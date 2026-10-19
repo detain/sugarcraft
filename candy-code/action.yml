@@ -1,0 +1,236 @@
+# GitHub composite action around `candy-code -p --output-format json`.
+#
+# WHY IT LIVES HERE AND NOT UNDER .github/: this file is at the lib-dir root,
+# and `.github/workflows/sync-sugarcraft.yml` subtree-splits `candy-code/`
+# (splitsh-lite `--prefix=candy-code`) into `sugarcraft/candy-code`, which
+# makes the directory's CONTENTS the split-repo root — the same way
+# `candy-code/composer.json` surfaces as the package root for Packagist. So
+# `uses: sugarcraft/candy-code@<ref>` finds `action.yml` exactly where GitHub
+# looks for it. Do NOT move this file under `candy-code/.github/`; a
+# root-level `action.yml` in the used repo/ref is the only location a composite
+# action resolves from.
+#
+# SUPPLY-CHAIN DOCTRINE, enforced by construction in this file:
+# - No `${{ inputs.* }}` or `${{ matrix.* }}` interpolation ever appears
+#   INSIDE a `run:` script body. Every caller-controlled value crosses into the
+#   shell through `env:` only. Interpolating input text into script text is the
+#   classic Actions script-injection bug, and this action's whole payload is
+#   attacker-grade text (PR diffs quoted in prompts).
+# - Every third-party action is pinned to a FULL COMMIT SHA, mirroring the
+#   monorepo's own ci.yml doctrine. Tags and branch names are mutable.
+# - This action requests NO token and runs NO code from the caller's checkout.
+#   It executes the Packagist-published `sugarcraft/candy-code` at a pinned
+#   version. If you want to review a PR, you pass its TEXT into `prompt` —
+#   never hand this action the repository's own scripts.
+# - Secrets are deliberately NOT action inputs: they are ordinary environment
+#   variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, ...) the CALLER injects
+#   via its step `env:` block. Inputs would land in the runner log context
+#   dump; env does not.
+#
+# The fork-PR / prompt-injection doctrine for READING UNTRUSTED DIFFS with
+# this action lives in docs/CI.md and is not optional reading.
+
+name: 'CandyCode headless run'
+description: 'Run `candy-code -p` over the checked-out workspace, parse the JSON envelope into the step summary and outputs (PR commenting is left to the caller).'
+author: 'Joe Huss'
+
+inputs:
+  prompt:
+    description: 'The prompt to run. Required. Treated as untrusted text: it crosses into the shell only through the environment.'
+    required: true
+  permission-mode:
+    description: 'Headless permission mode. The default is deliberate: a review must never edit. Only loosen it for prompts you authored.'
+    required: false
+    default: 'plan'
+  max-cost:
+    description: 'Spend ceiling in USD passed as --max-cost. Empty string omits the flag and inherits settings/env.'
+    required: false
+    default: '1.00'
+  model:
+    description: 'Model override passed as --model. Empty string inherits the configured default.'
+    required: false
+    default: ''
+  args:
+    description: 'Extra candy-code arguments (space-separated, e.g. "--resume abc" or "--config /path"). CALLER-OWNED TEXT: never build this from PR-derived content.'
+    required: false
+    default: ''
+  candy-code-version:
+    description: 'Composer version constraint for sugarcraft/candy-code. Pin it — dev-master moves, and in a workflow the pin is the only thing between you and whatever landed on Packagist since your last run.'
+    required: false
+    default: 'dev-master'
+  fail-on-error:
+    description: 'Fail the step when candy-code exits non-zero. Set false to always proceed to your own outputs/summary handling.'
+    required: false
+    default: 'true'
+
+outputs:
+  result:
+    description: 'The envelope `result` field — the final assistant message — as UTF-8 text. Empty on error documents and on unparsable output.'
+    value: ${{ steps.envelope.outputs.result }}
+  refusal-count:
+    description: 'Number of entries in the envelope `refusals` array (0 when absent). Non-zero means tools were blocked mid-run; in plan mode that is the expected shape of "it wanted to edit".'
+    value: ${{ steps.envelope.outputs.refusal_count }}
+  refusals:
+    description: 'The envelope `refusals` array as compact JSON.'
+    value: ${{ steps.envelope.outputs.refusals }}
+  error-type:
+    description: 'The envelope `error.type` ("usage", "provider", "encoding", ...) when the run produced an error document; empty on success.'
+    value: ${{ steps.envelope.outputs.error_type }}
+  error-message:
+    description: 'The envelope `error.message` when the run produced an error document; empty on success.'
+    value: ${{ steps.envelope.outputs.error_message }}
+  exit-code:
+    description: 'candy-code exit code: 0 ok, 1 ran-and-failed, 2 usage/config error, or 127 when the binary could not be launched at all.'
+    value: ${{ steps.envelope.outputs.exit_code }}
+
+runs:
+  using: 'composite'
+  steps:
+    # Same full-SHA pin as the monorepo's ci.yml setup-php legs; bump
+    # deliberately, never implicitly.
+    - name: 'Set up PHP 8.3'
+      uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+      with:
+        php-version: '8.3'
+        coverage: none
+
+    - name: 'Install candy-code from Packagist'
+      shell: bash
+      env:
+        CANDY_CODE_CONSTRAINT: ${{ inputs.candy-code-version }}
+      run: |
+        set -euo pipefail
+        composer global require --no-interaction --no-progress --no-scripts \
+          "sugarcraft/candy-code:${CANDY_CODE_CONSTRAINT}"
+        # Make the global vendor bin visible to later steps.
+        printf '%s\n' "$(composer global config bin-dir --absolute --quiet)" >> "$GITHUB_PATH"
+
+    - name: 'Run candy-code headless'
+      shell: bash
+      env:
+        CC_PROMPT: ${{ inputs.prompt }}
+        CC_MODE: ${{ inputs.permission-mode }}
+        CC_MAX_COST: ${{ inputs.max-cost }}
+        CC_MODEL: ${{ inputs.model }}
+        CC_EXTRA_ARGS: ${{ inputs.args }}
+      run: |
+        set -uo pipefail
+        argv=(-p "$CC_PROMPT" --output-format json --permission-mode "$CC_MODE" --root "$GITHUB_WORKSPACE")
+        if [ -n "$CC_MAX_COST" ]; then argv+=(--max-cost "$CC_MAX_COST"); fi
+        if [ -n "$CC_MODEL" ];   then argv+=(--model "$CC_MODEL");   fi
+        # Intentional word-splitting of the caller-owned extra-args string;
+        # quoting semantics inside it are the caller's, exactly like a `with:`
+        # block they wrote themselves. PR-derived text must never reach here.
+        if [ -n "$CC_EXTRA_ARGS" ]; then
+          read -r -a extra <<< "$CC_EXTRA_ARGS"
+          argv+=("${extra[@]}")
+        fi
+        if ! command -v candy-code >/dev/null 2>&1; then
+          printf 'candy-code binary not on PATH after install\n' >&2
+          printf 'candy-code: binary not found\n' > "$RUNNER_TEMP/candy-code-envelope.json"
+          echo 127 > "$RUNNER_TEMP/candy-code-exit-code"
+          exit 0
+        fi
+        candy-code "${argv[@]}" > "$RUNNER_TEMP/candy-code-envelope.json"
+        rc=$?
+        echo "$rc" > "$RUNNER_TEMP/candy-code-exit-code"
+        # Deliberate exit 0 here: the envelope publish step owns the verdict,
+        # so fail-on-error=false callers still get summary + outputs intact.
+        exit 0
+
+    - name: 'Publish summary and outputs'
+      id: envelope
+      shell: bash
+      env:
+        CC_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+        ENVELOPE: ${{ runner.temp }}/candy-code-envelope.json
+        RC_FILE: ${{ runner.temp }}/candy-code-exit-code
+      run: |
+        set -uo pipefail
+        rc="$(cat "$RC_FILE" 2>/dev/null || echo 1)"
+        # One python3 pass turns the envelope into GITHUB_OUTPUT (multiline-safe
+        # heredoc form) + GITHUB_STEP_SUMMARY. A missing or unparsable envelope
+        # is reported as such — an empty summary is indistinguishable from a
+        # silently skipped step, which is the failure mode this action exists
+        # to not have.
+        python3 - "$ENVELOPE" "$rc" <<'PY'
+        import json, os, sys
+
+        path, rc = sys.argv[1], sys.argv[2]
+        try:
+            with open(path, encoding="utf-8") as fh:
+                doc = json.load(fh)
+            if not isinstance(doc, dict):
+                raise ValueError("envelope is not a JSON object")
+        except Exception as exc:  # noqa: BLE001 - any failure means "no envelope"
+            doc, parse_note = None, str(exc)
+        else:
+            parse_note = ""
+
+        result = (doc or {}).get("result") or ""
+        error = (doc or {}).get("error") or {}
+        refusals = (doc or {}).get("refusals") or []
+
+        outputs = [
+            ("result", result),
+            ("error_type", str(error.get("type", ""))),
+            ("error_message", str(error.get("message", ""))),
+            ("refusals", json.dumps(refusals, ensure_ascii=False)),
+            ("refusal_count", str(len(refusals))),
+            ("exit_code", str(rc)),
+        ]
+
+        # GITHUB_OUTPUT heredoc contract: "<name><<<delim>" opens a value and a
+        # bare delimiter LINE closes it. Omitting the closing line makes the
+        # value swallow every later line, so all remaining outputs vanish; and
+        # a per-write delimiter must never occur inside any value it frames.
+        # One high-entropy delimiter is generated per step (the file is read
+        # once) and re-rolled if any value could contain it.
+        outputs_blob = "\n".join(value for _, value in outputs)
+        delim = "EOF_GHOUT_" + os.urandom(16).hex()
+        while delim in outputs_blob:
+            delim = "EOF_GHOUT_" + os.urandom(16).hex()
+
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+            for name, value in outputs:
+                out.write("%s<<%s\n%s\n%s\n" % (name, delim, value, delim))
+
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as s:
+            s.write("## CandyCode headless run\n\n")
+            s.write("- exit code: `%s`%s\n" % (
+                rc,
+                "" if not parse_note else " (envelope unparsable: `%s`)" % parse_note,
+            ))
+            if error:
+                s.write("- error: **%s** — %s\n" % (error.get("type", "?"), error.get("message", "")))
+            if refusals:
+                s.write("- refusals: %d (blocked tool calls)\n\n" % len(refusals))
+                for r in refusals[:20]:
+                    if isinstance(r, dict):
+                        s.write("  - `%s` [%s]: %s\n" % (r.get("tool", "?"), r.get("kind", "?"), str(r.get("reason", ""))[:200]))
+                if len(refusals) > 20:
+                    s.write("  - … %d more\n" % (len(refusals) - 20))
+            if result:
+                s.write("\n### Result\n\n")
+                s.write(
+                    "> [!WARNING]\n"
+                    "> The text below is model output, potentially derived from untrusted "
+                    "input (a PR diff, an issue body). Do not act on it without reading it. "
+                    "Never auto-merge or auto-approve on the strength of it.\n\n"
+                )
+                s.write(result + "\n")
+            elif not error and not parse_note:
+                s.write("\n_(empty result)_\n")
+        PY
+        parse_rc=$?
+        if [ "$parse_rc" -ne 0 ]; then
+          echo 'candy-code: envelope publication failed' >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ "$rc" -ne 0 ] && [ "$CC_FAIL_ON_ERROR" = "true" ]; then
+          exit "$rc"
+        fi
+        exit 0
+
+branding:
+  icon: 'eye'
+  color: 'purple'

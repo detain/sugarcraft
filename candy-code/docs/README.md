@@ -22,6 +22,7 @@ asking.
 | [SERVER.md](SERVER.md) | `candy-code serve`, the WebSocket protocol, tokens | You embed or remote-control the agent |
 | [DOCKER.md](DOCKER.md) | Running `serve` in a container: image, volume, ports, health | You deploy the server |
 | [MEDIA.md](MEDIA.md) | Image/video generation, render modes, presets | You generate media |
+| [CI.md](CI.md) | The GitHub Action around `-p`, fork-PR and prompt-injection doctrine | You run the agent in CI |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The code's shape, seams and invariants, incl. [the screen, zone by zone](ARCHITECTURE.md#the-screen-zone-by-zone) | You are reading or changing `src/` |
 | [PROMPT_ENGINEERING.md](PROMPT_ENGINEERING.md) | How the system prompt is assembled | You tune agent behaviour |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Symptom-first error recovery, incl. CI automation notes | Something is broken |
