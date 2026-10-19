@@ -31,7 +31,7 @@ use SugarCraft\Code\Providers\Concerns\ToolSchema;
 use SugarCraft\Code\Usage;
 use SugarCraft\Code\Util\TokenEstimate;
 
-final readonly class SglangProvider implements ProviderInterface, ReportsServedModel, AcceptsAssistantPrefill
+final readonly class SglangProvider implements ProviderInterface, ReportsServedModel, AcceptsAssistantPrefill, HasModelCatalog
 {
     use ToolSchema;
 
@@ -981,6 +981,18 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
     public function name(): string
     {
         return 'sglang';
+    }
+
+    /** PRV-1 (§6.5): the configured base, normalized for memo identity. */
+    public function catalogKey(): ?string
+    {
+        return rtrim($this->baseUrl, '/');
+    }
+
+    /** PRV-1: one bounded `GET {base}/models`; the server's answer or null. */
+    public function listModels(): ?array
+    {
+        return OpenAiModelsEndpoint::fetch($this->baseUrl, $this->apiKey);
     }
 
     public function supportsStreaming(): bool

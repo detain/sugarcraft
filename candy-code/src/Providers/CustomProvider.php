@@ -20,7 +20,7 @@ use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Providers\Concerns\ToolSchema;
 use SugarCraft\Code\Usage;
 
-final readonly class CustomProvider implements ProviderInterface, RebindsModel
+final readonly class CustomProvider implements ProviderInterface, RebindsModel, HasModelCatalog
 {
     use ToolSchema;
 
@@ -258,6 +258,18 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel
     public function name(): string
     {
         return $this->name;
+    }
+
+    /** PRV-1 (§6.5): the configured base, normalized for memo identity. */
+    public function catalogKey(): ?string
+    {
+        return rtrim($this->baseUrl, '/');
+    }
+
+    /** PRV-1: one bounded `GET {base}/models`; the server's answer or null. */
+    public function listModels(): ?array
+    {
+        return OpenAiModelsEndpoint::fetch($this->baseUrl, $this->apiKey);
     }
 
     public function supportsStreaming(): bool

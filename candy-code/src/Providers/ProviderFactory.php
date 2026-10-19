@@ -906,6 +906,11 @@ final readonly class ProviderFactory
             // Roadmap 5.13a: the model database, between the operator's
             // figures above and the built-in tables.
             $this->modelMetadata(),
+            // PRV-1 (§6.5): the catalog asks the endpoint the completions go
+            // to — the config/OPENAI_BASE_URL base when set, the SDK's own
+            // default otherwise (the exact URI \OpenAI::client() would use).
+            is_string($baseUrl) && trim($baseUrl) !== '' ? trim($baseUrl) : 'https://api.openai.com/v1',
+            is_string($config['apiKey'] ?? null) && $config['apiKey'] !== '' ? $config['apiKey'] : null,
         );
     }
 

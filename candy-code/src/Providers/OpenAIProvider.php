@@ -18,7 +18,7 @@ use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Providers\Concerns\ToolSchema;
 use SugarCraft\Code\Usage;
 
-final readonly class OpenAIProvider implements ProviderInterface, RebindsModel
+final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, HasModelCatalog
 {
     use ToolSchema;
 
@@ -165,6 +165,14 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel
         private ?int $contextWindowOverride = null,
         private ?bool $supportsVision = null,
         private ?ModelMetadata $modelMetadata = null,
+        // PRV-1 (§6.5): where to ask for the model list. The SDK's
+        // ClientContract is a chat-only seam with no models() route, so the
+        // catalog rides its own bounded GET against the same base/key the
+        // factory resolved (config `baseUrl`, OPENAI_BASE_URL, or the SDK
+        // default). Null base — a hand-built provider in tests — is simply
+        // "no catalog", never a guess at api.openai.com.
+        private ?string $modelsBaseUrl = null,
+        private ?string $modelsApiKey = null,
     ) {
         if ($contextWindowOverride !== null && $contextWindowOverride < 1) {
             throw new \InvalidArgumentException(sprintf(
@@ -177,6 +185,28 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel
     public function name(): string
     {
         return 'openai';
+    }
+
+    /** PRV-1: the version root the factory resolved, normalized for memo identity. */
+    public function catalogKey(): ?string
+    {
+        $base = $this->modelsBaseUrl;
+        if ($base === null || trim($base) === '') {
+            return null;
+        }
+
+        return rtrim($base, '/');
+    }
+
+    /** PRV-1: one bounded `GET {base}/models`; null when no base was threaded. */
+    public function listModels(): ?array
+    {
+        $base = $this->modelsBaseUrl;
+        if ($base === null || trim($base) === '') {
+            return null;
+        }
+
+        return OpenAiModelsEndpoint::fetch($base, $this->modelsApiKey);
     }
 
     public function supportsStreaming(): bool
