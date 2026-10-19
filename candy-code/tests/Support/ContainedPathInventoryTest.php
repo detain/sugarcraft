@@ -414,7 +414,7 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "ELEVEN spellings remain by hand, in SIX files" — plus the eight the
+     * "TWELVE spellings remain by hand, in SEVEN files" — plus the nine the
      * inventory deliberately EXCLUDES, named here so the exclusion is a recorded
      * decision rather than a hole. `WorktreeManager`'s pair matches relative paths
      * against a glob directory; it is not a boundary compare. `SkillLoader`'s one
@@ -437,7 +437,11 @@ final class ContainedPathInventoryTest extends TestCase
      * the compared-with side. `BuildsUnifiedDiff`'s one (`headerPaths()`, ISS-100)
      * abbreviates an in-root absolute path to a relative `a/`/`b/` diff header label
      * and shows an out-of-root one bare; the answer selects the SPELLING a header
-     * displays, nothing is admitted or refused on it.
+     * displays, nothing is admitted or refused on it. `StartupSummary`'s one
+     * (`shortenHome()`, plan_comparison VIS-1) abbreviates the owned home to `~`
+     * in a launch-summary row, like `TuiErrorLog`'s and `SessionPicker`'s; the
+     * answer selects the string that is displayed, nothing is admitted or refused
+     * on it.
      */
     public function testTheHandSpelledInventoryIncludingItsStatedExclusion(): void
     {
@@ -454,7 +458,14 @@ final class ContainedPathInventoryTest extends TestCase
                 'Renderer.php' => 1,
                 'Skills/SkillLoader.php' => 1,
                 'Support/MediaStore.php' => 1,
+                'Support/StartupSummary.php' => 1,
                 'Tools/BuiltIn/Glob.php' => 1,
+                // SHL-2 (plan_comparison w1f): the jail-escape refusal in collect() —
+                // a listed entry whose realpath leaves the jail is dropped and counted.
+                // Same realpath test as Glob's withinRoot(), inlined because the count
+                // feeds a note. A boundary, not an abbreviation: it goes in the
+                // inventory, not the exclusion list.
+                'Tools/BuiltIn/Ls.php' => 1,
                 'Tools/Concerns/BuildsUnifiedDiff.php' => 1,
                 'Tools/IgnoreRules.php' => 1,
                 'Tools/PathJail.php' => 5,
@@ -463,9 +474,9 @@ final class ContainedPathInventoryTest extends TestCase
             $counts,
         );
 
-        unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php'], $counts['Tools/Concerns/BuildsUnifiedDiff.php']);
-        $this->assertSame(11, array_sum($counts), 'containment spellings still by hand');
-        $this->assertCount(6, $counts, 'files still holding one');
+        unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php'], $counts['Tools/Concerns/BuildsUnifiedDiff.php'], $counts['Support/StartupSummary.php']);
+        $this->assertSame(12, array_sum($counts), 'containment spellings still by hand');
+        $this->assertCount(7, $counts, 'files still holding one');
     }
 
     /**
