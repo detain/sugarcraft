@@ -25,6 +25,20 @@ Three tiers, merged by name, later overriding earlier
 | built-in | `CommandRegistry::all()` | n/a, they are PHP |
 | user | `~/.candy-code/commands/*.md` | yes |
 | project | `<root>/.candy-code/commands/*.md` | **only if this root is trusted** |
+| foreign | the other tools' trees (below) | never — imports run no shell |
+
+The foreign floor is what INT-3 added: `~/.claude/commands`,
+`<root>/.claude/commands`, `~/.opencode/{command,commands}`,
+`~/.config/opencode/{command,commands}` and `<root>/.opencode/{command,commands}`
+are read by `ForeignCommandDiscovery` and merged **below** everything native.
+Inside the floor the last write wins, ordered project-claude, project-opencode,
+user-claude, user-opencode — so user beats project inside foreign, opencode
+beats claude inside a tier, and XDG beats the legacy `~/.opencode` pair (the
+same convention order `ForeignSkillDiscovery` uses). Foreign-vs-native losses
+are silent (owner ruling R7): the import never announces itself and never
+lands on `overrides()`. That silence is the whole point of the floor — a
+cloned `.claude/commands/exit.md` cannot replace `/exit`; imports never win a
+native name.
 
 **A file's path under the commands directory is its name.** `test.md` gives
 `/test`; `deploy/staging.md` gives `/deploy/staging`. Subdirectories namespace,
@@ -42,7 +56,10 @@ merged map minus everything that is still a built-in row, so an allowed
 override survives the filter while the built-ins stay reachable through their
 own dispatch arms (keeping both would list every built-in twice in the "/"
 popup). A file row carries its tier as `CommandSpec::tierBadge()` — `[user]`
-or `[project]` — so the popup can show which file is about to run.
+or `[project]` — and foreign rows carry their format as
+`CommandSpec::sourceBadge()` — `[claude]` or `[opencode]` — so the popup shows
+`[tier] [source]` for an import and `[tier]` alone for a native file; the
+badges are display only, the tier is the gate.
 
 ### Except the control plane
 
@@ -91,7 +108,9 @@ subtask: true
 Review the change at $1 for correctness issues.
 ```
 
-Four keys, all optional. Frontmatter itself is optional — a bare markdown file
+Four keys, all optional, plus four import-floor keys the audit recognises
+silently (`template`, `allowed-tools`, `disallowed-tools`, `agent`).
+Frontmatter itself is optional — a bare markdown file
 is a valid command whose body is the whole prompt.
 
 | Key | Effect |
@@ -100,12 +119,14 @@ is a valid command whose body is the whole prompt.
 | `argument-hint` | placeholder shown after the name in the popup |
 | `model` | **Inert.** Parsed and carried on the row; the expanded prompt still goes to the session's current model |
 | `subtask` | **Inert.** Parsed and carried on the row; `true` does not isolate anything — the prompt still expands into the current conversation |
+| `template` | opencode's prompt body. Consumed only as a substitute for an empty file body; a body wins when both exist |
+| `allowed-tools` / `disallowed-tools` / `agent` | Claude Code's command frontmatter. Recognised-silent: a file in the imported convention earns no did-you-mean for its own syntax, and this port carries and acts on none of the three (the silence is ours, not the file's) |
 
 `model` and `subtask` are written the way opencode and Claude Code write them,
 so a command copied from either tool loads unchanged, but nothing in
 `Chat` reads them yet. The launch says so instead of leaving it to be
 discovered: one aggregated row (stderr and transcript) names every command
-that sets an inert key or a key outside these four, with a did-you-mean for a
+that sets an inert key or a key the audit does not know, with a did-you-mean for a
 near miss (`argument_hint` → `argument-hint`). The file still loads. The inert
 pair is `FrontmatterKeyAudit::INERT`, which `InertFrontmatterDocumentationDriftTest`
 holds this table to.
