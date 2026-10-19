@@ -3586,22 +3586,17 @@ final class App implements Model
     }
 
     /**
-     * The ISS-047 alias step: a `Ctrl+<rune>` press whose rune some registered
-     * override chord claims is rebuilt as the binding's SHIPPED chord, so the
-     * ordinary claim/dispatch machinery answers it unchanged. Any other press —
-     * not a Ctrl char, or a rune no override touches — is the same message.
+     * The ISS-047 alias step, widened by plan_comparison TUI-4c: a press an
+     * override chord claims is rebuilt as the binding's SHIPPED chord — the
+     * rune lane for bare `Ctrl+<rune>` pairs, the chord lane for every other
+     * parseable shape (`Alt+Enter`, `Ctrl+Tab`, `F10`, …) — so the ordinary
+     * claim/dispatch machinery answers it unchanged. Any press no override
+     * touches is the same message. The whole consult lives in the registry
+     * ({@see KeyBindingRegistry::aliasPress()}); this is the one funnel.
      */
     private static function honourKeybindingAliases(KeyMsg $msg): KeyMsg
     {
-        if ($msg->type !== KeyType::Char || !$msg->ctrl) {
-            return $msg;
-        }
-
-        $shipped = KeyBindingRegistry::shippedRuneFor($msg->rune);
-
-        return $shipped === null
-            ? $msg
-            : new KeyMsg(KeyType::Char, $shipped, $msg->alt, $msg->ctrl, $msg->shift);
+        return KeyBindingRegistry::aliasPress($msg) ?? $msg;
     }
 
     /**

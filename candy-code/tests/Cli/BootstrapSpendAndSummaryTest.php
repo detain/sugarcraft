@@ -318,11 +318,14 @@ final class BootstrapSpendAndSummaryTest extends TestCase
     }
 
     /**
-     * The chord grammar mirrors KeyBinding::ctrlRune(): the handlers claim and
-     * dispatch bare single-character Ctrl chords and nothing wider, so a
-     * `Cmd+K` or `Ctrl+AB` override could never be honoured — and neither
-     * could overriding a row whose SHIPPED chord is not `Ctrl+<key>` (the
-     * alias has no rune to land on).
+     * The chord grammar mirrors KeyBinding::parseChord(): the funnel aliases
+     * one pressable chord onto another, so a `Cmd+K` (unknown modifier), a
+     * bare `K` (would steal ordinary typing), a `Ctrl+AB` (no such press)
+     * override could never be honoured — and neither could overriding a row
+     * whose SHIPPED chord names no single press (the `Esc Esc` sequence —
+     * the alias has no chord to land on). Since plan_comparison TUI-4c the
+     * grammar is wider than `Ctrl+<key>`, so a row shipped as `Enter` IS
+     * aliasable now and no longer belongs in this list.
      *
      * @param array<string,string> $map
      *
@@ -347,7 +350,7 @@ final class BootstrapSpendAndSummaryTest extends TestCase
             'empty tail' => [['shell.palette' => 'Ctrl+']],
             'non-string chord' => [['shell.palette' => 7]],
             'a list is not a map' => [['shell.palette']],
-            'target row ships Enter, not Ctrl+<key>' => [['chat.send' => 'Ctrl+B']],
+            'target row ships a sequence, not a single chord' => [['chat.cancel' => 'Ctrl+B']],
         ];
     }
 
@@ -373,8 +376,20 @@ final class BootstrapSpendAndSummaryTest extends TestCase
         $this->assertNull($definition->validate(null));
         $this->assertNull($definition->validate([]));
         $this->assertNull($definition->validate(['chat.palette' => 'Ctrl+B']));
+        // plan_comparison TUI-4c: the grammar is every single-press chord
+        // with a modifier (or a function key), in or out — Enter rows are
+        // alias TARGETS now, named/modifier chords are alias VALUES now.
+        $this->assertNull($definition->validate(['chat.send' => 'Ctrl+B']), 'a row shipped as Enter takes an override');
+        $this->assertNull($definition->validate(['chat.newline' => 'Ctrl+Q']), 'Alt+Enter ships — Ctrl+Q may be aimed at it');
+        $this->assertNull($definition->validate(['chat.session-cycle' => 'Alt+S']));
+        $this->assertNull($definition->validate(['shell.menu' => 'F11']), 'function keys need no modifier');
+        $this->assertNull($definition->validate(['chat.keys' => 'Ctrl+Space']));
         $this->assertNotNull($definition->validate(['nope' => 'Ctrl+B']));
         $this->assertNotNull($definition->validate(['shell.palette' => 'Cmd+K']));
+        $this->assertNotNull($definition->validate(['chat.send' => 'Enter']), 'a bare named key would steal ordinary typing');
+        $this->assertNotNull($definition->validate(['chat.send' => 'Esc Esc']), 'a sequence is not one pressable chord');
+        $this->assertNotNull($definition->validate(['chat.cancel' => 'Ctrl+B']), 'a row shipped as a sequence has no chord to land on');
+        $this->assertNotNull($definition->validate(['agents.slot' => 'Ctrl+B']), 'a row shipped as a range has no chord to land on');
         $this->assertNotNull($definition->validate(['a', 'b']), 'a list is not a map');
     }
 

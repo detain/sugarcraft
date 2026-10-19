@@ -7,6 +7,8 @@ namespace SugarCraft\Code\Tests\Commands;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Commands\KeyBinding;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 
 /**
  * Shape of the keybinding table itself. What each row DOES is
@@ -584,10 +586,13 @@ final class KeyBindingRegistryTest extends TestCase
 
     /**
      * A row shipped as a non-`Ctrl+<key>` chord (chat.send ships `Enter`) has no
-     * rune to alias onto; even a hand-registered override of it must not invent
-     * a translation (the validator refuses such pairs at launch).
+     * rune to alias onto the RUNE lane; even a hand-registered override of it
+     * must not invent a rune translation. Since plan_comparison TUI-4c such
+     * rows are NOT inert — the chord lane ({@see aliasPress()}) carries them —
+     * but the rune map stays exactly the bare-`Ctrl+<key>`-on-both-ends alphabet
+     * the pre-4c funnel was, and this pins that boundary.
      */
-    public function testANonCtrlTargetRowNeverAliases(): void
+    public function testANonCtrlTargetRowNeverAliasesOnTheRuneLane(): void
     {
         KeyBindingRegistry::useOverrides(['chat.send' => 'Ctrl+Q']);
 
@@ -608,5 +613,128 @@ final class KeyBindingRegistryTest extends TestCase
 
         KeyBindingRegistry::useOverrides([]);
         $this->assertNull(KeyBindingRegistry::shippedRuneFor('q'));
+    }
+
+    // =====================================================================
+    // plan_comparison TUI-4c: the canonical chord alphabet and the chord lane
+    // =====================================================================
+
+    /**
+     * The parse IS the wire: every parseable shipped label round-trips —
+     * press the reconstructed message and {@see KeyBinding::pressId()} answers
+     * exactly the parsed id. A label that does not describe one press (dual,
+     * sequence, range, mouse, prose) parses to null instead of guessing.
+     */
+    public function testParseChordIsTheWireItself(): void
+    {
+        $parsed = 0;
+        foreach (KeyBindingRegistry::all() as $binding) {
+            $id = $binding->chord();
+            if ($id === null) {
+                continue;
+            }
+            $parsed++;
+            $msg = KeyBinding::keyMsgFromId($id);
+            $this->assertNotNull($msg, "id {$id} must rebuild");
+            $this->assertSame($id, KeyBinding::pressId($msg), "round trip of {$binding->keys}");
+        }
+        $this->assertGreaterThan(50, $parsed, 'the parseable majority of the table must parse');
+
+        // The unpressable shapes are named, so a label that LOSES its
+        // shape (a dual quietly rewritten as prose moves nothing visible)
+        // cannot slip through, and a name that GAINS one flips this pin.
+        $names = [];
+        foreach (KeyBindingRegistry::all() as $binding) {
+            if ($binding->chord() === null) {
+                $names[] = $binding->id . ' => ' . $binding->keys;
+            }
+        }
+        foreach ([
+            'chat.cancel => Esc Esc',
+            'agents.slot => Alt+1…9',
+        ] as $row) {
+            if (!in_array($row, $names, true)) {
+                $this->fail("roster row {$row} changed shape without a decision");
+            }
+        }
+        $this->assertNotContains('shell.menu => F10', $names, 'a function key IS one press');
+    }
+
+    /**
+     * `shell.menu` ships `F10` — it parses; a hand-written roster entry naming
+     * it null would catch a regression that turns named keys back into prose.
+     */
+    public function testNamedFunctionAndAltChordsParse(): void
+    {
+        $this->assertSame('f10', KeyBinding::parseChord('F10'));
+        $this->assertSame('alt+enter', KeyBinding::parseChord('Alt+Enter'));
+        $this->assertSame('ctrl+tab', KeyBinding::parseChord('Ctrl+Tab'));
+        $this->assertSame('ctrl+shift+tab', KeyBinding::parseChord('Ctrl+Shift+Tab'));
+        $this->assertSame('ctrl+space', KeyBinding::parseChord('Ctrl+Space'));
+        $this->assertSame('alt+down', KeyBinding::parseChord('Alt+↓'));
+        $this->assertSame('ctrl+left', KeyBinding::parseChord('Ctrl+←'));
+        $this->assertSame('?', KeyBinding::parseChord('?'));
+        $this->assertSame('ctrl+,', KeyBinding::parseChord('Ctrl+,'));
+
+        $this->assertNull(KeyBinding::parseChord('Esc Esc'), 'a sequence is not a press');
+        $this->assertNull(KeyBinding::parseChord('Ctrl+X b'), 'a sequence is not a press');
+        $this->assertNull(KeyBinding::parseChord('Alt+1…9'), 'a range is not a press');
+        $this->assertNull(KeyBinding::parseChord('↑ / ↓'), 'a dual is not a press');
+        $this->assertNull(KeyBinding::parseChord('Click tab'), 'a gesture is not a press');
+        $this->assertNull(KeyBinding::parseChord('Cmd+K'), 'no such modifier');
+        $this->assertNull(KeyBinding::parseChord('Ctrl+'), 'a modifier alone is not a chord');
+        $this->assertNull(KeyBinding::parseChord(''), 'empty is not a chord');
+    }
+
+    /**
+     * THE WIDENING: an override aimed at a named-shape row lands at the chord
+     * lane — Ctrl+Q rebuilt as Alt+Enter — while the rune lane stays silent,
+     * the shipped chord keeps answering unchanged, and re-registering clears
+     * the derived pairs (the chord memo obeys the same staleness law).
+     */
+    public function testTheChordLaneAliasesNamedShapes(): void
+    {
+        KeyBindingRegistry::useOverrides(['chat.newline' => 'Ctrl+Q']);
+
+        $this->assertNull(KeyBindingRegistry::shippedRuneFor('q'), 'no rune pair — the row ships no bare Ctrl chord');
+
+        $aliased = KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Char, 'q', ctrl: true));
+        $this->assertNotNull($aliased, 'the chord lane must carry it');
+        $this->assertSame(KeyType::Enter, $aliased->type);
+        $this->assertTrue($aliased->alt, 'the rebuild is the SHIPPED shape: Alt+Enter');
+        $this->assertFalse($aliased->ctrl);
+
+        // The shipped chord is never stranded by the alias (ISS-047 law,
+        // now over the wider alphabet): a real Alt+Enter press passes through.
+        $this->assertNull(KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Enter, '', alt: true)));
+
+        KeyBindingRegistry::useOverrides(['chat.session-cycle' => 'Ctrl+B']);
+        $retargeted = KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Char, 'b', ctrl: true));
+        $this->assertNotNull($retargeted, 'the old map must not outlive the re-registration');
+        $this->assertSame(KeyType::Tab, $retargeted->type);
+        $this->assertTrue($retargeted->ctrl);
+
+        KeyBindingRegistry::useOverrides([]);
+        $this->assertNull(KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Char, 'b', ctrl: true)));
+    }
+
+    /**
+     * Byte-compat of the funnel widening: a bare-Ctrl pair still rides the
+     * rune lane with the press's own modifier flags preserved (the pre-4c
+     * rebuild), and an F-key target rebuilds named.
+     */
+    public function testTheFunnelKeepsTheRuneLaneFirstAndRebuildsFKeys(): void
+    {
+        KeyBindingRegistry::useOverrides(['chat.palette' => 'Ctrl+Q', 'shell.menu' => 'F12']);
+
+        $runeLane = KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Char, 'q', ctrl: true, shift: true));
+        $this->assertNotNull($runeLane);
+        $this->assertSame('p', $runeLane->rune);
+        $this->assertTrue($runeLane->shift, 'the rune lane rebuilds with the press\'s own flags, as before 4c');
+
+        $function = KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::F12));
+        $this->assertNotNull($function);
+        $this->assertSame(KeyType::F10, $function->type);
+        $this->assertSame('f10', KeyBinding::pressId($function));
     }
 }

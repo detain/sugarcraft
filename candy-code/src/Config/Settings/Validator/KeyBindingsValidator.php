@@ -4,22 +4,27 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Config\Settings\Validator;
 
+use SugarCraft\Code\Commands\KeyBinding;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Config\Settings\SettingValidator;
 
 /**
- * The `keybindings` map: binding id => replacement `Ctrl+<key>` chord.
+ * The `keybindings` map: binding id => replacement chord.
  *
  * IDS ARE CHECKED AGAINST THE REGISTRY, not a snapshot: a renamed row must
  * refuse the stale override at the next save rather than park it under an id
- * nothing declares. The chord grammar mirrors
- * {@see \SugarCraft\Code\Commands\KeyBinding::ctrlRune()} deliberately — a
- * bare single-character `Ctrl+<key>` tail is the only shape today's handlers
- * claim and dispatch, so accepting anything wider would write a value the
- * routing cannot honour. THE SAME SHAPE IS REQUIRED OF THE TARGET: dispatch
- * aliases the override chord onto the row's shipped rune, so overriding a row
- * that ships `Enter` (or any non-`Ctrl+<key>` chord) would be accepted,
- * registered, and silently inert.
+ * nothing declares. THE CHORD GRAMMAR MIRRORS
+ * {@see \SugarCraft\Code\Commands\KeyBinding::parseChord()} deliberately: a
+ * value must name ONE pressable chord carrying a modifier (`Ctrl+<key>`,
+ * `Alt+Enter`, `Shift+Tab`, `Ctrl+Space`) or standing alone as a function key
+ * (`F10`). Bare printable keys are refused because overriding TO them would
+ * steal ordinary typing; sequences, ranges, and mouse shapes are refused
+ * because the wire never reports them as one press. Plan_comparison TUI-4c
+ * widened this from the pre-4c bare-`Ctrl+<letter>`-only grammar.
+ *
+ * THE TARGET MUST BE ALIASABLE TOO: dispatch aliases the override chord onto
+ * the row's shipped chord, so a row shipped as a two-key sequence or a range
+ * has no single chord to land on and is refused.
  */
 final class KeyBindingsValidator implements SettingValidator
 {
@@ -60,15 +65,17 @@ final class KeyBindingsValidator implements SettingValidator
                 return "'{$id}' is not a known binding (the /keys reference lists them)";
             }
 
-            if (!self::isCtrlChord($chord)) {
-                return "the override for '{$id}' must be a chord of the form Ctrl+<key>";
+            $pressed = \is_string($chord) ? KeyBinding::parseChord($chord) : null;
+            if ($pressed === null || !self::isAssignableChord($pressed)) {
+                return "the override for '{$id}' must be a chord of the form Ctrl+<key> (or Alt+<key>, Shift+<key>, Ctrl+<named key>, F10…)";
             }
 
-            // The alias lands on the row's SHIPPED rune (KeyBindingRegistry::
-            // shippedRuneFor()); a row shipped as `Enter` or a two-key
-            // sequence has no rune to land on, so honouring it is impossible.
-            if (KeyBindingRegistry::byId($id)?->ctrlRune() === null) {
-                return "the override for '{$id}' cannot be honoured: its shipped chord is not a bare Ctrl+<key> to alias";
+            // The alias lands on the row's SHIPPED chord
+            // (KeyBindingRegistry::aliasPress()); a row shipped as `Esc Esc`
+            // or `Ctrl+X b` has no single chord to land on, so honouring it
+            // is impossible.
+            if (KeyBindingRegistry::byId($id)?->chord() === null) {
+                return "the override for '{$id}' cannot be honoured: its shipped chord is not a single pressable chord (Ctrl+<key>, Alt+<key>, a named key, F10…) to alias";
             }
         }
 
@@ -76,20 +83,32 @@ final class KeyBindingsValidator implements SettingValidator
     }
 
     /**
+     * Whether a PARSED chord id may be assigned as an override value: it
+     * carries a modifier (every parsed id with a modifier holds a `+`), or
+     * it is a function key. Bare printable runes and bare named keys (`Tab`,
+     * `Enter`, `Esc`) are refused — overriding TO them would steal ordinary
+     * typing wholesale.
+     */
+    private static function isAssignableChord(string $id): bool
+    {
+        return str_contains($id, '+') || preg_match('/^f[0-9]{1,2}$/', $id) === 1;
+    }
+
+    /**
      * Rows WARNING that a (validated) override chord collides with another
      * binding's SHIPPED chord — the rv6 follow-up to ISS-047's alias funnel.
      *
      * WHY A WARNING AND NOT A REFUSAL: the dispatch is correct in this shape.
-     * `KeyBindingRegistry::shippedRuneFor()` translates the pressed chord to
-     * the override target's shipped rune BEFORE any claim decision, so the
+     * `KeyBindingRegistry::aliasPress()` translates the pressed chord to the
+     * override target's shipped chord BEFORE any claim decision, so the
      * user's chosen chord really does run the chosen binding. What no code
      * fixes is the OTHER row: the binding whose shipped chord was taken stops
-     * answering at its own key — silently, because the alias map has one
-     * winner per rune (declaration order). That is a consequence to SEE at
+     * answering at its own key — silently, because the alias maps have one
+     * winner per chord (declaration order). That is a consequence to SEE at
      * launch, not a config to reject; the user may want exactly this trade.
      *
      * A victim the user ALSO re-chorded is not named: its effective chord is
-     * no longer the stolen rune, so nothing is silently lost — /keys shows
+     * no longer the stolen chord, so nothing is silently lost — /keys shows
      * both rows where the overrides put them. The override landing on its
      * OWN shipped chord (`identity override`) is inert by the funnel's
      * `$pressed === $shipped` skip and warns of nothing.
@@ -109,13 +128,16 @@ final class KeyBindingsValidator implements SettingValidator
                 continue;
             }
 
-            $rune = self::chordRune($chord);
-            if ($rune === null) {
+            // Collisions are compared in the canonical id alphabet
+            // (KeyBinding::parseChord), so a stolen `Alt+Enter` is named as
+            // precisely as a stolen `Ctrl+P` (plan_comparison TUI-4c).
+            $pressed = KeyBinding::parseChord($chord);
+            if ($pressed === null) {
                 continue;
             }
 
             foreach (KeyBindingRegistry::all() as $binding) {
-                if ($binding->id === $id || $binding->ctrlRune() !== $rune) {
+                if ($binding->id === $id || $binding->chord() !== $pressed) {
                     continue;
                 }
 
@@ -138,33 +160,5 @@ final class KeyBindingsValidator implements SettingValidator
         }
 
         return $rows;
-    }
-
-    /**
-     * The lowercase rune of a `Ctrl+<one char>` chord — the same extraction
-     * {@see \SugarCraft\Code\Commands\KeyBinding::ctrlRune()} makes of a
-     * shipped label, so the two sides of the collision compare in the same
-     * space dispatch does.
-     */
-    private static function chordRune(string $chord): ?string
-    {
-        if (!self::isCtrlChord($chord)) {
-            return null;
-        }
-
-        return mb_strtolower(substr($chord, 5));
-    }
-
-    /**
-     * The chord shape the handlers can honour: `Ctrl+` and exactly one
-     * character. Mirrors KeyBinding::ctrlRune()'s strictness on purpose.
-     */
-    private static function isCtrlChord(mixed $chord): bool
-    {
-        if (!\is_string($chord) || !str_starts_with($chord, 'Ctrl+')) {
-            return false;
-        }
-
-        return mb_strlen(substr($chord, 5)) === 1;
     }
 }

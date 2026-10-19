@@ -2055,7 +2055,7 @@ final class Bootstrap
         // here (not in the registry) so the reader owns the settings layer; the
         // registry is the pure consult (`chordFor()`/`effective()`), and
         // `App::handleKey()` honours a registered override at the keystroke
-        // funnel — see KeyBindingRegistry::shippedRuneFor(). An override that
+        // funnel — see KeyBindingRegistry::aliasPress(). An override that
         // lands on another row's shipped chord is legitimate dispatch but a
         // silent steal of that row's own key, so the drain right after it
         // says so — {@see reportKeybindingCollisions()}.

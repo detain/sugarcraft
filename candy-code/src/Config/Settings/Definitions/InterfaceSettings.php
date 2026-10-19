@@ -287,7 +287,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.keybindings.label'))
                 ->withHelp('{"shell.palette": "Ctrl+B"}: bind an EXTRA Ctrl+<key> chord to a binding id (the /keys reference names them); the shipped chord keeps working. Present-but-unusable refuses the launch; remove the key for the shipped bindings.')
                 ->withReaderSymbol(KeyBindingRegistry::class . '::chordFor')
-                ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `shippedRuneFor()` (via `effective()`) at `App::handleKey()`'),
+                ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()`'),
         ];
     }
 }

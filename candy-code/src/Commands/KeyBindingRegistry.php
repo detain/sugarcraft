@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Commands;
 
 use SugarCraft\Code\Lang;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 
 /**
  * The ONE list of raw keybindings, read by two surfaces:
@@ -219,10 +221,10 @@ final class KeyBindingRegistry
      *
      * The two derived-set memos ({@see $ctrlRuneMemo}, {@see $yieldedRuneMemo})
      * keep answering from the RAW rows BY CONSTRUCTION: a registered override
-     * is honoured at the one keystroke funnel — {@see shippedRuneFor()}, read
-     * by {@see \SugarCraft\Code\App\App::handleKey()} — BEFORE any claim
+     * is honoured at the one keystroke funnel — {@see aliasPress()}, read by
+     * {@see \SugarCraft\Code\App\App::handleKey()} — BEFORE any claim
      * decision, so the alias arrives at the handlers already translated to the
-     * binding's shipped rune. Moving a claim to the override chord instead
+     * binding's shipped chord. Moving a claim to the override chord instead
      * would translate twice and abandon the shipped chord the reference still
      * lists: the override ADDS a chord, it does not move one.
      *
@@ -234,6 +236,7 @@ final class KeyBindingRegistry
         // The alias pairs are a function of this map; re-registering (which
         // includes the `[]` clear) must never serve a stale derivation.
         self::$aliasMemo = null;
+        self::$chordAliasMemo = null;
     }
 
     /** The overrides currently registered, by binding id. */
@@ -307,16 +310,17 @@ final class KeyBindingRegistry
 
     /**
      * The shipped rune a pressed `Ctrl+<rune>` chord dispatches AS when the
-     * `keybindings` setting aliased it to that binding — the consult the
-     * keystroke funnel lands ({@see \SugarCraft\Code\App\App::handleKey()};
-     * ISS-047, rv5b).
+     * `keybindings` setting aliased it to that binding — the RUNE lane of the
+     * keystroke funnel ({@see aliasPress()}, read by
+     * {@see \SugarCraft\Code\App\App::handleKey()}; ISS-047, rv5b).
      *
-     * Null for any press that is no override's chord: the built-in dispatch
-     * answers unchanged. A row whose SHIPPED chord is not a bare `Ctrl+<key>`
-     * has no rune to alias onto; the validator refuses such pairs at the
-     * launch boundary, and {@see aliasMap()} stays total anyway. When two
-     * registered overrides share a chord, the earlier-declared row wins —
-     * the derivation follows {@see all()}'s declaration order.
+     * Null for any press that is no override's rune. A row whose SHIPPED
+     * chord is not a bare `Ctrl+<key>` has no rune to alias onto HERE — such
+     * pairs ride the chord lane instead ({@see chordAliasMap()},
+     * plan_comparison TUI-4c); the validator still refuses labels that name
+     * no single pressable chord at all. When two registered overrides share
+     * a chord, the earlier-declared row wins — the derivation follows
+     * {@see all()}'s declaration order.
      */
     public static function shippedRuneFor(string $pressedRune): ?string
     {
@@ -328,9 +332,11 @@ final class KeyBindingRegistry
     }
 
     /**
-     * Pressed => shipped, for every row whose effective chord differs from
-     * the declared one and both are bare `Ctrl+<key>` tails (the only shape
-     * handlers claim and dispatch — {@see KeyBinding::ctrlRune()}).
+     * Pressed => shipped for the RUNE lane: every row whose effective chord
+     * differs from the declared one and both are bare `Ctrl+<key>` tails —
+     * the only shape pre-4c handlers could claim and dispatch
+     * ({@see KeyBinding::ctrlRune()}). Chords outside this alphabet ride
+     * {@see chordAliasMap()}; consult order lives in {@see aliasPress()}.
      *
      * @return array<string, string>
      */
@@ -351,6 +357,95 @@ final class KeyBindingRegistry
         }
 
         return self::$aliasMemo = $pairs;
+    }
+
+    /**
+     * Memo of {@see chordAliasMap()} — the pressed-key-id => shipped-key-id
+     * pairs the registered overrides derive over EVERY aliasable chord
+     * shape, not just the bare-rune lane. Cleared by {@see useOverrides()}.
+     *
+     * @var array<string, string>|null
+     */
+    private static ?array $chordAliasMemo = null;
+
+    /**
+     * Pressed id => shipped id, over the canonical chord alphabet
+     * ({@see KeyBinding::parseChord()}).
+     *
+     * This is the TUI-4c widening of the alias lane: a row shipped as
+     * `Alt+Enter`, `Ctrl+Tab`, `Ctrl+Space`, `F10`, `?`, or a lone arrow now
+     * accepts an override to any other parseable shape, where pre-4c the rune
+     * map above silently dropped every pair that was not `Ctrl+<letter>` on
+     * BOTH ends. Labels that do not describe ONE press (duals like
+     * `Home / End`, sequences, ranges, mouse gestures, prose) have no id to
+     * alias from or onto and are skipped here as well as refused at launch by
+     * the validator.
+     *
+     * The derivation mirrors {@see aliasMap()}'s laws: earlier-declared rows
+     * win a shared pressed id, and an override equal to the shipped label
+     * pairs nothing. Pairs the rune lane already carries appear here too —
+     * {@see aliasPress()} consults the rune lane first, so the shipped
+     * byte-compat of `Ctrl+<rune>` aliases is untouched.
+     *
+     * @return array<string, string>
+     */
+    private static function chordAliasMap(): array
+    {
+        if (self::$chordAliasMemo !== null) {
+            return self::$chordAliasMemo;
+        }
+
+        $pairs = [];
+        foreach (self::effective() as $row) {
+            if (!isset(self::$overrides[$row->id])) {
+                continue;
+            }
+            $pressed = $row->chord();
+            $shipped = self::byId($row->id)?->chord();
+            if ($pressed === null || $shipped === null || $pressed === $shipped) {
+                continue;
+            }
+            $pairs[$pressed] ??= $shipped;
+        }
+
+        return self::$chordAliasMemo = $pairs;
+    }
+
+    /**
+     * The keystroke funnel the `keybindings` setting rides — the ONE place a
+     * pressed chord is translated to the chord it dispatches AS
+     * ({@see \SugarCraft\Code\App\App::handleKey()}; ISS-047, rv5b, and
+     * plan_comparison TUI-4c for the chord-shape widening).
+     *
+     * Two lanes, consulted in order:
+     *
+     * 1. the RUNE lane — a `Ctrl+<char>` press whose lowercased rune an
+     *    override borrowed for another binding's bare `Ctrl+<rune>` row;
+     *    the press is rebuilt keeping its own modifier flags, byte-identical
+     *    to the pre-4c funnel ({@see shippedRuneFor()});
+     * 2. the CHORD lane — any press whose canonical id
+     *    ({@see KeyBinding::pressId()}) an override points at a binding
+     *    shipped with a different parseable chord; the press is rebuilt as
+     *    the SHIPPED chord, `Alt+Enter` and `Ctrl+Tab` and `F10` included.
+     *
+     * Null answers an unaliased press: dispatch continues unchanged.
+     */
+    public static function aliasPress(KeyMsg $msg): ?KeyMsg
+    {
+        if (self::$overrides === []) {
+            return null;
+        }
+
+        if ($msg->type === KeyType::Char && $msg->ctrl) {
+            $shipped = self::shippedRuneFor($msg->rune);
+            if ($shipped !== null) {
+                return new KeyMsg(KeyType::Char, $shipped, $msg->alt, $msg->ctrl, $msg->shift);
+            }
+        }
+
+        $target = self::chordAliasMap()[KeyBinding::pressId($msg)] ?? null;
+
+        return $target === null ? null : KeyBinding::keyMsgFromId($target);
     }
 
     /**

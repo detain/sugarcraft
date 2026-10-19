@@ -74,6 +74,32 @@ final class KeybindingChordDispatchTest extends TestCase
         $this->assertNotNull($viaShipped->chat->palette(), 'and the shipped chord still does');
     }
 
+    /**
+     * plan_comparison TUI-4c over the REAL funnel: a named-shape row
+     * (`chat.newline` ships `Alt+Enter`) is now reachable from a bare
+     * `Ctrl+Q`, and a row shipped as `Enter` is reachable from `Ctrl+B` —
+     * end to end through `App::handleKey`, not just at the consult.
+     */
+    public function testTheChordLaneCarriesNamedShapesEndToEnd(): void
+    {
+        KeyBindingRegistry::useOverrides(['chat.newline' => 'Ctrl+Q']);
+
+        [$typed] = $this->chatHostedApp()->update(new KeyMsg(KeyType::Char, 'a'));
+        [$aliased] = $typed->update(new KeyMsg(KeyType::Char, 'q', ctrl: true));
+        $this->assertStringEndsWith("\n", $aliased->chat->inputBuf, 'Ctrl+Q must land on the Alt+Enter behaviour');
+
+        KeyBindingRegistry::useOverrides(['chat.send' => 'Ctrl+B']);
+
+        [$filled] = $this->chatHostedApp()->update(new KeyMsg(KeyType::Char, 'h'));
+        [$filled] = $filled->update(new KeyMsg(KeyType::Char, 'i'));
+        [$sent] = $filled->update(new KeyMsg(KeyType::Char, 'b', ctrl: true));
+        $this->assertSame('', $sent->chat->inputBuf, 'Ctrl+B must land on the Enter behaviour (send clears the box)');
+
+        // The other Ctrl+B shipper (picker.branch, a non-claim context) is
+        // untouched: no claim set moves for an alias (ISS-047 law, 4c half).
+        $this->assertNotContains('b', KeyBindingRegistry::chatCtrlRunes());
+    }
+
     private function chatHostedApp(): App
     {
         $chat = (new Chat(backend: new EchoBackend()))->withSize(120, 20);
