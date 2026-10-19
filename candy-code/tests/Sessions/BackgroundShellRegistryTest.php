@@ -502,7 +502,9 @@ final class BackgroundShellRegistryTest extends TestCase
         $projectRoot = $home . '/project';
         mkdir($projectRoot, 0o700);
         $previousHome = getenv('HOME');
+        $previousServerHome = $_SERVER['HOME'] ?? null;
         putenv('HOME=' . $home);
+        $_SERVER['HOME'] = $home; // twin spelling (OneSidedHomeSandbox doctrine)
 
         $buckets = new \ReflectionProperty(Bootstrap::class, 'shellRegistries');
         $armed = new \ReflectionProperty(Bootstrap::class, 'shellsShutdownRegistered');
@@ -537,6 +539,11 @@ final class BackgroundShellRegistryTest extends TestCase
                 putenv('HOME');
             } else {
                 putenv('HOME=' . $previousHome);
+            }
+            if ($previousServerHome === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $previousServerHome;
             }
         }
     }
