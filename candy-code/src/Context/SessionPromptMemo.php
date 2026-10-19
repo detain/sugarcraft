@@ -38,7 +38,13 @@ namespace SugarCraft\Code\Context;
  * them in the history the next turn runs on. An edit to CLAUDE.md
  * made mid-session therefore takes effect at the next of those points, not on
  * the next step; that trades immediacy for a prefix that does not move, which
- * is the trade the surveyed agents make (crush_report IV.4). The inputs that
+ * is the trade the surveyed agents make (crush_report IV.4). The immediacy is
+ * not simply lost, only relocated (plan_comparison CTX-3):
+ * {@see InstructionDiffTracker} fingerprints the tracked files at freeze and
+ * re-checks them — stat-first — on every turn-context build, so the edit
+ * surfaces the next step as a bounded unified diff in the `<turn-context>`
+ * tail while the frozen slab keeps its bytes until the refresh point absorbs
+ * it. The inputs that
  * DO legitimately change a layer mid-session are part of its slot key instead
  * of being frozen: the project root, the model name (the `<env>` "Model:"
  * line), the `/rules` toggle set and the instruction-loader instance — so a

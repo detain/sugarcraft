@@ -5588,6 +5588,11 @@ final class Runtime
      * does. The context-window share is not filled here: the usage it needs
      * is the engine loop's, so that owner fills it
      * ({@see Context\TurnContextBlock::withContextPercent()}).
+     *
+     * CTX-3: this is also where the instruction-diff recheck runs — the tail
+     * row, never the message-0 assembly — so a mid-session edit to a root
+     * instruction file reaches the model as a bounded delta while the frozen
+     * slab keeps its bytes ({@see instructionDiff()}).
      */
     public function turnContext(App $app): Context\TurnContextBlock
     {
@@ -5595,7 +5600,44 @@ final class Runtime
             ->withGitState($this->environmentSnapshot($app)->renderVolatile())
             ->withRecentlyModifiedFiles(Context\TurnContextBlock::recentlyModifiedIn($app->messages))
             ->withMemoryRecall($this->memoryRecall($app)->render())
-            ->withChangedSinceRead(Tools\ReadLedger::in($app->tools)?->notice() ?? '');
+            ->withChangedSinceRead(Tools\ReadLedger::in($app->tools)?->notice() ?? '')
+            ->withInstructionDiff($this->instructionDiff($app));
+    }
+
+    /**
+     * The instruction-file delta for this step's turn-context row (CTX-3).
+     *
+     * The tracker rides the session memo keyed by the loader's identity, so
+     * it is captured once per frozen slab and re-captured the moment the slab
+     * re-freezes — forget() at a refresh point drops this slot with every
+     * other, and a {@see Context\InstructionFileLoader::refresh()} behind a
+     * NEW loader instance changes the key. Every call is a stat walk over a
+     * handful of paths; content is re-read (and hashed) only for a file whose
+     * mtime/size moved, which is the whole cost model of the feature: an
+     * unchanged session pays one stat per instruction file per step.
+     *
+     * An App without a loader has no slab and nothing frozen to diff against:
+     * renders '', and the row carries no section.
+     *
+     * Coupling caveat, shared with every standing layer: the memo is bounded
+     * ({@see Context\SessionPromptMemo::MAX_SLOTS_PER_SESSION}) and a slot
+     * that is evicted mid-session re-captures from current disk while the
+     * loader's own inner cache still holds the slab's bytes — in practice the
+     * standing slots never reach the cap, and the consequence is one lost
+     * notice until the next refresh point, not a moved prefix.
+     */
+    private function instructionDiff(App $app): string
+    {
+        $loader = $app->instructionLoader;
+        if ($loader === null) {
+            return '';
+        }
+
+        return $this->sessionPromptMemo()->remember(
+            $app->sessionId,
+            'instruction-diffs:' . \spl_object_id($loader),
+            static fn(): Context\InstructionDiffTracker => Context\InstructionDiffTracker::capture($loader),
+        )->recheck();
     }
 
     /**

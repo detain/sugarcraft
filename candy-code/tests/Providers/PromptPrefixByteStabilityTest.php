@@ -7,6 +7,8 @@ namespace SugarCraft\Code\Tests\Providers;
 use GuzzleHttp\Client;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Context\InstructionDiffTracker;
+use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\TurnContextBlock;
 use SugarCraft\Code\Message as RootMessage;
 use SugarCraft\Code\Providers\CompleteRequest;
@@ -45,6 +47,12 @@ use SugarCraft\Code\Tools\ToolResult;
  * (EngineBackend::runTurn), so step k+1 carries step k's row in place and
  * appends a new one only when the bytes changed: the comparison below covers
  * all n rows of the earlier request.
+ *
+ * CTX-3 extends the property across SESSIONS of complete() calls on one
+ * backend: an edit to CLAUDE.md between two turns must move the tail row —
+ * the delta rides the next `<turn-context>` — while every earlier row AND the
+ * system prompt stay byte-identical, because the instruction slab is a
+ * PerSession layer and this feature exists precisely to leave it frozen.
  */
 final class PromptPrefixByteStabilityTest extends TestCase
 {
@@ -130,6 +138,84 @@ final class PromptPrefixByteStabilityTest extends TestCase
                 "{$class}: the mid-history notice must ride in place",
             );
         }
+    }
+
+    /**
+     * CTX-3, full stack: two complete() turns on one backend, the instruction
+     * file edited between them. The prefix — system prompt AND every row turn
+     * 1 sent — must survive the edit byte-for-byte; only the new turn's
+     * appended row may carry it, as the tracker's delta.
+     */
+    public function testAMidSessionInstructionEditRidesTheTailRowAndNotTheFrozenPrefix(): void
+    {
+        $home = $this->tempDir();
+        mkdir($home . '/.candy-code', 0o700, true);
+        $this->useHomeSandbox($home);
+
+        $root = $this->gitFixture();
+        file_put_contents($root . '/CLAUDE.md', "Alpha rule\nBeta rule\n");
+
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'first answer'),
+            new CompleteResponse(content: 'second answer'),
+        ]);
+        $backend = EngineBackend::new($provider, 'm')
+            ->withoutHooks()
+            ->withRoot($root)
+            ->withInstructionLoader(new InstructionFileLoader($root));
+
+        $history = [RootMessage::system(self::LAUNCH_NOTICE), RootMessage::user('go')];
+        $reply = $backend->complete($history);
+        $this->assertSame('first answer', $reply->content);
+        $this->assertCount(1, $provider->requests, 'a no-tool turn is one step');
+
+        $turnOne = $provider->requests[0];
+        $firstRow = (string) TurnContextBlock::latestIn($turnOne->messages);
+        $this->assertStringStartsWith(TurnContextBlock::FENCE, $firstRow);
+        $this->assertStringNotContainsString(InstructionDiffTracker::HEADER, $firstRow, 'nothing has moved yet');
+        $this->assertStringNotContainsString(InstructionDiffTracker::HEADER, (string) $turnOne->systemPrompt);
+        $this->assertStringContainsString('Alpha rule', (string) $turnOne->systemPrompt, 'the slab froze the file — the fixture only works if it did');
+
+        // The user edits the instruction file mid-session.
+        file_put_contents($root . '/CLAUDE.md', "Alpha rule\nBeta rule\nGamma rule\n");
+
+        // The next turn runs on the history the first actually ended with —
+        // the persisted row included, exactly as the Chat owner carries it —
+        // plus the reply and the new question. beginSessionTurn keys its
+        // rewrite detection on these leading rows unchanged, so the memo (and
+        // with it the frozen baseline) survives into turn 2.
+        $historyTwo = [
+            RootMessage::system(self::LAUNCH_NOTICE),
+            RootMessage::user('go'),
+            RootMessage::user($firstRow),
+            RootMessage::assistant('first answer'),
+            RootMessage::user('more'),
+        ];
+        $reply = $backend->complete($historyTwo);
+        $this->assertSame('second answer', $reply->content);
+        $this->assertCount(2, $provider->requests);
+
+        $second = $provider->requests[1];
+        $this->assertSame((string) $turnOne->systemPrompt, (string) $second->systemPrompt, 'the frozen prefix must not feel the edit');
+        $this->assertStringNotContainsString('Gamma rule', (string) $second->systemPrompt);
+        $this->assertStringNotContainsString(InstructionDiffTracker::HEADER, (string) $second->systemPrompt, 'the delta lands in the tail, never the slab');
+
+        $tail = $second->messages[array_key_last($second->messages)];
+        $this->assertTrue(TurnContextBlock::isTurnContext($tail), 'the edit must show up on the appended row — that is the whole feature');
+        $secondRow = (string) TurnContextBlock::latestIn($second->messages);
+        $this->assertStringContainsString(InstructionDiffTracker::HEADER, $secondRow);
+        $this->assertStringContainsString('+Gamma rule', $secondRow);
+        $this->assertStringContainsString('CLAUDE.md (', $secondRow);
+
+        // And every row turn 1 sent is still in turn 2 byte-for-byte — the
+        // persisted row included, edit notwithstanding.
+        $earlier = self::wire(CustomProvider::class, $turnOne);
+        $later = self::wire(CustomProvider::class, $second);
+        $this->assertSame(
+            json_encode($earlier),
+            json_encode(\array_slice($later, 0, \count($earlier))),
+            'the instruction edit must not disturb a single byte the earlier turn already sent',
+        );
     }
 
     private const MARKER = '// written by step one';

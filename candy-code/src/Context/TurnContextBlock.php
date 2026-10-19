@@ -31,8 +31,11 @@ use SugarCraft\Code\Tools\ToolCall;
  * recalled for the latest user message ({@see MemoryRecallBlock}, roadmap
  * 5.3-2 — query-dependent, so it can only live here and never in message 0),
  * the files that changed on disk since the model read them
- * ({@see \SugarCraft\Code\Tools\ReadLedger::notice()}, roadmap 3.I-2), and
- * the share of the context window in use once it reaches
+ * ({@see \SugarCraft\Code\Tools\ReadLedger::notice()}, roadmap 3.I-2), the
+ * root instruction files edited since the session froze them
+ * ({@see withInstructionDiff()}, plan_comparison CTX-3 — the frozen slab
+ * never moves, so mid-session edits arrive here as bounded diffs), the share
+ * of the context window in use once it reaches
  * {@see CONTEXT_NOTICE_PERCENT}, the skills the Skill tool loaded this
  * session ({@see withInvokedSkills()}), and — on the one row after a
  * compaction — what it re-injects ({@see withReinjection()}, roadmap 2.6).
@@ -99,6 +102,7 @@ final readonly class TurnContextBlock
      * @param string       $changedSinceRead The read ledger's stale-file paragraph; '' for none.
      * @param list<string> $invokedSkills    Skill names the Skill tool loaded, most recent first.
      * @param string       $reinjection      A rendered {@see \SugarCraft\Code\Context\Compaction\ReinjectionPlan}; '' for none.
+     * @param string       $instructionDiff  A rendered {@see InstructionDiffTracker::recheck()} section; '' for none.
      */
     public function __construct(
         private string $gitState = '',
@@ -108,6 +112,7 @@ final readonly class TurnContextBlock
         private string $changedSinceRead = '',
         private array $invokedSkills = [],
         private string $reinjection = '',
+        private string $instructionDiff = '',
     ) {
     }
 
@@ -194,6 +199,23 @@ final readonly class TurnContextBlock
         return $this->reinjection;
     }
 
+    /** The instruction-diff section this row carries, or '' for none. */
+    public function instructionDiff(): string
+    {
+        return $this->instructionDiff;
+    }
+
+    /**
+     * @param string $section a rendered {@see InstructionDiffTracker::recheck()}
+     *                        section (CTX-3); '' clears it. Payload bytes
+     *                        arrive escaped by the tracker; this row's own
+     *                        fence is neutralised in them on render.
+     */
+    public function withInstructionDiff(string $section): self
+    {
+        return $this->mutate(instructionDiff: $section);
+    }
+
     /**
      * @param string $rendered a rendered {@see \SugarCraft\Code\Context\Compaction\ReinjectionPlan};
      *                         '' clears it. Payload bytes (file contents,
@@ -256,6 +278,15 @@ final readonly class TurnContextBlock
         // Canonical paths from the ledger: escaped like the paths above.
         if (trim($this->changedSinceRead) !== '') {
             $parts[] = self::escapeOwnFence(PromptFence::escape($this->changedSinceRead));
+        }
+
+        // Pre-escaped as data by InstructionDiffTracker (diff bodies from
+        // repository-controlled files); this row's own fence is neutralised
+        // in it like in every other payload. Sits with the other "the disk
+        // moved under you" notices, and only ever carries the DELTA — the
+        // frozen slab in the system prompt above it never moves.
+        if (trim($this->instructionDiff) !== '') {
+            $parts[] = self::escapeOwnFence($this->instructionDiff);
         }
 
         // Already escaped and fenced by MemoryRecallBlock; this row's own
@@ -501,6 +532,7 @@ final readonly class TurnContextBlock
         ?string $changedSinceRead = null,
         ?array $invokedSkills = null,
         ?string $reinjection = null,
+        ?string $instructionDiff = null,
     ): self {
         return new self(
             $gitState ?? $this->gitState,
@@ -510,6 +542,7 @@ final readonly class TurnContextBlock
             $changedSinceRead ?? $this->changedSinceRead,
             $invokedSkills ?? $this->invokedSkills,
             $reinjection ?? $this->reinjection,
+            $instructionDiff ?? $this->instructionDiff,
         );
     }
 }
