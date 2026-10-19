@@ -76,6 +76,7 @@ under [`docs/`](docs/) for the full detail.
 | [`docs/SKILLS.md`](docs/SKILLS.md) | Writing a skill, where skills load from, how they reach the model, `$name` mentions |
 | [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Multi-stage workflows in YAML or PHP, `/workflow`, and the model-authored `Workflow` tool |
 | [`docs/MEDIA.md`](docs/MEDIA.md) | Image and video generation: endpoint dialects, the capability probe, the `Ctrl+D` form and `/play`, presets, the PNG infotext round-trip, the RPC surface |
+| [`docs/CI.md`](docs/CI.md) | The GitHub Action around `-p`, the JSON envelope, and the fork-PR/prompt-injection doctrine — for when you run the agent in CI |
 | [`docs/MCP.md`](docs/MCP.md) | MCP servers: `.mcp.json`, the trust gate, auth, the in-process git server |
 | [`docs/SERVER.md`](docs/SERVER.md) | `candy-code serve`, remote access (`--allowed-host`, `--allowed-ips`), picking a new session's directory (`--allow-dir-browse`), the `candy-code.v1` protocol, the web UI, `candy-code attach`, editors through `candy-code acp` |
 | [`docs/PROMPT_ENGINEERING.md`](docs/PROMPT_ENGINEERING.md) | How the system prompt and the turn-context row are assembled, and why |
