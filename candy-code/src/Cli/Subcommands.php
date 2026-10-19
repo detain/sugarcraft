@@ -10,12 +10,15 @@ use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Bundles\Bundle;
+use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Session\SessionQuery;
 use SugarCraft\Code\Session\SessionResolver;
 use SugarCraft\Code\Session\SessionRow;
 use SugarCraft\Code\Session\TitleSource;
 use SugarCraft\Code\Util\Exporter;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * The real CLI subcommands — `mcp list`, `session list|show|rename|delete|
@@ -1461,30 +1464,39 @@ final class Subcommands
      * implemented by asking for the client.
      */
     /**
+     * The `bundles` verb: `list` reads the tree, `install` stages a bundle
+     * into the user root. Both answer without a provider, an API key or a
+     * terminal, like every sibling in this class.
+     */
+    private static function bundles(ParsedArgs $args): int
+    {
+        $verb = $args->subcommandArgs[0] ?? null;
+        if ($verb === 'list') {
+            return self::bundlesList($args);
+        }
+        if ($verb === 'install') {
+            return self::bundlesInstall($args);
+        }
+
+        return NonInteractive::failUsage(
+            $verb === null
+                ? 'candy-code: ' . Lang::t('cli.bundles.no_action')
+                : 'candy-code: ' . Lang::t('cli.bundles.unknown_action', ['action' => $verb]),
+            $args->outputFormat,
+            Lang::t('cli.bundles.usage'),
+        );
+    }
+
+    /**
      * `bundles list` — everything PLG-1's reader sees from this directory:
      * name, version, tier, a count per surface, and the two declined
      * surfaces spelled out. The discovery is read FRESH here rather than
      * through the memoized app feed: a one-shot CLI answer must reflect the
      * disk as it is now, and warnings/refusals go to this process's stderr,
      * not into a launch-notice store no headless reader will ever drain.
-     *
-     * `bundles install` is its own commit; until it lands, the action is
-     * refused as unknown through the usage envelope like every other bad
-     * operand.
      */
-    private static function bundles(ParsedArgs $args): int
+    private static function bundlesList(ParsedArgs $args): int
     {
-        $verb = $args->subcommandArgs[0] ?? null;
-        if ($verb !== 'list') {
-            return NonInteractive::failUsage(
-                $verb === null
-                    ? 'candy-code: ' . Lang::t('cli.bundles.no_action')
-                    : 'candy-code: ' . Lang::t('cli.bundles.unknown_action', ['action' => $verb]),
-                $args->outputFormat,
-                Lang::t('cli.bundles.usage'),
-            );
-        }
-
         $configured = Bootstrap::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
         $paths = \array_values(\array_filter(\is_array($configured) ? $configured : [], 'is_string'));
         $discovery = new BundleDiscovery((string) ($args->root ?? ''), $paths);
@@ -1541,14 +1553,377 @@ final class Subcommands
         echo Lang::t('cli.bundles.declined') . "\n";
 
         foreach ($discovery->warnings() as $warning) {
-            \fwrite(\STDERR, 'candy-code: ' . $warning . "\n");
+            self::bundlesLine($warning);
         }
 
         foreach ($discovery->refusedDirectories() as $reason) {
-            \fwrite(\STDERR, 'candy-code: ' . $reason . "\n");
+            self::bundlesLine($reason);
         }
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * The one prefixed stderr line every `bundles` diagnostic rides, shared
+     * by the listing's echoes and the installer's refusals so a CI gate
+     * reading this verb's bytes sees one shape.
+     */
+    private static function bundlesLine(string $message): void
+    {
+        \fwrite(\STDERR, 'candy-code: ' . $message . "\n");
+    }
+
+    /**
+     * Wall-clock ceiling for `bundles install`'s git clone. A ceiling on
+     * ONE named child the user asked for, escalated through
+     * {@see BoundedShutdown} with its process group — not a blanket timeout
+     * on anything model-facing (the E646 line).
+     */
+    private const BUNDLE_CLONE_TIMEOUT_SECONDS = 120.0;
+
+    /**
+     * The repo-local git variables removed from the clone's environment —
+     * the same discipline {@see \SugarCraft\Code\MCP\GitCommandHandlers}
+     * holds: an inherited `GIT_DIR` must never redirect a clone the user
+     * asked for into somebody else's object store.
+     */
+    private const BUNDLE_INSTALL_GIT_STRIP = [
+        'GIT_DIR',
+        'GIT_WORK_TREE',
+        'GIT_INDEX_FILE',
+        'GIT_OBJECT_DIRECTORY',
+        'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+        'GIT_COMMON_DIR',
+    ];
+
+    /**
+     * Test seam for the clone child, the {@see self::$loginSpawn} idiom:
+     * `$fn($url, $scratch)` returns `['ok' => bool, 'detail' => string]`.
+     * The default arms a `setsid -w`-wrapped shallow clone, drains both
+     * pipes until exit (never single-shot), and kills the WHOLE group on
+     * expiry so git-transport children die with it.
+     *
+     * @var (callable(string, string): array{ok: bool, detail: string})|null
+     */
+    private static ?\Closure $bundlesInstallSpawn = null;
+
+    /**
+     * `bundles install <path|git-url>` — stage a bundle into
+     * `~/.candy-code/bundles/`, the ONE directory this verb writes to
+     * (owned-dest law: {@see HomeDirectory::owned()} or refusal).
+     *
+     * A directory source must carry a manifest and is copied minus every
+     * `.git` directory — a bundle ships content, not the vendor's history.
+     * A git URL is cloned shallowly into a scratch directory INSIDE the
+     * bundle root, validated for a manifest, and only then renamed into
+     * place; failures remove the scratch. An existing install of the same
+     * name is refused, never overwritten: silently replacing what the
+     * session loaded this morning is not what an install means.
+     */
+    private static function bundlesInstall(ParsedArgs $args): int
+    {
+        $source = $args->subcommandArgs[1] ?? null;
+        if ($source === null || $source === '') {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.bundles.install.needs_source'),
+                $args->outputFormat,
+                Lang::t('cli.bundles.usage'),
+            );
+        }
+
+        $home = HomeDirectory::owned();
+        if ($home === null) {
+            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $root = $home . '/.candy-code/bundles';
+        if (!is_dir($root) && !@\mkdir($root, 0700, true) && !is_dir($root)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        if (is_dir($source) && realpath($source) === realpath($root)) {
+            // Installing the bundle root into itself is not an install.
+            self::bundlesLine(Lang::t('cli.bundles.install.not_a_source', ['source' => $source]));
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $scratch = null;
+        if (is_dir($source)) {
+            $scratch = $root . '/.install-' . \uniqid('', true);
+            if (!self::copyBundleTree($source, $scratch)) {
+                self::bundlesLine(Lang::t('cli.bundles.install.read_failed', ['source' => $source]));
+                self::removeTree($scratch);
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            $staged = $scratch;
+        } elseif (self::looksLikeGitUrl($source)) {
+            if (ProcessContainment::locateOnPath('git') === '') {
+                self::bundlesLine(Lang::t('cli.bundles.install.missing_git', ['source' => $source]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            $scratch = $root . '/.install-' . \uniqid('', true);
+            $spawn = self::$bundlesInstallSpawn ?? self::bundlesCloneDefault();
+            $run = $spawn($source, $scratch);
+            if ($run['ok'] !== true || !is_dir($scratch)) {
+                self::bundlesLine(Lang::t('cli.bundles.install.clone_failed', ['source' => $source, 'detail' => $run['detail']]));
+                self::removeTree($scratch);
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            $staged = $scratch;
+        } else {
+            self::bundlesLine(Lang::t('cli.bundles.install.not_a_source', ['source' => $source]));
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        if (!Bundle::hasManifest($staged)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $source]));
+            self::removeTree($scratch);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $manifest = Bundle::readManifest($staged);
+        $name = (string) ($manifest['name'] ?? '') !== ''
+            ? (string) $manifest['name']
+            : \basename(\rtrim(\str_replace(['\\', '/'], '/', $source), '/'));
+        if (\preg_match('/^[A-Za-z0-9._-]+$/', $name) !== 1 || $name === '.' || $name === '..') {
+            self::bundlesLine(Lang::t('cli.bundles.install.invalid_name', ['name' => $name]));
+            self::removeTree($scratch);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $dest = $root . '/' . $name;
+        if (\file_exists($dest)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.exists', ['name' => $name, 'dest' => $dest]));
+            self::removeTree($scratch);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        if (!@\rename($staged, $dest)) {
+            // Cross-device or non-directory root: fall back to the same
+            // copy used for path sources, then drop the scratch.
+            if (!self::copyBundleTree($staged, $dest)) {
+                self::bundlesLine(Lang::t('cli.bundles.install.read_failed', ['source' => $source]));
+                self::removeTree($dest);
+                self::removeTree($scratch);
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            self::removeTree($scratch);
+        }
+
+        echo Lang::t('cli.bundles.installed', ['name' => $name, 'dest' => $dest]) . "\n";
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * The default clone: argv-array `git clone --quiet --depth 1 --no-tags`
+     * (no shell: URL quoting is argv's job, and `--` ends option parsing so
+     * a URL beginning with `-` stays a URL), wrapped by
+     * {@see ProcessContainment::spawnSpec()} so the clone leads its own
+     * session and dies in its own group.
+     *
+     * @return array{ok: bool, detail: string}
+     */
+    private static function bundlesCloneDefault(): \Closure
+    {
+        return static function (string $url, string $scratch): array {
+            // `@`: with no wrapper a failed exec raises E_WARNING from
+            // proc_open() itself; the answer below is by return value.
+            $process = @\proc_open(
+                ProcessContainment::spawnSpec(['git', 'clone', '--quiet', '--depth', '1', '--no-tags', '--', $url, $scratch]),
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                null,
+                self::bundlesChildEnv(),
+            );
+
+            if (!\is_resource($process)) {
+                return ['ok' => false, 'detail' => 'git could not be launched'];
+            }
+
+            \fclose($pipes[0]);
+            \stream_set_blocking($pipes[1], false);
+            \stream_set_blocking($pipes[2], false);
+
+            $out = '';
+            $err = '';
+            $open = [$pipes[1], $pipes[2]];
+            $deadline = \hrtime(true) / 1_000_000_000 + self::BUNDLE_CLONE_TIMEOUT_SECONDS;
+            $timedOut = false;
+
+            while ($open !== []) {
+                $now = \hrtime(true) / 1_000_000_000;
+                if ($now >= $deadline) {
+                    $timedOut = true;
+
+                    break;
+                }
+
+                $read = $open;
+                $write = null;
+                $except = null;
+                $slice = (int) \max(0, \min(0.05, $deadline - $now));
+                if (\stream_select($read, $write, $except, $slice) === false) {
+                    break; // signal-interrupted: treat as done reading
+                }
+
+                foreach ($read as $index => $stream) {
+                    $chunk = \fread($stream, 8192);
+                    if ($chunk === false || $chunk === '') {
+                        if (\feof($stream)) {
+                            \fclose($stream);
+                            unset($open[$index]);
+                        }
+
+                        continue;
+                    }
+
+                    if ($stream === $pipes[1]) {
+                        $out .= $chunk;
+                    } else {
+                        $err .= $chunk;
+                    }
+                }
+            }
+
+            foreach ($open as $stream) {
+                \fclose($stream);
+            }
+
+            if ($timedOut) {
+                BoundedShutdown::terminateAndAwaitExit($process, groupPid: ProcessContainment::groupId($process));
+                \proc_close($process);
+
+                return ['ok' => false, 'detail' => Lang::t('cli.bundles.install.clone_timeout', ['source' => $url, 'seconds' => '120'])];
+            }
+
+            // Poll-then-reap: the pipes have both reached EOF (or select
+            // died); proc_close waits and carries the verdict.
+            $code = \proc_close($process);
+            if ($code !== 0) {
+                $tail = \trim($err) !== '' ? \trim($err) : (\trim($out) !== '' ? \trim($out) : 'exit ' . $code);
+
+                return ['ok' => false, 'detail' => $tail];
+            }
+
+            return ['ok' => true, 'detail' => ''];
+        };
+    }
+
+    /**
+     * The clone's environment: the contained base with the repo-local git
+     * variables stripped and a HOME git can read its config from.
+     *
+     * @return array<string, string>
+     */
+    private static function bundlesChildEnv(): array
+    {
+        $env = ProcessContainment::env();
+        foreach (self::BUNDLE_INSTALL_GIT_STRIP as $name) {
+            unset($env[$name]);
+        }
+
+        // git needs HOME to read ~/.gitconfig at all; the clone never
+        // writes there (auth prompts are refused by the environment, not
+        // answered from it), so a world-writable stand-in is honest.
+        if ((string) ($env['HOME'] ?? '') === '') {
+            $env['HOME'] = '/tmp';
+        }
+
+        return $env;
+    }
+
+    /**
+     * scp-style (`user@host:path`), scheme-style, or a bare `.git` path —
+     * the shapes `git clone` accepts. Deliberately strict: anything else
+     * that is not a directory is refused, because the alternative to a
+     * refusal here is handing an arbitrary string to a network client.
+     */
+    private static function looksLikeGitUrl(string $source): bool
+    {
+        return \preg_match('#^(?:https?|ssh|git)://#i', $source) === 1
+            || \preg_match('#^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:\S+$#', $source) === 1
+            || \str_ends_with($source, '.git');
+    }
+
+    /**
+     * Recursive copy that skips every `.git` directory: a bundle ships
+     * content, not the vendor's repository history.
+     */
+    private static function copyBundleTree(string $from, string $to): bool
+    {
+        if (!@\mkdir($to, 0700, true) && !\is_dir($to)) {
+            return false;
+        }
+
+        $entries = @\scandir($from);
+        if ($entries === false) {
+            return false;
+        }
+
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            if ($entry === '.git') {
+                continue;
+            }
+
+            $src = $from . '/' . $entry;
+            $dst = $to . '/' . $entry;
+
+            if (\is_dir($src)) {
+                if (!self::copyBundleTree($src, $dst)) {
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (!@\copy($src, $dst)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Best-effort scratch cleanup: this verb creates only inside its own
+     * root, so removing is bounded by paths it minted.
+     */
+    private static function removeTree(string $path): void
+    {
+        if (!\is_dir($path)) {
+            return;
+        }
+
+        $entries = @\scandir($path);
+        if (\is_array($entries)) {
+            foreach ($entries as $entry) {
+                if ($entry !== '.' && $entry !== '..') {
+                    $child = $path . '/' . $entry;
+                    \is_dir($child) ? self::removeTree($child) : @\unlink($child);
+                }
+            }
+        }
+
+        @\rmdir($path);
     }
 
     private static function mcp(ParsedArgs $args): int

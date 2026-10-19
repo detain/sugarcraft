@@ -57,9 +57,9 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — thirty-two sites (PLG-1 2026-10-19: +2 in
- *     `bundles list`, the headless warning/refusal echoes the one-shot shape
- *     keeps; AUT-4 2026-10-19: +1 in
+ *  1. `fwrite(STDERR, …)` — thirty-one sites (PLG-1 2026-10-19: +1 in
+ *     `bundles` — the installer's refusals and the listing's warning echoes
+ *     share the one `bundlesLine` writer; AUT-4 2026-10-19: +1 in
  *     `NonInteractive::failJsonSchemaUnsupported()`, stderr-alone beside the usage line;
  *     AUT-2 2026-10-19: +2 in
  *     `NonInteractive::run()` for the session-funnel and save degrade lines,
@@ -350,10 +350,10 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/Serve.php' => 1,
         // N-2 2026-10-17: +1 — `mcp list` names each skipped .mcp.json entry on
         // stderr, the same sentence the launch loop has printed since ISS-091.
-        // PLG-1 2026-10-19: +2 — `bundles list` echoes its config warnings and
-        // containment refusals on stderr: a subcommand is a separate process
-        // with no live transcript to name, the same decision as every sibling.
-        'src/Cli/Subcommands.php' => 7,
+        // PLG-1 2026-10-19: +1 — the `bundles` verb's one shared stderr
+        // writer (`bundlesLine`): a subcommand is a separate process with no
+        // live transcript to name, the same decision as every sibling.
+        'src/Cli/Subcommands.php' => 6,
         // `/new` into another directory: SessionRelaunch::tell(), the one
         // line saying why candy-code could not restart there (no
         // pcntl_exec, an unenterable directory, a failed exec) and the
@@ -548,8 +548,9 @@ final class StderrEmitterCensusTest extends TestCase
         // usage, too_many_operands and unknown_provider. Same stderr-only
         // decision as every sibling here: a separate CLI process, no live
         // session transcript to name, nothing was opened or changed.
-        // PLG-1 2026-10-19: +4 — the two `bundles` usage refusals and the two
-        // stderr echoes above all carry the `candy-code: ` message prefix.
+        // PLG-1 2026-10-19: +4 — the two `bundles` dispatch refusals, the
+        // installer's needs_source refusal, and the shared `bundlesLine`
+        // writer all carry the `candy-code: ` message prefix.
         'src/Cli/Subcommands.php' => 37,
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,

@@ -102,6 +102,33 @@ final class Bundle
         );
     }
 
+    /**
+     * The parsed manifest of $dir, or [] when there is no readable, decodable
+     * one. The installer's name lookup rides this; {@see fromDir()} keeps its
+     * own stricter read (no manifest OR no decode means no bundle AT ALL —
+     * discovery skips, the installer refuses with a named reason).
+     *
+     * @return array<string, mixed>
+     */
+    public static function readManifest(string $dir): array
+    {
+        $manifestPath = self::manifestPath($dir);
+
+        if ($manifestPath === null) {
+            return [];
+        }
+
+        $raw = @file_get_contents($manifestPath);
+
+        if ($raw === false) {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return \is_array($decoded) ? $decoded : [];
+    }
+
     /** True when $dir carries either manifest shape, readable or not. */
     public static function hasManifest(string $dir): bool
     {
