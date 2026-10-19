@@ -22,7 +22,12 @@ final class PaletteFullQueryMatchTest extends TestCase
     public function testALabelMatchingOnlySomeQueryCharactersIsNotListed(): void
     {
         self::assertSame([], self::palette('root', 'xq')->paletteMatches(), '"Exit" carries the x but not the q');
-        self::assertSame(['Switch model'], self::palette('root', 'mdl')->paletteMatches());
+        $mdl = self::palette('root', 'mdl')->paletteMatches();
+        sort($mdl);
+        // VIS-4 grew the label set: "Ask the model" (the compact row) covers
+        // m-d-l too, as a subsequence of "…mo**d**e**l**". The rule this test
+        // pins is coverage, not a fixed list — both rows belong here.
+        self::assertSame(['Ask the model', 'Switch model'], $mdl);
     }
 
     public function testInitialsStyleQueriesStillMatch(): void

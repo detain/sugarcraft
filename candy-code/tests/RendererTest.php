@@ -1606,7 +1606,7 @@ final class RendererTest extends TestCase
     /** An open palette, optionally with $query already typed into it. */
     private function openPalette(string $query = ''): Chat
     {
-        [$current] = $this->chat()->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        [$current] = $this->chat()->withSize(100, 80)->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
         foreach (str_split($query) as $ch) {
             [$current] = $current->update(new KeyMsg(KeyType::Char, $ch));
         }

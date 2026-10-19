@@ -2322,9 +2322,13 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertSame('run-2', $opened->agentViewTarget);
             },
             'mouse.palette-row' => function (): void {
-                $chat = $this->chatWithPalette();
-                $at = array_search(self::PALETTE_ROW_WITH_AN_EFFECT, $chat->paletteMatches(), true);
-                $this->assertIsInt($at, 'fixture: the root list must offer ' . self::PALETTE_ROW_WITH_AN_EFFECT);
+                // VIS-4 made the root list a superset — far longer than the
+                // painted window — so the row is reached through the filtered
+                // fixture (typed query, highlight moved onto it). The promise
+                // is about the CLICKED row, and clicking a highlighted row
+                // runs it rather than merely highlighting is the sharper form
+                // of the same claim.
+                [$chat, $at] = $this->paletteHighlightedOnTheSwitchThemeRow();
 
                 $after = $this->clickZone($chat, Renderer::PALETTE_ITEM_ZONE_PREFIX . $at);
                 $this->assertSame(
