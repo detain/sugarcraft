@@ -13,6 +13,7 @@ asking.
 | [PERMISSIONS.md](PERMISSIONS.md) | Permission modes, rules, gate chain | The agent is refused (or should be) |
 | [MCP.md](MCP.md) | Model Context Protocol servers: declaring, trusting, auth | You are wiring external tools |
 | [SKILLS.md](SKILLS.md) | Skill discovery, precedence, the `context:` field | You author or install skills |
+| [PLUGINS.md](PLUGINS.md) | Claude-format plugin bundles: surfaces, precedence, the declined hooks and MCP files | You install someone else's bundle |
 | [AGENTS.md](AGENTS.md) | Running sub-agents: presets, teams, delegation | You want work done in parallel |
 | [AGENTS_AUTHORING.md](AGENTS_AUTHORING.md) | Writing an agent-preset file, field by field | You author `.candy-code/agents/*.md` |
 | [WORKFLOWS.md](WORKFLOWS.md) | Multi-stage agent pipelines | You compose a repeatable run |

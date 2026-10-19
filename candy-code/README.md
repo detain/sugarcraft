@@ -74,6 +74,7 @@ under [`docs/`](docs/) for the full detail.
 | [`docs/HOOKS.md`](docs/HOOKS.md) | `hooks.yaml`, every hook event, the exit-code and JSON stdout contract, post-edit lint, diagnostics, auto-commit and auto-test |
 | [`docs/MEMORY.md`](docs/MEMORY.md) | Memory notes, the `Memory` tool, recall, auto-consolidation, the dream pass, instruction files |
 | [`docs/SKILLS.md`](docs/SKILLS.md) | Writing a skill, where skills load from, how they reach the model, `$name` mentions |
+| [`docs/PLUGINS.md`](docs/PLUGINS.md) | Claude-format plugin bundles: what a bundle may ship, which surfaces it feeds, why its hooks and `.mcp.json` are declined, `candy-code bundles list|install` |
 | [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Multi-stage workflows in YAML or PHP, `/workflow`, and the model-authored `Workflow` tool |
 | [`docs/MEDIA.md`](docs/MEDIA.md) | Image and video generation: endpoint dialects, the capability probe, the `Ctrl+D` form and `/play`, presets, the PNG infotext round-trip, the RPC surface |
 | [`docs/CI.md`](docs/CI.md) | The GitHub Action around `-p`, the JSON envelope, and the fork-PR/prompt-injection doctrine — for when you run the agent in CI |
