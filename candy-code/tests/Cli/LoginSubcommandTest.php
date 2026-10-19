@@ -218,6 +218,46 @@ final class LoginSubcommandTest extends TestCase
     }
 
     /**
+     * PRV-4 micro-pin (i): the post-write re-read is the ONLY thing separating
+     * a silent writeUserConfig() bail from an announced persist. The writer
+     * returns void and walks away quietly when acquireUserConfigLock() times
+     * out; with the re-read dropped, this whole suite stayed GREEN, which is
+     * another way of saying the command could print "Stored the openai API
+     * key" about bytes that never reached the disk.
+     *
+     * flock() locks are per open file description, so holding the sidecar on
+     * a SECOND handle from this very process reproduces the concurrent-writer
+     * case the bail exists for in full — at the honest price of one bounded
+     * TimedFileLock::DEFAULT_WAIT_SECONDS spin before the writer gives up.
+     */
+    public function testAWriteThatBailedUnderLockContentionIsCaughtByTheReReadAndNotAnnouncedAsStored(): void
+    {
+        $configPath = $this->dir . '/config.json';
+        file_put_contents($configPath, '{"theme":"dark"}');
+        $this->armKeyPaste('sk-lost-in-the-lock-3');
+
+        $lock = fopen($this->dir . '/.config.json.lock', 'c');
+        $this->assertIsResource($lock);
+        $this->assertTrue(flock($lock, \LOCK_EX), 'two handles, one file: flock still contends');
+
+        try {
+            [$code, $out] = $this->capture(fn (): int => $this->dispatch(['login', 'openai']));
+        } finally {
+            flock($lock, \LOCK_UN);
+            fclose($lock);
+        }
+
+        $this->assertSame(NonInteractive::EXIT_FAILURE, $code);
+        $this->assertStringContainsString('could not be updated', $out);
+        $this->assertStringNotContainsString('Stored the', $out, 'a bail must never borrow the success wording');
+        $this->assertSame(
+            '{"theme":"dark"}',
+            file_get_contents($configPath),
+            'the silent bail must also have left the file byte-for-byte the planted one',
+        );
+    }
+
+    /**
      * @return array<string, array{0: string, 1: string}>
      */
     public static function ambientProviderProvider(): array
