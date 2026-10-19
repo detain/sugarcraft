@@ -771,16 +771,17 @@ Git itself, hooks included, runs under three guarantees:
   `git rev-parse --local-env-vars` lists are removed. Every call runs against
   the contained root.
 
-`candy-code --help` lists exactly eight under its **Subcommands** heading —
-`doctor`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list|trust|import`, `serve`,
+`candy-code --help` lists exactly nine under its **Subcommands** heading —
+`doctor`, `login <provider>`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list|trust|import`, `serve`,
 `attach`, `acp`, `completion bash|zsh|fish` — and none of those but `attach`
-and `acp` needs a provider, an API key or a terminal; five answer and exit, and
+and `acp` needs a provider, an API key or a terminal; `login` answers with the
+criterion's own tool or a written key; six answer and exit, and
 `serve` runs until it is stopped. `attach` runs the TUI on a session of a
 running `serve`, whose turns run there; `acp` runs turns for an editor that
 started it, speaking the Agent Client Protocol on stdio.
 
-Eight is the subcommand count, not the count of bare words argv treats specially:
-`run` is a ninth (the `$arg === 'run'` arm in `Cli\ArgvParser`,
+Nine is the subcommand count, not the count of bare words argv treats specially:
+`run` is a tenth (the `$arg === 'run'` arm in `Cli\ArgvParser`,
 `candy-code run "<prompt>"` in the help's Usage block), but it is an alias for
 `-p` and therefore a turn of conversation rather than a question about the
 install.

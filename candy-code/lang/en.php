@@ -150,6 +150,7 @@ return [
     'cli.completion.verb.attach' => 'Run the TUI on a session of a running server',
     'cli.completion.verb.completion' => 'Emit a shell completion script',
     'cli.completion.verb.doctor' => 'Report on this installation and exit',
+    'cli.completion.verb.login' => 'Log a provider in: its own login flow, or a pasted API key',
     'cli.completion.verb.mcp' => 'Inspect the project MCP configuration',
     'cli.completion.verb.models' => 'List the providers this install can select',
     'cli.completion.verb.run' => 'Run a single prompt and exit (alias for --prompt)',
@@ -216,6 +217,11 @@ session; acp runs turns for an editor, until the editor disconnects):
                          FAILS.
                          Distinct from the model-callable "doctor" tool, which
                          reports the terminal's image protocol to the model.
+  login <provider>       Log one provider in: claude-code and codex hand the
+                         terminal to their own CLI (the token never passes
+                         through candy-code); openai, anthropic and gemini
+                         paste a key into the config file's providers block;
+                         the rest name whoever actually owns their credential.
   models                 List the providers this install can select and the
                          model each one defaults to; "*" marks the selected
                          one.
@@ -717,9 +723,9 @@ TXT,
     'cli.models.none_selected' => 'No provider is selected; set CANDY_CODE_PROVIDER or use Ctrl+P "Switch model".',
     'cli.models.selected_legend' => '* = selected (CANDY_CODE_PROVIDER or {path}).',
     'cli.noninteractive.answer_not_json' => 'the answer could not be encoded as JSON: {error}',
+    'cli.noninteractive.json_schema_invalid' => '--json-schema is not valid JSON: {error}',
     'cli.noninteractive.json_schema_no_backend' => 'the supplied backend cannot honour --json-schema: it is not the engine, so there is no provider to constrain the answer with',
     'cli.noninteractive.json_schema_not_object' => '--json-schema must be a JSON object (a schema); a list or a scalar is not one',
-    'cli.noninteractive.json_schema_invalid' => '--json-schema is not valid JSON: {error}',
     'cli.noninteractive.json_schema_unreadable' => '--json-schema names no readable file: {path}',
     'cli.noninteractive.json_schema_unsupported' => 'the {name} provider does not honour --json-schema: the answer would be billed as structured and arrive unconstrained',
     'cli.noninteractive.no_prompt' => 'no prompt given — pass -p "<prompt>" or `candy-code run "<prompt>"`',
@@ -885,6 +891,25 @@ TXT,
     'cli.settings.rejected_value' => '{key} in {file} will fall back to its default: {error}',
     'cli.settings.unknown_key' => '{key} in {file} is not a setting candy-code reads{hint}',
     'cli.settings.wrong_tier' => '{key} in {file} is a candy-code setting this file is not read for — it takes effect only in the user-tier files',
+    'cli.sub.login.ambient' => 'login: {provider} has no credential for this command to take. {hint}',
+    'cli.sub.login.ask_key' => 'Paste the {provider} API key and press Enter; it is written to {path} and never logged.',
+    'cli.sub.login.control_chars' => 'login: the pasted text contains control characters; the key was not written.',
+    'cli.sub.login.corrupt_config' => 'login: {path} is not valid JSON; fix or remove that file first, the key was not written.',
+    'cli.sub.login.empty_key' => 'login: nothing was pasted, nothing was written.',
+    'cli.sub.login.hint_bedrock' => 'AWS credentials ride the SDK chain: AWS_ACCESS_KEY_ID, AWS_PROFILE, or an `aws sso login` session.',
+    'cli.sub.login.hint_custom' => 'A custom arm is whatever your gateway speaks: declare its type, endpoint and apiKey under providers in ~/.candy-code/config.json.',
+    'cli.sub.login.hint_sglang' => 'SGLang is self-hosted: point baseUrl (or OPENAI_BASE_URL) at your server instead.',
+    'cli.sub.login.hint_vertex' => 'Google application-default credentials own this: `gcloud auth application-default login`, or GCP_PROJECT_ID with a service account.',
+    'cli.sub.login.missing_binary' => 'login: {name} was not found on PATH. Install the provider CLI first.',
+    'cli.sub.login.passthrough_claude' => 'Handing the terminal to `claude auth login`: the Claude CLI owns its OAuth and keychain under ~/.claude, candy-code stores nothing.',
+    'cli.sub.login.passthrough_codex' => 'Handing the terminal to `codex login`: the Codex CLI writes the subscription token under ~/.codex, candy-code stores nothing.',
+    'cli.sub.login.passthrough_done' => 'login: {name} exited with code {code}.',
+    'cli.sub.login.selectable' => 'Selectable providers are: {types}.',
+    'cli.sub.login.stored' => 'Stored the {provider} API key under providers.{provider} in {path}; select it with provider={provider} (the {env} variable still wins when exported).',
+    'cli.sub.login.stored_failed' => 'login: {path} could not be updated (a concurrent writer holds the config?); the key was not written.',
+    'cli.sub.login.too_many' => 'login takes exactly one provider name, got {count} words.',
+    'cli.sub.login.unknown' => 'login: {name} is not a provider this install can select.',
+    'cli.sub.login.usage' => 'login needs a provider name: candy-code login <provider>',
     'cli.sub.takes_no_arguments' => 'Usage: candy-code {verb} — this subcommand takes no arguments.',
     'cli.sub.unexpected_operand' => '{verb} {operand}: unexpected operand',
     'cli.sub.unknown_subcommand' => '{verb}: unknown subcommand',
