@@ -1116,7 +1116,7 @@ export interface Methods {
         min?: number
         max?: number
         riskClass: string
-        applies: "live" | "next-turn" | "restart" | "frozen"
+        applies: "live" | "next-turn" | "reload" | "restart" | "frozen"
         appliesLabel?: string
         ui?: "easy" | "list" | "complex" | "read-only" | "hidden"
         layered?: boolean
