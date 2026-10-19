@@ -1309,8 +1309,8 @@ final class Bootstrap
      * the mismatch is recorded here instead of being left for the next reader to
      * infer from the values.
      *
-      * SEVEN OTHER repository-chosen paths do NOT feed this — six with a holder
-      * of their own and the seventh, the `.candy-code/memory` sentinel of the
+      * EIGHT OTHER repository-chosen paths do NOT feed this — seven with a holder
+      * of their own and the eighth, the `.candy-code/memory` sentinel of the
       * importer's chat trigger, named inside that entry below — and each
       * is named rather than counted, because "five feeders" quietly becoming
       * "six things nobody drains" is the drift this collector keeps producing. It
@@ -1367,7 +1367,16 @@ final class Bootstrap
       *    directory, `::within` on each entry) — the same discipline as
       *    `CommandLoader` — and drains only into a doctor pane when
       *    `CANDY_CODE_DEBUG_RULES` is set. Deliberate, per the split ruling; not
-      *    pending work.
+      *    pending work;
+      *  - `.github/copilot-instructions.md` (the INT-1(c) instruction tail
+      *    alias, read per candidate level by
+      *    {@see \SugarCraft\Code\Context\InstructionFileLoader}) is gated by the
+      *    very same `ContainedPath` compares as every other instruction file —
+      *    the alias adds candidates, never a new read path — and its refusals
+      *    land LOADER-LOCAL in `refusedPaths()`, read only by
+      *    {@see instructionDeferrals()} for the launch transcript row. Nothing
+      *    spreads them into this map; same discipline as `RuleLoader`, gap for
+      *    the same fourth reason.
       *
      * The full enumeration and its derivation live in
      * {@see \SugarCraft\Code\Tests\Cli\ProjectTierRefusalInventoryTest}.
@@ -2365,10 +2374,10 @@ final class Bootstrap
      * {@see reportProjectTierRefusals()} putting one bounded line in front of
      * the user at launch.
      *
-     * SIXTEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
+     * SEVENTEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
      * qualifier is the number's domain rather than decoration. What the
      * derivation counts is a string literal of the shape `.<dir>/<segment>`:
-     * THIRTY-SEVEN distinct ones on this tree, sixteen of them classified
+     * THIRTY-EIGHT distinct ones on this tree, seventeen of them classified
      * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
      * now DERIVED from `src/` by
      * {@see \SugarCraft\Code\Tests\Cli\ProjectTierRefusalInventoryTest}, which
@@ -2380,7 +2389,10 @@ final class Bootstrap
      * path and a named gap at once — see the gap column below. P7.S6 added
      * `.candy-code/memory` — the sentinel directory of the now-wired
      * `/memory import` trigger — as a fifteenth, again a new path and a named gap
-     * at once, gated at its call site rather than drained here.
+     * at once, gated at its call site rather than drained here. INT-1(c) made it
+     * SEVENTEEN with the instruction tail alias `.github/copilot-instructions.md`
+     * — once more a new path and a named gap at once: the loader gates it with
+     * the instruction files' own compares and records refusals loader-local.
      *
      *  - `.candy-code/settings.json` and `.candy-code/settings.local.json` are
      *    genuinely new — the project tier of
@@ -2418,12 +2430,13 @@ final class Bootstrap
      * {@see foreignAgentPresets()} and gave that registry's refusal seam its first
      * reader; the split was five and five before it.
      *
-     * The SEVEN that are gated elsewhere and named as gaps rather than counted
+     * The EIGHT that are gated elsewhere and named as gaps rather than counted
      * here — `.opencode/memory`, `.candy-code/hooks.yaml`,
      * `.candy-code/config.json`, `.candy-code/settings.json`,
      * `.candy-code/settings.local.json`, the rules tier `.candy-code/rules`,
-     * and the import sentinel `.candy-code/memory` — are itemised on
-     * {@see $projectTierRefusals}, all seven of them.
+     * the import sentinel `.candy-code/memory`, and the instruction tail alias
+     * `.github/copilot-instructions.md` — are itemised on
+     * {@see $projectTierRefusals}, all eight of them.
      *
      * `.candy-code/commands` IS NOT ONE OF THEM, and this sentence used to say
      * it was — a gap list that went stale when crush_code.md Phase 2 item 4

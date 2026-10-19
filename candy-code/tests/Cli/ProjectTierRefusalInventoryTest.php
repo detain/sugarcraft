@@ -250,6 +250,16 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // temp-create + rename for the file, so no write ever follows a planted
         // symlink — which is why no collector entry is owed here.
         'Host/Commands/MemoryCommand.php|.candy-code/memory' => self::REPOSITORY,
+        // INT-1(c): the Copilot tail alias. `.github/copilot-instructions.md` is
+        // a file the shipped tree carries, looked for one level down from every
+        // candidate directory — repository-chosen on the same basis as the
+        // instruction tiers around it, gated by the very same ContainedPath
+        // compares (`an alias adds candidates, never a new read path`). NAMED
+        // GAP, the eighth: `InstructionFileLoader` records refusals loader-local
+        // in its own `refusedPaths()` and only `instructionDeferrals()` reads
+        // them for the launch transcript row; nothing spreads them into
+        // `$projectTierRefusals`, so DRAIN_EVIDENCE stays without an entry.
+        'Context/InstructionFileLoader.php|.github/copilot-instructions.md' => self::REPOSITORY,
         'Context/ProjectMemoryWriter.php|.candy-code/memory' => self::REPOSITORY,
         'Memory/ForeignMemoryImporter.php|.opencode/memory' => self::REPOSITORY,
         'Skills/SkillLoader.php|.candy-code/skills' => self::REPOSITORY,
@@ -421,11 +431,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FIFTY-SEVEN occurrences — one per entry
-     * in {@see DOT_PATHS} — of THIRTY-SEVEN distinct paths. TWENTY-ONE of those
+     * APPEARS IN. On this tree that is FIFTY-EIGHT occurrences — one per entry
+     * in {@see DOT_PATHS} — of THIRTY-EIGHT distinct paths. TWENTY-TWO of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
-     * they are SIXTEEN distinct paths — which is the figure
+     * they are SEVENTEEN distinct paths — which is the figure
      * {@see testEveryRepositoryChosenPathIsNamedWhereTheClaimIsMade()} asserts,
      * on PATHS. All four figures are measured off the map above, and each is
      * written next to the thing it counts because the pair has been mixed up in
@@ -497,10 +507,10 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * SIXTEEN repository-chosen paths, and the enumeration in
+     * SEVENTEEN repository-chosen paths, and the enumeration in
      * {@see Bootstrap::projectTierRefusals()}'s own doc-block must name every one
      * of them. It named FOUR, then FIVE, both hand-written, while `src/` held
-     * ten; it now names sixteen. See that doc-block for which of the three
+     * ten; it now names seventeen. See that doc-block for which of the three
      * additions is a NEW path and which is one literal reclassified.
      *
      * `BOTH` counts here: a string serving the project tier is repository-chosen
@@ -510,7 +520,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     {
         $repository = $this->repositoryChosenPaths();
 
-        $this->assertCount(16, $repository);
+        $this->assertCount(17, $repository);
 
         // SCOPED TO THE DOC-BLOCKS THAT MAKE THE CLAIM, not to the file. Asserted
         // file-wide, this passed while the enumeration itself was missing a name,
@@ -594,16 +604,16 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(37, $distinct, 'distinct dot-DIRECTORY paths in src/');
-        self::assertCount(16, $this->repositoryChosenPaths(), 'of which repository-chosen');
+        self::assertCount(38, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(17, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
             \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php',
             'public static function projectTierRefusals()',
         );
 
-        self::assertStringContainsString('SIXTEEN repository-chosen', $enumeration);
-        self::assertStringContainsString('THIRTY-SEVEN distinct', $enumeration);
+        self::assertStringContainsString('SEVENTEEN repository-chosen', $enumeration);
+        self::assertStringContainsString('THIRTY-EIGHT distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
@@ -617,13 +627,15 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             46 => 'FORTY-SIX', 47 => 'FORTY-SEVEN', 48 => 'FORTY-EIGHT', 49 => 'FORTY-NINE',
             50 => 'FIFTY', 51 => 'FIFTY-ONE', 52 => 'FIFTY-TWO', 53 => 'FIFTY-THREE',
             54 => 'FIFTY-FOUR', 55 => 'FIFTY-FIVE',
-            56 => 'FIFTY-SIX', 57 => 'FIFTY-SEVEN'];
+            56 => 'FIFTY-SIX', 57 => 'FIFTY-SEVEN', 58 => 'FIFTY-EIGHT'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
-            33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE', 36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN'];
+            33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE', 36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN',
+            38 => 'THIRTY-EIGHT'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
-            16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN', 20 => 'TWENTY', 21 => 'TWENTY-ONE'];
+            16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN', 20 => 'TWENTY',
+            21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO'];
 
         $occurrences = \count(self::DOT_PATHS);
         $repositoryOccurrences = 0;
@@ -661,9 +673,9 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * Which of the SIXTEEN reach the collector, and which are gated elsewhere.
-     * NINE and SEVEN — stated here so "nine feeders" cannot quietly stand in
-     * for "and seven paths nobody drains".
+     * Which of the SEVENTEEN reach the collector, and which are gated elsewhere.
+     * NINE and EIGHT — stated here so "nine feeders" cannot quietly stand in
+     * for "and eight paths nobody drains".
      *
      * It was FIVE AND FIVE until crush_code.md Phase 1 item 3 wired
      * {@see Bootstrap::foreignAgentPresets()}: `.claude/agents` and
@@ -682,7 +694,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * drained here, so the feeder column again stays EIGHT. The agents-spec
      * skill tree (`.agents/skills`) made it NINE and SEVEN: its refusals drain
      * through the same `$manager->refusedDirectories()` seam the other skill
-     * trees use — the same shape of move, recorded the same way.
+     * trees use — the same shape of move, recorded the same way. INT-1(c)'s
+     * instruction tail alias (`.github/copilot-instructions.md`) made it NINE
+     * and EIGHT: `InstructionFileLoader` records refusals loader-local in its
+     * own `refusedPaths()` and nothing drains them into `$projectTierRefusals`
+     * — the same shape of gap `RuleLoader` keeps, entered the same way.
      *
      * `.candy-code/commands` NEARLY WENT BACK TO THE GAP COLUMN, and the union
      * check below could not have stopped it: `assertSame($union, $paths)` plus
@@ -704,7 +720,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * matching evidence row in the same edit. The positive direction is what
      * this covers, and it is the direction the defect ran in.
      */
-    public function testTheNineThatFeedTheCollectorAndTheSevenThatAreNamedGaps(): void
+    public function testTheNineThatFeedTheCollectorAndTheEightThatAreNamedGaps(): void
     {
         $feeders = ['.agents/skills', '.claude/agents', '.claude/skills', '.opencode/agents',
             '.opencode/skills', '.candy-code/agents', '.candy-code/commands',
@@ -712,10 +728,10 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         $gaps = ['.opencode/memory', '.candy-code/hooks.yaml',
             '.candy-code/config.json', '.candy-code/memory',
             '.candy-code/settings.json', '.candy-code/settings.local.json',
-            '.candy-code/rules'];
+            '.candy-code/rules', '.github/copilot-instructions.md'];
 
         $this->assertCount(9, $feeders, 'the NINE this test is named for');
-        $this->assertCount(7, $gaps, 'and the SEVEN');
+        $this->assertCount(8, $gaps, 'and the EIGHT');
 
         $union = array_merge($feeders, $gaps);
         sort($union);
