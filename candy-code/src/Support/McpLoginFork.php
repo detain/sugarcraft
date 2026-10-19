@@ -142,9 +142,12 @@ final class McpLoginFork
     }
 
     /**
-     * Tear every live slot down: bounded TERM then KILL, reaped. Test and
-     * process-teardown hygiene, never the login path itself — a child left
-     * holding the loopback port would poison the next login attempt.
+     * Tear every live slot down: SIGTERM, then a blocking proc_close reap.
+     * There is no TERM-then-KILL ladder here — the wait is bounded not by an
+     * escalation rung but by the child's own deadline (OAuthLoopbackFlow
+     * self-exits after its 300-second budget no matter what signal it sees).
+     * Test and process-teardown hygiene, never the login path itself — a
+     * child left holding the loopback port would poison the next login.
      */
     public static function releaseAll(): void
     {
