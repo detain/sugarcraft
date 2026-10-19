@@ -6,7 +6,7 @@ often confused, so they are documented side by side:
 | | **Memory store** | **Instruction files** |
 |---|---|---|
 | Written by | `/memory add`, the model's `Memory` tool, auto-memory and the dream pass, as markdown files | you, by hand (`/init` drafts one) |
-| Lives in | `~/.candy-code/memory/<scope>/<uuid>.md` (`project/<key>/` per project) | `CLAUDE.md` / `AGENTS.md` (or an alias) in the repo; `~/.candy-code/AGENTS.md` |
+| Lives in | `~/.candy-code/memory/<scope>/<uuid>.md` (`project/<key>/` per project) | `CLAUDE.md` / `AGENTS.md` (or an alias) in the repo; `~/.candy-code/AGENTS.md`, or `~/.claude/CLAUDE.md` where that is absent |
 | Reaches the prompt as | a `<project-memory>` block | full documents |
 | Scope that reaches the prompt | **`project` and `user`** (as an index; `agent` never) | root files always; nested ones on touch |
 
@@ -732,7 +732,9 @@ plus three other agents' spellings of the same convention — `GEMINI.md`,
   in every project. It is priced first under the same instruction budget and
   framed in your own voice (the `<user-rules>` fence and preamble your
   `~/.candy-code/rules` use), ahead of anything a repository ships. Only an
-  owned home is consulted (`HomeDirectory::owned()`);
+  owned home is consulted (`HomeDirectory::owned()`); when you have not written
+  that file, Claude Code's personal memory file `~/.claude/CLAUDE.md` stands in,
+  gated by its own directory the same way — the two are never both read;
 - **root files** — always, at session start;
 - **forced patterns** from config — glob-resolved, loaded every session;
 - **nested files** — a `CLAUDE.md`/`AGENTS.md` (or alias) in a subdirectory is
@@ -788,9 +790,10 @@ protection — a file that imports itself is marked before its own expansion run
 
 ### Containment
 
-Every read is bounded by its own root through `ContainedPath` — seven call
-sites, one per read decision: `loadPersonal()`'s personal entry (bounded by
-`~/.candy-code`), `loadRoot()`'s root entry,
+Every read is bounded by its own root through `ContainedPath` — eight call
+sites, one per read decision: `loadPersonal()`'s personal entry and its
+`~/.claude` fallback (each bounded by its own directory),
+`loadRoot()`'s root entry,
 `loadAncestorRoots()`'s ancestor entry, `loadForced()`'s glob match,
 `loadForPath()`'s starting directory and its per-level candidate, and
 `expandImports()`'s gate closure. The gate closure is threaded through **every**

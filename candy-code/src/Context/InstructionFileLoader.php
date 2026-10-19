@@ -11,8 +11,8 @@ use SugarCraft\Code\Support\HomeDirectory;
 /**
  * Loads instruction files (CLAUDE.md, AGENTS.md and the other agents' aliases
  * in {@see FILENAMES}) from the repo root, the operator's personal
- * `~/.candy-code/AGENTS.md`, and resolves forced-instruction glob patterns
- * from config.
+ * `~/.candy-code/AGENTS.md` — or `~/.claude/CLAUDE.md` where that is absent —
+ * and resolves forced-instruction glob patterns from config.
  *
  * This class handles the nested instruction file discovery mechanism:
  * - Root-level files (CLAUDE.md, AGENTS.md) are always loaded at session start
@@ -27,7 +27,7 @@ use SugarCraft\Code\Support\HomeDirectory;
  * ISS-067 — a forced file's own imports were dead text.
  *
  * EVERY read here is bounded through {@see ContainedPath}, and the count is
- * deliberate rather than incidental: SEVEN call sites, one per read decision this
+ * deliberate rather than incidental: EIGHT call sites, one per read decision this
  * class makes — `loadPersonal()`'s personal entry, `loadRoot()`'s root entry,
  * `loadAncestorRoots()`'s ancestor entry, `loadForced()`'s glob match,
  * `loadForPath()`'s starting directory and its per-level candidate, and
@@ -35,11 +35,13 @@ use SugarCraft\Code\Support\HomeDirectory;
  * {@see \SugarCraft\Code\Tests\Support\ContainedPathInventoryTest}::ROUTED_CALL_SITES.
  *
  * BOUNDED BY WHICH ROOT IS NOW A REAL QUESTION, and the answer is per-tier
- * rather than "repoRoot" — five of the seven pass `$repoRoot`,
+ * rather than "repoRoot" — five of the eight pass `$repoRoot`,
  * `loadAncestorRoots()` and the `expandImports()` gate it calls pass
  * {@see ancestorRoot()}, because an ancestor file is by construction outside
  * `$repoRoot` and judging it against `$repoRoot` would refuse all of them, and
- * `loadPersonal()` passes the operator's own `~/.candy-code` ({@see personalDir()}).
+ * `loadPersonal()` passes the candidate's own home directory — `~/.candy-code`
+ * ({@see personalDir()}) for the primary file, its sibling `~/.claude` for the
+ * fallback — so neither fallback can borrow the other's tolerance.
  * `$repoRoot`'s own entries are NOT relaxed by that: the gate the measured
  * escapes closed still compares against `$repoRoot` exactly as before. There is
  * no local prefix compare left, and
@@ -461,7 +463,11 @@ final class InstructionFileLoader
      * The operator's personal instruction document, `~/.candy-code/AGENTS.md`
      * (roadmap 5.14j) — the one instruction file that follows the PERSON across
      * every checkout rather than arriving with one. Zero or one entry, in the
-     * path-keyed shape {@see loadDocuments()} returns.
+     * path-keyed shape {@see loadDocuments()} returns. When that file does not
+     * exist, Claude Code's personal memory file `~/.claude/CLAUDE.md` stands in
+     * (roadmap 6.4): operators who have invested in that convention get their
+     * context without being asked to duplicate it, and the two are never both
+     * read — the primary wins whenever it is a file.
      *
      * KEPT OUT OF {@see loadDocuments()} ON PURPOSE, because provenance picks the
      * framing: every document that list returns is repository-shipped and is
@@ -472,12 +478,13 @@ final class InstructionFileLoader
      * already speaks with, since both are bytes the operator wrote in their own
      * home directory.
      *
-     * BOUNDED BY THE PERSONAL DIRECTORY, not by `$repoRoot`: the file is by
-     * construction outside every checkout. The entry is gated with
-     * {@see ContainedPath::within()} against {@see personalDir()}, the same
-     * anchor RuleLoader holds `~/.candy-code/rules/*.md` inside, so a personal
-     * AGENTS.md symlinked out of `~/.candy-code` is refused AND RECORDED exactly
-     * as a user-tier rule would be; its `@import`s are bounded by the same
+     * BOUNDED BY THE CANDIDATE'S OWN DIRECTORY, not by `$repoRoot`: both files
+     * are by construction outside every checkout. Each entry is gated with
+     * {@see ContainedPath::within()} against its own anchor — `personalDir()`
+     * for `~/.candy-code/AGENTS.md`, the sibling `~/.claude` for the fallback —
+     * the same kind of hold RuleLoader keeps on `~/.candy-code/rules/*.md`, so
+     * either file symlinked out of its directory is refused AND RECORDED exactly
+     * as a user-tier rule would be, and its `@import`s are bounded by the same
      * directory. Size ceiling, UTF-8 scrub and the shared dedup set are the
      * root documents' own.
      *
@@ -498,14 +505,33 @@ final class InstructionFileLoader
         }
 
         $path = $dir . '/' . self::PERSONAL_FILENAME;
-        if (!is_file($path)) {
-            return [];
-        }
+        if (is_file($path)) {
+            $anchor = $dir;
+            if (!ContainedPath::within($path, $anchor)) {
+                $this->refusedPaths[$path] = 'the personal instruction file resolves outside ' . $anchor;
 
-        if (!ContainedPath::within($path, $dir)) {
-            $this->refusedPaths[$path] = 'the personal instruction file resolves outside ' . $dir;
+                return [];
+            }
+        } else {
+            // Claude Code's personal memory file stands in when the operator
+            // has not written ours (roadmap 6.4). The fallback is judged by ITS
+            // OWN compare against ITS OWN anchor — the `~/.claude` directory
+            // beside the personal one — so neither candidate can borrow the
+            // other's tolerance, and a symlinked fallback is refused AND
+            // RECORDED exactly as a symlinked personal AGENTS.md is. Its
+            // `@import`s are bounded by that directory too. `personalDir()` is
+            // `<home>/.candy-code` by construction (or the test seam beside a
+            // scratch home), so the fallback is the sibling `.claude` tree.
+            $anchor = \dirname($dir) . '/.claude';
+            $path = $anchor . '/CLAUDE.md';
+            if (!is_file($path)) {
+                return [];
+            }
+            if (!ContainedPath::within($path, $anchor)) {
+                $this->refusedPaths[$path] = 'the personal instruction file resolves outside ' . $anchor;
 
-            return [];
+                return [];
+            }
         }
 
         $realPath = realpath($path) ?: $path;
@@ -520,7 +546,7 @@ final class InstructionFileLoader
             $this->personalCache = [['path' => $path, 'body' => null, 'bytes' => (int) $bytes]];
         } elseif ($raw !== false) {
             [$doc, $note] = $this->utf8Document($raw, $path);
-            $body = $this->expandImports($doc, \dirname($path), $dir) . $note;
+            $body = $this->expandImports($doc, \dirname($path), $anchor) . $note;
             $this->personalCache = [['path' => $path, 'body' => $body, 'bytes' => strlen($body)]];
         }
 

@@ -182,7 +182,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Config/LayeredSettings.php' => 2,
         'Config/Settings/SettingsWriter.php' => 1,
         'Context/Compaction/ReinjectionPlan.php' => 2,
-        'Context/InstructionFileLoader.php' => 7,
+        'Context/InstructionFileLoader.php' => 8,
         'Context/ProjectMemoryWriter.php' => 1,
         'Context/RepoMapBlock.php' => 3,
         'Context/RuleLoader.php' => 3,
@@ -360,7 +360,7 @@ final class ContainedPathInventoryTest extends TestCase
             'THIRTY-THREE' => 33, 'THIRTY-FOUR' => 34, 'THIRTY-FIVE' => 35,
             'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
-            'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53,
+            'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54,
             'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
         ];
 

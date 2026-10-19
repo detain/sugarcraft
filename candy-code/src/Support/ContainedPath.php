@@ -94,7 +94,7 @@ namespace SugarCraft\Code\Support;
  * way that made the file read as audited while its two PRIMARY read paths had no
  * compare at all (see below). Per-file, executable lines only:
  *
- *   - FIFTY-THREE call sites in TWENTY-FIVE files ask this class. THIS SENTENCE
+ *   - FIFTY-FOUR call sites in TWENTY-FIVE files ask this class. THIS SENTENCE
  *     WAS FIVE SITES AND THREE FILES STALE when a reviewer measured it — it
  *     read "TWENTY-SEVEN in ELEVEN" while
  *     {@see \SugarCraft\Code\Tests\Support\ContainedPathInventoryTest}'s
@@ -132,8 +132,8 @@ namespace SugarCraft\Code\Support;
  *     anchor, skill asset), {@see \SugarCraft\Code\Agents\AgentPresetRegistry}
  *     (3 — the same pair, plus `load()`'s single-file arm),
  *     {@see \SugarCraft\Code\Commands\CommandLoader} (2),
- *     {@see \SugarCraft\Code\Context\InstructionFileLoader} (7 — one per read
- *     decision it makes),
+ *     {@see \SugarCraft\Code\Context\InstructionFileLoader} (8 — one per read
+ *     decision it makes, the personal tier gated once per candidate),
  *     {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry} (2 — entry,
  *     directory anchor), {@see \SugarCraft\Code\Memory\ForeignMemoryImporter}
  *     (2 — the same pair), {@see \SugarCraft\Code\Agents\WorktreeConfig} (2 —

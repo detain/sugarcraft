@@ -1421,7 +1421,8 @@ All of it is in [`docs/HOOKS.md`](docs/HOOKS.md).
   a touch returns every governing file not yet emitted, outermost first, in one
   framed result budgeted at one document's worth of bytes (what the budget
   skips arrives on a later touch; an over-ceiling file ships a pointer line),
-  and your personal `~/.candy-code/AGENTS.md`, all with `@import` expansion
+  and your personal `~/.candy-code/AGENTS.md` — or `~/.claude/CLAUDE.md` when
+  you have not written ours —, all with `@import` expansion
   that skips inline-code spans and `name@host.md`-shaped email addresses; an
   absolute `@/abs/x.md` resolves as given and is judged by the checkout-boundary
   gate (outside the checkout ships an `<import-blocked>` note). `/init` writes

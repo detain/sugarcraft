@@ -209,6 +209,66 @@ final class PersonalInstructionFileTest extends TestCase
         self::assertStringNotContainsString('OUTSIDECANARY', (string) $personal[0]['body']);
     }
 
+    private function claudeFallbackPath(): string
+    {
+        return $this->tempDir . '/home/.claude/CLAUDE.md';
+    }
+
+    public function testTheClaudePersonalFileStandsInWhenOursIsAbsent(): void
+    {
+        mkdir($this->tempDir . '/home/.claude', 0o700, true);
+        file_put_contents($this->claudeFallbackPath(), 'CLAUDECANARY');
+
+        $personal = (new InstructionFileLoader($this->fixture->root()))->loadPersonal();
+
+        self::assertCount(1, $personal);
+        self::assertSame($this->claudeFallbackPath(), $personal[0]['path']);
+        self::assertStringContainsString('CLAUDECANARY', (string) $personal[0]['body']);
+    }
+
+    public function testThePrimaryPersonalFileKeepsTheFallbackUnread(): void
+    {
+        mkdir($this->tempDir . '/home/.claude', 0o700, true);
+        file_put_contents($this->claudeFallbackPath(), 'CLAUDECANARY');
+        file_put_contents($this->personalPath(), 'PRIMARYCANARY');
+
+        $personal = (new InstructionFileLoader($this->fixture->root()))->loadPersonal();
+
+        self::assertCount(1, $personal);
+        self::assertSame($this->personalPath(), $personal[0]['path']);
+        self::assertStringNotContainsString('CLAUDECANARY', (string) $personal[0]['body']);
+    }
+
+    public function testAFallbackFileLinkedOutOfClaudeDirIsRefusedAndRecorded(): void
+    {
+        mkdir($this->tempDir . '/home/.claude', 0o700, true);
+        mkdir($this->tempDir . '/outside');
+        file_put_contents($this->tempDir . '/outside/secret.md', 'SECRETCANARY');
+        symlink($this->tempDir . '/outside/secret.md', $this->claudeFallbackPath());
+
+        $loader = new InstructionFileLoader($this->fixture->root());
+
+        self::assertSame([], $loader->loadPersonal());
+        self::assertArrayHasKey($this->claudeFallbackPath(), $loader->refusedPaths());
+        self::assertStringNotContainsString('SECRETCANARY', $this->fixture->systemPrompt());
+    }
+
+    public function testAFallbackImportIsBoundedByTheClaudeDir(): void
+    {
+        mkdir($this->tempDir . '/home/.claude', 0o700, true);
+        file_put_contents($this->tempDir . '/home/.claude/style.md', 'CLAUDESTYLE');
+        file_put_contents($this->tempDir . '/home/.candy-code/sneak.md', 'CANDYCODESNEAK');
+        file_put_contents($this->claudeFallbackPath(), "Mine.\n@./style.md\n@../.candy-code/sneak.md\n");
+
+        $personal = (new InstructionFileLoader($this->fixture->root()))->loadPersonal();
+
+        self::assertCount(1, $personal);
+        self::assertStringContainsString('CLAUDESTYLE', (string) $personal[0]['body']);
+        // The fallback's anchor is ITS directory: crossing into the neighbouring
+        // .candy-code tree is exactly the escape the primary's own bound refuses.
+        self::assertStringNotContainsString('CANDYCODESNEAK', (string) $personal[0]['body']);
+    }
+
     public function testAHomeThisProcessDoesNotOwnReadsNothing(): void
     {
         file_put_contents($this->personalPath(), 'PERSONALCANARY');
