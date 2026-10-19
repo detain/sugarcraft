@@ -179,7 +179,14 @@ final class StartupSummaryTest extends TestCase
      * rostered read token must lie inside the paren-bounded argument of a
      * `self::tryFact(` call in its own method slice, and the rostered
      * methods must still contain each token exactly once (a renamed or
-     * relocated read fails loudly here, not silently green).
+     * relocated read fails loudly here, not silently green). The contract is
+     * BIDIRECTIONAL (rev-w1d2 MAJOR-1): each body's wrapper count is pinned
+     * numerically, and every `self::tryFact(` span that no roster entry
+     * justifies stays visible to an impure-vocabulary denylist swept over the
+     * span-stripped remainder — so deleting a roster token cannot silently
+     * shrink the pin either. New impure sources must extend BOTH the roster
+     * and the denylist vocabulary below; covering one without the other is
+     * exactly the rot this arm refuses to allow.
      */
     public function testEveryFactReadOnTheGatherPathIsWrappedInTheFailSoft(): void
     {
@@ -187,31 +194,68 @@ final class StartupSummaryTest extends TestCase
 
         $readers = [
             'private static function gather' => [
-                'Help::versionString(',
-                'self::instructionFiles(',
-                'self::memoryCount(',
-                'self::skillCount(',
-                'self::mcpCount(',
+                'wraps' => 5,
+                'reads' => [
+                    'Help::versionString(',
+                    'self::instructionFiles(',
+                    'self::memoryCount(',
+                    'self::skillCount(',
+                    'self::mcpCount(',
+                ],
             ],
             'private static function providerAndModel' => [
-                '$chat->backend(',
-                '->provider()->name(',
-                '->servedModel(',
-                '->model()',
+                'wraps' => 1,
+                'reads' => [
+                    '$chat->backend(',
+                    '->provider()->name(',
+                    '->servedModel(',
+                    '->model()',
+                ],
             ],
             'private static function branch' => [
-                'GitRunner::available(',
-                'GitRunner::new(',
+                'wraps' => 1,
+                'reads' => [
+                    'GitRunner::available(',
+                    'GitRunner::new(',
+                ],
             ],
         ];
 
-        foreach ($readers as $signature => $reads) {
+        // Every name an unpinned impure read would surface with; roster and
+        // vocabulary move together (class docblock above). Names only — no
+        // wildcard shapes, GlobDialect-safe by construction.
+        $impure = [
+            'Bootstrap::',
+            'GitRunner::',
+            'SkillManager',
+            'SkillRegistry',
+            'SkillLoader',
+            'ProjectMemoryWriter',
+            'Help::',
+            'file_get_contents(',
+            'self::instructionFiles(',
+            'self::memoryCount(',
+            'self::skillCount(',
+            'self::mcpCount(',
+        ];
+
+        foreach ($readers as $signature => $pin) {
+            $reads = $pin['reads'];
             $start = strpos($src, $signature);
             $this->assertIsInt($start, "StartupSummary no longer declares {$signature}() — re-derive this pin, do not delete it");
 
             $end = strpos($src, "\n    }\n", $start);
             $this->assertIsInt($end, "Could not find the end of {$signature}()");
             $body = substr($src, $start, $end - $start);
+
+            // rev-w1d2 MAJOR-1(a): the wrapper count is pinned outright, so an
+            // unwrapping can never be answered by de-rostering its read — the
+            // number disagrees even when every remaining token still matches.
+            $this->assertSame(
+                $pin['wraps'],
+                substr_count($body, 'self::tryFact('),
+                "{$signature}() no longer holds exactly {$pin['wraps']} self::tryFact() wrappers — a fact read was unwrapped or added; re-derive this pin either way",
+            );
 
             // Every wrapped call-site: from each 'self::tryFact(' opener to
             // the matching close, found by plain paren depth.
@@ -245,6 +289,39 @@ final class StartupSummaryTest extends TestCase
                     }
                 }
                 $this->assertTrue($wrapped, "{$signature}() reads {$read} outside a self::tryFact() wrapper — the fail-soft contract of VIS-1 is broken");
+            }
+
+            // rev-w1d2 MAJOR-1(b): the source-side direction. Rebuild the body
+            // without the tryFact spans that a roster entry justifies; any
+            // span nobody rostered survives the strip, and so would any read
+            // inlined past the wrapper — if its name is impure. Dropping a
+            // roster token alone therefore reddens here: its wrapper remains
+            // in the source, becomes unjustified, and shows the denylist.
+            $stripped = '';
+            $cursor = 0;
+            foreach ($spans as [$from, $to]) {
+                $span = substr($body, $from, $to - $from + 1);
+                $rostered = false;
+                foreach ($reads as $read) {
+                    if (str_contains($span, $read)) {
+                        $rostered = true;
+                        break;
+                    }
+                }
+                $stripped .= substr($body, $cursor, $from - $cursor);
+                if (!$rostered) {
+                    $stripped .= $span;
+                }
+                $cursor = $to + 1;
+            }
+            $stripped .= substr($body, $cursor);
+
+            foreach ($impure as $token) {
+                $this->assertStringNotContainsString(
+                    $token,
+                    $stripped,
+                    "{$signature}() holds an impure read no roster entry justifies — de-rostering or inlining a fact read silently shrinks this pin; add it to the roster above (and keep it wrapped) rather than letting the coverage rot",
+                );
             }
         }
     }
