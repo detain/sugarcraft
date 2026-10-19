@@ -2799,6 +2799,9 @@ final class Chat implements Model
         if ($msg instanceof CustomCommandExpandedMsg) {
             return $this->resumeCustomCommand($msg);
         }
+        if ($msg instanceof McpLoginProgressMsg) {
+            return $this->handleMcpLoginProgress($msg);
+        }
         if ($msg instanceof HistoryCompactedMsg) {
             // Accounted BEFORE the latch check, and for the same reason the
             // AssistantMsg arm accounts before its staleness guard: the
@@ -20965,11 +20968,83 @@ final class Chat implements Model
      * Handle the `/mcp` slash command (and its legacy bare `mcp auth …`
      * spelling) for managing MCP server OAuth credentials.
      *
+     * MCP-5: `login <server>` (also via the `auth` noun — every spelling
+     * reduces to the same argv here) is intercepted before the host route
+     * and forked as a background child by {@see armMcpLogin()}, so the
+     * loopback wait happens off the TUI's terminal. Everything else — the
+     * bare `login` guide, list/add/remove/reconnect — still runs through
+     * the host command unchanged.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleMcpAuthCommand(string $inputBuf): array
     {
+        $argv = self::parseMcpArgs($inputBuf);
+        $server = trim((string) ($argv[1] ?? ''));
+
+        if (($argv[0] ?? '') === 'login' && $server !== '' && !str_starts_with($server, '--')) {
+            return $this->armMcpLogin($server, \array_slice($argv, 2), $inputBuf);
+        }
+
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\McpAuthHostCommand(), $inputBuf);
+    }
+
+    /**
+     * Open the forked login child and echo the outcome into the transcript
+     * as UI-only rows (the draft itself never reaches the model). The poll
+     * Cmd rides the return channel — the terminal hand-back problem that
+     * killed every in-process editor attempt is exactly what forking solves:
+     * the child owns no terminal, so the TUI keeps painting throughout.
+     *
+     * @param list<string> $rest
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function armMcpLogin(string $server, array $rest, string $inputText): array
+    {
+        [$notice, $armed] = \SugarCraft\Code\Support\McpLoginFork::arm($server, $rest, $this->projectRoot());
+
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($notice)->withUiOnly()],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+
+        return [$next, $armed ? \SugarCraft\Code\Support\McpLoginFork::pollCmd($server) : null];
+    }
+
+    /**
+     * Translate one {@see McpLoginProgressMsg} beat into transcript rows and
+     * the follow-up Cmd. `waiting`/`gone` change nothing visible; `url`
+     * announces the browser link so the user can act without hunting the
+     * child's (invisible) stdout; `done` closes with the exit status plus
+     * the honest sentence about when the token takes effect — a live
+     * session's client memoizes its store, so the grant attaches at the
+     * NEXT launch, and `/mcp list` is what refreshes the panel's view.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleMcpLoginProgress(McpLoginProgressMsg $msg): array
+    {
+        if ($msg->phase === McpLoginProgressMsg::PHASE_WAITING || $msg->phase === McpLoginProgressMsg::PHASE_GONE) {
+            return [$this, $msg->phase === McpLoginProgressMsg::PHASE_WAITING
+                ? \SugarCraft\Code\Support\McpLoginFork::pollCmd($msg->server)
+                : null];
+        }
+
+        $row = $msg->phase === McpLoginProgressMsg::PHASE_URL
+            ? Lang::t('cmd.mcp-auth.login-url', ['server' => $msg->server, 'url' => $msg->text])
+            : Lang::t($msg->exitCode === 0 ? 'cmd.mcp-auth.login-done' : 'cmd.mcp-auth.login-failed', [
+                'server' => $msg->server,
+                'code' => (string) $msg->exitCode,
+            ]);
+
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::assistant($row)->withUiOnly()],
+        ]);
+
+        return [$next, $msg->phase === McpLoginProgressMsg::PHASE_URL
+            ? \SugarCraft\Code\Support\McpLoginFork::pollCmd($msg->server)
+            : null];
     }
 
     /**
