@@ -291,6 +291,40 @@ final class HookRegistry
     }
 
     /**
+     * Every registered hook, grouped by event, as value copies — the read
+     * surface behind `/hooks` (roadmap VIS-3a). Hook OBJECTS never leave the
+     * registry through here: a caller that could reach one could execute it.
+     *
+     * `builtIn` marks the shipped guards two ways on purpose: the RESERVED
+     * names (which `disable()` refuses) and the classes under
+     * `Hooks\BuiltIn\` (which the launch registers itself — the Post-edit
+     * format/lint/diagnostics hooks arrive by configuration but are still
+     * code we ship, not YAML the user wrote). Events with no hooks are
+     * omitted: the report says what IS there, and an empty `TeammateIdle`
+     * row teaches nothing a reader can act on.
+     *
+     * @return array<string, list<array{name: string, matcher: string, disabled: bool, builtIn: bool}>>
+     */
+    public function all(): array
+    {
+        $report = [];
+
+        foreach ($this->hooks as $event => $hooks) {
+            foreach ($hooks as $name => $hook) {
+                $report[$event][] = [
+                    'name' => $name,
+                    'matcher' => $hook->matcher(),
+                    'disabled' => $this->isDisabled($name),
+                    'builtIn' => self::isReserved($name)
+                        || str_starts_with((string) get_class($hook), 'SugarCraft\\Code\\Hooks\\BuiltIn\\'),
+                ];
+            }
+        }
+
+        return $report;
+    }
+
+    /**
      * How many times a chain may rewrite the arguments before the call is
      * refused outright.
      *

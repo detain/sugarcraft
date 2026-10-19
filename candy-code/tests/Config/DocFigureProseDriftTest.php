@@ -3992,12 +3992,16 @@ final class DocFigureProseDriftTest extends TestCase
         $execute = self::bodyExcerpt($authSource, 'execute', 1200);
         preg_match_all("/'(list|add|remove|login)' =>/", $execute, $subs);
         self::assertCount($wordNumbers['four'], $subs[1], 'the /mcp match arms changed — the page fence and this count move together');
+        // VIS-3 grew a fifth arm (reconnect) deliberately OUTSIDE the fenced
+        // four — the page fence enumerates only the store-auth verbs. When w3d
+        // lands the page's fifth verb, this pin and the fence move together.
+        self::assertStringContainsString("'reconnect' =>", $execute, 'the /mcp reconnect arm left the command — the usage line still advertises it');
         preg_match_all('/^\/mcp (list|add|remove|login)\b/m', $raw, $fence);
         self::assertSame(['list', 'add', 'remove', 'login'], $fence[1], 'the page fence no longer lists the four commands in code order');
         // The message is catalogue text since audit 15b-14: the source routes the
         // key, and the English the key resolves to enumerates the roster.
         self::assertStringContainsString("Lang::t('cmd.mcp-auth.unknown'", $authSource, 'the unknown-sub-command arm stopped printing its message');
-        self::assertStringContainsString('Use: list, add, remove, login', \SugarCraft\Code\Lang::inLocale('en', static fn (): string => \SugarCraft\Code\Lang::t('cmd.mcp-auth.unknown')), 'the unknown-sub-command message stopped enumerating the roster');
+        self::assertStringContainsString('Use: list, add, remove, login, reconnect', \SugarCraft\Code\Lang::inLocale('en', static fn (): string => \SugarCraft\Code\Lang::t('cmd.mcp-auth.unknown')), 'the unknown-sub-command message stopped enumerating the roster');
         self::assertTrue(class_exists('SugarCraft\Code\MCP\McpAuthStore'), 'McpAuthStore vanished — the page credits it as backing');
         self::assertTrue(class_exists('SugarCraft\Code\MCP\OAuthClientRegistration'), 'OAuthClientRegistration vanished — the page credits it as backing');
 

@@ -328,7 +328,7 @@ edit it by hand.
 | `/theme` | ✓ | | — | Switch the color theme |
 | `/settings` | ✓ | ✓ | `[search]` | Show every setting, its value, where it came from and when it applies |
 | `/agents` | ✓ | | — | List the agent roster, inspect one by name, or open a running one's Agent View |
-| `/mcp` | ✓ | | `<list\|add\|remove\|login> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) |
+| `/mcp` | ✓ | | `<list\|add\|remove\|login\|reconnect> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) |
 | `/keys` | ✓ | | — | Show the keyboard shortcut reference (or press ?) |
 | `/help` | ✓ | ✓ | — | List every slash command |
 | `/permissions` | ✓ | ✓ | `[mode <name> \| revoke <n\|all>]` | Show this session's permission mode, its rules and its grants; switch the mode or revoke a grant |
@@ -339,6 +339,7 @@ edit it by hand.
 | `/compress` | ✓ | | `[focus]` | Ask the model to compress a closed part of the conversation into a summary |
 | `/decompress` | ✓ | | `[bN]` | Send a compressed section in full again (no argument: list the sections) |
 | `/recompress` | ✓ | | `[bN]` | Restore the summary of a section /decompress took back |
+| `/hooks` | ✓ | | — | List the hook chain: every registered hook, its matcher and state, plus matchers that failed to evaluate |
 | `/rules` | ✓ | | `[name]` | List the rule packs, or toggle one for this session |
 | `/newrule` | ✓ | | `[focus]` | Have the agent draft a project rule from this conversation |
 | `/pane` | ✓ | | `dock <left\|right>\|toggle [name]` | Dock a pane to a side, or toggle its docked state |

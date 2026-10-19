@@ -99,15 +99,16 @@ final class McpAuthLoginGuidanceTest extends TestCase
 
         self::assertSame(1, $rc, $output);
         self::assertStringContainsString("Unknown sub-command 'bogus'", $output);
-        self::assertStringContainsString('Use: list, add, remove, login', $output, 'the roster the error offers is the roster the match arms have');
+        self::assertStringContainsString('Use: list, add, remove, login, reconnect', $output, 'the roster the error offers is the roster the match arms have');
         self::assertSame(
-            "\n  ✗ Unknown sub-command 'bogus'. Use: list, add, remove, login\n\n  Usage:\n"
+            "\n  ✗ Unknown sub-command 'bogus'. Use: list, add, remove, login, reconnect\n\n  Usage:\n"
             . "    mcp auth list                    — list registered servers\n"
             . "    mcp auth add <server> [reg-url] [token-url]  — store OAuth credentials for a server\n"
             . "    mcp auth remove <server>         — remove a server's credentials\n"
-            . "    mcp auth login <server>          — print the shell command for interactive login\n\n",
+            . "    mcp auth login <server>          — print the shell command for interactive login\n"
+            . "    /mcp reconnect                   — restart the declared servers, only while .mcp.json still matches launch\n\n",
             $output,
-            'the English usage block, byte for byte (audit 15b-14 moved it into the catalogue)',
+            'the English usage block, byte for byte (audit 15b-14 moved it into the catalogue; VIS-3b grew the fifth line)',
         );
     }
 

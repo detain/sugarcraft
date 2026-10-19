@@ -228,6 +228,24 @@ final class HookManager
     }
 
     /**
+     * The read-only view `/hooks` renders (roadmap VIS-3a): every chain entry
+     * as the registry's own value copies, plus the matchers this process could
+     * not evaluate — the fail-open ledger {@see HookRegistry::matcherFailures()}
+     * keeps, surfaced here so the panel is the place a user learns their
+     * pathological matcher was widened. Nothing in either half can execute a
+     * hook or re-key the chain.
+     *
+     * @return array{hooks: array<string, list<array{name: string, matcher: string, disabled: bool, builtIn: bool}>>, matcherFailures: array<string, string>}
+     */
+    public function inspect(): array
+    {
+        return [
+            'hooks' => $this->registry->all(),
+            'matcherFailures' => $this->registry->matcherFailures(),
+        ];
+    }
+
+    /**
      * Pre-tool-use hook execution.
      *
      * A HookResult::ask() decision is passed through verbatim, not collapsed

@@ -8,6 +8,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Host\Commands\CommandContext;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\MCP\McpAuthStore;
+use SugarCraft\Code\MCP\McpClient;
 
 /**
  * Implements the `mcp auth` command for managing MCP server OAuth credentials.
@@ -21,6 +22,11 @@ use SugarCraft\Code\MCP\McpAuthStore;
  *                                      login (guidance only — the flow runs
  *                                      in {@see \SugarCraft\Code\MCP\OAuthLoopbackFlow}
  *                                      from `candy-code mcp auth login`)
+ *   /mcp reconnect                   — VIS-3b: stop and start the session's
+ *                                      declared servers WITHOUT re-deriving
+ *                                      anything the session was built from;
+ *                                      refuses outright while `.mcp.json`
+ *                                      differs from the launch bytes
  *
  * The command delegates token lifecycle (registration, fetch, refresh) to
  * {@see McpAuthStore} which wraps {@see \SugarCraft\Code\MCP\OAuthClientRegistration}.
@@ -101,19 +107,50 @@ final class McpAuthCommand
 
     private readonly \Closure $metadataFetcher;
 
+    /** @var \Closure(string): ?McpClient */
+    private readonly \Closure $clientResolver;
+
+    /** @var \Closure(string): ?bool */
+    private readonly \Closure $driftProbe;
+
+    /** @var \Closure(McpClient): array{0: array, 1: array, 2: list<string>, 3: list<string>, 4: array, 5: ?string} */
+    private readonly \Closure $reconnector;
+
     /**
      * @param callable(string): array<mixed>|null $metadataFetcher discovery
      *        seam for `add`, the twin of {@see \SugarCraft\Code\MCP\OAuthLoopbackFlow}'s:
      *        production leaves it null and gets {@see self::fetchOAuthMetadata()};
      *        tests inject a table so no request leaves the process.
+     * @param callable(string): ?McpClient|null $clientResolver VIS-3b seam for
+     *        the session's client ({@see \SugarCraft\Code\Cli\Bootstrap::mcpClient()}
+     *        in production) — the memo, never a fresh build: a reconnect that
+     *        minted its own client would be a second owner of live servers.
+     * @param callable(string): ?bool|null $driftProbe VIS-3b seam for the
+     *        E703-α changed-since-launch verdict that GATES the reconnect
+     *        ({@see \SugarCraft\Code\Cli\Bootstrap::mcpConfigChangedSinceLaunch()}).
+     * @param callable(McpClient): array|null $reconnector VIS-3b seam for the
+     *        stop/start pair itself, so a test can pin the gate WITHOUT
+     *        spawning servers; production runs {@see self::reconnectPair()}.
      */
     public function __construct(
         private readonly McpAuthStore $authStore,
         ?callable $metadataFetcher = null,
+        ?callable $clientResolver = null,
+        ?callable $driftProbe = null,
+        ?callable $reconnector = null,
     ) {
         $this->metadataFetcher = $metadataFetcher !== null
             ? \Closure::fromCallable($metadataFetcher)
             : static fn (string $url): array => self::fetchOAuthMetadata($url);
+        $this->clientResolver = $clientResolver !== null
+            ? \Closure::fromCallable($clientResolver)
+            : static fn (string $root): ?McpClient => \SugarCraft\Code\Cli\Bootstrap::mcpClient($root);
+        $this->driftProbe = $driftProbe !== null
+            ? \Closure::fromCallable($driftProbe)
+            : static fn (string $root): ?bool => \SugarCraft\Code\Cli\Bootstrap::mcpConfigChangedSinceLaunch($root);
+        $this->reconnector = $reconnector !== null
+            ? \Closure::fromCallable($reconnector)
+            : static fn (McpClient $client): array => self::reconnectPair($client);
     }
 
     /**
@@ -132,8 +169,128 @@ final class McpAuthCommand
             'add' => $this->addServer($args),
             'remove' => $this->removeServer($args),
             'login' => $this->printLoginGuidance(),
+            'reconnect' => $this->reconnect($chat),
             default => $this->printError(Lang::t('cmd.mcp-auth.unknown', ['sub' => $subCommand])),
         };
+    }
+
+    /**
+     * VIS-3b: stop and start the servers this session was admitted, so a
+     * dropped stdio server or a dead http endpoint gets its processes back
+     * without a restart.
+     *
+     * THE GATE COMES FIRST, AND IT IS THE WHOLE SAFETY OF THE VERB.
+     * `McpClient::startServers()` calls `loadConfig()`, which re-reads
+     * `.mcp.json` from disk — so reconnect is only honest while the file still
+     * holds the bytes launch trusted (E703-α). A drifted config means the set
+     * of servers, their commands and their fingerprints have moved under the
+     * session: reconnecting would start servers this session's admission
+     * decisions never saw. And `null` — no digest because no launch client
+     * recorded one — cannot prove the bytes are unchanged either, so it
+     * refuses the same way: fail CLOSED, report only. Restart stays the only
+     * apply path for a changed config.
+     *
+     * THE CACHE LAW RIDES THE SAME GATE: even a clean reconnect re-derives no
+     * roster. The model-facing tool list of a running session is not rebuilt
+     * from the restarted servers — a server that now answers a different tool
+     * count is REPORTED as drifted, and adopting it is the next session's job.
+     *
+     * No timers and no waits anywhere (E646): `stopServers()` tears down with
+     * its own bounded ladder and `startServers()` spawns without blocking on
+     * a handshake.
+     */
+    private function reconnect(Chat|CommandContext $chat): int
+    {
+        $root = $chat->projectRoot();
+
+        $client = ($this->clientResolver)($root);
+        if ($client === null) {
+            echo "\n" . TranscriptTable::indented(Lang::t('cmd.mcp-auth.reconnect.no-client')) . "\n";
+
+            return 0;
+        }
+
+        $changed = ($this->driftProbe)($root);
+        if ($changed !== false) {
+            echo "\n" . TranscriptTable::indented(Lang::t(
+                $changed === true ? 'cmd.mcp-auth.reconnect.drifted' : 'cmd.mcp-auth.reconnect.unknown',
+            )) . "\n";
+
+            return 0;
+        }
+
+        [$before, $after, $refused, $denied, $auth, $error] = ($this->reconnector)($client);
+
+        $lines = [Lang::t('cmd.mcp-auth.reconnect.heading')];
+        if ($error !== null) {
+            $lines[] = '  ' . Lang::t('cmd.mcp-auth.reconnect.error', ['error' => Chat::reportField($error)]);
+        }
+        if ($before === [] && $after === [] && $refused === [] && $denied === []) {
+            $lines[] = '  - ' . Lang::t('cmd.mcp-auth.reconnect.none');
+        }
+        foreach (array_unique([...array_keys($before), ...array_keys($after)]) as $name) {
+            $was = $before[$name] ?? null;
+            $now = $after[$name] ?? null;
+            $state = match (true) {
+                $now === null => Lang::t('cmd.mcp-auth.reconnect.state.down'),
+                $now['up'] === true => Lang::t('cmd.mcp-auth.reconnect.state.up'),
+                $now['up'] === false => Lang::t('cmd.mcp-auth.reconnect.state.down'),
+                default => Lang::t('cmd.mcp-auth.reconnect.state.starting'),
+            };
+            $row = '  - ' . Chat::reportField((string) $name) . ': ' . $state;
+            if ($was !== null && $now !== null && $was['tools'] !== $now['tools']) {
+                // The cache law, spoken: report the drift, re-derive nothing.
+                $row = rtrim($row) . "\n    " . Lang::t('cmd.mcp-auth.reconnect.tool-drift', [
+                    'now' => $now['tools'],
+                    'was' => $was['tools'],
+                ]);
+            }
+            $lines[] = $row;
+        }
+        foreach ($refused as $name) {
+            $lines[] = '  ' . Lang::t('cmd.mcp-auth.reconnect.refused', ['server' => Chat::reportField((string) $name)]);
+        }
+        foreach ($denied as $name) {
+            $lines[] = '  ' . Lang::t('cmd.mcp-auth.reconnect.denied', ['server' => Chat::reportField((string) $name)]);
+        }
+        foreach (array_keys($auth) as $name) {
+            $lines[] = '  ' . Lang::t('cmd.mcp-auth.reconnect.auth', ['server' => Chat::reportField((string) $name)]);
+        }
+
+        echo "\n" . TranscriptTable::indented(implode("\n", $lines)) . "\n";
+
+        return 0;
+    }
+
+    /**
+     * The production pair behind {@see self::$reconnector}: snapshot, stop,
+     * start, snapshot. A start that throws (a config that became unreadable
+     * between the gate and here — the race the gate narrows but cannot close)
+     * is captured as the error slot rather than escaping into the transcript
+     * path: the report shows the servers that DID come back plus the failure
+     * line, which is more than an exception's stack does for the user.
+     *
+     * @return array{0: array<string, array{transport: string, up: ?bool, tools: int}>, 1: array<string, array{transport: string, up: ?bool, tools: int}>, 2: list<string>, 3: list<string>, 4: array<string, array{url: string, status: string}>, 5: ?string}
+     */
+    private static function reconnectPair(McpClient $client): array
+    {
+        $before = $client->startedSnapshot();
+        $client->stopServers();
+        $error = null;
+        try {
+            $client->startServers();
+        } catch (\RuntimeException $e) {
+            $error = $e->getMessage();
+        }
+
+        return [
+            $before,
+            $client->startedSnapshot(),
+            $client->refusedServers(),
+            $client->deniedServers(),
+            $client->authRequired(),
+            $error,
+        ];
     }
 
     /**

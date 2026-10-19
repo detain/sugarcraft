@@ -12164,7 +12164,7 @@ final class Chat implements Model
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
-        'context', 'tokens', 'btw', 'play',
+        'context', 'tokens', 'btw', 'play', 'hooks',
     ];
 
     /**
@@ -13758,6 +13758,17 @@ final class Chat implements Model
     private function handleContextCommand(string $inputText): array
     {
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\ContextHostCommand(), $inputText);
+    }
+
+    /**
+     * `/hooks` (roadmap VIS-3a): the launch's hook chain, read-only —
+     * {@see \SugarCraft\Code\Host\Commands\HooksHostCommand}.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleHooksCommand(string $inputText): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\HooksHostCommand(), $inputText);
     }
 
     /**
