@@ -65,7 +65,6 @@ return [
     'cli.argv.continue_with_resume' => '--continue and --resume both pick the session to open; use one of them',
     'cli.argv.hint.config_value' => 'Write it as --config=<file> if the path begins with "-"; it may not be omitted.',
     'cli.argv.hint.continue_or_resume' => 'Use --continue for the most recent session, or --resume <id|name> for a specific one.',
-    'cli.argv.hint.drop_prompt' => 'Drop -p to continue the conversation in the TUI.',
     'cli.argv.hint.flag_alone' => 'Write it as {flag} alone.',
     'cli.argv.hint.flag_value' => 'Write it as {flag}=<value>; it may not be omitted.',
     'cli.argv.hint.max_cost' => 'Expected a spend ceiling in US dollars, for example 5 or $2.50.',
@@ -75,6 +74,7 @@ return [
     'cli.argv.hint.output_formats' => 'Valid formats are: {formats} (lowercase).',
     'cli.argv.hint.prompt_dash' => 'To pass a prompt that begins with "-", use --prompt=<text>.',
     'cli.argv.hint.quote_prompt' => 'Quote the whole prompt as one argument: -p "<prompt>".',
+    'cli.argv.hint.resume_needs_target' => 'Pass --resume <id|name> (see `candy-code session list`), or drop -p to pick the session interactively.',
     'cli.argv.hint.root_once' => 'Name the project directory once: as a bare argument or with --root <dir>, not both.',
     'cli.argv.hint.root_value' => 'Write it as --root=<dir> if the directory begins with "-"; it may not be omitted.',
     'cli.argv.hint.valid_modes' => 'Valid modes are: {modes}.',
@@ -97,11 +97,11 @@ return [
     'cli.argv.prompt_is_flag' => '{option} expects a prompt, but the next argument is the option {value}',
     'cli.argv.resume.not_found' => '--resume: no stored session has the id or name "{target}"',
     'cli.argv.resume.store_unavailable' => '--resume: cannot open the session store: {error}',
+    'cli.argv.resume_picker_with_prompt' => 'a bare --resume opens the interactive session picker and cannot be combined with -p/run',
     'cli.argv.root.flag' => '--root expects a directory, but the next argument is the option {option}',
     'cli.argv.root.missing' => '--root expects a directory, but the argument list ended',
     'cli.argv.root.no_such_directory' => '--root {root}: no such directory',
     'cli.argv.root_twice' => 'the project root is already {root}, but the argument {operand} also names one',
-    'cli.argv.session_with_prompt' => '{flag} reopens an interactive session and cannot be combined with -p/run',
     'cli.argv.unexpected.many' => 'unexpected arguments: {operands}',
     'cli.argv.unexpected.one' => 'unexpected argument: {operands}',
     'cli.argv.unexpected_after_prompt.many' => 'unexpected arguments after the prompt: {operands}',
@@ -395,8 +395,10 @@ Options:
       --resume [<id|name>]
                          Reopen a stored session by id, unique id prefix or
                          name (see `session list`). With no value, open the
-                         session picker at launch. Also accepts
-                         --resume=<id>. Not combinable with --continue or -p.
+                         session picker at launch; beside -p a target IS
+                         required (the transcript seeds the one-shot and the
+                         answer is saved back to the row). Also accepts
+                         --resume=<id>. Not combinable with --continue.
   -h, --help             Show this help message
   -v, --version          Show the installed version and exit
       --                 End of options: every later argument is positional,
@@ -705,6 +707,8 @@ TXT,
     'cli.noninteractive.refusal' => '[{kind}] {tool} was not run - {reason}',
     'cli.noninteractive.session_end_hook_refused' => 'SessionEnd hook "{hook}" refused: {reason}',
     'cli.noninteractive.session_end_refused' => 'SessionEnd hook refused: {reason}',
+    'cli.noninteractive.session_funnel_failed' => 'the session store could not be opened for this run; answering without stored history and nothing will be saved: {error}',
+    'cli.noninteractive.session_save_failed' => 'the session store could not save this answer; the answer is complete and the exit status is unchanged: {error}',
     'cli.noninteractive.stdin_silent' => 'stdin stayed silent for {seconds}s and was treated as no piped context; close fd 0 or feed it before the first byte lands on a slower start',
     'cli.noninteractive.stdin_truncated' => 'piped stdin exceeds 10MB cap; truncating.',
     'cli.noninteractive.turn_hook_blocked' => 'a turn hook refused this prompt, so it was never sent: {reason}',

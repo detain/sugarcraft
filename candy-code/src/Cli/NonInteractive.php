@@ -265,6 +265,62 @@ final class NonInteractive
         // headless host) owns that session's lifecycle, SessionEnd included.
         $ownsSession = $backend === null;
 
+        // AUT-2: a one-shot run now lives in a real session row, opened
+        // through the SAME funnel a TUI launch uses - Bootstrap::openSession()
+        // honours --continue / --resume as useSessionLaunch() registered them
+        // and mints a fresh lazy row for a plain run. The stored transcript
+        // seeds this run's history (below, ahead of the user's line) and the
+        // answer is saved back to the same row once it is out, so
+        // `candy-code -p --resume <id>` continues where that session stopped,
+        // `-c` picks up the cwd's latest conversation, and one-shot runs
+        // appear in `session list` at all. THE STORE MUST NOT COST THE ANSWER:
+        // the funnel is best-effort, and a failure downgrades to the exact
+        // pre-AUT-2 behaviour - no history, nothing saved, no `session_id` in
+        // the envelope - with one stderr line naming the cause.
+        $opened = null;
+        $sessionStore = null;
+        if ($ownsSession) {
+            // The funnel reads the mode from useSessionLaunch(), which
+            // bin/candy-code registers before dispatch. A run() entered
+            // IN-process with session flags in its own $args must honour them
+            // too - the flags belong to this call, and silently launching mode
+            // 'new' beside a `--resume` is the very defect AUT-2 closes.
+            // Re-registering the bin's own values is idempotent.
+            Bootstrap::useSessionLaunch($args->continueSession, $args->resumeRequested, $args->resumeSession);
+
+            // A --resume target that names nothing is the operator's argv
+            // mistake, checked before anything heavy runs - the same verdict
+            // bin/candy-code applies to a TUI launch, from the same source.
+            $launchError = Bootstrap::sessionLaunchError();
+            if ($launchError !== null) {
+                return self::failUsage(
+                    $launchError,
+                    $outputFormat,
+                    'Run `candy-code session list` to see stored sessions, or `candy-code --resume` to pick one.',
+                );
+            }
+
+            try {
+                $sessionStore = Bootstrap::sessionStore(prune: false);
+                $candidate = Bootstrap::openSession($sessionStore, ...Bootstrap::selectedProviderLabel());
+                if ($candidate['picker']) {
+                    // Defensive: the parser refuses a bare --resume beside a
+                    // prompt, so a picker request reaches here only from an
+                    // in-process caller that registered the launch itself.
+                    return self::failUsage(
+                        'candy-code: ' . Lang::t('cli.argv.resume_picker_with_prompt'),
+                        $outputFormat,
+                        Lang::t('cli.argv.hint.resume_needs_target'),
+                    );
+                }
+                $opened = $candidate;
+            } catch (\Throwable $e) {
+                $opened = null;
+                $sessionStore = null;
+                \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.session_funnel_failed', ['error' => $e->getMessage()]) . "\n");
+            }
+        }
+
         if ($backend === null) {
             $providerName = Bootstrap::selectedProviderName();
 
@@ -313,6 +369,18 @@ final class NonInteractive
         $backend = self::withoutInteractiveUser($backend);
         $backend = self::withHeadlessSpendCap($backend, $spendCapUsd);
 
+        // AUT-2 envelope plumbing: the engine carries the session id the same
+        // way the TUI's does (fireSessionEnd() below reads it back), and
+        // records each step's provider-reported usage as the engine already
+        // computes it - a read-only tap, no timing, no request change (E646).
+        $sessionUsages = [];
+        if ($opened !== null && $backend instanceof \SugarCraft\Code\Backend\EngineBackend) {
+            $backend = $backend->withSessionId($opened['id']);
+            $backend = $backend->withStepUsageObserver(static function (?\SugarCraft\Code\Usage $usage) use (&$sessionUsages): void {
+                $sessionUsages[] = $usage;
+            });
+        }
+
         // Audit 15b-15 residual: `@` mentions resolve from the typed prompt
         // against the same root the TUI's Chat uses (`--root`, else the cwd)
         // - and NEVER from piped stdin, which is context of unknown origin: a
@@ -339,6 +407,14 @@ final class NonInteractive
         );
         foreach ($mentionNotices as $notice) {
             self::noticeAttachment($notice);
+        }
+
+        // The resumed transcript goes AHEAD of this run's prompt, in the same
+        // position the TUI's Chat puts it when openSession() hands it history:
+        // turn hooks (SessionStart's empty-history gate below) and the prompt
+        // itself both see the whole conversation, not just the new line.
+        if ($opened !== null && $opened['history'] !== []) {
+            $history = [...$opened['history'], ...$history];
         }
 
         // E173, THEN E219. A refusal this turn raises reached the JSON consumer
@@ -446,7 +522,13 @@ final class NonInteractive
         // stdout keeps the JSON contract intact on this branch too, and 1
         // rather than 2 because something really did run.
         try {
-            $rendered = self::format($message, $outputFormat, $refusals);
+            $rendered = self::format(
+                $message,
+                $outputFormat,
+                $refusals,
+                $opened['id'] ?? null,
+                \SugarCraft\Code\Usage::sum($sessionUsages)?->toArray(),
+            );
         } catch (\JsonException $e) {
             \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.answer_not_json', ['error' => $e->getMessage()]) . "\n");
             self::emitErrorDocument($outputFormat, 'encoding', $e->getMessage(), null, $refusals);
@@ -461,6 +543,29 @@ final class NonInteractive
         }
 
         echo $rendered . "\n";
+
+        // AUT-2: the answer is out - persist this run to its session row
+        // BEFORE SessionEnd fires, so the session the end-event names is the
+        // session that now holds the transcript. The lazy mint lands here:
+        // runs that died earlier leave no empty row. A failed save cannot
+        // retract an answer the caller already holds: one stderr line, exit
+        // status unchanged. DIVERGENCE from the TUI, deliberate: the TUI
+        // replays a resumed session's stored permission grants into the gate;
+        // a headless run asks nobody (HeadlessPermissionPrompt refuses every
+        // ASK unattended), so persisted grants have no live surface to be
+        // honoured by and nothing is replayed.
+        if ($ownsSession && $opened !== null && $sessionStore !== null) {
+            try {
+                $mint = $opened['mint'] ?? null;
+                if ($mint !== null) {
+                    $mint();
+                }
+                $sessionStore->recordTurn($opened['id'], (string) $args->prompt);
+                \SugarCraft\Code\Host\TranscriptStore::new($sessionStore)->save($opened['id'], [...$history, $message]);
+            } catch (\Throwable $e) {
+                \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.session_save_failed', ['error' => $e->getMessage()]) . "\n");
+            }
+        }
 
         // Step 3.D-2: the run is over and its answer is out — the one point
         // a successful `-p` session ends, so SessionEnd fires here, once,
@@ -1398,11 +1503,19 @@ final class NonInteractive
      *
      * `text` (default): the assistant's raw content, matching the plain
      * stdout contract of every tool surveyed in crush_feat.md section 2.
-     * `json`: `{"schema": 1, "result": "<content>"}`, plus a `refusals` array when the turn
-     * blocked at least one tool call — see {@see self::emitErrorDocument()}
-     * for why that key alone is conditional, and {@see self::refusalFrom()}
-     * for what counts as one and for the optional per-row `unattended`
-     * qualifier an auto-refusal carries (E375).
+     * `json`: `{"schema": 1, "result": "<content>"}`, plus THREE conditional
+     * keys. `refusals` appears when the turn blocked at least one tool call
+     * — see {@see self::emitErrorDocument()} for why refusals is
+     * conditional, and {@see self::refusalFrom()} for what counts as one and
+     * for the optional per-row `unattended` qualifier an auto-refusal carries
+     * (E375). `session_id` names the row this run persisted its answer to and
+     * `usage` carries the run's summed token/cost report (AUT-2); both are
+     * ABSENT - not null - when the run owns no session (an injected backend)
+     * or the provider reported nothing billable. `jq '.usage'` answering null
+     * then means "nothing was measured", which is the truth rather than a
+     * forgotten field. Inside `usage` the buckets are
+     * {@see \SugarCraft\Code\Usage::toArray()}'s camelCase keys verbatim;
+     * the top-level envelope keys stay snake_case like `session_id`.
      *
      * `text` CARRIES NO REFUSALS ON STDOUT, AND THE REASON GIVEN FOR THAT HAS
      * BEEN WRONG TWICE.
@@ -1433,12 +1546,11 @@ final class NonInteractive
      * stderr, asserted in one child process because splitting them would pass
      * with the two channels merged.
      *
-     * This is a deliberately minimal
-     * first cut of crush_feat.md Recommendation 3 — the recommendation's own
-     * sketch also includes `session_id` and `usage` (token-cost) fields,
-     * which this step does not yet surface; a caller piping through `jq
-     * '.usage'` per that recommendation's full intent gets nothing today.
-     * Any value other than `self::FORMAT_JSON` falls back to plain text.
+     * crush_feat.md Recommendation 3 sketched this envelope;
+     * the first cut shipped `result` alone and left its `session_id`/`usage`
+     * fields a promise. AUT-2 keeps the promise: both fields land when the
+     * run has a session and a billing report to fill them. Any value other
+     * than `self::FORMAT_JSON` falls back to plain text.
      *
      * The success path had the same invalid-UTF-8 hole the failure path did
      * (see {@see self::encodeDocument()}): a model that returns a byte
@@ -1453,12 +1565,18 @@ final class NonInteractive
      *   {@see self::run()} turns this into an `encoding`-typed document at
      *   {@see self::EXIT_FAILURE}; never into an empty stdout.
      */
-    public static function format(Message $message, string $outputFormat, array $refusals = []): string
+    public static function format(Message $message, string $outputFormat, array $refusals = [], ?string $sessionId = null, ?array $usage = null): string
     {
         if ($outputFormat === self::FORMAT_JSON) {
             $document = ['schema' => self::SCHEMA, 'result' => $message->content];
             if ($refusals !== []) {
                 $document['refusals'] = $refusals;
+            }
+            if ($sessionId !== null) {
+                $document['session_id'] = $sessionId;
+            }
+            if ($usage !== null) {
+                $document['usage'] = $usage;
             }
 
             return self::encodeDocument($document);

@@ -87,8 +87,40 @@ final class SessionLaunchFlagsTest extends TestCase
     public static function refusals(): iterable
     {
         yield 'both flags' => [['candy-code', '-c', '--resume', 'x'], '--continue and --resume'];
-        yield '-c with -p' => [['candy-code', '-c', '-p', 'hi'], '--continue reopens an interactive session'];
-        yield '--resume with run' => [['candy-code', 'run', 'hi', '--resume'], '--resume reopens an interactive session'];
+        yield 'bare --resume with -p' => [['candy-code', '-p', 'hi', '--resume'], 'a bare --resume opens the interactive session picker'];
+        yield '--resume with run' => [['candy-code', 'run', 'hi', '--resume'], 'a bare --resume opens the interactive session picker'];
+    }
+
+    /**
+     * AUT-2: session flags beside a prompt went from refused to supported —
+     * NonInteractive::run() reuses the TUI's openSession funnel, seeds the
+     * stored transcript, and saves the answer back. Only a BARE --resume (no
+     * target to resume, picker unshowable in a one-shot) stays a usage error;
+     * the two-flags collision above stays too.
+     */
+    public function testSessionFlagsBesideAPromptParseAsOneShotContinuations(): void
+    {
+        $continue = ArgvParser::parse(['candy-code', '-c', '-p', 'hi']);
+        $this->assertNull($continue->usageError);
+        $this->assertTrue($continue->promptRequested);
+        $this->assertTrue($continue->continueSession);
+
+        $resume = ArgvParser::parse(['candy-code', 'run', 'hi', '--resume', 'abc']);
+        $this->assertNull($resume->usageError);
+        $this->assertTrue($resume->promptRequested);
+        $this->assertSame('abc', $resume->resumeSession);
+
+        $attached = ArgvParser::parse(['candy-code', '-p', 'hi', '--resume=abc']);
+        $this->assertNull($attached->usageError);
+        $this->assertSame('abc', $attached->resumeSession);
+    }
+
+    public function testTheBareResumeHintNamesBothRemedies(): void
+    {
+        $args = ArgvParser::parse(['candy-code', '-p', 'hi', '--resume']);
+
+        $this->assertStringContainsString('session list', (string) $args->usageHint);
+        $this->assertStringContainsString('drop -p', (string) $args->usageHint);
     }
 
     /** @param list<string> $argv */

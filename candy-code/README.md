@@ -922,8 +922,12 @@ prints the `cd … && php …/bin/candy-code …` command to run instead.
 
 `--resume <id>` also accepts `--resume=<id>`; ids come from `candy-code session
 list` or the picker. A target that names no stored session is a usage error
-(exit 2) before the TUI starts. `--continue` and `--resume` cannot be combined
-with each other or with `-p`/`run`. Inside the TUI, `Ctrl+R` (or `/sessions`)
+(exit 2) before the answer starts, on the TUI and on a one-shot run alike.
+`--continue` and `--resume` cannot be combined with each other. Beside
+`-p`/`run` they are honoured, not refused (AUT-2): the stored transcript seeds
+the one-shot's context and the answer is saved back to the same row. Only a
+BARE `--resume` beside a prompt stays a usage error — it asks for the
+interactive picker, which a one-shot run has no surface to show. Inside the TUI, `Ctrl+R` (or `/sessions`)
 opens the same picker and `Enter` loads the chosen session's transcript;
 `Ctrl+Tab` and the tab strip switch the same way. The tab strip shows the tabs
 this run **opened** — the launch session plus whatever you reached for (the
@@ -1794,7 +1798,9 @@ names `src/Cli/Subcommands.php` added when its subcommand errors joined the
 contract. Renaming them to `snake_case` was weighed and declined;
 match exact strings, never an inferred alphabet. The one-shot JSON envelope also carries a top-level `"schema"` version key — currently `1` — so a consumer can branch on the document shape without sniffing for keys.
 
-One key is **conditional**, and it is the only one: `refusals`. A turn that
+Three keys are **conditional**: `refusals`, and — since AUT-2 carried the
+first cut's promised fields onto the envelope — `session_id` and `usage`.
+A turn that
 blocked a tool call — a permission ASK that nothing could answer, an explicit
 `n` at the prompt, a hook that denied the call outright — adds
 `"refusals": [{"tool": "<name>", "kind": "<which of the three>", "reason":
@@ -1815,7 +1821,16 @@ the document read `{"result": "<the answer>"}` for a turn in which a tool was
 quietly not run, and the model — which *did* see the refusal — had simply
 answered around it. `refusals` is **absent, not empty**, on a run that refused
 nothing, so the ordinary document is unchanged and `jq '.refusals // []'` is
-the way to read it unconditionally. It is not a list of tool calls that
+the way to read it unconditionally. `session_id` names the stored session row
+the run persisted its answer to (a run owns a session when it built its own
+backend; an embedder that injects one owns its own lifecycle, and its envelope
+carries no `session_id`). `usage` carries the run's summed token/cost report as
+the `Usage::toArray()` camelCase buckets (`totalTokens`, `costUsd`,
+`inputTokens`, …); it is absent when the provider reported nothing billable —
+the offline echo answer, for one — because `jq '.usage'` answering null should
+mean "nothing was measured", not "zero". Both are absent, never null, like
+`refusals`, and a run whose session store could not open downgrades to the
+pre-AUT-2 document: one stderr line, answer intact, exit code unchanged. It is not a list of tool calls that
 *failed*: a tool that ran and returned an error is a result the model acted
 on, whereas a refusal is a call that never happened. That distinction is carried on
 the result by whoever refused the call, never read off its text, so a tool

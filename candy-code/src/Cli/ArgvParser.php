@@ -775,20 +775,23 @@ final class ArgvParser
             }
         }
 
-        // --continue and --resume both choose the session a TUI launch opens,
-        // so they cannot both win, and neither means anything to a one-shot
-        // run, which opens no session at all. Refused rather than ignored: a
-        // `-c -p "…"` that silently ran without the earlier conversation
-        // would look like a model that forgot everything.
+        // --continue and --resume both choose the session to open, so they
+        // cannot both win - on a TUI launch or a one-shot run alike.
         if ($usageError === null && $continueSession && $resumeRequested) {
             $usageError = 'candy-code: ' . Lang::t('cli.argv.continue_with_resume');
             $usageHint = Lang::t('cli.argv.hint.continue_or_resume');
         }
-        if ($usageError === null && $promptRequested && ($continueSession || $resumeRequested)) {
-            $usageError = 'candy-code: ' . Lang::t('cli.argv.session_with_prompt', [
-                'flag' => $continueSession ? '--continue' : '--resume',
-            ]);
-            $usageHint = Lang::t('cli.argv.hint.drop_prompt');
+        // AUT-2: a session flag beside -p is no longer refused wholesale.
+        // --continue and a TARGETED --resume seed the one-shot's history from
+        // the stored transcript and save the answer back to the same row -
+        // NonInteractive::run() reuses the TUI's openSession funnel. What
+        // cannot work is a BARE --resume: it asks for the interactive session
+        // picker, and a one-shot run has no surface to show it on. The hint
+        // carries the remedy (name a target, or drop -p and pick) because
+        // both readings of the user's intent remain open here.
+        if ($usageError === null && $promptRequested && $resumeRequested && $resumeSession === null) {
+            $usageError = 'candy-code: ' . Lang::t('cli.argv.resume_picker_with_prompt');
+            $usageHint = Lang::t('cli.argv.hint.resume_needs_target');
         }
 
         // The FIRST positional, when it looks like a path, is the root (see

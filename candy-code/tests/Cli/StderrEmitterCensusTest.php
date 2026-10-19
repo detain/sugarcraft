@@ -57,7 +57,9 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — twenty-seven sites (ISS-026 residual 2026-10-18: +1 in
+ *  1. `fwrite(STDERR, …)` — twenty-nine sites (AUT-2 2026-10-19: +2 in
+ *     `NonInteractive::run()` for the session-funnel and save degrade lines,
+ *     stderr-alone like every other answer-shaping note; ISS-026 residual 2026-10-18: +1 in
  *     `Bootstrap::openSession()` for the cross-project `--resume` pick notice,
  *     stderr-alone like its `--continue` twin below; ISS-026 2026-10-17: +1 in
  *     `Bootstrap::openSession()` for the cross-project `--continue` notice,
@@ -331,7 +333,11 @@ final class StderrEmitterCensusTest extends TestCase
         // is the operator's again by the time it is written.
         // +1 in ISS-080: readStdinIfPiped()'s stdin-silent grace line. Stderr
         // alone: no answer exists yet and stdout is the answer alone.
-        'src/Cli/NonInteractive.php' => 10,
+        // +2 in AUT-2: the session-funnel degrade line (store cannot open —
+        // the answer proceeds without history) and the save-degrade line
+        // (answer already echoed; a failed persist cannot retract it). Both
+        // stderr alone by design: stdout is the answer and nothing else.
+        'src/Cli/NonInteractive.php' => 12,
         // O-3a: `serve`'s one funnel (Serve::stderr()) for its startup lines,
         // request log and stop notice. Stderr alone: no session exists to
         // carry a transcript notice, and the terminal running the server is
@@ -511,7 +517,10 @@ final class StderrEmitterCensusTest extends TestCase
         // +1 in ISS-080: the stdin-silent grace line (channel 1's note).
         // +1 in ISS-006: failUsage()'s spend-cap refusal argument (channel 1's note).
         // +1 in ISS-041: the turn-hook document's message prefix (channel 1's note).
-        'src/Cli/NonInteractive.php' => 12,
+        // +3 in AUT-2: the defensive picker failUsage, the session-funnel
+        // degrade line, and the save-degrade line — all stderr-only, the same
+        // pre-launch/after-answer exit-shape decision as --max-cost's family.
+        'src/Cli/NonInteractive.php' => 15,
         // E701: mcpAuth's five failUsage shapes (no action, unknown action,
         // JSON refusal, bad --timeout, missing server) took eleven to sixteen.
         // E710: mcpImport adds the funnel prefix literal plus its five door
