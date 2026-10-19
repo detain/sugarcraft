@@ -17,6 +17,13 @@ namespace SugarCraft\Code\Session;
  * not a ranking: the picker ranks what comes back with sugar-fuzzy, so the
  * store only has to keep obviously-unrelated rows out of the page.
  *
+ * `bodySearch` is a full-text query over message bodies, answered by the
+ * FTS5 side table (SES-2): rows come back in bm25 rank order — best hit
+ * first, recency ignored, the rank is the point — each carrying a snippet
+ * of the message that matched. When the module is absent the same query
+ * degrades to the `search` prefilter above, and when the plain SessionStore
+ * is asked directly it refuses instead of pretending its LIKE can rank.
+ *
  * Mirrors the shape of opencode's `Session.list({ search, limit })`; there is
  * no charmbracelet/crush equivalent.
  */
@@ -34,12 +41,13 @@ final class SessionQuery
         public readonly int $limit,
         public readonly int $offset,
         public readonly ?string $search,
+        public readonly ?string $bodySearch,
     ) {
     }
 
     public static function new(): self
     {
-        return new self(SessionKind::visibleByDefault(), false, false, null, false, 20, 0, null);
+        return new self(SessionKind::visibleByDefault(), false, false, null, false, 20, 0, null, null);
     }
 
     /** Restrict to these kinds; no argument means every kind. */
@@ -93,6 +101,17 @@ final class SessionQuery
     }
 
     /**
+     * Full-text over message bodies (SES-2): ranked rows with a snippet.
+     * Blank lifts the filter; see the class docblock for the degrade law.
+     */
+    public function withBodySearch(?string $bodySearch): self
+    {
+        $bodySearch = $bodySearch === null ? null : trim($bodySearch);
+
+        return $this->mutate(['bodySearch' => $bodySearch === '' ? null : $bodySearch]);
+    }
+
+    /**
      * @param array<string, mixed> $changes
      */
     private function mutate(array $changes): self
@@ -108,6 +127,7 @@ final class SessionQuery
             $field('limit'),
             $field('offset'),
             $field('search'),
+            $field('bodySearch'),
         );
     }
 }

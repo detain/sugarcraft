@@ -509,6 +509,60 @@ final class SessionStore
     }
 
     /**
+     * Rows for the ids $ranked names, kept to every other condition in
+     * $query, returned in RANK order rather than recency order — the
+     * `bodySearch` read path of SES-2, where the FTS5 side table has
+     * already decided the order and this method only proves the row still
+     * qualifies (kind, archived, parent, LIKE `search`) and wears its
+     * snippet. `pinnedFirst` stays a LIKE-path nicety: a body search is
+     * ordered by bm25 from the first row, which is the whole feature.
+     *
+     * Ids $ranked does not contain are simply absent; offset and limit page
+     * over the ranked list before any SQL runs, so a deep page costs one
+     * bounded query, not the whole result set.
+     *
+     * @param list<array{session_id: string, snippet: string}> $ranked
+     *
+     * @return list<SessionRow>
+     */
+    public function listSessionsRanked(SessionQuery $query, array $ranked): array
+    {
+        $page = array_slice($ranked, $query->offset, $query->limit);
+        if ($page === []) {
+            return [];
+        }
+
+        $stripped = $query->withBodySearch(null);
+        [$where, $params] = self::queryConditions($stripped);
+        $ids = array_column($page, 'session_id');
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql = 'SELECT * FROM sessions WHERE id IN (' . $placeholders . ')'
+            . ($where === [] ? '' : ' AND ' . implode(' AND ', $where));
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([...$ids, ...$params]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->closeCursor();
+
+        $byId = [];
+        foreach ($rows as $row) {
+            $session = SessionRow::fromArray($row);
+            $byId[$session->id] = $session;
+        }
+
+        $out = [];
+        foreach ($page as $entry) {
+            $session = $byId[$entry['session_id']] ?? null;
+            if ($session === null) {
+                continue;
+            }
+            $out[] = $session->withBodySnippet($entry['snippet']);
+        }
+
+        return $out;
+    }
+
+    /**
      * Every direct child of $id — branches, sub-agents and background runs,
      * archived or not — newest first.
      *
@@ -576,6 +630,14 @@ final class SessionStore
             $like = '%' . addcslashes($query->search, '%_\\') . '%';
             $where[] = "(name LIKE ? ESCAPE '\\' OR last_preview LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\')";
             array_push($params, $like, $like, $like);
+        }
+        if ($query->bodySearch !== null) {
+            // SES-2 fail-fast: body search is resolved against the FTS5 side
+            // table by EnhancedSessionStore, never translated to SQL here —
+            // a LIKE over previews is not "the same thing, roughly". A
+            // caller reaching SessionStore with bodies asked for has skipped
+            // that resolution, which is a wiring bug worth naming.
+            throw new \LogicException('bodySearch is answered by EnhancedSessionStore::listSessionsFiltered(); SessionStore answers LIKE search only');
         }
 
         return [$where, $params];

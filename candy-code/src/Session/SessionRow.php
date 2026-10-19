@@ -43,6 +43,14 @@ final class SessionRow
         public readonly bool $costUnpriced,
         public readonly string $createdAt,
         public readonly string $updatedAt,
+        /**
+         * The snippet of the message that matched a `bodySearch` (SES-2),
+         * with the hit words wrapped in `[` `]` by FTS5 — raw stored text,
+         * sanitised by every surface that paints it, exactly like name and
+         * preview. Only the ranked read path sets it; the LIKE paths leave
+         * it null, which is how a caller tells the two apart.
+         */
+        public readonly ?string $bodySnippet = null,
     ) {
     }
 
@@ -87,6 +95,20 @@ final class SessionRow
     public function archived(): bool
     {
         return $this->archivedAt !== null;
+    }
+
+    /**
+     * This row annotated with the body-match snippet of a ranked `bodySearch`
+     * (null strips it). Every property is constructor-promoted, so the
+     * object's own values are already keyed exactly as the constructor
+     * spells its parameters — spread, override, rebuild.
+     */
+    public function withBodySnippet(?string $bodySnippet): self
+    {
+        $values = get_object_vars($this);
+        $values['bodySnippet'] = $bodySnippet;
+
+        return new self(...$values);
     }
 
     /**

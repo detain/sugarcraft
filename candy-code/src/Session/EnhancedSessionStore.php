@@ -909,11 +909,45 @@ final class EnhancedSessionStore
     /**
      * @see SessionStore::listSessionsFiltered()
      *
+     * The SES-2 body-search resolution point: without `bodySearch` this is
+     * the LIKE path, untouched; with it, the FTS5 side table answers in bm25
+     * rank order with snippets — or, when the module is latched away, the
+     * query folds into the LIKE prefilter it degraded to before SES-2, so
+     * an FTS5-less box keeps the old answers instead of losing search.
+     *
      * @return list<SessionRow>
      */
     public function listSessionsFiltered(SessionQuery $query): array
     {
-        return $this->sessionStore->listSessionsFiltered($query);
+        if ($query->bodySearch === null) {
+            return $this->sessionStore->listSessionsFiltered($query);
+        }
+
+        if ($this->searchIndex->needsRebuild() && !$this->rebuildSearchIndex()) {
+            return $this->sessionStore->listSessionsFiltered($this->degradeSearch($query));
+        }
+
+        $ranked = $this->searchIndex->search($query->bodySearch);
+        if ($ranked === null) {
+            // Latched, unanswerable-as-full-text, or the sweep just failed:
+            // "cannot rank" always answers as LIKE, never as nothing.
+            return $this->sessionStore->listSessionsFiltered($this->degradeSearch($query));
+        }
+        if ($ranked === []) {
+            return [];
+        }
+
+        return $this->sessionStore->listSessionsRanked($query, $ranked);
+    }
+
+    /**
+     * The degrade shape (SES-2): body text searched with the name/preview/id
+     * LIKE prefilter, $query's own `search` keeping precedence when both
+     * were asked for.
+     */
+    private function degradeSearch(SessionQuery $query): SessionQuery
+    {
+        return $query->withBodySearch(null)->withSearch($query->search ?? $query->bodySearch);
     }
 
     /**
