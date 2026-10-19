@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
 import { createAppRouter } from '../../router'
 import { useSessionsStore } from '../../stores/sessions'
@@ -102,7 +102,7 @@ describe('session-row menu (WEB-1a)', () => {
 
   it('downloads the exported transcript as a file', async () => {
     const { wire, wrapper } = await mountSidebar(['s1'])
-    const createObjectURL = vi.fn((..._args: unknown[]): string => 'blob:download')
+    const createObjectURL: Mock<(blob: Blob) => string> = vi.fn(() => 'blob:download')
     const revokeObjectURL = vi.fn()
     Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true, writable: true })
     Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true, writable: true })

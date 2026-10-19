@@ -6,8 +6,10 @@ import { activeCount, buildTree, foldRuns } from '../../stores/agents/tree'
 import { useAgentsStore } from '../../stores/agents/agents'
 import { useSessionStore } from '../../stores/session'
 import AgentsPanel from '../agents/AgentsPanel.vue'
+import AgentCatalogPanel from '../agents/AgentCatalogPanel.vue'
 import BackgroundPanel from './BackgroundPanel.vue'
 import MemoryPanel from './MemoryPanel.vue'
+import RulesPanel from './RulesPanel.vue'
 import TodoPanel from './TodoPanel.vue'
 import WorkflowPanel from './WorkflowPanel.vue'
 
@@ -91,6 +93,8 @@ function onKey(event: KeyboardEvent): void {
       <WorkflowPanel v-else-if="panels.active === 'workflows' && sessionId" :session-id="sessionId" />
       <BackgroundPanel v-else-if="panels.active === 'background'" :session-id="sessionId" />
       <MemoryPanel v-else-if="panels.active === 'memory'" />
+      <RulesPanel v-else-if="panels.active === 'rules'" :session-id="sessionId" />
+      <AgentCatalogPanel v-else-if="panels.active === 'catalog'" />
     </div>
   </aside>
 </template>

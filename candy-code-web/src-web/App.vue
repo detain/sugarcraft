@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, inject, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import ApprovalsButton from './components/approvals/ApprovalsButton.vue'
 import ApprovalsDrawer from './components/approvals/ApprovalsDrawer.vue'
 import { useAttention } from './components/approvals/attention'
+import AboutModal from './components/AboutModal.vue'
 import ConnectionBanner from './components/ConnectionBanner.vue'
 import DirectoryPicker from './components/DirectoryPicker.vue'
 import SessionTabs from './components/grid/SessionTabs.vue'
@@ -27,6 +28,8 @@ const code = inject(SIGN_IN_CODE, null)
 
 const activeId = computed(() => (route.name === 'session' ? String(route.params.id) : null))
 const onLogin = computed(() => route.name === 'login')
+/** WEB-1c: the About overlay (`server.info` + `server.health`). */
+const aboutOpen = ref(false)
 const rtt = computed(() => (connection.connected && connection.rttMs !== null ? `${connection.rttMs} ms` : ''))
 
 watch(() => connection.status, (status) => {
@@ -82,6 +85,7 @@ async function signOut(): Promise<void> {
       <ApprovalsButton v-if="!onLogin" />
       <span class="status" :data-status="connection.status" data-testid="connection-status">{{ connection.statusLabel }}<template v-if="rtt"> · {{ rtt }}</template></span>
       <RouterLink v-if="!onLogin" :to="{ name: 'settings' }" class="nav" data-testid="settings-link">settings</RouterLink>
+      <button v-if="!onLogin" type="button" class="link" data-testid="about-button" @click="aboutOpen = true">about</button>
       <button type="button" class="link opt" :title="`Theme: ${settings.theme}`" @click="settings.cycleTheme()">theme: {{ settings.theme }}</button>
       <button v-if="!settings.notify" type="button" class="link opt" :title="settings.notifyProblem ? NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] : 'Desktop notifications for questions'" @click="settings.enableNotifications()">notify</button>
       <span v-if="settings.notifyProblem" class="notify-problem" role="status" data-testid="notify-problem">{{ NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] }}</span>
@@ -98,6 +102,7 @@ async function signOut(): Promise<void> {
     </div>
     <ApprovalsDrawer v-if="!onLogin" />
     <DirectoryPicker v-if="!onLogin" />
+    <AboutModal :open="aboutOpen" @close="aboutOpen = false" />
   </div>
 </template>
 

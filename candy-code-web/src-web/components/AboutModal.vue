@@ -1,0 +1,176 @@
+<script setup lang="ts">
+import { ref, watch } from 'vue'
+import type { MethodResult } from '../protocol/generated'
+import { useConnectionStore } from '../stores/connection'
+import { describe } from '../stores/session'
+
+/**
+ * WEB-1c: what this client is talking to (`server.info`) and how that
+ * server is doing right now (`server.health`) — the two read-scoped methods
+ * that had no caller. Both go over the socket everything else uses, and
+ * each settles on its own: a health failure never hides the inventory the
+ * info answer brought.
+ */
+const props = defineProps<{ open: boolean }>()
+const emit = defineEmits<{ close: [] }>()
+const connection = useConnectionStore()
+
+const info = ref<MethodResult<'server.info'> | null>(null)
+const health = ref<MethodResult<'server.health'> | null>(null)
+const error = ref<string | null>(null)
+const loading = ref(false)
+
+async function load(): Promise<void> {
+  loading.value = true
+  error.value = null
+  const [first, second] = await Promise.allSettled([connection.request('server.info', {}), connection.request('server.health', {})])
+  if (first.status === 'fulfilled') info.value = first.value
+  else error.value = describe(first.reason)
+  if (second.status === 'fulfilled') health.value = second.value
+  loading.value = false
+}
+
+watch(() => props.open, (open) => {
+  if (open) void load()
+}, { immediate: true })
+
+function onKey(event: KeyboardEvent): void {
+  if (event.key === 'Escape') emit('close')
+}
+
+/** Seconds the server has been up, in the coarsest unit that still reads. */
+function uptime(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)} s`
+  if (seconds < 3_600) return `${Math.floor(seconds / 60)} m ${seconds % 60} s`
+  return `${Math.floor(seconds / 3_600)} h ${Math.floor((seconds % 3_600) / 60)} m`
+}
+</script>
+
+<template>
+  <div v-if="open" class="backdrop" data-testid="about-backdrop" @click.self="emit('close')">
+    <div class="dialog" role="dialog" aria-modal="true" aria-label="About this server" tabindex="-1" data-testid="about-modal" @keydown="onKey">
+      <header>
+        <h2>About this server</h2>
+        <button type="button" class="link" aria-label="Close" data-testid="about-close" @click="emit('close')">✕</button>
+      </header>
+      <p v-if="error" class="error" role="alert" data-testid="about-error">{{ error }}</p>
+      <p v-else-if="loading && info === null" class="empty">Asking the server…</p>
+      <template v-else-if="info !== null">
+        <dl class="grid" data-testid="about-info">
+          <dt>Version</dt>
+          <dd>{{ info.version }}</dd>
+          <dt>Protocol</dt>
+          <dd>{{ info.protocol }}</dd>
+          <dt v-if="info.root">Root</dt>
+          <dd v-if="info.root">{{ info.root }}</dd>
+          <dt v-if="info.providers?.length">Providers</dt>
+          <dd v-if="info.providers?.length">{{ info.providers.join(', ') }}</dd>
+          <dt v-if="info.tools?.length">Tools</dt>
+          <dd v-if="info.tools?.length" data-testid="about-tools">{{ info.tools.length }}<span class="hint"> · {{ info.tools.join(', ') }}</span></dd>
+          <dt v-if="info.commands?.length">Commands</dt>
+          <dd v-if="info.commands?.length" data-testid="about-commands">{{ info.commands.join(', ') }}</dd>
+          <dt>Permission modes</dt>
+          <dd data-testid="about-modes">{{ info.permissionModes.join(', ') }} (default: {{ info.defaultPermissionMode }})</dd>
+        </dl>
+        <template v-if="info.agents?.length">
+          <h3>Agents</h3>
+          <ul data-testid="about-agents">
+            <li v-for="agent in info.agents" :key="agent.name">
+              <strong>{{ agent.name }}</strong><template v-if="agent.description"> — {{ agent.description }}</template>
+            </li>
+          </ul>
+        </template>
+      </template>
+      <template v-if="health !== null">
+        <h3>Right now</h3>
+        <p class="health" data-testid="about-health">
+          <span class="state" :class="health.ok ? 'ok' : 'bad'">{{ health.ok ? 'ok' : 'not ok' }}</span>
+          · up {{ uptime(health.uptimeS) }}
+          · {{ health.sessionsOpen }} sessions open
+          · {{ health.turnsRunning }} turns running
+          <template v-if="health.draining"> · draining</template>
+        </p>
+      </template>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgb(0 0 0 / 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.dialog {
+  width: min(36rem, 100%);
+  max-height: min(80vh, 100%);
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.75rem 1rem 1rem;
+  box-shadow: 0 0.6rem 1.6rem rgb(0 0 0 / 0.35);
+}
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+h2,
+h3 {
+  margin: 0;
+}
+h3 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+header .link {
+  margin-left: auto;
+}
+.grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.75rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+}
+.grid dt {
+  color: var(--muted);
+}
+.grid dd {
+  margin: 0;
+  word-break: break-word;
+}
+.hint {
+  color: var(--muted);
+}
+ul {
+  margin: 0.2rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+}
+.health {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+}
+.state.ok {
+  color: var(--accent);
+}
+.state.bad {
+  color: var(--error);
+}
+.empty {
+  color: var(--muted);
+}
+.error {
+  color: var(--error);
+}
+</style>
