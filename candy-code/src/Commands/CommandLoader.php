@@ -212,6 +212,34 @@ final class CommandLoader
     private array $refusedDirectories = [];
 
     /**
+     * The plugin bundles whose `commands/` trees join the foreign floor, set
+     * by {@see useBundles()} before {@see loadAll()} runs (PLG-1). Held as
+     * loader state rather than a loadAll parameter because the loader is
+     * constructed at launch in `Cli\Bootstrap::workspace()` and the bundles
+     * are discovered by that same launch — Chat, SessionHost and the protocol
+     * commands surface all call `loadAll()` on the ONE instance, and a
+     * parameter would make every caller re-derive what the launcher already
+     * knew, which is the two-sources-of-truth shape this repo keeps paying to
+     * remove.
+     *
+     * @var list<\SugarCraft\Code\Bundles\Bundle>
+     */
+    private array $bundles = [];
+
+    /**
+     * Declare the bundles this loader should walk. Immutable-in-behaviour by
+     * construction order, not by signature: set once at wiring time, like the
+     * launch's gate, and every later `loadAll()` on this instance reads the
+     * same set.
+     *
+     * @param list<\SugarCraft\Code\Bundles\Bundle> $bundles
+     */
+    public function useBundles(array $bundles): void
+    {
+        $this->bundles = $bundles;
+    }
+
+    /**
      * File-based commands refused for taking a control-plane name, name => reason.
      *
      * SEPARATE FROM {@see $refusedDirectories} because it is a different subject
@@ -588,7 +616,7 @@ final class CommandLoader
         // overwrite another foreign row's source entry; it can never overwrite
         // a native tier's, because those walks run after this one and out-rank
         // it in the merge — the same right-bias does both jobs.
-        $foreign = (new ForeignCommandDiscovery($this))->discover($projectRoot);
+        $foreign = (new ForeignCommandDiscovery($this))->discover($projectRoot, $this->bundles);
 
         $user = $this->loadUserCommands();
         $project = $this->loadProjectCommands($projectRoot);

@@ -17,6 +17,8 @@ use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CommandBackend;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\StreamingCommandBackend;
+use SugarCraft\Code\Bundles\Bundle;
+use SugarCraft\Code\Bundles\BundleDiscovery;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandLoader;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
@@ -962,7 +964,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 28;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 31;
 
     /**
      * Project hook files this process has already reported as skipped, keyed
@@ -1880,7 +1882,7 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // TWENTY-EIGHT call sites now routed onto the transcript seam. This said
+        // THIRTY-ONE call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
@@ -2103,6 +2105,13 @@ final class Bootstrap
         // Built here rather than inside the constructor call so its refusals
         // survive the statement — see the `commandLoader:` argument below.
         $commandLoader = new CommandLoader();
+
+        // PLG-1: the launch's installed plugin bundles ride THIS loader, the
+        // one every command consumer reads — an argument parameter would make
+        // Chat, SessionHost and the protocol surface each re-derive what the
+        // launcher already scanned, and the scan's notices are memoized on
+        // exactly one call being the first.
+        $commandLoader->useBundles(self::bundles($root));
 
         // ONE set, THREE READERS (P6.S3; the third added with the nudge gate).
         // `Chat` is the only thing that writes it (the
@@ -2420,10 +2429,10 @@ final class Bootstrap
      * {@see reportProjectTierRefusals()} putting one bounded line in front of
      * the user at launch.
      *
-     * TWENTY-TWO repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
+     * TWENTY-FOUR repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
      * qualifier is the number's domain rather than decoration. What the
      * derivation counts is a string literal of the shape `.<dir>/<segment>`:
-     * FORTY-SIX distinct ones on this tree, twenty-two of them classified
+     * FORTY-EIGHT distinct ones on this tree, twenty-four of them classified
      * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
      * now DERIVED from `src/` by
      * {@see \SugarCraft\Code\Tests\Cli\ProjectTierRefusalInventoryTest}, which
@@ -2450,6 +2459,12 @@ final class Bootstrap
      * {@see \SugarCraft\Code\Commands\ForeignCommandDiscovery} serving both
      * tiers, so the project legs are repository-chosen and gated loader-local
      * under the same discipline as the rules trees above.
+     * PLG-1 (plan_comparison W6, lane w6a) made it TWENTY-FOUR with the bundle
+     * floor `.candy-code/bundles` — a TENTH feeder, its containment refusals
+     * drained at the {@see bundles()} choke — and the bundle manifest
+     * `.claude-plugin/plugin.json`, one literal in
+     * {@see \SugarCraft\Code\Bundles\Bundle} serving both tiers, gated with its
+     * bundle directory and named as a gap beside the command-floor trees.
      *
      *  - `.candy-code/settings.json` and `.candy-code/settings.local.json` are
      *    genuinely new — the project tier of
@@ -2470,8 +2485,9 @@ final class Bootstrap
      * literal with no directory component — `src/` holds exactly two,
      * `.mcp.json` in {@see mcpClient()} and `.phpunit.cache` in `IgnoreRules` —
      * cannot match, so `.mcp.json` is repository-chosen, feeds this collector, and
-     * is not one of the directory paths. NINE repository-chosen paths therefore
-     * produce entries here: the eight below plus `.mcp.json`, which
+     * is not one of the directory paths. TEN repository-chosen paths therefore
+     * produce entries here: the eight below, `.candy-code/commands` (see the
+     * paragraph on it), and `.candy-code/bundles`; beside them `.mcp.json`, which
      * {@see $projectTierRefusals} records as the only entry that is not a
      * directory. Stating the two figures without their domain is how the count
      * that this whole enumeration exists to prevent gets made in the sentence
@@ -2487,20 +2503,22 @@ final class Bootstrap
      * {@see foreignAgentPresets()} and gave that registry's refusal seam its first
      * reader; the split was five and five before it.
      *
-     * The EIGHT that are gated elsewhere and named as gaps rather than counted
-     * here — `.opencode/memory`, `.candy-code/hooks.yaml`,
+     * The FOURTEEN that are gated elsewhere and named as gaps rather than
+     * counted here — `.opencode/memory`, `.candy-code/hooks.yaml`,
      * `.candy-code/config.json`, `.candy-code/settings.json`,
      * `.candy-code/settings.local.json`, the rules tier `.candy-code/rules`,
      * the import sentinel `.candy-code/memory`, and the instruction tail alias
      * `.github/copilot-instructions.md`, and the three command-floor trees
-     * `.claude/commands`, `.opencode/command` and `.opencode/commands` — are
-     * itemised on {@see $projectTierRefusals}, all eleven of them.
+     * `.claude/commands`, `.opencode/command` and `.opencode/commands`, and the
+     * bundle manifest `.claude-plugin/plugin.json` — are
+     * itemised on {@see $projectTierRefusals}, all fourteen of them.
      *
      * `.candy-code/commands` IS NOT ONE OF THEM, and this sentence used to say
      * it was — a gap list that went stale when crush_code.md Phase 2 item 4
      * wired {@see \SugarCraft\Code\Commands\CommandLoader} and
      * {@see chat()} started draining `refusedDirectories()` straight into
-     * {@see $projectTierRefusals}. It is a ninth feeder beside the eight above.
+     * {@see $projectTierRefusals}. It is a ninth feeder beside the eight above,
+     * and PLG-1's `.candy-code/bundles` is the tenth beside those two.
      * The stale sentence
      * then very nearly reclassified the live code to match itself, which is the
      * direction this project's recurring defect always runs: prose is easier to
@@ -2554,13 +2572,108 @@ final class Bootstrap
             // line rather than a count.
             //
             // THE ONE PER-PATH SOURCE ON THE SEAM, and the reason
-            // {@see LAUNCH_NOTICE_LIMIT} exists: the nine feeders named above
+            // {@see LAUNCH_NOTICE_LIMIT} exists: the ten feeders named above
             // are bounded, but $commandLoader->refusedCommands() is one entry
             // per refused FILE and nothing caps that.
             self::warnPermissionConfigInTranscript(
                 sprintf(self::translated(self::PROJECT_TIER_REFUSAL_FORMAT), $path, rtrim($reason, '.')),
             );
         }
+    }
+
+    /** @var array<string, list<Bundle>> the memoized scans, keyed by root|pluginPaths */
+    private static array $bundlesCache = [];
+
+    /**
+     * The installed plugin bundles this launch reads, keyed by the exact
+     * (root, pluginPaths) pair it was last asked about.
+     *
+     * PLG-1 (plan_comparison W6) ships the READER, not an installer and not a
+     * registry: a bundle is a directory carrying `.claude-plugin/plugin.json`
+     * (or the tolerated bare `plugin.json`) whose `skills/`, `commands/` and
+     * `agents/` trees map onto the three loaders that already import those
+     * surfaces from Claude Code and opencode. Which roots hold bundles —
+     * `<root>/.candy-code/bundles`, `~/.candy-code/bundles`, and every
+     * directory listed in the user-tier `pluginPaths` setting — is
+     * {@see BundleDiscovery}'s subject; this method is the ONE caller that
+     * turns them on:
+     *
+     *  - {@see workspace()} feeds the result to the launch's single
+     *    {@see CommandLoader} (`useBundles`), which every command consumer —
+     *    Chat, SessionHost, the protocol's command list — then reads;
+     *  - {@see skillRegistry()} passes it to {@see SkillManager::loadAll()};
+     *  - {@see foreignAgentPresets()} passes it to the preset registry's
+     *    `discover()`.
+     *
+     * Two of the format's five surfaces are DECLINED AT THE WIRE and this is
+     * where the decline is said, once per launch: bundle HOOKS are never
+     * registered (hook surfaces stay candy-code-owned, the same ruling that
+     * keeps `hooks.json` out of cloned `.claude/` trees), and a bundle's
+     * `.mcp.json` is never AUTO-STARTED — the operator reviews it and imports
+     * it deliberately through `candy-code mcp import`. Both get a launch
+     * notice naming the affected bundles, because a bundle that loads its
+     * skills but silently runs no hooks looks exactly like a bundle whose
+     * hooks the user never wanted.
+     *
+     * Refused bundle directories feed {@see $projectTierRefusals} like every
+     * other containment answer; per-bundle parse problems rise as warnings.
+     * The whole scan — notices included — is memoized per (root, paths), so
+     * the many scans a launch performs (chat, app, provider switches) cost
+     * one walk and say their decline exactly once.
+     *
+     * @return list<Bundle>
+     */
+    public static function bundles(?string $root): array
+    {
+        $configured = self::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
+        $paths = array_values(array_filter(\is_array($configured) ? $configured : [], 'is_string'));
+
+        $key = ($root ?? '') . '|' . implode('|', $paths);
+
+        if (isset(self::$bundlesCache[$key])) {
+            return self::$bundlesCache[$key];
+        }
+
+        $discovery = new BundleDiscovery($root ?? '', $paths);
+        $bundles = $discovery->discover();
+
+        foreach ($discovery->warnings() as $warning) {
+            self::warnPermissionConfigInTranscript($warning);
+        }
+
+        self::$projectTierRefusals = [...self::$projectTierRefusals, ...$discovery->refusedDirectories()];
+
+        $hooked = [];
+        $mcped = [];
+
+        foreach ($bundles as $bundle) {
+            if ($bundle->hooksPaths() !== []) {
+                $hooked[] = $bundle->name;
+            }
+
+            if ($bundle->mcpFile() !== null) {
+                $mcped[] = $bundle->name;
+            }
+        }
+
+        // Lang::t(), not sprintf(): this file's launch-format census counts
+        // sprintf call sites, and a notice added here must not move it — the
+        // placeholder interpolation is what the catalogue entries are for.
+        if ($hooked !== []) {
+            self::warnPermissionConfigInTranscript(Lang::t('bundles.hooks_declined', [
+                'count' => (string) \count($hooked),
+                'names' => implode(', ', $hooked),
+            ]));
+        }
+
+        if ($mcped !== []) {
+            self::warnPermissionConfigInTranscript(Lang::t('bundles.mcp_not_auto_started', [
+                'count' => (string) \count($mcped),
+                'names' => implode(', ', $mcped),
+            ]));
+        }
+
+        return self::$bundlesCache[$key] = $bundles;
     }
 
     /**
@@ -3068,7 +3181,7 @@ final class Bootstrap
         $registry = new ForeignAgentPresetRegistry();
 
         try {
-            $presets = $registry->discover($root);
+            $presets = $registry->discover($root, self::bundles($root));
         } catch (\Throwable $e) {
             // BOTH CHANNELS, and the stderr bytes are unchanged — see
             // {@see warnPermissionConfigInTranscript()}. A launch whose
@@ -5727,7 +5840,7 @@ final class Bootstrap
     {
         $registry = new SkillRegistry();
         $manager = new SkillManager(new SkillLoader(), $registry);
-        $manager->loadAll($root);
+        $manager->loadAll($root, self::bundles($root));
 
         // section 7 E1's disableFromConfig() step: a user who does not want a
         // discovered skill offered to the model needs somewhere to say so,
@@ -5966,7 +6079,7 @@ final class Bootstrap
             // user meets that as `/skill` not offering something they wrote. ONE
             // ROW, whatever the count: this message is already an aggregate, which
             // is what makes it safe to put in a transcript that also has to carry
-            // twenty-seven other sources. THIS SAID ELEVEN. Round 44 could not correct
+            // thirty other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
@@ -9702,7 +9815,7 @@ final class Bootstrap
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // twenty-seven call sites: {@see chat()} holds no `self::tools(` call of
+            // thirty call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is

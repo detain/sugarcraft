@@ -1284,7 +1284,11 @@ set that one); `enabledSkills`, because it names skills whose full bodies
 ride the system prompt every turn — the `instructions` argument applied to
 skills, where a checkout could make any skill it ships standing,
 authoritative prompt text (the `disabledSkills` a project *may* set only ever
-removes one); `watchFiles`, because it turns an `AI!` comment saved into the
+removes one); `pluginPaths`, because it names the directories this launch imports
+plugin bundles from — a bundle's skills and commands arrive as prompt prose and
+slash rows exactly like `enabledSkills`'s, so a checkout choosing those paths
+could author the operator's context from anywhere on the disk it can point at;
+`watchFiles`, because it turns an `AI!` comment saved into the
 repository's files into a prompt the agent acts on, and a checkout must not be
 able to make its own text your next instruction; `debug.skills`, `debug.commands`, `debug.rules` and
 `debug.stream`, because they are the operator's own diagnostic switches — each

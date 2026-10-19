@@ -42,6 +42,17 @@ final class Bundle
         public readonly string $description = '',
         /** @param array<string, mixed> the manifest, parsed */
         public readonly array $manifest = [],
+        /**
+         * The tree whose OWNERSHIP every surface read under this bundle must
+         * also satisfy — `$HOME` for a bundle found under the user's own
+         * install root, null for a project bundle (the checkout anchor is
+         * enough) and for a `pluginPaths` entry (the operator's explicit word,
+         * trusted as given). Mirrors the second element of
+         * {@see \SugarCraft\Code\Skills\ForeignSkillDiscovery::tiers()}
+         * entries: it is what makes "the user's own tree" an established fact
+         * rather than a guess about a `$HOME` nobody vouched for.
+         */
+        public readonly ?string $ownedBy = null,
     ) {
     }
 
@@ -51,7 +62,7 @@ final class Bundle
      * {@see hasManifest()} is how the caller tells "not a bundle" (skip
      * quietly) from "broken bundle" (warn by name).
      */
-    public static function fromDir(string $dir, string $tier): ?self
+    public static function fromDir(string $dir, string $tier, ?string $ownedBy = null): ?self
     {
         $manifestPath = self::manifestPath($dir);
 
@@ -87,6 +98,7 @@ final class Bundle
             version: trim((string) ($decoded['version'] ?? '')),
             description: trim((string) ($decoded['description'] ?? '')),
             manifest: $decoded,
+            ownedBy: $ownedBy,
         );
     }
 

@@ -99,6 +99,10 @@ final class SkillManager
      * and the winner of a cross-tree collision was decided by which layout the
      * machine happened to use.
      *
+     * @param list<\SugarCraft\Code\Bundles\Bundle> $bundles plugin bundles whose
+     *        `skills/` trees join the foreign band at its bottom — see the
+     *        register-first note in the body.
+     *
      * The cost, stated rather than hidden: the foreign walk reads each
      * imported SKILL.md's BODY (ForeignSkillDiscovery goes through
      * loadFromDirectory()), so those skills do not get the lazy Stage-1
@@ -106,8 +110,9 @@ final class SkillManager
      * registerFromManifest() to carry a SkillSource, which is a change to the
      * registry's shape rather than to this wiring.
      */
-    public function loadAll(string $projectRoot = '.'): void
+    public function loadAll(string $projectRoot = '.', array $bundles = []): void
     {
+        $bundle = $this->foreign->bundleTiers($bundles);
         $agents = $this->foreign->agentsTiers($projectRoot);
         $claude = $this->foreign->claudeTiers($projectRoot);
         $opencode = $this->foreign->opencodeTiers($projectRoot);
@@ -123,7 +128,13 @@ final class SkillManager
         $holders = [];
 
         foreach (SkillOrigin::precedence() as $tier) {
-            foreach ([$agents[$tier->value] ?? [], $claude[$tier->value] ?? [], $opencode[$tier->value] ?? []] as $tree) {
+            // Bundle trees register FIRST inside a tier (PLG-1): the registry
+            // is last-write-wins, so a bundle's SKILL.md loses a same-tier name
+            // to every plain foreign convention — a package somebody packed
+            // does not outrank the directories the operator built by hand —
+            // while still shadowing nothing below it. The shadowing record
+            // fires for these losses exactly as it does inside a convention.
+            foreach ([$bundle[$tier->value] ?? [], $agents[$tier->value] ?? [], $claude[$tier->value] ?? [], $opencode[$tier->value] ?? []] as $tree) {
                 foreach ($tree as $skill) {
                     $this->registry->register([$skill]);
                     $this->claim($holders, $skill->name, $skill->sourcePath, self::tierOf($skill));

@@ -218,13 +218,48 @@ final class ForeignAgentPresetRegistry
      *
      * @return array<string, AgentPreset> keyed by preset filename stem
      */
-    public function discover(string $projectRoot): array
+    /**
+     * @param list<\SugarCraft\Code\Bundles\Bundle> $bundles plugin bundles
+     *        whose `agents/` trees join below both plain conventions
+     */
+    public function discover(string $projectRoot, array $bundles = []): array
     {
         $this->reset();
 
         $claude = $this->scanClaude($projectRoot);
 
-        return $claude + $this->scanOpencode($projectRoot);
+        // UNION, left-wins (see the class doc-block for why not a spread):
+        // bundle presets arrive last, so they lose a name to EVERY plain
+        // foreign preset of either convention and to nothing else — the
+        // PLG-1 seat "below plain foreign directories," applied to the one
+        // loader whose tiers are folded by union rather than walk order.
+        return $claude + $this->scanOpencode($projectRoot) + $this->scanBundles($bundles);
+    }
+
+    /**
+     * The `agents/` trees the given bundles contribute, badged
+     * {@see SkillSource::Bundle} and anchored at each bundle's own directory.
+     *
+     * Pairs walk in DISCOVERY order — project tier first, then user — so a
+     * user-tier bundle wins a name inside the bundle band, the rule the
+     * bundle format draws on every surface ({@see scanClaude()}'s
+     * project-outranks-user oddity is that convention's own, inherited from
+     * upstream, and this band deliberately does not inherit it).
+     *
+     * @param list<\SugarCraft\Code\Bundles\Bundle> $bundles
+     * @return array<string, AgentPreset>
+     */
+    private function scanBundles(array $bundles): array
+    {
+        $pairs = [];
+
+        foreach ($bundles as $bundle) {
+            foreach ($bundle->agentsPaths() as $dir) {
+                $pairs[] = [$dir, $bundle->dir];
+            }
+        }
+
+        return $this->scan($pairs, SkillSource::Bundle);
     }
 
     /**
@@ -420,15 +455,19 @@ final class ForeignAgentPresetRegistry
      */
     private function scan(array $dirs, SkillSource $source): array
     {
-        // SkillSource has four cases and only two of them name a foreign agent
+        // SkillSource has five cases and only two of them name a foreign agent
         // dialect this class can read. A two-way `=== Claude ? … : …` made
         // Native and AgentSkillsSpec fall into the opencode branch, which would
         // silently mis-read their frontmatter (tools-as-map, prompt-as-
         // initialPrompt). Rejected here, before the file loop, so a wrong
         // caller surfaces as an exception instead of being swallowed by the
         // per-file catch below, which exists to tolerate malformed FILES.
+        // Bundle (PLG-1) is a CONTAINER format, not a third agent dialect:
+        // its `agents/*.md` files are Claude Code agent files by definition —
+        // the plugin format is Claude's — so it reads through the Claude
+        // branch, and the badge still says where the row was installed FROM.
         match ($source) {
-            SkillSource::Claude, SkillSource::Opencode => null,
+            SkillSource::Claude, SkillSource::Opencode, SkillSource::Bundle => null,
             SkillSource::Native, SkillSource::AgentSkillsSpec => throw new \InvalidArgumentException(
                 "ForeignAgentPresetRegistry has no agent-frontmatter dialect for SkillSource::{$source->name}.",
             ),
@@ -477,7 +516,7 @@ final class ForeignAgentPresetRegistry
                     [$data, $body] = $this->frontmatter($file);
                     $name = basename($file, '.md');
                     $presets[$name] = match ($source) {
-                        SkillSource::Claude => $this->claudePreset($data, $name, $body),
+                        SkillSource::Claude, SkillSource::Bundle => $this->claudePreset($data, $name, $body, $source),
                         SkillSource::Opencode => $this->opencodePreset($data, $name, $body),
                     };
                 } catch (\Throwable $e) {
@@ -545,7 +584,12 @@ final class ForeignAgentPresetRegistry
      *
      * @param array<string, mixed> $data
      */
-    private function claudePreset(array $data, string $fallbackName, string $body = ''): AgentPreset
+    /**
+     * PLG-1: `$source` rides through, not hardcoded — a bundle's `agents/*.md`
+     * are parsed by this SAME Claude-shape reader (a container format, not a
+     * third dialect) but must carry the badge the roster ranks them by.
+     */
+    private function claudePreset(array $data, string $fallbackName, string $body, SkillSource $source): AgentPreset
     {
         $agentName = isset($data['name']) ? (string) $data['name'] : $fallbackName;
 
@@ -565,7 +609,7 @@ final class ForeignAgentPresetRegistry
             isolation: $this->enum(Isolation::class, $data['isolation'] ?? null),
             color: isset($data['color']) ? (string) $data['color'] : null,
             initialPrompt: self::resolveInitialPrompt($data['initialPrompt'] ?? null, $body),
-            source: SkillSource::Claude,
+            source: $source,
         );
     }
 

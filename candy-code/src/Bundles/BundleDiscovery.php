@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Bundles;
 
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 
@@ -42,7 +43,7 @@ final class BundleDiscovery
     /** @var list<string> */
     private array $warnings = [];
 
-    /** @var list<string> */
+    /** @var array<string, string> directory as spelled => why it was refused */
     private array $refusedDirectories = [];
 
     /** @param list<string> $configPaths the user-tier pluginPaths entries */
@@ -84,7 +85,10 @@ final class BundleDiscovery
             }
 
             if (Bundle::hasManifest($real)) {
-                $this->record($real, 'user');
+                // An operator-named path is trusted as given — the same
+                // verdict every other user-tier path setting draws — so it
+                // carries no owner anchor even though it is badged `user`.
+                $this->record($real, 'user', null);
                 continue;
             }
 
@@ -100,7 +104,16 @@ final class BundleDiscovery
         return $this->warnings;
     }
 
-    /** @return list<string> directories refused for confinement, worded for the refusal census */
+    /**
+     * Which bundle directories this walk refused for escaping the tree it was
+     * found in, directory as spelled => why — the shape every other feeder of
+     * {@see \SugarCraft\Code\Cli\Bootstrap::$projectTierRefusals} carries.
+     * Keyed on the path AS GIVEN, not on its realpath: the collector's readers
+     * print the directory the operator can go and look at, and the realpath is
+     * the far end of the link that caused the refusal.
+     *
+     * @return array<string, string>
+     */
     public function refusedDirectories(): array
     {
         return $this->refusedDirectories;
@@ -126,6 +139,20 @@ final class BundleDiscovery
         }
 
         $this->scanContainer($real, $tier, $boundary);
+    }
+
+    /**
+     * Who must OWN this bundle's tree, in the sense
+     * {@see \SugarCraft\Code\Skills\ForeignSkillDiscovery::tiers()} gives its
+     * user tier: the user install root was established as THIS user's home by
+     * {@see HomeDirectory::owned()} before anything under it was read, so every
+     * surface loader re-checks entry ownership against it. A project bundle
+     * needs no owner widening — the checkout is its whole boundary — and a
+     * `pluginPaths` bundle is trusted as given, so both carry null.
+     */
+    private function ownerOf(string $tier, ?string $boundary): ?string
+    {
+        return $tier === 'user' ? $boundary : null;
     }
 
     /**
@@ -171,7 +198,7 @@ final class BundleDiscovery
         }
 
         if ($boundary === null) {
-            $this->record($real, $tier);
+            $this->record($real, $tier, null);
 
             return;
         }
@@ -183,19 +210,24 @@ final class BundleDiscovery
         }
 
         if ($real !== $boundaryReal && !ContainedPath::below($real, $boundaryReal)) {
-            $this->refusedDirectories[] = $real;
+            $this->refusedDirectories[$dir] = Lang::t('bundles.dir-outside', [
+                'dir' => $dir,
+                'real' => $real,
+                'tier' => $tier,
+                'anchor' => $boundary,
+            ]);
             $this->warnings[] = 'bundle "' . basename($dir) . '" resolves outside the '
                 . $tier . ' tree it was found in and was skipped: ' . $dir;
 
             return;
         }
 
-        $this->record($real, $tier);
+        $this->record($real, $tier, $this->ownerOf($tier, $boundary));
     }
 
-    private function record(string $dir, string $tier): void
+    private function record(string $dir, string $tier, ?string $ownedBy): void
     {
-        $bundle = Bundle::fromDir($dir, $tier);
+        $bundle = Bundle::fromDir($dir, $tier, $ownedBy);
 
         if ($bundle === null) {
             $this->warnings[] = 'bundle manifest under ' . $dir . ' could not be read or parsed and was skipped';

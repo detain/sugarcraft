@@ -93,25 +93,60 @@ final class ForeignCommandDiscovery
      * Every foreign tree, tier-first: both conventions' PROJECT dirs in
      * convention order (Claude, opencode — the same cross-format tie inside a
      * tier that {@see \SugarCraft\Code\Skills\SkillManager::loadAll()} draws
-     * at spec < claude < opencode), then both conventions' USER dirs in that
-     * same order. The walk order IS the precedence: last write wins, so
+     * at spec < claude < opencode), then the same trio with bundle trees FIRST
+     * inside each tier (see {@see bundleDirs()}), USER dirs in that same order.
+     * The walk order IS the precedence: last write wins, so
      * opencode-user outranks everything foreign, and the whole result
      * outranks nothing native — see the class doc-block for why being the
      * floor is the point.
      *
      * @return array<string, CommandSpec>
      */
-    public function discover(string $projectRoot): array
+    public function discover(string $projectRoot, array $bundles = []): array
     {
+        $bundle = self::bundleDirs($bundles);
         $claude = self::claudeDirs($projectRoot);
         $opencode = self::opencodeDirs($projectRoot);
 
         return $this->walk(array_merge(
+            self::tier($bundle, 'project'),
             self::tier($claude, 'project'),
             self::tier($opencode, 'project'),
+            self::tier($bundle, 'user'),
             self::tier($claude, 'user'),
             self::tier($opencode, 'user'),
         ));
+    }
+
+    /**
+     * The command trees the given bundles contribute, in the same
+     * directory => [anchor, tier, badge] shape {@see claudeDirs()} builds.
+     * A bundle is anchored at ITS OWN directory — the containment boundary a
+     * bundle's contents may never cross, whichever tier installed it — and
+     * badged {@see SkillSource::Bundle} so the popup can say where the row
+     * came from.
+     *
+     * Bundles are walked FIRST inside their tier (PLG-1, plan_comparison W6):
+     * the plain foreign trees are ones the operator assembled by hand at
+     * those exact conventional paths, while a bundle is a package someone
+     * else packed — the same "content that arrives does not redefine the
+     * operator's setup" argument this class draws against the native tiers,
+     * applied one level down.
+     *
+     * @param list<\SugarCraft\Code\Bundles\Bundle> $bundles
+     * @return array<string, array{0: string, 1: string, 2: SkillSource}>
+     */
+    public static function bundleDirs(array $bundles): array
+    {
+        $dirs = [];
+
+        foreach ($bundles as $bundle) {
+            foreach ($bundle->commandsPaths() as $dir) {
+                $dirs[$dir] = [$bundle->dir, $bundle->tier, SkillSource::Bundle];
+            }
+        }
+
+        return $dirs;
     }
 
     /**

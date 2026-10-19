@@ -220,6 +220,37 @@ final class ForeignSkillDiscovery
      *        whose location no repository chose), the tier its skills belong to]
      * @return array<string, array<string, Skill>>
      */
+    /**
+     * The skill trees the given bundles contribute, badged
+     * {@see SkillSource::Bundle} and tiered from the bundle's own install
+     * root (PLG-1, plan_comparison W6).
+     *
+     * Each bundle is anchored at ITS OWN directory — the boundary its
+     * contents may never cross, whichever tier installed it — and the user
+     * tier's bundles additionally carry {@see \SugarCraft\Code\Bundles\Bundle::$ownedBy},
+     * the vouched `$HOME` that made them user content in the first place, so
+     * a link inside a home-installed bundle gets the same ownership audit
+     * the `~/.claude/skills` tree gets. A `pluginPaths` bundle carries null:
+     * an operator-named path is trusted as given.
+     *
+     * @param list<\SugarCraft\Code\Bundles\Bundle> $bundles
+     * @return array<string, array<string, Skill>> tier value => name => skill
+     */
+    public function bundleTiers(array $bundles): array
+    {
+        $dirs = [];
+
+        foreach ($bundles as $bundle) {
+            $origin = $bundle->tier === 'project' ? SkillOrigin::Project : SkillOrigin::User;
+
+            foreach ($bundle->skillsPaths() as $dir) {
+                $dirs[$dir] = [$bundle->ownedBy, $bundle->dir, $origin];
+            }
+        }
+
+        return $this->discover($dirs, SkillSource::Bundle);
+    }
+
     private function discover(array $dirs, SkillSource $source): array
     {
         $byTier = [];

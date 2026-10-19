@@ -120,7 +120,11 @@ final class BundleDiscoveryTest extends TestCase
         $bundles = $discovery->discover();
 
         self::assertSame([], $bundles, 'a committed symlink may not import a tree from outside the clone');
-        self::assertSame([$outside], $discovery->refusedDirectories());
+        $refused = $discovery->refusedDirectories();
+        $link = $project . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/looks-local';
+        self::assertSame([$link], array_keys($refused), 'keyed by the directory as given, not the escape');
+        self::assertStringContainsString('outside the project tree', $refused[$link]);
+        self::assertStringContainsString($outside, $refused[$link], 'the reason names where it really resolves');
     }
 
     public function testAUserBundleMayReachAnywhereInsideHome(): void

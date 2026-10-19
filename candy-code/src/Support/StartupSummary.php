@@ -298,7 +298,7 @@ final class StartupSummary
     private static function skillCount(string $root): int
     {
         $registry = new SkillRegistry();
-        (new SkillManager(new SkillLoader(), $registry))->loadAll($root);
+        (new SkillManager(new SkillLoader(), $registry))->loadAll($root, Bootstrap::bundles($root));
 
         return count($registry->getUserInvocable());
     }

@@ -212,7 +212,7 @@ final class AppBuilder
         // An injected registry is already loaded; re-running loadAll() on it
         // would re-register every skill and undo any caller-side filtering.
         if ($this->availableSkills === null && $this->projectRoot !== null) {
-            $manager->loadAll($this->projectRoot);
+            $manager->loadAll($this->projectRoot, \SugarCraft\Code\Cli\Bootstrap::bundles($this->projectRoot));
         }
 
         $manager->disableFromConfig($this->disabledSkills);

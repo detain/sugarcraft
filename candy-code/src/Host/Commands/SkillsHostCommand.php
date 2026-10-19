@@ -117,7 +117,7 @@ final class SkillsHostCommand implements HostCommand
         $loader = new SkillLoader();
         $registry = new SkillRegistry();
         $manager = new SkillManager($loader, $registry);
-        $manager->loadAll($context->projectRoot());
+        $manager->loadAll($context->projectRoot(), \SugarCraft\Code\Cli\Bootstrap::bundles($context->projectRoot()));
 
         $disabled = \SugarCraft\Code\Cli\Bootstrap::readUserConfig()['disabledSkills'] ?? [];
         $disabled = \is_array($disabled) ? \array_values(\array_filter($disabled, 'is_string')) : [];

@@ -228,9 +228,10 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — THIRTY-SEVEN call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
+ * it — FORTY call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
  * added three: the rv-sec-1 bypass banner, the rv-sec-3 policy-freshness notice
- * and the rv-enduser-1 unselectable-override row), each producing a
+ * and the rv-enduser-1 unselectable-override row; PLG-1 added three more: the
+ * bundles() warning drain and the two declined-surface notices), each producing a
  * distinct `candy-code: ` line, against a channel-4 credit of eight for that
  * file (ISS-026's envelope-carrying resume notice joined the six as a raw
  * fwrite line, and its rv6 `--resume` pick twin joined the seven). Off by
@@ -583,7 +584,12 @@ final class StderrEmitterCensusTest extends TestCase
         // mode keeps its old deny-and-strike answer.
         // +1 in ISS-088: foreignAgentPresets() gained its own seam call for
         // the skip/change envelope beside the one the outer catch already raised.
-        'src/Cli/Bootstrap.php' => 37,
+        // +3 in PLG-1 (plan_comparison W6, w6a): the bundles() choke's warning
+        // drain, the hooks-declined notice, and the mcp-not-started notice —
+        // all THREE on the transcript seam: each names something the session
+        // can no longer do with a bundle's surface (read it, run its hooks,
+        // talk to its servers), which is exactly channel 5's subject.
+        'src/Cli/Bootstrap.php' => 40,
     ];
 
     /**
@@ -948,7 +954,7 @@ final class StderrEmitterCensusTest extends TestCase
         'twenty-eight' => 28,
         'twenty-nine' => 29, 'thirty' => 30, 'thirty-one' => 31, 'thirty-two' => 32,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35, 'thirty-six' => 36,
-        'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39,
+        'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
         'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
     ];
 
