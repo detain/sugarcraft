@@ -133,6 +133,13 @@ final class UnknownSlashCommandTest extends TestCase
         $this->assertStringNotContainsString('Did you mean', $added[0]->content);
     }
 
+    /**
+     * VIS-5 moved the live half of this behavior into the mention channel:
+     * a typed `/name` now dispatches when the session's registry answers the
+     * name (pinned by `Skills\SlashSkillInvocationTest`). This harness has
+     * NO workspace, so the registry gate declines and the namesake notice is
+     * what a user with no live session gets — the fail-closed half.
+     */
     public function testAWordNamingAProjectSkillSaysSoWithoutInvokingIt(): void
     {
         mkdir($this->project . '/.candy-code/skills/shipit', 0700, true);

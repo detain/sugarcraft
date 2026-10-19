@@ -576,7 +576,13 @@ mention attaches a file (`Skills\SkillMentions`, resolved by
 `Host\TurnController::userTurnMessage()` against the launch's registry). It sits
 between the other doors: `enabledSkills` puts a body in every turn's system
 prompt, the Ctrl+S picker enables a skill for the session, and the model loads
-one on demand with the `Skill` tool.
+one on demand with the `Skill` tool. Typing the slash spelling —
+`/security-audit the auth module` — sends the same request: `submit()` rewrites
+a slash draft whose name the registry answers into this mention channel before
+the unknown-command refusal is consulted (VIS-5), so one gate, one
+`$ARGUMENTS` rule, and one `✨ Loaded skill:` row serve both spellings. A
+built-in or command-file name of the same word wins first: the rewrite only
+sees names no command claimed.
 
 - **The registry is the gate, not the `$`.** A token is a mention only when
   `SkillRegistry::userInvocable()` answers it — registered, not disabled, and

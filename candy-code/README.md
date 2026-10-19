@@ -430,7 +430,9 @@ taken as written. `Tab` completes the path under the cursor.
   `$security-audit the auth module`. A token counts only when it names a skill
   you can invoke, so `$HOME` or `$1` in a pasted shell line stays text, and a
   `$` inside a code span or fence is never a mention. At most three per prompt;
-  a disabled skill gets a notice instead. See
+  a disabled skill gets a notice instead. Typing `/security-audit args` for a
+  skill you can invoke sends it as `$security-audit args` — the slash spelling
+  rewrites into the same mention channel, not a parallel one. See
   [`docs/SKILLS.md`](docs/SKILLS.md#name-in-a-prompt-one-skill-for-one-turn).
 
 ### Shell commands (`!`)

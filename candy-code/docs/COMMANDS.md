@@ -479,8 +479,12 @@ model. The popup's anchored matcher writes the "did you mean" sentence when it
 has a vote. The escape and the survivors are deliberate: `//text` sends the
 line literally, and `/etc/hosts`, `/2fa` and `/exit now` reach the model because
 their names are not command-shaped or are claimed and declined. A word that
-names a SKILL is still refused — skills are not typed as slash commands — and
-the notice says where to find it.
+names a user-invocable SKILL dispatches it (VIS-5): the draft is rewritten
+into the live `$name` mention channel, so the skill's body rides the turn
+exactly as if the name had been mentioned. A skill the registry will not
+invoke — disabled, `user-invocable: false`, or no registry in this session —
+is refused like any other unclaimed word, and the notice points at the
+`$name` spelling.
 
 A name ends at the first space or `:`, so `/rename:Release prep` is the same
 command as `/rename Release prep`. The arms that read their argument as raw text

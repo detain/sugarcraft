@@ -11508,20 +11508,33 @@ final class Chat implements Model
                 return $dispatched;
             }
 
-            // ISS-037: a draft whose first token LOOKS like a slash command was
-            // advertised as one and nothing claimed it. Sending it to the model
-            // spends a paid turn to answer a typo with an essay, so it is
-            // refused here instead, with the popup's own anchored matcher as the
-            // did-you-mean source. Everything else — `//text` as the declared
-            // escape, `/etc/hosts` and `/2fa` because their tokens cannot be
-            // command names, `/exit now` because `exit` is a claimed name whose
-            // `accepts()` gate declined the argument — still falls through to
-            // the prose path below, exactly as before.
-            $unknown = $this->unknownSlashNotice($text);
-            if ($unknown !== null) {
-                return [$this->mutate([
-                    'history' => [...$this->history, Message::notice($unknown)],
-                ]), null];
+            // VIS-5: a typed `/name args` whose name a user-invocable skill
+            // claims is not an unknown command — it is the same request as
+            // `$name args`, so the draft is REWRITTEN into the existing
+            // mention channel instead of refused. One site is enough because
+            // one funnel exists: a slash draft mid-turn is refused by
+            // refuseInFlightCommand() before this dispatch, a file-based
+            // command name is consumed by the branch above, and every
+            // built-in spelling was just handed to dispatchCommand().
+            $skilled = $this->skillInvocationDraft($text);
+            if ($skilled !== null) {
+                $text = $skilled;
+            } else {
+                // ISS-037: a draft whose first token LOOKS like a slash command was
+                // advertised as one and nothing claimed it. Sending it to the model
+                // spends a paid turn to answer a typo with an essay, so it is
+                // refused here instead, with the popup's own anchored matcher as the
+                // did-you-mean source. Everything else — `//text` as the declared
+                // escape, `/etc/hosts` and `/2fa` because their tokens cannot be
+                // command names, `/exit now` because `exit` is a claimed name whose
+                // `accepts()` gate declined the argument — still falls through to
+                // the prose path below, exactly as before.
+                $unknown = $this->unknownSlashNotice($text);
+                if ($unknown !== null) {
+                    return [$this->mutate([
+                        'history' => [...$this->history, Message::notice($unknown)],
+                    ]), null];
+                }
             }
         }
 
@@ -13143,6 +13156,65 @@ final class Chat implements Model
     }
 
     /**
+     * The VIS-5 rewrite: turn a typed `/name args` draft into the `$name args`
+     * spelling the live mention channel already resolves, or null when this
+     * draft is not that request.
+     *
+     * WHY A REWRITE AND NOT A SECOND DISPATCHER: `$name` is where skill bodies
+     * attach ({@see \SugarCraft\Code\Skills\SkillMentions} — registry gate,
+     * `$ARGUMENTS` substitution, the file snapshot on the user row, the
+     * `✨ Loaded skill:` notice). The typed slash form is the same intent with
+     * a different prefix, so it borrows the whole channel instead of forking a
+     * parallel one that could drift from it.
+     *
+     * THE PRECEDENCE IS THE POSITION, PLUS ONE GUARD: `submit()` calls this
+     * only after `dispatchCommand()` and the file-command branch passed on the
+     * name, and the guard re-checks the built-in spellings so a claimed name
+     * whose `accepts()` gate declined the argument (`/exit now`) stays prose
+     * even if a skill were ever named `exit`. The registry, not the disk
+     * manifest, gates the dispatch — exactly the gate `$name` passes through
+     * one layer down, which is what keeps a disabled or non-user-invocable
+     * skill from dispatching by the slash door while it cannot by the mention
+     * door. No session registry means no channel, so nothing rewrites and the
+     * refusal notice's skill half explains the spelling instead.
+     */
+    private function skillInvocationDraft(string $text): ?string
+    {
+        $token = \explode("\n", \explode(' ', $text, 2)[0])[0];
+        if (preg_match('#^/([A-Za-z][\w:-]*)$#', $token, $shape) !== 1) {
+            return null;
+        }
+
+        $name = \explode(':', $shape[1], 2)[0];
+        if (\SugarCraft\Code\Commands\Specs\BuiltInCommands::forSpelling($name) !== null
+            || \SugarCraft\Code\Commands\Specs\BuiltInCommands::forSpelling(strtolower($name)) !== null
+        ) {
+            return null;
+        }
+
+        $registry = $this->workspace?->skills;
+        if ($registry === null) {
+            return null;
+        }
+
+        $skill = $registry->userInvocable($name) ?? $registry->userInvocable(strtolower($name));
+        if ($skill === null) {
+            return null;
+        }
+
+        // The name ends at the first space or `:`, as CommandParser reads it,
+        // so everything typed after the name — space form, colon form, or
+        // newline — becomes the mention's argument text.
+        $rest = \substr($text, 1 + \strlen($name));
+        if (\str_starts_with($rest, ':')) {
+            $rest = \ltrim(\substr($rest, 1));
+            $rest = $rest === '' ? '' : ' ' . $rest;
+        }
+
+        return '$' . $skill->name . $rest;
+    }
+
+    /**
      * The ISS-037 refusal notice for a draft that LOOKS like an advertised
      * slash command but is claimed by nothing, or null when the draft is not
      * that thing.
@@ -13176,8 +13248,11 @@ final class Chat implements Model
      * `/2fa` and `/3d` — a command never starts with a digit; `/exit now` and
      * `/keys foo` — claimed names whose `accepts()` gate declined the extra
      * argument stay prose, because their prose-ness is pinned behaviour, not
-     * a typo. Everything else that reaches the tail of `submit()` still goes
-     * to the model exactly as before.
+     * a typo; and a name a user-invocable skill claims — VIS-5 rewrites that
+     * draft into the mention channel before this notice is consulted
+     * ({@see skillInvocationDraft()}), so this half speaks only when that
+     * gate declined the name. Everything else that reaches the tail of
+     * `submit()` still goes to the model exactly as before.
      *
      * WHY A NOTICE INSTEAD OF A TURN: a typo'd command reaching a model is a
      * PAID turn spent essaying about a word the user never meant to prompt
@@ -13216,9 +13291,12 @@ final class Chat implements Model
             }
         }
 
-        // A word that NAMES a skill is the other thing the user may have meant
-        // — and skills never dispatch from a typed `/name`, so this half of
-        // the notice only says where the skill lives. The walk is Stage-1
+        // A word that NAMES a skill is the other thing the user may have
+        // meant — and since VIS-5 a typed `/name` DOES dispatch when the
+        // registry answers it, so this half of the notice speaks only when
+        // that gate declined the name (no session registry, or the skill
+        // stopped being invocable between manifest walk and dispatch) and
+        // points at the mention spelling instead. The walk is Stage-1
         // manifests on a refused submit, never per keystroke.
         $skillNames = $this->userInvocableSkillNames();
         if ($skillNames !== [] && in_array(strtolower($name), $skillNames, true)) {
