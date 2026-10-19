@@ -68,6 +68,12 @@ final class PaletteSupersetDispatchTest extends TestCase
         'review' => 'needs a diff range; the bare form only answers with usage',
         'security-review' => 'needs a diff range; the bare form only answers with usage',
         'bg' => 'bare /bg answers usage rather than backgrounding something unintended',
+        // AUT-1 (w5c), welded judgement: /schedules' bare form IS the
+        // read-only list — a palette row that only prints a table has nothing
+        // to pick; /loop needs its interval and prompt, the bare form answers
+        // usage.
+        'schedules' => 'bare /schedules is the whole read surface; no picker target exists',
+        'loop' => 'needs an interval and a prompt; the bare form only answers with usage',
         'fork' => 'needs a prompt to run against the clone',
         'websearch' => 'needs a query; the bare form only answers with usage',
         'btw' => 'needs a question for the title model',
