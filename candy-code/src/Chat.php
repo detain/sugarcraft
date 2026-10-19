@@ -3982,7 +3982,9 @@ final class Chat implements Model
             // arm an operator, `D Y o O e p P` act at once. NORMAL state
             // only (Insert is the lib's verbatim passthrough — typing must
             // reach the draft), no pending operator (that resolved above the
-            // modals), and it sits LAST among the claim arms on purpose: the
+            // modals), no visible `/` or `@`/`$` popup (a popup owns the
+            // letters that filter it — claiming `d` mid-`/do` or mid-`@src/`
+            // would eat the user's own typing), and it sits LAST among the claim arms on purpose: the
             // `?` key-help, the alt word chords, the ctrl family and every
             // modal keep their pinned precedence. What this arm can claim is
             // only what would otherwise reach the widget and be swallowed —
@@ -3992,6 +3994,8 @@ final class Chat implements Model
                 && $this->composerVim->pending === null
                 && $this->input->vimMode
                 && $this->input->vimState === VimState::Normal
+                && $this->slashMenuMatches() === []
+                && !$this->mentionPopupOpen()
                 && ComposerVim::claims($msg->rune)
                 => $this->applyComposerVim($msg),
             !$msg->ctrl && \in_array($msg->type, self::DRAFT_KEYS, true)
