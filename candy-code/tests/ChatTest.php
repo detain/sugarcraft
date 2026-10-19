@@ -1334,7 +1334,7 @@ final class ChatTest extends TestCase
 
     public function testSlashMenuUpDownWrapsSelection(): void
     {
-        $chat = new Chat(inputBuf: '/re'); // matches: recompress, redo, rename, rendermode, rewind, rules
+        $chat = new Chat(inputBuf: '/re'); // matches: recompress, redo, rename, rendermode, review, rewind, rules
         $this->assertSame(0, $chat->slashMenuIndex());
 
         [$down] = $chat->update(new KeyMsg(KeyType::Down, ''));
@@ -1349,14 +1349,19 @@ final class ChatTest extends TestCase
         [$down] = $down->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(4, $down->slashMenuIndex());
 
+        [$down] = $down->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(5, $down->slashMenuIndex());
+
+        // GIT-1's /review made this prefix a seven-row run: one more step
+        // before the wrap the test exists to pin.
         [$atEnd] = $down->update(new KeyMsg(KeyType::Down, ''));
-        $this->assertSame(5, $atEnd->slashMenuIndex());
+        $this->assertSame(6, $atEnd->slashMenuIndex());
 
         [$wrapped] = $atEnd->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(0, $wrapped->slashMenuIndex());
 
         [$up] = $wrapped->update(new KeyMsg(KeyType::Up, ''));
-        $this->assertSame(5, $up->slashMenuIndex());
+        $this->assertSame(6, $up->slashMenuIndex());
     }
 
     public function testEnterCompletesAmbiguousMatchInsteadOfSubmitting(): void

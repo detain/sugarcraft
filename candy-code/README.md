@@ -489,9 +489,9 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 `/exit` (`/quit`) `/fork` `/generate` `/goal` `/grind` `/handoff` `/help`
 `/hooks` `/init` `/keys` `/layout` `/mcp` `/memory` `/model` `/new` `/newrule`
 `/notices` `/pane` `/permissions` `/play` `/pruning` `/recompress` `/redo`
-`/rename` `/rendermode` `/rewind` `/rules` `/sendto` `/sessions`
-`/settings` (`/config`) `/share` `/skills` `/sweep` `/theme` `/undo`
-`/websearch` `/workflow`.
+`/rename` `/rendermode` `/review` `/rewind` `/rules` `/security-review`
+`/sendto` `/sessions` `/settings` (`/config`) `/share` `/skills` `/sweep`
+`/theme` `/undo` `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no

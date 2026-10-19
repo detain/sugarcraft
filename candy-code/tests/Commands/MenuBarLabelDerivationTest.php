@@ -57,6 +57,8 @@ final class MenuBarLabelDerivationTest extends TestCase
         'undo' => 'Take back the last',
         'redo' => 'Step forward again',
         'diff' => 'Show what changed',
+        'review' => 'Review the diff',
+        'security-review' => 'Security-review',
         'bg' => 'Run a task',
         'fork' => 'Clone',
         'websearch' => 'Search the web',
