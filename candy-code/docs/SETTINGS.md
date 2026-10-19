@@ -592,8 +592,9 @@ it does so exactly as quietly as the wrong-depth name above.
 The same names are a conversation command. `/rules` lists every pack the loader
 found — both user directories, `~/.candy-code/rules` and
 `~/.candy-code/rulebooks`, the second holding the named packs of the same tier
-(`RuleLoader` walks four directories across three tiers: user rules, user
-rulebooks, project rules, root `RULES.md`) — and it lists them even when they are
+(`RuleLoader` walks eight directories across three tiers: user rules, user
+rulebooks, user `~/.claude/rules` and `~/.cursor/rules`, project rules, project
+`.claude/rules` and `.cursor/rules`, root `RULES.md`) — and it lists them even when they are
 currently OFF, because a list that hides what is silenced cannot help you un-silence
 it. `/rules <name>` flips one pack out of, or back into, the session's
 `RulesState`; a pack whose stem sits in both user directories is two packs sharing
