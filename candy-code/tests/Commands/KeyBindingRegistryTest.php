@@ -588,7 +588,7 @@ final class KeyBindingRegistryTest extends TestCase
      * A row shipped as a non-`Ctrl+<key>` chord (chat.send ships `Enter`) has no
      * rune to alias onto the RUNE lane; even a hand-registered override of it
      * must not invent a rune translation. Since plan_comparison TUI-4c such
-     * rows are NOT inert — the chord lane ({@see aliasPress()}) carries them —
+     * rows are NOT inert — the chord lane ({@see \SugarCraft\Code\Commands\KeyBindingRegistry::aliasPress()}) carries them —
      * but the rune map stays exactly the bare-`Ctrl+<key>`-on-both-ends alphabet
      * the pre-4c funnel was, and this pins that boundary.
      */

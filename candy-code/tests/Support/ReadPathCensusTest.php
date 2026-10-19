@@ -310,6 +310,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'StateDir::existing() verified 0700 and ours; lstat refuses anything but a '
                 . 'regular file, and it is read, never minted (roadmap O-8a)',
         ],
+        'Cli/NonInteractive.php|file_get_contents' => [
+            'CALLER_SUPPLIED — `--json-schema` operand (AUT-4): the operator\'s own argv names the '
+                . 'file; an inline `{` document never reaches this sink, a miss is refused before '
+                . 'reading (is_file + is_readable), and the bytes are only ever json_decode\'d into '
+                . 'a responseSchema shape — never executed, never written back',
+        ],
         'Cli/Serve.php|file_get_contents' => [
             'SELF_LOCATED — storedToken(): the owner-token file in the `serve` state dir '
                 . 'StateDir::existing() verified 0700 and ours; lstat refuses anything but a '
