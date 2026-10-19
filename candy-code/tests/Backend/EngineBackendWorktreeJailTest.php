@@ -13,6 +13,7 @@ use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\BuiltIn\Edit;
 use SugarCraft\Code\Tools\BuiltIn\Glob;
 use SugarCraft\Code\Tools\BuiltIn\Grep;
+use SugarCraft\Code\Tools\BuiltIn\Ls;
 use SugarCraft\Code\Tools\BuiltIn\LspTool;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 use SugarCraft\Code\Tools\BuiltIn\WebFetch;
@@ -164,7 +165,7 @@ final class EngineBackendWorktreeJailTest extends TestCase
         }
 
         sort($takers);
-        $this->assertSame(['ApplyPatch', 'Bash', 'Edit', 'Glob', 'Grep', 'LspTool', 'PtyRun', 'Read', 'RepoMapTool', 'Write'], $takers);
+        $this->assertSame(['ApplyPatch', 'Bash', 'Edit', 'Glob', 'Grep', 'Ls', 'LspTool', 'PtyRun', 'Read', 'RepoMapTool', 'Write'], $takers);
     }
 
     /**
@@ -175,6 +176,7 @@ final class EngineBackendWorktreeJailTest extends TestCase
         return [
             new Glob($this->main),
             new Grep($this->main),
+            new Ls($this->main),
             new LspTool(null, $this->main),
             new Read($this->main),
             new Edit($this->main),
