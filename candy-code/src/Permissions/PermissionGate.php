@@ -886,10 +886,14 @@ final class PermissionGate
             return PermissionDecision::Ask;
         }
 
-        if (str_starts_with($call->name, 'mcp__')) {
+        if (str_starts_with($call->name, 'mcp__')
+            || $call->name === \SugarCraft\Code\Tools\BuiltIn\McpCallTool::NAME) {
             // A trusted server's `readOnlyHint` (roadmap 5.11-1) is the one
             // thing that says what an MCP tool does; like the Ask below it is
             // not a classification, so it leaves the breaker untouched.
+            // MCP-7: a dispatched `mcp_call` joins this branch so it is judged
+            // by the hint of the tool it names — never by the classifier,
+            // which would see no shell text (the F-P3(b) hole).
             return $this->isReadOnlyTool($call) ? PermissionDecision::Allow : PermissionDecision::Ask;
         }
 
@@ -1521,8 +1525,18 @@ final class PermissionGate
      */
     private function isReadOnlyMcpTool(ToolCall $call): bool
     {
-        return str_starts_with($call->name, McpToolBridge::NAME_PREFIX)
-            && McpToolBridge::declaredReadOnly($call->name);
+        // MCP-7: a dispatched `mcp_call` carries the hint of the tool it
+        // names, so its `server`/`tool` arguments are resolved back to the
+        // wire spelling before the hint table is consulted. A made-up or
+        // malformed pair resolves to nothing and is never read-only, exactly
+        // like a made-up wire name was before.
+        $wire = $call->name === \SugarCraft\Code\Tools\BuiltIn\McpCallTool::NAME
+            ? McpToolBridge::dispatchedWireName($call->arguments)
+            : $call->name;
+
+        return is_string($wire)
+            && str_starts_with($wire, McpToolBridge::NAME_PREFIX)
+            && McpToolBridge::declaredReadOnly($wire);
     }
 
     /**
@@ -1537,7 +1551,11 @@ final class PermissionGate
     private function isWriteTool(ToolCall $call): bool
     {
         if (in_array($call->name, ToolCatalog::namesOf(ToolPermissionClass::Write), true)) {
-            return true;
+            // MCP-7: a dispatched read-only call is a write only as often as
+            // the tool it NAMES is. `mcp_call` is Write-class for its
+            // worst case, but a seeded hint downgrades this call to exactly
+            // the verdict the bridged spelling would reach further down.
+            return !$this->isReadOnlyMcpTool($call);
         }
 
         if ($this->isReadOnlyMcpTool($call)) {

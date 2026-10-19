@@ -4153,7 +4153,12 @@ DOC;
         // this sweep has been red on master ever since (base bc37503bf); it
         // lists a directory, exactly what the roster's `Glob` row already
         // answers read-only.
-        return ['Read', 'Grep', 'Glob', 'Ls', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo', 'ShellOutput'];
+        // `mcp_list` (MCP-7) answers from the frozen shape's descriptor list —
+        // it formats names, descriptions and schemas it was handed and opens
+        // nothing: no file, no socket, no process. `mcp_call` deliberately
+        // does NOT join: it dispatches whatever the named tool does, and the
+        // write roster carries it for exactly that reason.
+        return ['mcp_list', 'Read', 'Grep', 'Glob', 'Ls', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo', 'ShellOutput'];
     }
 
     /**

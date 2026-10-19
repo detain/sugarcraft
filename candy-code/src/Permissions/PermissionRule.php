@@ -517,6 +517,26 @@ final class PermissionRule
             return false;
         }
 
+        // MCP-7 parity leg — the dispatcher and the wire spelling are ONE
+        // capability seen twice, never twice granted. A server is either
+        // bridged (`mcp__server__tool` first-class) or dispatched (reached as
+        // `mcp_call` with `server`/`tool` arguments); when the schema floor
+        // defers a server, a `Deny mcp__server__tool` the user wrote for the
+        // bridged world must still bind the deferred one, and a
+        // `Deny mcp_call` must bind the bridged tools a `eager: true` server
+        // kept first-class. Like the shell proxy below, and for the same
+        // reason (fix-1017 doctrine: a grant covers what it names), only
+        // RESTRICTIVE rules are translated; an Allow keeps its exact spelling.
+        if ($call->name === \SugarCraft\Code\Tools\BuiltIn\McpCallTool::NAME) {
+            $wire = \SugarCraft\Code\Tools\McpToolBridge::dispatchedWireName($call->arguments);
+            if ($wire !== null && self::matchesToolName($namePattern, $wire)) {
+                return true;
+            }
+        } elseif (str_starts_with($call->name, \SugarCraft\Code\Tools\McpToolBridge::NAME_PREFIX)
+            && self::matchesToolName($namePattern, \SugarCraft\Code\Tools\BuiltIn\McpCallTool::NAME)) {
+            return true;
+        }
+
         if (!in_array($call->name, self::SHELL_SUBJECT_TOOLS, true)) {
             return false;
         }
