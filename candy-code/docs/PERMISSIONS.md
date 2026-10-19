@@ -767,7 +767,7 @@ The tool names a pattern can start with are the tool catalog's names —
 `GenerateVideo`, `BoardPost`, `BoardRead` — and
 `mcp__<server>__<tool>` for bridges (`mcp__git__*`). What differs per tool is
 the argument's *grammar*: shell segments for `Bash` and `PtyRun`, path
-spellings for `Read`/`Edit`/`Write`/`Glob`/`Grep`/`Lsp`, per-path union for
+spellings for `Read`/`Edit`/`Write`/`Glob`/`Grep`/`Lsp`/`Ls`, per-path union for
 `ApplyPatch`, domains for `WebFetch`, whole-subject globs for `WebSearch` and
 `Skill`; for the rest — and for `doctor` and `mcp__*`, which map no subject —
 the argument is unknowable, so the rule's action decides alone: a restrictive

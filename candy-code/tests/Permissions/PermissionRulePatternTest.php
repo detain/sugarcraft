@@ -596,6 +596,13 @@ final class PermissionRulePatternTest extends TestCase
      * Every tool in {@see PermissionRule::PATH_SUBJECT_TOOLS} gets the treatment,
      * not just `Read` — asserted through the tools' OWN subject argument names,
      * which differ (`file_path` vs `path`), so a mapping change breaks this.
+     * `Ls` — the seventh member, admitted by the owner ruling of 2026-10-19 —
+     * is pinned next door in
+     * {@see testAPathRuleBindsLsWithDenyDepthAndGrantExactness} rather than
+     * joined to the list below, so that list keeps doubling as the historical
+     * control: neuter a six-deep member and THIS test, and only this test,
+     * says so; neuter `Ls`'s membership and the next-door pin says so. One
+     * discriminator per membership, which is what makes a red a diagnosis.
      */
     public function testEveryPathSubjectToolNormalisesItsPathAndNoneOfTheOthersDo(): void
     {
@@ -616,6 +623,47 @@ final class PermissionRulePatternTest extends TestCase
             (new PermissionRule('WebSearch(./secrets/key)', PermissionAction::Deny))
                 ->matches(new ToolCall('WebSearch', ['query' => 'secrets/key'])),
             'a query is not a path and must not be normalised',
+        );
+    }
+
+    /**
+     * The owner ruling of 2026-10-19, pinned end to end for `Ls`: a path-scoped
+     * DENY binds its spellings (normalisation and the segment-aligned depth
+     * reading, both), and the GRANT is no wider for it — the exact path it
+     * names, not the tree beneath a same-named directory. A name-only grant is
+     * the unchanged control, which is what makes the assertions above about
+     * paths rather than about `Ls` rules being inert.
+     */
+    public function testAPathRuleBindsLsWithDenyDepthAndGrantExactness(): void
+    {
+        $deny = new PermissionRule('Ls(./.env)', PermissionAction::Deny);
+        self::assertTrue(
+            $deny->matches(new ToolCall('Ls', ['path' => '.env'])),
+            'Ls must normalise the `./` prefix away like every other path subject',
+        );
+        self::assertTrue(
+            $deny->matches(new ToolCall('Ls', ['path' => 'vendor/.env'])),
+            'a restrictive path rule reads at any depth — the same reading Deny Read(.env) gets',
+        );
+
+        $grant = new PermissionRule('Ls(.env)', PermissionAction::Allow);
+        self::assertTrue(
+            $grant->matches(new ToolCall('Ls', ['path' => './.env'])),
+            'the grant still covers the path it names',
+        );
+        self::assertFalse(
+            $grant->matches(new ToolCall('Ls', ['path' => 'vendor/.env'])),
+            'joining the path subjects must not widen a grant to the depth reading',
+        );
+        self::assertFalse(
+            $grant->matches(new ToolCall('Ls', ['path' => 'prod.env'])),
+            'segment-aligned, not a substring — .env never names prod.env',
+        );
+
+        self::assertTrue(
+            (new PermissionRule('Ls', PermissionAction::Allow))
+                ->matches(new ToolCall('Ls', ['path' => 'any/where'])),
+            'a name-only grant is untouched by the subject mapping',
         );
     }
 

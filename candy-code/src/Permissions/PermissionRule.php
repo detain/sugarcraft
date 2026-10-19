@@ -201,6 +201,7 @@ final class PermissionRule
         'Glob' => 'path',
         'Grep' => 'path',
         'Lsp' => 'path',
+        'Ls' => 'path',
         'WebFetch' => 'url',
         'WebSearch' => 'query',
         'Skill' => 'name',
@@ -244,9 +245,14 @@ final class PermissionRule
      * above is: one file has MANY spellings (`./x`, `x`, `.//x`, `a/../x`,
      * `/abs/x`), so a pattern that matches one spelling of a path is not a rule
      * about that path. Derived from {@see SUBJECT_ARGUMENTS} by what the mapped
-     * argument IS rather than by what its key is called — `Glob` and `Grep` map
-     * to `path` and `Read`/`Edit`/`Write`/`Lsp` to `file_path`, and all six are
-     * paths.
+     * argument IS rather than by what its key is called — `Glob`, `Grep` and
+     * `Ls` map to `path` and `Read`/`Edit`/`Write`/`Lsp` to `file_path`, and
+     * all seven are paths. (`Ls` joined on the owner ruling of 2026-10-19,
+     * closing the omission three review lanes independently flagged: it lists
+     * the filesystem under `PathJail` exactly like its siblings, so a
+     * path-scoped rule must bind it the same way — before that, `Deny Ls(…)`
+     * over-blocked every listing and `Allow Ls(…)` never fired, the
+     * unknowable-subject shape.)
      *
      * The three that are in NEITHER list are the point of having lists at all:
      * `WebFetch`'s `url`, `WebSearch`'s `query` and `Skill`'s `name` are each
@@ -264,7 +270,7 @@ final class PermissionRule
      *
      * @var list<string>
      */
-    private const PATH_SUBJECT_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Lsp'];
+    private const PATH_SUBJECT_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Lsp', 'Ls'];
 
     /**
      * How many symlinks {@see resolveOnDisk()} follows by hand before it stops —
