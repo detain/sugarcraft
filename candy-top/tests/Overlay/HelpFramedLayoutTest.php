@@ -165,14 +165,16 @@ final class HelpFramedLayoutTest extends OverlayTestCase
     }
 
     /**
-     * (e) maximality — the hole must be provably unfillable, not just small:
-     * the greedy turns the page only when neither column takes the box, so
-     * on every non-last page the FIRST box of the next page fails the
+     * (e) maximality — the precise invariant, stated exactly as strong as it
+     * is: the greedy turns the page only when neither column takes the box,
+     * so on every non-last page the FIRST box of the next page fails the
      * column-fit predicate (used height, plus the one-row spacer whenever
      * the column already stacks a box, plus box height beats the budget)
-     * for BOTH columns. Swept over every real box width, the four live
-     * per-column budgets, and the degenerate 1-row column where boxes
-     * overflow the head of each page.
+     * for BOTH columns. Later boxes of that next page are NOT covered — a
+     * smaller one could have fitted a residual hole, and the pass keeps
+     * reading order instead of reaching past the box in front of it. Swept
+     * over every real box width, the four live per-column budgets, and the
+     * degenerate 1-row column where boxes overflow the head of each page.
      */
     public function testEveryNonLastPageEndsUnfillable(): void
     {
@@ -216,32 +218,32 @@ final class HelpFramedLayoutTest extends OverlayTestCase
         $plan = HelpMenu::plan(HelpMenu::widthFor(120), $height - 3);
         $this->assertCount(3, $plan, 'the greedy still spends exactly three pages at 120x40');
 
-        $columns = static fn (array $page): array => array_map(
-            static fn (array $boxes): array => array_map(
-                static fn (array $box): string => $box['heading'] . '@' . $box['row'],
-                $boxes,
-            ),
-            $page,
-        );
         $this->assertSame([
             [Lang::t('help.section.general') . '@0', Lang::t('help.section.panels') . '@8'],
             [Lang::t('help.section.panels') . '@0', Lang::t('help.section.navigation') . '@18'],
-        ], $columns($plan[0]));
+        ], self::columnShape($plan[0]));
         $this->assertSame([
             [Lang::t('help.section.process_list') . '@0'],
             [Lang::t('help.section.filter') . '@0', Lang::t('help.section.net') . '@8'],
-        ], $columns($plan[1]));
+        ], self::columnShape($plan[1]));
         $this->assertSame([
             [Lang::t('help.section.actions') . '@0'],
             [Lang::t('help.section.overlays') . '@0', Lang::t('help.section.mouse') . '@5', Lang::t('help.section.info') . '@12'],
-        ], $columns($plan[2]));
+        ], self::columnShape($plan[2]));
     }
 
     /**
-     * (g) the owner's ask on the terminal that earns it: at the zero-wrap
-     * width the page-1 budget really holds six sections — General and the
-     * 22-row Panels box side by side, the small boxes stacking into the
-     * hole under General — where the old flush next-fit left it at two.
+     * (g) the zero-wrap width at a 40-row terminal spends its whole page-1
+     * budget — six sections — and the SHAPE is the greedy's own: the 22-row
+     * Panels box rides the right column while General's stack continues
+     * three deep under it. Honest scope: the base flush next-fit also held
+     * six sections on this page (General + Panels left, all four small
+     * boxes right), so the six is a property of the 166-wide zero-wrap
+     * budget, NOT of the packing rule — first-fit drops Panels into the
+     * hole under General just as the base did, and only the column split
+     * pinned below tells that from the greedy's placement. The count win
+     * over next-fit lives where the budget is short: measured and pinned
+     * in test (h).
      */
     public function testGreedyFillsPageOneOnWideTerminals(): void
     {
@@ -258,5 +260,75 @@ final class HelpFramedLayoutTest extends OverlayTestCase
             $this->assertArrayHasKey(Lang::t($heading), $first, Lang::t($heading) . ' belongs to page 1 of the wide grid');
         }
         $this->assertCount(6, $first, 'six sections share page 1 at the zero-wrap width');
+        $this->assertSame([
+            [
+                Lang::t('help.section.general') . '@0',
+                Lang::t('help.section.navigation') . '@7',
+                Lang::t('help.section.process_list') . '@15',
+                Lang::t('help.section.filter') . '@22',
+            ],
+            [Lang::t('help.section.panels') . '@0', Lang::t('help.section.net') . '@23'],
+        ], self::columnShape($plan[0]), 'Panels rides the right column; the small boxes fill the hole under General');
+    }
+
+    /**
+     * (h) the measured win over the old rule, in the short-terminal band of
+     * the owner's screenshot: a 166-wide (zero-wrap) box on a 32-row
+     * terminal answers a 23-row column, where the 22-row Panels box no
+     * longer stacks under General. The base column-advancing next-fit
+     * leaves page 1 with 2 distinct sections (General stranded above a
+     * 17-row hole, Panels alone on the right) and spends 3 pages; the
+     * greedy revisits the short stack — page 1 holds 4 distinct sections
+     * (General, Navigation, Process list down the left, Panels right) in 2
+     * pages. Both numbers come from the probe table in this campaign's
+     * evidence report; the page count is pinned against the disclosed base
+     * constant 3.
+     */
+    public function testGreedyRescuesTheShortZeroWrapBand(): void
+    {
+        [$x, $y, $height, $pages] = HelpMenu::geometry(170, 32);
+        $this->assertSame(23, $height - 3, 'a 32-row terminal answers a 23-row column');
+        $this->assertSame(2, $pages, 'two pages where the base next-fit spent three');
+        $plan = HelpMenu::plan(HelpMenu::widthFor(170), $height - 3);
+        $this->assertCount(2, $plan, 'the plan itself turns exactly two pages');
+
+        $first = [];
+        foreach ($plan[0] as $boxes) {
+            foreach ($boxes as $box) {
+                $first[$box['heading']] = true;
+            }
+        }
+        foreach (['help.section.general', 'help.section.panels', 'help.section.navigation', 'help.section.process_list'] as $heading) {
+            $this->assertArrayHasKey(Lang::t($heading), $first, Lang::t($heading) . ' belongs to page 1 of the short zero-wrap grid');
+        }
+        $this->assertCount(4, $first, 'four distinct sections share page 1 where the next-fit held two');
+        $this->assertSame([
+            [
+                Lang::t('help.section.general') . '@0',
+                Lang::t('help.section.navigation') . '@7',
+                Lang::t('help.section.process_list') . '@15',
+            ],
+            [Lang::t('help.section.panels') . '@0'],
+        ], self::columnShape($plan[0]));
+
+        $second = [];
+        foreach ($plan[1] as $boxes) {
+            foreach ($boxes as $box) {
+                $second[$box['heading']] = true;
+            }
+        }
+        $this->assertCount(6, $second, 'the other six roster sections share page 2 of the two-page grid');
+    }
+
+    /** The plan's page as `heading@row` per column — the shape (f), (g) and (h) assert against. */
+    private static function columnShape(array $page): array
+    {
+        return array_map(
+            static fn (array $boxes): array => array_map(
+                static fn (array $box): string => $box['heading'] . '@' . $box['row'],
+                $boxes,
+            ),
+            $page,
+        );
     }
 }

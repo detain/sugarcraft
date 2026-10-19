@@ -259,9 +259,15 @@ final class HelpMenu implements Overlay
      * the page turns only when NEITHER column fits. Later, smaller boxes
      * therefore fill the shorter column's hole instead of trailing the
      * first one down, and for every non-last page the first box of the
-     * next page provably fits NEITHER column of it — maximality is a
-     * property of the pass, not a hope. Boxes are never reordered against
-     * reading order. A box is atomic; a section taller than one whole
+     * next page provably fits NEITHER column of it — only that first box:
+     * a later, smaller one on the same page might still have squeezed into
+     * a residual hole, and the pass lets the turn stand rather than reach
+     * past the box in front of it, so the invariant is reading-order-stable
+     * maximality, not order-free optimality. Boxes are never reordered
+     * against reading order; a page reads column-major (left stack, then
+     * right), and a split section's continuation rides whichever column has
+     * room, so its second frame can sit left of its first — the embedded
+     * headings keep that legible either way. A box is atomic; a section taller than one whole
      * column splits into balanced segments, EACH a framed box re-embedding
      * the heading, so every row stays visible. Pure and deterministic —
      * the goldens and {@see self::geometry()} byte-pin this layout.
