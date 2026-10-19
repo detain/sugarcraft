@@ -496,6 +496,19 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             'NOT A LIBC CALL, stop() draining listeners: close(1001, $reason) -- the RFC6455 going-away '
             . 'code on the same Ws\Connection method.',
         ],
+        'candy-code/src/Server/Server.php::->close(self::CLOSE_SIGNED_OUT)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, closeExpiredSessions() signing out an expired cookie session\'s socket: '
+            . 'close(4001, ...) with a private-range status code on Ws\Connection::close(int $code, '
+            . 'string $reason) -- the number is a WebSocket code, never a descriptor.',
+        ],
+        'candy-code/src/Server/Server.php::->close(self::CLOSE_SIGNED_OUT) #2' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, closeSessionSockets() ending every socket of a just-revoked session '
+            . '(sign-out callback): the same Ws\Connection::close(int $code, string $reason) with the '
+            . 'same 4001 alias -- the second spelling-identical site in the file, judged separately '
+            . 'as the ordinal demands.',
+        ],
         'candy-code/src/Server/Workspace/WorkspaceHostClient.php::->close($reason)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, stop() taking the workspace child down: $this->rpc->close($reason) on the '
