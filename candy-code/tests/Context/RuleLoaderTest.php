@@ -829,6 +829,33 @@ final class RuleLoaderTest extends TestCase
         self::assertSame(['note'], $this->ruleNames((new RuleLoader($root))->loadUserRules()), 'a file in the wrong extension is one the operator\'s own tool would not load either');
     }
 
+    /**
+     * w5j-3 (w4d review MINOR): one tier, two files, one stripped name.
+     * The fixed sort decides the winner (x.mdc sorts after x.md); what it
+     * used NOT to do is say anything. The loser must be a skip-ledger row
+     * naming both paths, not a silent overwrite.
+     */
+    public function testAStemCollisionBetweenMdAndMdcIsRecordedAndNotSilent(): void
+    {
+        $root = $this->sandbox . '/repo-stem-clash';
+        $claude = $this->home . '/.claude/rules';
+        mkdir($claude, 0o755, true);
+        $this->emitRule($claude . '/style.md', "---\nname: style\n---\nMD-LOSER\n");
+        $this->emitRule($claude . '/style.mdc', "---\nname: style\n---\nMDC-WINNER\n");
+
+        $loader = new RuleLoader($root);
+        $loaded = $loader->loadUserClaudeRules();
+
+        self::assertSame(['style'], $this->ruleNames($loaded), 'one rule owns the colliding stem');
+        self::assertStringContainsString('MDC-WINNER', $loaded[0]->body, 'fixture: the later-sorting extension is the winner the row describes');
+        self::assertStringNotContainsString('MD-LOSER', $loaded[0]->body);
+
+        $skipped = $loader->skippedFiles();
+        self::assertArrayHasKey(realpath($claude . '/style.md'), $skipped, 'the dropped file is in the skip ledger, not silent');
+        self::assertStringContainsString('style.mdc', $skipped[realpath($claude . '/style.md')], 'the row names the winner it lost to');
+        self::assertStringContainsString('"style"', $skipped[realpath($claude . '/style.md')]);
+    }
+
     public function testGlobsFrontmatterBuildsThePathTriggerAsAnAliasOfPaths(): void
     {
         $root = $this->sandbox . '/repo-globs';

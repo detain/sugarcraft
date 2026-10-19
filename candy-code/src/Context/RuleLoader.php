@@ -829,6 +829,7 @@ final class RuleLoader
         }
 
         $byKey = [];
+        $pathByKey = [];
         $reads = 0;
         foreach ($candidates as $candidate) {
             $file = new \SplFileInfo($candidate);
@@ -909,6 +910,24 @@ final class RuleLoader
                 continue;
             }
 
+            // w4d review minor (w5j-3): `x.md` and `x.mdc` in one tier strip
+            // to the SAME key, and the plain assignment used to drop
+            // whichever file arrived first in the fixed sort with no trace.
+            // The winner is unchanged — bytes as before, the fixed sort still
+            // decides — the LOSER is now a line: named, both paths in it, in
+            // the skip ledger beside the cap and truncation rows, so a
+            // double claim cannot be silently lost.
+            if (array_key_exists($key, $byKey)) {
+                $reason = sprintf(
+                    'Skipping rules file %s: %s strips to the same rule name "%s" and sorts later, so it wins the key.',
+                    $pathByKey[$key],
+                    $spelled,
+                    $key,
+                );
+                $this->report($reason);
+                $this->skippedFiles[$pathByKey[$key]] = $reason;
+            }
+            $pathByKey[$key] = $spelled;
             $byKey[$key] = $rule;
         }
 
