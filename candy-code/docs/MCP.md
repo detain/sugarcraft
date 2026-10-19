@@ -113,8 +113,11 @@ answered here:
   `issues` means for that checkout — matching the trust record, which is keyed
   to the repo's own bytes. The shadowed user entry is invisible to every
   report: not started, not refused, not even a shape-check sentence. The `/mcp`
-  panel's `User scope: N servers (path)` row counts only what the launch will
-  actually start from your file.
+  panel's `User scope: N servers (path)` row reads the file live and counts the
+  entries shadowing would leave to be adopted were the file this launch's — it
+  is a display of the roster, not its state: a file created mid-session lifts
+  that N with no drift line (next bullet), and the servers this process will
+  actually start stay the ones its memoised client carries.
 - **Why the repo wins the collision:** the repository is the side that is
   consented to per server, so widening discovery must not silently retitle
   that consent; and your tier still cannot be overridden wholesale, only

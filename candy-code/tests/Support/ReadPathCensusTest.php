@@ -285,9 +285,12 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — mcpServerInventory() reading the project `.mcp.json` for `candy-code mcp list`. '
                 . 'Same ContainedPath::within() compare and same trust gate mcpClient() applies, because both '
                 . 'come through mcpConfigDecision(); this arm is reached only on the TRUSTED verdict',
-            'CONTAINED — mcpConfigDigest() hashing the SAME decision-path `.mcp.json`: at the memo-store '
-                . 'point inside mcpClient() (behind the identical mcpConfigDecision() gate) and from '
-                . 'mcpConfigChangedSinceLaunch(), which re-runs that decision for the same root before '
+            'CONTAINED — mcpConfigDigest() hashing the two tier files the decision path names: the project '
+                . '`.mcp.json` and, from MCP-3 on, the user tier `~/.candy-code/mcp.json` — at the '
+                . 'memo-store point inside mcpClient(), which notes one digest per tier this launch may '
+                . 'read (behind the identical mcpConfigDecision() gate), and from '
+                . 'mcpConfigChangedSinceLaunch(), which re-runs that decision for the same root and '
+                . 're-reads each tier it stored before '
                 . 'reading. file_get_contents rather than hash_file on purpose — the latter spelling is '
                 . 'outside this census\'s sink vocabulary and would be an ungazed read on a '
                 . 'repository-chosen path',
