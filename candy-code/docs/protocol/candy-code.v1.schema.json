@@ -5279,6 +5279,48 @@
                 ]
             }
         },
+        "tool.progress": {
+            "description": "Live tail of a running tool call, frame-rate capped; ephemeral — tool.finished is the contract, so a late joiner replays nothing and still sees the whole output.",
+            "durable": false,
+            "scope": "session",
+            "data": {
+                "type": "object",
+                "properties": {
+                    "toolCallId": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "seq": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Frames of this call so far, from 1; a client keeps the highest it has seen."
+                    },
+                    "tail": {
+                        "type": "string",
+                        "description": "The last tailBudget bytes of output, replaced wholesale each frame — never a delta to stitch."
+                    },
+                    "truncated": {
+                        "type": "boolean",
+                        "description": "True once bytes fell out of the ring."
+                    },
+                    "tailBudget": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Byte cap the tail obeys."
+                    }
+                },
+                "required": [
+                    "toolCallId",
+                    "name",
+                    "seq",
+                    "tail",
+                    "truncated",
+                    "tailBudget"
+                ]
+            }
+        },
         "tool.started": {
             "description": "A tool call started.",
             "durable": true,

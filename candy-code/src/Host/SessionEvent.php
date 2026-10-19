@@ -45,6 +45,7 @@ final class SessionEvent
     public const ASSISTANT_COMPLETED = 'assistant.completed';
     public const TOOL_STARTED = 'tool.started';
     public const TOOL_FINISHED = 'tool.finished';
+    public const TOOL_PROGRESS = 'tool.progress';
     public const PERMISSION_REQUESTED = 'permission.requested';
     public const PERMISSION_RESOLVED = 'permission.resolved';
     public const SUBAGENT_STARTED = 'subagent.started';

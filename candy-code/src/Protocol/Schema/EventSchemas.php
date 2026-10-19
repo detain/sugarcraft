@@ -146,6 +146,14 @@ final class EventSchemas
                 'mediaTruncated' => Schema::boolean(),
                 'replaces' => Schema::string(),
             ], ['toolCallId', 'name', 'isError', 'content']),
+            E::TOOL_PROGRESS => Schema::object([
+                'toolCallId' => Schema::string(),
+                'name' => Schema::string(),
+                'seq' => Schema::integer(1)->describe('Frames of this call so far, from 1; a client keeps the highest it has seen.'),
+                'tail' => Schema::string()->describe('The last tailBudget bytes of output, replaced wholesale each frame — never a delta to stitch.'),
+                'truncated' => Schema::boolean()->describe('True once bytes fell out of the ring.'),
+                'tailBudget' => Schema::integer(0)->describe('Byte cap the tail obeys.'),
+            ], ['toolCallId', 'name', 'seq', 'tail', 'truncated', 'tailBudget']),
             E::PERMISSION_REQUESTED => Schema::ref(D::PENDING_ASK),
             E::PERMISSION_RESOLVED => Schema::object([
                 'askId' => Schema::string(),

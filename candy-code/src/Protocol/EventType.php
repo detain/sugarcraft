@@ -59,6 +59,7 @@ final class EventType
         SessionEvent::ASSISTANT_COMPLETED => [true, self::SCOPE_SESSION, 'The reply, complete; repairs any delta a client dropped.'],
         SessionEvent::TOOL_STARTED => [true, self::SCOPE_SESSION, 'A tool call started.'],
         SessionEvent::TOOL_FINISHED => [true, self::SCOPE_SESSION, 'A tool call finished (content capped; tool.output has the rest).'],
+        SessionEvent::TOOL_PROGRESS => [false, self::SCOPE_SESSION, 'Live tail of a running tool call, frame-rate capped; ephemeral — tool.finished is the contract, so a late joiner replays nothing and still sees the whole output.'],
         SessionEvent::PERMISSION_REQUESTED => [true, self::SCOPE_SESSION, 'A tool call is waiting for an answer (permission.respond).'],
         SessionEvent::PERMISSION_RESOLVED => [true, self::SCOPE_SESSION, 'A question was answered or cancelled.'],
         SessionEvent::SUBAGENT_STARTED => [true, self::SCOPE_SESSION, 'A delegated sub-agent started.'],
