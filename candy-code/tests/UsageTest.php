@@ -837,7 +837,8 @@ final class UsageTest extends TestCase
     public function testVertexsStreamEmitsTheTwoHalvesSeparatelyUnlikeItsUnaryPath(): void
     {
         $source = (string) file_get_contents(dirname(__DIR__) . '/src/Providers/VertexProvider.php')
-            . (string) file_get_contents(dirname(__DIR__) . '/src/Providers/Concerns/AnthropicMessagesWire.php');
+            . (string) file_get_contents(dirname(__DIR__) . '/src/Providers/Concerns/AnthropicMessagesWire.php')
+            . (string) file_get_contents(dirname(__DIR__) . '/src/Providers/Concerns/GeminiGenerateContentWire.php');
 
         $this->assertSame(
             1,
