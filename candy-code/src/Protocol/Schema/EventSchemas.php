@@ -197,7 +197,14 @@ final class EventSchemas
             EventType::SESSION_CREATED => $summary,
             EventType::SESSION_UPDATED => $summary,
             EventType::SESSION_DELETED => Schema::object(['id' => Schema::ref(D::SESSION_ID)], ['id']),
-            EventType::PERMISSION_ASKED => D::all()[D::PENDING_ASK]->with(['sessionId' => Schema::ref(D::SESSION_ID)], ['sessionId']),
+            // WEB-3b: two ask families ride one event — a turn's question, and
+            // the context.sources discovery's project-trust prompt. Required
+            // fields make the arms mutually exclusive: only a permission ask
+            // carries toolCallId/tool/options, only a trust ask carries kind.
+            EventType::PERMISSION_ASKED => Schema::oneOf(
+                D::all()[D::PENDING_ASK]->with(['sessionId' => Schema::ref(D::SESSION_ID)], ['sessionId']),
+                D::all()[D::TRUST_PROMPT]->with(['sessionId' => Schema::ref(D::SESSION_ID)], ['sessionId']),
+            ),
             EventType::PERMISSION_SETTLED => Schema::object([
                 'sessionId' => Schema::ref(D::SESSION_ID),
                 'askId' => Schema::string(),

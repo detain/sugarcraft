@@ -399,6 +399,19 @@ final class MethodSchemas
                 Schema::ref(D::CONTEXT_SOURCES),
             ],
 
+            'context.trust' => [
+                Schema::object([
+                    'askId' => Schema::string(16)->describe('The trust prompt\'s id, as permission.asked (kind "trust") carried it.'),
+                    'decision' => Schema::enum(['grant', 'reject']),
+                    'remember' => Schema::enum(['session', 'user', 'project'])->describe('`user` writes the root into your own trustedProjectMcp list (effective next launch, like the TUI grant); `session` — or omitted — settles for this server only; `project` is refused: a project cannot grant itself trust (the permission.respond posture).'),
+                ], ['askId', 'decision']),
+                Schema::object([
+                    'askId' => Schema::string(16),
+                    'status' => Schema::enum(['granted', 'rejected']),
+                    'persisted' => Schema::boolean()->describe('True only when the user-tier write landed.'),
+                ], ['askId', 'status', 'persisted']),
+            ],
+
             'agents.list' => [$empty, $items(Schema::object([
                 'name' => Schema::string(),
                 'description' => Schema::string(),

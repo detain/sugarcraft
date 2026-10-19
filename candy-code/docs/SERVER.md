@@ -440,6 +440,7 @@ it and the two tables below are generated from the code
 | `command.exec` | write | yes | `sessionId`, `name` | Run a slash command in a session (command files, and the built-ins that run headless). |
 | `command.list` | read |  | — | The slash commands a session knows, and where each runs. |
 | `context.sources` | read |  | `sessionId` | What the session's context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, and the token breakdown. |
+| `context.trust` | approve |  | `askId`, `decision` | Answer a project-trust prompt (permission.asked with kind "trust"): grant or reject; a user-tier remember writes your own trustedProjectMcp list, a project-tier one is refused. |
 | `files.changed` | read |  | — | The workspace's changed and untracked files. |
 | `files.diff` | read |  | — | The workspace's uncommitted changes to tracked files, as a unified diff. |
 | `files.read` | read |  | `path` | A file under the project root, read-only and size-capped. |
@@ -524,7 +525,7 @@ one re-reads what it describes (`session.list`, `permission.pending`).
 | `bg.status` | server | live | A background session's status changed (running, stalled, …). |
 | `compaction.completed` | session | durable | The history was compacted before a turn. |
 | `message.created` | session | durable | A transcript row was added: the prompt, a notice, a summary. |
-| `permission.asked` | server | live | A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and, since ISS-004, a background session's relayed question, named by its background id and answered the same way. |
+| `permission.asked` | server | live | A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and, since ISS-004, a background session's relayed question, named by its background id and answered the same way. Since WEB-3b a third shape joins the arm: a project-trust prompt (kind "trust") discovered by a context.sources measurement, answered by `context.trust` and not by `permission.respond`. |
 | `permission.requested` | session | durable | A tool call is waiting for an answer (permission.respond). |
 | `permission.resolved` | session | durable | A question was answered or cancelled. |
 | `permission.settled` | server | live | A question was answered or cancelled (permission.resolved for every client) — a background session's relayed question included, cancelled when its session settled unanswered. |

@@ -29,6 +29,7 @@ final class Definitions
     public const BACKGROUND_SESSION = 'BackgroundSession';
     public const MEDIA_REF = 'MediaRef';
     public const CONTEXT_SOURCES = 'ContextSources';
+    public const TRUST_PROMPT = 'TrustPrompt';
 
     private function __construct()
     {
@@ -73,6 +74,15 @@ final class Definitions
                     'parentCallId' => Schema::string(),
                 ], ['agentId'])->describe('The delegated run that asked, when a sub-agent\'s question was relayed; absent for the turn\'s own.'),
             ], ['askId', 'toolCallId', 'tool', 'arguments', 'options']),
+            self::TRUST_PROMPT => Schema::object([
+                'askId' => Schema::string(16),
+                'kind' => Schema::enum(['trust'])->describe('WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn\'s question registry).'),
+                'target' => Schema::enum(['mcp'])->describe('What a grant would enable — today only the project `.mcp.json` census verdict, the one launch-time trust with a user-tier grant writer.'),
+                'root' => Schema::string(4096)->describe('The project root the prompt is about — the exact string a `trustedProjectMcp` entry becomes.'),
+                'reason' => Schema::string()->describe('Why the prompt was put, for the panel line.'),
+                'status' => Schema::enum(['asked', 'granted', 'rejected'])->describe('`asked` while open; one answer settles it for the process (the once-per-untrusted-root law).'),
+                'persisted' => Schema::boolean()->describe('True when the answer wrote the user-tier trust list; a session grant or a refusal leaves it false.'),
+            ], ['askId', 'kind', 'target', 'root', 'status']),
             self::QUEUE_ENTRY => Schema::object([
                 'queueId' => Schema::string(32),
                 'text' => Schema::string(),
@@ -206,6 +216,7 @@ final class Definitions
                     'path' => Schema::string(4096),
                     'reason' => Schema::string(),
                 ], ['path', 'reason']))->describe('Instruction paths the loader refused and why.'),
+                'trust' => Schema::ref(self::TRUST_PROMPT)->nullable()->describe('WEB-3b: this root\'s trust prompt — measured here is where it is DISCOVERED: an untrusted project `.mcp.json` verdict mints the prompt (once per root) and server-scopes it as `permission.asked`; null while the verdicts need no grant or one was already settled.'),
                 'breakdown' => Schema::object([
                     'window' => Schema::integer(0),
                     'sections' => Schema::arrayOf(Schema::object([

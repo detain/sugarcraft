@@ -268,6 +268,17 @@
                     },
                     "description": "Instruction paths the loader refused and why."
                 },
+                "trust": {
+                    "oneOf": [
+                        {
+                            "$ref": "#/$defs/TrustPrompt"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "WEB-3b: this root's trust prompt — measured here is where it is DISCOVERED: an untrusted project `.mcp.json` verdict mints the prompt (once per root) and server-scopes it as `permission.asked`; null while the verdicts need no grant or one was already settled."
+                },
                 "breakdown": {
                     "type": "object",
                     "properties": {
@@ -1104,6 +1115,55 @@
                 }
             ]
         },
+        "TrustPrompt": {
+            "type": "object",
+            "properties": {
+                "askId": {
+                    "type": "string",
+                    "maxLength": 16
+                },
+                "kind": {
+                    "enum": [
+                        "trust"
+                    ],
+                    "description": "WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry)."
+                },
+                "target": {
+                    "enum": [
+                        "mcp"
+                    ],
+                    "description": "What a grant would enable — today only the project `.mcp.json` census verdict, the one launch-time trust with a user-tier grant writer."
+                },
+                "root": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "description": "The project root the prompt is about — the exact string a `trustedProjectMcp` entry becomes."
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Why the prompt was put, for the panel line."
+                },
+                "status": {
+                    "enum": [
+                        "asked",
+                        "granted",
+                        "rejected"
+                    ],
+                    "description": "`asked` while open; one answer settles it for the process (the once-per-untrusted-root law)."
+                },
+                "persisted": {
+                    "type": "boolean",
+                    "description": "True when the answer wrote the user-tier trust list; a session grant or a refusal leaves it false."
+                }
+            },
+            "required": [
+                "askId",
+                "kind",
+                "target",
+                "root",
+                "status"
+            ]
+        },
         "Usage": {
             "type": "object",
             "properties": {
@@ -1894,6 +1954,63 @@
             },
             "result": {
                 "$ref": "#/$defs/ContextSources"
+            }
+        },
+        "context.trust": {
+            "description": "Answer a project-trust prompt (permission.asked with kind \"trust\"): grant or reject; a user-tier remember writes your own trustedProjectMcp list, a project-tier one is refused.",
+            "scope": "approve",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "askId": {
+                        "type": "string",
+                        "maxLength": 16,
+                        "description": "The trust prompt's id, as permission.asked (kind \"trust\") carried it."
+                    },
+                    "decision": {
+                        "enum": [
+                            "grant",
+                            "reject"
+                        ]
+                    },
+                    "remember": {
+                        "enum": [
+                            "session",
+                            "user",
+                            "project"
+                        ],
+                        "description": "`user` writes the root into your own trustedProjectMcp list (effective next launch, like the TUI grant); `session` — or omitted — settles for this server only; `project` is refused: a project cannot grant itself trust (the permission.respond posture)."
+                    }
+                },
+                "required": [
+                    "askId",
+                    "decision"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "askId": {
+                        "type": "string",
+                        "maxLength": 16
+                    },
+                    "status": {
+                        "enum": [
+                            "granted",
+                            "rejected"
+                        ]
+                    },
+                    "persisted": {
+                        "type": "boolean",
+                        "description": "True only when the user-tier write landed."
+                    }
+                },
+                "required": [
+                    "askId",
+                    "status",
+                    "persisted"
+                ]
             }
         },
         "files.changed": {
@@ -4967,81 +5084,138 @@
             }
         },
         "permission.asked": {
-            "description": "A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and, since ISS-004, a background session's relayed question, named by its background id and answered the same way.",
+            "description": "A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and, since ISS-004, a background session's relayed question, named by its background id and answered the same way. Since WEB-3b a third shape joins the arm: a project-trust prompt (kind \"trust\") discovered by a context.sources measurement, answered by `context.trust` and not by `permission.respond`.",
             "durable": false,
             "scope": "server",
             "data": {
-                "type": "object",
-                "properties": {
-                    "askId": {
-                        "type": "string",
-                        "maxLength": 16
-                    },
-                    "toolCallId": {
-                        "type": "string"
-                    },
-                    "tool": {
-                        "type": "string"
-                    },
-                    "arguments": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    },
-                    "reason": {
-                        "type": "string"
-                    },
-                    "source": {
-                        "type": "string",
-                        "description": "`gate`, `hook:<names>`, or `tool:<name>` for a question the call puts itself (`AskUser`, `PlanExit`)"
-                    },
-                    "mode": {
-                        "type": "string"
-                    },
-                    "options": {
-                        "type": "array",
-                        "items": {
-                            "enum": [
-                                "once",
-                                "always",
-                                "reject"
-                            ]
-                        }
-                    },
-                    "alwaysScope": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "string"
-                        }
-                    },
-                    "origin": {
+                "oneOf": [
+                    {
                         "type": "object",
                         "properties": {
-                            "agentId": {
+                            "askId": {
+                                "type": "string",
+                                "maxLength": 16
+                            },
+                            "toolCallId": {
                                 "type": "string"
                             },
-                            "agentName": {
+                            "tool": {
                                 "type": "string"
                             },
-                            "parentCallId": {
+                            "arguments": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            },
+                            "reason": {
                                 "type": "string"
+                            },
+                            "source": {
+                                "type": "string",
+                                "description": "`gate`, `hook:<names>`, or `tool:<name>` for a question the call puts itself (`AskUser`, `PlanExit`)"
+                            },
+                            "mode": {
+                                "type": "string"
+                            },
+                            "options": {
+                                "type": "array",
+                                "items": {
+                                    "enum": [
+                                        "once",
+                                        "always",
+                                        "reject"
+                                    ]
+                                }
+                            },
+                            "alwaysScope": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": "string"
+                                }
+                            },
+                            "origin": {
+                                "type": "object",
+                                "properties": {
+                                    "agentId": {
+                                        "type": "string"
+                                    },
+                                    "agentName": {
+                                        "type": "string"
+                                    },
+                                    "parentCallId": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "agentId"
+                                ],
+                                "description": "The delegated run that asked, when a sub-agent's question was relayed; absent for the turn's own."
+                            },
+                            "sessionId": {
+                                "$ref": "#/$defs/SessionId"
                             }
                         },
                         "required": [
-                            "agentId"
-                        ],
-                        "description": "The delegated run that asked, when a sub-agent's question was relayed; absent for the turn's own."
+                            "askId",
+                            "toolCallId",
+                            "tool",
+                            "arguments",
+                            "options",
+                            "sessionId"
+                        ]
                     },
-                    "sessionId": {
-                        "$ref": "#/$defs/SessionId"
+                    {
+                        "type": "object",
+                        "properties": {
+                            "askId": {
+                                "type": "string",
+                                "maxLength": 16
+                            },
+                            "kind": {
+                                "enum": [
+                                    "trust"
+                                ],
+                                "description": "WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry)."
+                            },
+                            "target": {
+                                "enum": [
+                                    "mcp"
+                                ],
+                                "description": "What a grant would enable — today only the project `.mcp.json` census verdict, the one launch-time trust with a user-tier grant writer."
+                            },
+                            "root": {
+                                "type": "string",
+                                "maxLength": 4096,
+                                "description": "The project root the prompt is about — the exact string a `trustedProjectMcp` entry becomes."
+                            },
+                            "reason": {
+                                "type": "string",
+                                "description": "Why the prompt was put, for the panel line."
+                            },
+                            "status": {
+                                "enum": [
+                                    "asked",
+                                    "granted",
+                                    "rejected"
+                                ],
+                                "description": "`asked` while open; one answer settles it for the process (the once-per-untrusted-root law)."
+                            },
+                            "persisted": {
+                                "type": "boolean",
+                                "description": "True when the answer wrote the user-tier trust list; a session grant or a refusal leaves it false."
+                            },
+                            "sessionId": {
+                                "$ref": "#/$defs/SessionId"
+                            }
+                        },
+                        "required": [
+                            "askId",
+                            "kind",
+                            "target",
+                            "root",
+                            "status",
+                            "sessionId"
+                        ]
                     }
-                },
-                "required": [
-                    "askId",
-                    "toolCallId",
-                    "tool",
-                    "arguments",
-                    "options",
-                    "sessionId"
                 ]
             }
         },
