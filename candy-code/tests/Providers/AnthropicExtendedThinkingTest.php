@@ -41,7 +41,7 @@ final class AnthropicExtendedThinkingTest extends TestCase
 {
     use HomeSandboxTrait;
 
-    private const MODERN = 'claude-sonnet-4-6';
+    private const THINKING_MODEL = 'claude-sonnet-4-6';
 
     private const SIGNED_BLOCK = [
         'type' => 'thinking',
@@ -117,7 +117,7 @@ final class AnthropicExtendedThinkingTest extends TestCase
         return new AnthropicProvider(
             'sk-test',
             'https://api.anthropic.com',
-            self::MODERN,
+            self::THINKING_MODEL,
             $this->nativeUnarySeam($response, $captured),
             null,
             [],
@@ -127,7 +127,7 @@ final class AnthropicExtendedThinkingTest extends TestCase
         );
     }
 
-    private function turnRequest(?array $messages = null, ?float $temperature = null, ?int $maxTokens = null, string $model = self::MODERN): CompleteRequest
+    private function turnRequest(?array $messages = null, ?float $temperature = null, ?int $maxTokens = null, string $model = self::THINKING_MODEL): CompleteRequest
     {
         return new CompleteRequest(
             model: $model,
@@ -143,7 +143,7 @@ final class AnthropicExtendedThinkingTest extends TestCase
         $provider = new AnthropicProvider(
             'sk-test',
             'https://api.anthropic.com',
-            self::MODERN,
+            self::THINKING_MODEL,
             null,
             $this->streamSeam($events),
             [],
@@ -216,7 +216,7 @@ final class AnthropicExtendedThinkingTest extends TestCase
         $this->expectExceptionMessage($needle);
 
         /** @phpstan-ignore-next-line intentionally invalid */
-        new AnthropicProvider('sk-test', 'https://api.anthropic.com', self::MODERN, null, null, [], true, null, $budget);
+        new AnthropicProvider('sk-test', 'https://api.anthropic.com', self::THINKING_MODEL, null, null, [], true, null, $budget);
     }
 
     /** @return iterable<string, array{mixed, string}> */
@@ -380,7 +380,7 @@ final class AnthropicExtendedThinkingTest extends TestCase
         $provider = new AnthropicProvider(
             'sk-test',
             'https://api.anthropic.com',
-            self::MODERN,
+            self::THINKING_MODEL,
             $this->nativeUnarySeam(['content' => []], $captured),
             null,
             [],
@@ -453,7 +453,7 @@ final class AnthropicExtendedThinkingTest extends TestCase
         $provider = (new ProviderFactory())->create([
             'type' => 'anthropic',
             'apiKey' => 'sk-test',
-            'model' => self::MODERN,
+            'model' => self::THINKING_MODEL,
             'thinkingBudget' => 1024,
         ]);
 
@@ -468,7 +468,7 @@ final class AnthropicExtendedThinkingTest extends TestCase
         $provider = (new ProviderFactory())->create([
             'type' => 'anthropic',
             'apiKey' => 'sk-test',
-            'model' => self::MODERN,
+            'model' => self::THINKING_MODEL,
         ]);
 
         self::assertSame(2048, self::privateValue($provider, 'thinkingBudget'), 'the same key serves both arms, per-arm parsed');

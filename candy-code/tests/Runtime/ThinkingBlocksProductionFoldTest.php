@@ -33,7 +33,7 @@ use SugarCraft\Code\Runtime;
  */
 final class ThinkingBlocksProductionFoldTest extends TestCase
 {
-    private const THINKING_MODEL = 'claude-sonnet-4-6';
+    private const FOLD_MODEL = 'claude-sonnet-4-6';
 
     /** @var array<string, string> */
     private const FIRST_BLOCK = [
@@ -96,7 +96,7 @@ final class ThinkingBlocksProductionFoldTest extends TestCase
         $provider = new AnthropicProvider(
             'sk-test',
             'https://api.anthropic.com',
-            self::THINKING_MODEL,
+            self::FOLD_MODEL,
             self::capturingSeam(['content' => []], $captured),
             null,
             [],
@@ -106,7 +106,7 @@ final class ThinkingBlocksProductionFoldTest extends TestCase
         );
 
         $provider->complete(new CompleteRequest(
-            model: self::THINKING_MODEL,
+            model: self::FOLD_MODEL,
             messages: [new UserMessage('go'), $reply],
         ));
 
