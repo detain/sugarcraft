@@ -1088,9 +1088,9 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and twenty-six keys are layered — `provider`, `models`,
-`providers`, `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
-`extraBody`, `thinkingBudget`, `reasoningEffort`, `promptCache`,
+Only these one hundred and twenty-seven keys are layered — `provider`,
+`models`, `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`,
+`modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `promptCache`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxToolSteps`,
 `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`,
 `compaction.blockPercent`, `compaction.keepRecent`,
@@ -1115,7 +1115,7 @@ Only these one hundred and twenty-six keys are layered — `provider`, `models`,
 `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`,
 `sd.savePattern`, `skills.pathNudges`, `instructions`, `instructionsExclude`,
 `disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
-`subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
+`pluginPaths`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
 `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
 `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`,
 `layout`, `notify`, `watchFiles`, `queueMode`, `terminalBackground`, `mouse`,
@@ -1168,7 +1168,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, seventy keys are **never** taken from a project file:
+Even for a trusted project, seventy-one keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for

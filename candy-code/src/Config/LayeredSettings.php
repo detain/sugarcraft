@@ -581,6 +581,7 @@ final class LayeredSettings
         'embeddingModel',
         'disabledSkills',
         'enabledSkills',
+        'pluginPaths',
         'subagentModel',
         'subagentMaxTurns',
         'subagentMaxConcurrent',

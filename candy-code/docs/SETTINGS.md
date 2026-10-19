@@ -268,6 +268,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `embeddingModel` | `EngineBackend::completeAsync()` | **no** |
 | `disabledSkills` | `Bootstrap::chat()` → `skillRegistry()` | yes |
 | `enabledSkills` | `Bootstrap::backend()`, `backendFor()` → `promptEnabledSkills()` | **no** |
+| `pluginPaths` | `BundleDiscovery::discover()` — fed by `Bootstrap::bundles()` at launch | **no** |
 | `subagentModel` | `Bootstrap::agentManager()` | **no** |
 | `subagentMaxTurns` | `TaskTool` (engine path) and `EngineExecutor::execute()` → `EngineExecutor::defaultMaxTurns()`, as each run starts | **no** |
 | `subagentMaxConcurrent` | `Bootstrap::agentPoolConfig()` → `AgentPoolConfig::withSettings()` | **no** |
@@ -313,7 +314,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and twenty-six, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and twenty-seven, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -1140,6 +1141,7 @@ project-settable.
 | `embeddingModel` | Memory & Rules | string | unset | U C | — | next turn | spend |
 | `disabledSkills` | Skills | list | `[]` | P U C | — | restart | narrowing |
 | `enabledSkills` | Skills | list | `[]` | U C | — | restart | prompt |
+| `pluginPaths` | Skills | list | `[]` | U C | — | restart | prompt |
 | `skills.listingMaxBytes` | Skills | int | `8192` | C | — | next turn | prompt |
 | `subagentModel` | Sub-agents | string | unset | U C | — | restart | spend |
 | `subagentMaxTurns` | Sub-agents | int | `200` | U C | — | next turn | spend |
@@ -1326,10 +1328,10 @@ Saved is not applied: see the next section for when each key takes effect.
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `reasoningEffort`, `maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `compaction.idleAuto`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints` |
 | next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `sd.timeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `memory.dreamProposeSkills`, `embeddingModel`, `skills.listingMaxBytes`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `streamHeaderTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
 | reload | On `/keys reload`, or at the next launch: the saved file is re-read and re-applied when you say the word (plan_comparison TUI-4a) | `keybindings` |
-| restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `instructions`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `lintCommands`, `formatCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.browseRoot`, `webhooks`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
+| restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `instructions`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `lintCommands`, `formatCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.browseRoot`, `webhooks`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
-**In numbers:** thirty-seven live, fifty-five next turn, one reload, sixty-nine
+**In numbers:** thirty-seven live, fifty-five next turn, one reload, seventy
 restart and seven next launch.
 
 **This session only** accepts `maxOutputTokens`, `reasoningEffort`,
@@ -1546,14 +1548,15 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only twenty-two of the one hundred and twenty-six layered
-  keys have an env override (`provider`, `models`, `titleModel`, `summaryModel`,
-  `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxCostUsd`,
-  `webSearchEndpoint`, `sd.baseUrl`, `ui.imageRenderMode`, `terminalBackground`,
-  `mouse`, `mouseClicks`, `sessionRetentionDays`, `promptSuggestions`,
-  `mcp.enabled`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`,
-  `debug.rules`, `debug.stream`). `providers`, `maxOutputTokens`, `modelPrices`,
-  `extraBody`, `thinkingBudget`, `reasoningEffort`, `maxToolSteps`,
+  They do not cover it: only twenty-two of the one hundred and twenty-seven
+  layered keys have an env override (`provider`, `models`, `titleModel`,
+  `summaryModel`, `promptCache`, `parallelToolCalls`,
+  `parallelToolDeadlineSeconds`, `maxCostUsd`, `webSearchEndpoint`, `sd.baseUrl`,
+  `ui.imageRenderMode`, `terminalBackground`, `mouse`, `mouseClicks`,
+  `sessionRetentionDays`, `promptSuggestions`, `mcp.enabled`,
+  `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`,
+  `debug.stream`). `providers`, `maxOutputTokens`, `modelPrices`, `extraBody`,
+  `thinkingBudget`, `reasoningEffort`, `maxToolSteps`,
   `compaction.reminderPercent`, `compaction.autoPercent`,
   `compaction.blockPercent`, `compaction.keepRecent`,
   `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
@@ -1576,15 +1579,15 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `sd.timeoutSeconds`, `sd.defaultModel`, `sd.presets`,
   `ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
   `instructions`, `instructionsExclude`, `disabledRules`, `embeddingModel`,
-  `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxTurns`,
-  `subagentMaxConcurrent`, `subagentMaxDepth`, `subagentMaxActive`,
-  `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`,
-  `theme`, `statusLine`, `layout`, `notify`, `watchFiles`, `queueMode`,
-  `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`,
-  `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestionHistory`,
-  `expandToolOutput`, `maxCheckpoints`, `keybindings`, `lintCommands`,
-  `formatCommands`, `disabledMcpServers`, `providerRetryAttempts` and
-  `providerRetryBaseBackoffMs` have none.
+  `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`,
+  `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`,
+  `subagentMaxActive`, `includeGitInstructions`, `attribution`, `lsp`,
+  `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
+  `watchFiles`, `queueMode`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
+  `diffPreviewRows`, `toolOutputPreviewLines`, `sessions.autoTitle`,
+  `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `keybindings`,
+  `lintCommands`, `formatCommands`, `disabledMcpServers`, `providerRetryAttempts`
+  and `providerRetryBaseBackoffMs` have none.
   <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.

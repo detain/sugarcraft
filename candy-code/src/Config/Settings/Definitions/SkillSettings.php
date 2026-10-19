@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Config\Settings\Definitions;
 
+use SugarCraft\Code\Bundles\BundleDiscovery;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\Settings\ApplyMode;
 use SugarCraft\Code\Config\Settings\OptionsSource;
@@ -52,6 +53,15 @@ final class SkillSettings implements SettingDefinitionSet
                 ->withHelp('Skills whose full bodies ride the system prompt every turn.')
                 ->withReaderSymbol(Bootstrap::class . '::promptEnabledSkills')
                 ->withReadBy('`Bootstrap::backend()`, `backendFor()` → `promptEnabledSkills()`'),
+            SettingDefinition::new(BundleDiscovery::SETTING_KEY, SettingType::StringList, [])
+                ->withCategory(SettingCategory::Skills)
+                ->withRiskClass(RiskClass::Prompt)
+                ->withLayered()
+                ->withUi(UiEditability::List)
+                ->withLabel(Lang::t('settings.pluginPaths.label'))
+                ->withHelp('Extra directories scanned for Claude-format plugin bundles, beside the two installed roots; a value may name a bundle itself or a container of bundles. User-tier only — a checkout cannot enroll its own plugins.')
+                ->withReaderSymbol(BundleDiscovery::class . '::discover')
+                ->withReadBy('`BundleDiscovery::discover()` — fed by `Bootstrap::bundles()` at launch'),
             SettingDefinition::new(SkillMatcher::SETTING_LISTING_MAX_BYTES, SettingType::Int, SkillMatcher::DEFAULT_LISTING_MAX_BYTES)
                 ->withCategory(SettingCategory::Skills)
                 ->withRiskClass(RiskClass::Prompt)
