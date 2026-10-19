@@ -1376,6 +1376,20 @@ origin through the forwarded `Host` and needs no `--allowed-origin`.
 `serve` needs pcntl and posix, which Windows PHP does not have; it refuses to
 start there. WSL works.
 
+## Container
+
+A ready-made serve image is published from this repository
+(`ghcr.io/detain/sugarcraft-candy-code:latest`, built by
+`.github/workflows/candy-code-image.yml` from `candy-code/Dockerfile`). It
+runs unprivileged as `candy` with `HOME=/data` — the serve preflight's refusal
+to run as root is honored, not bypassed (`--allow-root` is never passed) — so
+all server state (sessions, token, discovery record, control socket) lives on
+the `/data` volume under `~/.candy-code/server`. The default command is
+`serve --host 0.0.0.0 --allow-remote` and a `HEALTHCHECK` probes
+`GET /api/health` on the default port `7420`. The sign-in URL still prints to
+stderr at startup; read it with `docker logs`. Full runbook:
+[DOCKER.md](DOCKER.md).
+
 ## See also
 
 - [`candy-code-web`](https://github.com/sugarcraft/candy-code-web) — the
