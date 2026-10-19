@@ -1248,6 +1248,11 @@ final class SessionStore
      *           public methods; {@see EnhancedSessionStore} only ever uses
      *           this handle for its own tables.
      */
+    public function getPdo(): PDO
+    {
+        return $this->pdo;
+    }
+
     /**
      * The database file this store is open on — see
      * {@see \SugarCraft\Code\Share\ShareStore} (COMPARISON §6.5).
@@ -1255,10 +1260,5 @@ final class SessionStore
     public function path(): string
     {
         return $this->dbPath;
-    }
-
-    public function getPdo(): PDO
-    {
-        return $this->pdo;
     }
 }

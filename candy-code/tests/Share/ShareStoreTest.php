@@ -68,6 +68,39 @@ final class ShareStoreTest extends TestCase
         self::assertStringNotContainsString('sess-0', implode('', array_keys($seen)), 'a token never embeds its session id');
     }
 
+    /**
+     * The BEHAVIOUR above cannot tell 128 CSPRNG bits from anything shaped
+     * like 32 hex characters: an md5-of-uniqid swap passes every draw check
+     * while trading away the one property the URL's life depends on (an
+     * independent review proved it: the whole family stayed green under
+     * exactly that swap). So the entropy SOURCE is pinned structurally, in
+     * the house source-slice doctrine (cf. MailboxTest's ordering pin): the
+     * publish() body must mint through random_bytes() itself, and must not
+     * name a time/hash/loop PRNG — the shape tests prove width, this proves
+     * where the width comes from.
+     */
+    public function testPublishMintsItsTokenFromTheCsprngAndNowhereElse(): void
+    {
+        $method = new \ReflectionMethod(ShareStore::class, 'publish');
+        $lines = file((string) $method->getFileName());
+        self::assertNotFalse($lines);
+        $body = implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertStringContainsString(
+            'bin2hex(random_bytes(self::TOKEN_BYTES))',
+            $body,
+            'the token must be hex of the CSPRNG constant, not of a hash or a clock',
+        );
+        self::assertSame(ShareStore::TOKEN_BYTES * 2, 32, 'the pinned hex width is the documented 128-bit capability');
+        foreach (['uniqid', 'microtime', 'mt_rand', 'rand', 'md5', 'sha1'] as $forbidden) {
+            self::assertStringNotContainsString($forbidden . '(', $body, $forbidden . '() is not an entropy source for a capability token');
+        }
+    }
+
     public function testLookupOfAnUnknownTokenIsPlainlyNull(): void
     {
         $store = ShareStore::atPath($this->dbPath);

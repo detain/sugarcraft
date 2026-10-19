@@ -44,10 +44,12 @@ final class ShareStore
     public const MAX_EXPIRY_DAYS = 365;
 
     /**
-     * Rows publish() keeps visible to a reader it never deletes; the sweep
-     * runs opportunistically at publish time, never on a background timer —
-     * an expired or revoked row is already inert to {@see lookup()}, and a
-     * timer would mean serve owns a second clock to reason about.
+     * The idempotent migration: creates `shares` when absent, on every
+     * publish and revoke. Deleting dead rows is NOT this constant's
+     * business — that sweep is {@see sweepInertRows()}, run opportunistically
+     * at publish time, never on a background timer: an expired or revoked row
+     * is already inert to {@see lookup()}, and a timer would mean serve owns
+     * a second clock to reason about.
      */
     private const CREATE_TABLE = 'CREATE TABLE IF NOT EXISTS shares ('
         . 'token TEXT PRIMARY KEY,'
