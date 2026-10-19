@@ -57,6 +57,16 @@ final class ProcessExecutor implements ExecutorInterface
     /** Default fraction of available memory above which we pause scheduling (0.0–1.0). */
     private const DEFAULT_MEMORY_THRESHOLD = 0.8;
 
+    /**
+     * How long the startup frame may wait on the child's stdin while the
+     * pipe buffer is full (CTX-5 finding). The frame embeds the agent's
+     * system prompt, whose `<env>` block carries the worktree's own
+     * uncommitted diff — so on any tree with a few hundred dirty lines the
+     * frame outruns the 8,192-byte buffer of a live-but-not-yet-reading
+     * child. Same 5 s envelope the ready handshake already grants below.
+     */
+    private const STARTUP_FRAME_WRITE_TIMEOUT_SECONDS = 5.0;
+
     public function __construct(
         private readonly string $binaryPath = 'php',
         /**
@@ -716,7 +726,7 @@ final class ProcessExecutor implements ExecutorInterface
         // spawnWorker returns a `fatal` descriptor that {@see execute()} and
         // {@see executeStream()} translate into a failed AgentResult naming
         // the death. No warning surfaces; the condition is reported.
-        if (!self::writeFrame($pipes[0], $startupMessage)) {
+        if (!self::writeFrame($pipes[0], $startupMessage, $process, self::STARTUP_FRAME_WRITE_TIMEOUT_SECONDS)) {
             return self::deadWorker($processDescriptor, 'before its startup frame could be written');
         }
 
@@ -801,11 +811,67 @@ final class ProcessExecutor implements ExecutorInterface
      *
      * @param resource $stdin
      */
-    private static function writeFrame($stdin, string $frame): bool
+    /**
+     * Write one frame into the child's stdin.
+     *
+     * E650's law — a failed write is a DEAD CHILD, not a transport error to
+     * raise — holds, but the frame-size premise it was written under does
+     * not: a startup frame embeds the agent prompt WITH its `<env>` block
+     * (the worktree's live `git diff`), so a sub-agent dispatched over a
+     * dirty worktree sends a frame larger than the 8,192-byte pipe buffer.
+     * Measured on the CTX-5 lane (`written=8192` of `len=10130`, child
+     * running): the single non-blocking write lands a PARTIAL frame on a
+     * live child, and the honest-looking death message accuses a child that
+     * was simply not reading yet.
+     *
+     * Callers that hand in the process handle and a deadline get the
+     * backpressure loop: wait for writability, re-check liveness on every
+     * wake, so E650's dead-child reporting still fires — and fires at once,
+     * not at the deadline — when the reader really is gone, and the
+     * deadline bounds the pathological live-but-never-reading child (the
+     * same envelope the ready handshake already uses). Every other frame on
+     * this transport is small, and every caller that passes neither keeps
+     * the original single-attempt reading byte-for-byte.
+     *
+     * @param resource $stdin
+     * @param ?resource $process
+     */
+    private static function writeFrame($stdin, string $frame, $process = null, float $backpressureSeconds = 0.0): bool
     {
         $written = @fwrite($stdin, $frame);
+        if ($written === strlen($frame)) {
+            return @fflush($stdin);
+        }
+        if ($process === null || $backpressureSeconds <= 0.0) {
+            return false;
+        }
 
-        return $written === strlen($frame) && @fflush($stdin);
+        $offset = \is_int($written) ? $written : 0;
+        $deadline = microtime(true) + $backpressureSeconds;
+        while (true) {
+            if (!self::childIsAlive($process)) {
+                return false; // E650, still first: death mid-frame is the death, named at once.
+            }
+            if (microtime(true) >= $deadline) {
+                return false; // Alive but not reading within the handshake's own envelope.
+            }
+            $read = null;
+            $except = null;
+            $writable = [$stdin];
+            if (@stream_select($read, $writable, $except, 0, 100_000) === false) {
+                return false;
+            }
+            $written = @fwrite($stdin, substr($frame, $offset));
+            if ($written === false) {
+                return false; // EPIPE: the reader closed while we waited.
+            }
+            if ($written > 0) {
+                $offset += $written;
+                if ($offset >= strlen($frame)) {
+                    return @fflush($stdin);
+                }
+            }
+        }
     }
 
     /**

@@ -554,6 +554,51 @@ final class ProcessExecutorTest extends TestCase
     }
 
     /**
+     * A startup frame LARGER than the 8,192-byte pipe buffer still reaches a
+     * live child (CTX-5 finding, surfaced by running ChatTest's dispatch pin
+     * over a worktree with an uncommitted diff).
+     *
+     * The frame embeds the agent's system prompt, whose `<env>` block carries
+     * the worktree's own `git diff` — sugar-crush dispatches sub-agents from
+     * exactly such trees, so the oversized frame is the product's normal
+     * shape, not a corner. Before the fix the single non-blocking write
+     * landed a partial frame, and the LIVE child was accused of dying: the
+     * error named "Worker process died before its startup frame could be
+     * written" — E650's honest message told about a dishonest measurement.
+     * The pin forces the size with a fat prompt, independent of whatever the
+     * tree's diff happens to be, and demands the CHILD's own refusal words —
+     * only a delivered frame can produce them.
+     */
+    public function testTheLiveWorkerReceivesAStartupFrameThatOutrunsThePipeBuffer(): void
+    {
+        $fat = 'You are a test agent. '
+            . str_repeat('Backpressure padding keeps this startup frame past the pipe buffer. ', 140);
+        $agent = new SubAgent(
+            id: 'live-fat-frame-agent-' . uniqid((string) getmypid(), true),
+            agent: new Agent(
+                name: 'FatFrameAgent',
+                description: 'Forces a startup frame past the 8,192-byte pipe buffer',
+                prompt: $fat,
+                model: 'test-model',
+                provider: 'test',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+            task: 'Say hello',
+        );
+
+        $result = (new ProcessExecutor(timeoutSeconds: 30))->execute($agent, $this->request);
+
+        $this->assertSame(AgentStatus::Failed, $result->status);
+        $this->assertStringNotContainsString('Worker process died', (string) $result->error?->getMessage(),
+            'a live child that merely outran the pipe buffer is not dead');
+        $this->assertStringContainsString('Refusing to fabricate', (string) $result->error?->getMessage(),
+            'the refusal is the CHILD\'S words: the whole frame arrived');
+    }
+
+    /**
      * A provider that will not construct is also a refusal, not a fallback.
      *
      * The dangerous shape is not "no provider" — that one is obvious. It is a
