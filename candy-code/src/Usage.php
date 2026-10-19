@@ -51,7 +51,7 @@ namespace SugarCraft\Code;
  * live TURN: providers parse the buckets, but `CompleteResponse` carries a
  * single `$tokensUsed` and nothing else, so what arrives across it is a total.
  *
- * EIGHT of the nine providers know the split — read the count with its
+ * NINE of the ten providers know the split — read the count with its
  * domain, because stale literals of it are what drifted before.
  * {@see Providers\BedrockProvider} reads `usage.inputTokens` /
  * `usage.outputTokens`, {@see Providers\VertexProvider} reads
@@ -71,7 +71,11 @@ namespace SugarCraft\Code;
  * {@see Providers\Concerns\AnthropicMessagesWire}, and — since PRV-3 armed the
  * native API-key arm — {@see Providers\GeminiProvider} parses the same split from
  * `usageMetadata.promptTokenCount` / `.candidatesTokenCount` through the shared
- * {@see Providers\Concerns\GeminiGenerateContentWire}. All eight now PARSE the split
+ * {@see Providers\Concerns\GeminiGenerateContentWire}, and — since PRV-4 armed
+ * the Codex CLI — {@see Providers\CodexProvider} reads `usage.input_tokens` /
+ * `usage.output_tokens`, whose `cached_input_tokens`,
+ * `cache_write_input_tokens` and `reasoning_output_tokens` are declared
+ * SUBSETS of those two legs rather than addends. All nine now PARSE the split
  * into the buckets above and hand it whole to
  * {@see Providers\CompleteResponse::$usage}, which `Runtime`'s fold prefers;
  * `tokensUsed` stays beside it as the one-number projection. The

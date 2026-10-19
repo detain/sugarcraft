@@ -56,6 +56,12 @@ final class PaletteSupersetDispatchTest extends TestCase
      */
     private const SLASH_ONLY_SURVIVORS = [
         'pane' => 'bare /pane prints usage; the palette actions are the dock-left/dock-right rows',
+        // W4 merge coupling: GIT-1 (w4c) added /review and /security-review
+        // after VIS-4 cut this census — no PaletteAction arm yet (VIS-4
+        // predates GIT-1), typed dispatch only. A palette row for the pair is
+        // a W5-micro judgement, not a silent promotion here.
+        'review' => 'needs a diff range; the bare form only answers with usage',
+        'security-review' => 'needs a diff range; the bare form only answers with usage',
         'bg' => 'bare /bg answers usage rather than backgrounding something unintended',
         'fork' => 'needs a prompt to run against the clone',
         'websearch' => 'needs a query; the bare form only answers with usage',

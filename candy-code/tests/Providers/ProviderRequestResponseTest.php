@@ -22,6 +22,8 @@ use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Providers\BedrockProvider;
 use SugarCraft\Code\Providers\ClaudeCodeInvocation;
 use SugarCraft\Code\Providers\ClaudeCodeProvider;
+use SugarCraft\Code\Providers\CodexInvocation;
+use SugarCraft\Code\Providers\CodexProvider;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\CustomProvider;
@@ -95,6 +97,7 @@ final class ProviderRequestResponseTest extends TestCase
         VertexProvider::class => 30,
         AnthropicProvider::class => 30,
         GeminiProvider::class => 30,
+        CodexProvider::class => 30,
         ClaudeCodeProvider::class => 0,
     ];
 
@@ -811,6 +814,34 @@ final class ProviderRequestResponseTest extends TestCase
         $sum = array_sum(array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks));
 
         $this->assertSame(self::STREAMED_USAGE_CONTRACT[GeminiProvider::class], $sum);
+    }
+
+    public function testCodexStreamedUsageIsPerDeltaNotCumulative(): void
+    {
+        // The codex wire is an NDJSON event stream read off a child process,
+        // not a Guzzle SSE body, so the contract rides parseLine directly
+        // (reflection — it is private by design). The E24-hostile shape: the
+        // cumulative usage record lands ONCE on the terminal `turn.completed`
+        // event; the two `agent_message` chunks before it must carry 0. A
+        // naive per-chunk copy of a cumulative total onto EVERY event would
+        // sum past 30, which must stay RED.
+        $provider = new CodexProvider(new CodexInvocation());
+        $parse = (new \ReflectionClass($provider))->getMethod('parseLine');
+
+        $lines = [
+            '{"type":"thread.started","thread_id":"t-1"}',
+            '{"type":"item.completed","item":{"type":"agent_message","text":"Hel"}}',
+            '{"type":"item.completed","item":{"type":"agent_message","text":"lo"}}',
+            '{"type":"turn.completed","usage":{"input_tokens":20,"output_tokens":10}}',
+        ];
+
+        $sum = 0;
+        foreach ($lines as $line) {
+            $chunk = $parse->invoke($provider, $line);
+            $sum += $chunk?->tokensUsed ?? 0;
+        }
+
+        $this->assertSame(self::STREAMED_USAGE_CONTRACT[CodexProvider::class], $sum);
     }
 
     public function testClaudeCodeStreamedUsageIsPerDeltaNotCumulative(): void
