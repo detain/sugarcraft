@@ -311,7 +311,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and twenty-three, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and twenty-four, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -1321,7 +1321,7 @@ Saved is not applied: see the next section for when each key takes effect.
 | restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `instructions`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `keybindings`, `lintCommands`, `formatCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.browseRoot`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
-**In numbers:** thirty-five live, fifty-five next turn, sixty-eight restart and
+**In numbers:** thirty-five live, fifty-five next turn, sixty-nine restart and
 seven next launch.
 
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
@@ -1471,15 +1471,14 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only twenty-two of the one hundred and twenty-three
-  layered keys have an env override (`provider`, `models`, `titleModel`,
-  `summaryModel`, `promptCache`, `parallelToolCalls`,
-  `parallelToolDeadlineSeconds`, `maxCostUsd`, `webSearchEndpoint`, `sd.baseUrl`,
-  `ui.imageRenderMode`, `terminalBackground`, `mouse`, `mouseClicks`,
-  `sessionRetentionDays`, `promptSuggestions`, `mcp.enabled`,
-  `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`,
-  `debug.stream`). `providers`, `maxOutputTokens`, `modelPrices`, `extraBody`,
-  `thinkingBudget`, `maxToolSteps`, `compaction.reminderPercent`,
+  They do not cover it: only twenty-two of the one hundred and twenty-four layered
+  keys have an env override (`provider`, `models`, `titleModel`, `summaryModel`,
+  `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxCostUsd`,
+  `webSearchEndpoint`, `sd.baseUrl`, `ui.imageRenderMode`, `terminalBackground`,
+  `mouse`, `mouseClicks`, `sessionRetentionDays`, `promptSuggestions`,
+  `mcp.enabled`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`,
+  `debug.rules`, `debug.stream`). `providers`, `maxOutputTokens`, `modelPrices`,
+  `extraBody`, `thinkingBudget`, `maxToolSteps`, `compaction.reminderPercent`,
   `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`,
   `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
   `compaction.toolOutputChars`, `compaction.reminderTokens`,
@@ -1500,16 +1499,16 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `sd.apiKey`,
   `sd.timeoutSeconds`, `sd.defaultModel`, `sd.presets`,
   `ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
-  `instructions`, `instructionsExclude`, `disabledRules`, `embeddingModel`, `disabledSkills`,
-  `enabledSkills`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
-  `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
-  `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`,
-  `layout`, `notify`, `watchFiles`, `queueMode`, `scrollWheelLines`,
-  `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
-  `sessions.autoTitle`, `promptSuggestionHistory`, `expandToolOutput`,
-  `maxCheckpoints`, `keybindings`, `lintCommands`, `formatCommands`,
-  `disabledMcpServers`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`
-  have none.
+  `instructions`, `instructionsExclude`, `disabledRules`, `embeddingModel`,
+  `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxTurns`,
+  `subagentMaxConcurrent`, `subagentMaxDepth`, `subagentMaxActive`,
+  `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`,
+  `theme`, `statusLine`, `layout`, `notify`, `watchFiles`, `queueMode`,
+  `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`,
+  `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestionHistory`,
+  `expandToolOutput`, `maxCheckpoints`, `keybindings`, `lintCommands`,
+  `formatCommands`, `disabledMcpServers`, `providerRetryAttempts` and
+  `providerRetryBaseBackoffMs` have none.
   <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.

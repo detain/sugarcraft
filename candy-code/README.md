@@ -1082,7 +1082,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and twenty-three keys are layered — `provider`,
+Only these one hundred and twenty-four keys are layered — `provider`,
 `models`, `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`,
 `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxToolSteps`,
@@ -1107,17 +1107,17 @@ Only these one hundred and twenty-three keys are layered — `provider`,
 `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`,
 `sd.baseUrl`, `sd.apiKey`, `sd.timeoutSeconds`, `sd.defaultModel`,
 `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`,
-`sd.savePattern`, `skills.pathNudges`, `instructions`, `disabledRules`,
-`embeddingModel`, `disabledSkills`, `enabledSkills`, `subagentModel`,
-`subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`,
-`subagentMaxActive`, `includeGitInstructions`, `attribution`, `lsp`,
-`lspAutoDetect`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
-`watchFiles`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`,
-`scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`,
-`toolOutputPreviewLines`, `sessionRetentionDays`, `sessions.autoTitle`,
-`promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`,
-`maxCheckpoints`, `keybindings`, `lintCommands`, `formatCommands`,
-`disabledMcpServers`, `mcp.enabled`, `connectTimeoutSeconds`,
+`sd.savePattern`, `skills.pathNudges`, `instructions`, `instructionsExclude`,
+`disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
+`subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
+`subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
+`attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`,
+`layout`, `notify`, `watchFiles`, `queueMode`, `terminalBackground`, `mouse`,
+`mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
+`diffPreviewRows`, `toolOutputPreviewLines`, `sessionRetentionDays`,
+`sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`,
+`expandToolOutput`, `maxCheckpoints`, `keybindings`, `lintCommands`,
+`formatCommands`, `disabledMcpServers`, `mcp.enabled`, `connectTimeoutSeconds`,
 `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
 `debug.commands`, `debug.rules`, `debug.stream`.
 <!-- settings:layered:end -->
@@ -1162,7 +1162,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, sixty-seven keys are **never** taken from a project file:
+Even for a trusted project, sixty-eight keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
