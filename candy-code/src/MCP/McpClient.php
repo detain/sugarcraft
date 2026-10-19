@@ -103,6 +103,23 @@ final class McpClient
      */
     private array $authRequired = [];
 
+    /**
+     * MCP-1/MCP-2 surface readout: the ONE launch-time pass over the provider
+     * servers' rosters, kept for display and command materialization so the
+     * `/mcp` panel and the Chat construction never pay a second exchange and
+     * no keystroke path ever blocks on a server.
+     *
+     * This is NOT the roster's source of truth — that stays the live, per-call
+     * {@see listResources()}/{@see listPrompts()} round trips, per the
+     * READ ON DEMAND law on the capability interfaces. It is a snapshot of
+     * sizes and prompt rows as of the moment the surface first asked, and
+     * nothing that ENFORCES reads it.
+     *
+     * @var array<string, array{resources: int|null, prompts: list<array<mixed>>|null}>|null
+     *      null = never primed; keyed by server name once it has been
+     */
+    private ?array $surfaceRosters = null;
+
     public function __construct(
         private string $configPath,
         ?Client $httpClient = null,
@@ -419,7 +436,7 @@ final class McpClient
      * {@see GitMcpServer::listTools()} all return arrays built during the
      * handshake or constructor), so enumerating it costs no traffic.
      *
-     * @return array<string, array{transport: string, up: bool|null, tools: int}>
+     * @return array<string, array{transport: string, up: bool|null, tools: int, resources?: int}>
      */
     public function startedSnapshot(): array
     {
@@ -443,6 +460,16 @@ final class McpClient
                 },
                 'tools' => count($server->listTools()),
             ];
+
+            // MCP-1 panel count: a size remembered by the surface pass
+            // ({@see primeSurfaceRosters()}), never a fresh exchange — the
+            // zero-traffic property of this readout is unchanged. An absent
+            // key means never asked or refused, which is the truth the panel
+            // must not paper over by inventing `0`.
+            $resources = $this->surfaceRosters[$name]['resources'] ?? null;
+            if ($resources !== null) {
+                $rows[$name]['resources'] = $resources;
+            }
         }
 
         // ISS-042: a server that refused for credentials never registered, so
@@ -936,6 +963,76 @@ final class McpClient
         $this->pumpStderr(); // E677, see listTools()
 
         return $server->getPrompt($name, $arguments);
+    }
+
+    /**
+     * The launch-time surface pass: resource SIZES and prompt ROWS for every
+     * allowed provider server, gathered once and remembered (the
+     * {@see $surfaceRosters} contract — display and materialization only,
+     * never enforcement). Each server is asked under the same
+     * {@see isServerAllowed()} predicate the strict {@see listResources()} and
+     * {@see listPrompts()} apply, and each server's refusal — no capability,
+     * dead pipe, outlived bound — costs only that server's entry: a roster
+     * that erased every other server because one answered -32601 would make
+     * the whole feature hostage to the least compliant config.
+     *
+     * Idempotent: the first caller pays the exchanges, every later reader
+     * gets the same snapshot, and a process that never surfaces (a one-shot
+     * tool call) never pays at all.
+     */
+    public function primeSurfaceRosters(): void
+    {
+        if ($this->surfaceRosters !== null) {
+            return;
+        }
+        $this->pumpStderr(); // E677, see listTools()
+
+        $roster = [];
+        foreach ($this->servers as $name => $server) {
+            if (!$this->isServerAllowed($name)) {
+                continue;
+            }
+
+            $entry = ['resources' => null, 'prompts' => null];
+            if ($server instanceof McpResourceProvider) {
+                try {
+                    $entry['resources'] = \count($server->listResources());
+                } catch (\Throwable) {
+                    // Refused or unreachable: the entry stays a null size.
+                }
+            }
+            if ($server instanceof McpPromptProvider) {
+                try {
+                    $entry['prompts'] = $server->listPrompts();
+                } catch (\Throwable) {
+                    // Same per-server isolation for the rows.
+                }
+            }
+            $roster[$name] = $entry;
+        }
+        $this->surfaceRosters = $roster;
+    }
+
+    /**
+     * The launch-frozen prompt rows the surface layer materializes into
+     * commands ({@see \SugarCraft\Code\Commands\McpPromptCommands}). Data,
+     * not enforcement — the strict per-call {@see listPrompts()} round trip
+     * remains the live answer and keeps its throw-on-refusal gates.
+     *
+     * @return array<string, list<array<mixed>>> per server that answered
+     */
+    public function promptsRoster(): array
+    {
+        $this->primeSurfaceRosters();
+
+        $rows = [];
+        foreach ($this->surfaceRosters ?? [] as $name => $entry) {
+            if ($entry['prompts'] !== null) {
+                $rows[$name] = $entry['prompts'];
+            }
+        }
+
+        return $rows;
     }
 
     /**

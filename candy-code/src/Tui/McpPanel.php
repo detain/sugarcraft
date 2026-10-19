@@ -79,7 +79,7 @@ final class McpPanel
      * Render the inventory as transcript lines.
      *
      * @param array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, error: string|null} $inventory exactly what {@see Bootstrap::mcpServerInventory()} returned
-     * @param array<string, array{transport: string, up: bool|null, tools: int}> $liveness what {@see Bootstrap::mcpLivenessSnapshot()} returned for the same root (`?? []` when it answered null). EMPTY MAP ⇒ the render is BYTE-IDENTICAL to the pre-E698 panel — every existing pin in `tests/Tui/McpPanelTest` reads the cold process, and a cold process must say exactly what it said before this feature existed.
+     * @param array<string, array{transport: string, up: bool|null, tools: int, resources?: int}> $liveness what {@see Bootstrap::mcpLivenessSnapshot()} returned for the same root (`?? []` when it answered null). EMPTY MAP ⇒ the render is BYTE-IDENTICAL to the pre-E698 panel — every existing pin in `tests/Tui/McpPanelTest` reads the cold process, and a cold process must say exactly what it said before this feature existed.
      * @param bool|null $configChangedSinceLaunch {@see Bootstrap::mcpConfigChangedSinceLaunch()}; null suppresses the E703-α line (no digest to compare — silence, never a claim).
      */
     public static function render(
@@ -223,6 +223,12 @@ final class McpPanel
      *    list".
      *  - ` · state unknown` — the `up: null` of a transport the snapshot
      *    could not classify; unknown stays unknown.
+     *
+     * Rows whose server answered the launch-time surface pass ({@see
+     * \SugarCraft\Code\MCP\McpClient::primeSurfaceRosters()}) gain a trailing
+     * ` · N resources` after the tool count (MCP-1) — a remembered size, not
+     * a live re-count, and absent rather than invented when the server never
+     * answered.
      */
     private static function livenessSuffix(?array $row): string
     {
@@ -254,7 +260,17 @@ final class McpPanel
             default => Lang::t('tui.mcp.liveness.exited'),
         };
 
-        return ' · ' . $label . ' ' . Lang::t('tui.mcp.liveness.tools', ['count' => (int) $row['tools']]);
+        $suffix = ' · ' . $label . ' ' . Lang::t('tui.mcp.liveness.tools', ['count' => (int) $row['tools']]);
+
+        // MCP-1: a server that answered the launch-time surface pass carries
+        // its remembered resource roster size beside the tool count. Absent
+        // key means never asked or refused — inventing `0 resources` would
+        // read as "answered empty", which is a different fact.
+        if (isset($row['resources'])) {
+            $suffix .= ' · ' . Lang::t('tui.mcp.liveness.resources', ['count' => (int) $row['resources']]);
+        }
+
+        return $suffix;
     }
 
     /**

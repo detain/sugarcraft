@@ -159,6 +159,44 @@ final class TurnControllerTest extends TestCase
         self::assertNull($turns->refuseCommandShell($project, 'make test', true, null), 'no gate is not a refusal');
     }
 
+    /**
+     * MCP-2 (plan_comparison §3): a fetched prompt body carries the same shell
+     * posture as a cloned repository's command file — but its refusal names
+     * its own provenance and never the word `trustedProjectCommands`' file
+     * sentence, because the operator who can fix THIS one is the server's,
+     * reached through the same trust key. And an mcp-tier row FORKS whatever
+     * its (not yet fetched) body holds: the `prompts/get` exchange is IO and
+     * belongs off the update path for the audit 15b-20 reason.
+     */
+    public function testAMcpPromptShellFormNeedsTheSameTrustAndAlwaysForksTheFetch(): void
+    {
+        $turns = TurnController::new();
+        $prompt = CommandSpec::new('mcp__srv__p', 'd', 'MCP', template: 'run', tier: 'mcp');
+        $asked = [];
+        $record = static function (string $command) use (&$asked): void {
+            $asked[] = $command;
+        };
+        $gate = new PermissionGate(PermissionMode::Default);
+
+        $refusal = $turns->refuseCommandShell($prompt, 'make test', false, $gate, $record);
+        self::assertNotNull($refusal);
+        self::assertStringContainsString('is an MCP prompt fetched from a server', $refusal);
+        self::assertStringNotContainsString('came from this project', $refusal, 'the two provenances keep their own sentences');
+        self::assertSame([], $asked, 'a tier refusal never moves the gate');
+
+        self::assertNull($turns->refuseCommandShell($prompt, 'make test', true, $gate, $record), 'the same key that trusts project files trusts fetched bodies');
+        self::assertSame(['make test'], $asked);
+
+        self::assertTrue(
+            $turns->customCommandMustFork('/mcp__srv__p now', ['mcp__srv__p' => $prompt], null, true),
+            'an untrusted project that still FORCES the fork of a fetched body — the fetch itself is the IO',
+        );
+        self::assertFalse(
+            $turns->customCommandMustFork('/mcp__srv__p now', ['mcp__srv__p' => $prompt], '/mcp__srv__p now', true),
+            'the re-entry with the expansion already in hand never re-forks',
+        );
+    }
+
     public function testAnExpansionPayloadCarriesRawBytesAndReadsBackFailClosed(): void
     {
         $raw = "out\xff\xfe" . 'put';

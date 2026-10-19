@@ -239,7 +239,7 @@ final class ContextMentionsTest extends TestCase
 
         self::assertCount(ContextMentions::MAX_MENTIONS, $r['attachments']);
         self::assertCount(2, $r['notices']);
-        self::assertStringContainsString('at most 5 @diff/@session/@url mentions', $r['notices'][0]);
+        self::assertStringContainsString('at most 5 @diff/@session/@url/@mcp mentions', $r['notices'][0]);
     }
 
     public function testTheContextBlockSurvivesAResume(): void

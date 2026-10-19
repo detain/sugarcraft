@@ -65,6 +65,7 @@ use SugarCraft\Code\Commands\CommandLoader;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\McpAuthCommand;
+use SugarCraft\Code\Commands\McpPromptCommands;
 use SugarCraft\Code\Commands\ShareCommand;
 use SugarCraft\Code\Commands\WebSearchCommand;
 use SugarCraft\Code\Tools\BuiltIn\WebSearch;
@@ -1710,9 +1711,23 @@ final class Chat implements Model
         // them would list every built-in twice in the "/" popup. A project file
         // that DOES override a built-in survives the filter — it is file-based by
         // then — which is exactly the override loadAll() documents.
-        $this->customCommands = $customCommands ?? array_filter(
-            $commandLoader?->loadAll($this->projectRoot(), $this->projectCommandsTrusted) ?? [],
-            static fn(CommandSpec $spec): bool => $spec->isFileBased(),
+        //
+        // MCP-2 (plan_comparison §3): server prompts join the SAME map as
+        // launch-frozen rows UNDERNEATH every disk file — the one seam
+        // {@see mergeCustomCommandRows()} decides that precedence, so
+        // `project file > user file > MCP prompt` holds by construction and a
+        // command the operator typed into a file is never shadowed by a
+        // server. Consulted exactly once, here, on the first construction
+        // (mutate() re-passes the settled map, and `??` never evaluates its
+        // right side when a caller injected one): the MCP roster is
+        // launch-frozen, and no keystroke path may round-trip a server to
+        // decorate a popup.
+        $this->customCommands = $customCommands ?? self::mergeCustomCommandRows(
+            McpPromptCommands::specs($this->mcpClientProvider()),
+            array_filter(
+                $commandLoader?->loadAll($this->projectRoot(), $this->projectCommandsTrusted) ?? [],
+                static fn(CommandSpec $spec): bool => $spec->isFileBased(),
+            ),
         );
 
         // Per-model absolute caps (2.9) resolve against the backend's model.
@@ -11844,11 +11859,14 @@ final class Chat implements Model
      * {@see submit()} for why its `@` forms are never read here.
      *
      * The keyword mentions (`@diff`, `@session:<id>`, `@https://…`, roadmap
-     * 5.8) are resolved beside the files by
+     * 5.8; `@mcp:<server>:<uri>`, MCP-1) are resolved beside the files by
      * {@see \SugarCraft\Code\Attachments\ContextMentions}: this session's
-     * store answers `@session:`, and a URL a permission rule denies `WebFetch`
-     * is refused rather than fetched. A `$name` skill mention (roadmap 5.14l)
-     * is answered by the workspace's skill registry — the launch's.
+     * store answers `@session:`, a URL a permission rule denies `WebFetch`
+     * is refused rather than fetched, and `@mcp:` is read through this
+     * session's MCP client under the client's own gates — refused with a
+     * notice where the launch has no client at all. A `$name` skill mention
+     * (roadmap 5.14l) is answered by the workspace's skill registry — the
+     * launch's.
      *
      * @return array{0: Message, 1: list<Message>}
      */
@@ -11861,7 +11879,40 @@ final class Chat implements Model
             $this->sessionStore,
             $this->permissionGate(),
             $this->workspace?->skills,
+            $this->mcpClientProvider(),
         );
+    }
+
+    /**
+     * THE ONE precedence decision of the file-shaped command map (MCP-2):
+     * disk rows merge OVER launch-frozen MCP prompt rows, so a name a human
+     * typed into a command file — user tier or project tier, which loadAll()
+     * has already ordered among itself — always wins the map key against a
+     * server that happens to sanitize to the same spelling. String keys, so
+     * the later side wins; one method owns that order and nothing else in
+     * this class composes the two sources.
+     *
+     * @param array<string, CommandSpec> $mcpSpecs
+     * @param array<string, CommandSpec> $diskSpecs
+     * @return array<string, CommandSpec>
+     */
+    private static function mergeCustomCommandRows(array $mcpSpecs, array $diskSpecs): array
+    {
+        return array_merge($mcpSpecs, $diskSpecs);
+    }
+
+    /**
+     * This session's MCP client as a lazy provider (MCP-1/MCP-2): resolved
+     * when a mention or a prompt command actually needs it, never when this
+     * closure is merely built. A null answer is the honest state of a launch
+     * that trusted no MCP config — every consumer turns it into its own
+     * refusal, and nothing here starts a server the trust decision refused.
+     */
+    private function mcpClientProvider(): \Closure
+    {
+        $root = $this->projectRoot();
+
+        return static fn (): ?\SugarCraft\Code\MCP\McpClient => \SugarCraft\Code\Cli\Bootstrap::mcpClient($root);
     }
 
     /**
@@ -12971,6 +13022,24 @@ final class Chat implements Model
             return null;
         }
         [$spec, $arguments] = $command;
+
+        // MCP-2 (plan_comparison §3): a launch-frozen prompt row carries a
+        // MARKER template, not a body — the body is fetched NOW, at
+        // submission, by `prompts/get` riding the transport's existing
+        // per-exchange bound (E646: no new timers). Normal submissions reach
+        // here from the forked expansion child, because
+        // {@see customCommandMustFork()} always forks tier `mcp`; the
+        // no-pcntl fallback expands inline. Every refusal — no client, a
+        // server error, a body without text parts — expands to '' and lands
+        // on the existing empty-expansion refusal, visibly and with the line
+        // back in the box: a fetched prompt is never half-guessed.
+        if (McpPromptCommands::isMcpPrompt($spec)) {
+            $materialized = McpPromptCommands::materialize($spec, $arguments, $this->mcpClientProvider());
+            if ($materialized === null) {
+                return '';
+            }
+            $spec = $materialized;
+        }
 
         return $this->turnController()->expandCustomCommand(
             $spec,

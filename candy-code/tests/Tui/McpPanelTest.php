@@ -341,6 +341,35 @@ final class McpPanelTest extends TestCase
     }
 
     /**
+     * MCP-1: a row whose server answered the launch-time surface pass carries
+     * ` · N resources` after the tool count; a row without the key must read
+     * exactly as before it — never asked and zero-resources are different
+     * facts and only one of them may print.
+     */
+    public function testTheSurfacePassCountJoinsTheSuffixOnlyWhenTheSnapshotCarriesIt(): void
+    {
+        $root = $this->makeRoot();
+        $counted = 'vesper-' . bin2hex(random_bytes(3));
+        $plain = 'umber-' . bin2hex(random_bytes(3));
+        file_put_contents($root . '/' . Bootstrap::MCP_CONFIG_FILENAME, json_encode([
+            'mcpServers' => [
+                $counted => ['command' => '/usr/bin/' . $counted],
+                $plain => ['command' => '/usr/bin/' . $plain],
+            ],
+        ], JSON_THROW_ON_ERROR));
+        $this->trustRoot($root);
+
+        $out = McpPanel::render(Bootstrap::mcpServerInventory($root), 160, [
+            $counted => ['transport' => 'stdio', 'up' => true, 'tools' => 5, 'resources' => 7],
+            $plain => ['transport' => 'stdio', 'up' => true, 'tools' => 3],
+        ]);
+
+        self::assertStringContainsString($counted . ' [stdio] /usr/bin/' . $counted . ' · up 5 tools · 7 resources', $out);
+        self::assertStringContainsString($plain . ' [stdio] /usr/bin/' . $plain . ' · up 3 tools' . "\n", $out);
+        self::assertStringNotContainsString('0 resources', $out);
+    }
+
+    /**
      * The git label is deliberately longer than the http one — "(in-process)"
      * is the distinction the operator needs when two rows both say ready.
      */

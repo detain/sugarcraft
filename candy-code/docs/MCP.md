@@ -458,7 +458,11 @@ servers are not visible here)`. The scope is honest: the readout is per
 process, so a second candy-code session or a sub-agent worker keeps its own
 servers to itself. A server this process started that the config no longer
 declares gets its own line (`Started but no longer declared: name (N tools)`)
-rather than vanishing from the count.
+rather than vanishing from the count. A server that exposes resources may
+carry one more tail after its tool count — ` · N resources`, the size of
+that server's resource roster taken once at launch. The tail is a readout,
+not a gate: a server that exposes no resources, or one whose read failed,
+simply carries no tail.
 
 A live session also digests `.mcp.json` at the instant it memoises its client.
 The verdict rides inside the liveness block above, so it renders only while
@@ -657,6 +661,56 @@ so a failed refresh leaves the stored entry as it was. A token response
 without `expires_in` (the field is optional in OAuth 2.0) is stored with an
 unknown expiry and sent until you log in again: there is no deadline to
 refresh ahead of, and a server's 401 does not trigger a refresh yet.
+
+## Resources as `@mcp:` mentions
+
+A turn can pull a named resource out of a running MCP server with the
+keyword mention `@mcp:<server>:<uri>`. The second colon is load-bearing:
+the form is a keyword leg, not a path, so `@mcp:notes` on its own is not a
+mention at all — it reads as a file path. Resolution happens at submit
+time, bounded like every other keyword leg, and a resolved mention rides
+the resumed transcript as a saved attachment.
+
+The bytes are untrusted. A fetched resource is attached inside the same
+framed context block other fetched content uses, opening with a header
+that names the server and the resource and tells the model to treat it as
+data to read, never as instructions to follow. Text resources only: a
+resource whose contents report binary is refused as a whole, a resource
+with no readable text is refused, and a very large one is clipped to the
+first 256 KiB with a notice saying so. When the mention cannot be served —
+no client is open in this run, the server is unknown or not allowed for
+this agent, or the read failed — the transcript shows a one-line refusal
+naming the mention and the reason, and the rest of the turn is sent. The
+keyword legs share one per-prompt cap: at most five of them attach to a
+single prompt.
+
+## Prompts as slash commands
+
+A server that exposes prompts contributes slash commands. At construction —
+once, before the first keystroke — the session asks each allowed server for
+its prompt roster and maps every prompt to a command named
+`/mcp__<server>__<prompt>`. Each side of the name goes through the same
+sanitizer that scopes MCP tool names, so a prompt called `deploy app`
+arrives as `/mcp__srv__deploy_20app`, and a name collision inside one
+launch keeps the first roster row it saw. The roster is frozen with the
+session: a server that adds prompts mid-session is picked up at the next
+launch, never between keystrokes.
+
+These commands live beside the file-based ones under one precedence rule:
+a project command file beats a user command file beats an MCP prompt of
+the same name. The prompt body is fetched at submission, not at launch —
+the `prompts/get` exchange happens when the command is run, riding the
+ordinary MCP request deadline rather than any separate clock. A prompt
+whose fetch fails, or whose messages carry anything but text, expands to
+nothing: the line returns to the input with a refusal notice instead of
+sending an empty turn. Positional arguments on the command line map onto
+the prompt's declared arguments in order, required first.
+
+A fetched prompt body is repository-authored posture, not user intent:
+its inline shell forms run only when the project is listed under
+`trustedProjectCommands`, exactly as for a project command file, and the
+transcript records the `mcp` tier so the reader knows where the
+instruction came from.
 
 ## Serving MCP
 

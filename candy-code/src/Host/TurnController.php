@@ -499,7 +499,10 @@ final class TurnController
      *
      * 1. THE TIER. A `project`-tier file came out of a `git clone`, and running
      *    a shell out of it needs $projectCommandsTrusted — the operator having
-     *    named this root under `trustedProjectCommands`. `user` is the
+     *    named this root under `trustedProjectCommands`. An `mcp`-tier body was
+     *    fetched over a wire from a third-party server and carries the SAME
+     *    repository-authored posture (MCP-2), refused by its own sentence so
+     *    each provenance's author can see which gate closed it. `user` is the
      *    operator's own file; `null` was built in PHP by an in-process caller.
      * 2. THE GATE, and only then, because {@see PermissionGate::evaluate()}
      *    MUTATES Auto mode's circuit-breaker counters, and a command refused by
@@ -533,6 +536,23 @@ final class TurnController
             );
         }
 
+        // MCP-2 (plan_comparison §3): an MCP prompt's body arrived over a wire
+        // from a third-party server, so it carries the repository-authored
+        // posture — the SAME gate as a project-tier file, and the same one
+        // sentence about why. Keeping the legs separate (rather than matching
+        // a tier set) is what pins that the two provenances are judged by the
+        // two authors who can each fix them.
+        if ($spec->tier === \SugarCraft\Code\Commands\McpPromptCommands::TIER && !$projectCommandsTrusted) {
+            return sprintf(
+                '[!`%s` was not run: /%s is an MCP prompt fetched from a server, which arrives '
+                . 'over the wire, and a fetched prompt body may only run a shell if you have '
+                . 'listed this project under "trustedProjectCommands" in ~/.candy-code/config.json — the '
+                . 'rest of the prompt was sent.]',
+                CommandSpec::abbreviateForm($command),
+                $spec->name,
+            );
+        }
+
         if ($gate === null) {
             return null;
         }
@@ -559,7 +579,10 @@ final class TurnController
      * Whether expanding the command file $text names would run a shell, and so
      * has to leave the host's thread (audit 15b-20).
      *
-     * True only when every one of these holds, so every other expansion stays
+     * True for an MCP prompt placeholder whatever its (not yet fetched) body
+     * holds — `prompts/get` is network IO and belongs off the update path for
+     * the same reason a shell form does (MCP-2). Otherwise true only when
+     * every one of these holds, so every other expansion stays
      * synchronous and byte-identical: $text names a file whose body has a
      * `` !`…` `` form; that form could actually reach a shell (an untrusted
      * project-tier body has every one refused by {@see refuseCommandShell()}'s
@@ -584,6 +607,15 @@ final class TurnController
             return false;
         }
         [$spec] = $command;
+
+        // An MCP prompt always forks: its `prompts/get` exchange is network IO
+        // that rides the server's existing per-call bound, and IO that can
+        // block belongs off the update path exactly as a shell form does
+        // (audit 15b-20's argument, new instance — no `hasShellSubstitution()`
+        // can see a body that has not been fetched yet).
+        if ($spec->tier === \SugarCraft\Code\Commands\McpPromptCommands::TIER) {
+            return true;
+        }
 
         return $spec->hasShellSubstitution()
             && !($spec->tier === 'project' && !$projectCommandsTrusted);
@@ -970,9 +1002,12 @@ final class TurnController
      * the mention text itself.
      *
      * The keyword mentions (`@diff`, `@session:<id>`, `@https://…`, roadmap
-     * 5.8) are resolved beside the files by {@see ContextMentions}: $store
-     * answers `@session:`, and a URL a permission rule denies `WebFetch` is
-     * refused rather than fetched.
+     * 5.8; `@mcp:<server>:<uri>`, MCP-1) are resolved beside the files by
+     * {@see ContextMentions}: $store answers `@session:`, a URL a permission
+     * rule denies `WebFetch` is refused rather than fetched, and $mcpProvider
+     * (a lazy read of this process's session MCP client, null where the route
+     * has none) answers `@mcp:` — refused with a notice when absent, and
+     * refused through the client's own gates when the server is denied.
      *
      * The `$name` skill mentions (roadmap 5.14l) are resolved first, against
      * $skills: each user-invocable skill named attaches its SKILL.md body for
@@ -994,6 +1029,7 @@ final class TurnController
         SessionStore|EnhancedSessionStore|null $store,
         ?PermissionGate $gate,
         ?\SugarCraft\Code\Skills\SkillRegistry $skills = null,
+        ?\Closure $mcpProvider = null,
     ): array {
         $message = Message::user($text);
         if (!$resolveMentions) {
@@ -1014,6 +1050,14 @@ final class TurnController
                 ) === PermissionDecision::Deny
                     ? 'a permission rule denies WebFetch for it.'
                     : null)
+                ->withMcpReader($mcpProvider === null ? null : static function (string $server, string $uri) use ($mcpProvider): array {
+                    $client = $mcpProvider();
+                    if ($client === null) {
+                        throw new \RuntimeException('no MCP client is open for this project');
+                    }
+
+                    return $client->readResource($server, $uri);
+                })
                 ->resolve($text);
         }
         foreach ([...$skilled['attachments'], ...$resolved['attachments'], ...$context['attachments']] as $attachment) {
