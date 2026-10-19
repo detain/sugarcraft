@@ -10,10 +10,12 @@ use SugarCraft\Code\Lang;
 // mention close and the same "report, do not edit" mandate, but the body
 // walks trust boundaries — injection, SSRF, authz regressions, leaked
 // secrets, unbounded sizes. A command that STARTS A TURN — see
-// Chat::handleSecurityReviewCommand().
+// Chat::handleSecurityReviewCommand(). Coded under Tools like /init files
+// under Memory: a canned prompt's category is its domain, not the Session
+// transcript menu it happens to post into.
 return BuiltInCommand::new(CommandSpec::new(
     'security-review',
     Lang::t('cmd.security-review.description'),
-    Lang::t('cmd.category.session'),
+    Lang::t('cmd.category.tools'),
     argumentHint: Lang::t('cmd.security-review.hint'),
 ))->withHandler('handleSecurityReviewCommand');
