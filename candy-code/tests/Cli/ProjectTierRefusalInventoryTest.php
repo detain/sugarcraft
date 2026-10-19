@@ -282,6 +282,14 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Agents/TeamConfig.php|.candy-code/teams' => self::USER,
         'Agents/TeamManager.php|.candy-code/teams' => self::USER,
         'Agents/Teammate.php|.candy-code/teams' => self::USER,
+        // INT-4: the user's Claude Code settings file, read for its `hooks`
+        // block at launch. Home-rooted like every entry around it —
+        // `userClaudeSettingsFile()` derives it one level up from
+        // `trustedConfigDirPath()`, so no clone chooses this location. (The
+        // project tier's `{root}/.claude/settings.json` is built in
+        // `Hooks/ClaudeSettingsHooks` from its own FILENAMES constant, a
+        // different occurrence, behind `trustedProjectHooks`.)
+        'Cli/Bootstrap.php|.claude/settings.json' => self::USER,
         // A SENTENCE IN THE CATALOGUE IS NOT AN OCCURRENCE IN `src/`. The
         // transcript sentences that told the operator where a `~` file lives —
         // `Chat::refuseCommandShell()`'s `trustedProjectCommands`, the
@@ -438,8 +446,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is SIXTY occurrences — one per entry
-     * in {@see DOT_PATHS} — of THIRTY-NINE distinct paths. TWENTY-TWO of those
+     * APPEARS IN. On this tree that is SIXTY-ONE occurrences — one per entry
+     * in {@see DOT_PATHS} — of FORTY distinct paths. TWENTY-TWO of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are SEVENTEEN distinct paths — which is the figure
@@ -611,7 +619,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(39, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(40, $distinct, 'distinct dot-DIRECTORY paths in src/');
         self::assertCount(17, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
@@ -620,7 +628,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         );
 
         self::assertStringContainsString('SEVENTEEN repository-chosen', $enumeration);
-        self::assertStringContainsString('THIRTY-NINE distinct', $enumeration);
+        self::assertStringContainsString('FORTY distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
@@ -635,12 +643,12 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             50 => 'FIFTY', 51 => 'FIFTY-ONE', 52 => 'FIFTY-TWO', 53 => 'FIFTY-THREE',
             54 => 'FIFTY-FOUR', 55 => 'FIFTY-FIVE',
             56 => 'FIFTY-SIX', 57 => 'FIFTY-SEVEN', 58 => 'FIFTY-EIGHT',
-            59 => 'FIFTY-NINE', 60 => 'SIXTY'];
+            59 => 'FIFTY-NINE', 60 => 'SIXTY', 61 => 'SIXTY-ONE'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
             33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE', 36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN',
-            38 => 'THIRTY-EIGHT', 39 => 'THIRTY-NINE'];
+            38 => 'THIRTY-EIGHT', 39 => 'THIRTY-NINE', 40 => 'FORTY'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
             16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN', 20 => 'TWENTY',
             21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO'];
