@@ -78,7 +78,7 @@ final class McpPanel
     /**
      * Render the inventory as transcript lines.
      *
-     * @param array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, error: string|null} $inventory exactly what {@see Bootstrap::mcpServerInventory()} returned
+     * @param array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, error: string|null, userStatus?: string, userPath?: string, userServers?: list<array{name: string, type: string, detail: string}>, userError?: string|null} $inventory exactly what {@see Bootstrap::mcpServerInventory()} returned (the four MCP-3 `user*` keys are optional reads — an inventory from before MCP-3 renders exactly as it did)
      * @param array<string, array{transport: string, up: bool|null, tools: int, resources?: int}> $liveness what {@see Bootstrap::mcpLivenessSnapshot()} returned for the same root (`?? []` when it answered null). EMPTY MAP ⇒ the render is BYTE-IDENTICAL to the pre-E698 panel — every existing pin in `tests/Tui/McpPanelTest` reads the cold process, and a cold process must say exactly what it said before this feature existed.
      * @param bool|null $configChangedSinceLaunch {@see Bootstrap::mcpConfigChangedSinceLaunch()}; null suppresses the E703-α line (no digest to compare — silence, never a claim).
      */
@@ -111,6 +111,27 @@ final class McpPanel
             Bootstrap::MCP_TRUSTED => Lang::t('tui.mcp.status.trusted'),
             default => $status,
         }]), $width);
+
+        // MCP-3: the user scope speaks only when the decision says it is
+        // trusted — and the `?? null` reads are deliberate: a hand-built
+        // pre-MCP-3 inventory (every existing pin fixture, and any embedder
+        // that has not caught up) renders byte-identically, because absent
+        // keys answer neither status and no row is printed.
+        if ((string) ($inventory['userStatus'] ?? '') === Bootstrap::MCP_TRUSTED) {
+            $userServers = $inventory['userServers'] ?? [];
+            $out .= self::line('  ' . Lang::t('tui.mcp.scope.user', [
+                'count' => count($userServers),
+                'path' => (string) ($inventory['userPath'] ?? ''),
+            ]), $width);
+
+            // A broken user file is named right below the row that spells out
+            // which file it is, so the shared `Config {error}.` sentence reads
+            // unambiguously without minting a second label for one arm.
+            $userError = $inventory['userError'] ?? null;
+            if (is_string($userError) && $userError !== '') {
+                $out .= self::line('  ' . Lang::t('tui.mcp.config_error', ['error' => $userError]), $width);
+            }
+        }
 
         $error = $inventory['error'] ?? null;
         if (is_string($error) && $error !== '') {

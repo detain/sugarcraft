@@ -164,8 +164,11 @@ final class McpClientTest extends TestCase
 
         $result = $method->invoke($client);
 
-        $this->assertArrayHasKey('mcpServers', $result);
-        $this->assertArrayHasKey('test-server', $result['mcpServers']);
+        // MCP-3: loadConfig answers a per-tier list, project first; the
+        // single-file fixture yields exactly one row naming its file.
+        $this->assertCount(1, $result);
+        $this->assertSame($this->configPath, $result[0]['path']);
+        $this->assertArrayHasKey('test-server', $result[0]['servers']);
     }
 
     public function testLoadConfigThrowsForInvalidJsonNamingThePath(): void

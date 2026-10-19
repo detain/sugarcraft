@@ -1417,7 +1417,9 @@ final class Bootstrap
 
     /**
      * The MCP clients whose servers are running, keyed FIRST by the pid that
-     * started them and then by the `.mcp.json` path they were built from.
+     * started them and then by the {@see mcpConfigMemoKey()} of the decision
+     * that built them — the `.mcp.json` path, and since MCP-3 the user tier's
+     * path joined ahead of it when a user file is live.
      *
      * MEMOIZED BECAUSE STARTING IS A SIDE EFFECT. One launch calls
      * {@see tools()} at least twice — {@see app()} once for the shell's tool
@@ -1461,8 +1463,11 @@ final class Bootstrap
     private static array $mcpClients = [];
 
     /**
-     * E703-α: the bytes each memoised client's `.mcp.json` had AT LAUNCH, keyed
-     * exactly like {@see $mcpClients} — pid, then the canonical decision path.
+     * E703-α: the bytes each memoised client's config file had AT LAUNCH,
+     * keyed by pid, then by the FILE path itself — since MCP-3 one entry per
+     * tier, for exactly the tiers that launch was trusted to read. (The client
+     * memo keys by the composite decision; these compare per file, because a
+     * drift verdict is about a file.)
      *
      * WHY A DIGEST AND NOT A RELOAD: the trusted-roots list is read once per
      * process and frozen (see {@see trustedRootsForThisProcess()} and
@@ -8535,6 +8540,16 @@ final class Bootstrap
     public const MCP_DISABLE_ENV = 'CANDY_CODE_MCP_DISABLE';
 
     /**
+     * MCP-3: the USER tier's file name — `~/.candy-code/mcp.json`, the operator's
+     * own server roster, read beside every other `~/.candy-code` file and gated
+     * the same way (the {@see \SugarCraft\Code\Support\HomeDirectory::owned()}
+     * ownership check IS the gate; there is no second ceremony for it). The
+     * project tier keeps the Claude Code filename; this tier deliberately does
+     * not shadow-copy that name into the home directory's own corner.
+     */
+    public const MCP_USER_CONFIG_FILENAME = 'mcp.json';
+
+    /**
      * Where this project's `.mcp.json` is, and whether this launch is allowed
      * to start the servers it names — WITHOUT starting any of them.
      *
@@ -8553,11 +8568,27 @@ final class Bootstrap
      * {@see mcpDisabled()}) short-circuits this whole gate to
      * {@see self::MCP_DISABLED} before any stat or trust read — the decision
      * stays the one discovery path, it just answers the environment first.
+     * And the switch answers for BOTH tiers: a disabled launch reads no user
+     * file either, which is why that arm carries an empty `userPath`.
      *
-     * @return array{path: string, root: string, canonicalRoot: string|false, status: string}
+     * MCP-3: THE USER TIER rides beside the project tier in the same decision.
+     * `~/.candy-code/mcp.json` needs no entry in any trust list — the operator
+     * wrote it, and the ownership gate in {@see mcpUserConfigPath()} is the
+     * check (the same posture as user-tier commands and hooks). Only three
+     * statuses can appear in `userStatus`: {@see self::MCP_DISABLED} under the
+     * switch, {@see self::MCP_ABSENT} with no readable home or no file, and
+     * {@see self::MCP_TRUSTED}. Where BOTH tiers declare a name, the PROJECT
+     * wins ({@see \SugarCraft\Code\MCP\McpClient::startServers()} applies the
+     * precedence on the launch side; {@see mcpServerInventory()} mirrors it on
+     * the listing side).
+     *
+     * @return array{path: string, root: string, canonicalRoot: string|false, status: string, userPath: string, userStatus: string}
      *   `status` is one of {@see self::MCP_DISABLED}, {@see self::MCP_ABSENT},
      *   {@see self::MCP_OUTSIDE_TREE}, {@see self::MCP_UNTRUSTED},
-     *   {@see self::MCP_TRUSTED}.
+     *   {@see self::MCP_TRUSTED}. `userPath` is the user tier's path, empty
+     *   when the home is not this user's or the switch is on; `userStatus`
+     *   carries no containment or trust verdicts because neither applies —
+     *   see MCP-3 above.
      */
     public static function mcpConfigDecision(?string $root = null): array
     {
@@ -8590,15 +8621,29 @@ final class Bootstrap
         // and still NO notice is recorded here: an operator who disabled MCP
         // does not want to be told to trust it on every launch.
         if (self::mcpDisabled()) {
-            return $decision + ['status' => self::MCP_DISABLED];
+            return $decision + [
+                'userPath' => '',
+                'userStatus' => self::MCP_DISABLED,
+                'status' => self::MCP_DISABLED,
+            ];
         }
+
+        // MCP-3: the user tier, resolved for every launch that is not switched
+        // off. The two stats this costs are the honest price of widening
+        // discovery from one file to two; the project tier below still runs
+        // its own single-stat fast path untouched.
+        $userPath = self::mcpUserConfigPath();
+        $tiers = [
+            'userPath' => $userPath,
+            'userStatus' => $userPath !== '' && is_file($userPath) ? self::MCP_TRUSTED : self::MCP_ABSENT,
+        ];
 
         // is_file() FIRST, so the overwhelmingly common "no MCP config" case
         // costs one stat and reaches neither the containment compare, the trust
         // gate, nor the refusal report. A dangling symlink is not a file, so it
         // lands here.
         if (!is_file($path)) {
-            return $decision + ['status' => self::MCP_ABSENT];
+            return $decision + $tiers + ['status' => self::MCP_ABSENT];
         }
 
         if (!ContainedPath::within($path, $root)) {
@@ -8615,7 +8660,7 @@ final class Bootstrap
                 $root,
             );
 
-            return $decision + ['status' => self::MCP_OUTSIDE_TREE];
+            return $decision + $tiers + ['status' => self::MCP_OUTSIDE_TREE];
         }
 
         // THE TRUST GATE, and it is checked AFTER containment so that an
@@ -8647,10 +8692,31 @@ final class Bootstrap
                 self::userConfigPath(),
             );
 
-            return $decision + ['status' => self::MCP_UNTRUSTED];
+            return $decision + $tiers + ['status' => self::MCP_UNTRUSTED];
         }
 
-        return $decision + ['status' => self::MCP_TRUSTED];
+        return $decision + $tiers + ['status' => self::MCP_TRUSTED];
+    }
+
+    /**
+     * MCP-3: the USER tier's `.candy-code/mcp.json`, or the empty string when
+     * there is no such place to look.
+     *
+     * `HomeDirectory::owned()` answers "is this home verifiably this user's"
+     * — same door every other user-tier read comes through
+     * ({@see trustedConfigDirPath()}, foreign skill discovery, presets), and
+     * here it is ALSO the trust ceremony: an operator who can write
+     * `~/.candy-code` owns what runs from it, so no second allowlist adds a
+     * decision anyone could actually make. An unowned, unresolved or
+     * world-writable home yields `''` — the tier is silently absent, never an
+     * error, because unlike the permission policy this file is optional and a
+     * hostile-home launch must simply not read it.
+     */
+    private static function mcpUserConfigPath(): string
+    {
+        $home = HomeDirectory::owned();
+
+        return $home === null ? '' : $home . '/.candy-code/' . self::MCP_USER_CONFIG_FILENAME;
     }
 
     /**
@@ -8709,7 +8775,7 @@ final class Bootstrap
      * `enabled` reflects the CONFIG, not liveness. Nothing here can tell you a
      * declared server would fail to start — finding that out means starting it.
      *
-     * @return array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, skipped: list<string>, error: string|null}
+     * @return array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, skipped: list<string>, error: string|null, userStatus: string, userPath: string, userServers: list<array{name: string, type: string, detail: string}>, userSkipped: list<string>, userError: string|null}
      *   `servers` is empty for every non-{@see self::MCP_TRUSTED} status and
      *   for a file that is not decodable, in which case `error` says why.
      *   `skipped` (N-2) names every ENTRY that is not a named server object —
@@ -8717,75 +8783,61 @@ final class Bootstrap
      *   (ISS-091), so `mcp list` must not swallow them silently: a skipped
      *   entry is an operator typo that would otherwise only surface as a
      *   missing tool.
+     *
+     * MCP-3: the five `user*` keys describe the USER tier with the same
+     * sentences and the same shape. A name the project tier declares is not
+     * listed twice — the project wins, so `userServers` carries only the
+     * entries that would actually reach the launch. When the project file is
+     * present but undecodable, the shadow set is empty: the launch aborts on
+     * that file anyway, and the listing must not pretend to know which names
+     * it would have declared.
      */
     public static function mcpServerInventory(?string $root = null): array
     {
         $decision = self::mcpConfigDecision($root);
-        $base = ['status' => $decision['status'], 'path' => $decision['path'], 'servers' => [], 'skipped' => [], 'error' => null];
+        $base = [
+            'status' => $decision['status'],
+            'path' => $decision['path'],
+            'servers' => [],
+            'skipped' => [],
+            'error' => null,
+            'userStatus' => $decision['userStatus'],
+            'userPath' => $decision['userPath'],
+            'userServers' => [],
+            'userSkipped' => [],
+            'userError' => null,
+        ];
 
         if ($decision['status'] !== self::MCP_TRUSTED) {
-            return $base;
+            return array_merge($base, self::mcpUserTierRows($decision, []));
         }
 
         $contents = @file_get_contents($decision['path']);
         if (!is_string($contents)) {
-            return ['error' => Lang::t('cli.mcp.config.unreadable')] + $base;
+            return array_merge(['error' => Lang::t('cli.mcp.config.unreadable')] + $base, self::mcpUserTierRows($decision, []));
         }
 
         try {
             $data = json_decode($contents, true, 512, \JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
-            return ['error' => Lang::t('cli.mcp.config.invalid_json', ['error' => $e->getMessage()])] + $base;
+            return array_merge(['error' => Lang::t('cli.mcp.config.invalid_json', ['error' => $e->getMessage()])] + $base, self::mcpUserTierRows($decision, []));
         }
 
         if (!is_array($data) || !is_array($data['mcpServers'] ?? null)) {
-            return ['error' => Lang::t('cli.mcp.config.no_servers_object')] + $base;
+            return array_merge(['error' => Lang::t('cli.mcp.config.no_servers_object')] + $base, self::mcpUserTierRows($decision, []));
         }
 
-        $servers = [];
-        $skipped = [];
-        foreach ($data['mcpServers'] as $name => $config) {
-            if (!is_string($name) || !is_array($config)) {
-                // N-2: the SAME sentence {@see \SugarCraft\Code\MCP\McpClient::startServers()}
-                // records for this shape (ISS-091), so `mcp list` and the
-                // launch can never disagree about why an entry is missing.
-                $skipped[] = sprintf(
-                    '%s (entry is %s, not a named server object)',
-                    is_string($name) && $name !== '' ? $name : json_encode($name, JSON_PARTIAL_OUTPUT_ON_ERROR),
-                    get_debug_type($config),
-                );
+        // MCP-3: both tiers build their rows through ONE builder, so the
+        // listing cannot drift into saying different things about the two
+        // files it read. The launch loop in
+        // {@see \SugarCraft\Code\MCP\McpClient::startServers()} keeps its own
+        // copy of the refusal sentence (ISS-091 pins the pair).
+        [$servers, $skipped] = self::mcpConfigRows($data['mcpServers']);
 
-                continue;
-            }
-
-            // The same types {@see \SugarCraft\Code\MCP\McpClient::startServer()}
-            // constructs, and the same `?? 'stdio'` default it applies, so an
-            // entry listed as `stdio` here is the entry that would be started
-            // as `stdio`. An unknown type is shown as written rather than
-            // normalised: that string is what makes startServers() throw, so
-            // hiding it would hide the diagnosis.
-            $type = is_string($config['type'] ?? null) ? $config['type'] : 'stdio';
-            $detail = match ($type) {
-                'stdio' => trim(
-                    (is_string($config['command'] ?? null) ? $config['command'] : '')
-                    . ' ' . implode(' ', array_filter(
-                        is_array($config['args'] ?? null) ? $config['args'] : [],
-                        static fn ($a): bool => is_string($a),
-                    ))
-                ),
-                'http' => is_string($config['url'] ?? null) ? $config['url'] : '',
-                'git' => is_string($config['path'] ?? null) ? $config['path'] : '(this project)',
-                // E699: the entry names nothing and the operator's path must
-                // never reach a transcript-visible surface — the detail is a
-                // fixed label, not data.
-                'claude-mcp' => '(operator-supplied)',
-                default => '',
-            };
-
-            $servers[] = ['name' => $name, 'type' => $type, 'detail' => $detail];
-        }
-
-        return ['servers' => $servers, 'skipped' => $skipped] + $base;
+        return array_merge(
+            ['servers' => $servers, 'skipped' => $skipped] + $base,
+            self::mcpUserTierRows($decision, array_column($servers, 'name')),
+        );
     }
 
     /**
@@ -8903,10 +8955,29 @@ final class Bootstrap
         // this call — the render site has already asked it once for the very
         // same root, and its refusals are keyed idempotently by path.
         $decision = self::mcpConfigDecision($root);
-        $path = $decision['path'];
         $pid = getmypid() ?: 0;
 
-        return (self::$mcpClients[$pid][$path] ?? null)?->startedSnapshot();
+        // MCP-3: the same composite key mcpClient() stores under — reading the
+        // bare project path would miss every two-tier launch.
+        $key = self::mcpConfigMemoKey($decision);
+
+        return (self::$mcpClients[$pid][$key] ?? null)?->startedSnapshot();
+    }
+
+    /**
+     * MCP-3: the memo key for a decision. With no user tier this is exactly
+     * the canonical project path — the key every pre-MCP-3 reader and writer
+     * used — and only a live user tier widens it, to the two paths joined by a
+     * NUL. A path cannot contain NUL, so no pair of real files can collide
+     * with a single-path key.
+     *
+     * @param array{path: string, userPath?: string} $decision
+     */
+    private static function mcpConfigMemoKey(array $decision): string
+    {
+        $userPath = (string) ($decision['userPath'] ?? '');
+
+        return $userPath === '' ? $decision['path'] : $userPath . "\0" . $decision['path'];
     }
 
     /**
@@ -8920,28 +8991,43 @@ final class Bootstrap
      * execution with no new operator decision). So the honest seam stops at
      * naming the drift and pointing at the restart.
      *
-     * @return bool|null null when THIS process has no launch digest for the
-     *         rooted path (no client built here, or the file was unreadable at
+     * @return bool|null null when THIS process has no launch digest for either
+     *         tier path (no client built here, or the files were unreadable at
      *         the store instant) — the caller suppresses the line rather than
-     *         claiming anything; true when the current bytes differ from the
-     *         launch bytes OR the file cannot be read any more (vanishing IS
-     *         a change — the loud answer is the truthful one); false when the
-     *         digest still matches.
+     *         claiming anything; true when either tier's current bytes differ
+     *         from its launch bytes OR that file cannot be read any more
+     *         (vanishing IS a change — the loud answer is the truthful one);
+     *         false when both digests still match.
      */
     public static function mcpConfigChangedSinceLaunch(?string $root = null): ?bool
     {
         $decision = self::mcpConfigDecision($root);
-        $path = $decision['path'];
         $pid = getmypid() ?: 0;
 
-        $digest = self::$mcpConfigDigests[$pid][$path] ?? null;
-        if ($digest === null) {
-            return null;
+        // MCP-3: one verdict across both tiers. A digest exists only for a
+        // tier THIS launch was allowed to read (mcpClient() stores per-tier),
+        // so an untrusted project contributes nothing to compare — its drift
+        // is not a drift of what runs.
+        $verdict = null;
+        foreach ([$decision['path'], (string) $decision['userPath']] as $tierPath) {
+            if ($tierPath === '') {
+                continue;
+            }
+
+            $digest = self::$mcpConfigDigests[$pid][$tierPath] ?? null;
+            if ($digest === null) {
+                continue;
+            }
+
+            $now = self::mcpConfigDigest($tierPath);
+            if ($now === null || $now['sha256'] !== $digest['sha256']) {
+                return true;
+            }
+
+            $verdict = false;
         }
 
-        $now = self::mcpConfigDigest($path);
-
-        return $now === null || $now['sha256'] !== $digest['sha256'];
+        return $verdict;
     }
 
     /**
@@ -8962,6 +9048,124 @@ final class Bootstrap
         }
 
         return ['sha256' => hash('sha256', $contents), 'mtime' => (int) @filemtime($path)];
+    }
+
+    /**
+     * MCP-3: the row builder both tiers of {@see mcpServerInventory()} read
+     * through — one source for the skipped sentence (N-2/ISS-091) and for the
+     * type/detail projection, so the listing says the same words about the
+     * project file and the user file. Lives OUTSIDE the inventory's own span
+     * on purpose: the AW documentation arm slices that span for its zero-sink
+     * claim and quotes this pair's rules; a second method in the slice would
+     * blur which body owes which pin.
+     *
+     * `$shadowed` is MCP-3's precedence made visible in the listing: names a
+     * HIGHER tier (the project) already declares are dropped from the lower
+     * tier's rows, because that is exactly what the launch will do — the
+     * listing that showed them would promise servers that never start.
+     *
+     * @param array<array-key, mixed> $entries   one file's `mcpServers` map
+     * @param list<string>            $shadowed
+     * @return array{0: list<array{name: string, type: string, detail: string}>, 1: list<string>}
+     */
+    private static function mcpConfigRows(array $entries, array $shadowed = []): array
+    {
+        $servers = [];
+        $skipped = [];
+        foreach ($entries as $name => $config) {
+            if (!is_string($name) || !is_array($config)) {
+                // N-2: the SAME sentence {@see \SugarCraft\Code\MCP\McpClient::startServers()}
+                // records for this shape (ISS-091), so `mcp list` and the
+                // launch can never disagree about why an entry is missing.
+                $skipped[] = sprintf(
+                    '%s (entry is %s, not a named server object)',
+                    is_string($name) && $name !== '' ? $name : json_encode($name, JSON_PARTIAL_OUTPUT_ON_ERROR),
+                    get_debug_type($config),
+                );
+
+                continue;
+            }
+
+            // MCP-3: the project tier owns this name; the lower tier's entry
+            // is invisible here because it is invisible to the launch.
+            if (\in_array($name, $shadowed, true)) {
+                continue;
+            }
+
+            // The same types {@see \SugarCraft\Code\MCP\McpClient::startServer()}
+            // constructs, and the same `?? 'stdio'` default it applies, so an
+            // entry listed as `stdio` here is the entry that would be started
+            // as `stdio`. An unknown type is shown as written rather than
+            // normalised: that string is what makes startServers() throw, so
+            // hiding it would hide the diagnosis.
+            $type = is_string($config['type'] ?? null) ? $config['type'] : 'stdio';
+            $detail = match ($type) {
+                'stdio' => trim(
+                    (is_string($config['command'] ?? null) ? $config['command'] : '')
+                    . ' ' . implode(' ', array_filter(
+                        is_array($config['args'] ?? null) ? $config['args'] : [],
+                        static fn ($a): bool => is_string($a),
+                    ))
+                ),
+                'http' => is_string($config['url'] ?? null) ? $config['url'] : '',
+                'git' => is_string($config['path'] ?? null) ? $config['path'] : '(this project)',
+                // E699: the entry names nothing and the operator's path must
+                // never reach a transcript-visible surface — the detail is a
+                // fixed label, not data.
+                'claude-mcp' => '(operator-supplied)',
+                default => '',
+            };
+
+            $servers[] = ['name' => $name, 'type' => $type, 'detail' => $detail];
+        }
+
+        return [$servers, $skipped];
+    }
+
+    /**
+     * MCP-3: the five `user*` listing keys, or the silent defaults when the
+     * user tier has nothing to say. The same three broken-shape reports as
+     * the project tier, through the same Lang sentences — an unreadable home
+     * file is described exactly like an unreadable project file, because from
+     * here it is the same kind of thing: bytes the operator cannot launch
+     * until they can be read.
+     *
+     * @param array{userPath: string, userStatus: string} $decision
+     * @param list<string> $shadowed names the project tier already declares
+     * @return array{userServers: list<array{name: string, type: string, detail: string}>, userSkipped: list<string>, userError: string|null}
+     */
+    private static function mcpUserTierRows(array $decision, array $shadowed): array
+    {
+        $rows = ['userServers' => [], 'userSkipped' => [], 'userError' => null];
+
+        if ($decision['userStatus'] !== self::MCP_TRUSTED || (string) $decision['userPath'] === '') {
+            return $rows;
+        }
+
+        $contents = @file_get_contents($decision['userPath']);
+        if (!is_string($contents)) {
+            $rows['userError'] = Lang::t('cli.mcp.config.unreadable');
+
+            return $rows;
+        }
+
+        try {
+            $data = json_decode($contents, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            $rows['userError'] = Lang::t('cli.mcp.config.invalid_json', ['error' => $e->getMessage()]);
+
+            return $rows;
+        }
+
+        if (!is_array($data) || !is_array($data['mcpServers'] ?? null)) {
+            $rows['userError'] = Lang::t('cli.mcp.config.no_servers_object');
+
+            return $rows;
+        }
+
+        [$rows['userServers'], $rows['userSkipped']] = self::mcpConfigRows($data['mcpServers'], $shadowed);
+
+        return $rows;
     }
 
     /**
@@ -9147,10 +9351,11 @@ final class Bootstrap
     {
         $decision = self::mcpConfigDecision($root);
         $path = $decision['path'];
+        $memoKey = self::mcpConfigMemoKey($decision);
 
         $pid = getmypid() ?: 0;
-        if (array_key_exists($path, self::$mcpClients[$pid] ?? [])) {
-            return self::$mcpClients[$pid][$path];
+        if (array_key_exists($memoKey, self::$mcpClients[$pid] ?? [])) {
+            return self::$mcpClients[$pid][$memoKey];
         }
 
         // The memo is consulted BEFORE this gate, deliberately: a client whose
@@ -9158,7 +9363,14 @@ final class Bootstrap
         // still owns live server processes that stopMcpServers() has to reach,
         // so an already-created client is returned whatever the file says now.
         // Only mcpConfigDecision() decides whether a NEW one may be built.
-        if ($decision['status'] !== self::MCP_TRUSTED) {
+        //
+        // MCP-3: the gate widens to OR across the two tiers, and it is the
+        // ONLY widening — the per-entry trust ceremony below still binds the
+        // project tier alone, the user tier carries no pins by design (its
+        // operator wrote it), and the once-per-process freeze law is byte-for-
+        // byte unchanged: a client built at all is memoised by the same
+        // composite key, built once, and never rebuilt from re-read bytes.
+        if ($decision['status'] !== self::MCP_TRUSTED && $decision['userStatus'] !== self::MCP_TRUSTED) {
             return null;
         }
 
@@ -9174,7 +9386,22 @@ final class Bootstrap
         $recorded = $pins->forRoot($trustRoot);
         $admitted = [];
         $refused = [];
-        $admit = static function (string $name, mixed $type, array $entry) use ($recorded, &$admitted, &$refused): bool {
+        $userPath = (string) $decision['userPath'];
+        $admit = static function (string $name, mixed $type, array $entry, string $sourcePath = '') use ($recorded, $userPath, &$admitted, &$refused): bool {
+            // MCP-3: entries from the USER file were written by this operator
+            // and are admitted on the ownership gate alone — WITHOUT touching
+            // $admitted or $refused. That is not an oversight, it is the whole
+            // boundary: $admitted feeds the first-launch pin record for the
+            // PROJECT root, and user servers must never be persisted under a
+            // project grant; $refused feeds a notice whose fix line is
+            // `mcp trust`, and there is nothing to re-trust about a file the
+            // operator just edited. A blank sourcePath (a legacy embedder
+            // calling the client without tier provenance) falls through to the
+            // project ceremony — the conservative direction.
+            if ($userPath !== '' && $sourcePath === $userPath) {
+                return true;
+            }
+
             $pin = McpTrustPins::pin($type, $entry);
             $admitted[$name] = $pin;
             if ($recorded === null) {
@@ -9194,7 +9421,12 @@ final class Bootstrap
         };
 
         $client = new McpClient(
-            $path,
+            // MCP-3: each tier reaches the client only behind its own verdict.
+            // An untrusted (or absent) PROJECT contributes an empty path here,
+            // which McpClient treats as "no such tier" — the launch of a
+            // user-trusted session must never re-open a project file the gate
+            // refused, and the gate's verdict is not re-litigated below.
+            $decision['status'] === self::MCP_TRUSTED ? $path : '',
             // $unrestricted, and it is the opposite of what it looks like. The
             // client fails CLOSED without an AgentPreset, and the MAIN agent has
             // no preset — that mechanism scopes SUB-agents. So the alternatives
@@ -9231,6 +9463,7 @@ final class Bootstrap
             // to its unrestricted arm, not only through the preset router.
             unrestricted: true,
             admit: $admit,
+            userConfigPath: $decision['userStatus'] === self::MCP_TRUSTED ? $userPath : '',
         );
 
         // E696: the operator's `disabledMcpServers` globs (raw `.mcp.json`
@@ -9251,14 +9484,23 @@ final class Bootstrap
         // each server to the client as it comes up, so a client that throws
         // part-way through still owns live processes that stopMcpServers() has to
         // reach.
-        self::$mcpClients[$pid][$path] = $client;
+        self::$mcpClients[$pid][$memoKey] = $client;
         // E703-α: digest the SAME bytes this memo was keyed on, at the instant
         // the memo is stored. Unreadable stores nothing — a missing digest is
         // silence in the panel, never a claim that the file did or did not
         // move. Not a reload hook: see mcpConfigChangedSinceLaunch().
+        // MCP-3: one store per tier, and only for a tier this launch was
+        // allowed to read — a file the gate refused has no "since launch"
+        // to drift from.
         $digest = self::mcpConfigDigest($path);
-        if ($digest !== null) {
+        if ($digest !== null && $decision['status'] === self::MCP_TRUSTED) {
             self::$mcpConfigDigests[$pid][$path] = $digest;
+        }
+        if ($decision['userStatus'] === self::MCP_TRUSTED && $userPath !== '') {
+            $userDigest = self::mcpConfigDigest($userPath);
+            if ($userDigest !== null) {
+                self::$mcpConfigDigests[$pid][$userPath] = $userDigest;
+            }
         }
         self::registerMcpShutdown();
 

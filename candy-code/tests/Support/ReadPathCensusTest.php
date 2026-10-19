@@ -294,6 +294,10 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — trustProjectMcp() reading the decision-path `.mcp.json` for `candy-code mcp trust` '
                 . '(audit MCP-5): the same mcpConfigDecision() containment, reached only on the UNTRUSTED or '
                 . 'TRUSTED verdict; it is fingerprinted and printed, never executed',
+            'OWNED_HOME — mcpUserTierRows() reading the user tier `~/.candy-code/mcp.json` for the listing '
+                . '(MCP-3): reached only when HomeDirectory::owned() established the home as this user\'s and '
+                . 'the file exists; the same three broken-shape reports as the project read, and the bytes '
+                . 'are listed and shadowed, never executed',
         ],
         'Cli/Bootstrap.php|fopen' => [
             'SELF_LOCATED — acquireUserConfigLock(): the `.config.json.lock` sidecar beside the '

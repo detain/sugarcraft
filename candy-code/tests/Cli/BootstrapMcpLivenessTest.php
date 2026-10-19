@@ -158,7 +158,10 @@ final class BootstrapMcpLivenessTest extends TestCase
      * the memo under a different path — even one naming the same file through
      * a `..` hop — must NOT be visible to a snapshot asked for this root. A
      * miss here is correct-by-design: this process has no client for THIS
-     * decision path.
+     * decision path. MCP-3 keeps the claim: the composite key the plants use
+     * here is derived from the production builder, which canonicalises the
+     * project half — so the spelled root and its canonical twin still land on
+     * ONE key, and a never-memoised root lands on none.
      */
     public function testTheSnapshotIsKeyedByTheCanonicalDecisionPathNotTheSpelling(): void
     {
@@ -198,9 +201,10 @@ final class BootstrapMcpLivenessTest extends TestCase
         self::assertNull(Bootstrap::mcpLivenessSnapshot($root));
         // KEY-SCOPED, not whole-bucket (E737): this process may legitimately
         // hold a foreign entry another test seeded; the claim is only that THIS
-        // untrusted root never entered the memo.
+        // untrusted root never entered the memo. MCP-3: under the composite
+        // keying, and computed under this root's own sandbox home.
         self::assertArrayNotHasKey(
-            $this->canonicalDecisionPath($root),
+            $this->memoKeyFor($root),
             $this->readMemo()[getmypid()] ?? [],
             'the untrusted cold read must not memoise a client for this root',
         );
@@ -338,7 +342,12 @@ final class BootstrapMcpLivenessTest extends TestCase
         $client = Bootstrap::mcpClient($poisoned);
         self::assertInstanceOf(McpClient::class, $client, 'sanity: the seed must be a real launch, not a refusal');
         $poisonedPath = $this->canonicalDecisionPath($poisoned);
-        self::assertArrayHasKey($poisonedPath, $this->readMemo()[getmypid()] ?? [], 'sanity: the shared memo bucket must be genuinely poisoned for this pin to mean anything');
+        // MCP-3: captured WHILE this root's own home grant is live — the
+        // composite key joins the user tier's path, and the re-point below
+        // moves that half. The entry the launch stored is only findable by the
+        // key that was current when it was stored; the digests stay per-file.
+        $poisonedKey = $this->memoKeyFor($poisoned);
+        self::assertArrayHasKey($poisonedKey, $this->readMemo()[getmypid()] ?? [], 'sanity: the shared memo bucket must be genuinely poisoned for this pin to mean anything');
         self::assertArrayHasKey($poisonedPath, $this->readDigests()[getmypid()] ?? [], 'sanity: the shared digest bucket must be genuinely poisoned for this pin to mean anything');
 
         // Re-point HOME (a NEW frozen trust read) so the probes below run while
@@ -350,18 +359,19 @@ final class BootstrapMcpLivenessTest extends TestCase
         // A trusted-but-cold root: still null, still unmemoised, foreign entry
         // surviving untouched.
         self::assertNull(Bootstrap::mcpLivenessSnapshot($quiet));
-        self::assertArrayNotHasKey($this->canonicalDecisionPath($quiet), $this->readMemo()[getmypid()] ?? []);
+        self::assertArrayNotHasKey($this->memoKeyFor($quiet), $this->readMemo()[getmypid()] ?? []);
         self::assertNull(Bootstrap::mcpConfigChangedSinceLaunch($quiet));
         self::assertArrayNotHasKey($this->canonicalDecisionPath($quiet), $this->readDigests()[getmypid()] ?? []);
 
         // An absent root: same silence through the same keying.
         $absent = $this->makeLivenessRoot();
         self::assertNull(Bootstrap::mcpLivenessSnapshot($absent));
-        self::assertArrayNotHasKey($this->canonicalDecisionPath($absent), $this->readMemo()[getmypid()] ?? []);
+        self::assertArrayNotHasKey($this->memoKeyFor($absent), $this->readMemo()[getmypid()] ?? []);
 
         // THE PIN'S TEETH: the poison is still standing, and no cold read
-        // erased or consulted it.
-        self::assertArrayHasKey($poisonedPath, $this->readMemo()[getmypid()] ?? [], 'cold reads must neither drop nor overwrite a foreign memo entry');
+        // erased or consulted it — checked under the launch-time key, which is
+        // where a whole-bucket wipe would have to reach to corrupt this pin.
+        self::assertArrayHasKey($poisonedKey, $this->readMemo()[getmypid()] ?? [], 'cold reads must neither drop nor overwrite a foreign memo entry');
         self::assertArrayHasKey($poisonedPath, $this->readDigests()[getmypid()] ?? [], 'cold reads must neither drop nor overwrite a foreign digest entry');
 
         $client->stopServers();
@@ -430,8 +440,24 @@ final class BootstrapMcpLivenessTest extends TestCase
     {
         $memo = $this->readMemo();
         $pid = getmypid() ?: 0;
-        $memo[$pid][$this->canonicalDecisionPath($root)] = $client;
+        $memo[$pid][$this->memoKeyFor($root)] = $client;
         $this->writeMemo($memo);
+    }
+
+    /**
+     * MCP-3: the memo is keyed by {@see Bootstrap::mcpConfigMemoKey()}, the
+     * composite of the two canonical tier paths — not by the project path
+     * alone. Derived through the production builder rather than re-spelled
+     * here: a plant this file computed by hand would keep passing while the
+     * real keying drifted under it, which is the one lie a keying pin cannot
+     * tell. (The DIGESTS stay keyed per file path — a drift verdict is about
+     * a file; only the CLIENT memo composites.)
+     */
+    private function memoKeyFor(string $root): string
+    {
+        $builder = new \ReflectionMethod(Bootstrap::class, 'mcpConfigMemoKey');
+
+        return (string) $builder->invoke(null, Bootstrap::mcpConfigDecision($root));
     }
 
     /** @return array<int, array<string, McpClient>> */

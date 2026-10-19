@@ -525,8 +525,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // MCP-5 added the trust-record plumbing: the decision's canonicalRoot
         // key, the path separator, the two pin keys and the item separator.
         // E696 added the deny map's plumbing: the empty glob it skips and the
-        // `deny` value every disabledMcpServers pattern maps to.
-        'mcpClient' => ["'path'", "'status'", "'canonicalRoot'", "'/'", "'fingerprint'", "'summary'", "''", "'deny'", "'; '"],
+        // `deny` value every disabledMcpServers pattern maps to. MCP-3 added
+        // the user tier's two decision keys, in body order: `userStatus` in
+        // the OR-ed launch gate, `userPath` at the tier read.
+        'mcpClient' => ["'path'", "'status'", "'userStatus'", "'canonicalRoot'", "'/'", "'userPath'", "''", "'fingerprint'", "'summary'", "'deny'", "'; '"],
         // Audit 15d-05's binding row: the plural pair and the is/are pick.
         'reportMemorySkips' => ["''", "'s'", "'is'", "'are'"],
         // Audit R1's two rows: the plural pair, the was/were pick of the
