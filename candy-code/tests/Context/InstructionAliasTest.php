@@ -52,7 +52,7 @@ final class InstructionAliasTest extends TestCase
     public function testTheAliasRosterIsPrecedenceOrdered(): void
     {
         self::assertSame(
-            ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'GEMINI.md', '.cursorrules', '.clinerules'],
+            ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'GEMINI.md', '.cursorrules', '.clinerules', '.github/copilot-instructions.md'],
             InstructionFileLoader::FILENAMES,
         );
     }
@@ -76,10 +76,12 @@ final class InstructionAliasTest extends TestCase
         file_put_contents($this->repoRoot . '/AGENTS.md', 'AGENTSCANARY');
         file_put_contents($this->repoRoot . '/CLAUDE.local.md', 'LOCALCANARY');
         file_put_contents($this->repoRoot . '/CLAUDE.md', 'CLAUDECANARY');
+        mkdir($this->repoRoot . '/.github');
+        file_put_contents($this->repoRoot . '/.github/copilot-instructions.md', 'COPILOTCANARY');
 
         $contents = (new InstructionFileLoader($this->repoRoot))->loadRoot();
 
-        self::assertSame(['CLAUDECANARY', 'LOCALCANARY', 'AGENTSCANARY', 'GEMINICANARY', 'CURSORCANARY', 'CLINECANARY'], $contents);
+        self::assertSame(['CLAUDECANARY', 'LOCALCANARY', 'AGENTSCANARY', 'GEMINICANARY', 'CURSORCANARY', 'CLINECANARY', 'COPILOTCANARY'], $contents);
     }
 
     public function testCLAUDELocalMdAloneIsReadAtTheRoot(): void
@@ -153,6 +155,20 @@ final class InstructionAliasTest extends TestCase
 
         self::assertSame(self::framedOnTouch($this->repoRoot . '/pkg/CLAUDE.md', 'NESTEDCLAUDE'), $loader->loadForPath($this->repoRoot . '/pkg/src/a.php'));
         self::assertSame(self::framedOnTouch($this->repoRoot . '/pkg/.cursorrules', 'NESTEDCURSOR'), $loader->loadForPath($this->repoRoot . '/pkg/src/a.php'));
+    }
+
+    public function testACopilotInstructionsFileIsFoundThroughItsDirectory(): void
+    {
+        // The tail alias is a PATH, not a bare name: a nested level's `.github`
+        // candidate is its own file, read on touch like every other alias.
+        mkdir($this->repoRoot . '/pkg/.github');
+        file_put_contents($this->repoRoot . '/pkg/.github/copilot-instructions.md', 'NESTEDCOPILOT');
+        file_put_contents($this->repoRoot . '/pkg/src/a.php', '<?php');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+
+        self::assertSame(self::framedOnTouch($this->repoRoot . '/pkg/.github/copilot-instructions.md', 'NESTEDCOPILOT'), $loader->loadForPath($this->repoRoot . '/pkg/src/a.php'));
+        self::assertNull($loader->loadForPath($this->repoRoot . '/pkg/src/a.php'), 'injected at most once');
     }
 
     public function testAnAncestorAliasIsReadFromTheEnclosingCheckout(): void

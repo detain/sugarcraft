@@ -724,9 +724,11 @@ setting off, a `skills` list in the answer is ignored.
 
 `InstructionFileLoader` (`src/Context/InstructionFileLoader.php`) loads
 `CLAUDE.md`, its uncommitted personal overlay `CLAUDE.local.md`, and `AGENTS.md`,
-plus three other agents' spellings of the same convention — `GEMINI.md`,
-`.cursorrules` and `.clinerules` — in that precedence order
-(`InstructionFileLoader::FILENAMES`):
+plus four other agents' spellings of the same convention — `GEMINI.md`,
+`.cursorrules`, `.clinerules` and GitHub Copilot's
+`.github/copilot-instructions.md` (last: found through a path, and trailing
+rank keeps it from ever winning a level from the names above) — in that
+precedence order (`InstructionFileLoader::FILENAMES`):
 
 - **your personal file** — `~/.candy-code/AGENTS.md`, always, at session start,
   in every project. It is priced first under the same instruction budget and

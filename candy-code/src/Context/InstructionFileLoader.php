@@ -163,14 +163,19 @@ final class InstructionFileLoader
      * (roadmap 5.14j): Gemini CLI's `GEMINI.md`, Cursor's legacy
      * `.cursorrules`, and Cline's `.clinerules`. A repository that ships only
      * one of those has written its conventions down already; reading them is
-     * cheaper than asking every team to keep a second copy as AGENTS.md. Every
-     * alias goes through exactly the gates CLAUDE.md does — the same
-     * containment compare, size ceiling, UTF-8 scrub, `@import` expansion and
-     * shared dedup set — so an alias adds candidates, never a new read path.
+     * cheaper than asking every team to keep a second copy as AGENTS.md.
+     * `Copilot`'s spelling goes LAST on purpose: `.github/copilot-instructions.md`
+     * lives one directory down from every candidate level — the same file a
+     * repository ships, found through a path, and the trailing rank means it
+     * never wins a level from a file written in the agent-native conventions
+     * above it. Every alias goes through exactly the gates CLAUDE.md does — the
+     * same containment compare, size ceiling, UTF-8 scrub, `@import` expansion
+     * and shared dedup set — so an alias adds candidates, never a new read path.
      * A `.clinerules` DIRECTORY (Cline's newer folder form) is not a file and is
-     * skipped by the same `is_file()` that skips a missing CLAUDE.md.
+     * skipped by the same `is_file()` that skips a missing CLAUDE.md; the same
+     * skip means a level without a `.github/` directory costs one stat.
      */
-    public const FILENAMES = ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'GEMINI.md', '.cursorrules', '.clinerules'];
+    public const FILENAMES = ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'GEMINI.md', '.cursorrules', '.clinerules', '.github/copilot-instructions.md'];
 
     /** The one personal instruction file, relative to {@see personalDir()}. */
     public const PERSONAL_FILENAME = 'AGENTS.md';
