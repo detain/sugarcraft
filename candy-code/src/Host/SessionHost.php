@@ -35,6 +35,7 @@ use SugarCraft\Code\Host\Commands\CommandEffect;
 use SugarCraft\Code\Host\Commands\CommandEffectKind;
 use SugarCraft\Code\Host\Commands\CommandResult;
 use SugarCraft\Code\Host\Commands\CommandText;
+use SugarCraft\Code\Host\ContextSources;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
@@ -1360,6 +1361,29 @@ final class SessionHost
             contextTokens: $this->estimate($this->history),
             workspace: $this->workspace,
             grants: $this->grants,
+        );
+    }
+
+    /**
+     * WEB-3a: this session's structured context sources for `context.sources`
+     * ({@see \SugarCraft\Code\Protocol\Methods\ContextMethods}). Built through
+     * the same {@see commandContext()} `/context` runs with and measured by
+     * the same {@see \SugarCraft\Code\Host\ContextSources} provider — with the
+     * history figure taken from this host's own calibrated estimate, exactly
+     * as the status bar shows it. No `Chat` state is reached: the session IS
+     * the provider (the seam WEB-3a's brief anticipated).
+     *
+     * @return array<string, mixed>
+     */
+    public function contextSources(): array
+    {
+        $context = $this->commandContext();
+        $instructionFiles = ContextSources::priceInstructionFiles($this->workspace->root);
+
+        return ContextSources::answer(
+            workspace: $this->workspace,
+            breakdown: ContextSources::measure($context, $instructionFiles, historyTokens: $this->estimate($this->history)),
+            instructionFiles: $instructionFiles,
         );
     }
 

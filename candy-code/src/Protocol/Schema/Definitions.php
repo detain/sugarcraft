@@ -28,6 +28,7 @@ final class Definitions
     public const USAGE = 'Usage';
     public const BACKGROUND_SESSION = 'BackgroundSession';
     public const MEDIA_REF = 'MediaRef';
+    public const CONTEXT_SOURCES = 'ContextSources';
 
     private function __construct()
     {
@@ -179,6 +180,81 @@ final class Definitions
                 'infotextDigest' => Schema::string()->describe('SHA-256 of the PNG infotext embedded in the artifact, when one was readable.'),
                 'indexLabel' => Schema::string()->describe('Batch slot label, when a multi-artifact result names its rows.'),
             ], ['artifactId', 'kind', 'path', 'bytes', 'mime'])->describe('A media artifact a finished tool produced — identity and path only; bytes never ride the journal (Appendix C-7).'),
+            self::CONTEXT_SOURCES => Schema::object([
+                'instructionFiles' => Schema::arrayOf(Schema::object([
+                    'path' => Schema::string(4096),
+                    'bytes' => Schema::integer(0),
+                    'tier' => Schema::enum(['project', 'personal']),
+                ], ['path', 'bytes', 'tier']))->nullable()->describe('The documents the system prompt splices — names and sizes, bodies never (roadmap VIS-2a); null when this server could not price them.'),
+                'memorySections' => Schema::arrayOf(Schema::ref(self::MEMORY_ENTRY))->describe('Every note of both stores across all scopes, the `memory.list` grouping rule (repo rows first, ISS-020).'),
+                'skills' => Schema::arrayOf(Schema::object([
+                    'name' => Schema::string(),
+                    'tier' => Schema::string()->describe('Who put the file there — a SkillOrigin value, not the format.'),
+                    'enabled' => Schema::boolean()->describe('False when the `disabledSkills` setting withheld it.'),
+                ], ['name', 'tier', 'enabled']))->describe('The skills registry, as the prompt listing sees it.'),
+                'mcp' => Schema::object([
+                    'status' => Schema::string()->describe('The config-level verdict of the read-never-run census (`Bootstrap::mcpServerInventory`): trusted, refused, or absent. Nothing is started to answer this.'),
+                    'error' => Schema::string()->nullable(),
+                    'skipped' => Schema::arrayOf(Schema::string()),
+                    'servers' => Schema::arrayOf(Schema::object([
+                        'name' => Schema::string(),
+                        'transport' => Schema::string(),
+                        'trust' => Schema::enum(['trusted'])->describe('Rows exist only while the file is trusted; the http entry\'s URL stays off the wire (the `server.hello` media restraint, restated).'),
+                    ], ['name', 'transport', 'trust'])),
+                ], ['status', 'error', 'skipped', 'servers'])->describe('The `.mcp.json` declaration as `candy-code mcp list` reads it (ISS-091 census), minus per-entry details.'),
+                'untrusted' => Schema::arrayOf(Schema::object([
+                    'path' => Schema::string(4096),
+                    'reason' => Schema::string(),
+                ], ['path', 'reason']))->describe('Instruction paths the loader refused and why.'),
+                'breakdown' => Schema::object([
+                    'window' => Schema::integer(0),
+                    'sections' => Schema::arrayOf(Schema::object([
+                        'label' => Schema::string(),
+                        'stability' => Schema::string(),
+                        'sections' => Schema::integer(0),
+                        'bytes' => Schema::integer(0),
+                        'tokens' => Schema::integer(0),
+                    ], ['label', 'stability', 'sections', 'bytes', 'tokens']))->nullable(),
+                    'toolCount' => Schema::integer(0)->nullable(),
+                    'toolTokens' => Schema::integer(0)->nullable(),
+                    'historyTokens' => Schema::integer(0),
+                    'historyMessages' => Schema::integer(0),
+                    'uiOnlyRows' => Schema::integer(0),
+                    'largest' => Schema::arrayOf(Schema::object([
+                        'index' => Schema::integer(1),
+                        'role' => Schema::string(),
+                        'tokens' => Schema::integer(0),
+                        'preview' => Schema::string(),
+                    ], ['index', 'role', 'tokens', 'preview'])),
+                    'lastCache' => Schema::object(['read' => Schema::integer(0), 'prompt' => Schema::integer(0)], ['read', 'prompt'])->nullable(),
+                    'sessionCache' => Schema::object(['read' => Schema::integer(0), 'prompt' => Schema::integer(0), 'replies' => Schema::integer(0)], ['read', 'prompt', 'replies'])->nullable(),
+                    'pruning' => Schema::object([
+                        'mode' => Schema::string(),
+                        'sessionMode' => Schema::boolean(),
+                        'outputs' => Schema::integer(0),
+                        'outputTokens' => Schema::integer(0),
+                        'files' => Schema::string()->nullable(),
+                        'contextRows' => Schema::integer(0),
+                        'contextRowTokens' => Schema::integer(0),
+                        'block' => Schema::object([
+                            'id' => Schema::integer(0),
+                            'compressed' => Schema::integer(0),
+                            'summary' => Schema::integer(0),
+                        ], ['id', 'compressed', 'summary'])->nullable(),
+                        'rows' => Schema::arrayOf(Schema::object([
+                            'ref' => Schema::integer(0)->nullable(),
+                            'tool' => Schema::string(),
+                            'reason' => Schema::string(),
+                            'by' => Schema::string(),
+                            'tokens' => Schema::integer(0),
+                        ], ['tool', 'reason', 'by', 'tokens'])),
+                    ], ['mode', 'sessionMode', 'outputs', 'outputTokens', 'contextRows', 'contextRowTokens', 'rows'])->nullable(),
+                    'cacheBreaks' => Schema::object([
+                        'breaks' => Schema::integer(0),
+                        'last' => Schema::object(['from' => Schema::integer(0), 'to' => Schema::integer(0)], ['from', 'to'])->nullable(),
+                    ], ['breaks'])->nullable(),
+                ], ['window', 'sections', 'toolCount', 'toolTokens', 'historyTokens', 'historyMessages', 'uiOnlyRows', 'largest', 'lastCache', 'sessionCache'])->describe('The `/context` figures ({@see \SugarCraft\Code\Context\ContextBreakdown}) — same measurement, same single writer (WEB-3a).'),
+            ], ['instructionFiles', 'memorySections', 'skills', 'mcp', 'untrusted', 'breakdown'])->describe('WEB-3a: what the session\'s context is built from — structure for the panel `/context` prints as text.'),
         ];
         \ksort($defs);
 

@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Host\Commands;
 
-use SugarCraft\Code\Backend\EngineBackend;
-use SugarCraft\Code\Backend\ReportsPromptSections;
 use SugarCraft\Code\Commands\ContextCommand;
-use SugarCraft\Code\Context\ContextBreakdown;
+use SugarCraft\Code\Host\ContextSources;
 
 /**
  * `/context` (and `/tokens`): where the next request's context window goes —
@@ -17,44 +15,20 @@ use SugarCraft\Code\Context\ContextBreakdown;
  * measures in this process, sends nothing and calls no model. The report
  * itself is {@see ContextCommand}'s; this is its session half (roadmap O-2h).
  *
- * The history figure is the driver's own token estimate
+ * The measurement itself lives in {@see ContextSources::measure()} — the SAME
+ * call `context.sources` answers from (WEB-3a), so the panel and the wire can
+ * never fork it. The history figure is the driver's own token estimate
  * ({@see CommandContext::$contextTokens}) — the status bar's — so the two
  * surfaces cannot disagree. The prompt layers come from a backend that
- * assembles its own prompt ({@see ReportsPromptSections}); the tool schemas
- * from an engine backend's tool list. Either may be unknown, and the report
- * then says so instead of printing a zero.
+ * assembles its own prompt ({@see \SugarCraft\Code\Backend\ReportsPromptSections});
+ * the tool schemas from an engine backend's tool list. Either may be unknown,
+ * and the report then says so instead of printing a zero.
  */
 final class ContextHostCommand implements HostCommand
 {
     public function run(CommandContext $context, string $text): CommandResult
     {
-        $sections = null;
-        if ($context->backend instanceof ReportsPromptSections) {
-            try {
-                $sections = $context->backend->promptSectionSizes();
-            } catch (\Throwable) {
-                // A layer that fails to build here fails the next turn too and
-                // is reported there; this read-only panel just says "not measured".
-                $sections = null;
-            }
-        }
-        $tools = $context->backend instanceof EngineBackend ? $context->backend->tools() : null;
-
-        $breakdown = ContextBreakdown::measure(
-            $context->history,
-            $sections,
-            $tools,
-            (int) $context->contextTokenLimit,
-            (int) $context->contextTokens,
-            instructionFiles: self::instructionFiles($context->root),
-        )
-            // Roadmap 5.6 remainder: what the session's ledger prunes out.
-            ->withPruning($context->contextLedger(), $context->history);
-        if ($context->backend instanceof EngineBackend) {
-            // Roadmap 3.B-5: the session's prompt-cache breaks, off the
-            // watch every clone of the backend shares.
-            $breakdown = $breakdown->withCacheBreaks($context->backend->cacheBreaks(), $context->backend->lastCacheBreak());
-        }
+        $breakdown = ContextSources::measure($context, self::instructionFiles($context->root));
 
         return CommandResult::reply($text, (new ContextCommand($breakdown))->report());
     }
@@ -75,23 +49,6 @@ final class ContextHostCommand implements HostCommand
      */
     private static function instructionFiles(?string $root): ?array
     {
-        try {
-            $loader = \SugarCraft\Code\Cli\Bootstrap::instructionLoader($root);
-            $files = [];
-            foreach ($loader->loadDocuments() as $doc) {
-                $files[] = ['path' => $doc['path'], 'bytes' => $doc['bytes'], 'personal' => false];
-            }
-            foreach ($loader->loadPersonal() as $doc) {
-                $files[] = ['path' => $doc['path'], 'bytes' => $doc['bytes'], 'personal' => true];
-            }
-            $refused = [];
-            foreach ($loader->refusedPaths() as $path => $reason) {
-                $refused[] = ['path' => (string) $path, 'reason' => (string) $reason];
-            }
-
-            return ['files' => $files, 'refused' => $refused];
-        } catch (\Throwable) {
-            return null;
-        }
+        return ContextSources::priceInstructionFiles($root);
     }
 }

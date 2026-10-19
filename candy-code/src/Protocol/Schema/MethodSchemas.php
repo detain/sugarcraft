@@ -394,6 +394,11 @@ final class MethodSchemas
                 ], ['restored']),
             ],
 
+            'context.sources' => [
+                $sessionOnly,
+                Schema::ref(D::CONTEXT_SOURCES),
+            ],
+
             'agents.list' => [$empty, $items(Schema::object([
                 'name' => Schema::string(),
                 'description' => Schema::string(),
