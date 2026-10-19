@@ -393,12 +393,13 @@ final readonly class RepoMapBlock implements PromptSection
      * distance that replaced them is no longer prose either; it is asserted by
      * {@see \SugarCraft\Code\Tests\Tools\BuiltInToolCorpusTest::testTheRestatementGuardHasRoomBeforeItsNextFalsePositive()}.
      *
-     * RAISED FROM 20,000 when this package's own `src/` grew past the slack
-     * that assertion demands (roadmap W6): the bound is a backstop, so it
-     * moves with the tree rather than becoming the policy it was argued not
-     * to be. {@see MAX_WALK_ENTRIES} moved with it, five times over.
+     * RAISED (roadmap W6: 20,000, then plan_comparison W3 weld: 40,000) each
+     * time this package's own `src/` grew past the slack that assertion
+     * demands: the bound is a backstop, so it moves with the tree rather than
+     * becoming the policy it was argued not to be. {@see MAX_WALK_ENTRIES}
+     * moved with it both times, five times over.
      */
-    public const MAX_SOURCE_FILES = 30000;
+    public const MAX_SOURCE_FILES = 40000;
 
     /**
      * Ceiling on directory entries of ANY kind listed across all PSR-4 source
@@ -415,7 +416,7 @@ final readonly class RepoMapBlock implements PromptSection
      * non-PHP files a package may carry. The walk is sorted, so the cut lands
      * at the same entry on every filesystem.
      */
-    public const MAX_WALK_ENTRIES = 150000;
+    public const MAX_WALK_ENTRIES = 200000;
 
     /**
      * Appended to a line cut at {@see MAX_ENTRY_BYTES}, and paid for OUT OF
