@@ -27,6 +27,7 @@ use SugarCraft\Code\Providers\ClaudeCodeInvocation;
 use SugarCraft\Code\Providers\ClaudeCodeProvider;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CustomProvider;
+use SugarCraft\Code\Providers\GeminiProvider;
 use SugarCraft\Code\Providers\OpenAIProvider;
 use SugarCraft\Code\Providers\SglangProvider;
 use SugarCraft\Code\Providers\VertexProvider;
@@ -86,7 +87,10 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * completeStream()); Vertex `#google` is reached on the stream path only
      * by delegation (completeStream() yields complete()); Vertex `#gemini` is
      * one method, geminiBody(), serving both complete() and streamGemini().
-     * So the headline holds for every body-shaped row.
+     * So the headline holds for every body-shaped row — and since PRV-3 it
+     * holds for GeminiProvider too: its `complete()` and `completeStream()`
+     * share the one extracted `geminiBody()` in
+     * `Concerns\GeminiGenerateContentWire`, so the native arm is one row.
      *
      * THE DENOMINATOR IS DELIBERATELY NO LONGER A NUMBER. It used to read
      * "9 of 9", which was true when written and stopped being true the moment
@@ -218,6 +222,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         VertexProvider::class . '#anthropic' => 'system',
         VertexProvider::class . '#google' => 'instances[0].context',
         VertexProvider::class . '#gemini' => 'systemInstruction.parts[0].text',
+        GeminiProvider::class => 'systemInstruction.parts[0].text',
         ClaudeCodeProvider::class => '--system-prompt argv',
     ];
 
@@ -429,6 +434,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
             VertexProvider::class . '#anthropic' => self::SENTINEL,
             VertexProvider::class . '#google' => self::SENTINEL,
             VertexProvider::class . '#gemini' => self::SENTINEL,
+            GeminiProvider::class => self::SENTINEL,
         ];
 
         $bodyShapedRows = array_values(array_diff(
@@ -697,6 +703,20 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
                 $this->assertSame('generateContent', $geminiCaptured['method'], self::WRONG_BUILDER);
 
                 return $geminiCaptured['body'];
+
+            case GeminiProvider::class:
+                $nativeCaptured = null;
+                $this->geminiProvider($nativeCaptured)
+                    ->complete($this->request(model: 'gemini-2.5-flash'));
+                // PRV-3: the native arm shares the extracted builder, so the
+                // slot spelling is identical to Vertex's `#gemini` row — and
+                // the endpoint is what distinguishes the two drives. A call
+                // that reached the streaming path or a mis-spliced URL would
+                // land on `:streamGenerateContent?alt=sse`, and this names
+                // that cause instead of a NOT-FOUND at the slot.
+                $this->assertStringEndsWith(':generateContent', $nativeCaptured['endpoint'], self::WRONG_BUILDER);
+
+                return $nativeCaptured['body'];
         }
 
         // Rule 32: an unreadable row is reported, never quietly passed.
@@ -1422,6 +1442,33 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
                 ];
 
                 return $return;
+            },
+        );
+    }
+
+    /**
+     * PRV-3 native arm: same capture shape as `vertexProvider()`'s unary
+     * predictor seam, returning a minimal valid GenerateContentResponse
+     * document so `complete()` resolves without touching the network.
+     *
+     * @param-out array<string, mixed> $captured
+     */
+    private function geminiProvider(?array &$captured = null): GeminiProvider
+    {
+        $captured = ['called' => false];
+
+        return new GeminiProvider(
+            'gsk-test',
+            'https://gemini.invalid',
+            'gemini-2.5-flash',
+            http: function (string $endpoint, array $body) use (&$captured): array {
+                $captured = [
+                    'called' => true,
+                    'endpoint' => $endpoint,
+                    'body' => $body,
+                ];
+
+                return ['candidates' => [['content' => ['parts' => [['text' => 'ok']]]]]];
             },
         );
     }

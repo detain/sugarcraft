@@ -143,6 +143,14 @@ final readonly class ProviderFactory
             'required' => ['projectId'],
             'optional' => ['location', 'model', 'modelPrices', 'thinkingBudget', 'promptCache', 'fallbackModels', 'contextWindow'],
         ],
+        // PRV-3: the native API-key Gemini arm. No `location`/`projectId` -
+        // that is the whole point beside `vertex` - and no `promptCache`:
+        // the Gemini wire marks nothing ({@see GeminiProvider} states the
+        // doctrine), so the key would select nothing.
+        'gemini' => [
+            'required' => ['apiKey'],
+            'optional' => ['baseUrl', 'model', 'modelPrices', 'thinkingBudget', 'fallbackModels', 'contextWindow'],
+        ],
         'custom' => [
             'required' => ['name', 'baseUrl', 'model'],
             'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody', 'supportsVision', 'modelPrices', 'contextWindow', 'fallbackModels', 'mediaKinds', 'mediaBaseUrl', 'mediaApiKey'],
@@ -465,7 +473,7 @@ final readonly class ProviderFactory
      */
     public function availableTypes(): array
     {
-        return ['openai', 'anthropic', 'claude-code', 'sglang', 'bedrock', 'vertex', 'custom'];
+        return ['openai', 'anthropic', 'claude-code', 'sglang', 'bedrock', 'vertex', 'gemini', 'custom'];
     }
 
     /**
@@ -594,6 +602,15 @@ final readonly class ProviderFactory
                 // model not found". The default must be a current model that
                 // also resolves in VertexProvider::PRICE_TABLE.
                 'model' => 'claude-sonnet-4-6',
+            ],
+            'gemini' => [
+                'type' => 'gemini',
+                'apiKey' => getenv('GEMINI_API_KEY') ?: '',
+                'baseUrl' => getenv('GEMINI_BASE_URL') ?: 'https://generativelanguage.googleapis.com',
+                // Sourced from the provider rather than repeated, the way
+                // sglang/bedrock do: a default `gemini` launch must name a
+                // model that resolves in the shared Gemini price table.
+                'model' => GeminiProvider::DEFAULT_MODEL,
             ],
             'custom' => [
                 'type' => 'custom',
@@ -727,6 +744,12 @@ final readonly class ProviderFactory
         'sglang' => ['baseUrl' => 'OPENAI_BASE_URL'],
         'bedrock' => ['region' => 'AWS_REGION'],
         'vertex' => ['projectId' => 'GCP_PROJECT_ID'],
+        // PRV-3: the native Gemini front door. GEMINI_API_KEY is Google's
+        // own documented variable name for the aiplatform key (the
+        // GOOGLE_API_KEY synonym is deliberately NOT read here - one name,
+        // one meaning, and this package names no env a config parser does
+        // not also honour).
+        'gemini' => ['apiKey' => 'GEMINI_API_KEY'],
     ];
 
     /**
@@ -759,7 +782,7 @@ final readonly class ProviderFactory
      * "Unknown provider type: opnenai" used to be the whole sentence, leaving
      * the typo to rediscover the valid set by reading source. The prefix stays
      * byte-identical — existing pins and the transcript's denial-shape scans
-     * key off it — and behind it now ride the seven valid types, the closest
+     * key off it — and behind it now ride the eight valid types, the closest
      * spelling by {@see similar_text()} percentage (only when the candidate
      * shares at least half its length with the ask, so `cat` does not get
      * told it meant `custom`), and the one command that lists what this
@@ -802,6 +825,7 @@ final readonly class ProviderFactory
             'sglang' => $this->createSglang($config),
             'bedrock' => $this->createBedrock($config),
             'vertex' => $this->createVertex($config),
+            'gemini' => $this->createGemini($config),
             'custom' => $this->createCustom($config),
             default => throw new \RuntimeException("Unsupported provider type: {$type}"),
         };
@@ -1608,6 +1632,35 @@ final readonly class ProviderFactory
             // that has a per-family table, vertex included - block key
             // first, user-tier fallback, map-or-scalar both accepted (same
             // normaliser the openai/anthropic/custom arms use).
+            contextWindowOverride: self::configuredContextWindow(
+                $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
+                $model,
+            ),
+        );
+    }
+
+    /**
+     * PRV-3: the native API-key Gemini arm. Same setting surface as the
+     * vertex Gemini arm reads (modelPrices, the A21 thinkingBudget — same
+     * configuredThinkingBudget parser, since it is the SAME wire value —
+     * and the ISS-073 contextWindow), minus the GCP half: no projectId,
+     * location, ADC or promptCache knob. A user whose block says `gemini`
+     * gets the Google first-party endpoint, full stop.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function createGemini(array $config): GeminiProvider
+    {
+        $model = $config['model'] ?? GeminiProvider::DEFAULT_MODEL;
+
+        return new GeminiProvider(
+            $config['apiKey'],
+            $config['baseUrl'] ?? 'https://generativelanguage.googleapis.com',
+            $model,
+            modelPrices: self::modelPricesFor($config),
+            thinkingBudget: self::configuredThinkingBudget(
+                $config['thinkingBudget'] ?? self::userTierSetting('thinkingBudget'),
+            ),
             contextWindowOverride: self::configuredContextWindow(
                 $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
                 $model,

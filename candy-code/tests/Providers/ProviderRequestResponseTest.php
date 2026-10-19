@@ -27,6 +27,7 @@ use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\CustomProvider;
 use SugarCraft\Code\Providers\EmbeddingsRequest;
 use SugarCraft\Code\Providers\EmbeddingsResponse;
+use SugarCraft\Code\Providers\GeminiProvider;
 use SugarCraft\Code\Providers\OpenAIProvider;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Providers\ProviderInterface;
@@ -93,6 +94,7 @@ final class ProviderRequestResponseTest extends TestCase
         BedrockProvider::class => 30,
         VertexProvider::class => 30,
         AnthropicProvider::class => 30,
+        GeminiProvider::class => 30,
         ClaudeCodeProvider::class => 0,
     ];
 
@@ -775,6 +777,40 @@ final class ProviderRequestResponseTest extends TestCase
         $sum = array_sum(array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks));
 
         $this->assertSame(self::STREAMED_USAGE_CONTRACT[AnthropicProvider::class], $sum);
+    }
+
+    public function testGeminiStreamedUsageParksTheCumulativeTotalAndEmitsItOnce(): void
+    {
+        // PRV-3: the extracted Gemini wire restates cumulative `usageMetadata`
+        // on every chunk that carries it (10/20/30 — the deliberately
+        // E24-hostile shape the OpenAI-family fixtures use). The
+        // PARK-THEN-EMIT-ONCE semantics ride the shared
+        // Concerns\GeminiGenerateContentWire, so the streamed total is 30
+        // exactly once, never 60. This reds if the park degrades to
+        // per-chunk emission or if the usage read is deleted.
+        $events = [
+            ['candidates' => [['content' => ['parts' => [['text' => 'Hel']]]]], 'usageMetadata' => ['promptTokenCount' => 10, 'totalTokenCount' => 10]],
+            ['candidates' => [['content' => ['parts' => [['text' => 'lo']]]]], 'usageMetadata' => ['promptTokenCount' => 20, 'totalTokenCount' => 20]],
+            ['candidates' => [['content' => ['parts' => []], 'finishReason' => 'STOP']], 'usageMetadata' => ['promptTokenCount' => 30, 'totalTokenCount' => 30]],
+        ];
+
+        $provider = new GeminiProvider(
+            'gsk-test',
+            'https://generativelanguage.googleapis.com',
+            'gemini-2.5-flash',
+            null,
+            static function (string $endpoint, array $body) use ($events): iterable {
+                yield from $events;
+            },
+        );
+
+        $chunks = iterator_to_array($provider->completeStream(
+            new CompleteRequest(model: 'gemini-2.5-flash', messages: [new UserMessage('hi')])
+        ));
+
+        $sum = array_sum(array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks));
+
+        $this->assertSame(self::STREAMED_USAGE_CONTRACT[GeminiProvider::class], $sum);
     }
 
     public function testClaudeCodeStreamedUsageIsPerDeltaNotCumulative(): void

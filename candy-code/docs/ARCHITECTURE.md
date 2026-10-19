@@ -930,7 +930,7 @@ its keys and its main argument, and its result is sent as it was.
 
 ## Providers
 
-`ProviderFactory::availableTypes()` returns **seven** selectable
+`ProviderFactory::availableTypes()` returns **eight** selectable
 names, and each builds a different class. Measured by constructing every one of
 them on this tree:
 
@@ -942,6 +942,7 @@ them on this tree:
 | `sglang` | `SglangProvider` |
 | `bedrock` | `BedrockProvider` |
 | `vertex` | `VertexProvider` |
+| `gemini` | `GeminiProvider`, native generativelanguage wire |
 | `custom` | `CustomProvider` |
 
 Two rows are easy to get wrong, so they are worth stating flatly.
@@ -960,7 +961,7 @@ of `anthropic`: `createClaudeCode()` returns the real
 `ClaudeCodeProvider`, and `php bin/candy-code models` prints
 `claude-code claude-sonnet-4-6` as its own row.
 
-**`echo` is not one of the seven.** `$factory->create(['type' => 'echo'])`
+**`echo` is not one of the eight.** `$factory->create(['type' => 'echo'])`
 raises `Unknown provider type: echo`. `EchoProvider` is nonetheless live, from a
 different direction: `Cli\Bootstrap::provider()` returns
 `new EchoProvider()` whenever the run selected no provider, or the selected one

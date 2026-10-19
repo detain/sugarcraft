@@ -197,6 +197,8 @@ takes priority; nothing here is consulted in that case.
 | `ANTHROPIC_BASE_URL` | `anthropic`, `claude-code` | API base URL, the root without `/v1`. Defaults to `https://api.anthropic.com`. The `anthropic` type sends to `<base>/v1/messages`; a base that already ends in `/v1` is used as it is. |
 | `SGLANG_API_KEY` | `sglang` | Optional key for a self-hosted OpenAI-compatible endpoint. Defaults to `null`, which is correct for an unauthenticated local server. |
 | `GCP_PROJECT_ID` | `vertex` | Google Cloud project ID. Defaults to the empty string. |
+| `GEMINI_API_KEY` | `gemini` | API key for the native Gemini endpoint, sent as the `x-goog-api-key` header (PRV-3). Defaults to the empty string, which the provider will reject. |
+| `GEMINI_BASE_URL` | `gemini` | API base URL. Defaults to `https://generativelanguage.googleapis.com`; the requests go to `<base>/v1beta/models/<model>:generateContent` (and `:streamGenerateContent?alt=sse`), and a base that already ends in `/v1` or `/v1beta` is used as it is. |
 
 `bedrock` reads no variable of its own here — it relies on the AWS SDK's
 ambient credential chain (`AWS_*` variables, `~/.aws/credentials`, instance

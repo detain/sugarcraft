@@ -61,11 +61,11 @@ final class ProviderFactoryTest extends TestCase
     // availableTypes()
     // -------------------------------------------------------------------------
 
-    public function testAvailableTypesReturnsAllSevenTypes(): void
+    public function testAvailableTypesReturnsAllEightTypes(): void
     {
         $types = $this->factory->availableTypes();
 
-        $this->assertCount(7, $types);
+        $this->assertCount(8, $types);
         $this->assertSame([
             'openai',
             'anthropic',
@@ -73,6 +73,7 @@ final class ProviderFactoryTest extends TestCase
             'sglang',
             'bedrock',
             'vertex',
+            'gemini',
             'custom',
         ], $types);
     }
@@ -113,6 +114,7 @@ final class ProviderFactoryTest extends TestCase
             'sglang' => ['sglang'],
             'bedrock' => ['bedrock'],
             'vertex' => ['vertex'],
+            'gemini' => ['gemini'],
             'custom' => ['custom'],
         ];
     }

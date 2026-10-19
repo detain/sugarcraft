@@ -70,6 +70,9 @@ final class ProviderErrorCopyTest extends TestCase
         $this->assertStringContainsString('providers.<name>', $message, 'the config door this same review opened must be named too');
     }
 
+    // The name predates the sglang row and now the gemini row: this table is
+    // the roster of arms whose REQUIRED_KEY_ENVS hints are checked, whatever
+    // it was called when it was three types.
     public function testTheAnthropicBedrockAndVertexHintsMatchWhatTheArmsActuallyRead(): void
     {
         $expectations = [
@@ -77,6 +80,7 @@ final class ProviderErrorCopyTest extends TestCase
             'bedrock' => ['region', 'AWS_REGION'],
             'vertex' => ['projectId', 'GCP_PROJECT_ID'],
             'sglang' => ['baseUrl', 'OPENAI_BASE_URL'],
+            'gemini' => ['apiKey', 'GEMINI_API_KEY'],
         ];
 
         foreach ($expectations as $type => [$key, $env]) {

@@ -725,6 +725,11 @@ final class UsageTest extends TestCase
      * now reads the CLI's Anthropic buckets (the CLI prints no `total_tokens`,
      * so the total-only read reported every real turn as 0), making six; the
      * set, the "SIX … remaining one" markers and the docblock moved together.
+     * PRV-3's extraction of the Gemini wire arm into
+     * `Concerns\GeminiGenerateContentWire` made the new GeminiProvider the
+     * eighth split reader (it parses `usageMetadata.promptTokenCount` /
+     * `.candidatesTokenCount`), and the set, the "EIGHT … remaining one"
+     * markers and the docblock moved together again.
      * It stays DISCRIMINATING both ways: the expected set reds
      * if a provider regresses to total-only (deletion experiment in the fix-6
      * report), and the cross-check below reds if the docblock side drifts from
@@ -760,14 +765,14 @@ final class UsageTest extends TestCase
         sort($totalOnly);
 
         $this->assertSame(
-            ['AnthropicProvider', 'BedrockProvider', 'ClaudeCodeProvider', 'CustomProvider', 'OpenAIProvider', 'SglangProvider', 'VertexProvider'],
+            ['AnthropicProvider', 'BedrockProvider', 'ClaudeCodeProvider', 'CustomProvider', 'GeminiProvider', 'OpenAIProvider', 'SglangProvider', 'VertexProvider'],
             $split,
             'the set of providers that read a separate input/output usage key changed',
         );
         $this->assertCount(
-            8,
+            9,
             [...$split, ...$totalOnly],
-            'the provider count the docblock quotes ("seven of the eight") changed',
+            'the provider count the docblock quotes ("eight of the nine") changed',
         );
 
         // The docblock's two sides, read out of it by their own markers rather
@@ -775,11 +780,11 @@ final class UsageTest extends TestCase
         // for either list.
         $docblock = (string) (new \ReflectionClass(Usage::class))->getDocComment();
         $this->assertMatchesRegularExpression(
-            '/SEVEN of the eight providers know the split(.*?)remaining one \(([^)]*)\)/s',
+            '/EIGHT of the nine providers know the split(.*?)remaining one \(([^)]*)\)/s',
             $docblock,
             'the docblock no longer states the two-sided enumeration this test pins',
         );
-        preg_match('/SEVEN of the eight providers know the split(.*?)remaining one \(([^)]*)\)/s', $docblock, $m);
+        preg_match('/EIGHT of the nine providers know the split(.*?)remaining one \(([^)]*)\)/s', $docblock, $m);
         [, $splitSide, $totalOnlySide] = $m;
 
         foreach ($split as $name) {

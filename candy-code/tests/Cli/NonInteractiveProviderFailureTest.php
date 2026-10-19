@@ -91,6 +91,9 @@ final class NonInteractiveProviderFailureTest extends TestCase
         'SGLANG_API_KEY',
         'GCP_PROJECT_ID',
         'GOOGLE_APPLICATION_CREDENTIALS',
+        // PRV-3: the native gemini arm's two getenv() reads.
+        'GEMINI_API_KEY',
+        'GEMINI_BASE_URL',
         // Bedrock has no getenv() of its own: the AWS SDK resolves ambient
         // credentials from these, so they are what would decide whether a
         // 'bedrock' row constructs.
