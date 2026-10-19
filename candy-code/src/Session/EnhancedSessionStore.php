@@ -51,6 +51,16 @@ final class EnhancedSessionStore
     }
 
     /**
+     * The database file this store is open on — the address `shares`
+     * (COMPARISON §6.5) publishes into, so the TUI act and the serve reader
+     * resolve the same file without either re-deriving `~/.candy-code`.
+     */
+    public function path(): string
+    {
+        return $this->dbPath;
+    }
+
+    /**
      * Take the single-writer lock on $sessionId (audit SES-3(b)), or null when
      * another TUI holds it. See {@see SessionLock} for what the lock is and why
      * a failure to lock opens the session writable rather than read-only.

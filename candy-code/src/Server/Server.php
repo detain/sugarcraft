@@ -59,7 +59,7 @@ use function React\Promise\resolve;
  *     before anything reads it;
  *  8. {@see AuthMiddleware} — a credential on everything but health, login
  *     and the static UI;
- *  9. {@see Router} — `/ws`, `/api/*`, the UI.
+ *  9. {@see Router} — `/ws`, `/api/*`, `/s/{token}` share pages, the UI.
  *
  * WHAT A MESSAGE MEANS is the handler's: `candy-code serve` hands this the
  * `candy-code.v1` {@see \SugarCraft\Code\Protocol\Dispatcher} (O-3b) over the
@@ -139,6 +139,7 @@ final class Server
         private readonly \Closure $log,
         private readonly \Closure $clock,
         private readonly float $readDeadlineSeconds,
+        private readonly ?\Closure $share = null,
     ) {
     }
 
@@ -156,6 +157,7 @@ final class Server
         ?\Closure $log = null,
         ?\Closure $clock = null,
         ?float $requestDeadlineSeconds = null,
+        ?\Closure $share = null,
     ): self {
         return new self(
             $config,
@@ -167,6 +169,7 @@ final class Server
             },
             $clock ?? static fn (): float => \microtime(true),
             $requestDeadlineSeconds ?? self::REQUEST_READ_DEADLINE_SECONDS,
+            $share,
         );
     }
 
@@ -206,7 +209,9 @@ final class Server
             ServerConfig::MAX_CLIENT_MESSAGE_BYTES,
             $this->log,
         );
-        $router = new Router($upgrade(...), $api(...), ($this->static)(...));
+        // SES-3: serve publishes share pages from the session database; a
+        // server built without $share answers /s/... through the UI, as before.
+        $router = new Router($upgrade(...), $api(...), ($this->static)(...), $this->share === null ? null : ($this->share)(...));
 
         $http = new HttpServer(
             $this->loop,

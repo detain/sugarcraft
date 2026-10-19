@@ -322,7 +322,7 @@ edit it by hand.
 | `/session-pin` | | | — | Pin the current session to the front of the list, or unpin it |
 | `/session-delete` | | | — | Open the session list to delete a session |
 | `/model` | ✓ | ✓ | `[provider [model]]` | Switch the active provider, or a provider and its model |
-| `/share` | ✓ | | `[md\|html\|json] [path]` | Export the session to a file |
+| `/share` | ✓ | | `[md\|html\|json] [path] \| serve [days] \| revoke [token]` | Export the session to a file, or serve and revoke share pages |
 | `/docs` | | | — | Open the documentation |
 | `/exit` | ✓ | ✓ | — | Quit the app |
 | `/theme` | ✓ | | — | Switch the color theme |
@@ -615,9 +615,21 @@ local file and names it in the reply: by default
 the directory `0700`), or a path inside the project — a path that leaves the
 project is refused, and an existing directory gets the default file name. The
 format is the argument, else the path's extension, else Markdown. Nothing is
-uploaded: `CANDY_CODE_SHARE_UPLOAD_URL` names an upload host, but the uploader
-has no backend yet, so the reply says the upload did not happen beside the
-local path ([`ENVIRONMENT.md`](ENVIRONMENT.md)).
+ever uploaded: `CANDY_CODE_SHARE_UPLOAD_URL` is retired, and if it is still
+set the reply refuses it loudly
+([`ENVIRONMENT.md`](ENVIRONMENT.md)).
+
+`/share serve [days]` publishes instead of uploading: the transcript is
+rendered to HTML AT THAT MOMENT and the snapshot is written to the `shares`
+table of the session database, with a 128-bit random token, an expiry
+(default 7 days) and revocation as data. `candy-code serve` then answers
+`GET /s/<token>` publicly — no login cookie — enforcing expiry and
+revocation on every request. Because the row holds rendered HTML, later
+edits to the transcript never appear on a page already shared; publishing
+the new state is a second user act. `/share revoke [token]` takes a page
+down (unknown, expired and revoked tokens all answer the same 404, so the
+page cannot be probed); with no token it revokes the session's only live
+share, or lists the choices.
 
 What keeps the table honest is not this page — no guard counts the rows here. It
 is `Commands\SlashDispatchTest::testEverySlashVisibleRegistryRowHasALiveDispatchHandler()`,

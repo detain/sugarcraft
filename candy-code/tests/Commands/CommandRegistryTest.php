@@ -209,7 +209,7 @@ final class CommandRegistryTest extends TestCase
         }
 
         $this->assertSame('[<name>|--auto]', $hints['rename']);
-        $this->assertSame('[md|html|json] [path]', $hints['share']);
+        $this->assertSame('[md|html|json] [path] | serve [days] | revoke [token]', $hints['share']);
         $this->assertSame('[name]', $hints['rules']);
         $this->assertSame('[--self] [focus]', $hints['compact']);
         $this->assertSame('[bN]', $hints['decompress']);

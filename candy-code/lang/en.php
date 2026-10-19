@@ -473,9 +473,11 @@ Environment variables:
                           A positive whole number of days: each launch drops
                           sessions untouched for at least that long.
    CANDY_CODE_SHARE_UPLOAD_URL
-                          Opt-in upload host for /share; unset, /share only
-                          writes a local file, and no public default host
-                          exists (the uploader has no backend yet).
+                          Retired upload host: /share never uploads
+                          anywhere. When set, the local export still lands
+                          and the reply loudly refuses the key and names
+                          /share serve, which publishes a self-hosted
+                          snapshot page on your own candy-code serve.
    CANDY_CODE_WORKTREES_DIR
                           Base directory under which per-teammate git
                           worktrees are created.
@@ -1155,16 +1157,24 @@ TXT,
     'cmd.settings.description' => 'Show every setting, its value, where it came from and when it applies',
     'cmd.settings.hint' => '[search]',
     'cmd.settings.label' => 'View settings',
+    'cmd.share.bad-days' => 'Days must be a whole number from 1 to {max}.',
     'cmd.share.bad-format' => 'Invalid format \'{format}\'. Supported: md, html, json, text',
-    'cmd.share.description' => 'Export the session to a file',
+    'cmd.share.description' => 'Export the session to a file, or serve and revoke share pages',
     'cmd.share.exported' => 'Exported {count} message(s) as {format} to `{target}`.',
-    'cmd.share.hint' => '[md|html|json] [path]',
+    'cmd.share.hint' => '[md|html|json] [path] | serve [days] | revoke [token]',
     'cmd.share.label' => 'Share session',
     'cmd.share.no-home' => 'Cannot determine a home directory this user owns, so there is no safe default export location. Pass a path inside the project instead: /share md exports/session.md',
     'cmd.share.outside-root' => 'Refusing to write \'{path}\': an export path must stay inside the project root{root}. Omit the path to write to ~/{exports}.',
+    'cmd.share.no-store' => 'No session database is open, so there is nowhere to publish a share page.',
+    'cmd.share.nothing' => 'Nothing to publish: this session has no visible messages to snapshot.',
+    'cmd.share.revoke-many' => 'This session has several live share pages; name the token to revoke:',
+    'cmd.share.revoke-none' => 'This session has no live share page to revoke.',
+    'cmd.share.revoke-unknown' => 'No live share page carries that token.',
+    'cmd.share.revoked' => 'Revoked share {token}; the page 404s from its next request.',
+    'cmd.share.served' => 'Shared {count} message(s): {url} — live for {days} day(s). /share revoke {token} takes it down sooner.',
     'cmd.share.too-many' => 'Too many arguments.',
-    'cmd.share.upload-failed' => 'Upload to {url} did not happen: {error} The local file above is the export.',
-    'cmd.share.usage' => 'Usage: /share [md|html|json|text] [path]',
+    'cmd.share.upload-retired' => 'Uploads are retired: {key} no longer sends anything anywhere. The local file above is the export; /share serve publishes a snapshot page on your own candy-code serve.',
+    'cmd.share.usage' => 'Usage: /share [md|html|json|text] [path] | /share serve [days] | /share revoke [token]',
     'cmd.share.usage-hint' => 'Without a path the export goes to ~/{exports}/; a path must stay inside the project.',
     'cmd.sendto.description' => 'Import a saved PNG\'s parameters back into the generate form',
     // Kept inside the /help spill-row budget (KeyHelpTest pins the hint as one

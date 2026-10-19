@@ -561,18 +561,19 @@ final class HelpTest extends TestCase
 
     /**
      * ISS-119(a): the share-host row used to warn about keeping transcripts
-     * "off the public default" — a default that does not exist. The truth is
-     * `docs/ENVIRONMENT.md`'s own wording for this variable: opt-in only, no
-     * public host, and the uploader is dormant. The screen must not resurrect
-     * the phantom host, so the lie is pinned OUT and the truth IN.
+     * "off the public default" — a default that does not exist. SES-3
+     * (COMPARISON §6.5) retired the uploader outright: the screen must say
+     * the key sends nothing and name `/share serve` as the self-hosted
+     * replacement, still never resurrecting the phantom host.
      */
     public function testScreenTellsTheTruthAboutTheShareUploadHost(): void
     {
         $screen = Help::screen();
 
         $this->assertStringNotContainsString('off the public default', $screen);
-        $this->assertStringContainsString('Opt-in upload host for /share', $screen);
-        $this->assertStringContainsString('no public default host', $screen);
+        $this->assertStringNotContainsString('Opt-in upload host for /share', $screen);
+        $this->assertStringContainsString('Retired upload host: /share never uploads', $screen);
+        $this->assertStringContainsString('/share serve, which publishes a self-hosted', $screen);
     }
 
     /**

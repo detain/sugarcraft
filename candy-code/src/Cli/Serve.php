@@ -17,6 +17,7 @@ use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\LoginCodes;
 use SugarCraft\Code\Server\Auth\TokenStore;
 use SugarCraft\Code\Server\DiscoveryFile;
+use SugarCraft\Code\Server\Http\SharePageController;
 use SugarCraft\Code\Server\Http\StaticFiles;
 use SugarCraft\Code\Server\InterfaceAddresses;
 use SugarCraft\Code\Server\Listener;
@@ -26,6 +27,7 @@ use SugarCraft\Code\Server\Server;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\ServerConfigException;
 use SugarCraft\Code\Server\StateDir;
+use SugarCraft\Code\Share\ShareStore;
 use SugarCraft\Code\Server\Workspace\Gateway;
 use SugarCraft\Code\Support\Daemonize;
 use SugarCraft\Code\Support\Directories\DirectoryBrowser;
@@ -394,7 +396,13 @@ final class Serve
         // naming another project root to that root's workspace host; every
         // other request reaches $protocol untouched.
         $gateway = Gateway::new($protocol, $config, Help::versionString(), $loop);
-        $server = Server::new($config, AuthContext::new($tokens), $static, $gateway, $loop, $log);
+        // SES-3 (COMPARISON §6.5): share pages are read from the same session
+        // database the workspace writes, built HERE like the workspace itself
+        // (after any detach fork — a connection may not ride into the child
+        // that returns to the shell). The lookup is fail-safe: a database
+        // without the shares table answers 404, never an error page.
+        $share = new SharePageController(ShareStore::atPath(Bootstrap::sessionStore(prune: false)->path()));
+        $server = Server::new($config, AuthContext::new($tokens), $static, $gateway, $loop, $log, null, null, $share(...));
 
         try {
             $server->start();

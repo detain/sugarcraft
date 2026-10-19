@@ -8,7 +8,8 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Palette\PaletteAction;
 
 // X-35a: a local export, `~/.candy-code/exports/` by default or a path inside
-// the project. See ShareCommand.
+// the project; SES-3 (COMPARISON §6.5) added `serve [days]` and
+// `revoke [token]` for self-hosted snapshot pages. See ShareCommand.
 return BuiltInCommand::new(CommandSpec::new(
     'share',
     Lang::t('cmd.share.description'),

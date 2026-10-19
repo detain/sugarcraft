@@ -109,8 +109,11 @@ final class SessionStore
      */
     private array $pruneReport = [];
 
+    private string $dbPath;
+
     public function __construct(string $dbPath)
     {
+        $this->dbPath = $dbPath;
         // The transcript database holds full conversation history — sensitive
         // data that must stay owner-only. Setting a restrictive umask BEFORE PDO
         // touches the filesystem makes the main DB and its WAL/SHM sidecar files
@@ -1245,6 +1248,15 @@ final class SessionStore
      *           public methods; {@see EnhancedSessionStore} only ever uses
      *           this handle for its own tables.
      */
+    /**
+     * The database file this store is open on — see
+     * {@see \SugarCraft\Code\Share\ShareStore} (COMPARISON §6.5).
+     */
+    public function path(): string
+    {
+        return $this->dbPath;
+    }
+
     public function getPdo(): PDO
     {
         return $this->pdo;

@@ -14,7 +14,8 @@ use SugarCraft\Code\Util\Exporter;
  * Extracts and serializes the conversation history from a Chat instance
  * into shareable export formats (Markdown, self-contained HTML, JSON, plain
  * text). `/share` writes the result to a local file (roadmap X-35a); the
- * upload path through {@see ShareUploader} is a dormant opt-in.
+ * HTML rendering doubles as the published snapshot behind `/share serve`
+ * ({@see ShareStore}, COMPARISON §6.5).
  *
  * WHAT IS EXPORTED: the rows a backend may be shown
  * ({@see Message::agentVisible()}'s rule — not `uiOnly`) plus the tool rows
