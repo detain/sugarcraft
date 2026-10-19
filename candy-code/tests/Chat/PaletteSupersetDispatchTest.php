@@ -55,6 +55,11 @@ final class PaletteSupersetDispatchTest extends TestCase
      * so does a survivor quietly gaining a palette row elsewhere.
      */
     private const SLASH_ONLY_SURVIVORS = [
+        // PRV-2 (w5b): /effort stays a typed command by the judgement recorded
+        // in its spec file - a palette row carries no argument, and half the
+        // providers refuse the tier, so the picker would be a trap with a
+        // nicer frame.
+        'effort' => 'the dial takes a tier as its argument; the bare form reads, never sets',
         'pane' => 'bare /pane prints usage; the palette actions are the dock-left/dock-right rows',
         // W4 merge coupling: GIT-1 (w4c) added /review and /security-review
         // after VIS-4 cut this census — no PaletteAction arm yet (VIS-4
