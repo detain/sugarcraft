@@ -92,8 +92,11 @@ final class ReplyContinuation
     /**
      * $partial and its continuation $next as the one reply they are: the text
      * joined, the reasoning joined, both responses' usage summed (each was a
-     * billed call), and the tool calls and length stop of $next, which is
-     * where the reply now ends.
+     * billed call), the signed thinking blocks concatenated in the order the
+     * conversation received them (CTX-1: both attempts' blocks were really
+     * shown, and the API only replays a thinking turn whose blocks are all
+     * present), and the tool calls and length stop of $next, which is where
+     * the reply now ends.
      */
     public static function merge(AssistantMessage $partial, AssistantMessage $next, bool $prefill): AssistantMessage
     {
@@ -105,6 +108,7 @@ final class ReplyContinuation
             $reasoning === '' ? null : $reasoning,
             Usage::sum([$partial->usage(), $next->usage()]),
             $next->lengthStopped(),
+            array_merge($partial->thinkingBlocks(), $next->thinkingBlocks()),
         );
     }
 

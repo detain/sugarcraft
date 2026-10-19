@@ -1459,6 +1459,13 @@ foreach ((is_array($requestSpec['messages'] ?? null) ? $requestSpec['messages'] 
             $content,
             is_array($entry['tool_calls'] ?? null) ? $entry['tool_calls'] : null,
             isset($entry['reasoning']) ? (string) $entry['reasoning'] : null,
+            null,
+            false,
+            // CTX-1: rows written before thinking blocks were carried have no
+            // key at all - tolerate the legacy shape rather than fatal the
+            // whole rehydration, and restore the blocks when they are there
+            // so a rehydrated sub-agent conversation still replays them.
+            is_array($entry['thinkingBlocks'] ?? null) ? $entry['thinkingBlocks'] : [],
         ),
         'system' => new SugarCraft\Code\Messages\SystemMessage($content),
         'tool' => new SugarCraft\Code\Messages\ToolResultMessage(

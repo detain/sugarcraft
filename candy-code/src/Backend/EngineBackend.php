@@ -5784,7 +5784,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             }
 
             if ($assistant !== null) {
-                $out[] = new AssistantMessage($assistant->content, $calls === [] ? null : $calls, $assistant->reasoning);
+                // CTX-1: the untyped root Message carries no thinking-block
+                // column (weld follow-up: persist them on the session row),
+                // so this reconstruction is honestly empty - state it in the
+                // call rather than let two more defaults hide the loss.
+                $out[] = new AssistantMessage($assistant->content, $calls === [] ? null : $calls, $assistant->reasoning, null, false, []);
             }
             array_push($out, ...$answers);
         }

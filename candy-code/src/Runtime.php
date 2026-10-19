@@ -1497,8 +1497,8 @@ final class Runtime
      *
      * EVERY ACCUMULATOR IS RESET PER ATTEMPT, AND `$usages` IS THE ONE THAT BITES
      * -------------------------------------------------------------------------
-     * All four are re-initialised at the top of each attempt rather than only
-     * `$buffer`. `$usages` is the dangerous one: it SUMS across chunks (see the
+     * Every accumulator is re-initialised at the top of each attempt rather
+     * than only `$buffer`. `$usages` is the dangerous one: it SUMS across chunks (see the
      * note on the yield below - Vertex reports input and output tokens as two
      * separate responses), and those figures now drive a spend cap, so an
      * attempt whose partial usage survived into the next attempt would
@@ -1524,6 +1524,14 @@ final class Runtime
         $reasoning = null;
         /** @var list<?Usage> $usages */
         $usages = [];
+        // CTX-1 (§6.3): the signed thinking blocks this attempt's stream
+        // closed with, in wire order - folded per chunk like $reasoning and
+        // carried onto the yielded AssistantMessage so the next request can
+        // replay them (the Messages API 400s a thinking turn whose blocks
+        // were dropped). Only replayable (signed/redacted) shapes ever
+        // arrive on a carrier, so merging carriers merges valid blocks.
+        /** @var list<array<string, mixed>> $thinkingBlocks */
+        $thinkingBlocks = [];
         $errorChunk = null;
 
         // Roadmap 2.7-3: a stream that drops AFTER its text reached the screen
@@ -1547,11 +1555,15 @@ final class Runtime
         // false when this attempt cannot be continued (it streamed a tool
         // call, or no text to continue from), and the failure then surfaces
         // as it always did.
-        $resume = function (string $buffer, array $toolCalls, ?string $reasoning, array $usages) use (&$carried, &$carriedPrefill, &$prefillRejected, &$request, $resumeRequest, $baseRequest): bool {
+        $resume = function (string $buffer, array $toolCalls, ?string $reasoning, array $usages, array $thinkingBlocks) use (&$carried, &$carriedPrefill, &$prefillRejected, &$request, $resumeRequest, $baseRequest): bool {
             if ($toolCalls !== []) {
                 return false;
             }
-            $partial = new AssistantMessage($buffer, null, $reasoning, Usage::sum($usages));
+            // CTX-1: the dropped attempt's signed blocks ride its partial -
+            // ReplyContinuation::merge joins them onto the continuation's
+            // own, so the joined reply replays every block the conversation
+            // actually received.
+            $partial = new AssistantMessage($buffer, null, $reasoning, Usage::sum($usages), false, $thinkingBlocks);
             $joined = $carried === null ? $partial : \SugarCraft\Code\Providers\ReplyContinuation::merge($carried, $partial, $carriedPrefill);
             if (!\SugarCraft\Code\Providers\ReplyContinuation::continuable($joined)) {
                 return false;
@@ -1589,8 +1601,12 @@ final class Runtime
             $toolCalls = [];
             $reasoning = null;
             $usages = [];
+            // CTX-1: same per-attempt discipline - blocks collected by a
+            // FAILED attempt belong to text the retry never says; carrying
+            // them over would replay thinking the final reply did not think.
+            $thinkingBlocks = [];
 
-            // E707 (round 81): same per-attempt discipline as the four above -
+            // E707 (round 81): same per-attempt discipline as the five above -
             // a length stop seen by a FAILED attempt must not stain the
             // retried one that completed cleanly. ORed across the attempt's
             // chunks because the stop arrives on one frame of many.
@@ -1633,6 +1649,11 @@ final class Runtime
                     if ($response->reasoning !== null && $response->reasoning !== '') {
                         $reasoning = ($reasoning ?? '') . $response->reasoning;
                     }
+                    // CTX-1: fold signed thinking blocks in wire order, exactly
+                    // like the reasoning fold above. Non-Anthropic providers
+                    // never set the carrier, so this merges an empty list and
+                    // stays inert.
+                    $thinkingBlocks = array_merge($thinkingBlocks, $response->thinkingBlocks);
                     // E456. EVERY chunk that did not already reach $onToken is
                     // announced here, and the condition is `content === ''`
                     // rather than "has reasoning" on purpose: the defect is a
@@ -1687,7 +1708,7 @@ final class Runtime
                 }
                 if ($lastAttempt
                     || !TransientFailure::isTransient($thrown)
-                    || ($emitted && !$resume($buffer, $toolCalls, $reasoning, $usages))
+                    || ($emitted && !$resume($buffer, $toolCalls, $reasoning, $usages, $thinkingBlocks))
                 ) {
                     throw $thrown;
                 }
@@ -1709,7 +1730,7 @@ final class Runtime
             if ($errorChunk === null
                 || $lastAttempt
                 || !TransientFailure::responseIsTransient($errorChunk)
-                || ($emitted && !$resume($buffer, $toolCalls, $reasoning, $usages))
+                || ($emitted && !$resume($buffer, $toolCalls, $reasoning, $usages, $thinkingBlocks))
             ) {
                 break;
             }
@@ -1748,7 +1769,7 @@ final class Runtime
         // and before a call runs, so the history, the ToolStarted/ToolFinished
         // events and every ToolResultMessage all carry the same id.
         $toolCalls = ($this->toolCallIds ??= \SugarCraft\Code\Support\ToolCallIdAllocator::new())->assign($toolCalls);
-        $assistant = new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages), $lengthStopped);
+        $assistant = new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages), $lengthStopped, $thinkingBlocks);
         // 2.7-3: what the dropped attempts already said, then the rest. The
         // dropped attempts' usage is kept, not reset like a restart's: their
         // text is part of the reply, so what they billed is part of its cost.
@@ -1884,6 +1905,10 @@ final class Runtime
             // E707 (round 81): the batch answer states its own ending on the
             // same carrier the content arrived on - forward it verbatim.
             $response->truncated,
+            // CTX-1: and the same for its signed thinking blocks - the batch
+            // carrier is the whole turn's truth in one response, so its
+            // blocks ride verbatim into the persisted message for replay.
+            $response->thinkingBlocks,
         );
 
         if ($toolCalls !== null && $toolCalls !== []) {

@@ -949,9 +949,11 @@ final class ProcessExecutorTest extends TestCase
             . 'tool call reaches the model as a successful one',
         );
         $this->assertSame(
-            3,
+            6,
             $count($script, 'AssistantMessage'),
-            'the child rebuilds an assistant turn without its tool_calls and reasoning',
+            'the child rebuilds an assistant turn without its usage, its length '
+            . 'stop or its signed thinking blocks (CTX-1: the blocks ride the '
+            . 'wire now and legacy rows rehydrate empty)',
         );
         $this->assertSame(
             2,
