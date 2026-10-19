@@ -1552,6 +1552,37 @@ final class Bootstrap
      * $root defaults to getcwd() — the directory the CLI was invoked from —
      * matching the original inline IIFE's behaviour.
      */
+    /**
+     * Build the launch's OBS-1 event sink (roadmap: typed spans from the
+     * `src/Events/*` DTOs over OTLP/HTTP-JSON, hand-rolled — no
+     * open-telemetry packages on a TUI tree).
+     *
+     * Dark by construction: without `OTEL_EXPORTER_OTLP_ENDPOINT` this is
+     * three `getenv()` reads and a {@see \SugarCraft\Code\Observability\NullEventSink}
+     * singleton-allocation — no Guzzle client, no shutdown registration, no
+     * network call site ever built. When lit, the shutdown arm is a
+     * best-effort FLUSH of the bounded batch: the per-request Guzzle timeout
+     * bounds it, so this is a finite HTTP call at exit, NOT a wall-clock kill
+     * (E646 law).
+     */
+    public static function observabilitySink(): \SugarCraft\Code\Observability\EventSink
+    {
+        $config = \SugarCraft\Code\Observability\OtelConfig::fromEnvironment();
+        if (!$config->exportsEvents()) {
+            return new \SugarCraft\Code\Observability\NullEventSink();
+        }
+
+        $sink = new \SugarCraft\Code\Observability\BatchEventSink(
+            \SugarCraft\Code\Observability\OtelSink::fromConfig($config, new \GuzzleHttp\Client()),
+            $config->batchSize,
+        );
+        register_shutdown_function(static function () use ($sink): void {
+            $sink->flush();
+        });
+
+        return $sink;
+    }
+
     public static function chat(?string $root = null): Chat
     {
         // `?: null` rather than a bare `getcwd()`: the call can fail (deleted
@@ -1617,6 +1648,11 @@ final class Bootstrap
         $sessionId = $opened['id'];
         $sessionName = $opened['name'];
 
+        // OBS-1: the OTLP event sink, dark unless the launch environment
+        // names an OTLP endpoint. Serves both `chat` and `serve` because
+        // serve builds its Chat through this same funnel.
+        $eventSink = self::observabilitySink();
+
         $chat = new Chat(
             // The resumed conversation (--continue / --resume <id>), or [] for
             // a new session.
@@ -1640,6 +1676,11 @@ final class Bootstrap
             tokenTracker: $sessionStore instanceof EnhancedSessionStore
                 ? $sessionStore->resumedTokenTracker($sessionId)
                 : null,
+            // OBS-1 (roadmap): typed spans over the Events DTOs to OTLP/HTTP.
+            // {@see observabilitySink()} answers NullEventSink unless
+            // OTEL_EXPORTER_OTLP_ENDPOINT is set, so the dark path costs one
+            // no-op call per folded event and zero I/O.
+            eventSink: $eventSink,
             // A resumed session keeps the "always" answers it was given.
             permissionGrants: Chat::storedPermissionGrants($sessionStore, $sessionId),
             titleBackend: $workspace->titleBackend,
