@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Cli;
 
+use SugarCraft\Code\Bundles\BundleDiscovery;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Lang;
@@ -18,8 +19,9 @@ use SugarCraft\Code\Util\Exporter;
 
 /**
  * The real CLI subcommands — `mcp list`, `session list|show|rename|delete|
- * pin|unpin|archive|unarchive`, `models`, `doctor`, `serve` and `completion
- * bash|zsh|fish` (crush_code.md Phase 4 item 6; the session verbs past
+ * pin|unpin|archive|unarchive`, `models`, `doctor`, `bundles list|install`,
+ * `serve` and `completion bash|zsh|fish` (crush_code.md Phase 4 item 6; the
+ * session verbs past
  * `list`/`delete` are Appendix P §3.4; `serve` is Appendix O §4.7, its body in
  * {@see Serve} — the one verb that keeps running rather than answering, and
  * still constructs no `Program`; `attach` is Appendix O §4.9, its body in
@@ -102,6 +104,7 @@ final class Subcommands
             'serve'      => Serve::run($args),
             'attach'     => Attach::run($args),
             'acp'        => Acp::run($args),
+            'bundles'    => self::bundles($args),
             'mcp'        => self::mcp($args),
             'completion' => self::completion($args),
             // Unreachable: ArgvParser only ever stores a ParsedArgs::SUBCOMMANDS
@@ -1457,6 +1460,97 @@ final class Subcommands
      * never calls `proc_open()` — see that method for why listing must not be
      * implemented by asking for the client.
      */
+    /**
+     * `bundles list` — everything PLG-1's reader sees from this directory:
+     * name, version, tier, a count per surface, and the two declined
+     * surfaces spelled out. The discovery is read FRESH here rather than
+     * through the memoized app feed: a one-shot CLI answer must reflect the
+     * disk as it is now, and warnings/refusals go to this process's stderr,
+     * not into a launch-notice store no headless reader will ever drain.
+     *
+     * `bundles install` is its own commit; until it lands, the action is
+     * refused as unknown through the usage envelope like every other bad
+     * operand.
+     */
+    private static function bundles(ParsedArgs $args): int
+    {
+        $verb = $args->subcommandArgs[0] ?? null;
+        if ($verb !== 'list') {
+            return NonInteractive::failUsage(
+                $verb === null
+                    ? 'candy-code: ' . Lang::t('cli.bundles.no_action')
+                    : 'candy-code: ' . Lang::t('cli.bundles.unknown_action', ['action' => $verb]),
+                $args->outputFormat,
+                Lang::t('cli.bundles.usage'),
+            );
+        }
+
+        $configured = Bootstrap::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
+        $paths = \array_values(\array_filter(\is_array($configured) ? $configured : [], 'is_string'));
+        $discovery = new BundleDiscovery((string) ($args->root ?? ''), $paths);
+        $bundles = $discovery->discover();
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            $rows = [];
+
+            foreach ($bundles as $bundle) {
+                $rows[] = [
+                    'name' => $bundle->name,
+                    'version' => $bundle->version,
+                    'tier' => $bundle->tier,
+                    'dir' => $bundle->dir,
+                    'skills' => \count($bundle->skillsPaths()),
+                    'commands' => \count($bundle->commandsPaths()),
+                    'agents' => \count($bundle->agentsPaths()),
+                    // Declined surfaces: counted honestly, never started.
+                    'hooks' => \count($bundle->hooksPaths()),
+                    'mcp' => $bundle->mcpFile() !== null,
+                ];
+            }
+
+            echo \json_encode(
+                ['bundles' => $rows, 'warnings' => $discovery->warnings(), 'refused' => \array_values($discovery->refusedDirectories())],
+                \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE,
+            ) . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        if ($bundles === []) {
+            echo Lang::t('cli.bundles.none') . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        echo Lang::t('cli.bundles.header') . "\n";
+
+        foreach ($bundles as $bundle) {
+            \printf(
+                "%-18s %-9s %-7s %-7s %-9s %-7s %-6s %s\n",
+                $bundle->name,
+                $bundle->version === '' ? '-' : $bundle->version,
+                $bundle->tier,
+                (string) \count($bundle->skillsPaths()),
+                (string) \count($bundle->commandsPaths()),
+                (string) \count($bundle->agentsPaths()),
+                \count($bundle->hooksPaths()) > 0 ? 'yes' : '-',
+                $bundle->mcpFile() !== null ? 'yes' : '-',
+            );
+        }
+
+        echo Lang::t('cli.bundles.declined') . "\n";
+
+        foreach ($discovery->warnings() as $warning) {
+            \fwrite(\STDERR, 'candy-code: ' . $warning . "\n");
+        }
+
+        foreach ($discovery->refusedDirectories() as $reason) {
+            \fwrite(\STDERR, 'candy-code: ' . $reason . "\n");
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
     private static function mcp(ParsedArgs $args): int
     {
         $verb = $args->subcommandArgs[0] ?? null;
@@ -2072,6 +2166,7 @@ final class Subcommands
         'run' => 'cli.completion.verb.run',
         'acp' => 'cli.completion.verb.acp',
         'attach' => 'cli.completion.verb.attach',
+        'bundles' => 'cli.completion.verb.bundles',
         'completion' => 'cli.completion.verb.completion',
         'doctor' => 'cli.completion.verb.doctor',
         'login' => 'cli.completion.verb.login',
@@ -2089,6 +2184,7 @@ final class Subcommands
      */
     private const SUBCOMMAND_ACTIONS = [
         'session' => ['list', 'show', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
+        'bundles' => ['list', 'install'],
         'mcp' => ['list', 'auth', 'import', 'trust'],
         'serve' => Serve::ACTIONS,
         'completion' => self::SHELLS,

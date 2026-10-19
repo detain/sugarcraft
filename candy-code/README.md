@@ -1989,6 +1989,7 @@ candy-code serve status|stop|logs|url|token
 candy-code attach [<session>]        # the TUI on a session of the running server — turns run there
                                      #   [--url URL]
 candy-code acp                       # an Agent Client Protocol agent on stdio, for an editor to start
+candy-code bundles list              # plugin bundles this directory sees, with the declined surfaces named
 candy-code completion bash|zsh|fish  # a shell completion script on stdout
 ```
 

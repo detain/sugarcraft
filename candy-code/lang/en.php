@@ -148,6 +148,7 @@ return [
     'cli.completion.usage' => 'Usage: candy-code completion {shells}',
     'cli.completion.verb.acp' => 'Run as an Agent Client Protocol agent for an editor',
     'cli.completion.verb.attach' => 'Run the TUI on a session of a running server',
+    'cli.completion.verb.bundles' => 'List or install Claude-format plugin bundles',
     'cli.completion.verb.completion' => 'Emit a shell completion script',
     'cli.completion.verb.doctor' => 'Report on this installation and exit',
     'cli.completion.verb.login' => 'Log a provider in: its own login flow, or a pasted API key',
@@ -211,6 +212,13 @@ Subcommands (none of them opens the TUI or needs a provider, an API key or a
 terminal; each answers and exits except serve, which runs until stopped — and
 attach, which is the exception to both: it runs the TUI on a running server's
 session; acp runs turns for an editor, until the editor disconnects):
+  bundles list           List the plugin bundles this directory sees: name,
+                         version, tier, and the surfaces each carries —
+                         including the hooks and .mcp.json candy-code
+                         declines to run.
+  bundles install <src>  Copy a bundle directory, or clone a git URL with a
+                         bounded depth-one clone, into the user bundle root
+                         (~/.candy-code/bundles), where only you own it.
   doctor                 Check this installation and report every problem it
                          finds: PHP version, the extensions the session store
                          and serve need, the config file, the permission
@@ -721,6 +729,12 @@ TXT,
     'cli.mcp.trust.usage' => 'Usage: candy-code mcp trust (run it in the project, or pass the project directory first)',
     'cli.mcp.unknown_action' => 'mcp {action}: unknown action',
     'cli.mcp.usage' => 'Usage: candy-code mcp list | candy-code mcp trust | candy-code mcp auth login <server> | candy-code mcp import claude|opencode <path>',
+    'cli.bundles.no_action' => 'bundles: no action given',
+    'cli.bundles.unknown_action' => 'bundles {action}: unknown action',
+    'cli.bundles.usage' => 'Usage: candy-code bundles list | candy-code bundles install <path|git-url>',
+    'cli.bundles.none' => 'No plugin bundles found (looked under .candy-code/bundles and every pluginPaths entry).',
+    'cli.bundles.header' => 'BUNDLE            VERSION   TIER    SKILLS  COMMANDS  AGENTS  HOOKS  MCP',
+    'cli.bundles.declined' => 'Bundle hooks and bundle .mcp.json files are DECLINED by design: hooks never register, and an MCP file is only ever started from the project root file. Import one deliberately with `candy-code mcp import claude <file>`.',
     'cli.models.none_configured' => 'No providers are configured.',
     'cli.models.none_selected' => 'No provider is selected; set CANDY_CODE_PROVIDER or use Ctrl+P "Switch model".',
     'cli.models.selected_legend' => '* = selected (CANDY_CODE_PROVIDER or {path}).',
