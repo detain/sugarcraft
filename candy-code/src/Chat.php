@@ -18056,6 +18056,21 @@ final class Chat implements Model
     }
 
     /**
+     * TUI-3A: run a claimed NORMAL-state letter through
+     * {@see ComposerVim::start()} — the single place the composer's
+     * operator-register state changes outside the pending-resolution arm
+     * (which calls {@see ComposerVim::resolve()} directly above the modals).
+     *
+     * @return array{0:Chat, 1:null}
+     */
+    private function applyComposerVim(KeyMsg $key): array
+    {
+        [$input, $state] = ComposerVim::start($key, $this->input, $this->composerVim);
+
+        return [$this->mutate(['input' => $input, 'composerVim' => $state]), null];
+    }
+
+    /**
      * Hand one keystroke to the draft editor.
      *
      * The plain-text call site still guards on `!$msg->ctrl`: a ctrl chord
@@ -18074,21 +18089,6 @@ final class Chat implements Model
      *
      * @return array{0: self, 1: ?\Closure}
      */
-    /**
-     * TUI-3A: run a claimed NORMAL-state letter through
-     * {@see ComposerVim::start()} — the single place the composer's
-     * operator-register state changes outside the pending-resolution arm
-     * (which calls {@see ComposerVim::resolve()} directly above the modals).
-     *
-     * @return array{0:Chat, 1:null}
-     */
-    private function applyComposerVim(KeyMsg $key): array
-    {
-        [$input, $state] = ComposerVim::start($key, $this->input, $this->composerVim);
-
-        return [$this->mutate(['input' => $input, 'composerVim' => $state]), null];
-    }
-
     private function delegateToInput(KeyMsg $msg): array
     {
         [$next, $cmd] = $this->input->update($msg);

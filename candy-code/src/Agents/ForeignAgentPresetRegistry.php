@@ -216,11 +216,9 @@ final class ForeignAgentPresetRegistry
      * as two entries under 0 and 1 -- losing the collision AND the
      * filename-stem key this method promises.
      *
-     * @return array<string, AgentPreset> keyed by preset filename stem
-     */
-    /**
      * @param list<\SugarCraft\Code\Bundles\Bundle> $bundles plugin bundles
      *        whose `agents/` trees join below both plain conventions
+     * @return array<string, AgentPreset> keyed by preset filename stem
      */
     public function discover(string $projectRoot, array $bundles = []): array
     {
@@ -582,12 +580,11 @@ final class ForeignAgentPresetRegistry
      * $body is the prompt whenever no `initialPrompt:` key declares one; a
      * declared key wins, being the more specific statement of intent.
      *
-     * @param array<string, mixed> $data
-     */
-    /**
      * PLG-1: `$source` rides through, not hardcoded — a bundle's `agents/*.md`
      * are parsed by this SAME Claude-shape reader (a container format, not a
      * third dialect) but must carry the badge the roster ranks them by.
+     *
+     * @param array<string, mixed> $data
      */
     private function claudePreset(array $data, string $fallbackName, string $body, SkillSource $source): AgentPreset
     {

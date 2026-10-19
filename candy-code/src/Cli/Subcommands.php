@@ -1451,19 +1451,6 @@ final class Subcommands
     // ---------------------------------------------------------------------
 
     /**
-     * `candy-code mcp list` — what `.mcp.json` declares, and whether this
-     * launch would start it —, since E701, `candy-code mcp auth login`,
-     * the interactive OAuth flow handed off whole to {@see self::mcpAuth()}
-     * at the verb gate below, and, since E710, `candy-code mcp import`,
-     * the print-only foreign-config translator handed to {@see self::mcpImport()}.
-     *
-     * READ-ONLY BY CONSTRUCTION. It goes through
-     * {@see Bootstrap::mcpServerInventory()}, which shares its path,
-     * containment and trust decision with {@see Bootstrap::mcpClient()} but
-     * never calls `proc_open()` — see that method for why listing must not be
-     * implemented by asking for the client.
-     */
-    /**
      * The `bundles` verb: `list` reads the tree, `install` stages a bundle
      * into the user root. Both answer without a provider, an API key or a
      * terminal, like every sibling in this class.
@@ -1926,6 +1913,19 @@ final class Subcommands
         @\rmdir($path);
     }
 
+    /**
+     * `candy-code mcp list` — what `.mcp.json` declares, and whether this
+     * launch would start it —, since E701, `candy-code mcp auth login`,
+     * the interactive OAuth flow handed off whole to {@see self::mcpAuth()}
+     * at the verb gate below, and, since E710, `candy-code mcp import`,
+     * the print-only foreign-config translator handed to {@see self::mcpImport()}.
+     *
+     * READ-ONLY BY CONSTRUCTION. It goes through
+     * {@see Bootstrap::mcpServerInventory()}, which shares its path,
+     * containment and trust decision with {@see Bootstrap::mcpClient()} but
+     * never calls `proc_open()` — see that method for why listing must not be
+     * implemented by asking for the client.
+     */
     private static function mcp(ParsedArgs $args): int
     {
         $verb = $args->subcommandArgs[0] ?? null;

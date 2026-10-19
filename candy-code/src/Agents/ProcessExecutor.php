@@ -809,11 +809,6 @@ final class ProcessExecutor implements ExecutorInterface
      * failure an AgentResult can carry from degrading into an E_WARNING that
      * reddens the suite for the wrong reason (E650).
      *
-     * @param resource $stdin
-     */
-    /**
-     * Write one frame into the child's stdin.
-     *
      * E650's law — a failed write is a DEAD CHILD, not a transport error to
      * raise — holds, but the frame-size premise it was written under does
      * not: a startup frame embeds the agent prompt WITH its `<env>` block
