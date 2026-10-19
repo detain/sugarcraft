@@ -214,12 +214,14 @@ final class RendererTest extends TestCase
 
     public function testRendersEmptyConversationHint(): void
     {
+        // VIS-1 (plan_comparison 6.2): the bare placeholder is gone for a
+        // chat that paints its own frame — a fresh launch now opens on the
+        // startup summary. The shape pin: app line first row (faint, per
+        // ISS-096's lesson about styling), tip row last, no old notice.
         $out = Renderer::render($this->chat());
-        $this->assertStringContainsString('empty conversation', $out);
-        // ISS-096: the hint is styled faint, and the literal Markdown
-        // delimiters that used to fake italics are gone — the placeholder
-        // never passed a Markdown renderer, so they only ever painted noise.
-        $this->assertStringContainsString("\e[2m" . 'empty conversation', $out);
+        $this->assertStringNotContainsString('empty conversation', $out);
+        $this->assertStringContainsString("\e[2m" . 'CandyCode', $out, 'the app line leads and is styled faint');
+        $this->assertStringContainsString('Tip: ', $out);
         $this->assertStringNotContainsString('_(empty', $out);
         $this->assertStringNotContainsString(')_', $out);
     }

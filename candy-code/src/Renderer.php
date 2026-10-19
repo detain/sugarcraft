@@ -13,6 +13,7 @@ use SugarCraft\Core\Util\Token;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Media\PreviewPaint;
 use SugarCraft\Code\Media\PreviewSlots;
+use SugarCraft\Code\Support\StartupSummary;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
 use SugarCraft\Image\ImageLayer;
@@ -1771,6 +1772,10 @@ final class Renderer
             // badge — live, as a turn's `Prune` lands. An open Agent View
             // shows another run's rows, which this ledger does not describe.
             $openView === null ? $chat->contextLedgerView() : null,
+            // VIS-1: the parent chat, for the empty-history startup summary;
+            // an Agent View's transcript belongs to the delegated run, not to
+            // this launch, so it passes null and keeps the placeholder.
+            $openView === null ? $chat : null,
         );
         if ($openView !== null) {
             if ($body === '' && $openView['attach'] === null) {
@@ -4236,8 +4241,14 @@ final class Renderer
      *                                       ledger (roadmap 3.B-3): a tool row whose
      *                                       output the model is no longer sent wears a
      *                                       `pruned` / `distilled` badge; null draws none
+     * @param ?Chat                 $chat    the chat whose transcript this paints (VIS-1):
+     *                                       when the visible history is empty the frame
+     *                                       opens with {@see StartupSummary::render()} for
+     *                                       THIS chat; null — an Agent View's row list,
+     *                                       which no parent summary describes — keeps the
+     *                                       plain empty-conversation placeholder
      */
-    private static function renderHistory(array $history, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents = null, ?\SugarCraft\Code\Context\Pruning\ContextLedger $ledger = null): string
+    private static function renderHistory(array $history, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents = null, ?\SugarCraft\Code\Context\Pruning\ContextLedger $ledger = null, ?Chat $chat = null): string
     {
         // Roadmap 1.B-2: a row the model reads but the user does not - a
         // turn's step record ({@see Message::$userVisible}) - is not painted.
@@ -4246,6 +4257,18 @@ final class Renderer
         $sections = $ledger === null ? [] : self::compressedSectionStarts($history, $ledger);
         $history = array_filter($history, static fn(Message $msg): bool => $msg->userVisible);
         if ($history === []) {
+            // VIS-1 (plan_comparison 6.2): a fresh launch used to paint one
+            // faint line and nothing else; it now opens with the startup
+            // summary — version · provider · model · mode, cwd · branch, the
+            // instruction docs and the memory/skill/MCP counts, and a tip.
+            // View-side only: no transcript row, so persistence, compaction
+            // and the prompt budget never see it, and the first message
+            // replaces it exactly as the placeholder used to be replaced.
+            // An Agent View's empty row list passes no chat — the parent's
+            // summary is not this pane's story, so the placeholder stays.
+            if ($chat !== null) {
+                return StartupSummary::render($chat);
+            }
             // ISS-096: this used to be `'_(' . … . ')_'` — Markdown italic
             // delimiters on a row that never reaches a Markdown pass (the
             // placeholder is returned pre-render), so every fresh launch

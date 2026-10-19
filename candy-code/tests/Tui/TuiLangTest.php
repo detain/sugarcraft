@@ -217,7 +217,10 @@ final class TuiLangTest extends TestCase
     private static function quotedTuiKeys(): array
     {
         $src = \dirname(__DIR__, 2) . '/src';
-        $files = [$src . '/Renderer.php', $src . '/App/App.php', $src . '/Chat.php'];
+        // VIS-1: StartupSummary names its tui.startup.* keys from src/Support,
+        // which this census never walked before the startup block existed —
+        // an unlisted file would strand its keys as "dead" here.
+        $files = [$src . '/Renderer.php', $src . '/App/App.php', $src . '/Chat.php', $src . '/Support/StartupSummary.php'];
         foreach (['/Tui', '/Palette'] as $dir) {
             $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($src . $dir, \FilesystemIterator::SKIP_DOTS));
             foreach ($iterator as $file) {

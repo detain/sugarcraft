@@ -1,0 +1,374 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Support;
+
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Chat;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\Help;
+use SugarCraft\Code\Agents\MemoryScope;
+use SugarCraft\Code\Context\ProjectMemoryWriter;
+use SugarCraft\Code\Skills\SkillLoader;
+use SugarCraft\Code\Skills\SkillManager;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Workspace\GitRunner;
+use SugarCraft\Code\Lang;
+use SugarCraft\Style\Style;
+
+/**
+ * The startup summary that replaces the old empty-conversation placeholder
+ * (VIS-1, plan_comparison 6.2).
+ *
+ * A fresh launch used to paint one faint line and nothing else; the summary
+ * answers the four questions a user arriving in an unfamiliar checkout
+ * actually has — what is running, where am I, what does it already know, and
+ * what should I try — out of facts the running process ALREADY holds: the
+ * Composer version, the live backend's provider and model, the permission
+ * mode, the git branch, the instruction documents the system prompt splices,
+ * and the memory/skill/MCP inventories the host commands enumerate.
+ *
+ * It is VIEW-SIDE ONLY by construction: the transcript is untouched, so no
+ * row is persisted, no compaction budget is spent, and clearing history
+ * brings the summary back rather than having buried it. {@see compose()} is
+ * pure — it lays out a parsed fact bag and reads nothing; every impure
+ * accessor sits behind {@see gather()}'s per-fact fail-soft, because a
+ * summary line is never worth a paint-time fatal.
+ *
+ * The tip rotates over a const roster by `crc32(session id)` — deterministic
+ * per conversation, stable across frames, and with no timer and no RNG, so
+ * golden-style pins stay byte-reproducible.
+ */
+final class StartupSummary
+{
+    /**
+     * The tip roster. Index by `crc32(session id) % count()` (see
+     * {@see tipIndex()}); a seventh tip is a seventh key and nothing else —
+     * no consumer pins a numeral outside this array.
+     */
+    public const TIP_KEYS = [
+        'tui.startup.tip.0',
+        'tui.startup.tip.1',
+        'tui.startup.tip.2',
+        'tui.startup.tip.3',
+        'tui.startup.tip.4',
+        'tui.startup.tip.5',
+    ];
+
+    /** The segment separator, the same middle dot the status bar joins with. */
+    private const SEP = ' · ';
+
+    /**
+     * Rendered frames memoized by the fact key. The summary only exists while
+     * the transcript is empty, but an idle repaint used to re-derive git and
+     * disk inventories every frame; the key carries every fact that can
+     * change what is painted, so a mode switch or a model swap re-derives and
+     * an idle spinner tick does not.
+     *
+     * @var array<string, string>
+     */
+    private static array $cache = [];
+
+    /**
+     * The painted block: the summary rows, each one faint (ISS-096's lesson —
+     * the placeholder's mood was always "quiet context", which is what a
+     * Style spells, not what literal delimiters fake).
+     */
+    public static function render(Chat $chat): string
+    {
+        $mode = $chat->currentPermissionMode()?->value;
+        [$provider, $model] = self::providerAndModel($chat);
+        $key = ($chat->currentSessionId() ?? '') . "\0" . $chat->projectRoot()
+            . "\0" . ($mode ?? '') . "\0" . ($provider ?? '') . "\0" . ($model ?? '');
+
+        return self::$cache[$key] ??= self::faintRows(
+            self::compose(self::gather($chat, $mode, $provider, $model))
+        );
+    }
+
+    /**
+     * Lay the parsed facts out as the summary's raw rows.
+     *
+     * Pure: given the same bag it returns the same text, and the only fact it
+     * consults outside its argument is the home directory, purely to shorten
+     * the display path (the way a shell prompt does). The bag is PARSED here,
+     * key by key — a missing or
+     * misshapen fact degrades to "not measured" (null) or "nothing to show"
+     * ([]) rather than trusting the producer, so the one place the block's
+     * layout lives is also the one place its shape is settled. Rows:
+     *
+     *  1. app + version, provider, model, permission mode
+     *  2. working directory (home shortened to `~`), git branch
+     *  3. instruction documents with their sizes, memory/skill/MCP counts
+     *  4. the conversation's tip
+     *
+     * @param array<string, mixed> $facts
+     */
+    public static function compose(array $facts): string
+    {
+        $segments = static function (array $values): array {
+            $kept = [];
+            foreach ($values as $value) {
+                if (\is_string($value) && $value !== '') {
+                    $kept[] = $value;
+                }
+            }
+
+            return $kept;
+        };
+
+        $header = Lang::t('tui.startup.app_line', ['version' => (string) ($facts['version'] ?? 'unknown')]);
+        foreach ($segments([$facts['provider'] ?? null, $facts['model'] ?? null, $facts['mode'] ?? null]) as $segment) {
+            $header .= self::SEP . $segment;
+        }
+
+        $place = self::shortenHome((string) ($facts['cwd'] ?? ''));
+        $branch = $facts['branch'] ?? null;
+        if (\is_string($branch) && $branch !== '') {
+            $place .= self::SEP . $branch;
+        }
+
+        $knowledge = [];
+        $files = $facts['instructionFiles'] ?? [];
+        if (\is_array($files)) {
+            foreach ($files as $document) {
+                if (\is_array($document) && \is_string($document['name'] ?? null) && \is_int($document['bytes'] ?? null)) {
+                    $knowledge[] = $document['name'] . ' (' . self::bytes($document['bytes']) . ')';
+                }
+            }
+        }
+        // The whole-key literals are load-bearing: the census in
+        // tests/LangParityTest.php scans quoted call-site keys for entries
+        // that exist in lang/en.php, and a key assembled by concatenation is
+        // invisible to it (and to whoever greps for it later).
+        foreach (['memories', 'skills', 'mcpServers'] as $fact) {
+            $count = $facts[$fact] ?? null;
+            if (!\is_int($count)) {
+                continue;
+            }
+            $knowledge[] = match ([$fact, $count === 1]) {
+                ['memories', true] => Lang::t('tui.startup.memory.one', ['count' => $count]),
+                ['memories', false] => Lang::t('tui.startup.memory.many', ['count' => $count]),
+                ['skills', true] => Lang::t('tui.startup.skill.one', ['count' => $count]),
+                ['skills', false] => Lang::t('tui.startup.skill.many', ['count' => $count]),
+                ['mcpServers', true] => Lang::t('tui.startup.mcp.one', ['count' => $count]),
+                ['mcpServers', false] => Lang::t('tui.startup.mcp.many', ['count' => $count]),
+            };
+        }
+
+        $tip = Lang::t('tui.startup.tip_label', [
+            'tip' => Lang::t(self::TIP_KEYS[((int) ($facts['tipIndex'] ?? 0)) % count(self::TIP_KEYS)]),
+        ]);
+
+        return self::rowsToString([$header, $place, $knowledge === [] ? '' : implode(self::SEP, $knowledge), $tip]);
+    }
+
+    /**
+     * The conversation's tip slot: crc32 over the session id, or over the
+     * working directory while the session has no id yet (a fresh launch has a
+     * stable summary seed before it has a stable id). Deterministic by
+     * design — see the class docblock for why neither a timer nor an RNG is
+     * in play.
+     */
+    public static function tipIndex(?string $sessionId, string $fallbackSeed = ''): int
+    {
+        return crc32($sessionId ?? $fallbackSeed) % count(self::TIP_KEYS);
+    }
+
+    /** Drop every memoized frame — test seam, same shape as the other caches. */
+    public static function clearCacheForTesting(): void
+    {
+        self::$cache = [];
+    }
+
+    /**
+     * Read every fact the summary shows. Each read is individually fail-soft:
+     * the value is null (a count) or omitted (a segment) when its subsystem
+     * is unavailable, throws, or reports nothing, so the block always paints
+     * what the process can actually establish and never a fatal.
+     *
+     * @return array{version: string, provider: ?string, model: ?string, mode: ?string, cwd: string, branch: ?string, instructionFiles: list<array{name: string, bytes: int}>, memories: ?int, skills: ?int, mcpServers: ?int, tipIndex: int}
+     */
+    private static function gather(Chat $chat, ?string $mode, ?string $provider, ?string $model): array
+    {
+        $root = $chat->projectRoot();
+
+        return [
+            'version' => self::tryFact(static fn(): string => Help::versionString()) ?? 'unknown',
+            'provider' => $provider,
+            'model' => $model,
+            'mode' => $mode,
+            'cwd' => $root,
+            'branch' => self::branch($root),
+            'instructionFiles' => self::tryFact(
+                static fn(): array => self::instructionFiles($root),
+            ) ?? [],
+            'memories' => self::tryFact(static fn(): int => self::memoryCount($chat, $root)),
+            'skills' => self::tryFact(static fn(): int => self::skillCount($root)),
+            'mcpServers' => self::tryFact(static fn(): int => self::mcpCount($root)),
+            'tipIndex' => self::tipIndex($chat->currentSessionId(), $root),
+        ];
+    }
+
+    /**
+     * The backend's provider and served model, using the same rule the status
+     * bar's model segment reads (served model wins, the configured one is the
+     * fallback, and a backend that is not the engine reports neither).
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private static function providerAndModel(Chat $chat): array
+    {
+        $fact = self::tryFact(static function () use ($chat): array {
+            $backend = $chat->backend();
+            if (!$backend instanceof EngineBackend) {
+                return [null, null];
+            }
+
+            return [$backend->provider()->name(), $backend->servedModel() ?? $backend->model()];
+        });
+
+        return $fact ?? [null, null];
+    }
+
+    /** The `git branch --show-current` read — EnvironmentBlock's precedent. */
+    private static function branch(string $root): ?string
+    {
+        return self::tryFact(static function () use ($root): ?string {
+            if (!GitRunner::available()) {
+                return null;
+            }
+            $result = GitRunner::new($root)->run('branch', '--show-current');
+            $branch = trim($result['stdout']);
+
+            // Detached HEAD answers empty with exit 0 — a real state, not a
+            // failure, and not a fact worth a segment either.
+            return $result['ok'] && $branch !== '' ? $branch : null;
+        });
+    }
+
+    /**
+     * The instruction documents the system prompt splices, as display names
+     * with their byte sizes. {@see Bootstrap::instructionLoader()} is the
+     * launch's own memoized loader, so this reads nothing the prompt did not
+     * already read.
+     *
+     * @return list<array{name: string, bytes: int}>
+     */
+    private static function instructionFiles(string $root): array
+    {
+        $files = [];
+        foreach (Bootstrap::instructionLoader($root)->loadDocuments() as $document) {
+            $files[] = ['name' => basename($document['path']), 'bytes' => $document['bytes']];
+        }
+
+        return $files;
+    }
+
+    /** Notes across every scope of both stores, deduplicated by store identity. */
+    private static function memoryCount(Chat $chat, string $root): int
+    {
+        $stores = [];
+        $home = $chat->memoryStore();
+        if ($home !== null) {
+            $stores[spl_object_id($home)] = $home;
+        }
+        $project = ProjectMemoryWriter::forRoot($root)?->store();
+        if ($project !== null) {
+            $stores[spl_object_id($project)] = $project;
+        }
+
+        $total = 0;
+        foreach ($stores as $store) {
+            foreach (MemoryScope::cases() as $scope) {
+                $total += count($store->list($scope));
+            }
+        }
+
+        return $total;
+    }
+
+    /**
+     * The skills this session could load and would let the user invoke. The
+     * live registry is private to the backend, so — exactly as
+     * `/skills`'s own listing does — the count re-runs the launch's cheap
+     * tier scan rather than borrowing a reference that does not exist.
+     */
+    private static function skillCount(string $root): int
+    {
+        $registry = new SkillRegistry();
+        (new SkillManager(new SkillLoader(), $registry))->loadAll($root);
+
+        return count($registry->getUserInvocable());
+    }
+
+    /** The trusted config's MCP server rows — the inventory `/mcp` reports. */
+    private static function mcpCount(string $root): int
+    {
+        return count(Bootstrap::mcpServerInventory($root)['servers']);
+    }
+
+    /**
+     * Run one fact read; a throw is the same "not established" answer as an
+     * unavailable subsystem. Fail-soft on {@see \Throwable} on purpose — the
+     * summary must never take down a frame over a git probe or a stray scan.
+     *
+     * @template T
+     *
+     * @param callable(): T $read
+     *
+     * @return T|null
+     */
+    private static function tryFact(callable $read): mixed
+    {
+        try {
+            return $read();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /** Home as `~`, the way shell prompts shorten their own root. */
+    private static function shortenHome(string $path): string
+    {
+        $home = \rtrim(HomeDirectory::resolved() ?? '', '/');
+        if ($home !== '' && ($path === $home || str_starts_with($path, $home . '/'))) {
+            return '~' . substr($path, \strlen($home));
+        }
+
+        return $path;
+    }
+
+    /** The same byte humanisation `/context` prints its row sizes with. */
+    private static function bytes(int $bytes): string
+    {
+        return $bytes < 1024
+            ? $bytes . ' B'
+            : rtrim(rtrim(number_format($bytes / 1024, 1, '.', ''), '0'), '.') . ' KB';
+    }
+
+    /**
+     * Drop empty rows and join what is left.
+     *
+     * @param list<string> $rows
+     */
+    private static function rowsToString(array $rows): string
+    {
+        return implode("\n", array_values(array_filter($rows, static fn(string $row): bool => $row !== '')));
+    }
+
+    /**
+     * Style each row faint on its own. One wrapper around the whole block
+     * would open the SGR once and close it after the last row, so the
+     * inter-row newlines would ride outside the faint and the first-row pin
+     * the shell tests keep would not describe every line.
+     */
+    private static function faintRows(string $rows): string
+    {
+        return implode("\n", array_map(
+            static fn(string $row): string => Style::new()->faint()->render($row),
+            explode("\n", $rows),
+        ));
+    }
+}
