@@ -121,6 +121,49 @@ final class ModelMetadataTest extends TestCase
     {
         self::assertNull(ModelMetadata::disabled()->entry('claude-sonnet-4-6'));
         self::assertNull(ModelMetadata::disabled()->contextWindow('claude-sonnet-4-6'));
+        self::assertSame([], ModelMetadata::disabled()->candidates());
+    }
+
+    public function testCandidatesEnumerateChatRowsSortedVerbatim(): void
+    {
+        $db = ModelMetadata::fromTable(self::litellm() + [
+            'bedrock/anthropic.claude-sonnet-4-5-v2:0' => ['max_input_tokens' => 200_000, 'litellm_provider' => 'bedrock', 'mode' => 'chat'],
+            'gpt-4*' => ['max_input_tokens' => 8_192, 'litellm_provider' => 'openai'],
+            '*' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai'],
+        ]);
+
+        // SORT_STRING keeps uppercase ahead of lowercase; keys ride verbatim
+        // so entry() resolves every answer directly.
+        self::assertSame([
+            'Mixed-Case-Model',
+            'absurd-window',
+            'bedrock/anthropic.claude-sonnet-4-5-v2:0',
+            'claude-sonnet-4-6',
+            'gpt-5-made-up',
+        ], $db->candidates());
+    }
+
+    public function testCandidateHintsMatchLitellmProviderCaseInsensitivelyAndWildcardsNeverRide(): void
+    {
+        $db = ModelMetadata::fromTable(self::litellm() + [
+            'gpt-4*' => ['max_input_tokens' => 8_192, 'litellm_provider' => 'openai'],
+            '*' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai'],
+        ]);
+
+        self::assertSame(['claude-sonnet-4-6'], $db->candidates('anthropic'));
+        self::assertSame(['gpt-5-made-up'], $db->candidates('OpenAI'), 'a self-hosted name with no attributed row is not forced in');
+        self::assertSame([], $db->candidates('bedrock'), 'no bedrock-attributed row in this fixture');
+        self::assertSame([], $db->candidates('no-such-family'));
+    }
+
+    public function testCandidatesCapToTheGivenLimit(): void
+    {
+        $db = ModelMetadata::fromTable(self::litellm() + [
+            'bedrock/anthropic.claude-sonnet-4-5-v2:0' => ['max_input_tokens' => 200_000, 'litellm_provider' => 'bedrock', 'mode' => 'chat'],
+        ]);
+
+        self::assertSame(['Mixed-Case-Model', 'absurd-window'], $db->candidates(limit: 2));
+        self::assertCount(5, $db->candidates(limit: 0));
     }
 
     // -------------------------------------------------------------------------

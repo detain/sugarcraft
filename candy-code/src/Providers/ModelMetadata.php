@@ -21,7 +21,10 @@ use SugarCraft\Code\Support\HomeDirectory;
  * the `anthropic` type, whose models bill real money — and models whose real
  * window is 200k or 1M, so the context tiers fired at the wrong point. The
  * native `AnthropicProvider` carries its own tables and does not consult this
- * one; `openai` and `custom` are its only provider readers. {@see OpenAIProvider} answered 0
+ * one; `openai` and `custom` are its only provider readers of the figures.
+ * PRV-1 (§6.5) adds a second kind of reader, {@see candidates()}: the model
+ * palette and `models --all` enumerate names for ANY provider type from the
+ * same table. {@see OpenAIProvider} answered 0
  * ("unknown") for a model its built-in table did not list. Both now consult
  * this database between the operator's own settings and their built-in
  * fallbacks: `contextWindow` / `modelPrices` setting > this database >
@@ -255,6 +258,54 @@ final class ModelMetadata
         }
 
         return null;
+    }
+
+    /**
+     * PRV-1 (§6.5): the model names this database knows, for filling the
+     * model palette and `models --all` without any provider round trip.
+     * Every entry is a table key verbatim, so {@see entry()} resolves each
+     * one directly — including hosted rows whose key carries the upstream
+     * prefix (`bedrock/…`, `vertex_ai/…`), whose spelling IS the name the
+     * hosted endpoint expects on the wire.
+     *
+     * With a $providerHint, only rows LiteLLM attributes to that hosted
+     * family survive — the `litellm_provider` column is the table's only
+     * per-row attribution, matched case-insensitively exactly like entry()'s
+     * two-piece lookup. A self-hosted model that shares a name fragment
+     * with a hosted one has no litellm_provider row to speak of, which is
+     * the same honesty rule as the pricing match.
+     *
+     * Wildcard pattern rows (`*`, `gpt-4*` — LiteLLM's defaults for
+     * unlisted variants) are never offered: they are price fallbacks, not
+     * selectable models. The result is sorted for stable palette order and
+     * capped at $limit rows when a limit is given.
+     *
+     * @return list<string>
+     */
+    public function candidates(?string $providerHint = null, int $limit = 0): array
+    {
+        $table = $this->table();
+        if ($table === []) {
+            return [];
+        }
+
+        $hint = $providerHint === null ? null : strtolower(trim($providerHint));
+        $out = [];
+        foreach ($table as $model => $row) {
+            if ($model === '' || str_contains($model, '*')) {
+                continue;
+            }
+
+            if ($hint !== null && strtolower((string) ($row['litellm_provider'] ?? '')) !== $hint) {
+                continue;
+            }
+
+            $out[] = (string) $model;
+        }
+
+        sort($out, SORT_STRING);
+
+        return $limit > 0 ? array_slice($out, 0, $limit) : $out;
     }
 
     /**
