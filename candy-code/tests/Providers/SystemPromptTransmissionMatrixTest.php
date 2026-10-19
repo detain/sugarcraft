@@ -25,6 +25,8 @@ use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Providers\BedrockProvider;
 use SugarCraft\Code\Providers\ClaudeCodeInvocation;
 use SugarCraft\Code\Providers\ClaudeCodeProvider;
+use SugarCraft\Code\Providers\CodexInvocation;
+use SugarCraft\Code\Providers\CodexProvider;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CustomProvider;
 use SugarCraft\Code\Providers\GeminiProvider;
@@ -45,6 +47,9 @@ use SugarCraft\Code\Providers\VertexProvider;
  * {@see testEveryProviderImplementerHasATransmissionContract} on day one; a
  * provider whose transmission is deleted fails its per-provider test.
  *
+ * That day-one red is not decoration: CodexProvider (PRV-4) shipped with no
+ * row and reddened exactly this file's roster assertion until the row landed.
+ *
  * Each provider is driven exactly the way its own suite drives it (Sglang /
  * Custom through a mocked Guzzle client and the captured wire body,
  * OpenAI through a captured create()/createStreamed() params array, Bedrock
@@ -52,7 +57,12 @@ use SugarCraft\Code\Providers\VertexProvider;
  * predictor/streamer seams, ClaudeCode through ClaudeCodeInvocation's public
  * printModeArgs() wire shaper — its execute() step is proc_open and cannot
  * run in a unit test, so the shaper is driven with the exact options the
- * provider builds, as ClaudeCodeProviderTest does).
+ * provider builds, as ClaudeCodeProviderTest does — and Codex through the
+ * private buildPrompt() transcript shaper reflected, the same idiom
+ * testBedrockEmptyStringSystemPromptIsTransmittedBecauseTheGuardIsNotNullOnly()
+ * uses for systemBlocks(); Codex's wire is that transcript written to the
+ * child's stdin, the spawn itself is pinned end-to-end by
+ * CodexProviderTest::testTheSystemPromptRidesTheStdinTranscript).
  */
 final class SystemPromptTransmissionMatrixTest extends TestCase
 {
@@ -177,9 +187,9 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * reference so a class rename still breaks this file at compile time.
      *
      * EVERY VALUE HERE IS A BODY PATH READ BY {@see resolveContractSlot()},
-     * except the one row named in {@see NON_BODY_CONTRACT_ROWS}.
+     * except the rows named in {@see NON_BODY_CONTRACT_ROWS}.
      *
-     * Four families (the `/` in a citation pair separates the `#complete`
+     * Six families (the `/` in a citation pair separates the `#complete`
      * builder from the `#stream` one):
      * - Sglang/Custom/OpenAI prepend an OpenAI-chat-shaped leading system
      *   message into `messages` (`SglangProvider::buildParams()` hoisting via
@@ -200,6 +210,10 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      *   top-level `system` string (`AnthropicProvider` through the shared
      *   `AnthropicMessagesWire::anthropicBody()`) — the same slot the Vertex
      *   Anthropic arm uses, because it is the same wire.
+     * - Codex turns it into the leading `System:` part of the stdin
+     *   transcript (`CodexProvider::buildPrompt()`, shared by both its paths)
+     *   — there is no probed `--system-prompt` flag on `codex exec`, so the
+     *   prompt rides the flattened conversation instead.
      *
      * EchoProvider is deliberately absent: it is a test double with no wire —
      * it echoes a blockquote in PHP and never serializes a request payload
@@ -224,6 +238,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         VertexProvider::class . '#gemini' => 'systemInstruction.parts[0].text',
         GeminiProvider::class => 'systemInstruction.parts[0].text',
         ClaudeCodeProvider::class => '--system-prompt argv',
+        CodexProvider::class => 'System: leading transcript part on stdin',
     ];
 
     /**
@@ -240,10 +255,23 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * {@see testClaudeCodeTransmitsSystemPromptAsASystemPromptArgvPairOnBothPaths()},
      * which asserts the flag AND its adjacent value.
      *
+     * `System: leading transcript part on stdin` is a flattened text
+     * transcript, not a JSON document either: CodexProvider never serializes
+     * a request body — it shells out to `codex exec --json` and writes the
+     * transcript to the child's stdin (`CodexProvider::complete()` /
+     * `CodexProvider::completeStream()` -> `CodexProvider::buildPrompt()`),
+     * and there is no probed `--system-prompt` flag to carry the prompt
+     * instead. {@see resolveContractSlot()} has nothing to walk, so the row
+     * is pinned by
+     * {@see testCodexTransmitsSystemPromptAsTheLeadingTranscriptPart()} and
+     * the both-paths sharing of the single builder is pinned structurally by
+     * {@see testCodexBuildPromptIsTheOneTranscriptShaperBothPathsCall()}.
+     *
      * @var list<string>
      */
     private const NON_BODY_CONTRACT_ROWS = [
         ClaudeCodeProvider::class,
+        CodexProvider::class,
     ];
 
     /**
@@ -1279,6 +1307,70 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     }
 
     // =========================================================================
+    // Codex — leading `System:` part of the stdin transcript
+    // (`CodexProvider::complete()` / `CodexProvider::completeStream()` ->
+    // `CodexProvider::buildPrompt()`). The wire is a subprocess, which no
+    // unit test in this file spawns; like the claude-code sibling the SHAPER
+    // is driven instead — here by reflection, the same idiom this file uses
+    // for BedrockProvider::systemBlocks() — and CodexProviderTest pins the
+    // whole spawn end-to-end against a fake codex
+    // (testTheSystemPromptRidesTheStdinTranscript).
+    // =========================================================================
+
+    public function testCodexTransmitsSystemPromptAsTheLeadingTranscriptPart(): void
+    {
+        // Exact value (rule 20): the sentinel rides the leading `System:`
+        // part of the flattened transcript, one copy, ahead of the user
+        // turn, joined by the blank line buildPrompt() emits.
+        $transcript = $this->codexTranscript($this->request());
+
+        $this->assertSame('System: ' . self::SENTINEL . "\n\nUser: Hi", $transcript);
+        $this->assertSame(1, substr_count($transcript, self::SENTINEL));
+    }
+
+    public function testCodexNullSystemPromptTransmitsNoSystemPart(): void
+    {
+        $this->assertSame('User: Hi', $this->codexTranscript($this->request(null)));
+    }
+
+    public function testCodexEmptyStringSystemPromptTransmitsNoSystemPart(): void
+    {
+        // Measured guard polarity: buildPrompt() rejects null AND ''
+        // (`CodexProvider::buildPrompt()`'s combined guard), so '' is
+        // "unset" here — the Sglang/Custom side of the family difference,
+        // NOT the empty part OpenAI/Bedrock transmit. Pinned so the guards
+        // cannot silently drift together.
+        $this->assertSame('User: Hi', $this->codexTranscript($this->request('')));
+    }
+
+    public function testCodexBuildPromptIsTheOneTranscriptShaperBothPathsCall(): void
+    {
+        // The row carries no `#complete`/`#stream` discriminator, and that
+        // IS the claim: one builder, both paths. ClaudeCode's argv drive can
+        // replay both shapes; this one's cannot (the paths differ only in
+        // the proc plumbing after the shaper), so the claim is pinned where
+        // it lives — in the source: the complete() and completeStream()
+        // slices of CodexProvider.php each call the shaper exactly once.
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 2) . '/src/Providers/CodexProvider.php',
+        );
+
+        $paths = [
+            'complete()' => $this->methodSourceSlice($source, 'complete', 'completeStream'),
+            'completeStream()' => $this->methodSourceSlice($source, 'completeStream', 'embeddings'),
+        ];
+
+        foreach ($paths as $path => $body) {
+            $this->assertSame(
+                1,
+                substr_count($body, '$this->buildPrompt($request)'),
+                'CodexProvider::' . $path . ' must route the request through buildPrompt() exactly '
+                . 'once — the undiscriminated contract row claims one transcript shaper for both paths',
+            );
+        }
+    }
+
+    // =========================================================================
     // Harness — each provider driven exactly as its own suite drives it.
     // =========================================================================
 
@@ -1512,5 +1604,34 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
             messages: [new UserMessage('Hi')],
             systemPrompt: $systemPrompt,
         );
+    }
+
+    /**
+     * The stdin transcript CodexProvider would write for $request: the
+     * private buildPrompt() driven by reflection, the same way the Bedrock
+     * empty-string pin above drives systemBlocks(). That the string reaches
+     * the child's stdin verbatim is CodexProviderTest's fake-codex spawn to
+     * pin, and testTheSystemPromptRidesTheStdinTranscript pins it there.
+     */
+    private function codexTranscript(CompleteRequest $request): string
+    {
+        $provider = new CodexProvider(new CodexInvocation());
+        $method = new \ReflectionMethod(CodexProvider::class, 'buildPrompt');
+        $method->setAccessible(true);
+
+        return (string) $method->invoke($provider, $request);
+    }
+
+    /**
+     * One method's source slice, cut between the two literal signatures.
+     */
+    private function methodSourceSlice(string $source, string $from, string $to): string
+    {
+        $start = strpos($source, 'public function ' . $from . '(');
+        $this->assertNotFalse($start, 'no public function ' . $from . '() in the walked source');
+        $end = strpos($source, 'public function ' . $to . '(', $start + 1);
+        $this->assertNotFalse($end, 'no public function ' . $to . '() after ' . $from . '() in the walked source');
+
+        return substr($source, $start, $end - $start);
     }
 }
