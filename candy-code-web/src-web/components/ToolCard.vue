@@ -38,6 +38,11 @@ const argsJson = computed(() => JSON.stringify(props.item.arguments, null, 2))
 // the stored text, which the model re-reads, keeps every byte.
 const output = computed(() => (props.item.content === undefined ? null : stripTerminalSequences(props.item.content)))
 const reasoning = computed(() => (props.item.reasoning === undefined ? '' : stripTerminalSequences(props.item.reasoning)))
+// WEB-4: the live tail is paint — it renders only while the call runs, and
+// tool.finished replaces the item, so it clears itself with the old row.
+const tail = computed(() =>
+  props.item.status === 'running' && props.item.progressTail !== undefined ? stripTerminalSequences(props.item.progressTail) : null,
+)
 // The runs this call delegated to, live, with what they delegated in turn
 // (roadmap O-6c); a row opens the run's agent view in the side panels.
 const agentTree = computed(() =>
@@ -61,6 +66,12 @@ function openAgent(id: string): void {
       <span class="time">{{ duration(item.durationMs) }}</span>
     </button>
     <ReasoningFold v-if="reasoning !== ''" :text="reasoning" />
+    <section v-if="tail !== null" class="progress" data-testid="tool-progress">
+      <p class="progress-tag">
+        live tail<template v-if="item.progressTruncated"> · older output dropped</template>
+      </p>
+      <pre class="output">{{ tail }}</pre>
+    </section>
     <div v-if="open" class="body">
       <p v-if="item.denial" class="denial">Refused ({{ item.denial.kind }}){{ item.denial.reason ? `: ${item.denial.reason}` : '' }}</p>
       <details class="args">
@@ -201,5 +212,23 @@ pre {
   to {
     transform: rotate(360deg);
   }
+}
+.progress {
+  margin: 0 0.6rem 0.4rem;
+  min-width: 0;
+}
+.progress pre {
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  border-left: 2px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.progress-tag {
+  margin: 0 0 0.15rem;
+  font-size: 0.72rem;
+  opacity: 0.65;
 }
 </style>

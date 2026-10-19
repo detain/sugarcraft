@@ -124,6 +124,37 @@ describe('reducer: media refs (W6.3)', () => {
   })
 })
 
+describe('reducer: live tool tail (WEB-4)', () => {
+  const frame = (seq: number, tail: string, truncated = false): EventEnvelope =>
+    ev('tool.progress', { toolCallId: 'c1', name: 'Bash', seq, tail, truncated, tailBudget: 4096 }, { durable: false })
+
+  it('replaces the tail wholesale and ignores a stale or out-of-order frame', () => {
+    const state = run(createState('s1'), [ev('tool.started', { toolCallId: 'c1', name: 'Bash', arguments: {} }), frame(2, 'second'), frame(1, 'first')])
+    expect(tools(state)[0]).toMatchObject({ status: 'running', progressTail: 'second', progressSeq: 2, progressTruncated: false })
+  })
+
+  it('clears with the finished row because tool.finished builds a fresh item', () => {
+    const state = run(createState('s1'), [
+      ev('tool.started', { toolCallId: 'c1', name: 'Bash', arguments: {} }),
+      frame(1, 'working', true),
+      ev('tool.finished', { toolCallId: 'c1', name: 'Bash', isError: false, content: 'done' }),
+    ])
+    expect(tools(state)[0]).toMatchObject({ status: 'done', content: 'done' })
+    expect(tools(state)[0]?.progressTail).toBeUndefined()
+    expect(tools(state)[0]?.progressSeq).toBeUndefined()
+  })
+
+  it('drops a frame whose call never started — the tail is paint, not a row', () => {
+    const state = run(createState('s1'), [ev('tool.progress', { toolCallId: 'ghost', name: 'Bash', seq: 1, tail: 'x', truncated: false, tailBudget: 4096 }, { durable: false })])
+    expect(tools(state)).toHaveLength(0)
+  })
+
+  it('generates tool.progress as ephemeral session scope', async () => {
+    const { EVENT_KINDS } = await import('../../protocol/generated')
+    expect(EVENT_KINDS['tool.progress']).toEqual({ durable: false, scope: 'session' })
+  })
+})
+
 describe('reducer: deltas', () => {
   it('appends a delta only at the byte offset the part holds; duplicates are dropped', () => {
     const state = run(createState('s1'), [delta('héllo', 0), delta('héllo', 0), delta(' you', 6)])

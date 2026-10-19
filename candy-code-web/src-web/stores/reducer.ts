@@ -67,6 +67,12 @@ export interface ToolItem {
   /** The server capped the ref list at MAX_EVENT_MEDIA_REFS; more artifacts exist. */
   mediaTruncated?: boolean
   reasoning?: string
+  /** WEB-4 live tail: the newest tool.progress frame's tail, replaced wholesale per frame. Ephemeral paint — cleared by tool.finished. */
+  progressTail?: string
+  /** Highest tool.progress seq applied to this card; a lower or equal seq is a duplicate or out-of-order and is ignored. */
+  progressSeq?: number
+  /** True when the ring dropped bytes beyond the tail budget. */
+  progressTruncated?: boolean
 }
 
 export type TranscriptItem = UserItem | AssistantItem | NoticeItem | ToolItem
@@ -482,6 +488,24 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
         arguments: data.arguments ?? {},
         status: 'running',
         reasoning,
+      })
+      break
+    }
+
+    case 'tool.progress': {
+      // WEB-4: ephemeral paint only. Never durable, never replayed, so a
+      // frame that belongs to no running card (late, lost, or already
+      // finished) is dropped rather than resurrected — tool.finished is
+      // the contract, and it replaces the item wholesale, clearing these.
+      const { data } = envelope as unknown as Ev<'tool.progress'>
+      const item = runningTool(state, turnId, data.toolCallId)
+      if (!item) break
+      if (data.seq <= (item.progressSeq ?? 0)) break
+      upsert(state, {
+        ...item,
+        progressTail: data.tail,
+        progressSeq: data.seq,
+        progressTruncated: data.truncated,
       })
       break
     }

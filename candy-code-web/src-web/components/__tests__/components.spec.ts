@@ -28,6 +28,20 @@ describe('ToolCard', () => {
     expect(wrapper.find('[data-testid="tool-output"]').text()).toBe('clean')
   })
 
+  it('paints the live tail outside the collapsed body while the call runs (WEB-4)', () => {
+    const wrapper = mount(ToolCard, { props: { item: tool({ status: 'running', content: undefined, progressTail: 'gcc -c a.c', progressSeq: 1, progressTruncated: true }) } })
+    const tail = wrapper.find('[data-testid="tool-progress"]')
+    expect(tail.exists()).toBe(true)
+    expect(tail.text()).toContain('gcc -c a.c')
+    expect(tail.text()).toContain('older output dropped')
+    expect(wrapper.attributes('data-status')).toBe('running')
+  })
+
+  it('shows no tail once the call is finished', () => {
+    const wrapper = mount(ToolCard, { props: { item: tool({ progressTail: 'stale', progressSeq: 1 }) } })
+    expect(wrapper.find('[data-testid="tool-progress"]').exists()).toBe(false)
+  })
+
   it('opens a refusal and names its kind', () => {
     const wrapper = mount(ToolCard, { props: { item: tool({ status: 'denied', denial: { kind: 'UserRejected', reason: 'no thanks' } }) } })
     expect(wrapper.text()).toContain('Refused (UserRejected): no thanks')

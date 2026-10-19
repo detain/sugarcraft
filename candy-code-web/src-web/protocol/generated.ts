@@ -1546,6 +1546,19 @@ export interface Events {
     mediaTruncated?: boolean
     replaces?: string
   }
+  /** Live tail of a running tool call, frame-rate capped; ephemeral — tool.finished is the contract, so a late joiner replays nothing and still sees the whole output. */
+  "tool.progress": {
+    toolCallId: string
+    name: string
+    /** Frames of this call so far, from 1; a client keeps the highest it has seen. */
+    seq: number
+    /** The last tailBudget bytes of output, replaced wholesale each frame — never a delta to stitch. */
+    tail: string
+    /** True once bytes fell out of the ring. */
+    truncated: boolean
+    /** Byte cap the tail obeys. */
+    tailBudget: number
+  }
   /** A tool call started. */
   "tool.started": {
     messageId?: string
@@ -1626,6 +1639,7 @@ export const EVENT_KINDS: { readonly [E in EventName]: { readonly durable: boole
   "subagent.started": { durable: true, scope: "session" },
   "todo.updated": { durable: true, scope: "session" },
   "tool.finished": { durable: true, scope: "session" },
+  "tool.progress": { durable: false, scope: "session" },
   "tool.started": { durable: true, scope: "session" },
   "turn.completed": { durable: true, scope: "session" },
   "turn.dequeued": { durable: true, scope: "session" },
