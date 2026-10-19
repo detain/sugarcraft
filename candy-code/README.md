@@ -492,7 +492,7 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 `/new` `/newrule` `/notices` `/pane` `/permissions` `/play` `/pruning`
 `/recompress` `/redo` `/rename` `/rendermode` `/review` `/rewind` `/rules`
 `/schedules` (`/schedule`) `/security-review` `/sendto` `/sessions`
-`/settings` (`/config`) `/share` `/skills` `/sweep` `/theme` `/undo`
+`/settings` (`/config`) `/share` `/skills` `/status` `/sweep` `/theme` `/undo`
 `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 

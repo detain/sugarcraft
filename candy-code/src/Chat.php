@@ -12480,7 +12480,7 @@ final class Chat implements Model
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
-        'context', 'tokens', 'btw', 'play', 'hooks', 'effort',
+        'context', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status',
     ];
 
     /**
@@ -14298,6 +14298,23 @@ final class Chat implements Model
     private function handleNoticesCommand(string $inputText): array
     {
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\NoticesHostCommand(), $inputText);
+    }
+
+    /**
+     * `/status` (OBS-2): where this session stands, read off the app's own
+     * stores ({@see \SugarCraft\Code\Host\Commands\StatusHostCommand}). The
+     * tracker and cap are the two facts CommandContext cannot carry — they are
+     * per-Chat state, which is exactly why the TUI hands them in while any
+     * other host lets the durable ledger answer instead.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleStatusCommand(string $inputText): array
+    {
+        return $this->runHostCommand(
+            new \SugarCraft\Code\Host\Commands\StatusHostCommand($this->tokenTracker, $this->maxCostUsd),
+            $inputText,
+        );
     }
 
     /**

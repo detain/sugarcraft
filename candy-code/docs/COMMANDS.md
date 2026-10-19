@@ -355,6 +355,7 @@ edit it by hand.
 | `/help` | ✓ | ✓ | — | List every slash command |
 | `/permissions` | ✓ | ✓ | `[mode <name> \| revoke <n\|all>]` | Show this session's permission mode, its rules and its grants; switch the mode or revoke a grant |
 | `/notices` | ✓ | | — | Show every warning this launch raised, un-capped and un-aggregated |
+| `/status` | ✓ | | — | Show where this session stands: version, model, context, spend, config, MCP, hooks, serve |
 | `/context` | ✓ | | — | Show what fills the context window: prompt layers, tools, history, cache |
 | `/sweep` | ✓ | | `[n]` | Prune the tool outputs since your last prompt (or the last n) from what the model sees |
 | `/pruning` | ✓ | | `[auto\|manual\|off\|default]` | Show or set how this session prunes its context: auto, manual or off |
