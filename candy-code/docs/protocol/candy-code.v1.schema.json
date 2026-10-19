@@ -3773,6 +3773,35 @@
                             "interrupt"
                         ]
                     },
+                    "images": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "maxLength": 256
+                                },
+                                "mime": {
+                                    "enum": [
+                                        "image/png",
+                                        "image/jpeg",
+                                        "image/gif",
+                                        "image/webp"
+                                    ]
+                                },
+                                "data": {
+                                    "type": "string",
+                                    "maxLength": 6990508
+                                }
+                            },
+                            "required": [
+                                "mime",
+                                "data"
+                            ]
+                        },
+                        "maxItems": 4
+                    },
                     "idempotencyKey": {
                         "type": "string",
                         "maxLength": 64,

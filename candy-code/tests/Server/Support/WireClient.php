@@ -63,7 +63,7 @@ final class WireClient
             false,
         );
         $this->toClient->on('data', static fn (string $bytes) => $buffer->onData($bytes));
-        $this->connection = new Connection($id, 'bearer', $this->toClient, $fromClient, $handler, ServerConfig::MAX_CLIENT_MESSAGE_BYTES);
+        $this->connection = new Connection($id, 'bearer', $this->toClient, $fromClient, $handler, ServerConfig::MAX_CLIENT_FRAME_BYTES);
     }
 
     /** Open a client on $handler (what the upgrade does). */

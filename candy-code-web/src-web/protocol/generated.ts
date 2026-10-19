@@ -1042,6 +1042,11 @@ export interface Methods {
       sessionId: SessionId
       text: string
       delivery?: "queue" | "steer" | "interrupt"
+      images?: ({
+        name?: string
+        mime: "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+        data: string
+      })[]
       /** A retry with the same key gets the original answer (5 min). */
       idempotencyKey?: string
     }

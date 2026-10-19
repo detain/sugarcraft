@@ -173,7 +173,7 @@ final class WorkspaceHostProcess
             $stream,
             $stream,
             $dispatcher,
-            ServerConfig::MAX_CLIENT_MESSAGE_BYTES,
+            ServerConfig::MAX_CLIENT_FRAME_BYTES,
             static function () use ($stop): void {
                 $stop();
             },

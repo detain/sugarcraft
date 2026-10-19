@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Composer from '../components/Composer.vue'
+import type { PastedImage } from '../lib/paste'
 import PermissionCard, { type Reply } from '../components/PermissionCard.vue'
 import QueueStrip from '../components/QueueStrip.vue'
 import ReasoningFold from '../components/ReasoningFold.vue'
@@ -61,11 +62,11 @@ watch(() => connection.connected, (connected) => {
   if (connected && session.value.phase === 'idle') void session.value.subscribe()
 })
 
-async function send(text: string, delivery: Delivery): Promise<void> {
+async function send(text: string, delivery: Delivery, images: PastedImage[] = []): Promise<void> {
   sending.value = true
   error.value = null
   try {
-    await session.value.send(text, delivery)
+    await session.value.send(text, delivery, images)
     draft.value = ''
   } catch (failure) {
     error.value = describe(failure)
@@ -73,6 +74,9 @@ async function send(text: string, delivery: Delivery): Promise<void> {
     sending.value = false
   }
 }
+
+/** The composer's @ popup (WEB-5b): `fs.search` over this session's store. */
+const searchFiles = (query: string): Promise<string[]> => session.value.searchFiles(query)
 
 async function stop(): Promise<void> {
   try {
@@ -169,6 +173,7 @@ async function rename(): Promise<void> {
         :disabled="sending || !connection.connected"
         :commands="session.commands"
         :default-delivery="connection.defaultDelivery"
+        :search-files="searchFiles"
         @send="send"
         @stop="stop"
       />

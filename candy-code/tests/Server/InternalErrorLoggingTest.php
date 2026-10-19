@@ -65,7 +65,7 @@ final class InternalErrorLoggingTest extends TestCase
             $toClient,
             $fromClient,
             $this->throwingHandler(new \RuntimeException('the workspace at /home/secret/owner exploded')),
-            ServerConfig::MAX_CLIENT_MESSAGE_BYTES,
+            ServerConfig::MAX_CLIENT_FRAME_BYTES,
             null,
             null,
             static function (string $line) use (&$lines): void {
@@ -93,7 +93,7 @@ final class InternalErrorLoggingTest extends TestCase
             $wire .= $chunk;
         });
         $fromClient = new ThroughStream();
-        new Connection('c10', 'bearer', $toClient, $fromClient, $this->throwingHandler(new \LogicException('quiet')), ServerConfig::MAX_CLIENT_MESSAGE_BYTES);
+        new Connection('c10', 'bearer', $toClient, $fromClient, $this->throwingHandler(new \LogicException('quiet')), ServerConfig::MAX_CLIENT_FRAME_BYTES);
 
         $fromClient->write(self::maskedTextFrame('ping'));
 

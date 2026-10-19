@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Protocol\Schema;
 use SugarCraft\Code\Host\SessionSnapshot;
 use SugarCraft\Code\Memory\MemoryHistory;
 use SugarCraft\Code\Protocol\Methods\FsMethods;
+use SugarCraft\Code\Protocol\Methods\TurnMethods;
 use SugarCraft\Code\Protocol\Schema\Definitions as D;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Share\ShareSession;
@@ -207,6 +208,15 @@ final class MethodSchemas
                     ...$sid,
                     'text' => Schema::string(ServerConfig::MAX_CLIENT_MESSAGE_BYTES),
                     'delivery' => Schema::enum(['queue', 'steer', 'interrupt']),
+                    // WEB-5b: pasted images, base64. `data` is strict base64 and
+                    // `mime` a claim — the handler sniffs the bytes and refuses
+                    // any mismatch; the caps here bound the frame, the handler
+                    // bounds the decoded budget.
+                    'images' => Schema::arrayOf(Schema::object([
+                        'name' => Schema::string(256),
+                        'mime' => Schema::enum(TurnMethods::PASTED_IMAGE_MIMES),
+                        'data' => Schema::string(TurnMethods::MAX_IMAGE_B64_CHARS),
+                    ], ['mime', 'data']), TurnMethods::MAX_IMAGES),
                 ], ['sessionId', 'text']),
                 Schema::ref(D::ADMISSION),
             ],

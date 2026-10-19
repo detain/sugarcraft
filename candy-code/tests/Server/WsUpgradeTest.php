@@ -182,7 +182,7 @@ final class WsUpgradeTest extends TestCase
 
         $closed = new Deferred();
         $socket->on('close', static fn (int $code) => $closed->resolve($code));
-        $socket->send(\str_repeat('x', ServerConfig::MAX_CLIENT_MESSAGE_BYTES + 1));
+        $socket->send(\str_repeat('x', ServerConfig::MAX_CLIENT_FRAME_BYTES + 1));
 
         self::assertSame(1009, $this->settle($closed->promise()));
     }

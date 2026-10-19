@@ -28,6 +28,9 @@ use SugarCraft\Code\Backend\QueueMode;
  *   mentions in the text are attached. False for text the user did not type
  *   (a command file's expansion, a background session's announcement), the
  *   rule {@see TurnController::userTurnMessage()} documents.
+ * - **attachments** — images (or documents) the sender pasted alongside the
+ *   text, decoded and sniffed by the wire handler (WEB-5b). They ride only a
+ *   prompt that starts a turn; the host's queue and steer lanes hold strings.
  *
  * Immutable and fluent like every value in this package.
  */
@@ -37,6 +40,8 @@ final class SubmitOptions
         public readonly ?QueueMode $delivery,
         public readonly ?string $idempotencyKey,
         public readonly bool $resolveMentions,
+        /** @var list<\SugarCraft\Code\Attachment> */
+        public readonly array $attachments = [],
     ) {
     }
 
@@ -73,6 +78,17 @@ final class SubmitOptions
     }
 
     /**
+     * A copy carrying $attachments — pasted images, already typed and
+     * sniffed — into the prompt this submission starts (WEB-5b).
+     *
+     * @param list<\SugarCraft\Code\Attachment> $attachments
+     */
+    public function withAttachments(array $attachments): self
+    {
+        return $this->mutate(['attachments' => array_values($attachments)]);
+    }
+
+    /**
      * The delivery this submission gets while a turn is running: the one it
      * asked for, else {@see QueueMode::onEnter()}.
      */
@@ -90,6 +106,7 @@ final class SubmitOptions
             'delivery' => $this->delivery,
             'idempotencyKey' => $this->idempotencyKey,
             'resolveMentions' => $this->resolveMentions,
+            'attachments' => $this->attachments,
         ], $changes));
     }
 }

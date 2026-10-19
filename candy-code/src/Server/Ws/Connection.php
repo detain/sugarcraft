@@ -20,7 +20,7 @@ use SugarCraft\Code\Server\ErrorLog;
  * The codec is `ratchet/rfc6455`'s {@see MessageBuffer}, so masking,
  * fragmentation, UTF-8 validation and close-code checks are not reimplemented
  * here. What this class adds is POLICY:
- * - the {@see \SugarCraft\Code\Server\ServerConfig::MAX_CLIENT_MESSAGE_BYTES}
+ * - the {@see \SugarCraft\Code\Server\ServerConfig::MAX_CLIENT_FRAME_BYTES}
  *   ceiling, closing 1009 past it;
  * - text only — a binary message closes 1003 (`candy-code.v1` is JSON);
  * - ping answered with pong, a client close echoed and the stream ended;

@@ -210,7 +210,7 @@ final class Server
                 unset($this->connections[$connection->id()]);
                 ($this->log)(\sprintf('ws closed %s', $connection->id()));
             },
-            ServerConfig::MAX_CLIENT_MESSAGE_BYTES,
+            ServerConfig::MAX_CLIENT_FRAME_BYTES,
             $this->log,
         );
         // SES-3: serve publishes share pages from the session database; a

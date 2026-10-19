@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { SeqCursor } from '../protocol/cursor'
 import type { EventEnvelope, MethodResult, PermissionMode, SessionSnapshot, Subscription } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
+import type { PastedImage } from '../lib/paste'
 import { useConnectionStore } from './connection'
 import { useLayoutStore } from './layout'
 import { applyEvent, applyOlderPage, applyPendingAsks, applySnapshot, createState, type ToolItem } from './reducer'
@@ -160,7 +161,7 @@ function setup(sessionId: string) {
    * runs is refused here with the reason; a command file and plain prose
    * are a prompt (`session.send`), exactly as typing them in the TUI.
    */
-  async function send(text: string, delivery: Delivery = 'queue'): Promise<MethodResult<'session.send'> | MethodResult<'command.exec'>> {
+  async function send(text: string, delivery: Delivery = 'queue', images: PastedImage[] = []): Promise<MethodResult<'session.send'> | MethodResult<'command.exec'>> {
     const slash = /^\/([A-Za-z0-9_:.-]+)(?:\s+([\s\S]*))?$/.exec(text.trim())
     if (slash) {
       const name = slash[1] ?? ''
@@ -168,6 +169,11 @@ function setup(sessionId: string) {
       if (command && command.source === 'builtin') {
         if (command.runsIn === 'client') {
           throw new ProtocolError(-32030, `/${name} runs only in the terminal UI`, 'ui_only')
+        }
+        if (images.length > 0) {
+          // WEB-5b, mirroring the server: a built-in's body carries no
+          // attachments, so pastes ride prose only.
+          throw new ProtocolError(-32602, 'images ride a prose prompt; a /command or !bang takes none', 'images_with_command')
         }
         const args = (slash[2] ?? '').trim()
         const result = await connection.request('command.exec', args === '' ? { sessionId, name } : { sessionId, name, args })
@@ -177,7 +183,19 @@ function setup(sessionId: string) {
         return result
       }
     }
-    return connection.request('session.send', busy.value ? { sessionId, text, delivery } : { sessionId, text })
+    return connection.request('session.send', {
+      ...(busy.value ? { sessionId, text, delivery } : { sessionId, text }),
+      ...(images.length > 0 ? { images } : {}),
+    })
+  }
+
+  /**
+   * `fs.search` for the composer's @-mention popup (WEB-5b): workspace file
+   * names ranked against the partial, jailed server-side to the project root.
+   */
+  async function searchFiles(query: string, limit = 12): Promise<string[]> {
+    const answer = await connection.request('fs.search', query === '' ? { limit } : { query, limit })
+    return answer.matches
   }
 
   function cancel(mode: 'hard' | 'soft' = 'hard', clearQueue = false): Promise<MethodResult<'session.cancel'>> {
@@ -283,6 +301,7 @@ function setup(sessionId: string) {
     retain,
     release,
     send,
+    searchFiles,
     cancel,
     respond,
     dequeue,

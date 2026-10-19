@@ -374,7 +374,7 @@ only.
 
 | Limit (`limits` key) | Value |
 |---|---|
-| `maxClientFrameBytes` | 1 MiB |
+| `maxClientFrameBytes` | 16 MiB |
 | `maxServerFrameBytes` | 4 MiB — a larger answer is refused `too_large`; a tool output past 256 KiB arrives truncated, and `tool.output` reads the rest |
 | `maxInflight` | 64 — advisory: announced in `server.hello` for clients to pace by; the dispatcher enforces no in-flight ceiling of its own |
 | `tickIntervalMs` | 15000 — a `server.tick` event this often |

@@ -59,7 +59,7 @@ final class ConformanceTest extends TestCase
         self::assertContains('permission.respond', $hello['features']['methods']);
         self::assertSame(EventType::all(), $hello['features']['events']);
         self::assertSame(16_777_216, $hello['limits']['maxBufferedBytes']);
-        self::assertSame(1_048_576, $hello['limits']['maxClientFrameBytes']);
+        self::assertSame(ServerConfig::MAX_CLIENT_FRAME_BYTES, $hello['limits']['maxClientFrameBytes']);
         self::assertSame(['read', 'write', 'approve', 'admin'], $hello['principal']['scopes']);
         self::assertSame('default', $hello['defaults']['permissionMode'], 'server sessions ask by default');
     }

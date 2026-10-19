@@ -41,8 +41,20 @@ final class ServerConfig
     /** A non-browser client may carry its token as `candy-code.auth.<token>`. */
     public const AUTH_SUBPROTOCOL_PREFIX = 'candy-code.auth.';
 
-    /** Client→server WebSocket message ceiling (prompts; uploads come later). */
+    /**
+     * One client message FIELD's byte ceiling (a prompt, a task). Image
+     * payloads are not exempt by field: `session.send`'s images share this
+     * transport and get their own decoded-bytes budget at the handler
+     * ({@see \SugarCraft\Code\Protocol\Methods\TurnMethods::MAX_IMAGE_TOTAL_BYTES}).
+     */
     public const MAX_CLIENT_MESSAGE_BYTES = 1_048_576;
+
+    /**
+     * Client→server WebSocket message ceiling. Sized for an image-paste
+     * `session.send`: up to four 5 MiB base64 payloads plus the prompt
+     * (uploads rode this lane in, plan_comparison WEB-5b).
+     */
+    public const MAX_CLIENT_FRAME_BYTES = 16_777_216;
 
     /** Every HTTP API body is a few hundred bytes; anything near this is hostile. */
     public const MAX_API_BODY_BYTES = 65_536;

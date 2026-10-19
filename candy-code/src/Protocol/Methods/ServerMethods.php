@@ -112,7 +112,7 @@ final class ServerMethods
                 'media' => MediaAffordance::current(),
             ],
             'limits' => [
-                'maxClientFrameBytes' => ServerConfig::MAX_CLIENT_MESSAGE_BYTES,
+                'maxClientFrameBytes' => ServerConfig::MAX_CLIENT_FRAME_BYTES,
                 'maxServerFrameBytes' => Dispatcher::MAX_SERVER_FRAME_BYTES,
                 'maxInflight' => Dispatcher::MAX_INFLIGHT,
                 'tickIntervalMs' => (int) (Dispatcher::TICK_INTERVAL_SECONDS * 1000),

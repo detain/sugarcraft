@@ -1020,6 +1020,13 @@ final class TurnController
      * announcement (the model's answer, quoted). Neither kind of mention is
      * resolved in it.
      *
+     * $extraAttachments (WEB-5b) are already-typed attachments the sender
+     * pasted alongside the text (`session.send`'s images). They are not
+     * parsed from the text, so they ride even a text with no `@` in it; they
+     * are sniffed, trusted Input, and join the same attach loop below.
+     *
+     * @param list<\SugarCraft\Code\Attachment> $extraAttachments
+     *
      * @return array{0: Message, 1: list<Message>}
      */
     public function userTurnMessage(
@@ -1030,8 +1037,16 @@ final class TurnController
         ?PermissionGate $gate,
         ?\SugarCraft\Code\Skills\SkillRegistry $skills = null,
         ?\Closure $mcpProvider = null,
+        array $extraAttachments = [],
     ): array {
         $message = Message::user($text);
+        foreach ($extraAttachments as $attachment) {
+            $message = match ($attachment->type) {
+                AttachmentType::Image => $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType),
+                AttachmentType::Document => $message->attachDocument($attachment->path, $attachment->data, $attachment->mimeType),
+                AttachmentType::File => $message->attachFile($attachment->path, $attachment->data, $attachment->skill),
+            };
+        }
         if (!$resolveMentions) {
             return [$message, []];
         }

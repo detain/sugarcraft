@@ -47,7 +47,7 @@ final class Upgrade
         private readonly MessageHandler $handler,
         private readonly \Closure $onOpen,
         private readonly \Closure $onGone,
-        private readonly int $maxMessageBytes = ServerConfig::MAX_CLIENT_MESSAGE_BYTES,
+        private readonly int $maxMessageBytes = ServerConfig::MAX_CLIENT_FRAME_BYTES,
         private readonly ?\Closure $log = null,    ) {
     }
 

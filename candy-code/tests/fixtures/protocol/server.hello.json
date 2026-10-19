@@ -12,7 +12,7 @@
     "server": {"version": "1.0.0", "connectionId": "c1-9f3a1b2c", "root": "/home/me/project", "pid": 4242},
     "features": {"methods": ["server.hello", "session.send"], "events": ["turn.started"]},
     "limits": {
-      "maxClientFrameBytes": 1048576,
+      "maxClientFrameBytes": 16777216,
       "maxServerFrameBytes": 4194304,
       "maxInflight": 64,
       "tickIntervalMs": 15000,

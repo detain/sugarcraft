@@ -913,7 +913,7 @@ final class SessionHost
             return TurnTicket::refused($turns->noBackendNotice());
         }
 
-        return $this->admitPrompt($text, $options->resolveMentions, $text);
+        return $this->admitPrompt($text, $options->resolveMentions, $text, attachments: $options->attachments);
     }
 
     /**
@@ -993,8 +993,10 @@ final class SessionHost
      * them; null fires the chain now.
      *
      * @param array{0: HookResult, 1: ?HookResult}|null $verdicts
+     * @param list<\SugarCraft\Code\Attachment> $attachments pasted images riding this
+     *     prompt (WEB-5b); threaded unchanged through a forked hook's resume
      */
-    private function admitPrompt(string $text, bool $resolveMentions, string $draft, ?array $verdicts = null): TurnTicket
+    private function admitPrompt(string $text, bool $resolveMentions, string $draft, ?array $verdicts = null, array $attachments = []): TurnTicket
     {
         $turns = $this->turns();
         $ledger = $this->ledger();
@@ -1106,7 +1108,7 @@ final class SessionHost
         $notes = [];
         if ($hooks !== null) {
             if ($verdicts === null) {
-                $verdicts = $this->fireTurnHooks($text, $resolveMentions, $draft);
+                $verdicts = $this->fireTurnHooks($text, $resolveMentions, $draft, $attachments);
                 if ($verdicts === null) {
                     return TurnTicket::pending();
                 }
@@ -1120,7 +1122,7 @@ final class SessionHost
             $notes = $turns->turnHookNotes($prompt, $session);
         }
 
-        return $this->dispatch($text, $resolveMentions, $draft, $baseHistory, $reports, $notes, $refilled);
+        return $this->dispatch($text, $resolveMentions, $draft, $baseHistory, $reports, $notes, $refilled, $attachments);
     }
 
     /**
@@ -1133,7 +1135,7 @@ final class SessionHost
      *
      * @return array{0: HookResult, 1: ?HookResult}|null
      */
-    private function fireTurnHooks(string $text, bool $resolveMentions, string $draft): ?array
+    private function fireTurnHooks(string $text, bool $resolveMentions, string $draft, array $attachments = []): ?array
     {
         $hooks = $this->workspace->hooks ?? throw new \LogicException('fireTurnHooks() needs a hook manager');
         $turns = $this->turns();
@@ -1158,8 +1160,8 @@ final class SessionHost
             },
             static fn (string $file): array => TurnController::turnHookResultsFromPayload(TurnController::takePayload($file)),
             $run,
-            function (array $verdicts) use ($text, $resolveMentions, $draft): void {
-                $this->admitPrompt($text, $resolveMentions, $draft, $verdicts);
+            function (array $verdicts) use ($text, $resolveMentions, $draft, $attachments): void {
+                $this->admitPrompt($text, $resolveMentions, $draft, $verdicts, $attachments);
             },
         );
 
@@ -1582,6 +1584,8 @@ final class SessionHost
      * @param list<Message> $notes the hook notes that ride beside it
      * @param bool|null $refilled the breaker's measurement when the tier's
      *        rewrite goes out with this turn, else null
+     * @param list<\SugarCraft\Code\Attachment> $attachments pasted images
+     *        riding this prompt (WEB-5b)
      */
     private function dispatch(
         string $text,
@@ -1591,6 +1595,7 @@ final class SessionHost
         array $reports,
         array $notes,
         ?bool $refilled,
+        array $attachments = [],
     ): TurnTicket {
         $turns = $this->turns();
         $preTurnHistory = [...$baseHistory, ...$reports];
@@ -1602,6 +1607,7 @@ final class SessionHost
             $this->workspace->sessionStore,
             $this->workspace->permissionGate,
             $this->workspace->skills,
+            extraAttachments: $attachments,
         );
         $newTurnMessages = [...$reports, ...$notes, ...$attachmentNotes, $userTurn];
 

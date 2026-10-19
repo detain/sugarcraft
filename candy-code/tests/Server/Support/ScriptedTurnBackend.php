@@ -25,6 +25,9 @@ final class ScriptedTurnBackend implements InteractiveTurn
     /** @var list<string> the newest user row of each dispatch */
     public array $sent = [];
 
+    /** @var list<Message> the same rows whole — attachments a send carried ride them (WEB-5b) */
+    public array $userMessages = [];
+
     /** @var list<PermissionResolved> every settlement a question reached */
     public array $settled = [];
 
@@ -51,6 +54,7 @@ final class ScriptedTurnBackend implements InteractiveTurn
         for ($i = \count($history) - 1; $i >= 0; $i--) {
             if ($history[$i]->role === Role::User) {
                 $this->sent[] = $history[$i]->content;
+                $this->userMessages[] = $history[$i];
                 break;
             }
         }

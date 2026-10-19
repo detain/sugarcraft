@@ -35,7 +35,7 @@ final class ServerProtocolDocumentationDriftTest extends TestCase
     public function testTheLimitsTableIsTheCode(): void
     {
         $rows = [
-            'maxClientFrameBytes' => self::mib(ServerConfig::MAX_CLIENT_MESSAGE_BYTES),
+            'maxClientFrameBytes' => self::mib(ServerConfig::MAX_CLIENT_FRAME_BYTES),
             'maxServerFrameBytes' => self::mib(Dispatcher::MAX_SERVER_FRAME_BYTES),
             'maxInflight' => (string) Dispatcher::MAX_INFLIGHT,
             'tickIntervalMs' => (string) (int) (Dispatcher::TICK_INTERVAL_SECONDS * 1000),
