@@ -444,6 +444,10 @@ final class MemoryPromptWiringTest extends TestCase
             // tail pair explicitly is what a dispatch-time clone does.
             'withSpendCap' => fn(EngineBackend $b): EngineBackend => $b->withSpendCap(1.0, 0.25),
             'withSiblingSpend' => fn(EngineBackend $b): EngineBackend => $b->withSiblingSpend(null),
+            // W4 weld base-red cure: the W3 weld shipped withJsonSchema() on
+            // EngineBackend without its roster row — reflection named it, $steps
+            // did not carry it, so the pair assertion below was red at ded8ed677.
+            'withJsonSchema' => fn(EngineBackend $b): EngineBackend => $b->withJsonSchema(['type' => 'object']),
             'withStepUsageObserver' => fn(EngineBackend $b): EngineBackend => $b->withStepUsageObserver(static function (): void {}),
             'withSubAgentGrant' => fn(EngineBackend $b): EngineBackend => $b->withSubAgentGrant(null),
             'withMaxConcurrentDelegations' => fn(EngineBackend $b): EngineBackend => $b->withMaxConcurrentDelegations(2),
