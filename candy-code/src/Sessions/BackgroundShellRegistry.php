@@ -39,6 +39,21 @@ use SugarCraft\Code\Support\ProcessContainment;
  * certainly alive (ISS-014, the same law `runCaptured()` follows):
  * re-deriving it after the leader exits would signal a recycled pid.
  *
+ * THE GROUP OUTLIVES THE LEADER'S PROCESS TABLE ENTRY (MAJOR-2). When the
+ * leader is fully reaped, {@see ProcessContainment::terminatePid()} can no
+ * longer confirm the group through posix_getpgid() — both the group branch
+ * and its per-pid fallback answer ESRCH, and the signal lands nowhere while
+ * TERM-proof members keep running. Where {@see groupMemberAlive()} has just
+ * proved live processes carry the recorded pgid, the ladder and the teardown
+ * sweep signal the group DIRECTLY instead ({@see signalShellGroup()}) — that
+ * is what makes the teardown guarantee true for corpse leaders. RESIDUAL
+ * RISK, ACCEPTED AND WRITTEN DOWN: pid/pgid reuse. If this launch's group
+ * has fully died and an unrelated process later takes the recorded pid as
+ * its own group leader, the member census cannot distinguish the lineage,
+ * and a late sweep would signal that stranger's group. The window is bounded
+ * by teardown, every signal is gated on members carrying the recorded pgid,
+ * and the exposure is the same one every pid-caching killer accepts.
+ *
  * OUTPUT LANDS IN FILES, NOT PIPES. A background shell has no reader on the
  * parent side between calls, and keeping a pipe open across a later fork
  * hands the write end into every tool child — the fd-inheritance family the
@@ -396,11 +411,14 @@ final class BackgroundShellRegistry
         // group outlive it — TERM-proof or merely orphaned. The teardown
         // guarantee is about the GROUP: no background process of this
         // registry survives the launch, so every still-living group gets a
-        // KILL after the polite pass, unconditionally.
+        // KILL after the polite pass, unconditionally. The kill goes through
+        // signalShellGroup() so a CORPSE leader — fully reaped, invisible to
+        // posix_getpgid() — cannot route it into ESRCH and strand the
+        // members the census just proved alive (MAJOR-2).
         foreach ($this->rows as $row) {
             $pid = (int) ($row['pid'] ?? 0);
             if ($pid > 0 && self::groupMemberAlive($pid)) {
-                ProcessContainment::terminatePid($pid, 9);
+                self::signalShellGroup($pid, 9);
             }
         }
         // Drop the map; each resource closes with its last reference. NOT
@@ -495,6 +513,14 @@ final class BackgroundShellRegistry
      *     "running" until the launch reaps it — the honest limit of
      *     file-based bookkeeping, written down rather than papered over.
      *
+     * THE EXIT FILE IS THE WRAPPER'S TRUTH, NOT THE GROUP'S (documented
+     * boundary, deliberate): route 2 settles the row WITHOUT a member check,
+     * so a `nohup X & exit 0` shape answers `finished` while X keeps running
+     * inside the group — stop() on such a row is a no-op by design and cannot
+     * reach X. The launch-wide sweep in teardown() is the backstop that kills
+     * the orphaned group; the member census lives on the handle route (3),
+     * where the wrapper's own death is exactly the moment being judged.
+     *
      * @param array<string, mixed> $row
      * @return array{state: string, exitCode: ?int}
      */
@@ -555,25 +581,55 @@ final class BackgroundShellRegistry
      * the recorded pgid: terminatePid() takes a pid and consults
      * posix_getpgid() itself, and because spawnSpec makes the child's pid its
      * group id, passing the leader pid IS the group kill. (Feeding it the
-     * pgid as if it were a pid looks identical and signals nobody.)
+     * pgid as if it were a pid looks identical and signals nobody.) A fully
+     * reaped leader blinds that consult — the rungs therefore go through
+     * {@see signalShellGroup()}, which falls back to the direct group signal
+     * the moment the member census proves the group is live (MAJOR-2).
      */
     private function runKillLadder(string $id, int $pid): bool
     {
-        ProcessContainment::terminatePid($pid, 15);
+        self::signalShellGroup($pid, 15);
         if ($this->awaitGroupDeath($id, $pid, self::TERM_GRACE_SECONDS)) {
             return true;
         }
-        ProcessContainment::terminatePid($pid, 9);
+        self::signalShellGroup($pid, 9);
 
         return $this->awaitGroupDeath($id, $pid, self::TERM_GRACE_SECONDS);
+    }
+
+    /**
+     * Signal the shell's process group, surviving a corpse leader.
+     *
+     * The documented route (terminatePid) group-kills only while
+     * posix_getpgid() still answers $pid === $pid; once the leader has been
+     * fully reaped both its pgid lookup and its per-pid signal answer ESRCH,
+     * and TERM-proof members outlive every rung the launch fires. When that
+     * route delivers nothing, {@see groupMemberAlive()} is the proof that
+     * live processes still carry $pid as their pgid — so the group gets the
+     * signal directly. A group with no proven members is never signalled:
+     * the recorded pid may already belong to a stranger, and pgid -X could
+     * alias pid X on a kill.
+     */
+    private static function signalShellGroup(int $pid, int $signal): void
+    {
+        if (ProcessContainment::terminatePid($pid, $signal)) {
+            return;
+        }
+        if ($pid > 0 && \function_exists('posix_kill') && self::groupMemberAlive($pid)) {
+            @posix_kill(-$pid, $signal);
+        }
     }
 
     /**
      * Poll until NO live (non-zombie) member of the shell's process group
      * remains. A zombie leader holds the group id in `kill(-pgid, 0)`
      * answers, so the Linux path reads /proc and discounts state Z; the
-     * fallback (no /proc) probes the group with signal 0 and accepts the
-     * exit file as the wrapper's own proof of a clean finish.
+     * fallback (no /proc) probes the group with signal 0. The exit file is
+     * DELIBERATELY not consulted here: it proves the wrapper finished, not
+     * that the group died (a `nohup X & exit 0` writes one with X alive —
+     * the boundary documented on observe()), and accepting it would stop the
+     * ladder early and strand exactly the members the confirmation exists
+     * to catch.
      */
     private function awaitGroupDeath(string $id, int $pid, float $budgetSeconds): bool
     {

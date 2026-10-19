@@ -250,6 +250,104 @@ final class BackgroundShellRegistryTest extends TestCase
         self::assertNull($registry->status($id)['exitCode'], 'a killed wrapper leaves its exit file empty — the code is honestly unknown');
     }
 
+    public function testACorpseLeaderCannotShelterATermProofMemberFromTheLadder(): void
+    {
+        // MAJOR-2 fixture, shaped like the escape it cures: the leader is
+        // SIGKILLed and FULLY REAPED (proc_get_status peels it off the
+        // process table) while a TERM-proof member keeps the group alive.
+        // terminatePid() routes the group signal only while
+        // posix_getpgid() answers on the leader, so pre-cure TERM and KILL
+        // both died on ESRCH and the member outlived stop(). Post-cure the
+        // rungs fall back to the direct group signal the member census
+        // justifies: the row must stay running over the corpse, stop() must
+        // CONFIRM, and the member must die to the KILL rung. Neutering only
+        // the KILL rung's fallback reddens exactly this test.
+        $registry = $this->registry();
+        $memberFile = $this->root . '/member-' . bin2hex(random_bytes(3));
+        $started = $registry->start(
+            '( trap "" TERM; printf %s $BASHPID > ' . escapeshellarg($memberFile) . '; while :; do sleep 0.05; done ) & wait',
+            'corpse-leader',
+        );
+        self::assertTrue($started['ok'], (string) ($started['error'] ?? ''));
+        $id = (string) $started['shell']['id'];
+        $ready = $this->waitFor($registry, static fn (BackgroundShellRegistry $r): bool => (int) @file_get_contents($memberFile) > 0);
+        self::assertTrue($ready, 'the TERM-proof member never announced itself');
+        $member = (int) @file_get_contents($memberFile);
+        $pid = (int) $registry->status($id)['pid'];
+
+        @posix_kill($pid, 9);
+        // status() is also the reaper here: route 3 calls proc_get_status,
+        // which waitpid()s the exited leader away. Its pgid lookup going
+        // dead is the corpse state the ladder used to strand on.
+        $reaped = $this->waitFor($registry, static function (BackgroundShellRegistry $r) use ($id, $pid): bool {
+            $r->status($id);
+
+            return @posix_getpgid($pid) !== $pid;
+        });
+        self::assertTrue($reaped, 'the leader never came off the process table');
+        self::assertSame('running', $registry->status($id)['state'], 'a corpse leader must not settle a shell whose group still lives');
+
+        $stopped = $registry->stop($id);
+        self::assertTrue($stopped['wasRunning']);
+        self::assertTrue($stopped['confirmed'], 'the ladder stranded on the dead leader and never reached the group');
+        self::assertTrue($this->waitFor($registry, static fn (BackgroundShellRegistry $r): bool => !@posix_kill($member, 0), 5.0), 'the TERM-proof member survived the group KILL');
+        self::assertFalse(@posix_kill(-$pid, 0), 'the process group survived the ladder — a reaped leader is not a dead shell');
+        self::assertNotSame('running', $registry->status($id)['state'], 'the row reads settled once the group is truly gone');
+        @unlink($memberFile);
+    }
+
+    public function testTheLaunchSweepCleansAnOrphanedGroupBehindASettledExitFile(): void
+    {
+        // MAJOR-2 through the teardown door, mirroring the ladder pin:
+        // `X & exit 0` writes the exit file while X keeps running in the
+        // group, so observe() settles the row WITHOUT a member check (the
+        // boundary documented there), stop() is a no-op, and the only force
+        // left is the unconditional sweep. With the launch's reaper having
+        // peeled the exited leader — mirrored below through the handle PHP
+        // holds — pre-cure the sweep routed through terminatePid, ESRCHed on
+        // the corpse, and X escaped the launch entirely. Post-cure the
+        // census-justified direct KILL reclaims it.
+        $registry = $this->registry();
+        $memberFile = $this->root . '/member-' . bin2hex(random_bytes(3));
+        $started = $registry->start(
+            '( trap "" TERM; printf %s $BASHPID > ' . escapeshellarg($memberFile) . '; while :; do sleep 0.05; done ) & exit 0',
+            'orphan-behind-a-settled-row',
+        );
+        self::assertTrue($started['ok'], (string) ($started['error'] ?? ''));
+        $id = (string) $started['shell']['id'];
+        $ready = $this->waitFor($registry, static fn (BackgroundShellRegistry $r): bool => (int) @file_get_contents($memberFile) > 0);
+        self::assertTrue($ready, 'the member never announced itself');
+        $member = (int) @file_get_contents($memberFile);
+        $pid = (int) $registry->status($id)['pid'];
+
+        $settled = $this->waitFor($registry, static fn (BackgroundShellRegistry $r): bool => ($r->status($id)['state'] ?? '') === 'finished');
+        self::assertTrue($settled, 'the exit file never settled the row');
+        self::assertSame(0, $registry->status($id)['exitCode'], 'the wrapper exited clean and its code is the answer');
+        self::assertTrue(@posix_kill($member, 0), 'pinned boundary: a settled exit file is wrapper truth — the live orphan behind it is not the row\'s verdict');
+        self::assertFalse($registry->stop($id)['wasRunning'], 'stop() on a settled row is the documented no-op; the sweep is the backstop');
+
+        // Drive the launch reaper through the handle this process holds:
+        // once proc_get_status reports not-running, PHP has waitpid()ed the
+        // leader and posix_getpgid() is blind — the corpse state.
+        $handles = new \ReflectionProperty(BackgroundShellRegistry::class, 'handles');
+        $handles->setAccessible(true);
+        $map = $handles->getValue($registry);
+        self::assertIsResource($map[$id] ?? null, 'this process spawned the shell, so it holds the handle');
+        $peeled = $this->waitFor($registry, static function (BackgroundShellRegistry $r) use ($map, $id): bool {
+            $status = @proc_get_status($map[$id]);
+
+            return \is_array($status) && $status['running'] === false;
+        });
+        self::assertTrue($peeled, 'the leader never exited under the handle');
+        self::assertFalse(@posix_getpgid($pid) === $pid, 'the reaped leader must no longer answer as the group — the state the sweep must survive');
+
+        $registry->teardown();
+
+        self::assertTrue($this->waitFor($registry, static fn (BackgroundShellRegistry $r): bool => !@posix_kill($member, 0), 5.0), 'the sweep stranded on the corpse leader and let the orphan escape the launch');
+        self::assertFalse(@posix_kill(-$pid, 0), 'no live group may survive teardown()');
+        @unlink($memberFile);
+    }
+
     public function testStoppingASettledShellSignalsNothingAndReportsTheCode(): void
     {
         $registry = $this->registry();

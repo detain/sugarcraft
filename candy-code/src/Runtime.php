@@ -687,7 +687,7 @@ final class Runtime
      * stay permissioned where they are CREATED — the Bash call that spawns
      * one is judged exactly like a synchronous one. The full argument lives
      * in `ShellStop`'s class doc-block.
-     *     *
+     *
      * THE SHELL PAIR IS NOT RESPELLED HERE (rv-php-2b, crush-review-1014).
      * `Bash` and `PtyRun` ride in from {@see ShellSubjectTools::NAMES} by
      * spread — the same adoption the f-perms-sec sites made — so an eighth
