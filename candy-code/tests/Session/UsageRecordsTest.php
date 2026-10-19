@@ -6,7 +6,9 @@ namespace SugarCraft\Code\Tests\Session;
 
 use PDO;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\SpendLedger;
+use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionRow;
 use SugarCraft\Code\Session\SessionStore;
@@ -195,6 +197,44 @@ final class UsageRecordsTest extends TestCase
         self::assertEqualsWithDelta($live->totalCost(), $reseeded->totalCost(), 1e-9);
         self::assertSame($live->unsplitTokens(), $reseeded->unsplitTokens());
         self::assertTrue($reseeded->hasUnpricedUsage());
+    }
+
+    public function testTheServeHostReseedsItsTrackerFromTheLedger(): void
+    {
+        // SES-1b: the serve-side half of the resume seam. `serve --continue`
+        // builds a SessionHost over an existing session; before the reseed
+        // its in-process tracker started at $0 while the durable cost
+        // columns were right — spentUsd() and the cap checks read the
+        // tracker, so the serve window lied about money the ledger held.
+        $store = new EnhancedSessionStore($this->dbPath);
+        $sink = $this->sinkFor($store, 's1');
+        $ledger = SpendLedger::new();
+        $ledger->account(new TokenTracker(), Usage::new(1500, 0.03), $sink);
+        $ledger->account(new TokenTracker(), Usage::new(10, 0.0, unpricedModel: 'mystery-model'), $sink);
+
+        $host = SessionHost::new('s1', WorkspaceContext::new(sessionStore: $store));
+        self::assertEqualsWithDelta(0.03, $host->spentUsd(), 1e-9);
+
+        // The ≥-law travels with the reseed: the unpriced row re-flags the
+        // host's own tracker, so serve's dollar surfaces keep the
+        // lower-bound disclosure, not a bald number.
+        $spend = (new \ReflectionProperty(SessionHost::class, 'spend'))->getValue($host);
+        self::assertInstanceOf(TokenTracker::class, $spend);
+        self::assertTrue($spend->hasUnpricedUsage());
+        self::assertStringContainsString('Spend so far: ≥$0.0300', $ledger->statusLine($spend, 1.0));
+
+        // The other polarity of adoption: a fresh session id on the same
+        // store starts at zero exactly as every host did before the table.
+        $fresh = SessionHost::new('never-opened', WorkspaceContext::new(sessionStore: $store));
+        self::assertSame(0.0, $fresh->spentUsd());
+
+        // House wiring pin: the ctor consults the ledger, and no reseed
+        // shape can silently regress to the plain `new TokenTracker()`.
+        $source = file_get_contents(dirname(__DIR__, 2) . '/src/Host/SessionHost.php');
+        self::assertMatchesRegularExpression(
+            '/\$this->spend = \$store instanceof EnhancedSessionStore\s*\?\s*\(\$store->resumedTokenTracker\(\$sessionId\) \?\? new TokenTracker\(\)\)\s*:\s*new TokenTracker\(\);/',
+            $source,
+        );
     }
 
     public function testAFreshSessionReseedsToNothingAndAnUnknownSessionWritesNothing(): void

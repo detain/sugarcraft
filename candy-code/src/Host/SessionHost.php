@@ -212,7 +212,17 @@ final class SessionHost
         $this->inbox = new \ArrayObject();
         // The session's own "always" answers, saved with it (Chat does the same).
         $this->grants = SessionPermissionMemo::fromGrants($transcripts->loadPermissionGrants($sessionId));
-        $this->spend = new TokenTracker();
+        // SES-1b: serve adopts the durable ledger the way the interactive
+        // launch adopts it (the `tokenTracker:` seam in Bootstrap::chat()) —
+        // a host over a session whose usage_records hold rows must not show
+        // $0 to its live surfaces (spentUsd(), the cap checks) while the
+        // session's cost columns say otherwise. An empty or absent ledger —
+        // a fresh session, or a base store without the table — keeps the
+        // zero tracker, byte-identical to every host built before the table.
+        $store = $workspace->sessionStore;
+        $this->spend = $store instanceof EnhancedSessionStore
+            ? ($store->resumedTokenTracker($sessionId) ?? new TokenTracker())
+            : new TokenTracker();
         $this->compactor = new ContextCompactor($compactorConfig ?? CompactorConfig::new());
         $root = $this->root();
         $this->customCommands = $customCommands ?? array_filter(
