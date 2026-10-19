@@ -242,7 +242,17 @@ final class PharCompatTest extends TestCase
 
         $bin = self::read('bin/candy-code');
         self::assertStringStartsWith("#!/usr/bin/env php\n<?php", $bin, 'build-phar refuses this shape; keep the two honest');
-        self::assertStringContainsString('Phar::running', $bin, 'the fourth autoload candidate (inside-archive vendor) is the phar entry seam');
+        // The measured stub truth (first real build): Phar::running() answers
+        // '' when the process IS the archive entry, and bare '/x.phar/entry'
+        // paths fail is_file()/require for every caller. Both phar shapes —
+        // stub identity (__FILE__ ends .phar) and require-from-inside
+        // (Phar::running) — must therefore be addressed as phar:// URIs, and
+        // the archive's own vendor must REPLACE the filesystem candidates,
+        // not merely outrank them (a stray vendor beside a downloaded phar
+        // must never boot code from outside the frozen archive).
+        self::assertStringContainsString('Phar::running', $bin, 'the inside-archive candidate seam must stay visible');
+        self::assertStringContainsString("'phar://' . __FILE__", $bin, 'the stub door must address the archive as a phar:// URI off __FILE__');
+        self::assertStringContainsString("\$candidates = [\$archive . '/vendor/autoload.php'];", $bin, 'inside an archive the archive is the ONLY root — replacement, not append');
     }
 
     public function testConvertedScannersStayGlobFreeInExecutableCode(): void
@@ -472,9 +482,10 @@ final class PharCompatTest extends TestCase
         self::assertArrayNotHasKey('error', $document, 'error field on the phar smoke document: ' . ($document['error'] ?? ''));
 
         // Stage 3 — the scanners are ALIVE inside the archive: a child reaches
-        // it through its own vendor/autoload.php exactly as the shipped stub
-        // does, and both converted scan sites come back non-empty.
-        $probe = 'require getenv("W2J_PHAR")."/vendor/autoload.php";'
+        // it through its own vendor/autoload.php via the only addressing that
+        // works from outside (a phar:// URI — bare '/x.phar/entry' requires
+        // throw, measured), and both converted scan sites come back non-empty.
+        $probe = 'require "phar://" . getenv("W2J_PHAR") . "/vendor/autoload.php";'
             . 'echo ",".count(\SugarCraft\Code\Tools\Catalog\ToolCatalog::names());'
             . 'echo ",".count(\SugarCraft\Code\Commands\Specs\BuiltInCommands::all());';
         $scan = self::launch([\PHP_BINARY, '-r', $probe], $this->freshPharHome(), ['W2J_PHAR' => $phar]);
@@ -483,10 +494,15 @@ final class PharCompatTest extends TestCase
         self::assertGreaterThanOrEqual(1, $counts[0] ?? 0, 'tool catalogue empty under phar: ' . $scan['out']);
         self::assertGreaterThanOrEqual(1, $counts[1] ?? 0, 'built-in command specs empty under phar: ' . $scan['out']);
 
-        // Stage 4 — build manifest present; LICENSE shipped; dev config kept out.
+        // Stage 4 — build manifest present; LICENSE shipped; dev config kept
+        // out. getMetadata(), not ->metadata: on PHP 8.3 the magic property
+        // warns "Undefined property" and answers NULL even when the archive
+        // carries the manifest (measured during the first real-build smoke —
+        // the stored data was there all along, the property read was a lie).
         $archive = new \Phar($phar);
-        self::assertIsArray($archive->metadata, 'build metadata missing');
-        self::assertArrayHasKey('version', (array) $archive->metadata);
+        $manifest = $archive->getMetadata();
+        self::assertIsArray($manifest, 'build metadata missing');
+        self::assertArrayHasKey('version', $manifest);
 
         $sawLicense = false;
         $sawDevConfig = false;

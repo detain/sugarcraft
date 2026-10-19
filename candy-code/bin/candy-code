@@ -14,20 +14,33 @@ ini_set('display_errors', 'stderr');
 
 (static function () {
     $candidates = ['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
-    // DST-1: under the phar build (tools/build-phar.php) THIS file is the
-    // archive's stub, so __FILE__/__DIR__ name the phar on the real filesystem
-    // and every candidate above resolves outside the archive. The archive's
-    // own path is then the only correct root, and it exists as a candidate
-    // exactly when it can hit: Phar::running() is '' in every composer-mode
-    // checkout, so the three-candidate behaviour above is byte-untouched
-    // there (tests/Integration/BinCandyCodeAutoloadGuardTest.php restates
-    // precisely those three for that reason).
-    $runningPhar = \Phar::running(false);
-    if ($runningPhar !== '') {
-        $candidates[] = $runningPhar . '/vendor/autoload.php';
+    // DST-1, corrected by the first real build's smoke (php 8.3.6, measured):
+    // when `php candy-code.phar` runs, THIS file is the archive's stub and the
+    // process is NOT inside the archive — Phar::running() answers '' in exactly
+    // this context, and a bare '/x.phar/entry' path fails is_file()/require for
+    // every caller. Two identities therefore cover the two phar shapes: the
+    // stub names itself in __FILE__, and a require-from-inside names the
+    // archive in Phar::running(). Both are addressed the only way that works,
+    // as a phar:// URI. The archive's own vendor is then the ONLY root — a
+    // stray vendor beside (or above) a downloaded phar must never boot the
+    // app with code from outside the frozen archive, so when the archive
+    // identity exists the filesystem candidates are dropped, not merely
+    // outranked. In every composer-mode checkout Phar::running() is '' and
+    // __FILE__ is not a .phar, so the three candidates above are byte-untouched
+    // (tests/Integration/BinCandyCodeAutoloadGuardTest.php restates precisely
+    // those three for that reason).
+    $archive = \Phar::running(false) !== ''
+        ? 'phar://' . \Phar::running(false)
+        : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+    if ($archive !== '') {
+        $candidates = [$archive . '/vendor/autoload.php'];
     }
     foreach ($candidates as $candidate) {
-        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        // phar:// URIs are absolute by construction; the '/' test alone would
+        // re-prefix them onto __DIR__ and miss the archive.
+        $path = str_starts_with($candidate, '/') || str_starts_with($candidate, 'phar://')
+            ? $candidate
+            : __DIR__ . '/../' . $candidate;
         if (is_file($path)) {
             require $path;
             return;

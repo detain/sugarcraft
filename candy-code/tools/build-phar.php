@@ -72,8 +72,10 @@ declare(strict_types=1);
  * and `/new`'s cross-root relaunch execs `PHP_BINARY . $argv-script`,
  * which under a require-from-stub layout is exactly such a URL — the
  * relaunch would exit 1 and strand the session. As stub, `__FILE__` is the
- * archive's real path, the guard's phar candidate (`Phar::running(false)`)
- * finds `vendor/autoload.php` inside the archive, and a relaunch re-runs
+ * archive's real path — and Phar::running() answers '' in the stub context
+ * (measured on the first real build), so the guard's phar candidate is
+ * `'phar://' . __FILE__`, which finds `vendor/autoload.php` inside the
+ * archive; and a relaunch re-runs
  * the stub — the phar relaunches itself. PharCompatTest pins both halves.
  *
  * KNOWN PHAR DEGRADATION (disclosed, not fixed here):
@@ -285,3 +287,7 @@ printf(
     $withDev ? ' [WARNING: vendor/ still carries dev packages; run composer install --no-dev for release artifacts]' : '',
 );
 printf("build-phar: sha256 %s\n", hash_file('sha256', $outArg));
+// The stub carries a shebang; without the executable bit the shipped artifact
+// answers `./candy-code.phar` with EACCES and only `php candy-code.phar` works
+// (measured on the first real build). Make the direct form the honest one.
+@chmod($outArg, 0o755);

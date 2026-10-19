@@ -15,9 +15,12 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * standing behind it either way.
  *
  * `bin/candy-code` opens with an IIFE that hunts for `vendor/autoload.php`
- * across three candidates — plus a fourth that exists ONLY inside a phar
- * build, where `Phar::running(false)` names the archive and this process is
- * running the stub (DST-1, tools/build-phar.php) — and, failing all of them,
+ * across three candidates. A phar build takes a different door entirely
+ * (DST-1, tools/build-phar.php): when the process is the archive's stub its
+ * own `phar://__FILE__` vendor replaces the list, and when a script is
+ * required from inside an archive `Phar::running(false)` names it — a phpunit
+ * process satisfies neither, so these three remain the whole truth here —
+ * and, failing all of them,
  * writes
  * `candy-code: cannot find composer autoload.php` to stderr and exits 2. It is
  * structurally exempt from
@@ -257,12 +260,13 @@ final class BinCandyCodeAutoloadGuardTest extends TestCase
      * something, would also red `testACheckoutWithNoAutoloaderFailsOnStderr…`,
      * because the guard would not fire at all.
      *
-     * SINCE DST-1 the script has a FOURTH candidate that this count cannot
-     * see, and cannot: it exists only when `Phar::running(false)` is non-empty,
-     * which no phpunit process satisfies, so `assertCount(3)` remains the
-     * truth for every non-phar launch this file models. The safe-direction
-     * argument is unchanged for it: a phar-only candidate that FOUND an
-     * autoloader in a non-phar fixture would fire the same red below.
+     * SINCE DST-1 the script can replace this list outright, but only from a
+     * door no phpunit process can open: the archive identity — the stub's
+     * `phar://__FILE__` or a non-empty `Phar::running(false)` — exists only
+     * inside a phar build, so `assertCount(3)` remains the truth for every
+     * non-phar launch this file models. The safe-direction
+     * argument is unchanged for the phar door: an archive-only candidate that
+     * FOUND an autoloader in a non-phar fixture would fire the same red below.
      */
     public function testTheGuardsThreeCandidatesAllLandInsideTheEmptyFixture(): void
     {
