@@ -15,15 +15,18 @@ final class HelpMenuTest extends OverlayTestCase
         $this->assertSame(78, HelpMenu::widthFor(80), 'btop 78 at the 80-column minimum');
         $this->assertSame(78, HelpMenu::widthFor(79), 'never below 78');
         $this->assertSame(98, HelpMenu::widthFor(100), 'mid-size: cols - 2');
-        $this->assertSame(117, HelpMenu::widthFor(120), 'the +50% box caps out at 117');
-        $this->assertSame(117, HelpMenu::widthFor(300));
+        $this->assertSame(118, HelpMenu::widthFor(120), 'cols - 2 again — only a 166-wide terminal or wider saturates the cap');
+        $this->assertSame(148, HelpMenu::widthFor(150), 'mid-range: cols - 2');
+        $this->assertSame(166, HelpMenu::widthFor(168), 'the 166 ceiling engages from 168 columns up (cols - 2 reaches it)');
+        $this->assertSame(166, HelpMenu::widthFor(170), 'the 166 ceiling');
+        $this->assertSame(166, HelpMenu::widthFor(300));
         $this->assertSame(2, HelpMenu::columnsFor(78));
         $this->assertSame(2, HelpMenu::columnsFor(109));
         $this->assertSame(2, HelpMenu::columnsFor(110), 'the third column is gone — every width gets the framed pair');
-        $this->assertSame(2, HelpMenu::columnsFor(117));
+        $this->assertSame(2, HelpMenu::columnsFor(166));
         $this->assertSame(37, HelpMenu::columnWidth(78, 2), '(78 - 2 - 2) / 2');
-        $this->assertSame(56, HelpMenu::columnWidth(117, 2), '(117 - 2 - 2) / 2 — 54 cells inside the frame');
-        $this->assertSame(34, HelpMenu::columnWidth(117, 2) - 2 - HelpMenu::KEY_COL, 'the description budget a framed row gets at the widest box');
+        $this->assertSame(81, HelpMenu::columnWidth(166, 2), '(166 - 2 - 2) / 2 — 79 cells inside the frame');
+        $this->assertSame(59, HelpMenu::columnWidth(166, 2) - 2 - HelpMenu::KEY_COL, 'the widest box leaves a 59-cell description column — zero roster descriptions wrap in it');
     }
 
     public function testGeometryIsBtops(): void
@@ -41,7 +44,7 @@ final class HelpMenuTest extends OverlayTestCase
         $this->assertSame(9, $pages, 'framed box flow, not the flat 177-line grid');
 
         [$wx, $wy, $wh, $wp] = HelpMenu::geometry(120, 40);
-        $this->assertSame(2, $wx, 'max(1, 120/2 - 117/2)');
+        $this->assertSame(1, $wx, 'max(1, 120/2 - 118/2)');
         $this->assertSame(max(1, 20 - 4 - intdiv($n, 2)), $wy);
         $this->assertSame(min(34, $n + 3), $wh);
         $this->assertSame(3, $wp, 'sections over a 2 x (34 - 3) = 62-row page: General+Panels+Navigation, Process list..Overlays, Mouse+Info');

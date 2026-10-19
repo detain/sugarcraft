@@ -99,12 +99,12 @@ final class HelpSectionsTest extends OverlayTestCase
     }
 
     /**
-     * A 120x80 terminal holds the whole grid on one page. The plan order
-     * (every heading once, in declared section order) is checked on the
-     * pure box plan itself — with a tall enough column every section is a
-     * single atomic box, so each heading appears exactly once; the paint
-     * then pins the widened box: at 120 cols the borders span the full
-     * WIDE_WIDTH.
+     * A tall 120-column terminal holds the whole grid on one page. The plan
+     * order (every heading once, in declared section order) is checked on
+     * the pure box plan itself — with a tall enough column every section is
+     * a single atomic box, so each heading appears exactly once; the paint
+     * then pins the adaptive borders: a cols-2 box at 120 columns, the full
+     * WIDE_WIDTH cap once the terminal saturates it.
      */
     public function testPaintStreamsEverySectionOnce(): void
     {
@@ -123,8 +123,15 @@ final class HelpSectionsTest extends OverlayTestCase
         HelpMenu::new()->paint($surface, self::ctx(120, 80));
         $top = $surface->plainLines()[11];
         $left = mb_strpos($top, '╭');
-        $this->assertSame(1, $left, 'box centred at x=2 (1-based)');
-        $this->assertSame($left + HelpMenu::WIDE_WIDTH - 1, mb_strpos($top, '╮'), 'the 117-wide box');
+        $this->assertSame(0, $left, 'x=1 (1-based): the 118-cell box hugs the left of a 120-col terminal');
+        $this->assertSame($left + HelpMenu::widthFor(120) - 1, mb_strpos($top, '╮'), 'the cols-2 box at 120 columns');
+
+        $wide = Surface::new(170, 80);
+        HelpMenu::new()->paint($wide, self::ctx(170, 80));
+        $top = $wide->plainLines()[11];
+        $left = mb_strpos($top, '╭');
+        $this->assertSame(1, $left, 'x=2 (1-based) centring of the saturated box');
+        $this->assertSame($left + HelpMenu::WIDE_WIDTH - 1, mb_strpos($top, '╮'), 'the full 166-wide box at the cap');
     }
 
     /**

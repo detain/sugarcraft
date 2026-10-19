@@ -104,7 +104,7 @@ final class HelpFramedLayoutTest extends OverlayTestCase
     /** (c2) the planner never emits a box taller than the column it flows into. */
     public function testNoBoxEverExceedsItsColumn(): void
     {
-        foreach ([78, 98, 117] as $width) {
+        foreach ([78, 98, 118, 166] as $width) {
             for ($per = 3; $per <= 40; ++$per) {
                 foreach (HelpMenu::plan($width, $per) as $page) {
                     foreach ($page as $boxes) {
@@ -121,30 +121,35 @@ final class HelpFramedLayoutTest extends OverlayTestCase
         }
     }
 
-    /** (d) the framed 34-cell budget wraps strictly fewer descriptions than the old 17-cell column. */
+    /**
+     * (d) the widened cap answers the ask on the planner itself: at a 168+
+     * column terminal (166 box) NO description wraps; at 120 columns the
+     * 118-cell box still beats the old three-column 117-cap grid (167
+     * content lines). If help.* text drifts, these counts move and fail
+     * here with the numbers named.
+     */
     public function testFramedDescriptionsWrapLessThanTheOldGrid(): void
     {
-        $blank = str_repeat(' ', HelpMenu::KEY_COL);
-        $content = 0;
-        $keyless = 0;
-        foreach (HelpMenu::plan(HelpMenu::WIDE_WIDTH, 1000) as $page) {
-            foreach ($page as $boxes) {
-                foreach ($boxes as $box) {
-                    foreach ($box['lines'] as [$label]) {
-                        ++$content;
-                        if ($label === $blank) {
-                            ++$keyless;
-                        }
+        $roster = count(KeyTable::rows());
+        $content = static function (int $width): int {
+            $lines = 0;
+            foreach (HelpMenu::plan($width, 1000) as $page) {
+                foreach ($page as $boxes) {
+                    foreach ($boxes as $box) {
+                        $lines += count($box['lines']);
                     }
                 }
             }
-        }
-        // Blank-labelled rows are the 39 wrap continuations plus the 3
-        // key-less trailer rows (blank, help.footer, help.url); the old
-        // 17-cell column turned the same 60 descriptions into 167 rows.
-        $this->assertSame(99, $content, 'the framed 34-cell budget holds the roster in 99 content lines');
-        $this->assertSame(42, $keyless, '39 descriptions still wrap at 34 cells (the old 17-cell column wrapped 52)');
-        $this->assertLessThan(167, $content, 'the wider framed budget wraps strictly less than the old grid');
+
+            return $lines;
+        };
+
+        $this->assertSame(166, HelpMenu::widthFor(170), 'the 166 ceiling: a 170-column terminal saturates it');
+        $this->assertSame($roster, $content(HelpMenu::widthFor(170)), 'zero wrap continuations in the 59-cell description column at the 166 cap');
+
+        $at120 = $content(HelpMenu::widthFor(120));
+        $this->assertSame(99, $at120, 'the 120-column box holds the roster in 99 content lines (39 continuations)');
+        $this->assertLessThan(167, $at120, 'strictly fewer lines than the old three-column 117-cap grid (167)');
     }
 
     /** The header row keeps labelling the two halves of every box row. */

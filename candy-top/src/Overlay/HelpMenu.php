@@ -19,9 +19,10 @@ use SugarCraft\Top\View\Surface;
  * section drawn as its own framed box, and the boxes flowed through two
  * columns, paged when the terminal cannot hold the whole grid.
  *
- * The box is adaptive: {@see self::WIDTH} (78, btop's) on an 80-column
- * terminal — today's status quo — growing to {@see self::WIDE_WIDTH}
- * (117, roughly +50%) on wide ones. Every width gets exactly two columns:
+ * The box is adaptive: {@see self::WIDTH} (78, btop's) at the 80-column
+ * minimum, growing with the terminal up to {@see self::WIDE_WIDTH} (166)
+ * so the two framed columns carry wide description gutters. Every width
+ * gets exactly two columns:
  * a framed section box needs the column the third one used to take. Each
  * column stacks whole boxes: the top border carries the section heading
  * as an embedded title (btop's `┐title┌`), the rows inside run btop's
@@ -33,14 +34,17 @@ use SugarCraft\Top\View\Surface;
  * (both columns at once), and {@see self::plan()} is the one pure,
  * deterministic model of that flow.
  *
- * KEY_COL keeps btop's 20. At the framed 117-wide box the 54-cell interior
- * leaves a 54 - 20 = 34-cell description column, where 39 of the roster's
- * 60 descriptions still wrap — over a third, so the 16-cell floor was
- * measured too: it only saves 4 wraps (35) and `MenuDraw::cjust()` CLIPS
- * the two labels longer than 16 cells (`Shift + Left, Right`,
- * `Alt+Shift+Left/Right`) to mangled prefixes. Truncated key names are
- * worse data loss than a second description line; 20 stands (see the
- * wrap tables in this campaign's evidence report).
+ * KEY_COL keeps btop's 20. At the widest 166 box the 79-cell frame interior
+ * leaves a 79 - 20 = 59-cell description column and NONE of the roster's
+ * 60 descriptions wraps; at the 118-cell box a 120-column terminal gets,
+ * 39 still do — a two-up framed layout with 56-cell-plus descriptions
+ * would need a ~160-cell box, which simply is not there. Lowering KEY_COL
+ * toward its 16-cell floor was measured (see the sweep in this campaign's
+ * evidence report): it saves only 7 of those 39 at width 118 and nothing
+ * at 166, while `MenuDraw::cjust()` CLIPS the two labels longer than 16
+ * cells (`Shift + Left, Right`, `Alt+Shift+Left/Right`) to mangled
+ * prefixes. Truncated key names are worse data loss than a second
+ * description line; 20 stands.
  *
  * Keys: escape / q / h / backspace / space / enter or any click close it;
  * with more than one page, down / j / page_down / tab / wheel-down turn
@@ -57,8 +61,8 @@ final class HelpMenu implements Overlay
     /** Narrowest box: btop's fixed help width, used at the 80-column minimum. */
     public const WIDTH = 78;
 
-    /** Widest box (~+50% over btop's 78); wide terminals get the roomier frames. */
-    public const WIDE_WIDTH = 117;
+    /** Widest box; wide terminals get frames roomy enough that descriptions stop wrapping. */
+    public const WIDE_WIDTH = 166;
 
     /** The grid is always two framed columns (see the class docblock). */
     public const COLUMNS = 2;
@@ -92,8 +96,8 @@ final class HelpMenu implements Overlay
 
     /**
      * Box width for a terminal: btop's 78 at the 80-column minimum, up to
-     * 117, never wider than two cells under the terminal (the status-quo
-     * 78-in-80 margins stay symmetric).
+     * 166, never wider than two cells under the terminal (the 78-in-80
+     * margins stay symmetric).
      */
     public static function widthFor(int $cols): int
     {

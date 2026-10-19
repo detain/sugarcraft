@@ -96,8 +96,10 @@ final class TtyModeFrameTest extends TestCase
         // last page carries an editable row, so the editing sweep runs where
         // the label is true.
         yield "80x24 options editing" => [80, 24, self::optionsEditingKeys(), OptionsMenu::class];
-        foreach ([[80, 24], [120, 40]] as [$w, $h]) {
+        foreach ([[80, 24], [120, 40], [168, 40], [170, 80]] as [$w, $h]) {
             yield "{$w}x{$h} help" => [$w, $h, ['h'], HelpMenu::class];
+        }
+        foreach ([[80, 24], [120, 40]] as [$w, $h]) {
             yield "{$w}x{$h} signals" => [$w, $h, ['down', 's'], SignalMenu::class];
             yield "{$w}x{$h} renice" => [$w, $h, ['down', 'N'], ReniceMenu::class];
             yield "{$w}x{$h} kill confirm" => [$w, $h, ['down', 'k'], MsgBox::class];
