@@ -201,10 +201,23 @@ final class BinCandyCodeWiringTest extends TestCase
             static fn (\SugarCraft\Code\Tools\Catalog\CatalogEntry $e): string => $e->class,
             array_values(array_filter(\SugarCraft\Code\Tools\Catalog\ToolCatalog::entries(), static fn (\SugarCraft\Code\Tools\Catalog\CatalogEntry $e): bool => !$e->onLaunch)),
         );
+        // And minus the MCP-7 dispatcher pair: the catalog declares the two
+        // names in ToolCatalog::CONDITIONAL_BUILDS because they ride a frozen
+        // LAZY shape, and a repo with no deferred MCP server ships without
+        // them — their presence is pinned at the wire tier
+        // ({@see McpLazyToolLoadingTest}), not by this launch.
+        $conditional = array_map(
+            static fn (\SugarCraft\Code\Tools\Catalog\CatalogEntry $e): string => $e->class,
+            array_values(array_filter(
+                \SugarCraft\Code\Tools\Catalog\ToolCatalog::entries(),
+                static fn (\SugarCraft\Code\Tools\Catalog\CatalogEntry $e): bool => in_array($e->name, \SugarCraft\Code\Tools\Catalog\ToolCatalog::CONDITIONAL_BUILDS, true),
+            )),
+        );
         $expected = array_values(array_diff(
             BuiltInToolCorpus::classNames(),
             BuiltInToolCorpus::dynamicToolClasses(),
             $memberOnly,
+            $conditional,
         ));
         $wired = array_keys($byClass);
         sort($wired);
@@ -246,7 +259,13 @@ final class BinCandyCodeWiringTest extends TestCase
 
         // DH-TOOLS: and the launch set is exactly the catalog — a new tool joins
         // by declaring itself, not by editing this list.
-        $catalogued = array_map(static fn (\SugarCraft\Code\Tools\Catalog\CatalogEntry $e): string => $e->name, \SugarCraft\Code\Tools\Catalog\ToolCatalog::onLaunch());
+        $catalogued = array_map(
+            static fn (\SugarCraft\Code\Tools\Catalog\CatalogEntry $e): string => $e->name,
+            array_values(array_filter(
+                \SugarCraft\Code\Tools\Catalog\ToolCatalog::onLaunch(),
+                static fn (\SugarCraft\Code\Tools\Catalog\CatalogEntry $e): bool => !in_array($e->name, \SugarCraft\Code\Tools\Catalog\ToolCatalog::CONDITIONAL_BUILDS, true),
+            )),
+        );
         sort($catalogued);
         $this->assertSame($catalogued, $names);
 

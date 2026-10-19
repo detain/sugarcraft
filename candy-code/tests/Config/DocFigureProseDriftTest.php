@@ -5357,6 +5357,7 @@ final class DocFigureProseDriftTest extends TestCase
         // re-spelling of both pages.
         $wordNumbers['thirty-three'] = 33;
         $wordNumbers['thirty-four'] = 34;
+        $wordNumbers['thirty-six'] = 36;
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));

@@ -601,6 +601,8 @@ Sharing is made safe in the transport (audit B1/AG-1):
 (`src/Tools/McpToolBridge.php`) and appends it to the tool list. Bridge names
 follow the `mcp__<server>__<tool>` convention, which is what permission rule
 patterns like `mcp__git__*` match — see [`PERMISSIONS.md`](PERMISSIONS.md).
+One server can opt out of that shape by being too talkative; see
+[Deferred schemas: `mcp_list` and `mcp_call`](#deferred-schemas-mcp_list-and-mcp_call-mcp-7).
 
 The client is built `unrestricted: true`, which is the opposite of what it looks
 like. `McpClient::listTools()` fails *closed* without an `AgentPreset`, and the
@@ -655,6 +657,73 @@ launch, so a change applies on restart:
 ```json
 { "disabledMcpServers": ["untrusted_*", "scratch"] }
 ```
+
+---
+
+## Deferred schemas: `mcp_list` and `mcp_call` (MCP-7)
+
+A server's full `tools/list` schema is priced in tokens — name, description and
+`inputSchema`, in the same shape every other tool is costed. When one server's
+advertised total reaches `mcp.lazySchemaTokens` (user-tier setting, default
+8000, `0` never defers), that server's tools stop arriving as first-class
+`mcp__<server>__<tool>` names and instead ride two stable built-in-shaped
+tools:
+
+- **`mcp_list`** (position 39) answers the deferred roster — server, tool,
+  description, and the schema the model needs to build arguments. Pass a
+  `server` to see one server; no arguments for everything.
+- **`mcp_call`** (position 40) runs one of them:
+  `mcp_call(server, tool, arguments)`. The call goes through the exact same
+  `McpClient::callTool()` path a bridge uses, so the router's allow/deny and
+  the whole `PreToolUse` chain are unchanged — the deferral moves the spelling,
+  never the gate.
+
+Three properties make this safe to turn on by default:
+
+**Nothing changes until something is deferred.** Servers under the floor, and
+any server whose `.mcp.json` entry carries `"eager": true` (also accepted:
+`"1"`, `"true"`, `"yes"`, `"on"`), keep their first-class bridges
+byte-identically. The common small `.mcp.json` sees zero difference — same
+names, same schemas, same order. And the pair itself is only built when at
+least one tool was actually deferred; a launch with nothing to defer never
+meets `mcp_list` at all.
+
+**The decision is per server, not per config.** A fat server pays its own
+floor; a small one is not taxed for a noisy neighbour.
+
+**The roster is frozen at launch, like everything else MCP.** The split is
+computed once, on the first MCP tool build of the session, and memoised —
+mid-session edits to `mcp.json` change the *next* launch, not this one (the
+E703-alpha law, applied to the dispatcher). `mcp_call` refuses any name not
+on the frozen list, even a server added minutes ago, and points at `mcp_list`
+to discover the real names.
+
+Permission rules speak both spellings. A restrictive rule written against a
+wire name — `Deny mcp__git__drop_table`, `mcp__git__*`, `mcp__*` — binds the
+dispatched call, and a rule written against `mcp_call` binds first-class
+bridges, because after the deferral they are one capability. Grants translate
+in neither direction: `Allow mcp__git__push` never reaches the args form, and
+`Allow mcp_call` never blesses a bridge it did not name. The gate classifies a
+dispatched call by the *named tool's* `readOnlyHint` — a deferred read-only
+tool still runs unasked under `auto`, an unhinted one still asks — so moving a
+server over the floor cannot silently re-classify its tools. See
+[PERMISSIONS.md](PERMISSIONS.md) for the roster this parity covers.
+
+```json
+{
+  "mcpServers": {
+    "notes": { "type": "stdio", "command": "notes-mcp" },
+    "monorepo": {
+      "type": "stdio",
+      "command": "huge-tools-mcp",
+      "eager": true
+    }
+  }
+}
+```
+
+Here `notes` is priced under the floor and keeps first-class tools; `huge-tools-mcp`
+would be deferred, but its `eager: true` opts it back in.
 
 ---
 

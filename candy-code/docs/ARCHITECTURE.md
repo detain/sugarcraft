@@ -28,7 +28,7 @@ bin/candy-code                argv → pre-flight → dispatch
                                   │
                                   └─ Runtime        the agentic loop
                                          ├─ Providers\*          the model call
-                                         ├─ Tools\*              34 built-ins + MCP bridges
+                                         ├─ Tools\*              36 built-ins + MCP bridges
                                          ├─ Hooks\*              the PreToolUse chain
                                          └─ Permissions\*        the gate, last in that chain
 ```
