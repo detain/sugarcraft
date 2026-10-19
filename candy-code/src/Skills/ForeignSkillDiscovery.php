@@ -199,28 +199,6 @@ final class ForeignSkillDiscovery
     }
 
     /**
-     * Read every directory's skills, tagged with $source and with the tier
-     * the directory belongs to, grouped by tier in
-     * {@see SkillOrigin::precedence()} order — lowest first, whatever order
-     * $dirs lists them in.
-     *
-     * Within ONE tier, a later directory's skill replaces an earlier one's of
-     * the same name, and the loser is recorded through
-     * {@see SkillLoader::recordShadowing()} exactly as {@see merge()} records
-     * cross-tier losers — byte-identical twins (one SKILL.md synced into two
-     * user trees of the same convention) collapse silently there, differing
-     * bytes are reported. This only became reachable when a convention grew a
-     * second user tree; with one directory per tier per convention the
-     * collision had no second claimant.
-     *
-     * @param array<string, array{0: string|null, 1: string|null, 2: SkillOrigin}> $dirs
-     *        directory => [the extra containment root its symlinks may resolve
-     *        into (null confines them to the directory itself), the checkout the
-     *        directory itself must resolve strictly inside (null for a directory
-     *        whose location no repository chose), the tier its skills belong to]
-     * @return array<string, array<string, Skill>>
-     */
-    /**
      * The skill trees the given bundles contribute, badged
      * {@see SkillSource::Bundle} and tiered from the bundle's own install
      * root (PLG-1, plan_comparison W6).
@@ -251,6 +229,28 @@ final class ForeignSkillDiscovery
         return $this->discover($dirs, SkillSource::Bundle);
     }
 
+    /**
+     * Read every directory's skills, tagged with $source and with the tier
+     * the directory belongs to, grouped by tier in
+     * {@see SkillOrigin::precedence()} order — lowest first, whatever order
+     * $dirs lists them in.
+     *
+     * Within ONE tier, a later directory's skill replaces an earlier one's of
+     * the same name, and the loser is recorded through
+     * {@see SkillLoader::recordShadowing()} exactly as {@see merge()} records
+     * cross-tier losers — byte-identical twins (one SKILL.md synced into two
+     * user trees of the same convention) collapse silently there, differing
+     * bytes are reported. This only became reachable when a convention grew a
+     * second user tree; with one directory per tier per convention the
+     * collision had no second claimant.
+     *
+     * @param array<string, array{0: string|null, 1: string|null, 2: SkillOrigin}> $dirs
+     *        directory => [the extra containment root its symlinks may resolve
+     *        into (null confines them to the directory itself), the checkout the
+     *        directory itself must resolve strictly inside (null for a directory
+     *        whose location no repository chose), the tier its skills belong to]
+     * @return array<string, array<string, Skill>>
+     */
     private function discover(array $dirs, SkillSource $source): array
     {
         $byTier = [];
