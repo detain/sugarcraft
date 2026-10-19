@@ -38,7 +38,7 @@ use SugarCraft\Code\Util\TokenTracker;
  */
 final class IdleAutoCompactionTest extends TestCase
 {
-    private const RECORD = 'a record the idle fold wrote';
+    private const IDLE_RECORD = 'a record the idle fold wrote';
 
     private const FOLDED_MARK = 'Compacted during the idle';
 
@@ -100,7 +100,7 @@ final class IdleAutoCompactionTest extends TestCase
     {
         $records = [];
         foreach ($fingerprint->exchangeKeys() as $key) {
-            $records[$key] = self::RECORD;
+            $records[$key] = self::IDLE_RECORD;
         }
 
         return [...$records, StateSummaryTemplate::SUMMARY_KEY => StateSummaryTemplate::new()->render()];
@@ -147,7 +147,7 @@ final class IdleAutoCompactionTest extends TestCase
     }
 
     /** @return ?array{id:string,fingerprint:HistoryFingerprint,sessionId:?string} */
-    private static function latchOf(Chat $chat): ?array
+    private static function idleLatchOf(Chat $chat): ?array
     {
         return (new \ReflectionProperty(Chat::class, 'pendingIdleCompaction'))->getValue($chat);
     }
@@ -251,7 +251,7 @@ final class IdleAutoCompactionTest extends TestCase
 
         $this->assertNotNull($cmd, 'the request rides a Cmd like every other summarization');
         $this->assertSame(0, $summarizer->calls, 'the tick builds the request; executing it is the runner\'s');
-        $latch = self::latchOf($next);
+        $latch = self::idleLatchOf($next);
         $this->assertNotNull($latch);
         $this->assertNotSame('', $latch['id']);
         $this->assertTrue(
@@ -275,7 +275,7 @@ final class IdleAutoCompactionTest extends TestCase
         $busy = $this->chat(self::bigIdlePairs(), idleSince: new \DateTimeImmutable('-5 minutes'));
         [$after, $cmd] = $busy->update($tick);
         $this->assertNull($cmd, 'five minutes into a 3600-second window: no request');
-        $this->assertNull(self::latchOf($after));
+        $this->assertNull(self::idleLatchOf($after));
 
         // Input in the box: the user is about to be back.
         $typed = $this->chat(self::bigIdlePairs(), idleSince: new \DateTimeImmutable('-2 hours'));
@@ -299,7 +299,7 @@ final class IdleAutoCompactionTest extends TestCase
 
         $this->assertSame(0, $summarizer->calls, 'heuristic mode never pays for a round-trip');
         $this->assertTrue(self::mentions($next->history, self::FOLDED_MARK), 'the free fold landed immediately');
-        $this->assertNull(self::latchOf($next), 'nothing is outstanding');
+        $this->assertNull(self::idleLatchOf($next), 'nothing is outstanding');
         $this->assertLessThan(self::idleWireSize($chat->history), self::idleWireSize($next->history), 'the agent-visible wire actually shrank');
     }
 
@@ -319,7 +319,7 @@ final class IdleAutoCompactionTest extends TestCase
 
         $this->assertSame(0, $summarizer->calls, 'a cap-breached session cannot buy the model\'s opinion');
         $this->assertTrue(self::mentions($next->history, self::FOLDED_MARK), 'the free fold still ran');
-        $this->assertNull(self::latchOf($next));
+        $this->assertNull(self::idleLatchOf($next));
     }
 
     public function testAFoldThatBuysNothingStaysQuietAndSelfLimits(): void
@@ -340,7 +340,7 @@ final class IdleAutoCompactionTest extends TestCase
 
         $this->assertFalse(self::mentions($next->history, self::FOLDED_MARK), 'a silent zero-savings attempt');
         $this->assertSame($before, $next->history);
-        $this->assertNull(self::latchOf($next));
+        $this->assertNull(self::idleLatchOf($next));
     }
 
     // ── the landing ───────────────────────────────────────────────────
@@ -353,11 +353,11 @@ final class IdleAutoCompactionTest extends TestCase
 
         [$next, $cmd] = $chat->update(new HistoryCompactedMsg('ic-1', self::idleRecords($fingerprint), fingerprint: $fingerprint));
 
-        $this->assertTrue(self::mentions($next->history, self::RECORD), 'the summaries landed');
+        $this->assertTrue(self::mentions($next->history, self::IDLE_RECORD), 'the summaries landed');
         $this->assertTrue(self::mentions($next->history, self::FOLDED_MARK), 'the transcript says the idle did it');
         $folded = $next->history[count($next->history) - 1];
         $this->assertTrue($folded->uiOnly, 'the announcement is for the human, not the model');
-        $this->assertNull(self::latchOf($next));
+        $this->assertNull(self::idleLatchOf($next));
         $this->assertFalse($next->inFlight, 'nobody sent anything — no turn started');
         $this->assertLessThan(self::idleWireSize($history), self::idleWireSize($next->history), 'the leading run was condensed');
         // $cmd is the postCompactCmd closure: the /compact report hook, never a turn.
@@ -374,7 +374,7 @@ final class IdleAutoCompactionTest extends TestCase
         [$next] = $chat->update(new HistoryCompactedMsg('ic-1', self::idleRecords($fingerprint), fingerprint: $fingerprint));
 
         $this->assertSame($chat->history, $next->history, 'no rewrite under a live stream');
-        $this->assertNull(self::latchOf($next), 'the latch releases — the watch may re-arm');
+        $this->assertNull(self::idleLatchOf($next), 'the latch releases — the watch may re-arm');
     }
 
     public function testALandingWhoseFingerprintWentStaleIsDiscarded(): void
@@ -387,8 +387,8 @@ final class IdleAutoCompactionTest extends TestCase
 
         [$next] = $chat->update(new HistoryCompactedMsg('ic-1', self::idleRecords($stale), fingerprint: $stale));
 
-        $this->assertFalse(self::mentions($next->history, self::RECORD), 'summaries of a history that no longer leads never land');
-        $this->assertNull(self::latchOf($next));
+        $this->assertFalse(self::mentions($next->history, self::IDLE_RECORD), 'summaries of a history that no longer leads never land');
+        $this->assertNull(self::idleLatchOf($next));
     }
 
     public function testALandingFromAnotherSessionReleasesTheLatch(): void
@@ -400,7 +400,7 @@ final class IdleAutoCompactionTest extends TestCase
         [$next] = $chat->update(new HistoryCompactedMsg('ic-1', self::idleRecords($fingerprint), fingerprint: $fingerprint));
 
         $this->assertSame($chat->history, $next->history);
-        $this->assertNull(self::latchOf($next));
+        $this->assertNull(self::idleLatchOf($next));
     }
 
     public function testABlockedLandingWritesOneNoticeAndFoldsNothing(): void
@@ -414,7 +414,7 @@ final class IdleAutoCompactionTest extends TestCase
         $this->assertTrue(self::mentions($next->history, 'PreCompact'), 'the user learns the hook stopped it');
         $this->assertFalse(self::mentions($next->history, self::FOLDED_MARK), 'nothing was folded');
         $this->assertCount(count($history) + 1, $next->history);
-        $this->assertNull(self::latchOf($next));
+        $this->assertNull(self::idleLatchOf($next));
     }
 
     public function testAHoldVerdictDegradesToTheHeuristicFoldWithTheAdvisory(): void
@@ -432,7 +432,7 @@ final class IdleAutoCompactionTest extends TestCase
 
         $this->assertFalse(self::mentions($next->history, 'model text that must not land'), 'the HOLD text never enters the transcript');
         $this->assertTrue(self::mentions($next->history, self::FOLDED_MARK), 'the fold degraded instead of refusing');
-        $this->assertNull(self::latchOf($next));
+        $this->assertNull(self::idleLatchOf($next));
         $this->assertLessThan(self::idleWireSize($history), self::idleWireSize($next->history), 'the heuristic condensed the leading run');
     }
 
@@ -464,7 +464,7 @@ final class IdleAutoCompactionTest extends TestCase
 
         [$next] = $chat->update(new HistoryCompactedMsg('ic-ghost', self::idleRecords($fingerprint), fingerprint: $fingerprint));
 
-        $this->assertFalse(self::mentions($next->history, self::RECORD), 'a landing for an id nothing asked is dropped');
+        $this->assertFalse(self::mentions($next->history, self::IDLE_RECORD), 'a landing for an id nothing asked is dropped');
         $this->assertSame('manual', (new \ReflectionProperty(Chat::class, 'pendingCompactionId'))->getValue($chat));
     }
 
@@ -476,7 +476,7 @@ final class IdleAutoCompactionTest extends TestCase
         // the idle fold from asking while the tick's own latch is out.
         $chat = $this->chat(self::bigIdlePairs(), idleSince: new \DateTimeImmutable('-2 hours'));
         [$folded] = $chat->update(new \SugarCraft\Code\IdleCompactTickMsg());
-        $this->assertNotNull(self::latchOf($folded), 'control: the fold is out');
+        $this->assertNotNull(self::idleLatchOf($folded), 'control: the fold is out');
 
         [, $second] = $folded->update(new \SugarCraft\Code\IdleCompactTickMsg());
         $this->assertNull($second, 'a second tick while the first is out asks nobody');
