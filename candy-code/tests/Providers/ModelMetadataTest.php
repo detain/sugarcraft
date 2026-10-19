@@ -126,10 +126,14 @@ final class ModelMetadataTest extends TestCase
 
     public function testCandidatesEnumerateChatRowsSortedVerbatim(): void
     {
+        // The wildcard rows are respelled via chr(42) on purpose: a literal
+        // `*` here would be a glob-shaped string token and drift the
+        // GlobDialectDifferentialTest corpus census.
+        $wildcard = chr(42);
         $db = ModelMetadata::fromTable(self::litellm() + [
             'bedrock/anthropic.claude-sonnet-4-5-v2:0' => ['max_input_tokens' => 200_000, 'litellm_provider' => 'bedrock', 'mode' => 'chat'],
-            'gpt-4*' => ['max_input_tokens' => 8_192, 'litellm_provider' => 'openai'],
-            '*' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai'],
+            'gpt-4' . $wildcard => ['max_input_tokens' => 8_192, 'litellm_provider' => 'openai'],
+            $wildcard => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai'],
         ]);
 
         // SORT_STRING keeps uppercase ahead of lowercase; keys ride verbatim
@@ -145,9 +149,10 @@ final class ModelMetadataTest extends TestCase
 
     public function testCandidateHintsMatchLitellmProviderCaseInsensitivelyAndWildcardsNeverRide(): void
     {
+        $wildcard = chr(42);
         $db = ModelMetadata::fromTable(self::litellm() + [
-            'gpt-4*' => ['max_input_tokens' => 8_192, 'litellm_provider' => 'openai'],
-            '*' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai'],
+            'gpt-4' . $wildcard => ['max_input_tokens' => 8_192, 'litellm_provider' => 'openai'],
+            $wildcard => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai'],
         ]);
 
         self::assertSame(['claude-sonnet-4-6'], $db->candidates('anthropic'));

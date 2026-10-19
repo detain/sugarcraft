@@ -14166,7 +14166,13 @@ final class Chat implements Model
             ]]), null];
         }
 
-        return $this->withInputBuf('')->selectPaletteProvider($args[0], $args[1] ?? null);
+        [$next, $cmd] = $this->withInputBuf('')->selectPaletteProvider($args[0], $args[1] ?? null);
+        // PRV-1: `/model <provider> [model]` never passes the palette's
+        // reopen gate, but the next palette open should still find a warm
+        // catalog for the provider it just switched to.
+        $next->primeModelCatalog($args[0]);
+
+        return [$next, $cmd];
     }
 
     /**
@@ -18801,6 +18807,10 @@ final class Chat implements Model
     private function pickPaletteProvider(string $name): array
     {
         [$next, $cmd] = $this->selectPaletteProvider($name);
+        // PRV-1: warm the catalog tiers BEFORE the reopen decision, so the
+        // row count that gates the second level counts the models the user
+        // is about to be offered, not just the three install-known ids.
+        $next->primeModelCatalog($name);
         if ($next->backend === $this->backend || \count($next->paletteModelLabels($name)) < 2) {
             return [$next, $cmd];
         }
@@ -18809,10 +18819,14 @@ final class Chat implements Model
     }
 
     /**
-     * The model rows the palette offers for $provider
-     * ({@see \SugarCraft\Code\Config\Settings\ModelChoice::paletteLabels()}):
-     * the model running now when it runs on that provider, the one saved for
-     * it in `models`, then its configured default.
+     * The model rows the palette offers for $provider: the install-known
+     * trio from {@see \SugarCraft\Code\Config\Settings\ModelChoice::paletteLabels()}
+     * — the model running now when it runs on that provider, the one saved
+     * for it in `models`, its configured default — then the PRV-1 catalog
+     * tiers merged live-over-LiteLLM by
+     * {@see \SugarCraft\Code\Providers\ModelCatalog}. The merge only ever
+     * reads memos (the bounded fetches belong to {@see primeModelCatalog()},
+     * update-side), so this stays safe to call from the render path.
      *
      * @return list<string>
      */
@@ -18830,11 +18844,39 @@ final class Chat implements Model
             $persisted = $default = null;
         }
 
-        return \SugarCraft\Code\Config\Settings\ModelChoice::paletteLabels(
-            $current,
-            \is_string($persisted) ? $persisted : null,
-            \is_string($default) ? $default : null,
+        $backend = $this->backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $this->backend->provider() : null;
+
+        return \SugarCraft\Code\Providers\ModelCatalog::merge(
+            \SugarCraft\Code\Config\Settings\ModelChoice::paletteLabels(
+                $current,
+                \is_string($persisted) ? $persisted : null,
+                \is_string($default) ? $default : null,
+            ),
+            $backend instanceof \SugarCraft\Code\Providers\HasModelCatalog && $backend->name() === $provider
+                ? \SugarCraft\Code\Providers\ModelCatalog::live($backend)
+                : null,
+            \SugarCraft\Code\Providers\ModelCatalog::litellm($provider),
         );
+    }
+
+    /**
+     * PRV-1: run the two catalog fetches for one provider once per process,
+     * from update-side code only (a palette open, a `/model` command). The
+     * live tier asks the endpoint through the shared bounded seam when this
+     * provider speaks one and the session's backend is already on it; the
+     * LiteLLM tier sweeps the community table's attribution. Both results
+     * memoise in {@see \SugarCraft\Code\Providers\ModelCatalog}, including a
+     * null — an unreachable endpoint is asked about once, not per keystroke.
+     */
+    private function primeModelCatalog(string $provider): void
+    {
+        $backend = $this->backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $this->backend->provider() : null;
+
+        if ($backend instanceof \SugarCraft\Code\Providers\HasModelCatalog && $backend->name() === $provider) {
+            \SugarCraft\Code\Providers\ModelCatalog::prefetch($backend);
+        }
+
+        \SugarCraft\Code\Providers\ModelCatalog::litellm($provider);
     }
 
     /**

@@ -62,9 +62,11 @@ final class ModelChoice
      * The rows a model picker offers for one provider, deduplicated, in the
      * order a user wants them: the model running now (when it runs on this
      * provider), the one persisted for it, then its configured default.
-     * No provider exposes a catalogue of its models without a network round
-     * trip, so these are the ids this install actually knows; any other id is
-     * typed as `/model <provider> <model>`.
+     * These are the ids this install actually knows without asking anyone;
+     * PRV-1 merged the catalog tiers on top of them
+     * ({@see \SugarCraft\Code\Providers\ModelCatalog::merge()}) — live
+     * endpoint answer over LiteLLM names over this trio — and any id that
+     * reaches neither list is still typed as `/model <provider> <model>`.
      *
      * @return list<string>
      */
