@@ -9171,6 +9171,8 @@ final class Bootstrap
                     ))
                 ),
                 'http' => is_string($config['url'] ?? null) ? $config['url'] : '',
+                // MCP-4 relay (w5h): sse rides the same url detail as http.
+                'sse' => is_string($config['url'] ?? null) ? $config['url'] : '',
                 'git' => is_string($config['path'] ?? null) ? $config['path'] : '(this project)',
                 // E699: the entry names nothing and the operator's path must
                 // never reach a transcript-visible surface — the detail is a
