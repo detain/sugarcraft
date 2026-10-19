@@ -18,7 +18,7 @@ use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Providers\Concerns\ToolSchema;
 use SugarCraft\Code\Usage;
 
-final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, HasModelCatalog
+final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, HasModelCatalog, ShapesReasoningEffort
 {
     use ToolSchema;
 

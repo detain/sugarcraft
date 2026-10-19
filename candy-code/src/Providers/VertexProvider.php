@@ -84,7 +84,7 @@ use SugarCraft\Code\Usage;
  * what selects between the two bodies. A `gemini-*` id used to be handed the
  * PaLM 2 envelope; it now gets its own.
  */
-final readonly class VertexProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill, RebindsModel
+final readonly class VertexProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill, RebindsModel, ShapesReasoningEffort
 {
     use ToolSchema;
 
@@ -148,6 +148,21 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
     protected function anthropicWireStreamLabel(): string
     {
         return 'Vertex streamRawPredict';
+    }
+
+    /**
+     * PRV-2 (§6.3→§6.5): the follow-up that {@see __construct()}'s
+     * `thinkingBudget` note asked for, fed by its OWN key. The Gemini
+     * setting number never crosses to this arm — a `-1`, a `0` or a
+     * two-digit Gemini value would be a protocol insult as an Anthropic
+     * `budget_tokens`. The effort tier is the separate channel: five words
+     * that all map to a floor-satisfying budget or to null, so the default
+     * Vertex-Anthropic body is still its exact pre-CTX-1 shape until the
+     * user names a tier.
+     */
+    protected function anthropicThinkingBudget(CompleteRequest $request): ?int
+    {
+        return EffortBudget::thinkingTokens($request->reasoningEffort);
     }
 
     /**
@@ -255,8 +270,12 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
      *        counts Gemini thinking tokens (where 0/-1/small values are
      *        ordinary) and would not be a valid Anthropic `budget_tokens`,
      *        so feeding both arms from it would make every Gemini user's
-     *        value an Anthropic-arm surprise. Anthropic-on-Vertex thinking
-     *        is a follow-up with its own key if a user ever asks for it.
+     *        value an Anthropic-arm surprise. PRV-2 (§6.5) landed that
+     *        asked-for follow-up FROM ITS OWN KEY: the Anthropic arm derives
+     *        its budget from the `reasoningEffort` tier
+     *        ({@see EffortBudget}), never from this number — the arms stay
+     *        unbridged and the hook answers non-null only when the request
+     *        carries a recognized tier.
      * @param bool $promptCache Audit A15: whether the Anthropic arm marks
      *        prompt-cache breakpoints ({@see CacheBreakpoints}: the system
      *        prompt, the last tool and the conversation tail). From the

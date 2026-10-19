@@ -54,7 +54,7 @@ use SugarCraft\Code\Providers\Concerns\ToolSchema;
  * half of the tables the PRV-3 extraction left in the shared traits, and
  * an unknown model prices `null` (loud) rather than guessed.
  */
-final readonly class GeminiProvider implements ProviderInterface, RebindsModel
+final readonly class GeminiProvider implements ProviderInterface, RebindsModel, ShapesReasoningEffort
 {
     use ToolSchema;
     use HttpClientDefaults;

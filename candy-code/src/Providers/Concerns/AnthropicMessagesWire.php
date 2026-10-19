@@ -15,6 +15,7 @@ use SugarCraft\Code\Providers\CacheBreakpoints;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\ContextOverflow;
+use SugarCraft\Code\Providers\EffortBudget;
 use SugarCraft\Code\Providers\ProviderException;
 use SugarCraft\Code\Providers\ProviderStreamException;
 use SugarCraft\Code\Providers\TransientFailure;
@@ -441,17 +442,21 @@ trait AnthropicMessagesWire
     // Anthropic (rawPredict / streamRawPredict) request shaping
     // -------------------------------------------------------------------------
     /**
-     * CTX-1 (§6.3): the host's extended-thinking budget for this wire, or
-     * null to send no `thinking` field at all (the default, and the exact
-     * pre-CTX-1 body). A host that answers non-null commits to the protocol
-     * triangle that {@see anthropicBody()} enforces - budget >= 1024,
-     * temperature forced to 1, max_tokens raised above the budget - and to
-     * replaying the signed blocks {@see anthropicBlocks()} carries. The
-     * budget must ALREADY be boundary-parsed: the value is trusted here,
-     * which is why the factory refuses malformed `thinkingBudget` settings
-     * at construction rather than filtering them per request.
+     * CTX-1 (§6.3): the host's extended-thinking budget for THIS request's
+     * wire, or null to send no `thinking` field at all (the default, and the
+     * exact pre-CTX-1 body). A host that answers non-null commits to the
+     * protocol triangle that {@see anthropicBody()} enforces - budget >=
+     * 1024, temperature forced to 1, max_tokens raised above the budget -
+     * and to replaying the signed blocks {@see anthropicBlocks()} carries.
+     * The budget must be boundary-parsed or boundary-BUILT: a configured
+     * value is trusted because the factory refuses a malformed
+     * `thinkingBudget` at construction, and a PRV-2-derived value is safe
+     * because {@see EffortBudget::thinkingTokens()} cannot answer below
+     * the floor. A host whose budget depends on the request (the effort
+     * tier) reads it here rather than in the body builder, so the body,
+     * the ceiling raise and the replay gate all see ONE answer per request.
      */
-    protected function anthropicThinkingBudget(): ?int
+    protected function anthropicThinkingBudget(CompleteRequest $request): ?int
     {
         return null;
     }
@@ -469,7 +474,12 @@ trait AnthropicMessagesWire
      */
     private function anthropicBody(CompleteRequest $request, bool $stream): array
     {
-        $messages = $this->formatAnthropicMessages($request->messages);
+        // PRV-2 (§6.5): resolved ONCE so the body triangle and the signed-
+        // block replay gate can never answer with two different budgets for
+        // one request - the hook may now read the request's effort tier,
+        // and a per-message re-read would be re-deriving, not caching.
+        $thinkingBudget = $this->anthropicThinkingBudget($request);
+        $messages = $this->formatAnthropicMessages($request->messages, $thinkingBudget);
 
         if ($messages === []) {
             // `messages` must hold at least one turn - an empty list is a
@@ -493,7 +503,7 @@ trait AnthropicMessagesWire
         // inside the thoughts. The max_tokens floor of budget x 1.5 is
         // deliberate headroom, and `max()` guarantees enabling thinking can
         // only ever RAISE an explicit request ceiling, never shrink it.
-        $thinkingBudget = $this->anthropicThinkingBudget();
+        // ($thinkingBudget itself was resolved above the message walk.)
 
         $body = array_merge($this->anthropicWireBodyPrelude($request), [
             'messages' => $messages,
@@ -701,9 +711,13 @@ trait AnthropicMessagesWire
      *     which are `user` turns).
      *
      * @param array<Message> $messages
+     * @param int|null $thinkingBudget the request's resolved budget, threaded
+     *        from {@see anthropicBody()} — it gates the signed-block replay
+     *        (PRV-2 made it request-derived, so the walk takes the answer
+     *        instead of re-asking the hook per message)
      * @return array<int, array{role: string, content: array<int, array<string, mixed>>}>
      */
-    private function formatAnthropicMessages(array $messages): array
+    private function formatAnthropicMessages(array $messages, ?int $thinkingBudget): array
     {
         $turns = [];
 
@@ -712,7 +726,7 @@ trait AnthropicMessagesWire
                 continue;
             }
 
-            $blocks = $this->anthropicBlocks($msg);
+            $blocks = $this->anthropicBlocks($msg, $thinkingBudget);
             if ($blocks === []) {
                 // An empty text block is a 400; a turn with nothing in it is
                 // simply not a turn.
@@ -736,7 +750,7 @@ trait AnthropicMessagesWire
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function anthropicBlocks(Message $msg): array
+    private function anthropicBlocks(Message $msg, ?int $thinkingBudget): array
     {
         if ($msg instanceof ToolResultMessage) {
             $content = $msg->content();
@@ -777,7 +791,7 @@ trait AnthropicMessagesWire
         // replayable shapes are ever stored), and they ride only while the
         // budget hook is on: a request that did not ask for thinking gets
         // exactly the body shape it got before CTX-1.
-        if ($this->anthropicThinkingBudget() !== null && $msg instanceof AssistantMessage) {
+        if ($thinkingBudget !== null && $msg instanceof AssistantMessage) {
             foreach ($msg->thinkingBlocks() as $block) {
                 $blocks[] = $block;
             }

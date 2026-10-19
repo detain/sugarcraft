@@ -31,7 +31,7 @@ use SugarCraft\Code\Providers\Concerns\ToolSchema;
 use SugarCraft\Code\Usage;
 use SugarCraft\Code\Util\TokenEstimate;
 
-final readonly class SglangProvider implements ProviderInterface, ReportsServedModel, AcceptsAssistantPrefill, HasModelCatalog
+final readonly class SglangProvider implements ProviderInterface, ReportsServedModel, AcceptsAssistantPrefill, HasModelCatalog, ShapesReasoningEffort
 {
     use ToolSchema;
 

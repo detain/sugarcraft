@@ -36,7 +36,7 @@ use SugarCraft\Code\Providers\Concerns\ToolSchema;
  * an unknown model is priced `null` (loud) rather than guessed from the
  * model database. That is a deliberate change from the old compat arm.
  */
-final readonly class AnthropicProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill, RebindsModel
+final readonly class AnthropicProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill, RebindsModel, ShapesReasoningEffort
 {
     use ToolSchema;
     use HttpClientDefaults;
@@ -385,10 +385,16 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
      * CTX-1 (§6.3): this host speaks extended thinking natively, so it feeds
      * the wire's budget hook from the constructor-parsed setting. The value
      * is already trusted (>= 1024 or null) by the time the body is shaped.
+     *
+     * PRV-2 (§6.5): with no configured budget the request's effort tier
+     * answers — {@see EffortBudget} maps it to a budget at or above the
+     * same 1024 floor, so the triangle stays satisfied either way, and a
+     * configured budget keeps winning because an operator's number is more
+     * specific than a tier word.
      */
-    protected function anthropicThinkingBudget(): ?int
+    protected function anthropicThinkingBudget(CompleteRequest $request): ?int
     {
-        return $this->thinkingBudget;
+        return $this->thinkingBudget ?? EffortBudget::thinkingTokens($request->reasoningEffort);
     }
 
     /**

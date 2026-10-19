@@ -35,9 +35,9 @@ use SugarCraft\Code\Tools\ToolCall;
  *
  * The byte-identity of the OFF shape (no `thinking` key, untouched
  * temperature/max_tokens, no replayed blocks) is pinned here because the
- * shared wire also carries Vertex's `:rawPredict` arm, whose budget hook this
- * class proves stays at its null default (`VertexProvider` keeps
- * `thinkingBudget` Gemini-side only).
+ * shared wire also carries Vertex's `:rawPredict` arm, whose budget hook is
+ * tier-only since PRV-2 (`VertexProvider` keeps `thinkingBudget` Gemini-side only
+ * and an unnamed effort tier answers null).
  */
 final class AnthropicExtendedThinkingTest extends TestCase
 {
@@ -132,13 +132,14 @@ final class AnthropicExtendedThinkingTest extends TestCase
         );
     }
 
-    private function turnRequest(?array $messages = null, ?float $temperature = null, ?int $maxTokens = null, string $model = self::THINKING_MODEL): CompleteRequest
+    private function turnRequest(?array $messages = null, ?float $temperature = null, ?int $maxTokens = null, string $model = self::THINKING_MODEL, ?string $reasoningEffort = null): CompleteRequest
     {
         return new CompleteRequest(
             model: $model,
             messages: $messages ?? [new UserMessage('go')],
             temperature: $temperature,
             maxTokens: $maxTokens,
+            reasoningEffort: $reasoningEffort,
         );
     }
 
@@ -212,6 +213,72 @@ final class AnthropicExtendedThinkingTest extends TestCase
 
         self::assertSame('claude-opus-4-1', $captured[1]['model']);
         self::assertSame(['type' => 'enabled', 'budget_tokens' => 4096], $captured[1]['thinking'], 'a model switch is not a settings reset');
+    }
+
+    // -------------------------------------------------------------------------
+    // PRV-2: the effort tier rides the same budget the configured key owns
+    // -------------------------------------------------------------------------
+
+    public function testAnEffortTierThinksWithoutAnyConfiguredBudget(): void
+    {
+        $captured = [];
+        $this->providerWithBudget(null, ['content' => []], $captured)
+            ->complete($this->turnRequest(reasoningEffort: 'medium'));
+
+        self::assertSame(['type' => 'enabled', 'budget_tokens' => 4096], $captured[1]['thinking'], "medium's token count is the budget");
+        self::assertSame(1.0, $captured[1]['temperature'], 'the thinking triangle is enforced from the tier too');
+        self::assertSame(6144, $captured[1]['max_tokens'], '4096 plus half of it clears the default ceiling, so it rises to 6144');
+    }
+
+    public function testTheConfiguredBudgetWinsWhereAnEffortTierAlsoSpeaks(): void
+    {
+        $captured = [];
+        $this->providerWithBudget(2048, ['content' => []], $captured)
+            ->complete($this->turnRequest(reasoningEffort: 'max'));
+
+        self::assertSame(['type' => 'enabled', 'budget_tokens' => 2048], $captured[1]['thinking'], 'max would say 32768; the key says 2048 and the key is authority');
+    }
+
+    public function testAnUnnamedTierLeavesTheOffShapeByteIdenticalThroughTheNewHook(): void
+    {
+        $captured = [];
+        $this->providerWithBudget(null, ['content' => []], $captured)
+            ->complete($this->turnRequest());
+
+        self::assertArrayNotHasKey('thinking', $captured[1], 'no key, no tier: the field is absent, not null');
+        self::assertSame(0.7, $captured[1]['temperature'], 'the ordinary default temperature rides');
+        self::assertSame(4096, $captured[1]['max_tokens'], 'the ordinary default ceiling rides');
+    }
+
+    public function testTheEffortTierOpensTheSignedBlockReplayGateToo(): void
+    {
+        $captured = [];
+        $provider = $this->providerWithBudget(null, ['content' => []], $captured);
+
+        $provider->complete($this->turnRequest(
+            messages: [
+                new UserMessage('go'),
+                new AssistantMessage('', [new ToolCall('tu_1', 'Read', ['path' => 'a'])], null, null, false, [self::SIGNED_BLOCK]),
+            ],
+            reasoningEffort: 'high',
+        ));
+
+        $blocks = $captured[1]['messages'][1]['content'];
+        self::assertSame(self::SIGNED_BLOCK, $blocks[0], 'a tier-built budget replays the chain of custody exactly like a configured one');
+    }
+
+    public function testNoBudgetAndNoTierKeepsTheReplayGateShut(): void
+    {
+        $captured = [];
+        $provider = $this->providerWithBudget(null, ['content' => []], $captured);
+
+        $provider->complete($this->turnRequest(messages: [
+            new UserMessage('go'),
+            new AssistantMessage('', [new ToolCall('tu_1', 'Read', ['path' => 'a'])], null, null, false, [self::SIGNED_BLOCK]),
+        ]));
+
+        $blocks = $captured[1]['messages'][1]['content'];
+        self::assertSame('tool_use', $blocks[0]['type'], 'thinking was never on, so the un-replayable block stays off the wire');
     }
 
     #[DataProvider('refusedBudgets')]
@@ -600,13 +667,37 @@ final class AnthropicExtendedThinkingTest extends TestCase
         );
 
         // A Gemini thinking value must not leak onto the shared Anthropic
-        // wire: this class leaves anthropicThinkingBudget() at its null
-        // default, so the rawPredict body keeps its exact pre-CTX-1 shape.
+        // wire: the override reads the effort TIER only, and this request
+        // names none, so the rawPredict body keeps its exact pre-CTX-1
+        // shape despite the configured Gemini budget.
         $vertex->complete($this->turnRequest());
 
         self::assertArrayHasKey('anthropic_version', $captured, 'guard: the seam really received the Anthropic-arm body');
         self::assertArrayNotHasKey('thinking', $captured, "the same-number setting is Gemini's; the Anthropic arm stays silent");
         self::assertSame(0.7, $captured['temperature'], 'the pre-CTX-1 defaults ride untouched');
+    }
+
+    public function testTheVertexAnthropicArmDerivesItsThinkingFromTheEffortTierAlone(): void
+    {
+        $captured = [];
+        $vertex = new VertexProvider(
+            'p',
+            'us-east1',
+            'claude-made-up-4',
+            predictor: static function (string $endpoint, string $method, array $body) use (&$captured): array {
+                $captured = $body;
+
+                return $body;
+            },
+            thinkingBudget: 2048,
+        );
+
+        // The tier rides; the same-number Gemini key still does not: 1024
+        // is low's token count, not the configured 2048.
+        $vertex->complete($this->turnRequest(reasoningEffort: 'low'));
+
+        self::assertArrayHasKey('anthropic_version', $captured, 'guard: the seam really received the Anthropic-arm body');
+        self::assertSame(['type' => 'enabled', 'budget_tokens' => 1024], $captured['thinking']);
     }
 
     private static function privateValue(object $provider, string $property): mixed

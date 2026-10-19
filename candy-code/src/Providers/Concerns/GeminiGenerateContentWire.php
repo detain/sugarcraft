@@ -11,6 +11,7 @@ use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Providers\AttachmentEncoding;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
+use SugarCraft\Code\Providers\EffortBudget;
 use SugarCraft\Code\Providers\TransientFailure;
 use SugarCraft\Code\Usage;
 
@@ -50,7 +51,9 @@ use SugarCraft\Code\Usage;
  * stopSequences(), prematureEndChunk(), modelId() and pricing family with
  * the Vertex arms by design (PRV-3 moved the code, it did not fork it) - and
  * it must define the promoted private property `$thinkingBudget` (?int) with
- * that meaning, alongside the AMW property trio `$defaultModel`,
+ * that meaning — PRV-2 (§6.5) extended the meaning, not the type: null now
+ * means "derive from the request's effort tier when it names one, else send
+ * nothing" — alongside the AMW property trio `$defaultModel`,
  * `$modelPrices`, `$promptCache`.
  */
 trait GeminiGenerateContentWire
@@ -247,11 +250,16 @@ trait GeminiGenerateContentWire
         }
 
         // The other half of A21 (b): how much of that budget thinking may
-        // take. Only when configured: a model that does not think may refuse
-        // a `thinkingConfig`, so the operator opts in by setting it. Not
-        // verified live - this repo holds no GCP credentials.
-        if ($this->thinkingBudget !== null) {
-            $generationConfig['thinkingConfig'] = ['thinkingBudget' => $this->thinkingBudget];
+        // take. PRV-2 (§6.5) added a second door: with no operator number
+        // configured, a named effort tier DERIVES the budget — tiers map to
+        // >= 1024 tokens, so the derivation can never manufacture the 0/-1
+        // shapes that live only on the settings side. With neither, no
+        // `thinkingConfig` goes out and the model's own default stands — the
+        // exact pre-A21(b) body. Not verified live - this repo holds no GCP
+        // credentials.
+        $geminiThinking = $this->thinkingBudget ?? EffortBudget::thinkingTokens($request->reasoningEffort);
+        if ($geminiThinking !== null) {
+            $generationConfig['thinkingConfig'] = ['thinkingBudget' => $geminiThinking];
         }
 
         if ($request->topP !== null) {

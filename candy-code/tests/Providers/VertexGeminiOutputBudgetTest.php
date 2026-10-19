@@ -95,6 +95,30 @@ final class VertexGeminiOutputBudgetTest extends TestCase
         self::assertArrayNotHasKey('maxOutputTokens', $captured['generationConfig']);
     }
 
+    /** PRV-2: with no configured key, an effort tier derives the same field. */
+    public function testAnEffortTierDerivesTheThinkingConfigWhenNothingIsConfigured(): void
+    {
+        $body = $this->sentBody(self::GEMINI_25_PRO, null, new CompleteRequest(
+            model: self::GEMINI_25_PRO,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: 'high',
+        ));
+
+        self::assertSame(['thinkingBudget' => 8192], $body['generationConfig']['thinkingConfig']);
+    }
+
+    /** The configured key stays authority over the tier, whatever it says. */
+    public function testAConfiguredThinkingBudgetStillBeatsTheEffortTier(): void
+    {
+        $body = $this->sentBody(self::GEMINI_25_PRO, 0, new CompleteRequest(
+            model: self::GEMINI_25_PRO,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: 'max',
+        ));
+
+        self::assertSame(['thinkingBudget' => 0], $body['generationConfig']['thinkingConfig'], 'a deliberate 0 is not upgraded by a tier');
+    }
+
     /**
      * The Anthropic arm is untouched: `max_tokens` is REQUIRED there, so its
      * 4096 default stays, and a Gemini thinking budget is not an Anthropic
