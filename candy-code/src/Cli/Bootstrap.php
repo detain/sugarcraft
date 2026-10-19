@@ -52,6 +52,7 @@ use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\PromptHistory;
 use SugarCraft\Code\Session\SessionStore;
+use SugarCraft\Code\Sessions\BackgroundShellRegistry;
 use SugarCraft\Code\Sessions\BackgroundSupervisor;
 use SugarCraft\Code\Skills\Skill;
 use SugarCraft\Code\Skills\SkillLoader;
@@ -9507,6 +9508,92 @@ final class Bootstrap
     }
 
     /**
+     * The launch's background-shell tables (SHL-1), per process and per root
+     * — the {@see readLedger()} shape for the same reason: Bash, ShellOutput
+     * and ShellStop must consult ONE table per build, a forked tool child
+     * records into its copy, and the parent merges the copy back through the
+     * tools' {@see \SugarCraft\Code\Tools\CarriesSessionState} exports.
+     *
+     * Construction touches no disk; the registry's directory appears on the
+     * first background spawn. The session folder is `'main'` — the same
+     * fallback `GenerateImage`/`GenerateVideo` use when no engine-bound
+     * session id is in reach — because the table is launch-scoped, not
+     * turn-scoped: shells started by one turn are readable by the next.
+     *
+     * REGISTERING THE SHUTDOWN HOOK IS PART OF THIS METHOD, for the reason
+     * {@see registerMcpShutdown()} gives for MCP servers: this is the only
+     * door through which a registry exists, so nothing can acquire a
+     * background shell without the teardown that stops it.
+     */
+    public static function backgroundShells(?string $root = null): BackgroundShellRegistry
+    {
+        $root = self::requireRoot($root);
+        $pid = getmypid() ?: 0;
+        self::registerBackgroundShellShutdown();
+
+        return self::$shellRegistries[$pid][$root]
+            ??= BackgroundShellRegistry::forSession('main');
+    }
+
+    /** Whether {@see stopBackgroundShells()} is already registered to run at exit. */
+    private static bool $shellsShutdownRegistered = false;
+
+    /**
+     * @var array<int, array<string, BackgroundShellRegistry>>
+     */
+    private static array $shellRegistries = [];
+
+    /**
+     * THE SHUTDOWN SEAM for background shells — same shape and same once-
+     * per-process-image reasoning as {@see registerMcpShutdown()}: a forked
+     * child inherits the hook, and {@see stopBackgroundShells()} acts only on
+     * THIS pid's bucket, so a tool child's exit tears down the shells that
+     * child itself spawned (none, in the ordinary case — the registry it
+     * hands home is rows without handles) and never touches the parent's
+     * live shells.
+     */
+    private static function registerBackgroundShellShutdown(): void
+    {
+        if (self::$shellsShutdownRegistered) {
+            return;
+        }
+
+        self::$shellsShutdownRegistered = true;
+
+        register_shutdown_function(static function (): void {
+            self::stopBackgroundShells();
+        });
+    }
+
+    /**
+     * Stop every background shell THIS pid holds a handle to, and release
+     * the per-pid bucket. PUBLIC for the shutdown-hook reason
+     * {@see stopMcpServers()} states, and idempotent the same way: teardown
+     * kills by recorded group, and the handle map empties with the bucket.
+     *
+     * THIS PID'S BUCKET AND NO OTHER — a child's inherited copy of the
+     * parent's registries holds no handles (the parent spawned those
+     * children), and {@see BackgroundShellRegistry::teardown()} only
+     * re-signals rows it could observe as live, so the live session's shells
+     * survive a worker's exit.
+     */
+    public static function stopBackgroundShells(): void
+    {
+        $pid = getmypid() ?: 0;
+        $registries = self::$shellRegistries[$pid] ?? [];
+        unset(self::$shellRegistries[$pid]);
+
+        foreach ($registries as $registry) {
+            try {
+                $registry->teardown();
+            } catch (\Throwable) {
+                // Nothing to report to — stderr may already be gone at
+                // shutdown, and there is no remedy left to offer.
+            }
+        }
+    }
+
+    /**
      * The language servers the user configured under `lsp` (step 3.F), started
      * once and shared by every tool, hook and forked turn of this launch — or
      * null when none is configured or none would start.
@@ -9965,6 +10052,12 @@ final class Bootstrap
                 // ({@see readLedger()}) — owned by the launch, for the
                 // loader's reason above.
                 readLedger: self::readLedger($root),
+                // SHL-1: ONE background-shell table per launch and root —
+                // Bash's `run_in_background` records into it, ShellOutput and
+                // ShellStop read it, and the shutdown hook
+                // ({@see registerBackgroundShellShutdown()}) tears down what
+                // this pid's copies hold.
+                backgroundShells: self::backgroundShells($root),
             )),
             ...self::mcpTools($root),
         ];

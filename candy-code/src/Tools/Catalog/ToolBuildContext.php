@@ -32,6 +32,15 @@ use SugarCraft\Code\Tools\ReadLedger;
  * ledger it hands out and nothing else can mint a second one for the same
  * build. Defaulted, so a context built without one (a test, an embedder)
  * still gives its tools one shared ledger.
+ *
+ * `backgroundShells` is the session's {@see \SugarCraft\Code\Sessions\BackgroundShellRegistry}
+ * (SHL-1): Bash's `run_in_background` spawns into it, ShellOutput tails it,
+ * and ShellStop kills through it — three tools, one table, for the same
+ * one-instance reason as the ledger. NULL (the default, for a context built
+ * without one) is a refusal to background rather than a silent home-tree
+ * write: Bash answers that no registry is attached, and the read/stop tools
+ * say the same. The launch path always passes the per-root table from
+ * {@see \SugarCraft\Code\Cli\Bootstrap::backgroundShells()}.
  */
 final readonly class ToolBuildContext
 {
@@ -46,6 +55,7 @@ final readonly class ToolBuildContext
         public bool $fdAvailable = false,
         public ?MemoryWriter $memory = null,
         public ReadLedger $readLedger = new ReadLedger(),
+        public ?\SugarCraft\Code\Sessions\BackgroundShellRegistry $backgroundShells = null,
     ) {
     }
 }

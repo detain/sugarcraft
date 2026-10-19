@@ -22,6 +22,8 @@ use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
+use SugarCraft\Code\Sessions\BackgroundShellRegistry;
+use SugarCraft\Code\Tools\CarriesSessionState;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
 
 /**
@@ -46,7 +48,7 @@ use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
  * PreToolUse hook that denies commands referencing paths outside `$root`.
  */
 #[BuiltInTool(name: 'Bash', permission: ToolPermissionClass::Write, position: 1)]
-final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, AcceptsHeartbeat, BuildsFromCatalog, TakesToolCallId, AcceptsToolProgress
+final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, AcceptsHeartbeat, BuildsFromCatalog, TakesToolCallId, AcceptsToolProgress, CarriesSessionState
 {
     use CapturesProcessOutput;
     use RebindsWorktreeJail;
@@ -83,6 +85,11 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * frame-rate-capped {@see \SugarCraft\Code\Events\ToolProgress} tail of
      * the command's output while it runs (WEB-4). Null — every launch-built
      * and standalone caller — streams nothing, exactly as before.
+ *
+ * $registry (SHL-1) is the launch's {@see \SugarCraft\Code\Sessions\BackgroundShellRegistry},
+ * the table `run_in_background` spawns into and ShellOutput/ShellStop read.
+ * Null — a standalone Bash, an embedder’s context built without one — makes
+ * `run_in_background` an immediate refusal, never a silently-different spawn.
      */
     public function __construct(
         private ?string $root = null,
@@ -95,6 +102,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         private int $defaultTimeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
         private int $maxTimeoutSeconds = self::MAX_TIMEOUT_SECONDS,
         private ?\Closure $toolProgressEmitter = null,
+        private ?BackgroundShellRegistry $registry = null,
     ) {}
 
     /**
@@ -176,6 +184,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         return new self(
             $context->root,
             sandbox: Bubblewrap::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null),
+            registry: $context->backgroundShells,
         );
     }
 
@@ -255,6 +264,10 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 $this->defaultTimeoutSeconds,
                 $this->maxTimeoutSeconds,
             )
+            . ($this->registry === null ? '' : sprintf(
+                ' `run_in_background: true` starts the command detached and answers a shell_id at once: read it with ShellOutput (cursor-offset tail), end it with ShellStop; a background shell is killed with its whole group after %d seconds.',
+                BackgroundShellRegistry::MAX_LIFETIME_SECONDS,
+            ))
             . ($this->sandbox === null ? '' : ' ' . $this->sandbox->describe($this->writableRoot()));
     }
 
@@ -401,6 +414,18 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 'minimum' => 1,
                 'maximum' => $this->maxTimeoutSeconds,
             ],
+            // SHL-1: the background opt-in. Off (the default, and the shape a
+            // caller that never heard of it sends) is the synchronous capture
+            // path, byte for byte; on returns a shell id the same launch's
+            // ShellOutput/ShellStop address. The wall figure is stated so a
+            // deliberate long-runner is restarted by asking, not discovered.
+            'run_in_background' => [
+                'type' => 'boolean',
+                'description' => sprintf(
+                    'Return immediately with a shell_id instead of waiting for the command. Read its output with ShellOutput(shell_id, cursor) and end it with ShellStop(shell_id). A background shell is killed with its whole process group after %d seconds whether or not anything reads it; raise `timeout` is not an option here — restart it if it needs to live longer. Default false.',
+                    BackgroundShellRegistry::MAX_LIFETIME_SECONDS,
+                ),
+            ],
         ],
         'required' => ['command', 'description'],
         ];
@@ -479,6 +504,21 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         $maxBytes = $this->captureBound($this->maxOutputBytes);
         $timeout = $this->timeoutSeconds($args['timeout'] ?? null);
         $interactive = ($args['interactive'] ?? false) === true;
+        $background = ($args['run_in_background'] ?? false) === true;
+
+        // SHL-1, and it is checked BEFORE the sandbox probe so a refused
+        // combination costs no spawn at all (fail fast, fail loud): a pty is
+        // the synchronous mechanism by design — its whole point is a screen
+        // captured while a human-less program paints on it — and a detached
+        // background shell has no one left to watch one. The two flags ask
+        // for opposite lives for the same child.
+        if ($background && $interactive) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: 'run_in_background and interactive cannot both be true: an interactive run is a captured terminal screen this call waits for, and a background shell has no reader between calls. Pick one.',
+                isError: true,
+            );
+        }
 
         // WEB-4: the live tail. The ring is built only when the turn bound a
         // channel AND the call has its engine-spliced id — a tail without an
@@ -529,6 +569,24 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
             $cmd = $this->sandbox->wrap($cmd, $this->writableRoot(), $interactive);
         }
 
+        // The background half of SHL-1, riding the SAME wrapped command the
+        // synchronous path was about to run — cd guard, sandbox prefix and
+        // all — into the launch's registry. `start()` owns the rest: file
+        // sinks, exit-code trailer, containment spawn, group bookkeeping.
+        // No ShellTailRing fires (nothing streams); the call answers after a
+        // return that costs milliseconds, so no heartbeat is owed either.
+        if ($background) {
+            if ($this->registry === null) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: 'this Bash has no background shell registry attached, so run_in_background cannot start the command; run it without the flag (the `timeout` bound applies) — the launch that built this tool decided whether background shells exist.',
+                    isError: true,
+                );
+            }
+
+            return $this->backgroundAnswer($args, $this->registry->start($cmd, (string) ($args['description'] ?? '')));
+        }
+
         $run = $interactive
             ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout, $heartbeat, $onChunk)
             : $this->runCaptured($cmd, null, $maxBytes, (float) $timeout, [], $heartbeat, $onChunk);
@@ -568,6 +626,62 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
             ),
             isError: $run['exitCode'] !== 0,
         );
+    }
+
+    /**
+     * The answer to a successful (or refused) background start: the shell id
+     * front and centre, the two tools that address it named with their
+     * arguments, and the wall stated up front so a forgotten shell is never
+     * a mystery. Raw prose, no denial-shaped frame (DenialPrefixRoster law).
+     *
+     * @param array<string, mixed> $args
+     * @param array{ok: bool, error?: string, shell?: array<string, mixed>} $started
+     */
+    private function backgroundAnswer(array $args, array $started): ToolResult
+    {
+        if ($started['ok'] !== true) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: (string) $started['error'],
+                isError: true,
+            );
+        }
+        $shell = $started['shell'];
+        $id = (string) ($shell['id'] ?? '');
+
+        return new ToolResult(
+            toolCallId: $args['id'] ?? '',
+            content: sprintf(
+                'Started background shell %s. Read new output with ShellOutput {shell_id: "%s", cursor: <the cursor the last answer gave>}; stop it with ShellStop {shell_id: "%s"}. It is killed with its whole process group after %d seconds whether or not anything reads it; its output and exit code stay readable until this session\'s shell directory is cleaned.',
+                $id,
+                $id,
+                $id,
+                BackgroundShellRegistry::MAX_LIFETIME_SECONDS,
+            ),
+        );
+    }
+
+    /**
+     * The registry's rows ride the forked tool-child boundary under the
+     * {@see \SugarCraft\Code\Tools\CarriesSessionState} contract: a
+     * background shell started inside a forked child must be addressable by
+     * the parent's later ShellOutput/ShellStop calls, and the child's
+     * `proc_open` resource never serialises — the parent re-derives liveness
+     * from the exit file and the recorded group.
+     *
+     * @return array<string, mixed>
+     */
+    public function exportSessionState(): array
+    {
+        return [BackgroundShellRegistry::SESSION_STATE_KEY => $this->registry?->toArray() ?? []];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    public function mergeSessionState(array $state): void
+    {
+        $this->registry?->merge($state[BackgroundShellRegistry::SESSION_STATE_KEY] ?? null);
     }
 
     /**

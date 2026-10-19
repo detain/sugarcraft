@@ -670,6 +670,23 @@ final class Runtime
      * `Workflow` (roadmap 4.10-2) joined on the same judgement: its stage
      * agents run the session's write tools. `ApplyPatch` (roadmap 3.I-3) is
      * `Edit` and `Write` across several files at once.
+
+        // SHL-1: `ShellStop` joined for a mutation of a different dimension —
+        // not the working tree but the launch's PROCESS TABLE. The question this
+        // roster answers is "did something this batch depends on change", and a
+        // call that tears down a process tree changes exactly that: a parallel
+        // `ShellOutput` for the same shell now reads a settled log, and a build
+        // the shell was running has stopped mid-flight. It is also the honest
+        // half of the parity check — `PermissionGate::isWriteTool()` reads the
+        // catalog, and the catalog's attribute puts ShellStop in the Write
+        // class, so this roster omitting it would be a LIE about a tool that
+        // already pays the approval cost of a write. It is NOT added to
+        // {@see \SugarCraft\Code\Permissions\ShellSubjectTools}: its only
+        // subject is an opaque registry id (`sh-xxxxxxxx`), there is no command
+        // text for `Bash(rm *)`-style rules to parse, and background shells
+        // stay permissioned where they are CREATED — the Bash call that spawns
+        // one is judged exactly like a synchronous one. The full argument lives
+        // in `ShellStop`'s class doc-block.
      *
      * THE SHELL PAIR IS NOT RESPELLED HERE (rv-php-2b, crush-review-1014).
      * `Bash` and `PtyRun` ride in from {@see ShellSubjectTools::NAMES} by
@@ -681,7 +698,7 @@ final class Runtime
      *
      * @var list<string>
      */
-    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow'];
+    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is
