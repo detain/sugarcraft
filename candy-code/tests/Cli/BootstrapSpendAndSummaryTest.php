@@ -365,7 +365,9 @@ final class BootstrapSpendAndSummaryTest extends TestCase
         $this->assertNotNull($definition, 'the keybindings definition vanished from the schema');
         $this->assertSame(SettingType::Map, $definition->type);
         $this->assertSame([], $definition->default);
-        $this->assertSame(ApplyMode::Restart, $definition->applyMode);
+        // TUI-4a: `/keys reload` re-applies the saved map; RESTART would
+        // now be a lie for this key.
+        $this->assertSame(ApplyMode::Reload, $definition->applyMode);
         $this->assertSame(UiEditability::Complex, $definition->ui);
         $this->assertTrue($definition->layered);
         $this->assertFalse($definition->projectSettable, 'a project must not be able to re-key the user\'s chords');

@@ -285,7 +285,7 @@ final class MethodSchemas
                     'min' => Schema::number(),
                     'max' => Schema::number(),
                     'riskClass' => Schema::string(),
-                    'applies' => Schema::enum(['live', 'next-turn', 'restart', 'frozen']),
+                    'applies' => Schema::enum(['live', 'next-turn', 'reload', 'restart', 'frozen']),
                     'appliesLabel' => Schema::string(),
                     'ui' => Schema::enum(['easy', 'list', 'complex', 'read-only', 'hidden']),
                     'layered' => Schema::boolean(),

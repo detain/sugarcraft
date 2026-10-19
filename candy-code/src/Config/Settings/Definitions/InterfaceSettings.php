@@ -274,20 +274,21 @@ final class InterfaceSettings implements SettingDefinitionSet
             // ISS-047: the key map as a setting. USER tier only (the default —
             // no withProjectSettable()): a checkout must not be able to change
             // the operator's keys, the same reasoning that keeps
-            // `watchFiles` and the spend cap user-only. RESTART apply mode is
-            // honest: `Bootstrap::chat()` registers the overrides at launch and
-            // nothing re-applies a save mid-session.
+            // `watchFiles` and the spend cap user-only. RELOAD apply mode
+            // (plan_comparison TUI-4a): `Bootstrap::chat()` registers the
+            // overrides at launch and `/keys reload` re-reads and re-applies
+            // the saved file on the word — no watcher, no silent surprise.
             SettingDefinition::new('keybindings', SettingType::Map, [])
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Tuning)
                 ->withLayered()
-                ->withApplyMode(ApplyMode::Restart)
+                ->withApplyMode(ApplyMode::Reload)
                 ->withUi(UiEditability::Complex)
                 ->withValidators(KeyBindingsValidator::new())
                 ->withLabel(Lang::t('settings.keybindings.label'))
                 ->withHelp('{"shell.palette": "Ctrl+B"}: bind an EXTRA Ctrl+<key> chord to a binding id (the /keys reference names them); the shipped chord keeps working. Present-but-unusable refuses the launch; remove the key for the shipped bindings.')
                 ->withReaderSymbol(KeyBindingRegistry::class . '::chordFor')
-                ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()`'),
+                ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()` — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a)'),
         ];
     }
 }

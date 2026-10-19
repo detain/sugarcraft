@@ -1483,6 +1483,14 @@ final class Bootstrap
     private static array $mcpConfigDigests = [];
 
     /**
+     * The canonical hash of the keybinding map the LIVE registry holds
+     * (plan_comparison TUI-4a) — the applied-state twin of
+     * {@see self::$mcpConfigDigests}. Null means "nothing noted", and the
+     * first reload after that applies rather than claiming unchanged.
+     */
+    private static ?string $keybindingsAppliedDigest = null;
+
+    /**
      * Whether this process IMAGE has registered the shutdown hook that stops the
      * servers in {@see $mcpClients}.
      *
@@ -1995,6 +2003,12 @@ final class Bootstrap
         RuntimeNoticeSink::reset();
         RuntimeNoticeSink::arm();
 
+        // plan_comparison TUI-5 stage 1: an Apple-terminal launch is the one
+        // place Alt chords die by a setting outside this app. Recorded AFTER
+        // the arm because `record()` drops on an unarmed sink — before it,
+        // this row would exist only in mutation runs.
+        self::announceMacAltFallback();
+
         // RESOLVED FOR ITS REFUSAL, NOT FOR ITS VALUE, and resolved FIRST.
         // {@see trustedConfigDirPath()} throws when this process cannot tell
         // whose home it is in, which is what stops the launch reading policy
@@ -2061,6 +2075,7 @@ final class Bootstrap
         // says so — {@see reportKeybindingCollisions()}.
         KeyBindingRegistry::useOverrides(self::keybindingsSetting());
         self::reportKeybindingCollisions();
+        self::noteKeybindingsApplied();
 
         // Built here rather than inside the constructor call so its refusals
         // survive the statement — see the `commandLoader:` argument below.
@@ -11285,6 +11300,155 @@ final class Bootstrap
         self::warnLaunchRows(
             KeyBindingsValidator::new()->collisionNotices(KeyBindingRegistry::overrides()),
         );
+    }
+
+    /**
+     * Note the applied keybinding map (TUI-4a) — the LAST step of the boot
+     * pair, so the digest always describes the map the LIVE registry holds.
+     * Digesting the registry state rather than file bytes is what keeps an
+     * absent key and an empty map from reading as a change, and it needs no
+     * file watcher or mtime: the reload compares this against the freshly
+     * parsed setting, exactly the applied-vs-desired half of the MCP
+     * `mcpConfigChangedSinceLaunch()` shape (E703-α).
+     */
+    private static function noteKeybindingsApplied(): void
+    {
+        self::$keybindingsAppliedDigest = self::keybindingsDigest(
+            KeyBindingRegistry::overrides(),
+            KeyBindingRegistry::suppressed(),
+        );
+    }
+
+    /**
+     * `/keys reload`: re-read the `keybindings` setting and re-apply it to
+     * the LIVE registry — plan_comparison TUI-4a. NO file watcher: the user
+     * edits the file and says the word, the same stance the MCP digest
+     * detection takes, and for the same reason — re-applying a repository-
+     * adjacent choice without being asked re-arms surprises the freeze
+     * closed. Absent launch digest (an embedder that never booted through
+     * chat()) means the first reload APPLIES rather than claiming anything.
+     *
+     * Every announcement rides the RUNTIME sink, never the launch buffer:
+     * after boot nobody drains `launchNotices()` again, so a reload row put
+     * there is a row no one will read — and the launch-cap census roster
+     * ({@see LAUNCH_NOTICE_BOUNDED_SOURCES}) stays byte-untouched by design.
+     *
+     * Fail-loud-keep-live: a present-but-unusable re-read costs the NEW map,
+     * never the running one — the keymap a user pressed into is more true
+     * than one half-typed into a file — with the refusal said out loud.
+     */
+    public static function reloadKeybindings(): void
+    {
+        try {
+            $map = self::keybindingsSetting();
+        } catch (PermissionConfigException $e) {
+            \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(
+                Lang::t('cli.keys.reload_refused', ['reason' => $e->getMessage()]),
+            );
+
+            return;
+        }
+
+        // useOverrides() splits the map the same way the reload must judge it.
+        $overrides = [];
+        $suppressed = [];
+        foreach ($map as $id => $chord) {
+            if ($chord === null) {
+                $suppressed[] = $id;
+                continue;
+            }
+            $overrides[$id] = $chord;
+        }
+
+        $digest = self::keybindingsDigest($overrides, $suppressed);
+        if ($digest === self::$keybindingsAppliedDigest) {
+            \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(Lang::t('cli.keys.reload_unchanged'));
+
+            return;
+        }
+
+        KeyBindingRegistry::useOverrides($map);
+        self::$keybindingsAppliedDigest = $digest;
+        \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(
+            Lang::t('cli.keys.reloaded', ['count' => \count($map)]),
+        );
+
+        // The rv6 warning half of ISS-047, on the live channel: an override
+        // onto another row's shipped chord is a silent steal — the user must
+        // hear it at the moment it happens, not at a launch already passed.
+        foreach (KeyBindingsValidator::new()->collisionNotices(KeyBindingRegistry::overrides()) as $row) {
+            \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn($row);
+        }
+    }
+
+    /**
+     * The canonical hash of the applied keybinding state. Sorted so the
+     * digest answers to the MAP, not to the order it was typed in.
+     *
+     * @param array<string, string> $overrides
+     * @param list<string>          $suppressed
+     */
+    private static function keybindingsDigest(array $overrides, array $suppressed): string
+    {
+        \ksort($overrides);
+        \sort($suppressed);
+
+        return \hash('sha256', \json_encode([$overrides, $suppressed]) ?: '');
+    }
+
+    /**
+     * plan_comparison TUI-5 stage 1: the Option-as-Meta hint for macOS
+     * launches. PURE so every quadrant is pinned on a Linux host.
+     *
+     * WHY THE WORDING STAYS HONEST-UNCERTAIN: `App::init()` PUSHES
+     * `CoreCmd::pushKittyKeyboard()` fire-and-forget — the app never sends
+     * the query whose reply would prove negotiation, and the reply family has
+     * no consumer anywhere in `src/`. So `kittyCapable` is an ENV probe
+     * ({@see terminalSpeaksKittyKeyboard()}), not a receipt, and the row says
+     * "may be" because on a Mac that asked the question badly, nobody knows
+     * more than that.
+     *
+     * @param string $osFamily the {@see PHP_OS_FAMILY} value
+     */
+    public static function macAltNotice(string $osFamily, bool $kittyCapable): ?string
+    {
+        if ($osFamily !== 'Darwin' || $kittyCapable) {
+            return null;
+        }
+
+        return Lang::t('cli.launch.mac_alt_notice');
+    }
+
+    /** Whether the ambient terminal environment names a kitty-speaking emulator. */
+    public static function terminalSpeaksKittyKeyboard(): bool
+    {
+        $env = \strtolower(
+            (string) (\getenv('TERM') ?: '') . ' ' . (string) (\getenv('TERM_PROGRAM') ?: ''),
+        );
+
+        foreach (['kitty', 'ghostty', 'wezterm'] as $terminal) {
+            if (\str_contains($env, $terminal)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Record the Mac hint on the TUI channel when the launch is one it
+     * belongs to. `record()` — not `warn()`: a headless run must not grow an
+     * unsolicited stderr row, and an unarmed sink drops the row anyway
+     * (which is the correct answer for a surface with no one to read it).
+     */
+    private static function announceMacAltFallback(): void
+    {
+        $row = self::macAltNotice(PHP_OS_FAMILY, self::terminalSpeaksKittyKeyboard());
+        if ($row === null) {
+            return;
+        }
+
+        \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::record($row);
     }
 
     /**

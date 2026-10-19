@@ -329,7 +329,7 @@ edit it by hand.
 | `/settings` | ✓ | ✓ | `[search]` | Show every setting, its value, where it came from and when it applies |
 | `/agents` | ✓ | | — | List the agent roster, inspect one by name, or open a running one's Agent View |
 | `/mcp` | ✓ | | `<list\|add\|remove\|login\|reconnect> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) |
-| `/keys` | ✓ | | — | Show the keyboard shortcut reference (or press ?) |
+| `/keys` | ✓ | | `[reload]` | Show the keyboard shortcut reference (or press ?) |
 | `/help` | ✓ | ✓ | — | List every slash command |
 | `/permissions` | ✓ | ✓ | `[mode <name> \| revoke <n\|all>]` | Show this session's permission mode, its rules and its grants; switch the mode or revoke a grant |
 | `/notices` | ✓ | | — | Show every warning this launch raised, un-capped and un-aggregated |
@@ -466,9 +466,13 @@ together cannot both adopt one daemon. A record is deleted when its session
 settles, and the index directory goes with its last record.
 
 Two guards apply to every arm, and neither guesses. A draft must begin with the
-canonical spelling verbatim, so `/KEYS` is prose. And five commands — `exit`, `quit`, `keys`, `help`, `clear` — fire only when the
+canonical spelling verbatim, so `/KEYS` is prose. And the argument-less
+commands — `exit`, `quit`, `help`, `clear` — fire only when the
 draft is exactly `/name`, because `/help me name this variable` is a request and
-not a command list. `permissions` sits below that block deliberately despite
+not a command list. `keys` obeys that law for every word but one: `/keys
+reload` re-applies the `keybindings` setting mid-session (plan_comparison
+TUI-4a), and it is the only command with a listed sub-argument — `/keys foo`
+is still prose. `permissions` sits below that block deliberately despite
 looking like its neighbour, and `rules` too: mis-routing those two is worse than
 answering a question loosely, because `/permissions rules` would ask the model
 about a gate it cannot see and answer plausibly, and `/rules terse` would never

@@ -3577,6 +3577,7 @@
                                     "enum": [
                                         "live",
                                         "next-turn",
+                                        "reload",
                                         "restart",
                                         "frozen"
                                     ]

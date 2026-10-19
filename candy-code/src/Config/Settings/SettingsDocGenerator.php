@@ -156,6 +156,7 @@ final class SettingsDocGenerator
         $how = [
             ApplyMode::Live->value => 'At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end',
             ApplyMode::NextTurn->value => 'From the next turn: the engine re-reads the merged settings at every turn start',
+            ApplyMode::Reload->value => 'On `/keys reload`, or at the next launch: the saved file is re-read and re-applied when you say the word (plan_comparison TUI-4a)',
             ApplyMode::Restart->value => 'At the next launch: read once while the session is built',
             ApplyMode::Frozen->value => 'At the next launch, and only then: frozen for the life of the process',
         ];

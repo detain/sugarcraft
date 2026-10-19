@@ -271,6 +271,23 @@ final class KeyBindingRegistry
         // The alias pairs and the derived sets are functions of these maps;
         // re-registering (which includes the `[]` clear) must never serve a
         // stale derivation — suppression feeds the claim sets BY DESIGN.
+        self::resetDerived();
+    }
+
+    /**
+     * Drop every process-global derivation, in the ONE place that owns them.
+     *
+     * TUI-4a (plan_comparison 6.14) made this a named operation because the
+     * `/keys reload` path re-registers the map mid-session: the memo cleared
+     * here are derived from `$overrides`/`$suppressed`, so the clear and the
+     * maps are ONE transaction, and a second hand listing the memos is a
+     * second place a future memo can be forgotten. The census pin
+     * `KeysReloadTest::testTheResetClearsEveryMemoTheClassDeclares` derives
+     * the memo names FROM THE CLASS, so adding a memo without a line here
+     * goes red rather than shipping stale.
+     */
+    public static function resetDerived(): void
+    {
         self::$aliasMemo = null;
         self::$chordAliasMemo = null;
         self::$inertChordMemo = null;

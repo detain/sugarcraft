@@ -9615,7 +9615,7 @@ final class Chat implements Model
 
         $chat = $this;
         $cmds = [];
-        $now = $held = $nextTurn = $restart = $refused = [];
+        $now = $held = $nextTurn = $reload = $restart = $refused = [];
         $engine = false;
         $compactor = false;
         $config = null;
@@ -9634,6 +9634,14 @@ final class Chat implements Model
 
             if ($mode === \SugarCraft\Code\Config\Settings\ApplyMode::NextTurn) {
                 $nextTurn[] = $key;
+                continue;
+            }
+
+            if ($mode === \SugarCraft\Code\Config\Settings\ApplyMode::Reload) {
+                // TUI-4a: the saved file IS the new state; `/keys reload` (or
+                // the next launch) applies it. A save alone applies nothing —
+                // saying "restart" here would lie now that the word works.
+                $reload[] = $key;
                 continue;
             }
 
@@ -9705,7 +9713,7 @@ final class Chat implements Model
             ]);
         }
 
-        $summary = self::settingsSavedSummary(\count($changed), $savedTo, \count($now), \count($held), \count($nextTurn), $restart);
+        $summary = self::settingsSavedSummary(\count($changed), $savedTo, \count($now), \count($held), \count($nextTurn), $reload, $restart);
         if ($refused !== []) {
             $summary .= ' · ' . Lang::t('chat.settings.not_a_spend_cap', ['keys' => implode(', ', $refused)]);
         }
@@ -9713,7 +9721,7 @@ final class Chat implements Model
             $summary,
             match (true) {
                 $refused !== [] => \SugarCraft\Toast\ToastType::Warning,
-                $restart === [] => \SugarCraft\Toast\ToastType::Success,
+                $restart === [] && $reload === [] => \SugarCraft\Toast\ToastType::Success,
                 default => \SugarCraft\Toast\ToastType::Info,
             },
         );
@@ -9841,7 +9849,7 @@ final class Chat implements Model
      *
      * @param list<string> $restart
      */
-    private static function settingsSavedSummary(int $count, ?string $savedTo, int $now, int $held, int $nextTurn, array $restart): string
+    private static function settingsSavedSummary(int $count, ?string $savedTo, int $now, int $held, int $nextTurn, array $reload, array $restart): string
     {
         $parts = [Lang::t($count === 1 ? 'chat.settings.saved.one' : 'chat.settings.saved.other', ['count' => $count])
             . ($savedTo === null || $savedTo === '' ? '' : Lang::t('chat.settings.saved_to', ['path' => $savedTo]))];
@@ -9853,6 +9861,12 @@ final class Chat implements Model
         }
         if ($nextTurn > 0) {
             $parts[] = Lang::t('chat.settings.next_turn', ['count' => $nextTurn]);
+        }
+        if ($reload !== []) {
+            $parts[] = Lang::t(\count($reload) === 1 ? 'chat.settings.reload.one' : 'chat.settings.reload.other', [
+                'count' => \count($reload),
+                'keys' => implode(', ', $reload),
+            ]);
         }
         if ($restart !== []) {
             $parts[] = Lang::t(\count($restart) === 1 ? 'chat.settings.needs_restart.one' : 'chat.settings.needs_restart.other', [
@@ -13170,8 +13184,11 @@ final class Chat implements Model
      *   keeps that exact, for every command at once.
      * - `$text === '/' . $name` ({@see
      *   \SugarCraft\Code\Commands\Specs\BuiltInCommand::accepts()} for a
-     *   `CommandArguments::None` spec) is what keeps the four argument-less
-     *   commands argument-less. `/exit now` and `/keys foo` were prompts before this
+     *   `CommandArguments::None` spec) is what keeps the argument-less
+     *   commands argument-less; TUI-4a grew the ONE exception-shaped lane —
+     *   a row may list allowed sub-arguments, and `keys` now lists `reload`,
+     *   so `/keys reload` dispatches while `/keys foo` stays prose.
+     *   `/exit now` and `/keys foo` were prompts before this
      *   refactor because their arms compared the WHOLE trimmed buffer; a bare
      *   name match would have quietly turned both into commands.
      *
@@ -13876,8 +13893,22 @@ final class Chat implements Model
      *
      * @return array{0: self, 1: ?\Closure}
      */
-    private function handleKeysCommand(): array
+    private function handleKeysCommand(array $args = []): array
     {
+        // TUI-4a (plan_comparison 6.14): the ONE argument this row takes.
+        // `/keys reload` re-applies the `keybindings` setting through
+        // Bootstrap::reloadKeybindings() and consumes the draft WITHOUT
+        // opening the reference. MID-TURN nothing new refuses — `submit()`
+        // already refuses every command while a turn runs, so the word waits;
+        // and because the turn child read its settings when the turn STARTED,
+        // a reload issued the moment a turn ends applies to the next turn as
+        // the settings docs already promise for every other save.
+        if ($args !== []) {
+            \SugarCraft\Code\Cli\Bootstrap::reloadKeybindings();
+
+            return [$this->withInputBuf(''), null];
+        }
+
         return [$this->withInputBuf('')->withKeyHelp(0), null];
     }
 
