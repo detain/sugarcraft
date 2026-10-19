@@ -824,6 +824,14 @@ final class ReadPathCensusTest extends TestCase
                 . 'type and age; nothing is read, and a directory holding anything but regular '
                 . 'files and sockets is left whole',
         ],
+        // AUT-1 (plan_comparison §3): per-row fire-claim locks.
+        'Sessions/ScheduleRegistry.php|fopen' => [
+            'SELF_LOCATED — claimLock() creates one schedule\'s fire-claim lock file with `c` '
+                . 'inside the 0700 `schedules/` directory beside this registry\'s own config path, '
+                . 'settles it to 0600 before any payload, and flock()s it non-blocking (the '
+                . 'SessionLock idiom); the only payload written is this process\'s pid, and the '
+                . 'name in the path is regex-vetted by Schedule::NAME_PATTERN before the open',
+        ],
         // Roadmap 5.4-3's propose mode: the dream pass's skill drafts.
         'Skills/ProposedSkills.php|scandir' => [
             'NAMES_ONLY — `/skills proposed` lists the owned home\'s drafts tree; only names that '
