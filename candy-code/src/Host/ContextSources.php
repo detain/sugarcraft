@@ -209,7 +209,7 @@ final class ContextSources
 
     /**
      * The breakdown as a plain array — the value object's own fields, one
-     * serialization, schema-checked by ProtocolSchemaDriftTest through the
+     * serialization, schema-checked by ContextSourcesTest through the
      * fixtures a real session produces.
      *
      * @return array<string, mixed>
