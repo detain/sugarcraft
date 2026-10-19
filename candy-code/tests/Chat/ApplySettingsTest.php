@@ -102,6 +102,41 @@ final class ApplySettingsTest extends TestCase
         self::assertNotNull($cmd, 'the release brings its own toast tick');
     }
 
+    public function testReasoningEffortMovesTheIdleEngineAndAResetAsksNothing(): void
+    {
+        $this->writeConfig(['reasoningEffort' => 'high']);
+        [$chat] = $this->engineChat()->applySettings(['reasoningEffort'], '/x/config.json');
+
+        self::assertSame('high', self::effort($chat), 'the running engine takes the saved tier at once');
+        self::assertSame([], $chat->pendingSettingsApply());
+
+        // PRV-2: null IS the engine's "ask nothing" — unlike the step ceiling,
+        // a reset restores no numeric default, it clears the ask.
+        $this->writeConfig([]);
+        [$chat] = $chat->applySettings(['reasoningEffort']);
+        self::assertNull(self::effort($chat), 'a reset means no effort on the wire, not a remembered tier');
+    }
+
+    public function testNonsenseOrCasewiseEffortResolvesLikeTheLaunchRuleNotWorse(): void
+    {
+        // One resolver, read by launch and live apply alike
+        // (Bootstrap::resolvedReasoningEffort): a recognized tier is lowered
+        // to its wire spelling, and anything else is exactly as good as
+        // unset — never a throw a settings typo could weaponise against the
+        // next save.
+        $this->writeConfig(['reasoningEffort' => 'High ']);
+        [$chat] = $this->engineChat()->applySettings(['reasoningEffort']);
+        self::assertSame('high', self::effort($chat), 'the hand-edited spelling lands on the same tier');
+
+        $this->writeConfig(['reasoningEffort' => 'turbo']);
+        [$chat] = $chat->applySettings(['reasoningEffort']);
+        self::assertNull(self::effort($chat), 'a nonsense level asks nothing');
+
+        $this->writeConfig(['reasoningEffort' => 7]);
+        [$chat] = $chat->applySettings(['reasoningEffort']);
+        self::assertNull(self::effort($chat), 'a non-string is nonsense too, not a float effort');
+    }
+
     // ── live: Chat state and Cmds ───────────────────────────────────────
 
     public function testASessionTierThemeIsPaintedNowAndNothingIsWritten(): void
@@ -210,7 +245,7 @@ final class ApplySettingsTest extends TestCase
     {
         // N-P4g: the interface keys read through UiSettings apply by the
         // save dropping its held values.
-        $handled = ['maxToolSteps', 'theme', 'statusLine', ...\SugarCraft\Code\Config\Settings\UiSettings::KEYS];
+        $handled = ['maxToolSteps', 'reasoningEffort', 'theme', 'statusLine', ...\SugarCraft\Code\Config\Settings\UiSettings::KEYS];
         // N-P4b: every key the session's CompactorConfig is read from
         // rebuilds it on a save.
         $handled = [...$handled, ...\SugarCraft\Code\Context\CompactorConfig::SETTINGS];
@@ -237,7 +272,7 @@ final class ApplySettingsTest extends TestCase
         self::assertStringContainsString('restart', (string) $writer->refusal(SettingsTier::Session, 'instructions', ['AGENTS.md']));
         self::assertStringContainsString('config.json', (string) $writer->refusal(SettingsTier::Session, 'permissionMode', 'plan'));
         self::assertNotNull($writer->refusal(SettingsTier::Session, 'trustedProjectHooks', ['/x']), 'trust never goes through a save');
-        self::assertSame(['maxOutputTokens', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'maxCostUsd', 'compaction.reminderPercent', 'compaction.autoPercent', 'compaction.blockPercent', 'compaction.keepRecent', 'compaction.summaryUserChars', 'compaction.summaryAssistantChars', 'compaction.toolOutputChars', 'compaction.reminderTokens', 'compaction.autoTokens', 'compaction.blockTokens', 'compaction.modelTokenCaps', 'compaction.idleOfferSeconds', 'compaction.mode', 'compaction.refillLimit', 'contextPruning.minContextTokens', 'contextPruning.maxContextTokens', 'contextPruning.nudgeFrequency', 'contextPruning.iterationNudgeThreshold', 'repoMap.enabled', 'repoMap.maxBytes', 'env.gitDiffAfterWrites', 'env.diffMaxBytes', 'permissions.autoStrikeLimit', 'permissions.autoTotalLimit', 'permissions.autoAllowReadOnly', 'toolOutputCapBytes', 'mcpResultCapBytes', 'readMaxBytes', 'readPageLines', 'readPageBytes', 'toolSpillWindowPercent', 'toolInstructionCapBytes', 'toolSpillCaptureBytes', 'toolSpillMinCapBytes', 'globMaxMatches', 'webFetchMaxBytes', 'webFetchTimeoutSeconds', 'bashInteractiveIdleSeconds', 'bashTimeoutSeconds', 'bashMaxTimeoutSeconds', 'chatToolTimeoutSeconds', 'grepTimeoutSeconds', 'sd.timeoutSeconds', 'skills.pathNudges', 'embeddingModel', 'subagentMaxTurns', 'subagentMaxDepth', 'subagentMaxActive', 'theme', 'statusLine', 'queueMode', 'terminalBackground', 'mouse', 'mouseClicks', 'scrollWheelLines', 'doubleEscSeconds', 'paletteMru', 'diffPreviewRows', 'toolOutputPreviewLines', 'sessions.autoTitle', 'promptSuggestions', 'promptSuggestionHistory', 'expandToolOutput', 'maxCheckpoints', 'providerRetryAttempts', 'providerRetryBaseBackoffMs'], SettingsWriter::sessionKeys());
+        self::assertSame(['maxOutputTokens', 'reasoningEffort', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'maxCostUsd', 'compaction.reminderPercent', 'compaction.autoPercent', 'compaction.blockPercent', 'compaction.keepRecent', 'compaction.summaryUserChars', 'compaction.summaryAssistantChars', 'compaction.toolOutputChars', 'compaction.reminderTokens', 'compaction.autoTokens', 'compaction.blockTokens', 'compaction.modelTokenCaps', 'compaction.idleOfferSeconds', 'compaction.mode', 'compaction.refillLimit', 'contextPruning.minContextTokens', 'contextPruning.maxContextTokens', 'contextPruning.nudgeFrequency', 'contextPruning.iterationNudgeThreshold', 'repoMap.enabled', 'repoMap.maxBytes', 'env.gitDiffAfterWrites', 'env.diffMaxBytes', 'permissions.autoStrikeLimit', 'permissions.autoTotalLimit', 'permissions.autoAllowReadOnly', 'toolOutputCapBytes', 'mcpResultCapBytes', 'readMaxBytes', 'readPageLines', 'readPageBytes', 'toolSpillWindowPercent', 'toolInstructionCapBytes', 'toolSpillCaptureBytes', 'toolSpillMinCapBytes', 'globMaxMatches', 'webFetchMaxBytes', 'webFetchTimeoutSeconds', 'bashInteractiveIdleSeconds', 'bashTimeoutSeconds', 'bashMaxTimeoutSeconds', 'chatToolTimeoutSeconds', 'grepTimeoutSeconds', 'sd.timeoutSeconds', 'skills.pathNudges', 'embeddingModel', 'subagentMaxTurns', 'subagentMaxDepth', 'subagentMaxActive', 'theme', 'statusLine', 'queueMode', 'terminalBackground', 'mouse', 'mouseClicks', 'scrollWheelLines', 'doubleEscSeconds', 'paletteMru', 'diffPreviewRows', 'toolOutputPreviewLines', 'sessions.autoTitle', 'promptSuggestions', 'promptSuggestionHistory', 'expandToolOutput', 'maxCheckpoints', 'providerRetryAttempts', 'providerRetryBaseBackoffMs'], SettingsWriter::sessionKeys());
 
         $writer->write(SettingsTier::Session, ['maxOutputTokens' => 100]);
         self::assertSame(['maxOutputTokens' => 100], $writer->current(SettingsTier::Session));
@@ -296,6 +331,15 @@ final class ApplySettingsTest extends TestCase
         self::assertInstanceOf(EngineBackend::class, $backend);
 
         return (int) (new \ReflectionProperty(EngineBackend::class, 'maxSteps'))->getValue($backend);
+    }
+
+    private static function effort(?Chat $chat): string|float|null
+    {
+        self::assertInstanceOf(Chat::class, $chat);
+        $backend = $chat->backend();
+        self::assertInstanceOf(EngineBackend::class, $backend);
+
+        return $backend->reasoningEffort();
     }
 
     private static function toastText(?Chat $chat): string

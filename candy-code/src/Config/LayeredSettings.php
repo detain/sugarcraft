@@ -506,6 +506,7 @@ final class LayeredSettings
         'modelPrices',
         'extraBody',
         'thinkingBudget',
+        'reasoningEffort',
         'promptCache',
         'parallelToolCalls',
         'parallelToolDeadlineSeconds',

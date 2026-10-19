@@ -129,6 +129,29 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withHelp('Thinking-token budget: Gemini `thinkingConfig` on the `vertex` provider; extended thinking on the `anthropic` provider, where the Messages API floor is 1024 (0 or unset means off on either arm). Thinking tokens bill as output.')
                 ->withReaderSymbol(ProviderFactory::class . '::createVertex')
                 ->withReadBy('`ProviderFactory::createVertex()` → `VertexProvider`, `createAnthropic()` → `AnthropicProvider`'),
+            // PRV-2 (§6.5): the reasoning-effort tier, named in words instead
+            // of tokens. The number a `thinkingBudget` is for the Anthropic
+            // family, this is for every family: each shaped provider maps the
+            // tier to its own control (Anthropic/Vertex-anthropic arms map it
+            // to a thinking budget, Gemini derives its `thinkingConfig` from
+            // it when `thinkingBudget` is unset, OpenAI sends its
+            // `reasoning_effort` string, SGLang its validated level), and a
+            // provider that shapes nothing refuses `/effort` loudly rather
+            // than storing a knob no wire reads.
+            SettingDefinition::new('reasoningEffort', SettingType::String)
+                ->withCategory(SettingCategory::ModelProvider)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                // Live: a save re-applies it to the running engine
+                // (`Chat::applySettings()` → `EngineBackend::withReasoningEffort()`),
+                // held until a running turn ends — the same door `maxToolSteps`
+                // walks, so `/effort` and the settings panel cannot disagree.
+                ->withApplyMode(ApplyMode::Live)
+                ->withEnumValues(array_map(static fn (\SugarCraft\Code\Agents\Effort $level): string => $level->value, \SugarCraft\Code\Agents\Effort::cases()))
+                ->withLabel(Lang::t('settings.reasoningEffort.label'))
+                ->withHelp('Thinking tier sent to providers that shape effort; unset or unrecognized asks nothing. `/effort` sets and clears it.')
+                ->withReaderSymbol(Bootstrap::class . '::resolvedReasoningEffort')
+                ->withReadBy('`Bootstrap::backend()`, `backendFor()`, `Chat::applySettings()` → `resolvedReasoningEffort()`'),
             SettingDefinition::new('promptCache', SettingType::Bool, true)
                 ->withCategory(SettingCategory::ModelProvider)
                 ->withRiskClass(RiskClass::Spend)

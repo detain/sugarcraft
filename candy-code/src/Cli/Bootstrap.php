@@ -9,6 +9,7 @@ use SugarCraft\Code\Agents\AgentDefinition;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\AgentPreset;
 use SugarCraft\Code\Agents\AgentPresetRegistry;
+use SugarCraft\Code\Agents\Effort;
 use SugarCraft\Code\Agents\ForeignAgentPresetRegistry;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\App\PaneAutoShow;
@@ -3969,6 +3970,9 @@ final class Bootstrap
         // are deliberately NOT wrapped: title/summary turns never loop on
         // tools, so the orchestration ceiling is not their axis.
         $engine = self::withResolvedMaxToolSteps($engine);
+        // PRV-2 (§6.5): the effort tier rides the same launch tail as the step
+        // ceiling, for the same reason — one door, both engine settings.
+        $engine = self::withResolvedReasoningEffort($engine);
 
         return self::withConsolePermissionPrompt($engine, $gate, $consolePermissionPrompt);
     }
@@ -4096,6 +4100,9 @@ final class Bootstrap
         // are deliberately NOT wrapped: title/summary turns never loop on
         // tools, so the orchestration ceiling is not their axis.
         $engine = self::withResolvedMaxToolSteps($engine);
+        // PRV-2 (§6.5): the effort tier rides the same launch tail as the step
+        // ceiling, for the same reason — one door, both engine settings.
+        $engine = self::withResolvedReasoningEffort($engine);
 
         return self::withConsolePermissionPrompt($engine, $gate, $consolePermissionPrompt);
     }
@@ -4276,6 +4283,41 @@ final class Bootstrap
         $steps = self::resolvedMaxToolSteps();
 
         return $steps === null ? $engine : $engine->withMaxSteps($steps);
+    }
+
+    /**
+     * PRV-2 (§6.5): the configured `reasoningEffort` as the name of one
+     * {@see Effort} tier, or null when it is absent or anything else. There is
+     * deliberately no flag for it: the roster in `Cli/ArgvParser.php` is
+     * frozen for this shape of knob, and `/effort` is the live door anyway.
+     *
+     * Nonsense is exactly as good as unset, and this never throws — like
+     * `maxOutputTokens`'s resolver, because a settings typo must not break
+     * every launch (or every `Chat::withEngineSettings()` re-apply) that
+     * follows it. A recognized tier is lowered to its wire spelling, so
+     * `"High"` in a hand-edited file is the same tier as `high`.
+     */
+    public static function resolvedReasoningEffort(): ?string
+    {
+        $raw = self::readUserConfig()['reasoningEffort'] ?? null;
+
+        if (!\is_string($raw)) {
+            return null;
+        }
+
+        return Effort::tryFrom(strtolower(trim($raw)))?->value;
+    }
+
+    /**
+     * Attach the configured effort tier, or hand the engine back untouched —
+     * the {@see withResolvedMaxToolSteps()} shape, so the two engine settings
+     * can never drift on whether an unset key rewrites what launch built.
+     */
+    private static function withResolvedReasoningEffort(EngineBackend $engine): EngineBackend
+    {
+        $effort = self::resolvedReasoningEffort();
+
+        return $effort === null ? $engine : $engine->withReasoningEffort($effort);
     }
 
     /**

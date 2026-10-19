@@ -9583,7 +9583,7 @@ final class Chat implements Model
      * and is therefore held while a turn runs. Every other `Live` key is Chat
      * state or a Cmd and applies at once, even mid-turn: it touches no history.
      */
-    private const ENGINE_SETTINGS = ['maxToolSteps'];
+    private const ENGINE_SETTINGS = ['maxToolSteps', 'reasoningEffort'];
 
     /** Widest the settings toast is drawn, in cells. */
     public const SETTINGS_TOAST_COLS = 56;
@@ -9813,6 +9813,14 @@ final class Chat implements Model
      * never parse differently. Unset (a reset) means the engine's own default,
      * which is read off `EngineBackend`'s constructor rather than restated.
      * A non-engine backend has no step ceiling to move.
+     *
+     * `reasoningEffort` (PRV-2, §6.5) goes through
+     * {@see \SugarCraft\Code\Cli\Bootstrap::resolvedReasoningEffort()} on the
+     * SAME rule-for-rule argument, and applies UNCONDITIONALLY rather than
+     * only-when-set: unlike the step ceiling, null here is a real value —
+     * "ask nothing" — which is exactly what clearing the tier (`/effort auto`)
+     * must mean for the running engine, and what a settings reset falls back
+     * to. A nonsense stored string resolves to that same null.
      */
     private function withEngineSettings(): self
     {
@@ -9823,7 +9831,9 @@ final class Chat implements Model
         $steps = \SugarCraft\Code\Cli\Bootstrap::resolvedMaxToolSteps()
             ?? (int) (new \ReflectionParameter([Backend\EngineBackend::class, '__construct'], 'maxSteps'))->getDefaultValue();
 
-        return $this->withBackend($this->backend->withMaxSteps($steps));
+        return $this->withBackend($this->backend
+            ->withMaxSteps($steps)
+            ->withReasoningEffort(\SugarCraft\Code\Cli\Bootstrap::resolvedReasoningEffort()));
     }
 
     /**
