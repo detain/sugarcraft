@@ -139,12 +139,13 @@ final class HelpMenu implements Overlay
      * whole block stays centered the way today's banner+box is.
      *
      * Pages count the BOX PLAN, not the flat roster: one page holds two
-     * columns of `height - 3` rows each (the box interior minus the centred
-     * key/description header row), and {@see self::plan()} decides which
-     * section boxes (and which segments of an over-tall section) land
-     * where. That budget is the per-page CONTENT CAPACITY, planned at this
-     * global height for every page; the box {@see self::paint()} renders is
-     * fitted per page to at most `usedRows + 3` rows ({@see self::usedRows()}),
+     * columns of `height - self::CHROME_ROWS` rows each (the box interior
+     * minus the centred key/description header row), and {@see self::plan()}
+     * decides which section boxes (and which segments of an over-tall
+     * section) land where. That budget is the per-page CONTENT CAPACITY,
+     * planned at this global height for every page; the box
+     * {@see self::paint()} renders is fitted per page to at most
+     * `usedRows + self::CHROME_ROWS` rows ({@see self::usedRows()}),
      * never taller and never re-flowed — a short page shows a shorter box,
      * the pagination stays identical.
      *
@@ -158,7 +159,7 @@ final class HelpMenu implements Overlay
         $x = max(1, intdiv($cols, 2) - intdiv($width, 2));
         $height = min($rows - 6 - $delta, $n + 3);
 
-        return [$x, $y, $height, $height > 3 ? max(1, count(self::plan($width, $height - 3))) : 1];
+        return [$x, $y, $height, $height > 3 ? max(1, count(self::plan($width, $height - self::CHROME_ROWS))) : 1];
     }
 
     /**
