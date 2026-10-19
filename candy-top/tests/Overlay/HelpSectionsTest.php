@@ -99,28 +99,25 @@ final class HelpSectionsTest extends OverlayTestCase
     }
 
     /**
-     * A 120x80 terminal holds the whole grid on one page: paint must show
-     * every section heading exactly once, in stream order, and no row may
-     * leak between pages (there is no second page to leak to).
-     */
-    /**
-     * A 120x80 terminal holds the whole grid on one page. The stream order
-     * (every heading once, declared section order) is checked on the grid
-     * itself; the paint then pins the widened box: at 120 cols the borders
-     * span the full WIDE_WIDTH.
+     * A 120x80 terminal holds the whole grid on one page. The plan order
+     * (every heading once, in declared section order) is checked on the
+     * pure box plan itself — with a tall enough column every section is a
+     * single atomic box, so each heading appears exactly once; the paint
+     * then pins the widened box: at 120 cols the borders span the full
+     * WIDE_WIDTH.
      */
     public function testPaintStreamsEverySectionOnce(): void
     {
-        $grid = new \ReflectionMethod(HelpMenu::class, 'gridLines');
         $headings = array_map(static fn (string $k): string => Lang::t($k), array_keys(KeyTable::SECTIONS));
         $seen = [];
-        foreach ($grid->invoke(null, HelpMenu::WIDE_WIDTH) as [$label, $description, $isHeading]) {
-            if ($isHeading) {
-                $this->assertSame('', $description, 'heading lines carry no description');
-                $seen[] = $label;
+        foreach (HelpMenu::plan(HelpMenu::WIDE_WIDTH, 1000) as $columns) {
+            foreach ($columns as $boxes) {
+                foreach ($boxes as $box) {
+                    $seen[] = $box['heading'];
+                }
             }
         }
-        $this->assertSame($headings, $seen, 'every heading enters the stream exactly once, in order');
+        $this->assertSame($headings, $seen, 'every heading enters the plan exactly once, in order, unsegmented');
 
         $surface = Surface::new(120, 80);
         HelpMenu::new()->paint($surface, self::ctx(120, 80));
@@ -132,12 +129,14 @@ final class HelpSectionsTest extends OverlayTestCase
 
     /**
      * The three help trailer rows (the blank line, help.footer, help.url)
-     * land at the tail of the Info section — on the last grid page — so no
-     * first-page golden has ever shown them. Drive the real key handler to
-     * the last page at 120x40 and require the footer, the URL, and section
-     * headings to appear together in one frame. Descriptions word-wrap, and
-     * the columns run side by side, so a flat string match cannot see them;
-     * {@see self::strippedColumns()} reads each column as a vertical strip.
+     * land inside the Info box — on the last grid page — so no first-page
+     * golden has ever shown them. Drive the real key handler to the last
+     * page at 120x40 and require the footer, the URL, and the boxes around
+     * them to appear together in one frame. Descriptions word-wrap, and
+     * the framed columns run side by side, so a flat string match cannot
+     * see them; {@see self::strippedColumns()} reads each column window as
+     * a vertical strip, borders and all, then drops the whitespace and box
+     * glyphs the frames contribute.
      */
     public function testTheFinalPageCarriesTheTrailerRows(): void
     {
@@ -157,7 +156,7 @@ final class HelpSectionsTest extends OverlayTestCase
         $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.footer')), 'the footer lands on the last page');
         $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.url')), 'the URL lands on the last page');
         $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.section.info')), 'the Info heading shares the last frame with its trailer');
-        $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.section.net')), 'an earlier section heading is still on the same frame');
+        $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.section.mouse')), 'the box before Info is still on the same frame');
 
         $firstPage = Surface::new(120, 40);
         HelpMenu::new()->paint($firstPage, $ctx);
@@ -184,10 +183,12 @@ final class HelpSectionsTest extends OverlayTestCase
     }
 
     /**
-     * Each grid column as a whitespace-stripped vertical strip: concatenating
-     * a column top-to-bottom reconstitutes a description that word-wrapped
-     * over several rows. Column offsets come from HelpMenu's public geometry,
-     * never hard-coded.
+     * Each grid column window as a whitespace-stripped vertical strip:
+     * concatenating a window top-to-bottom reconstitutes a description
+     * that word-wrapped over several rows. The framed layout adds border
+     * rows and side glyphs inside every window, so the strip drops both
+     * whitespace and box-drawing glyphs (U+2500-U+257F). Column offsets
+     * come from HelpMenu's public geometry, never hard-coded.
      *
      * @param list<string> $lines
      * @return list<string>
@@ -206,7 +207,7 @@ final class HelpSectionsTest extends OverlayTestCase
             foreach ($lines as $line) {
                 $text .= mb_substr($line, $start, $columnWidth);
             }
-            $strips[] = preg_replace('/\s+/u', '', $text);
+            $strips[] = preg_replace('/[\s\x{2500}-\x{257F}]+/u', '', $text);
         }
 
         return $strips;

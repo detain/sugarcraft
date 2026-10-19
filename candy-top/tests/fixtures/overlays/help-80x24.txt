@@ -6,19 +6,19 @@
 │    ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝C3  ╚═╝4%    C╚═╝  60╚═════╝ ╚═╝         ││
 ╭─┐help┌─────────────────────────────────────────────────────────────────────╮╯│
 │        Key:        Description:                                            │─╯
-│General                                          1         Toggle CPU box.  │─╮
-│       Esc, m       Toggles main                 2         Toggle MEM box.  │%│
-│                    menu.                        3         Toggle NET box.  │8│
-│      ctrl + r      Reloads config               4         Toggle PROC box. │0│
-│                    file from disk.      5, 6, 7, 8, 9, 0  Toggle GPU box.  │6│
-│     q, ctrl + c    Quits program.               x         Toggle CTR       │5│
-│       +, -, =      Add/Subtract                           (containers) box.│9│
-│                    100ms to/from              [, ]        Select           │2│
-│                    update timer.                          previous/next    │6│
-│Panels & views                                             container in CTR │6│
-│          p         Cycle view                             box.             │ │
-│                    presets forwards.            v         Toggle the VM    │ │
-│      shift + p     Cycle view                             dashboard (hides │ │
-│                    presets                                mem, net, proc,  │ │
-│                    backwards.                             ctr).            │ │
-╰─┘↑ page 1/6 ↓└─────────────────────────────────────────────────────────────╯─╯
+│╭─┐General┌─────────────────────────╮  ╭─┐Panels & views┌──────────────────╮│─╮
+││       Esc, m       Toggles main   │  │          p         Cycle view     ││%│
+││                    menu.          │  │                    presets        ││8│
+││      ctrl + r      Reloads config │  │                    forwards.      ││0│
+││                    file from disk.│  │      shift + p     Cycle view     ││6│
+││     q, ctrl + c    Quits program. │  │                    presets        ││5│
+││       +, -, =      Add/Subtract   │  │                    backwards.     ││9│
+││                    100ms to/from  │  │          1         Toggle CPU box.││2│
+││                    update timer.  │  │          2         Toggle MEM box.││6│
+│╰───────────────────────────────────╯  │          3         Toggle NET box.││6│
+│                                       │          4         Toggle PROC    ││ │
+│                                       │                    box.           ││ │
+│                                       │  5, 6, 7, 8, 9, 0  Toggle GPU box.││ │
+│                                       ╰───────────────────────────────────╯│ │
+│                                                                            │ │
+╰─┘↑ page 1/9 ↓└─────────────────────────────────────────────────────────────╯─╯

@@ -15,17 +15,32 @@ use SugarCraft\Top\View\Surface;
 
 /**
  * btop's help menu: the banner over a `help` box listing every key from
- * {@see KeyTable}, grouped into the named {@see KeyTable::SECTIONS} and
- * flowed through a two- or three-column grid, paged when the terminal
- * cannot hold the whole grid.
+ * {@see KeyTable}, grouped into the named {@see KeyTable::SECTIONS}, each
+ * section drawn as its own framed box, and the boxes flowed through two
+ * columns, paged when the terminal cannot hold the whole grid.
  *
  * The box is adaptive: {@see self::WIDTH} (78, btop's) on an 80-column
  * terminal — today's status quo — growing to {@see self::WIDE_WIDTH}
- * (117, roughly +50%) on wide ones, at least {@see self::THREE_COLUMNS_WIDTH}
- * cells earning the third column. Each column is a stream of sections:
- * a bold heading row, then rows in btop's `key (20 cells, centred) +
- * description` style; descriptions that outgrow the column wrap under
- * themselves. Paging turns whole grid pages (columns x rows-per-column).
+ * (117, roughly +50%) on wide ones. Every width gets exactly two columns:
+ * a framed section box needs the column the third one used to take. Each
+ * column stacks whole boxes: the top border carries the section heading
+ * as an embedded title (btop's `┐title┌`), the rows inside run btop's
+ * `key (16 cells, centred) + description` style, and descriptions that
+ * outgrow the box wrap under themselves. A box is atomic — it never
+ * splits across a column break or a page break; a section taller than a
+ * whole column continues as a NEW framed box carrying the same heading,
+ * so no row is ever hidden behind a clip. Paging turns whole pages
+ * (both columns at once), and {@see self::plan()} is the one pure,
+ * deterministic model of that flow.
+ *
+ * KEY_COL keeps btop's 20. At the framed 117-wide box the 54-cell interior
+ * leaves a 54 - 20 = 34-cell description column, where 39 of the roster's
+ * 60 descriptions still wrap — over a third, so the 16-cell floor was
+ * measured too: it only saves 4 wraps (35) and `MenuDraw::cjust()` CLIPS
+ * the two labels longer than 16 cells (`Shift + Left, Right`,
+ * `Alt+Shift+Left/Right`) to mangled prefixes. Truncated key names are
+ * worse data loss than a second description line; 20 stands (see the
+ * wrap tables in this campaign's evidence report).
  *
  * Keys: escape / q / h / backspace / space / enter or any click close it;
  * with more than one page, down / j / page_down / tab / wheel-down turn
@@ -42,16 +57,16 @@ final class HelpMenu implements Overlay
     /** Narrowest box: btop's fixed help width, used at the 80-column minimum. */
     public const WIDTH = 78;
 
-    /** Widest box (~+50% over btop's 78); wide terminals get the grid. */
+    /** Widest box (~+50% over btop's 78); wide terminals get the roomier frames. */
     public const WIDE_WIDTH = 117;
 
-    /** A box at least this wide earns a third column instead of two. */
-    public const THREE_COLUMNS_WIDTH = 110;
+    /** The grid is always two framed columns (see the class docblock). */
+    public const COLUMNS = 2;
 
     /** Cells between grid columns. */
     public const GUTTER = 2;
 
-    /** Cells reserved for the centred key label inside a column. */
+    /** Cells reserved for the centred key label inside a box (btop's; the docblock records why the measured step-down was rejected). */
     public const KEY_COL = 20;
 
     private function __construct(
@@ -85,10 +100,15 @@ final class HelpMenu implements Overlay
         return min(self::WIDE_WIDTH, max(self::WIDTH, $cols - 2));
     }
 
-    /** Grid columns a box of this width fits. */
+    /**
+     * Grid columns a box of this width fits — always two: the third column
+     * the adaptive grid once earned (110+ cells) was too narrow to hold a
+     * framed section box and its descriptions. Kept as a method because
+     * the width math and the tests flow through it.
+     */
     public static function columnsFor(int $width): int
     {
-        return $width >= self::THREE_COLUMNS_WIDTH ? 3 : 2;
+        return self::COLUMNS;
     }
 
     /** Cells of one grid column inside a box of this width. */
@@ -105,8 +125,11 @@ final class HelpMenu implements Overlay
      * shrinks by it, keeping the bottom row anchored where it was — the
      * whole block stays centered the way today's banner+box is.
      *
-     * Pages count the GRID, not the flat roster: capacity is one column's
-     * line budget times the column count of this terminal's box width.
+     * Pages count the BOX PLAN, not the flat roster: one page holds two
+     * columns of `height - 3` rows each (the box interior minus the centred
+     * key/description header row), and {@see self::plan()} decides which
+     * section boxes (and which segments of an over-tall section) land
+     * where.
      *
      * @return array{0: int, 1: int, 2: int, 3: int}
      */
@@ -117,9 +140,8 @@ final class HelpMenu implements Overlay
         $width = self::widthFor($cols);
         $x = max(1, intdiv($cols, 2) - intdiv($width, 2));
         $height = min($rows - 6 - $delta, $n + 3);
-        $capacity = self::columnsFor($width) * max(1, $height - 3);
 
-        return [$x, $y, $height, $height > 3 ? max(1, (int) ceil(count(self::gridLines($width)) / $capacity)) : 1];
+        return [$x, $y, $height, $height > 3 ? max(1, count(self::plan($width, $height - 3))) : 1];
     }
 
     /**
@@ -197,53 +219,108 @@ final class HelpMenu implements Overlay
         }
         $cy = $y + 7 + $delta;
         MenuDraw::at($surface, $cy++, $x + 1, $ink->fg('title') . $bold . MenuDraw::cjust(Lang::t('menu.help.key'), self::KEY_COL) . Lang::t('menu.help.description'), '', $clip);
-        $per = max(1, $height - 3);
-        $lines = self::gridLines($width);
-        for ($j = 0; $j < $columns; ++$j) {
-            $col = $x + 1 + $j * ($columnWidth + self::GUTTER);
-            $ly = $cy;
-            foreach (array_slice($lines, ($page * $columns + $j) * $per, $per) as [$label, $description, $isHeading]) {
-                if ($isHeading) {
-                    MenuDraw::at($surface, $ly++, $col, $ink->fg('title') . $bold . MenuDraw::cut($label, $columnWidth) . MenuDraw::UNBOLD, '', $clip);
-                    continue;
+        $grid = self::plan($width, max(1, $height - 3));
+        foreach ($grid[$page] ?? [] as $j => $boxes) {
+            $bx = $x + 1 + $j * ($columnWidth + self::GUTTER);
+            foreach ($boxes as $box) {
+                $by = $cy + $box['row'];
+                $bh = count($box['lines']) + 2;
+                MenuDraw::box($surface, $c, $bx, $by, $columnWidth, $bh, $box['heading']);
+                $inner = MenuDraw::inside($bx, $by, $columnWidth, $bh);
+                $ly = $by + 1;
+                foreach ($box['lines'] as [$label, $description]) {
+                    MenuDraw::at(
+                        $surface,
+                        $ly++,
+                        $bx + 1,
+                        $ink->fg('hi_fg') . $bold . $label . $ink->fg('main_fg') . MenuDraw::UNBOLD . $description,
+                        '',
+                        $inner,
+                    );
                 }
-                MenuDraw::at(
-                    $surface,
-                    $ly++,
-                    $col,
-                    $ink->fg('hi_fg') . $bold . $label . $ink->fg('main_fg') . MenuDraw::UNBOLD . $description,
-                    '',
-                    $clip,
-                );
             }
         }
     }
 
     /**
-     * The whole grid as one stream of lines, independent of terminal
-     * height and paging: per section a heading, then its rows in the
-     * roster order, descriptions wrapped to the column's cell budget.
-     * Pure and deterministic — the goldens byte-pin this layout.
+     * The whole grid as pages of framed section boxes, independent of the
+     * terminal beyond width and per-column height: every section becomes a
+     * box (heading + its rows in roster order, descriptions wrapped to the
+     * box interior minus the key column), and boxes flow next-fit — down
+     * the current column, to the next column when one no longer fits the
+     * remaining height, to a new page when both columns are spent. A box
+     * is atomic; a section taller than one whole column splits into
+     * balanced segments, EACH a framed box re-embedding the heading, so
+     * every row stays visible. Pure and deterministic — the goldens and
+     * {@see self::geometry()} byte-pin this layout.
      *
-     * @return list<array{0: string, 1: string, 2: bool}> [label cells, description cells, isHeading]
+     * @return list<list<list<array{heading: string, lines: list<array{0: string, 1: string}>, row: int, segment: int, segments: int}>>> pages => columns => boxes (lines hold [key cells, description cells]; row is the box's 0-based offset in its column)
      */
-    private static function gridLines(int $width): array
+    public static function plan(int $width, int $perColumn): array
     {
-        $descriptionWidth = max(1, self::columnWidth($width, self::columnsFor($width)) - self::KEY_COL);
-        $lines = [];
+        $columnCount = self::columnsFor($width);
+        $descriptionWidth = max(1, self::columnWidth($width, $columnCount) - 2 - self::KEY_COL);
+        $chunkMax = max(1, $perColumn - 2);
+        $pages = [];
+        $columns = array_fill(0, $columnCount, []);
+        $column = 0;
+        $row = 0;
         foreach (KeyTable::sections() as $heading => $rows) {
-            $lines[] = [Lang::t($heading), '', true];
-            foreach ($rows as $row) {
-                $chunks = self::wrapCells($row->description(), $descriptionWidth);
-                $label = MenuDraw::cjust($row->keyLabel(), self::KEY_COL);
-                $lines[] = [$label, array_shift($chunks), false];
+            $title = Lang::t($heading);
+            $lines = [];
+            foreach ($rows as $rowModel) {
+                $chunks = self::wrapCells($rowModel->description(), $descriptionWidth);
+                $label = MenuDraw::cjust($rowModel->keyLabel(), self::KEY_COL);
+                $lines[] = [$label, array_shift($chunks)];
                 foreach ($chunks as $chunk) {
-                    $lines[] = [str_repeat(' ', self::KEY_COL), $chunk, false];
+                    $lines[] = [str_repeat(' ', self::KEY_COL), $chunk];
                 }
             }
+            $segments = self::splitSegments($lines, $chunkMax);
+            foreach ($segments as $index => $segment) {
+                $height = count($segment) + 2;
+                if ($row > 0 && $row + $height > $perColumn) {
+                    ++$column;
+                    $row = 0;
+                    if ($column >= $columnCount) {
+                        $pages[] = $columns;
+                        $columns = array_fill(0, $columnCount, []);
+                        $column = 0;
+                    }
+                }
+                $columns[$column][] = [
+                    'heading' => $title,
+                    'lines' => $segment,
+                    'row' => $row,
+                    'segment' => $index,
+                    'segments' => count($segments),
+                ];
+                $row += $height;
+            }
         }
+        $pages[] = $columns;
 
-        return $lines;
+        return $pages;
+    }
+
+    /**
+     * A section's content lines cut into per-column pieces: at most one
+     * segment while the whole box fits a bare column (atomic), otherwise
+     * evenly balanced chunks of at most `$chunkMax` lines — each chunk
+     * still fits its own frame inside the column.
+     *
+     * @param list<array{0: string, 1: string}> $lines
+     * @return list<list<array{0: string, 1: string}>>
+     */
+    private static function splitSegments(array $lines, int $chunkMax): array
+    {
+        if (count($lines) <= $chunkMax) {
+            return [$lines];
+        }
+        $count = intdiv(count($lines) + $chunkMax - 1, $chunkMax);
+        $size = intdiv(count($lines) + $count - 1, $count);
+
+        return array_chunk($lines, $size);
     }
 
     /**

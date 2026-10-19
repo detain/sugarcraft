@@ -19,10 +19,11 @@ final class HelpMenuTest extends OverlayTestCase
         $this->assertSame(117, HelpMenu::widthFor(300));
         $this->assertSame(2, HelpMenu::columnsFor(78));
         $this->assertSame(2, HelpMenu::columnsFor(109));
-        $this->assertSame(3, HelpMenu::columnsFor(110));
-        $this->assertSame(3, HelpMenu::columnsFor(117));
+        $this->assertSame(2, HelpMenu::columnsFor(110), 'the third column is gone — every width gets the framed pair');
+        $this->assertSame(2, HelpMenu::columnsFor(117));
         $this->assertSame(37, HelpMenu::columnWidth(78, 2), '(78 - 2 - 2) / 2');
-        $this->assertSame(37, HelpMenu::columnWidth(117, 3), 'floor((117 - 2 - 4) / 3)');
+        $this->assertSame(56, HelpMenu::columnWidth(117, 2), '(117 - 2 - 2) / 2 — 54 cells inside the frame');
+        $this->assertSame(34, HelpMenu::columnWidth(117, 2) - 2 - HelpMenu::KEY_COL, 'the description budget a framed row gets at the widest box');
     }
 
     public function testGeometryIsBtops(): void
@@ -32,20 +33,20 @@ final class HelpMenuTest extends OverlayTestCase
         $this->assertSame(1, $x, 'max(1, 80/2 - 78/2) — the 78 box centred in 80');
         $this->assertSame(max(1, 12 - 4 - intdiv($n, 2)), $y);
         $this->assertSame(min(18, $n + 3), $height);
-        // The box is 78 wide here, so both columns are 37 cells and every
-        // description wraps word-aware under its 20-cell key column at
-        // descW = 17: 10 section headings + 167 row lines (8 single, 12
-        // doubled, 25 trebled, 15 four-lined) = 177 grid lines, over a
-        // 2 x (18 - 3) = 30-line page.
-        $this->assertSame(6, $pages, 'grid lines over the two-column page, not the flat 60-row roster');
+        // The box is 78 wide here: framed columns are 35 cells inside the
+        // side borders, descriptions wrap under a 20-cell key column at
+        // descW = 15, and boxes are atomic — sections over one column's
+        // 15 rows continue as fresh framed segments, so the plan costs 9
+        // pages of 2 x (18 - 3) rows where the flat line stream took 6.
+        $this->assertSame(9, $pages, 'framed box flow, not the flat 177-line grid');
 
         [$wx, $wy, $wh, $wp] = HelpMenu::geometry(120, 40);
         $this->assertSame(2, $wx, 'max(1, 120/2 - 117/2)');
         $this->assertSame(max(1, 20 - 4 - intdiv($n, 2)), $wy);
         $this->assertSame(min(34, $n + 3), $wh);
-        $this->assertSame(2, $wp, '177 grid lines over a 3 x (34 - 3) = 93-line page');
+        $this->assertSame(3, $wp, 'sections over a 2 x (34 - 3) = 62-row page: General+Panels+Navigation, Process list..Overlays, Mouse+Info');
 
-        $this->assertSame(1, HelpMenu::geometry(120, 80)[3], 'a tall terminal fits the whole 177-line grid on one 180-line page');
+        $this->assertSame(1, HelpMenu::geometry(120, 80)[3], 'a tall terminal fits every section box on one 120-row page');
     }
 
     public function testPagingWrapsBothWays(): void

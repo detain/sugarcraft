@@ -6,19 +6,19 @@
 │    ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝C3  ╚═╝4%    C╚═╝  60╚═════╝ ╚═╝         ││
 ╭─┐help┌─────────────────────────────────────────────────────────────────────╮╯│
 │        Key:        Description:                                            │─╯
-│        s, S        Next/previous VM             e         Toggle processes │─╮
-│                    card order (VM                         tree view.       │%│
-│                    dashboard).                  E         Collapse/expand  │8│
-│      shift + i     Toggle the ipmi                        all processes in │0│
-│                    box (BMC power,                        tree view.       │6│
-│                    fans, temps;                 %         Toggles memory   │5│
-│                    root).                                 display mode in  │9│
-│          d         Toggle disks view                      processes box.   │2│
-│                    in MEM box.                  O         Toggle hiding    │6│
-│          c         Toggle per-core                        containers and   │6│
-│                    cpu usage of                           VMs in process   │ │
-│                    processes.                             list.            │ │
-│          r         Reverse sorting         g, ctrl + g    Toggle GPU-only  │ │
-│                    order in                               process filter   │ │
-│                    processes box.                         (vim_keys: ctrl +│ │
-╰─┘↑ page 2/6 ↓└─────────────────────────────────────────────────────────────╯─╯
+│╭─┐Panels & views┌──────────────────╮  ╭─┐Panels & views┌──────────────────╮│─╮
+││          x         Toggle CTR     │  │        s, S        Next/previous  ││%│
+││                    (containers)   │  │                    VM card order  ││8│
+││                    box.           │  │                    (VM dashboard).││0│
+││        [, ]        Select         │  │      shift + i     Toggle the ipmi││6│
+││                    previous/next  │  │                    box (BMC power,││5│
+││                    container in   │  │                    fans, temps;   ││9│
+││                    CTR box.       │  │                    root).         ││2│
+││          v         Toggle the VM  │  │          d         Toggle disks   ││6│
+││                    dashboard      │  │                    view in MEM    ││6│
+││                    (hides mem,    │  │                    box.           ││ │
+││                    net, proc,     │  │          c         Toggle per-core││ │
+││                    ctr).          │  │                    cpu usage of   ││ │
+│╰───────────────────────────────────╯  ╰───────────────────────────────────╯│ │
+│                                                                            │ │
+╰─┘↑ page 2/9 ↓└─────────────────────────────────────────────────────────────╯─╯

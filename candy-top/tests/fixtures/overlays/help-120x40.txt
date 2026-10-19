@@ -6,35 +6,35 @@
 │                        ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝    ╚═╝       ╚═╝    ╚═════╝8╚═╝         C7    60%           ││
 │╭─┐help┌────────────────────────────────────────────────────────────────────────────────────────────────────────────╮││
 ││        Key:        Description:                                                                                   │││
-││General                                                    card order (VM           Up, Down      Select in process│││
-││       Esc, m       Toggles main                           dashboard).                            list.            │││
-││                    menu.                    shift + i     Toggle the ipmi       Pg Up, Pg Down   Jump 1 page in   │╯│
-││      ctrl + r      Reloads config                         box (BMC power,                        process list.    │ │
-╰│                    file from disk.                        fans, temps;             Home, End     Jump to first or │─╯
-╭│     q, ctrl + c    Quits program.                         root).                                 last page in     │─╮
-││       +, -, =      Add/Subtract                 d         Toggle disks view                      process list.    │%│
-││                    100ms to/from                          in MEM box.             h, j, k, l     With vim_keys:   │8│
-││                    update timer.                c         Toggle per-core                        left, down, up,  │0│
-││Panels & views                                             cpu usage of                           right in lists.  │6│
-││          p         Cycle view                             processes.                 g, G        With vim_keys:   │5│
-││                    presets forwards.            r         Reverse sorting                        first / last     │9│
-││      shift + p     Cycle view                             order in                               process in the   │2│
-││                    presets                                processes box.                         list.            │6│
-││                    backwards.                   e         Toggle processes   Process list                         │6│
-││          1         Toggle CPU box.                        tree view.                 Enter       Show detailed    │ │
-││          2         Toggle MEM box.              E         Collapse/expand                        information for  │ │
-││          3         Toggle NET box.                        all processes in                       selected process.│ │
-││          4         Toggle PROC box.                       tree view.               Spacebar      Expand/collapse  │ │
-╰│  5, 6, 7, 8, 9, 0  Toggle GPU box.              %         Toggles memory                         the selected     │ │
-╭│          x         Toggle CTR                             display mode in                        process in tree  │ │
-││                    (containers) box.                      processes box.                         view.            │ │
-││        [, ]        Select                       O         Toggle hiding                C         Expand/collapse  │ │
-││                    previous/next                          containers and                         the selected     │ │
-││                    container in CTR                       VMs in process                         process'         │ │
-││                    box.                                   list.                                  children.        │ │
-││          v         Toggle the VM           g, ctrl + g    Toggle GPU-only         Left, Right    Select           │ │
-││                    dashboard (hides                       process filter                         previous/next    │ │
-││                    mem, net, proc,                        (vim_keys: ctrl +                      sorting column.  │ │
-││                    ctr).                                  g).                Search & filter                      │ │
-││        s, S        Next/previous VM   Navigation & scrolling                         f, /        To enter a       │ │
-╰╰─┘↑ page 1/2 ↓└────────────────────────────────────────────────────────────────────────────────────────────────────╯─╯
+││╭─┐General┌────────────────────────────────────────────╮  ╭─┐Panels & views┌─────────────────────────────────────╮ │││
+│││       Esc, m       Toggles main menu.                │  │                    fans, temps; root).               │ │││
+│││      ctrl + r      Reloads config file from disk.    │  │          d         Toggle disks view in MEM box.     │ │╯│
+│││     q, ctrl + c    Quits program.                    │  │          c         Toggle per-core cpu usage of      │ │ │
+╰││       +, -, =      Add/Subtract 100ms to/from update │  │                    processes.                        │ │─╯
+╭││                    timer.                            │  │          r         Reverse sorting order in processes│ │─╮
+││╰──────────────────────────────────────────────────────╯  │                    box.                              │ │%│
+││╭─┐Panels & views┌─────────────────────────────────────╮  │          e         Toggle processes tree view.       │ │8│
+│││          p         Cycle view presets forwards.      │  │          E         Collapse/expand all processes in  │ │0│
+│││      shift + p     Cycle view presets backwards.     │  │                    tree view.                        │ │6│
+│││          1         Toggle CPU box.                   │  │          %         Toggles memory display mode in    │ │5│
+│││          2         Toggle MEM box.                   │  │                    processes box.                    │ │9│
+│││          3         Toggle NET box.                   │  │          O         Toggle hiding containers and VMs  │ │2│
+│││          4         Toggle PROC box.                  │  │                    in process list.                  │ │6│
+│││  5, 6, 7, 8, 9, 0  Toggle GPU box.                   │  │     g, ctrl + g    Toggle GPU-only process filter    │ │6│
+│││          x         Toggle CTR (containers) box.      │  │                    (vim_keys: ctrl + g).             │ │ │
+│││        [, ]        Select previous/next container in │  ╰──────────────────────────────────────────────────────╯ │ │
+│││                    CTR box.                          │  ╭─┐Navigation & scrolling┌─────────────────────────────╮ │ │
+│││          v         Toggle the VM dashboard (hides    │  │      Up, Down      Select in process list.           │ │ │
+╰││                    mem, net, proc, ctr).             │  │   Pg Up, Pg Down   Jump 1 page in process list.      │ │ │
+╭││        s, S        Next/previous VM card order (VM   │  │      Home, End     Jump to first or last page in     │ │ │
+│││                    dashboard).                       │  │                    process list.                     │ │ │
+│││      shift + i     Toggle the ipmi box (BMC power,   │  │     h, j, k, l     With vim_keys: left, down, up,    │ │ │
+││╰──────────────────────────────────────────────────────╯  │                    right in lists.                   │ │ │
+││                                                          │        g, G        With vim_keys: first / last       │ │ │
+││                                                          │                    process in the list.              │ │ │
+││                                                          ╰──────────────────────────────────────────────────────╯ │ │
+││                                                                                                                   │ │
+││                                                                                                                   │ │
+││                                                                                                                   │ │
+││                                                                                                                   │ │
+╰╰─┘↑ page 1/3 ↓└────────────────────────────────────────────────────────────────────────────────────────────────────╯─╯
