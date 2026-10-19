@@ -61,6 +61,12 @@ final class AuthMiddleware
     /** The header carrying the per-login secret (ISS-007), as named with the web client. */
     public const SECRET_HEADER = 'X-Candy-Code-Auth';
 
+    /**
+     * Paths under `/api/` that answer without a session. AUT-6 hook routes are
+     * not in this exact-match list because they are per-name: they pass through
+     * on {@see isHookRoute()} instead and carry their own secret, strike count
+     * and rate inside {@see HookWebhooks}.
+     */
     public const PUBLIC_API = ['/api/health', '/api/login'];
 
     /** Live login secrets held at once; the oldest give way beyond this. */
@@ -111,11 +117,11 @@ final class AuthMiddleware
         }
 
         $retry = $this->auth->limiter->retryAfter($address);
-        if ($retry > 0 && self::isProtected($path) && $path !== '/api/health' && $path !== '/api/login') {
+        if ($retry > 0 && self::isProtected($path) && $path !== '/api/health' && $path !== '/api/login' && !self::isHookRoute($path)) {
             return Responses::error(429, 'rate_limited', 'too many failed sign-ins from this address', ['Retry-After' => (string) $retry]);
         }
 
-        if (\in_array($path, self::PUBLIC_API, true) || !self::isProtected($path)) {
+        if (\in_array($path, self::PUBLIC_API, true) || !self::isProtected($path) || self::isHookRoute($path)) {
             return $next($request);
         }
 
@@ -177,6 +183,17 @@ final class AuthMiddleware
     public static function isProtected(string $path): bool
     {
         return $path === '/ws' || \str_starts_with($path, '/api/');
+    }
+
+    /**
+     * AUT-6: `POST /api/hooks/{name}` — protected in the sense of never free
+     * (it authenticates by secret), public in the sense of this middleware:
+     * no cookie, no ticket, and no share of the login lockout bucket, because
+     * hammering a webhook must not lock the operator out of signing in.
+     */
+    public static function isHookRoute(string $path): bool
+    {
+        return \str_starts_with($path, ServerConfig::HOOK_ROUTE_PREFIX);
     }
 
     /**

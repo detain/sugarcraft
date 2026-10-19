@@ -296,12 +296,18 @@ single address may hold at most 16 simultaneous connections; more are refused
 | `POST /api/login` | none (rate limited) | `{"code"}` or `{"token"}` → `{"ok": true, "loginSecret": "<64-hex>"}` + the session cookie; wrong → `401` |
 | `POST /api/ticket` | session cookie + `X-Candy-Code-Auth` secret | `{"ticket", "expiresInSeconds": 30}`; a bearer client gets `400` (it needs no ticket) |
 | `POST /api/logout` | any | revokes the session, closes every WebSocket bound to it with close code `4001`, and clears the cookie |
+| `POST /api/hooks/{name}` | the `webhooks` user-config secret in the `x-candy-code-hook` header (constant-time; wrong ones lock out per hook and address) | AUT-6: the body (≤ 64 KiB) is fence-escaped as untrusted input and spliced into the hook's configured prompt at `{{payload}}` — or appended below a plain label — and admitted through the same background door `bg.spawn` uses; `{"ok": true, "bgId": …}` on admission, `429` over the configured per-minute rate, `503` if the turn cannot start. Mounted only when `webhooks` names the hook: unconfigured, the path 404s like any unknown endpoint. Bypass-class permission modes are refused for hooks at launch — a webhook has no one to answer an ask. |
 | `GET /ws` | ticket, bearer or token subprotocol — never the cookie alone, which a browser attaches by itself | the WebSocket upgrade; `Origin` is checked, and a ticket only opens the socket for the login secret that minted it |
 | anything else | none | the web UI's files (`GET`/`HEAD` only) |
 
 Refusals are JSON: `{"error": {"kind": "…", "message": "…"}}`. Clients branch on
 `kind` (`unauthorized`, `rate_limited`, `host_refused`, `origin_refused`,
-`subprotocol_required`, `not_found`, …), never on the message.
+`subprotocol_required`, `not_found`, `hook_unavailable`, …), never on the
+message.
+
+AUT-6 covers **inbound** delivery only; there is no outbound webhook (the
+server posting events to external URLs) in this build — deferred by design, so
+the first webhook surface is the one an operator explicitly opens.
 
 ## WebSocket
 

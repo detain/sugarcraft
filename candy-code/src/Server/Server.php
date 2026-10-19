@@ -25,6 +25,7 @@ use SugarCraft\Code\Server\Http\AuthMiddleware;
 use SugarCraft\Code\Server\Http\ClientAddress;
 use SugarCraft\Code\Server\Http\ClientAddressGuard;
 use SugarCraft\Code\Server\Http\HostAndOriginGuard;
+use SugarCraft\Code\Server\Http\HookWebhooks;
 use SugarCraft\Code\Server\Http\Responses;
 use SugarCraft\Code\Server\Http\Router;
 use SugarCraft\Code\Server\Http\StaticFiles;
@@ -140,6 +141,7 @@ final class Server
         private readonly \Closure $clock,
         private readonly float $readDeadlineSeconds,
         private readonly ?\Closure $share = null,
+        private readonly ?HookWebhooks $webhooks = null,
     ) {
     }
 
@@ -158,6 +160,7 @@ final class Server
         ?\Closure $clock = null,
         ?float $requestDeadlineSeconds = null,
         ?\Closure $share = null,
+        ?HookWebhooks $webhooks = null,
     ): self {
         return new self(
             $config,
@@ -170,6 +173,7 @@ final class Server
             $clock ?? static fn (): float => \microtime(true),
             $requestDeadlineSeconds ?? self::REQUEST_READ_DEADLINE_SECONDS,
             $share,
+            $webhooks,
         );
     }
 
@@ -195,7 +199,7 @@ final class Server
         $api = new ApiController($this->auth, $this->config, $credentials, function (string $session): void {
             unset($this->sessionLastUsed[$session]);
             $this->closeSessionSockets($session, 'you have signed out');
-        });
+        }, $this->webhooks);
         $upgrade = new Upgrade(
             $this->handler,
             function (Connection $connection): void {

@@ -62,6 +62,18 @@ final class ServerConfig
     /** Appendix O §6.7: 0 waits for a permission answer forever (`server.askTimeoutSeconds`). */
     public const DEFAULT_ASK_TIMEOUT_SECONDS = 0.0;
 
+    /** AUT-6: the `webhooks` key's per-minute default when a hook names no `rate`. */
+    public const DEFAULT_HOOK_RATE_PER_MINUTE = 6;
+
+    /** AUT-6: a hook rate is calls per minute; this bounds the window's memory. */
+    public const MAX_HOOK_RATE_PER_MINUTE = 600;
+
+    /** AUT-6: a secret below this is guessable entropy, not a credential. */
+    public const MIN_HOOK_SECRET_BYTES = 32;
+
+    /** AUT-6: `POST /api/hooks/{name}` — the inbound webhook route prefix. */
+    public const HOOK_ROUTE_PREFIX = '/api/hooks/';
+
     /**
      * Appendix O §4.6: how long a stopping server waits for running turns
      * (`server.drainSeconds`). Kept well inside `serve stop`'s own wait, which
@@ -77,6 +89,8 @@ final class ServerConfig
      * @param list<string> $allowedIps     client IPs/CIDRs admitted beside loopback; empty admits every address ({@see Http\ClientAddressGuard})
      * @param bool         $dirBrowse      whether `fs.listDirs` and the browse-rooted `workspace.open` answer
      * @param string|null  $browseRoot     the directory they are confined to (resolved by {@see \SugarCraft\Code\Cli\Serve::config()}; null = the user's home)
+     * @param array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int}> $webhooks
+     *                                     AUT-6 inbound webhook hooks, validated at launch ({@see self::webhooksValue()}); empty = the route is not mounted at all
      */
     private function __construct(
         public readonly string $host,
@@ -100,6 +114,7 @@ final class ServerConfig
         public readonly array $allowedIps = [],
         public readonly bool $dirBrowse = false,
         public readonly ?string $browseRoot = null,
+        public readonly array $webhooks = [],
     ) {
     }
 
@@ -209,6 +224,14 @@ final class ServerConfig
         $allowBypassKey = $userConfig['server.allowBypass'] ?? false;
         if (!\is_bool($allowBypassKey)) {
             throw new ServerConfigException('server.allowBypass in the user config must be true or false');
+        }
+
+        // AUT-6: `webhooks` is top-level (not `server.*`) because it names
+        // hooks, not server knobs — but it is read and validated HERE, at
+        // launch, so one malformed hook is a startup refusal (exit 2), never a
+        // half-mounted route or a surprise on the first delivery.
+        if (isset($userConfig['webhooks'])) {
+            $config = $config->withWebhooks(self::webhooksValue($userConfig['webhooks']));
         }
 
         $mode = $permissionModeFlag;
@@ -371,6 +394,19 @@ final class ServerConfig
     public function withBrowseRoot(?string $browseRoot): self
     {
         return $this->mutate(browseRoot: $browseRoot === null || \trim($browseRoot) === '' ? null : $browseRoot);
+    }
+
+    /**
+     * AUT-6: the inbound webhook hooks. Values arrive validated ({@see self::webhooksValue()});
+     * an empty map means `/api/hooks/{name}` is not mounted at all — the endpoint
+     * answers its 404 like any unknown path, so the feature is default-off by
+     * construction rather than by a flag.
+     *
+     * @param array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int}> $webhooks
+     */
+    public function withWebhooks(array $webhooks): self
+    {
+        return $this->mutate(webhooks: $webhooks);
     }
 
     public function withWebRoot(?string $webRoot): self
@@ -605,6 +641,97 @@ final class ServerConfig
         }
 
         return (float) $value;
+    }
+
+    /**
+     * AUT-6: parse and validate the `webhooks` map at launch. Every refusal
+     * names the hook and the field, because the operator is reading a startup
+     * error, not debugging a live request.
+     *
+     * The floors, in order of severity:
+     * - the name must be a URL segment we can route on (no traversal, no
+     *   encoding games on `/api/hooks/`),
+     * - the secret is the ONLY credential the route has; below
+     *   {@see MIN_HOOK_SECRET_BYTES} it is guessable entropy,
+     * - a bypass-class `permissionMode` (bypass-permissions, dont-ask) is
+     *   refused unconditionally — even under `--allow-bypass`, whose promise
+     *   is about a HUMAN's client sessions. A webhook is nobody watching:
+     *   remote input, headless agent, no one to answer an ask. That is the
+     *   restrictive floor this feature ships behind,
+     * - the prompt is the injection surface; it must exist (a hook with no
+     *   prompt would run the payload as the whole instruction).
+     *
+     * @return array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int}>
+     *
+     * @throws ServerConfigException
+     */
+    public static function webhooksValue(mixed $value): array
+    {
+        if (!\is_array($value) || ($value !== [] && \array_is_list($value))) {
+            throw new ServerConfigException('webhooks in the user config must be a map of hook name to its settings');
+        }
+        $hooks = [];
+        foreach ($value as $name => $hook) {
+            if (!\is_string($name) || \preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/', $name) !== 1) {
+                throw new ServerConfigException(\sprintf(
+                    'webhook "%s": the name must be %d characters or fewer of a-z, 0-9, underscore or hyphen, starting with a letter or digit',
+                    (string) $name,
+                    64,
+                ));
+            }
+            if (!\is_array($hook) || \array_is_list($hook)) {
+                throw new ServerConfigException(\sprintf('webhook "%s": its value must be a map of settings', $name));
+            }
+            $secret = $hook['secret'] ?? null;
+            if (!\is_string($secret) || \strlen($secret) < self::MIN_HOOK_SECRET_BYTES) {
+                throw new ServerConfigException(\sprintf(
+                    'webhook "%s": secret must be a string of at least %d characters — it is the only thing between an inbound request and an agent turn',
+                    $name,
+                    self::MIN_HOOK_SECRET_BYTES,
+                ));
+            }
+            $prompt = $hook['prompt'] ?? null;
+            if (!\is_string($prompt) || \trim($prompt) === '') {
+                throw new ServerConfigException(\sprintf('webhook "%s": prompt must be a non-empty string — the request body is spliced into it as untrusted data', $name));
+            }
+            $modeKey = $hook['permissionMode'] ?? null;
+            if ($modeKey !== null) {
+                if (!\is_string($modeKey) || PermissionMode::tryFrom($modeKey) === null) {
+                    throw new ServerConfigException(\sprintf(
+                        'webhook "%s": permission mode "%s" is not one of: %s',
+                        $name,
+                        \is_scalar($modeKey) ? (string) $modeKey : \get_debug_type($modeKey),
+                        \implode(', ', \array_map(static fn (PermissionMode $m): string => $m->value, PermissionMode::cases())),
+                    ));
+                }
+                $mode = PermissionMode::tryFrom($modeKey);
+                if ($mode !== null && \in_array($mode, [PermissionMode::BypassPermissions, PermissionMode::DontAsk], true)) {
+                    throw new ServerConfigException(\sprintf(
+                        'webhook "%s": permission mode "%s" is refused for hooks even with --allow-bypass — a webhook runs unattended, with no one to answer a permission ask',
+                        $name,
+                        $mode->value,
+                    ));
+                }
+            } else {
+                $mode = null;
+            }
+            $rate = $hook['rate'] ?? self::DEFAULT_HOOK_RATE_PER_MINUTE;
+            if (!\is_int($rate) || $rate < 1 || $rate > self::MAX_HOOK_RATE_PER_MINUTE) {
+                throw new ServerConfigException(\sprintf(
+                    'webhook "%s": rate must be a whole number of deliveries per minute between 1 and %d',
+                    $name,
+                    self::MAX_HOOK_RATE_PER_MINUTE,
+                ));
+            }
+            $unknown = \array_values(\array_diff(\array_keys($hook), ['secret', 'prompt', 'permissionMode', 'rate']));
+            if ($unknown !== []) {
+                throw new ServerConfigException(\sprintf('webhook "%s": unknown setting "%s"', $name, (string) $unknown[0]));
+            }
+
+            $hooks[$name] = ['secret' => $secret, 'prompt' => $prompt, 'permissionMode' => $mode, 'rate' => $rate];
+        }
+
+        return $hooks;
     }
 
     /**

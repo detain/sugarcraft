@@ -144,6 +144,18 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.server.browseRoot.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
+            // AUT-6: top-level name (the key maps hooks, not server knobs),
+            // Server category (only `serve` reads it), user-config only like
+            // every sibling above — a cloned repository must not be able to
+            // mount an inbound door.
+            SettingDefinition::new('webhooks', SettingType::Map, [])
+                ->withCategory(SettingCategory::Server)
+                ->withRiskClass(RiskClass::Security)
+                ->withUi(UiEditability::Complex)
+                ->withLabel(Lang::t('settings.webhooks.label'))
+                ->withHelp(Lang::t('settings.webhooks.help'))
+                ->withReaderSymbol(ServerConfig::class . '::webhooksValue')
+                ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
         ];
     }
 }

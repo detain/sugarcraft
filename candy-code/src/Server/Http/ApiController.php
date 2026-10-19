@@ -30,17 +30,23 @@ use SugarCraft\Code\Server\ServerConfig;
  *   30-second ticket for `/ws?ticket=…`, bound to that cookie's session.
  * - `POST /api/logout` — ends the cookie session, and with it every
  *   WebSocket that session minted a ticket for (ISS-009).
+ * - `POST /api/hooks/{name}` — AUT-6 inbound webhook delivery: secret in the
+ *   {@see HookWebhooks::SECRET_HEADER} header, body spliced into the
+ *   configured prompt, and the turn admitted through the same background
+ *   door `bg.spawn` uses. Mounted only when hooks are configured.
  */
 final class ApiController
 {
     /**
      * @param \Closure(string): void|null $onSessionRevoked the server's hook to close the sockets a revoked session opened
+     * @param HookWebhooks|null           $webhooks         AUT-6 delivery handler; null when no hooks are configured — `/api/hooks/…` then falls through to the ordinary 404, which is the default-off mount
      */
     public function __construct(
         private readonly AuthContext $auth,
         private readonly ServerConfig $config,
         private readonly AuthMiddleware $credentials,
         private readonly ?\Closure $onSessionRevoked = null,
+        private readonly ?HookWebhooks $webhooks = null,
     ) {
     }
 
@@ -48,6 +54,18 @@ final class ApiController
     {
         $path = $request->getUri()->getPath();
         $method = $request->getMethod();
+
+        // AUT-6 ahead of the match: a hook name is operator data, not a route
+        // table, and an unmounted handler must not change what any other path
+        // answers. The 404 for unknown names comes from the handler itself,
+        // byte-identical to the default arm below.
+        if ($this->webhooks !== null && \str_starts_with($path, ServerConfig::HOOK_ROUTE_PREFIX)) {
+            return $this->webhooks->handle(
+                $request,
+                \substr($path, \strlen(ServerConfig::HOOK_ROUTE_PREFIX)),
+                ClientAddress::of($request, $this->config->trustedProxies),
+            );
+        }
 
         return match ($path) {
             '/api/health' => $method === 'GET' || $method === 'HEAD'

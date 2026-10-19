@@ -8,15 +8,18 @@ use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Socket\ConnectionInterface;
+use SugarCraft\Code\Host\Commands\BackgroundCommand;
 use SugarCraft\Code\Host\SessionHub;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Media\Capability\MediaAffordance;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ServerContext;
 use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\LoginCodes;
 use SugarCraft\Code\Server\Auth\TokenStore;
 use SugarCraft\Code\Server\DiscoveryFile;
+use SugarCraft\Code\Server\Http\HookWebhooks;
 use SugarCraft\Code\Server\Http\SharePageController;
 use SugarCraft\Code\Server\Http\StaticFiles;
 use SugarCraft\Code\Server\InterfaceAddresses;
@@ -402,7 +405,55 @@ final class Serve
         // that returns to the shell). The lookup is fail-safe: a database
         // without the shares table answers 404, never an error page.
         $share = new SharePageController(ShareStore::atPath(Bootstrap::sessionStore(prune: false)->path()));
-        $server = Server::new($config, AuthContext::new($tokens), $static, $gateway, $loop, $log, null, null, $share(...));
+        // AUT-6: inbound webhook delivery, mounted ONLY when the operator's
+        // user config names hooks (they were validated at launch inside
+        // ServerConfig::resolve — one bad hook refused the boot, never a
+        // half-mounted route). The run closure is the same door `bg.spawn`
+        // walks: the server context's background supervisor, tracked, and the
+        // summary answered to the caller — caps, draining and the event feed
+        // stay one truth. A throw here is logged at its cause (ISS-057) and
+        // answered as the handler's generic 503.
+        $hooks = $config->webhooks === [] ? null : HookWebhooks::new(
+            $config->webhooks,
+            static function (string $name, array $hook, string $prompt) use ($protocol, $config): array {
+                $server = $protocol->context();
+                if ($server->isDraining()) {
+                    throw new \RuntimeException('the server is shutting down');
+                }
+                $events = $server->background();
+                if ($events === null) {
+                    throw new \RuntimeException('this server has no background supervisor');
+                }
+                $manager = $server->hub()->workspace()->agentManager;
+                $agent = $manager?->get('default') ?? ($manager?->all()[0] ?? null) ?? BackgroundCommand::defaultAgent();
+                // The hook's own configured mode wins (launch-validated, and
+                // bypass-class was refused there); unmodeled hooks run in the
+                // server's admitted mode, downgraded to `default` exactly as
+                // BgMethods::spawnPermissionMode() does for `bg.spawn`.
+                $mode = $hook['permissionMode'];
+                $modeValue = $mode?->value
+                    ?? ($config->admitsPermissionMode($config->permissionMode) ? $config->permissionMode->value : PermissionMode::Default->value);
+                $root = $server->hub()->workspace()->root;
+                try {
+                    $session = $events->supervisor()->spawnSession(
+                        name: BackgroundCommand::sessionName('hook ' . $name),
+                        agent: $agent,
+                        task: $prompt,
+                        workingDirectory: $root !== null && $root !== '' ? $root : '.',
+                        permissionMode: $modeValue,
+                        permissionAskTimeout: $config->askTimeoutSeconds,
+                    );
+                } catch (\Throwable $e) {
+                    $server->logError($e, 'webhook ' . $name . ' failed');
+
+                    throw $e;
+                }
+                $events->track($session);
+
+                return $events->summary($session);
+            },
+        );
+        $server = Server::new($config, AuthContext::new($tokens), $static, $gateway, $loop, $log, null, null, $share(...), $hooks);
 
         try {
             $server->start();
