@@ -618,6 +618,7 @@ final class LayeredSettings
         'formatCommands',
         'disabledMcpServers',
         'mcp.enabled',
+        'mcp.lazySchemaTokens',
         'connectTimeoutSeconds',
         'providerRetryAttempts',
         'providerRetryBaseBackoffMs',

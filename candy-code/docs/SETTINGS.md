@@ -316,7 +316,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and twenty-seven, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and twenty-nine, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -760,7 +760,7 @@ keeping fresh was in fact unpinned on this page and in
 because "there is a generator" is exactly the claim a reader stops checking.)
 In a project you have listed
 under `trustedProjectSettings` (an untrusted project's `disabledTools` never
-reaches the merge at all, and all thirty-one tools survive):
+reaches the merge at all, and all thirty-three tools survive):
 
 ```json
 { "disabledTools": ["[!B]*"] }
@@ -771,7 +771,7 @@ exactly `Bash` and removing everything else — the same tool set
 `allowedTools: ["Bash"]` produces, and the same degradation to opaque shell
 text. (This line said "eight characters" until the count was re-derived:
 `[!B]*` is five, `"[!B]*"` seven, `["[!B]*"]` nine, and nothing here is eight.
-The point the figure was making — that the value names none of the thirty tools it
+The point the figure was making — that the value names none of the thirty-two tools it
 removes — is what survives, so the sentence stays and the number is corrected.
 This line once continued
 "`src/Config/LayeredSettings.php` and `Bootstrap::reportProjectTierToolRemovals()`
@@ -804,7 +804,7 @@ corrected; a page that re-derives a number and then contradicts itself further
 down is worse than one that never re-derived it.)
 
 **Two things narrow this, and both are measured.** An *untrusted* project's
-`disabledTools` never reaches the merge — all thirty-one tools survive — so this
+`disabledTools` never reaches the merge — all thirty-three tools survive — so this
 needs a `trustedProjectSettings` grant you made yourself. And the layers merge
 **key by key, not as a union**: if *you* name any `disabledTools` at all, yours
 replaces the project's entirely. Measured: your `["Read"]` against a trusted
@@ -823,12 +823,12 @@ project's tool removals are reported at launch, naming the file, the tools it
 took and the tools it left:
 
 ```
-candy-code: /repo/.candy-code/settings.json (disabledTools) disabled 30 of the
-31 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
+candy-code: /repo/.candy-code/settings.json (disabledTools) disabled 32 of the
+33 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
 WebSearch, doctor, Skill, Lsp, Memory, RepoMap, Prune, Todo, Compress, Workflow,
 Recall, Team, ApplyPatch, AskUser, PlanExit, SendMessage, Subagents,
-InterruptAgent, GenerateImage, GenerateVideo, PtyRun, Ls, ShellOutput, ShellStop
-— leaving: Bash.
+InterruptAgent, GenerateImage, GenerateVideo, PtyRun, Ls, ShellOutput,
+ShellStop, mcp_list, mcp_call — leaving: Bash.
 ```
 
 That is the stderr form, byte for byte. The `candy-code: ` prefix and the
@@ -1182,7 +1182,7 @@ project-settable.
 | `hooksDefaultTimeoutSeconds` | Hooks & MCP | number | `60` | C | — | restart | tuning |
 | `disabledMcpServers` | Hooks & MCP | list | `[]` | P U C | — | restart | narrowing |
 | `mcp.enabled` | Hooks & MCP | bool | `true` | U C | `CANDY_CODE_MCP_DISABLE` | restart | exec |
-| `mcp.lazySchemaTokens` | Hooks & MCP | number | `8000` | U C | — | restart | tuning |
+| `mcp.lazySchemaTokens` | Hooks & MCP | int | `8000` | U C | — | restart | tuning |
 | `claudeMcpBinary` | Hooks & MCP | path | unset | C | — | next launch | exec |
 | `claudeMcpArgs` | Hooks & MCP | list | unset | C | — | next launch | exec |
 | `claudeMcpEnv` | Hooks & MCP | object | unset | C | — | next launch | security |
@@ -1335,7 +1335,7 @@ Saved is not applied: see the next section for when each key takes effect.
 | restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `instructions`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `lintCommands`, `formatCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `mcp.lazySchemaTokens`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.browseRoot`, `webhooks`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
-**In numbers:** thirty-eight live, fifty-five next turn, one reload, sixty-nine
+**In numbers:** thirty-eight live, fifty-five next turn, one reload, seventy-one
 restart and seven next launch.
 
 **This session only** accepts `maxOutputTokens`, `reasoningEffort`,
@@ -1553,15 +1553,14 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only twenty-two of the one hundred and twenty-seven
-  layered keys have an env override (`provider`, `models`, `titleModel`,
-  `summaryModel`, `promptCache`, `parallelToolCalls`,
-  `parallelToolDeadlineSeconds`, `maxCostUsd`, `webSearchEndpoint`, `sd.baseUrl`,
-  `ui.imageRenderMode`, `terminalBackground`, `mouse`, `mouseClicks`,
-  `sessionRetentionDays`, `promptSuggestions`, `mcp.enabled`,
-  `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`,
-  `debug.stream`). `providers`, `maxOutputTokens`, `modelPrices`, `extraBody`,
-  `thinkingBudget`, `reasoningEffort`, `maxToolSteps`,
+  They do not cover it: only twenty-two of the one hundred and twenty-nine layered
+  keys have an env override (`provider`, `models`, `titleModel`, `summaryModel`,
+  `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxCostUsd`,
+  `webSearchEndpoint`, `sd.baseUrl`, `ui.imageRenderMode`, `terminalBackground`,
+  `mouse`, `mouseClicks`, `sessionRetentionDays`, `promptSuggestions`,
+  `mcp.enabled`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`,
+  `debug.rules`, `debug.stream`). `providers`, `maxOutputTokens`, `modelPrices`,
+  `extraBody`, `thinkingBudget`, `reasoningEffort`, `maxToolSteps`,
   `compaction.reminderPercent`, `compaction.autoPercent`,
   `compaction.blockPercent`, `compaction.keepRecent`,
   `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
@@ -1584,16 +1583,16 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `sd.timeoutSeconds`, `sd.defaultModel`, `sd.presets`,
   `ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
   `instructions`, `instructionsExclude`, `disabledRules`, `embeddingModel`,
-
-  `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`, `subagentMaxTurns`,
-  `subagentMaxConcurrent`, `subagentMaxDepth`, `subagentMaxActive`,
-  `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`,
-  `theme`, `statusLine`, `layout`, `notify`, `watchFiles`, `queueMode`,
-  `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`,
-  `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestionHistory`,
-  `expandToolOutput`, `maxCheckpoints`, `keybindings`, `vimMode`, `lintCommands`,
-  `formatCommands`, `disabledMcpServers`, `providerRetryAttempts` and
-  `providerRetryBaseBackoffMs` have none.
+  `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`,
+  `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`,
+  `subagentMaxActive`, `includeGitInstructions`, `attribution`, `lsp`,
+  `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
+  `watchFiles`, `queueMode`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
+  `diffPreviewRows`, `toolOutputPreviewLines`, `sessions.autoTitle`,
+  `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `keybindings`,
+  `vimMode`, `lintCommands`, `formatCommands`, `disabledMcpServers`,
+  `mcp.lazySchemaTokens`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`
+  have none.
   <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.
