@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Tools\BuiltIn;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Tools\BuiltIn\Grep;
 
 /**
@@ -20,6 +21,16 @@ use SugarCraft\Code\Tools\BuiltIn\Grep;
  *
  * The fixture is a repo that did gitignore its `.env` (the favourable case for
  * the old code) plus a `.git/config` carrying a token in its remote URL.
+ *
+ * SHL-4 runs every case under BOTH engines. The rg legs only enter the dataset
+ * when the host actually has rg — the provider inspects the capability the same
+ * way the boot wiring does, so an rg-less container gets the identical suite it
+ * got before, not a skipped-test farm. The engine-critical delta the port had
+ * to discover by measurement: rg's `--glob` screening reaches a WALK but not an
+ * explicitly named FILE operand (rg printed `SECRET=1` for `path: ".env"`), so
+ * the tool screens those operands itself before spawning (the door in
+ * {@see Grep::buildCommand()}); these explicit-operand cases are the door's
+ * behavioural proof.
  */
 final class GrepSecretFileTest extends TestCase
 {
@@ -43,7 +54,8 @@ final class GrepSecretFileTest extends TestCase
         file_put_contents($this->root . '/src/a.php', "<?php \$url = 'x';\n");
         file_put_contents($this->root . '/src/b.txt', "url = plain text\n");
         // A link with an innocent name: PathJail hands grep the realpath, so a
-        // named symlink arrives as `.env` and the exclude still applies.
+        // named symlink arrives as `.env` and the exclude still applies — and
+        // the rg door checks the same resolved name it receives.
         symlink('.env', $this->root . '/notes.txt');
     }
 
@@ -55,10 +67,10 @@ final class GrepSecretFileTest extends TestCase
     /**
      * @param array<string, mixed> $args
      */
-    #[DataProvider('searches')]
-    public function testNoSecretReachesTheResult(array $args): void
+    #[DataProvider('searchesUnderBothEngines')]
+    public function testNoSecretReachesTheResult(array $args, bool $rg): void
     {
-        $content = (new Grep($this->root))->execute($args + ['description' => 'x'])->content();
+        $content = (new Grep($this->root, rgAvailable: $rg))->execute($args + ['description' => 'x'])->content();
 
         foreach (self::SECRETS as $secret) {
             $this->assertStringNotContainsString($secret, $content, json_encode($args) . " leaked {$secret}");
@@ -80,14 +92,46 @@ final class GrepSecretFileTest extends TestCase
     }
 
     /**
+     * Every search × every engine this host can actually run.
+     *
+     * @return array<string, array{0: array<string, mixed>, 1: bool}>
+     */
+    public static function searchesUnderBothEngines(): array
+    {
+        $cases = [];
+        foreach (self::searches() as $label => [$args]) {
+            foreach (self::hostEngines() as $rg) {
+                $cases[$label . ($rg ? ' [rg]' : ' [grep]')] = [$args, $rg];
+            }
+        }
+
+        return $cases;
+    }
+
+    /**
+     * The engines available to this host: grep always (the fallback is the
+     * only engine an rg-less box has), rg when the boot probe finds it.
+     *
+     * @return list<bool>
+     */
+    private static function hostEngines(): array
+    {
+        return Bootstrap::capabilityPresent('rg') ? [false, true] : [false];
+    }
+
+    /**
      * The other half: the search still works. Ordinary files are found, and
      * the model's `include` still NARROWS — it has to come before the secret
-     * excludes on the command line, or GNU grep treats the excludes as the
-     * first file option and searches every file the include does not name.
+     * excludes on the command line on BOTH engines, for DIFFERENT reasons: GNU
+     * grep decides a double-matching file by its FIRST matching glob option,
+     * while rg's globset lets the LAST match win. One argv order serves both,
+     * and swapping it leaks (grep) or empties (rg) — pinned by
+     * `GrepEngineDifferentialTest`.
      */
-    public function testOrdinaryFilesAreStillSearchedAndIncludeStillNarrows(): void
+    #[DataProvider('engines')]
+    public function testOrdinaryFilesAreStillSearchedAndIncludeStillNarrows(bool $rg): void
     {
-        $grep = new Grep($this->root);
+        $grep = new Grep($this->root, rgAvailable: $rg);
 
         $all = $grep->execute(['pattern' => 'url', 'path' => '.', 'include_ignored' => true, 'description' => 'x'])->content();
         $this->assertStringContainsString('src/a.php', $all);
@@ -98,6 +142,17 @@ final class GrepSecretFileTest extends TestCase
         $this->assertStringNotContainsString('src/b.txt', $php);
     }
 
+    /** @return array<string, array{0: bool}> */
+    public static function engines(): array
+    {
+        $cases = [];
+        foreach (self::hostEngines() as $rg) {
+            $cases[$rg ? 'rg' : 'grep'] = [$rg];
+        }
+
+        return $cases;
+    }
+
     /**
      * W1-g handoff (0.14-c follow-up): key material is kept out of a directory
      * walk the same way `.env` is. `Grep pattern="PRIVATE KEY" path="."` used to
@@ -105,7 +160,8 @@ final class GrepSecretFileTest extends TestCase
      * search that NAMES the key. The `.pub` halves stay searchable, matching the
      * hook, which lets them be read.
      */
-    public function testKeyMaterialIsNeverSearchedButPublicKeysAre(): void
+    #[DataProvider('engines')]
+    public function testKeyMaterialIsNeverSearchedButPublicKeysAre(bool $rg): void
     {
         mkdir($this->root . '/keys');
         $private = ['server.key', 'DEPLOY.PEM', 'tls.pem', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', 'id_rsa_work', 'id_ed25519_sk', 'id_ecdsa.bak'];
@@ -117,7 +173,7 @@ final class GrepSecretFileTest extends TestCase
         }
 
         foreach ([['path' => '.'], ['path' => 'keys', 'include_ignored' => true], ['path' => 'keys', 'include' => '*']] as $args) {
-            $content = (new Grep($this->root))->execute($args + ['pattern' => 'PRIVATE KEY', 'description' => 'x'])->content();
+            $content = (new Grep($this->root, rgAvailable: $rg))->execute($args + ['pattern' => 'PRIVATE KEY', 'description' => 'x'])->content();
 
             foreach ($private as $name) {
                 $this->assertStringNotContainsString("PRIVATE KEY----- {$name}\n", $content, json_encode($args) . " searched {$name}");

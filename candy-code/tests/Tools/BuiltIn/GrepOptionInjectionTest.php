@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Tools\BuiltIn;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Tools\BuiltIn\Grep;
 
 /**
@@ -24,6 +25,18 @@ use SugarCraft\Code\Tools\BuiltIn\Grep;
  * TEXT — the second half is what fails on the old command line for every
  * spelling, including the ones (`-R`, `--devices=read`) that would otherwise
  * have quietly consumed the path operand as their pattern.
+ *
+ * SHL-4 re-runs every argv-bearing case under rg as well, because F-J1 was
+ * proved against grep's parser only: rg gets the same three guards (`-e` for
+ * the pattern, single-token `--glob=<value>` for every model string, `--`
+ * before the operand), each verified by measurement on rg 14.1.0, and the
+ * `-r`-not-`-R` doctrine lands as rg's own default — walk-time symlinks are
+ * never followed and `--follow` is deliberately never passed (a link named on
+ * the command line IS followed on both engines, measured: that parity is the
+ * bounded IgnoreRules::halts() hatch, not an accident). The rg legs join the
+ * dataset only on hosts with rg, via the same boot probe the wiring uses.
+ * The non-string-argument guard test stays single-engine: it answers before
+ * any command exists, which is the whole point of it.
  *
  * The process cwd is moved into the root for each test: an option-injected
  * call that swallows the path operand makes `grep -r` default to `.`, and
@@ -82,13 +95,21 @@ final class GrepOptionInjectionTest extends TestCase
         ];
     }
 
-    #[DataProvider('optionShapedPatterns')]
-    public function testAnOptionShapedPatternIsSearchedForAsTextAndNeverEscapesTheRoot(string $pattern): void
+    /**
+     * @return array<string, array{0: string, 1: bool}>
+     */
+    public static function optionShapedPatternsUnderBothEngines(): array
+    {
+        return self::crossProduct(self::optionShapedPatterns());
+    }
+
+    #[DataProvider('optionShapedPatternsUnderBothEngines')]
+    public function testAnOptionShapedPatternIsSearchedForAsTextAndNeverEscapesTheRoot(string $pattern, bool $rg): void
     {
         $pattern = str_replace('%PATTERN_FILE%', $this->patternFile, $pattern);
         file_put_contents($this->root . '/flags.txt', $pattern . "\n");
 
-        $content = (new Grep($this->root))->execute([
+        $content = (new Grep($this->root, rgAvailable: $rg))->execute([
             'pattern' => $pattern,
             'path' => '.',
             'description' => 'option-shaped pattern',
@@ -100,11 +121,12 @@ final class GrepOptionInjectionTest extends TestCase
         $this->assertStringContainsString($this->root . '/flags.txt:1:' . $pattern, $content);
     }
 
-    public function testALiteralDashPatternMatchesItsOwnText(): void
+    #[DataProvider('engines')]
+    public function testALiteralDashPatternMatchesItsOwnText(bool $rg): void
     {
         file_put_contents($this->root . '/dash.txt', "keep\n-foo marks the spot\n");
 
-        $content = (new Grep($this->root))->execute([
+        $content = (new Grep($this->root, rgAvailable: $rg))->execute([
             'pattern' => '-foo',
             'path' => '.',
             'description' => 'leading dash pattern',
@@ -113,9 +135,10 @@ final class GrepOptionInjectionTest extends TestCase
         $this->assertStringContainsString($this->root . '/dash.txt:2:-foo marks the spot', $content);
     }
 
-    public function testAnOrdinaryPatternStillMatchesInsideTheRoot(): void
+    #[DataProvider('engines')]
+    public function testAnOrdinaryPatternStillMatchesInsideTheRoot(bool $rg): void
     {
-        $result = (new Grep($this->root))->execute([
+        $result = (new Grep($this->root, rgAvailable: $rg))->execute([
             'pattern' => 'needle',
             'path' => '.',
             'description' => 'ordinary pattern',
@@ -127,11 +150,14 @@ final class GrepOptionInjectionTest extends TestCase
 
     /**
      * The `-r` symlink hatch stays as documented: a link MET during the walk
-     * is not followed, so a plain search for the secret finds nothing.
+     * is not followed, so a plain search for the secret finds nothing. rg
+     * encodes the same doctrine as its default (measured: no walk-time descent
+     * into `innocent_link`), and the tool never passes `--follow`.
      */
-    public function testAPlainSearchDoesNotFollowAnOutOfRootLink(): void
+    #[DataProvider('engines')]
+    public function testAPlainSearchDoesNotFollowAnOutOfRootLink(bool $rg): void
     {
-        $content = (new Grep($this->root))->execute([
+        $content = (new Grep($this->root, rgAvailable: $rg))->execute([
             'pattern' => 'SECRET',
             'path' => '.',
             'description' => 'plain secret search',
@@ -142,12 +168,14 @@ final class GrepOptionInjectionTest extends TestCase
 
     /**
      * `--include=<glob>` is one argv token, so an option-shaped glob is the
-     * option's value: it filters filenames and enables nothing.
+     * option's value: it filters filenames and enables nothing. rg's
+     * `--glob=<value>` is the same single-token form (measured, including a
+     * value that itself begins with `-`).
      */
-    #[DataProvider('optionShapedIncludes')]
-    public function testAnOptionShapedIncludeIsOnlyAFilenameGlob(string $include): void
+    #[DataProvider('optionShapedIncludesUnderBothEngines')]
+    public function testAnOptionShapedIncludeIsOnlyAFilenameGlob(string $include, bool $rg): void
     {
-        $content = (new Grep($this->root))->execute([
+        $content = (new Grep($this->root, rgAvailable: $rg))->execute([
             'pattern' => 'SECRET',
             'path' => '.',
             'include' => $include,
@@ -170,17 +198,70 @@ final class GrepOptionInjectionTest extends TestCase
     }
 
     /**
+     * @return array<string, array{0: string, 1: bool}>
+     */
+    public static function optionShapedIncludesUnderBothEngines(): array
+    {
+        return self::crossProduct(self::optionShapedIncludes());
+    }
+
+    /**
+     * The engines this host can actually run: grep always (it is the fallback),
+     * rg only when the boot probe finds it, so an rg-less container gets the
+     * same dataset it got before SHL-4 rather than a farm of red legs.
+     *
+     * @return array<string, array{0: bool}>
+     */
+    public static function engines(): array
+    {
+        $cases = [];
+        foreach (self::hostEngines() as $rg) {
+            $cases[$rg ? 'rg' : 'grep'] = [$rg];
+        }
+
+        return $cases;
+    }
+
+    /**
+     * Cross a single-string-argument provider with {@see engines()}, keeping a
+     * `[grep]`/`[rg]` suffix in the case label so a red line names its engine.
+     *
+     * @param array<string, array{0: string}> $cases
+     * @return array<string, array{0: string, 1: bool}>
+     */
+    private static function crossProduct(array $cases): array
+    {
+        $out = [];
+        foreach ($cases as $label => [$value]) {
+            foreach (self::hostEngines() as $rg) {
+                $out[$label . ($rg ? ' [rg]' : ' [grep]')] = [$value, $rg];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<bool>
+     */
+    private static function hostEngines(): array
+    {
+        return Bootstrap::capabilityPresent('rg') ? [false, true] : [false];
+    }
+
+    /**
      * The unrooted instance (tests, embedders) passes `path` through as given,
      * so a directory literally named `-R` used to be read by grep as the `-R`
      * flag — leaving no file operand, so grep dereference-walked `.` instead.
-     * `--` makes it the directory it is.
+     * `--` makes it the directory it is, on both engines.
      */
-    public function testADashNamedDirectoryIsSearchedAsADirectory(): void
+    #[DataProvider('engines')]
+    public function testADashNamedDirectoryIsSearchedAsADirectory(bool $rg): void
     {
         mkdir($this->root . '/-R');
         file_put_contents($this->root . '/-R/inside.txt', "SECRET-free needle\n");
 
-        $grep = new Grep();
+        $grep = new Grep(rgAvailable: $rg);
 
         $secret = $grep->execute(['pattern' => 'SECRET', 'path' => '-R', 'description' => 'x'])->content();
         $this->assertStringNotContainsString('hunter2', $secret);

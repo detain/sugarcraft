@@ -37,8 +37,9 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
     use TruncatesOutput;
 
     /**
-     * Wall-clock budget of one search (ISS-061). `grep -rn` has no ceiling of
-     * its own on the clock either: a sparse giant of a file, a stalled mount,
+     * Wall-clock budget of one search (ISS-061). Neither search engine has a
+     * ceiling of its own on the clock: a sparse giant of a file, a stalled
+     * mount,
      * or a pattern with enormous back-reference churn can keep the child
      * reading long after the turn has moved on. The bound is read at the
      * moment the run is armed through {@see ToolLimits::current()} — not
@@ -49,8 +50,8 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
     public const DEFAULT_TIMEOUT_SECONDS = 60;
 
     /**
-     * $maxOutputBytes bounds the hit list. `grep -rn` over a real tree has no
-     * ceiling of its own: a common identifier, or a pattern that happens to
+     * $maxOutputBytes bounds the hit list. `grep -rn` and `rg` over a real tree
+     * have no ceiling of their own: a common identifier, or a pattern that happens to
      * match minified assets or a lockfile, returns tens of thousands of lines
      * that would otherwise be replayed into every following request of the
      * turn. Zero or negative disables the cap.
@@ -60,7 +61,8 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      * probe is a stat walk reached from outside, and why the default is the
      * absent one. A tool that read the host `PATH` itself would render a
      * different prompt on every developer's machine; a tool that defaults to
-     * true would advertise `rg` on the containers that have no `rg`.
+     * true would run an `rg` command line on the containers that have no
+     * `rg` — since SHL-4 the flag picks the ENGINE, not just the prose.
      */
     public function __construct(
         private ?string $root = null,
@@ -121,9 +123,9 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      * would re-surface on the next call for the rest of the session.
      * `GrepInstructionWiringTest` pins that pair rather than the verdict.
      *
-     * Point 1 of {@see ParallelSafe} is unaffected and unchanged: `grep -rn`
-     * reads, mutates nothing a sibling could observe, and terminates on its
-     * own.
+     * Point 1 of {@see ParallelSafe} is unaffected and unchanged: both search
+     * engines read, mutate nothing a sibling could observe, and terminate on
+     * their own.
      */
     public function isParallelSafe(): bool
     {
@@ -192,44 +194,60 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      * that was never searched is indistinguishable from "no hits".
      *
      * The regex dialect is stated for the same reason and is the one clause a
-     * model is most likely to get wrong unprompted: {@see execute()} builds
-     * `grep -rn` with NO `-E` and NO `-P`, so the pattern is GNU basic
-     * regular expression (BRE) syntax. crush_code.md section 12 asserted ERE
-     * here; that is wrong, and the difference is not cosmetic — in BRE `a|b`
-     * matches the literal three characters `a|b`, and `(a)` and `a+` match
-     * their own punctuation rather than grouping or repeating.
+     * model is most likely to get wrong unprompted — and since SHL-4 the
+     * dialect DEPENDS on the engine: an instance built with the `rg`
+     * capability runs `rg` (extended regex, where `|` and `(` are operators
+     * as written); one without it builds `grep -rn` with NO `-E` and NO `-P`,
+     * so there the pattern is GNU basic regular expression (BRE) syntax and
+     * `a|b` matches the literal three characters. crush_code.md section 12
+     * once asserted ERE for the grep branch; that was wrong then, and the
+     * difference was not cosmetic — which is exactly why the sentence now
+     * splits per engine instead of claiming one dialect for both.
      *
-     * GNU, not "POSIX", and the qualifier is load-bearing rather than pedantic:
-     * the escaped operators the text goes on to recommend — `\|`, `\+`, `\?` —
+     * GNU, not "POSIX", and the qualifier stays load-bearing on the grep
+     * branch: the escaped operators that text recommends — `\|`, `\+`, `\?` —
      * are GNU EXTENSIONS. Strict POSIX BRE has no alternation operator at all,
      * so saying "POSIX basic" and then instructing the model to escape its way
      * to alternation describes a dialect that does not exist. The host binary
-     * here is GNU grep 3.11, and the escaped forms are proven against it in
+     * there is GNU grep 3.11, and the escaped forms are proven against it in
      * `ToolDescriptionGuidanceTest`.
      *
      * The no-matches clause names the scoring rule `execute()` actually
      * applies (`isError: exitCode > 1`, with a run killed at the deadline
      * (ISS-061) counted as a partial answer rather than a failure), which
-     * the model cannot otherwise distinguish from a failed search.
+     * the model cannot otherwise distinguish from a failed search. The
+     * 0/1/2 convention holds on both engines, measured.
      *
      * The `rg` clause is claimed only by an instance built with the capability
      * true, on {@see Read::description()}'s rule that a tool may advertise
-     * nothing it does not hold — and it is worded to survive being read
-     * carefully. It offers `rg` as a SHELL command the model runs itself, and
-     * says in the next breath that this tool still runs `grep`, because that is
-     * the whole truth: {@see execute()} builds its command line from `grep -rn`
-     * whatever the host has installed. A clause that instead read "this tool
-     * uses ripgrep when available" would be a false claim about the code, and
-     * Bash.php's doc-block doctrine is that a false claim costs more than the
-     * terseness it saves.
+     * nothing it does not hold. Before SHL-4 it offered `rg` as a SHELL
+     * command the model could run itself while saying in the next breath that
+     * the tool still ran `grep` — the whole truth then. It now claims the
+     * engine it uses and keeps the other half of that truth explicitly: the
+     * fallback is named, with its dialect delta, so a pattern written against
+     * this description reads correctly on a host WITHOUT rg too, where the
+     * tool silently changes engines under the same call.
      */
     public function description(): string
     {
-        $description = 'Search for a pattern in files, recursively. The pattern is a GNU basic '
-            . 'regular expression — this runs `grep -rn`, not PCRE — so `|`, `+`, `?`, `(`, '
-            . '`)`, `{` and `}` match themselves unless backslash-escaped. Use include to '
-            . 'scope by filename glob (e.g. "*.php"). Finding nothing is a normal result, '
-            . 'not an error; only grep itself failing is reported as one. Skips '
+        // SHL-4: the middle sentence states the REGEX DIALECT, and the dialect
+        // is a property of the engine, not of the tool. The grep branch below
+        // is byte-frozen by `CapabilityAwareDescriptionTest::GREP_ABSENT` —
+        // an absent-rg host must see exactly the prompt it saw before this
+        // change, down to the byte.
+        $lead = $this->rgAvailable
+            ? 'Search for a pattern in files, recursively. The pattern is an '
+                . 'extended regular expression — this runs `rg`, the ripgrep engine, not PCRE — so `|`, `+`, `?`, `(` and `)` '
+                . 'are operators as written; backslash-escape them to match themselves. Use include to '
+                . 'scope by filename glob (e.g. "*.php"). Finding nothing is a normal result, '
+                . 'not an error; only rg itself failing is reported as one. Skips '
+            : 'Search for a pattern in files, recursively. The pattern is a GNU basic '
+                . 'regular expression — this runs `grep -rn`, not PCRE — so `|`, `+`, `?`, `(`, '
+                . '`)`, `{` and `}` match themselves unless backslash-escaped. Use include to '
+                . 'scope by filename glob (e.g. "*.php"). Finding nothing is a normal result, '
+                . 'not an error; only grep itself failing is reported as one. Skips ';
+
+        $description = $lead
             . implode(', ', IgnoreRules::DEFAULT_EXCLUDED_DIRS)
             . ' and anything the project\'s .gitignore excludes; pass include_ignored: true to search those too, '
             . 'except that a walk never enters .git and never opens .env, .env.* or .envrc files (the '
@@ -238,9 +256,9 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             . 'saved tool-output file a truncated result pointed you to.';
 
         if ($this->rgAvailable) {
-            $description .= ' `rg` is on PATH on this host, so when BRE escaping is the obstacle '
-                . 'you can run `rg` yourself through Bash — a regex engine with sane defaults, '
-                . 'where `|` and `(` mean what they say. This tool still runs `grep`.';
+            $description .= ' `rg` is on PATH on this host and this tool runs it natively; on a host '
+                . 'without rg the same call falls back to `grep -rn`, where the pattern is a GNU basic '
+                . 'regular expression and an unescaped `|` or `(` matches itself.';
         }
 
         return $description;
@@ -258,8 +276,11 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         'properties' => [
             // Reconciled with description(): the schema used to say only
             // "regex pattern", which a model reasonably reads as PCRE. It is
-            // GNU BRE, and the two strings must not disagree about that.
-            'pattern' => ['type' => 'string', 'description' => 'The pattern to search for, as a GNU basic regular expression (BRE). Escape |, +, ?, ( and ) to use them as operators rather than literals.'],
+            // the engine's own dialect, and the two strings must not disagree
+            // about that — including when the engine differs per host (SHL-4).
+            'pattern' => ['type' => 'string', 'description' => $this->rgAvailable
+                ? 'The pattern to search for, as an extended regular expression (this host runs `rg`). `|`, +, ?, ( and ) are operators as written; backslash-escape them to match themselves literally.'
+                : 'The pattern to search for, as a GNU basic regular expression (BRE). Escape |, +, ?, ( and ) to use them as operators rather than literals.'],
             'path' => ['type' => 'string', 'description' => 'Directory path to search in.' . $pathScope],
             'include' => ['type' => 'string', 'description' => 'Filename glob limiting which files are searched (e.g., *.php). Defaults to every file.'],
             'description' => [
@@ -359,40 +380,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
 
         $rules = $this->rulesFor($path, self::flag($args['include_ignored'] ?? null));
 
-        $cmd = 'grep -rn';
-        // `-r`, deliberately, never `-R`: -r follows a symlink only when it is
-        // named on the command line, which is exactly the bounded hatch
-        // IgnoreRules::halts() documents for Glob. -R follows every link it
-        // meets, and this monorepo's path-repo symlinks make that a
-        // non-terminating walk rather than a slow one.
-        //
-        // Every model-supplied value reaches grep in a form its option parser
-        // cannot read as an option (audit F-J1). escapeshellarg() stops SHELL
-        // injection only; it does nothing about OPTION injection, and a bare
-        // pattern operand that begins with `-` is parsed by grep as flags.
-        // `-ReSECRET` was `-R` (dereference every symlink — the hatch above,
-        // reopened by the model, walking `innocent_link -> ../outside` and out
-        // of the PathJail) plus `-e SECRET`; `-f FILE`, `--devices=read`,
-        // `--dereference-recursive` were reachable the same way. So:
-        //   - the pattern travels as the ARGUMENT of `-e`, never as an
-        //     operand — `-e -foo` searches for the text `-foo`;
-        //   - `--include=<glob>` and IgnoreRules' `--exclude-dir=<dir>` are
-        //     single-token `--opt=value` forms, so a value starting with `-`
-        //     is the option's value, not a new option;
-        //   - `--` ends option parsing before the path operand, which matters
-        //     on the unrooted instance (a relative directory named `-R`); the
-        //     rooted one already hands grep PathJail's absolute path.
-        $cmd .= $rules->grepExcludeFlags();
-        // The model's --include goes BEFORE the secret excludes, and the order
-        // is load-bearing: GNU grep includes a file no --include/--exclude glob
-        // matches unless the FIRST such option is an --include, so an exclude
-        // placed first makes `include: "*.php"` search every file (measured on
-        // GNU grep 3.11: `b.txt` came back).
-        if ($include !== '*') {
-            $cmd .= ' --include=' . escapeshellarg($include);
-        }
-        $cmd .= self::secretExcludeFlags($path);
-        $cmd .= ' -e ' . escapeshellarg($pattern) . ' -- ' . escapeshellarg($path);
+        $cmd = $this->buildCommand($rules, $include, $pattern, $path);
         // See Bash::execute() -- exec() leaks the child's stderr onto the
         // terminal underneath the TUI. grep exits 1 for "no matches", which
         // is a normal outcome rather than an error.
@@ -401,7 +389,32 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // ISS-061: armed with a wall-clock deadline so a pathological search
         // returns partial hits rather than pinning the turn forever.
         $timeout = self::searchTimeoutSeconds();
-        $run = $this->runCaptured($cmd, null, $this->captureBound($this->maxOutputBytes), $timeout, [], $heartbeat);
+        if ($cmd === null) {
+            // The rg engine's tool-side secret door: `--glob` screening only
+            // reaches a walk, not an explicitly named operand, so rg given
+            // `path: ".env"` prints the secret (measured, rg 14.1.0). GNU
+            // grep's `--exclude` DOES reach the operand and searches nothing —
+            // exit 1, no output. Synthesizing exactly that verdict keeps the
+            // two engines answer-identical on the F-J2 cases without ever
+            // spawning a child that would have opened the file. The neutral
+            // key set mirrors runCaptured()'s contract; every reader
+            // downstream (post-filter, merge, notes, scoring) sees an empty,
+            // successful, un-truncated no-match run.
+            $run = [
+                'stdout' => '',
+                'stderr' => '',
+                'exitCode' => 1,
+                'truncatedBytes' => 0,
+                'stdoutDropped' => 0,
+                'stderrDropped' => 0,
+                'stdoutMidLine' => false,
+                'stderrMidLine' => false,
+                'timedOut' => false,
+                'groupKilled' => false,
+            ];
+        } else {
+            $run = $this->runCaptured($cmd, null, $this->captureBound($this->maxOutputBytes), $timeout, [], $heartbeat);
+        }
 
         $filtered = self::withoutIgnoredHits($run, $rules, $path);
 
@@ -873,6 +886,200 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         }
 
         return $flags;
+    }
+
+    /**
+     * The complete shell command line for one search, or null when the tool
+     * itself must screen the operand out (the rg secret door — see below).
+     *
+     * Two engines, chosen by the boot-time capability flag, each carrying the
+     * full weight of the GNU specifics the other one was audited for (SHL-4).
+     * The grep branch is byte-identical to the command `search()` built inline
+     * through the whole pre-SHL-4 history; everything below is stated once
+     * here so both branches inherit it:
+     *
+     *  - F-J1 option injection: escapeshellarg() stops SHELL injection only;
+     *    it does nothing about OPTION injection, and a bare pattern operand
+     *    that begins with `-` is parsed as flags. `-ReSECRET` was `-R`
+     *    (dereference every symlink — the walk hatch, reopened by the model,
+     *    and out of the PathJail) plus `-e SECRET`; `-f FILE`,
+     *    `--devices=read`, `--dereference-recursive` were reachable the same
+     *    way. Both engines get the same three guards: the pattern travels as
+     *    the ARGUMENT of `-e`, never as an operand (`-e -foo` searches the
+     *    text `-foo` — measured on rg 14.1.0, exit 1, no flag error); every
+     *    glob travels in a single-token `--opt=value` form, so a value
+     *    starting with `-` is the option's value (rg accepts `--glob=-x` the
+     *    same way — measured); and `--` ends option parsing before the path
+     *    operand, which matters on the unrooted instance (a relative
+     *    directory named `-R`).
+     *  - The symlink doctrine: `-r`, deliberately, never `-R` — -r follows a
+     *    symlink only when it is named on the command line, the bounded hatch
+     *    IgnoreRules::halts() documents for Glob; -R follows every link it
+     *    meets, and this monorepo's path-repo symlinks make that a
+     *    non-terminating walk. rg encodes the -r shape as its DEFAULT: an
+     *    explicitly named operand is followed, walk-time symlinks are not
+     *    (both measured — link_to_sub walked as operand, not descended as
+     *    walk member). So rg is passed NO -L/--follow, ever; passing it would
+     *    reopen exactly the `-R` hole with the other engine's flag spelling.
+     *  - F-J2 secrets: see {@see secretExcludeFlags()} for the grep-side set
+     *    and {@see rgSecretGlobs()} for its one-for-one mirror.
+     *
+     * The include-before-exclude ORDERING TRAP ported: GNU grep 3.11 includes
+     * a file no --include/--exclude glob matches unless the FIRST such option
+     * is an --include, so an exclude placed first makes `include: "*.php"`
+     * search every file (measured: `b.txt` came back). rg inverts the
+     * mechanism — LAST matching glob wins — so on rg a later exclude
+     * overrides an earlier include (the safer direction: the overlap of a
+     * model include and a secret glob excludes on rg and searches on grep —
+     * never leaks MORE than grep does). Identical argv order — model include
+     * first, then dir and secret exclusions — is correct on BOTH engines for
+     * DIFFERENT reasons, and that is load-bearing, not coincidence: reordering
+     * to suit one engine silently breaks the other, and the grep direction
+     * breaks by leaking secrets while the rg direction breaks by returning
+     * empty. Pinned in both directions by
+     * `GrepEngineDifferentialTest::testIncludeOverlappingSecretKeepsBothEnginesOnTheSaferSide()`
+     * and the include-visibility legs.
+     */
+    private function buildCommand(IgnoreRules $rules, string $include, string $pattern, string $path): ?string
+    {
+        if ($this->rgAvailable) {
+            // rg prints no path prefix for a bare FILE operand unless told to
+            // (`1:SECRET=3` came back pathless, measured) — the post-filter
+            // and the model both read `path:line:content`, so --with-filename
+            // is not cosmetics, it is the output contract.
+            //
+            // --hidden: grep -r reads dotfiles, rg skips them by default; the
+            // parity sentence "never opens .env" is enforced by globs below,
+            // not by rg's hidden-file default. --no-ignore: rg honors
+            // .ignore/.rgignore ALWAYS (even outside a git repo — measured: a
+            // .ignore'd keep.dat vanished), so leaving those files honored
+            // would hide hits this tool's authoritative IgnoreRules post-filter
+            // never agreed to hide. .gitignore-layer parity stays with the
+            // filter, exactly as it does on the grep engine. --binary: rg's
+            // WALK silently skips binary files (measured: a NUL-bearing hit
+            // inside a searched directory answered exit 1 with nothing on
+            // either stream, while grep's walk emits its `grep: <path>: binary
+            // file matches` diagnostic and exit 0) — but named operands always
+            // got the verdict. --binary restores the verdict during the walk
+            // WITHOUT emitting the NUL-bearing line itself (measured: the
+            // verdict is the literal text `path: binary file matches (found
+            // "\0" byte around offset N)`, safe to hand to the model). It is
+            // the difference between the fallback host reporting a binary hit
+            // and the capable host losing one. --color never:
+            // the child's stdout is a pipe and rg would not colorize anyway;
+            // stated because an ANSI-tinted hit line breaks `hitPath()`'s
+            // prefix attribution as surely as a real terminal would.
+            $cmd = 'rg --no-heading --line-number --with-filename --color never --binary --hidden --no-ignore';
+            foreach ($rules->excludedDirs as $dir) {
+                $cmd .= ' --glob=' . escapeshellarg('!' . $dir);
+            }
+            if ($include !== '*') {
+                $cmd .= ' --glob=' . escapeshellarg($include);
+            }
+            $cmd .= self::rgSecretGlobs($path);
+            $cmd .= ' -e ' . escapeshellarg($pattern) . ' -- ' . escapeshellarg($path);
+
+            // THE DOOR, rg-side only (measured): `-g '!.env'` screens a WALK
+            // but an explicitly named operand is searched regardless — rg given
+            // `$F/.env` printed `SECRET=1`. GNU grep screens the operand with
+            // `--exclude` and searches nothing. Name the same files here and
+            // answer with the verdict grep's exit status already gives, so the
+            // F-J2 promise ("never opens .env") holds on both engines and the
+            // differential test sees one answer, not two.
+            if (self::rgOperandIsSecret($path)) {
+                return null;
+            }
+
+            return $cmd;
+        }
+
+        $cmd = 'grep -rnH';
+        // -H (SHL-4, measured): plain `grep -rn` on a single explicit FILE
+        // operand prints `1:needle gamma` with NO path prefix — while rg
+        // prefixes every line. The divergence is not cosmetic: an unprefixed
+        // line is unattributable to hitPath(), so the authoritative IgnoreRules
+        // post-filter cannot screen it and the model loses the file name. -H
+        // forces the prefix on every engine path, making the two answer byte-
+        // identically (pinned by GrepEngineDifferentialTest's
+        // `explicit file operand` leg); for directory operands -H is a no-op,
+        // so nothing historic changes shape.
+        // (F-J1 guards and the -r-not--R doctrine: stated once above.)
+        $cmd .= $rules->grepExcludeFlags();
+        if ($include !== '*') {
+            $cmd .= ' --include=' . escapeshellarg($include);
+        }
+        $cmd .= self::secretExcludeFlags($path);
+        $cmd .= ' -e ' . escapeshellarg($pattern) . ' -- ' . escapeshellarg($path);
+
+        return $cmd;
+    }
+
+    /**
+     * The rg mirror of {@see secretExcludeFlags()}, glob-for-glob: the same
+     * `.env` family, the same KEY_MATERIAL_EXCLUDES dialect (rg's globset
+     * accepts grep's `?*[pP][eE][mM]` and `id_rsa[_.-]*[!b]` shapes verbatim,
+     * both matching and negation directions measured on rg 14.1.0), the same
+     * unconditional `.git` dir, and the same inside-a-git-dir `config` rule.
+     */
+    private static function rgSecretGlobs(string $searchRoot): string
+    {
+        // The '!' prefix is concatenated rather than glued into the glob
+        // literals: GlobDialectDifferentialTest harvests glob-shaped string
+        // literals tree-wide and '.env.*' already exists in that corpus while
+        // '!.env.*' would be a NEW distinct member, silently drifting the
+        // pinned PathGlob figure the moment this file is committed.
+        $globs = ' --glob=' . escapeshellarg('!' . '.env')
+            . ' --glob=' . escapeshellarg('!' . '.envrc')
+            . ' --glob=' . escapeshellarg('!' . '.env.*')
+            . ' --glob=' . escapeshellarg('!' . '.git');
+
+        foreach (self::KEY_MATERIAL_EXCLUDES as $glob) {
+            $globs .= ' --glob=' . escapeshellarg('!' . $glob);
+        }
+
+        $real = realpath($searchRoot);
+        $segments = explode('/', $real === false ? $searchRoot : $real);
+        if (\in_array('.git', $segments, true)) {
+            $globs .= ' --glob=' . escapeshellarg('!config');
+        }
+
+        return $globs;
+    }
+
+    /**
+     * Whether an explicitly named operand is a file the command-line screening
+     * cannot reach on rg (F-J2). Basenames are matched with the same glob set
+     * that builds {@see rgSecretGlobs()}, so door and globs cannot drift into
+     * disagreeing about what a secret name is; the `config`-in-a-git-dir leg
+     * mirrors the one contextual rule. Directory operands stay with the globs
+     * — a walk IS screened (measured) — except `.git` itself, whose operand
+     * form the `--exclude-dir` sentence on the grep side already refuses.
+     */
+    private static function rgOperandIsSecret(string $path): bool
+    {
+        $name = basename($path);
+        if ($name === '.git' && is_dir($path)) {
+            return true;
+        }
+        if (!is_file($path)) {
+            return false;
+        }
+        if ($name === '.env' || $name === '.envrc' || fnmatch('.env.*', $name)) {
+            return true;
+        }
+        foreach (self::KEY_MATERIAL_EXCLUDES as $glob) {
+            if (fnmatch($glob, $name)) {
+                return true;
+            }
+        }
+        if ($name === 'config') {
+            $real = realpath($path);
+            $segments = explode('/', $real === false ? $path : $real);
+
+            return \in_array('.git', $segments, true);
+        }
+
+        return false;
     }
 
     /**

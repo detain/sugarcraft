@@ -37,9 +37,11 @@ use SugarCraft\Code\Tools\Tool;
  * warning, and `phpunit.xml` sets `failOnWarning`, so the suite would go red on
  * every container that has no `rg` — which is the CI image today. A false claim
  * in a description is the other failure mode this file is aimed at, so every
- * clause checked here says what the code does: `Grep::buildCommand()` still
- * compiles `grep -rn` and `Glob::match()` still walks with PHP iterators while
- * the model is being told the shell tools exist.
+ * clause checked here says what the code does: `Grep::buildCommand()` compiles
+ * a `grep -rn` line for the capability-absent instance and the SHL-4 rg line —
+ * engine-conditional prose, both halves true of the branch that renders them —
+ * while `Glob::match()` still walks with PHP iterators even when the model is
+ * being told the shell tools exist.
  *
  * No tree walk: the roster in the last test comes from {@see Bootstrap::tools()},
  * and the probe file is located through reflection rather than path arithmetic.
@@ -98,19 +100,30 @@ final class CapabilityAwareDescriptionTest extends TestCase
         $present = (new Grep(rgAvailable: true))->description();
 
         $this->assertStringContainsString('`rg` is on PATH on this host', $present);
-        // The absent half is a strict prefix of the present half: the clause is
-        // added, nothing already promised is edited out to make room for it.
-        $this->assertTrue(
-            str_starts_with($present, self::GREP_ABSENT),
-            'the rg clause must be appended to the existing text, not a rewrite of it'
-        );
-        $this->assertStringContainsString('not PCRE', $present);
+        $this->assertStringContainsString('this tool runs it natively', $present);
+        // SHL-4 REVERSED the polarity of the old prefix pin: the dialect
+        // sentence is now a property of the engine, so the absent text is no
+        // longer a strict prefix of the present text — the lead clause, the
+        // skips/secret tail and the spill clause are what stay byte-stable
+        // across both renderings, and they are asserted in both.
+        $this->assertStringStartsWith('Search for a pattern in files, recursively. The pattern is ', $present);
+        $this->assertStringContainsString('extended regular expression', $present);
+        $this->assertStringContainsString('the ripgrep engine, not PCRE', $present);
+        $this->assertStringContainsString('are operators as written', $present);
         $this->assertStringContainsString('GNU basic', $present);
-        $this->assertStringContainsString('backslash-escaped', $present);
         $this->assertStringContainsString('Finding nothing is a normal result', $present);
         $this->assertStringContainsString('include_ignored: true', $present);
-        // The honest half of the claim: Grep says out loud that it still runs grep.
-        $this->assertStringContainsString('This tool still runs `grep`', $present);
+        $this->assertStringContainsString('never opens .env', $present);
+        $this->assertStringContainsString('path may also name a saved tool-output file', $present);
+        // The honest half of the claim changed shape with the engine switch:
+        // the tool names the engine IT uses AND names the other-dialect
+        // fallback, so a pattern written against this text reads correctly on
+        // a host without rg too.
+        $this->assertStringContainsString('falls back to `grep -rn`', $present);
+        $this->assertStringNotContainsString('This tool still runs `grep`', $present);
+        // The pre-SHL-4 advisory sent the model to run rg itself through Bash;
+        // with the tool AS the rg engine that advice would mislead.
+        $this->assertStringNotContainsString('you can run `rg` yourself through Bash', $present);
         // Each tool advertises only its own capability.
         $this->assertStringNotContainsString('`fd`', $present);
     }
