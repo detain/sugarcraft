@@ -135,9 +135,7 @@ final class BackgroundCommand implements HostCommand
         string $task,
         ?string $forkedSessionId,
     ): \Closure {
-        $agent = $agentManager?->get('default')
-            ?? self::firstNativeAgent($agentManager)
-            ?? self::defaultAgent();
+        $agent = self::rosterAgent($agentManager);
         $workingDirectory = $root !== '' ? $root : '.';
         $tags = $forkedSessionId === null ? null : ['fork', 'session:' . $forkedSessionId];
 
@@ -335,6 +333,20 @@ final class BackgroundCommand implements HostCommand
         }
 
         return Message::assistant(self::stopNotice($msg))->withUiOnly()->withError(self::isStopFailure($msg));
+    }
+
+    /**
+     * The agent a background session runs as: a registered "default", then
+     * the first NATIVE roster entry, then a synthesised stand-in — the chain
+     * {@see spawnThunk()} documented, lifted out of it (AUT-1) so
+     * {@see \SugarCraft\Code\Sessions\ScheduleSpawner::closure()} shares ONE
+     * copy rather than a second drift family.
+     */
+    public static function rosterAgent(?AgentManager $agentManager): Agent
+    {
+        return $agentManager?->get('default')
+            ?? self::firstNativeAgent($agentManager)
+            ?? self::defaultAgent();
     }
 
     /**

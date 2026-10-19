@@ -364,6 +364,8 @@ edit it by hand.
 | `/review` | ✓ | | `[<ref>]` | Review the diff against a revision and report findings without editing |
 | `/security-review` | ✓ | | `[<ref>]` | Security-review the diff against a revision and report findings without editing |
 | `/bg` | ✓ | | `<task>` | Run a task in a background session |
+| `/schedules` | ✓ | | `[list\|enable\|disable\|delete <name>]` | List, enable, disable, and delete scheduled prompt rows |
+| `/loop` | ✓ | | `<interval> <prompt>` | Re-run a prompt in this session every interval (this process only) |
 | `/fork` | ✓ | | `<prompt>` | Clone this conversation into a background session |
 | `/websearch` | ✓ | | `<query> [--safesearch 0\|1\|2] [--time-range day\|month\|year]` | Search the web via SearXNG |
 | `/goal` | ✓ | | `[<condition>\|clear]` | Work until a condition is met, judged by the title model after every turn |

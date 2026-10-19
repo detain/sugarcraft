@@ -21,6 +21,7 @@ use SugarCraft\Code\Permissions\SessionPermissionMemo;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Sessions\ScheduleRegistry;
 use SugarCraft\Code\Tools\BuiltIn\WebSearch;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 
@@ -73,6 +74,7 @@ final class CommandContext
         public readonly ?int $contextTokens,
         public readonly ?WorkspaceContext $workspace,
         public readonly SessionPermissionMemo $grants,
+        public readonly ?ScheduleRegistry $scheduleRegistry,
     ) {
     }
 
@@ -101,6 +103,7 @@ final class CommandContext
         ?int $contextTokens = null,
         ?WorkspaceContext $workspace = null,
         ?SessionPermissionMemo $grants = null,
+        ?ScheduleRegistry $scheduleRegistry = null,
     ): self {
         return new self(
             history: array_values($history),
@@ -124,6 +127,7 @@ final class CommandContext
             contextTokens: $contextTokens,
             workspace: $workspace,
             grants: $grants ?? SessionPermissionMemo::new(),
+            scheduleRegistry: $scheduleRegistry,
         );
     }
 

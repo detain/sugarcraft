@@ -1533,6 +1533,7 @@ final class SessionHost
             contextTokens: $this->estimate($this->history),
             workspace: $this->workspace,
             grants: $this->grants,
+            scheduleRegistry: $this->workspace->service(\SugarCraft\Code\Sessions\ScheduleRegistry::class),
         );
     }
 
