@@ -188,7 +188,20 @@ final class ToolCatalog
      */
     public static function discover(string $dir, string $namespacePrefix): array
     {
-        $files = glob(rtrim($dir, '/') . '/*.php') ?: [];
+        // scandir, not glob: glob() reads no stream wrapper, and under a phar
+        // build (DST-1, tools/build-phar.php) this directory lives INSIDE the
+        // phar:// archive, where a glob listing comes back empty and the
+        // shipped tool set would silently be zero. scandir/filter/sort is
+        // the wrapper-safe pair; the sorted-by-full-path order glob gave is
+        // re-established by the sort below and is unchanged on a real
+        // filesystem.
+        $root = rtrim($dir, '/');
+        $files = [];
+        foreach (scandir($root) ?: [] as $name) {
+            if (str_ends_with($name, '.php')) {
+                $files[] = $root . '/' . $name;
+            }
+        }
         sort($files);
 
         $built = [];

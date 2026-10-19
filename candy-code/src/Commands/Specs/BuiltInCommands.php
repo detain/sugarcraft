@@ -74,7 +74,20 @@ final class BuiltInCommands
         }
 
         $files = [];
-        foreach (glob(self::specDir() . '/*.php') ?: [] as $path) {
+        // scandir, not glob: glob() reads no stream wrapper, and under a phar
+        // build (DST-1, tools/build-phar.php) the spec directory lives INSIDE
+        // the phar:// archive, where a glob listing comes back empty and every
+        // built-in slash command would silently vanish from the shipped
+        // artifact. scandir + the .php filter below reproduces the glob set
+        // exactly on a real filesystem (globs never return `.`/`..`; neither
+        // does a name ending in '.php' appear there), and the ksort on the
+        // basename key keeps the load-bearing spec-file order.
+        $specDir = self::specDir();
+        foreach (scandir($specDir) ?: [] as $specName) {
+            if (!str_ends_with($specName, '.php')) {
+                continue;
+            }
+            $path = $specDir . '/' . $specName;
             // A misnamed spec would otherwise be skipped without a word.
             if (preg_match(self::FILE_PATTERN, basename($path), $m) !== 1) {
                 throw new \LogicException('builtin-commands/' . basename($path) . ' is not named <NNNN>-<name>.php');
