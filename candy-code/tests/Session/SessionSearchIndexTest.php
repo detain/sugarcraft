@@ -116,6 +116,35 @@ final class SessionSearchIndexTest extends TestCase
         self::assertSame([], $index->search('etcd') ?? []);
     }
 
+    public function testAReSaveOfUnchangedBodiesMovesNotOneRowIndexRow(): void
+    {
+        $store = $this->baseStore();
+        $store->createSession('s1', 'p', 'm');
+        $index = SessionSearchIndex::create($store->getPdo());
+        $bodies = ['m1' => 'the kubernetes cluster rolled overnight', 'm2' => 'a note about redis failover'];
+        $index->syncMessages('s1', $bodies);
+
+        $anchor = static fn(): array => $store->getPdo()
+            ->query('SELECT id, message_id, hash FROM session_message_rows ORDER BY id')
+            ->fetchAll(PDO::FETCH_ASSOC);
+        $totalChanges = static fn(): int => (int) $store->getPdo()->query('SELECT total_changes()')->fetchColumn();
+
+        $rowsBefore = $anchor();
+        $changesBefore = $totalChanges();
+
+        // Same set, and the same set in shuffled key order: the diff is by
+        // hash, so neither re-save may touch a row. Row-identity snapshots
+        // cannot see a churn bug (a delete-and-reinsert keeps id and hash),
+        // which is why total_changes() is the load-bearing assert — it
+        // counts every INSERT/UPDATE/DELETE the connection performed.
+        $index->syncMessages('s1', $bodies);
+        $index->syncMessages('s1', array_reverse($bodies, true));
+
+        self::assertSame($rowsBefore, $anchor());
+        self::assertSame($changesBefore, $totalChanges(), 'an unchanged re-save performed zero row movements on the connection');
+        self::assertCount(1, $index->search('kubernetes') ?? [], 'the untouched rows still answer');
+    }
+
     public function testForgettingASessionRemovesItsTextWithoutTouchingOthers(): void
     {
         $store = $this->baseStore();
