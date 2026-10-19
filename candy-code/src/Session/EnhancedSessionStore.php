@@ -29,7 +29,14 @@ final class EnhancedSessionStore
     /** Wrapped session store for base session operations. */
     private SessionStore $sessionStore;
 
-    public function __construct(private readonly string $dbPath)
+    /**
+     * The SES-2 body-search side table over the same connection — created
+     * once the enhanced schema is in place, latched for the process when
+     * SQLite has no FTS5 (never a reason the store itself cannot open).
+     */
+    private SessionSearchIndex $searchIndex;
+
+    public function __construct(private readonly string $dbPath, string $ftsModule = 'fts5')
     {
         /** @var \WeakMap<object, string> */
         $this->messageHashes = new \WeakMap();
@@ -47,6 +54,7 @@ final class EnhancedSessionStore
             $this->pdo = $this->sessionStore->getPdo();
 
             $this->initEnhancedSchema();
+            $this->searchIndex = SessionSearchIndex::create($this->pdo, $ftsModule);
         } finally {
             umask($previousUmask);
         }
@@ -484,6 +492,10 @@ final class EnhancedSessionStore
         foreach ($deleted as $deletedId) {
             $this->forgetInternedBlobs($deletedId);
         }
+        // SES-2: the FK cascade took the anchor rows, but the FTS table is
+        // virtual and un-cascaded — a deleted session's text leaves here or
+        // it stays searchable after the session itself is gone.
+        $this->searchIndex->forgetSessions($deleted);
 
         return $deleted;
     }
@@ -539,6 +551,10 @@ final class EnhancedSessionStore
                 $this->flushWorkspaceRefOps();
                 self::collectShadows($dropped);
             }
+            // SES-2: the pruned ids were never named, so their anchor rows
+            // left by FK cascade and their FTS rows left by nothing — the
+            // garbage pass reclaims the text those cascades cannot reach.
+            $this->searchIndex->collectGarbage();
         }
 
         return $pruned;
@@ -1899,7 +1915,91 @@ final class EnhancedSessionStore
             ]);
 
             $this->sessionStore->updateSession($sessionId);
+            $this->syncSearchIndex($sessionId, $messages, $identities);
         });
+    }
+
+    /**
+     * SES-2: feed the body-search side table from the identities this very
+     * save settled — the incremental half of "rebuild once, diff per save".
+     * It runs INSIDE the save transaction so a transcript and its index
+     * cannot drift when anything else in the save rolls back.
+     * {@see SessionSearchIndex::syncMessages()} never throws: an index that
+     * cannot catch up is marked dirty for the next rebuild, because a search
+     * index is never worth failing a save over.
+     *
+     * @param array<array-key, mixed>                    $messages    the rows as saved
+     * @param array<int, array{0: string, 1: int}>       $identities  freshly allocated `[id, ref]` by position
+     */
+    private function syncSearchIndex(string $sessionId, array $messages, array $identities): void
+    {
+        if (!$this->searchIndex->available()) {
+            return;
+        }
+
+        $this->searchIndex->syncMessages($sessionId, self::searchBodies($messages, $identities));
+    }
+
+    /**
+     * Message id => searchable body, for every row that has both. A row's id
+     * is the one it carries (a reloaded row), else the one this save's
+     * identity pass gave it; a row with neither has no stable key to index
+     * under and waits for the next save that allocates one.
+     *
+     * @param array<array-key, mixed>              $messages
+     * @param array<int, array{0: string, 1: int}> $identities
+     *
+     * @return array<string, string>
+     */
+    private static function searchBodies(array $messages, array $identities): array
+    {
+        $bodies = [];
+        foreach ($messages as $i => $message) {
+            $id = self::carriedIdentity($message)[0] ?? $identities[$i][0] ?? null;
+            if ($id === null) {
+                continue;
+            }
+            $bodies[(string) $id] = $message instanceof Message
+                ? $message->content
+                : (string) ($message['content'] ?? '');
+        }
+
+        return $bodies;
+    }
+
+    /**
+     * Rebuild-on-first-search (SES-2): sweep every stored transcript once per
+     * process so an index created after its sessions — or left suspect by a
+     * failed sync — answers from the full history, not just what this
+     * process saved. The sweep decodes each transcript exactly as a resume
+     * would ({@see loadTranscript()}, identities folded, blobs materialised),
+     * which is why it is a first-search cost and never a launch one: opening
+     * a store must stay a handful of milliseconds no matter how many
+     * sessions it holds.
+     *
+     * Returns false when the sweep could not run; the caller degrades that
+     * search to LIKE, and the next one tries again.
+     */
+    private function rebuildSearchIndex(): bool
+    {
+        try {
+            $this->searchIndex->clearAll();
+            $ids = $this->pdo->query('SELECT session_id FROM session_transcripts ORDER BY session_id')
+                ->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($ids as $sessionId) {
+                $rows = $this->loadTranscript((string) $sessionId);
+                if ($rows === null || $rows === []) {
+                    continue;
+                }
+                $this->searchIndex->syncMessages((string) $sessionId, self::searchBodies($rows, []));
+            }
+            $this->searchIndex->collectGarbage();
+            $this->searchIndex->markBuilt();
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
