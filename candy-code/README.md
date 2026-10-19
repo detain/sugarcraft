@@ -1081,7 +1081,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and twenty-one keys are layered — `provider`, `models`,
+Only these one hundred and twenty-two keys are layered — `provider`, `models`,
 `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
 `extraBody`, `thinkingBudget`, `promptCache`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
@@ -1115,9 +1115,9 @@ Only these one hundred and twenty-one keys are layered — `provider`, `models`,
 `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
 `sessionRetentionDays`, `sessions.autoTitle`, `promptSuggestions`,
 `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `keybindings`,
-`lintCommands`, `disabledMcpServers`, `mcp.enabled`, `connectTimeoutSeconds`,
-`providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
-`debug.commands`, `debug.rules`, `debug.stream`.
+`lintCommands`, `formatCommands`, `disabledMcpServers`, `mcp.enabled`,
+`connectTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`,
+`debug.skills`, `debug.commands`, `debug.rules`, `debug.stream`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -1165,7 +1165,9 @@ Even for a trusted project, sixty-six keys are **never** taken from a project fi
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
 the same reason — each value is a lint command the post-edit hook runs after an
-edit; `lsp`, for the same reason again — each entry is a language server this app
+edit; `formatCommands`, for the same reason with the write added — each value
+is a formatter the post-edit format hook runs over, and rewrites, the file just
+edited; `lsp`, for the same reason again — each entry is a language server this app
 starts at launch; `mcp.enabled`, because whether a checkout's
 `.mcp.json` servers start is the trust list's decision, and the checkout's own
 settings file must not be a second door to it; `autoCommit`, because a commit runs the repository's own git

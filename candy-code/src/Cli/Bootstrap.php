@@ -77,6 +77,7 @@ use SugarCraft\Code\Tools\BuiltIn\WebFetch;
 use SugarCraft\Code\Tools\BuiltIn\Write;
 use SugarCraft\Code\Tools\Concerns\DetectsCapabilities;
 use SugarCraft\Code\Tools\McpToolBridge;
+use SugarCraft\Code\Tools\ReadLedger;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Workflows\WorkflowEngine;
@@ -6477,6 +6478,22 @@ final class Bootstrap
         $hooks = new HookManager(new HookRegistry());
         $hooks->registerBuiltIns(); // audit + confirm-rm + protect-files guards
 
+        // Post-edit format (EDT-1): the user's `formatCommands` map rewrites
+        // each edited file, and the launch's shared read ledger is told about
+        // every KEPT rewrite so the formatter's change never reads as an
+        // external edit. Registered AHEAD of the lint hook on purpose — the
+        // linter then sees the bytes that actually stand on disk. Same
+        // user-tier, ahead-of-files reasoning as the lint; unlike the lint it
+        // registers ONLY when a command exists, since the map has no built-in
+        // default and a hook with nothing to run would cost chain dispatch
+        // for silence.
+        $formatRunner = \SugarCraft\Code\Format\FormatRunner::new()->withCommands(
+            self::readUserConfig()[\SugarCraft\Code\Format\FormatRunner::SETTINGS_KEY] ?? null,
+        );
+        if ($formatRunner->commands() !== []) {
+            $hooks->register(new \SugarCraft\Code\Hooks\BuiltIn\PostEditFormatHook($formatRunner, self::readLedger($root)));
+        }
+
         // Post-edit lint (step 3.E): `php -l` by default, plus the user's
         // `lintCommands` map. Read through readUserConfig(), whose project
         // tier is filtered to PROJECT_TIER_KEYS — a lint command is shell, so
@@ -9445,6 +9462,38 @@ final class Bootstrap
     private static bool $lspShutdownRegistered = false;
 
     /**
+     * The launch's read ledgers, per process and per root — see
+     * {@see readLedger()}.
+     *
+     * @var array<int, array<string, ReadLedger>>
+     */
+    private static array $readLedgers = [];
+
+    /**
+     * The launch's ONE read ledger for $root (roadmap 3.I-2, EDT-1): the
+     * instance handed to every {@see \SugarCraft\Code\Tools\Catalog\ToolBuildContext}
+     * built this process makes for that root AND to the post-edit format hook,
+     * so a formatter's rewrite recorded by the hook is the same picture Read,
+     * Edit, Write and ApplyPatch consult — that identity is the feature, and
+     * it is what widened the ledger's scope from per-tool-build to per-launch.
+     *
+     * Memoised per pid and root, the {@see lspClients()} shape: a forked turn
+     * child inherits the parent's object, records into its copy, and the
+     * parent merges the copy back through the existing
+     * {@see \SugarCraft\Code\Tools\ReadLedger::in()}-exported frame payloads —
+     * {@see \SugarCraft\Code\Backend\EngineBackend} needs no change for the
+     * hook's recordings to ride home, because they happen on the very object
+     * the export reads.
+     */
+    public static function readLedger(?string $root = null): ReadLedger
+    {
+        $root = self::requireRoot($root);
+        $pid = getmypid() ?: 0;
+
+        return self::$readLedgers[$pid][$root] ??= new ReadLedger();
+    }
+
+    /**
      * The language servers the user configured under `lsp` (step 3.F), started
      * once and shared by every tool, hook and forked turn of this launch — or
      * null when none is configured or none would start.
@@ -9894,10 +9943,13 @@ final class Bootstrap
                     static fn (): ?MemoryStore => self::memoryStoreOrNull($root),
                     $root,
                 ),
-                // Roadmap 3.I-2: ONE read ledger for this build — Read records
-                // into it, Edit/Write/ApplyPatch refuse a stale file against it
-                // — owned here, by the build, for the loader's reason above.
-                readLedger: \SugarCraft\Code\Tools\ReadLedger::new(),
+                // Roadmap 3.I-2: ONE read ledger for this launch and root —
+                // Read records into it, Edit/Write/ApplyPatch refuse a stale
+                // file against it, and the post-edit format hook records its
+                // rewrites through the very same instance
+                // ({@see readLedger()}) — owned by the launch, for the
+                // loader's reason above.
+                readLedger: self::readLedger($root),
             )),
             ...self::mcpTools($root),
         ];

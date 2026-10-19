@@ -2138,7 +2138,7 @@ final class DocFigureProseDriftTest extends TestCase
             ];
         }
         ksort($live);
-        self::assertCount(14, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
+        self::assertCount(15, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
 
         self::assertSame(
             1,
@@ -2223,11 +2223,12 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame(1, preg_match('/`(\w+)` and `(\w+)` — the repeat-call loop guard,\s*registered per turn by `EngineBackend::(\w+)\(\)`/', $bullets, $guardRow), 'the loop-guard bullet no longer names its pair and the EngineBackend seam that registers them');
         self::assertSame(1, preg_match('/`(\w+)` — the delegated run\'s own tool declaration, registered\s*by `EngineBackend::(\w+)\(\)`/', $bullets, $grantRow), 'the sub-agent grant bullet no longer names its class and the EngineBackend seam that registers it (step 4.2)');
         self::assertSame(1, preg_match('/`(\w+)` — the post-edit lint, registered by `Bootstrap::(\w+)\(\)`\s*on every launch, after the three above and ahead of the hook files/', $bullets, $lintRow), 'the post-edit lint bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.E)');
+        self::assertSame(1, preg_match('/`(\w+)` — the post-edit format, registered by\s*`Bootstrap::(\w+)\(\)`\s*when `formatCommands` names a command, after the three above and ahead of\s*the post-edit lint/', $bullets, $formatRow), 'the post-edit format bullet no longer names its class, its Bootstrap seam and its place ahead of the lint (EDT-1)');
         self::assertSame(1, preg_match('/`(\w+)` — the post-edit diagnostics, registered by `Bootstrap::(\w+)\(\)`\s*when a language server is configured under `lsp` and started, right after the\s*post-edit lint and ahead of the hook files/', $bullets, $diagnosticsRow), 'the post-edit diagnostics bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.F)');
         self::assertSame(1, preg_match('/`(\w+)` — the auto-commit of each edit, registered by `Bootstrap::(\w+)\(\)`\s*when `autoCommit` is `edit`, after the post-edit diagnostics and ahead of the\s*hook files/', $bullets, $commitRow), 'the auto-commit bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.G)');
         self::assertSame(1, preg_match('/`(\w+)` and `(\w+)` — auto-test reflection, registered by `Bootstrap::(\w+)\(\)`\s*when `autoTest` is on and `testCommand` is set, after the auto-commit and ahead of the\s*hook files/', $bullets, $testRow), 'the auto-test bullet no longer names its two classes, its Bootstrap seam and its place in the chain (step 3.H)');
         self::assertSame(1, preg_match('/`(\w+)` — shared-board notices, registered by `Bootstrap::(\w+)\(\)`\s*on every launch, after the hooks above and ahead of the hook files/', $bullets, $boardRow), 'the board-notice bullet no longer names its class, its Bootstrap seam and its place in the chain (step 4.5)');
-        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2], $grantRow[1], $lintRow[1], $diagnosticsRow[1], $commitRow[1], $testRow[1], $testRow[2], $boardRow[1]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2], $grantRow[1], $formatRow[1], $lintRow[1], $diagnosticsRow[1], $commitRow[1], $testRow[1], $testRow[2], $boardRow[1]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
         self::assertSame(HookEvent::PostToolUse->value, $live[$boardRow[1]]['event'], "the board-notice bullet says {$boardRow[1]} rides PostToolUse — its event() moved");
         $boardSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $boardRow[2], 12000);
         $boardAt = strpos($boardSeam, 'Hooks\\BuiltIn\\' . $boardRow[1] . '(');
@@ -2248,16 +2249,22 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsInt($commitAt, "Bootstrap::{$commitRow[2]}() no longer constructs {$commitRow[1]} — the bullet names the wrong seam");
         self::assertGreaterThan((int) strpos($commitSeam, 'Hooks\\BuiltIn\\PostEditDiagnosticsHook('), $commitAt, 'the auto-commit is no longer registered after the post-edit diagnostics, as the bullet says');
         self::assertLessThan((int) strpos($commitSeam, 'loadEntries('), $commitAt, 'the auto-commit is no longer registered ahead of the hook files, as the bullet says');
-        $diagnosticsSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $diagnosticsRow[2], 6000);
+        $diagnosticsSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $diagnosticsRow[2], 9000);
         $diagnosticsAt = strpos($diagnosticsSeam, 'Hooks\\BuiltIn\\' . $diagnosticsRow[1] . '(');
         self::assertIsInt($diagnosticsAt, "Bootstrap::{$diagnosticsRow[2]}() no longer constructs {$diagnosticsRow[1]} — the bullet names the wrong seam");
         self::assertGreaterThan((int) strpos($diagnosticsSeam, 'Hooks\\BuiltIn\\' . $lintRow[1] . '('), $diagnosticsAt, 'the post-edit diagnostics are no longer registered right after the lint, as the bullet says');
         self::assertLessThan((int) strpos($diagnosticsSeam, 'loadEntries('), $diagnosticsAt, 'the post-edit diagnostics are no longer registered ahead of the hook files, as the bullet says');
-        $lintSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $lintRow[2], 6000);
+        $lintSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $lintRow[2], 9000);
         $lintAt = strpos($lintSeam, 'Hooks\\BuiltIn\\' . $lintRow[1] . '(');
         self::assertIsInt($lintAt, "Bootstrap::{$lintRow[2]}() no longer constructs {$lintRow[1]} — the bullet names the wrong seam");
         self::assertGreaterThan((int) strpos($lintSeam, 'registerBuiltIns()'), $lintAt, 'the post-edit lint is no longer registered after the three built-ins, as the bullet says');
         self::assertLessThan((int) strpos($lintSeam, 'loadEntries('), $lintAt, 'the post-edit lint is no longer registered ahead of the hook files, as the bullet says');
+        $formatAt = strpos($lintSeam, 'Hooks\\BuiltIn\\' . $formatRow[1] . '(');
+        self::assertIsInt($formatAt, "Bootstrap::{$formatRow[2]}() no longer constructs {$formatRow[1]} — the bullet names the wrong seam");
+        self::assertGreaterThan((int) strpos($lintSeam, 'registerBuiltIns()'), $formatAt, 'the post-edit format is no longer registered after the three built-ins, as the bullet says');
+        self::assertLessThan($lintAt, $formatAt, 'the post-edit format is no longer registered ahead of the lint, so the linter would not see the formatted bytes (EDT-1)');
+        self::assertLessThan((int) strpos($lintSeam, 'loadEntries('), $formatAt, 'the post-edit format is no longer registered ahead of the hook files, as the bullet says');
+        self::assertSame(HookEvent::PostToolUse->value, $live[$formatRow[1]]['event'], "the post-edit format bullet says {$formatRow[1]} rides PostToolUse — its event() moved");
         self::assertStringContainsString('register($this->subAgentGrant)', self::bodyExcerpt(self::sourceOf('Backend/EngineBackend.php'), $grantRow[2], 3000), "EngineBackend::{$grantRow[2]}() no longer registers the sub-agent grant — the bullet names the wrong seam");
         self::assertStringContainsString('new \\SugarCraft\\Code\\Hooks\\BuiltIn\\' . $grantRow[1] . '(', self::sourceOf('Tools/BuiltIn/TaskTool.php'), 'TaskTool no longer binds the sub-agent grant hook — the bullet\'s "TaskTool binds it" lost its referent');
         $guardSeam = self::bodyExcerpt(self::sourceOf('Backend/EngineBackend.php'), $guardRow[3], 3000);

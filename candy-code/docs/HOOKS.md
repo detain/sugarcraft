@@ -938,7 +938,7 @@ it runs only once the rest of the chain has permitted that output — see
 | `ConfirmRemoveHook` | `PreToolUse` on `^(?:Bash\|PtyRun)$` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) — typed keystrokes count as shell text here too |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
-Eleven more exist and are **not** registered by default:
+Twelve more exist and are **not** registered by default:
 
 - `PermissionGateHook` — registered by `Bootstrap::hooks()` when a gate exists,
   which is every CLI launch. It is what makes the six-mode gate reachable from
@@ -971,6 +971,10 @@ Eleven more exist and are **not** registered by default:
   name, `subagent-grant`, is reserved like the gate's
   (`HookRegistry::isReserved()`): no other hook may register under it, and a
   disable naming it is ignored.
+- `PostEditFormatHook` — the post-edit format, registered by `Bootstrap::hooks()`
+  when `formatCommands` names a command, after the three above and ahead of
+  the post-edit lint, so the linter reads formatted bytes. See
+  [Post-edit format](#post-edit-format).
 - `PostEditLintHook` — the post-edit lint, registered by `Bootstrap::hooks()`
   on every launch, after the three above and ahead of the hook files, because
   it reads the user's `lintCommands`. See [Post-edit lint](#post-edit-lint).
@@ -1026,6 +1030,50 @@ denied like their unquoted spellings. Before audit F-P1 the first three passed
 the whole built-in chain under `bypass-permissions`, then the default mode on
 every path (it still is for `-p` and background sessions; the TUI now starts in
 `default`).
+
+### Post-edit format
+
+After every `Write`, `Edit` or `ApplyPatch`, `PostEditFormatHook` runs the
+formatter named by `formatCommands` over each edited file and lets it
+REWRITE the file. It is registered ahead of `PostEditLintHook` — the linter
+then reads the bytes that actually stand on disk — and only registers at all
+when the map names a command: `formatCommands` is off by default, and where
+the lint falls back to a built-in `php -l`, a formatter has no safe default
+to pick for you.
+
+```json
+{"formatCommands": {"php": "vendor/bin/php-cs-fixer fix {file}", "ts": "npx prettier --write"}}
+```
+
+- The command line is built exactly like a lint command: the file goes last,
+  shell-quoted, or wherever the command writes `{file}`; the command runs in
+  the project root, resolves through the same workspace jail, and answers to
+  the same 30-second wall, 64 KiB output capture and 2 MiB source gate as
+  `LintRunner`.
+- **The command MUTATES the file, so the runner hashes around the run.**
+  After it returns, the file is read again: a rewrite that removed the file,
+  emptied it, grew it past the size wall, overran its deadline mid-rewrite or
+  exited non-zero after already changing bytes is UNDONE — the pre-run bytes
+  are put back — and the note says which of these happened. A clean rewrite
+  stands; a run that changed nothing is silent.
+- A kept rewrite is recorded in the launch's read ledger — the same instance
+  `Read`, `Edit`, `Write` and `ApplyPatch` consult — so the formatter's
+  change never reads as an external edit and never trips the staleness
+  refusal on the next `Edit`. That recording is the ledger reason the hook
+  exists; an embedder that registers it without a ledger still formats, it
+  just cannot make the change look read.
+- The model still hears about it: each kept rewrite earns a note that the
+  file's bytes are no longer the ones it wrote, so line numbers from the
+  previous read are stale and worth re-reading against.
+- **User tier only.** A format command is shell that WRITES, so no project
+  settings file may name one, trusted or not — `lintCommands`' argument with
+  the mutation added.
+- **It never refuses.** The edit has already happened; every outcome is an
+  allow with a note. It counts against the chain deadline like a script hook
+  (`BoundedHookInterface`) and runs through the same bounded spawn as `Bash`,
+  so a hung formatter is stopped rather than freezing the turn. The note is
+  capped at 10,000 bytes like any other hook note, with the formatter's own
+  output cut first.
 
 ### Post-edit lint
 

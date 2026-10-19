@@ -44,6 +44,20 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withHelp('Post-edit lint command per file extension ({"php": "…", "js": false}); `php -l` is built in.')
                 ->withReaderSymbol(Bootstrap::class . '::hooks')
                 ->withReadBy('`Bootstrap::hooks()` → `LintRunner::withCommands()`'),
+            // EDT-1: extension => post-edit format command for the format hook.
+            // Same user-tier, same code-execution argument as `lintCommands`,
+            // and the same map shape — but the command MUTATES the file, which
+            // is why `FormatRunner` hashes around the run and the hook runs
+            // ahead of the lint so the linter sees the formatted bytes.
+            SettingDefinition::new('formatCommands', SettingType::Map, [])
+                ->withCategory(SettingCategory::HooksMcp)
+                ->withRiskClass(RiskClass::Exec)
+                ->withLayered()
+                ->withUi(UiEditability::Complex)
+                ->withLabel(Lang::t('settings.formatCommands.label'))
+                ->withHelp('Post-edit format command per file extension ({"php": "vendor/bin/php-cs-fixer fix {file}"}); runs before the post-edit lint and rewrites the file. Off by default.')
+                ->withReaderSymbol(Bootstrap::class . '::hooks')
+                ->withReadBy('`Bootstrap::hooks()` → `FormatRunner::withCommands()`'),
             // The bound a hook entry with no `timeout:` gets. config.json only:
             // a hook run is a SECURITY bound (a stuck hook freezes the CLI), so
             // no repository may raise it for the operator.

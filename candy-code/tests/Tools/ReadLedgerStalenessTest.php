@@ -384,7 +384,7 @@ final class ReadLedgerStalenessTest extends TestCase
             }
         }
         $this->assertSame(4, $carriers, 'Read, Edit, Write and ApplyPatch carry the ledger');
-        $this->assertNotSame($ledger, ReadLedger::in(\SugarCraft\Code\Cli\Bootstrap::unfilteredTools($this->dir)), 'each build is its own session');
+        $this->assertSame($ledger, ReadLedger::in(\SugarCraft\Code\Cli\Bootstrap::unfilteredTools($this->dir)), 'the launch shares one ledger per root — the post-edit format hook records into the very picture these tools consult (EDT-1)');
     }
 
     // ── harness ─────────────────────────────────────────────────────────

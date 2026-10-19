@@ -257,6 +257,15 @@ final class LayeredSettings
      *                 shell command the hook RUNS after an edit, so a
      *                 project-tier one would be code execution on
      *                 clone-and-launch.
+     *  - `formatCommands`
+     *                 `Bootstrap::hooks()`, into the post-edit format hook's
+     *                 runner (EDT-1): file extension => format command, or
+     *                 `false` to turn one off. USER-TIER ONLY for
+     *                 `lintCommands`' reason directly above it — every value
+     *                 is a shell command, and unlike the lint this one
+     *                 WRITES the file (which is why `FormatRunner` hashes
+     *                 before and after and puts the bytes back when a
+     *                 formatter corrupts them).
      *  - `layout`   {@see \SugarCraft\Constraints\Dock\DockLayout::fromArray()},
      *                 loaded by {@see \SugarCraft\Code\Cli\Bootstrap::app()}
      *                 onto {@see \SugarCraft\Code\App\App::$dock} and saved
@@ -360,7 +369,8 @@ final class LayeredSettings
      * why it is user-tier only ({@see PROJECT_TIER_KEYS} does not list it).
      * `lintCommands` (step 3.E) is the second, and is user-tier only for the
      * same reason: each of its values is a command the post-edit lint hook
-     * runs. Every other key on this list names a preference, a model, a glob
+     * runs. `formatCommands` (EDT-1) is the third and needs no new argument:
+     * its values run after an edit too, and they WRITE the file. Every other key on this list names a preference, a model, a glob
      * or a tool name — a value some later reader interprets. This one names a shell
      * command that {@see \SugarCraft\Code\Config\StatusLineCommand::run()}
      * executes on a timer, with no tool call and no permission gate anywhere
@@ -593,6 +603,7 @@ final class LayeredSettings
         'maxCheckpoints',
         'keybindings',
         'lintCommands',
+        'formatCommands',
         'disabledMcpServers',
         'mcp.enabled',
         'connectTimeoutSeconds',
@@ -897,8 +908,7 @@ final class LayeredSettings
      * `extraBody`, `thinkingBudget`, `promptCache`, `maxToolSteps`,
      * `contextWindow`, `secretEnvAllowlist`, `allowedTools`, `instructions`,
      * `instructionsExclude`, `disabledRules`, `enabledSkills`, `attribution`,
-     * `statusLine`, `layout`
-     * and `lintCommands`, in {@see LAYERED_KEYS} order — named rather than numbered
+     * `statusLine`, `layout`, `lintCommands` and `formatCommands`, in {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key
      * joined the list. `allowedTools`'s argument is on {@see PROJECT_TIER_KEYS},
