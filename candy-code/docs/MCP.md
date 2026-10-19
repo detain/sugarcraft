@@ -626,7 +626,7 @@ sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`:
 /mcp list                                        show registered servers + auth status
 /mcp add <server> [registration-url] [token-url] trigger OAuth registration
 /mcp remove <server>                             drop stored credentials
-/mcp login <server>                              print the shell command for a real login
+/mcp login <server>                              fork a real login into a background child
 ```
 
 This store maps **server URLs to auth entries**. It is independent of
@@ -646,8 +646,10 @@ stance under which the server list itself is frozen per launch.
 
 ### Authorization-code login (`candy-code mcp auth login`)
 
-In chat, `mcp login` only prints the command — the interactive flow needs the
-terminal for itself, and the TUI owns this one. From a plain shell:
+In chat, `/mcp login <server>` forks the flow below into a detached child: the
+authorize URL lands in the transcript, the TUI keeps painting, and stored tokens
+attach at the next launch (the live session memoized its store at start). A bare
+`/mcp login` prints the shell command for you to run yourself. From a plain shell:
 
 ```
 candy-code mcp auth login <server> [token-url] [authorize-url] [registration-url] [-- --timeout N]
