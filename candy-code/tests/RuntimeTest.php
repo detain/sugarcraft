@@ -4140,7 +4140,11 @@ DOC;
         // checkout, so it does not re-arm the turn's env-block diff. `GenerateVideo`
         // (media plan W5.3) is the same shape by the same argument: its fetched
         // bytes and its job sidecar both land in MediaStore, never the checkout.
-        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo'];
+        // `Ls` (comparison plan SHL-2) is the filesystem's own read-only sibling
+        // of `Glob`: one scandir-shaped listing of a jailed directory, no write
+        // primitive in its source at all, so it moves no byte anywhere and does
+        // not re-arm the diff.
+        return ['Read', 'Grep', 'Glob', 'Ls', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo'];
     }
 
     /**

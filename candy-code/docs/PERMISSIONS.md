@@ -762,7 +762,7 @@ The tool names a pattern can start with are the tool catalog's names —
 `Skill`, `doctor`; the roster is now the whole catalog — also `ApplyPatch`,
 `PtyRun`, `Task`, `Team`, `Workflow`, `Memory`,
 `RepoMap`, `Prune`, `Todo`, `Compress`, `Recall`, `AskUser`, `PlanExit`,
-`SendMessage`, `Subagents`, `InterruptAgent`, `GenerateImage`,
+`SendMessage`, `Subagents`, `InterruptAgent`, `Ls`, `GenerateImage`,
 `GenerateVideo`, `BoardPost`, `BoardRead` — and
 `mcp__<server>__<tool>` for bridges (`mcp__git__*`). What differs per tool is
 the argument's *grammar*: shell segments for `Bash` and `PtyRun`, path
