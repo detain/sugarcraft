@@ -11,8 +11,9 @@ import DiffView from '../DiffView.vue'
  * for the list, `files.diff` for the text). The diff arrives whole — the
  * wire takes a revision, not a path — so each row carves its file's section
  * out client-side; untracked rows have no section by nature and say so.
- * Fail-soft: git missing or the server serving no root is an error line,
- * never a crash, and the panel stays mounted for a reload.
+ * Fail-soft per side (w4j: Promise.allSettled, the AboutModal shape): a
+ * refused diff is a stub inside the panel, never a discarded changed-list;
+ * a refused list is an error line. The panel stays mounted for a reload.
  */
 const connection = useConnectionStore()
 
@@ -22,6 +23,7 @@ const items = ref<ChangedItem[]>([])
 const changedTruncated = ref(false)
 const diffText = ref('')
 const diffTruncated = ref(false)
+const diffError = ref<string | null>(null)
 const selected = ref<string | null>(null)
 const loading = ref(false)
 const loaded = ref(false)
@@ -30,22 +32,29 @@ const error = ref<string | null>(null)
 async function load(): Promise<void> {
   loading.value = true
   error.value = null
-  try {
-    const [changed, diff] = await Promise.all([
-      connection.request('files.changed', {}),
-      connection.request('files.diff', {}),
-    ])
-    items.value = changed.items
-    changedTruncated.value = changed.truncated
-    diffText.value = diff.diff
-    diffTruncated.value = diff.truncated
+  const [changed, diff] = await Promise.allSettled([
+    connection.request('files.changed', {}),
+    connection.request('files.diff', {}),
+  ])
+  if (changed.status === 'fulfilled') {
+    items.value = changed.value.items
+    changedTruncated.value = changed.value.truncated
     loaded.value = true
     if (selected.value !== null && !items.value.some((item) => item.path === selected.value)) selected.value = null
-  } catch (failure) {
-    error.value = describe(failure)
-  } finally {
-    loading.value = false
+  } else {
+    error.value = describe(changed.reason)
   }
+  if (diff.status === 'fulfilled') {
+    diffError.value = null
+    diffText.value = diff.value.diff
+    diffTruncated.value = diff.value.truncated
+  } else {
+    // A refused diff clears any stale text: an error stub, never last run's hunks.
+    diffError.value = describe(diff.reason)
+    diffText.value = ''
+    diffTruncated.value = false
+  }
+  loading.value = false
 }
 
 /** Clicking a row narrows the diff to that file; clicking it again widens back out. */
@@ -93,7 +102,9 @@ onMounted(() => void load())
         </li>
       </ul>
       <p v-if="diffTruncated" class="warn" data-testid="diff-truncated">The workspace diff is truncated.</p>
-      <p v-if="untracked" class="empty" data-testid="changes-untracked">{{ selected }} is untracked — no diff for it in the workspace.</p>
+      <!-- The stub precedes the untracked line in this chain: a refused diff is not an untracked file. -->
+      <p v-if="diffError" class="error" role="alert" data-testid="changes-diff-error">{{ diffError }}</p>
+      <p v-else-if="untracked" class="empty" data-testid="changes-untracked">{{ selected }} is untracked — no diff for it in the workspace.</p>
       <template v-else-if="shownDiff">
         <div class="diff-head">
           <span v-if="selection" class="sel" data-testid="changes-selected">{{ selection.path }}</span>
