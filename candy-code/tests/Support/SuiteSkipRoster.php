@@ -178,6 +178,24 @@ final class SuiteSkipRoster
         'SugarCraft\Code\Tests\Integration\LiveSglangSmokeTest::testTheLiveDiscoveryLadderNamesSglangDiffusion';
 
     /**
+     * The DST-1 built-phar smoke key: the heavy release arm of
+     * {@see \SugarCraft\Code\Tests\Integration\PharCompatTest}, gated on
+     * `CANDY_CODE_PHAR` naming a built archive. Same mechanism as
+     * {@see LIVE_SGLANG_SMOKE} — {@see builtPharSmokeArmed()} is the gate the
+     * test body itself calls, so predicate and skip cannot drift.
+     */
+    private const PHAR_SMOKE =
+        'SugarCraft\Code\Tests\Integration\PharCompatTest::testTheBuiltPharBehavesLikeTheInstalledApplication';
+
+    /**
+     * The DST-1 premise key: the glob-vs-scandir asymmetry test, which can only
+     * mint its fixture archive where the phar extension can write. The body
+     * gate calls {@see pharWritingPossible()} directly.
+     */
+    private const PHAR_PREMISE =
+        'SugarCraft\Code\Tests\Integration\PharCompatTest::testTheMeasuredPremiseGlobSeesNothingInsideAPharAndScandirDoes';
+
+    /**
      * The tests this suite is allowed to skip, `Class::method` => why.
      *
      * The first is UNCONDITIONAL -- no environment gate, no platform check, no
@@ -205,6 +223,14 @@ final class SuiteSkipRoster
      * test-only env deliberately unread by `src/`, so `EnvRosterDriftTest`
      * (which censuses `src/` and `bin/`) demands no docs/ENVIRONMENT.md row
      * for it.
+     *
+     * The DST-1 pair is conditional on the same mechanism: the heavy built-phar
+     * smoke skips while `CANDY_CODE_PHAR` names no existing archive, and the
+     * premise test skips where the process cannot mint a fixture archive
+     * (`phar.readonly` armed, or the extension absent). Both gates are
+     * implemented, not described — `builtPharSmokeArmed()` and
+     * `pharWritingPossible()` are the very predicates the test bodies call, and
+     * {@see expectedForLayout()} lifts each entry exactly when it reads armed.
      */
     public const EXPECTED = [
         'SugarCraft\Code\Tests\MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails'
@@ -224,6 +250,20 @@ final class SuiteSkipRoster
                 . 'expectedForLayout() drops it the moment liveSglangSmokeArmed() reads the armed '
                 . 'env and the test runs its GET-only ladder against the real server instead; the '
                 . 'predicate mirrors the test body\'s own gate exactly',
+        self::PHAR_SMOKE
+            => 'conditional built-phar gate: rostered while CANDY_CODE_PHAR does not name an '
+                . 'existing archive -- every ordinary run, where the DST-1 heavy release smoke '
+                . 'skips itself. expectedForLayout() drops it the moment builtPharSmokeArmed() '
+                . 'points at a built phar (the release workflow, or a local build with '
+                . 'CANDY_CODE_PHAR exported), where the smoke boots the real archive instead; '
+                . 'the predicate IS the gate the test body calls, so the two cannot drift',
+        self::PHAR_PREMISE
+            => 'conditional phar-writing gate: rostered while this process cannot mint a '
+                . 'fixture archive (phar.readonly armed, or the phar extension absent) -- the '
+                . 'DST-1 premise test skips itself there. Where pharWritingPossible() is true the '
+                . 'test runs and asserts the measured asymmetry (glob reads nothing under '
+                . 'phar://, scandir does), and expectedForLayout() lifts the entry; again the '
+                . 'predicate IS the body gate',
     ];
 
     private static ?self $live = null;
@@ -277,9 +317,9 @@ final class SuiteSkipRoster
             return;
         }
 
-        // The vendor layout and the live-smoke env gate decide which conditional
-        // entries are part of the roster this run is judged against (see
-        // expectedForLayout()).
+        // The vendor layout, the live-smoke env gate, and the DST-1 phar gates
+        // decide which conditional entries are part of the roster this run is
+        // judged against (see expectedForLayout()).
         $roster = new self(self::expectedForLayout(\dirname(__DIR__, 2) . '/vendor/sugarcraft'));
 
         try {
@@ -401,6 +441,36 @@ final class SuiteSkipRoster
     }
 
     /**
+     * Whether the DST-1 built-phar smoke will RUN this process: `CANDY_CODE_PHAR`
+     * naming an existing file. This is not a mirror of the test body's gate —
+     * it IS the gate: {@see \SugarCraft\Code\Tests\Integration\PharCompatTest}
+     * calls this predicate directly, so roster and skip cannot drift apart.
+     */
+    public static function builtPharSmokeArmed(): bool
+    {
+        $path = getenv('CANDY_CODE_PHAR');
+
+        return \is_string($path) && $path !== '' && is_file($path);
+    }
+
+    /**
+     * Whether this process can mint a fixture phar at all: the phar extension
+     * loaded and `phar.readonly` not armed. Read the same way the build tool
+     * reads it (`tools/build-phar.php` refuses the same shape with the same
+     * boolean filter), and called directly by the premise test's body gate.
+     */
+    public static function pharWritingPossible(): bool
+    {
+        if (!\extension_loaded('phar')) {
+            return false;
+        }
+
+        $readonly = ini_get('phar.readonly');
+
+        return !($readonly !== '' && filter_var($readonly, FILTER_VALIDATE_BOOLEAN));
+    }
+
+    /**
      * The roster this checkout's layout and environment can be judged against:
      * {@see EXPECTED} minus the layout-conditional entry wherever the path-repo
      * symlinks are present and the conditional test RUNS instead of skipping,
@@ -410,12 +480,13 @@ final class SuiteSkipRoster
      * {@see install()} feeds this to the constructor. Expressing the conditions
      * on the roster side -- rather than forcing one layout or one shell to
      * tolerate the other's skip behaviour -- is what lets a single suite be
-     * green in every shape: CI's symlink farm with the live gate unarmed sees a
-     * roster of 2 matched by 2 skips (the canary and the dormant smoke), a
-     * packagist checkout sees a roster of 3 matched by 3 skips, and the armed
-     * operator run drops the smoke's entry so its live assertions judge clean;
-     * checks 1-3 stay fully armed for every key on the effective roster either
-     * way.
+     * green in every shape: CI's symlink farm with every gate unarmed judges
+     * against the canary plus each dormant conditional (the live smoke and the
+     * built-phar smoke), a packagist checkout adds the layout-conditional skip,
+     * and on a runner whose `phar.readonly` is armed the premise test joins the
+     * skipping set too; an armed operator or release run drops exactly the
+     * entries whose tests RUN, so their live assertions judge clean. Checks 1-3
+     * stay fully armed for every key on the effective roster either way.
      *
      * @return array<string,string>
      */
@@ -429,6 +500,14 @@ final class SuiteSkipRoster
 
         if (self::liveSglangSmokeArmed()) {
             unset($effective[self::LIVE_SGLANG_SMOKE]);
+        }
+
+        if (self::builtPharSmokeArmed()) {
+            unset($effective[self::PHAR_SMOKE]);
+        }
+
+        if (self::pharWritingPossible()) {
+            unset($effective[self::PHAR_PREMISE]);
         }
 
         return $effective;

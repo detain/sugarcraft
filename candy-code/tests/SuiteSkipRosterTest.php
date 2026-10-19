@@ -54,7 +54,7 @@ final class SuiteSkipRosterTest extends TestCase
     ];
 
     /**
-     * The three real roster keys, written out in full so a rename inside
+     * The real roster keys, written out in full so a rename inside
      * `SuiteSkipRoster::EXPECTED` reddens the layout tests below (via an
      * undefined index) rather than quietly aiming them at a stale key.
      */
@@ -68,6 +68,55 @@ final class SuiteSkipRosterTest extends TestCase
     /** The env-conditional key -- the private `SuiteSkipRoster::LIVE_SGLANG_SMOKE`, by literal. */
     private const LIVE_SGLANG_ENTRY =
         'SugarCraft\\Code\\Tests\\Integration\\LiveSglangSmokeTest::testTheLiveDiscoveryLadderNamesSglangDiffusion';
+
+    /** The DST-1 built-phar keys -- the private `PHAR_SMOKE` / `PHAR_PREMISE`, by literal. */
+    private const PHAR_SMOKE_ENTRY =
+        'SugarCraft\\Code\\Tests\\Integration\\PharCompatTest::testTheBuiltPharBehavesLikeTheInstalledApplication';
+
+    private const PHAR_PREMISE_ENTRY =
+        'SugarCraft\\Code\\Tests\\Integration\\PharCompatTest::testTheMeasuredPremiseGlobSeesNothingInsideAPharAndScandirDoes';
+
+    /**
+     * Runs $body with CANDY_CODE_PHAR forced UNARMED and restores the caller's
+     * shell state exactly, so the layout pins stay deterministic no matter
+     * whether the suite runs with a built phar exported.
+     *
+     * @template T
+     *
+     * @param  callable():T  $body
+     * @return T
+     */
+    private static function withPharSmokeUnarmed(callable $body): mixed
+    {
+        $prior = getenv('CANDY_CODE_PHAR');
+
+        putenv('CANDY_CODE_PHAR');
+
+        try {
+            return $body();
+        } finally {
+            $prior === false ? putenv('CANDY_CODE_PHAR') : putenv('CANDY_CODE_PHAR=' . $prior);
+        }
+    }
+
+    /**
+     * Which DST-1 keys this process shape adds to an effective roster with the
+     * smoke forced unarmed: the smoke skips (rostered); the premise skips only
+     * where phar writing is NOT possible, so its key joins conditionally —
+     * computed from the same predicate the roster and the test bodies read.
+     *
+     * @return array<string,string>
+     */
+    private static function pharEntriesUnarmed(): array
+    {
+        $entries = [self::PHAR_SMOKE_ENTRY => SuiteSkipRoster::EXPECTED[self::PHAR_SMOKE_ENTRY]];
+
+        if (!SuiteSkipRoster::pharWritingPossible()) {
+            $entries[self::PHAR_PREMISE_ENTRY] = SuiteSkipRoster::EXPECTED[self::PHAR_PREMISE_ENTRY];
+        }
+
+        return $entries;
+    }
 
     /**
      * Runs $body with CANDY_CODE_LIVE_SGLANG forced UNARMED and restores the
@@ -203,15 +252,18 @@ final class SuiteSkipRosterTest extends TestCase
         try {
             self::assertSame(
                 self::withLiveGateUnarmed(
-                    static fn () => SuiteSkipRoster::expectedForLayout($farm),
+                    static fn () => self::withPharSmokeUnarmed(
+                        static fn () => SuiteSkipRoster::expectedForLayout($farm),
+                    ),
                 ),
                 [
                     self::MCP_ENTRY => SuiteSkipRoster::EXPECTED[self::MCP_ENTRY],
                     self::LIVE_SGLANG_ENTRY => SuiteSkipRoster::EXPECTED[self::LIVE_SGLANG_ENTRY],
-                ],
+                ] + self::pharEntriesUnarmed(),
                 'over a path-repo symlink farm the layout-conditional test RUNS while the dormant '
-                . 'smoke stays rostered, so the effective roster must be the const minus exactly '
-                . 'its GitignoreAwareness key, reasons intact',
+                . 'smokes stay rostered, so the effective roster must be the const minus exactly '
+                . 'its GitignoreAwareness key (and minus the premise wherever phar writing is '
+                . 'possible), reasons intact',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
@@ -227,14 +279,22 @@ final class SuiteSkipRosterTest extends TestCase
         mkdir($farm . '/sugar-core');
 
         try {
+            $expected = SuiteSkipRoster::EXPECTED;
+            if (SuiteSkipRoster::pharWritingPossible()) {
+                unset($expected[self::PHAR_PREMISE_ENTRY]);
+            }
+
             self::assertSame(
-                SuiteSkipRoster::EXPECTED,
+                $expected,
                 self::withLiveGateUnarmed(
-                    static fn () => SuiteSkipRoster::expectedForLayout($farm),
+                    static fn () => self::withPharSmokeUnarmed(
+                        static fn () => SuiteSkipRoster::expectedForLayout($farm),
+                    ),
                 ),
-                'over a packagist farm the layout-conditional test skips and the unarmed smoke '
-                . 'skips too, so the effective roster must be the full const -- all three keys, '
-                . 'all three reasons, same order',
+                'over a packagist farm the layout-conditional test skips and the unarmed smokes skip '
+                . 'too, so the effective roster must be the full const -- all unconditional and '
+                . 'dormant keys, all reasons, same order (minus the premise wherever phar writing '
+                . 'is possible and it RUNS instead of skipping)',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
@@ -258,22 +318,84 @@ final class SuiteSkipRosterTest extends TestCase
         try {
             putenv('CANDY_CODE_LIVE_SGLANG=1');
             self::assertTrue(SuiteSkipRoster::liveSglangSmokeArmed(), 'the predicate must read the armed env');
-            $armed = SuiteSkipRoster::expectedForLayout($farm);
+            $armed = self::withPharSmokeUnarmed(
+                static fn () => SuiteSkipRoster::expectedForLayout($farm),
+            );
             self::assertArrayNotHasKey(self::LIVE_SGLANG_ENTRY, $armed, 'an armed smoke RUNS, so it may not sit on the roster');
             self::assertArrayHasKey(self::GITIGNORE_ENTRY, $armed, 'the live gate may not lift the LAYOUT entry');
+            self::assertArrayHasKey(self::PHAR_SMOKE_ENTRY, $armed, 'the live gate may not lift the phar entries');
 
             putenv('CANDY_CODE_LIVE_SGLANG');
             self::assertFalse(SuiteSkipRoster::liveSglangSmokeArmed(), 'an unset gate reads unarmed');
+            $unarmed = SuiteSkipRoster::EXPECTED;
+            if (SuiteSkipRoster::pharWritingPossible()) {
+                unset($unarmed[self::PHAR_PREMISE_ENTRY]);
+            }
+
             self::assertSame(
-                SuiteSkipRoster::EXPECTED,
-                SuiteSkipRoster::expectedForLayout($farm),
-                'the unarmed gate may not lift anything -- the smoke skips and stays rostered',
+                $unarmed,
+                self::withPharSmokeUnarmed(
+                    static fn () => SuiteSkipRoster::expectedForLayout($farm),
+                ),
+                'the unarmed gate may not lift anything -- the smokes skip and stay rostered (the '
+                . 'premise lifts only where phar writing is possible)',
             );
 
             putenv('CANDY_CODE_LIVE_SGLANG=0');
             self::assertFalse(SuiteSkipRoster::liveSglangSmokeArmed(), 'only the literal 1 arms the smoke');
         } finally {
             $prior === false ? putenv('CANDY_CODE_LIVE_SGLANG') : putenv('CANDY_CODE_LIVE_SGLANG=' . $prior);
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * The DST-1 phar gates, each lifting only its own entry. The armed shape is
+     * the release workflow / local build: CANDY_CODE_PHAR naming an existing
+     * file makes the smoke RUN, so its key leaves the roster while the other
+     * conditional keys stay put. The premise polarity is ini-driven and not
+     * forceable in-process, so its pin is the roster-agreement statement — the
+     * entry rides the roster exactly when the predicate (the test body's own
+     * gate) says this process cannot mint a fixture archive.
+     */
+    public function testThePharGatesDropOnlyTheirOwnEntries(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($farm . '/sugar-core');
+
+        $prior = getenv('CANDY_CODE_PHAR');
+
+        try {
+            $archive = $dir . '/not-really-a.phar';
+            file_put_contents($archive, 'x');
+            putenv('CANDY_CODE_PHAR=' . $archive);
+            self::assertTrue(SuiteSkipRoster::builtPharSmokeArmed(), 'the predicate must read the armed env');
+            $armed = self::withLiveGateUnarmed(
+                static fn () => SuiteSkipRoster::expectedForLayout($farm),
+            );
+            self::assertArrayNotHasKey(self::PHAR_SMOKE_ENTRY, $armed, 'an armed smoke RUNS, so it may not sit on the roster');
+            self::assertArrayHasKey(self::LIVE_SGLANG_ENTRY, $armed, 'the phar gate may not lift the live-smoke entry');
+
+            putenv('CANDY_CODE_PHAR=' . $dir . '/no-such-file.phar');
+            self::assertFalse(SuiteSkipRoster::builtPharSmokeArmed(), 'a path that is not a file reads unarmed');
+
+            putenv('CANDY_CODE_PHAR');
+            self::assertFalse(SuiteSkipRoster::builtPharSmokeArmed(), 'an unset gate reads unarmed');
+            self::assertArrayHasKey(
+                self::PHAR_SMOKE_ENTRY,
+                self::withLiveGateUnarmed(static fn () => SuiteSkipRoster::expectedForLayout($farm)),
+                'the unarmed smoke skips and stays rostered',
+            );
+
+            self::assertSame(
+                SuiteSkipRoster::pharWritingPossible(),
+                !array_key_exists(self::PHAR_PREMISE_ENTRY, SuiteSkipRoster::expectedForLayout($farm)),
+                'the premise entry rides the roster exactly when this process cannot mint a fixture phar'
+            );
+        } finally {
+            $prior === false ? putenv('CANDY_CODE_PHAR') : putenv('CANDY_CODE_PHAR=' . $prior);
             $this->purgeFarmSandbox($dir);
         }
     }
@@ -299,8 +421,9 @@ final class SuiteSkipRosterTest extends TestCase
 
     /**
      * CI-shape at the constructor seam with the live gate unarmed: the
-     * layout-computed roster of 2 (canary + dormant smoke), ALL THREE roster
-     * names prepared, the layout-conditional one running -- the run is CLEAN.
+     * layout-computed roster (canary + dormant smoke + dormant phar smoke, plus
+     * the premise only where phar writing is impossible), all roster names
+     * prepared, the layout-conditional one running -- the run is CLEAN.
      *
      * This is the exact event shape CI was printing as a violation before the
      * roster computed its condition: check 3 must not see the non-rostered
@@ -317,13 +440,24 @@ final class SuiteSkipRosterTest extends TestCase
 
         try {
             $roster = self::withLiveGateUnarmed(
-                static fn () => new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux'),
+                static fn () => self::withPharSmokeUnarmed(
+                    static fn () => new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux'),
+                ),
             );
             $roster->recordPrepared(self::MCP_ENTRY);
             $roster->recordSkip(self::MCP_ENTRY, self::MCP_ENTRY, 'placeholder');
             $roster->recordPrepared(self::LIVE_SGLANG_ENTRY);
             $roster->recordSkip(self::LIVE_SGLANG_ENTRY, self::LIVE_SGLANG_ENTRY, 'dormant live smoke');
+            $roster->recordPrepared(self::PHAR_SMOKE_ENTRY);
+            $roster->recordSkip(self::PHAR_SMOKE_ENTRY, self::PHAR_SMOKE_ENTRY, 'no built phar');
             $roster->recordPrepared(self::GITIGNORE_ENTRY);
+
+            if (!SuiteSkipRoster::pharWritingPossible()) {
+                $roster->recordPrepared(self::PHAR_PREMISE_ENTRY);
+                $roster->recordSkip(self::PHAR_PREMISE_ENTRY, self::PHAR_PREMISE_ENTRY, 'phar.readonly armed');
+            } else {
+                $roster->recordPrepared(self::PHAR_PREMISE_ENTRY);
+            }
 
             self::assertSame(
                 [],
@@ -333,8 +467,9 @@ final class SuiteSkipRosterTest extends TestCase
             );
             self::assertNull(
                 $roster->report(),
-                'a CI-layout run (roster of 2, two skips, layout-conditional test running and '
-                . 'passing) was judged a violation -- this is the regression this fix exists to end',
+                'a CI-layout run (the dormant-conditional roster, every entry skipping, the '
+                . 'layout-conditional test running and passing) was judged a violation -- this is '
+                . 'the regression this fix exists to end',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
@@ -343,8 +478,8 @@ final class SuiteSkipRosterTest extends TestCase
 
     /**
      * Packagist-shape mirror through the same seam: the layout-computed roster
-     * of 3 with all three rostered skips is clean -- the shape of every local
-     * run on a real-directory farm and of the suite floor.
+     * with all rostered skips is clean -- the shape of every local run on a
+     * real-directory farm and of the suite floor.
      */
     public function testThePackagistShapeRosterJudgesAPackagistRunClean(): void
     {
@@ -355,7 +490,9 @@ final class SuiteSkipRosterTest extends TestCase
 
         try {
             $roster = self::withLiveGateUnarmed(
-                static fn () => new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux'),
+                static fn () => self::withPharSmokeUnarmed(
+                    static fn () => new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux'),
+                ),
             );
             $roster->recordPrepared(self::MCP_ENTRY);
             $roster->recordSkip(self::MCP_ENTRY, self::MCP_ENTRY, 'placeholder');
@@ -367,12 +504,21 @@ final class SuiteSkipRosterTest extends TestCase
             );
             $roster->recordPrepared(self::LIVE_SGLANG_ENTRY);
             $roster->recordSkip(self::LIVE_SGLANG_ENTRY, self::LIVE_SGLANG_ENTRY, 'dormant live smoke');
+            $roster->recordPrepared(self::PHAR_SMOKE_ENTRY);
+            $roster->recordSkip(self::PHAR_SMOKE_ENTRY, self::PHAR_SMOKE_ENTRY, 'no built phar');
 
-            self::assertSame(3, $roster->skipEventCount());
+            $skips = 4;
+            if (!SuiteSkipRoster::pharWritingPossible()) {
+                $roster->recordPrepared(self::PHAR_PREMISE_ENTRY);
+                $roster->recordSkip(self::PHAR_PREMISE_ENTRY, self::PHAR_PREMISE_ENTRY, 'phar.readonly armed');
+                $skips++;
+            }
+
+            self::assertSame($skips, $roster->skipEventCount());
             self::assertNull(
                 $roster->report(),
-                'the packagist-shape run no longer matches its roster -- the local floor of three '
-                . 'skips against three entries has to stay green',
+                'the packagist-shape run no longer matches its roster -- the local floor of every '
+                . 'dormant conditional skipping against its entry has to stay green',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
