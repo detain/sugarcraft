@@ -258,6 +258,32 @@ final class LoginSubcommandTest extends TestCase
     }
 
     /**
+     * PRV-4 micro-pin (ii): the OTHER silent-bail shape the re-read answers
+     * for. userConfigWriteTarget() refuses to write through a symlink that
+     * resolves to nothing, and writeUserConfig() returns void on that refusal
+     * — without the re-read the command would announce success anyway, and
+     * this also pins the stronger half: the refusing write never MINTS the
+     * far end of the dangling link.
+     */
+    public function testADanglingSymlinkedConfigPathCostsTheHonestFailureAndMintsNoTarget(): void
+    {
+        $target = $this->dir . '/elsewhere.json';
+        $this->assertTrue(symlink($target, $this->dir . '/config.json'));
+        $this->armKeyPaste('sk-dangling-8');
+
+        [$code, $out] = $this->capture(fn (): int => $this->dispatch(['login', 'openai']));
+
+        $this->assertSame(NonInteractive::EXIT_FAILURE, $code);
+        $this->assertStringContainsString('could not be updated', $out);
+        $this->assertStringNotContainsString('Stored the', $out);
+        $this->assertFileDoesNotExist($target, 'a write that refuses to traverse must not create the far end');
+        $this->assertTrue(
+            is_link($this->dir . '/config.json'),
+            'the link itself survives — the command never "repairs" a config path out from under the operator',
+        );
+    }
+
+    /**
      * @return array<string, array{0: string, 1: string}>
      */
     public static function ambientProviderProvider(): array
