@@ -18350,6 +18350,20 @@ final class Chat implements Model
     }
 
     /**
+     * Run a root-palette row by label.
+     *
+     * VIS-4 (palette-as-superset): the explicit arms below are only the
+     * EXCEPTIONS — rows with no slash spelling (NewSession, NewSessionPicker,
+     * OpenDocs, PinSession, DeleteSession), actions whose palette text is a
+     * specific SUB-command rather than the bare name (the dock pair,
+     * LayoutReset, ToggleMcp's list), actions that open shell state rather
+     * than run the slash handler (OpenSettings, OpenMediaForm, Exit), and the
+     * two second-level lists handled above. Every other palette row falls to
+     * {@see dispatchPaletteCommand()}, which dispatches the row's own slash
+     * handler exactly as typing the bare command does — so promoting a row to
+     * the palette is one `paletteAction:` line in its spec file, never a new
+     * arm here.
+     *
      * @return array{0: self, 1: ?\Closure}
      */
     private function runRootPaletteAction(string $label): array
@@ -18379,9 +18393,11 @@ final class Chat implements Model
         $closed = $this->mutate(['palette' => null]);
 
         return match ($action) {
-            PaletteAction::ShareSession => $closed->handleShareCommand('/share'),
-            PaletteAction::SwitchAgent => $closed->handleAgentsCommand('/agents'),
-            PaletteAction::SwitchSession => $closed->handleSessionsCommand('/sessions'),
+            // ShareSession, SwitchAgent, SwitchSession, RenameSession and
+            // BranchSession drove their slash handlers with the bare command
+            // text by hand; VIS-4's generic dispatch IS that behaviour, so
+            // they fell out of this match. Rename's read-only gate rides in
+            // {@see dispatchPaletteCommand()}.
             PaletteAction::ToggleMcp => $closed->handleMcpAuthCommand('mcp auth list'),
             PaletteAction::NewSession => $closed->handlePaletteNewSession(),
             PaletteAction::NewSessionPicker => $closed->handleNewCommand('/new'),
@@ -18396,15 +18412,42 @@ final class Chat implements Model
             // W3.10: same story for the generation form — it paints a modal
             // and writes no turn state until Generate is pressed.
             PaletteAction::OpenMediaForm => $closed->openMediaFormView(),
-            // P-A4: the session actions. Rename opens the inline editor through
-            // the slash handler, refused in a read-only window as `/rename` is.
-            PaletteAction::RenameSession => $closed->readOnlyRefusal('/rename') ?? $closed->handleRenameCommand('/rename'),
-            PaletteAction::BranchSession => $closed->handleBranchCommand('/branch'),
+            // P-A4: the session actions with no slash spelling of their own.
             PaletteAction::PinSession => $closed->togglePinCurrentSession(),
             PaletteAction::DeleteSession => $closed->openSessionListToDelete(),
             PaletteAction::Exit => [$closed, Cmd::quit()],
-            default => [$closed, null],
+            default => $this->dispatchPaletteCommand($closed, $action),
         };
+    }
+
+    /**
+     * VIS-4's generic palette tail: dispatch the action's own registry row as
+     * if the user had typed its bare command.
+     *
+     * One funnel through {@see dispatchCommand()}, the same one a typed
+     * submit takes, including the read-only-session gate submit() applies
+     * ahead of dispatch — a palette row must not open in a read-only window
+     * the typed spelling is refused in. A file-based row cannot reach here
+     * (the registry's palette rows are built-ins, and a template row has no
+     * private handler to name); a row whose handler is absent is a wiring bug
+     * {@see CommandRegistryTest} turns red, and fails closed to a no-op here.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function dispatchPaletteCommand(self $closed, PaletteAction $action): array
+    {
+        $spec = CommandRegistry::forPaletteAction($action);
+        if ($spec === null || $spec->isFileBased() || !$spec->slashVisible) {
+            return [$closed, null];
+        }
+
+        $text = '/' . $spec->name;
+        $readOnly = $closed->readOnlyRefusal($text);
+        if ($readOnly !== null) {
+            return $readOnly;
+        }
+
+        return $closed->dispatchCommand($text) ?? [$closed, null];
     }
 
     /**
