@@ -596,6 +596,8 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/RulesStateWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'Cli/SubcommandsMcpImportTest.php' => ['scandir($this->tempDir)'],
         'Commands/McpAuthLoginGuidanceTest.php' => ['glob($this->tempDir.\'/*\')'],
+        // w3c (VIS-3): tearDown's removeTree() lists the temp home setUp() made.
+        'Commands/McpReconnectTest.php' => ['scandir($dir)'],
         // the layered-settings audit walk lists the config dir the test itself wrote.
         'Config/LayeredSettingsTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'Context/EnvironmentBlockTest.php' => ['scandir($dir)'],
