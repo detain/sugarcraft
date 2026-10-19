@@ -218,6 +218,34 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'reason' => 'long-lived per-root workspace host, reaped by stop(); server sockets are '
                 . 'FD_CLOEXEC, other fds ≥3 inherited',
         ],
+
+        // W5 login passthrough. The scanner reads `return is_resource($process)
+        // ? proc_close($process) : -1` as "the handle is returned" because the
+        // handle appears in the return EXPRESSION; checked in source,
+        // proc_close() consumes it in that same expression and the closure
+        // answers an int status — the child never outlives the call. Row
+        // licensed for the scanner's closure-blind attribution, not for an
+        // actual survivor.
+        'Cli/Subcommands.php::loginPassthrough' => [
+            'count' => 1,
+            'reason' => 'synchronous login passthrough; proc_close rides the closure\'s return '
+                . 'expression (Subcommands.php:910) — the scanner cannot follow the handle '
+                . 'across the closure boundary and reports it as returned',
+        ],
+
+        // W5 MCP OAuth login helper. This one IS long-lived by design: the
+        // child is parked in self::$slots[$server] and polled non-blocking
+        // from beat(). Death is accounted at both terminals — beat() reaps a
+        // gone child with proc_close (McpLoginFork.php:131) and teardown()
+        // SIGTERMs then reaps every live slot. The spec names fds 0-2
+        // (0 a /dev/null file sink, 1/2 the slot's own pipes), so what this
+        // row licenses is the inherited-fd half: fds >= 3 the host held at
+        // spawn ride into the child for the slot's lifetime.
+        'Support/McpLoginFork.php::arm' => [
+            'count' => 1,
+            'reason' => 'async MCP OAuth login child held in self::$slots, reaped by beat() on '
+                . 'exit and by teardown(); inherited-fd >=3 exposure for the slot lifetime',
+        ],
     ];
 
     /**
@@ -563,6 +591,14 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'verdict rests entirely on the CLOSING_HELPERS row for that helper; if that '
                 . 'row is ever wrong this site is a long-lived exposed spawn and nothing else '
                 . 'in this file would say so.',
+        ],
+        'Providers/CodexProvider.php::completeStream' => [
+            'count' => 1,
+            'reason' => 'same shape as the ClaudeCodeProvider sibling row above — reaped by '
+                . 'ProcessReaper::terminateAndClose() in the generator finally (with the '
+                . 'containment group id), so the short verdict rests entirely on that '
+                . 'CLOSING_HELPERS row; if it is ever wrong this site is a long-lived exposed '
+                . 'spawn and nothing else in this file would say so.',
         ],
     ];
 
