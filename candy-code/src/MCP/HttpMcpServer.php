@@ -847,143 +847,40 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
             return null;
         }
 
-        return array_is_list($data) ? self::matchReply($data, $id) : $data;
+        return array_is_list($data) ? SseLineParser::matchReply($data, $id) : $data;
     }
 
     /**
      * Read SSE events until the one carrying the response to $id (the body is
      * already buffered — see {@see send()} — so this is a parse, not a wait).
      *
-     * Per the SSE format: lines end in CRLF, LF or CR; `:` lines are comments;
-     * `data:` lines accumulate and join with "\n"; a blank line dispatches the
-     * event; one leading space after the colon is dropped. Only `message`
-     * events (the default type) carry JSON-RPC. The stream may interleave
-     * server notifications and server-to-client requests before the response —
-     * those are skipped. A trailing event left unterminated by end-of-stream is
-     * still examined: a server that closes right after its last data line has
-     * said what it meant to.
+     * The framing and matching rules are the shared {@see SseLineParser}'s.
      *
      * @return array<mixed>
      */
     private function replyFromEventStream(StreamInterface $body, int|string $id): array
     {
-        $state = ['event' => '', 'data' => []];
-        $buffer = '';
-
+        // MCP-4: the framing, the line/field state machine and the reply
+        // matcher moved VERBATIM into {@see SseLineParser} so the legacy SSE
+        // transport parses with the same code. The reader closure is the old
+        // loop's read expression — buffered body, 8192-byte slices, `''` at
+        // eof — and this class keeps the two decisions that are its own: the
+        // body is closed on every exit, and a stream that ended without the
+        // reply is the failure this method names.
         try {
-            while (true) {
-                $chunk = $body->eof() ? '' : $body->read(8192);
-                $atEnd = $chunk === '';
-                $buffer .= $chunk;
-
-                while (preg_match('/\r\n|\n|\r/', $buffer, $m, PREG_OFFSET_CAPTURE) === 1) {
-                    [$terminator, $offset] = $m[0];
-                    // A lone CR at the very end may be the first half of a CRLF
-                    // split across reads — wait for the next chunk to decide.
-                    if ($terminator === "\r" && $offset === strlen($buffer) - 1 && !$atEnd) {
-                        break;
-                    }
-                    $line = substr($buffer, 0, $offset);
-                    $buffer = (string) substr($buffer, $offset + strlen($terminator));
-
-                    $reply = self::consumeSseLine($line, $state, $id);
-                    if ($reply !== null) {
-                        return $reply;
-                    }
-                }
-
-                if ($atEnd) {
-                    break;
-                }
-            }
-
-            if ($buffer !== '') {
-                $reply = self::consumeSseLine($buffer, $state, $id);
-                if ($reply !== null) {
-                    return $reply;
-                }
-            }
-            $reply = self::consumeSseLine('', $state, $id);
-            if ($reply !== null) {
-                return $reply;
-            }
+            $parser = new SseLineParser(static function () use ($body): string {
+                return $body->eof() ? '' : $body->read(8192);
+            });
+            $reply = $parser->replyTo($id);
         } finally {
             $body->close();
         }
 
-        throw new \RuntimeException("event stream ended without a response to request {$id}");
-    }
-
-    /**
-     * Feed one SSE line into the event being assembled; return the reply to
-     * $id when this line completes the event that carries it.
-     *
-     * @param array{event: string, data: list<string>} $state
-     * @return array<mixed>|null
-     */
-    private static function consumeSseLine(string $line, array &$state, int|string $id): ?array
-    {
-        if ($line === '') {
-            $event = $state['event'];
-            $data = $state['data'];
-            $state = ['event' => '', 'data' => []];
-
-            if ($data === [] || ($event !== '' && $event !== 'message')) {
-                return null;
-            }
-
-            $decoded = json_decode(implode("\n", $data), true);
-            if (!is_array($decoded)) {
-                return null;
-            }
-
-            return self::matchReply(array_is_list($decoded) ? $decoded : [$decoded], $id);
+        if ($reply === null) {
+            throw new \RuntimeException("event stream ended without a response to request {$id}");
         }
 
-        if ($line[0] === ':') {
-            return null; // comment / keep-alive
-        }
-
-        $colon = strpos($line, ':');
-        $field = $colon === false ? $line : substr($line, 0, $colon);
-        $value = $colon === false ? '' : substr($line, $colon + 1);
-        if (str_starts_with($value, ' ')) {
-            $value = substr($value, 1);
-        }
-
-        if ($field === 'data') {
-            $state['data'][] = $value;
-        } elseif ($field === 'event') {
-            $state['event'] = $value;
-        }
-
-        return null;
-    }
-
-    /**
-     * The response to $id among JSON-RPC messages: an entry with our id and a
-     * `result` or `error`, and no `method` (a server-to-client request may
-     * reuse an id value from its own sequence).
-     *
-     * @param list<mixed> $messages
-     * @return array<mixed>|null
-     */
-    private static function matchReply(array $messages, int|string $id): ?array
-    {
-        foreach ($messages as $message) {
-            if (!is_array($message) || isset($message['method']) || !array_key_exists('id', $message)) {
-                continue;
-            }
-            if (!array_key_exists('result', $message) && !array_key_exists('error', $message)) {
-                continue;
-            }
-            $messageId = $message['id'];
-            if ((is_int($messageId) || is_string($messageId)) && (string) $messageId === (string) $id) {
-                return $message;
-            }
-        }
-
-        return null;
+        return $reply;
     }
 
     private static function isEventStream(ResponseInterface $response): bool
