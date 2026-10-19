@@ -39,7 +39,8 @@ final class LengthStopTranscriptNoticeTest extends TestCase
      */
     private const STEPS_NOTICE = 'This turn used all of its tool steps before the work was done, so the reply above describes where it '
         . 'stopped — what is finished and what remains — not a finished answer. Say "continue" to pick it up '
-        . 'from there, or raise "maxToolSteps" in ~/.candy-code/config.json for longer agentic turns.';
+        . 'from there, or raise the ceiling for longer agentic turns — a --max-turns flag at launch outranks '
+        . 'the "maxToolSteps" setting in ~/.candy-code/config.json, so raise whichever is in force.';
 
     /** The loop guard's own sentence (the third harness stop), with the tool it ended. */
     private const LOOP_NOTICE = 'This turn was ended by the repeat-call loop guard: the model called %s 8 times with the same arguments '
