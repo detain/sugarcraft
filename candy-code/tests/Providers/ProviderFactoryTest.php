@@ -61,15 +61,16 @@ final class ProviderFactoryTest extends TestCase
     // availableTypes()
     // -------------------------------------------------------------------------
 
-    public function testAvailableTypesReturnsAllEightTypes(): void
+    public function testAvailableTypesReturnsAllNineTypes(): void
     {
         $types = $this->factory->availableTypes();
 
-        $this->assertCount(8, $types);
+        $this->assertCount(9, $types);
         $this->assertSame([
             'openai',
             'anthropic',
             'claude-code',
+            'codex',
             'sglang',
             'bedrock',
             'vertex',

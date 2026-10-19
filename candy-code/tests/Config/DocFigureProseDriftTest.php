@@ -5313,7 +5313,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('ClaudeCodeInvocation', $segment, 'the table no longer says the claude-code row rides over ClaudeCodeInvocation');
         self::assertTrue(class_exists('SugarCraft\Code\Providers\ClaudeCodeInvocation'), 'ClaudeCodeInvocation, cited as the claude-code row carrier, is gone');
 
-        self::assertStringContainsString('**`echo` is not one of the eight.**', $segment, 'the echo exclusion sentence moved — echo is a degradation path, never a selectable name');
+        self::assertStringContainsString('**`echo` is not one of the nine.**', $segment, 'the echo exclusion sentence moved — echo is a degradation path, never a selectable name');
         self::assertNotContains('echo', $liveTypes, 'echo joined availableTypes() — the exclusion this paragraph stakes out is no longer true');
         self::assertStringContainsString('Unknown provider type:', $factory, 'the factory no longer throws the named rejection the echo paragraph quotes');
         $provider = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), 'provider', 6000);
