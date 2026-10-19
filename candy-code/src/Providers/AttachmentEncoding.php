@@ -23,6 +23,13 @@ use SugarCraft\Code\Messages\UserMessage;
  * (a plain string `content` for the OpenAI family, one text block for the block
  * families), so attachments cost nothing - and change no cached prefix - for
  * the ordinary prompt.
+ *
+ * CTX-2 adds the Anthropic family's `document` block for PDF attachments;
+ * capability is decided the same upstream way by
+ * {@see ProviderInterface::supportsDocuments()}. The OpenAI/Gemini/Bedrock
+ * encoders decline the block this slice - a document reaching one of those
+ * anyway (hand-built past the gate) is named in the text, never dropped and
+ * never inlined as bytes.
  */
 final class AttachmentEncoding
 {
@@ -37,11 +44,11 @@ final class AttachmentEncoding
     {
         $images = $message->images();
         if ($images === []) {
-            return $message->wireText();
+            return self::withDeclinedDocuments($message->wireText(), $message);
         }
 
         $parts = [];
-        $text = $message->wireText();
+        $text = self::withDeclinedDocuments($message->wireText(), $message);
         if ($text !== '') {
             $parts[] = ['type' => 'text', 'text' => $text];
         }
@@ -56,8 +63,10 @@ final class AttachmentEncoding
     }
 
     /**
-     * Anthropic Messages (Claude on Vertex's rawPredict): a text block, then
-     * one base64 `image` block per image.
+     * Anthropic Messages (the Messages API, and Claude on Vertex's
+     * rawPredict): a text block, then one base64 `image` block per image,
+     * then one base64 `document` block per PDF (CTX-2 - the wire's own
+     * document family, titled so the model can name the file back).
      *
      * @return list<array<string, mixed>>
      */
@@ -78,6 +87,17 @@ final class AttachmentEncoding
                 ],
             ];
         }
+        foreach ($message->documents() as $document) {
+            $blocks[] = [
+                'type' => 'document',
+                'title' => $document->name(),
+                'source' => [
+                    'type' => 'base64',
+                    'media_type' => (string) $document->mimeType,
+                    'data' => base64_encode((string) $document->data),
+                ],
+            ];
+        }
 
         return $blocks;
     }
@@ -91,7 +111,7 @@ final class AttachmentEncoding
     public static function geminiParts(UserMessage $message): array
     {
         $parts = [];
-        $text = $message->wireText();
+        $text = self::withDeclinedDocuments($message->wireText(), $message);
         if ($text !== '') {
             $parts[] = ['text' => $text];
         }
@@ -111,7 +131,7 @@ final class AttachmentEncoding
      */
     public static function bedrockBlocks(UserMessage $message): array
     {
-        $blocks = [['text' => $message->wireText()]];
+        $blocks = [['text' => self::withDeclinedDocuments($message->wireText(), $message)]];
         foreach ($message->images() as $image) {
             $format = self::bedrockFormat((string) $image->mimeType);
             if ($format === null) {
@@ -138,5 +158,25 @@ final class AttachmentEncoding
             'image/webp' => 'webp',
             default => null,
         };
+    }
+
+    /**
+     * CTX-2: this wire family does not build document blocks. A sendable
+     * PDF can only reach here past the upstream capability gate (a
+     * hand-built message), and the never-silent rule says such an arrival
+     * is named, not dropped - the bytes are never inlined as text either.
+     */
+    private static function withDeclinedDocuments(string $text, UserMessage $message): string
+    {
+        $documents = $message->documents();
+        if ($documents === []) {
+            return $text;
+        }
+
+        $line = '[Document attachment '
+            . implode(', ', array_map(static fn (\SugarCraft\Code\Attachment $d): string => $d->name(), $documents))
+            . ' was not sent: this wire does not accept PDF document blocks.]';
+
+        return $text === '' ? $line : $text . "\n\n" . $line;
     }
 }

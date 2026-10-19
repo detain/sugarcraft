@@ -196,6 +196,11 @@ final class MemoryRecallPrimeTest extends TestCase
                 return true;
             }
 
+            public function supportsDocuments(): bool
+            {
+                return false;
+            }
+
             public function supportsVision(): bool
             {
                 return false;

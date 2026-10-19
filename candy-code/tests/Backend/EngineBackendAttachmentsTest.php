@@ -33,6 +33,8 @@ final class EngineBackendAttachmentsTest extends TestCase
 
     private const IMAGE_BYTES = "\x89PNG\r\n\x1a\n" . 'pixel-bytes';
 
+    private const PDF_BYTES = '%PDF-1.4' . "\n" . "\x00\x01\x00\x02" . 'xref body';
+
     private string $home;
 
     protected function setUp(): void
@@ -112,6 +114,72 @@ final class EngineBackendAttachmentsTest extends TestCase
         $this->assertSame(0, $provider->visionQueries(), 'SGLang answers this from the network; a text turn must not wait on it');
     }
 
+    public function testADocumentCapableProviderReceivesThePdfAndNobodyAsksAboutVision(): void
+    {
+        $provider = self::recordingProvider(vision: false, documents: true);
+        $prompt = Message::user('read the spec')->attachDocument('/tmp/spec.pdf', self::PDF_BYTES, 'application/pdf');
+
+        $reply = EngineBackend::new($provider, 'claude-sonnet-4-6')->complete([$prompt]);
+
+        $user = $provider->lastUser();
+        $this->assertNotNull($user);
+        $this->assertCount(1, $user->documents(), 'the PDF reaches a document-capable wire whole');
+        $this->assertSame(self::PDF_BYTES, $user->documents()[0]->data);
+        $this->assertStringNotContainsString('was not sent', $user->content(), 'a carried document is not a withheld one');
+        $this->assertStringNotContainsString('%PDF', $user->content(), 'the bytes never ride the prompt text');
+        $this->assertSame(0, $provider->visionQueries(), 'a document-only turn must not pay for the vision probe');
+        $this->assertSame(1, $provider->documentQueries(), 'memoised once per request batch');
+        $this->assertNull($reply->attachmentNotice, 'nothing was withheld, so nothing is reported');
+    }
+
+    public function testAProviderWithoutDocumentsGetsAPlaceholderAndTheUserANotice(): void
+    {
+        $provider = self::recordingProvider(vision: true, documents: false);
+        $prompt = Message::user('what is this?')->attachDocument('/tmp/spec.pdf', self::PDF_BYTES, 'application/pdf');
+
+        $reply = EngineBackend::new($provider, 'gpt-4o')->complete([$prompt]);
+
+        $user = $provider->lastUser();
+        $this->assertNotNull($user);
+        $this->assertSame([], $user->documents(), 'no document part may reach a provider without the capability');
+        $this->assertStringContainsString(
+            '[Document attachment /tmp/spec.pdf was not sent: the active model does not accept documents.]',
+            $user->content(),
+        );
+        $this->assertStringNotContainsString('%PDF', $user->content(), 'withheld means named, not inlined');
+        $this->assertNotNull($reply->attachmentNotice);
+        $this->assertStringContainsString('spec.pdf was not sent', $reply->attachmentNotice);
+        $this->assertStringContainsString('does not accept documents', $reply->attachmentNotice);
+        $this->assertStringContainsString('recording-double (gpt-4o)', $reply->attachmentNotice);
+    }
+
+    public function testWithheldImagesAndDocumentsGetTheirOwnSentences(): void
+    {
+        $provider = self::recordingProvider(vision: false, documents: false);
+        $prompt = Message::user('two files')
+            ->attachImage('shot.png', self::IMAGE_BYTES, 'image/png')
+            ->attachDocument('spec.pdf', self::PDF_BYTES, 'application/pdf');
+
+        $reply = EngineBackend::new($provider, 'm')->complete([$prompt]);
+
+        $this->assertNotNull($reply->attachmentNotice);
+        $this->assertStringContainsString('does not accept images', $reply->attachmentNotice);
+        $this->assertStringContainsString('does not accept documents', $reply->attachmentNotice);
+        // Two sentences, one per capability: fused grammar would hide which
+        // model switch fixes which attachment.
+        $this->assertSame(1, substr_count($reply->attachmentNotice, 'Switch to a vision-capable model'));
+        $this->assertSame(1, substr_count($reply->attachmentNotice, 'Switch to a document-capable model'));
+    }
+
+    public function testATurnWithoutADocumentNeverAsksTheProviderAboutDocuments(): void
+    {
+        $provider = self::recordingProvider(vision: true);
+
+        EngineBackend::new($provider, 'm')->complete([Message::user('hi')->attachImage('a.png', self::IMAGE_BYTES, 'image/png')]);
+
+        $this->assertSame(0, $provider->documentQueries(), 'the same memoised-never rule the vision probe answers to');
+    }
+
     public function testTheNoticeCrossesTheResultFrame(): void
     {
         $backend = EngineBackend::new(self::recordingProvider(vision: true), 'm');
@@ -184,15 +252,17 @@ final class EngineBackendAttachmentsTest extends TestCase
         return $outcome;
     }
 
-    private static function recordingProvider(bool $vision): ProviderInterface
+    private static function recordingProvider(bool $vision, bool $documents = false): ProviderInterface
     {
-        return new class ($vision) implements ProviderInterface {
+        return new class ($vision, $documents) implements ProviderInterface {
             /** @var list<UserMessage> */
             private array $users = [];
 
             private int $visionQueries = 0;
 
-            public function __construct(private readonly bool $vision) {}
+            private int $documentQueries = 0;
+
+            public function __construct(private readonly bool $vision, private readonly bool $documents = false) {}
 
             /** @return list<UserMessage> */
             public function users(): array
@@ -210,6 +280,11 @@ final class EngineBackendAttachmentsTest extends TestCase
                 return $this->visionQueries;
             }
 
+            public function documentQueries(): int
+            {
+                return $this->documentQueries;
+            }
+
             public function name(): string
             {
                 return 'recording-double';
@@ -223,6 +298,13 @@ final class EngineBackendAttachmentsTest extends TestCase
             public function supportsFunctionCalling(): bool
             {
                 return false;
+            }
+
+            public function supportsDocuments(): bool
+            {
+                $this->documentQueries++;
+
+                return $this->documents;
             }
 
             public function supportsVision(): bool

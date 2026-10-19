@@ -417,6 +417,11 @@ final class AnthropicProviderTest extends TestCase
         $this->assertTrue($provider->supportsStreaming());
         $this->assertTrue($provider->supportsFunctionCalling());
         $this->assertTrue($provider->supportsVision());
+        $this->assertTrue($provider->supportsDocuments(), 'CTX-2: the Messages wire carries PDF document blocks');
+        $this->assertFalse(
+            (new AnthropicProvider('sk-test', 'https://api.anthropic.com', 'gpt-5'))->supportsDocuments(),
+            'a non-Claude default cannot be assumed to speak the document block',
+        );
         $this->assertFalse($provider->supportsJsonSchema());
         $this->assertInstanceOf(MarksPromptCache::class, $provider);
         $this->assertTrue($provider->marksPromptCache(self::MODERN));

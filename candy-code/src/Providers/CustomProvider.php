@@ -270,6 +270,11 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel
         return $this->supportsFunctionCalling;
     }
 
+    public function supportsDocuments(): bool
+    {
+        return false;
+    }
+
     public function supportsVision(): bool
     {
         return $this->supportsVision;

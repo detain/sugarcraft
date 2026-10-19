@@ -373,6 +373,17 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
         return $this->isAnthropicModel($this->defaultModel) || $this->isGeminiModel($this->defaultModel);
     }
 
+    /**
+     * CTX-2: only the Claude arm of this host speaks the Messages `document`
+     * block. The Gemini `inlineData` document path is DECLINED for this
+     * slice, so a Gemini model gets the PDF withheld with a notice rather
+     * than a part its wire cannot carry.
+     */
+    public function supportsDocuments(): bool
+    {
+        return $this->isAnthropicModel($this->defaultModel);
+    }
+
     public function supportsJsonSchema(): bool
     {
         // Anthropic constrains output through tools, not a response schema.

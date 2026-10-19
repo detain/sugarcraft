@@ -60,6 +60,11 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
         return true;
     }
 
+    public function supportsDocuments(): bool
+    {
+        return false;
+    }
+
     public function supportsVision(): bool
     {
         return false;

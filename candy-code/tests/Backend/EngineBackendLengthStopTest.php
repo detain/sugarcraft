@@ -421,6 +421,11 @@ final class EngineBackendLengthStopTest extends TestCase
                 return false;
             }
 
+            public function supportsDocuments(): bool
+            {
+                return false;
+            }
+
             public function supportsVision(): bool
             {
                 return false;
@@ -476,6 +481,11 @@ final class EngineBackendLengthStopTest extends TestCase
             }
 
             public function supportsFunctionCalling(): bool
+            {
+                return false;
+            }
+
+            public function supportsDocuments(): bool
             {
                 return false;
             }
@@ -542,6 +552,11 @@ final class EngineBackendLengthStopTest extends TestCase
             public function supportsFunctionCalling(): bool
             {
                 return true;
+            }
+
+            public function supportsDocuments(): bool
+            {
+                return false;
             }
 
             public function supportsVision(): bool

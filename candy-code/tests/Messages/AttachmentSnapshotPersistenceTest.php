@@ -40,6 +40,19 @@ final class AttachmentSnapshotPersistenceTest extends TestCase
         $this->assertSame([['path' => '/tmp/a.txt', 'type' => 'File']], $row['attachments']);
     }
 
+    public function testADocumentSnapshotSurvivesTheTranscriptRoundTrip(): void
+    {
+        $pdf = '%PDF-1.4' . "\n" . "\x00\x01\x00\x02" . 'xref';
+        $original = Message::user('spec', 1_700_000_000)
+            ->attachDocument('/tmp/spec.pdf', $pdf, 'application/pdf');
+
+        $revived = Message::fromArray(json_decode(json_encode($original, JSON_THROW_ON_ERROR), true));
+
+        $this->assertEquals($original->attachments, $revived->attachments);
+        $this->assertSame(AttachmentType::Document, $revived->attachments[0]->type, 'the arm existed or this row silently dropped on resume');
+        $this->assertSame($pdf, $revived->attachments[0]->data, 'NUL bytes ride base64 whole');
+    }
+
     public function testACorruptSnapshotDegradesToPathOnly(): void
     {
         $revived = Message::fromArray([

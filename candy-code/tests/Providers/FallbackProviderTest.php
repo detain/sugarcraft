@@ -285,6 +285,15 @@ final class FallbackProviderTest extends TestCase
         FallbackProvider::new($this->fake('a', []), 'a', ['a' => fn () => $this->fake('a', [])]);
     }
 
+    public function testDocumentCapabilityIsThePrimariesAlone(): void
+    {
+        $yes = FallbackProvider::new($this->fake('claude-x', [], 0, true), 'claude-x', ['fallback' => fn () => $this->fake('fallback', [])]);
+        $no = FallbackProvider::new($this->fake('claude-x', [], 0, false), 'claude-x', ['fallback' => fn () => $this->fake('fallback', [])]);
+
+        $this->assertTrue($yes->supportsDocuments());
+        $this->assertFalse($no->supportsDocuments(), 'read off the primary, never overruled by a fallback that may not carry the block');
+    }
+
     // ─── ProviderFactory ─────────────────────────────────────────────────
 
     public function testTheFactoryWrapsOnlyABlockThatNamesFallbacks(): void
@@ -371,15 +380,15 @@ final class FallbackProviderTest extends TestCase
     }
 
     /** @param list<\Throwable|CompleteResponse|list<\Throwable|CompleteResponse>> $script */
-    private function fake(string $model, array $script, int $window = 0): ProviderInterface
+    private function fake(string $model, array $script, int $window = 0, bool $documents = false): ProviderInterface
     {
         $calls = &$this->calls;
 
-        return new class ($model, $script, $window, $calls) implements ProviderInterface, ReportsServedModel {
+        return new class ($model, $script, $window, $documents, $calls) implements ProviderInterface, ReportsServedModel {
             private ?string $served = null;
 
             /** @param list<mixed> $script @param array<string, list<string>> $calls */
-            public function __construct(private string $model, private array $script, private int $window, private array &$calls)
+            public function __construct(private string $model, private array $script, private int $window, private bool $documents, private array &$calls)
             {
             }
 
@@ -396,6 +405,11 @@ final class FallbackProviderTest extends TestCase
             public function supportsFunctionCalling(): bool
             {
                 return true;
+            }
+
+            public function supportsDocuments(): bool
+            {
+                return $this->documents;
             }
 
             public function supportsVision(): bool

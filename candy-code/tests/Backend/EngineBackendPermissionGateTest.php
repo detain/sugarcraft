@@ -529,6 +529,7 @@ final class EngineBackendPermissionGateTest extends TestCase
             public function supportsStreaming(): bool { return false; }
             public function supportsFunctionCalling(): bool { return true; }
             public function supportsVision(): bool { return false; }
+            public function supportsDocuments(): bool { return false; }
             public function supportsJsonSchema(): bool { return false; }
             public function contextWindow(): int { return 1000; }
             public function costPer1kTokens(string $m, string $d): float { return 0.0; }
@@ -562,6 +563,7 @@ final class EngineBackendPermissionGateTest extends TestCase
             public function supportsStreaming(): bool { return false; }
             public function supportsFunctionCalling(): bool { return true; }
             public function supportsVision(): bool { return false; }
+            public function supportsDocuments(): bool { return false; }
             public function supportsJsonSchema(): bool { return false; }
             public function contextWindow(): int { return 1000; }
             public function costPer1kTokens(string $m, string $d): float { return 0.0; }

@@ -105,8 +105,39 @@ final class FileMentionsTest extends TestCase
 
         $this->assertCount(1, $r['attachments']);
         $this->assertStringContainsString('@blob.bin was not attached: it is neither text nor', $r['notices'][0]);
+        $this->assertStringContainsString('nor a PDF document.', $r['notices'][0], 'CTX-2 widened what the refusal says it is not');
         $this->assertStringContainsString('@big.txt is 256 KiB; only its first 256 KiB were attached.', $r['notices'][1]);
         $this->assertStringEndsWith('the first 256 KiB are included]', (string) $r['attachments'][0]->data);
+    }
+
+    public function testAPdfIsAttachedAsADocumentWithItsBytesWhole(): void
+    {
+        // Built from bytes, not copied fixtures: the NULs are the point -
+        // before CTX-2 this file died at the NUL refusal as "neither text
+        // nor image".
+        $pdf = '%PDF-1.7' . "\n" . "\x00\x01\x02obj" . "\n" . 'trailer' . "\n%%EOF\n";
+        file_put_contents($this->root . '/spec.pdf', $pdf);
+
+        $r = FileMentions::resolve('@spec.pdf', $this->root);
+
+        $this->assertSame([], $r['notices']);
+        $this->assertCount(1, $r['attachments']);
+        $this->assertSame(AttachmentType::Document, $r['attachments'][0]->type);
+        $this->assertSame('application/pdf', $r['attachments'][0]->mimeType);
+        $this->assertSame($pdf, $r['attachments'][0]->data, 'whole bytes, no truncation marker');
+    }
+
+    public function testAnOversizedPdfIsRefusedNotHalved(): void
+    {
+        $fh = fopen($this->root . '/huge.pdf', 'wb');
+        fwrite($fh, '%PDF-1.7');
+        ftruncate($fh, FileMentions::DOCUMENT_MAX_BYTES + 1);
+        fclose($fh);
+
+        $r = FileMentions::resolve('@huge.pdf', $this->root);
+
+        $this->assertSame([], $r['attachments']);
+        $this->assertStringContainsString('the document is 20 MiB, over the 20 MiB limit', $r['notices'][0]);
     }
 
     public function testAnOversizedImageIsRefusedNotHalved(): void

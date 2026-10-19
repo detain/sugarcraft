@@ -40,6 +40,8 @@ final class AttachmentWireTest extends TestCase
 {
     private const PNG = "\x89PNG\r\n\x1a\n" . "\x00\xffbinary";
 
+    private const PDF = '%PDF-1.7' . "\n" . "\x00\x00\x00" . 'body' . "\n%%EOF\n";
+
     /** @var list<array<string, mixed>> */
     private array $history = [];
 
@@ -48,6 +50,12 @@ final class AttachmentWireTest extends TestCase
         return (new UserMessage('what is this?'))
             ->withAttachment(new Attachment('src/a.php', AttachmentType::File, "<?php echo 1;\n"))
             ->withAttachment(new Attachment('shot.png', AttachmentType::Image, self::PNG, 'image/png'));
+    }
+
+    private static function attachedWithPdf(): UserMessage
+    {
+        return self::attached()
+            ->withAttachment(new Attachment('handouts/spec.pdf', AttachmentType::Document, self::PDF, 'application/pdf'));
     }
 
     // ── UserMessage's own text forms ────────────────────────────────────
@@ -114,6 +122,115 @@ final class AttachmentWireTest extends TestCase
 
         $bedrock = AttachmentEncoding::bedrockBlocks(self::attached());
         $this->assertSame(['image' => ['format' => 'png', 'source' => ['bytes' => self::PNG]]], $bedrock[1], 'raw: the SDK encodes blobs');
+    }
+
+    // ── CTX-2: the PDF document family ──────────────────────────────────
+
+    public function testTheAnthropicDocumentBlockCarriesThePdfTitled(): void
+    {
+        $blocks = AttachmentEncoding::anthropicBlocks(self::attachedWithPdf());
+
+        // The image keeps its slot; the document block joins after it.
+        $this->assertSame('text', $blocks[0]['type']);
+        $this->assertSame('image', $blocks[1]['type']);
+        $this->assertSame(
+            [
+                'type' => 'document',
+                'title' => 'spec.pdf',
+                'source' => ['type' => 'base64', 'media_type' => 'application/pdf', 'data' => base64_encode(self::PDF)],
+            ],
+            $blocks[2],
+        );
+    }
+
+    public function testADatalessDocumentIsNamedInTheTextAndCarriesNoBlock(): void
+    {
+        $message = (new UserMessage('see @spec.pdf'))->withDocument('/tmp/gone.pdf');
+
+        $this->assertStringContainsString('[Attached document /tmp/gone.pdf could not be included', $message->wireText());
+        $this->assertSame([], $message->documents());
+        $this->assertCount(1, AttachmentEncoding::anthropicBlocks($message));
+
+        $withBytes = $message->withAttachment(new Attachment('/tmp/raw.pdf', AttachmentType::Document, self::PDF, 'application/pdf'));
+        $this->assertStringEndsWith(
+            '[Document attachment /tmp/raw.pdf was not sent: this request carries text only.]',
+            $withBytes->textOnly(),
+        );
+    }
+
+    public function testTheDeclinedFamiliesNameTheDocumentAndNeverInlineIt(): void
+    {
+        $message = self::attachedWithPdf();
+
+        $openAi = json_encode(AttachmentEncoding::openAiContent($message), JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        $gemini = json_encode(AttachmentEncoding::geminiParts($message), JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        $bedrock = json_encode(AttachmentEncoding::bedrockBlocks($message), JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+
+        foreach (['openai' => $openAi, 'gemini' => $gemini, 'bedrock' => $bedrock] as $family => $wire) {
+            $this->assertStringContainsString(
+                '[Document attachment spec.pdf was not sent: this wire does not accept PDF document blocks.]',
+                $wire,
+                $family . ': the never-silent rule names what it cannot carry',
+            );
+            $this->assertStringNotContainsString(base64_encode(self::PDF), $wire, $family . ': no document part is built');
+            $this->assertStringNotContainsString('%PDF-1.7', $wire, $family . ': the bytes are never inlined as text');
+        }
+
+        // The string path (no images at all) names it too.
+        $textOnly = AttachmentEncoding::openAiContent(
+            (new UserMessage('just the pdf'))->withAttachment(new Attachment('a.pdf', AttachmentType::Document, self::PDF, 'application/pdf')),
+        );
+        $this->assertIsString($textOnly);
+        $this->assertStringContainsString('[Document attachment a.pdf was not sent', $textOnly);
+    }
+
+    public function testDocumentsAreOnlyTheAnthropicMessagesFamily(): void
+    {
+        $factory = new ProviderFactory();
+
+        $this->assertTrue($factory->create(['type' => 'anthropic', 'apiKey' => 'k'])->supportsDocuments());
+        $this->assertFalse($factory->create(['type' => 'openai', 'apiKey' => 'k', 'model' => 'gpt-4o'])->supportsDocuments(), 'the chat/completions wire has no document part here');
+        $this->assertFalse(
+            $factory->create(['type' => 'custom', 'name' => 'c', 'baseUrl' => 'https://x', 'model' => 'm', 'supportsVision' => true])->supportsDocuments(),
+            'a vision override does not buy a document wire',
+        );
+        $this->assertFalse(
+            $factory->create(['type' => 'sglang', 'baseUrl' => 'https://x', 'model' => 'm', 'discoverServerInfo' => false, 'supportsVision' => true])->supportsDocuments(),
+        );
+
+        $claude = VertexProvider::create(
+            projectId: 'p',
+            model: 'claude-3-sonnet@20240229',
+            predictor: static fn (string $e, string $m, array $b): array => ['content' => [['type' => 'text', 'text' => 'ok']]],
+        );
+        $gemini = VertexProvider::create(
+            projectId: 'p',
+            model: 'gemini-1.5-pro-002',
+            predictor: static fn (string $e, string $m, array $b): array => ['candidates' => [['content' => ['parts' => [['text' => 'ok']]]]]],
+        );
+        $this->assertTrue($claude->supportsDocuments(), 'the Claude arm speaks the Messages document block');
+        $this->assertFalse($gemini->supportsDocuments(), 'the Gemini inlineData document path is declined this slice');
+    }
+
+    public function testVertexClaudeCarriesTheDocumentBlockOnTheWire(): void
+    {
+        $captured = [];
+        $provider = VertexProvider::create(
+            projectId: 'p',
+            model: 'claude-3-sonnet@20240229',
+            predictor: function (string $endpoint, string $method, array $body) use (&$captured): array {
+                $captured = $body;
+
+                return ['content' => [['type' => 'text', 'text' => 'ok']]];
+            },
+            promptCache: false,
+        );
+
+        $provider->complete(new CompleteRequest(model: 'claude-3-sonnet@20240229', messages: [self::attachedWithPdf()]));
+
+        $blocks = $captured['messages'][0]['content'];
+        $this->assertSame('document', $blocks[2]['type']);
+        $this->assertSame(base64_encode(self::PDF), $blocks[2]['source']['data']);
     }
 
     public function testBedrockNamesAnImageFormatConverseDoesNotKnow(): void

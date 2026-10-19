@@ -1015,6 +1015,11 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
      * where a guessed "yes" would send a text-only model a part its chat
      * template rejects.
      */
+    public function supportsDocuments(): bool
+    {
+        return false;
+    }
+
     public function supportsVision(): bool
     {
         if ($this->supportsVision !== null) {

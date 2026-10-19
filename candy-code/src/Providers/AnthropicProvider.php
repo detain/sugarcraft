@@ -227,6 +227,13 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
         return $this->isAnthropicModel($this->defaultModel);
     }
 
+    public function supportsDocuments(): bool
+    {
+        // CTX-2: the Messages API carries PDFs as `document` blocks on the
+        // same models that read images.
+        return $this->isAnthropicModel($this->defaultModel);
+    }
+
     public function supportsJsonSchema(): bool
     {
         // Anthropic constrains output through tools, not a response schema.

@@ -1704,6 +1704,11 @@ final class ScriptedUsageProvider implements ProviderInterface
         return true;
     }
 
+    public function supportsDocuments(): bool
+    {
+        return false;
+    }
+
     public function supportsVision(): bool
     {
         return false;
@@ -1764,6 +1769,11 @@ final class ChunkedUsageProvider implements ProviderInterface
     }
 
     public function supportsFunctionCalling(): bool
+    {
+        return false;
+    }
+
+    public function supportsDocuments(): bool
     {
         return false;
     }

@@ -170,6 +170,11 @@ final class FallbackProvider implements ProviderInterface, ReportsServedModel, M
         return $this->primary->supportsVision();
     }
 
+    public function supportsDocuments(): bool
+    {
+        return $this->primary->supportsDocuments();
+    }
+
     public function supportsJsonSchema(): bool
     {
         return $this->primary->supportsJsonSchema();

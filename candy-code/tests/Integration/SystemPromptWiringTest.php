@@ -1090,6 +1090,11 @@ final class SystemPromptWiringTest extends TestCase
                 return true;
             }
 
+            public function supportsDocuments(): bool
+            {
+                return false;
+            }
+
             public function supportsVision(): bool
             {
                 return false;
@@ -1159,6 +1164,11 @@ final class SystemPromptWiringTest extends TestCase
             public function supportsFunctionCalling(): bool
             {
                 return true;
+            }
+
+            public function supportsDocuments(): bool
+            {
+                return false;
             }
 
             public function supportsVision(): bool

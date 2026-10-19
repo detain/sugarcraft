@@ -348,6 +348,18 @@ final class VertexProviderTest extends TestCase
         $this->assertFalse($this->providerWithPredictor([], $unused, self::LEGACY_GOOGLE_MODEL)->supportsVision());
     }
 
+    /**
+     * CTX-2: the document block is the Messages wire's, so only the Claude arm
+     * claims it. The Gemini inlineData document path is declined this slice.
+     */
+    public function testSupportsDocumentsOnTheClaudeArmOnly(): void
+    {
+        $unused = null;
+        $this->assertTrue($this->providerWithPredictor()->supportsDocuments());
+        $this->assertFalse($this->providerWithPredictor([], $unused, self::GEMINI_MODEL)->supportsDocuments());
+        $this->assertFalse($this->providerWithPredictor([], $unused, self::LEGACY_GOOGLE_MODEL)->supportsDocuments());
+    }
+
     public function testSupportsJsonSchemaReturnsFalse(): void
     {
         $this->assertFalse($this->providerWithPredictor()->supportsJsonSchema());

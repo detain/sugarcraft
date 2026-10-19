@@ -5779,12 +5779,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         }
 
         $vision = null;
+        $documents = null;
         $out = [];
         $replayed = [];
         foreach ($visible as $i => $msg) {
             if ($msg->role->value === 'user') {
                 $rowNotice = null;
-                $out[] = $this->typedUserMessage($msg, $vision, $rowNotice);
+                $out[] = $this->typedUserMessage($msg, $vision, $documents, $rowNotice);
                 if ($i === $lastUser) {
                     $attachmentNotice = $rowNotice;
                 }
@@ -5888,11 +5889,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * One user row as a {@see UserMessage}, its attachments carried - see
      * {@see toTypedMessages()}.
      */
-    private function typedUserMessage(Message $msg, ?bool &$vision, ?string &$notice): UserMessage
+    private function typedUserMessage(Message $msg, ?bool &$vision, ?bool &$documents, ?string &$notice): UserMessage
     {
         $content = $msg->content;
         $kept = [];
         $withheld = [];
+        $withheldDocs = [];
         foreach ($msg->attachments as $attachment) {
             if (!$attachment instanceof Attachment) {
                 continue;
@@ -5906,6 +5908,21 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     $content .= ($content === '' ? '' : "\n\n") . '[Image attachment '
                         . str_replace(['"', "\r", "\n"], ["'", ' ', ' '], $attachment->path)
                         . ' was not sent: the active model does not accept images.]';
+
+                    continue;
+                }
+            }
+            if ($attachment->type === AttachmentType::Document && $attachment->data !== null) {
+                // CTX-2: the PDF half of the same never-silent rule - a
+                // document-capable wire takes the bytes as a block, anything
+                // else withholds the attachment and says so, twice over:
+                // once in the text the model reads, once in the transcript.
+                $documents ??= $this->provider->supportsDocuments();
+                if (!$documents) {
+                    $withheldDocs[] = trim((string) preg_replace('/[\p{C}\s]+/u', ' ', $attachment->name())) ?: '(unnamed)';
+                    $content .= ($content === '' ? '' : "\n\n") . '[Document attachment '
+                        . str_replace(['"', "\r", "\n"], ["'", ' ', ' '], $attachment->path)
+                        . ' was not sent: the active model does not accept documents.]';
 
                     continue;
                 }
@@ -5929,6 +5946,22 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 count($withheld) === 1 ? 'it' : 'them',
                 count($withheld) === 1 ? 'it' : 'them',
             );
+        }
+
+        if ($withheldDocs !== []) {
+            // Its own sentence, kept separate from the image notice: the two
+            // capabilities are two different model choices to make.
+            $docNotice = sprintf(
+                '%s %s not sent: %s does not accept documents, so the model was told %s attached but cannot see %s. '
+                . 'Switch to a document-capable model to send %s.',
+                count($withheldDocs) === 1 ? 'Document' : 'Documents',
+                implode(', ', $withheldDocs) . (count($withheldDocs) === 1 ? ' was' : ' were'),
+                $this->provider->name() . ' (' . ($this->servedModel() ?? $this->model) . ')',
+                count($withheldDocs) === 1 ? 'it was' : 'they were',
+                count($withheldDocs) === 1 ? 'it' : 'them',
+                count($withheldDocs) === 1 ? 'it' : 'them',
+            );
+            $notice = $notice === null ? $docNotice : $notice . ' ' . $docNotice;
         }
 
         return $typed;

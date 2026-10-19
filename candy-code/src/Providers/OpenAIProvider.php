@@ -195,6 +195,11 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel
      * {@see TEXT_ONLY_MODELS}. Before this every model answered yes, so an
      * image sent to a text-only model failed the turn with the API's error.
      */
+    public function supportsDocuments(): bool
+    {
+        return false;
+    }
+
     public function supportsVision(): bool
     {
         if ($this->supportsVision !== null) {

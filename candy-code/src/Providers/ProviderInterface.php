@@ -14,6 +14,17 @@ interface ProviderInterface
 
     public function supportsVision(): bool;
 
+    /**
+     * Whether this provider may receive a PDF document attachment (CTX-2).
+     *
+     * True means the wire carries {@see \SugarCraft\Code\Messages\UserMessage::documents()}
+     * as its own document blocks. Only the Anthropic Messages family answers
+     * true today; the capability is consulted once, upstream, by
+     * {@see \SugarCraft\Code\Backend\EngineBackend::toTypedMessages()}, which
+     * withholds documents (with a notice) from a provider that answers false.
+     */
+    public function supportsDocuments(): bool;
+
     public function supportsJsonSchema(): bool;
 
     /**

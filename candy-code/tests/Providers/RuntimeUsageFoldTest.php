@@ -168,6 +168,11 @@ final class RuntimeUsageFoldTest extends TestCase
                 return false;
             }
 
+            public function supportsDocuments(): bool
+            {
+                return false;
+            }
+
             public function supportsVision(): bool
             {
                 return false;
@@ -223,6 +228,11 @@ final class RuntimeUsageFoldTest extends TestCase
             }
 
             public function supportsFunctionCalling(): bool
+            {
+                return false;
+            }
+
+            public function supportsDocuments(): bool
             {
                 return false;
             }

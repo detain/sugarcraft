@@ -517,6 +517,11 @@ final class FixedWindowProvider implements ProviderInterface
         return false;
     }
 
+    public function supportsDocuments(): bool
+    {
+        return false;
+    }
+
     public function supportsVision(): bool
     {
         return false;

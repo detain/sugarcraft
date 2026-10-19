@@ -442,6 +442,15 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
      * image as a named text placeholder plus a transcript notice
      * ({@see \SugarCraft\Code\Backend\EngineBackend::toTypedMessages()}).
      */
+    public function supportsDocuments(): bool
+    {
+        // CTX-2 DECLINES Bedrock for this slice: Converse document blocks
+        // have their own shape (`format => 'pdf'`) and the wire here builds
+        // only image blocks, so a Claude-on-Bedrock model gets the PDF
+        // withheld with a notice rather than a part this encoder cannot make.
+        return false;
+    }
+
     public function supportsVision(): bool
     {
         $family = self::family($this->defaultModel);
