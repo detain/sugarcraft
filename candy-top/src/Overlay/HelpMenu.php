@@ -250,25 +250,33 @@ final class HelpMenu implements Overlay
      * The whole grid as pages of framed section boxes, independent of the
      * terminal beyond width and per-column height: every section becomes a
      * box (heading + its rows in roster order, descriptions wrapped to the
-     * box interior minus the key column), and boxes flow next-fit — down
-     * the current column, to the next column when one no longer fits the
-     * remaining height, to a new page when both columns are spent. A box
-     * is atomic; a section taller than one whole column splits into
-     * balanced segments, EACH a framed box re-embedding the heading, so
-     * every row stays visible. Pure and deterministic — the goldens and
-     * {@see self::geometry()} byte-pin this layout.
+     * box interior minus the key column), over-tall sections are first cut
+     * into sized segments, and the ordered boxes are then placed by a
+     * greedy pass — each box takes the FITTING column with the LEAST used
+     * height (ties to the left column), a column takes a box when
+     * `used + spacer + height` stays within `$perColumn` (the spacer is one
+     * blank row, needed only when the column already stacks a box), and
+     * the page turns only when NEITHER column fits. Later, smaller boxes
+     * therefore fill the shorter column's hole instead of trailing the
+     * first one down, and for every non-last page the first box of the
+     * next page provably fits NEITHER column of it — maximality is a
+     * property of the pass, not a hope. Boxes are never reordered against
+     * reading order. A box is atomic; a section taller than one whole
+     * column splits into balanced segments, EACH a framed box re-embedding
+     * the heading, so every row stays visible. Pure and deterministic —
+     * the goldens and {@see self::geometry()} byte-pin this layout.
      *
-     * @return list<list<list<array{heading: string, lines: list<array{0: string, 1: string}>, row: int, segment: int, segments: int}>>> pages => columns => boxes (lines hold [key cells, description cells]; row is the box's 0-based offset in its column)
+     * @return list<list<list<array{heading: string, lines: list<array{0: string, 1: string}>, row: int, segment: int, segments: int}>>> pages => columns => boxes (lines hold [key cells, description cells]; row is the box's 0-based offset in its column, spacer gaps included)
      */
     public static function plan(int $width, int $perColumn): array
     {
         $columnCount = self::columnsFor($width);
         $descriptionWidth = max(1, self::columnWidth($width, $columnCount) - 2 - self::KEY_COL);
         $chunkMax = max(1, $perColumn - 2);
-        $pages = [];
-        $columns = array_fill(0, $columnCount, []);
-        $column = 0;
-        $row = 0;
+
+        // Ordered boxes first: sections in KeyTable::SECTIONS order, each
+        // over-tall section pre-split so every segment fits one bare column.
+        $boxes = [];
         foreach (KeyTable::sections() as $heading => $rows) {
             $title = Lang::t($heading);
             $lines = [];
@@ -282,25 +290,47 @@ final class HelpMenu implements Overlay
             }
             $segments = self::splitSegments($lines, $chunkMax);
             foreach ($segments as $index => $segment) {
-                $height = count($segment) + 2;
-                if ($row > 0 && $row + $height > $perColumn) {
-                    ++$column;
-                    $row = 0;
-                    if ($column >= $columnCount) {
-                        $pages[] = $columns;
-                        $columns = array_fill(0, $columnCount, []);
-                        $column = 0;
-                    }
-                }
-                $columns[$column][] = [
+                $boxes[] = [
                     'heading' => $title,
                     'lines' => $segment,
-                    'row' => $row,
+                    'row' => 0,
                     'segment' => $index,
                     'segments' => count($segments),
                 ];
-                $row += $height;
             }
+        }
+
+        // Greedy placement in that order: least-used fitting column, page
+        // turn only on a two-column refusal.
+        $pages = [];
+        $columns = array_fill(0, $columnCount, []);
+        $used = array_fill(0, $columnCount, 0);
+        foreach ($boxes as $box) {
+            $height = count($box['lines']) + 2;
+            $target = null;
+            for ($c = 0; $c < $columnCount; ++$c) {
+                $needed = $used[$c] + ($used[$c] > 0 ? 1 : 0) + $height;
+                if ($needed <= $perColumn && ($target === null || $used[$c] < $used[$target])) {
+                    $target = $c;
+                }
+            }
+            if ($target === null && $used !== array_fill(0, $columnCount, 0)) {
+                // Neither column takes the box: flush the page and start
+                // the next; the fresh left column always accepts it below.
+                $pages[] = $columns;
+                $columns = array_fill(0, $columnCount, []);
+                $used = array_fill(0, $columnCount, 0);
+            }
+            if ($target === null) {
+                // Degenerate column (perColumn < 3): the box is taller than
+                // any empty column can hold. Place it at the head of the
+                // left column anyway — overflowing exactly as the old
+                // atomic flow did on the same inputs, and terminating.
+                $target = 0;
+            }
+            $box['row'] = $used[$target] > 0 ? $used[$target] + 1 : 0;
+            $columns[$target][] = $box;
+            $used[$target] = $box['row'] + $height;
         }
         $pages[] = $columns;
 

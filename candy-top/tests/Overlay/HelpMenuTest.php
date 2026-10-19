@@ -39,17 +39,23 @@ final class HelpMenuTest extends OverlayTestCase
         // The box is 78 wide here: framed columns are 35 cells inside the
         // side borders, descriptions wrap under a 20-cell key column at
         // descW = 15, and boxes are atomic — sections over one column's
-        // 15 rows continue as fresh framed segments, so the plan costs 9
-        // pages of 2 x (18 - 3) rows where the flat line stream took 6.
-        $this->assertSame(9, $pages, 'framed box flow, not the flat 177-line grid');
+        // 15 rows continue as fresh framed segments. The least-used-column
+        // greedy stacks each pair of boxes with a one-row spacer, so the
+        // plan costs 10 pages of 2 x (18 - 3) rows where the flat line
+        // stream took 6 and the old flush next-fit took 9.
+        $this->assertSame(10, $pages, 'framed box flow, not the flat 177-line grid');
 
         [$wx, $wy, $wh, $wp] = HelpMenu::geometry(120, 40);
         $this->assertSame(1, $wx, 'max(1, 120/2 - 118/2)');
         $this->assertSame(max(1, 20 - 4 - intdiv($n, 2)), $wy);
         $this->assertSame(min(34, $n + 3), $wh);
-        $this->assertSame(3, $wp, 'sections over a 2 x (34 - 3) = 62-row page: General+Panels+Navigation, Process list..Overlays, Mouse+Info');
+        $this->assertSame(3, $wp, 'sections over a 2 x (34 - 3) = 62-row page: General+Panels+Navigation, Process list+Search & filter+Net & io, Process actions+Overlays+Mouse+Info');
 
-        $this->assertSame(1, HelpMenu::geometry(120, 80)[3], 'a tall terminal fits every section box on one 120-row page');
+        // The greedy's spacer makes the wrapped (118-wide) grid 119 box
+        // rows plus 8 stack gaps — over one 2 x 60-row page — while the
+        // zero-wrap 166-wide grid (80 box rows + 8 gaps) still lands whole.
+        $this->assertSame(2, HelpMenu::geometry(120, 80)[3], 'the wrapped grid needs two pages at width 118');
+        $this->assertSame(1, HelpMenu::geometry(168, 80)[3], 'a tall, wide terminal fits every section box on one page');
     }
 
     public function testPagingWrapsBothWays(): void
@@ -71,7 +77,7 @@ final class HelpMenuTest extends OverlayTestCase
         $this->assertInstanceOf(HelpMenu::class, $r->overlay);
         $this->assertSame(1, $r->overlay->page);
 
-        $one = HelpMenu::new()->update(self::key('down'), self::ctx(120, 80));
+        $one = HelpMenu::new()->update(self::key('down'), self::ctx(168, 80));
         $this->assertInstanceOf(HelpMenu::class, $one->overlay);
         $this->assertSame(0, $one->overlay->page, 'one page: nothing to turn');
     }
