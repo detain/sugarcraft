@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // Category 'App', matching /keys and /budget: the gate is built once per LAUNCH
 // by Cli\Bootstrap::permissionGate() and carried across /new, /clear and a
@@ -27,6 +28,7 @@ return BuiltInCommand::new(CommandSpec::new(
     'permissions',
     Lang::t('cmd.permissions.description'),
     Lang::t('cmd.category.app'),
+    paletteAction: PaletteAction::ShowPermissions,
     argumentHint: Lang::t('cmd.permissions.hint'),
 ))->withHandler('handlePermissionsCommand')
     ->withHostCommand(\SugarCraft\Code\Host\Commands\PermissionsCommand::class);

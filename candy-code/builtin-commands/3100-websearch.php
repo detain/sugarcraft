@@ -6,6 +6,7 @@ use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
 
+// VIS-4 ruling: stays slash-only — bare '/websearch' has no query to run and only answers with usage.
 return BuiltInCommand::new(CommandSpec::new(
     'websearch',
     Lang::t('cmd.websearch.description'),

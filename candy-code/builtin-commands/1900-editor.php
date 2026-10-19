@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // Roadmap 5.14h. No key binding: Ctrl+G, the usual chord for this, is
 // `shell.group-input` here, so the command is the one door. Hands the terminal
@@ -14,5 +15,6 @@ return BuiltInCommand::new(CommandSpec::new(
     'editor',
     Lang::t('cmd.editor.description'),
     Lang::t('cmd.category.app'),
+    paletteAction: PaletteAction::OpenEditor,
     argumentHint: Lang::t('cmd.editor.hint'),
 ))->withHandler('handleEditorCommand');

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // E653's Shape B. `/permissions` reports the GATE; `/notices` reports the
 // warnings the launch raised about it. The transcript rows those warnings seed
@@ -16,5 +17,6 @@ return BuiltInCommand::new(CommandSpec::new(
     'notices',
     Lang::t('cmd.notices.description'),
     Lang::t('cmd.category.app'),
+    paletteAction: PaletteAction::ShowNotices,
 ))->withHandler('handleNoticesCommand')
     ->withHostCommand(\SugarCraft\Code\Host\Commands\NoticesHostCommand::class);

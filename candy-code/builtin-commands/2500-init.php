@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // Roadmap 5.14e. A canned prompt rather than a handler: the agent studies the
 // checkout and writes the file, gated like any other Write. Filed under Memory
@@ -15,5 +16,6 @@ return BuiltInCommand::new(CommandSpec::new(
     'init',
     Lang::t('cmd.init.description'),
     Lang::t('cmd.category.memory'),
+    paletteAction: PaletteAction::InitializeProject,
     argumentHint: Lang::t('cmd.init.hint'),
 ))->withHandler('handleInitCommand');

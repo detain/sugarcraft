@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // crush-media W5.7 — show or switch the media render mode in one command
 // (slot 4040, after /play 4030):
@@ -17,6 +18,7 @@ return BuiltInCommand::new(CommandSpec::new(
     'rendermode',
     Lang::t('cmd.rendermode.description'),
     Lang::t('cmd.category.appearance'),
+    paletteAction: PaletteAction::ShowRenderMode,
     argumentHint: Lang::t('cmd.rendermode.hint'),
 ))->withHandler('handleRenderModeCommand')
     ->withHostCommand(\SugarCraft\Code\Host\Commands\RenderModeHostCommand::class);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // Deliberately NOT near `permissions` in category, though the two read alike.
 // `/permissions` reports the gate that decides what a tool call may DO, and is
@@ -16,6 +17,7 @@ return BuiltInCommand::new(CommandSpec::new(
     'rules',
     Lang::t('cmd.rules.description'),
     Lang::t('cmd.category.rules'),
+    paletteAction: PaletteAction::ListRules,
     argumentHint: Lang::t('cmd.rules.hint'),
 ))->withHandler('handleRulesCommand')
     ->withHostCommand(\SugarCraft\Code\Host\Commands\RulesHostCommand::class);
