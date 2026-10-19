@@ -77,7 +77,7 @@ final class ChatHostLangCatalogueTest extends TestCase
     {
         $asked = [];
         foreach ($this->sources() as $source) {
-            preg_match_all("/'((?:chat|host)\\.[a-z0-9_.]+)'/", $source, $m);
+            preg_match_all("/'((?:chat|host)\\.[a-z0-9_.-]+)'/", $source, $m);
             foreach ($m[1] as $key) {
                 $asked[$key] = true;
             }
