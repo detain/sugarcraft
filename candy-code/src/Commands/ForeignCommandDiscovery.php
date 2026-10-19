@@ -60,9 +60,14 @@ final class ForeignCommandDiscovery
     /**
      * Claude Code's trees: `~/.claude/commands` and
      * `{projectRoot}/.claude/commands`, tagged
-     * {@see SkillSource::Claude}. Project before user — the operator's own
-     * copy wins a name inside this convention (PROJECT < USER, the same
-     * order {@see CommandLoader::loadAll()} draws between the native tiers).
+     * {@see SkillSource::Claude}. Project before user, the walk last-write-wins,
+     * so the operator's own copy wins a name inside this convention
+     * (PROJECT < USER) — the OPPOSITE bias {@see CommandLoader::loadAll()}
+     * draws between the native tiers, where the project file out-ranks the
+     * user one; a native project command is the operator committing an
+     * override to the repo, while a cloned foreign tree is someone else's
+     * format arriving by `git clone`, which must not redefine what the
+     * operator hand-wrote at home.
      *
      * @return array<string, CommandSpec>
      */
