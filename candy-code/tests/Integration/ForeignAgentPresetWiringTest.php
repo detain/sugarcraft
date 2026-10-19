@@ -514,6 +514,14 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // top-level session mode the server named (the delegation
                 // block's own key is read from the array, never off an Agent).
                 'Sessions/BackgroundSessionRunner.php',
+                // NOT Agent readers: the schedule row owns its OWN recorded
+                // `permissionMode` field (the AUT-1 permission floor — a cron
+                // never re-reads the live session's mode), and ScheduleSpawner
+                // passes that row value through. The needle is shape-matched,
+                // so both files land on the roster even though neither touches
+                // `Agent::$permissionMode`.
+                'Sessions/Schedule.php',
+                'Sessions/ScheduleSpawner.php',
                 // Roadmap 4.1-2: the gate was decided. TaskTool hands the mode
                 // to AgentManager::createSubAgent(), which narrows it to the
                 // session's (stricter-of, never wider), and fromPreset()
