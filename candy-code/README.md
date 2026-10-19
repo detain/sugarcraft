@@ -486,10 +486,10 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 <!-- commands:roster:begin -->
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/btw` `/budget` `/clear`
 `/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff` `/editor`
-`/exit` (`/quit`) `/fork` `/generate` `/goal` `/grind` `/handoff` `/help`
-`/hooks` `/init` `/keys` `/layout` `/mcp` `/memory` `/model` `/new` `/newrule`
-`/notices` `/pane` `/permissions` `/play` `/pruning` `/recompress` `/redo`
-`/rename` `/rendermode` `/review` `/rewind` `/rules` `/security-review`
+`/effort` `/exit` (`/quit`) `/fork` `/generate` `/goal` `/grind` `/handoff`
+`/help` `/hooks` `/init` `/keys` `/layout` `/mcp` `/memory` `/model` `/new`
+`/newrule` `/notices` `/pane` `/permissions` `/play` `/pruning` `/recompress`
+`/redo` `/rename` `/rendermode` `/review` `/rewind` `/rules` `/security-review`
 `/sendto` `/sessions` `/settings` (`/config`) `/share` `/skills` `/sweep`
 `/theme` `/undo` `/websearch` `/workflow`.
 <!-- commands:roster:end -->

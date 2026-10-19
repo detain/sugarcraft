@@ -12285,7 +12285,7 @@ final class Chat implements Model
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
-        'context', 'tokens', 'btw', 'play', 'hooks',
+        'context', 'tokens', 'btw', 'play', 'hooks', 'effort',
     ];
 
     /**
@@ -14183,6 +14183,146 @@ final class Chat implements Model
         $next->primeModelCatalog($args[0]);
 
         return [$next, $cmd];
+    }
+
+    /**
+     * `/effort [level|auto]` (PRV-2 §6.5) - the one reasoning dial, answered
+     * by the only authority on what a dial does: the provider.
+     *
+     * The ShapesReasoningEffort roster decides, and every class outside it
+     * is refused OUT LOUD - a tier that saves cleanly into config.json while
+     * no wire reads it is the exact set-but-ignored failure the plan bans,
+     * so a refusal here never persists and never touches the backend. A
+     * fallback chain is judged by its primary (the request rides to it
+     * first), matching how the wire seams answer for the chain.
+     *
+     * A set applies live through {@see Backend\EngineBackend::withReasoningEffort()}
+     * - the same mid-session overlay `/model` uses - and persists through the
+     * workspace's SettingsWriter user tier, the same door as the per-provider
+     * `models` map; a failed save is reported, never fatal, and the live value
+     * then only outlives the next settings reload the way `maxToolSteps` does.
+     * `auto` DELETES the key rather than writing an empty one, so a lower
+     * layer still speaks, and clears the live overlay to match.
+     *
+     * @param list<string> $args
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleEffortCommand(array $args): array
+    {
+        $engine = $this->backend instanceof Backend\EngineBackend ? $this->backend : null;
+        $provider = $engine?->provider();
+        if ($provider instanceof \SugarCraft\Code\Providers\FallbackProvider) {
+            $provider = $provider->primary();
+        }
+        $names = $provider instanceof \SugarCraft\Code\Providers\ProviderInterface ? $provider->name() : 'this backend';
+        $shapes = $provider instanceof \SugarCraft\Code\Providers\ShapesReasoningEffort;
+
+        if ($args === []) {
+            if ($engine === null) {
+                return $this->effortRow(Lang::t('chat.effort.status_no_backend'));
+            }
+
+            $raw = $engine->reasoningEffort();
+            $level = $raw === null ? null : (string) $raw;
+
+            if (!$shapes) {
+                return $this->effortRow(Lang::t('chat.effort.status', [
+                    'level' => $level ?? 'unset',
+                    'provider' => $names,
+                    'shape' => Lang::t('chat.effort.shape.none'),
+                ]));
+            }
+
+            if ($level === null) {
+                $shape = Lang::t('chat.effort.shape.unset');
+            } elseif ($provider instanceof \SugarCraft\Code\Providers\AnthropicProvider
+                || $provider instanceof \SugarCraft\Code\Providers\VertexProvider
+                || $provider instanceof \SugarCraft\Code\Providers\GeminiProvider
+            ) {
+                $shape = Lang::t('chat.effort.shape.thinking', ['tokens' => (string) \SugarCraft\Code\Providers\EffortBudget::thinkingTokens($level)]);
+            } else {
+                $shape = Lang::t('chat.effort.shape.request');
+            }
+
+            return $this->effortRow(Lang::t('chat.effort.status', ['level' => $level ?? 'unset', 'provider' => $names, 'shape' => $shape]));
+        }
+
+        $levels = implode('|', \SugarCraft\Code\Providers\EffortBudget::levels());
+
+        if (count($args) > 1) {
+            return $this->effortRow(Lang::t('chat.effort.usage', ['levels' => $levels]));
+        }
+
+        $token = strtolower(trim($args[0]));
+
+        if ($token === 'auto' || $token === 'clear') {
+            [$next, $cmd] = $this->effortRow(Lang::t('chat.effort.cleared', [
+                'provider' => $names,
+                'note' => $this->persistEffort(null),
+            ]));
+
+            return [$engine === null ? $next : $next->withBackend($engine->withReasoningEffort(null)), $cmd];
+        }
+
+        $level = \SugarCraft\Code\Agents\Effort::tryFrom($token)?->value;
+
+        if ($level === null) {
+            return $this->effortRow(Lang::t('chat.effort.usage', ['levels' => $levels]));
+        }
+
+        if (!$shapes) {
+            return $this->effortRow(Lang::t('chat.effort.unsupported', ['provider' => $names]));
+        }
+
+        [$next, $cmd] = $this->effortRow(Lang::t('chat.effort.set', [
+            'level' => $level,
+            'provider' => $names,
+            'note' => $this->persistEffort($level),
+        ]));
+
+        // $shapes can only have been answered through a live engine, so the
+        // overlay below never dereferences null - the roster is read off it.
+        return [$next->withBackend($engine->withReasoningEffort($level)), $cmd];
+    }
+
+    /**
+     * One UI-only transcript row answering `/effort`, laid out like
+     * handleModelCommand's rows: the typed line stays out of the model's
+     * view, the answer rides `withUiOnly()`.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function effortRow(string $row): array
+    {
+        return [$this->withInputBuf('')->mutate([
+            'history' => [...$this->history, Message::assistant($row)->withUiOnly()],
+        ]), null];
+    }
+
+    /**
+     * The user-tier save door `/model`'s settings write uses - same workspace
+     * service, same reported-not-fatal failure semantics. `null` UNSETS the
+     * key (a reset that leaves no explicit value shadowing lower layers),
+     * which is why the two notes read differently.
+     */
+    private function persistEffort(?string $level): string
+    {
+        $writer = $this->workspace?->service(\SugarCraft\Code\Config\Settings\SettingsWriter::class);
+        if (!$writer instanceof \SugarCraft\Code\Config\Settings\SettingsWriter) {
+            return Lang::t('chat.effort.note_unsavable');
+        }
+
+        try {
+            $path = $level === null
+                ? $writer->write(\SugarCraft\Code\Config\Settings\SettingsTier::You, [], ['reasoningEffort'])
+                : $writer->write(\SugarCraft\Code\Config\Settings\SettingsTier::You, ['reasoningEffort' => $level]);
+
+            return $level === null
+                ? Lang::t('chat.effort.note_cleared', ['path' => self::reportField($path)])
+                : Lang::t('chat.effort.note_saved', ['path' => self::reportField($path)]);
+        } catch (\Throwable $e) {
+            return Lang::t('chat.effort.note_failed', ['error' => self::reportField($e->getMessage())]);
+        }
     }
 
     /**
