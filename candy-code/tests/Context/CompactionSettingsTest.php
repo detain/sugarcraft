@@ -173,6 +173,7 @@ final class CompactionSettingsTest extends TestCase
             'compaction.idleOfferSeconds' => 900,
             'compaction.mode' => 'Heuristic',
             'compaction.refillLimit' => 5,
+            'compaction.idleAuto' => true,
         ]);
 
         $this->assertSame([60, 75, 90], [$config->reminderThreshold, $config->backgroundCompactionThreshold, $config->foregroundBlockingThreshold]);
@@ -182,6 +183,7 @@ final class CompactionSettingsTest extends TestCase
         $this->assertTrue($config->reminderTokensSet && $config->backgroundCompactionTokensSet && $config->foregroundBlockingTokensSet);
         $this->assertTrue($config->offersCompressUnprompted());
         $this->assertSame([900, CompactorConfig::MODE_HEURISTIC, 5], [$config->idleOfferSeconds, $config->mode, $config->refillLimit]);
+        $this->assertTrue($config->idleAuto, 'the switch reads as a real bool');
 
         $nudges = $config->nudgePolicy();
         $this->assertSame([40_000, 90_000, 3, 7], [$nudges->minContextTokens, $nudges->maxContextTokens, $nudges->nudgeFrequency, $nudges->iterationThreshold]);
@@ -341,11 +343,15 @@ final class CompactionSettingsTest extends TestCase
     /**
      * N-P4b remainder: a save rebuilds the session's config
      * (`Chat::applySettings()`), so every `compaction.*` key is live. All but
-     * the breaker's limit are tuning a project may set; that one is spend —
-     * raised, it lets a session pay for more compactions that buy nothing —
-     * and stays the operator's.
+     * the breaker's limit and the idle auto-fold are tuning a project may set;
+     * the breaker is spend — raised, it lets a session pay for more
+     * compactions that buy nothing — and stays the operator's. The auto-fold
+     * is tuning by class but user-tier by the same money logic in the
+     * opposite direction: it spends a provider call UNATTENDED, so the trust
+     * grant that lets a checkout tune a session must not let it sign the
+     * session up to background billing (CTX-5, inv-63 §Item 5.2).
      */
-    public function testEveryCompactionKeyIsLiveAndTuningAProjectMaySetButTheBreakersLimit(): void
+    public function testEveryCompactionKeyIsLiveTuningAProjectMaySetButTheBreakersLimitAndTheAutoFold(): void
     {
         $seen = 0;
         foreach (SettingsSchema::all() as $definition) {
@@ -360,10 +366,15 @@ final class CompactionSettingsTest extends TestCase
                 $this->assertSame(\SugarCraft\Code\Config\Settings\RiskClass::Spend, $definition->riskClass);
                 continue;
             }
+            if ($definition->key === CompactorConfig::SETTING_IDLE_AUTO) {
+                $this->assertFalse($definition->projectSettable, 'the unattended-spend switch is the operator\'s');
+                $this->assertSame(\SugarCraft\Code\Config\Settings\RiskClass::Tuning, $definition->riskClass);
+                continue;
+            }
             $this->assertTrue($definition->projectSettable, "{$definition->key} is tuning a project may set");
             $this->assertSame(\SugarCraft\Code\Config\Settings\RiskClass::Tuning, $definition->riskClass);
         }
-        $this->assertSame(14, $seen, 'eleven tier keys, the idle offer, the mode and the breaker');
+        $this->assertSame(15, $seen, 'eleven tier keys, the idle offer, its opt-in auto-fold, the mode and the breaker');
 
         foreach ([CompactorConfig::SETTING_NUDGE_MIN_TOKENS, CompactorConfig::SETTING_NUDGE_MAX_TOKENS, CompactorConfig::SETTING_NUDGE_FREQUENCY, CompactorConfig::SETTING_NUDGE_ITERATIONS, CompactorConfig::SETTING_COMPRESS] as $key) {
             $this->assertSame(\SugarCraft\Code\Config\Settings\ApplyMode::NextTurn, SettingsSchema::byKey($key)?->applyMode, "{$key} reaches the engine with the next dispatch");
@@ -380,6 +391,7 @@ final class CompactionSettingsTest extends TestCase
 
         $this->assertSame(IdleCompactionPolicy::IDLE_SECONDS, $config->idleOfferSeconds);
         $this->assertSame(IdleCompactionPolicy::REFILL_LIMIT, $config->refillLimit);
+        $this->assertFalse($config->idleAuto, 'CTX-5: a background provider call is never on by default');
         $this->assertSame(CompactorConfig::MODE_LLM, $config->mode);
         $this->assertTrue($config->autoCompacts());
         $this->assertTrue($config->summarisesWithModel(true));
@@ -387,8 +399,21 @@ final class CompactionSettingsTest extends TestCase
 
         $this->assertSame(IdleCompactionPolicy::IDLE_SECONDS, SettingsSchema::byKey(CompactorConfig::SETTING_IDLE_OFFER_SECONDS)?->default);
         $this->assertSame(IdleCompactionPolicy::REFILL_LIMIT, SettingsSchema::byKey(CompactorConfig::SETTING_REFILL_LIMIT)?->default);
+        $this->assertSame(false, SettingsSchema::byKey(CompactorConfig::SETTING_IDLE_AUTO)?->default);
         $this->assertSame(CompactorConfig::MODE_LLM, SettingsSchema::byKey(CompactorConfig::SETTING_MODE)?->default);
         $this->assertSame(CompactorConfig::MODES, SettingsSchema::byKey(CompactorConfig::SETTING_MODE)?->enumValues);
+    }
+
+    public function testIdleAutoRoundTripsThroughTheSetterAndAnExplicitFalseReadsAsFalse(): void
+    {
+        $this->assertTrue(CompactorConfig::new()->withIdleAuto()->idleAuto);
+        $this->assertFalse(CompactorConfig::new()->withIdleAuto(true)->withIdleAuto(false)->idleAuto, 'immutable derive, last write wins');
+        $this->assertTrue(CompactorConfig::fromSettings(['compaction.idleAuto' => true])->idleAuto);
+        $this->assertFalse(
+            CompactorConfig::fromSettings(['compaction.idleAuto' => false])->idleAuto,
+            'an explicit false is a read, not a miss — fromSettings([]) and it agree, so no sentinel is needed',
+        );
+        $this->assertEquals(CompactorConfig::new(), CompactorConfig::fromSettings(['compaction.idleAuto' => false]));
     }
 
     public function testTheModeDecidesWhoSummarisesAndWhetherAnythingCompactsOnItsOwn(): void
@@ -427,6 +452,10 @@ final class CompactionSettingsTest extends TestCase
         yield 'mode not a string' => [['compaction.mode' => 1]];
         yield 'zero refill' => [['compaction.refillLimit' => 0]];
         yield 'float refill' => [['compaction.refillLimit' => 2.5]];
+        // CTX-5: the switch buys a background provider call, so an ambiguous
+        // hand edit must not guess — a real bool or the default stands.
+        yield 'string idleAuto' => [['compaction.idleAuto' => 'true']];
+        yield 'int idleAuto' => [['compaction.idleAuto' => 1]];
     }
 
     /**

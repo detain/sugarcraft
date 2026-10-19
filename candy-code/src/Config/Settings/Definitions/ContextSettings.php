@@ -164,6 +164,20 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withHelp('Automatic compactions in a row that may come straight back over their tier, prompt unsent, before the next prompt is refused instead of compacted again.')
                 ->withReaderSymbol(IdleCompactionPolicy::class . '::thrashTripped')
                 ->withReadBy($readBy . ' → `IdleCompactionPolicy::thrashTripped()`'),
+            // CTX-5: the opt-in that turns the idle window from an offer into a
+            // fold. User-tier like the breaker above it — the money side is the
+            // existing spend cap, so the class stays Tuning with the offer — and
+            // default-off because it bills a summarisation round-trip to a
+            // session nobody is watching. Both hosts read it through the policy.
+            SettingDefinition::new(CompactorConfig::SETTING_IDLE_AUTO, SettingType::Bool, false)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Live)
+                ->withLabel(Lang::t('settings.compaction.idleAuto.label'))
+                ->withHelp('Compact an idle over-tier session during the idle instead of waiting for the next prompt, using the automatic tier\'s machinery (spend cap and thrash breaker apply). Costs a background provider call; needs compaction.idleOfferSeconds above 0.')
+                ->withReaderSymbol(IdleCompactionPolicy::class . '::shouldAutoCompact')
+                ->withReadBy($readBy . ' → `IdleCompactionPolicy::shouldAutoCompact()`'),
             // Roadmap 3.B-4 / N-P4b: the model's context reminders. Read with
             // the compaction keys and handed to the engine's step loop through
             // `CompactorConfig::nudgePolicy()`; a min above the max is ignored

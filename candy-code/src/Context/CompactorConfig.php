@@ -124,6 +124,13 @@ final readonly class CompactorConfig
     public const SETTING_MODE = 'compaction.mode';
     public const SETTING_REFILL_LIMIT = 'compaction.refillLimit';
 
+    /**
+     * `compaction.idleAuto` (CTX-5): whether the idle window, rather than only
+     * producing the human offer, also triggers the automatic fold on its own.
+     * Default false — it spends a provider call on a session nobody is watching.
+     */
+    public const SETTING_IDLE_AUTO = 'compaction.idleAuto';
+
     /** `compaction.mode`: the summary model writes the summaries (the heuristic is its fallback). */
     public const MODE_LLM = 'llm';
 
@@ -157,6 +164,7 @@ final readonly class CompactorConfig
         self::SETTING_BLOCK_TOKENS,
         self::SETTING_MODEL_TOKEN_CAPS,
         self::SETTING_IDLE_OFFER_SECONDS,
+        self::SETTING_IDLE_AUTO,
         self::SETTING_MODE,
         self::SETTING_REFILL_LIMIT,
         self::SETTING_NUDGE_MIN_TOKENS,
@@ -275,6 +283,12 @@ final readonly class CompactorConfig
      *                                      before the thrash breaker refuses
      *                                      ({@see IdleCompactionPolicy::thrashTripped()}).
      *                                      Default {@see IdleCompactionPolicy::REFILL_LIMIT}.
+     * @param bool $idleAuto               Whether the idle window also triggers the
+     *                                      automatic fold on its own (CTX-5,
+     *                                      {@see IdleCompactionPolicy::shouldAutoCompact()})
+     *                                      rather than only offering `/compact` to a
+     *                                      human. Default false: the fold is a billed
+     *                                      provider call on a session nobody is watching.
      */
     public function __construct(
         public int $reminderThreshold = 70,
@@ -301,6 +315,7 @@ final readonly class CompactorConfig
         public int $idleOfferSeconds = IdleCompactionPolicy::IDLE_SECONDS,
         public string $mode = self::MODE_LLM,
         public int $refillLimit = IdleCompactionPolicy::REFILL_LIMIT,
+        public bool $idleAuto = false,
     ) {
         foreach (self::ABSOLUTE_FIELDS as $field) {
             self::assertAbsolute($field, $this->{$field});
@@ -345,7 +360,10 @@ final readonly class CompactorConfig
      * clears that cap for the model); a malformed entry is skipped.
      * `compaction.idleOfferSeconds` (`0` never offers), `compaction.mode` (one
      * of {@see MODES}, case-insensitive) and `compaction.refillLimit` (at
-     * least 1) follow the same rule.
+     * least 1) follow the same rule. `compaction.idleAuto` (CTX-5) takes a
+     * real boolean only — `"true"` and `1` are ignored, leaving the off
+     * default, because this key buys a background provider call and an
+     * ambiguous edit must not buy it by accident.
      *
      * `fromSettings([])` equals {@see new()}.
      *
@@ -440,6 +458,14 @@ final readonly class CompactorConfig
         $mode = $config[self::SETTING_MODE] ?? null;
         if (\is_string($mode) && \in_array(strtolower(trim($mode)), self::MODES, true)) {
             $changes['mode'] = strtolower(trim($mode));
+        }
+
+        // `compaction.idleAuto` (CTX-5): a strict bool. `"true"`-strings are not
+        // coerced — the schema writes real booleans, and a hand edit that got it
+        // wrong keeps the safe default rather than guessing at the intent.
+        $idleAuto = self::boolSetting($config, self::SETTING_IDLE_AUTO);
+        if ($idleAuto !== null) {
+            $changes['idleAuto'] = $idleAuto;
         }
 
         $compress = $config[self::SETTING_COMPRESS] ?? null;
@@ -614,6 +640,12 @@ final readonly class CompactorConfig
     public function withRefillLimit(int $limit): self
     {
         return $this->mutate(['refillLimit' => $limit]);
+    }
+
+    /** Let the idle window fold the automatic tier on its own (CTX-5) rather than only offer. */
+    public function withIdleAuto(bool $idleAuto = true): self
+    {
+        return $this->mutate(['idleAuto' => $idleAuto]);
     }
 
     /**
@@ -811,6 +843,20 @@ final readonly class CompactorConfig
         }
 
         return $value;
+    }
+
+    /**
+     * $config[$key] as a bool, or null when absent or not one — strings and
+     * ints are not coerced (see {@see fromSettings()} on why this key in
+     * particular refuses to guess).
+     *
+     * @param array<string, mixed> $config
+     */
+    private static function boolSetting(array $config, string $key): ?bool
+    {
+        $value = $config[$key] ?? null;
+
+        return \is_bool($value) ? $value : null;
     }
 
     /**

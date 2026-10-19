@@ -39,7 +39,10 @@ final class IdleCompactionPolicy
      * interrupting the user about. One hour: short enough that a session
      * resumed the next morning is caught, long enough that a coffee break is
      * not. The default of `compaction.idleOfferSeconds` (roadmap N-P4b), which
-     * a session carries on its {@see CompactorConfig}.
+     * a session carries on its {@see CompactorConfig}. The opt-in idle
+     * AUTO-fold ({@see shouldAutoCompact()}, CTX-5) re-measures on this same
+     * clock rather than minting a second one: one idle window, two verdicts —
+     * ask the human, or compact without asking if that is what was opted into.
      */
     public const IDLE_SECONDS = 3600;
 
@@ -114,6 +117,53 @@ final class IdleCompactionPolicy
         }
 
         if ($tokenLimit <= 0 || $tokenCount <= $tokenLimit) {
+            return false;
+        }
+
+        if ($lastActivityAt === null) {
+            return false;
+        }
+
+        return (($now ?? time()) - $lastActivityAt->getTimestamp()) > $idleSeconds;
+    }
+
+    /**
+     * Whether to compact during the idle instead of waiting for the next
+     * prompt (CTX-5) — the opt-in sibling of {@see shouldPrompt()}.
+     *
+     * The two differ in WHO acts, and the difference reaches the size test:
+     * the offer asks a human past the WHOLE window (the outermost tier, by
+     * design — nothing else was left to try), while this one hands work to
+     * the AUTOMATIC tier, so the caller's `$overTier` is its own
+     * `ContextCompactor::shouldCompact()` verdict — 85% (or the absolute
+     * cap), the same pair the next prompt would be judged by. Computing it
+     * here would need the history, and this file deliberately sees numbers,
+     * not transcripts; each caller supplies the verdict from whatever it can
+     * see, exactly as {@see shouldPrompt()} supplies its size test from a
+     * token count. The shared part — the only part two hosts must not
+     * disagree about — is that a fold may only start once the session has
+     * genuinely gone idle: the offer window re-measured on the SAME
+     * `compaction.idleOfferSeconds` the human offer reads, and the same
+     * `null` = "idleness unknown, never a grounds" rule.
+     *
+     * `$idleAuto` is `compaction.idleAuto` ({@see CompactorConfig::$idleAuto},
+     * default **false**): a summarisation round-trip costs a provider call
+     * while nobody is watching, so nothing here fires unless the person said
+     * it may. `idleSeconds <= 0` turns the offer off, and with it the auto
+     * fold — the offer window is the one idle clock this app has.
+     */
+    public static function shouldAutoCompact(
+        bool $overTier,
+        ?\DateTimeImmutable $lastActivityAt,
+        bool $idleAuto,
+        ?int $now = null,
+        int $idleSeconds = self::IDLE_SECONDS,
+    ): bool {
+        if (!$idleAuto || !$overTier) {
+            return false;
+        }
+
+        if ($idleSeconds <= 0) {
             return false;
         }
 

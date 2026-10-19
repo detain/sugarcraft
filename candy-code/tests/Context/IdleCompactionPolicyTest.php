@@ -15,7 +15,10 @@ use SugarCraft\Code\Context\IdleCompactionPolicy;
  * The file carries a second tier's number now too — the compaction circuit
  * breaker's `REFILL_LIMIT` — and it is tested here for the same reason the idle
  * pair is: the caller holds a count and this decides whether that many is enough
- * to stop, which is not a question two callers should answer separately.
+ * to stop, which is not a question two callers should answer separately. And a
+ * third predicate (CTX-5): {@see IdleCompactionPolicy::shouldAutoCompact()} is
+ * the opt-in idle AUTO-fold's reuse of the idle clock, tested for the standing
+ * reason — the two hosts that call it must not disagree about what "idle" means.
  *
  * @see IdleCompactionPolicy
  */
@@ -169,5 +172,54 @@ final class IdleCompactionPolicyTest extends TestCase
         $this->assertTrue(IdleCompactionPolicy::thrashTripped(\PHP_INT_MAX));
         $this->assertFalse(IdleCompactionPolicy::thrashTripped(0));
         $this->assertFalse(IdleCompactionPolicy::thrashTripped(-1), 'a negative run is no run at all');
+    }
+
+    // =====================================================================
+    // The third predicate this file carries (CTX-5): the opt-in idle AUTO-fold.
+    // It re-measures the clock above and takes the tier verdict from the
+    // caller; nothing in the two sections before it moves.
+    // =====================================================================
+
+    public function testTheAutoFoldFiresOnlyWhenEnabledOverTierAndIdle(): void
+    {
+        $now = 1_700_000_000;
+        $past = new DateTimeImmutable('@' . ($now - IdleCompactionPolicy::IDLE_SECONDS - 1));
+
+        $this->assertTrue(IdleCompactionPolicy::shouldAutoCompact(true, $past, true, $now));
+        $this->assertFalse(IdleCompactionPolicy::shouldAutoCompact(false, $past, true, $now), 'under-tier is the human-offer case, not this one');
+        $this->assertFalse(IdleCompactionPolicy::shouldAutoCompact(true, $past, false, $now), 'default-off: nobody pays for a fold that was not opted into');
+    }
+
+    /**
+     * The same two boundary rules the offer tier pins, because the fold
+     * re-measures the SAME clock: strictly past the window, and `0` turns the
+     * one idle clock off for both verdicts.
+     */
+    public function testTheAutoFoldKeepsTheOfferTiersClockBoundaries(): void
+    {
+        $now = 1_700_000_000;
+        $at = new DateTimeImmutable('@' . ($now - IdleCompactionPolicy::IDLE_SECONDS));
+        $past = new DateTimeImmutable('@' . ($now - IdleCompactionPolicy::IDLE_SECONDS - 1));
+
+        $this->assertFalse(IdleCompactionPolicy::shouldAutoCompact(true, $at, true, $now));
+        $this->assertTrue(IdleCompactionPolicy::shouldAutoCompact(true, $past, true, $now));
+        $this->assertFalse(IdleCompactionPolicy::shouldAutoCompact(true, $past, true, $now, 0), 'idleOfferSeconds 0 disables the offer AND the fold');
+        $this->assertTrue(IdleCompactionPolicy::shouldAutoCompact(true, new DateTimeImmutable('@' . ($now - 61)), true, $now, 60), 'the window is the session setting, not the constant');
+    }
+
+    public function testTheAutoFoldDoesNotGuessWhenIdlenessIsUnknown(): void
+    {
+        $this->assertFalse(IdleCompactionPolicy::shouldAutoCompact(true, null, true), 'same never-on-unknown rule as the offer');
+    }
+
+    /**
+     * The default $now is the wall clock here too — the seam must not be the
+     * only thing the boundary tests prove (mirrors the offer tier's own
+     * wall-clock pin).
+     */
+    public function testTheAutoFoldDefaultsToTheWallClock(): void
+    {
+        $this->assertTrue(IdleCompactionPolicy::shouldAutoCompact(true, new DateTimeImmutable('2 hours ago'), true));
+        $this->assertFalse(IdleCompactionPolicy::shouldAutoCompact(true, new DateTimeImmutable('1 second ago'), true));
     }
 }

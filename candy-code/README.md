@@ -1087,7 +1087,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and twenty-four keys are layered — `provider`,
+Only these one hundred and twenty-five keys are layered — `provider`,
 `models`, `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`,
 `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxToolSteps`,
@@ -1097,10 +1097,10 @@ Only these one hundred and twenty-four keys are layered — `provider`,
 `compaction.toolOutputChars`, `compaction.reminderTokens`,
 `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
 `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`,
-`contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
-`contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
-`repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`,
-`env.diffMaxBytes`, `contextWindow`, `autoReview`,
+`compaction.idleAuto`, `contextPruning.minContextTokens`,
+`contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`,
+`contextPruning.iterationNudgeThreshold`, `repoMap.enabled`, `repoMap.maxBytes`,
+`env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextWindow`, `autoReview`,
 `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`,
 `permissions.autoAllowReadOnly`, `secretEnvAllowlist`, `allowedTools`,
 `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
@@ -1167,7 +1167,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, sixty-eight keys are **never** taken from a project file:
+Even for a trusted project, sixty-nine keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1228,7 +1228,9 @@ the operator's cap nor to impose one that refuses their turns;
 operator's title model after every turn — input tokens on their credential, the
 same money axis; `compaction.refillLimit`, because it is how many automatic compactions that
 bought nothing the thrash breaker lets a session pay for in a row — the same
-argument counted in summarisation calls; `toolOutputCapBytes`,
+argument counted in summarisation calls; `compaction.idleAuto`, because it decides
+whether the session may pay for a summarisation round-trip NOBODY is watching —
+the same money axis, counted as the decision to spend it unattended; `toolOutputCapBytes`,
 `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
 `toolSpillWindowPercent` and `toolInstructionCapBytes`, the seven caps on what
 one tool result may hand the model,

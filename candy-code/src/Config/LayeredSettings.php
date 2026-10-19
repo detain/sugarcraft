@@ -525,6 +525,7 @@ final class LayeredSettings
         'compaction.idleOfferSeconds',
         'compaction.mode',
         'compaction.refillLimit',
+        'compaction.idleAuto',
         'contextPruning.minContextTokens',
         'contextPruning.maxContextTokens',
         'contextPruning.nudgeFrequency',
