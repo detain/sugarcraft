@@ -31,6 +31,7 @@ use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Skills\SkillMentions;
+use SugarCraft\Code\Tui\ComposerVim;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\SessionPicker;
@@ -72,6 +73,7 @@ use SugarCraft\Code\Tools\BuiltIn\WebSearch;
 use SugarCraft\Code\Palette\PaletteAction;
 use SugarCraft\Code\Palette\PaletteState;
 use SugarCraft\Forms\TextArea\TextArea;
+use SugarCraft\Forms\Vim\VimState;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\Sentinel;
@@ -503,6 +505,19 @@ final class Chat implements Model
     private static function scrollWheelLines(): int
     {
         return \SugarCraft\Code\Config\Settings\UiSettings::int('scrollWheelLines');
+    }
+
+    /**
+     * TUI-3A: is the composer's vim mode on? The `vimMode` setting's reader —
+     * user tier, Live, DEFAULT FALSE so every wire that never heard of it
+     * behaves byte-identically. The keystroke that finds the widget's arm
+     * flag disagreeing with this value re-arms the widget and is spent on the
+     * switch (see the wiring in {@see update()}); the sugar-forms Vim layer
+     * (w5f) is what the flag arms.
+     */
+    private static function vimModeEnabled(): bool
+    {
+        return \SugarCraft\Code\Config\Settings\UiSettings::bool('vimMode');
     }
 
     /**
@@ -1688,6 +1703,16 @@ final class Chat implements Model
          * clone is on screen.
          */
         private readonly ?\SugarCraft\Code\Sessions\ScheduleRegistry $scheduleRegistry = null,
+        /**
+         * TUI-3A: the composer's vim OPERATOR state (pending `d`/`y` plus the
+         * delete/yank register) — the app-side half of the mode, above the
+         * sugar-forms Vim layer that owns the state machine itself. See
+         * {@see ComposerVim}'s class docblock for the layering decision.
+         * Carried by VALUE through {@see mutate()} like 'input': a pending
+         * operator that reset on the next keystroke could never resolve, and
+         * an evaporating register would make `y` unobservable.
+         */
+        public readonly ComposerVim $composerVim = new ComposerVim(),
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -3227,6 +3252,83 @@ final class Chat implements Model
             return [$this->mutate(['mentionMenuDismissed' => true]), null];
         }
 
+        // ── TUI-3A: vim-mode composer, wiring half 1 of 2 ─────────────────
+        // (a) The SETTING is the truth and the widget carries the arm flag;
+        // the keystroke that FINDS them disagreeing is spent re-arming,
+        // because replaying a key through a widget built for the other mode
+        // is how stray characters get typed. UiSettings is memoized (the
+        // save that flips it calls forget()), so with the setting off — the
+        // DEFAULT, and every wire-dormant run — this comparison is
+        // `false !== false` per keystroke and the whole region below is
+        // inert. Toggling mid-session therefore applies on the NEXT
+        // keystroke, not the frame: no reload, no restart, one spent key.
+        $vimEnabled = self::vimModeEnabled();
+        if ($msg instanceof KeyMsg && $vimEnabled !== $this->input->vimMode) {
+            return [$this->mutate([
+                'input' => $this->input->withVimMode($vimEnabled),
+                'composerVim' => ComposerVim::empty(),
+            ]), null];
+        }
+
+        // (b) A pending operator (`d`/`y` waiting for its motion) resolves
+        // HERE, ahead of the double-Escape arm below, because its Escape
+        // means "cancel the operator" and must not arm the two-beat stop
+        // binding. Every keyboard owner above the composer gates it out the
+        // same way the Escape arm is gated: while a modal or the `@`/`$`
+        // popup is open that surface keeps its keys and the pending simply
+        // waits. Enter is the one overlap with an owner BELOW — the slash
+        // menu and the mention accept bind it first, so under a popup the
+        // operator dies and the menu gets its Enter, exactly as it would
+        // with vim off. A key that is no operator material at all (Tab, an
+        // arrow, a chord) clears the pending and re-routes through
+        // update() — the recursion is one step deep, since the cleaned
+        // clone's pending is null. That is the queue-owns-Tab / palette-owns-
+        // arrows guarantee: a forgotten `d` can never hold the keyboard
+        // hostage for one extra keystroke.
+        if (
+            $this->composerVim->pending !== null
+            && $msg instanceof KeyMsg
+            && $this->titleEditor === null
+            && $this->palette === null
+            && $this->sessionPicker === null
+            && $this->dirPicker === null
+            && $this->historySearch === null
+            && !$this->mentionPopupOpen()
+        ) {
+            if ($msg->type === KeyType::Enter && $this->slashMenuShouldIntercept()) {
+                return $this->mutate(['composerVim' => $this->composerVim->pendingCleared()])->update($msg);
+            }
+
+            [$vimInput, $vimState, $vimHandled] = ComposerVim::resolve($msg, $this->input, $this->composerVim);
+            if ($vimHandled) {
+                return [$this->mutate(['input' => $vimInput, 'composerVim' => $vimState]), null];
+            }
+
+            return $this->mutate(['composerVim' => $vimState])->update($msg);
+        }
+
+        // (c) While vim is armed and the widget sits in INSERT or VISUAL,
+        // Escape is that state's exit key and belongs to the widget: the
+        // two-beat stop arm below unconditionally claims every otherwise
+        // unowned Escape (the pre-vim behaviour), which would trap a user in
+        // Insert. NORMAL-state Escape therefore keeps its byte-identical
+        // turn-cancel meaning; a modal or the `@` popup above keeps its own
+        // Escape owner untouched, and with the setting off `vimMode` is false
+        // so this arm is inert.
+        if (
+            $msg->type === KeyType::Escape
+            && $this->input->vimMode
+            && $this->input->vimState !== VimState::Normal
+            && $this->titleEditor === null
+            && $this->palette === null
+            && $this->sessionPicker === null
+            && $this->dirPicker === null
+            && $this->historySearch === null
+            && !$this->mentionPopupOpen()
+        ) {
+            return $this->delegateToInput($msg);
+        }
+
         if ($msg->type === KeyType::Escape && $this->palette === null && $this->sessionPicker === null && $this->dirPicker === null && $this->historySearch === null) {
             if (!$this->inFlight) {
                 return [$this->mutate(['lastEscapeAt' => null]), null];
@@ -3875,6 +3977,23 @@ final class Chat implements Model
             // plain Home/End are line-scoped here (TextArea::update() answers
             // them with moveCursor($row, …), and this box can have rows) — and
             // deciding that is a keymap addition, not part of the ctrl filter.
+            // TUI-3A: vim-mode composer, wiring half 2 of 2 — the letters
+            // the sugar-forms Vim layer does NOT bind and a host must: `d`/`y`
+            // arm an operator, `D Y o O e p P` act at once. NORMAL state
+            // only (Insert is the lib's verbatim passthrough — typing must
+            // reach the draft), no pending operator (that resolved above the
+            // modals), and it sits LAST among the claim arms on purpose: the
+            // `?` key-help, the alt word chords, the ctrl family and every
+            // modal keep their pinned precedence. What this arm can claim is
+            // only what would otherwise reach the widget and be swallowed —
+            // with vim off, `$this->input->vimMode` is false and the arm is
+            // inert, byte-for-byte the delegation below.
+            $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt
+                && $this->composerVim->pending === null
+                && $this->input->vimMode
+                && $this->input->vimState === VimState::Normal
+                && ComposerVim::claims($msg->rune)
+                => $this->applyComposerVim($msg),
             !$msg->ctrl && \in_array($msg->type, self::DRAFT_KEYS, true)
                 => $this->delegateToInput($msg),
             default => [$this, null],
@@ -10812,6 +10931,11 @@ final class Chat implements Model
             'reasoningText' => $this->reasoningText,
             'keyHelp' => $this->keyHelp,
             'input' => $this->input,
+            // TUI-3A: carried like 'input' — the pending operator and the
+            // register are keystroke-spanning draft state, and a clone that
+            // dropped them would turn `dw` into a beep and `yy p` into an
+            // empty paste.
+            'composerVim' => $this->composerVim,
             // Passed by object identity, for the reason 'liveToolEvents' above
             // is: it is the session's running spend, and a clone that allocated
             // a fresh tracker would zero the total on the next keystroke.
@@ -17862,6 +17986,21 @@ final class Chat implements Model
      *
      * @return array{0: self, 1: ?\Closure}
      */
+    /**
+     * TUI-3A: run a claimed NORMAL-state letter through
+     * {@see ComposerVim::start()} — the single place the composer's
+     * operator-register state changes outside the pending-resolution arm
+     * (which calls {@see ComposerVim::resolve()} directly above the modals).
+     *
+     * @return array{0:Chat, 1:null}
+     */
+    private function applyComposerVim(KeyMsg $key): array
+    {
+        [$input, $state] = ComposerVim::start($key, $this->input, $this->composerVim);
+
+        return [$this->mutate(['input' => $input, 'composerVim' => $state]), null];
+    }
+
     private function delegateToInput(KeyMsg $msg): array
     {
         [$next, $cmd] = $this->input->update($msg);
@@ -17997,17 +18136,17 @@ final class Chat implements Model
      *
      * Deliberately the same boundary {@see dropLastWord()} uses, applied to
      * the draft up to the cursor rather than to the whole draft, so Ctrl+W
-     * and Alt+Left cannot disagree about where a word starts. TextArea has no
-     * word MOTION to delegate to — measured over
-     * `vendor/sugarcraft/sugar-forms/src/TextArea/TextArea.php`, its only
-     * word-aware member is the public `word()` (the run of non-whitespace
-     * under the cursor, a reader with no cursor effect), and it has no vim
-     * mode at all: `vimWordForward()`/`vimWordBackward()`/`$vimMode` live in
-     * the sibling `TextInput.php`, which this box does not use. So Chat
-     * keeps ownership of the boundary and drives the widget's public
-     * {@see TextArea::setCursor()} with it. `\s` in that pattern includes
-     * "\n", so word motion crosses a line break rather than sticking at
-     * column 0.
+     * and Alt+Left cannot disagree about where a word starts. These helpers
+     * keep ownership of the boundary rather than delegating to the widget:
+     * the sugar-forms Vim layer (w5f) does bind `w`/`b` on the TextArea now,
+     * but LINE-locally with its own `[a-zA-Z0-9_]` word, while this pair
+     * walks the flat draft offset with `\s` (newlines included) — two notions
+     * of a word boundary, deliberately: the alt chords and Ctrl+W are app
+     * keymap behavior pinned to whole-draft offsets, and Chat drives the
+     * widget's public {@see TextArea::setCursor()} with the result. `\s` in
+     * that pattern includes "\n", so word motion crosses a line break rather
+     * than sticking at column 0. (Until TUI-3A this doc-block claimed the
+     * widget had no vim mode at all — true when written, false since w5f.)
      */
     private function wordLeftOffset(): int
     {

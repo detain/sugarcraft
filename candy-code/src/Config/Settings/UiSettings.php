@@ -56,6 +56,7 @@ final class UiSettings
         'promptSuggestions',
         'promptSuggestionHistory',
         'maxCheckpoints',
+        'vimMode',
     ];
 
     /** @var array{fingerprint: string, values: array<string, mixed>}|null */

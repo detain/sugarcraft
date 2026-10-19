@@ -613,6 +613,7 @@ final class LayeredSettings
         'expandToolOutput',
         'maxCheckpoints',
         'keybindings',
+        'vimMode',
         'lintCommands',
         'formatCommands',
         'disabledMcpServers',

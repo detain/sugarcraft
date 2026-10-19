@@ -289,6 +289,22 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withHelp('{"shell.palette": "Ctrl+B"}: bind an EXTRA Ctrl+<key> chord to a binding id (the /keys reference names them); the shipped chord keeps working. Present-but-unusable refuses the launch; remove the key for the shipped bindings.')
                 ->withReaderSymbol(KeyBindingRegistry::class . '::chordFor')
                 ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()` — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a)'),
+            // TUI-3A: the composer's vim MODE (plan_comparison.md §3). USER
+            // tier on purpose — like `keybindings` above it, a checked-out
+            // project must not be able to flip the operator's own keystrokes;
+            // unlike `keybindings` it is Live, because the arm re-syncs the
+            // widget on the next keystroke rather than needing a reload. The
+            // keys are a MODE, not bindings: nothing here lands in /keys and
+            // the KeyBindingRegistry roster is untouched.
+            SettingDefinition::new('vimMode', SettingType::Bool, false)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Live)
+                ->withLabel(Lang::t('settings.vimMode.label'))
+                ->withHelp('NORMAL/INSERT editing in the draft box (i a I A o O Esc, h j k l w b e 0 $ x, dd D yy y p P v V): motions and deletion in NORMAL, verbatim typing in INSERT. A mode, not bindings — it never appears in /keys. Applies on the next keystroke after saving.')
+                ->withReaderSymbol(Chat::class . '::vimModeEnabled')
+                ->withReadBy('`Chat::update()` key dispatch (arm re-sync + operator resolution, TUI-3A) → `ComposerVim` over the sugar-forms `TextArea` Vim layer (w5f)'),
         ];
     }
 }

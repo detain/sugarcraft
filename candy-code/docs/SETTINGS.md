@@ -300,6 +300,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `expandToolOutput` | `Renderer::renderToolResults()`, `Chat::isToolOutputExpanded()` → `Renderer::toolOutputExpandedByDefault()` | yes |
 | `maxCheckpoints` | `EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()` | **no** |
 | `keybindings` | `Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()` — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a) | **no** |
+| `vimMode` | `Chat::update()` key dispatch (arm re-sync + operator resolution, TUI-3A) → `ComposerVim` over the sugar-forms `TextArea` Vim layer (w5f) | **no** |
 | `lintCommands` | `Bootstrap::hooks()` → `LintRunner::withCommands()` | **no** |
 | `formatCommands` | `Bootstrap::hooks()` → `FormatRunner::withCommands()` | **no** |
 | `disabledMcpServers` | `Bootstrap::mcpClient()` → `McpClient::setDenyPatterns()`, at the first MCP launch | yes |
@@ -1174,6 +1175,7 @@ project-settable.
 | `expandToolOutput` | Interface | bool | `false` | P U C | — | live | cosmetic |
 | `maxCheckpoints` | Interface | int | `100` | U C | — | live | tuning |
 | `keybindings` | Interface | object | `{}` | U C | — | reload | tuning |
+| `vimMode` | Interface | bool | `false` | U C | — | live | cosmetic |
 | `lintCommands` | Hooks & MCP | object | `{}` | U C | — | restart | exec |
 | `formatCommands` | Hooks & MCP | object | `{}` | U C | — | restart | exec |
 | `hooksDefaultTimeoutSeconds` | Hooks & MCP | number | `60` | C | — | restart | tuning |
@@ -1325,13 +1327,13 @@ Saved is not applied: see the next section for when each key takes effect.
 <!-- settings:apply:begin -->
 | Applies | When a saved change takes effect | Keys |
 |---|---|---|
-| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `reasoningEffort`, `maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `compaction.idleAuto`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints` |
+| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `reasoningEffort`, `maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `compaction.idleAuto`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `vimMode` |
 | next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `sd.timeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `memory.dreamProposeSkills`, `embeddingModel`, `skills.listingMaxBytes`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `streamHeaderTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
 | reload | On `/keys reload`, or at the next launch: the saved file is re-read and re-applied when you say the word (plan_comparison TUI-4a) | `keybindings` |
 | restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `instructions`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `lintCommands`, `formatCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.browseRoot`, `webhooks`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
-**In numbers:** thirty-seven live, fifty-five next turn, one reload, seventy
+**In numbers:** thirty-eight live, fifty-five next turn, one reload, sixty-nine
 restart and seven next launch.
 
 **This session only** accepts `maxOutputTokens`, `reasoningEffort`,
@@ -1358,7 +1360,8 @@ restart and seven next launch.
 `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
 `diffPreviewRows`, `toolOutputPreviewLines`, `sessions.autoTitle`,
 `promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`,
-`maxCheckpoints`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`.
+`maxCheckpoints`, `vimMode`, `providerRetryAttempts` and
+`providerRetryBaseBackoffMs`.
 <!-- settings:apply:end -->
 
 `provider` and `layout` are live through their own doors — `/model` and the
@@ -1579,15 +1582,16 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `sd.timeoutSeconds`, `sd.defaultModel`, `sd.presets`,
   `ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
   `instructions`, `instructionsExclude`, `disabledRules`, `embeddingModel`,
-  `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`,
-  `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`,
-  `subagentMaxActive`, `includeGitInstructions`, `attribution`, `lsp`,
-  `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
-  `watchFiles`, `queueMode`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
-  `diffPreviewRows`, `toolOutputPreviewLines`, `sessions.autoTitle`,
-  `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `keybindings`,
-  `lintCommands`, `formatCommands`, `disabledMcpServers`, `providerRetryAttempts`
-  and `providerRetryBaseBackoffMs` have none.
+
+  `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`, `subagentMaxTurns`,
+  `subagentMaxConcurrent`, `subagentMaxDepth`, `subagentMaxActive`,
+  `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`,
+  `theme`, `statusLine`, `layout`, `notify`, `watchFiles`, `queueMode`,
+  `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`,
+  `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestionHistory`,
+  `expandToolOutput`, `maxCheckpoints`, `keybindings`, `vimMode`, `lintCommands`,
+  `formatCommands`, `disabledMcpServers`, `providerRetryAttempts` and
+  `providerRetryBaseBackoffMs` have none.
   <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.

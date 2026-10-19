@@ -1123,7 +1123,7 @@ Only these one hundred and twenty-seven keys are layered — `provider`,
 `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
 `diffPreviewRows`, `toolOutputPreviewLines`, `sessionRetentionDays`,
 `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`,
-`expandToolOutput`, `maxCheckpoints`, `keybindings`, `lintCommands`,
+`expandToolOutput`, `maxCheckpoints`, `keybindings`, `vimMode`, `lintCommands`,
 `formatCommands`, `disabledMcpServers`, `mcp.enabled`, `connectTimeoutSeconds`,
 `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
 `debug.commands`, `debug.rules`, `debug.stream`.
