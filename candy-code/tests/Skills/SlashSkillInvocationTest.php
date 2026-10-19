@@ -217,4 +217,41 @@ final class SlashSkillInvocationTest extends TestCase
         $this->assertStringContainsString('`diskonly` names a skill', $added[0]->content);
         $this->assertStringContainsString('`$diskonly` mention', $added[0]->content);
     }
+
+    /**
+     * w3c review m-2 fold: a skill whose own name carries a colon — the
+     * `ns:sub` spelling the loader uses for namespaced skills — was
+     * unreachable from the slash door: the head-truncated lookup matched
+     * `ns` (no such skill) and the colon half read as arguments. The full
+     * colon form is now tried first, so both doors reach it.
+     */
+    public function testAColonNamespacedSkillIsInvokedByItsFullName(): void
+    {
+        $next = $this->pressEnter('/w4cns:w4csub do the thing', $this->registry(['w4cns:w4csub' => 'Namespaced body: $ARGUMENTS']));
+
+        $this->assertTrue($next->inFlight, 'the colon name resolves instead of dying in the refusal');
+        $added = $this->added($next);
+        $this->assertSame('$w4cns:w4csub do the thing', $added[0]->content, 'the mention keeps the full colon spelling');
+        $this->assertCount(1, $added[0]->attachments);
+        $this->assertSame('w4cns:w4csub', $added[0]->attachments[0]->skill);
+    }
+
+    public function testTheColonNamespacedFormStillAcceptsTheColonArgumentSeparator(): void
+    {
+        $next = $this->pressEnter('/w4cns:w4csub:quickly', $this->registry(['w4cns:w4csub' => 'x']));
+
+        $this->assertTrue($next->inFlight);
+        $this->assertSame('$w4cns:w4csub quickly', $this->added($next)[0]->content, 'a second colon is the separator, not part of the name');
+    }
+
+    public function testTheHeadKeepsWinningWhenItIsTheSkillThatExists(): void
+    {
+        // Regression fence for the reordering: the full colon form is tried
+        // first, but a miss there must fall back to the head exactly as
+        // before, so /shipit:review still arguments shipit.
+        $next = $this->pressEnter('/shipit:review the diff', $this->registry(['shipit' => 'x']));
+
+        $this->assertTrue($next->inFlight);
+        $this->assertSame('$shipit review the diff', $this->added($next)[0]->content);
+    }
 }

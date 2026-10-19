@@ -13270,15 +13270,34 @@ final class Chat implements Model
             return null;
         }
 
-        $skill = $registry->userInvocable($name) ?? $registry->userInvocable(strtolower($name));
+        // A colon-namespaced skill (`ns:sub`) spells its own name with a
+        // colon, and the head-truncated $name above can never find it —
+        // while the mention channel resolves that spelling freely (the
+        // SkillMentions pattern admits colons). So the colon form is walked
+        // LONGEST NAME FIRST: `/ns:sub extra` reaches ns:sub with `extra`,
+        // `/ns:sub:quickly` still reaches ns:sub with the second colon read
+        // as the separator the way `/shipit:review` always was, and a miss
+        // all the way down ends at the head, where the old lookup lived —
+        // the final candidate is exactly the former $name, so no existing
+        // spelling changes meaning (w3c review m-2).
+        $spelling = $name;
+        $skill = null;
+        $segments = \explode(':', $shape[1]);
+        for ($take = \count($segments); $skill === null && $take >= 1; $take--) {
+            $candidate = \implode(':', \array_slice($segments, 0, $take));
+            $skill = $registry->userInvocable($candidate) ?? $registry->userInvocable(strtolower($candidate));
+            if ($skill !== null) {
+                $spelling = $candidate;
+            }
+        }
         if ($skill === null) {
             return null;
         }
 
-        // The name ends at the first space or `:`, as CommandParser reads it,
-        // so everything typed after the name — space form, colon form, or
-        // newline — becomes the mention's argument text.
-        $rest = \substr($text, 1 + \strlen($name));
+        // The name ends where the matched spelling ends, so everything typed
+        // after it — space form, colon form, or newline — becomes the
+        // mention's argument text.
+        $rest = \substr($text, 1 + \strlen($spelling));
         if (\str_starts_with($rest, ':')) {
             $rest = \ltrim(\substr($rest, 1));
             $rest = $rest === '' ? '' : ' ' . $rest;

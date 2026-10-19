@@ -226,9 +226,13 @@ final class UnknownSlashCommandTest extends TestCase
 
     public function testAFileCommandOfTheSessionIsNeverRefused(): void
     {
-        file_put_contents($this->project . '/.candy-code/commands/review.md', 'Review it.');
+        // GIT-1 displaced the fixture's former name: `/review` is a built-in
+        // spelling now, and built-ins winning over file commands is the
+        // pinned precedence, so the fixture names itself something no
+        // built-in claims.
+        file_put_contents($this->project . '/.candy-code/commands/changelog.md', 'Review it.');
 
-        $next = $this->pressEnter('/review');
+        $next = $this->pressEnter('/changelog');
 
         $this->assertTrue($next->inFlight, 'the file command runs, ISS-037 not withstanding');
         $this->assertSame('Review it.', $this->added($next)[0]->content);
