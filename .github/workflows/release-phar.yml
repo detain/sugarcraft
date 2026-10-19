@@ -9,8 +9,10 @@
 # from Packagist at their `dev-master` moving target. Two builds of the same
 # tag can therefore differ byte-wise; the .sha256 published alongside each
 # release names the bytes that job produced, not a rebuild guarantee. The
-# build script REFUSES symlinked sibling vendors, so a linked-mode working
-# tree can never freeze uncommitted sibling code into a public artifact.
+# build script REFUSES symlinked sibling vendors, dirty source trees, and
+# detached HEADs, so a linked-mode working tree can never freeze uncommitted
+# sibling code into a public artifact; the checkout below attaches HEAD to a
+# named branch because the preflight demands exactly that attribution.
 #
 # `phar.readonly=0` is passed with `-d` to the BUILD command only. It is
 # never a runtime requirement: the produced archive executes under a normal
@@ -50,6 +52,14 @@ jobs:
           else
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Attach HEAD to the tag
+        # The build's integrity preflight refuses detached HEADs (a tag
+        # checkout IS detached); re-attaching the same commit to a branch
+        # name keeps the artifact attributable without weakening the door.
+        run: |
+          set -euo pipefail
+          git checkout -B phar-build '${{ steps.tag.outputs.tag }}'
 
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
@@ -107,6 +117,19 @@ jobs:
           '
         env:
           PHAR_PATH: ${{ github.workspace }}/dist/candy-code.phar
+
+      - name: PharCompatTest heavy arm
+        # The archive is real; run the suite's CANDY_CODE_PHAR-gated stage 4
+        # against it (the docblock at PharCompatTest promises this workflow
+        # "builds an archive, exports CANDY_CODE_PHAR, and runs this file" —
+        # this step is what makes that sentence true). Dev dependencies are
+        # installed only now: the artifact above was built from the --no-dev
+        # vendor, and re-running install does not touch dist/.
+        run: |
+          set -euo pipefail
+          cd candy-code
+          composer install --prefer-dist --no-interaction --no-progress
+          CANDY_CODE_PHAR="${GITHUB_WORKSPACE}/dist/candy-code.phar" vendor/bin/phpunit --no-coverage --filter PharCompatTest
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

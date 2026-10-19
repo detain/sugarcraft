@@ -35,6 +35,25 @@ declare(strict_types=1);
  * runtime vendor set lands in the tens of megabytes (the summary prints the
  * real figure; --gz trades a runtime ext-zlib dependency for transfer size).
  *
+ * THE FAIL-CLOSED INTEGRITY PREFLIGHT (GUARD 2, rev-w2j2 MAJOR-2)
+ * ===============================================================
+ * A vendor-shape check alone is not enough: a DIRTY source tree with a
+ * PUBLISHED vendor freezes uncommitted working-tree code into the artifact
+ * while the metadata commit stamp names a state that does not contain it —
+ * disclosure is not refusal. The build therefore stops, by default, when the
+ * source tree does not match its commit: `git status --porcelain` must be
+ * empty and HEAD must sit on a named branch. A checkout whose integrity git
+ * cannot answer for (no repository, git missing, git erroring) is refused the
+ * same way — the door fails CLOSED, never open on a read failure. The release
+ * workflow satisfies all three legs by construction: it checks out a tag,
+ * attaches HEAD to a branch, and installs with no working-tree edits.
+ *
+ * `--vendor=monorepo` is the deliberate dev escape hatch for building inside
+ * this repository between commits: it skips ONLY the integrity preflight (the
+ * symlink guard below still stands — freezing SIBLING working trees remains
+ * poison), prints a loud notice on stderr, and must never produce a
+ * published artifact. PharCompatTest pins all three doors.
+ *
  * WHAT IS PACKAGED, and why the entry point is special
  * ====================================================
  * The archive root mirrors the package root (src/, lang/,
@@ -72,6 +91,7 @@ $package = dirname(__DIR__);
 $outArg = $package . '/dist/candy-code.phar';
 $gz = false;
 $version = null;
+$vendorMode = 'published';
 
 foreach (array_slice($argv, 1) as $arg) {
     if ($arg === '--gz') {
@@ -86,7 +106,16 @@ foreach (array_slice($argv, 1) as $arg) {
         $version = substr($arg, 10);
         continue;
     }
-    fwrite(STDERR, "build-phar: unrecognized option {$arg} (usage: php -d phar.readonly=0 tools/build-phar.php [--out=PATH] [--gz] [--version=X])\n");
+    if (str_starts_with($arg, '--vendor=')) {
+        $candidate = substr($arg, 9);
+        if ($candidate !== 'published' && $candidate !== 'monorepo') {
+            fwrite(STDERR, "build-phar: --vendor={$candidate} is not a mode (expected published or monorepo).\n");
+            exit(2);
+        }
+        $vendorMode = $candidate;
+        continue;
+    }
+    fwrite(STDERR, "build-phar: unrecognized option {$arg} (usage: php -d phar.readonly=0 tools/build-phar.php [--out=PATH] [--gz] [--version=X] [--vendor=published|monorepo])\n");
     exit(2);
 }
 
@@ -96,7 +125,34 @@ if (ini_get('phar.readonly') !== '' && filter_var(ini_get('phar.readonly'), FILT
     exit(2);
 }
 
-// Guard 2: the packaged vendor must exist and be a published install.
+// Guard 2 (the integrity preflight): the archive may only ship what its
+// commit stamp claims. Every git question is asked with 2>&1 so a failing
+// git reads as an unverifiable tree — refused, not waved through.
+if ($vendorMode === 'published') {
+    $headRef = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' rev-parse --abbrev-ref HEAD 2>&1'));
+    $porcelain = (string) @shell_exec('git -C ' . escapeshellarg($package) . ' status --porcelain 2>&1');
+    if ($headRef === '' || str_contains($headRef, 'fatal:') || str_contains($porcelain, 'fatal:')) {
+        fwrite(STDERR, "build-phar: refusing to build — the source tree's integrity cannot be verified with git (no repository, git unavailable, or git refused to answer). Commit the tree, or pass --vendor=monorepo to build from working-tree state deliberately (dev-only; never for a published artifact).\n");
+        exit(2);
+    }
+    if ($headRef === 'HEAD') {
+        fwrite(STDERR, "build-phar: refusing to build from a detached HEAD — the artifact could not be attributed to a named ref. Attach the checkout (git checkout -B build HEAD), or pass --vendor=monorepo (dev-only).\n");
+        exit(2);
+    }
+    $dirty = array_values(array_filter(explode("\n", $porcelain), static fn (string $line): bool => $line !== ''));
+    if ($dirty !== []) {
+        fwrite(STDERR, sprintf(
+            "build-phar: refusing to build from a dirty source tree — %d path(s) differ from branch %s. Uncommitted code would freeze into the artifact while its commit stamp names a state that does not contain it. Commit or revert, or pass --vendor=monorepo to build from working-tree state deliberately (dev-only; never for a published artifact).\n",
+            count($dirty),
+            $headRef,
+        ));
+        exit(2);
+    }
+} else {
+    fwrite(STDERR, "build-phar: --vendor=monorepo given — INTEGRITY PREFLIGHT DISABLED. This artifact is built from the WORKING TREE, uncommitted edits included. Development use only; it must never be published.\n");
+}
+
+// Guard 3: the packaged vendor must exist and be a published install.
 if (!is_file($package . '/vendor/autoload.php')) {
     fwrite(STDERR, "build-phar: {$package}/vendor/autoload.php is missing — run `composer install --no-dev --prefer-dist` in candy-code/ first.\n");
     exit(2);
@@ -110,7 +166,7 @@ const INCLUDE_FILES = ['LICENSE'];
 const EXCLUDE_SEGMENTS = ['.git', '.phpunit.cache', 'node_modules'];
 
 /**
- * Guard 3 (the poisoning guard): no symlink anywhere in a packaged tree,
+ * Guard 4 (the poisoning guard): no symlink anywhere in a packaged tree,
  * and no hard-to-see directory escape. RecursiveDirectoryIterator does not
  * follow directory symlinks by default for RECURSION, but it reports them,
  * so every entry is checked; a link inside vendor/sugarcraft is the exact
