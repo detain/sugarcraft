@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { money, tokens } from '../lib/format'
-import type { PermissionMode, SessionSummary } from '../protocol/generated'
+import type { MethodResult, PermissionMode, SessionSummary } from '../protocol/generated'
+import { useConnectionStore } from '../stores/connection'
 import type { SessionState } from '../stores/reducer'
 
 const MODES: PermissionMode[] = ['default', 'accept-edits', 'plan', 'auto', 'dont-ask', 'bypass-permissions']
@@ -12,7 +13,47 @@ const props = defineProps<{
   contextPct: number | null
   connection: string
 }>()
-const emit = defineEmits<{ setMode: [mode: PermissionMode] }>()
+const emit = defineEmits<{ setMode: [mode: PermissionMode]; runCommand: [text: string] }>()
+
+/**
+ * WEB-2: the served session runs /compact and /model on the host now (the
+ * runsIn marker admits them), so the status bar carries both as controls.
+ * The provider list rides `server.info` — the same read-scoped inventory
+ * the About overlay shows — and a failed or empty fetch simply leaves the
+ * model a plain span: the select is progressive enhancement, never a
+ * second source of truth about what is selected (the session summary is).
+ */
+const socket = useConnectionStore()
+const providers = ref<string[]>([])
+
+onMounted(async () => {
+  try {
+    const info = await socket.request('server.info', {})
+    providers.value = (info as MethodResult<'server.info'>).providers ?? []
+  } catch {
+    providers.value = []
+  }
+})
+
+const currentProvider = computed(() => props.summary?.provider || '')
+const selectableProviders = computed(() => {
+  if (providers.value.length === 0) return []
+  const names = new Set(providers.value)
+  if (currentProvider.value !== '' && !names.has(currentProvider.value)) names.add(currentProvider.value)
+  return [...names].sort()
+})
+/** The current entry keeps its exact model; switching to another provider takes that provider's configured default. */
+function modelOptionValue(provider: string): string {
+  const model = props.summary?.model || ''
+  return provider === currentProvider.value && model !== '' ? `${provider} ${model}` : provider
+}
+function modelOptionLabel(provider: string): string {
+  return provider === currentProvider.value ? model.value : provider
+}
+function pickModel(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value
+  if (value !== '' && value !== modelOptionValue(currentProvider.value)) emit('runCommand', `/model ${value}`)
+}
 
 const statusText = computed(() => {
   switch (props.state.status) {
@@ -40,7 +81,22 @@ const model = computed(() => {
       <span v-if="contextPct !== null" class="meter" aria-hidden="true"><span :style="{ width: `${contextPct}%` }" /></span>
     </span>
     <span class="item" title="Spent this session">{{ money(spent) }}</span>
-    <span class="item model" :title="model">{{ model }}</span>
+    <label v-if="selectableProviders.length > 0" class="item" :title="model">
+      <span class="sr-only">Model</span>
+      <select :value="modelOptionValue(currentProvider)" data-testid="model-select" @change="pickModel">
+        <option v-if="currentProvider === ''" value="">default model</option>
+        <option v-for="provider in selectableProviders" :key="provider" :value="modelOptionValue(provider)">{{ modelOptionLabel(provider) }}</option>
+      </select>
+    </label>
+    <span v-else class="item model" :title="model">{{ model }}</span>
+    <button
+      type="button"
+      class="item action"
+      data-testid="compact-button"
+      title="Condense older exchanges into a summary"
+      :disabled="state.status === 'busy'"
+      @click="emit('runCommand', '/compact')"
+    >compact</button>
     <label class="item">
       <span class="sr-only">Permission mode</span>
       <select :value="state.permissionMode ?? 'default'" data-testid="mode-select" @change="emit('setMode', ($event.target as HTMLSelectElement).value as PermissionMode)">
@@ -98,6 +154,20 @@ select {
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 0.1rem 0.25rem;
+}
+button.action {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  cursor: pointer;
+}
+button.action:disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.55;
 }
 .conn {
   margin-left: auto;

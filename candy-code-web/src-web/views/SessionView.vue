@@ -113,6 +113,11 @@ async function refreshQueue(): Promise<void> {
   }
 }
 
+/** WEB-2: status-bar commands (/compact, /model …) enter through the same slash router the composer uses. */
+async function runCommand(text: string): Promise<void> {
+  await send(text, 'queue')
+}
+
 async function setMode(mode: PermissionMode): Promise<void> {
   try {
     await session.value.setMode(mode)
@@ -177,7 +182,7 @@ async function rename(): Promise<void> {
         @send="send"
         @stop="stop"
       />
-      <StatusBar :state="state" :summary="summary" :context-pct="session.contextPct" :connection="connection.statusLabel" @set-mode="setMode" />
+      <StatusBar :state="state" :summary="summary" :context-pct="session.contextPct" :connection="connection.statusLabel" @set-mode="setMode" @run-command="runCommand" />
     </div>
   </section>
 </template>

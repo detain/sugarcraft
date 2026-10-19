@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { parseUnifiedDiff } from '../../lib/diff'
 import { markdownToHtml } from '../../lib/markdown'
 import type { ToolItem } from '../../stores/reducer'
@@ -192,6 +193,13 @@ describe('Composer', () => {
 })
 
 describe('StatusBar', () => {
+  // WEB-2: the status bar reads `server.info` for the model select, so it
+  // needs the connection store — and every request here stays unanswered,
+  // which is exactly the shape the plain-span fallback is for.
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
   it('shows the step, context use and mode', () => {
     const state = { ...createState('s1'), status: 'busy' as const, step: 3, maxSteps: 8, contextTokens: 41000, permissionMode: 'plan' as const }
     const wrapper = mount(StatusBar, { props: { state, contextPct: 41, connection: 'connected' } })
