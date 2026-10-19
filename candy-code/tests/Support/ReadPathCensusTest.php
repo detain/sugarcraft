@@ -341,14 +341,16 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — includeFile() reads an `@path` written inside a command file, behind this '
                 . 'file\'s own ContainedPath::within() compare against the checkout',
         ],
-        'Commands/Specs/BuiltInCommands.php|glob' => [
-            'PROCESS_DERIVED — lists `builtin-commands/*.php`, located from `__DIR__`: the installation\'s own shipped spec files '
-                . '(DH-CMDS); no config, project or $HOME path reaches it',
-        ],
         'Commands/Specs/BuiltInCommands.php|require' => [
-            'PROCESS_DERIVED — the `NNNN-<name>.php` spec files the glob above listed, in the '
+            'PROCESS_DERIVED — the `NNNN-<name>.php` spec files the scandir below listed, in the '
                 . 'installation\'s own builtin-commands/ located from `__DIR__`; each must return a '
                 . 'BuiltInCommand. Nothing outside the shipped source can name one',
+        ],
+        'Commands/Specs/BuiltInCommands.php|scandir' => [
+            'NAMES_ONLY — lists `builtin-commands/*.php`, located from `__DIR__`: the installation\'s '
+                . 'own shipped spec files (DH-CMDS); scandir not glob since DST-1 so the listing '
+                . 'reaches inside a phar:// archive, the .php filter reproducing the old glob set; '
+                . 'no config, project or $HOME path reaches it',
         ],
         'Commands/EditorCommand.php|file_get_contents' => [
             'SELF_LOCATED — the `/editor` temp file: tempnam() created it owner-only in the system temp '
@@ -731,6 +733,23 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — the same token file, re-read per connection to gate '
                 . 'HEARTBEAT/RESUME/STOP (audit M5)',
         ],
+        'Sessions/BackgroundShellRegistry.php|file_get_contents' => [
+            'PROCESS_DERIVED — groupMemberAlive() (SHL-1) reads /proc/<pid>/stat for the numeric '
+                . 'entries the scandir below enumerated, to reject zombies from the liveness answer; '
+                . 'no config, project or $HOME path reaches the name',
+            'SELF_LOCATED — readExitFile() reads back the exit-code file the wrapper child wrote '
+                . 'into this registry\'s own 0700 directory; a non-numeric body answers null',
+        ],
+        'Sessions/BackgroundShellRegistry.php|fopen' => [
+            'SELF_LOCATED — sinkFiles() creates the stdout/stderr/exit sinks with `xb` in the '
+                . 'registry\'s own directory before the fork, settled to 0600',
+            'SELF_LOCATED — sliceFrom() opens a capture file this registry created to tail from '
+                . 'the caller\'s cursor; the size guard answers before the open ever happens',
+        ],
+        'Sessions/BackgroundShellRegistry.php|scandir' => [
+            'NAMES_ONLY — groupMemberAlive() enumerates /proc; the numeric names feed only the '
+                . 'stat reads above and nothing is admitted or refused on the listing itself',
+        ],
         'Sessions/BackgroundSupervisor.php|file_get_contents' => [
             'SELF_LOCATED — the IPC buffer this supervisor named for its own child (or one '
                 . 'reconnect() adopted from the index after vetting its directory)',
@@ -937,9 +956,11 @@ final class ReadPathCensusTest extends TestCase
             'PATH_JAIL — the preview\'s bounded cap+1 head read (ISS-010): the PRE-WRITE diff the permission modal '
                 . 'shows, on the same already-jailed path and behind the same size guard as the write arm',
         ],
-        'Tools/Catalog/ToolCatalog.php|glob' => [
-            'PROCESS_DERIVED — lists the installation\'s own `src/Tools/BuiltIn/*.php` located from '
-                . '`__DIR__` (DH-TOOLS); it reads names only and resolves each through the autoloader. '
+        'Tools/Catalog/ToolCatalog.php|scandir' => [
+            'NAMES_ONLY — lists the installation\'s own `src/Tools/BuiltIn/*.php` located from '
+                . '`__DIR__` (DH-TOOLS); scandir not glob since DST-1 so the listing reaches inside a '
+                . 'phar:// archive, the sorted .php filter reproducing the old glob set; it reads '
+                . 'names only and resolves each through the autoloader. '
                 . 'The one other caller is the catalog\'s own test, over a fixture tree it wrote',
         ],
         'Tools/IgnoreRules.php|file_get_contents' => [

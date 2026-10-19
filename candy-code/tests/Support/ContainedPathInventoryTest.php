@@ -414,7 +414,7 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "TWELVE spellings remain by hand, in SEVEN files" — plus the nine the
+     * "TWELVE spellings remain by hand, in SEVEN files" — plus the eleven the
      * inventory deliberately EXCLUDES, named here so the exclusion is a recorded
      * decision rather than a hole. `WorktreeManager`'s pair matches relative paths
      * against a glob directory; it is not a boundary compare. `SkillLoader`'s one
@@ -441,7 +441,11 @@ final class ContainedPathInventoryTest extends TestCase
      * (`shortenHome()`, plan_comparison VIS-1) abbreviates the owned home to `~`
      * in a launch-summary row, like `TuiErrorLog`'s and `SessionPicker`'s; the
      * answer selects the string that is displayed, nothing is admitted or refused
-     * on it.
+     * on it. `Router`'s and `SharePageController`'s one (share routing,
+     * plan_comparison W2) test `'/' . ShareStore::URL_PREFIX . '/'` against a
+     * request path — a URL predicate choosing a controller; no file sits on
+     * either side of the compare, so nothing filesystem-shaped is admitted or
+     * refused on its answer.
      */
     public function testTheHandSpelledInventoryIncludingItsStatedExclusion(): void
     {
@@ -456,6 +460,13 @@ final class ContainedPathInventoryTest extends TestCase
                 'Hooks/BuiltIn/BashEscapeDenyHook.php' => 1,
                 'Permissions/ReadOnlyCommands.php' => 2,
                 'Renderer.php' => 1,
+                // Plan_comparison W2 (share routing): '/' . ShareStore::URL_PREFIX
+                // . '/' is a URL-path predicate choosing which controller sees a
+                // request — no file sits on either side of the compare. Seen by
+                // the instrument, excluded from the by-hand boundary census below,
+                // like `Renderer`'s zone marker.
+                'Server/Http/Router.php' => 1,
+                'Server/Http/SharePageController.php' => 1,
                 'Skills/SkillLoader.php' => 1,
                 'Support/MediaStore.php' => 1,
                 'Support/StartupSummary.php' => 1,
@@ -474,7 +485,7 @@ final class ContainedPathInventoryTest extends TestCase
             $counts,
         );
 
-        unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php'], $counts['Tools/Concerns/BuildsUnifiedDiff.php'], $counts['Support/StartupSummary.php']);
+        unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Server/Http/Router.php'], $counts['Server/Http/SharePageController.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php'], $counts['Tools/Concerns/BuildsUnifiedDiff.php'], $counts['Support/StartupSummary.php']);
         $this->assertSame(12, array_sum($counts), 'containment spellings still by hand');
         $this->assertCount(7, $counts, 'files still holding one');
     }
