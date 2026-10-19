@@ -134,7 +134,7 @@ return [
     'cli.completion.option.max_turns' => 'Tool-loop step ceiling for the launch',
     'cli.completion.option.mode' => 'Permission mode to run under',
     'cli.completion.option.model' => 'Conversation model name (not a provider)',
-    'cli.completion.option.output_format' => 'Output format: text or json',
+    'cli.completion.option.output_format' => 'Output format: text, json or stream-json',
     'cli.completion.option.prompt' => 'Run a single prompt and exit (one-shot mode)',
     'cli.completion.option.resume' => 'Resume a stored session by id or name',
     'cli.completion.option.root' => 'Use <dir> as the project root',
@@ -340,7 +340,8 @@ session; acp runs turns for an editor, until the editor disconnects):
 Options:
   -p, --prompt <text>    Provide a prompt on the command line (one-shot mode)
       --output-format <format>
-                         Output format: "text" (default) or "json"
+                         Output format: "text" (default), "json" or
+                         "stream-json" (NDJSON events, answer last)
       --root <dir>       Use <dir> as the project root instead of the current
                          directory. Also accepts --root=<dir> (the form to use
                          when <dir> begins with "-"); it may not be omitted.

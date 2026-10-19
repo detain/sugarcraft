@@ -1625,6 +1625,7 @@ candy-code -p "explain the Width helper"        # one prompt, print, exit
 candy-code run "explain the Width helper"       # same thing
 candy-code -p "audit this" --output-format json # machine-readable envelope
 candy-code --output-format json run "audit this" # `run` works after flags too
+candy-code -p "list the files" --output-format stream-json # NDJSON events, answer document last
 candy-code doctor                               # check the install (see Subcommands)
 candy-code --root /path/to/project              # set the project root explicitly
 candy-code src                                  # an existing directory as the only argument is the root too
@@ -1735,12 +1736,18 @@ deliberately not duplicated in `ArgvParser::configError()`, which validates
 existence and readability only: two copies of an ownership/mode rule is how the
 two drift apart.
 
-`--output-format` accepts exactly `text` (the default) and `json`, matched
-case-sensitively; anything else is a usage error (exit `2`) on both the
-one-shot and the TUI path. It used to be accepted verbatim and then compared
-for equality against `json` at each consumer, so `--output-format xml` printed
-plain text and exited `0` — a `| jq` caller got an empty pipe with a success
-status.
+`--output-format` accepts exactly `text` (the default), `json`, and
+`stream-json`, matched case-sensitively; anything else is a usage error (exit
+`2`) on both the one-shot and the TUI path. It used to be accepted verbatim and
+then compared for equality against `json` at each consumer, so
+`--output-format xml` printed plain text and exited `0` — a `| jq` caller got
+an empty pipe with a success status. `stream-json` is NDJSON: the turn's typed
+events (assistant/reasoning deltas, tool start/finish/progress, the spend-cap
+breach) one per line, each an envelope whose `type` and `data` are the same
+protocol vocabulary the server's `event` notifications carry, followed by
+exactly one final line — the same schema-1 success document `json` prints (or
+its error twin on a failing path), so a reader can always parse the last line
+and treat the rest as live events.
 
 **One-shot mode never falls back to the offline echo provider.** If this run
 selected a provider — via `$CANDY_CODE_PROVIDER` or a persisted Ctrl+P "Switch
@@ -1761,7 +1768,7 @@ The same three exit codes govern every subcommand below.
 | --- | --- |
 | `0` | the prompt ran and produced an answer, or the subcommand answered |
 | `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, a trusted `.mcp.json` could not be parsed, or a turn hook (`UserPromptSubmit`/`SessionStart`) blocked the prompt before the first billed call — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found`, `hook` |
-| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.candy-code/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$CANDY_CODE_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
+| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is none of `text`, `json` or `stream-json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.candy-code/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$CANDY_CODE_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
 
 `2` covers "no prompt given" (`candy-code -p`, `candy-code run`) deliberately:
 the invocation is malformed, no backend is ever selected, and a CI gate that
@@ -1895,7 +1902,7 @@ one.
 
 There is exactly one exception, and it is not a case of the JSON renderer
 being unavailable — it is the caller asking for a rendering nothing implements:
-an **`--output-format` value that is not `text` or `json`**. That run exits `2`
+an **`--output-format` value that is not `text`, `json` or `stream-json`**. That run exits `2`
 with an **empty stdout** and its message on stderr, because the requested
 rendering is the thing being rejected, so there is no format left to honour —
 emitting the JSON document anyway would mean guessing that `--output-format

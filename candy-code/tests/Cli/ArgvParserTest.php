@@ -922,7 +922,7 @@ final class ArgvParserTest extends TestCase
     }
 
     /**
-     * ParsedArgs restates NonInteractive's two format constants as literals to
+     * ParsedArgs restates NonInteractive's three format constants as literals to
      * stay free of a compile-time dependency on it; this is the seam that
      * keeps the two copies honest, the same job
      * {@see self::testOutputFormatDefaultsToText()} does for the default.
@@ -930,7 +930,7 @@ final class ArgvParserTest extends TestCase
     public function testOutputFormatsMirrorNonInteractiveConstants(): void
     {
         $this->assertSame(
-            [\SugarCraft\Code\Cli\NonInteractive::FORMAT_TEXT, \SugarCraft\Code\Cli\NonInteractive::FORMAT_JSON],
+            [\SugarCraft\Code\Cli\NonInteractive::FORMAT_TEXT, \SugarCraft\Code\Cli\NonInteractive::FORMAT_JSON, \SugarCraft\Code\Cli\NonInteractive::FORMAT_STREAM_JSON],
             ParsedArgs::OUTPUT_FORMATS,
         );
     }

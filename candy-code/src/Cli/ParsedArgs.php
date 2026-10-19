@@ -20,7 +20,8 @@ final readonly class ParsedArgs
 
     /**
      * Every value `--output-format` accepts, in help-text order. Mirrors
-     * {@see NonInteractive::FORMAT_TEXT} and {@see NonInteractive::FORMAT_JSON}
+     * {@see NonInteractive::FORMAT_TEXT}, {@see NonInteractive::FORMAT_JSON}
+     * and {@see NonInteractive::FORMAT_STREAM_JSON}
      * as literals for the same no-compile-time-dependency reason as
      * {@see self::DEFAULT_OUTPUT_FORMAT}; kept in sync by
      * {@see ArgvParserTest::testOutputFormatsMirrorNonInteractiveConstants()}.
@@ -30,7 +31,7 @@ final readonly class ParsedArgs
      *
      * @var list<string>
      */
-    public const OUTPUT_FORMATS = ['text', 'json'];
+    public const OUTPUT_FORMATS = ['text', 'json', 'stream-json'];
 
     /**
      * Every subcommand VERB {@see ArgvParser::parse()} recognises, in help-text

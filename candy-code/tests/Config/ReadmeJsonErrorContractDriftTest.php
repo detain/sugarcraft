@@ -1496,7 +1496,7 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
             . 'object" contract has',
         );
         self::assertMatchesRegularExpression(
-            '/exactly one exception.{0,400}`--output-format` value that is not `text` or `json`/su',
+            '/exactly one exception.{0,400}`--output-format` value that is not `text`, `json` or `stream-json`/su',
             $flat,
             'the remaining exception is no longer identified as an unimplemented --output-format value',
         );

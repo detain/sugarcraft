@@ -68,6 +68,14 @@ final class NonInteractive
     public const FORMAT_JSON = 'json';
 
     /**
+     * AUT-3: NDJSON — the typed turn events as protocol-vocabulary lines,
+     * then the `json` success document as the FINAL line (or as the only
+     * line when the turn never produced events). Parsing: read lines while
+     * the exit code lets you; the last line is always a schema-1 document.
+     */
+    public const FORMAT_STREAM_JSON = 'stream-json';
+
+    /**
      * Top-level version of every `--output-format json` envelope (rv-tui-5).
      *
      * THE GAP THIS CLOSES: the envelope carried `result`, `error` and
@@ -508,8 +516,30 @@ final class NonInteractive
             }
         }
 
+        // AUT-3: under stream-json the same observer seam that already feeds
+        // refusal rows into the document additionally feeds the NDJSON
+        // emitter. The refusal observer runs FIRST and untouched — stderr
+        // discipline is byte-identical across the three formats; the emitter
+        // only ADDS stdout lines. The answer's own deltas ride $onToken /
+        // $onReasoning, which the text and json formats never passed at all
+        // (headless had no live surface to paint); passing them here changes
+        // no provider request — they are pure observation (E646).
+        $emitter = $outputFormat === self::FORMAT_STREAM_JSON
+            ? new StreamJsonEmitter(self::$streamOutForTesting ?? \STDOUT)
+            : null;
+        $onToken = static function (string $text) use ($emitter): void {
+            $emitter?->onToken($text);
+        };
+        $onReasoning = static function (string $text) use ($emitter): void {
+            $emitter?->onReasoning($text);
+        };
+        $onEvent = static function (object $event) use ($observeRefusals, $emitter): void {
+            $observeRefusals($event);
+            $emitter?->onEvent($event);
+        };
+
         try {
-            $message = $backend->complete($history, null, $observeRefusals);
+            $message = $backend->complete($history, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning);
         } catch (\Throwable $e) {
             \fwrite(\STDERR, $e->getMessage() . "\n");
             self::emitErrorDocument($outputFormat, 'backend', $e->getMessage(), null, $refusals);
@@ -524,7 +554,13 @@ final class NonInteractive
         try {
             $rendered = self::format(
                 $message,
-                $outputFormat,
+                // Under stream-json the terminal line IS the json success
+                // document (AUT-3): the same shape, the same keys, encoded
+                // by the same encoder — a stream-json reader's last line
+                // parses exactly like an `--output-format json` run's only
+                // line. The format constant stays distinguishable for the
+                // paths above; only this rendering maps to the document.
+                $emitter !== null ? self::FORMAT_JSON : $outputFormat,
                 $refusals,
                 $opened['id'] ?? null,
                 \SugarCraft\Code\Usage::sum($sessionUsages)?->toArray(),
@@ -542,7 +578,11 @@ final class NonInteractive
             self::noticeAttachment($message->attachmentNotice);
         }
 
-        echo $rendered . "\n";
+        if ($emitter !== null) {
+            $emitter->emitLine($rendered);
+        } else {
+            echo $rendered . "\n";
+        }
 
         // AUT-2: the answer is out - persist this run to its session row
         // BEFORE SessionEnd fires, so the session the end-event names is the
@@ -1039,7 +1079,11 @@ final class NonInteractive
         ?string $provider,
         array $refusals = [],
     ): void {
-        if ($outputFormat !== self::FORMAT_JSON) {
+        // AUT-3: stream-json prints the same one-line typed document — as
+        // its terminal line when events preceded it, as its only line when
+        // the run died before any. One document either way, so the reader's
+        // "last line is the schema-1 result" rule holds on every exit path.
+        if ($outputFormat !== self::FORMAT_JSON && $outputFormat !== self::FORMAT_STREAM_JSON) {
             return;
         }
 
@@ -1285,6 +1329,25 @@ final class NonInteractive
     }
 
     private static ?HookManager $turnHooksForTesting = null;
+
+    /**
+     * The stream `--output-format stream-json` writes its NDJSON to — the
+     * same pin shape as {@see pinStdinDefault()}, because writes to the
+     * `\STDOUT` constant bypass output buffering and an e2e pin of line
+     * ORDER (events first, schema-1 document last) has to see the bytes.
+     * Null in every real run.
+     *
+     * @var resource|null
+     */
+    private static $streamOutForTesting = null;
+
+    /**
+     * @param resource|null $stream
+     */
+    public static function pinStreamOutputForTesting($stream): void
+    {
+        self::$streamOutForTesting = $stream;
+    }
 
     /**
      * The stream this `-p` console family reads when its caller names none —
