@@ -34,6 +34,9 @@ describe('gen:protocol', () => {
     expect(METHOD_SCOPES['session.list']).toBe('read')
     expect(IDEMPOTENT_METHODS).toContain('session.send')
     expect(IDEMPOTENT_METHODS).not.toContain('session.subscribe')
+    // SES-3: the share-page methods ride the schema into the client tables.
+    expect(METHOD_SCOPES['session.share']).toBe('write')
+    expect(METHOD_SCOPES['session.unshare']).toBe('write')
     expect(EVENT_KINDS['assistant.delta']).toEqual({ durable: false, scope: 'session' })
     expect(EVENT_KINDS['tool.finished']).toEqual({ durable: true, scope: 'session' })
   })

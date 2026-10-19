@@ -8,6 +8,8 @@ use SugarCraft\Code\Host\SessionSnapshot;
 use SugarCraft\Code\Memory\MemoryHistory;
 use SugarCraft\Code\Protocol\Schema\Definitions as D;
 use SugarCraft\Code\Server\ServerConfig;
+use SugarCraft\Code\Share\ShareSession;
+use SugarCraft\Code\Share\ShareStore;
 
 /**
  * The params and result of every `candy-code.v1` method (roadmap O-3c).
@@ -180,6 +182,19 @@ final class MethodSchemas
             'session.export' => [
                 Schema::object([...$sid, 'format' => Schema::enum(['markdown', 'json', 'text'])], ['sessionId']),
                 Schema::object(['format' => Schema::enum(['markdown', 'json', 'text']), 'content' => Schema::string()], ['format', 'content']),
+            ],
+            'session.share' => [
+                Schema::object([...$sid, 'days' => Schema::integer(1, ShareStore::MAX_EXPIRY_DAYS)], ['sessionId']),
+                Schema::object([
+                    'token' => Schema::string(ShareStore::TOKEN_BYTES * 2),
+                    'path' => Schema::string(),
+                    'format' => Schema::enum([ShareSession::FORMAT_HTML]),
+                    'expiresAt' => Schema::integer(0),
+                ], ['token', 'path', 'format', 'expiresAt']),
+            ],
+            'session.unshare' => [
+                Schema::object(['token' => Schema::string(ShareStore::TOKEN_BYTES * 2)], ['token']),
+                Schema::object(['revoked' => Schema::boolean()], ['revoked']),
             ],
             'session.setMode' => [
                 Schema::object([...$sid, 'permissionMode' => Schema::ref(D::PERMISSION_MODE)], ['sessionId', 'permissionMode']),

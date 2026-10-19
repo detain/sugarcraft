@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Protocol\Methods;
 
 use SugarCraft\Code\Host\SessionHost;
+use SugarCraft\Code\Share\ShareSession;
+use SugarCraft\Code\Share\ShareStore;
 use SugarCraft\Code\Host\SessionSnapshot;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionMode;
@@ -22,7 +24,8 @@ use SugarCraft\Code\Util\Exporter;
 
 /**
  * `session.*` lifecycle (Appendix O §6.3): list, create, open and follow,
- * rename, fork, close, delete, export, and the session's permission mode.
+ * rename, fork, close, delete, export, serve and revoke (share pages), and
+ * the session's permission mode.
  * Prompting is {@see TurnMethods}.
  *
  * A SESSION'S PERMISSION MODE is the client's to choose — within
@@ -51,6 +54,8 @@ final class SessionMethods
         $registry->add(MethodSpec::new('session.delete', Scope::Write, 'Delete a session and its history.', self::delete(...), true));
         $registry->add(MethodSpec::new('session.export', Scope::Read, 'A session\'s transcript as markdown, json or text.', self::export(...)));
         $registry->add(MethodSpec::new('session.setMode', Scope::Write, 'The permission mode the session\'s next turns run in.', self::setMode(...), true));
+        $registry->add(MethodSpec::new('session.share', Scope::Write, 'Publish an HTML snapshot of a session as a self-hosted share page at /s/{token} (SES-3).', self::share(...), true));
+        $registry->add(MethodSpec::new('session.unshare', Scope::Write, 'Revoke a share page by token; it 404s from its next request.', self::unshare(...), true));
     }
 
     public static function sessionId(Params $params): string
@@ -251,6 +256,74 @@ final class SessionMethods
             'text' => Exporter::toText($rows),
             default => Exporter::toMarkdown($rows),
         }];
+    }
+
+    /**
+     * `session.share` — the RPC twin of `/share serve` (SES-3, COMPARISON
+     * §6.5): the row stores the HTML rendered AT THIS CALL, never a session
+     * reference, so publishing is an explicit act and a later transcript
+     * edit cannot reach a page that is already shareable.
+     *
+     * @return array<string, mixed>
+     */
+    private static function share(CallContext $call, Params $params): array
+    {
+        $sessionId = self::sessionId($params);
+        $days = $params->optionalInt('days', 1, ShareStore::MAX_EXPIRY_DAYS) ?? ShareSession::DEFAULT_EXPIRY_DAYS;
+        $hub = $call->server->hub();
+        $host = $hub->get($sessionId);
+        if ($host !== null) {
+            $rows = $host->history();
+        } else {
+            $workspace = $hub->workspace();
+            if ($workspace->sessionStore === null || $workspace->sessionStore->getSession($sessionId) === null) {
+                throw RpcError::notFound(\sprintf('no session %s', $sessionId), 'session_not_found');
+            }
+            $rows = SessionHost::transcriptsFor($workspace)->load($sessionId);
+        }
+
+        $snapshot = new ShareSession($rows, ShareSession::FORMAT_HTML);
+        if ($snapshot->messageCount() === 0) {
+            throw RpcError::invalidParams('nothing to share: the session has no visible messages to snapshot');
+        }
+
+        $record = self::shareStore($call)->publish($sessionId, $snapshot->format(), $snapshot->serialize(), $days);
+
+        return [
+            'token' => $record->token,
+            'path' => $record->path(),
+            'format' => $record->format,
+            'expiresAt' => $record->expiresAt,
+        ];
+    }
+
+    /**
+     * `session.unshare` — the RPC twin of `/share revoke`. Unknown, expired
+     * and already-revoked tokens all answer `revoked: false` without
+     * distinguishing, matching the page's no-oracle 404.
+     *
+     * @return array<string, mixed>
+     */
+    private static function unshare(CallContext $call, Params $params): array
+    {
+        $token = $params->string('token', ShareStore::TOKEN_BYTES * 2);
+
+        return ['revoked' => self::shareStore($call)->revoke($token)];
+    }
+
+    /**
+     * The `shares` table lives in the workspace's own session database, so
+     * a share published over the wire is readable by the `serve` process
+     * that serves `/s/...` without any second store to keep in step.
+     */
+    private static function shareStore(CallContext $call): ShareStore
+    {
+        $store = $call->server->hub()->workspace()->sessionStore;
+        if ($store === null) {
+            throw RpcError::of(ErrorCode::Internal, 'this server has no session database to publish into', 'share_store_unavailable');
+        }
+
+        return ShareStore::atPath($store->path());
     }
 
     /** @return array<string, mixed> */

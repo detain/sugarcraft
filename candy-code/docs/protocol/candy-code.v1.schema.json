@@ -3191,6 +3191,59 @@
                 ]
             }
         },
+        "session.share": {
+            "description": "Publish an HTML snapshot of a session as a self-hosted share page at /s/{token} (SES-3).",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "days": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 365
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "path": {
+                        "type": "string"
+                    },
+                    "format": {
+                        "enum": [
+                            "html"
+                        ]
+                    },
+                    "expiresAt": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "token",
+                    "path",
+                    "format",
+                    "expiresAt"
+                ]
+            }
+        },
         "session.subscribe": {
             "description": "Follow a session's events from a cursor (replay) or from a snapshot; snapshotLimit pages the reset snapshot.",
             "scope": "read",
@@ -3223,6 +3276,39 @@
             },
             "result": {
                 "$ref": "#/$defs/Subscription"
+            }
+        },
+        "session.unshare": {
+            "description": "Revoke a share page by token; it 404s from its next request.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "token"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "revoked": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "revoked"
+                ]
             }
         },
         "session.unsubscribe": {

@@ -902,6 +902,21 @@ export interface Methods {
       permissionMode: PermissionMode
     }
   }
+  /** Publish an HTML snapshot of a session as a self-hosted share page at /s/{token} (SES-3). */
+  "session.share": {
+    params: {
+      sessionId: SessionId
+      days?: number
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      token: string
+      path: string
+      format: "html"
+      expiresAt: number
+    }
+  }
   /** Follow a session's events from a cursor (replay) or from a snapshot; snapshotLimit pages the reset snapshot. */
   "session.subscribe": {
     params: {
@@ -911,6 +926,17 @@ export interface Methods {
       snapshotLimit?: number
     }
     result: Subscription
+  }
+  /** Revoke a share page by token; it 404s from its next request. */
+  "session.unshare": {
+    params: {
+      token: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      revoked: boolean
+    }
   }
   /** Stop following a session. */
   "session.unsubscribe": {
@@ -1239,7 +1265,9 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "session.rename": "write",
   "session.send": "write",
   "session.setMode": "write",
+  "session.share": "write",
   "session.subscribe": "read",
+  "session.unshare": "write",
   "session.unsubscribe": "read",
   "settings.get": "read",
   "settings.preview": "admin",
@@ -1282,6 +1310,8 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "session.rename",
   "session.send",
   "session.setMode",
+  "session.share",
+  "session.unshare",
   "settings.set",
   "workflow.pause",
   "workflow.resume",
