@@ -1620,6 +1620,16 @@ final class Bootstrap
             // id above names; every other mode has a real row already and
             // passes null.
             sessionMint: $opened['mint'] ?? null,
+            // SES-1: a resumed session's spend does not restart at $0.00 —
+            // the durable usage_records rollup reseeds the tracker at THE
+            // chat-construction seam both `--continue` and `--resume` pass
+            // through (serve builds its Chat elsewhere and gets a fresh zero
+            // per its own contract). A fresh session has no rows, so the
+            // accessor answers null and Chat's `?? new TokenTracker()`
+            // fallback keeps byte-identical launch semantics.
+            tokenTracker: $sessionStore instanceof EnhancedSessionStore
+                ? $sessionStore->resumedTokenTracker($sessionId)
+                : null,
             // A resumed session keeps the "always" answers it was given.
             permissionGrants: Chat::storedPermissionGrants($sessionStore, $sessionId),
             titleBackend: $workspace->titleBackend,

@@ -40,6 +40,12 @@ final class SessionStore
      *  - `cwd`, `git_branch`: where the session was opened.
      *  - `turns`, `last_preview`: what the picker shows in place of the
      *    system prompt every session shares.
+     *  - `cost_usd`, `cost_unpriced`: the SES-1 spend cache — dollars summed
+     *    from `usage_records` at the moment each row is appended, plus the
+     *    sticky bit saying that sum is a LOWER BOUND (at least one accounted
+     *    call arrived from a model with no rate on file). They exist so the
+     *    picker can read a session's spend without a SUM over the records
+     *    table; `usage_records` stays the truth they are derived from.
      */
     private const MIGRATED_COLUMNS = [
         'name' => 'TEXT',
@@ -55,6 +61,8 @@ final class SessionStore
         'git_branch' => 'TEXT',
         'turns' => 'INTEGER NOT NULL DEFAULT 0',
         'last_preview' => 'TEXT',
+        'cost_usd' => 'REAL',
+        'cost_unpriced' => 'INTEGER NOT NULL DEFAULT 0',
     ];
 
     /**
@@ -162,7 +170,9 @@ final class SessionStore
                 cwd TEXT,
                 git_branch TEXT,
                 turns INTEGER NOT NULL DEFAULT 0,
-                last_preview TEXT
+                last_preview TEXT,
+                cost_usd REAL,
+                cost_unpriced INTEGER NOT NULL DEFAULT 0
             )
         ');
 
@@ -843,6 +853,44 @@ final class SessionStore
             UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
         ');
         $stmt->execute([$id]);
+        $this->sessionWriteSeq++;
+    }
+
+    /**
+     * The cached dollar figure {@see addSessionSpend()} sums onto $id's row
+     * (SES-1), or null when the session never recorded a call. A read of the
+     * cache, never a re-SUM: `usage_records` stays the truth this mirrors.
+     */
+    public function sessionCost(string $id): ?float
+    {
+        $stmt = $this->pdo->prepare('SELECT cost_usd FROM sessions WHERE id = ?');
+        $stmt->execute([$id]);
+        $cost = $stmt->fetchColumn();
+        $stmt->closeCursor();
+
+        return \is_float($cost) || \is_int($cost) ? (float) $cost : null;
+    }
+
+    /**
+     * Fold one accounted call into $id's cached spend (SES-1): dollars sum,
+     * and the `cost_unpriced` bit is STICKY — once any row arrived from a
+     * model with no rate on file, the cache is a lower bound forever (the
+     * same disclosure law {@see \SugarCraft\Code\Util\TokenTracker} carries
+     * in-process). It lives here rather than as a raw UPDATE on
+     * {@see EnhancedSessionStore}'s side of the door because the memoised
+     * {@see listSessions()} rows invalidate on THIS connection's
+     * `sessionWriteSeq`: a write that skipped this method would leave the
+     * picker showing yesterday's sum out of the very connection that changed
+     * it.
+     */
+    public function addSessionSpend(string $id, float $cost, bool $unpriced): void
+    {
+        $this->pdo->prepare('
+            UPDATE sessions
+               SET cost_usd = COALESCE(cost_usd, 0) + ?,
+                   cost_unpriced = cost_unpriced OR ?
+             WHERE id = ?
+        ')->execute([$cost, $unpriced ? 1 : 0, $id]);
         $this->sessionWriteSeq++;
     }
 

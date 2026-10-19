@@ -65,6 +65,19 @@ final class SpendLedger
     }
 
     /**
+     * The session's dollar figure as PRINTED, bound disclosed on the number
+     * itself: the unpriced-lower-bound law (SES-1) once said it only in a
+     * trailing sentence a reader can skip or a narrow pane can clip; every
+     * dollar surface this ledger owns now spells an unpriced session's sum
+     * `≥$x`. A priced session's bytes are unchanged, down to the width —
+     * the law discloses blindness, it does not decorate honesty.
+     */
+    private static function boundAmount(TokenTracker $tracker): string
+    {
+        return ($tracker->hasUnpricedUsage() ? '≥$' : '$') . sprintf('%.4f', $tracker->totalCost());
+    }
+
+    /**
      * Whether any call this session actually reported usage. A READOUT
      * concern only: the cap decision ({@see capReached()}) gets the same
      * fail-open from arithmetic — an unreported session's spend is `0.0` and a
@@ -84,8 +97,18 @@ final class SpendLedger
      * reaches here is a TOTAL with no input/output split. A 0-cost call from
      * an UNPRICED model is a different claim from a free one, and the tracker
      * remembers that the session's figure is a lower bound from then on.
+     *
+     * THE CHOKE, IN BOTH DIRECTIONS (SES-1). Every accounted call crosses
+     * this one method on the TUI path and on the serve path alike — the
+     * `?Closure $record` seam is HOW that durability arrives rather than a
+     * second place to remember: the caller's sink appends the session's
+     * `usage_records` row here, under the same null-guard, so a call that
+     * reached the tracker has a ledger row and a call that never existed
+     * fabricates neither. The sink resolves its session id at CALL time
+     * because a late-minted session only learns its id between the Chat's
+     * construction and its first settle.
      */
-    public function account(TokenTracker $tracker, ?Usage $usage): void
+    public function account(TokenTracker $tracker, ?Usage $usage, ?\Closure $record = null): void
     {
         if ($usage === null) {
             return;
@@ -95,6 +118,10 @@ final class SpendLedger
 
         if ($usage->unpricedModel !== null) {
             $tracker->noteUnpricedUsage();
+        }
+
+        if ($record !== null) {
+            $record($usage);
         }
     }
 
@@ -131,7 +158,7 @@ final class SpendLedger
         $spent = $this->spent($tracker);
 
         return Lang::t('host.spend.refused', [
-            'spent' => sprintf('%.4f', $spent),
+            'spent' => self::boundAmount($tracker),
             'cap' => sprintf('%.4f', $cap),
             'crossing' => $crossing,
             'raise' => sprintf('%.2f', $spent * 2),
@@ -169,7 +196,7 @@ final class SpendLedger
         }
 
         return Lang::t('host.spend.status', [
-            'spent' => sprintf('%.4f', $this->spent($tracker)),
+            'spent' => self::boundAmount($tracker),
             'cap' => $capText,
             'summary' => $tracker->summary(),
         ]) . ($tracker->hasUnpricedUsage() ? Lang::t('host.spend.lower_bound') : '');

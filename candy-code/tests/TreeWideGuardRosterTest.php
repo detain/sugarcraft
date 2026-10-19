@@ -631,6 +631,8 @@ final class TreeWideGuardRosterTest extends TestCase
         'Server/ServeStatusStopTest.php' => ['scandir($path)'],
         // tearDown() sweeps the two crossed-project sandbox dirs setUp() made.
         'Session/ExplicitResumeCrossProjectTest.php' => ["glob(\$this->dir.'/'.chr(42))"],
+        // tearDown() clears the sys_get_temp_dir() ledger sandbox setUp() made.
+        'Session/UsageRecordsTest.php' => ['glob($this->tempDir.\'/*\')'],
         // Names the package root only to hand its posix-less `php -n` probe the
         // vendor autoloader; every walk is over the sys_get_temp_dir() HOME
         // setUp() made (the session config dir in it, and tearDown()'s removal).

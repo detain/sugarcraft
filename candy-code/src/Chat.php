@@ -20208,7 +20208,42 @@ final class Chat implements Model
      */
     private function accountUsage(?Usage $usage): void
     {
-        $this->spendLedger()->account($this->tokenTracker, $usage);
+        $this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink());
+    }
+
+    /**
+     * The durable ledger sink SES-1 hands the accounting choke: one
+     * `usage_records` row per accounted call, appended through the same
+     * single guard the in-process tracker rides, so the TUI and serve (which
+     * run THIS Chat through TurnRunner) share one append site without a
+     * second seam to remember. Null when this Chat has no enhanced store —
+     * accounting then stays exactly as durable as it was before the table.
+     *
+     * The closure resolves store kind at build time but the session ID at
+     * CALL time on purpose: an ISS-102 lazy mint hands the Chat its row's id
+     * only after construction, mid-first-turn, and a ledger that stamped the
+     * null it saw at launch would silently lose the very first session's
+     * spend — the thing this whole table exists to stop losing.
+     */
+    private function usageRecordSink(): ?\Closure
+    {
+        $store = $this->sessionStore;
+        if (!$store instanceof EnhancedSessionStore) {
+            return null;
+        }
+
+        return function (Usage $usage) use ($store): void {
+            $sessionId = $this->currentSessionId;
+            if ($sessionId === null) {
+                return;
+            }
+
+            $store->appendUsageRecord(
+                $sessionId,
+                $usage,
+                $this->backend instanceof Backend\EngineBackend ? $this->backend->model() : null,
+            );
+        };
     }
 
     /**
