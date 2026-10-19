@@ -43,6 +43,9 @@ final class ProtectFilesPolicySurfacesTest extends TestCase
         yield 'Write a Claude skill' => ['Write', ['file_path' => '.claude/skills/deploy/SKILL.md', 'content' => 'x']];
         yield 'Edit a Claude agent' => ['Edit', ['file_path' => '/home/u/.claude/agents/reviewer.md', 'old_string' => 'a', 'new_string' => 'b']];
         yield 'Write a Claude command' => ['Write', ['file_path' => 'repo/.claude/commands/ship.md', 'content' => 'x']];
+        yield 'Write a Claude settings file' => ['Write', ['file_path' => '.claude/settings.json', 'content' => '{}']];
+        yield 'Edit a local Claude settings file' => ['Edit', ['file_path' => '/home/u/.claude/settings.local.json', 'old_string' => 'a', 'new_string' => 'b']];
+        yield 'Bash append Claude settings' => ['Bash', ['command' => 'echo x >> .claude/settings.json']];
         yield 'Write an opencode agent' => ['Write', ['file_path' => '.opencode/agents/x.md', 'content' => 'x']];
         yield 'Write an opencode agent (singular dir)' => ['Write', ['file_path' => '.opencode/agent/x.md', 'content' => 'x']];
         yield 'Bash into an opencode command dir' => ['Bash', ['command' => 'cp x.md .opencode/command/']];
@@ -120,9 +123,19 @@ final class ProtectFilesPolicySurfacesTest extends TestCase
             '.candy-code/memory/notes.md',
             'docs/skills/x.md',
             'src/rules/Rule.php',
-            '.claude/settings.json',
             '.claude/skills-old/x.md',
             'my.claude/skills/x.md',
+            // Lookalikes of the .claude/settings surface: the read files are
+            // `settings.json`/`settings.local.json` exactly, bounded by the
+            // same "different name" class as the .candy-code one. (The bare
+            // `.claude/settings.json` row that lived here is now the ask
+            // class — INT-4 made the read real; see policyWrites.)
+            '.claude/settings.json.example',
+            '.claude/settings.local.json.bak',
+            '.claude/settings.dev.json',
+            'my.claude/settings.json',
+            '.opencode/settings.json',
+            '.opencode/settings.local.json',
             '.opencode/memory/notes.md',
         ] as $path) {
             self::assertTrue(
@@ -136,6 +149,7 @@ final class ProtectFilesPolicySurfacesTest extends TestCase
     {
         foreach ([
             '#(^|/)\.candy-code/settings(?:\.local)?\.json(?![\w.-])#',
+            '#(^|/)\.claude/settings(?:\.local)?\.json(?![\w.-])#',
             '#(?<![\w.-])\.mcp\.json(?![\w.-])#',
             '#(^|/)\.candy-code/(?:skills|commands|rules|workflows)(?![\w.-])#',
             '#(^|/)\.(?:claude|opencode)/(?:skills|agents?|commands?)(?![\w.-])#',

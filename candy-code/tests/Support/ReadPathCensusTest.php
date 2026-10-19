@@ -507,9 +507,15 @@ final class ReadPathCensusTest extends TestCase
         // the measured half of this instrument exists to catch, and it caught one on
         // its first run.
         'Hooks/HookConfig.php|file_get_contents' => [
-            'CALLER_SUPPLIED — `hooks.yaml`; this class holds no boundary. Cli\Bootstrap resolves '
+            'CALLER_SUPPLIED — `hooks.yaml`; this class holds no boundary. Cli\\Bootstrap resolves '
                 . 'the user copy through trustedConfigDirPath() (owned home) and puts the project '
                 . 'copy behind projectHooksAreTrusted(), which refuses the LAUNCH rather than the read',
+        ],
+        'Hooks/ClaudeSettingsHooks.php|file_get_contents' => [
+            'CALLER_SUPPLIED — `hooks` block of a `.claude/settings*.json`; same resolution as the '
+                . 'HookConfig row above and for the same reasons: user copy from the owned home '
+                . '(requirePrivatePolicyFile also screens it), project copies behind '
+                . 'projectHooksAreTrusted(), which refuses the LAUNCH rather than the read',
         ],
         'LSP/LspClient.php|file' => [
             'CALLER_SUPPLIED — the URI came from the editor request this client is answering',

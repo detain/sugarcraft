@@ -22,6 +22,9 @@ use SugarCraft\Code\Hooks\ScriptHook;
  * `{root}/.candy-code/hooks.yaml` are read by {@see Bootstrap::hooks()},
  * which is what makes {@see ScriptHook}'s exit-3 (ask) and exit-4 (modify)
  * reachable from configuration instead of only from hand-written PHP.
+ * Since INT-4 the same chain also reads the `hooks` block of Claude Code
+ * settings files — `~/.claude/settings.json` ungated, the project's
+ * `.claude/settings*.json` pair behind `trustedProjectHooks`.
  *
  * HOME is redirected at a temp dir for the whole class — both `getenv('HOME')`
  * (what Bootstrap reads) and `$_SERVER['HOME']` (what the skill/agent
@@ -83,6 +86,7 @@ final class BootstrapHookFileTest extends TestCase
         // put them back before sweeping the tree.
         @chmod($this->home . '/.candy-code', 0700);
         @chmod($this->home . '/.candy-code/hooks.yaml', 0600);
+        @chmod($this->home . '/.claude/settings.json', 0600);
         @chmod($this->project . '/.candy-code', 0700);
         clearstatcache();
         $this->removeDirectory($this->tempDir);
@@ -542,7 +546,10 @@ YAML);
 
         $files = (new \ReflectionMethod(Bootstrap::class, 'hookFiles'))->invoke(null, $ghost);
 
-        $this->assertSame([$this->home . '/.candy-code/hooks.yaml'], $files);
+        $this->assertSame([
+            $this->home . '/.candy-code/hooks.yaml',
+            $this->home . '/.claude/settings.json',
+        ], $files);
     }
 
     /**
@@ -588,6 +595,303 @@ YAML);
             'from-project',
             $this->namesOn($this->chainOf(Bootstrap::backend($this->project)), 'PreToolUse'),
         );
+    }
+
+    // =========================================================================
+    // INT-4: the `hooks` block of Claude Code settings files
+    // =========================================================================
+
+    /**
+     * The user's `~/.claude/settings.json` is read with no trust gate, exactly
+     * like `~/.candy-code/hooks.yaml` — and it lands in the chain with a
+     * generated `cc:` name, so a settings file cannot claim a native entry's
+     * guard the way `hooks.yaml` entries cannot claim a built-in's.
+     */
+    public function testAUserClaudeSettingsFileReachesTheLiveChain(): void
+    {
+        $this->writeUserClaudeSettings($this->nestedCommandHook('Bash', 'true'));
+
+        $hooks = $this->chainOf(Bootstrap::backend($this->project));
+
+        $this->assertInstanceOf(ScriptHook::class, $hooks->hook('PreToolUse', 'cc:PreToolUse:0'));
+    }
+
+    /**
+     * Additive at the same tier: the native user hooks register first, then the
+     * Claude settings ones, then the project files — `chain: [...native, cc]`.
+     */
+    public function testTheClaudeSettingsHooksLandAfterTheNativeUserHooks(): void
+    {
+        $this->writeUserHooks("hooks:\n  PreToolUse:\n    - name: from-home\n      command: 'true'\n");
+        $this->writeUserClaudeSettings($this->nestedCommandHook('*', 'true'));
+
+        $hooks = $this->chainOf(Bootstrap::backend($this->project));
+
+        $this->assertSame(
+            ['protect-files', 'confirm-rm', 'from-home', 'cc:PreToolUse:0'],
+            $this->namesOn($hooks, 'PreToolUse'),
+        );
+    }
+
+    /**
+     * THE SECURITY TEST for the project tier. Not "is the entry registered" —
+     * "did the command run", asserted on a side effect nothing else in the test
+     * could have created. A settings file the repository shipped is the same
+     * anonymous shell as a repository hooks.yaml, and it must stay behind the
+     * same opt-in.
+     */
+    public function testAnUntrustedProjectClaudeSettingsFileDoesNotExecuteOnAToolCall(): void
+    {
+        $marker = $this->tempDir . '/pwned-from-settings';
+        $this->writeProjectClaudeSettings('settings.json', $this->nestedCommandHook('Bash', 'touch ' . $marker));
+
+        $hooks = $this->chainOf(Bootstrap::backend($this->project));
+        $hooks->preToolUse($this->context('Bash', ['command' => 'ls']));
+
+        $this->assertFileDoesNotExist($marker, 'a project settings file nobody opted into must never run its hooks');
+        $this->assertNotContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
+    }
+
+    public function testATrustedProjectClaudeSettingsFileDoesExecuteOnAToolCall(): void
+    {
+        $marker = $this->tempDir . '/trusted-settings-ran';
+        $this->trustProject();
+        $this->writeProjectClaudeSettings('settings.json', $this->nestedCommandHook('Bash', 'touch ' . $marker));
+
+        $hooks = $this->chainOf(Bootstrap::backend($this->project));
+        $hooks->preToolUse($this->context('Bash', ['command' => 'ls']));
+
+        $this->assertFileExists($marker, 'the opt-in has to actually opt in');
+        $this->assertContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
+    }
+
+    /**
+     * `settings.local.json` is the per-checkout override, and the override
+     * rides the same gate: trust is granted per ROOT, never per file name.
+     *
+     * One trust state per test — trust is frozen for the life of the process
+     * ({@see \SugarCraft\Code\Cli\Bootstrap::projectHooksAreTrusted()}), so the opt-in and the refusal cannot
+     * share a launch, exactly like the hooks.yaml pair above.
+     */
+    public function testTheLocalOverrideFileIsGatedExactlyLikeItsBase(): void
+    {
+        $marker = $this->tempDir . '/pwned-from-local';
+        $this->writeProjectClaudeSettings('settings.local.json', $this->nestedCommandHook('Bash', 'touch ' . $marker));
+
+        $hooks = $this->chainOf(Bootstrap::backend($this->project));
+
+        $this->assertFileDoesNotExist($marker, 'the override file is not a side door around the trust list');
+        $this->assertNotContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
+    }
+
+    public function testTheLocalOverrideFileLoadsWhenItsRootIsTrusted(): void
+    {
+        $marker = $this->tempDir . '/trusted-local-ran';
+        $this->trustProject();
+        $this->writeProjectClaudeSettings('settings.local.json', $this->nestedCommandHook('Bash', 'touch ' . $marker));
+
+        $hooks = $this->chainOf(Bootstrap::backend($this->project));
+        $hooks->preToolUse($this->context('Bash', ['command' => 'ls']));
+
+        $this->assertFileExists($marker, 'the opt-in has to actually opt in, override file included');
+        $this->assertContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
+    }
+
+    /**
+     * The untrusted skip is reported for a settings file exactly as it is for a
+     * hooks.yaml — same notice, same once-per-path-per-process budget.
+     */
+    public function testTheSkippedProjectClaudeSettingsFileIsReportedOnStderr(): void
+    {
+        $this->writeProjectClaudeSettings('settings.json', $this->nestedCommandHook('Bash', 'true'));
+
+        $stderr = $this->stderrOfABuiltBackend(null, 2);
+
+        $this->assertStringContainsString('.claude/settings.json', $stderr);
+        $this->assertStringContainsString('trustedProjectHooks', $stderr);
+        $this->assertSame(1, substr_count($stderr, 'was NOT loaded'), 'once per path, not once per chain');
+    }
+
+    /**
+     * A settings file the launch cannot trust is NOT a silent absence either
+     * way: with trust granted, nothing about it is reported.
+     */
+    public function testATrustedProjectClaudeSettingsFileIsNotReportedAsSkipped(): void
+    {
+        $this->trustProject();
+        $this->writeProjectClaudeSettings('settings.json', $this->nestedCommandHook('Bash', 'true'));
+
+        $this->assertStringNotContainsString('trustedProjectHooks', $this->stderrOfABuiltBackend());
+    }
+
+    /**
+     * One hook of a newer type refuses the LAUNCH by name. Silent registration
+     * would run the wrong meaning; silent skipping would hand back exactly the
+     * silently-shortened guard chain {@see \SugarCraft\Code\Cli\Bootstrap::hookFiles()} exists to close.
+     */
+    public function testAClaudeHookOfANonCommandTypeRefusesTheStart(): void
+    {
+        $this->writeUserClaudeSettings((string) json_encode([
+            'hooks' => [
+                'PreToolUse' => [
+                    ['matcher' => 'Bash', 'hooks' => [['type' => 'prompt', 'command' => 'true']]],
+                ],
+            ],
+        ]));
+
+        try {
+            Bootstrap::backend($this->project);
+            $this->fail('a hook this port cannot run may not launch as a silent no-op');
+        } catch (PermissionConfigException $e) {
+            $this->assertStringContainsString('prompt', $e->getMessage());
+        }
+    }
+
+    /**
+     * `Notification` is the one event recognised and NOT registered: the chain
+     * has no such event yet (plan ruling R3), so its entries are skipped while
+     * the launch stays otherwise normal and every other unknown event still
+     * refuses.
+     */
+    public function testTheNotificationEventIsSkippedWithoutRefusingTheLaunch(): void
+    {
+        $this->writeUserClaudeSettings((string) json_encode([
+            'hooks' => [
+                'Notification' => [
+                    ['matcher' => '*', 'hooks' => [['type' => 'command', 'command' => 'true']]],
+                ],
+                'PreToolUse' => [
+                    ['matcher' => 'Bash', 'hooks' => [['type' => 'command', 'command' => 'true']]],
+                ],
+            ],
+        ]));
+
+        $hooks = $this->chainOf(Bootstrap::backend($this->project));
+
+        $this->assertContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
+        $this->assertNotContains('cc:Notification:0', $this->namesOn($hooks, 'Notification'));
+    }
+
+    /**
+     * An unknown event beside the deferred one is still loud: the skip-list is
+     * a named exception, not a blanket tolerance of anything unrecognised.
+     */
+    public function testAnUnknownEventBesideNotificationStillRefusesTheStart(): void
+    {
+        $this->writeUserClaudeSettings((string) json_encode([
+            'hooks' => [
+                'Bogus' => [
+                    ['matcher' => 'Bash', 'hooks' => [['type' => 'command', 'command' => 'true']]],
+                ],
+            ],
+        ]));
+
+        try {
+            Bootstrap::backend($this->project);
+            $this->fail('an unrecognised event name is a typo or a version skew, and both are refusals');
+        } catch (PermissionConfigException $e) {
+            $this->assertStringContainsString('Bogus', $e->getMessage());
+        }
+    }
+
+    /**
+     * The `hooks` key is the ONLY thing read. The permission gate's own
+     * settings are the layered-settings authority's, and a second loader
+     * consulting `permissions` from this file would fork that authority into
+     * two precedences over one config — the exact class of bug the
+     * `bypassPermissions`/deny-rule incidents of round 63 were about.
+     */
+    public function testTheOtherKeysOfAClaudeSettingsFileMoveNothingHere(): void
+    {
+        $this->writeUserClaudeSettings((string) json_encode([
+            'permissions' => ['deny' => ['Bash(rm -rf /)'], 'allow' => ['Everything']],
+            'env' => ['CANDY_CODE_FAKE' => 'yes'],
+            'model' => 'claude-opus-4-5',
+            'hooks' => [
+                'PreToolUse' => [
+                    ['matcher' => 'Bash', 'hooks' => [['type' => 'command', 'command' => 'true']]],
+                ],
+            ],
+        ]));
+
+        $chain = $this->chainOf(Bootstrap::backend($this->project));
+
+        $this->assertSame(
+            ['protect-files', 'confirm-rm', 'cc:PreToolUse:0'],
+            $this->namesOn($chain, 'PreToolUse'),
+            'the hooks key loads; nothing else in the file joins the chain',
+        );
+        // The `permissions` line bought no entry and no widening: exactly ONE
+        // `cc:` row exists — the one the identical `hooks` block alone yields.
+        $ccRows = array_filter(
+            $this->namesOn($chain, 'PreToolUse'),
+            static fn (string $name): bool => str_starts_with($name, 'cc:'),
+        );
+        $this->assertCount(1, $ccRows);
+    }
+
+    /**
+     * The `cc:{event}:{index}` names are generated per FILE, so a user file and
+     * a trusted project file that both carry one `PreToolUse` group produce the
+     * same name — and the already-registered guard refuses the launch exactly
+     * as it refuses a collision inside one file. A hook chain adds; it never
+     * quietly displaces. Disclosed consequence of the naming scheme in
+     * {@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks}.
+     */
+    public function testTwoClaudeSettingsFilesNamingTheSameGeneratedEntryRefuseTheStart(): void
+    {
+        $this->writeUserClaudeSettings($this->nestedCommandHook('Bash', 'true'));
+        $this->trustProject();
+        $this->writeProjectClaudeSettings('settings.json', $this->nestedCommandHook('Edit', 'true'));
+
+        try {
+            Bootstrap::backend($this->project);
+            $this->fail('the second cc:PreToolUse:0 may not silently win or silently lose');
+        } catch (PermissionConfigException $e) {
+            $this->assertStringContainsString('cc:PreToolUse:0', $e->getMessage());
+        }
+    }
+
+    /**
+     * Running `candy-code` in the home directory: the user file and the project
+     * file it trusts are the same file, and realpath de-duplication has to
+     * cover the new sources too — loading it twice would trip the guard above
+     * over a collision that does not exist.
+     */
+    public function testTheClaudeSettingsFileDoesNotCollideWithItselfInHome(): void
+    {
+        $this->writeUserClaudeSettings($this->nestedCommandHook('Bash', 'true'));
+        $this->trustProject($this->home);
+
+        $chain = $this->chainOf(Bootstrap::backend($this->home));
+
+        $this->assertSame(
+            1,
+            count(array_filter(
+                $this->namesOn($chain, 'PreToolUse'),
+                static fn (string $name): bool => $name === 'cc:PreToolUse:0',
+            )),
+        );
+    }
+
+    /**
+     * The user copy is read ungated because the user wrote it — so the premise
+     * gets the same screen `hooks.yaml` gets: a `.claude/settings.json` world-
+     * writable on this machine refuses the launch instead of becoming anyone's
+     * hook chain but the owner's.
+     */
+    public function testAWorldWritableUserClaudeSettingsFileRefusesTheStart(): void
+    {
+        $this->writeUserClaudeSettings($this->nestedCommandHook('Bash', 'true'));
+        chmod($this->home . '/.claude/settings.json', 0o666);
+        clearstatcache();
+
+        try {
+            Bootstrap::backend($this->project);
+            $this->fail('a world-writable user settings file is not "the file the user wrote"');
+        } catch (PermissionConfigException $e) {
+            $this->assertStringContainsString('writable by every account', $e->getMessage());
+        }
     }
 
     // =========================================================================
@@ -882,6 +1186,44 @@ YAML);
         }
 
         file_put_contents($dir . '/hooks.yaml', $yaml);
+    }
+
+    private function writeUserClaudeSettings(string $json): void
+    {
+        $dir = $this->home . '/.claude';
+        if (!is_dir($dir)) {
+            mkdir($dir, 0700, true);
+        }
+
+        file_put_contents($dir . '/settings.json', $json);
+        clearstatcache();
+    }
+
+    private function writeProjectClaudeSettings(string $name, string $json): void
+    {
+        $dir = $this->project . '/.claude';
+        if (!is_dir($dir)) {
+            mkdir($dir, 0700, true);
+        }
+
+        file_put_contents($dir . '/' . $name, $json);
+        clearstatcache();
+    }
+
+    /**
+     * One command hook, in Claude Code's own nested shape: EVENT → groups →
+     * inner entries. The fixture is written as the real file spells it, not as
+     * anything here would prefer it to be.
+     */
+    private function nestedCommandHook(string $matcher, string $command): string
+    {
+        return (string) json_encode([
+            'hooks' => [
+                'PreToolUse' => [
+                    ['matcher' => $matcher, 'hooks' => [['type' => 'command', 'command' => $command]]],
+                ],
+            ],
+        ]);
     }
 
     /**

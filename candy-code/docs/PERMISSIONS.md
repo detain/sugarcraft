@@ -1081,7 +1081,7 @@ allow, like any other `Ask`:
 | `.git/config`, `config/*.php` | all of the above |
 | `.candy-code/hooks.yaml`, `.candy-code/config.json`, `.candy-code/agents/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) — **floor: refuses in every mode, bypass included** |
 | `.git/hooks/`, `.git/info/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) — a hook runs on your next `git commit`, outside any session (audit F-J4) — **floor: refuses in every mode, bypass included** |
-| `.candy-code/settings.json`, `.candy-code/settings.local.json`, `.mcp.json`, `.candy-code/skills`, `.candy-code/skills-proposed` (the dream pass's skill drafts), `.candy-code/commands`, `.candy-code/rules`, `.candy-code/workflows`, and `.claude/` / `.opencode/` `skills`, `agents`, `commands` (opencode's `agent`, `command` too) | **writes only, asked rather than refused** (`Edit`, `Write`, `Bash`, `mcp__*`) — the rest of the policy surface: settings tiers, the MCP server list, and prompt text, presets, commands and workflows the next session runs as yours. Every mode asks, `bypass-permissions` included (headless bypass answers its own ask allow); a mode that refuses the call on its own (`plan`, `dont-ask`) still refuses it |
+| `.candy-code/settings.json`, `.candy-code/settings.local.json`, `.mcp.json`, `.candy-code/skills`, `.candy-code/skills-proposed` (the dream pass's skill drafts), `.candy-code/commands`, `.candy-code/rules`, `.candy-code/workflows`, `.claude/settings.json`, `.claude/settings.local.json`, and `.claude/` / `.opencode/` `skills`, `agents`, `commands` (opencode's `agent`, `command` too) | **writes only, asked rather than refused** (`Edit`, `Write`, `Bash`, `mcp__*`) — the rest of the policy surface: settings tiers, the MCP server list, and prompt text, presets, commands and workflows the next session runs as yours. Every mode asks, `bypass-permissions` included (headless bypass answers its own ask allow); a mode that refuses the call on its own (`plan`, `dont-ask`) still refuses it |
 
 `Bash` commands are matched both as written and with quotes removed, so
 `cat ".env"` and `cat .env;true` are refused; see
@@ -1110,7 +1110,11 @@ and the next write asks again; a run with nobody to answer (`-p` without a
 terminal) refuses it. `Bash` asks on any mention, read or write —
 `cat .mcp.json` and `ls .candy-code/skills` prompt — since one shell string
 does not say which way it touches the file; `Read`, `Grep` and `Glob` never ask.
-`.claude/settings*.json` is not listed: candy-code never reads it.
+`candy-code` now reads `.claude/settings*.json` for one thing — the `hooks` block
+(see [`HOOKS.md`](HOOKS.md#where-hooks-come-from)) — so a write there is shell queued
+for the next launch and the row covers those two files. The `permissions`, `env` and
+`model` keys in the same file stay unread by the hook loader; the whole file is asked
+about because a tool call cannot say which half it touches.
 
 `HookRegistry::executeHooks()` also **re-scans the whole chain against a
 rewrite**, so a hook that turns `Bash{command:"ls"}` into
@@ -1151,7 +1155,7 @@ must be yours, made before the untrusted content is read:
 
 | Key | Gates | Documented in |
 |---|---|---|
-| `trustedProjectHooks` | `<root>/.candy-code/hooks.yaml` — shell on every tool call | [`HOOKS.md`](HOOKS.md) |
+| `trustedProjectHooks` | `<root>/.candy-code/hooks.yaml` and the `hooks` block of `<root>/.claude/settings.json` / `settings.local.json` — shell on every tool call | [`HOOKS.md`](HOOKS.md) |
 | `trustedProjectMcp` | `<root>/.mcp.json` — servers started at launch | [`MCP.md`](MCP.md) |
 | `trustedProjectCommands` | `` !`cmd` `` forms in `<root>/.candy-code/commands/*.md` | [`COMMANDS.md`](COMMANDS.md) |
 | `trustedProjectSettings` | `<root>/.candy-code/settings.json` and its `.local.json` sibling | [`SETTINGS.md`](SETTINGS.md) |

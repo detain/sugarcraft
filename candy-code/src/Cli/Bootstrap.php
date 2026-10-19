@@ -32,6 +32,7 @@ use SugarCraft\Code\Context\RulesState;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Diagnostics\TuiErrorLog;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
+use SugarCraft\Code\Hooks\ClaudeSettingsHooks;
 use SugarCraft\Code\Hooks\HookConfig;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
@@ -5082,9 +5083,24 @@ final class Bootstrap
         $trustedRoots = self::trustedProjectHookRoots(self::permissionConfig());
         $projectHookIdentities = [];
         foreach ($trustedRoots as $root) {
-            $file = $root . '/.candy-code/hooks.yaml';
+            // Every PROJECT file `hookFiles()` will read, not just the native
+            // one: a `.claude/settings.json` GAINING a hook is the same
+            // ISS-090(a) event, and recording only `hooks.yaml` would let the
+            // CC rows run un-quarantined on the launch that first saw them.
+            $files = array_merge(
+                [$root . '/.candy-code/hooks.yaml'],
+                array_map(
+                    static fn (string $name): string => $root . '/.claude/' . $name,
+                    ClaudeSettingsHooks::FILENAMES,
+                ),
+            );
+            $entries = [];
             try {
-                $entries = is_file($file) ? self::hookFileEntries($file) : [];
+                foreach ($files as $file) {
+                    if (is_file($file)) {
+                        $entries = array_merge($entries, self::hookFileEntries($file));
+                    }
+                }
             } catch (\Throwable) {
                 // Unreadable/malformed today: `hooks()` will refuse the launch
                 // over it with the real message; the record stores the empty
@@ -6472,8 +6488,9 @@ final class Bootstrap
      *        Auto-mode circuit breaker counts strikes once across every path
      *        that shares this manager; null keeps the built-ins-only chain
      *        every caller had before crush_code.md Phase 1 item 2.
-     * @param string|null $root The project whose `.candy-code/hooks.yaml` is
-     *        read alongside the user's. Null reads only the user's file, which
+     * @param string|null $root The project whose `.candy-code/hooks.yaml` and
+     *        `.claude` settings files are read alongside the user's. Null
+     *        reads only the user's files, which
      *        is what a caller with no root of its own to give should get
      *        rather than a hook file resolved against the process directory.
      *
@@ -6586,14 +6603,14 @@ final class Bootstrap
         $hooks->register(new \SugarCraft\Code\Hooks\BuiltIn\BoardNoticeHook());
 
         $quarantine = self::policyQuarantineActive();
-        $userHooksPath = self::trustedConfigDirPath() . '/hooks.yaml';
+        $userTierFiles = [self::trustedConfigDirPath() . '/hooks.yaml', self::userClaudeSettingsFile()];
         foreach (self::hookFiles($root) as $path) {
             try {
                 $entries = self::quarantineNewHookEntries(
                     $path,
                     self::hookFileEntries($path),
                     $quarantine,
-                    $userHooksPath,
+                    $userTierFiles,
                 );
 
                 $hooks->loadEntries($entries, $path);
@@ -6683,15 +6700,20 @@ final class Bootstrap
     private static function hookFileEntries(string $path): array
     {
         if (!\array_key_exists($path, self::$hookFileEntries)) {
-            // Only the USER's file. The project's is gated by
-            // `trustedProjectHooks` and lives in a checkout whose permissions
-            // are the user's business; the user's file is the one loaded with
-            // no gate at all, on a premise that ownership is what makes true.
-            if ($path === self::trustedConfigDirPath() . '/hooks.yaml') {
+            // Only the USER's files. The project's are gated by
+            // `trustedProjectHooks` and live in a checkout whose permissions
+            // are the user's business; the user's files are the ones loaded
+            // with no gate at all, on a premise that ownership is what makes
+            // true — and the user's `.claude/settings.json` joins
+            // `hooks.yaml` under that premise, since it now carries the same
+            // class of payload (shell on a tool call).
+            if ($path === self::trustedConfigDirPath() . '/hooks.yaml' || $path === self::userClaudeSettingsFile()) {
                 self::requirePrivatePolicyFile($path);
             }
 
-            self::$hookFileEntries[$path] = HookConfig::loadFromFile($path);
+            self::$hookFileEntries[$path] = ClaudeSettingsHooks::isClaudeSettingsPath($path)
+                ? ClaudeSettingsHooks::fromFile($path)
+                : HookConfig::loadFromFile($path);
         }
 
         return self::$hookFileEntries[$path];
@@ -6702,23 +6724,25 @@ final class Bootstrap
      *
      * While the policy snapshot says the user's config or hooks changed since
      * the previous launch, PROJECT-tier entries that launch never saw do not
-     * load this time. The user's own file is never entry-filtered — the launch
-     * notice IS the consent there; a repository's file is the one that can
-     * change by nobody at this keyboard editing anything. Lives beside
-     * {@see hookFileEntries()} rather than inline in `hooks()` so the
+     * load this time. The user's own files — `hooks.yaml` and the
+     * `.claude/settings.json` beside it — are never entry-filtered; the
+     * launch notice IS the consent there; a repository's file is the one
+     * that can change by nobody at this keyboard editing anything. Lives
+     * beside {@see hookFileEntries()} rather than inline in `hooks()` so the
      * registration-order anchors SKILLS.md cites stay inside the excerpt
      * window the doc guard reads them from.
      *
      * @param list<array<string, mixed>> $entries
+     * @param list<string> $userTierFiles
      * @return list<array<string, mixed>>
      */
     private static function quarantineNewHookEntries(
         string $path,
         array $entries,
         bool $quarantine,
-        string $userHooksPath,
+        array $userTierFiles,
     ): array {
-        if (!$quarantine || $path === $userHooksPath) {
+        if (!$quarantine || \in_array($path, $userTierFiles, true)) {
             return $entries;
         }
 
@@ -6791,9 +6815,11 @@ final class Bootstrap
 
     /**
      * The hook files this launch reads, lowest-priority first: the user's
-     * `~/.candy-code/hooks.yaml` always, and the project's
-     * `{root}/.candy-code/hooks.yaml` ONLY when the user has said they trust
-     * that project.
+     * `~/.candy-code/hooks.yaml` always, the user's `~/.claude/settings.json`
+     * always (its `hooks` block only — INT-4), the project's
+     * `{root}/.candy-code/hooks.yaml`, and the project's
+     * `{root}/.claude/settings.json` plus `settings.local.json` ONLY when the
+     * user has said they trust that project.
      *
      * THE PROJECT FILE IS ARBITRARY CODE EXECUTION FROM CLONED CONTENT, and
      * that is the whole reason for the gate. A hook entry is a shell command;
@@ -6861,7 +6887,14 @@ final class Bootstrap
      * hook chain is not what creates `~/.candy-code`. YAML because
      * {@see \SugarCraft\Code\Hooks\HookConfig} parses YAML (symfony/yaml is a
      * hard dependency of this package), so the extension names what the file
-     * actually is.
+     * actually is — and the Claude Code settings pair is JSON because that is
+     * what that ecosystem writes, read by
+     * {@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks}, whose flattened rows
+     * go through the SAME {@see \SugarCraft\Code\Hooks\HookConfig::parse()}
+     * validation as a native file. The `hooks` key of those files is the
+     * whole of what is read; `permissions`, `env` and `model` stay the
+     * layered settings authority's, so this file pair cannot fork that
+     * authority into a second loader.
      *
      * WHEN BOTH ARE LOADED, neither overrides the other, and a name collision
      * between them is refused by {@see HookManager::loadFromFile()}. That is
@@ -6885,7 +6918,7 @@ final class Bootstrap
         // trustedConfigDirPath(), NOT configDirPath(): the user file is loaded
         // with no trust gate at all on the grounds that the user wrote it, and
         // that premise only holds in a directory only the user can write.
-        $paths = [self::trustedConfigDirPath() . '/hooks.yaml'];
+        $paths = [self::trustedConfigDirPath() . '/hooks.yaml', self::userClaudeSettingsFile()];
 
         if ($root !== null) {
             // The repository's hook file, not the launch subdirectory's (audit
@@ -6898,45 +6931,60 @@ final class Bootstrap
             // decision that was not — and an in-process `chdir()` would then
             // re-point a path the launch had already vetted.
             $canonicalRoot = realpath($root);
-            $projectFile = rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/') . '/.candy-code/hooks.yaml';
+            $baseDir = rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/');
+            $projectFiles = array_merge(
+                [$baseDir . '/.candy-code/hooks.yaml'],
+                array_map(
+                    static fn (string $name): string => $baseDir . '/.claude/' . $name,
+                    ClaudeSettingsHooks::FILENAMES,
+                ),
+            );
 
             if ($canonicalRoot !== false && self::projectHooksAreTrusted($canonicalRoot)) {
-                $paths[] = $projectFile;
-            } elseif (is_file($projectFile)) {
-                // NOT a silent drop. Ignoring a file the repo's author expects
-                // to run changes what the session does, so it is reported the
-                // same way a skipped permission rule is — BOTH CHANNELS, see
-                // {@see warnPermissionConfigInTranscript()}. This runs during
-                // construction, before Program takes the terminal, so the
-                // stderr copy lands ahead of the alt screen rather than inside
-                // a frame — but "ahead of the alt screen" is exactly where the
-                // alt screen then paints OVER it, which is why the transcript
-                // copy exists as well.
-                //
-                // ONCE PER PATH PER PROCESS. {@see chat()} builds two hook
-                // managers (its own chain and the engine backend's), so an
-                // untrusted project printed this twice on every interactive
-                // launch — and a notice a user meets twice a run for doing
-                // nothing wrong is a notice they learn to scroll past.
-                //
-                // The advice names the CANONICAL path, which is the whole
-                // point of printing it: `--root .` used to print `Add "." to
-                // trustedProjectHooks`, and a literal `"."` entry is
-                // realpath()'d against the CWD on every launch exactly as the
-                // root is, so it always agrees — following the tool's own
-                // instruction turned a per-path allowlist into "trust every
-                // repository I cd into". {@see trustedProjectHookRoots()}
-                // refuses such an entry now; this makes sure the tool never
-                // suggests one.
-                if (!isset(self::$reportedUntrustedHookFiles[$projectFile])) {
-                    self::$reportedUntrustedHookFiles[$projectFile] = true;
+                foreach ($projectFiles as $projectFile) {
+                    $paths[] = $projectFile;
+                }
+            } else {
+                foreach ($projectFiles as $projectFile) {
+                    if (!is_file($projectFile)) {
+                        continue;
+                    }
 
-                    self::warnPermissionConfigInTranscript(Lang::t('cli.warn.hook_file_untrusted', [
-                        'file' => $projectFile,
-                        'root' => rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/'),
-                        'key' => self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY,
-                        'config' => self::userConfigPath(),
-                    ]));
+                    // NOT a silent drop. Ignoring a file the repo's author expects
+                    // to run changes what the session does, so it is reported the
+                    // same way a skipped permission rule is — BOTH CHANNELS, see
+                    // {@see warnPermissionConfigInTranscript()}. This runs during
+                    // construction, before Program takes the terminal, so the
+                    // stderr copy lands ahead of the alt screen rather than inside
+                    // a frame — but "ahead of the alt screen" is exactly where the
+                    // alt screen then paints OVER it, which is why the transcript
+                    // copy exists as well.
+                    //
+                    // ONCE PER PATH PER PROCESS. {@see chat()} builds two hook
+                    // managers (its own chain and the engine backend's), so an
+                    // untrusted project printed this twice on every interactive
+                    // launch — and a notice a user meets twice a run for doing
+                    // nothing wrong is a notice they learn to scroll past.
+                    //
+                    // The advice names the CANONICAL path, which is the whole
+                    // point of printing it: `--root .` used to print `Add "." to
+                    // trustedProjectHooks`, and a literal `"."` entry is
+                    // realpath()'d against the CWD on every launch exactly as the
+                    // root is, so it always agrees — following the tool's own
+                    // instruction turned a per-path allowlist into "trust every
+                    // repository I cd into". {@see trustedProjectHookRoots()}
+                    // refuses such an entry now; this makes sure the tool never
+                    // suggests one.
+                    if (!isset(self::$reportedUntrustedHookFiles[$projectFile])) {
+                        self::$reportedUntrustedHookFiles[$projectFile] = true;
+
+                        self::warnPermissionConfigInTranscript(Lang::t('cli.warn.hook_file_untrusted', [
+                            'file' => $projectFile,
+                            'root' => $baseDir,
+                            'key' => self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY,
+                            'config' => self::userConfigPath(),
+                        ]));
+                    }
                 }
             }
         }
@@ -6976,6 +7024,22 @@ final class Bootstrap
         }
 
         return array_values($unique);
+    }
+
+    /**
+     * The user's own `~/.claude/settings.json` — the home directory resolved
+     * one level up from {@see trustedConfigDirPath()}, deliberately off that
+     * method rather than `HomeDirectory::owned()` directly, so the two hook
+     * tiers can never disagree about what "my home" means and an
+     * undeterminable home raises the same `cli.refuse.no_home` refusal
+     * before any path is built. Only `hooks.yaml`'s sibling `settings.json`
+     * is read at user tier: `settings.local.json` is a per-checkout
+     * override in Claude Code's own layering, and the project tier already
+     * reads both spellings behind `trustedProjectHooks`.
+     */
+    private static function userClaudeSettingsFile(): string
+    {
+        return \dirname(self::trustedConfigDirPath()) . '/.claude/settings.json';
     }
 
     /**

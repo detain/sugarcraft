@@ -281,7 +281,15 @@ final readonly class ProtectFilesHook implements HookInterface
      *    opencode's singular `agent`/`command`) — candy-code imports skills
      *    and agent presets from both trees, so a write there is a write to
      *    this session's next launch; and they are other agents' policy too.
-     *    Their `settings*.json` are NOT listed: candy-code never reads them.
+     *  - `.claude/settings.json` and `.claude/settings.local.json` — the
+     *    `hooks` block of a Claude Code settings file IS read since INT-4
+     *    (see {@see \SugarCraft\Code\Cli\Bootstrap::hookFiles()}), so a write
+     *    there is shell queued for the next launch, the same argument as the
+     *    `.candy-code/settings*.json` entry above. Only that one key is read
+     *    — but a tool call cannot cite which half of a file it means, and
+     *    the ask class is the right answer for the whole file either way.
+     *    `.opencode/settings*.json` stay off the list: they remain files
+     *    candy-code never reads.
      *
      * WHY ASK AND NOT DENY. Step 0.8 denied these outright because there was
      * nobody to ask: the TUI could not put a question to the human and its
@@ -301,6 +309,7 @@ final readonly class ProtectFilesHook implements HookInterface
      */
     public const POLICY_ASK_PATTERNS = [
         '#(^|/)\.candy-code/settings(?:\.local)?\.json(?![\w.-])#',
+        '#(^|/)\.claude/settings(?:\.local)?\.json(?![\w.-])#',
         '#(?<![\w.-])\.mcp\.json(?![\w.-])#',
         '#(^|/)\.candy-code/(?:skills|commands|rules|workflows)(?![\w.-])#',
         '#(^|/)\.candy-code/skills-proposed(?![\w.-])#',

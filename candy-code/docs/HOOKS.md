@@ -5,17 +5,20 @@ code is a verdict**. It is the escape hatch for a rule a permission mode cannot
 express: "ask me before anything touches production", "block any `Edit` under
 `vendor/`", "rewrite this tool's arguments".
 
-Hooks come from two YAML files. One of them is in your home directory and is
-loaded on trust; the other arrives with a repository and is not.
+Hooks come from your `hooks.yaml` files and from the `hooks` block of Claude
+Code settings files. The files in your home directory are loaded on trust; the
+ones that arrive with a repository are not.
 
 ---
 
-## The two files
+## Where hooks come from
 
 | File | Loaded |
 |---|---|
 | `~/.candy-code/hooks.yaml` | always |
+| `~/.claude/settings.json` | always — the `hooks` block only (see below) |
 | `<root>/.candy-code/hooks.yaml` | only if this root is listed under `trustedProjectHooks` |
+| `<root>/.claude/settings.json` and `<root>/.claude/settings.local.json` | only if this root is listed under `trustedProjectHooks`, and the `hooks` block only |
 
 Honouring a project hook file means running shell this repository's author
 wrote, every time you open it. So it is opt-in per project root:
@@ -30,12 +33,45 @@ interactive launch builds two hook managers: `Chat`'s own chain and the engine
 backend's. A notice you meet twice a run for doing nothing wrong is a notice you
 learn to scroll past.)
 
-The two candidates are de-duplicated **by real path**, because they are not
-always two files: run `candy-code` in your own home directory and both name
-`~/.candy-code/hooks.yaml`. Loading it twice would trip the
+The candidates are de-duplicated **by real path**, because they are not
+always distinct files: run `candy-code` in your own home directory and both
+hook tiers name `~/.candy-code/hooks.yaml`. Loading it twice would trip the
 already-registered guard and kill the launch over a collision that does not
 exist. See [`PERMISSIONS.md`](PERMISSIONS.md#the-four-trustedproject-keys) for
 the properties this trust key shares with the other three.
+
+### What is read from a Claude settings file
+
+The `.claude` sources are read for **one key: `hooks`**. Those files also carry
+`permissions`, `env` and `model` — none of it is looked at. candy-code's
+layered settings authority owns those surfaces, and a second loader reading
+them from a different file would fork that authority into two precedences over
+one config. Everything outside `hooks` is simply not this loader's subject.
+
+Inside `hooks`, Claude Code's shape is nested where `hooks.yaml` is flat:
+
+```json
+{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"./guard.sh","timeout":60}]}]}}
+```
+
+Each inner hook flattens into one `hooks.yaml`-shaped entry and runs through
+the SAME validator — event-name check, matcher compilation, positive-finite
+`timeout` — so the file format section below applies to it verbatim. Names are
+generated as `cc:{event}:{index}` (CC entries carry no `name`); the `cc:`
+prefix means these entries can never claim a `hooks.yaml` guard's name.
+Differences that are this loader's own:
+
+- `type` must be `command`. The newer `prompt`/`agent` types have no exit-code
+  verdict to read, so one refuses the launch by name rather than being skipped
+  quietly or run with the wrong meaning.
+- `matcher` is taken as a regular expression, exactly as `hooks.yaml` takes it
+  (CC's own `*`/empty spelling means "every tool" and flattens to `.*`).
+- Relative commands are NOT anchored to the settings file's directory: Claude
+  Code runs hooks with the project as cwd, and candy-code's script hooks
+  already spawn there.
+- The `Notification` event is recognised and SKIPPED: the hook chain has no
+  such event yet, and widening it is a separate decision. Every other unknown
+  event still refuses the launch.
 
 ---
 
