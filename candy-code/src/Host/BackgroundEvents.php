@@ -9,6 +9,9 @@ use SugarCraft\Code\Protocol\EventType;
 use SugarCraft\Code\Sessions\BackgroundPermissionRelay;
 use SugarCraft\Code\Sessions\BackgroundSession;
 use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Sessions\ScheduleRegistry;
+use SugarCraft\Code\Sessions\ScheduleSpawner;
+use SugarCraft\Code\Agents\AgentManager;
 
 /**
  * A host's view of its workspace's background (`/bg`) sessions as events
@@ -104,16 +107,26 @@ final class BackgroundEvents
         private readonly BackgroundSupervisor $supervisor,
         private readonly ?string $root,
         private readonly \Closure $emit,
+        private readonly ?ScheduleRegistry $schedules = null,
+        private readonly ?AgentManager $agentManager = null,
     ) {
     }
 
     /**
      * @param string|null $root the project whose orphaned sessions {@see boot()} adopts; null adopts none
      * @param \Closure(string, array<string, mixed>): void $emit given each event's type and data
+     * @param ScheduleRegistry|null $schedules the AUT-1 roster this host fires
+     *        persisted rows from on every poll (the row lock arbitrates with
+     *        any other host); null runs no clock, as before
      */
-    public static function new(BackgroundSupervisor $supervisor, ?string $root, \Closure $emit): self
-    {
-        return new self($supervisor, $root, $emit);
+    public static function new(
+        BackgroundSupervisor $supervisor,
+        ?string $root,
+        \Closure $emit,
+        ?ScheduleRegistry $schedules = null,
+        ?AgentManager $agentManager = null,
+    ): self {
+        return new self($supervisor, $root, $emit, $schedules, $agentManager);
     }
 
     public function supervisor(): BackgroundSupervisor
@@ -170,6 +183,10 @@ final class BackgroundEvents
      */
     public function poll(): int
     {
+        // AUT-1 FIRST: the clock runs even while nothing is being watched —
+        // an idle serve with a due row must fire, and the session its fire
+        // spawns turns this poll's own diff into `bg.started`.
+        $this->pumpSchedules();
         if ($this->reported === [] && !$this->supervisor->hasActiveSessions()) {
             return 0;
         }
@@ -186,6 +203,38 @@ final class BackgroundEvents
         $emitted += $this->pollAsks();
 
         return $emitted;
+    }
+
+    /**
+     * Evaluate the persisted AUT-1 rows once (the serve half of the clock):
+     * reload if the file moved, fire due rows behind their per-row locks, and
+     * retire fired markers whose daemons settled. A fired session is already
+     * in the active set when {@see poll()} diffs it, so it announces itself as
+     * an ordinary `bg.started` — no schedule-specific event type exists, and
+     * none is minted here (the Protocol/ fence stays whole).
+     *
+     * Spawn REFUSALS are quiet on this side by necessity: there is no
+     * transcript to announce to. `/schedules list` on the serve host reads
+     * the same roster, and the row keeps its un-advanced state only across a
+     * locked skip — an error'd row advances and will retry next period.
+     */
+    private function pumpSchedules(): void
+    {
+        if ($this->schedules === null) {
+            return;
+        }
+        $this->schedules->reloadIfChanged();
+        $this->schedules->fireDue(
+            time(),
+            ScheduleSpawner::closure($this->supervisor, $this->agentManager, $this->root ?? ''),
+        );
+        foreach ($this->schedules->firedNames() as $name) {
+            $sessionId = $this->schedules->busySession($name);
+            $session = $sessionId === null ? null : $this->supervisor->getSession($sessionId);
+            if ($session === null || $session->isSettled()) {
+                $this->schedules->clearFired($name);
+            }
+        }
     }
 
     /**

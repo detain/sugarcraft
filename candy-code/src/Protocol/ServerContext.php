@@ -171,6 +171,13 @@ final class ServerContext
                     function (string $type, array $data): void {
                         $this->broadcast(EventEnvelope::server($type, $data));
                     },
+                    // AUT-1: `serve` is a cron HOST. The same row a TUI's pump
+                    // eyes rides this poll too; the per-row file lock decides
+                    // which process fires it, so two hosts on one home get one
+                    // fire. Fired sessions are ordinary daemons, so their
+                    // `bg.started` rows come from this poll's own status diff.
+                    $workspace->service(\SugarCraft\Code\Sessions\ScheduleRegistry::class),
+                    $workspace->agentManager,
                 );
             }
         }

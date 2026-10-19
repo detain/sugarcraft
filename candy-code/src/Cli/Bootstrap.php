@@ -1686,6 +1686,11 @@ final class Bootstrap
                 array_keys($workspace->backgroundSupervisor?->reconnect($root) ?? []),
                 BackgroundSupervisor::ADOPTED_STATUS,
             ),
+            // AUT-1 (plan_comparison.md §3): the ONE home roster, registered at
+            // the workspace so a TUI and `serve` built on it share one clock —
+            // and so the row locks, not luck, decide who fires when two hosts
+            // run on one home anyway.
+            scheduleRegistry: $workspace->service(\SugarCraft\Code\Sessions\ScheduleRegistry::class),
             // The same root the tools above are jailed to. Chat's own
             // pipeline builds hook contexts and spawns background sessions
             // without an App or Runtime in reach, so it needs its own copy
@@ -2237,7 +2242,13 @@ final class Bootstrap
             // and app() hands the SAME instance to the settings editor — one
             // writer per launch, so the two doors cannot disagree on trust.
             ->withService(\SugarCraft\Code\Config\Settings\SettingsWriter::class, self::settingsWriter($root))
-            ->withService(\SugarCraft\Code\Host\TranscriptStore::class, $transcripts);
+            ->withService(\SugarCraft\Code\Host\TranscriptStore::class, $transcripts)
+            // AUT-1: schedules.json is read once per launch here; every door
+            // that lists or fires rows resolves THIS instance (TUI pump,
+            // /schedules, serve's BackgroundEvents). Reload-on-stat-change
+            // keeps hand-edits landing within a tick of the roster's own
+            // clock, so nothing else needs to watch the file.
+            ->withService(\SugarCraft\Code\Sessions\ScheduleRegistry::class, \SugarCraft\Code\Sessions\ScheduleRegistry::loadDefault());
 
         $events = $transcripts->events();
 

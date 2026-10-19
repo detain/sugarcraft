@@ -1674,6 +1674,20 @@ final class Chat implements Model
          * ({@see pendingRelaunch()}, {@see \SugarCraft\Code\Support\SessionRelaunch}).
          */
         private readonly ?string $relaunchDir = null,
+        /**
+         * The AUT-1 clock's roster (plan_comparison.md §3): persisted
+         * `schedules.json` rows plus this process's `/loop` rows. The TUI is a
+         * cron HOST — `pumpBackgroundSessions()` evaluates the roster on the
+         * SAME tick it polls daemons, persisted rows firing as supervised
+         * background sessions behind per-row file locks, `/loop` rows landing
+         * their prompt in `queuedPrompts`. Null (tests, embedders) makes both
+         * commands answer "not configured" and keeps the pump untouched.
+         *
+         * Shared by IDENTITY like the supervisor: the registry owns mutable
+         * clock state that `serve` and `/schedules` must see through whichever
+         * clone is on screen.
+         */
+        private readonly ?\SugarCraft\Code\Sessions\ScheduleRegistry $scheduleRegistry = null,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -9982,6 +9996,22 @@ final class Chat implements Model
     }
 
     /**
+     * Wire the AUT-1 roster (see the constructor note: shared by IDENTITY,
+     * like the supervisor — a wither clone must keep pointing at the same
+     * clock, or the /schedules surface and the pump diverge).
+     */
+    public function withScheduleRegistry(?\SugarCraft\Code\Sessions\ScheduleRegistry $registry): self
+    {
+        return $this->mutate(['scheduleRegistry' => $registry]);
+    }
+
+    /** The AUT-1 roster this session fires from, if any. */
+    public function scheduleRegistry(): ?\SugarCraft\Code\Sessions\ScheduleRegistry
+    {
+        return $this->scheduleRegistry;
+    }
+
+    /**
      * Get the memory store, if set.
      */
     public function memoryStore(): ?MemoryStore
@@ -10767,6 +10797,7 @@ final class Chat implements Model
             'pasteChips' => $this->pasteChips,
             'pasteCounter' => $this->pasteCounter,
             'backgroundSupervisor' => $this->backgroundSupervisor,
+            'scheduleRegistry' => $this->scheduleRegistry,
             'backgroundStatuses' => $this->backgroundStatuses,
             'sessionPicker' => $this->sessionPicker,
             'projectRoot' => $this->projectRoot,
@@ -12349,6 +12380,14 @@ final class Chat implements Model
             return \in_array($tokens[1] ?? 'list', ['list', 'status'], true);
         }
 
+        if ($name === 'schedules') {
+            // AUT-1 judgement: listing the roster changes nothing, so a
+            // read-only window may look; enable/disable/delete persist rows
+            // that later turns will act ON, which is a write. `/loop` gets no
+            // arm at all — it programs future turns, the clearest write here.
+            return \SugarCraft\Code\Host\Commands\SchedulesCommand::isReadOnlyVerb($tokens[1] ?? 'list');
+        }
+
         return \in_array($name, self::READ_ONLY_COMMANDS, true);
     }
 
@@ -13528,6 +13567,7 @@ final class Chat implements Model
             contextTokens: $this->contextTokens(),
             workspace: $this->workspace,
             grants: \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants),
+            scheduleRegistry: $this->scheduleRegistry,
         );
     }
 
@@ -17160,6 +17200,30 @@ final class Chat implements Model
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\BackgroundCommand(), $inputText);
     }
 
+    /**
+     * Handle /loop — {@see \SugarCraft\Code\Host\Commands\LoopCommand}: register an
+     * EPHEMERAL AUT-1 row (in the registry, never in schedules.json) whose
+     * prompt rides `queuedPrompts` from this session's clock.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleLoopCommand(string $inputText): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\LoopCommand(), $inputText);
+    }
+
+    /**
+     * Handle /schedules — {@see \SugarCraft\Code\Host\Commands\SchedulesCommand}: list
+     * the roster (rows, kinds, next-due stamps, load refusals) or enable,
+     * disable, and delete one.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleSchedulesCommand(string $inputText): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\SchedulesCommand(), $inputText);
+    }
+
     /** The transcript line for a settled `/bg stop` — {@see \SugarCraft\Code\Host\Commands\BackgroundCommand::stopNotice()}. */
     private static function backgroundStopNotice(BackgroundSessionStoppedMsg $msg): string
     {
@@ -19995,7 +20059,13 @@ final class Chat implements Model
     {
         $subscriptions = null;
 
-        if ($this->backgroundSupervisor !== null && $this->backgroundSupervisor->hasActiveSessions()) {
+        if (($this->backgroundSupervisor !== null && $this->backgroundSupervisor->hasActiveSessions())
+            || ($this->scheduleRegistry !== null && $this->scheduleRegistry->hasEnabled())
+        ) {
+            // AUT-1: a live schedule keeps the SAME tick running even with no
+            // daemon up — the pump is the clock, and the cadence floor is ten
+            // seconds against a two-second poll. Rows all disabled again drop
+            // the timer, idle chats notwithstanding, as before.
             $subscriptions = (new \SugarCraft\Core\Subscriptions())->withTick(
                 self::BACKGROUND_POLL_SUBSCRIPTION,
                 self::BACKGROUND_POLL_SECONDS,
@@ -20259,11 +20329,31 @@ final class Chat implements Model
     private function pumpBackgroundSessions(): array
     {
         $supervisor = $this->backgroundSupervisor;
-        if ($supervisor === null) {
+        if ($supervisor === null && $this->scheduleRegistry === null) {
             return [$this, null];
+        }
+        if ($supervisor === null) {
+            // No daemons to poll; the clock still runs, and `/loop` rows fire
+            // through the queue (persisted rows cannot: there is no supervisor
+            // here to spawn them on, so their due stamps simply wait).
+            [$notices, $queued] = $this->pumpSchedules(time());
+            if ($notices === [] && $queued === []) {
+                return [$this, null];
+            }
+            $idle = $this->mutate([
+                'history' => [...$this->history, ...$notices],
+                'queuedPrompts' => [...$this->queuedPrompts, ...$queued],
+            ]);
+            if ($queued === [] || $idle->inFlight) {
+                return [$idle, null];
+            }
+
+            return self::releaseQueuedPrompts([$idle, null]);
         }
 
         $supervisor->tick();
+
+        [$scheduleNotices, $scheduleQueued] = $this->pumpSchedules(time());
 
         $statuses = [];
         foreach ($supervisor->getActiveSessions() as $id => $session) {
@@ -20314,6 +20404,12 @@ final class Chat implements Model
             $announcements = [...$announcements, ...$replies];
         }
 
+        // AUT-1: the clock's own rows join the same announce/queue chain, so
+        // a fired schedule reads like every other background movement and a
+        // /loop prompt waits for the running turn exactly like an
+        // announcement does.
+        $notices = [...$notices, ...$scheduleNotices];
+
         if ($notices === [] && $statuses === $this->backgroundStatuses) {
             // Nothing moved - returning $this keeps the renderer's diff empty
             // instead of repainting the transcript twice a second.
@@ -20326,19 +20422,95 @@ final class Chat implements Model
                 : Lang::t('chat.background.after_turn.other', ['count' => count($announcements)]));
         }
 
+        // Loop prompts queue as turns of their OWN (each prompt is one turn);
+        // the settled announcements keep their existing bundled form.
+        $queuedEntries = $scheduleQueued;
+        if ($announcements !== []) {
+            $queuedEntries[] = implode("\n\n", $announcements);
+        }
+
         $polled = $this->mutate([
             'history' => [...$this->history, ...$notices],
             'backgroundStatuses' => $statuses,
-            'queuedPrompts' => $announcements === []
+            'queuedPrompts' => $queuedEntries === []
                 ? $this->queuedPrompts
-                : [...$this->queuedPrompts, implode("\n\n", $announcements)],
+                : [...$this->queuedPrompts, ...$queuedEntries],
         ]);
 
-        if ($announcements === [] || $polled->inFlight) {
+        if ($queuedEntries === [] || $polled->inFlight) {
             return [$polled, null];
         }
 
         return self::releaseQueuedPrompts([$polled, null]);
+    }
+
+    /**
+     * AUT-1's clock, run by the pumps (both hosts share the shape): reload if
+     * the file moved, fire PERSISTED due rows as supervised daemons — behind
+     * per-row file locks, so a second TUI or `serve` claiming the same row
+     * skips instead of double-firing — retire the fired markers whose sessions
+     * settled, and turn EPHEMERAL `/loop` due rows into queued prompts.
+     *
+     * Bounds here are due-COUNTS, never timeouts (E646): a row missed a week
+     * of slots fires once and re-arms for the next live one
+     * ({@see Schedule::nextDueAfter()}), and a row whose previous run is still
+     * up is skipped-but-advanced rather than stacked.
+     *
+     * @return array{0: list<Message>, 1: list<string>} notice rows, queued prompts
+     */
+    private function pumpSchedules(int $now): array
+    {
+        $registry = $this->scheduleRegistry;
+        if ($registry === null) {
+            return [[], []];
+        }
+        $registry->reloadIfChanged();
+        $notices = [];
+        $supervisor = $this->backgroundSupervisor;
+        if ($supervisor !== null) {
+            foreach ($registry->fireDue($now, \SugarCraft\Code\Sessions\ScheduleSpawner::closure(
+                $supervisor,
+                $this->agentManager,
+                $this->projectRoot,
+            )) as $result) {
+                $notice = match ($result['action']) {
+                    'fired' => Lang::t('chat.schedule.fired', ['name' => $result['name']]),
+                    'error' => Lang::t('chat.schedule.spawn_failed', [
+                        'name' => $result['name'],
+                        'error' => $result['error'] ?? '',
+                    ]),
+                    default => null,
+                };
+                if ($notice !== null) {
+                    $notices[] = Message::notice($notice);
+                }
+            }
+            // A fired row's daemon settled (or vanished): the row may claim
+            // its next slot. This runs on the NEXT tick's fireDue, so a row
+            // settling and becoming due in the same second fires once, not
+            // twice, per pump.
+            foreach ($registry->firedNames() as $name) {
+                $sessionId = $registry->busySession($name);
+                $session = $sessionId === null ? null : $supervisor->getSession($sessionId);
+                if ($session === null || $session->isSettled()) {
+                    $registry->clearFired($name);
+                }
+            }
+        }
+        $queued = [];
+        foreach ($registry->due($now) as $row) {
+            if ($row->persisted) {
+                continue;
+            }
+            // Ephemeral rows live in this process only: no lock to claim, no
+            // file to advance, the prompt rides the queue like a settled
+            // announcement.
+            $registry->noteNextDue($row->name, $row->nextDueAfter($now));
+            $queued[] = $row->prompt;
+            $notices[] = Message::notice(Lang::t('chat.schedule.loop_queued', ['name' => $row->name]));
+        }
+
+        return [$notices, $queued];
     }
 
     /**
