@@ -250,8 +250,12 @@ says so.
    `X-Candy-Code-Auth` secret) for a **single-use ticket** valid 30 s, bound to
    its cookie session and to that login secret, and opens `/ws?ticket=…`.
 
-Sessions live in memory: restarting the server signs every browser out, and the
-token file is the only durable credential. A signed-in browser session that goes
+Sessions persist across restarts as hash-only rows: `CookieSessions::persisted()`
+keeps expiry records keyed by a sha256 fingerprint of the owner token in
+`sessions.json` in the state dir (0600, mode-before-rename, pruned on boot), so
+restarting the server no longer signs every browser out — but rotating the token
+while the server was down does, because every row is bound to the old token's
+fingerprint. A signed-in browser session that goes
 unused for the cookie lifetime (7 d sliding, stamped on each authenticated
 request) has its open sockets swept shut with close code `4001` — "your sign-in
 expired"; logging out revokes instantly and closes every WebSocket bound to the
@@ -1166,8 +1170,9 @@ The page keeps one WebSocket. When it drops, the page retries — after 0.5 s,
 then doubling to at most 15 s, each wait jittered — with a fresh ticket, and
 resumes every session it follows from the last event it holds, so nothing that
 happened meanwhile is missed or shown twice; a reload is never needed. A
-restarted server signs the browser out (sign-ins live in memory) and the page
-asks again. A server that comes back as a different version offers a reload.
+restarted server keeps signed-in browsers signed in (sign-in rows persist, hash-only) and the page
+resumes where it left off; rotating the owner token is what sends it back to the
+login prompt. A server that comes back as a different version offers a reload.
 
 **Developing the UI** (`candy-code-web/`, Node 24): `npm run dev` serves it
 from Vite with hot reload and proxies `/ws` and `/api` to `127.0.0.1:7420`;
