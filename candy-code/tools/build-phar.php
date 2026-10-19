@@ -156,6 +156,7 @@ foreach (INCLUDE_FILES as $loose) {
     }
 }
 sort($files);
+fwrite(STDERR, sprintf("build-phar: walk found %d files\n", count($files)));
 
 // Bloat report (not a refusal): dev packages in vendor/ mean the build ran
 // `composer install` without --no-dev.
@@ -185,9 +186,15 @@ $commit = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' rev
 
 $phar = new Phar($outArg, 0, 'candy-code.phar');
 $phar->startBuffering();
+$added = 0;
+$tick  = hrtime(true);
 foreach ($files as $file) {
     $phar->addFile($file, ltrim(substr($file, strlen($package)), '/'));
+    if (++$added % 1000 === 0) {
+        fwrite(STDERR, sprintf("build-phar: added %d/%d (%.1fs)\n", $added, count($files), (hrtime(true) - $tick) / 1e9));
+    }
 }
+fwrite(STDERR, sprintf("build-phar: all %d files buffered (%.1fs); sealing (per-entry signatures + tar write)\n", $added, (hrtime(true) - $tick) / 1e9));
 $phar->setMetadata([
     'version'   => $version,
     'built_at'  => date('c'),
