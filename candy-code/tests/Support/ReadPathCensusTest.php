@@ -683,6 +683,11 @@ final class ReadPathCensusTest extends TestCase
         'Runtime.php|file_get_contents' => [
             'SELF_LOCATED — a forked child\'s result file, named by Support\ToolIpcFiles',
         ],
+        'Server/Auth/SessionFileStore.php|file_get_contents' => [
+            'SELF_LOCATED — sessions.json, the hash-only cookie rows this store itself wrote 0600 into the '
+                . '`serve` state dir PrivateRetainedDir::verified() created 0700 and checked is ours; lstat '
+                . 'refuses a link, it is decoded as JSON at depth 8 and only ever yields sha256 hashes',
+        ],
         'Server/Auth/TokenStore.php|file_get_contents' => [
             'SELF_LOCATED — the owner-token file this store minted, in the `serve` state dir '
                 . 'PrivateRetainedDir::verified() created 0700 and checked is ours; lstat refuses a link',

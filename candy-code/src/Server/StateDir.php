@@ -17,6 +17,7 @@ use SugarCraft\Code\Support\ProcessContainment;
  * | File | What |
  * |---|---|
  * | `token` | the owner token ({@see Auth\TokenStore}), 0600 |
+ * | `sessions.json` | hash-only cookie-session rows across restarts ({@see Auth\SessionFileStore}), 0600 |
  * | `server.json` | the discovery record ({@see DiscoveryFile}), 0600 |
  * | `server.lock` | the singleton lock, held for the server's whole life |
  * | `control.sock` | the running server's local control socket (`serve url`) |

@@ -116,6 +116,13 @@ final class TokenStore
      * --rotate` in another process replaced it). Answers whether the token
      * changed. An override has no file behind it and never changes.
      *
+     * A store that has never read the file has nothing to have changed from:
+     * its first reload reports false and records the boot token as the
+     * baseline. (WEB-6 makes the distinction load-bearing: a false "changed"
+     * at boot would revokeAll the sessions a restart has just restored, and
+     * the control socket asks this question before any client has
+     * authenticated.)
+     *
      * @throws \RuntimeException when the state directory is unsafe or unwritable
      */
     public function reload(): bool
@@ -126,7 +133,7 @@ final class TokenStore
         $before = $this->cached;
         $this->cached = null;
 
-        return $this->token() !== $before;
+        return $before !== null && $this->token() !== $before;
     }
 
     public function matches(string $candidate): bool

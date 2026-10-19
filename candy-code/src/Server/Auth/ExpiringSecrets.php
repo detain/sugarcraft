@@ -41,15 +41,46 @@ final class ExpiringSecrets
     public function mint(string $value = '', int $bytes = 32): string
     {
         $this->purge();
-        if (\count($this->entries) >= $this->capacity) {
-            \uasort($this->entries, static fn (array $a, array $b): int => $a['expires'] <=> $b['expires']);
-            \array_shift($this->entries);
-        }
+        $this->trimToCapacity();
 
         $secret = \bin2hex(\random_bytes($bytes));
         $this->entries[self::hash($secret)] = ['expires' => ($this->clock)() + $this->ttlSeconds, 'value' => $value];
 
         return $secret;
+    }
+
+    /**
+     * The live rows as `hash => expiresAt` — {@see export()}'s counterpart for
+     * a store whose owner persists it (WEB-6): hashes only, never a secret,
+     * in either direction.
+     *
+     * @return array<string, float>
+     */
+    public function export(): array
+    {
+        $this->purge();
+        $rows = [];
+        foreach ($this->entries as $hash => $entry) {
+            $rows[$hash] = $entry['expires'];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Merge rows back in after a restart, binding each to $value. The caller
+     * parsed them (a {@see SessionFileStore} rejects malformed and expired
+     * rows at the boundary); a hash already live in memory keeps its entry —
+     * this hydrates, it does not overwrite.
+     *
+     * @param array<string, float> $hashToExpires
+     */
+    public function import(array $hashToExpires, string $value): void
+    {
+        foreach ($hashToExpires as $hash => $expires) {
+            $this->entries[$hash] ??= ['expires' => $expires, 'value' => $value];
+        }
+        $this->trimToCapacity();
     }
 
     /** The value $secret is bound to, consuming it; null when unknown or expired. */
@@ -98,6 +129,15 @@ final class ExpiringSecrets
         $this->purge();
 
         return \count($this->entries);
+    }
+
+    /** Oldest expiry first, so a flood of mints cannot grow the map past the cap. */
+    private function trimToCapacity(): void
+    {
+        if (\count($this->entries) >= $this->capacity) {
+            \uasort($this->entries, static fn (array $a, array $b): int => $a['expires'] <=> $b['expires']);
+            \array_shift($this->entries);
+        }
     }
 
     private function purge(): void

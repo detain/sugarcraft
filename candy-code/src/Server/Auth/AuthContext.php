@@ -45,7 +45,7 @@ final class AuthContext
         return new self(
             $tokens,
             LoginCodes::new($clock),
-            CookieSessions::new($clock),
+            CookieSessions::persisted($tokens, $clock),
             Tickets::new($clock),
             RateLimiter::new($clock),
         );
