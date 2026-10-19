@@ -166,6 +166,89 @@ final class StartupSummaryTest extends TestCase
         }
     }
 
+    /**
+     * rev-w1d MAJOR-1: every raw subsystem read on the gather path must be
+     * routed through the fail-soft wrapper. This is pinned STRUCTURALLY —
+     * from the method-body text of the real source file, not from behaviour —
+     * because GitRunner degrades a failed probe via ok=false rather than a
+     * throw, so a behavioural throw-pin would need an injection seam the
+     * class deliberately does not have. Deleting a `self::tryFact(` wrap (the
+     * rev-w1d M1 shape) leaves every functional test green — the summary
+     * only ever asks for facts it can survive losing — so this arm is the
+     * only reader of the fail-soft contract. The rule it enforces: every
+     * rostered read token must lie inside the paren-bounded argument of a
+     * `self::tryFact(` call in its own method slice, and the rostered
+     * methods must still contain each token exactly once (a renamed or
+     * relocated read fails loudly here, not silently green).
+     */
+    public function testEveryFactReadOnTheGatherPathIsWrappedInTheFailSoft(): void
+    {
+        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Support/StartupSummary.php');
+
+        $readers = [
+            'private static function gather' => [
+                'Help::versionString(',
+                'self::instructionFiles(',
+                'self::memoryCount(',
+                'self::skillCount(',
+                'self::mcpCount(',
+            ],
+            'private static function providerAndModel' => [
+                '$chat->backend(',
+                '->provider()->name(',
+                '->servedModel(',
+                '->model()',
+            ],
+            'private static function branch' => [
+                'GitRunner::available(',
+                'GitRunner::new(',
+            ],
+        ];
+
+        foreach ($readers as $signature => $reads) {
+            $start = strpos($src, $signature);
+            $this->assertIsInt($start, "StartupSummary no longer declares {$signature}() — re-derive this pin, do not delete it");
+
+            $end = strpos($src, "\n    }\n", $start);
+            $this->assertIsInt($end, "Could not find the end of {$signature}()");
+            $body = substr($src, $start, $end - $start);
+
+            // Every wrapped call-site: from each 'self::tryFact(' opener to
+            // the matching close, found by plain paren depth.
+            $spans = [];
+            $at = 0;
+            while (($open = strpos($body, 'self::tryFact(', $at)) !== false) {
+                $depth = 0;
+                $close = -1;
+                for ($i = $open + \strlen('self::tryFact'); $i < \strlen($body); ++$i) {
+                    $depth += match ($body[$i]) { '(' => 1, ')' => -1, default => 0 };
+                    if ($depth === 0) {
+                        $close = $i;
+                        break;
+                    }
+                }
+                $this->assertGreaterThan(-1, $close, "unbalanced self::tryFact( in {$signature}() — re-derive this pin");
+                $spans[] = [$open, $close];
+                $at = $open + 1;
+            }
+
+            foreach ($reads as $read) {
+                $count = substr_count($body, $read);
+                $this->assertSame(1, $count, "{$signature}() must contain exactly one call site for {$read} — a rename or duplication leaves this census blind");
+
+                $occurrence = (int) strpos($body, $read);
+                $wrapped = false;
+                foreach ($spans as [$from, $to]) {
+                    if ($occurrence > $from && $occurrence < $to) {
+                        $wrapped = true;
+                        break;
+                    }
+                }
+                $this->assertTrue($wrapped, "{$signature}() reads {$read} outside a self::tryFact() wrapper — the fail-soft contract of VIS-1 is broken");
+            }
+        }
+    }
+
     public function testRenderPaintsFaintRowsAndStaysStableAcrossFrames(): void
     {
         $chat = (new Chat())->withSize(100, 30);
