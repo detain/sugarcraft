@@ -34,7 +34,7 @@ use SugarCraft\McpClient\RequestIdSequence;
  * one session carrying many concurrent requests with distinct ids is legal
  * Streamable HTTP. Only the owner ends the session in {@see stop()}.
  */
-final class HttpMcpServer implements McpServer, McpResourceProvider
+final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptProvider
 {
     /** The version this client advertises in `initialize` (unchanged by MCP-2). */
     public const PROTOCOL_VERSION = '2024-11-05';
@@ -430,6 +430,38 @@ final class HttpMcpServer implements McpServer, McpResourceProvider
         return $this->requireProviderResult(
             'resources/read',
             $this->request('resources/read', ['uri' => $uri], $this->toolOptions()),
+        );
+    }
+
+    /**
+     * MCP-2 wire half: the prompts roster rides the identical walk and gates
+     * as the resources roster — the capability is the same paginated shape
+     * under different member names.
+     *
+     * @return list<array<mixed>> raw `prompts` rows
+     */
+    public function listPrompts(): array
+    {
+        return $this->collectProviderPages('prompts/list', 'prompts');
+    }
+
+    /**
+     * @param array<string,mixed> $arguments
+     * @return array<mixed> the raw `result` of the reply
+     */
+    public function getPrompt(string $name, array $arguments = []): array
+    {
+        // The empty-arguments object law already enforced for `tools/call`:
+        // SDK servers reject `"arguments": []`, and only the empty PHP array
+        // reaches json_encode as an array — a populated map encodes as an
+        // object on its own.
+        return $this->requireProviderResult(
+            'prompts/get',
+            $this->request(
+                'prompts/get',
+                ['name' => $name, 'arguments' => $arguments === [] ? new \stdClass() : $arguments],
+                $this->toolOptions(),
+            ),
         );
     }
 

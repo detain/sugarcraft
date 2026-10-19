@@ -876,6 +876,69 @@ final class McpClient
     }
 
     /**
+     * MCP-2 wire half: every allowed provider server's CURRENT prompt
+     * roster, keyed by server name. Gate parity exactly as documented on
+     * {@see listResources()} — same predicate, same skip rules, same
+     * fail-closed posture, E677 pump at the dispatch caller.
+     *
+     * The roster is DATA here: materializing a prompt into a slash command
+     * or a Chat turn is the surface lane's decision, never this one's.
+     *
+     * @return array<string, list<array<mixed>>> raw rows per provider server
+     */
+    public function listPrompts(): array
+    {
+        $this->pumpStderr(); // E677, see listTools()
+
+        $prompts = [];
+
+        foreach ($this->servers as $name => $server) {
+            if (!$this->isServerAllowed($name)) {
+                continue;
+            }
+
+            if (!$server instanceof McpPromptProvider) {
+                continue;
+            }
+
+            $prompts[$name] = $server->listPrompts();
+        }
+
+        return $prompts;
+    }
+
+    /**
+     * Fetch one prompt from one server, call shape only. Mirrors
+     * {@see readResource()}'s refusal ladder verbatim — unknown server,
+     * server outside the current gates, then the capability question —
+     * before any exchange is entered.
+     *
+     * @param array<string,mixed> $arguments
+     * @return array<mixed> the raw `result` — untrusted server bytes, the
+     *         surface fences them (PromptFence), this method does not
+     */
+    public function getPrompt(string $serverName, string $name, array $arguments = []): array
+    {
+        $server = $this->servers[$serverName] ?? null;
+
+        if ($server === null) {
+            throw new \RuntimeException("Unknown MCP server: $serverName");
+        }
+
+        if (!$this->isServerAllowed($serverName)) {
+            throw new \RuntimeException("MCP server not allowed for this agent: $serverName");
+        }
+
+        if (!$server instanceof McpPromptProvider) {
+            throw new \RuntimeException("MCP server does not provide prompts: $serverName");
+        }
+
+        $this->pumpStderr(); // E677, see listTools()
+
+        return $server->getPrompt($name, $arguments);
+    }
+
+    /**
      * Build an McpRouter over this client's currently-started servers,
      * forwarding the configured global deny patterns alongside the servers
      * so both halves of McpRouter's enforcement (allowlist + deny patterns)

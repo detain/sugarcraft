@@ -49,7 +49,7 @@ use SugarCraft\Code\Support\ProcessContainment;
  * mid-exchange, and teardown reserved to the process that started it. See
  * the library class's FORK SAFETY note.
  */
-final class StdioMcpServer implements McpServer, McpResourceProvider
+final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptProvider
 {
     /**
      * Handshake ceiling default, DERIVED from the library constant so the two
@@ -283,6 +283,39 @@ final class StdioMcpServer implements McpServer, McpResourceProvider
         return $this->requireProviderResult('resources/read', $this->transport->request(
             'resources/read',
             ['uri' => $uri],
+            $this->providerDeadline(),
+        ));
+    }
+
+    /**
+     * MCP-2 wire half. Same machinery as the resources roster — the prompts
+     * capability is the same paginated list shape under different member
+     * names, and the same gates therefore apply verbatim.
+     *
+     * @return list<array<mixed>> raw `prompts` rows
+     */
+    public function listPrompts(): array
+    {
+        return $this->collectProviderPages('prompts/list', 'prompts');
+    }
+
+    /**
+     * `prompts/get` in its call shape and NOTHING more: no command
+     * materialization, no transcript injection — the surface lane consumes
+     * the raw result (RAW BYTES LAW, {@see McpPromptProvider}).
+     *
+     * The `arguments` member must encode as a JSON OBJECT: SDK servers reject
+     * the array form, and an empty PHP array is exactly the case that would
+     * (the law already enforced for `tools/call`).
+     *
+     * @param array<string,mixed> $arguments
+     * @return array<mixed> the raw `result` of the reply
+     */
+    public function getPrompt(string $name, array $arguments = []): array
+    {
+        return $this->requireProviderResult('prompts/get', $this->transport->request(
+            'prompts/get',
+            ['name' => $name, 'arguments' => $arguments === [] ? new \stdClass() : $arguments],
             $this->providerDeadline(),
         ));
     }
