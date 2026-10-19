@@ -1160,7 +1160,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, sixty-five keys are **never** taken from a project file:
+Even for a trusted project, sixty-six keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1182,7 +1182,9 @@ to;
 `providers`, for the same host-and-bill reason — each entry pins a provider's base URL
 and key material, so a checkout choosing them would route the operator's paid traffic
 through an endpoint it picked; `instructions`, because it decides which files become authoritative
-system-prompt text; `disabledRules`, because its value is a list of names
+system-prompt text; `instructionsExclude`, because it names the instruction
+files whose absence is enforced — the mirror of `instructions`'s power, so a
+checkout choosing it could mute the operator's own context; `disabledRules`, because its value is a list of names
 pointing at the operator's own rule packs, so a project-tier one would let a
 checkout choose which of the operator's instructions go silent — a different
 power from the `disabledSkills` a project *may* set, because a rule pack is

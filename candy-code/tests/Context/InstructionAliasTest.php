@@ -195,6 +195,12 @@ final class InstructionAliasTest extends TestCase
         mkdir($this->repoRoot . '/vendor/dep', 0o700, true);
         file_put_contents($this->repoRoot . '/vendor/dep/CLAUDE.md', 'VENDORCANARY');
         file_put_contents($this->repoRoot . '/vendor/dep/x.php', '<?php');
+        // The not-excluded twin must be a REAL candidate: an instruction file
+        // at a level loadForPath() governs, spelled so the pattern does not
+        // name it. Asserting null on a path with no candidate proves nothing
+        // about exclusion — it stays null even when excluded() matches
+        // everything.
+        file_put_contents($this->repoRoot . '/pkg/CLAUDE.md', 'PKGCANARY');
         file_put_contents($this->repoRoot . '/pkg/src/b.php', '<?php');
 
         $loader = new InstructionFileLoader($this->repoRoot, excludedGlobs: [$pattern]);
@@ -205,8 +211,12 @@ final class InstructionAliasTest extends TestCase
             'excluded by instructionsExclude',
             $loader->refusedPaths()[$this->repoRoot . '/vendor/dep/CLAUDE.md'],
         );
-        // A path the pattern does not name keeps loading normally.
-        self::assertNull($loader->loadForPath($this->repoRoot . '/pkg/src/b.php'));
+        // Polarity twin of the legs above: a real file the pattern does not
+        // name keeps loading normally.
+        self::assertSame(
+            self::framedOnTouch($this->repoRoot . '/pkg/CLAUDE.md', 'PKGCANARY'),
+            $loader->loadForPath($this->repoRoot . '/pkg/src/b.php'),
+        );
     }
 
     public function testExclusionNeverSilencesThePersonalTier(): void

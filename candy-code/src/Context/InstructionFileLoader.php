@@ -29,8 +29,9 @@ use SugarCraft\Code\Util\PathGlob;
  *
  * EVERY read here is bounded through {@see ContainedPath}, and the count is
  * deliberate rather than incidental: EIGHT call sites, one per read decision this
- * class makes — `loadPersonal()`'s personal entry, `loadRoot()`'s root entry,
- * `loadAncestorRoots()`'s ancestor entry, `loadForced()`'s glob match,
+ * class makes — `loadPersonal()`'s personal entry and its `~/.claude` fallback,
+ * `loadRoot()`'s root entry, `loadAncestorRoots()`'s ancestor entry,
+ * `loadForced()`'s glob match,
  * `loadForPath()`'s starting directory and its per-level candidate, and
  * `expandImports()`'s gate closure. Pinned as a count in
  * {@see \SugarCraft\Code\Tests\Support\ContainedPathInventoryTest}::ROUTED_CALL_SITES.
