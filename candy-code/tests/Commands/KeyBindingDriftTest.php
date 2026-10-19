@@ -970,6 +970,38 @@ final class KeyBindingDriftTest extends TestCase
                 [$next] = $this->chatWithSessions(2)->update($k[0]);
                 $this->assertNotNull($next->sessionPicker());
             },
+            // TUI-2 (plan_comparison): the chord opens the reverse history
+            // search over the prompt-history file; a second press, with the
+            // query untouched, cycles the highlight to the NEXT match (the
+            // reverse-i-search idiom); Escape closes WITHOUT submitting and
+            // puts the seed draft back exactly as it was.
+            'chat.history-search' => function (array $k): void {
+                $path = \sys_get_temp_dir() . '/drift-history-' . \bin2hex(\random_bytes(4));
+
+                try {
+                    $history = new \SugarCraft\Code\Session\PromptHistory($path);
+                    $history->append('fix the parser');
+                    $history->append('wrap up the report');
+                    $history->append('fix the lexer');
+                    $chat = new Chat(backend: new EchoBackend(), promptHistory: $history);
+                    [$open] = $chat->update($k[0]);
+                    $this->assertNotNull($open->historySearch(), 'the chord must open the history search');
+                    $this->assertSame(0, $open->historySearch()?->selectedIndex(), 'the newest match starts highlighted');
+
+                    [$cycled] = $open->update($k[0]);
+                    $this->assertSame(1, $cycled->historySearch()?->selectedIndex(), 'a second press cycles to the next match');
+
+                    [$typed] = $cycled->update(new KeyMsg(KeyType::Char, 'l'));
+                    $hits = $typed->historySearch()?->matches() ?? [];
+                    $this->assertSame(['fix the lexer'], $hits, 'typing filters by containment');
+
+                    [$closed] = $typed->update(new KeyMsg(KeyType::Escape));
+                    $this->assertNull($closed->historySearch(), 'Escape closes it');
+                    $this->assertSame('', $closed->inputBuf, 'and the untouched seed draft comes back');
+                } finally {
+                    @\unlink($path);
+                }
+            },
             // "(runs /agents)" is the promise, so the dispatched COMMAND is
             // what gets asserted: "the history grew" was satisfied by any
             // appended message at all, including one from an unrelated arm.
@@ -1896,9 +1928,18 @@ final class KeyBindingDriftTest extends TestCase
             },
             // P-D3: Ctrl+G turns the composer into a broadcast — it opens the
             // view on the newest running run, and Enter reaches every one.
+            // TUI-2 made Ctrl+G a dual claim: in an ordinary chat pane it now
+            // opens the history search, and the shell keeps it only while one
+            // of its keyboard-owning views is up (the yield declared on the
+            // registry row). The chord is therefore pressed from the agent
+            // view — the state that owns the batch — and the toggle itself
+            // lands the user back on the chat pane (openAgentView's rule), so
+            // the broadcast Enter flow below is the untouched original.
             'shell.group-input' => function (array $k): void {
                 $session = 'drift-group-' . bin2hex(random_bytes(4));
-                [$group] = $this->composing($this->stripApp(), $session, 'wrap up')->update($k[0]);
+                [$group] = $this->composing($this->stripApp(), $session, 'wrap up')
+                    ->withPane(Pane::Agents)
+                    ->update($k[0]);
                 $this->assertTrue($group->agentBroadcast);
                 $this->assertSame('run-3', $group->agentViewTarget, 'the view opened on the newest running run');
                 $this->assertSame(['run-1', 'run-2', 'run-3'], $group->agentComposerTargets());

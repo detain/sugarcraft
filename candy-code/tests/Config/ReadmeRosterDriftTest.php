@@ -465,14 +465,15 @@ final class ReadmeRosterDriftTest extends TestCase
             'README.md names a different set of always-chat control chords than KeyBindingRegistry routes',
         );
 
-        // And the exception is named, and is the only one.
+        // And the exceptions are named, and are the only ones (TUI-2 added
+        // the Ctrl+G rebind polity — see chatCtrlRunesYieldedToShell()).
         $yielded = KeyBindingRegistry::chatCtrlRunesYieldedToShell();
         sort($yielded);
-        $this->assertSame(['r'], $yielded, 'the yielded-chord set changed; the README exception sentence must too');
+        $this->assertSame(['g', 'r'], $yielded, 'the yielded-chord set changed; the README exception sentence must too');
         $this->assertStringContainsString(
-            '`Ctrl+R` belongs to the chat too, with one declared exception',
+            '`Ctrl+R` belongs to the chat too, with declared exceptions',
             $flat,
-            'README.md no longer declares Ctrl+R as the single exception',
+            'README.md no longer declares the Ctrl+R/Ctrl+G yield pair',
         );
     }
 

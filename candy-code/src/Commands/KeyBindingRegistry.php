@@ -393,10 +393,15 @@ final class KeyBindingRegistry
      *    own keys (`↑`/`↓`/`Enter`) they claim, so opening it there puts up a
      *    modal the user can neither see nor move; AND
      * 2. the shell's own `KeyboardHandler::handleCtrl()` answers the chord
-     *    with a NO-OP, so taking it back means "nothing happens" — not
-     *    "something else happens".
+     *    there either with a NO-OP, so taking it back means "nothing
+     *    happens" — or with a LIVE shell feature the owning view is itself
+     *    about, so taking it back means "the thing that chord did before this
+     *    row existed happens", exactly as it does for a user who never
+     *    learned the new binding. A rebind in the second polity must be
+     *    declared at its row; it is what makes a shared chord survivable
+     *    rather than silently stolen.
      *
-     * `Ctrl+R` is the one row that fits. Condition 1, measured with the yield
+     * `Ctrl+R` is the no-op polity's row. Condition 1, measured with the yield
      * lifted, in `Pane::Agents` with two stored sessions: the picker opens,
      * `Down` does not move its highlight, `Enter` switches the dashboard to
      * Peek mode instead of resuming, and only leaving the pane (`Esc`/`q`)
@@ -405,6 +410,18 @@ final class KeyBindingRegistry
      * overlay `Chat` has open, which the `Ctrl+P` rows below demonstrate
      * directly. Condition 2: `handleCtrl('r')` falls through to its `default`
      * arm, so the shell answers the yielded chord with `[$app, null]`.
+     *
+     * `Ctrl+G` (plan_comparison TUI-2) is the rebind polity's first and only
+     * row: condition 1 holds of the history search the same way it holds of
+     * the picker, and `handleCtrl('g')` answers the chord with `GroupInputCmd`
+     * — Broadcast — which is a live feature precisely in the views that own
+     * the keyboard there (the Agents dashboard IS the batch). Not yielding
+     * it, measured against the same drift fixture, deletes Broadcast outright:
+     * `chatOwns()` claims every chat rune in every ordinary pane, so the
+     * shell arm would become unreachable everywhere. The dual claim is
+     * disclosed at the row, in the README's Keys section, and pinned per
+     * polity by `KeyboardHandlerTest::testEveryYieldedChordIsAnsweredByANoOp()`
+     * and its rebind sibling.
      *
      * `Ctrl+P` is absent because it fails condition **2**, not condition 1.
      * Measured by driving `KeyboardHandler::handle('ctrl+p')` in all three
@@ -516,15 +533,15 @@ final class KeyBindingRegistry
      * {@see chatCtrlRunesYieldedToShell()} only when it is TRUE. The two reads
      * are mutually exclusive. Swept exhaustively over 2 menu states × 10 panes ×
      * 95 printable runes × Ctrl on/off = 3800 keypresses: 1900 derive nothing,
-     * 1031 derive one set, 869 derive two, none derive three.
+     * 1027 derive one set, 873 derive two, none derive three.
      *
      * That sweep visits the panes at their DEFAULT sub-state, and a sub-state is
      * not neutral here: opening the skill picker in `Pane::Skills` flips
      * `KeyboardHandler::shellOwnsKeyboard()`, which is the very predicate
      * choosing which set derives (`ctrl+r` there goes `{Chat}` → `{Chat,
      * YIELDED}`). So the same rune × Ctrl sweep is run again over a CORPUS of 8
-     * keyboard-owning sub-states = 1520 more keypresses: 760 derive nothing, 704
-     * derive one, 56 derive two, none derive three. A corpus, not an
+     * keyboard-owning sub-states = 1520 more keypresses: 760 derive nothing, 688
+     * derive one, 72 derive two, none derive three. A corpus, not an
      * enumeration: it covers `AgentViewMode` exhaustively but the agent view's
      * selection index only at -1 and 0, two skill options, and the menu strip's
      * first menu — `KeyboardHandlerTest::keyboardOwningSubStates()` states that
@@ -669,6 +686,28 @@ final class KeyBindingRegistry
                     . 'them puts up a modal the user can neither see nor move. The shell swallows the '
                     . 'chord there instead, which is what it did before this table derived the claim '
                     . 'sets. See chatCtrlRunesYieldedToShell() for why Ctrl+P is not treated the same.',
+            ),
+            // The Ctrl+G reverse history search (plan_comparison TUI-2, owner
+            // ruling R10: Ctrl+R was already taken by the session picker above).
+            // The chord is SHARED with shell.group-input — the Broadcast door —
+            // and yields to it exactly where Ctrl+R yields, while a shell view
+            // owns the keyboard. The difference, declared in
+            // chatCtrlRunesYieldedToShell(): the picker's chord is swallowed
+            // there because the shell answers it with nothing; this one is
+            // given BACK because the shell answers it with Broadcast, the live
+            // feature that state exists to drive. In every ordinary pane the
+            // chord opens the search, and Broadcast keeps its dashboard, its
+            // strip door and its menu states.
+            KeyBinding::new(
+                'chat.history-search',
+                'Ctrl+G',
+                Lang::t('keys.chat.history-search'),
+                $c,
+                yieldsToShellReason: 'While one of the shell\'s keyboard-owning views is up the shell '
+                    . 'keeps this chord for shell.group-input (Broadcast), the live agent feature that '
+                    . 'state is about; the search it would open is painted by the chat those views '
+                    . 'cover. See chatCtrlRunesYieldedToShell() for the dual-claim rule this is the '
+                    . 'first instance of.',
             ),
             KeyBinding::new('chat.agents', 'Ctrl+A', Lang::t('keys.chat.agents'), $c),
             KeyBinding::new('chat.session-cycle', 'Ctrl+Tab', Lang::t('keys.chat.session-cycle'), $c),

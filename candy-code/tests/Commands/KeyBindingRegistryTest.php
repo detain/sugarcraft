@@ -123,23 +123,31 @@ final class KeyBindingRegistryTest extends TestCase
         $runes = KeyBindingRegistry::chatCtrlRunes();
         sort($runes);
 
-        $this->assertSame(['a', 'c', 'l', 'o', 'p', 'r', 'v', 'w'], $runes);
+        $this->assertSame(['a', 'c', 'g', 'l', 'o', 'p', 'r', 'v', 'w'], $runes);
     }
 
     /**
-     * The exception the shell's claim layer reads, pinned exactly — it is the
-     * one hole in "content wins outright", and it may not grow by accident.
+     * The exceptions the shell's claim layer reads, pinned exactly — they are
+     * the only holes in "content wins outright", and they may not grow by
+     * accident. The polity has two shapes: `Ctrl+R` is SWALLOWED while the
+     * shell owns the keyboard (its shell answer is a no-op), and `Ctrl+G` is
+     * REBOUND to a live shell feature (Broadcast) there — the dual claim of
+     * plan_comparison TUI-2, which keeps an ordinary pane's `Ctrl+G` falling
+     * through to the history search while the agent dashboard, skill picker
+     * and `F10` menu keep their broadcast chord. Both conditions of the yield
+     * criterion, and each rune's polity, live in
+     * {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}; the rebind
+     * half is driven, not asserted here, by
+     * {@see \SugarCraft\Code\Tests\Tui\KeyboardHandlerTest::testEveryYieldedRebindChordStaysWithTheShell()}.
      *
-     * Ctrl+P is deliberately NOT here: see
-     * {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()} for condition 2
-     * it fails — the shell answers `ctrl+p` with `ProviderSelectCmd`, so
-     * yielding it would rebind the chord rather than swallow it. That is
-     * driven, not asserted here: see
-     * {@see \SugarCraft\Code\Tests\Tui\KeyboardHandlerTest::testEveryYieldedChordIsAnsweredByANoOp()}.
+     * Ctrl+P is deliberately NOT here: it fails condition 2 in its strict
+     * form — the shell answers `ctrl+p` with `ProviderSelectCmd`, and that
+     * rebind lands on `/model`, which is worse than swallowing, not a
+     * feature the yielding states surface on screen.
      */
-    public function testExactlyOneChatChordIsYieldedBackToTheShell(): void
+    public function testTheYieldedChatChordsAreExactlyCtrlRAndCtrlG(): void
     {
-        $this->assertSame(['r'], KeyBindingRegistry::chatCtrlRunesYieldedToShell());
+        $this->assertSame(['r', 'g'], KeyBindingRegistry::chatCtrlRunesYieldedToShell());
     }
 
     /**
@@ -165,13 +173,13 @@ final class KeyBindingRegistryTest extends TestCase
         // Cold: the first caller must get the real set, not the empty one.
         // In DECLARED row order, which is the order the accessors build in —
         // the sorted spellings live in the two tests above.
-        $this->assertSame(['r'], KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'cold call');
-        $this->assertSame(['w', 'p', 'o', 'l', 'v', 'r', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'cold call');
+        $this->assertSame(['r', 'g'], KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'cold call');
+        $this->assertSame(['w', 'p', 'o', 'l', 'v', 'r', 'g', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'cold call');
         $this->assertSame(['n', 'k', 's', ',', 'g'], KeyBindingRegistry::shellCtrlRunes(), 'cold call');
 
         // Warm: the same answer, and now out of the memo rather than rebuilt.
-        $this->assertSame(['r'], KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'warm call');
-        $this->assertSame(['w', 'p', 'o', 'l', 'v', 'r', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'warm call');
+        $this->assertSame(['r', 'g'], KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'warm call');
+        $this->assertSame(['w', 'p', 'o', 'l', 'v', 'r', 'g', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'warm call');
         $this->assertSame(['n', 'k', 's', ',', 'g'], KeyBindingRegistry::shellCtrlRunes(), 'warm call');
 
         $byContext = (new \ReflectionProperty(KeyBindingRegistry::class, 'ctrlRuneMemo'))->getValue();
@@ -349,26 +357,39 @@ final class KeyBindingRegistryTest extends TestCase
      * repaint row (crush-review-1014) joining the claims, and earlier the permission modal's `p`:
      * `permission.persist` — `a`'s scope also written to `permissionRules`
      * so the grant outlives the session.
+     
+     * 145 -> 146 live (146 all), 14 groups, with the Ctrl+G history search
+     * (plan_comparison TUI-2): `chat.history-search`, the first row of the
+     * declared-live rebind polity in `chatCtrlRunesYieldedToShell()`.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(145, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(145, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(146, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(146, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(14, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }
 
     /**
-     * The one invariant that makes deriving both sets from one table safe: a
-     * chord claimed by both layers would be claimed by the shell and never
-     * reach the content model, silently killing a Chat binding.
+     * The invariant that makes deriving both sets from one table safe: a chord
+     * claimed by both layers reaches Chat only where the yield lets it, so an
+     * accidental overlap would strand one binding. The ONE overlap permitted is
+     * the declared dual claim — `Ctrl+G`, which is in the yielded set (so an
+     * ordinary pane still falls through to `chat.history-search`) and in the
+     * shell's set live (so the keyboard-owning states' rebind to Broadcast is
+     * a real feature, not a dead chord). The yielded half of the property is
+     * not incidental: a non-yielded rune in both sets is exactly the silent
+     * kill this test was written to catch, and the roster pins it to `g`.
      */
     public function testTheTwoClaimSetsAreDisjoint(): void
     {
-        $this->assertSame(
-            [],
-            array_intersect(KeyBindingRegistry::shellCtrlRunes(), KeyBindingRegistry::chatCtrlRunes()),
-        );
+        $overlap = array_values(array_intersect(
+            KeyBindingRegistry::shellCtrlRunes(),
+            KeyBindingRegistry::chatCtrlRunes(),
+        ));
+
+        $this->assertSame(['g'], $overlap);
+        $this->assertContains('g', KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'the overlap must be yielded — an unyielded shared chord strands Broadcast');
     }
 
     /**

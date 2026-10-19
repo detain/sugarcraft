@@ -371,12 +371,13 @@ final class KeyboardHandler
      * The conclusion does not depend on the imprecision, because the conjunct
      * only ever governs the runes in
      * {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}, which is the
-     * single rune `r`, and `Ctrl+R` is not one of the six — so rule 2 does claim
-     * it inside these states, and the conjunct still cannot change the outcome
-     * there. Outside them
-     * `KeyBindingRegistryTest::testTheTwoClaimSetsAreDisjoint()` keeps a
-     * yielded rune out of {@see shellCtrlRunes()}, so claim rule 6 cannot pick
-     * it up either and it still falls through to Chat. (The corrected phrasing
+     * two runes, `r` and the dual-claim `g`, and `Ctrl+R` is not one of the
+     * six — so rule 2 does claim it inside these states, and the conjunct still
+     * cannot change the outcome there. Outside them
+     * `KeyBindingRegistryTest::testTheTwoClaimSetsAreDisjoint()` keeps every
+     * yielded rune out of {@see shellCtrlRunes()} except the one declared live
+     * overlap `Ctrl+G`, so claim rule 6 cannot pick `Ctrl+R` up either and it
+     * still falls through to Chat. (The corrected phrasing
      * lived thirty lines from the wrong one, in the test docblock, for a round:
      * two copies of one claim, one fixed and one not.) The guard is what keeps
      * that true if rule 2 ever narrows — a rule-2 that claimed only its own
@@ -426,7 +427,8 @@ final class KeyboardHandler
         // The declared exception: a chord whose only effect is a Chat overlay
         // that one of the shell's own keyboard-owning views would bury AND
         // render undrivable goes back to the shell while such a view is up,
-        // PROVIDED the shell answers it with a no-op there. The registry is
+        // PROVIDED the shell answers it there per the registry's yield
+        // criterion — a no-op, or a declared live rebind. The registry is
         // what says WHICH chord and why — both conditions, and the gap the
         // second one deliberately leaves open, live in its docblock and may not
         // be spelled out a second time here. The $app conjunct is deliberately

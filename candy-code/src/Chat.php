@@ -1644,6 +1644,13 @@ final class Chat implements Model
          */
         private readonly ?\SugarCraft\Code\Tui\DirectoryPicker\DirectoryPicker $dirPicker = null,
         /**
+         * The Ctrl+G history search ({@see buildHistorySearch()}), while it is
+         * up: it owns every key until it closes, like {@see $sessionPicker},
+         * and it restores the draft it was opened on when the user escapes out
+         * of it (the seed it carries — plan_comparison TUI-2).
+         */
+        private readonly ?\SugarCraft\Code\Tui\HistorySearch $historySearch = null,
+        /**
          * The directory `/new` chose to restart candy-code in — another
          * project root, which this process (one root per process, Bootstrap's
          * statics) cannot serve. Set together with `Cmd::quit()`; read by
@@ -2953,6 +2960,12 @@ final class Chat implements Model
             if ($this->dirPicker !== null) {
                 return [$this->mutate(['dirPicker' => $this->dirPicker->withPaste($msg->content)]), null];
             }
+            // The history search takes a paste into its query for the same
+            // reason (TUI-2): the overlay owns typing, and the draft behind
+            // it must survive the search untouched.
+            if ($this->historySearch !== null) {
+                return [$this->mutate(['historySearch' => $this->historySearch->withPaste($msg->content)]), null];
+            }
             $imagePath = self::pastedImagePath($msg->content);
             if ($imagePath !== null) {
                 return [$this->withInput($this->input->insertString($this->mentionFor($imagePath) . ' ')), null];
@@ -3142,7 +3155,7 @@ final class Chat implements Model
             return [$this->mutate(['mentionMenuDismissed' => true]), null];
         }
 
-        if ($msg->type === KeyType::Escape && $this->palette === null && $this->sessionPicker === null && $this->dirPicker === null) {
+        if ($msg->type === KeyType::Escape && $this->palette === null && $this->sessionPicker === null && $this->dirPicker === null && $this->historySearch === null) {
             if (!$this->inFlight) {
                 return [$this->mutate(['lastEscapeAt' => null]), null];
             }
@@ -3325,6 +3338,15 @@ final class Chat implements Model
             return $this->handleDirPickerKey($msg);
         }
 
+        // Same rule for the Ctrl+G history search (plan_comparison TUI-2):
+        // while it is up every keystroke searches/cycles/accepts rather than
+        // reaching inputBuf. Checked last among the modals, so the palette,
+        // the session picker and the folder picker keep a fixed precedence
+        // even though only one of them can be open at a time.
+        if ($this->historySearch !== null) {
+            return $this->handleHistorySearchKey($msg);
+        }
+
         return match (true) {
             // Alt/Shift/Ctrl+Enter insert a newline instead of submitting.
             // E705: App::init() now pushes the Kitty DISAMBIGUATE flag, so on
@@ -3484,6 +3506,16 @@ final class Chat implements Model
             // Claude Code's `--resume` picker mnemonic.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'r'
                 => [$this->mutate(['sessionPicker' => $this->buildSessionPicker()]), null],
+            // Ctrl+G opens the reverse history search (plan_comparison TUI-2,
+            // owner ruling R10). The chord is shared with the shell's
+            // `shell.group-input` Broadcast row and YIELDS to it while one of
+            // the shell's keyboard-owning views is up — see
+            // KeyBindingRegistry::chatCtrlRunesYieldedToShell() for the
+            // declared dual claim; in every ordinary pane it reaches here.
+            // While the overlay is already open this arm is unreachable (the
+            // route above feeds the widget, whose own ctrl+g cycles matches).
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'g'
+                => [$this->mutate(['historySearch' => $this->buildHistorySearch()]), null],
             // R20: Ctrl+A re-runs the exact same /agents dispatch submit()
             // already uses for typed input (handleAgentsCommand()), giving
             // KeyboardHandler's Ctrl+A shortcut (Pane::Agents in the
@@ -10752,6 +10784,7 @@ final class Chat implements Model
             // the first keystroke and the 85% tier would park after all.
             'backgroundSummary' => $this->backgroundSummary,
             'dirPicker' => $this->dirPicker,
+            'historySearch' => $this->historySearch,
             'relaunchDir' => $this->relaunchDir,
         ];
 
@@ -11996,6 +12029,7 @@ final class Chat implements Model
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
+            && $this->historySearch === null
             && !$this->slashMenuOwnsTab()
             && !$this->mentionOwnsTab();
     }
@@ -17298,6 +17332,7 @@ final class Chat implements Model
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
+            && $this->historySearch === null
             && $this->slashMenuMatches() !== [];
     }
 
@@ -17388,6 +17423,7 @@ final class Chat implements Model
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
+            && $this->historySearch === null
             && $this->mentionTokenAtCaret() !== null;
     }
 
@@ -17411,6 +17447,7 @@ final class Chat implements Model
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
+            && $this->historySearch === null
             && $this->mentionPopupRows() !== [];
     }
 
@@ -18705,6 +18742,54 @@ final class Chat implements Model
     public function dirPicker(): ?\SugarCraft\Code\Tui\DirectoryPicker\DirectoryPicker
     {
         return $this->dirPicker;
+    }
+
+    /** The Ctrl+G history search, while it is up (plan_comparison TUI-2). */
+    public function historySearch(): ?\SugarCraft\Code\Tui\HistorySearch
+    {
+        return $this->historySearch;
+    }
+
+    /**
+     * Build the history search over the same entries ↑/↓ walk
+     * ({@see recallEntries()}), seeded with the draft and cursor it is opened
+     * on so Escape can put them back. Returns null — do not open, the
+     * buildSessionPicker rule — when there is nothing to search yet.
+     */
+    private function buildHistorySearch(): ?\SugarCraft\Code\Tui\HistorySearch
+    {
+        $entries = $this->recallEntries();
+        if ($entries === []) {
+            return null;
+        }
+
+        return \SugarCraft\Code\Tui\HistorySearch::open($entries, $this->inputBuf, $this->inputCursorOffset());
+    }
+
+    /**
+     * Route one key to the open history search (the handleDirPickerKey shape):
+     * keep browsing, or close it — Escape restoring the seed draft the overlay
+     * was opened on, Enter replacing the draft with the highlighted entry
+     * WITHOUT submitting it, so the user edits before sending.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleHistorySearchKey(KeyMsg $msg): array
+    {
+        if ($this->historySearch === null) {
+            return [$this, null];
+        }
+        [$search, $action] = $this->historySearch->update($msg);
+
+        return match ($action) {
+            null => [$this->mutate(['historySearch' => $search]), null],
+            'close' => [$this->mutate(['historySearch' => null])
+                ->withInputBuf($search->seed()[0])
+                ->withInputCursor($search->seed()[1]), null],
+            'accept' => [$this->mutate(['historySearch' => null])
+                ->withInputBuf((string) $search->selectedEntry()), null],
+            default => [$this, null],
+        };
     }
 
     /**

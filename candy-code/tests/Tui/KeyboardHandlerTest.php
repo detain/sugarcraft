@@ -1263,6 +1263,64 @@ final class KeyboardHandlerTest extends TestCase
     }
 
     /**
+     * The rebind polity's runes (TUI-2's Ctrl+G): yielded to the shell while a
+     * keyboard-owning view is up, answered there NOT with a no-op but with the
+     * live shell feature the registry paragraph names. The claim the two
+     * polities share is only this: the chord stays with the shell in those
+     * states — it must never reach `Chat` from underneath a view that could
+     * neither paint nor drive its overlay. What the shell then DOES with it is
+     * `GroupInputCmd`, pinned by `KeyBindingDriftTest`'s shell.group-input
+     * observation and by {@see testEveryYieldedRebindChordStaysWithTheShell()}.
+     */
+    private const YIELDED_REBIND_RUNES = ['g'];
+
+    /**
+     * The other half of the dual-claim yield criterion (TUI-2, see
+     * {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}): every rune of
+     * the rebind polity is still CLAIMED by the shell in all eight
+     * keyboard-owning sub-states — the chord does not fall through to the
+     * buried overlay — and in the agent view the claim answers the
+     * `shell.group-input` row's command, the declared rebind. The F10-menu
+     * sub-states and the ATTACHED agent view assert the claim alone: the menu
+     * routes its own keys first, and attached input belongs to the run's
+     * terminal — which answer is theirs to give, not this chord's.
+     */
+    public function testEveryYieldedRebindChordStaysWithTheShell(): void
+    {
+        $yielded = KeyBindingRegistry::chatCtrlRunesYieldedToShell();
+        foreach (self::YIELDED_REBIND_RUNES as $rune) {
+            $this->assertContains($rune, $yielded, "a rebind-polity rune must be in the derived yielded set");
+        }
+
+        foreach (self::YIELDED_REBIND_RUNES as $rune) {
+            foreach ($this->keyboardOwningSubStates() as $where => $build) {
+                $this->resetMenuBarState();
+                $app = $build();
+                $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, $rune, ctrl: true), $app);
+
+                $this->assertNotNull($handled, "ctrl+{$rune} must not reach Chat from {$where}");
+                // The Broadcast answer is asserted where the shell answers
+                // ctrl+G from its own state: the two agent-view browsing modes
+                // and the skill picker. The two F10-menu states route every
+                // key through the menu first (which row answers is the menu's
+                // contract), and ATTACHED input belongs to the run's terminal
+                // — forwarding it verbatim is the attach view's whole point.
+                $answersFromItsOwnState = !str_starts_with($where, 'an open F10 menu')
+                    && $where !== 'the agent view attached to an agent';
+                if ($answersFromItsOwnState) {
+                    $this->assertInstanceOf(
+                        \SugarCraft\Code\Tui\Commands\GroupInputCmd::class,
+                        $handled[1],
+                        "ctrl+{$rune} must answer {$where} with the Broadcast command the rebind declares",
+                    );
+                }
+            }
+        }
+
+        $this->resetMenuBarState();
+    }
+
+    /**
      * Condition 2 of the yield criterion
      * ({@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}), as a property
      * of the derived set rather than a sentence about `Ctrl+R`: a chord the
@@ -1301,7 +1359,10 @@ final class KeyboardHandlerTest extends TestCase
      */
     public function testEveryYieldedChordIsAnsweredByANoOp(): void
     {
-        $yielded = KeyBindingRegistry::chatCtrlRunesYieldedToShell();
+        $yielded = array_values(array_diff(
+            KeyBindingRegistry::chatCtrlRunesYieldedToShell(),
+            self::YIELDED_REBIND_RUNES,
+        ));
         $this->assertNotSame([], $yielded, 'fixture: the criterion has at least one row to check');
 
         foreach ($yielded as $rune) {
@@ -1453,7 +1514,7 @@ final class KeyboardHandlerTest extends TestCase
         $this->resetMenuBarState();
         $this->assertSame(3800, $presses, '2 menu states x 10 panes x 95 runes x ctrl on/off');
         $this->assertSame(
-            [0 => 1900, 1 => 1029, 2 => 871],
+            [0 => 1900, 1 => 1027, 2 => 873],
             $histogram,
             'the distribution the memo docblock states, over the sweep it names',
         );
@@ -1497,7 +1558,7 @@ final class KeyboardHandlerTest extends TestCase
         $this->resetMenuBarState();
         $this->assertSame(1520, $subPresses, '8 keyboard-owning sub-states x 95 runes x ctrl on/off');
         $this->assertSame(
-            [0 => 760, 1 => 696, 2 => 64],
+            [0 => 760, 1 => 688, 2 => 72],
             $subHistogram,
             'the sub-state distribution: nothing for ordinary typing, one set for a Ctrl chord this '
             . 'registry does not give Chat, two when it does and the yielded set has to be consulted',
@@ -1604,8 +1665,9 @@ final class KeyboardHandlerTest extends TestCase
      * {@see testOnlyChatsOwnChordsEscapeTheShellInTheAgentPane()} for the eight
      * that it has — and
      * `KeyBindingRegistryTest::testTheTwoClaimSetsAreDisjoint()` keeps a
-     * yielded rune out of the shell's own set, so a mutation that yields the
-     * chord unconditionally produces byte-identical routing everywhere.
+     * yielded rune out of the shell's own set — `Ctrl+G` is the one declared
+     * live overlap the roster pins, `Ctrl+R` is not in it — so a mutation that
+     * yields `Ctrl+R` unconditionally produces byte-identical routing.
      *
      * It is defence in depth against rule 2 narrowing — see
      * {@see KeyboardHandler::shellOwnsKeyboard()} — and a guard nothing can
@@ -1817,7 +1879,10 @@ final class KeyboardHandlerTest extends TestCase
 
         $expected = [
             'n' => NewSessionCmd::class,
-            'g' => GroupInputCmd::class,
+            // 'g' is absent since TUI-2: chat.history-search gives `ctrl+g` to
+            // the chat in an ordinary pane (chatOwns claims first); the shell
+            // keeps it only in its keyboard-owning states, pinned by
+            // testEveryYieldedRebindChordStaysWithTheShell() below.
             'k' => CommandPaletteCmd::class,
             's' => SourceSkillCmd::class,
         ];

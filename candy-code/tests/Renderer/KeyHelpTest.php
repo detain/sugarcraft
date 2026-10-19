@@ -1139,7 +1139,10 @@ final class KeyHelpTest extends TestCase
         // The permission modal's `p` declared `permission.persist`: one row
         // under a heading it already had: 171 lines, 145 -> 146, fitting at
         // 100x176.
-        foreach ([[100, 30, 147], [100, 177, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // The Ctrl+G history search (plan_comparison TUI-2) declared `chat.history-search`:
+        // one row under a heading it already had: 173 lines, 147 -> 148 at 100x30, fitting
+        // at 100x178.
+        foreach ([[100, 30, 148], [100, 178, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1203,8 +1206,8 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 177 rows, not 80: the list is 172 content lines now (145 live
-            // rows, 14 headers, 13 separators; 171 before `chat.repaint`, 170 before `permission.persist`,
+            // 178 rows, not 80: the list is 173 content lines now (146 live
+            // rows, 14 headers, 13 separators; 172 before `chat.history-search`, 171 before `chat.repaint`, 170 before `permission.persist`,
             // 167 before `media.open_form` and its fourteenth heading, 156 before `/new`'s nine folder-picker keys, 155 before `permission.edit`, 151 before the N-P5 remainder's four settings keys, 150 before 5.7-2's `permission.choice`, 148 before N-P5's two settings keys, 147 before P-E3's Ctrl+X b, 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
@@ -1214,7 +1217,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 177))),
+                Width::of($this->footer($this->chat('', $cols, 178))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }

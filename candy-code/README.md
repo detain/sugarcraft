@@ -224,7 +224,7 @@ all one component tree — not two parallel UIs.
 | `Alt+M` | Toggle **plan mode** between turns: into `plan` from any mode, and back to the mode you left. In `plan` the agent reads and explores but every change is refused except a Markdown plan in `.candy-code/plans/`, and the prompt tells it so. The agent is told about each switch once — a switch you undo before sending anything is never sent — and the status bar shows any mode other than `default` (`plan mode (Alt+M to leave)`). `Shift+Tab` stays the backward pane cycle. See [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md#setting-the-mode) |
 | `Esc` / `Alt+↑` (Agent View) | Back to the main transcript; the `Esc` that leaves the view is never the first half of an `Esc` `Esc` cancel. `Alt+N` / `Alt+P` open the next / previous agent of the same `Task` batch |
 | `Ctrl+X` `c` / `p` / `s` / `o` / `b` (Agent View) | Control the agent on screen: `c` **cancels** it at its next tool or step (it stays resumable; press again within 3 s to stop it at once), `p` **pauses** it at its next step boundary — `⏸ paused` on its line, for 10 minutes at most, then it goes on by itself so the parent turn never hangs — and `p` again lets it go on, `s` cancels **every** running agent, `o` **opens it as a session**: once it has finished, its stored sub-agent session becomes the session on screen, a normal one to type into (not while a turn runs), and `b` **sends it to the background**: at its next tool or step it is saved and a background session continues the same conversation, its `Task` call returns at once (`⧗ moved to the background` on its line) so the parent turn goes on, and the result is announced into the chat when the session finishes, like any background agent. Only a run the main conversation delegated can go — a nested run, or one on a launch that cannot start background sessions, says so and keeps running |
-| `Ctrl+G` | **Broadcast**: the composer sends to every running agent of the batch at once (an empty box reads `message all 3 agents…`); it opens the Agent View on the newest running agent when none is open. `Ctrl+G` again goes back to the one on screen |
+| `Ctrl+G` | **Broadcast**: the composer sends to every running agent of the batch at once (an empty box reads `message all 3 agents…`); it opens the Agent View on the newest running agent when none is open. `Ctrl+G` again goes back to the one on screen. Reachable while the agent dashboard, a skill picker or the `F10` menu owns the keyboard; from an ordinary chat pane the chord opens the history search instead (below) |
 | `Enter` (Agent View) | Send the draft **to the agent on screen** — the input box is its composer while the view is open (an empty box says `message <agent>…`). A running agent reads it at its next step; a finished one is continued by a follow-up run of the same conversation. Idle or mid-turn alike, and never to the main model. A `/command` or `!command` still runs as one |
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
 | `Up` (empty input) | Recall the last prompt you sent — press again to walk further back, into earlier sessions too (a fresh launch's first `Up` is the previous session's last prompt). History lives in `~/.candy-code/prompt_history.jsonl`; editing a recalled prompt ends the walk |
@@ -241,11 +241,13 @@ all one component tree — not two parallel UIs.
 `Ctrl+P`, `Ctrl+O`, `Ctrl+V`, `Ctrl+A`, `Ctrl+W`, `Ctrl+L` and `Ctrl+C` always belong to the chat
 content model — the shell never claims them, in any pane, so hosting chat
 inside the shell cannot silently steal a binding. `Ctrl+R` belongs to the chat
-too, with one declared exception: while a shell view is itself driving the
+too, with declared exceptions: while a shell view is itself driving the
 keyboard (the agent dashboard, an open skill picker, an open `F10` menu) the
-shell keeps it, because the picker it opens is painted by the chat those views
-cover and moved by the `↑`/`↓`/`Enter` those views claim. Leave the view and
-`Ctrl+R` works as usual.
+shell keeps `Ctrl+R` — the picker it opens is painted by the chat those views
+cover and moved by the `↑`/`↓`/`Enter` those views claim — and keeps `Ctrl+G`
+for **Broadcast**, the live agent feature those views are about. From an
+ordinary pane `Ctrl+R` opens the picker and `Ctrl+G` the history search; leave
+the view and both chords work for the chat as usual.
 
 The table above is a summary of the chat pane; **the reference `?` opens is the
 authority**, and it covers the overlays too (palette, session picker, permission

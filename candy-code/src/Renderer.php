@@ -2089,6 +2089,9 @@ final class Renderer
         if ($overlay === '') {
             $overlay = self::renderDirectoryPicker($chat, $theme);
         }
+        if ($overlay === '') {
+            $overlay = self::renderHistorySearch($chat, $theme);
+        }
         if ($overlay !== '') {
             // The width invariant does not stop at $body: a Veil box is built
             // at its own natural width AFTER fitToPane()'s choke point (the
@@ -6304,6 +6307,23 @@ final class Renderer
         [$width, $height] = \SugarCraft\Code\Tui\DirectoryPicker\DirectoryPicker::overlayGeometry($chat->cols(), $chat->rows(), self::SHELL_CHROME_COLS);
 
         return $picker->render($width, $height, $theme);
+    }
+
+    /**
+     * The Ctrl+G history search (plan_comparison TUI-2), composited over the
+     * frame like the folder picker and sized by the same rule
+     * ({@see \SugarCraft\Code\Tui\HistorySearch::overlayGeometry()}).
+     * Keyboard-driven; its rows carry no click ids.
+     */
+    private static function renderHistorySearch(Chat $chat, Theme $theme): string
+    {
+        $search = $chat->historySearch();
+        if ($search === null) {
+            return '';
+        }
+        [$width, $height] = \SugarCraft\Code\Tui\HistorySearch::overlayGeometry($chat->cols(), $chat->rows(), self::SHELL_CHROME_COLS);
+
+        return $search->render($width, $height, $theme);
     }
 
     /**
