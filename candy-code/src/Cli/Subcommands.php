@@ -323,6 +323,44 @@ final class Subcommands
     }
 
     /**
+     * The SES-2 capability question: can this SQLite actually build an FTS5
+     * table? EXERCISED, not name-checked, in the ISS-083 doctrine — FTS5 is
+     * a compile option of SQLite rather than a PHP extension, so the only
+     * honest probe is the exact `CREATE VIRTUAL TABLE ... USING fts5` the
+     * session index issues, run against `sqlite::memory:` (and read back
+     * with a real MATCH, so a table that builds but cannot search still
+     * reports what it is).
+     *
+     * WARN, never FAIL: session body search keeps answering through the
+     * LIKE prefilter while the module is absent
+     * ({@see \SugarCraft\Code\Session\SessionSearchIndex}), so a refusal is
+     * a degraded feature, not a broken install.
+     *
+     * @param string $module test seam — the FTS5 module name to attempt
+     *
+     * @return array{status: string, detail: string}
+     */
+    private static function fts5Probe(string $module = 'fts5'): array
+    {
+        $error = '';
+        try {
+            $pdo = new \PDO(self::SESSION_STORE_PROBE_DSN);
+            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+            $pdo->exec('CREATE VIRTUAL TABLE candy_code_fts5_probe USING ' . $module . '(body, tokenize = \'porter unicode61\')');
+            $pdo->exec('INSERT INTO candy_code_fts5_probe(body) VALUES (\'fts5 probe sentence\')');
+            $answered = (int) $pdo->query('SELECT COUNT(*) FROM candy_code_fts5_probe WHERE body MATCH \'fts5\'')->fetchColumn() === 1;
+        } catch (\Throwable $e) {
+            $answered = false;
+            $error = $e->getMessage();
+        }
+
+        return [
+            'status' => $answered ? 'OK' : 'WARN',
+            'detail' => Lang::t($answered ? 'cli.doctor.fts5_ok' : 'cli.doctor.fts5_missing', ['error' => $error]),
+        ];
+    }
+
+    /**
      * The doctor's checks, as label => closure returning
      * `{status: 'OK'|'WARN'|'FAIL', detail: string}`.
      *
@@ -353,6 +391,8 @@ final class Subcommands
             ],
 
             'pdo_sqlite' => static fn (): array => self::pdoDriverProbe(self::SESSION_STORE_PROBE_DSN),
+
+            'fts5' => static fn (): array => self::fts5Probe(),
 
             'ext-curl' => static fn (): array => [
                 // `suggest`, not `require`: only the HTTP providers need it, so

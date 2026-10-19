@@ -167,6 +167,8 @@ return [
     'cli.doctor.failed.many' => '{count} checks failed.',
     'cli.doctor.failed.one' => '{count} check failed.',
     'cli.doctor.loaded' => 'loaded',
+    'cli.doctor.fts5_ok' => 'full-text session search available',
+    'cli.doctor.fts5_missing' => 'full-text search unavailable ({error}) — session body search degrades to the name/preview prefilter',
     'cli.doctor.mcp_absent' => 'no {file} in this project',
     'cli.doctor.mcp_disabled' => 'MCP is switched off for this launch — no servers start, whatever .mcp.json says',
     'cli.doctor.mcp_outside' => '{path} resolves outside the project tree; it is ignored',
