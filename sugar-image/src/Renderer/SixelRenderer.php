@@ -12,6 +12,7 @@ use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Levels\LevelsStretch;
 use SugarCraft\Image\Lang;
 use SugarCraft\Image\Quantizer;
+use SugarCraft\Image\TermInfo;
 
 /**
  * Sixel graphics renderer — DEC sixel to terminal.
@@ -144,6 +145,22 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *                              {@see \SugarCraft\Image\Quantizer} — null
      *                              (default) keeps median-cut, so the
      *                              byte-frozen default path is untouched.
+     * @param int|null $quirks      F-02: the {@see TermInfo} `QUIRK_*`
+     *                              bitmask of the terminal the poster is
+     *                              destined for, armed through
+     *                              {@see withQuirks()}. NULL (default) =
+     *                              the terminal was never consulted — the
+     *                              byte-frozen legacy shape, no parking
+     *                              newline and no mlterm forcing. When
+     *                              known, two chicle rules ride the value:
+     *                              chafa.c:445-451 emits one vertical space
+     *                              after the sixel UNLESS the terminal has
+     *                              QUIRK_SIXEL_OVERSHOOT (it already parked
+     *                              the cursor a row below the final band),
+     *                              and chafa-sixel-renderer.c:415-440
+     *                              forces the global first/last band's
+     *                              full-width sweep when
+     *                              QUIRK_MLTERM_EDGE_ROWS is set.
      */
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
@@ -157,6 +174,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         private readonly bool $mltermEdgeRows = false,
         private readonly ?int $quality = null,
         private readonly bool $autoLevels = false,
+        private readonly ?int $quirks = null,
     ) {
         if ($maxColors < 1 || $maxColors > 256) {
             throw new \InvalidArgumentException(
@@ -361,6 +379,15 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             }
 
             $write(Ansi::sixelTerminator());
+            // F-02: the chafa.c:445-451 parking newline — one vertical space
+            // after the sixel when the terminal is known not to park the
+            // cursor below the final band itself. Success path only: the
+            // finally-arm above must never strand a DCS, but a half-failed
+            // poster also never gets to choose where the cursor rests.
+            $park = $this->parkingNewline();
+            if ($park !== '') {
+                $write($park);
+            }
             $terminated = true;
         } finally {
             // Never strand the terminal inside a DCS: if the header reached the
@@ -467,6 +494,10 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * B-14: the quality segment likewise appears ONLY when armed — the
      * pinned default fingerprint stays byte-identical (C-04/B-10 discipline).
      * B-15: the autoLevels segment likewise appears only when armed.
+     * F-02: the quirks segment appears ONLY when the terminal was actually
+     * consulted — a queried quirks=0 differs from the frozen null default
+     * (it earns the parking newline), so the two must never share a cache
+     * key; the null default keeps every pinned fingerprint byte-identical.
      */
     public function configFingerprint(): string
     {
@@ -487,7 +518,8 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             . ($this->serpentine ? '|serpentine=1' : '')
             . ($this->mltermEdgeRows ? '|mlterm=1' : '')
             . ($this->quality === null ? '' : '|quality=' . $this->quality)
-            . ($this->autoLevels ? '|autolevels=1' : '');
+            . ($this->autoLevels ? '|autolevels=1' : '')
+            . ($this->quirks === null ? '' : '|quirks=' . $this->quirks);
     }
 
     /**
@@ -510,6 +542,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->mltermEdgeRows,
             $this->quality,
             $this->autoLevels,
+            $this->quirks,
         );
     }
 
@@ -557,6 +590,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->mltermEdgeRows,
             $this->quality,
             $this->autoLevels,
+            $this->quirks,
         );
     }
 
@@ -582,6 +616,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->mltermEdgeRows,
             $this->quality,
             $this->autoLevels,
+            $this->quirks,
         );
     }
 
@@ -612,6 +647,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->mltermEdgeRows,
             $this->quality,
             $this->autoLevels,
+            $this->quirks,
         );
     }
 
@@ -645,7 +681,78 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $mltermEdgeRows,
             $this->quality,
             $this->autoLevels,
+            $this->quirks,
         );
+    }
+
+    /**
+     * F-02 copy armed from a terminal-database quirks bitmask
+     * ({@see TermInfo::QUIRK_*}). Two chicle consumers re-home here:
+     * QUIRK_MLTERM_EDGE_ROWS arms the F-03 full-width edge-band forcing
+     * (the flag's "auto-enabling belongs to the F-02 TermDb capability
+     * table" home promised in its F-03 docblock), and the ABSENCE of
+     * QUIRK_SIXEL_OVERSHOOT on a KNOWN terminal makes the encoder append
+     * the parking newline chafa writes at chafa.c:445-451 — a terminal
+     * with the quirk parks its own cursor a row below the final band and
+     * needs nothing extra. Passing QUIRK_NONE is a positive fact ("chain
+     * consulted, no quirks") and still earns the parking newline; only
+     * the never-polled null default keeps the legacy bytes frozen.
+     */
+    public function withQuirks(?int $quirks): self
+    {
+        if ($quirks !== null && ($quirks & ~TermInfo::ALL_QUIRKS) !== 0) {
+            throw new \InvalidArgumentException("unknown quirk bits: {$quirks}");
+        }
+
+        return new self(
+            $this->dither,
+            $this->maxColors,
+            $this->cellWidth,
+            $this->cellHeight,
+            $this->intensity,
+            $this->alphaThreshold,
+            $this->flattenBackground,
+            $this->serpentine,
+            $this->mltermEdgeRows
+                || ($quirks !== null && ($quirks & TermInfo::QUIRK_MLTERM_EDGE_ROWS) !== 0),
+            $this->quality,
+            $this->autoLevels,
+            $quirks,
+        );
+    }
+
+    /**
+     * F-02: the armed quirks mask, null when the terminal was never
+     * consulted (the byte-frozen default).
+     */
+    public function quirks(): ?int
+    {
+        return $this->quirks;
+    }
+
+    /**
+     * F-02: whether one `QUIRK_*` bit is armed. Null quirks answers false
+     * for every bit — no facts, no quirk-driven bytes.
+     */
+    public function hasQuirk(int $quirk): bool
+    {
+        return $this->quirks !== null && ($this->quirks & $quirk) === $quirk;
+    }
+
+    /**
+     * F-02: the parking newline chafa.c:445-451 appends after sixel output
+     * when the terminal is KNOWN not to overshoot its cursor. Returns ''
+     * for the frozen null default and for overshooting terminals.
+     */
+    public function parkingNewline(): string
+    {
+        return $this->needsParkingNewline() ? "\n" : '';
+    }
+
+    private function needsParkingNewline(): bool
+    {
+        return $this->quirks !== null
+            && ($this->quirks & TermInfo::QUIRK_SIXEL_OVERSHOOT) === 0;
     }
 
     /**
@@ -687,6 +794,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->mltermEdgeRows,
             $this->quality,
             $autoLevels,
+            $this->quirks,
         );
     }
 
@@ -710,6 +818,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->mltermEdgeRows,
             $quality,
             $this->autoLevels,
+            $this->quirks,
         );
     }
 

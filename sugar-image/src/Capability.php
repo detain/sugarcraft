@@ -33,6 +33,22 @@ final class Capability
         public readonly ?string $defaultFg = null,
         /** F-08: OSC 11 default background, same representation and sentinel. */
         public readonly ?string $defaultBg = null,
+        /**
+         * F-02: the terminal-database quirks bitmask ({@see TermInfo::QUIRK_*})
+         * for the resolved chain, or null when no chain was consulted — the
+         * byte-frozen legacy shape. Null must never be collapsed to 0: "no
+         * fact" and "fact: no quirks" drive different trailing-newline
+         * behaviour in SixelRenderer (chafa.c:445-451 parks only when the
+         * terminal is KNOWN not to overshoot).
+         */
+        public readonly ?int $quirks = null,
+        /**
+         * F-12: which passthrough envelope the session needs, derived from
+         * the TermDb MUX row via {@see TermInfo::passthroughMode()} —
+         * TermInfo::PASSTHROUGH_NONE (default) keeps the pre-F-12 bytes
+         * untouched.
+         */
+        public readonly string $passthroughMode = TermInfo::PASSTHROUGH_NONE,
     ) {}
 
     /**
@@ -89,6 +105,9 @@ final class Capability
             // orthogonal facets of the same probe, neither may blank the other.
             $this->defaultFg,
             $this->defaultBg,
+            // F-02/F-12: terminal facts survive the same way.
+            $this->quirks,
+            $this->passthroughMode,
         );
     }
 
@@ -110,6 +129,38 @@ final class Capability
             $this->inTmux,
             $defaultFg,
             $defaultBg,
+            $this->quirks,
+            $this->passthroughMode,
+        );
+    }
+
+    /**
+     * F-02/F-12: return a copy carrying the terminal-database facts — the
+     * quirks bitmask (null = chain never consulted, the byte-frozen shape)
+     * and the passthrough envelope mode. Built by {@see Detect::probeEnv()}
+     * on the resolved {@see TermInfo}, mirroring how chafa consults
+     * chafa_term_info_get_quirks() at the output epilogue (chafa.c:445-451)
+     * and dispatches on the chained passthrough mode
+     * (chafa-passthrough-encoder.c:145-165).
+     */
+    public function withTerminalFacts(?int $quirks, string $passthroughMode): self
+    {
+        if (!in_array($passthroughMode, TermInfo::PASSTHROUGH_MODES, true)) {
+            throw new \InvalidArgumentException("unknown passthrough mode: {$passthroughMode}");
+        }
+
+        return new self(
+            $this->sixel,
+            $this->kitty,
+            $this->iterm2,
+            $this->halfblock,
+            $this->chafa,
+            $this->cellSize,
+            $this->inTmux,
+            $this->defaultFg,
+            $this->defaultBg,
+            $quirks,
+            $passthroughMode,
         );
     }
 

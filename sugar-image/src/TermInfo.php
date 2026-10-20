@@ -60,6 +60,61 @@ final class TermInfo
     public const BLOCK_BORDER_ONLY = self::SYMBOL_BLOCK | self::SYMBOL_BORDER;
 
     /**
+     * F-02: terminal quirks bitmask — mirrors chicle's `ChafaTermQuirk`
+     * (chafa/chafa-term-info.h:53-60 in the legacy clone layout on disk).
+     * The legacy enum carries only the overshoot bit; modern chafa widened
+     * it (OPCODES_SEPARATED_BY_COMMAS … SEVEN_BIT_FOOT_SHORTEST,
+     * chafa-term.h:112-118) with entries no SugarCraft renderer consumes,
+     * so only the bits with a live consumer are ported.
+     *
+     * @see QUIRK_SIXEL_OVERSHOOT
+     */
+    public const QUIRK_NONE = 0;
+
+    /**
+     * F-02: after printing a sixel image in advance-down mode the terminal
+     * leaves the cursor on the row BELOW the final band (chicle's own doc,
+     * chafa-term-info.h:53-58; rows carrying it in chafa-term-db.c:
+     * alacritty :598, konsole :707, mintty :737, mlterm :746, rio :767,
+     * tmux :810 and the 3.4 gate :818). Consumers compensate: chafa parks
+     * with a trailing newline ONLY on terminals WITHOUT the quirk
+     * (chafa.c:445-451) and forces a bottom margin on terminals with it
+     * (chicle-options.c:2248-2255).
+     */
+    public const QUIRK_SIXEL_OVERSHOOT = 1 << 0;
+
+    /**
+     * F-02: mlterm draws garbage unless the global first/last band of a
+     * transparent canvas is fully drawn even when its rightmost pixels are
+     * transparent (chafa-sixel-renderer.c:330-410 `force_full_width`,
+     * applied at :415-440 to is_global_first_row || is_global_last_row).
+     * SC-original bit — chicle keys that workaround on terminal identity
+     * inside the renderer instead of the quirk table; lifting it here is
+     * the "re-home S4.1's mlterm flag through TermDb" half of plan step
+     * S7.1, disclosed as a structural divergence. It is the auto-select
+     * consumer of {@see SixelRenderer::withMltermEdgeRows()}'s F-03 flag.
+     */
+    public const QUIRK_MLTERM_EDGE_ROWS = 1 << 1;
+
+    /** Every quirk bit the table may set — guard for the Fail Fast ctor check. */
+    public const ALL_QUIRKS = self::QUIRK_SIXEL_OVERSHOOT | self::QUIRK_MLTERM_EDGE_ROWS;
+
+    /**
+     * F-12: passthrough envelope modes — mirrors chicle's
+     * `ChafaPassthroughMode` (NONE/TMUX/SCREEN, dispatched in
+     * chafa/internal/chafa-passthrough-encoder.c:145-165) as strings so
+     * they survive var-export and JSON snapshots. Derived from the matched
+     * MUX row: tmux rows (chafa-term-db.c:810/:818 pass
+     * CHAFA_PASSTHROUGH_TMUX), screen row (:786-789 passes
+     * CHAFA_PASSTHROUGH_SCREEN).
+     */
+    public const PASSTHROUGH_NONE = 'none';
+    public const PASSTHROUGH_TMUX = 'tmux';
+    public const PASSTHROUGH_SCREEN = 'screen';
+
+    public const PASSTHROUGH_MODES = [self::PASSTHROUGH_NONE, self::PASSTHROUGH_TMUX, self::PASSTHROUGH_SCREEN];
+
+    /**
      * @param list<self::PROTOCOL_*>  $claims      protocols the chain claims
      * @param array<string, bool>     $passthrough per-protocol "needs the mux passthrough wrapper";
      *                                             absent key = native (no wrapper)
@@ -70,6 +125,11 @@ final class TermInfo
      *                                             "dumb" row (chafa-term-db.c:1169, ASCII-only),
      *                                             because "the table says nothing" is not
      *                                             evidence of an ancient seat.
+     * @param int                     $quirks      F-02 `QUIRK_*` bitmask of the chain's terminal
+     *                                             quirks; chicle stores one per term_info and
+     *                                             chains it by OR across the mux link, so a
+     *                                             quirk on either end affects the output —
+     *                                             see {@see TermDb::matchChain()}.
      */
     public function __construct(
         /** Human-readable match chain, innermost first: "tmux(3.4):xterm". */
@@ -78,6 +138,7 @@ final class TermInfo
         public readonly array $passthrough,
         public readonly ?string $mux,
         public readonly int $safeSymbols = self::ALL_SYMBOLS,
+        public readonly int $quirks = self::QUIRK_NONE,
     ) {
         foreach ($claims as $protocol) {
             if (!in_array($protocol, self::PROTOCOLS, true)) {
@@ -88,6 +149,9 @@ final class TermInfo
             if (!in_array($protocol, self::PROTOCOLS, true)) {
                 throw new \InvalidArgumentException("unknown passthrough protocol: {$protocol}");
             }
+        }
+        if (($quirks & ~self::ALL_QUIRKS) !== 0) {
+            throw new \InvalidArgumentException("unknown quirk bits: {$quirks}");
         }
     }
 
@@ -137,5 +201,36 @@ final class TermInfo
     public function hasPixelProtocol(): bool
     {
         return $this->claims !== [];
+    }
+
+    /**
+     * F-02: whether one `QUIRK_*` bit is armed on this chain.
+     */
+    public function hasQuirk(int $quirk): bool
+    {
+        return ($this->quirks & $quirk) === $quirk;
+    }
+
+    /**
+     * F-12: which passthrough envelope the matched MUX row demands — tmux
+     * rows pass CHAFA_PASSTHROUGH_TMUX (chafa-term-db.c:810/:818), the
+     * screen row passes CHAFA_PASSTHROUGH_SCREEN (:786-789); with no mux
+     * link there is nothing to envelope. The mux label from
+     * {@see TermDb::rowLabel()} ("tmux", "tmux 3.4", "screen") decides by
+     * prefix, so a versioned row keeps its parent's protocol.
+     */
+    public function passthroughMode(): string
+    {
+        if ($this->mux === null) {
+            return self::PASSTHROUGH_NONE;
+        }
+        if (str_starts_with($this->mux, 'tmux')) {
+            return self::PASSTHROUGH_TMUX;
+        }
+        if (str_starts_with($this->mux, 'screen')) {
+            return self::PASSTHROUGH_SCREEN;
+        }
+
+        return self::PASSTHROUGH_NONE;
     }
 }

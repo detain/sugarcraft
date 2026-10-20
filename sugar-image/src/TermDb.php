@@ -112,6 +112,7 @@ final class TermDb
      *     claims: list<TermInfo::PROTOCOL_*>,
      *     passthrough: array<string, bool>,
      *     symbols?: int,
+     *     quirks?: int,
      *     env: list<array{op: string, cmp: string, key: string, value: string|null, priority: int}>
      * }>
      */
@@ -178,6 +179,7 @@ final class TermDb
         ['name' => 'mintty', 'type' => self::TYPE_TERM, 'version' => null,
             'claims' => [TermInfo::PROTOCOL_ITERM2, TermInfo::PROTOCOL_SIXEL], 'passthrough' => [],
             'symbols' => TermInfo::BLOCK_BORDER_ONLY,
+            'quirks' => TermInfo::QUIRK_SIXEL_OVERSHOOT,
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM', 'value' => 'mintty', 'priority' => 10],
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM_PROGRAM', 'value' => 'mintty', 'priority' => 0],
@@ -186,6 +188,7 @@ final class TermDb
         // rio (chicle:761-767: iterm2+sixel, overshoot quirk).
         ['name' => 'rio', 'type' => self::TYPE_TERM, 'version' => null,
             'claims' => [TermInfo::PROTOCOL_ITERM2, TermInfo::PROTOCOL_SIXEL], 'passthrough' => [],
+            'quirks' => TermInfo::QUIRK_SIXEL_OVERSHOOT,
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM', 'value' => 'rio', 'priority' => 10],
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM_PROGRAM', 'value' => 'rio', 'priority' => 0],
@@ -202,6 +205,7 @@ final class TermDb
         // round-trip (chafa-term.c:509-522).
         ['name' => 'mlterm', 'type' => self::TYPE_TERM, 'version' => null,
             'claims' => [TermInfo::PROTOCOL_SIXEL], 'passthrough' => [],
+            'quirks' => TermInfo::QUIRK_SIXEL_OVERSHOOT | TermInfo::QUIRK_MLTERM_EDGE_ROWS,
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM', 'value' => 'mlterm', 'priority' => 10],
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM', 'value' => 'mlterm-256color', 'priority' => 10],
@@ -236,11 +240,13 @@ final class TermDb
         // — the version-gate EXCL row, the same shape as the tmux 3.4 row.
         ['name' => 'konsole', 'type' => self::TYPE_TERM, 'version' => null,
             'claims' => [], 'passthrough' => [],
+            'quirks' => TermInfo::QUIRK_SIXEL_OVERSHOOT,
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_ISSET, 'key' => 'KONSOLE_VERSION', 'value' => null, 'priority' => 0],
             ]],
         ['name' => 'konsole', 'type' => self::TYPE_TERM, 'version' => '220370',
             'claims' => [TermInfo::PROTOCOL_SIXEL], 'passthrough' => [],
+            'quirks' => TermInfo::QUIRK_SIXEL_OVERSHOOT,
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_ISSET, 'key' => 'KONSOLE_VERSION', 'value' => null, 'priority' => 0],
                 ['op' => self::ENV_OP_EXCL, 'cmp' => self::ENV_CMP_VER_GE, 'key' => 'KONSOLE_VERSION', 'value' => '220370', 'priority' => 0],
@@ -288,8 +294,12 @@ final class TermDb
         // ---- color-only / no-pixel rows (knowledge for the chain label and
         // for --dump-detect; the claims list is empty by evidence) ----
         // alacritty (chicle:594-598: mainline has no sixel — only PR#4763).
+        // The overshoot quirk rides chicle's row :598 verbatim; with no sixel
+        // claim today it changes no bytes, and it lands pre-emptively so a
+        // future sixel-capable alacritty row inherits the cursor fact.
         ['name' => 'alacritty', 'type' => self::TYPE_TERM, 'version' => null,
             'claims' => [], 'passthrough' => [],
+            'quirks' => TermInfo::QUIRK_SIXEL_OVERSHOOT,
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM', 'value' => 'alacritty', 'priority' => 10],
             ]],
@@ -347,6 +357,7 @@ final class TermDb
         // passthrough for every pixel protocol.
         ['name' => 'tmux', 'type' => self::TYPE_MUX, 'version' => null,
             'claims' => [],
+            'quirks' => TermInfo::QUIRK_SIXEL_OVERSHOOT,
             'passthrough' => [TermInfo::PROTOCOL_SIXEL => true, TermInfo::PROTOCOL_KITTY => true, TermInfo::PROTOCOL_ITERM2 => true],
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_ISSET, 'key' => 'TMUX', 'value' => null, 'priority' => 0],
@@ -362,6 +373,7 @@ final class TermDb
         // wrong native claim silently disables the F-04 termfeatures veto.
         ['name' => 'tmux', 'type' => self::TYPE_MUX, 'version' => '3.4',
             'claims' => [TermInfo::PROTOCOL_SIXEL],
+            'quirks' => TermInfo::QUIRK_SIXEL_OVERSHOOT,
             'passthrough' => [TermInfo::PROTOCOL_SIXEL => false, TermInfo::PROTOCOL_KITTY => true, TermInfo::PROTOCOL_ITERM2 => true],
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM_PROGRAM', 'value' => 'tmux', 'priority' => 0],
@@ -424,6 +436,15 @@ final class TermDb
         // set exactly like chicle's untagged rows.
         $safeSymbols = self::symbolsOf($term) & self::symbolsOf($mux);
 
+        // F-02: quirks UNION across the chain (bitwise OR) — the opposite
+        // merge law from symbols, and for the same physical reason: a quirk
+        // is a cursor/behaviour defect any one link can introduce, so a
+        // tmux overshoot row applies even when the outer terminal claims
+        // none. chicle chains quirks exactly this way (a chained
+        // term_info's quirks are OR'd at chain time, chafa-term-info.c
+        // chafa_term_info_chain).
+        $quirks = self::quirksOf($term) | self::quirksOf($mux);
+
         $passthrough = [];
         foreach ($claims as $protocol) {
             $passthrough[$protocol] = self::needsPassthroughFor($protocol, $term, $mux);
@@ -431,7 +452,19 @@ final class TermDb
 
         $chain = self::chainLabel($term, $mux);
 
-        return new TermInfo($chain, $claims, $passthrough, $mux === null ? null : self::rowLabel($mux), $safeSymbols);
+        return new TermInfo($chain, $claims, $passthrough, $mux === null ? null : self::rowLabel($mux), $safeSymbols, $quirks);
+    }
+
+    /**
+     * F-02: the quirk mask a matched row carries; absent means none (the
+     * table default — quirks are the curated exception, exactly like the
+     * restricted symbol presets).
+     *
+     * @param array{name: string, version: string|null, claims: list<string>, passthrough: array<string, bool>, symbols: int, quirks: int}|null $row
+     */
+    private static function quirksOf(?array $row): int
+    {
+        return $row === null ? TermInfo::QUIRK_NONE : $row['quirks'];
     }
 
     /**
@@ -449,10 +482,12 @@ final class TermDb
      * Pick the label row of $type and merge the union of every matching row's
      * claims — SC union semantics, see the class docblock. F-06: the symbol
      * mask intersects instead of unioning (conservative: every matching row
-     * of the type must allow a class for it to be safe).
+     * of the type must allow a class for it to be safe). F-02: the quirk
+     * mask UNIONS (OR) — a defect any matching row reports is real for the
+     * merged type, the mirror of the symbol law's conservatism.
      *
      * @param array<string, string> $env
-     * @return array{name: string, version: string|null, claims: list<string>, passthrough: array<string, bool>, symbols: int}|null
+     * @return array{name: string, version: string|null, claims: list<string>, passthrough: array<string, bool>, symbols: int, quirks: int}|null
      */
     private static function detectOfType(array $env, string $type): ?array
     {
@@ -460,6 +495,7 @@ final class TermDb
         $bestPri = null;
         $union = [];
         $symbols = TermInfo::ALL_SYMBOLS;
+        $quirks = TermInfo::QUIRK_NONE;
 
         foreach (self::ROWS as $row) {
             if ($row['type'] !== $type) {
@@ -473,6 +509,7 @@ final class TermDb
 
             $union = array_merge($union, $row['claims']);
             $symbols &= $row['symbols'] ?? TermInfo::ALL_SYMBOLS;
+            $quirks |= $row['quirks'] ?? TermInfo::QUIRK_NONE;
 
             if ($bestPri === null || $pri > $bestPri || ($pri === $bestPri && self::isMoreSpecific($row, $best))) {
                 $bestPri = $pri;
@@ -486,7 +523,7 @@ final class TermDb
 
         return ['name' => $best['name'], 'version' => $best['version'],
             'claims' => array_values(array_unique($union)), 'passthrough' => $best['passthrough'],
-            'symbols' => $symbols];
+            'symbols' => $symbols, 'quirks' => $quirks];
     }
 
     /** chicle's tie-break (:1114-1121): same name, a versioned row outranks its unversioned base. */

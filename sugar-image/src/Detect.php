@@ -263,7 +263,7 @@ final class Detect
             // The outer terminal does sixel and a sixel-capable tmux (3.3+)
             // renders it in-pane; the DA1 round-trip could only agree — skip
             // it, like chicle short-circuits on its TRUE tristate.
-            return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux));
+            return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux)->withTerminalFacts($cap->quirks, $cap->passthroughMode));
         }
 
         // Run DA1 sixel probing BEFORE font-size probing so that in tests
@@ -284,12 +284,12 @@ final class Detect
             // policy — a veto must not be laundered back into a sixel
             // claim through the database.
             if (!$cap->sixel && self::probeTerminfoSixel()) {
-                return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux));
+                return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux)->withTerminalFacts($cap->quirks, $cap->passthroughMode));
             }
 
             $sixelViaDa1 = self::probeDa1();
             if ($sixelViaDa1 === true) {
-                return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux));
+                return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux)->withTerminalFacts($cap->quirks, $cap->passthroughMode));
             }
         }
 
@@ -299,7 +299,7 @@ final class Detect
             // sixel claim the ENV ladder seeded (a leaked $XTERM_VERSION or
             // $TERM survives into some panes): inside a pane, graphics never
             // reach an outer terminal the server says cannot display them.
-            $cap = Capability::unknown(null, $inTmux);
+            $cap = Capability::unknown(null, $inTmux)->withTerminalFacts($cap->quirks, $cap->passthroughMode);
         }
 
         // Drain any remaining probe-response bytes so they don't appear
@@ -1284,16 +1284,16 @@ final class Detect
         // once; the first hit wins exactly as before — pinned by
         // testWezTermIsKittyOnlyNotIterm2 and testIterm2ViaTermProgramMintty).
         if ($info->supports(TermInfo::PROTOCOL_KITTY)) {
-            return Capability::kitty(null, $inTmux);
+            return Capability::kitty(null, $inTmux)->withTerminalFacts($info->quirks, $info->passthroughMode());
         }
         if ($info->supports(TermInfo::PROTOCOL_ITERM2)) {
-            return Capability::iterm2(null, $inTmux);
+            return Capability::iterm2(null, $inTmux)->withTerminalFacts($info->quirks, $info->passthroughMode());
         }
         if ($info->supports(TermInfo::PROTOCOL_SIXEL)) {
-            return Capability::sixel(null, $inTmux);
+            return Capability::sixel(null, $inTmux)->withTerminalFacts($info->quirks, $info->passthroughMode());
         }
 
         // Half-block: always available.
-        return Capability::unknown(null, $inTmux);
+        return Capability::unknown(null, $inTmux)->withTerminalFacts($info->quirks, $info->passthroughMode());
     }
 }
