@@ -15,6 +15,7 @@ import { useConnectionStore } from './stores/connection'
 import { useLayoutStore } from './stores/layout'
 import { useSessionsStore } from './stores/sessions'
 import { NOTIFICATION_PROBLEM_TEXT, useSettingsStore } from './stores/settings'
+import { useQuestionAnnouncements } from './lib/questions'
 import SessionTools from './components/panels/SessionTools.vue'
 
 const connection = useConnectionStore()
@@ -39,6 +40,9 @@ watch(() => connection.status, (status) => {
 // The attention model: the tab title, and desktop notifications for questions
 // and finished turns out of sight.
 const stopAttention = useAttention()
+
+// WEB-7a: questions announced in-page for screen readers (see lib/questions).
+const announcedQuestion = useQuestionAnnouncements()
 
 function onPageHide(): void {
   connection.stop()
@@ -92,6 +96,7 @@ async function signOut(): Promise<void> {
       <button v-if="connection.status !== 'signed-out'" type="button" class="link" @click="signOut">sign out</button>
     </header>
     <ConnectionBanner />
+    <p class="sr-only" role="status" aria-live="polite" data-testid="question-announcement">{{ announcedQuestion }}</p>
     <SessionTools v-if="!onLogin" :active-id="activeId" />
     <div class="body">
       <SessionSidebar v-if="!onLogin" class="side" :active-id="activeId" />

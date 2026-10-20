@@ -68,6 +68,14 @@ describe('App', () => {
     expect(wrapper.find('.root').text()).toBe('/repo')
   })
 
+  it('carries the WEB-7a live region for question arrivals at the app root', async () => {
+    const { wrapper } = await mountApp({ fetch: async () => json(200, { ticket: 'tk', expiresInSeconds: 30 }) })
+    const region = wrapper.find('[data-testid="question-announcement"]')
+    expect(region.exists()).toBe(true)
+    expect(region.attributes('role')).toBe('status')
+    expect(region.attributes('aria-live')).toBe('polite')
+  })
+
   it('shows the sign-in form when the browser holds no session', async () => {
     const { wrapper, router } = await mountApp({ fetch: async () => json(401, { error: { kind: 'unauthorized', message: 'sign in' } }) })
     await flushPromises()
