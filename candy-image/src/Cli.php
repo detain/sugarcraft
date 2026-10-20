@@ -32,8 +32,11 @@ use SugarCraft\Pty\SizeIoctl;
  * Chafa flag-compat vocabulary (survey :870-875) and what this base honors:
  * --format/--size/--scale/--probe-shape/--dump-detect are wired; --polite is
  * an accepted no-op (this viewer always renders inline and synchronously);
- * --symbols and --passthrough=screen refuse with a pointer because the
- * backing features (S6.2 / S7.1) are not on this base yet; --probe=off has
+ * --symbols and --passthrough=screen refuse with a pointer: the backing
+ * features (S6.2 symbol-map engine / S7.1 Screen envelope) HAVE landed in
+ * sugar-image, but the app-surface dials are deliberately unwired here
+ * (symbols deferred per REACH-A04; the Screen envelope is detection-chosen,
+ * never forced); --probe=off has
  * no seam in Detect yet, so the spelling is refused like any unknown flag.
  * --format=chafa is REFUSED by design: F-18's whole point is a viewer that
  * does not shell out to chafa.

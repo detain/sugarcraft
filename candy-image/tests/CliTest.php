@@ -3,8 +3,8 @@
 /**
  * F-18: behavioural pins for the candy-image front end — usage/help exits,
  * the flag grammar (values, formats, scale, size box), the refusal surface
- * (chafa by design, symbols/screen-passthrough by base availability), and
- * the terminal-detection dump. The blocking render path is pinned in
+ * (chafa by design, symbols/screen-passthrough by unwired app-surface dial),
+ * and the terminal-detection dump. The blocking render path is pinned in
  * RenderSmokeTest; the blocking animation loop never runs here — the $play
  * seam returns the wired Player.
  */
@@ -142,20 +142,22 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('F-18', $err);
     }
 
-    public function testSymbolsFlagIsRefusedUntilTheModeLands(): void
+    public function testSymbolsFlagStaysRefusedThoughTheEngineLanded(): void
     {
         [$exit, , $err] = self::drive(['--symbols=braille', 'x.png']);
 
         $this->assertSame(Cli::EXIT_USAGE, $exit);
         $this->assertStringContainsString('--symbols is not available on this base', $err);
+        $this->assertStringContainsString('deliberately does not wire the app-surface dial', $err);
     }
 
-    public function testScreenPassthroughIsRefusedUntilS71Lands(): void
+    public function testScreenPassthroughStaysRefusedThoughS71Landed(): void
     {
         [$exit, , $err] = self::drive(['--passthrough=screen', 'x.png']);
 
         $this->assertSame(Cli::EXIT_USAGE, $exit);
         $this->assertStringContainsString('--passthrough=screen is not available on this base', $err);
+        $this->assertStringContainsString('applied automatically by detection', $err);
     }
 
     public function testTmuxPassthroughIsRefusedWithoutAForceSeam(): void

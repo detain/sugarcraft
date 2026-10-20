@@ -17,8 +17,8 @@ return [
     'cli.bad_value'    => 'candy-image: invalid value \'{value}\' for {flag}',
     'cli.bad_format'   => 'candy-image: unknown render format \'{value}\' (--help lists the formats available on this build)',
     'cli.chafa_refused' => 'candy-image: --format=chafa is deliberately unsupported (F-18: this viewer is chafa-independent; use sixel|kitty|iterm2 for pixel protocols)',
-    'cli.symbols_refused' => 'candy-image: --symbols is not available on this base (the symbol-map renderer has not landed in sugar-image yet; --format=quarter or half gives the text-grid tiers)',
-    'cli.passthrough_refused' => 'candy-image: --passthrough={value} is not available on this base (the screen passthrough lands with S7.1; use auto or none)',
+    'cli.symbols_refused' => 'candy-image: --symbols is not available on this base (the symbol-map engine has landed in sugar-image, but this viewer deliberately does not wire the app-surface dial (REACH-A04); --format lists the wired renderers)',
+    'cli.passthrough_refused' => 'candy-image: --passthrough={value} is not available on this base (the GNU Screen envelope landed with S7.1 and is applied automatically by detection; it cannot be forced from here — use auto or none)',
     'cli.too_many'     => 'candy-image: unexpected argument \'{arg}\' (this viewer takes one image file)',
     'cli.no_frames'    => 'candy-image: no animation frames decoded from \'{path}\'',
 ];
