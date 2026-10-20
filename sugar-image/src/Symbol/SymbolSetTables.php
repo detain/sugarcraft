@@ -17,7 +17,12 @@ namespace SugarCraft\Image\Symbol;
  * DECLARED ChafaSymbolTag list. chafa's def_to_symbol() ORs the declared
  * tags with get_default_tags_for_char() minus AMBIGUOUS; this table stores
  * the declared half and {@see SymbolMap} derives the rest, so a glyph's
- * effective tags match the C build.
+ * effective tags match the C build. The nine misc-narrow entries that
+ * carry CHAFA_SYMBOL_TAG_AMBIGUOUS ("has an emoji variant that may show
+ * up unbidden" — U+25AA/25B6/25C0/25C6/25E2/25E3/25E4/25E5/25FC) keep the
+ * bit: char_is_selected() BAD-vetoes them out of every selector that does
+ * not name ambiguous/ugly/bad, INCLUDING `all`, exactly as the C build
+ * does (effective `all` corpus 1,251 of 1,260, not 1,260).
  *
  * Membership rule is chafa's init_symbol_array(): an outline is narrow when
  * it is 8x8 (64 chars); the 16x8 (128-char) outlines belong to the wide
@@ -502,18 +507,18 @@ final class SymbolSetTables
         0x23BD => ['        |        |        |        |        |        |XXXXXXXX|        ', SymbolTags::TECHNICAL],
         0x25AE => ['        | XXXXXX | XXXXXX | XXXXXX | XXXXXX | XXXXXX | XXXXXX |        ', SymbolTags::DOT],
         0x25A0 => ['        |        | XXXXXX | XXXXXX | XXXXXX | XXXXXX |        |        ', SymbolTags::DOT],
-        0x25AA => ['        |        |  XXXX  |  XXXX  |  XXXX  |  XXXX  |        |        ', SymbolTags::DOT],
+        0x25AA => ['        |        |  XXXX  |  XXXX  |  XXXX  |  XXXX  |        |        ', SymbolTags::DOT | SymbolTags::AMBIGUOUS],
         0x25B2 => ['        |   XX   |  XXXX  | XXXXXX | XXXXXX |XXXXXXXX|        |        ', SymbolTags::GEOMETRIC],
-        0x25B6 => [' X      | XXX    | XXXX   | XXXXXX | XXXX   | XXX    | X      |        ', SymbolTags::GEOMETRIC],
+        0x25B6 => [' X      | XXX    | XXXX   | XXXXXX | XXXX   | XXX    | X      |        ', SymbolTags::GEOMETRIC | SymbolTags::AMBIGUOUS],
         0x25BC => ['        |XXXXXXXX| XXXXXX | XXXXXX |  XXXX  |   XX   |        |        ', SymbolTags::GEOMETRIC],
-        0x25C0 => ['      X |    XXX |   XXXX | XXXXXX |   XXXX |    XXX |      X |        ', SymbolTags::GEOMETRIC],
-        0x25C6 => ['        |   XX   |  XXXX  | XXXXXX |  XXXX  |   XX   |        |        ', SymbolTags::GEOMETRIC],
+        0x25C0 => ['      X |    XXX |   XXXX | XXXXXX |   XXXX |    XXX |      X |        ', SymbolTags::GEOMETRIC | SymbolTags::AMBIGUOUS],
+        0x25C6 => ['        |   XX   |  XXXX  | XXXXXX |  XXXX  |   XX   |        |        ', SymbolTags::GEOMETRIC | SymbolTags::AMBIGUOUS],
         0x25CF => ['        |  XXXX  | XXXXXX | XXXXXX | XXXXXX |  XXXX  |        |        ', SymbolTags::GEOMETRIC],
-        0x25E2 => ['        |        |     XX |    XXX |   XXXX | XXXXXX |        |        ', SymbolTags::GEOMETRIC],
-        0x25E3 => ['        |        | XX     | XXX    | XXXX   | XXXXXX |        |        ', SymbolTags::GEOMETRIC],
-        0x25E4 => ['        |        | XXXXXX | XXXX   | XXX    | XX     |        |        ', SymbolTags::GEOMETRIC],
-        0x25E5 => ['        |        | XXXXXX |   XXXX |    XXX |     XX |        |        ', SymbolTags::GEOMETRIC],
-        0x25FC => ['        |        |  XXXX  |  XXXX  |  XXXX  |  XXXX  |        |        ', SymbolTags::GEOMETRIC],
+        0x25E2 => ['        |        |     XX |    XXX |   XXXX | XXXXXX |        |        ', SymbolTags::GEOMETRIC | SymbolTags::AMBIGUOUS],
+        0x25E3 => ['        |        | XX     | XXX    | XXXX   | XXXXXX |        |        ', SymbolTags::GEOMETRIC | SymbolTags::AMBIGUOUS],
+        0x25E4 => ['        |        | XXXXXX | XXXX   | XXX    | XX     |        |        ', SymbolTags::GEOMETRIC | SymbolTags::AMBIGUOUS],
+        0x25E5 => ['        |        | XXXXXX |   XXXX |    XXX |     XX |        |        ', SymbolTags::GEOMETRIC | SymbolTags::AMBIGUOUS],
+        0x25FC => ['        |        |  XXXX  |  XXXX  |  XXXX  |  XXXX  |        |        ', SymbolTags::GEOMETRIC | SymbolTags::AMBIGUOUS],
         0xB7 => ['        |        |        |   XX   |   XX   |        |        |        ', SymbolTags::DOT],
     ];
     private const LEGACY_BLOCK = [

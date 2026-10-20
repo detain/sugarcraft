@@ -460,12 +460,19 @@ final class SymbolMap
      * and signs persist across comma-separated tokens; the LAST matching
      * selector decides a glyph. `all` is every tag except EXTRA and BAD,
      * `none` selects nothing, and BAD (AMBIGUOUS|UGLY) is auto-excluded
-     * unless a selector names it. A string that BEGINS with `+`/`-` is
+     * unless a selector names it — so `all` selects 1,251 of the 1,260-entry
+     * array, the nine misc-narrow emoji-variant glyphs staying out exactly
+     * as in chafa. A string that BEGINS with `+`/`-` is
      * relative to this map's current corpus, otherwise it replaces it.
      * Unknown class names throw (fail fast, never a silent empty corpus).
      *
      * Seam: chafa's `[chars]` literal sets and codepoint ranges are not
      * implemented — tag classes are the useful subset for this port.
+     * Class names must also be complete: chafa's parse_symbol_tag
+     * (chafa-symbol-map.c:846-902) accepts any PREFIX of a table name,
+     * first-match-wins in table order (`brai` → braille, `al` → all);
+     * this port requires the exact name — a documented grammar narrowing,
+     * fail-fast over silent near-misses.
      *
      * @throws \InvalidArgumentException on an unknown class or syntax error
      */

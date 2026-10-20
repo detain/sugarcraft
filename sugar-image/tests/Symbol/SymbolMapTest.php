@@ -280,7 +280,11 @@ final class SymbolMapTest extends TestCase
 
     public function testTheFullNarrowCorpusIsChafasSymbolArray(): void
     {
-        $all = $this->map->withSelectors('all')->defs();
+        // The corpus dump must include the BAD glyphs to be the full array:
+        // `all` alone BAD-vetoes the nine misc-narrow AMBIGUOUS entries
+        // (chafa char_is_selected parity), so the dump names them explicitly
+        // — the same move as chafa's "-ugly+0..fffff" example.
+        $all = $this->map->withSelectors('all+ambiguous')->defs();
 
         // chafa's narrow symbol array at 413b76e4d: 95 ASCII + 365 Latin +
         // 229 block-table + 23 misc-narrow, then 256 braille + 59 sextant +
@@ -357,8 +361,26 @@ final class SymbolMapTest extends TestCase
         $this->assertCount(256, $this->map->withSelectors('braille')->defs());
         $this->assertCount(0, $this->map->withSelectors('none')->defs());
         $this->assertCount(286, $this->map->withSelectors('block+braille')->defs());
-        $this->assertCount(865, $this->map->withSelectors('all-legacy')->defs());
-        $this->assertCount(1260, $this->map->withSelectors('all')->defs());
+        // F-17: BAD-veto parity with chafa char_is_selected
+        // (chafa-symbol-map.c:489-545) — the nine table-declared AMBIGUOUS
+        // misc-narrow glyphs stay out of every selector that does not name
+        // them. Chafa's effective `all` count is 1,251 of the 1,260 array.
+        $this->assertCount(856, $this->map->withSelectors('all-legacy')->defs());
+        $this->assertCount(1251, $this->map->withSelectors('all')->defs());
+        $this->assertCount(5, $this->map->withSelectors('geometric')->defs(), 'only U+25AE/25A0/25B2/25BC/25CF — the eight ambiguous triangles and diamond are vetoed');
+        $this->assertCount(23, $this->map->withSelectors('dot')->defs(), '24 DOT-tagged less the vetoed U+25AA');
+
+        $ambiguous = array_map(
+            static fn (SymbolDef $d): int => mb_ord($d->char),
+            $this->map->withSelectors('ambiguous')->defs()
+        );
+        $this->assertSame(
+            [0x25AA, 0x25B6, 0x25C0, 0x25C6, 0x25E2, 0x25E3, 0x25E4, 0x25E5, 0x25FC],
+            $ambiguous,
+            'exactly the nine misc-narrow.h AMBIGUOUS declarations, in build order'
+        );
+        $this->assertCount(9, $this->map->withSelectors('bad')->defs());
+        $this->assertCount(0, $this->map->withSelectors('ugly')->defs(), 'no chafa static table declares UGLY');
 
         // Signs persist across comma-separated tokens (chafa parse_selectors).
         $this->assertCount(286, $this->map->withSelectors('block,braille')->defs());
