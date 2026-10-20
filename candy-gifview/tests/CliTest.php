@@ -163,4 +163,129 @@ final class CliTest extends TestCase
 
         return $path;
     }
+
+    /**
+     * E-09 seam probe: run main() with the given extra argv through the
+     * $play seam and return the wired Player (failing on non-zero exit).
+     *
+     * @param list<string> $args flags/positions after the script name, the
+     *        GIF path placeholder {gif} substituted with the fixture.
+     */
+    private function wiredPlayer(array $args): Player
+    {
+        $gif = $this->gifFixture();
+        [$stdout, $stderr] = self::pipes();
+
+        $seen = null;
+        $exit = Cli::main(
+            array_merge(
+                ['candy-gifview'],
+                array_map(static fn (string $a): string => str_replace('{gif}', $gif, $a), $args),
+            ),
+            $stdout,
+            $stderr,
+            static function (Player $player) use (&$seen): int {
+                $seen = $player;
+
+                return 0;
+            },
+        );
+
+        $this->assertSame(0, $exit, self::drain($stderr));
+
+        return $seen;
+    }
+
+    public function testE09FpsFlagWiresTheFixedCadence(): void
+    {
+        $player = $this->wiredPlayer(['{gif}', '--fps=24']);
+        $this->assertSame(24.0, $player->fixedFps);
+        $this->assertNull($player->maxSeconds);
+    }
+
+    public function testE09SpeedMultiplierAnchorsOnTheDecodedNominalRate(): void
+    {
+        // sugar-animation exposes no per-frame multiplier (only the
+        // fixed-cadence seam), so --speed scales the GIF's own nominal fps
+        // derived from the decoded frames — pin the arithmetic here.
+        $player = $this->wiredPlayer(['{gif}', '--speed=2']);
+        $n = count($player->frames);
+        $nominal = $n / (array_sum(array_map(
+            static fn ($f): int => max(1, $f->delay),
+            $player->frames,
+        )) / 100.0);
+        $this->assertSame(2.0 * $nominal, $player->fixedFps);
+    }
+
+    public function testE09SpeedMaxSaturatesAtThePlayerCeiling(): void
+    {
+        $player = $this->wiredPlayer(['{gif}', '--speed=max']);
+        $this->assertSame(Player::MAX_FPS, $player->fixedFps);
+    }
+
+    public function testE09SpeedFpsSuffixIsAnAbsoluteRate(): void
+    {
+        $player = $this->wiredPlayer(['{gif}', '--speed=5fps']);
+        $this->assertSame(5.0, $player->fixedFps);
+    }
+
+    public function testE09DurationWiresTheModelDeadline(): void
+    {
+        $player = $this->wiredPlayer(['{gif}', '--duration=3.5']);
+        $this->assertSame(3.5, $player->maxSeconds);
+        $this->assertNull($player->fixedFps, 'duration alone keeps the GIF cadence');
+    }
+
+    public function testE09FlagsAndPositionalsMixInAnyOrder(): void
+    {
+        $player = $this->wiredPlayer(['--fps=10', '--duration=2', '{gif}', 'density']);
+        $this->assertSame(10.0, $player->fixedFps);
+        $this->assertSame(2.0, $player->maxSeconds);
+        $this->assertSame(Renderer::PRESET_DENSITY, $player->preset);
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function refusalCases(): array
+    {
+        return [
+            'unknown flag'  => ['--watch=now', 'unknown option'],
+            'zero fps'      => ['--fps=0', 'invalid value'],
+            'word speed'    => ['--speed=lots', 'invalid value'],
+            'empty value'   => ['--duration=', 'invalid value'],
+            'negative time' => ['--duration=-2', 'invalid value'],
+        ];
+    }
+
+    #[DataProvider('refusalCases')]
+    public function testE09RefusalsExitOneWithTheNamedComplaintOnStderr(string $flag, string $needle): void
+    {
+        $gif = $this->gifFixture();
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(['candy-gifview', $gif, $flag], $stdout, $stderr,
+            static fn (Player $p): int => 0);
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString($needle, self::drain($stderr));
+        $this->assertSame('', self::drain($stdout), 'refusals never write to stdout');
+    }
+
+    public function testE09ThirdPositionalIsRefused(): void
+    {
+        $gif = $this->gifFixture();
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(['candy-gifview', $gif, 'density', 'wat'], $stdout, $stderr,
+            static fn (Player $p): int => 0);
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('unexpected argument', self::drain($stderr));
+    }
+
+    public function testE09NoFlagsLeaveThePlayerUntouched(): void
+    {
+        $player = $this->wiredPlayer(['{gif}']);
+        $this->assertNull($player->fixedFps);
+        $this->assertNull($player->maxSeconds);
+    }
 }

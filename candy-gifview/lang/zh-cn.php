@@ -9,6 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'cli.usage'       => '用法：candy-gifview <gif> [solid|density]',
+    'cli.usage'       => '用法：candy-gifview <gif> [solid|density] [--fps=N] [--speed=N|Nfps|max] [--duration=SECONDS]',
     'cli.no_autoload' => 'candy-gifview：无法找到 composer autoload.php',
 ];

@@ -21,6 +21,16 @@ candy-gifview my-animation.gif         # solid-block preset (default)
 candy-gifview my-animation.gif density # ASCII luminance ramp
 ```
 
+## Options
+
+| Option                | Meaning                                                          |
+|-----------------------|------------------------------------------------------------------|
+| `--fps=N`             | Play at a uniform N frames/second instead of the GIF's delays.    |
+| `--speed=N\|Nfps\|max`| N × the GIF's nominal rate; `Nfps` is an absolute rate; `max` burns frames as fast as the scheduler floors allow (chicle parity). |
+| `--duration=SECONDS`  | Stop after SECONDS of playback (a schedule deadline in the model — no wall-clock kill). |
+
+Flags may appear before or after the positional `<gif>` and preset token.
+
 ## Keys
 
 | Key                | Action                              |
@@ -40,8 +50,8 @@ The whole animation engine — `Decoder`, `Frame`, `Renderer`, `Player`, and the
 | File              | Role                                                                 |
 |-------------------|----------------------------------------------------------------------|
 | `bin/candy-gifview` | Autoload probe + `Cli::main()` shim — deliberately two lines of logic. |
-| `src/Cli.php`     | Argv parsing (`--help`, preset token), viewport sizing (`viewportCells()` — descriptor 1 behind a core `stream_isatty` gate), decode-failure exits, Player wiring, Program launch. A `$play` closure seam keeps every branch testable without entering the blocking loop. |
-| `src/Lang.php`    | i18n facade over the shared `T` registry, namespace `gifview` (`cli.usage`, `cli.no_autoload`). |
+| `src/Cli.php`     | Argv parsing (`--help`, preset token, E-09 `--fps`/`--speed`/`--duration`), viewport sizing (`viewportCells()` — descriptor 1 behind a core `stream_isatty` gate), decode-failure exits, Player wiring, Program launch. A `$play` closure seam keeps every branch testable without entering the blocking loop. |
+| `src/Lang.php`    | i18n facade over the shared `T` registry, namespace `gifview` (`cli.usage`, `cli.no_autoload`, `cli.bad_flag`, `cli.bad_value`, `cli.too_many`). |
 
 ## Test
 
