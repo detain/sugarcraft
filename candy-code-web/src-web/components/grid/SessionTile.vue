@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import PermissionCard, { type Reply } from '../PermissionCard.vue'
 import { sessionLabel } from '../approvals/attention'
-import { keyArgument, money, oneLine } from '../../lib/format'
+import { keyArgument, oneLine, spendLabel } from '../../lib/format'
 import { useApprovalsStore } from '../../stores/approvals'
 import { useConnectionStore } from '../../stores/connection'
 import type { TranscriptItem } from '../../stores/reducer'
@@ -116,7 +116,7 @@ async function answer(askId: string, reply: Reply, cascade: boolean, note = ''):
     <header>
       <span class="dot" :class="status" aria-hidden="true" />
       <strong class="name" :title="id">{{ title }}</strong>
-      <span class="meta">{{ statusText }} · {{ money(spent) }}</span>
+      <span class="meta" data-testid="tile-spend">{{ statusText }} · {{ spendLabel(spent, state.unpriced) }}</span>
       <span v-if="asks > 0" class="badge" :title="`${asks} waiting for an answer`" data-testid="tile-ask-badge">{{ asks }}</span>
       <button type="button" class="link" title="Open in a tab" aria-label="Open in a tab" data-testid="tile-maximize" @click.stop="emit('maximize')">&#10530;</button>
       <button type="button" class="link" title="Close the tile" aria-label="Close the tile" data-testid="tile-close" @click.stop="emit('close')">&#10005;</button>

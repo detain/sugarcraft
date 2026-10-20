@@ -101,3 +101,35 @@ describe('StatusBar (WEB-2)', { retry: 0 }, () => {
     expect(wrapper.emitted('runCommand')).toEqual([['/compact']])
   })
 })
+
+describe('StatusBar spend bound (WEB-5 parity)', () => {
+  function mountState(unpriced: boolean, spentUsd: number) {
+    const state = createState('s1')
+    state.spentUsd = spentUsd
+    state.unpriced = unpriced
+    return mount(StatusBar, {
+      props: {
+        state,
+        summary: sessionSummary('s1') as unknown as SessionSummary,
+        contextPct: null,
+        connection: 'live',
+      },
+    })
+  }
+
+  it('renders an exact figure for a priced session', () => {
+    const wrapper = mountState(false, 1.5)
+    const spend = wrapper.find('[data-testid="spend"]')
+    expect(spend.text()).toBe('$1.50')
+    expect(spend.attributes('data-unpriced')).toBe('false')
+    expect(spend.attributes('title')).toBe('Spent this session')
+  })
+
+  it('marks the lower bound when the snapshot says the model is unpriced', () => {
+    const wrapper = mountState(true, 0)
+    const spend = wrapper.find('[data-testid="spend"]')
+    expect(spend.text()).toBe('≥$0.00')
+    expect(spend.attributes('data-unpriced')).toBe('true')
+    expect(spend.attributes('title')).toContain('lower bound')
+  })
+})

@@ -29,6 +29,15 @@ export function money(usd: number | null | undefined): string {
   return usd < 0.01 && usd > 0 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`
 }
 
+/**
+ * Spend with the TUI's unpriced convention (UsageCommand::amount's `≥$`
+ * lower-bound): a model with no price on file bills 0.0 as a bound, not as
+ * free, and a chrome that renders that as an exact dollar figure lies.
+ */
+export function spendLabel(usd: number | null | undefined, unpriced: boolean): string {
+  return unpriced ? `≥${money(usd)}` : money(usd)
+}
+
 export function tokens(count: number | null | undefined): string {
   if (count === null || count === undefined) return '—'
   return count >= 1000 ? `${(count / 1000).toFixed(count >= 10_000 ? 0 : 1)}k` : String(count)

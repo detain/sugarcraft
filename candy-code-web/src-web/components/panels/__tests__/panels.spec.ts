@@ -78,6 +78,29 @@ describe('BackgroundPanel', () => {
     expect(warnings).toHaveLength(1)
     expect(warnings[0]?.text()).toContain('bypass-permissions')
   })
+
+  it("shows an unpriced row's spend as the lower bound, and nothing for a free priced row", async () => {
+    await wire.connect(() => useBackgroundStore())
+    await wire.answer('bg.list', {
+      items: [
+        { bgId: 'b1', name: 'bound', task: 'x', status: 'completed', createdAt: '2026-10-17 00:00:01', outputBytes: 0, adopted: false, costUsd: 0, unpricedModel: true },
+        { bgId: 'b2', name: 'exact', task: 'y', status: 'completed', createdAt: '2026-10-17 00:00:02', outputBytes: 0, adopted: false, costUsd: 2.5 },
+        { bgId: 'b3', name: 'silent', task: 'z', status: 'completed', createdAt: '2026-10-17 00:00:03', outputBytes: 0, adopted: false, costUsd: 0 },
+      ],
+    })
+    const wrapper = mount(BackgroundPanel, { props: { sessionId: null }, global: { plugins: [pinia] } })
+    await flushPromises()
+    const rowFor = (name: string): string => {
+      const row = wrapper.findAll('[data-testid="bg-item"]').find((item) => item.text().includes(name))
+      if (!row) throw new Error(`no row for ${name}`)
+      return row.text()
+    }
+    // The bit rides the row (parallel server lane); absent is priced, so the
+    // two priced rows keep the old law: exact figure, or nothing at zero.
+    expect(rowFor('bound')).toContain('≥$0.00')
+    expect(rowFor('exact')).toContain('$2.50')
+    expect(rowFor('silent')).not.toContain('$')
+  })
 })
 
 describe('SidePanels', () => {

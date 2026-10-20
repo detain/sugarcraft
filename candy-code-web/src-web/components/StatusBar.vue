@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { money, tokens } from '../lib/format'
+import { spendLabel, tokens } from '../lib/format'
 import type { MethodResult, PermissionMode, SessionSummary } from '../protocol/generated'
 import { useConnectionStore } from '../stores/connection'
 import type { SessionState } from '../stores/reducer'
@@ -80,7 +80,7 @@ const model = computed(() => {
       ~{{ tokens(state.contextTokens) }} tok<template v-if="contextPct !== null"> · {{ contextPct }}%</template>
       <span v-if="contextPct !== null" class="meter" aria-hidden="true"><span :style="{ width: `${contextPct}%` }" /></span>
     </span>
-    <span class="item" title="Spent this session">{{ money(spent) }}</span>
+    <span class="item" :title="state.unpriced ? 'No price on file for this model — spend shown is a lower bound' : 'Spent this session'" :data-unpriced="state.unpriced ? 'true' : 'false'" data-testid="spend">{{ spendLabel(spent, state.unpriced) }}</span>
     <label v-if="selectableProviders.length > 0" class="item" :title="model">
       <span class="sr-only">Model</span>
       <select :value="modelOptionValue(currentProvider)" data-testid="model-select" @change="pickModel">

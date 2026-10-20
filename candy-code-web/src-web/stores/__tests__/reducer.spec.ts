@@ -272,6 +272,24 @@ describe('reducer: snapshot', () => {
     expect(state.queue).toHaveLength(1)
   })
 
+  it('carries the unpriced lower-bound bit from the snapshot, defensively', () => {
+    const base: SessionSnapshot = {
+      sessionId: 's1', status: 'idle', lastSeq: 0, pendingAsks: [], queue: [],
+      messages: [], spentUsd: 3.25,
+    }
+    // Absent (the field rides a parallel server lane's payload): priced.
+    const absent = createState('s1')
+    applySnapshot(absent, base)
+    expect(absent.unpriced).toBe(false)
+    // Present and true: unpriced — and a later priced snapshot clears it.
+    const flagged = createState('s1')
+    applySnapshot(flagged, { ...base, unpricedModel: true } as SessionSnapshot)
+    expect(flagged.unpriced).toBe(true)
+    expect(flagged.spentUsd).toBe(3.25)
+    applySnapshot(flagged, base)
+    expect(flagged.unpriced).toBe(false)
+  })
+
   it('a refused row keeps its denial', () => {
     const [item] = itemsFromRow({ role: 'assistant', content: 'x', toolResults: [{ name: 'Write', result: '', error: 'refused', id: 'c', denial: 'UserRejected' }] }, 0)
     expect(item).toMatchObject({ kind: 'tool', status: 'denied', denial: { kind: 'UserRejected', reason: 'refused' } })

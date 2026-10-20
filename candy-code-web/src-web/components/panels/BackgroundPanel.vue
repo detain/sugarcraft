@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ago, money, tokens } from '../../lib/format'
+import { ago, spendLabel, tokens } from '../../lib/format'
 import type { BackgroundSession, PermissionMode } from '../../protocol/generated'
 import { isSettled, useBackgroundStore } from '../../stores/agents/background'
 import { useConnectionStore } from '../../stores/connection'
@@ -38,6 +38,16 @@ const expanded = ref<string | null>(null)
 const error = ref<string | null>(null)
 const starting = ref(false)
 const canWrite = computed(() => connection.scopes.includes('write'))
+
+/**
+ * WEB-5 billing parity: a bg row is unpriced when its daemon's model has no
+ * price on file — `costUsd` is then a lower bound, not a bill. The bit rides
+ * the row from a parallel server lane, so the read is defensive: absent is
+ * priced, and a priced run that has spent nothing stays off the meta line.
+ */
+function isUnpriced(session: BackgroundSession): boolean {
+  return (session as unknown as { unpricedModel?: unknown }).unpricedModel === true
+}
 
 async function act(action: () => Promise<unknown>): Promise<void> {
   error.value = null
@@ -81,7 +91,7 @@ function toggle(session: BackgroundSession): void {
           <span class="status" :class="session.status">{{ session.status.replace('_', ' ') }}</span>
           <span class="name">{{ session.name || session.task }}</span>
           <span v-if="spawnMode" class="mode" :class="{ bypass: isBypassClass }" data-testid="bg-mode">mode: {{ spawnMode }}</span>
-          <span class="meta">{{ ago(session.createdAt) }}<template v-if="session.tokensUsed"> · {{ tokens(session.tokensUsed) }} tok</template><template v-if="session.costUsd"> · {{ money(session.costUsd) }}</template></span>
+          <span class="meta">{{ ago(session.createdAt) }}<template v-if="session.tokensUsed"> · {{ tokens(session.tokensUsed) }} tok</template><template v-if="session.costUsd || isUnpriced(session)"> · {{ spendLabel(session.costUsd, isUnpriced(session)) }}</template></span>
         </button>
         <p v-if="isBypassClass" class="bypass-warning" role="alert" data-testid="bg-bypass-warning">
           Permission mode {{ spawnMode }}: nothing will ask a human before this run acts.
