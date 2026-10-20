@@ -67,11 +67,12 @@ final class MosaicBuilderTest extends TestCase
     public function testBuildWithNoRendererAutoDetectsInsteadOfSixel(): void
     {
         // A cleared environment advertises no graphics protocol — the builder
-        // must land on the universal HalfBlock fallback, never on Sixel,
-        // whose DCS payload a non-Sixel terminal cannot display.
+        // must land on the universal Symbols rung (A-04: Unicode text floor,
+        // one rung richer than HalfBlock), never on Sixel, whose DCS payload
+        // a non-Sixel terminal cannot display.
         $mosaic = Mosaic::builder()->build();
 
-        $this->assertSame('halfblock', $mosaic->protocol());
+        $this->assertSame('symbols', $mosaic->protocol());
     }
 
     public function testBuildWithNoRendererPicksKittyWhenTerminalAdvertisesIt(): void
@@ -293,9 +294,9 @@ final class MosaicBuilderTest extends TestCase
             ->build();
 
         $this->assertInstanceOf(Mosaic::class, $mosaic);
-        // Cleared env → auto-detect lands on halfblock, and the chain's
-        // scale still rides into the built mosaic.
-        $this->assertSame('halfblock', $mosaic->protocol());
+        // Cleared env → auto-detect lands on the Symbols floor, and the
+        // chain's scale still rides into the built mosaic.
+        $this->assertSame('symbols', $mosaic->protocol());
         $this->assertSame(Scale::Fit, $mosaic->scale());
     }
 }

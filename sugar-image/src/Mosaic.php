@@ -7,6 +7,7 @@ namespace SugarCraft\Image;
 use SugarCraft\Image\Renderer\AsciiColorMode;
 use SugarCraft\Image\Renderer\AsciiRenderer;
 use SugarCraft\Image\Renderer\AcceptsOptimization;
+use SugarCraft\Image\Renderer\CanvasModeConfigurable;
 use SugarCraft\Image\Renderer\ChafaRenderer;
 use SugarCraft\Image\Renderer\ConfigFingerprintProvider;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
@@ -16,6 +17,8 @@ use SugarCraft\Image\Renderer\QuarterBlockRenderer;
 use SugarCraft\Image\Renderer\Renderer;
 use SugarCraft\Image\Renderer\SixelRenderer;
 use SugarCraft\Image\Renderer\SymbolMapRenderer;
+use SugarCraft\Image\Symbol\CanvasMode;
+use SugarCraft\Image\Renderer\WorkFactorConfigurable;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Scale;
 use SugarCraft\Image\TmuxPassthrough;
@@ -157,7 +160,10 @@ final class Mosaic
      * Only consulted when {@see Detect::probe()} identified no graphics
      * protocol. The palette report can still see Kitty/iTerm2 environment
      * advertisements Detect's env table misses; anything else keeps the
-     * Detect snapshot (whose bestBackend lands on HalfBlock).
+     * Detect snapshot (whose bestBackend lands on the Symbols rung).
+     * F-08 consumer wire: the rebuilt capabilities inherit the snapshot's
+     * probed OSC 10/11 default colours — dropping them used to hand the
+     * terminal a colour-blind text fallback two rungs down the ladder.
      */
     private static function autoFromPalette(Capability $fallbackCap): self
     {
@@ -170,12 +176,18 @@ final class Mosaic
 
         // Kitty keyboard support implies the Kitty graphics protocol.
         if ($report->has(PaletteCapability::KittyKeyboard)) {
-            return self::fromCapability(Capability::kitty($fallbackCap->cellSize, $fallbackCap->inTmux));
+            return self::fromCapability(
+                Capability::kitty($fallbackCap->cellSize, $fallbackCap->inTmux)
+                    ->withDefaultColors($fallbackCap->defaultFg, $fallbackCap->defaultBg),
+            );
         }
 
         // iTerm2 inline image support.
         if ($report->has(PaletteCapability::ITerm2)) {
-            return self::fromCapability(Capability::iterm2($fallbackCap->cellSize, $fallbackCap->inTmux));
+            return self::fromCapability(
+                Capability::iterm2($fallbackCap->cellSize, $fallbackCap->inTmux)
+                    ->withDefaultColors($fallbackCap->defaultFg, $fallbackCap->defaultBg),
+            );
         }
 
         return self::fromCapability($fallbackCap);
@@ -300,22 +312,81 @@ final class Mosaic
     }
 
     /**
-     * Force the coverage-class symbol-map renderer (F-04/F-05).
+     * Force the coverage-class symbol-map renderer (A-04).
      *
      * Unicode braille/sextant/octant/block glyphs plus Hamming-distance
      * candidate search — pure inline SGR text, so the backend is always
-     * available. It does not join the auto() ladder (that would change
-     * default-path output); the font-coverage probe slot is a recorded
-     * seam (S7.1).
+     * available. A-04 seats it in the auto() ladder BELOW the chafa shell
+     * rung and ABOVE the HalfBlock fallback; explicit halfBlock() and
+     * fromModeString('halfblock') selection is untouched. The canvas rung
+     * and work factor ride the A-07/A-08 dials.
      */
-    public static function symbolMap(): self
+    public static function symbols(CanvasMode $canvas = CanvasMode::TrueColor, float $workFactor = SymbolMapRenderer::DEFAULT_WORK_FACTOR): self
     {
+        $renderer = (new SymbolMapRenderer())
+            ->withCanvasMode($canvas)
+            ->withWorkFactor($workFactor);
+
         return new self(
-            new SymbolMapRenderer(),
+            $renderer,
             Capability::universal(),
             null,
             null,
             null,
+        );
+    }
+
+    /**
+     * A-07: switch the colour canvas when the active backend is a
+     * text-tier renderer that speaks {@see CanvasModeConfigurable}
+     * (SymbolMapRenderer, QuarterBlockRenderer — also through a tmux
+     * passthrough envelope); returns the same instance otherwise.
+     */
+    public function withCanvasMode(CanvasMode $canvasMode): self
+    {
+        $renderer = $this->renderer instanceof TmuxPassthroughDecorator
+            ? $this->renderer->inner()
+            : $this->renderer;
+
+        if (!$renderer instanceof CanvasModeConfigurable) {
+            return $this;
+        }
+
+        $configured = $renderer->withCanvasMode($canvasMode);
+
+        return new self(
+            $this->renderer instanceof TmuxPassthroughDecorator ? new TmuxPassthroughDecorator($configured) : $configured,
+            $this->capability,
+            $this->forcedWidth,
+            $this->forcedHeight,
+            $this->scale,
+            $this->optimizations,
+        );
+    }
+
+    /**
+     * A-08/D-03: forward chafa's --work dial when the active backend
+     * speaks {@see WorkFactorConfigurable}; same instance otherwise.
+     */
+    public function withWorkFactor(float $workFactor): self
+    {
+        $renderer = $this->renderer instanceof TmuxPassthroughDecorator
+            ? $this->renderer->inner()
+            : $this->renderer;
+
+        if (!$renderer instanceof WorkFactorConfigurable) {
+            return $this;
+        }
+
+        $configured = $renderer->withWorkFactor($workFactor);
+
+        return new self(
+            $this->renderer instanceof TmuxPassthroughDecorator ? new TmuxPassthroughDecorator($configured) : $configured,
+            $this->capability,
+            $this->forcedWidth,
+            $this->forcedHeight,
+            $this->scale,
+            $this->optimizations,
         );
     }
 
@@ -702,7 +773,11 @@ final class Mosaic
 
     /**
      * Pick the best available renderer for the given capability snapshot.
-     * Precedence: Kitty > iTerm2 > Sixel > Chafa > HalfBlock.
+     * Precedence: Kitty > iTerm2 > Sixel > Chafa > Symbols > HalfBlock.
+     * The Symbols rung (A-04) is the Unicode coverage tier — plain text,
+     * gated on the same text-availability slot HalfBlock rides, but one
+     * rung richer; explicit halfBlock()/fromModeString('halfblock')
+     * selection is untouched.
      */
     private static function bestBackend(Capability $cap): Renderer
     {
@@ -717,6 +792,9 @@ final class Mosaic
         }
         if ($cap->chafa) {
             return new ChafaRenderer();
+        }
+        if ($cap->halfblock) {
+            return new SymbolMapRenderer(defaultFg: $cap->defaultFg, defaultBg: $cap->defaultBg);
         }
 
         return new HalfBlockRenderer();
@@ -795,7 +873,8 @@ final class Mosaic
      * Accepts the vocabulary terminals/apps configure image output with —
      * `auto`, `sixel`, `kitty`, `iterm2`, `halfblock` (aliases `half`,
      * `ansi`), `quarterblock` (alias `quarter`), `ascii`, `ansi16`, `ansi256`,
-     * `truecolor`, `chafa`, `symbols` — case-insensitively, whitespace-trimmed.
+     * `truecolor`, `chafa`, `symbols` (aliases `symbol`, `sym`) —
+     * case-insensitively, whitespace-trimmed.
      * `ansi16`/`ansi256`/`truecolor` select the ASCII ramp renderer tinted with
      * the matching colour mode, mirroring how the client config maps them.
      * A-06: those are INPUT spellings of the 'ascii' protocol's
@@ -824,7 +903,7 @@ final class Mosaic
             'ansi256'      => self::ascii(AsciiColorMode::Ansi256),
             'truecolor'    => self::ascii(AsciiColorMode::TrueColor),
             'chafa'        => self::chafa(),
-            'symbols'      => self::symbolMap(),
+            'symbols', 'symbol', 'sym' => self::symbols(),
             default        => null,
         };
     }

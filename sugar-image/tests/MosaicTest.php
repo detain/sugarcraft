@@ -202,7 +202,7 @@ final class MosaicTest extends TestCase
         $this->assertSame('quarterblock', Mosaic::quarterBlock()->protocol());
         $this->assertSame('chafa', Mosaic::chafa()->protocol());
         $this->assertSame('ascii', Mosaic::ascii()->protocol());
-        $this->assertSame('symbols', Mosaic::symbolMap()->protocol());
+        $this->assertSame('symbols', Mosaic::symbols()->protocol());
     }
 
     public function testSupportedProtocols(): void

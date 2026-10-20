@@ -77,24 +77,26 @@ final class MosaicAutoTest extends TestCase
         $this->assertInstanceOf(Mosaic::class, $mosaic);
     }
 
-    public function testAutoWithNoColorFallsBackToHalfBlock(): void
+    public function testAutoWithNoColorFallsBackToSymbols(): void
     {
         $this->env('NO_COLOR', '1');
 
         $mosaic = Mosaic::auto();
 
-        // Should fall back to HalfBlock (always available)
-        $this->assertSame('halfblock', $mosaic->protocol());
+        // A-04: no graphics protocol still outranks HalfBlock — the
+        // Unicode Symbols rung (always available) is the floor now.
+        $this->assertSame('symbols', $mosaic->protocol());
     }
 
-    public function testAutoWithTermDumbFallsBackToHalfBlock(): void
+    public function testAutoWithTermDumbFallsBackToSymbols(): void
     {
         $this->env('TERM', 'dumb');
 
         $mosaic = Mosaic::auto();
 
-        // Should fall back to HalfBlock (always available)
-        $this->assertSame('halfblock', $mosaic->protocol());
+        // A-04: same Symbols floor as above; explicit 'halfblock' mode
+        // strings and halfBlock() force the historical renderer untouched.
+        $this->assertSame('symbols', $mosaic->protocol());
     }
 
     public function testDiagnoseReturnsProbeReport(): void

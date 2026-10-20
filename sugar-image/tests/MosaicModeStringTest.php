@@ -13,6 +13,7 @@ use SugarCraft\Image\Renderer\Iterm2Renderer;
 use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Image\Renderer\QuarterBlockRenderer;
 use SugarCraft\Image\Renderer\SixelRenderer;
+use SugarCraft\Image\Renderer\SymbolMapRenderer;
 
 /**
  * @covers \SugarCraft\Image\Mosaic::fromModeString
@@ -65,7 +66,7 @@ final class MosaicModeStringTest extends TestCase
     public static function modeProvider(): array
     {
         return [
-            'auto'         => ['auto', HalfBlockRenderer::class],
+            'auto'         => ['auto', SymbolMapRenderer::class],
             'sixel'        => ['sixel', SixelRenderer::class],
             'kitty'        => ['kitty', KittyRenderer::class],
             'iterm2'       => ['iterm2', Iterm2Renderer::class],
@@ -80,6 +81,8 @@ final class MosaicModeStringTest extends TestCase
             'truecolor'    => ['truecolor', AsciiRenderer::class],
             'chafa'        => ['chafa', ChafaRenderer::class],
             'symbols'      => ['symbols', \SugarCraft\Image\Renderer\SymbolMapRenderer::class],
+            'symbol alias' => ['symbol', \SugarCraft\Image\Renderer\SymbolMapRenderer::class],
+            'sym alias'      => ['sym', \SugarCraft\Image\Renderer\SymbolMapRenderer::class],
         ];
     }
 
@@ -94,9 +97,10 @@ final class MosaicModeStringTest extends TestCase
         $this->assertSame($rendererClass, $mosaic->renderer()::class);
     }
 
-    public function testAutoModeProtocolIsHalfBlockOnBareEnvironment(): void
+    public function testAutoModeProtocolIsSymbolsOnBareEnvironment(): void
     {
-        $this->assertSame('halfblock', Mosaic::fromModeString('auto')?->protocol());
+        // A-04 seats the Symbols rung below chafa and above HalfBlock.
+        $this->assertSame('symbols', Mosaic::fromModeString('auto')?->protocol());
     }
 
     public function testModeStringsAreCaseInsensitiveAndTrimmed(): void
