@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
+use SugarCraft\Image\Quantizer;
 
 /**
  * Sixel graphics renderer — DEC sixel to terminal.
@@ -77,6 +78,14 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     private const BASE_INTENSITY_256C = 0.1;
 
     /**
+     * B-14: palette-sample ceiling. chafa scales its census ceiling with the
+     * -w rung (quality_params.n_samples = 2^14..2^26); the port holds the
+     * historical 4096 cap fixed — the dial moves the histogram DEPTH (bits
+     * per channel), not the sample census. Disclosed deviation.
+     */
+    private const SAMPLE_CAP = 4096;
+
+    /**
      * B-10: default alpha threshold — GD's fully-transparent value (0 =
      * opaque .. 127 = transparent). The hole test `alpha >= threshold` at
      * the default therefore matches exactly today's `=== 127` semantics
@@ -136,6 +145,11 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *                              is_global_first_row || is_global_last_row).
      *                              Default false: auto-enabling belongs to the
      *                              F-02 TermDb capability table, not here.
+     * @param ?int $quality         B-14: chafa -w quality ladder rung (1-9)
+     *                              selecting the PNN histogram depth via
+     *                              {@see \SugarCraft\Image\Quantizer} — null
+     *                              (default) keeps median-cut, so the
+     *                              byte-frozen default path is untouched.
      */
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
@@ -147,6 +161,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         private readonly ?Color $flattenBackground = null,
         private readonly bool $serpentine = false,
         private readonly bool $mltermEdgeRows = false,
+        private readonly ?int $quality = null,
     ) {
         if ($maxColors < 1 || $maxColors > 256) {
             throw new \InvalidArgumentException(
@@ -164,6 +179,13 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         if ($alphaThreshold < 0 || $alphaThreshold > self::DEFAULT_ALPHA_THRESHOLD) {
             throw new \InvalidArgumentException(
                 Lang::t('sixel.alpha_threshold_out_of_range', ['alphaThreshold' => $alphaThreshold])
+            );
+        }
+        // B-14: the quality rung is the SAME knob Quantizer::bitsForQuality
+        // parses, so the refusal comes from the shared ladder message.
+        if ($quality !== null && ($quality < Quantizer::MIN_QUALITY || $quality > Quantizer::MAX_QUALITY)) {
+            throw new \InvalidArgumentException(
+                Lang::t('quantizer.quality_out_of_range', ['quality' => $quality])
             );
         }
         $this->intensity = $intensity === null ? null : min(1.0, $intensity);
@@ -289,7 +311,12 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             // is reserved, the colour budget shrinks by one so the highest
             // shifted register stays inside DEC's 0..255 range (#256 aliases
             // onto the transparent background on tolerant decoders).
-            $palette = $this->medianCut($this->samplePixels($resized, 4096, $offset), $this->maxColors - $offset);
+            // B-14: with the quality dial armed the census goes to the PNN
+            // quantiser instead — see buildPalette() for the routing rule.
+            $palette = $this->buildPalette(
+                $this->samplePixels($resized, self::SAMPLE_CAP, $offset),
+                $this->maxColors - $offset
+            );
 
             // Header, optional transparent background, and the palette are a
             // one-time prefix: a streaming consumer must see them before any band
@@ -431,6 +458,8 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * B-10: threshold and flatten segments follow the same discipline —
      * they appear only when they deviate from the byte-frozen default.
      * C-08: the serpentine segment likewise appears only when armed.
+     * B-14: the quality segment likewise appears ONLY when armed — the
+     * pinned default fingerprint stays byte-identical (C-04/B-10 discipline).
      */
     public function configFingerprint(): string
     {
@@ -449,7 +478,8 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                     $this->flattenBackground->g,
                     $this->flattenBackground->b))
             . ($this->serpentine ? '|serpentine=1' : '')
-            . ($this->mltermEdgeRows ? '|mlterm=1' : '');
+            . ($this->mltermEdgeRows ? '|mlterm=1' : '')
+            . ($this->quality === null ? '' : '|quality=' . $this->quality);
     }
 
     /**
@@ -470,6 +500,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->flattenBackground,
             $this->serpentine,
             $this->mltermEdgeRows,
+            $this->quality,
         );
     }
 
@@ -515,6 +546,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->flattenBackground,
             $this->serpentine,
             $this->mltermEdgeRows,
+            $this->quality,
         );
     }
 
@@ -538,6 +570,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $background,
             $this->serpentine,
             $this->mltermEdgeRows,
+            $this->quality,
         );
     }
 
@@ -566,6 +599,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->flattenBackground,
             $serpentine,
             $this->mltermEdgeRows,
+            $this->quality,
         );
     }
 
@@ -597,6 +631,38 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->flattenBackground,
             $this->serpentine,
             $mltermEdgeRows,
+            $this->quality,
+        );
+    }
+
+    /**
+     * B-14: the PNN quality rung in force (1-9), or null when the renderer
+     * quantises with median-cut — the byte-frozen default.
+     */
+    public function quality(): ?int
+    {
+        return $this->quality;
+    }
+
+    /**
+     * B-14 copy on a different rung of the chafa -w ladder (1-9). Arming it
+     * routes palette construction through {@see Quantizer} when the sample
+     * census outweighs the colour budget; every other setting rides along.
+     * The default path never calls this, so default bytes are untouched.
+     */
+    public function withQuality(int $quality): self
+    {
+        return new self(
+            $this->dither,
+            $this->maxColors,
+            $this->cellWidth,
+            $this->cellHeight,
+            $this->intensity,
+            $this->alphaThreshold,
+            $this->flattenBackground,
+            $this->serpentine,
+            $this->mltermEdgeRows,
+            $quality,
         );
     }
 
@@ -749,6 +815,29 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             fn(array $bucket): array => $this->avgBucket($bucket),
             $buckets
         );
+    }
+
+    /**
+     * B-14: palette construction router.
+     *
+     * Median-cut stays the default AND the fallback: it wins whenever the
+     * quality dial is unarmed, the census is empty, or the sample stream
+     * carries no merge mass to exploit (one sample per requested colour or
+     * fewer — a histogram cannot compress what is already sparse). Only an
+     * armed dial with surplus samples routes to the PNN quantiser, where
+     * chafa's -w rung selects the histogram depth. The default render thus
+     * never reaches Quantizer and its bytes are frozen as before.
+     *
+     * @param list<array{int,int,int}> $samples
+     * @return list<array{int,int,int}>
+     */
+    private function buildPalette(array $samples, int $budget): array
+    {
+        if ($this->quality === null || $samples === [] || count($samples) <= max(1, $budget)) {
+            return $this->medianCut($samples, $budget);
+        }
+
+        return Quantizer::build($samples, $budget, Quantizer::bitsForQuality($this->quality));
     }
 
     private function largestBucketIndex(array $buckets): ?int

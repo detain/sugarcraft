@@ -572,4 +572,77 @@ final class SixelStreamTest extends TestCase
         $this->assertSame(Dither::Stucki, $stacked->dither());
         $this->assertStringContainsString('|serpentine=1|mlterm=1', $stacked->configFingerprint());
     }
+
+    /**
+     * B-14: the default renderer carries no rung and its fingerprint stays
+     * byte-identical to the pre-dial pinned string — the quality segment may
+     * appear only when explicitly armed (C-04/B-10 discipline).
+     */
+    public function testQualityDefaultIsNullAndFingerprintUntouched(): void
+    {
+        $renderer = new SixelRenderer();
+        $this->assertNull($renderer->quality());
+        $this->assertSame(
+            'dither=floyd-steinberg|maxColors=256|cellWidth=10|cellHeight=20',
+            $renderer->configFingerprint(),
+        );
+    }
+
+    /**
+     * B-14: arming the dial on a sparse census must NOT change bytes — the
+     * router sends samples ≤ budget back through median-cut, so the opt-in
+     * is inert without merge mass. On a dense census (4096 noise samples vs
+     * 256 colours) the PNN path fires and replaces the median-cut palette.
+     */
+    public function testQualityArmedRoutesOnlyWhenTheCensusOutweighsTheBudget(): void
+    {
+        $flat = ImageSource::fromFile(__DIR__ . '/../fixtures/8x4_red.png');
+        $armedFlat = (new SixelRenderer())->withQuality(5)->render($flat, 8, 4);
+        $this->assertStringStartsWith(self::ESC . 'P', $armedFlat);
+        $this->assertSame(
+            sha1($armedFlat),
+            'd883ac34846a2a92d12e03f16e4f793e354a4ad9',
+            'quality-armed sparse render keeps the median-cut bytes',
+        );
+
+        $noise = ImageSource::fromFile(__DIR__ . '/../fixtures/500x400_noise.png');
+        $median = (new SixelRenderer(Dither::Stucki, 256))->render($noise, 30, 24);
+        $pnn = (new SixelRenderer(Dither::Stucki, 256))->withQuality(5)->render($noise, 30, 24);
+
+        $this->assertStringStartsWith(self::ESC . 'P', $pnn);
+        $this->assertSame(self::ESC . '\\', substr($pnn, -2), 'the PNN render is a well-formed DCS');
+        $this->assertNotSame($median, $pnn, 'the dense census must route to the PNN palette');
+        $this->assertSame(sha1($median), 'c79e84bfb8cfee4e0b240e73f62a5908b84f98c4', 'the unarmed render keeps its base bytes');
+    }
+
+    /**
+     * B-14: every wither carries the rung, in both stacking orders, and an
+     * out-of-range rung is refused at the boundary (constructor and wither).
+     */
+    public function testQualityWithersCarryAndBoundaryRefuses(): void
+    {
+        $stacked = (new SixelRenderer(Dither::FloydSteinberg, 3, 1, 1))
+            ->withQuality(3)->withSerpentine()->withMltermEdgeRows()->withAlphaThreshold(90)->withDither(Dither::Stucki);
+        $this->assertSame(3, $stacked->quality());
+        $this->assertStringEndsWith('|quality=3', $stacked->configFingerprint());
+
+        $reverse = $stacked->withQuality(9);
+        $this->assertSame(9, $reverse->quality(), 're-dialing keeps every other setting');
+        $this->assertTrue($reverse->serpentine());
+        $this->assertTrue($reverse->mltermEdgeRows());
+        $this->assertSame(90, $reverse->alphaThreshold());
+        $this->assertSame(Dither::Stucki, $reverse->dither());
+
+        $this->expectException(\InvalidArgumentException::class);
+        (new SixelRenderer(Dither::FloydSteinberg, 256, 10, 20, null, 127, null, false, false, 0));
+    }
+
+    /**
+     * B-14: the wither refuses rung 10 before any copy escapes.
+     */
+    public function testWithQualityRefusesHighRung(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new SixelRenderer())->withQuality(10);
+    }
 }
