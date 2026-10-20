@@ -132,7 +132,10 @@ trait TruncatesOutput
      * {@see \SugarCraft\Code\Tools\BuiltIn\PtyRun} (its own spelled copy of
      * the number, the F-T3 shape the census names),
      * {@see \SugarCraft\Code\Tools\McpToolBridge} (one per MCP tool, since
-     * audit 0.5) and
+     * audit 0.5), {@see \SugarCraft\Code\Tools\BuiltIn\McpCallTool} and
+     * {@see \SugarCraft\Code\Tools\BuiltIn\McpListTool} (MCP-7's lazy
+     * dispatcher pair — they answer schema listings and single calls whose
+     * bridges carry their own clipping) and
      * {@see \SugarCraft\Code\Tools\BuiltIn\WebFetch} take the same default
      * and spend no nudge budget, so the margin says nothing about them. (The
      * last of those also holds a far larger read bound of its own; that one

@@ -218,15 +218,15 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 42 is that sum — 41 after the ISS-047 keybinding-collision drain joined
-     * the roster on top of the ISS-036 override aggregate — plus one row of
-     * headroom. A launch that does hit
+     * 44 is that sum — 43 after the PLG-1 bundles discovery seam joined the
+     * roster on top of the ISS-047 keybinding-collision drain — plus one row
+     * of headroom. A launch that does hit
      * the cap loses nothing silently: the overflow is COUNTED and reported as
      * one trailing row — see {@see launchNotices()} — and stderr carries every
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 42;
+    public const LAUNCH_NOTICE_LIMIT = 44;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -270,6 +270,8 @@ final class Bootstrap
      * loader's one row per refused command FILE. `lspClient` counts its one
      * whole-key row (a malformed `lsp` value, or the server cap reached); its
      * one row per configured server that did not start is a fan-out too.
+     * `bundles` counts two, one per fixed install container; its
+     * `pluginPaths` rows are the same shape as those.
      *
      * Read by the census test only; nothing at runtime sums it.
      *
@@ -298,6 +300,11 @@ final class Bootstrap
         'reportIgnoredFrontmatter' => 4,
         'lspClient' => 1,
         'permissionGate' => 1,
+        // Roadmap PLG-1: two, one per fixed install container (the project
+        // and user tier roots) whose walk can raise a problem row on any
+        // launch; rows naming entries of the pluginPaths setting are fan-out
+        // over a user list — the very thing the cap is for.
+        'bundles' => 2,
         'availableProviders' => 1,
         'checkPolicyFreshness' => 1,
         'reportKeybindingCollisions' => 1,

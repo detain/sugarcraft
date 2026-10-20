@@ -81,7 +81,10 @@ final class ToolDocGenerator
      */
     public function countAnchors(): array
     {
-        $built = \count(ToolCatalog::built());
+        // MCP-7: every sentence anchored here describes what a plain launch
+        // ships and what the project tier can therefore filter — the lazy
+        // dispatcher pair is in neither set. See readmeRoster()'s note above.
+        $built = \count(ToolCatalog::builtUnconditionally());
         $wired = \count(ToolCatalog::entries());
         $launched = \count(ToolCatalog::onLaunch());
 
@@ -110,19 +113,24 @@ final class ToolDocGenerator
      */
     public function readmeRoster(): string
     {
+        // MCP-7's law ({@see ToolCatalog::CONDITIONAL_BUILDS} doc-block): the
+        // plain-launch roster is `builtUnconditionally()`, not `built()`. The
+        // `disabledTools` ceiling sentence in the same bullet still counts
+        // everything `build()` may construct, so the conditional pair stays
+        // classified on the page — just not in the list a bare launch ships.
         $items = [];
-        foreach (ToolCatalog::built() as $entry) {
+        foreach (ToolCatalog::builtUnconditionally() as $entry) {
             $items[] = '`' . $entry->name . '`' . ($entry->gloss === '' ? '' : ' (' . $entry->gloss . ')');
         }
 
         $renamed = [];
-        foreach (ToolCatalog::built() as $entry) {
+        foreach (ToolCatalog::builtUnconditionally() as $entry) {
             if ($entry->name . '.php' !== $entry->fileName()) {
                 $renamed[] = '`' . $entry->name . '` is `' . $entry->fileName() . '`';
             }
         }
 
-        $built = \count(ToolCatalog::built());
+        $built = \count(ToolCatalog::builtUnconditionally());
         // The entry WITHOUT a gloss goes last: the prose after the block
         // finishes its sentence ("… joins the set only when …").
         $wired = ToolCatalog::externallyWired();
@@ -194,7 +202,11 @@ final class ToolDocGenerator
      */
     public function launchReportSample(): string
     {
-        $ceiling = array_map(static fn (CatalogEntry $e): string => $e->name, ToolCatalog::built());
+        // A plain launch's report — the conditional pair is not built without a
+        // deferred MCP shape ({@see ToolCatalog::builtUnconditionally()}), so the
+        // sample the launcher would actually print reads the same set the roster
+        // does.
+        $ceiling = array_map(static fn (CatalogEntry $e): string => $e->name, ToolCatalog::builtUnconditionally());
         $removed = array_values(array_filter($ceiling, static fn (string $n): bool => $n !== self::SURVIVOR));
 
         $line = rtrim(sprintf(

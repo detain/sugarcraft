@@ -236,6 +236,10 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // project directory so the model knows which are taken; it reads no
         // rule and refuses nothing, so there is nothing to drain either.
         'Host/Commands/NewRulePrompt.php|.candy-code/rules' => self::REPOSITORY,
+        // The `/status` host pane reads the serve-mode state dir under the
+        // user's own home (or CANDY_CODE_SERVER_DIR) to report the running
+        // server; it never touches a project tier and refuses nothing.
+        'Host/Commands/StatusHostCommand.php|.candy-code/server' => self::USER,
         // MOVED OUT OF THE PACKAGE-RELATIVE BLOCK BELOW, and the move is the
         // finding rather than a tidy-up. This literal was package-relative
         // because {@see \SugarCraft\Code\Agents\WorktreeManager} constructed
@@ -486,7 +490,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is SEVENTY-ONE occurrences — one per entry
+     * APPEARS IN. On this tree that is SEVENTY-TWO occurrences — one per entry
      * in {@see DOT_PATHS} — of FORTY-EIGHT distinct paths. TWENTY-NINE of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
@@ -686,7 +690,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             59 => 'FIFTY-NINE', 60 => 'SIXTY', 61 => 'SIXTY-ONE',
             62 => 'SIXTY-TWO', 63 => 'SIXTY-THREE', 64 => 'SIXTY-FOUR', 65 => 'SIXTY-FIVE',
             66 => 'SIXTY-SIX', 67 => 'SIXTY-SEVEN', 68 => 'SIXTY-EIGHT',
-            69 => 'SIXTY-NINE', 70 => 'SEVENTY', 71 => 'SEVENTY-ONE'];
+            69 => 'SIXTY-NINE', 70 => 'SEVENTY', 71 => 'SEVENTY-ONE', 72 => 'SEVENTY-TWO'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',

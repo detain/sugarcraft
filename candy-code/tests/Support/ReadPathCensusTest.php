@@ -269,6 +269,18 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — complete() lists one directory\'s names for Tab completion of a mention; '
                 . 'the read is resolve()\'s, on submit',
         ],
+        'Bundles/Bundle.php|file_get_contents' => [
+            'CONTAINED_UPSTREAM:Bundles/BundleDiscovery.php — a bundle\'s manifest.json, read by '
+                . 'fromDir() and readManifest() only at paths that ride the directory discovery '
+                . 'accepted through guard()\'s containment',
+            'CONTAINED_UPSTREAM:Bundles/BundleDiscovery.php — the second of the two manifest '
+                . 'reads above; a bundle dir is never user-supplied content, only a name under '
+                . 'a container the tier\'s boundary admitted',
+        ],
+        'Bundles/BundleDiscovery.php|glob' => [
+            'NAMES_ONLY — lists one container\'s children; the jail decision rides guard()\'s '
+                . 'per-directory containment in this file, and manifest bytes are read in Bundle',
+        ],
         'Chat.php|file_get_contents' => [
             'SELF_LOCATED — a forked child\'s result file, named by Support\ToolIpcFiles',
             'USER_TYPED — pastedImagePath() sniffs 16 bytes of a path the user pasted or dropped, to '
@@ -343,6 +355,12 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Commands/CommandLoader.php|new RecursiveDirectoryIterator' => [
             'CONTAINED — the commands directory is anchored to its tree and each `*.md` confined to it',
+        ],
+        'Cli/Subcommands.php|scandir' => [
+            'USER_TYPED — copyBundleTree() lists the install source the person at the terminal '
+                . 'named on `bundles install`; the destination is this command\'s own container',
+            'SELF_LOCATED — removeTree() sweeps only the scratch paths this verb minted inside '
+                . 'its own root',
         ],
         'Commands/BangShell.php|file_get_contents' => [
             'SELF_LOCATED — the `!cmd` result payload (roadmap 5.14g): the name ToolIpcFiles::reserve() '
@@ -673,6 +691,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'resolves outside it and is refused, and the fd is read in bounded slices, never whole',
             'SELF_LOCATED — the ledger atomic-publish temp (.partial beside jobs/<jobId>.json the method '
                 . 'itself mints from the MediaJob id, xb + 0600 + rename), never caller-supplied',
+        ],
+        'Protocol/Methods/FsMethods.php|opendir' => [
+            'CONTAINED — walk() re-checks every frame with ContainedPath::within() before '
+                . 'listing it, and every frame is built by concatenating non-link components '
+                . 'onto the resolved search root',
         ],
         'Protocol/Methods/MediaMethods.php|file_get_contents' => [
             'SELF_LOCATED — generate.status reads back only the jobs/<jobId>.json ledger this class wrote '

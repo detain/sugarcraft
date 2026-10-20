@@ -49,13 +49,17 @@ final class ToolDocDriftTest extends TestCase
         self::assertSame($once, $generator->rendered($once));
     }
 
-    public function testTheReadmeRosterNamesEveryCatalogBuiltTool(): void
+    public function testTheReadmeRosterNamesEveryPlainLaunchBuiltTool(): void
     {
+        // MCP-7: the roster is the plain-launch set. `mcp_list`/`mcp_call` are
+        // classified by {@see ToolCatalog::CONDITIONAL_BUILDS} and still ride
+        // the ceiling sentence (`tools:others`), which this file's count-anchor
+        // tests keep honest — the roster only names what a bare launch ships.
         $readme = (string) file_get_contents(self::package() . '/README.md');
         self::assertSame(1, preg_match('/<!-- tools:roster:begin -->(.*?)These are \*\*runtime tool names\*\*/s', $readme, $m));
         preg_match_all('/`([A-Za-z_]+)`/', (string) preg_replace('/\([^)]*\)/', '', $m[1]), $names);
 
-        self::assertSame(array_map(static fn ($e): string => $e->name, ToolCatalog::built()), $names[1]);
+        self::assertSame(array_map(static fn ($e): string => $e->name, ToolCatalog::builtUnconditionally()), $names[1]);
     }
 
     public function testAMissingPageAndAMissingMarkerAreRefused(): void

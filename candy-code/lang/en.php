@@ -603,6 +603,13 @@ Environment variables:
                           refuses to launch at euid 0. Nothing about a
                           candy-code launch changes — the suite is not a
                           user-facing surface.
+   CANDY_CODE_OTEL_BATCH_SIZE
+                          How many spans one OTLP export batch carries
+                          (default 64, clamped to 1..2048).
+   CANDY_CODE_OTEL_TIMEOUT
+                          Seconds each OTLP export attempt may take
+                          (default 3; a non-positive or malformed value
+                          falls back to the default).
 
    docs/ENVIRONMENT.md tabulates every variable this build reads, with its
    full contract.

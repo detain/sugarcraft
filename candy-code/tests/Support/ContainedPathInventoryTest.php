@@ -176,6 +176,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Agents/ForeignAgentPresetRegistry.php' => 2,
         'Agents/WorktreeConfig.php' => 2,
         'Agents/WorktreeManager.php' => 2,
+        'Bundles/BundleDiscovery.php' => 1,
         'Cli/Bootstrap.php' => 1,
         'Commands/CommandLoader.php' => 2,
         'Commands/CommandSpec.php' => 1,
@@ -195,6 +196,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Host/Commands/MemoryCommand.php' => 1,
         'MCP/GitCommandHandlers.php' => 2,
         'Memory/ForeignMemoryImporter.php' => 2,
+        'Protocol/Methods/FsMethods.php' => 1,
         'Providers/ProviderFactory.php' => 2,
         'Server/Http/StaticFiles.php' => 1,
         'Skills/ProposedSkills.php' => 1,
@@ -360,7 +362,7 @@ final class ContainedPathInventoryTest extends TestCase
             'THIRTY-THREE' => 33, 'THIRTY-FOUR' => 34, 'THIRTY-FIVE' => 35,
             'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
-            'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54,
+            'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
             'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
         ];
 
