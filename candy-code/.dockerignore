@@ -1,0 +1,20 @@
+# Build context hygiene for the serve image (Dockerfile COPYs exactly one
+# file from this directory: docker/entrypoint.sh — everything the app itself
+# needs comes from the published composer stream). Without these ignores the
+# context ships the whole lib (tests, examples, linked-vendor symlink entries)
+# over the wire on every build, and a stale vendor/ symlink tree is context
+# noise at best. Never list docker/ here: the COPY needs it.
+.git
+.github
+.phpunit.cache
+.phpunit.result.cache
+coverage.xml
+composer.lock
+vendor/
+tests/
+examples/
+docs/
+lang/
+.vhs/
+*.md
+CALIBER_LEARNINGS.md
