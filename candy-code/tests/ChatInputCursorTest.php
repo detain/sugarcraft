@@ -272,8 +272,12 @@ final class ChatInputCursorTest extends TestCase
         $rows = [];
         foreach (explode("\n", $chat->view()) as $row) {
             $plain = preg_replace('/\e\[[0-9;]*m/', '', $row) ?? $row;
-            if (str_contains($plain, '> ab') || str_contains($plain, 'cd')) {
-                $rows[] = trim($plain, "│ ");
+            // Exact trimmed rows, not substring filters: the version banner can
+            // carry a git SHA that happens to contain 'cd', and a substring
+            // filter would then sweep the banner into the drafted-rows claim.
+            $trimmed = trim($plain, "│ ");
+            if ($trimmed === '> ab' || $trimmed === 'cd█') {
+                $rows[] = $trimmed;
             }
         }
 
