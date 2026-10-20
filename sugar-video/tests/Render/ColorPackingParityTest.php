@@ -9,7 +9,6 @@ use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Player;
-use SugarCraft\Video\Render\AsciiRenderer;
 use SugarCraft\Video\Render\Color;
 use SugarCraft\Video\Render\Mode;
 
@@ -20,6 +19,16 @@ use SugarCraft\Video\Render\Mode;
  * Both call sites are pinned against `Color::pack()` AND against the verbatim
  * legacy inline expression that used to be duplicated in each of them, so this
  * test would fail if either site re-inlined a subtly different formula.
+ *
+ * A-11 FLIP (disclosed): the former third leg reflected into
+ * `AsciiRenderer::emitColorCode()` to pin the #44 pen-delta sentinel on the
+ * shared `Color::pack()`. That private emitter no longer exists — sugar-video's
+ * ascii path is now a thin bridge over sugar-image's canonical renderer, so the
+ * pen-delta and its masking ride `OutputOptimizer` (pinned in sugar-image's
+ * A-01/A-13/A-14 suite and, behaviourally here, by AsciiRendererTest's surviving
+ * coalescing pin). The re-fork guard moved to
+ * AsciiBridgeParityTest::testBridgeDeclaresNoForkEmitters, which keeps #44's
+ * drift fear alive in its now-correct location.
  *
  * @covers \SugarCraft\Video\Render\Color
  */
@@ -122,47 +131,5 @@ final class ColorPackingParityTest extends TestCase
         $method->setAccessible(true);
 
         self::assertNull($method->invoke(null, 255, 128, 0, Mode::Ascii));
-    }
-
-    /**
-     * Round-1 review M5: `AsciiRenderer` was the last site still re-inlining the
-     * packing expression (its TrueColor dedup sentinel `$fg`/`$lastFg`). The inputs
-     * come from `ord()` today, so masked and unmasked agree — but that is precisely
-     * the silent drift #44 exists to kill. This leg pins the sentinel against
-     * `Color::pack()` with an OUT-OF-BYTE CHANNEL: only the masked formula makes
-     * `emitColorCode()` recognise its own previous colour, so reverting the site to
-     * `($r << 16) | ($g << 8) | $b` turns this RED.
-     */
-    public function testAsciiRendererSentinelUsesSharedPack(): void
-    {
-        $emit = new ReflectionMethod(AsciiRenderer::class, 'emitColorCode');
-        $emit->setAccessible(true);
-        $renderer = new AsciiRenderer();
-
-        // In-range: dedup works under any formula — this is the contract, not the discriminator.
-        self::assertSame(
-            '',
-            $emit->invoke($renderer, 255, 128, 1, Color::pack(255, 128, 1)),
-            'the SGR must be suppressed when lastFg equals the packed colour',
-        );
-
-        // Out-of-byte channel: pack() masks (300 → 0x2C0000); an unmasked re-inline
-        // would compute 0x12C0000, miss the equality, and emit a redundant SGR.
-        self::assertSame(
-            Color::pack(300, 0, 0),
-            0x2C0000,
-            'the shared helper masks each channel to one byte',
-        );
-        self::assertSame(
-            '',
-            $emit->invoke($renderer, 300, 0, 0, Color::pack(300, 0, 0)),
-            'emitColorCode() must dedup on Color::pack() exactly, not on a private re-derivation',
-        );
-
-        // And a genuinely new colour still emits — the dedup is not a blanket ''.
-        self::assertSame(
-            "\x1b[38;2;10;20;30m",
-            $emit->invoke($renderer, 10, 20, 30, Color::pack(30, 20, 10)),
-        );
     }
 }

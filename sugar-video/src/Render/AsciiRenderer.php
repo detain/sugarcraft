@@ -4,19 +4,30 @@ declare(strict_types=1);
 
 namespace SugarCraft\Video\Render;
 
-use SugarCraft\ColorProfile\Color;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Renderer\AsciiColorMode;
+use SugarCraft\Image\Renderer\AsciiRenderer as ImageAsciiRenderer;
 use SugarCraft\Video\Decode\RgbFrame;
-use SugarCraft\Video\Render\Color as RgbColor;
 
 /**
- * ASCII / ANSI renderer — maps each pixel to a grayscale character
- * optionally colored via SGR escape sequences.
+ * A-11: ASCII / ANSI renderer — thin bridge over sugar-image's canonical AsciiRenderer.
  *
- * For TrueColor mode: grayscale char + 38;2;R;G;B foreground.
- * For Ansi256 mode:   grayscale char + 38;5;N foreground (Color::toAnsi256Index).
- * For Ascii mode:     grayscale char only, no color.
+ * Formerly a full independent copy (own pen-delta emitters, full-ESC[0m row
+ * resets, floor-quantized LUT glyphs, "\r\n" joins) while the HalfBlock and
+ * QuarterBlock siblings already delegated. Now the canonical library owns the
+ * single ascii implementation: round-to-nearest glyph quantization, the A-01
+ * pen-delta with blank-cell copy-through, the A-13/A-14 scoped row-end
+ * restore, and the "\n" join shared by every text protocol.
  *
- * Luminance formula: BT.601 (SMPTE-C) Y = (77*R + 150*G + 29*B) >> 8
+ * Frames cross the bridge through {@see ImageSource::fromRgb()} rather than a
+ * toGd() round-trip: rgb24 bytes map pixel-exactly, and an undersized buffer
+ * fails loudly where the legacy path painted silent black columns — the
+ * documented RgbFrame contract already demands exactly w*h*3 bytes. ext-gd is
+ * enforced transitively by sugar-image's composer requirement.
+ *
+ * The ramp name ('standard'/'minimal'/'dense') resolves here to its character
+ * table and threads through the canonical ramp knob, keeping Reel::withRamp()
+ * a live feature without re-forking the quantizer.
  *
  * No single upstream — drawn from maxcurzi/tplay, seatedro/glyph, joelibaceta/video-to-ascii.
  */
@@ -24,6 +35,21 @@ final class AsciiRenderer implements FrameRenderer
 {
     public function __construct(private readonly string $ramp = 'standard')
     {
+    }
+
+    /**
+     * A-06 accessor route: the video Mode enum projects onto the canonical
+     * colour-depth enum. Graphics modes never reach this renderer (the factory
+     * routes them elsewhere), so they default to Mono — mirroring the legacy
+     * match's default arm, which emitted plain characters for them too.
+     */
+    public static function colorModeFor(Mode $mode): AsciiColorMode
+    {
+        return match ($mode) {
+            Mode::Ansi256   => AsciiColorMode::Ansi256,
+            Mode::TrueColor => AsciiColorMode::TrueColor,
+            default         => AsciiColorMode::Mono,
+        };
     }
 
     /**
@@ -35,79 +61,23 @@ final class AsciiRenderer implements FrameRenderer
             return '';
         }
 
-        $bytes = $frame->bytes;
-        $w = $frame->w;
-        $h = $frame->h;
-        $len = \strlen($bytes);
+        $source = ImageSource::fromRgb($frame->bytes, $frame->w, $frame->h);
 
-        $reset = "\x1b[0m";
-        $lines = [];
-
-        for ($y = 0; $y < $h; $y++) {
-            $line = '';
-            $rowOffset = $y * $w * 3;
-            $lastFg = null; // null = no active color
-
-            for ($x = 0; $x < $w; $x++) {
-                $idx = $rowOffset + ($x * 3);
-                if ($idx + 2 >= $len) {
-                    $r = $g = $b = 0;
-                } else {
-                    $r = \ord($bytes[$idx]);
-                    $g = \ord($bytes[$idx + 1]);
-                    $b = \ord($bytes[$idx + 2]);
-                }
-                $luma = (($r * 77) + ($g * 150) + ($b * 29)) >> 8;
-                $ch = LumaRamp::char((float)$luma, $this->ramp);
-
-                $line .= match ($mode) {
-                    Mode::TrueColor => $this->emitColorCode($r, $g, $b, $lastFg) . $ch,
-                    Mode::Ansi256 => $this->emitAnsi256Code($r, $g, $b, $lastFg) . $ch,
-                    Mode::Ascii => $ch,
-                    default => $ch,
-                };
-                // Update lastFg after emitting (even for Ascii which doesn't change it).
-                if ($mode === Mode::TrueColor) {
-                    $lastFg = RgbColor::pack($r, $g, $b);
-                } elseif ($mode === Mode::Ansi256) {
-                    $lastFg = (new Color($r, $g, $b))->toAnsi256Index();
-                }
-            }
-
-            // End of line: reset SGR if a color was active.
-            if ($lastFg !== null) {
-                $line .= $reset;
-            }
-            $lines[] = $line;
-        }
-
-        return \implode("\r\n", $lines);
+        return (new ImageAsciiRenderer(self::colorModeFor($mode), self::rampChars($this->ramp)))
+            ->render($source, $frame->w, $frame->h);
     }
 
     /**
-     * Emit a TrueColor SGR only when the foreground color changes.
-     * Returns '' when $fg === $lastFg (no change needed).
+     * Ramp name → ramp characters. Unknown names fall back to the standard
+     * table exactly as {@see LumaRamp::char()} always has.
      */
-    private function emitColorCode(int $r, int $g, int $b, mixed $lastFg): string
+    private static function rampChars(string $ramp): string
     {
-        $fg = RgbColor::pack($r, $g, $b);
-        if ($fg === $lastFg) {
-            return '';
-        }
-        return "\x1b[38;2;{$r};{$g};{$b}m";
-    }
-
-    /**
-     * Emit an ANSI 256 SGR only when the foreground color index changes.
-     * Returns '' when $idx === $lastFg (no change needed).
-     */
-    private function emitAnsi256Code(int $r, int $g, int $b, mixed $lastFg): string
-    {
-        $idx = (new Color($r, $g, $b))->toAnsi256Index();
-        if ($idx === $lastFg) {
-            return '';
-        }
-        return "\x1b[38;5;{$idx}m";
+        return match ($ramp) {
+            'minimal'  => LumaRamp::CHARS1,
+            'dense'    => LumaRamp::CHARS3,
+            default    => LumaRamp::CHARS2,
+        };
     }
 
     /**
@@ -118,5 +88,4 @@ final class AsciiRenderer implements FrameRenderer
         // All ASCII modes render one source pixel per terminal cell.
         return ['w' => 1, 'h' => 1];
     }
-
 }

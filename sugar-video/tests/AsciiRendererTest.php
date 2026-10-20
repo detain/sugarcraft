@@ -64,7 +64,9 @@ final class AsciiRendererTest extends TestCase
         $this->assertNotEmpty($output);
 
         // Must contain only printable ASCII characters (0x20-0x7E) and newlines.
-        $lines = explode("\r\n", $output);
+        // A-11: canonical joins rows with "\n" (never "\r\n") — same delimiter
+        // every other Player text mode already emits via the Buffer path.
+        $lines = explode("\n", $output);
         $this->assertCount(3, $lines);
 
         foreach ($lines as $line) {
@@ -219,7 +221,8 @@ final class AsciiRendererTest extends TestCase
         $frame = self::makeFrame();
         $output = $this->getRenderer()->render($frame, Mode::Ascii);
 
-        $lines = explode("\r\n", $output);
+        // A-11: "\n" join — the canonical renderer's row delimiter.
+        $lines = explode("\n", $output);
         $this->assertCount(3, $lines);
     }
 
@@ -231,7 +234,8 @@ final class AsciiRendererTest extends TestCase
         $frame = self::makeFrame();
         $output = $this->getRenderer()->render($frame, Mode::Ascii);
 
-        $lines = explode("\r\n", $output);
+        // A-11: "\n" join — the canonical renderer's row delimiter.
+        $lines = explode("\n", $output);
         foreach ($lines as $line) {
             $this->assertSame(3, strlen($line), "Line '{$line}' should be 3 characters for a 3-wide frame");
         }
