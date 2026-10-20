@@ -80,9 +80,15 @@ final class Decoder
         }
         $header = self::parseHeader($bytes);
 
-        // Cap the SOURCE canvas as well as the output grid: everything below
-        // (compositing canvas, snapshot, per-frame GD decode) is sized from the
-        // header's screen dimensions, so the pixel line must fire before them.
+        // Cap the SOURCE canvas as well as the output grid: the compositing
+        // canvas and the DISPOSAL_PREVIOUS snapshot are sized from the header's
+        // screen dimensions, so the pixel line must fire before them.  Per-frame
+        // Image Descriptors do NOT ride on GD's goodwill either: parseHeader()
+        // clips every declared rect to the logical screen (fully off-canvas
+        // frames are dropped) and assembleFrameGif() re-emits the descriptor it
+        // feeds GD with the clipped rect — so the screen gate below bounds every
+        // allocation in the decode, whatever a sloppy or crafted file declares
+        // per frame (E-01).
         if ($header['width'] * $header['height'] > self::MAX_TOTAL_PIXELS) {
             throw new \RuntimeException(Lang::t('decoder.screen_too_large', ['max' => (string) self::MAX_TOTAL_PIXELS]));
         }
@@ -215,7 +221,7 @@ final class Decoder
      * descriptor-less files), which previously carried byte-identical
      * copies of this forty-line block.
      *
-     * @param array{offset: int, delay: int, disposal: int, transparent: bool, transparentIndex: int, hasLct: bool, lctBytes: int} $info
+     * @param array{offset: int, delay: int, disposal: int, transparent: bool, transparentIndex: int, hasLct: bool, lctBytes: int, left: int, top: int, frameW: int, frameH: int} $info
      * @param array{hasGct: bool, gctBytes: int} $header
      */
     private static function assembleFrameGif(string $bytes, array $info, array $header): string
@@ -250,7 +256,26 @@ final class Decoder
         // palette bytes where GD expects a block introducer: depending on
         // those bytes GD either rejects the frame or decodes it with garbage
         // colours (GIF89a §20-21: descriptor, then LCT, then data).
-        $gifData .= substr($bytes, $offset, 10);
+        if ($offset > 0 && ord($bytes[$offset]) === 0x2C) {
+            // E-01: re-emit the descriptor with the CLIPPED rect parseHeader()
+            // stored, not the declared bytes — copying them through is how a
+            // 65535x65535 frame inside a 4x4 screen reached GD at its declared
+            // size.  Unclipped frames rewrite byte-identically to the raw copy
+            // (same left/top/w/h, and the packed byte — LCT and interlace
+            // flags — is carried verbatim).  A frame whose LZW stride is wider
+            // than the clipped rect shears: rows decode against the declared
+            // width but fill the narrower canvas.  Real out-of-canvas frames
+            // are encoder sloppiness, pixel-fidelity there would need a full
+            // LZW re-encode, and provable allocation bounds win that trade.
+            $gifData .= "\x2C" . pack('v', $info['left']) . pack('v', $info['top'])
+                . pack('v', $info['frameW']) . pack('v', $info['frameH'])
+                . $bytes[$offset + 9];
+        } else {
+            // The static-fallback pseudo-frame (offset 0, screen-sized) has no
+            // descriptor of its own to rewrite; its raw head slice behaves as
+            // it always has (GD rejects it, the frame list lands empty).
+            $gifData .= substr($bytes, $offset, 10);
+        }
         if ($hasLct) {
             $gifData .= substr($bytes, $offset + 10, $lctBytes);
         }
@@ -326,7 +351,8 @@ final class Decoder
     /**
      * Parse the GIF header: logical screen dimensions, GCT flag + size,
      * and per-frame info (GCE delay + image descriptor offset + disposal
-     * + transparency + image position/size).
+     * + transparency + image position/size, the rect clipped to the
+     * screen — frames entirely outside it are dropped; see E-01 below).
      *
      * @throws \RuntimeException when the declared GCT or an Image Descriptor
      *                           reaches past EOF (`decoder.truncated`). A
@@ -429,19 +455,33 @@ final class Decoder
                 $lctEntryCount = $hasLct ? (1 << ($lctSizeExp + 1)) : 0;
                 $lctBytes = $lctEntryCount * 3;
 
-                $frameInfos[] = [
-                    'offset' => $i,
-                    'delay' => $lastDelay,
-                    'disposal' => $lastDisposal,
-                    'transparent' => $lastTransparent,
-                    'transparentIndex' => $lastTransparentIndex,
-                    'hasLct' => $hasLct,
-                    'lctBytes' => $lctBytes,
-                    'left' => $left,
-                    'top' => $top,
-                    'frameW' => $frameW,
-                    'frameH' => $frameH,
-                ];
+                // E-01: a frame may not pretend to be bigger than the canvas it
+                // composites onto.  Clip the declared rect to the logical screen
+                // exactly as browsers do: the visible part of a partly-off-canvas
+                // frame is stored clipped, a frame entirely outside the screen is
+                // dropped from the list (its sub-blocks are still consumed below,
+                // so the byte walk stays in sync).  Zero-extent declarations clip
+                // to nothing and drop the same way.  The clipped dims are what
+                // assembleFrameGif() re-emits, which is what makes every GD
+                // allocation provably bounded by the MAX_TOTAL_PIXELS header gate
+                // instead of merely bounded in practice by GD's own silent clamp.
+                $visibleW = min($frameW, $width - $left);
+                $visibleH = min($frameH, $height - $top);
+                if ($visibleW > 0 && $visibleH > 0) {
+                    $frameInfos[] = [
+                        'offset' => $i,
+                        'delay' => $lastDelay,
+                        'disposal' => $lastDisposal,
+                        'transparent' => $lastTransparent,
+                        'transparentIndex' => $lastTransparentIndex,
+                        'hasLct' => $hasLct,
+                        'lctBytes' => $lctBytes,
+                        'left' => $left,
+                        'top' => $top,
+                        'frameW' => $visibleW,
+                        'frameH' => $visibleH,
+                    ];
+                }
                 // Skip image data: the one-byte LZW minimum code size (and the
                 // Local Color Table when the descriptor declared one), then the
                 // length-prefixed sub-blocks until the block terminator (0x00).

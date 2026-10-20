@@ -16,14 +16,27 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
  * GIF player as a SugarCraft Model. Loads every frame up-front (the
  * decoder caps at 256), then advances one frame per `TickMsg` — each
  * tick re-armed with the CURRENT frame's `delay` (centiseconds over
- * 100), so the play rate follows the GIF's own timing and no render
- * loop is needed in the bin/.
+ * 100, floored at self::MIN_TICK_CS), so the play rate follows the
+ * GIF's own timing and no render loop is needed in the bin/.
  *
  * Keys: space — pause/resume.  ←/→ — manual step.  q/esc — quit.
  */
 final class Player implements Model
 {
     use Mutable;
+
+    /**
+     * Floor for every scheduled tick, in centiseconds.  {@see Frame} is
+     * public API and documents `delay 0` as "no delay specified" (the GIF
+     * Graphic Control Extension's inherit-the-previous marker), so a host
+     * may legitimately hand us 0 — and 0/100.0 armed a `Cmd::tick()` that
+     * fires as fast as the loop can run: a busy-loop flood, not playback.
+     * Rejected alternative: chafa's chicle loader rewrites every GIF zero
+     * to a fixed 50 ms (tools/chafa/chicle-gif-loader.c:228-231) — that
+     * would fight the Decoder's spec-honest inherit-previous policy, and
+     * the flood is a scheduling hazard, so it is floored at the scheduler.
+     */
+    private const MIN_TICK_CS = 1;
 
     /**
      * @param list<Frame> $frames
@@ -51,7 +64,7 @@ final class Player implements Model
         if ($this->frames === [] || $this->paused) {
             return null;
         }
-        return Cmd::tick($this->frames[$this->index]->delay / 100.0, static fn(): Msg => new TickMsg());
+        return Cmd::tick(max($this->frames[$this->index]->delay, self::MIN_TICK_CS) / 100.0, static fn(): Msg => new TickMsg());
     }
 
     public function update(Msg $msg): array
@@ -133,7 +146,7 @@ final class Player implements Model
 
     private function scheduleTick(): \Closure
     {
-        return Cmd::tick($this->frames[$this->index]->delay / 100.0, static fn(): Msg => new TickMsg());
+        return Cmd::tick(max($this->frames[$this->index]->delay, self::MIN_TICK_CS) / 100.0, static fn(): Msg => new TickMsg());
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
