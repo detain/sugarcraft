@@ -102,11 +102,20 @@ jobs:
           php -r 'exit(json_decode(file_get_contents("/tmp/phar-smoke.json"), true) === null ? 1 : 0);'
 
       - name: Smoke — archive scanners are alive under phar://
+        # The archive is addressed as a phar:// URI, never as a bare
+        # '/x.phar/entry' path: measured on PHP 8.3.6 (this very step in run
+        # 39355949075 died with ENOENT on the bare form), bare paths fail
+        # is_file()/require for every caller — bin/candy-code's autoload guard
+        # and PharCompatTest's stub pins document the same measurement, and the
+        # phar:// URI is the only form the extension honours. It is also the
+        # only form under which the step title ("under phar://") is honestly
+        # exercised. Double quotes only in the php body below: it is embedded
+        # in a shell single-quoted argument.
         run: |
           set -euo pipefail
           php -r '
             $phar = getenv("PHAR_PATH");
-            require $phar . "/vendor/autoload.php";
+            require "phar://" . $phar . "/vendor/autoload.php";
             $tools = \SugarCraft\Code\Tools\Catalog\ToolCatalog::names();
             $specs = \SugarCraft\Code\Commands\Specs\BuiltInCommands::all();
             if (count($tools) === 0 || count($specs) === 0) {
