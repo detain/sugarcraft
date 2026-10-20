@@ -212,7 +212,7 @@ final class ComposerVim
 
             case 'D':
                 // d$ — kill caret..EOL, caret clamps by the delete itself.
-                return self::applyCharwise('d', $input, $state, self::lineLen($input, $input->row));
+                return self::applyCharwise('d', $input, $state, self::rowLen($input, $input->row));
 
             case 'Y':
                 // vim's Y is the linewise sibling of yy.
@@ -438,11 +438,6 @@ final class ComposerVim
         $char = mb_substr($line, $pos, 1, 'UTF-8');
 
         return $char !== '' && preg_match('/[a-zA-Z0-9_]/', $char) === 1;
-    }
-
-    private static function lineLen(TextArea $input, int $row): int
-    {
-        return mb_strlen($input->lines[$row] ?? '', 'UTF-8');
     }
 
     private static function rowLen(TextArea $input, int $row): int
