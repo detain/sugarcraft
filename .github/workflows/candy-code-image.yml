@@ -5,8 +5,20 @@ name: candy-code serve image
 # under candy-code/ re-verifies that the published stream still composes a
 # working serve image. Cloned from .github/workflows/vhs-runner-php-image.yml
 # (same pinned-action set, same GHCR tag shape: latest + sha).
+#
+# The pull_request arm exists because the first edition of this workflow had
+# no pre-merge proof: every run since inception failed at `composer
+# create-project` on master, nine in a row, with nothing gating the merge.
+# A Dockerfile or entrypoint change now has to build green on its own PR
+# (push disabled) before it can reach the publishing trigger below.
 
 on:
+  pull_request:
+    paths:
+      - 'candy-code/Dockerfile'
+      - 'candy-code/docker/**'
+      - 'candy-code/.dockerignore'
+      - '.github/workflows/candy-code-image.yml'
   push:
     branches: [master]
     paths:
@@ -53,7 +65,9 @@ jobs:
         with:
           context: candy-code
           file: candy-code/Dockerfile
-          push: true
+          # PR runs are proof-only: they build but never publish (and a fork
+          # PR would not have packages:write anyway).
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
