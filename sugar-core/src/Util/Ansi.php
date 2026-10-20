@@ -63,6 +63,12 @@ final class Ansi
     public const CHARSET_UK           = 'A'; // UK Latin-1 (0x23 = £)
     public const CHARSET_NO_BREAK_SPACE = 'U'; // ISO Latin-1, 0xA0 renders as space
 
+    // DECSIXEL repeat-run limits (F-09): runs of 1..3 stay bare literals, a
+    // single `!N` token may carry at most 255, longer runs split into
+    // repeated `!255` chunks (chafa/internal/chafa-sixel-renderer.c:218-251).
+    public const SIXEL_RLE_LITERAL_LIMIT = 4;
+    public const SIXEL_RLE_MAX_COUNT     = 255;
+
     public static function sgr(int ...$codes): string
     {
         if ($codes === []) {
@@ -1339,6 +1345,56 @@ final class Ansi
     }
 
     /**
+     * Encode one Sixel data-byte run with the DECSIXEL repeat rules.
+     *
+     * F-09 shared home: a sixel data byte is `bits + 63` (printable 63-126);
+     * counts of 4..254 ride as `!count byte`, runs of 255 or more split into
+     * repeated `!255` chunks plus the remainder, and runs of 1..3 stay bare
+     * literals — mirroring chafa's `format_schar_reps`
+     * (chafa/internal/chafa-sixel-renderer.c:218-251). An uncapped `!900` is
+     * illegal SIXEL and corrupts the band on real decoders.
+     *
+     * Both wire homes compose this: {@see sixelPixelData()} here and
+     * sugar-image's SixelRenderer band encoder.
+     *
+     * @param int $bits  Six-bit pixel mask / palette index (only bits 0-5 used)
+     * @param int $count Run length (0 emits nothing)
+     *
+     * @return string
+     */
+    public static function sixelRle(int $bits, int $count): string
+    {
+        if ($count < 0) {
+            throw new \InvalidArgumentException(
+                Lang::t('ansi.invalid_sixel_repeat', ['count' => $count])
+            );
+        }
+
+        $char = chr(($bits & 0x3F) + 63);
+
+        if ($count < self::SIXEL_RLE_LITERAL_LIMIT) {
+            return str_repeat($char, $count);
+        }
+
+        $out = '';
+        while ($count >= self::SIXEL_RLE_MAX_COUNT) {
+            $out .= '!' . self::SIXEL_RLE_MAX_COUNT . $char;
+            $count -= self::SIXEL_RLE_MAX_COUNT;
+        }
+
+        // The loop only leaves 0..254 behind; 0 means the chunks covered the
+        // whole run (length 255, 510, 765, …).
+        if ($count === 0) {
+            return $out;
+        }
+        if ($count < self::SIXEL_RLE_LITERAL_LIMIT) {
+            return $out . str_repeat($char, $count);
+        }
+
+        return $out . '!' . $count . $char;
+    }
+
+    /**
      * Emit a Sixel pixel-data string for one band (6 rows at a time).
      *
      * Each 6-row band is encoded left-to-right, top-to-bottom within
@@ -1346,11 +1402,8 @@ final class Ansi
      * represent the six rows: bit 0 = top row of the band, bit 5 = bottom.
      * The byte value is the palette index ORed with 0x3F (63).
      *
-     * A repeat count prefix "!" precedes runs of the same palette index for
-     * column efficiency. Per DECSIXEL the count is capped at 255 (F-09, mirroring
-     * chafa's format_schar_reps in chafa/internal/chafa-sixel-renderer.c:218-251):
-     * runs of 255 or more split into repeated "!255" chunks, and runs of 1..3
-     * emit as bare repeated bytes instead of a counted form.
+     * Repeat runs go through {@see sixelRle()} (F-09 shared home), so the
+     * `!255` chunking rule has exactly one implementation tree-wide.
      *
      * Mirrors charmbracelet/x/ansi. SixelRenderer.
      *
@@ -1362,29 +1415,8 @@ final class Ansi
     public static function sixelPixelData(array $column, ?int $repeat = null): string
     {
         $pal = $column[0] ?? 0;
-        $byte = chr(self::toSixelByte($pal) + 63);
-        $count = max(1, $repeat ?? 1);
 
-        if ($count < 4) {
-            return str_repeat($byte, $count);
-        }
-
-        $out = '';
-        while ($count >= 255) {
-            $out .= '!255' . $byte;
-            $count -= 255;
-        }
-
-        // The loop only leaves 0..254 behind; 0 means the chunks covered the
-        // whole run (length 255, 510, 765, …).
-        if ($count === 0) {
-            return $out;
-        }
-        if ($count < 4) {
-            return $out . str_repeat($byte, $count);
-        }
-
-        return $out . '!' . $count . $byte;
+        return self::sixelRle(self::toSixelByte($pal), max(1, $repeat ?? 1));
     }
 
     /**

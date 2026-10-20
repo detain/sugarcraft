@@ -235,6 +235,63 @@ final class AnsiTest extends TestCase
     }
 
     /**
+     * F-09 shared home: sixelRle() reproduces the pre-fold inline algorithm
+     * for EVERY run length 0..3000 (literal < 4, `!N` for 4..254, `!255`
+     * chunks plus remainder above), so routing both wire homes through it is
+     * byte-frozen.
+     */
+    public function testSixelRleMatchesThePreFoldInlineAlgorithmForEveryRunLength(): void
+    {
+        $reference = static function (int $bits, int $count): string {
+            $char = chr(($bits & 0x3F) + 63);
+            if ($count < 4) {
+                return str_repeat($char, $count);
+            }
+            $out = '';
+            while ($count >= 255) {
+                $out .= '!255' . $char;
+                $count -= 255;
+            }
+            if ($count === 0) {
+                return $out;
+            }
+            if ($count < 4) {
+                return $out . str_repeat($char, $count);
+            }
+
+            return $out . '!' . $count . $char;
+        };
+
+        foreach ([0, 1, 0x15, 0x3F] as $bits) {
+            $expected = '';
+            $actual = '';
+            for ($count = 0; $count <= 3000; $count++) {
+                $expected .= $reference($bits, $count) . '|';
+                $actual .= Ansi::sixelRle($bits, $count) . '|';
+            }
+
+            if ($expected !== $actual) {
+                for ($count = 0; $count <= 3000; $count++) {
+                    $this->assertSame(
+                        $reference($bits, $count),
+                        Ansi::sixelRle($bits, $count),
+                        "sixelRle({$bits}, {$count}) drifted from the pre-fold algorithm",
+                    );
+                }
+            }
+
+            $this->assertSame($expected, $actual, "sixelRle mask {$bits} drifted across runs 0..3000");
+        }
+    }
+
+    /** F-09: a negative run length is a caller bug — fail loud, never emit. */
+    public function testSixelRleRejectsNegativeCounts(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Ansi::sixelRle(0, -1);
+    }
+
+    /**
      * A-01 dedup pass: the SGR parameter spelling of a pen has one home.
      * The full-sequence helpers, sugar-cellbuffer's SgrEmitter and
      * sugar-image's OutputOptimizer all compose these parameter builders,
@@ -253,7 +310,7 @@ final class AnsiTest extends TestCase
         $this->assertSame("\x1b[38;5;196m", Ansi::fg256(196));
         $this->assertSame("\x1b[48;5;196m", Ansi::bg256(196));
 
-        // Background re-spelling: colour selectors flip 38;->48;, everything
+        // Background re-spelling: colour selectors flip 38;→48;, everything
         // else (bare attribute codes) passes through untouched.
         $this->assertSame('48;2;1;2;3', Ansi::backgroundPenParams('38;2;1;2;3'));
         $this->assertSame('48;5;196', Ansi::backgroundPenParams('38;5;196'));

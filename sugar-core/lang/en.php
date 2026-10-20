@@ -31,6 +31,7 @@ return [
     'ansi.component_out_of_range' => '{label} out of range [0,255]: {value}',
     'ansi.invalid_scs_slot'       => 'invalid SCS slot: {slot} (expected 0-3 for G0-G3)',
     'ansi.invalid_scs_designator' => 'invalid SCS designator: {designator} (expected one byte in 0x30-0x7E)',
+    'ansi.invalid_sixel_repeat'   => 'sixel repeat count must not be negative: {count}',
 
     // Program.php
     'program.proc_open_failed'    => 'proc_open failed for: {cmd}',
