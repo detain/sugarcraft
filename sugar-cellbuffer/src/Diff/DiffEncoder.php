@@ -19,7 +19,9 @@ use SugarCraft\CellBuffer\Style;
  * ANSI sequences emitted (per xterm ctlseqs):
  *   - CUP  \x1b[row;colH  (cursor position, 1-based)
  *   - ECH  \x1b[N X        (erase N chars)
- *   - REP  \x1b[N b        (repeat preceding char N times)
+ *   - REP  \x1b[N b        (repeat preceding char N times — emitted only
+ *                          when RepeatGate::worth() says it beats the
+ *                          literal bytes; A-02, chafa printer.c:56-92)
  *   - SGR  \x1b[...m      (style transitions)
  *   - OSC 8;id;url\x1b\\  (hyperlink open)
  *   - OSC 8;;\x1b\\        (hyperlink close)
@@ -191,6 +193,16 @@ final class DiffEncoder
         }
 
         $this->cursorCol += $op->count * ($op->width > 0 ? $op->width : 1);
+
+        // A-02: chafa gates REP on byte arithmetic (printer.c:56-92), never
+        // emits it unconditionally. Below the break-even the run is written
+        // as literal repeats — same cells, same cursor advance, no escape.
+        // The literal arm also happens to paint $op->rune rather than the
+        // stale preceding glyph, so on the (defensive, never-reached-by-real-
+        // diffs) rune-mismatch shape it is strictly MORE faithful than REP.
+        if (!RepeatGate::worth($op->count, strlen($op->rune))) {
+            return str_repeat($op->rune, $op->count);
+        }
 
         return "\x1b[{$op->count}b";
     }

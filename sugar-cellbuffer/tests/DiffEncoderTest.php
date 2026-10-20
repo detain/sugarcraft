@@ -70,7 +70,9 @@ final class DiffEncoderTest extends TestCase
         ];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("A\x1b[3b", $bytes);
+        // A-02: count 3 of a 1-byte rune is below the byte break-even
+        // ("\x1b[3b" costs 4, "AAA" costs 3) — the run stays literal.
+        $this->assertSame("AAAA", $bytes);
     }
 
     public function testEncodeRepeatRunOpZeroCount(): void
@@ -90,18 +92,24 @@ final class DiffEncoderTest extends TestCase
         $encoder->encode([new SetCellOp([Cell::new('A')])]);
         $bytes = $encoder->encode([new RepeatRunOp('X', 2)]);
 
-        $this->assertSame("\x1b[2b", $bytes);
+        // A-02: count 2 of a 1-byte rune is sub-threshold, so the defensive
+        // shape lands on the literal arm — which paints the op's OWN rune,
+        // strictly more faithful than REP (REP would have repeated the stale
+        // 'A' sitting under the cursor while only relabelling bookkeeping).
+        $this->assertSame("XX", $bytes);
     }
 
     public function testEncodeRepeatRunEmitsRepSequence(): void
     {
         $ops = [
             new SetCellOp([Cell::new('A')]),
-            new RepeatRunOp('A', 3),
+            new RepeatRunOp('A', 5),
         ];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("A\x1b[3b", $bytes);
+        // A-02: count 5 is the first strict win for a 1-byte rune
+        // ("\x1b[5b" costs 4 bytes, "AAAAA" costs 5) — REP is emitted.
+        $this->assertSame("A\x1b[5b", $bytes);
     }
 
     public function testEncodeSetStyleOp(): void

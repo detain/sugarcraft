@@ -9,9 +9,10 @@ namespace SugarCraft\CellBuffer\Diff;
  * \x1b[N b.
  *
  * REP repeats the last printed character.  It requires N >= 1.
- * It is emitted only when the run length justifies the overhead
- * (typically N >= 2) and the preceding cell in the output stream
- * is the same rune.
+ * Buffer::diff() emits it for every qualifying run (run length >= 2);
+ * whether the encoded stream carries the ESC[#b sequence or literal
+ * repeats is decided at encode time by {@see RepeatGate::worth()}
+ * (A-02, chafa printer.c:56-92 byte arithmetic).
  *
  * @readonly
  */
