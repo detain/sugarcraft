@@ -309,6 +309,7 @@ final class WebTwoHostCommandsTest extends TestCase
         $listing = implode("\n", array_map(static fn (Message $m): string => $m->content, $host->history()));
         self::assertStringContainsString('ship the demo', $listing);
         self::assertStringContainsString('/goal', $listing, 'the set row names the command');
+        self::assertStringContainsString('Goal check stopped', $listing, 'W7a-3: the kickoff turn was judged — the echo judge never answers in JSON, so the goal stops with that verdict');
         self::assertFalse($host->isBusy());
     }
 
@@ -329,8 +330,11 @@ final class WebTwoHostCommandsTest extends TestCase
     public function testGoalBareAfterSetAnswersStatusAndClearTakesItBack(): void
     {
         $host = $this->host(title: true);
-        $host->runCommand('goal', 'ship the demo');
-        $this->drain($host);
+        // W7a-3: a served /goal judges the instant its kickoff turn settles —
+        // the echo judge stops it in the same breath as set above. The status
+        // and clear arms therefore run against the state a RESUMED session
+        // carries: the live marker row, exactly as the transcript holds it.
+        self::setHistory($host, [\SugarCraft\Code\Goal\GoalState::new(\SugarCraft\Code\Goal\GoalMode::Goal, 'ship the demo')->toMessage()]);
 
         $host->runCommand('goal');
         $listing = implode("\n", array_map(static fn (Message $m): string => $m->content, $host->history()));
@@ -339,6 +343,7 @@ final class WebTwoHostCommandsTest extends TestCase
         $host->runCommand('goal', 'clear');
         $listing = implode("\n", array_map(static fn (Message $m): string => $m->content, $host->history()));
         self::assertStringContainsString('cleared', strtolower($listing));
+        $this->drain($host);
     }
 
     public function testGrindRidesTheGoalBodyAtItsOwnRoundCeiling(): void

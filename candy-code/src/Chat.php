@@ -4295,39 +4295,28 @@ final class Chat implements Model
             return self::releaseQueuedPrompts([$released, null]);
         }
 
-        $verdict = $msg->verdict;
-        if ($verdict === null) {
-            return $released->goalEnded($goal, \SugarCraft\Code\Goal\GoalState::STOPPED, Lang::t('chat.goal.check_stopped', [
-                'reason' => $msg->error ?? Lang::t('chat.goal.stop.no_verdict'),
-                'command' => $goal->mode->command(),
-            ]));
+        // W7a-3: the decision table is the shared GoalLoop's — the served
+        // host runs the identical one, so a round budget or stop condition
+        // can no longer drift between the surfaces. Chat keeps its own
+        // effect machinery; only the "what next" moved.
+        if ($msg->verdict === null) {
+            return $released->goalEnded($goal, \SugarCraft\Code\Goal\GoalState::STOPPED, \SugarCraft\Code\Goal\GoalLoop::stopped($goal, $msg->error)->notice);
         }
 
-        $score = $verdict->score === null ? '' : ' (' . $verdict->scoreLabel() . ')';
-        if ($verdict->complete) {
-            return $released->goalEnded($goal, \SugarCraft\Code\Goal\GoalState::MET, Lang::t('chat.goal.met', ['score' => $score, 'condition' => $goal->condition]));
-        }
-
-        if ($goal->exhausted()) {
-            return $released->goalEnded($goal, \SugarCraft\Code\Goal\GoalState::STOPPED, Lang::t('chat.goal.not_met', [
-                'rounds' => $goal->round,
-                'score' => $score,
-                'condition' => $goal->condition,
-                'missing' => $verdict->missing === []
-                    ? ''
-                    : Lang::t('chat.goal.still_missing', ['missing' => implode('; ', $verdict->missing)]),
-                'command' => $goal->mode->command(),
-            ]));
+        $outcome = \SugarCraft\Code\Goal\GoalLoop::afterVerdict($goal, $msg->verdict);
+        if ($outcome->kind !== \SugarCraft\Code\Goal\GoalLoop::CONTINUE) {
+            return $released->goalEnded($goal, $outcome->status, $outcome->notice);
         }
 
         if ($released->queuedPrompts !== []) {
+            // The user's own message goes first and the goal waits: the turn
+            // it starts is judged when it settles like any other.
             return self::releaseQueuedPrompts([$released, null]);
         }
 
-        $next = $goal->withRound($goal->round + 1);
         $draft = $released->input;
-        [$sent, $cmd] = $released->mutate(['history' => [...$released->history, $next->toMessage()]])
-            ->withInputBuf(\SugarCraft\Code\Goal\GoalJudge::followupPrompt($next, $verdict))
+        [$sent, $cmd] = $released->mutate(['history' => [...$released->history, $outcome->next->toMessage()]])
+            ->withInputBuf($outcome->nextPrompt)
             ->submit();
 
         return [$sent->mutate(['input' => $draft]), $cmd];

@@ -24,12 +24,13 @@ use SugarCraft\Code\Message;
  *    {@see CommandEffect::submitPrompt()} sends the kickoff prompt as a real
  *    turn (spend cap and blocking tiers refuse it through the submit route's
  *    own checks, and the refusal reason lands beside the marker).
- *  - The CONTINUATION ROUNDS do not: the judge loop rides the terminal's turn
- *    settle, which a headless host does not run. A served goal therefore runs
- *    its first turn and waits — the marker keeps it live, and the next prompt
- *    typed (or the next `/goal` settle once the loop exists server-side)
- *    carries on. The row says so out loud rather than letting the silence
- *    read as "still working".
+ *  - The CONTINUATION ROUNDS cross too (W7a-3): the served host runs the
+ *    judge on its own turn settle — the shared {@see \SugarCraft\Code\Goal\GoalLoop}
+ *    decision table, so the round budget and every stop condition are the
+ *    terminal's, byte for byte. A goal set on a served session keeps sending
+ *    the agent back to work until the judge says met, the budget is spent, or
+ *    a stop fires (no judge model, spend cap, an unusable verdict); the rows
+ *    it lands say which.
  */
 final class GoalHostCommand implements HostCommand
 {

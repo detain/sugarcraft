@@ -29,6 +29,10 @@ use SugarCraft\Code\Events\PermissionAsked;
 use SugarCraft\Code\Events\PermissionResolved;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolStarted;
+use SugarCraft\Code\Goal\GoalJudge;
+use SugarCraft\Code\Goal\GoalLoop;
+use SugarCraft\Code\Goal\GoalState;
+use SugarCraft\Code\GoalJudgedMsg;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\HistoryCompactedMsg;
@@ -1830,7 +1834,127 @@ final class SessionHost
             $this->applyApprovedPlanExit();
             $this->save();
             $this->releaseQueue();
+
+            // W7a-3: a session with a live `/goal` is not done yet — the title
+            // model judges this turn and the agent goes back to work until the
+            // goal is met, the TUI's continuation loop (3.D-3) served. Only
+            // when nothing queued took the turn's place: the user's own
+            // message carries the conversation on, and the turn it starts is
+            // judged when it settles. The decision table is the shared
+            // {@see GoalLoop}'s, so budget and stop conditions cannot drift.
+            if ($this->turn === null) {
+                $goal = GoalState::activeIn($this->history);
+                if ($goal !== null) {
+                    $this->scheduleGoalJudge($goal);
+                }
+            }
         });
+    }
+
+    /**
+     * Hold the turn slot and ask the title model to judge the live goal
+     * (W7a-3, mirroring {@see Chat::scheduleGoalJudge()} exactly): the bump
+     * of the generation strands anything already in flight, and the verdict
+     * lands through {@see self::landGoalVerdict()} on this promise's own
+     * channel — the same shape the ahead-of-need compaction uses.
+     */
+    private function scheduleGoalJudge(GoalState $goal): void
+    {
+        $judge = $this->workspace->titleBackend;
+        $stop = GoalLoop::refusalReason($judge, $this->ledger()->capReached($this->spend, $this->workspace->maxCostUsd));
+        if ($stop !== null || $judge === null) {
+            $this->endGoal($goal, GoalState::STOPPED, Lang::t('chat.goal.check_stopped', [
+                'reason' => $stop,
+                'command' => $goal->mode->command(),
+            ]));
+
+            return;
+        }
+
+        $this->generation++;
+        $this->turn = new CancellationToken();
+        GoalJudge::new()->call($judge, $goal->condition, $this->history, $this->generation, $this->sessionId)()
+            ->then(function (mixed $msg): void {
+                $this->landGoalVerdict($msg);
+            });
+    }
+
+    /**
+     * Land the `/goal` judge's verdict on a served session (W7a-3): the
+     * judge's usage is billed first — stamped with the JUDGE's model, the
+     * threaded sink from W7a-1 — then the shared {@see GoalLoop} table says
+     * whether the goal ended (met, budget spent, no usable verdict) or the
+     * agent goes back to work with what is still missing.
+     *
+     * A prompt the user queued while the turn ran goes first and the goal
+     * waits: the user's own message is the conversation carrying on, and the
+     * turn it starts is judged when it settles like any other. The follow-up
+     * prompt goes out through {@see self::submit()}, so every admission gate
+     * applies to it, refusal row and all.
+     */
+    private function landGoalVerdict(mixed $msg): void
+    {
+        if (!$msg instanceof GoalJudgedMsg) {
+            return;
+        }
+
+        $judge = $this->workspace->titleBackend;
+        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $judge instanceof EngineBackend ? $judge->model() : null);
+        if ($msg->generation !== $this->generation || $this->turn === null || $msg->sessionId !== $this->sessionId) {
+            // A verdict that raced a cancel or a newer turn: billed, never
+            // acted on — the live turn owns the decision now.
+            return;
+        }
+
+        $this->turn = null;
+        $goal = GoalState::activeIn($this->history);
+        if ($goal === null) {
+            // `/goal clear` (or a resume that rewrote the transcript) during
+            // judging: nothing to end, keep the queue moving.
+            $this->releaseQueue();
+
+            return;
+        }
+
+        if ($msg->verdict === null) {
+            $this->endGoal($goal, GoalState::STOPPED, GoalLoop::stopped($goal, $msg->error)->notice);
+
+            return;
+        }
+
+        $outcome = GoalLoop::afterVerdict($goal, $msg->verdict);
+        if ($outcome->kind !== GoalLoop::CONTINUE) {
+            $this->endGoal($goal, $outcome->status, $outcome->notice);
+
+            return;
+        }
+
+        if ($this->queue !== []) {
+            // The user's own message goes first and the goal waits — the
+            // turn it starts is judged when it settles like any other.
+            $this->releaseQueue();
+
+            return;
+        }
+
+        $this->appendMessageRow($outcome->next->toMessage());
+        $ticket = $this->submit($outcome->nextPrompt);
+        if (!$ticket->isAdmitted()) {
+            $this->appendCommandRow((string) $ticket->reason, true);
+        }
+    }
+
+    /**
+     * End $goal with $status and say so in $notice, then let the queue move —
+     * the served twin of {@see Chat::endGoal()}/{@see Chat::goalEnded()}
+     * minus the TUI's terminal-notification, which a headless session has no
+     * terminal to notify.
+     */
+    private function endGoal(GoalState $goal, string $status, string $notice): void
+    {
+        $this->appendMessageRow(Message::notice($notice));
+        $this->appendMessageRow($goal->withStatus($status)->toMessage());
+        $this->releaseQueue();
     }
 
     /**
