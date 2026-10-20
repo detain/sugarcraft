@@ -25,7 +25,7 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
 - **Environment-aware**: reads `TERM`, `COLORTERM`, `FORCE_COLOR`, `NO_COLOR`, `TERM_PROGRAM`
 - **Probe class**: static env-detection layer with precedence-ordered rules + infocmp Phase 2 upgrade
 - **ColorProfile enum**: SSOT env-detection enum (NoTTY/Ascii/Ansi/Ansi256/TrueColor) for libs that need raw profile values without constructing a Palette instance
-- **Perceptual color distance**: CIELAB conversion + ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ (CIEDE2000) metrics with an opt-in nearest-palette matcher (`NearestColor`), palette Lab values memoised for hot loops, and a PCA-bucketed exact lookup index for repeated queries (`PaletteIndex`)
+- **Perceptual color distance**: CIELAB conversion + ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ (CIEDE2000) metrics with an opt-in nearest-palette matcher (`NearestColor`), palette Lab values memoised for hot loops, a PCA-bucketed exact lookup index for repeated queries (`PaletteIndex`), and error-compensated quantization for dither chains (`NearestColor::withError()`)
 
 ## Install
 
@@ -122,6 +122,15 @@ $key   = $matcher->closest(new Color(12, 34, 56), $brand);
 // only; those are the metrics that admit a distance-preserving rotation.
 $idx  = PaletteIndex::fromPalette(NearestColor::palette256(), ColorDistance::Cie76);
 $near = $idx->nearest(new Color(30, 120, 30));                    // === $matcher->ansi256(...)
+
+// Error-compensated lookup (B-07), chafa chafa-palette.c:1160-1197: pass the
+// per-channel accumulator by reference; the query is pushed by error * 0.9/16
+// before matching, and the new residual is written back for the next pixel.
+$acc  = [0.0, 0.0, 0.0];                                    // start of the scanline
+$d1   = $matcher->withError(new Color(90, 90, 90), $acc);    // dither chain step 1
+$d2   = $matcher->withError(new Color(91, 90, 89), $acc);    // ... inherits the push
+$none = null;
+$plain = $matcher->withError(new Color(12, 34, 56), $none);  // null === plain ansi256()
 ```
 
 The 256-entry and 16-entry palette Lab tables are memoised statically, so a warm

@@ -42,6 +42,9 @@ final class NearestColor
     /** @var list<array{l: float, a: float, b: float}>|null Memoized Lab of the ANSI-16 palette. */
     private static ?array $ansi16PaletteLab = null;
 
+    /** B-07 damping applied to the stored error before it pushes the query, per chafa chafa-palette.c:1170. */
+    private const ERROR_DAMPING = 0.9;
+
     public function __construct(
         private readonly ColorDistance $metric = ColorDistance::Euclidean,
     ) {
@@ -118,6 +121,75 @@ final class NearestColor
             ColorMath::toLab($color->r, $color->g, $color->b),
             $labs,
         );
+    }
+
+    /**
+     * B-07: error-compensated nearest lookup against the ANSI-256 palette.
+     *
+     * Mirrors chafa chafa-palette.c:1160-1197 (`chafa_palette_lookup_with_error`):
+     * the query is pushed toward accumulated quantization error, damped by a
+     * factor of 0.9/16 (the damping prevents the feedback oscillation a raw
+     * residual would cause across a scanline), and the palette entry is chosen
+     * for the COMPENSATED query. The new residual — compensated query minus
+     * chosen color, computed from the UNCLAMPED compensated value so a pinned
+     * channel keeps its push into the next lookup — is written back through
+     * $err, forming the error-diffusion chain that pairs with ordered dithering.
+     *
+     * $err is a channel accumulator `[r, g, b]` in 0-255 units (floats, or
+     * ints); passing null (or by reference a variable that is null) means
+     * "no feedback" and the call is exactly {@see self::ansi256()} — plain
+     * nearest, no writes.
+     *
+     * The `with` in the name reads "accompanied by", not the immutable-setter
+     * convention: this is a lookup with a by-reference feedback vector, the
+     * shape the survey (B-07) prescribes verbatim for dither loops.
+     *
+     * @param ?array{0: float|int, 1: float|int, 2: float|int} $err in/out accumulator, list-shaped triple
+     *
+     * @throws \InvalidArgumentException when $err is non-null but not a
+     *                                   3-element list of numbers
+     */
+    public function withError(Color $color, ?array &$err = null): int
+    {
+        if ($err === null) {
+            return $this->ansi256($color);
+        }
+
+        if (!array_is_list($err) || count($err) !== 3) {
+            throw new \InvalidArgumentException(
+                'withError() expects a 3-element list [r, g, b]; got ' . count($err) . ' element(s)',
+            );
+        }
+        foreach ($err as $channel) {
+            if (!is_int($channel) && !is_float($channel)) {
+                throw new \InvalidArgumentException(
+                    'withError() accumulator channels must be int or float; got ' . get_debug_type($channel),
+                );
+            }
+        }
+
+        // Damped feedback, chafa :1170-1175. The lookup uses the clamped,
+        // rounded result (Color's ctor clamps); the residual written back uses
+        // the unclamped float, chafa :1189-1192.
+        $damped = [];
+        foreach ([0 => $color->r, 1 => $color->g, 2 => $color->b] as $i => $channel) {
+            $damped[$i] = $channel + ($err[$i] * self::ERROR_DAMPING) / 16;
+        }
+
+        $index = $this->ansi256(new Color(
+            (int) round($damped[0]),
+            (int) round($damped[1]),
+            (int) round($damped[2]),
+        ));
+
+        $found = self::palette256()[$index];
+        $err = [
+            $damped[0] - $found->r,
+            $damped[1] - $found->g,
+            $damped[2] - $found->b,
+        ];
+
+        return $index;
     }
 
     /**
