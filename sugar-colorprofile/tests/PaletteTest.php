@@ -32,6 +32,7 @@ final class PaletteTest extends TestCase
             'TMUX'           => $_ENV['TMUX'] ?? null,
             'STY'            => $_ENV['STY'] ?? null,
             'TERM_PROGRAM'   => $_ENV['TERM_PROGRAM'] ?? null,
+            'FORCE_COLOR'    => $_ENV['FORCE_COLOR'] ?? null,
         ];
 
         // Set known-safe values that won't trigger color forcing.
@@ -54,6 +55,7 @@ final class PaletteTest extends TestCase
         putenv('TMUX');  // Remove
         putenv('STY');  // Remove
         putenv('TERM_PROGRAM');  // Remove
+        putenv('FORCE_COLOR');  // Remove — B-02: makes the unset polarity deterministic
 
         // Also update $_ENV superglobal to match putenv state.
         // Use unset to truly remove keys (not set to empty) so that
@@ -68,6 +70,7 @@ final class PaletteTest extends TestCase
         unset($_ENV['TMUX']);
         unset($_ENV['STY']);
         unset($_ENV['TERM_PROGRAM']);
+        unset($_ENV['FORCE_COLOR']);
     }
 
     protected function tearDown(): void
@@ -125,6 +128,57 @@ final class PaletteTest extends TestCase
     {
         $profile = Palette::detect(null, ['FORCE_COLOR' => '0']);
         $this->assertSame(Profile::Ascii, $profile);
+    }
+
+    public function testForceColorTruthyWordsAndNumericLevelsFullTable(): void
+    {
+        // B-02: FORCE_COLOR accepts the chalk/npm truthy words (any case) as
+        // level 3 — previously intval('true')===0 forced the Ascii rung.
+        // Numeric passthrough stays byte-identical; unrecognised words are
+        // falsy and keep the level-0 (Ascii) rung.
+        $table = [
+            // truthy words → TrueColor
+            'true'  => Profile::TrueColor,
+            'True'  => Profile::TrueColor,
+            'TRUE'  => Profile::TrueColor,
+            'yes'   => Profile::TrueColor,
+            'YES'   => Profile::TrueColor,
+            'on'    => Profile::TrueColor,
+            'ON'    => Profile::TrueColor,
+            // numeric levels unchanged (incl. >=3 saturation)
+            '0'     => Profile::Ascii,
+            '1'     => Profile::ANSI,
+            '2'     => Profile::ANSI256,
+            '3'     => Profile::TrueColor,
+            '4'     => Profile::TrueColor,
+            // falsy words → level 0 path
+            'false' => Profile::Ascii,
+            'FALSE' => Profile::Ascii,
+            'off'   => Profile::Ascii,
+            'no'    => Profile::Ascii,
+        ];
+
+        foreach ($table as $value => $expected) {
+            $this->assertSame(
+                $expected,
+                Palette::detect(null, ['FORCE_COLOR' => (string) $value]),
+                "FORCE_COLOR={$value}"
+            );
+        }
+    }
+
+    public function testForceColorEmptyAndUnsetFallThroughToChain(): void
+    {
+        // B-02 polarity pair: '' and absent must NOT hit the force branch —
+        // detection falls through to the chain (NO_COLOR below proves it).
+        $this->assertSame(
+            Profile::NoTTY,
+            Palette::detect(null, ['FORCE_COLOR' => '', 'NO_COLOR' => '1'])
+        );
+        $this->assertSame(
+            Profile::NoTTY,
+            Palette::detect(null, ['NO_COLOR' => '1'])
+        );
     }
 
     public function testColortermEnvImpliesTrueColor(): void

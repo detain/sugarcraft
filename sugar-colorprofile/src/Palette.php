@@ -191,7 +191,8 @@ final class Palette
      *
      * Priority:
      *  1. CLICOLOR_FORCE=1      → TrueColor (overrides everything)
-     *  2. FORCE_COLOR           → SugarCraft extension level override (0=Ascii, 1=ANSI, 2=ANSI256, 3=TC)
+     *  2. FORCE_COLOR           → SugarCraft extension level override (0=Ascii, 1=ANSI, 2=ANSI256, 3=TC;
+ *                             truthy strings true/yes/on treat as 3 — B-02)
      *  3. NO_COLOR (any value) → NoTTY
      *  4. CLICOLOR=0            → NoTTY
      *  5. COLORTERM=24bit|truecolor|yes → TrueColor
@@ -231,6 +232,10 @@ final class Palette
         // 2. FORCE_COLOR: SugarCraft extension (level-based) — not in DetectionChain
         $force = self::envValue($env, 'FORCE_COLOR');
         if (\is_string($force) && $force !== '') {
+            // B-02: chalk/npm convention spells "force color" as a truthy
+            // word, not a level digit — intval('true')===0 used to destroy
+            // color down to Ascii. Truthy strings ride the level-3 rung.
+            $force = \in_array(\strtolower($force), ['true', 'yes', 'on'], true) ? '3' : $force;
             $level = \intval($force);
             return match (true) {
                 $level >= 3 => Profile::TrueColor,
