@@ -60,7 +60,15 @@ final class PaletteSupersetDispatchTest extends TestCase
         // providers refuse the tier, so the picker would be a trap with a
         // nicer frame.
         'effort' => 'the dial takes a tier as its argument; the bare form reads, never sets',
+        // OBS-2 (w5): the spec file records its own no-paletteAction call —
+        // /status is a destination, not a mode, and the palette has no status
+        // pane to pre-open. Bare form IS the whole read-only restatement.
+        'status' => 'bare /status is the whole read surface; no palette pane exists to open',
         'pane' => 'bare /pane prints usage; the palette actions are the dock-left/dock-right rows',
+        // OBS-3 (w5): same shape as /status by its spec's own judgement — a
+        // typed readout of the durable ledger, not a panel the palette can
+        // pre-open; the cross-launch /budget pairing rides the argument hint.
+        'usage' => 'bare /usage is the whole ledger readout; no palette pane exists to open',
         // W4 merge coupling: GIT-1 (w4c) added /review and /security-review
         // after VIS-4 cut this census — no PaletteAction arm yet (VIS-4
         // predates GIT-1), typed dispatch only. A palette row for the pair is
