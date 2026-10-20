@@ -9,6 +9,7 @@ use SugarCraft\Image\Concerns\OptimizationCarrierTrait;
 use SugarCraft\Image\Concerns\RenderValidationTrait;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
+use SugarCraft\Image\Symbol\CanvasMode;
 use SugarCraft\Image\Symbol\SymbolDef;
 use SugarCraft\Image\Symbol\SymbolMap;
 use SugarCraft\Image\Support\OutputOptimizer;
@@ -53,9 +54,28 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization
 
     private readonly SymbolMap $map;
 
+    private CanvasMode $canvasMode = CanvasMode::TrueColor;
+
     public function __construct(?SymbolMap $map = null)
     {
         $this->map = $map ?? SymbolMap::new();
+    }
+
+    /**
+     * Select the fixed-palette canvas mode (A-07, PC-14). TrueColor (the
+     * default) reproduces the pre-A-07 byte output exactly; the limited
+     * palettes snap the scoring pens BEFORE the candidate error sum —
+     * a 16-colour terminal must pick the best glyph FOR THAT PALETTE —
+     * and emit the snapped pens (Fgbg emits none, riding terminal
+     * defaults). Chafa counterpart: chafa-canvas.c update_cell palette
+     * dispatch + use_quantized_error.
+     */
+    public function withCanvasMode(CanvasMode $mode): self
+    {
+        $clone = clone $this;
+        $clone->canvasMode = $mode;
+
+        return $clone;
     }
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
@@ -82,11 +102,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization
         foreach ($cells as $row) {
             foreach ($row as $cell) {
                 [$glyph, $fg, $bg] = $this->paintCell($cell);
-                $pen->cell(
-                    $glyph,
-                    $fg === null ? null : OutputOptimizer::trueColor($fg[0], $fg[1], $fg[2]),
-                    $bg === null ? null : OutputOptimizer::trueColor($bg[0], $bg[1], $bg[2]),
-                );
+                $pen->cell($glyph, $this->canvasMode->fgSgr($fg), $this->canvasMode->bgSgr($bg));
             }
             $lines[] = $pen->finishRow();
         }
@@ -206,7 +222,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization
             $cov = array_map(static fn (int $b): int => 1 - $b, $cov);
         }
 
-        $pens = $this->meanPens($pixels, $cov);
+        $pens = $this->scoredPens($pixels, $cov);
 
         return [$def->char, $pens[1], $pens[0]];
     }
@@ -296,7 +312,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization
             if ($inverted) {
                 $cov = array_map(static fn (int $b): int => 1 - $b, $cov);
             }
-            $pens = $this->meanPens($pixels, $cov);
+            $pens = $this->scoredPens($pixels, $cov);
 
             $error = 0;
             foreach ($pixels as $i => $px) {
@@ -337,6 +353,26 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization
      *
      * @return array{0:array{int,int,int}, 1:array{int,int,int}} bg, fg
      */
+    /**
+     * meanPens() through the canvas mode's snap: under a fixed palette
+     * the pens that SCORE a candidate are the pens that would paint it
+     * (PC-14 quantize-before-scoring). TrueColor passes through.
+     *
+     * @param list<array{int,int,int,?int}> $pixels 64 cell pixels
+     * @param list<int> $cov 64 binary coverage bytes
+     *
+     * @return array{0:array{int,int,int}, 1:array{int,int,int}} bg, fg
+     */
+    private function scoredPens(array $pixels, array $cov): array
+    {
+        $pens = $this->meanPens($pixels, $cov);
+        if ($this->canvasMode->quantizes()) {
+            $pens = [$this->canvasMode->quantizeRgb($pens[0]), $this->canvasMode->quantizeRgb($pens[1])];
+        }
+
+        return $pens;
+    }
+
     private function meanPens(array $pixels, array $cov): array
     {
         $accums = [[0, 0, 0], [0, 0, 0]];

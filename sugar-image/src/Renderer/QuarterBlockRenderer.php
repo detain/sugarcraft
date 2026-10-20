@@ -31,11 +31,45 @@ use SugarCraft\Image\Support\OutputOptimizer;
  *
  * Higher visual fidelity than HalfBlockRenderer when Sixel/Kitty are
  * unavailable: 4 sub-pixel positions per cell vs 2.
+ *
+ * A-07 (HS-QBR minimum): {@see withCanvasMode()} puts the same PC-14
+ * fixed-palette ladder under this tier — group-average pens are snapped
+ * onto the palette BEFORE the membership split is scored, so the chosen
+ * glyph is optimal for what the terminal can actually paint. TrueColor
+ * (the default) scores and paints raw averages — byte-frozen against the
+ * pre-A-07 corpus. Fgbg runs the chafa discipline: the foreground leg is
+ * the terminal default, the background leg quantizes onto the eight dark
+ * ANSI colours, and both split orientations are scored (fixed pens
+ * break the complement symmetry that licenses the 1..7 half-search).
  */
-final class QuarterBlockRenderer implements Renderer, AcceptsOptimization
+final class QuarterBlockRenderer implements Renderer, AcceptsOptimization, ConfigFingerprintProvider, CanvasModeConfigurable
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
     use \SugarCraft\Image\Concerns\OptimizationCarrierTrait;
+
+    private CanvasMode $canvasMode = CanvasMode::TrueColor;
+
+    public function withCanvasMode(CanvasMode $canvasMode): self
+    {
+        $clone = clone $this;
+        $clone->canvasMode = $canvasMode;
+
+        return $clone;
+    }
+
+    public function canvasMode(): CanvasMode
+    {
+        return $this->canvasMode;
+    }
+
+    /**
+     * Non-default canvas only: the default rung fingerprints as '' so
+     * existing poster-cache keys never churn.
+     */
+    public function configFingerprint(): string
+    {
+        return $this->canvasMode === CanvasMode::TrueColor ? '' : 'canvas=' . $this->canvasMode->value;
+    }
     /**
      * 16 Unicode quadrant glyphs indexed by a 4-bit mask of which quadrants
      * belong to the FOREGROUND group: bit 0 = upper-left, bit 1 = upper-right,
@@ -64,6 +98,41 @@ final class QuarterBlockRenderer implements Renderer, AcceptsOptimization
         15 => "\u{2588}", // █ all four
     ];
 
+    /**
+     * Fixed-palette canvas mode (A-07). TrueColor is the historical
+     * default and stays byte-identical; the limited palettes snap the
+     * candidate pens before error scoring — the same rule chafa applies
+     * to its canvas ({@see CanvasMode}) — and emit snapped SGR.
+     */
+    public function withCanvasMode(CanvasMode $mode): self
+    {
+        $clone = clone $this;
+        $clone->canvasMode = $mode;
+
+        return $clone;
+    }
+
+    /**
+     * Snap a pen to the canvas palette (no-op on TrueColor) and encode
+     * it. Fgbg yields null — the terminal default paints the cell.
+     *
+     * @param ?array{int,int,int} $rgb
+     */
+    private function emitPen(?array $rgb, bool $background): ?string
+    {
+        if ($rgb === null) {
+            return null;
+        }
+        $mode = $this->canvasMode;
+        if ($mode->quantizes()) {
+            $rgb = $mode->quantizeRgb($rgb);
+        }
+
+        return $background ? $mode->bgSgr($rgb) : $mode->fgSgr($rgb);
+    }
+
+    private CanvasMode $canvasMode = CanvasMode::TrueColor;
+
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
         $effectiveHeight = $this->prepareRender($image, $width, $height);
@@ -86,12 +155,8 @@ final class QuarterBlockRenderer implements Renderer, AcceptsOptimization
         $lines = [];
         foreach ($grid->cells as $row) {
             foreach ($row as $quads) {
-                [$glyph, $fg, $bg] = self::cellPaint($quads);
-                $pen->cell(
-                    $glyph,
-                    $fg === null ? null : OutputOptimizer::trueColor($fg[0], $fg[1], $fg[2]),
-                    $bg === null ? null : OutputOptimizer::trueColor($bg[0], $bg[1], $bg[2]),
-                );
+                [$glyph, $fg, $bg] = self::cellPaint($quads, $this->canvasMode);
+                $pen->cell($glyph, $this->emitPen($fg, false), $this->emitPen($bg, true));
             }
             $lines[] = $pen->finishRow();
         }
@@ -115,10 +180,11 @@ final class QuarterBlockRenderer implements Renderer, AcceptsOptimization
      * {@see render()} normalizes them to SGR parameters for OutputOptimizer.
      *
      * @param list<array{int,int,int,?int}> $quads ul, ur, ll, lr (alpha null = transparent)
+     * @param CanvasMode $mode canvas palette the scoring pens snap to
      *
      * @return array{string, ?array{int,int,int}, ?array{int,int,int}} glyph, fg, bg
      */
-    private static function cellPaint(array $quads): array
+    private static function cellPaint(array $quads, CanvasMode $mode): array
     {
         $opaque = [];
         foreach ($quads as $i => $quad) {
@@ -147,7 +213,7 @@ final class QuarterBlockRenderer implements Renderer, AcceptsOptimization
             return [self::GLYPH_MAP[15], $rgb, $rgb];
         }
 
-        [$mask, $fg, $bg] = self::bestCell(array_values($quads));
+        [$mask, $fg, $bg] = self::bestCell(array_values($quads), $mode);
 
         return [self::GLYPH_MAP[$mask], $fg, $bg];
     }
@@ -182,10 +248,11 @@ final class QuarterBlockRenderer implements Renderer, AcceptsOptimization
      * chafa-symbol-map.c:1189-1263 treats hd and 64-hd as one pair).
      *
      * @param list<array{int,int,int,?int}> $quads four opaque quadrants
+     * @param CanvasMode $mode palette the candidate pens snap to (PC-14)
      *
      * @return array{0:int, 1:array{int,int,int}, 2:array{int,int,int}} mask, fg, bg
      */
-    private static function bestCell(array $quads): array
+    private static function bestCell(array $quads, CanvasMode $mode): array
     {
         $bestMask = 15; // unreachable seed — the 1..7 loop always scores a split first
         $bestFg = $bestBg = [0, 0, 0];
@@ -204,6 +271,11 @@ final class QuarterBlockRenderer implements Renderer, AcceptsOptimization
 
             $fg = self::averageColor($fgGroup);
             $bg = self::averageColor($bgGroup);
+            if ($mode->quantizes()) {
+                // PC-14: score the pens the palette can actually paint.
+                $fg = $mode->quantizeRgb($fg);
+                $bg = $mode->quantizeRgb($bg);
+            }
             $error = self::cellError($quads, $mask, $fg, $bg);
 
             // Brighter average rides the foreground; equal luma keeps the
