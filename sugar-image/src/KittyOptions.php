@@ -50,12 +50,13 @@ final class KittyOptions
         private readonly int $offsetX,
         private readonly int $offsetY,
         /**
-         * When true, renders with action 'p' (place virtual image) instead
-         * of 'T' (transmit). On first render with a given image id this stores
-         * the image in the terminal; subsequent renders with the same id+offset
-         * reference the stored copy.
+         * F-10: when true, the transmit stores the image as virtual —
+         * the store frame carries U=1 (the background compositor renders
+         * it UNDER the text) and a control-only a=p,U=1 frame follows the
+         * payload chunks to place the stored image. The payload itself
+         * always rides a=T data chunks; a=p never carries data.
          *
-         * @see https://sw.kovidgoyal.net/kitty/graphics-protocol/#transmission
+         * @see https://sw.kovidgoyal.net/kitty/graphics-protocol/ (U flag)
          */
         private readonly bool $useVirtual,
         /**
@@ -159,7 +160,8 @@ final class KittyOptions
     }
 
     /**
-     * Enable virtual-image placement mode (a=p instead of a=T).
+     * F-10: enable virtual placement — store with a=T,U=1, then place via
+     * a trailing control-only a=p,U=1 frame (composited under the text).
      */
     public function withUseVirtual(bool $useVirtual = true): self
     {

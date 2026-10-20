@@ -71,13 +71,19 @@ final class KittyRenderer implements Renderer
     /**
      * Render with explicit Kitty protocol options.
      *
+     * F-10: chain withUseVirtual(true) on a transmit to store the image
+     * with the virtual flag (a=T,U=1), stream its payload in m=1/m=0 data
+     * chunks, then composite it under the text with a trailing control-
+     * only a=p,U=1 frame — a=p never carries payload.
+     *
      * @param KittyOptions $opts  Use {@see KittyOptions::transmit()} for inline
      *                            transmission (a=T), {@see KittyOptions::place()}
-     *                            for virtual-image placement (a=p), or chain
-     *                            withUseVirtual(true) on transmit to store+place
-     *                            in one step. Use withCompression(1) to zlib-compress
-     *                            the PNG payload before base64-encoding, signalled
-     *                            as the spec's `o=z` key (`f` stays the data format).
+     *                            for placing a stored image (control-only a=p,U=1),
+     *                            or chain withUseVirtual(true) on transmit for the
+     *                            store+place pair above. Use withCompression(1) to
+     *                            zlib-compress the PNG payload before base64-
+     *                            encoding, signalled as the spec's `o=z` key
+     *                            (`f` stays the data format).
      */
     public function renderWithOptions(
         ImageSource $image,
@@ -88,11 +94,14 @@ final class KittyRenderer implements Renderer
         $optsArr   = $opts->toArray();
 
         if ($opts->isPlace()) {
-            // Place is a one-shot control frame — it must NOT open a
-            // chunked transmission (nothing would close it).
+            // F-10: Place is a one-shot control frame — it must NOT open a
+            // chunked transmission (nothing would close it). U=1 marks it
+            // virtual: the background compositor places the stored image
+            // UNDER the text instead of over it.
             return Ansi::kittyGraphicsControl([
                 'a' => 'p',
                 'i' => $optsArr['i'],
+                'U' => 1,
                 'x' => $optsArr['x'],
                 'y' => $optsArr['y'],
                 'z' => $optsArr['z'],
@@ -118,10 +127,18 @@ final class KittyRenderer implements Renderer
         $total     = count($chunks);
         $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
 
-        $action = $opts->useVirtual() ? 'p' : ($optsArr['a'] ?? 'T');
+        // F-10: transmission is always a=T. Virtual mode keeps that and
+        // flags the stored image U=1 (composited UNDER the text), then
+        // closes with a control-only a=p frame that places it — the
+        // two-step shape chafa emits (chafa/chafa-term-db.c:439:
+        // "a=T,U=1,q=2,f=...,m=1" store frame + placement). Feeding the
+        // payload under a=p (the old shape) was a spec-invalid use of the
+        // place action and never carried U= at all.
+        $useVirtual = $opts->useVirtual();
 
         $begin = $this->buildBegin([
-            'a' => $action,
+            'a' => $optsArr['a'] ?? 'T',
+            'U' => $useVirtual ? 1 : null,
             'i' => $optsArr['i'],
             'z' => $optsArr['z'],
             // Compression rides 'o=z' (spec); 'f' keeps its constant data-
@@ -142,6 +159,15 @@ final class KittyRenderer implements Renderer
             // The final m=0 data chunk never ran — close the transaction.
             $out .= Ansi::kittyGraphicsEnd();
         }
+        if ($useVirtual) {
+            // F-10: placement control frame — attributes only, no payload;
+            // it composites the just-stored virtual image under the text.
+            $out .= Ansi::kittyGraphicsControl([
+                'a' => 'p',
+                'i' => $optsArr['i'],
+                'U' => 1,
+            ]);
+        }
 
         return $out;
     }
@@ -151,6 +177,7 @@ final class KittyRenderer implements Renderer
     {
         return Ansi::kittyGraphicsBegin([
             'a' => $opts['a'] ?? 'T',
+            'U' => $opts['U'] ?? null,
             'i' => $opts['i'] ?? null,
             'z' => $opts['z'] ?? null,
             'f' => $opts['f'] ?? 100,
