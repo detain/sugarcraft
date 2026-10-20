@@ -42,6 +42,15 @@ final class PostEditFormatHookTest extends TestCase
 
     protected function tearDown(): void
     {
+        // Restore HOME BEFORE any cleanup: the per-test sandboxes under
+        // $this->root are unlinked by the tests' own finally blocks, and a
+        // leaked `HOME` pointing at a deleted directory makes every later
+        // `~`-reader in the process fall back to the passwd home — the real
+        // `~/.claude/settings.json` of whoever ran the suite. That poison
+        // reddened HOME-order-sensitive doors tree-wide once LPT co-sharded
+        // them with this file; the trait's whole contract is that the restore
+        // happens here, not that each test remembers it.
+        $this->restoreHomeSandbox();
         foreach (glob($this->root . '/src/' . '*') ?: [] as $file) {
             @unlink($file);
         }
