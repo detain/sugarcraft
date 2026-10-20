@@ -55,6 +55,7 @@ return [
     // Chafa
     'chafa.command_failed' => 'Chafa command failed: {error}',
     'chafa.not_found'      => 'Chafa command not found. Install with: sudo apt install chafa',
+    'chafa.sink_failed'    => 'Failed to create the temporary diagnostics sink file',
 
     // Sixel
     'sixel.max_colors_out_of_range' => 'maxColors must be 1-256, got {maxColors}',

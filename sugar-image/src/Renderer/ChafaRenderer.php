@@ -23,6 +23,16 @@ final class ChafaRenderer implements Renderer
      * anything past 32 MiB is runaway, not art. The drain keeps the first
      * this-many bytes and keeps reading to EOF beyond it (drain-to-null),
      * so the child never blocks on a full pipe nor dies of EPIPE.
+     *
+     * RULING (review s1-6 m1, accepted): a SUCCESS truncated at this cap
+     * returns the kept head silently — that is intended, not an oversight.
+     * A real sixel/kitty payload past 32 MiB is a misuse case (no terminal
+     * would display it), and a loud signal on the success path would punish
+     * the only caller that cannot act on it; the failure path keeps its own
+     * bounded channel instead — the {@see STDERR_TAIL_BYTES} stderr tail
+     * rides the exception. Chosen over the alternatives the review named
+     * (throw, or a renderTruncated flag) precisely because truncation here
+     * never corrupts a render the caller could still use.
      */
     public const MAX_STDOUT_BYTES = 32 * 1024 * 1024;
 
@@ -140,7 +150,7 @@ final class ChafaRenderer implements Renderer
         // law (AsyncRenderer): there is never a reader to block.
         $errPath = tempnam(sys_get_temp_dir(), 'schafaerr');
         if ($errPath === false) {
-            throw new \RuntimeException(Lang::t('image_source.temp_failed'));
+            throw new \RuntimeException(Lang::t('chafa.sink_failed'));
         }
 
         $descriptorSpec = [1 => ['pipe', 'w'], 2 => ['file', $errPath, 'w']];

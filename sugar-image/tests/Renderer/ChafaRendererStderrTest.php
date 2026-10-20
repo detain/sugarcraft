@@ -25,13 +25,21 @@ use SugarCraft\Image\Renderer\ChafaRenderer;
  *    head of a 100KiB spew is gone, the tail marker survives;
  *  - a flood-sized stdout beyond ChafaRenderer::MAX_STDOUT_BYTES is kept-
  *    then-drained-to-null: the child exits 0 (no EPIPE), the result is
- *    exactly cap bytes;
+ *    exactly cap bytes; the exact-cap boundary itself is pinned too (a
+ *    stream of EXACTLY cap bytes returns whole — the clamp cuts nothing at
+ *    size == cap);
  *  - a child that ignores SIGTERM after closing stdout is gone within the
  *    reap ladder — pinned inside a `timeout -s KILL` leash (r69 law: a
  *    wait-loop that can only hang must be bounded by its supervisor), so
  *    removing the KILL rung reads RED-fast, never as a suite-wide hang;
  *  - the sink file never outlives a render, on the success or the failure
  *    path (finally unlink).
+ *
+ * Survey D-07(d) prescribed an fd census; it is met in substance by the
+ * sink-file residue scan plus the pid-reap census (the two censuses below),
+ * which are exactly the leak shapes a `['file', $path, 'w']` spec can take
+ * here — that spec hands the sink fd to the child at exec and holds no
+ * parent-side descriptor to close.
  *
  * No real chafa, no pcntl requirement (signal numbers are literals), no
  * wall-clock assertions on the ladder — only its constants and markers.
@@ -175,6 +183,36 @@ final class ChafaRendererStderrTest extends TestCase
         // Reaching here at all means exit 0: had the drain closed the pipe
         // early, the writer child would have died of EPIPE and render()
         // would have thrown instead.
+        $this->assertChildReaped();
+    }
+
+    /**
+     * @testdox D-07 review pin: a stdout of EXACTLY MAX_STDOUT_BYTES is kept whole and succeeds
+     *
+     * The s1-6 m4 gap: bigout only ever exercised cap+1MiB, so an
+     * off-by-one in the clamp boundary would have passed the suite. This is
+     * the success-polarity half of the boundary — the exact-cap child must
+     * come back byte-complete, not one byte short. The over-cap pin above
+     * stays the discriminator for neutered caps (a removed clamp leaves
+     * THIS pin green and reddens bigout, by design).
+     */
+    public function testStdoutOfExactlyTheCapIsKeptWhole(): void
+    {
+        $this->plantFakeChafa();
+        putenv('FAKE_CHAFA_MODE=exactcap');
+
+        $out = (new ChafaRenderer())->render($this->source(), 10, 10);
+
+        $this->assertSame(
+            ChafaRenderer::MAX_STDOUT_BYTES,
+            strlen($out),
+            'a stream of exactly cap bytes must not lose a byte to the clamp',
+        );
+        $this->assertSame(
+            str_repeat('y', ChafaRenderer::MAX_STDOUT_BYTES),
+            $out,
+            'every byte of the exact-cap head must be kept, in order',
+        );
         $this->assertChildReaped();
     }
 
@@ -327,6 +365,12 @@ case "$FAKE_CHAFA_MODE" in
         # Cap + 1MiB of 'y', then a marker that must never be kept.
         dd if=/dev/zero bs=1048576 count=33 2>/dev/null | tr '\0' 'y'
         printf 'TAIL-AFTER-CAP'
+        exit 0
+        ;;
+    exactcap)
+        # EXACTLY the cap (32 x 1MiB) of 'y' — the boundary the clamp must
+        # not cut; the over-cap half lives in bigout above.
+        dd if=/dev/zero bs=1048576 count=32 2>/dev/null | tr '\0' 'y'
         exit 0
         ;;
     *)
