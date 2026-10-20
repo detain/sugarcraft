@@ -46,6 +46,9 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
     /** @var list<array{0:int,1:int}> handle → mode */
     private array $setConsoleModeCalls = [];
 
+    /** When true, setConsoleMode() records the attempt and reports failure (A-10 pins). */
+    private bool $setConsoleModeFails = false;
+
     /** @var list<int> */
     private array $setConsoleCPCalls = [];
 
@@ -86,6 +89,7 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
         $this->screenBufferInfo           = null;
         $this->screenBufferInfoSequence   = [];
         $this->setConsoleModeCalls        = [];
+        $this->setConsoleModeFails        = false;
         $this->setConsoleCPCalls          = [];
         $this->setConsoleOutputCPCalls    = [];
         $this->createFileHandles          = [];
@@ -103,6 +107,16 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
     public function setConsoleModeStdout(int $mode): void
     {
         $this->consoleModeStdout = $mode;
+    }
+
+    /**
+     * A-10: make setConsoleMode() record its attempts but answer false, to
+     * script a console that refuses the mode write (legacy Windows / a
+     * rejected handle). Off by default; WindowsBackendTest relies on that.
+     */
+    public function setSetConsoleModeFails(bool $fails = true): void
+    {
+        $this->setConsoleModeFails = $fails;
     }
 
     public function setConsoleCpIn(int $cp): void
@@ -244,7 +258,7 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
     public function setConsoleMode(int $h, int $mode): bool
     {
         $this->setConsoleModeCalls[] = [$h, $mode];
-        return true;
+        return !$this->setConsoleModeFails;
     }
 
     public function setConsoleCP(int $cp): bool
