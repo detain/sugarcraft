@@ -6,5 +6,5 @@
     "measured_at": "2026-10-19",
     "php": "8.3.6",
     "command": "php vendor/bin/phpunit -c phpunit.xml --log-junit <file> (cwd=candy-code, linked siblings, monorepo sandbox root)",
-    "regenerate": "php tests/Config/Support/refresh-suite-figure.php <junit.xml> (cwd=candy-code) — then update the README headline from the same run"
+    "regenerate": "php tests/Config/Support/refresh-suite-figure.php <junit.xml> (cwd=candy-code) \u2014 then update the README headline from the same run"
 }
