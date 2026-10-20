@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Animation;
 
 /**
- * Decode a GIF on disk into a list of {@see Frame}s using ext-gd's
+ * Decode a GIF — from disk via {@see self::decode()} or in-memory via
+ * {@see self::decodeBytes()} (E-07) — into {@see Frame}s, using ext-gd's
  * `imagecreatefromstring()` for in-memory single-frame extraction and
  * a hand-rolled GIF89a parser for per-frame timing.
  *
@@ -55,20 +56,66 @@ final class Decoder
      */
     public const MAX_FRAMES = 256;
 
-    /** @return list<Frame> */
+    /**
+     * Decode a GIF file on disk into a list of {@see Frame}s.
+     *
+     * Path ingress is the legacy shape (E-07): the file is read once here and
+     * every frame then arrives through {@see self::decodeBytes()}, so this
+     * method and its bytes sibling share exactly one walk and the parity
+     * between them is pinned by DecodeBytesParityTest. Sibling libraries that
+     * already hold validated bytes (sugar-image's bounded GIF ingress) must
+     * call {@see self::decodeBytes()} directly — staging a temp copy of the
+     * bytes to satisfy this signature is the TOCTOU hazard class E-07 removes.
+     *
+     * @return list<Frame>
+     */
     public static function decode(string $path, int $cellsW, int $cellsH): array
     {
         if (is_file($path) === false) {
             throw new \RuntimeException(Lang::t('decoder.no_file', ['path' => $path]));
         }
+        $bytes = file_get_contents($path);
+        if ($bytes === false) {
+            throw new \RuntimeException(Lang::t('decoder.not_gif'));
+        }
+
+        return iterator_to_array(self::decodeBytes($bytes, $cellsW, $cellsH), preserve_keys: false);
+    }
+
+    /**
+     * Decode in-memory GIF bytes into a stream of {@see Frame}s (E-07).
+     *
+     * The bytes-ingress twin of {@see self::decode()} — no filesystem is
+     * touched, so a caller that read the container through its own bounded,
+     * single-descriptor ingress (sugar-image's `readBoundedRegularFile`) can
+     * hand the very bytes it audited straight in. That closes the cross-open
+     * TOCTOU class at the root instead of papering over it with a private
+     * temp copy: there is no second open of any attacker-reachable path.
+     *
+     * Yields lazily: each frame is composited, sampled and emitted before the
+     * next is touched, so a consumer that stops early never pays for the rest
+     * of the animation (chicle's per-frame `decode_next_frame` shape).
+     *
+     * @param bool $withCanvasRgba When true, each frame additionally carries
+     *                             the pre-downsample composited canvas as
+     *                             packed RGBA bytes ({@see Frame::rgbaBytes()})
+     *                             — the representation-uniform frame chicle
+     *                             loaders emit. Off by default: plain terminal
+     *                             playback reads only `$cells`, and holding
+     *                             N × W × H × 4 resident is the E-12 memory
+     *                             model a player should not pay for.
+     *
+     * @return \Generator<int, Frame>
+     */
+    public static function decodeBytes(string $bytes, int $cellsW, int $cellsH, bool $withCanvasRgba = false): \Generator
+    {
         if (extension_loaded('gd') === false) {
             throw new \RuntimeException(Lang::t('decoder.no_gd'));
         }
-        $bytes = file_get_contents($path);
         // 13 = signature (6) + Logical Screen Descriptor (7). Anything shorter
         // has no dimensions to speak of — it is not a GIF, and parseHeader()
         // may read its first ten bytes unguarded only because of this gate.
-        if ($bytes === false || strlen($bytes) < 13
+        if (strlen($bytes) < 13
             || (substr($bytes, 0, 6) !== 'GIF87a' && substr($bytes, 0, 6) !== 'GIF89a')) {
             throw new \RuntimeException(Lang::t('decoder.not_gif'));
         }
@@ -98,12 +145,33 @@ final class Decoder
 
         // A zero-dimension logical screen (ord-parsed header bytes make 0 the
         // only impossible-but-craftable value) cannot host a canvas:
-        // imagecreatetruecolor() below — and the static fallback renderer —
+        // imagecreatetruecolor() in the walk — and the static fallback renderer —
         // would raise a raw ValueError, breaking the RuntimeException
         // contract this method documents. Reject at the door.
         if ($screenW <= 0 || $screenH <= 0) {
             throw new \RuntimeException(Lang::t('decoder.screen_too_small'));
         }
+
+        // Every gate above runs EAGERLY — at call time, not at first
+        // iteration: a generator body would otherwise defer fail-loud input
+        // rejection to whichever consumer happens to pull the first frame,
+        // and a discarded (never-started) generator would discard the error
+        // too. The walk itself stays lazy behind walkBytes().
+        return self::walkBytes($bytes, $header, $cellsW, $cellsH, $withCanvasRgba);
+    }
+
+    /**
+     * The compositing/sampling frame stream behind {@see self::decodeBytes()},
+     * entered only after every input gate has passed.
+     *
+     * @param array{width: int, height: int, hasGct: bool, gctBytes: int, frameInfos: list<array<string, int|bool>>} $header
+     *
+     * @return \Generator<int, Frame>
+     */
+    private static function walkBytes(string $bytes, array $header, int $cellsW, int $cellsH, bool $withCanvasRgba): \Generator
+    {
+        $screenW = $header['width'];
+        $screenH = $header['height'];
 
         // Static fallback — when no Image Descriptors were found.
         if ($header['frameInfos'] === []) {
@@ -120,8 +188,11 @@ final class Decoder
                 'frameW' => $screenW,
                 'frameH' => $screenH,
             ];
-            $frame = self::renderSingleFrame($bytes, $info, $header, $cellsW, $cellsH);
-            return $frame !== null ? [$frame] : [];
+            $frame = self::renderSingleFrame($bytes, $info, $header, $cellsW, $cellsH, $withCanvasRgba);
+            if ($frame !== null) {
+                yield $frame;
+            }
+            return;
         }
 
         // Create a truecolor canvas at logical screen size for compositing.
@@ -133,72 +204,128 @@ final class Decoder
         // Snapshot for DISPOSAL_PREVIOUS.
         $snapshot = null;
 
-        $frames = [];
         $prevInfo = null;
 
-        foreach ($header['frameInfos'] as $info) {
-            // Before painting frame N, apply frame N-1's disposal.
-            if ($prevInfo !== null) {
-                $prevDisposal = $prevInfo['disposal'];
-                if ($prevDisposal === Frame::DISPOSAL_BACKGROUND) {
-                    // Clear the previous frame's rect to transparent.
-                    $prevLeft = $prevInfo['left'];
-                    $prevTop = $prevInfo['top'];
-                    $prevW = $prevInfo['frameW'];
-                    $prevH = $prevInfo['frameH'];
-                    imagefilledrectangle($canvas, $prevLeft, $prevTop, $prevLeft + $prevW - 1, $prevTop + $prevH - 1, $transparentBg);
-                } elseif ($prevDisposal === Frame::DISPOSAL_PREVIOUS && $snapshot !== null) {
-                    // Restore to the snapshot taken before the previous frame.
-                    imagecopy($canvas, $snapshot, 0, 0, 0, 0, $screenW, $screenH);
-                }
-            }
-
-            // Snapshot before painting this frame (for DISPOSAL_PREVIOUS of next frame).
-            $snapshot = imagecreatetruecolor($screenW, $screenH);
-            imagesavealpha($snapshot, true);
-            imagefill($snapshot, 0, 0, $transparentBg);
-            imagecopy($snapshot, $canvas, 0, 0, 0, 0, $screenW, $screenH);
-
-            // Decode this frame's LZW data to a GD image.
-            $frameImg = self::decodeFrameImage($bytes, $info, $header);
-            if ($frameImg === null) {
-                $prevInfo = $info;
-                continue;
-            }
-
-            // Composite the frame onto the canvas at (left, top), honoring transparency.
-            $left = $info['left'];
-            $top = $info['top'];
-            $frameImgW = imagesx($frameImg);
-            $frameImgH = imagesy($frameImg);
-
-            // Copy non-transparent pixels from frame to canvas.
-            $srcTransparentIndex = imagecolortransparent($frameImg);
-            for ($y = 0; $y < $frameImgH; $y++) {
-                for ($x = 0; $x < $frameImgW; $x++) {
-                    $pixelIndex = imagecolorat($frameImg, $x, $y);
-                    if ($srcTransparentIndex >= 0 && $pixelIndex === $srcTransparentIndex) {
-                        continue; // Transparent pixel — leave canvas unchanged.
+        try {
+            foreach ($header['frameInfos'] as $info) {
+                // Before painting frame N, apply frame N-1's disposal.
+                if ($prevInfo !== null) {
+                    $prevDisposal = $prevInfo['disposal'];
+                    if ($prevDisposal === Frame::DISPOSAL_BACKGROUND) {
+                        // Clear the previous frame's rect to transparent.
+                        $prevLeft = $prevInfo['left'];
+                        $prevTop = $prevInfo['top'];
+                        $prevW = $prevInfo['frameW'];
+                        $prevH = $prevInfo['frameH'];
+                        imagefilledrectangle($canvas, $prevLeft, $prevTop, $prevLeft + $prevW - 1, $prevTop + $prevH - 1, $transparentBg);
+                    } elseif ($prevDisposal === Frame::DISPOSAL_PREVIOUS && $snapshot !== null) {
+                        // Restore to the snapshot taken before the previous frame.
+                        imagecopy($canvas, $snapshot, 0, 0, 0, 0, $screenW, $screenH);
                     }
-                    $rgb = imagecolorsforindex($frameImg, $pixelIndex);
-                    imagesetpixel($canvas, $left + $x, $top + $y, imagecolorallocate($canvas, $rgb['red'], $rgb['green'], $rgb['blue']));
                 }
+
+                // Snapshot before painting this frame (for DISPOSAL_PREVIOUS of next frame).
+                $snapshot = imagecreatetruecolor($screenW, $screenH);
+                imagesavealpha($snapshot, true);
+                imagefill($snapshot, 0, 0, $transparentBg);
+                imagecopy($snapshot, $canvas, 0, 0, 0, 0, $screenW, $screenH);
+
+                // Decode this frame's LZW data to a GD image.
+                $frameImg = self::decodeFrameImage($bytes, $info, $header);
+                if ($frameImg === null) {
+                    $prevInfo = $info;
+                    continue;
+                }
+
+                // Composite the frame onto the canvas at (left, top), honoring transparency.
+                $left = $info['left'];
+                $top = $info['top'];
+                $frameImgW = imagesx($frameImg);
+                $frameImgH = imagesy($frameImg);
+
+                // Copy non-transparent pixels from frame to canvas.
+                $srcTransparentIndex = imagecolortransparent($frameImg);
+                for ($y = 0; $y < $frameImgH; $y++) {
+                    for ($x = 0; $x < $frameImgW; $x++) {
+                        $pixelIndex = imagecolorat($frameImg, $x, $y);
+                        if ($srcTransparentIndex >= 0 && $pixelIndex === $srcTransparentIndex) {
+                            continue; // Transparent pixel — leave canvas unchanged.
+                        }
+                        $rgb = imagecolorsforindex($frameImg, $pixelIndex);
+                        imagesetpixel($canvas, $left + $x, $top + $y, imagecolorallocate($canvas, $rgb['red'], $rgb['green'], $rgb['blue']));
+                    }
+                }
+                imagedestroy($frameImg);
+
+                // Grab the composited canvas BEFORE downsampling (E-07): the
+                // lossless pre-cell representation, chicle-style.
+                $rgba = $withCanvasRgba ? self::grabCanvasRgba($canvas, $screenW, $screenH) : null;
+
+                // Downsample the composited canvas to produce this frame.
+                yield self::sampleCanvas($canvas, $cellsW, $cellsH, $info['delay'], $info['disposal'], $info['transparent'], $rgba, $screenW, $screenH);
+
+                $prevInfo = $info;
             }
-            imagedestroy($frameImg);
+        } finally {
+            // Runs on normal completion AND on abandonment: a generator that
+            // is never fully consumed must not leak its canvases — GD frees
+            // them with the generator's destruct, and the explicit destroy
+            // keeps the resident peak per-yield bounded on long walks.
+            imagedestroy($canvas);
+            if ($snapshot !== null) {
+                imagedestroy($snapshot);
+            }
+        }
+    }
 
-            // Downsample the composited canvas to produce this frame.
-            $f = self::sampleCanvas($canvas, $cellsW, $cellsH, $info['delay'], $info['disposal'], $info['transparent']);
-            $frames[] = $f;
-
-            $prevInfo = $info;
+    /**
+     * Pack a truecolor compositing canvas into RGBA bytes (row-major,
+     * width*height*4). GD alpha 0 (opaque) maps to alpha byte 255 and
+     * alpha 127 (fully transparent) to 0, linearly in between; the GIF
+     * canvas only ever holds the two extremes, but the linear map keeps a
+     * semi-transparent pixel honest if one is ever composited.
+     */
+    private static function grabCanvasRgba(\GdImage $canvas, int $screenW, int $screenH): string
+    {
+        $out = '';
+        for ($y = 0; $y < $screenH; $y++) {
+            for ($x = 0; $x < $screenW; $x++) {
+                $pixel = imagecolorat($canvas, $x, $y);
+                $a = ($pixel >> 24) & 0x7F;
+                $out .= chr(($pixel >> 16) & 0xFF)
+                    . chr(($pixel >> 8) & 0xFF)
+                    . chr($pixel & 0xFF)
+                    . chr(intdiv((127 - $a) * 255, 127));
+            }
         }
 
-        imagedestroy($canvas);
-        if ($snapshot !== null) {
-            imagedestroy($snapshot);
+        return $out;
+    }
+
+    /**
+     * Pack a palette frame image into RGBA bytes — the static-fallback twin
+     * of {@see self::grabCanvasRgba()}: the transparent index becomes
+     * (0,0,0,0), every other pixel is its palette colour at alpha 255.
+     */
+    private static function grabPaletteRgba(\GdImage $img): string
+    {
+        $w = imagesx($img);
+        $h = imagesy($img);
+        $transparentIndex = imagecolortransparent($img);
+        $out = '';
+        for ($y = 0; $y < $h; $y++) {
+            for ($x = 0; $x < $w; $x++) {
+                $index = imagecolorat($img, $x, $y);
+                if ($transparentIndex >= 0 && $index === $transparentIndex) {
+                    $out .= "\x00\x00\x00\x00";
+                    continue;
+                }
+                $rgb = imagecolorsforindex($img, $index);
+                $out .= chr($rgb['red']) . chr($rgb['green']) . chr($rgb['blue']) . "\xff";
+            }
         }
 
-        return $frames;
+        return $out;
     }
 
     /**
@@ -291,8 +418,12 @@ final class Decoder
 
     /**
      * Downsample a GD image (the composited canvas) to a cell grid.
+     *
+     * The optional `$rgba` rides through to {@see Frame} untouched (E-07):
+     * it was grabbed from the same canvas before this sampling pass, so the
+     * frame carries both the lossy cell view and the packed pixel view.
      */
-    private static function sampleCanvas(\GdImage $canvas, int $cellsW, int $cellsH, int $delay, int $disposal, bool $transparent): Frame
+    private static function sampleCanvas(\GdImage $canvas, int $cellsW, int $cellsH, int $delay, int $disposal, bool $transparent, ?string $rgba = null, int $rgbaWidth = 0, int $rgbaHeight = 0): Frame
     {
         $w = imagesx($canvas);
         $h = imagesy($canvas);
@@ -345,7 +476,7 @@ final class Decoder
             }
             $rows[] = $row;
         }
-        return new Frame($rows, $delay, $disposal, $transparent);
+        return new Frame($rows, $delay, $disposal, $transparent, $rgba, $rgbaWidth, $rgbaHeight);
     }
 
     /**
@@ -529,6 +660,7 @@ final class Decoder
         array $header,
         int $cellsW,
         int $cellsH,
+        bool $withCanvasRgba = false,
     ): ?Frame {
         // Build a minimal single-frame GIF in memory:
         //   GIF header (13 bytes) + effective color table + one GCE block
@@ -537,6 +669,10 @@ final class Decoder
         if ($img === false) {
             return null;
         }
+        // sample() destroys $img — grab the pixels first (E-07).
+        $rgba = $withCanvasRgba ? self::grabPaletteRgba($img) : null;
+        $rgbaWidth = $withCanvasRgba ? imagesx($img) : 0;
+        $rgbaHeight = $withCanvasRgba ? imagesy($img) : 0;
         // sample() destroys $img.
         return self::sample(
             $img,
@@ -546,6 +682,9 @@ final class Decoder
             $info['disposal'],
             $info['transparent'],
             $info['transparentIndex'],
+            $rgba,
+            $rgbaWidth,
+            $rgbaHeight,
         );
     }
 
@@ -560,6 +699,9 @@ final class Decoder
         int $disposal,
         bool $transparent,
         int $transparentIndex,
+        ?string $rgba = null,
+        int $rgbaWidth = 0,
+        int $rgbaHeight = 0,
     ): Frame {
         $w = imagesx($img);
         $h = imagesy($img);
@@ -618,7 +760,7 @@ final class Decoder
             $rows[] = $row;
         }
         imagedestroy($img);
-        return new Frame($rows, $delay, $disposal, $transparent);
+        return new Frame($rows, $delay, $disposal, $transparent, $rgba, $rgbaWidth, $rgbaHeight);
     }
 
     /**
