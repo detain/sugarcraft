@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Dither\Ditherer;
 use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Levels\LevelsStretch;
 use SugarCraft\Image\Lang;
 use SugarCraft\Image\Quantizer;
 
@@ -137,6 +138,8 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *                              Default false: auto-enabling belongs to the
      *                              F-02 TermDb capability table, not here.
      * @param ?int $quality         B-14: chafa -w quality ladder rung (1-9)
+     * @param bool $autoLevels        B-15: chafa prepare_pixels auto-levels pass
+     *                                    (histogram stretch + saturation lift), default OFF
      *                              selecting the PNN histogram depth via
      *                              {@see \SugarCraft\Image\Quantizer} — null
      *                              (default) keeps median-cut, so the
@@ -153,6 +156,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         private readonly bool $serpentine = false,
         private readonly bool $mltermEdgeRows = false,
         private readonly ?int $quality = null,
+        private readonly bool $autoLevels = false,
     ) {
         if ($maxColors < 1 || $maxColors > 256) {
             throw new \InvalidArgumentException(
@@ -285,6 +289,15 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             imagesx($src), imagesy($src)
         );
         imagedestroy($src);
+
+        // B-15: chafa's prepare_pixels pass runs on the RESIZED canvas
+        // before any palette census, hole detection, or dither — so the
+        // quantizer, the background-register decision, and every index
+        // row see the leveled pixels. Opt-in only: with autoLevels off
+        // this is the byte-frozen path untouched.
+        if ($this->autoLevels) {
+            LevelsStretch::stretch($resized, $this->maxColors, $this->alphaThreshold);
+        }
 
         $headWritten = false;
         $terminated = false;
@@ -453,6 +466,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * C-08: the serpentine segment likewise appears only when armed.
      * B-14: the quality segment likewise appears ONLY when armed — the
      * pinned default fingerprint stays byte-identical (C-04/B-10 discipline).
+     * B-15: the autoLevels segment likewise appears only when armed.
      */
     public function configFingerprint(): string
     {
@@ -472,7 +486,8 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                     $this->flattenBackground->b))
             . ($this->serpentine ? '|serpentine=1' : '')
             . ($this->mltermEdgeRows ? '|mlterm=1' : '')
-            . ($this->quality === null ? '' : '|quality=' . $this->quality);
+            . ($this->quality === null ? '' : '|quality=' . $this->quality)
+            . ($this->autoLevels ? '|autolevels=1' : '');
     }
 
     /**
@@ -494,6 +509,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->serpentine,
             $this->mltermEdgeRows,
             $this->quality,
+            $this->autoLevels,
         );
     }
 
@@ -540,6 +556,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->serpentine,
             $this->mltermEdgeRows,
             $this->quality,
+            $this->autoLevels,
         );
     }
 
@@ -564,6 +581,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->serpentine,
             $this->mltermEdgeRows,
             $this->quality,
+            $this->autoLevels,
         );
     }
 
@@ -593,6 +611,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $serpentine,
             $this->mltermEdgeRows,
             $this->quality,
+            $this->autoLevels,
         );
     }
 
@@ -625,6 +644,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->serpentine,
             $mltermEdgeRows,
             $this->quality,
+            $this->autoLevels,
         );
     }
 
@@ -635,6 +655,39 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     public function quality(): ?int
     {
         return $this->quality;
+    }
+
+    /**
+     * B-15: chafa's `--preprocessing` auto-levels in force — the
+     * fast-intensity histogram bounds, per-channel stretch, and Rec.709
+     * saturation lift run before the palette census (see
+     * {@see LevelsStretch()}). Default OFF: every byte-frozen digest
+     * predates the pass.
+     */
+    public function autoLevels(): bool
+    {
+        return $this->autoLevels;
+    }
+
+    /**
+     * A copy using (or not using) the auto-levels pass, keeping every
+     * other dial.
+     */
+    public function withAutoLevels(bool $autoLevels = true): self
+    {
+        return new self(
+            $this->dither,
+            $this->maxColors,
+            $this->cellWidth,
+            $this->cellHeight,
+            $this->intensity,
+            $this->alphaThreshold,
+            $this->flattenBackground,
+            $this->serpentine,
+            $this->mltermEdgeRows,
+            $this->quality,
+            $autoLevels,
+        );
     }
 
     /**
@@ -656,6 +709,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->serpentine,
             $this->mltermEdgeRows,
             $quality,
+            $this->autoLevels,
         );
     }
 
