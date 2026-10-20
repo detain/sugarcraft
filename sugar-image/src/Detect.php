@@ -68,6 +68,18 @@ final class Detect
      */
     public const XTWINOPS_REPLY_TERMINATOR = '/\e\[[468];[\d;]*t/';
 
+    /**
+     * F-19: plausibility ceilings for an XTWINOPS reply, mirroring chafa's
+     * MAX_PIXEL_{WIDTH,HEIGHT} (chafa-term.c:54-56: 8192 px across, 3x that
+     * — 24576 — down, the bound chafa added after issue #62 was filed
+     * against a hostile reply producing a 2GB pixel buffer). Any 4/6/8;t
+     * reply outside `0 < x < 8192` / `0 < y < 24576` (exclusive) is a
+     * fabrication: rejected like a non-reply, never trusted into a
+     * CellSize that downstream sizing arithmetic would overflow.
+     */
+    private const MAX_REPLY_X = 8192;
+    private const MAX_REPLY_Y = 24576;
+
     /** @var resource|null */
     private static $probeStdin = null;
 
@@ -932,6 +944,19 @@ final class Detect
             return null;
         }
         [$id, $v1, $v2] = $parts;
+
+        // F-19: a well-formed reply can still lie about its size. Chafa
+        // learned this the hard way (issue #62: a hostile emulator/host can
+        // answer 16t with absurd extents, and every pixel-budget arithmetic
+        // downstream trusts the numbers). Reject out-of-range extents here —
+        // the single parse chokepoint all three queries flow through — so a
+        // fabricated reply is indistinguishable from "no reply" and the
+        // caller falls back to font-estimated sizes. The bound also rejects
+        // ZERO extents: a terminal that answers "0 rows" did not answer
+        // (pre-F-19, CellSize(0, n) rode through into division arithmetic).
+        if ($v1 < 1 || $v1 >= self::MAX_REPLY_Y || $v2 < 1 || $v2 >= self::MAX_REPLY_X) {
+            return null;
+        }
 
         if ($id === 6 && $query === self::XTWINOP_16) {
             return new CellSize($v2, $v1); // w, h
