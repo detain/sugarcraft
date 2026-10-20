@@ -22,23 +22,39 @@ FROM php:8.3-cli
 # and "libmbstring-dev" do not exist (scripts/Dockerfile.vhs-runner learned
 # that the hard way). curl and mbstring are already bundled+enabled in
 # php:8.3-cli, so neither is re-installed here. git keeps composer's source
-# fallback alive if a dist is ever missing.
+# fallback alive if a dist is ever missing. unzip is load-bearing, not
+# garnish: php:8.3-cli ships neither ext-zip nor an archive binary, and
+# `composer create-project --prefer-dist` below (and its `composer require`)
+# dies with "The zip extension and unzip/7z commands are both missing"
+# without one. unzip is the minimal fix — building ext-zip would add
+# libzip-dev plus a compile layer for the same capability. The gd dev libs
+# are for ext-gd below: sugar-image and candy-mosaic HARD-require it in
+# their composer.json, so resolution fails without it (libavif-dev is not
+# optional garnish — the bundled gd of PHP 8.1+ configures AVIF support by
+# default and errors when the library is absent).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libicu-dev \
     libffi-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libwebp-dev \
+    libavif-dev \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # pcntl, posix and ffi are hard requirements of `serve` (its preflight exits
-# 2 without them); intl is required by the app's composer.json. sqlite3 and
+# 2 without them); intl is required by the app's composer.json; gd is
+# required by the sugar-image/candy-mosaic deps the app resolves at install.
+# sqlite3 and
 # pdo_sqlite are builtins of this base image — the exercise probe below pins
 # the whole set so a silent base-image change fails the BUILD, not the pod.
 # The probe is one line on purpose: a Dockerfile RUN continues only through
 # trailing backslashes, and a heredoc would tie this file to a buildkit
 # feature the other repo Dockerfiles do not require. It re-exercises ffi the
 # way the preflight does — loading is not enough, the library must work here.
-RUN docker-php-ext-install -j"$(nproc)" pcntl posix ffi intl \
-    && php -r 'foreach (["pcntl","posix","ffi","intl","mbstring","sqlite3","pdo_sqlite"] as $ext) { if (!extension_loaded($ext)) { fwrite(STDERR, "Dockerfile build probe: extension {$ext} is not loaded\n"); exit(1); } } FFI::cdef("int getpid(void);"); fwrite(STDOUT, "php-extensions-ok\n");'
+RUN docker-php-ext-install -j"$(nproc)" pcntl posix ffi intl gd \
+    && php -r 'foreach (["pcntl","posix","ffi","intl","gd","mbstring","sqlite3","pdo_sqlite"] as $ext) { if (!extension_loaded($ext)) { fwrite(STDERR, "Dockerfile build probe: extension {$ext} is not loaded\n"); exit(1); } } FFI::cdef("int getpid(void);"); fwrite(STDOUT, "php-extensions-ok\n");'
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
