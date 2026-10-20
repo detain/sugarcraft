@@ -89,7 +89,15 @@ final class ImageSource
         public readonly int $width,
         public readonly int $height,
         public readonly int $maxPixels = self::MAX_PIXELS,
-    ) {}
+    ) {
+        // MINOR-1 (C-10 review): the factories all guarantee ≥1, but this
+        // ctor is public — a hand-built 0×N source used to throw deep inside
+        // Scale::computeDimensions (C-11's boundary guard). Refuse it at the
+        // boundary instead, same InvalidArgumentException family.
+        if ($width <= 0 || $height <= 0) {
+            throw new \InvalidArgumentException("image source dimensions {$width}x{$height} must be positive");
+        }
+    }
 
     /**
      * Reject an image whose declared pixel count exceeds the ceiling.

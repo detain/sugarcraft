@@ -45,6 +45,30 @@ final class ImageSourceTest extends TestCase
         $image->resize(0, 0);
     }
 
+    // MINOR-1 (C-10 review): the public ctor is the boundary — a hand-built
+    // non-positive source must throw HERE, not deep inside Scale (C-11).
+
+    public function testConstructorRefusesZeroWidth(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/dimensions 0x8 must be positive/');
+        new ImageSource('bytes', 'image/png', 0, 8);
+    }
+
+    public function testConstructorRefusesNegativeHeight(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/dimensions 8x-1 must be positive/');
+        new ImageSource('bytes', 'image/png', 8, -1);
+    }
+
+    public function testConstructorAcceptsOnePixelSource(): void
+    {
+        $image = new ImageSource('bytes', 'image/png', 1, 1);
+        $this->assertSame(1, $image->width);
+        $this->assertSame(1, $image->height);
+    }
+
     public function testCropThrowsOnNegativeX(): void
     {
         $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
