@@ -59,9 +59,15 @@ final class SummaryRejectedWhenNotSmallerTest extends TestCase
 
     public function testTheModelsStateBlockIsAuditedAndItsDerivedSectionsComeFromTheTranscript(): void
     {
+        // CTX-4 calibration: four written model sections keep this block in the
+        // FILL zone (collapse is MORE THAN COLLAPSE_MISSING_SECTIONS missing);
+        // Progress stays omitted so the heuristic-fill leg is still exercised,
+        // and the file list stays invented so the derived-override leg is too.
         $reply = "1.\nasked: set up\n2.\nasked: wire it\n"
             . StateSummaryTemplate::OPEN_TAG . "\n"
             . "## Goal\nport the parser\n"
+            . "## Constraints\nkeep the grammar file read-only\n"
+            . "## Key decisions\nhand-roll the lexer\n"
             . "## Next step\nwrite the lexer tests\n"
             . "## Files modified\n- invented/by/model.php\n"
             . StateSummaryTemplate::CLOSE_TAG;
