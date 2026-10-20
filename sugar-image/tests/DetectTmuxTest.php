@@ -272,6 +272,12 @@ final class DetectTmuxTest extends TestCase
             ['unknown', null],
             ['', null],
             ["\n \t", null],
+            // F-04 falsy spellings a malformed/degraded answer can carry:
+            // a present-but-useless list must NOT read as AUTO (null) — the
+            // probe got an answer; it simply is not a sixel claim.
+            ['0', false],
+            ['off', false],
+            ['no', false],
         ];
 
         foreach ($cases as [$reply, $expected]) {
