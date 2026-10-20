@@ -1,6 +1,6 @@
 # SugarCraft
 
-PHP monorepo of 40 TUI libraries and 21 terminal apps (Charmbracelet ecosystem ports). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
+PHP monorepo of 40 TUI libraries and 22 terminal apps (Charmbracelet ecosystem ports). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
 
 @./AGENTS.md
 @./CONTRIBUTING.md
@@ -15,7 +15,7 @@ Cross-cuts: `docs/MATCHUPS.md` (upstream→port map) · `PROJECT_NAMES.md` · `L
 
 Audit/plan trees: `findings/<slug>.md` + `findings/plan_<slug>.md` (index `findings/README.md`, `findings/plan.md`) · `docs/plans/leftover/` phased step files · `docs/repo_map/` per-upstream maps (index `docs/repo_map.md`) · `docs/research/libraries/<slug>-research.md` (index `docs/research/INDEX.md`).
 
-**Libraries** (`sugar-*`): `sugar-core` `sugar-ansi-parser` `sugar-cellbuffer` `sugar-async` `sugar-constraints` `sugar-style` `sugar-forms` `sugar-animation` `sugar-testing` `sugar-vterm` `sugar-pty` `sugar-markdown` `sugar-cli` `sugar-input` `sugar-focus` `sugar-fuzzy` `sugar-gallery` `sugar-log` `sugar-metrics` `sugar-mouse` `sugar-navstack` `sugar-overlay` `sugar-panels` `sugar-quickpick` `sugar-readline` `sugar-spring` `sugar-ssh-server` `sugar-table` `sugar-toast` `sugar-treelist` `sugar-video` `sugar-widgets` `sugar-charts` `sugar-dashboard` `sugar-datepicker` `sugar-diff` `sugar-flexbox` `sugar-colorprofile` `sugar-image` `sugar-mcp-client`. **Apps** (`candy-*`): `candy-code` `candy-code-web` `candy-files` `candy-git` `candy-sql` `candy-top` `candy-vcr` `candy-scriptui` `candy-mdview` `candy-ansi-inspect` `candy-codeshot` `candy-codetime` `candy-flappy` `candy-gifview` `candy-git-server` `candy-kv` `candy-mail` `candy-minesweeper` `candy-ssh-launcher` `candy-starter` `candy-tetris`.
+**Libraries** (`sugar-*`): `sugar-core` `sugar-ansi-parser` `sugar-cellbuffer` `sugar-async` `sugar-constraints` `sugar-style` `sugar-forms` `sugar-animation` `sugar-testing` `sugar-vterm` `sugar-pty` `sugar-markdown` `sugar-cli` `sugar-input` `sugar-focus` `sugar-fuzzy` `sugar-gallery` `sugar-log` `sugar-metrics` `sugar-mouse` `sugar-navstack` `sugar-overlay` `sugar-panels` `sugar-quickpick` `sugar-readline` `sugar-spring` `sugar-ssh-server` `sugar-table` `sugar-toast` `sugar-treelist` `sugar-video` `sugar-widgets` `sugar-charts` `sugar-dashboard` `sugar-datepicker` `sugar-diff` `sugar-flexbox` `sugar-colorprofile` `sugar-image` `sugar-mcp-client`. **Apps** (`candy-*`): `candy-code` `candy-code-web` `candy-files` `candy-git` `candy-sql` `candy-top` `candy-vcr` `candy-scriptui` `candy-mdview` `candy-ansi-inspect` `candy-codeshot` `candy-codetime` `candy-flappy` `candy-gifview` `candy-git-server` `candy-image` `candy-kv` `candy-mail` `candy-minesweeper` `candy-ssh-launcher` `candy-starter` `candy-tetris`.
 
 ## Commands
 
