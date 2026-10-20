@@ -13,15 +13,17 @@ use SugarCraft\Image\PixelGrid;
 /**
  * Kitty graphics protocol renderer via chunked APC sequences.
  *
- * Encodes the image as base64 PNG and transmits it in 4092-byte
- * chunks (leaving room for base64 padding overhead) per the Kitty
- * graphics protocol spec. Terminals handle aspect-ratio and scaling.
+ * F-11: payloads are chunked in RAW BYTES (default 2967 per chunk, see
+ * {@see KittyOptions::DEFAULT_CHUNK_BYTES}) and each slice is base64-encoded
+ * independently, so every emitted frame — APC introducer, parameters,
+ * base64, string terminator — stays within the protocol's 4096-byte cap.
+ * (The previous shape sliced a 4092-character BASE64 stream, putting 4101
+ * bytes on the wire per data frame: kitty truncates such frames and the
+ * image corrupts.) Terminals handle aspect-ratio and scaling.
  */
 final class KittyRenderer implements Renderer
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
-
-    private const CHUNK_SIZE = 4092;
 
     /**
      * Render an image as a Kitty graphics protocol sequence.
@@ -36,9 +38,8 @@ final class KittyRenderer implements Renderer
         $effectiveHeight = $this->prepareRender($image, $width, $height);
 
         $pngBytes = $this->ensurePng($image);
-        $base64 = base64_encode($pngBytes);
-        $chunks = $this->chunk($base64);
-        $total  = count($chunks);
+        $chunks   = $this->chunkPayload($pngBytes, KittyOptions::DEFAULT_CHUNK_BYTES);
+        $total    = count($chunks);
 
         $out = Ansi::kittyGraphicsBegin([
             'c' => $width,
@@ -105,11 +106,15 @@ final class KittyRenderer implements Renderer
             if ($z === false) {
                 throw new \RuntimeException(Lang::t('renderer.gzcompress_failed'));
             }
-            $base64 = base64_encode($z);
+            $payload = $z;
         } else {
-            $base64 = base64_encode($pngBytes);
+            $payload = $pngBytes;
         }
-        $chunks    = $this->chunk($base64);
+        // F-11: chunk the raw payload — post-compression bytes when zlib is
+        // on, PNG bytes otherwise — then base64 each slice. Sizing the
+        // base64 string (the old shape) overshot the 4 KiB frame cap;
+        // sizing the raw bytes bounds every frame before encoding.
+        $chunks    = $this->chunkPayload($payload, $opts->chunkBytes() ?? KittyOptions::DEFAULT_CHUNK_BYTES);
         $total     = count($chunks);
         $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
 
@@ -243,19 +248,25 @@ final class KittyRenderer implements Renderer
     }
 
     /**
+     * Split a RAW payload into base64 slices bounded per F-11: every
+     * resulting data-chunk frame (envelope APC `ESC _ G` + `m=<0|1>` + ';' +
+     * ST, 9 bytes) must stay within {@see KittyOptions::MAX_FRAME_BYTES}.
+     *
+     * Slices are {@see $chunkBytes} raw bytes — a multiple of 3 by the
+     * options-boundary normalization — so no intermediate slice carries
+     * base64 padding and the receiver's concatenated decode is byte-exact.
+     *
+     * Mirrors chafa's raw-byte chunking (chafa/internal/chafa-kitty-renderer.c
+     * build_image_chunks: 510 raw bytes, 63 under Screen).
+     *
      * @return list<string>
      */
-    private function chunk(string $base64): array
+    private function chunkPayload(string $payload, int $chunkBytes): array
     {
-        $chunks = [];
-        $offset = 0;
-        $len    = strlen($base64);
-
-        while ($offset < $len) {
-            $chunks[] = substr($base64, $offset, self::CHUNK_SIZE);
-            $offset  += self::CHUNK_SIZE;
+        if ($payload === '') {
+            return [];
         }
 
-        return $chunks;
+        return array_map('base64_encode', str_split($payload, $chunkBytes));
     }
 }

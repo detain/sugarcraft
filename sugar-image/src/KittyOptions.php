@@ -15,6 +15,31 @@ final class KittyOptions
     private const ACTION_TRANSMIT = 'T';
     private const ACTION_PLACE    = 'p';
 
+    /**
+     * F-11: the kitty graphics protocol caps any single APC frame at 4 KiB —
+     * a longer frame is truncated by the terminal, corrupting the image.
+     */
+    public const MAX_FRAME_BYTES = 4096;
+
+    /**
+     * F-11: default raw (pre-base64) payload bytes per data-chunk frame.
+     * intdiv(4096 - 9 - 128, 4) * 3 = 2967: 9 is the data-chunk envelope
+     * (APC 2 + 'G' 1 + 'm=1' 3 + ';' 1 + ST 2), 128 is reserved for
+     * worst-case co-located parameters, and the result is floored to a
+     * multiple of 3 so every chunk base64-encodes without '=' padding
+     * (only the final chunk ever pads). Worst emitted data frame is
+     * 9 + 4*ceil(2967/3) = 3965 bytes — 131 bytes of margin, above the
+     * 16-byte floor F-11 requires. Mirrors chafa's raw-byte chunking in
+     * chafa/internal/chafa-kitty-renderer.c build_image_chunks().
+     */
+    public const DEFAULT_CHUNK_BYTES = 2967;
+
+    /**
+     * F-11: largest legal override: intdiv(4096 - 9, 4) * 3 — the envelope
+     * only, no parameter margin (frame stays under the cap by 3 bytes).
+     */
+    public const MAX_CHUNK_BYTES = 3063;
+
     private function __construct(
         private readonly string $action,
         private readonly int $imageId,
@@ -33,6 +58,11 @@ final class KittyOptions
          * @see https://sw.kovidgoyal.net/kitty/graphics-protocol/#transmission
          */
         private readonly bool $useVirtual,
+        /**
+         * F-11: raw payload bytes per data-chunk frame, already normalized to
+         * a multiple of 3; null means {@see self::DEFAULT_CHUNK_BYTES}.
+         */
+        private readonly ?int $chunkBytes,
     ) {}
 
     /**
@@ -50,6 +80,7 @@ final class KittyOptions
             offsetX:    0,
             offsetY:    0,
             useVirtual: false,
+            chunkBytes: null,
         );
     }
 
@@ -72,6 +103,7 @@ final class KittyOptions
             offsetX:    $x,
             offsetY:    $y,
             useVirtual: false,
+            chunkBytes: null,
         );
     }
 
@@ -90,6 +122,7 @@ final class KittyOptions
             offsetX:    $this->offsetX,
             offsetY:    $this->offsetY,
             useVirtual: $this->useVirtual,
+            chunkBytes: $this->chunkBytes,
         );
     }
 
@@ -121,6 +154,7 @@ final class KittyOptions
             offsetX:    $this->offsetX,
             offsetY:    $this->offsetY,
             useVirtual: $this->useVirtual,
+            chunkBytes: $this->chunkBytes,
         );
     }
 
@@ -139,6 +173,7 @@ final class KittyOptions
             offsetX:    $this->offsetX,
             offsetY:    $this->offsetY,
             useVirtual: $useVirtual,
+            chunkBytes: $this->chunkBytes,
         );
     }
 
@@ -172,6 +207,47 @@ final class KittyOptions
             offsetX:    $this->offsetX,
             offsetY:    $this->offsetY,
             useVirtual: $this->useVirtual,
+            chunkBytes: $this->chunkBytes,
+        );
+    }
+
+    /**
+     * F-11: override the raw payload bytes carried per data-chunk frame.
+     *
+     * The transport surface is this options object; wiring the value from
+     * runtime terminal capability (chafa's 63-byte Screen packets are that
+     * consumer — F-12) is a later seam, not part of F-11.
+     *
+     * @param int|null $chunkBytes  null restores {@see self::DEFAULT_CHUNK_BYTES};
+     *                              overrides are floored to a multiple of 3 so
+     *                              chunk boundaries never introduce base64 padding.
+     * @throws \InvalidArgumentException  if the override is below one base64
+     *                              group (3 bytes) or would push a data-chunk
+     *                              frame past the 4 KiB spec cap.
+     */
+    public function withChunkBytes(?int $chunkBytes): self
+    {
+        if ($chunkBytes === null) {
+            $normalized = null;
+        } elseif ($chunkBytes < 3 || $chunkBytes > self::MAX_CHUNK_BYTES) {
+            throw new \InvalidArgumentException(
+                "Kitty chunk size must be between 3 and " . self::MAX_CHUNK_BYTES . " bytes, got {$chunkBytes}"
+            );
+        } else {
+            $normalized = $chunkBytes - ($chunkBytes % 3);
+        }
+
+        return new self(
+            action:     $this->action,
+            imageId:    $this->imageId,
+            zIndex:     $this->zIndex,
+            compress:   $this->compress,
+            cellWidth:  $this->cellWidth,
+            cellHeight: $this->cellHeight,
+            offsetX:    $this->offsetX,
+            offsetY:    $this->offsetY,
+            useVirtual: $this->useVirtual,
+            chunkBytes: $normalized,
         );
     }
 
@@ -208,5 +284,11 @@ final class KittyOptions
     public function useVirtual(): bool
     {
         return $this->useVirtual;
+    }
+
+    /** @internal */
+    public function chunkBytes(): ?int
+    {
+        return $this->chunkBytes;
     }
 }

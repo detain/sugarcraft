@@ -144,4 +144,38 @@ final class KittyOptionsTest extends TestCase
 
         KittyOptions::transmit(1)->withCellDimensions(-1, 10);
     }
+
+    public function testWithChunkBytesFloorsToBase64Alignment(): void
+    {
+        // F-11: an unaligned override is floored to a multiple of 3 so no
+        // intermediate chunk ever carries base64 padding.
+        $opts = KittyOptions::transmit(1)->withChunkBytes(500);
+
+        $this->assertSame(498, $opts->chunkBytes());
+    }
+
+    public function testWithChunkBytesNullRestoresTheDefault(): void
+    {
+        // F-11: null means "use the framed default", not "0 bytes".
+        $opts = KittyOptions::transmit(1)->withChunkBytes(63)->withChunkBytes(null);
+
+        $this->assertNull($opts->chunkBytes());
+    }
+
+    public function testWithChunkBytesRejectsUndersizedOverride(): void
+    {
+        // F-11: one base64 group is the floor; 2 bytes cannot align.
+        $this->expectException(\InvalidArgumentException::class);
+
+        KittyOptions::transmit(1)->withChunkBytes(2);
+    }
+
+    public function testWithChunkBytesRejectsOversizedOverride(): void
+    {
+        // F-11: past MAX_CHUNK_BYTES the data-chunk envelope itself would
+        // push the frame beyond the 4 KiB spec cap.
+        $this->expectException(\InvalidArgumentException::class);
+
+        KittyOptions::transmit(1)->withChunkBytes(KittyOptions::MAX_CHUNK_BYTES + 3);
+    }
 }
