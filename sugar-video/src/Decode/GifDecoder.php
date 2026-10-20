@@ -64,6 +64,16 @@ final class GifDecoder implements Decoder
     private string $bytesSource = '';
 
     /**
+     * E-02: total playthroughs AUTHORED by the NETSCAPE2.0 loop extension of
+     * the captured bytes (libnsgif normalisation: raw 0 and no-extension both
+     * mean infinite = null; raw N means N+1). null while unopened or when the
+     * stream is unauthored. Read via {@see loopCount()}; it is pure file
+     * state — the sugar-video Player's own loop flag is engine policy and
+     * stays independent.
+     */
+    private ?int $authorLoops = null;
+
+    /**
      * Graphics modes only: the pixel box the frame must be presented at,
      * which is the FULL cellsW·cellPxW × cellsH·cellPxH terminal resolution.
      * 0 in every text mode, where the decode grid is already the frame.
@@ -171,6 +181,14 @@ final class GifDecoder implements Decoder
             throw new \RuntimeException("GIF decode failed: {$e->getMessage()}", 0, $e);
         }
 
+        // E-02: the authored loop count, read from the SAME audited bytes as
+        // the frames (never a second open — E-11 law) and re-derived on every
+        // hydrate, so open, mid-play re-hydrate and same-source reopen all
+        // report the truth of the one capture. loopCount() throws only on a
+        // bad signature, which the successful decode above has already ruled
+        // out; truncation degrades to "unauthored" inside it, never warns.
+        $this->authorLoops = AnimationDecoder::loopCount($bytes);
+
         // Best-effort time seek: all GIF frames are already in memory, so advance
         // the cursor to the frame at $startSec (clamped). GIF timing is per-frame,
         // so this uses the caller's nominal fps as an approximation.
@@ -197,6 +215,41 @@ final class GifDecoder implements Decoder
 
         $animationFrame = $this->frames[$this->frameIndex++];
         return $this->animationFrameToRgbFrame($animationFrame);
+    }
+
+    /**
+     * E-02: the playthrough count authored into the GIF's NETSCAPE2.0 loop
+     * extension, normalised by sugar-animation's {@see AnimationDecoder::loopCount()}
+     * — null means infinite (no extension present, or the raw-0 "loop forever"
+     * value; libnsgif's gif.c:862-871 reading), an integer N >= 2 means N
+     * total plays (raw values spell EXTRA repeats, so a total of 1 is not
+     * reachable from authored bytes — see {@see playOnce()}). null also answers
+     * before any open(); after close() it keeps reporting the last audited
+     * capture, because $bytes outlives close() by design (E-11).
+     *
+     * This is FILE STATE, not playback policy: sugar-video's own looping is
+     * the Player's engine-side `loop` flag (restart at EOF), which this
+     * accessor informs for hosts but does not silently override.
+     */
+    public function loopCount(): ?int
+    {
+        return $this->authorLoops;
+    }
+
+    /**
+     * E-02: true only when the bytes explicitly author exactly one
+     * playthrough. Unreachable from a valid NETSCAPE extension (raw 0 =
+     * forever, raw N > 0 = N+1 totals, so 1 is never produced — libnsgif
+     * documents "the only way to play the animation once is not to have this
+     * extension at all", gif.c:862-871, and the chicle CLI never consumes
+     * the loop field at all, it plays forever); this is the honest answer a
+     * host needs to know the difference between "the author said once"
+     * (some day, some other container) and "unauthored, play forever by
+     * policy".
+     */
+    public function playOnce(): bool
+    {
+        return $this->authorLoops === 1;
     }
 
     /**
