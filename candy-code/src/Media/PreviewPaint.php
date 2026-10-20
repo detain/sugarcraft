@@ -63,7 +63,11 @@ final class PreviewPaint
         // byte-keyed lookup would; two distinct spellings decoding to equal
         // bytes now cost two entries instead of sharing one — bounded churn,
         // never a wrong body.
-        $key = hash('xxh3', $frameB64) . ':' . $paneCols . ':' . $rowBudget . ':' . $mosaic->protocol();
+        // A-06: the protocol segment gains modeDetail() so the two
+        // non-Mono ascii arms (same protocol name 'ascii', different
+        // bytes) cannot cross-serve each other's memo entries.
+        $detail = $mosaic->modeDetail();
+        $key = hash('xxh3', $frameB64) . ':' . $paneCols . ':' . $rowBudget . ':' . $mosaic->protocol() . ($detail === null ? '' : ':' . $detail);
 
         if (isset(self::$memo[$key])) {
             $hit = self::$memo[$key];

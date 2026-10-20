@@ -5201,7 +5201,11 @@ final class Renderer
         // small as 1 (audit 15b-09), so the old floor of 8 is gone.
         $cols = max(1, min(self::IMAGE_COLS, $width));
         $rows = self::imageRows($bytes, $cols, $imageRows);
-        $key = hash('xxh3', $bytes) . ':' . $cols . 'x' . $rows . ':' . $mosaic->protocol();
+        // A-06: protocol() names the PROTOCOL; the ascii colour arms share
+        // 'ascii', so modeDetail() rides the key to keep ansi256 vs
+        // truecolor encodings from cross-serving on a /rendermode switch.
+        $detail = $mosaic->modeDetail();
+        $key = hash('xxh3', $bytes) . ':' . $cols . 'x' . $rows . ':' . $mosaic->protocol() . ($detail === null ? '' : ':' . $detail);
 
         if (isset(self::$imageCache[$key])) {
             $hit = self::$imageCache[$key];

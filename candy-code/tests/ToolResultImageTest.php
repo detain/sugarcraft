@@ -135,6 +135,29 @@ final class ToolResultImageTest extends TestCase
 
         $this->assertNotNull($result->imageProtocol);
         $this->assertIsValidMosaicProtocol($result->imageProtocol);
+
+        // A-06: a colour-arm render mode must stamp the PROTOCOL name, not
+        // the colour word — 'truecolor'/'ansi256' used to leak through the
+        // protocol slot here. ToolResult's mode memo is private statics, so
+        // save/restore through reflection (same seam the render-mode tests
+        // use) and leave no residue for the next test in the merged run.
+        $renderMode = new \ReflectionProperty(ToolResult::class, 'renderMode');
+        $mosaics = new \ReflectionProperty(ToolResult::class, 'mosaics');
+        $savedMode = $renderMode->getValue(null);
+        $savedMosaics = $mosaics->getValue(null);
+        ToolResult::setRenderMode('truecolor');
+
+        try {
+            $coloured = ToolResult::okWithImage('shot', 'ok', 'bytes');
+
+            $this->assertSame('ascii', $coloured->imageProtocol);
+            $this->assertIsValidMosaicProtocol('ascii');
+            // modeDetail() carries the arm that distinguishes the bytes.
+            $this->assertSame('truecolor', ToolResult::mosaic()->modeDetail());
+        } finally {
+            $renderMode->setValue(null, $savedMode);
+            $mosaics->setValue(null, $savedMosaics);
+        }
     }
 
     /**
