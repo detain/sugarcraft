@@ -63,6 +63,10 @@ return [
     'sixel.alpha_threshold_out_of_range' => 'alphaThreshold must be 0-127 (GD alpha scale), got {alphaThreshold}',
     'sixel.canvas_too_large'        => 'Sixel canvas {width}×{height} px for a {cols}×{rows}-cell box exceeds the {max}-pixel ceiling',
 
+    // Paced async rendering (D-05)
+    'paced.slice_ms'       => 'sliceMs must be >= 1, got {ms}',
+    'paced.rows_per_slice' => 'rowsPerSlice must be >= 1, got {rows}',
+
     // Mosaic
     'mosaic.no_render_width' => 'render() needs a width: pass one, or configure a default cell box with MosaicBuilder::withResize()',
 
