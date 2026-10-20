@@ -83,6 +83,9 @@ return [
     // tmux passthrough
     'tmux.stream_not_sixel' => 'Band streaming is only available for the Sixel renderer, not {name}',
 
+    // screen passthrough (F-12)
+    'screen.stream_not_sixel' => 'Band streaming is only available for the Sixel renderer, not {name}',
+
     // Animation
     'animation.empty'                 => 'Animation requires at least one frame',
     'animation.delay_count_mismatch'  => 'Frame count ({frameCount}) and delay count ({delayCount}) must match',

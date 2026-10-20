@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image;
 
 use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Passthrough\PassthroughDecorator;
 use SugarCraft\Image\Renderer\Renderer;
 use SugarCraft\Image\Renderer\SixelRenderer;
 
@@ -26,9 +27,17 @@ use SugarCraft\Image\Renderer\SixelRenderer;
  * fallback when the transaction is opted out via {@see
  * Detect::setAutoPassthrough(false)} or tmux refuses the toggle.
  *
+ * F-12: GNU Screen has its own envelope with different rules — payload
+ * packetized at 200 bytes, no ESC-doubling, and a byte-wise ST workaround
+ * for sixel terminators — implemented by {@see
+ * \SugarCraft\Image\Passthrough\ScreenPassthrough}. Screen needs no
+ * option transaction like the one above: its parser accepts `ESC P … ESC \`
+ * unconditionally, so this class's tmux-only scope stays exactly as F-05
+ * shipped it.
+ *
  * @see https://github.com/tmux/tmux/wiki/Passthrough
  */
-final class TmuxPassthroughDecorator implements Renderer
+final class TmuxPassthroughDecorator implements Renderer, PassthroughDecorator
 {
     public function __construct(
         private readonly Renderer $inner,
@@ -41,6 +50,11 @@ final class TmuxPassthroughDecorator implements Renderer
     public function inner(): Renderer
     {
         return $this->inner;
+    }
+
+    public function decorate(Renderer $inner): Renderer
+    {
+        return new self($inner);
     }
 
     public function render(ImageSource $image, int $width, ?int $height = null): string

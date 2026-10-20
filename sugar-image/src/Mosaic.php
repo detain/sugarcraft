@@ -22,6 +22,8 @@ use SugarCraft\Image\Renderer\WorkFactorConfigurable;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Scale;
 use SugarCraft\Image\TmuxPassthrough;
+use SugarCraft\Image\Passthrough\PassthroughDecorator;
+use SugarCraft\Image\Passthrough\ScreenPassthrough;
 use SugarCraft\Image\TmuxPassthroughDecorator;
 use SugarCraft\ColorProfile\Probe\TerminalProbe;
 use SugarCraft\ColorProfile\Probe\ProbeReport;
@@ -178,7 +180,8 @@ final class Mosaic
         if ($report->has(PaletteCapability::KittyKeyboard)) {
             return self::fromCapability(
                 Capability::kitty($fallbackCap->cellSize, $fallbackCap->inTmux)
-                    ->withDefaultColors($fallbackCap->defaultFg, $fallbackCap->defaultBg),
+                    ->withDefaultColors($fallbackCap->defaultFg, $fallbackCap->defaultBg)
+                    ->withTerminalFacts($fallbackCap->quirks, $fallbackCap->passthroughMode),
             );
         }
 
@@ -186,7 +189,8 @@ final class Mosaic
         if ($report->has(PaletteCapability::ITerm2)) {
             return self::fromCapability(
                 Capability::iterm2($fallbackCap->cellSize, $fallbackCap->inTmux)
-                    ->withDefaultColors($fallbackCap->defaultFg, $fallbackCap->defaultBg),
+                    ->withDefaultColors($fallbackCap->defaultFg, $fallbackCap->defaultBg)
+                    ->withTerminalFacts($fallbackCap->quirks, $fallbackCap->passthroughMode),
             );
         }
 
@@ -339,14 +343,13 @@ final class Mosaic
     /**
      * A-07: switch the colour canvas when the active backend is a
      * text-tier renderer that speaks {@see CanvasModeConfigurable}
-     * (SymbolMapRenderer, QuarterBlockRenderer — also through a tmux
+     * (SymbolMapRenderer, QuarterBlockRenderer — also through a
      * passthrough envelope); returns the same instance otherwise.
      */
     public function withCanvasMode(CanvasMode $canvasMode): self
     {
-        $renderer = $this->renderer instanceof TmuxPassthroughDecorator
-            ? $this->renderer->inner()
-            : $this->renderer;
+        $envelope = $this->renderer instanceof PassthroughDecorator ? $this->renderer : null;
+        $renderer = $envelope?->inner() ?? $this->renderer;
 
         if (!$renderer instanceof CanvasModeConfigurable) {
             return $this;
@@ -355,7 +358,7 @@ final class Mosaic
         $configured = $renderer->withCanvasMode($canvasMode);
 
         return new self(
-            $this->renderer instanceof TmuxPassthroughDecorator ? new TmuxPassthroughDecorator($configured) : $configured,
+            $envelope !== null ? $envelope->decorate($configured) : $configured,
             $this->capability,
             $this->forcedWidth,
             $this->forcedHeight,
@@ -370,9 +373,8 @@ final class Mosaic
      */
     public function withWorkFactor(float $workFactor): self
     {
-        $renderer = $this->renderer instanceof TmuxPassthroughDecorator
-            ? $this->renderer->inner()
-            : $this->renderer;
+        $envelope = $this->renderer instanceof PassthroughDecorator ? $this->renderer : null;
+        $renderer = $envelope?->inner() ?? $this->renderer;
 
         if (!$renderer instanceof WorkFactorConfigurable) {
             return $this;
@@ -381,7 +383,7 @@ final class Mosaic
         $configured = $renderer->withWorkFactor($workFactor);
 
         return new self(
-            $this->renderer instanceof TmuxPassthroughDecorator ? new TmuxPassthroughDecorator($configured) : $configured,
+            $envelope !== null ? $envelope->decorate($configured) : $configured,
             $this->capability,
             $this->forcedWidth,
             $this->forcedHeight,
@@ -393,16 +395,16 @@ final class Mosaic
     /**
      * Return a new Mosaic with a different dither algorithm.
      * Only meaningful when the current renderer is a SixelRenderer (also
-     * through a tmux passthrough envelope); returns the same instance
+     * through a passthrough envelope); returns the same instance
      * otherwise.
      */
     public function withDither(Dither $dither): self
     {
-        if ($this->renderer instanceof TmuxPassthroughDecorator) {
+        if ($this->renderer instanceof PassthroughDecorator) {
             $inner = $this->renderer->inner();
 
             return $inner instanceof SixelRenderer
-                ? new self(new TmuxPassthroughDecorator($inner->withDither($dither)), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale, $this->optimizations)
+                ? new self($this->renderer->decorate($inner->withDither($dither)), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale, $this->optimizations)
                 : $this;
         }
 
@@ -446,10 +448,10 @@ final class Mosaic
         $mask = Optimization::bits(...$levels);
 
         $renderer = $this->renderer;
-        if ($renderer instanceof TmuxPassthroughDecorator) {
+        if ($renderer instanceof PassthroughDecorator) {
             $inner = $renderer->inner();
             if ($inner instanceof AcceptsOptimization) {
-                $renderer = new TmuxPassthroughDecorator($inner->withOptimizations($mask));
+                $renderer = $renderer->decorate($inner->withOptimizations($mask));
             }
         } elseif ($renderer instanceof AcceptsOptimization) {
             $renderer = $renderer->withOptimizations($mask);
@@ -489,13 +491,13 @@ final class Mosaic
      * arms behind one protocol name, so an Ansi16/Ansi256/TrueColor ascii mosaic
      * reports its {@see AsciiColorMode} value ('ansi16'/'ansi256'/'truecolor')
      * here; every other renderer — and the Mono ascii arm, whose protocol
-     * name already is its mode value — reports null. A tmux-decorated
+     * name already is its mode value — reports null. A passthrough-decorated
      * mosaic answers for its inner renderer, the same way the decorator's
-     * 'tmux(<inner>)' name does.
+     * 'tmux(<inner>)'/'screen(<inner>)' name does.
      */
     public function modeDetail(): ?string
     {
-        $renderer = $this->renderer instanceof TmuxPassthroughDecorator
+        $renderer = $this->renderer instanceof PassthroughDecorator
             ? $this->renderer->inner()
             : $this->renderer;
 
@@ -788,7 +790,11 @@ final class Mosaic
             return new Iterm2Renderer();
         }
         if ($cap->sixel) {
-            return new SixelRenderer();
+            // F-02: hand the renderer the quirks verdict whenever the
+            // terminal chain was consulted (null = never probed = frozen
+            // pre-F-02 behaviour, no parking newline decision taken).
+            $sixel = new SixelRenderer();
+            return $cap->quirks === null ? $sixel : $sixel->withQuirks($cap->quirks);
         }
         if ($cap->chafa) {
             return new ChafaRenderer();
@@ -811,8 +817,9 @@ final class Mosaic
 
     /**
      * Mint the mosaic for a capability snapshot: best backend for the
-     * detected protocols, tmux passthrough envelope added when the terminal
-     * runs under tmux. Shared by {@see probe()}, {@see auto()} and the
+     * detected protocols, plus the passthrough envelope the mux demands —
+     * tmux when the env says tmux, GNU Screen (F-12) when the terminal
+     * chain answers screen. Shared by {@see probe()}, {@see auto()} and the
      * palette fallback so every detection path ends in one place.
      */
     private static function fromCapability(Capability $cap): self
@@ -824,6 +831,12 @@ final class Mosaic
         // through to the inner terminal.
         if ($cap->inTmux) {
             $renderer = new TmuxPassthroughDecorator($renderer);
+        } elseif ($cap->passthroughMode === TermInfo::PASSTHROUGH_SCREEN) {
+            // F-12: under GNU Screen the mux is decided by the env chain —
+            // the tmux envelope wins when both apply (tmux is the innermost
+            // pipe, the chicle term-db posture), and Screen's packetized
+            // `ESC P … ESC \` envelope takes the field otherwise.
+            $renderer = new ScreenPassthrough($renderer);
         }
 
         // F-05: the envelope only lands if tmux's allow-passthrough toggle
@@ -1085,7 +1098,7 @@ final class Mosaic
      */
     private function rendererConfigFingerprint(): string
     {
-        $renderer = $this->renderer instanceof TmuxPassthroughDecorator
+        $renderer = $this->renderer instanceof PassthroughDecorator
             ? $this->renderer->inner()
             : $this->renderer;
 
