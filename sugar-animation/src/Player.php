@@ -90,6 +90,18 @@ final class Player implements Model
      *        was due). Derived state — every public entry point leaves it
      *        null; the Player sets it on the first tick, on pause/resume, and
      *        on manual steps via {@see anchored()}.
+     * @param ?int $loops E-02 total playthroughs allowed: null (default) plays
+     *        forever — the unauthored-GIF policy of browsers and chicle, and
+     *        the shape {@see Decoder::loopCount()} answers for a stream with
+     *        no NETSCAPE extension; N >= 1 plays exactly N times and then
+     *        quits on the tick that completes the Nth lap (libnsgif
+     *        animation_complete semantics, gif.c:1854).
+     * @param int $lapsCarried E-02 playthroughs already completed before the
+     *        one the schedule is inside. Derived state — like `$anchor` it is
+     *        only ever moved by {@see advanceSchedule()}: each automatic wrap
+     *        of the schedule counts one lap, a manual ←/→ step never does
+     *        (user scrubbing is not a playthrough), and a frame-stream
+     *        replacement resets it with the index.
      */
     public function __construct(
         public readonly array $frames,
@@ -101,6 +113,8 @@ final class Player implements Model
         public readonly ?float $fixedFps = null,
         public readonly ?float $maxSeconds = null,
         private readonly ?float $anchor = null,
+        public readonly ?int $loops = null,
+        private readonly int $lapsCarried = 0,
     ) {
         // Fail fast: a Player that cannot display its start frame is a wiring
         // bug at construction time, not a state to carry into update()/view().
@@ -236,6 +250,38 @@ final class Player implements Model
         return $this->mutate(['maxSeconds' => $seconds]);
     }
 
+    /**
+     * E-02: cap playback at $plays total playthroughs (null = forever, the
+     * default). The stop happens INSIDE the schedule — on the tick whose
+     * position crosses the final lap boundary the Player returns
+     * {@see Cmd::quit()} while still displaying the last shown frame — so no
+     * wall-clock timer is armed for the bound (same E-09 law as
+     * {@see withMaxSeconds()}): a stalled loop cannot overshoot silently.
+     */
+    public function withLoops(?int $plays): self
+    {
+        if ($plays !== null && $plays < 1) {
+            throw new \InvalidArgumentException(
+                'sugar-animation: Player::withLoops() requires null or a play count >= 1, got ' . $plays,
+            );
+        }
+
+        return $this->mutate(['loops' => $plays]);
+    }
+
+    /**
+     * E-02: play the frame stream exactly once and quit. This is the honest
+     * counterpart of libnsgif's remark that "the only way to play the
+     * animation once is not to have this extension at all" (gif.c:862-871):
+     * because an unauthored stream reports infinite from
+     * {@see Decoder::loopCount()}, a host that wants one pass must ask the
+     * Player for it, not read it off the bytes.
+     */
+    public function playOnce(): self
+    {
+        return $this->withLoops(1);
+    }
+
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
         return null;
@@ -322,6 +368,15 @@ final class Player implements Model
         $cycle = (int) floor($pos / $total);
         $within = $pos - $cycle * $total;
 
+        // E-02 schedule-driven stop: while the epoch is stable, `cycle` IS the
+        // count of laps completed since it, so a lap bound is checked straight
+        // off it — before any landing work, keeping the last shown frame on
+        // screen exactly as libnsgif's animation_complete stops at the
+        // boundary (gif.c:1854).
+        if ($this->loops !== null && $this->lapsCarried + $cycle >= $this->loops) {
+            return [$this, Cmd::quit()];
+        }
+
         $landing = 0;
         for ($k = $n - 1; $k >= 0; $k--) {
             if ($within >= $cumulative[$k]) {
@@ -346,9 +401,16 @@ final class Player implements Model
 
         // Early fire: force-advance one frame and make its hold start now.
         $landing = ($this->index + 1) % $n;
-        $next = $this->anchored($landing, $now);
+        // E-02: the re-anchor below resets the epoch, which zeroes `cycle` —
+        // so if this forced advance itself steps over the lap boundary
+        // (index was the final frame) the lap it completed must be carried
+        // explicitly, or the epoch rebasing would erase it from the count.
+        $carried = $this->lapsCarried + ($this->index === $n - 1 ? 1 : 0);
+        if ($this->loops !== null && $carried >= $this->loops) {
+            return [$this, Cmd::quit()];
+        }
 
-        return [$next, $this->armFromRel($this->framePeriod($landing))];
+        return [$this->anchored($landing, $now)->mutate(['lapsCarried' => $carried]), $this->armFromRel($this->framePeriod($landing))];
     }
 
     /**

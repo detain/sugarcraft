@@ -71,6 +71,17 @@ final class Decoder
      */
     public static function decode(string $path, int $cellsW, int $cellsH): array
     {
+        return iterator_to_array(self::decodeBytes(self::readFile($path), $cellsW, $cellsH), preserve_keys: false);
+    }
+
+    /**
+     * Read a GIF file on disk into bytes for {@see self::decodeBytes()} and
+     * {@see self::loopCount()} — the ingress half of {@see self::decode()}
+     * exposed so a host can read once and feed both the frame stream and the
+     * loop-count inspection without a second open of the path.
+     */
+    public static function readFile(string $path): string
+    {
         if (is_file($path) === false) {
             throw new \RuntimeException(Lang::t('decoder.no_file', ['path' => $path]));
         }
@@ -79,7 +90,116 @@ final class Decoder
             throw new \RuntimeException(Lang::t('decoder.not_gif'));
         }
 
-        return iterator_to_array(self::decodeBytes($bytes, $cellsW, $cellsH), preserve_keys: false);
+        return $bytes;
+    }
+
+    /**
+     * E-02: the NETSCAPE2.0 loop extension in GIF bytes, normalised to total
+     * playthroughs (mirror of libnsgif's app-extension intake, gif.c:808 and
+     * :862-871 — the block at 0x21 0xFF whose 11-byte identifier is
+     * "NETSCAPE2.0" or its Animation Shop twin "ANIMEXTS1.0", carrying the
+     * sub-block 0x03 0x01 &lt;lo&gt; &lt;hi&gt;).
+     *
+     * Semantics follow libnsgif VERBATIM on the raw value: "The value in the
+     * source data means repeat N times after the first implied play. A value
+     * of zero has the special meaning of loop forever." — so raw 0 is
+     * infinite and raw N>0 is N+1 total playthroughs (libnsgif's own
+     * `if (loop_max > 0) loop_max++`). NOTE the browser split-brain this
+     * sides with: Chrome-family readers treat the raw value as the TOTAL, so
+     * a raw 1 loops once-then-stops there but plays twice here; libnsgif,
+     * GraphicsMagick and the Netscape spec text all read it as EXTRA repeats,
+     * and that is the reading pinned.
+     *
+     * A stream with NO loop extension reports null = infinite. That is the
+     * deliberate divergence from libnsgif's internal `loop_max = 1` seed
+     * (gif.c:1601): chicle and every browser play an unauthored animation
+     * forever (chicle-gif-loader.c carries zero loop references — the CLI
+     * never consumes the field at all), and an inspection API that answered
+     * "play once" for the overwhelmingly common unauthored file would hand
+     * hosts a wrong default. Hosts wanting play-once ask for it explicitly
+     * via {@see Player::playOnce()}.
+     *
+     * Multiple loop extensions: LAST wins, matching libnsgif's overwrite on
+     * every recognised block. Structural corruption ends the walk where it
+     * is and reports what was captured (null when nothing was) — this is an
+     * inspection over possibly-unvalidated bytes, so it never warns and
+     * never throws on truncation; only a bad signature raises (same gate as
+     * {@see self::decodeBytes()}).
+     */
+    public static function loopCount(string $bytes): ?int
+    {
+        if (strlen($bytes) < 13
+            || (substr($bytes, 0, 6) !== 'GIF87a' && substr($bytes, 0, 6) !== 'GIF89a')) {
+            throw new \RuntimeException(Lang::t('decoder.not_gif'));
+        }
+        $len = strlen($bytes);
+        $packed = ord($bytes[10]);
+        $hasGct = (bool) ($packed & 0x80);
+        $gctBytes = $hasGct ? (1 << (($packed & 0x07) + 1)) * 3 : 0;
+        if ($hasGct && 13 + $gctBytes > $len) {
+            return null; // GCT runs past EOF: there is no block stream to inspect.
+        }
+
+        $loops = null;
+        $i = 13 + $gctBytes;
+        while ($i < $len) {
+            $blockType = ord($bytes[$i]);
+            if ($blockType === 0x3B) {
+                break; // GIF trailer.
+            }
+            if ($blockType === 0x21) {
+                $label = ord($bytes[$i + 1] ?? '');
+                if ($label === 0xF9) {
+                    $i += 8; // Fixed 8-byte GCE (same skip as parseHeader()).
+                    continue;
+                }
+                if ($label === 0xFF
+                    && ord($bytes[$i + 2] ?? '') === 0x0B
+                    && in_array(substr($bytes, $i + 3, 11), ['NETSCAPE2.0', 'ANIMEXTS1.0'], true)
+                    && ord($bytes[$i + 14] ?? '') === 0x03
+                    && ord($bytes[$i + 15] ?? '') === 0x01) {
+                    $raw = ord($bytes[$i + 16] ?? '') | (ord($bytes[$i + 17] ?? '') << 8);
+                    $loops = $raw === 0 ? null : $raw + 1;
+                }
+                $i = self::skipSubBlocks($bytes, $i + 2, $len);
+                continue;
+            }
+            if ($blockType === 0x2C) {
+                if ($i + 10 > $len) {
+                    break; // Descriptor cut short by EOF — the walk ends here.
+                }
+                $descPacked = ord($bytes[$i + 9]);
+                $lctBytes = (bool) ($descPacked & 0x80) ? (1 << (($descPacked & 0x07) + 1)) * 3 : 0;
+                $i = self::skipSubBlocks($bytes, $i + 11 + $lctBytes, $len);
+                continue;
+            }
+            $i++; // Unexpected byte — step forward cautiously (parseHeader parity).
+        }
+
+        return $loops;
+    }
+
+    /**
+     * Walk length-prefixed sub-blocks from $j to the 0x00 terminator (or EOF)
+     * and return the index of the first byte after it — the skip arithmetic
+     * parseHeader() uses, shared so loopCount() cannot desync from the real
+     * decoder on any well-formed stream.
+     */
+    private static function skipSubBlocks(string $bytes, int $j, int $len): int
+    {
+        while ($j < $len) {
+            $subLen = ord($bytes[$j]);
+            $j++;
+            if ($subLen === 0) {
+                break;
+            }
+            if ($j + $subLen > $len) {
+                break; // Overrun: treat the truncated tail as end-of-data.
+            }
+            $j += $subLen;
+        }
+
+        return $j;
     }
 
     /**
@@ -549,20 +669,8 @@ final class Decoder
                     $lastTransparentIndex = $transparentIndex;
                     $i += 8; // Fixed 8-byte GCE: skip to next block.
                 } else {
-                    // Skip extension block: read sub-block length bytes until 0x00 terminator.
-                    $j = $i + 2;
-                    while ($j < $len) {
-                        $subLen = ord($bytes[$j]);
-                        $j++;
-                        if ($subLen === 0) {
-                            break; // Block terminator.
-                        }
-                        if ($j + $subLen > $len) {
-                            break; // Would overrun — treat truncated tail as end-of-data.
-                        }
-                        $j += $subLen; // Skip the sub-block data.
-                    }
-                    $i = $j;
+                    // Skip extension block: read sub-block length bytes until the 0x00 terminator.
+                    $i = self::skipSubBlocks($bytes, $i + 2, $len);
                 }
                 continue;
             }
@@ -619,19 +727,7 @@ final class Decoder
                 // Starting at +10 read the min-code byte as a block length and
                 // desynchronised the walk on some frame counts (MAX_FRAMES pin
                 // test caught it at n=8).
-                $j = $i + 11 + $lctBytes;
-                while ($j < $len) {
-                    $subLen = ord($bytes[$j]);
-                    $j++;
-                    if ($subLen === 0) {
-                        break; // Sub-block terminator.
-                    }
-                    if ($j + $subLen > $len) {
-                        break; // Would overrun — treat truncated tail as end-of-data.
-                    }
-                    $j += $subLen; // Skip the sub-block data.
-                }
-                $i = $j;
+                $i = self::skipSubBlocks($bytes, $i + 11 + $lctBytes, $len);
                 continue;
             }
             // Unexpected byte — step forward cautiously.
