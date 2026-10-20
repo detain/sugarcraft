@@ -42,19 +42,21 @@ final class PixelGridTest extends TestCase
         $this->assertSame(2, $grid->cellH);
         $this->assertNotEmpty($grid->cells);
 
-        // Each cell should have 4 quadrants (ul, ur, ll, lr)
+        // Each cell should have 4 quadrants (ul, ur, ll, lr), each an
+        // [r, g, b, ?int alpha] quad (A-05a: null alpha = transparent).
         foreach ($grid->cells as $row) {
             foreach ($row as $cell) {
                 $this->assertCount(4, $cell);
                 foreach ($cell as $quadrant) {
-                    $this->assertCount(3, $quadrant);
-                    [$r, $g, $b] = $quadrant;
+                    $this->assertCount(4, $quadrant);
+                    [$r, $g, $b, $a] = $quadrant;
                     $this->assertGreaterThanOrEqual(0, $r);
                     $this->assertLessThanOrEqual(255, $r);
                     $this->assertGreaterThanOrEqual(0, $g);
                     $this->assertLessThanOrEqual(255, $g);
                     $this->assertGreaterThanOrEqual(0, $b);
                     $this->assertLessThanOrEqual(255, $b);
+                    $this->assertTrue($a === null || ($a >= 0 && $a <= 126));
                 }
             }
         }
@@ -91,5 +93,37 @@ final class PixelGridTest extends TestCase
         $this->assertSame(4, $grid->cellW);
         $this->assertSame(2, $grid->cellH);
         $this->assertNotEmpty($grid->cells);
+    }
+
+    /**
+     * A-05a: fromGdQuarter must expose transparency per quad (alpha null)
+     * instead of silently handing back the stored RGB of a transparent
+     * pixel — the old colour-bits-only read turned a transparent-black
+     * quadrant into a black quad fed to the renderer.
+     */
+    public function testFromGdQuarterFlagsTransparentQuadsAsNullAlpha(): void
+    {
+        $gd = imagecreatetruecolor(2, 2);
+        self::assertNotFalse($gd);
+        imagealphablending($gd, false);
+
+        $opaque = imagecolorallocatealpha($gd, 10, 20, 30, 0);
+        $ghost  = imagecolorallocatealpha($gd, 0, 0, 0, 127);
+        self::assertNotFalse($opaque);
+        self::assertNotFalse($ghost);
+        imagesetpixel($gd, 0, 0, $opaque); // ul
+        imagesetpixel($gd, 1, 0, $ghost);  // ur
+        imagesetpixel($gd, 0, 1, $ghost);  // ll
+        imagesetpixel($gd, 1, 1, $opaque); // lr
+        imagesavealpha($gd, true);
+
+        $grid = PixelGrid::fromGdQuarter($gd, 1, 1);
+        imagedestroy($gd);
+
+        [$ul, $ur, $ll, $lr] = $grid->cells[0][0];
+        $this->assertSame([10, 20, 30, 0], $ul);
+        $this->assertSame([0, 0, 0, null], $ur, 'fully transparent quad reads null alpha');
+        $this->assertSame([0, 0, 0, null], $ll);
+        $this->assertSame([10, 20, 30, 0], $lr);
     }
 }

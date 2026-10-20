@@ -120,11 +120,17 @@ final class PixelGrid
      * back four quadrant values per cell (ul, ur, ll, lr).  Used by
      * QuarterBlockRenderer for 2×2 sub-pixel rendering.
      *
+     * Each quad carries the same binary-alpha slot as {@see fromGd()}:
+     * alpha 127 (fully transparent) reads back as null so downstream
+     * callers can exclude the quad from colour sampling instead of
+     * mistaking its stored RGB (often black) for image content (A-05a);
+     * alpha 0-126 is treated as opaque.
+     *
      * @param \GdImage $img    Source image (must be truecolor)
      * @param int      $cellW  Number of terminal cells wide
      * @param int      $cellH  Number of terminal cells tall
-     * @return self            2-D grid of 4-element [ul, ur, ll, lr] RGB triples
-     * @phpstan-return list<list<array{0:int,1:int,2:int}>>  // 4 entries per cell
+     * @return self            2-D grid of 4-element [ul, ur, ll, lr] quads,
+     *                         each `[r, g, b, ?int]`
      */
     public static function fromGdQuarter(\GdImage $img, int $cellW, int $cellH): self
     {
@@ -160,11 +166,15 @@ final class PixelGrid
                     [$cx * 2 + 1, $cy * 2 + 1], // lower-right
                 ];
                 foreach ($offsets as list($ox, $oy)) {
-                    $rgb = imagecolorat($scaled, $ox, $oy);
-                    $r = ($rgb >> 16) & 0xff;
-                    $g = ($rgb >>  8) & 0xff;
-                    $b =  $rgb        & 0xff;
-                    $quads[] = [$r, $g, $b];
+                    $color = imagecolorsforindex($scaled, imagecolorat($scaled, $ox, $oy));
+                    // GD alpha: 0 = fully opaque, 127 = fully transparent.
+                    // Map: alpha=127 → null (transparent), else opaque.
+                    $quads[] = [
+                        $color['red'],
+                        $color['green'],
+                        $color['blue'],
+                        $color['alpha'] === 127 ? null : $color['alpha'],
+                    ];
                 }
                 $row[] = $quads;
             }

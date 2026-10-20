@@ -16,6 +16,19 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * encodes which quadrants are bright via foreground colour and which are
  * dim via background colour (both drawn from the same image pixel).
  *
+ * Cell selection is an exhaustive minimum-error search over all 16 glyph
+ * masks (A-03): each membership split's pens are the group averages and the
+ * winner is the split minimising summed squared colour distance. Because
+ * complement(mask) with swapped pens paints identical pixels, the search
+ * evaluates the 8 representatives 1..7 and resolves each split's pen
+ * assignment by group luma (brighter group rides the foreground).
+ *
+ * Transparency is per quad (A-05a): a fully-transparent cell renders blank
+ * (terminal default on both pens), and a partly-transparent cell renders
+ * foreground-only — the filled mask is pinned to the opaque quadrant set so
+ * transparent quadrants never paint black. Semi-transparent pixels follow the
+ * lib-wide binary-alpha rule (see {@see PixelGrid}).
+ *
  * Higher visual fidelity than HalfBlockRenderer when Sixel/Kitty are
  * unavailable: 4 sub-pixel positions per cell vs 2.
  */
@@ -73,7 +86,11 @@ final class QuarterBlockRenderer implements Renderer
         foreach ($grid->cells as $row) {
             foreach ($row as $quads) {
                 [$glyph, $fg, $bg] = self::cellPaint($quads);
-                $pen->cell($glyph, $fg, $bg);
+                $pen->cell(
+                    $glyph,
+                    $fg === null ? null : OutputOptimizer::trueColor($fg[0], $fg[1], $fg[2]),
+                    $bg === null ? null : OutputOptimizer::trueColor($bg[0], $bg[1], $bg[2]),
+                );
             }
             $lines[] = $pen->finishRow();
         }
@@ -82,129 +99,170 @@ final class QuarterBlockRenderer implements Renderer
     }
 
     /**
-     * Resolve one 2×2 cell to (glyph, foreground, background). The four
-     * quadrant colours are split into two groups (a 1-step 2-means around the
-     * most-distant pair); the glyph encodes which quadrants are the brighter
-     * "foreground" group, drawn in that group's average colour over the other
-     * group's average as the background. Pen values are normalized SGR
-     * parameter strings for {@see OutputOptimizer} to diff; the mask is
-     * provably >= 1 (the seed pair splits the quadrants), so a space glyph
-     * never reaches this path.
+     * Resolve one 2×2 cell to (glyph, foreground, background). All four
+     * quadrants opaque: an exhaustive minimum-error search over the glyph
+     * masks (A-03) picks the membership split whose group averages best
+     * reproduce the quadrant colours — complement(mask) with swapped pens
+     * paints identical pixels, so masks 1..7 cover every split, and each
+     * split's brighter-average group rides the foreground. Flat cells keep
+     * the solid shortcut. With at least one transparent quad (A-05a) the
+     * search is skipped and the cell renders foreground-only: the filled
+     * mask is pinned to the opaque quadrant set, transparent quads are
+     * absent from the sample and from the group average, and the background
+     * pen stays null (terminal default) — never a black paint. All four
+     * transparent yields a blank. Pen colours are returned as RGB triples;
+     * {@see render()} normalizes them to SGR parameters for OutputOptimizer.
      *
-     * @param list<array{int,int,int}> $quads ul, ur, ll, lr
+     * @param list<array{int,int,int,?int}> $quads ul, ur, ll, lr (alpha null = transparent)
      *
-     * @return array{string, string, string}
+     * @return array{string, ?array{int,int,int}, ?array{int,int,int}} glyph, fg, bg
      */
     private static function cellPaint(array $quads): array
     {
-        [$a, $b] = self::findSeedPair($quads);
+        $opaque = [];
+        foreach ($quads as $i => $quad) {
+            if ($quad[3] !== null) {
+                $opaque[$i] = [$quad[0], $quad[1], $quad[2]];
+            }
+        }
+
+        if ($opaque === []) {
+            return [' ', null, null];
+        }
+
+        if (count($opaque) < 4) {
+            $mask = 0;
+            foreach (array_keys($opaque) as $i) {
+                $mask |= (1 << $i);
+            }
+
+            return [self::GLYPH_MAP[$mask], self::averageColor(array_values($opaque)), null];
+        }
 
         // A flat cell — all four quadrants identical — is a solid block.
-        if (ColorUtil::squaredDistance($quads[$a], $quads[$b]) === 0) {
-            [$r, $g, $bl] = $quads[0];
-            $rgb = OutputOptimizer::trueColor($r, $g, $bl);
+        if (self::isFlat($quads)) {
+            $rgb = [$quads[0][0], $quads[0][1], $quads[0][2]];
 
             return [self::GLYPH_MAP[15], $rgb, $rgb];
         }
 
-        // Brighter seed is the foreground.
-        [$fgSeed, $bgSeed] = ColorUtil::luma($quads[$a][0], $quads[$a][1], $quads[$a][2])
-            >= ColorUtil::luma($quads[$b][0], $quads[$b][1], $quads[$b][2])
-            ? [$quads[$a], $quads[$b]]
-            : [$quads[$b], $quads[$a]];
+        [$mask, $fg, $bg] = self::bestCell(array_values($quads));
 
-        [$mask, $fgSum, $bgSum, $fgN, $bgN] = self::groupQuadrantsBySeed($quads, $fgSeed, $bgSeed);
-        [$fg, $bg] = self::computeCellColors($fgSeed, $bgSeed, $fgSum, $fgN, $bgSum, $bgN);
-
-        return [
-            self::GLYPH_MAP[$mask],
-            OutputOptimizer::trueColor($fg[0], $fg[1], $fg[2]),
-            OutputOptimizer::trueColor($bg[0], $bg[1], $bg[2]),
-        ];
+        return [self::GLYPH_MAP[$mask], $fg, $bg];
     }
 
     /**
-     * Find the indices of the two most-distant quadrants.
+     * True when all four quadrant colours are identical.
      *
-     * @param list<array{int,int,int}> $quads
-     * @return array{0:int, 1:int} Indices of the most-distant pair
+     * @param list<array{int,int,int,?int}> $quads
      */
-    private static function findSeedPair(array $quads): array
+    private static function isFlat(array $quads): bool
     {
-        $maxD = -1;
-        $a = 0;
-        $b = 0;
-        for ($i = 0; $i < 4; $i++) {
-            for ($j = $i + 1; $j < 4; $j++) {
-                $d = ColorUtil::squaredDistance($quads[$i], $quads[$j]);
-                if ($d > $maxD) {
-                    $maxD = $d;
-                    $a = $i;
-                    $b = $j;
+        foreach ([1, 2, 3] as $i) {
+            if ($quads[0][0] !== $quads[$i][0]
+                || $quads[0][1] !== $quads[$i][1]
+                || $quads[0][2] !== $quads[$i][2]
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Exhaustive minimum-error search over the 16 quadrant membership masks,
+     * halved to the 8 representatives 1..7 by complement symmetry (masks 0
+     * and 15 are the solid/space duplicates the flat shortcut already owns).
+     * Per split the pen colours are the group averages; the brighter-average
+     * group is assigned the foreground, its complement mask the glyph, which
+     * is exactly chafa's inverted-candidate trial folded into one pass
+     * (chafa/internal/chafa-symbol-renderer.c:270-300 scores every symbol;
+     * chafa-symbol-map.c:1189-1263 treats hd and 64-hd as one pair).
+     *
+     * @param list<array{int,int,int,?int}> $quads four opaque quadrants
+     *
+     * @return array{0:int, 1:array{int,int,int}, 2:array{int,int,int}} mask, fg, bg
+     */
+    private static function bestCell(array $quads): array
+    {
+        $bestMask = 15; // unreachable seed — the 1..7 loop always scores a split first
+        $bestFg = $bestBg = [0, 0, 0];
+        $bestError = PHP_INT_MAX;
+
+        for ($mask = 1; $mask <= 7; $mask++) {
+            $fgGroup = [];
+            $bgGroup = [];
+            for ($i = 0; $i < 4; $i++) {
+                if ($mask & (1 << $i)) {
+                    $fgGroup[] = [$quads[$i][0], $quads[$i][1], $quads[$i][2]];
+                } else {
+                    $bgGroup[] = [$quads[$i][0], $quads[$i][1], $quads[$i][2]];
                 }
             }
-        }
-        return [$a, $b];
-    }
 
-    /**
-     * Group quadrants by their nearest seed colour.
-     *
-     * @param list<array{int,int,int}> $quads
-     * @param array{int,int,int} $fgSeed
-     * @param array{int,int,int} $bgSeed
-     * @return array{0:int, 1:array, 2:array, 3:int, 4:int} mask, fgSum, bgSum, fgN, bgN
-     */
-    private static function groupQuadrantsBySeed(array $quads, array $fgSeed, array $bgSeed): array
-    {
-        $mask = 0;
-        $fgSum = [0, 0, 0];
-        $bgSum = [0, 0, 0];
-        $fgN = 0;
-        $bgN = 0;
-        for ($i = 0; $i < 4; $i++) {
-            if (ColorUtil::squaredDistance($quads[$i], $fgSeed) <= ColorUtil::squaredDistance($quads[$i], $bgSeed)) {
-                $mask |= (1 << $i);
-                $fgSum[0] += $quads[$i][0];
-                $fgSum[1] += $quads[$i][1];
-                $fgSum[2] += $quads[$i][2];
-                $fgN++;
-            } else {
-                $bgSum[0] += $quads[$i][0];
-                $bgSum[1] += $quads[$i][1];
-                $bgSum[2] += $quads[$i][2];
-                $bgN++;
+            $fg = self::averageColor($fgGroup);
+            $bg = self::averageColor($bgGroup);
+            $error = self::cellError($quads, $mask, $fg, $bg);
+
+            // Brighter average rides the foreground; equal luma keeps the
+            // as-is assignment (mask bits = fg group) for determinism.
+            // $resolved is separate from the loop variable on purpose.
+            $resolved = $mask;
+            if (ColorUtil::luma($bg[0], $bg[1], $bg[2]) > ColorUtil::luma($fg[0], $fg[1], $fg[2])) {
+                [$resolved, $fg, $bg] = [15 & ~$mask, $bg, $fg];
+            }
+
+            if ($error < $bestError) {
+                $bestError = $error;
+                $bestMask = $resolved;
+                $bestFg = $fg;
+                $bestBg = $bg;
             }
         }
-        return [$mask, $fgSum, $bgSum, $fgN, $bgN];
+
+        return [$bestMask, $bestFg, $bestBg];
     }
 
     /**
-     * Compute averaged foreground and background colours from group sums.
+     * Summed squared colour error of a membership split: each quadrant pays
+     * the distance to the pen that paints it. Symmetric under the pen swap
+     * of complement masks, which licenses the 8-mask search.
      *
-     * @param array{int,int,int} $fgSeed Fallback fg if group is empty
-     * @param array{int,int,int} $bgSeed Fallback bg if group is empty
-     * @param array{int,int,int} $fgSum
-     * @param int $fgN
-     * @param array{int,int,int} $bgSum
-     * @param int $bgN
-     * @return array{0:array, 1:array} fg, bg
+     * @param list<array{int,int,int,?int}> $quads
+     * @param int $mask foreground membership bits
+     * @param array{int,int,int} $fg
+     * @param array{int,int,int} $bg
      */
-    private static function computeCellColors(
-        array $fgSeed,
-        array $bgSeed,
-        array $fgSum,
-        int $fgN,
-        array $bgSum,
-        int $bgN,
-    ): array {
-        $fg = $fgN > 0
-            ? [intdiv($fgSum[0], $fgN), intdiv($fgSum[1], $fgN), intdiv($fgSum[2], $fgN)]
-            : $fgSeed;
-        $bg = $bgN > 0
-            ? [intdiv($bgSum[0], $bgN), intdiv($bgSum[1], $bgN), intdiv($bgSum[2], $bgN)]
-            : $bgSeed;
-        return [$fg, $bg];
+    private static function cellError(array $quads, int $mask, array $fg, array $bg): int
+    {
+        $error = 0;
+        for ($i = 0; $i < 4; $i++) {
+            $pen = ($mask & (1 << $i)) ? $fg : $bg;
+            $error += ColorUtil::squaredDistance([$quads[$i][0], $quads[$i][1], $quads[$i][2]], $pen);
+        }
+
+        return $error;
+    }
+
+    /**
+     * Integer average of a non-empty colour group.
+     *
+     * @param list<array{int,int,int}> $colors
+     *
+     * @return array{int,int,int}
+     */
+    private static function averageColor(array $colors): array
+    {
+        $sum = [0, 0, 0];
+        foreach ($colors as $color) {
+            $sum[0] += $color[0];
+            $sum[1] += $color[1];
+            $sum[2] += $color[2];
+        }
+        $n = count($colors);
+
+        return [intdiv($sum[0], $n), intdiv($sum[1], $n), intdiv($sum[2], $n)];
     }
 
     public function name(): string

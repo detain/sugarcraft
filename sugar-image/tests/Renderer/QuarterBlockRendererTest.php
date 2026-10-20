@@ -128,4 +128,152 @@ final class QuarterBlockRendererTest extends TestCase
 
         $this->assertSame($directOut, $mosaicOut);
     }
+
+    /**
+     * A-03: exhaustive search must beat the retired 1-step 2-means on the
+     * survey's mis-choice cell (chafa campaign survey A-03, :60-72): UL=0,
+     * UR=200, LL=200, LR=100 grays. The old heuristic's most-distant seeds
+     * {0,200} plus the `<=` tie-to-fg rule dragged the mid-gray LR into the
+     * foreground group (mask 14, fg 166, bg 0, squared error 20004); the
+     * minimum-error split is {UR,LL} fg=200 vs {UL,LR} bg=50 (mask 6 ▞,
+     * error 15000) — pinned as exact output bytes.
+     */
+    public function testExhaustiveSearchCorrectsTheSeedHeuristicMisChoice(): void
+    {
+        $image = $this->cellImage([
+            [[0, 0, 0, 0], [200, 200, 200, 0]],
+            [[200, 200, 200, 0], [100, 100, 100, 0]],
+        ]);
+
+        $out = $this->renderer->render($image, 1, 1);
+
+        $this->assertSame(
+            "\x1b[38;2;200;200;200m\x1b[48;2;50;50;50m\u{259E}\x1b[39;49m",
+            $out,
+        );
+    }
+
+    /**
+     * A-03: on a clean two-group cell (upper row white, lower row black)
+     * the exhaustive search lands on the same cell the seed heuristic chose
+     * — zero-error split mask 3 (▀, fg 255,255,255 over bg 0,0,0). Pins the
+     * equivalence half so the rewrite is proven to only ever improve.
+     */
+    public function testExhaustiveSearchAgreesWithHeuristicOnCleanSplit(): void
+    {
+        $image = $this->cellImage([
+            [[255, 255, 255, 0], [255, 255, 255, 0]],
+            [[0, 0, 0, 0], [0, 0, 0, 0]],
+        ]);
+
+        $out = $this->renderer->render($image, 1, 1);
+
+        $this->assertSame(
+            "\x1b[38;2;255;255;255m\x1b[48;2;0;0;0m\u{2580}\x1b[39;49m",
+            $out,
+        );
+    }
+
+    /**
+     * A-03: the flat shortcut survives the rewrite — four identical quads
+     * stay a solid █ with fg and bg both the cell colour (byte-stable for
+     * the whole goldens corpus).
+     */
+    public function testFlatCellStaysSolidBlock(): void
+    {
+        $image = $this->cellImage([
+            [[255, 0, 0, 0], [255, 0, 0, 0]],
+            [[255, 0, 0, 0], [255, 0, 0, 0]],
+        ]);
+
+        $out = $this->renderer->render($image, 1, 1);
+
+        $this->assertSame(
+            "\x1b[38;2;255;0;0m\x1b[48;2;255;0;0m\u{2588}\x1b[39;49m",
+            $out,
+        );
+    }
+
+    /**
+     * A-05a: a transparent quadrant must never paint its stored RGB. The
+     * old fromGdQuarter read colour bits only, so a transparent-black quad
+     * became a BLACK background pen (survey A-05, chafa_improvemnts.md
+     * :95-101). With three opaque quads the cell renders foreground-only:
+     * mask pinned to the opaque set (UL+UR+LL = 7 = ▛), fg the average of
+     * the three opaque colours (255,0,0 + 0,255,0 + 0,0,255 → 85,85,85),
+     * background left terminal default. No 48;2 pen may appear at all.
+     */
+    public function testTransparentQuadIsAbsentFromSampleNotPaintedBlack(): void
+    {
+        $image = $this->cellImage([
+            [[255, 0, 0, 0], [0, 255, 0, 0]],
+            [[0, 0, 255, 0], [0, 0, 0, 127]],
+        ]);
+
+        $out = $this->renderer->render($image, 1, 1);
+
+        $this->assertStringNotContainsString('48;2', $out, 'a transparent quad must not mint a background pen');
+        $this->assertStringNotContainsString('48;2;0;0;0', $out, 'the A-05 bug shape: transparent black painted as black bg');
+        $this->assertSame("\x1b[38;2;85;85;85m\u{259B}\x1b[39m", $out);
+    }
+
+    /**
+     * A-05a: two opaque diagonal quads keep only their own corners lit —
+     * fg-only mask 9 (▚) in the opaque colour, no background pen.
+     */
+    public function testPartiallyTransparentCellUsesFgOnlyGlyphFamily(): void
+    {
+        $image = $this->cellImage([
+            [[255, 0, 0, 0], [0, 0, 0, 127]],
+            [[0, 0, 0, 127], [255, 0, 0, 0]],
+        ]);
+
+        $out = $this->renderer->render($image, 1, 1);
+
+        $this->assertSame("\x1b[38;2;255;0;0m\u{259A}\x1b[39m", $out);
+    }
+
+    /**
+     * A-05a: an all-transparent cell is a blank — a plain space with no
+     * colour sequence anywhere (the old path minted a solid black █).
+     */
+    public function testAllTransparentCellIsBlank(): void
+    {
+        $image = $this->cellImage([
+            [[0, 0, 0, 127], [0, 0, 0, 127]],
+            [[0, 0, 0, 127], [0, 0, 0, 127]],
+        ]);
+
+        $out = $this->renderer->render($image, 1, 1);
+
+        $this->assertSame(' ', $out);
+        $this->assertStringNotContainsString("\x1b[", $out);
+    }
+
+    /**
+     * Build a 2×2-pixel PNG (one quarter-block cell) from per-quadrant
+     * [r,g,b,gd-alpha] rows: [[ul, ur], [ll, lr]].
+     *
+     * @param array{0: array{0: array{int,int,int,int}, 1: array{int,int,int,int}}, 1: array{0: array{int,int,int,int}, 1: array{int,int,int,int}}} $quads
+     */
+    private function cellImage(array $quads): ImageSource
+    {
+        $gd = imagecreatetruecolor(2, 2);
+        self::assertNotFalse($gd);
+        imagealphablending($gd, false);
+
+        foreach ($quads as $y => $row) {
+            foreach ($row as $x => [$r, $g, $b, $a]) {
+                $color = imagecolorallocatealpha($gd, $r, $g, $b, $a);
+                self::assertNotFalse($color);
+                imagesetpixel($gd, $x, $y, $color);
+            }
+        }
+
+        imagesavealpha($gd, true);
+        $source = ImageSource::fromGd($gd, 'image/png');
+        imagedestroy($gd);
+
+        return $source;
+    }
 }
