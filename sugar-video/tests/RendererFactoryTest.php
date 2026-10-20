@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\Video\Render\AsciiRenderer;
 use SugarCraft\Video\Render\FrameRenderer;
 use SugarCraft\Video\Render\GraphicsRenderer;
 use SugarCraft\Video\Render\HalfBlockRenderer;
+use SugarCraft\Video\Render\LumaRamp;
 use SugarCraft\Video\Render\Mode;
 use SugarCraft\Video\Render\RendererFactory;
 
@@ -265,6 +267,93 @@ final class RendererFactoryTest extends TestCase
             $this->assertIsArray($dims);
             $this->assertArrayHasKey('w', $dims);
             $this->assertArrayHasKey('h', $dims);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // F-06 — autoModeFrom(): symbol-safe tier selection (pure seam, no probing)
+    // -------------------------------------------------------------------------
+
+    /**
+     * F-06: on a Unicode-capable seat the documented ladder stands —
+     * TrueColor answers the HalfBlock rung.
+     */
+    public function testAutoModeFromKeepsHalfBlockOnUnicodeCapableTerminals(): void
+    {
+        $modern = \SugarCraft\Image\TermDb::matchChain(['TERM' => 'xterm-256color']);
+        $this->assertSame(
+            Mode::HalfBlock,
+            RendererFactory::autoModeFrom(false, false, false, ColorProfile::TrueColor, $modern),
+        );
+    }
+
+    /**
+     * F-06: on an ASCII-only seat (TERM=linux console — chicle's
+     * LINUX_CONSOLE_SYMS row) the TrueColor rung cannot draw ▀/▄, so it
+     * steps down to the Ansi256 rung. Without the gate this stays HalfBlock
+     * and this pin goes red.
+     */
+    public function testAutoModeFromDemotesHalfBlockOnAsciiOnlySeats(): void
+    {
+        $console = \SugarCraft\Image\TermDb::matchChain(['TERM' => 'linux']);
+        $this->assertSame(
+            Mode::Ansi256,
+            RendererFactory::autoModeFrom(false, false, false, ColorProfile::TrueColor, $console),
+            'TrueColor on the Linux console must not pick the block-glyph rung',
+        );
+    }
+
+    /**
+     * F-06: the Windows console family (BLOCK|BORDER safe) keeps the
+     * half-block rung — the gate narrows by drawn class, not by OS.
+     */
+    public function testAutoModeFromWindowsConsoleKeepsHalfBlock(): void
+    {
+        $win = \SugarCraft\Image\TermDb::matchChain(['ComSpec' => 'C:\\Windows\\System32\\cmd.exe']);
+        $this->assertSame(
+            Mode::HalfBlock,
+            RendererFactory::autoModeFrom(false, false, false, ColorProfile::TrueColor, $win),
+        );
+    }
+
+    /**
+     * F-06: the graphics rungs are not text-cell glyphs — a sixel-capable
+     * Linux console (theoretically) still gets Sixel; the symbol gate
+     * touches only the TrueColor rung. Precedence above the gate is intact.
+     */
+    public function testAutoModeFromSymbolGateAppliesOnlyToTextCellRung(): void
+    {
+        $console = \SugarCraft\Image\TermDb::matchChain(['TERM' => 'linux']);
+        $this->assertSame(Mode::Sixel, RendererFactory::autoModeFrom(true, false, false, ColorProfile::TrueColor, $console));
+        $this->assertSame(Mode::Kitty, RendererFactory::autoModeFrom(false, true, false, ColorProfile::TrueColor, $console));
+        $this->assertSame(Mode::Iterm2, RendererFactory::autoModeFrom(false, false, true, ColorProfile::TrueColor, $console));
+    }
+
+    /**
+     * F-06: rungs below TrueColor are ASCII-ramp modes already — the gate
+     * never demotes them further.
+     */
+    public function testAutoModeFromLowerRungsPassThroughUntouched(): void
+    {
+        $console = \SugarCraft\Image\TermDb::matchChain(['TERM' => 'linux']);
+        $this->assertSame(Mode::Ansi256, RendererFactory::autoModeFrom(false, false, false, ColorProfile::Ansi256, $console));
+        $this->assertSame(Mode::Ascii, RendererFactory::autoModeFrom(false, false, false, ColorProfile::Ascii, $console));
+        $this->assertSame(Mode::Ascii, RendererFactory::autoModeFrom(false, false, false, null, $console));
+    }
+
+    /**
+     * F-06 (survey correction): the luma ramps ARE the safe tier — all three
+     * named ramps are pure 7-bit ASCII, which is why LumaRamp itself needs
+     * no TermDb consult (there is no Unicode glyph in the ladder to gate).
+     * Pinning the purity keeps the correction honest if a fancy ramp is ever
+     * added — that ramp would then need the symbol gate at selection time.
+     */
+    public function testLumaRampTiersArePureAsciiToday(): void
+    {
+        foreach ([LumaRamp::CHARS1, LumaRamp::CHARS2, LumaRamp::CHARS3] as $ramp) {
+            for ($i = 0; $i < strlen($ramp); $i++) {
+                $this->assertLessThan(128, ord($ramp[$i]), "non-ASCII byte in luma ramp at offset {$i}");
+            }
         }
     }
 }
