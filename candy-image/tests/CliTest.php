@@ -17,6 +17,7 @@ namespace SugarCraft\CandyImage\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\CandyImage\Cli;
 use SugarCraft\Image\Detect;
+use SugarCraft\Image\Renderer\SymbolMapRenderer;
 
 final class CliTest extends TestCase
 {
@@ -182,17 +183,63 @@ final class CliTest extends TestCase
         $this->assertStringContainsString("invalid value 'mono' for --canvas", $err);
     }
 
-    public function testWorkFlagAcceptsChafaIntegersAndTheFloatDial(): void
+    public function testWorkFlagAcceptsChafaIntegersOnly(): void
     {
-        foreach (['1', '5', '9', '0.5', '0.75'] as $value) {
+        // REACH-A04/rev-w10-2 M3: chafa's --work is G_OPTION_ARG_INT 1..9
+        // (chicle-options.c:2420); the bare-float sugar-image dial spelling
+        // is gone — it was what inverted the polarity at the cheap end.
+        foreach (['1', '5', '9'] as $value) {
             [$exit] = self::drive(['--work=' . $value, '/nonexistent.png']);
             $this->assertSame(Cli::EXIT_INPUT, $exit, $value);
         }
 
-        foreach (['0', '10', 'abc', '-1'] as $value) {
+        foreach (['0', '10', 'abc', '-1', '0.5', '0.75', '1.5'] as $value) {
             [$exit] = self::drive(['--work=' . $value, 'x.png']);
             $this->assertSame(Cli::EXIT_USAGE, $exit, $value);
         }
+    }
+
+    public function testTheWorkDialCarriesChafasExactNormalization(): void
+    {
+        // REACH-A04/rev-w10-2 M3: exact parity with chafa.c:570,
+        // (n - 1) / 8.0f — every step is a dyadic rational, so float
+        // equality is exact (no epsilon). Polarity: 1 is the CHEAPEST
+        // (0.0), 9 the most exhaustive (1.0).
+        $table = [
+            '1' => 0.0,
+            '2' => 0.125,
+            '3' => 0.25,
+            '4' => 0.375,
+            '5' => 0.5,
+            '6' => 0.625,
+            '7' => 0.75,
+            '8' => 0.875,
+            '9' => 1.0,
+        ];
+        foreach ($table as $raw => $factor) {
+            // PHP casts numeric-string array keys to int — spell the dial back.
+            $this->assertSame($factor, Cli::workDialToFactor((string) $raw), '--work=' . $raw);
+        }
+
+        // Monotonicity: successive steps strictly increase, so the
+        // pre-fix 1 -> 1.0 / 1.5 -> 0.15 collapse is structurally
+        // impossible — decimals never parse at all.
+        $previous = null;
+        foreach ($table as $factor) {
+            if ($previous !== null) {
+                $this->assertGreaterThan($previous, $factor);
+            }
+            $previous = $factor;
+        }
+        $this->assertNull(Cli::workDialToFactor('1.5'), 'the non-integer collapse spelling is refused');
+
+        // The endpoints land on the renderer's documented rungs.
+        $this->assertSame(1, SymbolMapRenderer::candidateLimit(Cli::workDialToFactor('1')));
+        $this->assertTrue(SymbolMapRenderer::isExhaustiveWorkFactor(Cli::workDialToFactor('9')));
+        // chafa's step 7 lands on 0.75 → raw int 8 → EXHAUSTIVE (the old
+        // /10 mapping answered 0.7 → 7 → non-exhaustive: this pin reds it).
+        $this->assertTrue(SymbolMapRenderer::isExhaustiveWorkFactor(Cli::workDialToFactor('7')));
+        $this->assertFalse(SymbolMapRenderer::isExhaustiveWorkFactor(Cli::workDialToFactor('6')));
     }
 
     public function testScreenPassthroughStaysRefusedThoughS71Landed(): void

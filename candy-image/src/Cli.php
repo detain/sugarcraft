@@ -233,19 +233,11 @@ final class Cli
                         $canvas = $mode;
                         break;
                     case 'work':
-                        // chafa's --work is the integer 1..9 (config float /
-                        // 10); sugar-image's dial is the 0..1 float, so both
-                        // spellings land on the same value.
-                        if (preg_match('/^\d+(?:\.\d+)?$/', $raw) !== 1) {
+                        $factor = self::workDialToFactor($raw);
+                        if ($factor === null) {
                             return $bad();
                         }
-                        $value = (float) $raw;
-                        // chafa's own range is 1..9; 0 would silence the
-                        // candidate window, so it refuses like 10+.
-                        if ($value <= 0.0 || $value > 9.0) {
-                            return $bad();
-                        }
-                        $work = $value > 1.0 ? $value / 10.0 : $value;
+                        $work = $factor;
                         break;
                     case 'passthrough':
                         $value = strtolower($raw);
@@ -424,6 +416,35 @@ final class Cli
         (new Program($player, new ProgramOptions(useAltScreen: true)))->run();
 
         return self::EXIT_OK;
+    }
+
+    /**
+     * chafa's --work normalization (REACH-A04, rev-w10-2 M3). The option
+     * is an INTeger 1..9 (G_OPTION_ARG_INT at tools/chafa/
+     * chicle-options.c:1989, range check :2420) mapped onto the config
+     * float as (n - 1) / 8.0 (tools/chafa/chafa.c:570): `--work=1` is the
+     * CHEAPEST render (0.0 → chafa's 1-candidate window), `--work=9` the
+     * most exhaustive (1.0 → the >= 8 slow path). Decimals, 0, 10+ and
+     * junk all return null — the caller reports the usage error, exactly
+     * where chafa's own parser bails. (The pre-fix spelling divided by
+     * 10 with a bare-float passthrough for <= 1, which inverted the
+     * polarity at the documented cheap end — --work=1 answered 1.0, the
+     * MOST work, not 0.0 — and made the dial non-monotonic across the
+     * 1.0 boundary: 1 -> 1.0 but 1.5 -> 0.15.)
+     *
+     * @return ?float the config work factor, null when invalid
+     */
+    public static function workDialToFactor(string $raw): ?float
+    {
+        if (preg_match('/^\d+$/', $raw) !== 1) {
+            return null;
+        }
+        $step = (int) $raw;
+        if ($step < 1 || $step > 9) {
+            return null;
+        }
+
+        return ($step - 1) / 8.0;
     }
 
     /**

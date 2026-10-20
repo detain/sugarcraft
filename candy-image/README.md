@@ -35,7 +35,7 @@ candy-image --format=symbols --canvas=ansi256 --work=7 logo.png
 | `--format=F`            | Force a protocol: `auto` `sixel` `kitty` `iterm2` `half` (`halfblock`) `quarter` (`quarterblock`) `ascii` `ansi16` `ansi256` `truecolor` `symbols`. |
 | `--symbols=CLASS[+CLASS…]` | Select the symbol tier's glyph corpus with chafa's tag-selector grammar (`all`, `block`, `border`, `braille`, `ascii`, `latin`, `legacy`, `sextant`, `octant`, `technical`, `geometric`, `stipple`, `wedge`, …; `+` adds, `-` removes, a leading sign is relative to the default corpus). Default: sugar-image's byte-frozen 676-glyph corpus. |
 | `--canvas=MODE`         | Colour canvas for the text tiers: `truecolor` (default) `ansi256` `ansi16` `fgbg`. A no-op on backends without the dial. |
-| `--work=N`              | Candidate-search effort: chafa's integer `1`–`9` (config float = N/10) or the sugar-image dial `0.0`–`1.0`; `9` runs the exhaustive path. |
+| `--work=N`              | Candidate-search effort: chafa's integer `1`–`9`, config float `(N−1)/8` — `1` is the cheapest render, `9` runs the exhaustive path. |
 | `--size=WxH`            | Render box in terminal cells (chafa spelling).                    |
 | `--width=N` / `--height=N` | Individual box legs; cannot be mixed with `--size`. Defaults: viewport columns × aspect-derived rows. |
 | `--scale=S`             | Fit policy: `fit` `shrink` `fill` `stretch` `none` `crop` (maps onto `SugarCraft\Image\Scale`). |
