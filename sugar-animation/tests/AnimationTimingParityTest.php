@@ -87,12 +87,13 @@ final class AnimationTimingParityTest extends TestCase
     public function testPositiveDelaysPassThroughTheFloorUnchanged(): void
     {
         $player = $this->playerFromDelays([0, 30]);
-        // update() re-arms off the CURRENT (index 0, delay 0) frame — floored;
-        // the Model it returns sits on index 1, whose own init() is 30cs:
-        // the floor is a minimum, never a rewrite of a real delay.
+        // init() arms off the CURRENT (index 0, delay 0) frame — floored;
+        // E-03's schedule arms off the frame the tick ARRIVES on (index 1,
+        // 30cs): the floor is a minimum, never a rewrite of a real delay,
+        // and it holds on both seams.
         [, $closure] = $player->update(new TickMsg());
         self::assertNotNull($closure);
-        self::assertSame($this->floorSeconds(), $closure()->seconds);
+        self::assertSame(30 / 100.0, $closure()->seconds);
         $closure2 = $player->update(new TickMsg())[0]->init();
         self::assertNotNull($closure2);
         self::assertSame(30 / 100.0, $closure2()->seconds);
@@ -118,8 +119,8 @@ final class AnimationTimingParityTest extends TestCase
     private function decodedDelays(int $delay1, int $delay2): array
     {
         $gif = "\x47\x49\x46\x38\x39\x61"                        // GIF89a
-            . "\x01\x00\x01\x00\x80\x00\x00"                     // 1x1 screen, 4-entry GCT
-            . "\x00\x00\x00\xff\x00\x00\x00\x00\x00\x00\x00\x00" // black, red, black, black
+            . "\x01\x00\x01\x00\x80\x00\x00"                     // 1x1 screen; packed 0x80 = GCT flag, size 0 → 2 ENTRIES
+            . "\x00\x00\x00\xff\x00\x00\x00\x00\x00\x00\x00\x00" // black, red (the two live entries) + 6 slack bytes the tolerant byte-walk steps over
             . "\x21\xF9\x04\x00" . chr($delay1 & 0xFF) . chr(($delay1 >> 8) & 0xFF) . "\x00\x00"
             . "\x2C\x00\x00\x00\x00\x01\x00\x01\x00\x00"
             . "\x02\x03\x04\x01\x05\x00"                         // LZW: clear, index 1, EOI, terminator

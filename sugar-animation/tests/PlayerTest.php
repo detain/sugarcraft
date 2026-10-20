@@ -160,31 +160,38 @@ final class PlayerTest extends TestCase
 
     /**
      * Item 5.3 — per-frame delay scheduling.
-     * Each frame carries its own delay (in centiseconds). scheduleTick() must
-     * use Frame::$delay / 100.0 as the interval so variable-rate GIFs play
-     * at the correct speed rather than a uniform fixed interval.
+     * E-03 flip (disclosed deviation): each Frame::$delay is the hold of
+     * the frame it belongs to, so the arm after ARRIVING on a frame is that
+     * frame's own delay / 100.0 on the absolute schedule — variable-rate
+     * GIFs play at the correct speed and a late tick re-arms for the
+     * REMAINING distance instead of stretching the cycle. The pre-E-03
+     * shape armed the frame being LEFT (a one-frame rotation that never
+     * honored the last frame's delay at all).
      */
     public function testPerFrameDelaySchedulesAppropriateInterval(): void
     {
         // Frame 0: 20 centiseconds (0.2s), Frame 1: 5 centiseconds (0.05s)
         $p = new Player($this->framesWithDelays([20, 5]));
 
-        // First tick should schedule ~0.2s (frame 0 delay)
+        // First tick lands on frame 1 — next tick should schedule ~0.05s
+        // (frame 1's own delay).
         [, $cmd] = $p->update(new TickMsg());
         $this->assertInstanceOf(\Closure::class, $cmd);
         $tickRequest = $cmd();
         $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $tickRequest);
-        $this->assertEqualsWithDelta(0.2, $tickRequest->seconds, 0.001,
-            'First frame delay (20cs) should schedule ~0.2s');
+        $this->assertEqualsWithDelta(0.05, $tickRequest->seconds, 0.001,
+            'Arrival at frame 1 arms frame 1\'s delay (5cs)');
 
-        // Advance to frame 1 — next tick should schedule ~0.05s (frame 1 delay)
+        // Advance to frame 1 — a second immediate tick finds the schedule
+        // still inside frame 1's window and liveness-advances to frame 0,
+        // which gets a fresh full 0.2s hold.
         [$p2, ] = $p->update(new TickMsg());
         $this->assertSame(1, $p2->index);
 
         [, $cmd2] = $p2->update(new TickMsg());
         $tickRequest2 = $cmd2();
         $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $tickRequest2);
-        $this->assertEqualsWithDelta(0.05, $tickRequest2->seconds, 0.001,
-            'Second frame delay (5cs) should schedule ~0.05s');
+        $this->assertEqualsWithDelta(0.2, $tickRequest2->seconds, 0.001,
+            'The wrapped arrival (frame 0) arms frame 0\'s delay (20cs)');
     }
 }
