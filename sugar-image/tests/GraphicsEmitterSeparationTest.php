@@ -37,6 +37,7 @@ final class GraphicsEmitterSeparationTest extends TestCase
         'KittyRenderer.php',
         'Iterm2Renderer.php',
         'ChafaRenderer.php',
+        'OrderedTexture.php',
         'Renderer.php',
         'AsciiColorMode.php',
         'ConfigFingerprintProvider.php',
