@@ -51,6 +51,8 @@ final class MosaicBuilderTest extends TestCase
         parent::tearDown();
         // F-05: re-arm the default any test opted out of (see the tmux dither pin).
         Detect::setAutoPassthrough(true);
+        // F-04: likewise, the termfeatures override must not outlive the test.
+        Detect::clearTmuxTermFeaturesOverride();
         foreach ($this->savedEnv as $key => $value) {
             if ($value === false) {
                 unset($_ENV[$key]);
@@ -128,8 +130,15 @@ final class MosaicBuilderTest extends TestCase
         putenv('TMUX=/tmp/tmux-1000/default,1234,0');
         // F-05 opted this pin out of the allow-passthrough transaction: the
         // fake TMUX is decoration for the envelope/dither wiring under test,
-        // and the transaction itself is pinned in TmuxPassthroughTest.
+        // and the transaction itself is pinned in TmuxPassthroughTest. F-04
+        // opted the same way: on this devbox the socket component of the
+        // value (/tmp/tmux-1000/default) is a LIVE server path, so an
+        // un-opted probe would ask the real tmux and let its answer decide
+        // the capability — the override pins "tmux reports sixel" without
+        // any exec. The transaction/feature queries are TmuxPassthroughTest
+        // and DetectTmuxTest respectively; here only the wrapper matters.
         Detect::setAutoPassthrough(false);
+        Detect::setTmuxTermFeaturesOverride(true);
 
         $renderer = Mosaic::builder()
             ->withDither(Dither::Atkinson)

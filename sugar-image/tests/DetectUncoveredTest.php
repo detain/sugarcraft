@@ -24,6 +24,7 @@ final class DetectUncoveredTest extends TestCase
             putenv($key);
         }
         Detect::reset();
+        Detect::clearTmuxTermFeaturesOverride();
     }
 
     protected function tearDown(): void
@@ -37,6 +38,7 @@ final class DetectUncoveredTest extends TestCase
         }
         Detect::reset();
         Detect::setProbeStdin(null);
+        Detect::clearTmuxTermFeaturesOverride();
         parent::tearDown();
     }
 

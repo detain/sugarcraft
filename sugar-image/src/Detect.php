@@ -28,6 +28,27 @@ final class Detect
     private const TIMEOUT_MS  = 100;
 
     /**
+     * F-04: the tmux format string carrying the OUTER terminal's negotiated
+     * feature list, asked the way chafa asks it
+     * (mirrors chafa `tools/chafa/chicle-options.c:1766-1796`
+     * `query_tmux_client_sixels()` → `tmux display-message -p
+     * '#{client_termfeatures}'`). Measured on tmux next-3.6 the answer is a
+     * comma list ("bpaste,ccolour,clipboard,cstyle,focus,title"); other builds
+     * of the 3.3+ feature list use ';'. {@see parseTermFeatures()} splits on
+     * both, so neither spelling can hide the sixel token.
+     */
+    private const CLIENT_FEATURES_FORMAT = '#{client_termfeatures}';
+
+    /** F-04: wall bound for one feature query — a socket round-trip, not a job. */
+    private const TERMFEATURES_DEADLINE_MS = 100;
+
+    /** F-04: hard cap on captured stdout before the child is killed (answers are short). */
+    private const TERMFEATURES_MAX_BYTES = 65536;
+
+    /** F-04: grace between SIGTERM and SIGKILL while escalating a runaway child. */
+    private const TERMFEATURES_TERM_GRACE_SECONDS = 0.25;
+
+    /**
      * Terminator for a DA1 reply: `` ESC [ ? <attrs> c ``.
      *
      * It deliberately requires the ``?`` flag byte, which no real reply
@@ -57,6 +78,18 @@ final class Detect
      * a graphics protocol is desired").
      */
     private static bool $autoPassthrough = true;
+
+    /**
+     * F-04 test seam: forced tri-state for {@see probeTmuxTermFeatures()}.
+     * null means "no override — ask (or fail-soft AUTO)"; when set, the
+     * wrapped state is the whole answer and NO tmux process is spawned.
+     * The array wrapper is what keeps "override with AUTO" (['state'=>null])
+     * distinct from "no override" (null) — the same sentinel-pair idea the
+     * lib's XSet law uses, one level up.
+     *
+     * @var array{state:bool|null}|null
+     */
+    private static ?array $tmuxFeaturesOverride = null;
 
     /** Raw bytes of the last DA1 reply, for debugging / testing. */
     private static ?string $lastDa1Reply = null;
@@ -109,14 +142,47 @@ final class Detect
             return $result;
         }
 
-        // Run DA1 sixel probing BEFORE font-size probing so that in tests
-        // using a preloaded socket pair, DA1 reply bytes are not consumed
-        // by probeFontSize() before probeDa1() gets to read them.
-        $sixelViaDa1 = self::probeDa1();
-        if ($sixelViaDa1 === true) {
+        // F-04: inside tmux the pane's DA1 reply answers FOR TMUX, not for
+        // the outer terminal — chicle-options.c:1755-1764: "tmux claims sixel
+        // support in its own DA1 response regardless, so probing the pane
+        // can't tell us" (it includes the sixel bit to enable passthrough).
+        // Ask the server what the attached client's terminal really features;
+        // a definite answer outranks any pane-side claim, and AUTO (tmux
+        // absent/old, no client, dead socket, over-budget reply) leaves the
+        // pre-F-04 ladder exactly as it was — fail-soft, never a veto by
+        // silence.
+        $features = $inTmux ? self::probeTmuxTermFeatures() : null;
+
+        if ($features === true) {
+            // The outer terminal does sixel and a sixel-capable tmux (3.3+)
+            // renders it in-pane; the DA1 round-trip could only agree — skip
+            // it, like chicle short-circuits on its TRUE tristate.
             $result = Capability::sixel(self::probeFontSize(), $inTmux);
             self::drainStdin(50, self::stdinFd());
             return $result;
+        }
+
+        // Run DA1 sixel probing BEFORE font-size probing so that in tests
+        // using a preloaded socket pair, DA1 reply bytes are not consumed
+        // by probeFontSize() before probeDa1() gets to read them. A definite
+        // feature-list NO (below) skips the round-trip outright: its answer
+        // is already known and the query is the thing F-04 distrusts.
+        if ($features !== false) {
+            $sixelViaDa1 = self::probeDa1();
+            if ($sixelViaDa1 === true) {
+                $result = Capability::sixel(self::probeFontSize(), $inTmux);
+                self::drainStdin(50, self::stdinFd());
+                return $result;
+            }
+        }
+
+        if ($features === false && $cap->sixel) {
+            // Chicle turns the sixel pixel mode OFF on exactly this answer
+            // (chicle-options.c:2180-2191). The same override demotes a
+            // sixel claim the ENV ladder seeded (a leaked $XTERM_VERSION or
+            // $TERM survives into some panes): inside a pane, graphics never
+            // reach an outer terminal the server says cannot display them.
+            $cap = Capability::unknown(null, $inTmux);
         }
 
         $result = $cap->withCellSize(self::probeFontSize());
@@ -173,6 +239,223 @@ final class Detect
     public static function autoPassthrough(): bool
     {
         return self::$autoPassthrough;
+    }
+
+    /**
+     * Force the F-04 termfeatures answer for tests: true = outer terminal
+     * has sixel, false = definite no (veto), null = AUTO (the fail-soft
+     * verdict — while overridden, NO tmux process is ever spawned).
+     */
+    public static function setTmuxTermFeaturesOverride(?bool $state): void
+    {
+        self::$tmuxFeaturesOverride = ['state' => $state];
+    }
+
+    /** Remove the override; {@see probeTmuxTermFeatures()} goes back to asking tmux. */
+    public static function clearTmuxTermFeaturesOverride(): void
+    {
+        self::$tmuxFeaturesOverride = null;
+    }
+
+    /**
+     * F-04: tri-state answer to "can the terminal OUTSIDE this tmux pane
+     * display sixels?", mirroring {@see chafa}'s `ChicleTristate`
+     * (chicle-options.c:1760-1796).
+     *
+     *  - true  — the feature list names sixel;
+     *  - false — the feature list came back definite and sixel is NOT in it
+     *            (this is the ONLY shape that vetoes; per chicle, "no answer"
+     *            is not an answer);
+     *  - null  — AUTO: outside tmux, tmux older than 3.3 (the format did not
+     *            exist and the command errors), no attached client, dead
+     *            socket, unparseable or empty reply, or the 100 ms budget
+     *            expired. Callers must treat this as "no information".
+     */
+    private static function probeTmuxTermFeatures(): ?bool
+    {
+        if (self::$tmuxFeaturesOverride !== null) {
+            return self::$tmuxFeaturesOverride['state'];
+        }
+        if (getenv('TMUX') === false) {
+            return null; // the guard clause IS the zero-process cost outside tmux
+        }
+
+        $reply = self::runTmuxFeatureQuery();
+
+        return $reply === null ? null : self::parseTermFeatures($reply);
+    }
+
+    /**
+     * Parse a `#{client_termfeatures}` reply into the F-04 tri-state.
+     *
+     * Separator alphabet: chicle splits the comma list on `, \t\r\n`; tmux
+     * builds that are 'us;suspend;...' style carry ';'. Split on both plus
+     * whitespace so no list spelling hides a token. Match is on WHOLE tokens
+     * only — an unrelated feature name containing the letters sixel (or a
+     * `desc=` string, which this command never emits but a future format
+     * might) must not fake a claim the way the old DA1 substring match faked
+     * one from tmux's own reply.
+     *
+     * tmux 3.4+ additionally spells refusals as `no-<feature>`; a `no-sixel`
+     * token is the DEFINITE no even when a bare list also came through, so it
+     * is checked per token, not after the loop.
+     */
+    private static function parseTermFeatures(string $output): ?bool
+    {
+        $tokens = preg_split('/[,;\s]+/', trim($output), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        $sawFeature = false;
+        foreach ($tokens as $token) {
+            if (str_starts_with($token, 'no-')) {
+                if (substr($token, 3) === 'sixel') {
+                    return false; // explicit negative outranks everything else
+                }
+                continue;
+            }
+            if ($token === 'unknown') {
+                // tmux's own "I never asked the outer terminal" marker —
+                // features were reported, but not trustworthily. AUTO.
+                return null;
+            }
+            if ($token === 'sixel') {
+                return true;
+            }
+            $sawFeature = true;
+        }
+
+        // A list came back, sixel was simply not in it: chicle's exact
+        // "features were reported, but sixel isn't among them" FALSE.
+        return $sawFeature ? false : null;
+    }
+
+    /**
+     * Run `tmux display-message -p '#{client_termfeatures}'` and return its
+     * stdout, or null on ANY failure (missing binary, dead socket, non-zero
+     * exit, over-budget reply) — every null path reads back as AUTO upstream.
+     *
+     * Child-lifetime discipline is the house shape copied from
+     * {@see TmuxPassthrough::runTmux}: argv-array proc_open (no shell in
+     * between), stdin and stderr both /dev/null (a reader-less stderr pipe
+     * would SIGPIPE the child mid-command), a deadline-bounded read, and a
+     * TERM→grace-poll→KILL escalation that ends in proc_close() on EVERY
+     * path so no child or zombie outlives this call.
+     *
+     * The command carries NO -S socket argument on purpose: tmux client
+     * commands take their server from $TMUX, which probeTmuxTermFeatures()
+     * has just checked — chicle's model command, same reason.
+     */
+    private static function runTmuxFeatureQuery(): ?string
+    {
+        $descriptorSpec = [
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['file', '/dev/null', 'w'],
+        ];
+        $pipes = [];
+        $proc = @proc_open(
+            ['tmux', 'display-message', '-p', self::CLIENT_FEATURES_FORMAT],
+            $descriptorSpec,
+            $pipes
+        );
+        if (!is_resource($proc)) {
+            return null;
+        }
+
+        $stdout    = '';
+        $completed = false;
+        $deadline  = Deadline::in(self::TERMFEATURES_DEADLINE_MS);
+        while (true) {
+            $remaining = $deadline->remainingMs();
+            if ($remaining <= 0) {
+                break;
+            }
+            $read  = [$pipes[1]];
+            $write = $except = null;
+            /** @var int|false */
+            $ready = @stream_select($read, $write, $except, 0, $remaining * 1000);
+            if ($ready === false) {
+                break; // signal-interrupted select: the query is blown
+            }
+            if ($ready === 0) {
+                continue; // slice spent: the deadline bounds the loop
+            }
+            $chunk = fread($pipes[1], 8192);
+            if ($chunk === false) {
+                $completed = true; // read error reads as end-of-stream; exit judges
+                break;
+            }
+            $stdout .= $chunk;
+            if (strlen($stdout) > self::TERMFEATURES_MAX_BYTES) {
+                break; // an answer this long is not a feature list; kill and bail
+            }
+            if (feof($pipes[1])) {
+                $completed = true; // stdout closed: the answer (or its absence) is complete
+                break;
+            }
+        }
+        fclose($pipes[1]);
+
+        if (!$completed) {
+            self::terminateBoundedChild($proc);
+            proc_close($proc);
+            return null;
+        }
+
+        $status = proc_get_status($proc);
+        if ($status['running']) {
+            // EOF arrived but the child lingers (issue #62 lesson generalized:
+            // a still-running writer never yields a stable exit code).
+            self::terminateBoundedChild($proc);
+        }
+
+        $exit = proc_close($proc);
+        if ($exit !== 0) {
+            return null; // old tmux rejects the unknown format with exit != 0 → AUTO
+        }
+
+        return $stdout;
+    }
+
+    /**
+     * SIGTERM, poll through the grace window, SIGKILL, poll for the reap —
+     * the integer-literal signals (15, 9) are the same no-ext-pcntl choice
+     * {@see TmuxPassthrough::terminateBounded()} documents.
+     *
+     * @param resource $proc
+     */
+    private static function terminateBoundedChild($proc): void
+    {
+        if (!proc_get_status($proc)['running']) {
+            return;
+        }
+
+        proc_terminate($proc, 15);
+        if (self::awaitChildExit($proc, self::TERMFEATURES_TERM_GRACE_SECONDS)) {
+            return;
+        }
+
+        proc_terminate($proc, 9);
+        self::awaitChildExit($proc, self::TERMFEATURES_TERM_GRACE_SECONDS);
+    }
+
+    /**
+     * Poll the child's status until it reports not-running or the budget
+     * expires — one poll before the first sleep and one after the last, so
+     * the return is measured liveness, not hope.
+     *
+     * @param resource $proc
+     */
+    private static function awaitChildExit($proc, float $budgetSeconds): bool
+    {
+        $end = hrtime(true) / 1_000_000_000 + $budgetSeconds;
+        do {
+            if (!proc_get_status($proc)['running']) {
+                return true;
+            }
+            usleep(10_000);
+        } while (hrtime(true) / 1_000_000_000 < $end);
+
+        return !proc_get_status($proc)['running'];
     }
 
     /**

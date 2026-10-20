@@ -17,12 +17,17 @@ final class DetectTest extends TestCase
     {
         parent::setUp();
         // Snapshot and clear relevant env vars so each test starts clean.
-        $keys = ['KITTY_WINDOW_ID', 'TERM_PROGRAM', 'LC_TERMINAL', 'TERM', 'XTERM_VERSION'];
+        // TMUX is in the cleared set because of F-04: with it set, probe()
+        // would consult the REAL tmux server (this suite may itself run
+        // inside one) and the outer terminal's feature list could veto or
+        // short-circuit the sixel expectations pinned here.
+        $keys = ['KITTY_WINDOW_ID', 'TERM_PROGRAM', 'LC_TERMINAL', 'TERM', 'XTERM_VERSION', 'TMUX'];
         foreach ($keys as $key) {
             $this->savedEnv[$key] = getenv($key);
             putenv($key);
         }
         Detect::reset();
+        Detect::clearTmuxTermFeaturesOverride();
     }
 
     protected function tearDown(): void
@@ -37,6 +42,7 @@ final class DetectTest extends TestCase
         }
         Detect::reset();
         Detect::setProbeStdin(null);
+        Detect::clearTmuxTermFeaturesOverride();
         if (isset($GLOBALS['__candy_non_interactive'])) {
             unset($GLOBALS['__candy_non_interactive']);
         }

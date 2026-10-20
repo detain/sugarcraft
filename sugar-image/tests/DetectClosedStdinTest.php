@@ -55,10 +55,40 @@ final class DetectClosedStdinTest extends TestCase
     /** @var list<resource> */
     private array $open = [];
 
+    /** @var array<string, string|false> */
+    private array $envSnapshot = [];
+
+    protected function setUp(): void
+    {
+        // F-04 made an ambient TMUX load-bearing for the probe: with the
+        // variable set, probeQueries() consults tmux termfeatures BEFORE
+        // trusting a DA1 sixel claim, and on a machine whose session runs
+        // inside tmux a definite no-sixel answer vetoes the DA1 arm that the
+        // controls below assert on. This file pins guard clauses around dead
+        // descriptors, not the ladder, so the terminal environment is cleared
+        // exactly as DetectTest does — and the child spawned further below
+        // inherits the cleared env, so it too never reaches a real tmux.
+        $keys = ['TERM', 'TERM_PROGRAM', 'KITTY_WINDOW_ID', 'XTERM_VERSION', 'LC_TERMINAL', 'TMUX'];
+        foreach ($keys as $key) {
+            $this->envSnapshot[$key] = getenv($key);
+            putenv($key);
+        }
+        Detect::clearTmuxTermFeaturesOverride();
+    }
+
     protected function tearDown(): void
     {
         Detect::reset();
         Detect::setProbeStdin(null);
+        Detect::clearTmuxTermFeaturesOverride();
+        foreach ($this->envSnapshot as $key => $value) {
+            if ($value === false) {
+                putenv($key);
+            } else {
+                putenv($key . '=' . $value);
+            }
+        }
+        $this->envSnapshot = [];
         foreach ($this->open as $handle) {
             if (\is_resource($handle)) {
                 fclose($handle);
