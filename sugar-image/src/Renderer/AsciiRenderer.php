@@ -7,6 +7,7 @@ namespace SugarCraft\Image\Renderer;
 use SugarCraft\Core\Util\ColorUtil;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
+use SugarCraft\Image\Support\OutputOptimizer;
 use SugarCraft\ColorProfile\Color;
 
 /**
@@ -62,13 +63,11 @@ final class AsciiRenderer implements Renderer
         imagedestroy($src);
 
         $rampMax = strlen(self::RAMP) - 1;
-        $reset = "\x1b[0m";
+        $pen = new OutputOptimizer();
 
         try {
             $lines = [];
             for ($y = 0; $y < $effectiveHeight; $y++) {
-                $line = '';
-                $coloured = false;
                 for ($x = 0; $x < $width; $x++) {
                     $idx = imagecolorat($scaled, $x, $y);
                     $rgb = $idx === false ? ['red' => 0, 'green' => 0, 'blue' => 0] : imagecolorsforindex($scaled, $idx);
@@ -79,16 +78,15 @@ final class AsciiRenderer implements Renderer
                     $luma = ColorUtil::luma($r, $g, $b);
                     $ch = self::RAMP[(int) round($luma / 255 * $rampMax)];
 
-                    $line .= match ($this->color) {
-                        AsciiColorMode::Mono      => $ch,
-                        AsciiColorMode::TrueColor => "\x1b[38;2;{$r};{$g};{$b}m" . $ch,
-                        AsciiColorMode::Ansi256   => "\x1b[38;5;" . (new Color($r, $g, $b))->toAnsi256Index() . 'm' . $ch,
-                    };
-                    if ($this->color !== AsciiColorMode::Mono) {
-                        $coloured = true;
-                    }
+                    $pen->cell($ch, match ($this->color) {
+                        // Mono rides the optimizer too: a null pen never
+                        // emits a byte, so the row is pure runes as before.
+                        AsciiColorMode::Mono      => null,
+                        AsciiColorMode::TrueColor => OutputOptimizer::trueColor($r, $g, $b),
+                        AsciiColorMode::Ansi256   => OutputOptimizer::indexed256((new Color($r, $g, $b))->toAnsi256Index()),
+                    });
                 }
-                $lines[] = $coloured ? $line . $reset : $line;
+                $lines[] = $pen->finishRow();
             }
         } finally {
             imagedestroy($scaled);

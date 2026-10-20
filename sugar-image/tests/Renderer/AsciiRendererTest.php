@@ -37,7 +37,8 @@ final class AsciiRendererTest extends TestCase
         $out = (new AsciiRenderer(AsciiColorMode::TrueColor))->render($this->fixture(), 4, 2);
 
         self::assertStringContainsString("\x1b[38;2;", $out);
-        self::assertStringContainsString("\x1b[0m", $out, 'a coloured row resets SGR at its end');
+        self::assertStringContainsString("\x1b[39m", $out, 'a coloured row restores the default foreground at its end (A-13: scoped, never ESC[0m)');
+        self::assertStringNotContainsString("\x1b[0m", $out, 'the reset-scope guard: a clobber reset must never reappear');
     }
 
     public function testAnsi256EmitsIndexedForeground(): void
