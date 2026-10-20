@@ -9,6 +9,15 @@ use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\UnsupportedFormatException;
 
 /**
+ * E-06: exotic containers (AVIF/HEIF-family `ftyp` brands, the JXL
+ * codestream magic, TIFF) are refused BY NAME at the same detect stage —
+ * pre-E-06 they collapsed into the generic 'GD failed to load image'
+ * corruption accusation (or GD's own unsupported-codec NULL), which tells a
+ * user their valid file is broken instead of naming the missing decoder.
+ * Generic MP4-family brands stay off the roster on purpose: a mis-sniffed
+ * video keeps today's GD-rejects-it posture rather than a claim this list
+ * cannot honour.
+ *
  * E-05: animated WebP must be refused on its container STRUCTURE, before any
  * decoder sees it — on hosts whose libwebp demuxes animation to a first frame,
  * GD used to hand back a happy one-frame still from an animated file (and on
@@ -311,6 +320,70 @@ final class ImageSourceWebpAnimDetectTest extends TestCase
             self::chunk('ICCP', 'icc'),
             self::anmf(self::chunk('VP8 ', 'bits')),
         )));
+    }
+
+    /**
+     * @return array<string, array{string}>  brand => fourcc
+     */
+    public static function exoticBrandProvider(): array
+    {
+        $cases = [];
+        foreach (['avif', 'avis', 'heic', 'heix', 'hevx', 'heim', 'heis', 'mif1', 'msf1', 'jxl '] as $b) {
+            $cases[$b] = [$b];
+        }
+
+        return $cases;
+    }
+
+    /**
+     * @param string $brand 4-byte ISOBMFF major brand (the roster minus
+     *                      rtrim — 'jxl ' keeps its trailing space on the wire)
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('exoticBrandProvider')]
+    public function testEveryListedExoticFtypBrandIsRefusedByName(string $brand): void
+    {
+        // Routed through fromString() — the refusal fires PRE-decode (GD's
+        // AVIF support is OFF on this very box, yet the honest class and the
+        // brand name still arrive), so no codec availability is required.
+        $bytes = pack('N', 24) . 'ftyp' . $brand . pack('N', 0) . 'isom' . str_repeat("\x00", 12);
+        try {
+            ImageSource::fromString($bytes);
+            self::fail("brand {$brand} reached an accept path");
+        } catch (UnsupportedFormatException $e) {
+            self::assertStringContainsString('chafa', $e->getMessage());
+            self::assertStringContainsString(trim($brand), $e->getMessage());
+        }
+    }
+
+    public function testTheJxlCodestreamMagicRefusesWithoutAnyContainer(): void
+    {
+        $this->expectException(UnsupportedFormatException::class);
+        $this->expectExceptionMessage('jxl codestream');
+        ImageSource::fromString("\xFF\x0A\x00\x10" . str_repeat("\x00", 24));
+    }
+
+    public function testBothTiffEndiansRefuseAndAnMp4BrandKeepsTodaysGdFate(): void
+    {
+        foreach (["II*\x00", "MM\x00*"] as $magic) {
+            try {
+                ImageSource::fromString($magic . str_repeat("\x00", 24));
+                self::fail("tiff magic {$magic} reached an accept path");
+            } catch (UnsupportedFormatException $e) {
+                self::assertStringContainsString('tiff', $e->getMessage());
+            }
+        }
+        // Negative polarity: a generic video brand is NOT on the exotic image
+        // roster — the bytes keep their pre-E-06 fate (GD refuses them as
+        // corruption; we never claim what the list cannot honour).
+        $mp4 = pack('N', 24) . 'ftyp' . 'isom' . pack('N', 0) . 'isom' . str_repeat("\x00", 12);
+        try {
+            ImageSource::fromString($mp4);
+            self::fail('this fixture must not decode');
+        } catch (UnsupportedFormatException $e) {
+            self::fail('unlisted brand must not be refused by the exotic list: ' . $e->getMessage());
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('GD failed to load image', $e->getMessage());
+        }
     }
 
     public function testGifAndPngIngressThroughDetectAreByteUntouched(): void

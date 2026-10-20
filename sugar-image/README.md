@@ -76,6 +76,9 @@ Codec matrix (sugar-image native paths only):
 | JPEG, static GIF | ✅ decode | GIF animates via `fromAnimatedFile()` |
 | WebP — static (VP8/VP8L/VP8X) | ✅ decode via `fromString()` | ext-gd WebP build |
 | WebP — animated (VP8X ANIM bit / ANMF) | ❌ refused by name | `UnsupportedFormatException` — needs chafa CLI or ffmpeg; the refusal is structural (pure-PHP RIFF walk), so the silent first-frame degrade class is closed on every host |
+| AVIF / HEIF / HEIC (`ftyp` brands) | ❌ refused by name | no PHP-side decoder; chafa CLI renders a still |
+| JPEG XL (`FF 0A` codestream, `jxl ` brand) | ❌ refused by name | same |
+| TIFF (`II*\0` / `MM\0*`) | ❌ refused as input | output-only: the GD-free iTerm2 payload encoder (`Codec\TiffUncompressed`) |
 
 - PNG, JPEG, static GIF — via ext-gd (`imagecreatefrompng`,
   `imagecreatefromjpeg`, `imagecreatefromgif`)

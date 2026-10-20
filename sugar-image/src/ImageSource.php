@@ -331,6 +331,21 @@ final class ImageSource
             return 'image/webp';
         }
 
+        // E-06: containers this library cannot decode AT ALL, recognisable by
+        // magic bytes alone — refuse them by name instead of letting GD emit a
+        // generic "GD failed to load image" corruption accusation.
+        // Mirrors chicle's per-codec loader roster (survey E-06): the brands
+        // here have no PHP-side decoder and are not ext-gd formats.
+        if (($brand = self::exoticFtypBrand($bytes)) !== null) {
+            throw new UnsupportedFormatException(Lang::t('image_source.exotic_format', ['brand' => $brand]));
+        }
+        if (strlen($bytes) >= 2 && $bytes[0] === "\xFF" && $bytes[1] === "\x0A") {
+            throw new UnsupportedFormatException(Lang::t('image_source.exotic_format', ['brand' => 'jxl codestream']));
+        }
+        if (strlen($bytes) >= 4 && (substr($bytes, 0, 4) === "II*\x00" || substr($bytes, 0, 4) === "MM\x00*")) {
+            throw new UnsupportedFormatException(Lang::t('image_source.exotic_format', ['brand' => 'tiff']));
+        }
+
         // Not one of the named formats: fromString() still lets GD validate the
         // bytes via imagecreatefromstring(), but the label must stay truthful.
         if ($sniffedMime !== null && $sniffedMime !== '') {
@@ -387,6 +402,25 @@ final class ImageSource
         }
 
         return $seen > 0 ? false : null; // zero well-formed chunks = not decidable
+    }
+
+    /**
+     * Major brand of an ISOBMFF `ftyp` box when it names an exotic image
+     * codec with no PHP-side decoder (E-06), else null.
+     *
+     * The check is exactly `ftyp` at offset 4 plus a {@see self::EXOTIC_FTYPO_BRANDS}
+     * match on the 4-byte major brand at offset 8 — generic video brands
+     * (isom/mp41/avc1 …) deliberately stay unlisted so a mis-sniffed MP4 keeps
+     * today's GD-rejects-it posture instead of a claim this list cannot honour.
+     */
+    private static function exoticFtypBrand(string $bytes): ?string
+    {
+        if (strlen($bytes) < 12 || substr($bytes, 4, 4) !== 'ftyp') {
+            return null;
+        }
+        $brand = substr($bytes, 8, 4);
+
+        return in_array($brand, self::EXOTIC_FTYPO_BRANDS, true) ? rtrim($brand) : null;
     }
 
 
