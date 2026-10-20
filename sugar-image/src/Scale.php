@@ -21,10 +21,18 @@ enum Scale
 
     /**
      * Preserve aspect ratio; shrink the image into the target bounds but
-     * never enlarge it. A source that already fits keeps its native size —
-     * the remainder of the box is left for the renderer to pad around the
-     * (centred) image. The rendered size is ≤ both the target and the
-     * source.
+     * never enlarge it. A source that already fits keeps its native size and
+     * the remainder of the box is blank, pad-centred around the image. The
+     * rendered size is ≤ both the target and the source.
+     *
+     * The pad is wired in Mosaic::applyScale(): the refused image is pasted
+     * 1:1, centred, onto a box-sized transparent canvas, so HalfBlock and
+     * ASCII render the remainder as blanks and Sixel/Kitty/iTerm2 composite
+     * it transparently on the terminal background. The quarter-block tier
+     * cannot represent a blank quad yet (PixelGrid::fromGdQuarter reads RGB
+     * only — a transparent pad would paint black), so it intentionally keeps
+     * Fit-shaped fill output there until nullable quads land (chafa-campaign
+     * follow-up S3.1).
      *
      * Mirrors chafa's CHAFA_TUCK_SHRINK_TO_FIT
      * (chafa/internal/chafa-math-util.c:70-79): when the image already fits
@@ -126,9 +134,11 @@ enum Scale
     /**
      * ShrinkToFit: like fit() but the factor is floored at 1 — never
      * enlarge (C-10, per chafa chafa-math-util.c:70-79). When the source
-     * already fits, both legs stay at native size (the caller/renderer
-     * centres and pads the remainder); otherwise it shrinks by the smaller
-     * factor so neither dimension exceeds the target.
+     * already fits, both legs stay at native size; Mosaic::applyScale then
+     * pastes it centred onto a box-sized transparent pad canvas (C-10 fix,
+     * lane f8 — the quarter tier alone cannot pad and falls back to fill);
+     * otherwise it shrinks by the smaller factor so neither dimension
+     * exceeds the target.
      */
     private function shrinkToFit(int $srcW, int $srcH, int $dstW, int $dstH): array
     {

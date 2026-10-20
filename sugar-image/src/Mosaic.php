@@ -459,12 +459,13 @@ final class Mosaic
                 $h = $w === $image->width ? $image->height : (int) round($w / $image->aspectRatio());
             }
 
-            $image = $this->applyScale($image, $w, $h);
+            [$image, $boxIsFinal] = $this->applyScale($image, $w, $h);
             // Cover modes (Fill/Crop) keep their cropped full-resolution image and
-            // render exactly $w×$h cells, so the explicit height is preserved. The
-            // other modes resized the image to fit, so re-derive height from its
-            // (now-final) aspect ratio.
-            if ($this->scale !== Scale::Fill && $this->scale !== Scale::Crop) {
+            // render exactly $w×$h cells, so the explicit height is preserved, as
+            // does the centred pad canvas of a refused ShrinkToFit upscale (C-10
+            // fix, lane f8). The other modes resized the image to fit, so
+            // re-derive height from its (now-final) aspect ratio.
+            if (!$boxIsFinal && $this->scale !== Scale::Fill && $this->scale !== Scale::Crop) {
                 $h = null;
             }
         }
@@ -474,8 +475,14 @@ final class Mosaic
 
     /**
      * Apply the configured scale mode to the image.
+     *
+     * @return array{0: ImageSource, 1: bool} The (possibly transformed) image
+     *         and whether the cell box is now final — true for the centred
+     *         pad canvas of a refused ShrinkToFit upscale, where re-deriving
+     *         the height from the image aspect would undo the padding (C-10
+     *         fix, lane f8).
      */
-    private function applyScale(ImageSource $image, int $cellW, int $cellH): ImageSource
+    private function applyScale(ImageSource $image, int $cellW, int $cellH): array
     {
         $cover = $this->scale === Scale::Fill || $this->scale === Scale::Crop;
 
@@ -489,12 +496,35 @@ final class Mosaic
 
         $dims = $this->scale->computeDimensions($image->width, $image->height, $cellW, $cropCellH);
 
+        // C-10 fix (lane f8): ShrinkToFit refuses the upscale in the factor math,
+        // but without a pad canvas the refusal re-happens one layer down — the
+        // render() aspect re-derivation hands the native-size image plus the FULL
+        // cell box to the renderer, and PixelGrid/resample fills rescale it to
+        // fill anyway (measured pre-fix: 40×40 → 80×80 under ShrinkToFit was
+        // byte-identical to Fit). Honour the mode here: paste the image at its
+        // native pixels, centred, on a box-sized transparent canvas so every
+        // renderer sees a blank remainder instead of an upscale.
+        //
+        // QuarterBlockRenderer is excluded because it cannot represent a blank:
+        // PixelGrid::fromGdQuarter reads RGB only (always-coloured quads), so a
+        // transparent pad would paint as black cells — a false image, not a
+        // blank. The quarter tier keeps Fit-shaped output until nullable quads
+        // land (chafa campaign follow-up S3.1). Half-block/ASCII render fully
+        // transparent cells as blanks, and the alpha protocols (Sixel/Kitty/
+        // iTerm2) composite the transparent pad on the terminal background.
+        if ($this->scale === Scale::ShrinkToFit
+            && $image->width <= $cellW && $image->height <= $cellH
+            && !$this->renderer instanceof QuarterBlockRenderer
+        ) {
+            return [$this->paddedToFitCanvas($image, $cellW, $cellH), true];
+        }
+
         // No transformation needed — return original.
         if ($dims['srcX'] === 0 && $dims['srcY'] === 0
             && $dims['srcW'] === $image->width && $dims['srcH'] === $image->height
             && $dims['dstW'] === $image->width && $dims['dstH'] === $image->height
         ) {
-            return $image;
+            return [$image, false];
         }
 
         // Apply crop first (if any).
@@ -512,7 +542,60 @@ final class Mosaic
             $img = $img->resize($dims['dstW'], $dims['dstH']);
         }
 
-        return $img;
+        return [$img, false];
+    }
+
+    /**
+     * Build the centred pad canvas for a refused ShrinkToFit upscale: a
+     * fully-transparent canvas at the cell box's display-aspect pixel geometry
+     * (cellW × round(cellH·CELL_ASPECT) — identical to the half-block sub-pixel
+     * grid, proportional for every other renderer), with the image copied 1:1 at
+     * its native pixel size — never resampled, never enlarged — floor-centred
+     * (extra pad cell goes right/bottom).
+     */
+    private function paddedToFitCanvas(ImageSource $image, int $cellW, int $cellH): ImageSource
+    {
+        $canvasH = max(1, (int) round($cellH * self::CELL_ASPECT));
+        $padX    = intdiv($cellW - $image->width, 2);
+        $padY    = intdiv($canvasH - $image->height, 2);
+
+        $src = imagecreatefromstring($image->bytes);
+        if ($src === false) {
+            throw new \RuntimeException(Lang::t('image_source.gd_load_failed_from_string'));
+        }
+        if (!imageistruecolor($src)) {
+            imagepalettetotruecolor($src);
+        }
+
+        $canvas = imagecreatetruecolor($cellW, $canvasH);
+        if ($canvas === false) {
+            imagedestroy($src);
+            throw new \RuntimeException(Lang::t('image_source.gd_create_failed'));
+        }
+
+        // Write pixels verbatim (no compositing against the canvas default) and
+        // carry alpha through the PNG encode — the pad must survive to the
+        // renderer's own decode as fully-transparent.
+        imagesavealpha($canvas, true);
+        imagealphablending($canvas, false);
+        $blank = imagecolorallocatealpha($canvas, 0, 0, 0, 127);
+        if ($blank === false || imagefill($canvas, 0, 0, $blank) === false) {
+            imagedestroy($src);
+            imagedestroy($canvas);
+            throw new \RuntimeException(Lang::t('image_source.gd_create_failed'));
+        }
+
+        imagecopy($canvas, $src, $padX, $padY, 0, 0, $image->width, $image->height);
+        imagedestroy($src);
+
+        try {
+            // PNG is mandatory regardless of the source container: JPEG cannot
+            // carry the transparent pad, and the format field must stay truthful
+            // to the bytes (ImageSource::isPng() checks them).
+            return ImageSource::fromGd($canvas, 'image/png', $image->maxPixels);
+        } finally {
+            imagedestroy($canvas);
+        }
     }
 
     /**
