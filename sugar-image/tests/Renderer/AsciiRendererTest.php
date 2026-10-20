@@ -96,4 +96,34 @@ final class AsciiRendererTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         (new AsciiRenderer())->render($this->fixture(), -1, 2);
     }
+
+    /**
+     * A-11: the ramp is an injectable knob so sugar-video's bridge can thread
+     * its named tables through this canonical quantizer instead of forking it.
+     * Glyphs index the GIVEN table; the default stays the frozen 15-step ramp.
+     */
+    public function testCustomRampSelectsGlyphsFromTheGivenTable(): void
+    {
+        $white = ImageSource::fromRgb("\xff\xff\xff", 1, 1);
+        $black = ImageSource::fromRgb("\x00\x00\x00", 1, 1);
+
+        // luma 255 → last char of whatever table is supplied.
+        self::assertSame('b', (new AsciiRenderer(AsciiColorMode::Mono, 'ab'))->render($white, 1, 1));
+        self::assertSame('z', (new AsciiRenderer(AsciiColorMode::Mono, 'xyz'))->render($white, 1, 1));
+        // luma 0 → first char.
+        self::assertSame('x', (new AsciiRenderer(AsciiColorMode::Mono, 'xyz'))->render($black, 1, 1));
+        // default unchanged: the 15-step ramp's top and bottom.
+        self::assertSame('@', (new AsciiRenderer(AsciiColorMode::Mono))->render($white, 1, 1));
+        self::assertSame(' ', (new AsciiRenderer(AsciiColorMode::Mono))->render($black, 1, 1));
+    }
+
+    /**
+     * A-11: an empty table cannot index a glyph — refuse at construction,
+     * not mid-render on the first pixel.
+     */
+    public function testEmptyRampIsRefusedAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new AsciiRenderer(AsciiColorMode::Mono, '');
+    }
 }

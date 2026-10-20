@@ -23,6 +23,11 @@ use SugarCraft\ColorProfile\Color;
  *
  * Luminance is BT.601: `Y = (77R + 150G + 29B) >> 8`. Rows are joined with
  * `"\n"` (never `"\r\n"` — a stray carriage return collapses a stitched rail).
+ *
+ * The luminance ramp is injectable (A-11): sugar-video's renderer bridge threads
+ * user-selected character tables (minimal/dense) through here so the canonical
+ * quantizer stays the single implementation. The default ramp is byte-frozen —
+ * every existing golden pins it.
  */
 final class AsciiRenderer implements Renderer
 {
@@ -33,7 +38,12 @@ final class AsciiRenderer implements Renderer
 
     public function __construct(
         private readonly AsciiColorMode $color = AsciiColorMode::TrueColor,
+        private readonly string $ramp = self::RAMP,
     ) {
+        if ($ramp === '') {
+            // Fail fast at construction: an empty table cannot index a glyph.
+            throw new \InvalidArgumentException('ascii ramp must contain at least one character');
+        }
     }
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
@@ -62,7 +72,7 @@ final class AsciiRenderer implements Renderer
         );
         imagedestroy($src);
 
-        $rampMax = strlen(self::RAMP) - 1;
+        $rampMax = strlen($this->ramp) - 1;
         $pen = new OutputOptimizer();
 
         try {
@@ -76,7 +86,7 @@ final class AsciiRenderer implements Renderer
                     $b = $rgb['blue'];
 
                     $luma = ColorUtil::luma($r, $g, $b);
-                    $ch = self::RAMP[(int) round($luma / 255 * $rampMax)];
+                    $ch = $this->ramp[(int) round($luma / 255 * $rampMax)];
 
                     $pen->cell($ch, match ($this->color) {
                         // Mono rides the optimizer too: a null pen never
