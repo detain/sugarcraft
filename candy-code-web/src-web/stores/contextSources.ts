@@ -30,18 +30,34 @@ export const useContextSourcesStore = defineStore('contextSources', () => {
   /** The session $sources belong to, so another session cannot show a stale panel. */
   const sessionId = ref<string | null>(null)
 
+  /**
+   * WEB-3a review MINOR-2: the ordering latch, the AboutModal generation
+   * gate in store form. Without it a late answer for session A overwrites
+   * session B's fresh `sources`+`sessionId`; the panel's
+   * `context.sessionId === props.sessionId` guard then blanks B's panel
+   * until a manual reload (the candy-query stale-wins lesson). Every load
+   * stamps its own number; a settle that arrives after a newer load began
+   * belongs to a superseded session and is dropped — answers AND errors,
+   * because a refusal for A is not news to B.
+   */
+  let generation = 0
+
   async function load(id: string): Promise<void> {
+    const mine = ++generation
     loading.value = true
     try {
-      sources.value = await connection.request('context.sources', { sessionId: id })
+      const result = await connection.request('context.sources', { sessionId: id })
+      if (mine !== generation) return
+      sources.value = result
       sessionId.value = id
       loaded.value = true
       error.value = null
     } catch (failure) {
+      if (mine !== generation) return
       // Fail soft: the panel shows the reason and stays mounted for a reload.
       error.value = failure instanceof Error ? failure.message : String(failure)
     } finally {
-      loading.value = false
+      if (mine === generation) loading.value = false
     }
   }
 
