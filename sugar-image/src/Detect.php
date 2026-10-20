@@ -261,6 +261,11 @@ final class Detect
 
     /**
      * Clear the cached capability and last DA1 reply (for testing).
+     *
+     * Deliberately does NOT clear the override seams ($repeatOverride,
+     * $tmuxTermFeatures, $terminfoSixel) — tests that armed one must call
+     * the matching {@see clearSupportsRepeatOverride()}-style clear
+     * explicitly.
      */
     public static function reset(): void
     {
@@ -1066,8 +1071,14 @@ final class Detect
      * Snapshots the env vars {@see TermDb} knows about, resolves the chained
      * {@see TermInfo}, and maps it to a Capability under SugarCraft's family
      * precedence (Kitty > iTerm2 > Sixel) — the same order the pre-F-01
-     * hardcoded ladder checked its three `if` blocks in, so every env answer
-     * is byte-identical to the old one; what changed is that terminals the
+     * hardcoded ladder checked its three `if` blocks in, so realistic env
+     * shapes answer as the old ladder did. Three synthetic edges diverge
+     * (measured, disclosed): an EMPTY-string KITTY_WINDOW_ID counted by the
+     * old getenv()!==false test but refused by the table's set-AND-non-empty
+     * ISSET; TERM_PROGRAM case handling — 'WezTerm' now also answers iterm2
+     * via the ORIGTERM row; and the old /xterm-kitty/i matched ANYWHERE in
+     * $TERM where the dot-head split does not (TERM=xterm-kitty-foo loses
+     * kitty, keeps sixel). What changed is that terminals the
      * ladder never named (konsole ≥ 22.03.70, foot via its prefix rule, warp,
      * contour, yaft, rio, mintty-as-$TERM, the tmux ≥ 3.4 native-sixel row)
      * are now recognized, and terminals chicle proves color-only (alacritty,

@@ -11,6 +11,7 @@ use SugarCraft\Image\Capability;
 use SugarCraft\Image\DiskCache;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Mosaic;
+use SugarCraft\Image\Optimization;
 use SugarCraft\Image\Renderer\ChafaRenderer;
 use SugarCraft\Image\Renderer\ConfigFingerprintProvider;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
@@ -160,6 +161,83 @@ final class DiskCacheKeyTest extends TestCase
             $stucki,
         );
         $this->assertNotSame($fs, $stucki);
+    }
+
+    /**
+     * A-02: the optimization mask rides the poster key as a trailing
+     * |opt=N segment — but ONLY when non-zero. A mask-0 mosaic (the
+     * default, and an explicit Optimization::None) must keep its exact
+     * pre-A-02 key byte-for-byte, or cache entries written before this
+     * level existed would age out for nothing. Each non-zero level
+     * changes the key; the segment carries the folded bits.
+     */
+    public function testOptimizationMaskRidesThePosterKeyOnlyWhenNonZero(): void
+    {
+        $plain = $this->mosaic(new HalfBlockRenderer());
+        $none = $this->mosaic(new HalfBlockRenderer())->withOptimization(Optimization::None);
+
+        $this->assertSame(
+            DiskCache::key(self::URL, 8, 4, 'halfblock|Fill'),
+            $this->posterKey($none, 8, 4),
+            'explicit None must stay byte-identical to the pre-A-02 key',
+        );
+        $this->assertSame($this->posterKey($plain, 8, 4), $this->posterKey($none, 8, 4));
+
+        $reuse = $this->mosaic(new HalfBlockRenderer())->withOptimization(Optimization::ReuseAttributes);
+        $repeat = $this->mosaic(new HalfBlockRenderer())->withOptimization(Optimization::RepeatCells);
+        $both = $this->mosaic(new HalfBlockRenderer())
+            ->withOptimization(Optimization::ReuseAttributes, Optimization::RepeatCells);
+
+        foreach ([[$reuse, 1], [$repeat, 4], [$both, 5]] as [$mosaic, $bits]) {
+            $this->assertSame(
+                DiskCache::key(self::URL, 8, 4, 'halfblock|Fill|opt=' . $bits),
+                $this->posterKey($mosaic, 8, 4),
+                "mask {$bits} must answer the exact |opt={$bits} segment",
+            );
+        }
+
+        $keys = array_map(
+            fn (Mosaic $m): string => $this->posterKey($m, 8, 4),
+            [$plain, $reuse, $repeat, $both],
+        );
+        $this->assertCount(4, array_unique($keys), 'masks 0/1/4/5 must never cross-serve');
+    }
+
+    /**
+     * A-02: the segment rides AFTER the D-04 config fingerprint, so a
+     * configured sixel encoder carries both discriminators (the mask
+     * changes the cache key even though pixel backends emit no REP).
+     */
+    public function testOptimizationSegmentFollowsTheConfigFingerprint(): void
+    {
+        $mosaic = $this->mosaic(new SixelRenderer())->withOptimization(Optimization::RepeatCells);
+
+        $this->assertSame(
+            DiskCache::key(
+                self::URL,
+                8,
+                4,
+                'sixel|Fill|dither=floyd-steinberg|maxColors=256|cellWidth=10|cellHeight=20|opt=4',
+            ),
+            $this->posterKey($mosaic, 8, 4),
+        );
+    }
+
+    /**
+     * A-02: withOptimization() REPLACES the mask (last call wins) — the
+     * chain below ends at RepeatCells alone, so the key must not
+     * accumulate the earlier ReuseAttributes bit.
+     */
+    public function testReplacedOptimizationMaskRewritesTheSegment(): void
+    {
+        $chained = $this->mosaic(new HalfBlockRenderer())
+            ->withOptimization(Optimization::ReuseAttributes, Optimization::RepeatCells)
+            ->withOptimization(Optimization::RepeatCells);
+
+        $this->assertSame(
+            DiskCache::key(self::URL, 8, 4, 'halfblock|Fill|opt=4'),
+            $this->posterKey($chained, 8, 4),
+        );
     }
 
     private function mosaic(Renderer $renderer): Mosaic

@@ -329,7 +329,9 @@ final class Mosaic
      * $mosaic = Mosaic::halfBlock()->withOptimization(Optimization::RepeatCells);
      * ```
      *
-     * The mask folds via {@see Optimization::bits()}. Semantics per level:
+     * The mask folds via {@see Optimization::bits()}. The call REPLACES the
+     * mask with the bits of THIS invocation — chains do not accumulate;
+     * the last call wins. Semantics per level:
      *  - ReuseAttributes (1) is DOCUMENTARY on this port: the streaming
      *    pen-delta emitter shipped with A-01/S2.2 is unconditional, so the
      *    flag changes no bytes and None cannot turn the delta off — that is

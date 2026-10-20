@@ -20,7 +20,8 @@ namespace SugarCraft\Image;
  *    exists so a caller can state the parity it depends on, and so a future
  *    literal-emitter mode has its negation to turn off against.
  *  - (1<<1) SKIP_CELLS is deliberately ABSENT. chafa itself reserves it —
- *    "Reserved for future use" (chafa-common.h:189) — and no SugarCraft
+ *    "Reserved for future use" (chafa-common.h:181 prose; the enumerator
+ *    CHAFA_OPTIMIZATION_SKIP_CELLS = (1 << 1) sits at :190) — and no SugarCraft
  *    emitter skips cells. The gap in the enum mirrors the dead bit upstream
  *    instead of inventing a local meaning for it.
  *  - RepeatCells = 1<<2 — coalesce runs of an identical glyph (under an

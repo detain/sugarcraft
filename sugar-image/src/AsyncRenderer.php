@@ -9,9 +9,11 @@ use React\Promise\PromiseInterface;
 /**
  * Strategy interface for asynchronous rendering.
  *
- * E722 (round 82) posture, judged from the tree: this library ships ONE
- * implementation — {@see SyncAsyncRenderer}, a futureTick deferral that
- * owns no child process. The worker-pool and pcntl_fork-per-render
+ * E722 (round 82) posture, judged from the tree: this library ships TWO
+ * implementations — {@see SyncAsyncRenderer}, a futureTick deferral, and
+ * {@see PacedAsyncRenderer}, which drives a {@see PacedRenderSession}
+ * slice pump from futureTick callbacks (D-05) — neither owns a child
+ * process. The worker-pool and pcntl_fork-per-render
  * backends named below are design invitations, not shipped code, and the
  * E722 audit note about a "64 MiB stderr cap" has no referent here at all
  * (erratum: no such cap exists anywhere in sugar-image or its history —
