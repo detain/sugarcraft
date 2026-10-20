@@ -152,6 +152,34 @@ final class SymbolSetLatinTest extends TestCase
         $this->assertTrue($twice->hasLatin());
     }
 
+    public function testTheLatinFlagResetsAcrossWithSelectors(): void
+    {
+        // F-17 (rev-w10-2 m2): the W10 weld's union contract — the
+        // hasLatin flag is carried by withLatin()-built maps only, and
+        // withSelectors() returns a plain corpus pick (SymbolMap.php
+        // ctor resets the flag), so the tier stays reachable via the
+        // `latin` class at its build-order position instead of riding
+        // the appended tail twice. A later withLatin() re-appends it —
+        // the documented seam, now pinned against silent regressions.
+        $latin = SymbolMap::new()->withLatin();
+        $selected = $latin->withSelectors('+stipple');
+
+        $this->assertTrue($latin->hasLatin());
+        $this->assertFalse($selected->hasLatin(), 'withSelectors resets the tier flag');
+        $this->assertCount(676 + 365, $selected->defs(), 'the stipple classes already ride the picked corpus; nothing is re-appended');
+        $chars = static function (SymbolMap $m): array {
+            $out = array_map(static fn ($d) => $d->char, $m->defs());
+            sort($out);
+
+            return $out;
+        };
+        $this->assertSame(
+            $chars($latin),
+            $chars($selected),
+            'same glyph set — the selection re-emits it in full-corpus build order'
+        );
+    }
+
     public function testALatinGlyphWinsItsOwnBitmapOnlyInTheLatinTier(): void
     {
         $default = SymbolMap::new();
