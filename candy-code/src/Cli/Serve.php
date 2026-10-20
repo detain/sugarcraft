@@ -12,7 +12,6 @@ use SugarCraft\Code\Host\Commands\BackgroundCommand;
 use SugarCraft\Code\Host\SessionHub;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Media\Capability\MediaAffordance;
-use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ServerContext;
 use SugarCraft\Code\Server\Auth\AuthContext;
@@ -428,11 +427,11 @@ final class Serve
                 $agent = $manager?->get('default') ?? ($manager?->all()[0] ?? null) ?? BackgroundCommand::defaultAgent();
                 // The hook's own configured mode wins (launch-validated, and
                 // bypass-class was refused there); unmodeled hooks run in the
-                // server's admitted mode, downgraded to `default` exactly as
-                // BgMethods::spawnPermissionMode() does for `bg.spawn`.
+                // server's mode, clamped to the Default family (AUT-6 MINOR-1)
+                // so a bypass-class server cannot hand an inbound HTTP request
+                // the unattended bypass the per-hook refusal denies it.
                 $mode = $hook['permissionMode'];
-                $modeValue = $mode?->value
-                    ?? ($config->admitsPermissionMode($config->permissionMode) ? $config->permissionMode->value : PermissionMode::Default->value);
+                $modeValue = $mode?->value ?? $config->hookPermissionModeFallback();
                 $root = $server->hub()->workspace()->root;
                 try {
                     $session = $events->supervisor()->spawnSession(

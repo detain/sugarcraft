@@ -560,7 +560,40 @@ final class ServerConfig
      */
     public function admitsPermissionMode(PermissionMode $mode): bool
     {
-        return $this->allowBypass || !\in_array($mode, [PermissionMode::BypassPermissions, PermissionMode::DontAsk], true);
+        return $this->allowBypass || !self::answersAsksWithoutAHuman($mode);
+    }
+
+    /**
+     * Whether this mode answers every permission ask without asking anyone
+     * (AUT-6 MINOR-1 names the pair: `bypass-permissions`, `dont-ask`). One
+     * spelling for the question, asked at the launch door
+     * ({@see admitsPermissionMode()}), at the hook-config refusal
+     * ({@see webhooksValue()}) and at the hook-inheritance clamp below — three
+     * sites that must agree about which two cases they mean.
+     */
+    public static function answersAsksWithoutAHuman(PermissionMode $mode): bool
+    {
+        return \in_array($mode, [PermissionMode::BypassPermissions, PermissionMode::DontAsk], true);
+    }
+
+    /**
+     * The mode an unmodeled webhook runs in (AUT-6 MINOR-1).
+     *
+     * A hook row that names no `permissionMode` inherits the server's, so the
+     * server's mode can reach an unattended turn WITHOUT ever passing the
+     * per-hook refusal in {@see webhooksValue()}. That refusal says a webhook
+     * must not run bypass-class because no one is there to answer an ask, and
+     * the inherited case is the same posture by the same reasoning: the
+     * operator's `--allow-bypass` was a promise about sessions a human drives,
+     * not about turns an inbound HTTP request starts. So the inheritance clamp
+     * is to the Default family — a bypass-class or dont-ask server lands the
+     * hook in `default`, whose asks the daemon's no-terminal approver refuses.
+     */
+    public function hookPermissionModeFallback(): string
+    {
+        return self::answersAsksWithoutAHuman($this->permissionMode)
+            ? PermissionMode::Default->value
+            : $this->permissionMode->value;
     }
 
     /**
@@ -717,7 +750,7 @@ final class ServerConfig
                     ));
                 }
                 $mode = PermissionMode::tryFrom($modeKey);
-                if ($mode !== null && \in_array($mode, [PermissionMode::BypassPermissions, PermissionMode::DontAsk], true)) {
+                if ($mode !== null && self::answersAsksWithoutAHuman($mode)) {
                     throw new ServerConfigException(\sprintf(
                         'webhook "%s": permission mode "%s" is refused for hooks even with --allow-bypass — a webhook runs unattended, with no one to answer a permission ask',
                         $name,
