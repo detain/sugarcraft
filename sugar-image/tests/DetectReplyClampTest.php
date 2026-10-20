@@ -15,10 +15,14 @@ use SugarCraft\Image\Detect;
  * until something answers a well-formed LIE. Chafa issue #62 is the caution
  * tale: a hostile (or broken) emulator answering 16t with absurd pixel
  * extents drove every downstream pixel budget into gigabyte territory.
- * Chafa's cure (chafa-term.c:54-56, MAX_PIXEL_WIDTH 8192 / MAX_PIXEL_HEIGHT
- * 8192*3=24576) rejects any extent outside `0 < c < MAX` — exclusive on
- * both ends — so the zero sizes a non-answering terminal prints ("I do not
- * know my rows: 0") are rejected exactly as the 2^31 fabrications are.
+ * Chafa's cure (chafa-term.c:54-55) is per-TYPE — PIXEL_EXTENT_MAX
+ * 8192*3=24576 on both axes of a pixel reply, CELL_EXTENT_PX_MAX 8192 on
+ * both axes of a cell reply — rejecting any extent outside `0 < c < MAX`
+ * — exclusive on both ends — so the zero sizes a non-answering terminal
+ * prints ("I do not know my rows: 0") are rejected exactly as the 2^31
+ * fabrications are. Detect ships one per-axis pair (x < 8192 / y < 24576)
+ * for all reply types; the divergences are disclosed at the MAX_REPLY_*
+ * docblock and pinned by the boundary rows below.
  * Detect now applies the same ceiling at its single reply-parsing
  * chokepoint, parseXtwinoReply(), which all three queries (16t direct,
  * 14t window, 18t grid) flow through: a rejected reply is indistinguishable

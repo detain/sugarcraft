@@ -69,13 +69,21 @@ final class Detect
     public const XTWINOPS_REPLY_TERMINATOR = '/\e\[[468];[\d;]*t/';
 
     /**
-     * F-19: plausibility ceilings for an XTWINOPS reply, mirroring chafa's
-     * MAX_PIXEL_{WIDTH,HEIGHT} (chafa-term.c:54-56: 8192 px across, 3x that
-     * — 24576 — down, the bound chafa added after issue #62 was filed
-     * against a hostile reply producing a 2GB pixel buffer). Any 4/6/8;t
-     * reply outside `0 < x < 8192` / `0 < y < 24576` (exclusive) is a
-     * fabrication: rejected like a non-reply, never trusted into a
-     * CellSize that downstream sizing arithmetic would overflow.
+     * F-19: plausibility ceilings for an XTWINOPS reply. Chafa's real
+     * bounds (chafa-term.c:54-55) are per-TYPE: PIXEL_EXTENT_MAX (8192*3
+     * = 24576) caps BOTH axes of a pixel reply (:476-477) and
+     * CELL_EXTENT_PX_MAX 8192 caps BOTH axes of a cell reply (:498-499) —
+     * the cure added after issue #62, when a hostile reply drove pixel
+     * budgets into gigabyte territory. Detect ships one per-AXIS pair
+     * instead: every 4/6/8;t reply must satisfy `0 < x < 8192` /
+     * `0 < y < 24576` (exclusive). Disclosed divergences: a pixel reply
+     * wider than 8192 is falsely rejected (fail-safe — the ladder falls
+     * back to font-estimated sizes), and a cell reply claiming more than
+     * 8192 rows is accepted where chafa would refuse (harmless — cell
+     * counts are display-bound, not pixel-bound). Per-type parity is a
+     * candidate alongside the S4.2 TermDb probe rework; the exclusive
+     * lower bound (zero extents are non-answers) is chafa-faithful
+     * either way.
      */
     private const MAX_REPLY_X = 8192;
     private const MAX_REPLY_Y = 24576;
@@ -377,7 +385,11 @@ final class Detect
      * Returns false — never throws, never blocks on a terminal — for an
      * absent/dumb $TERM, an absent infocmp, or NO_COLOR/CLICOLOR=0
      * suppression (the probe's own ladder rules, which terminate its
-     * capability phases). Only TRUE promotes here.
+     * capability phases). Only TRUE promotes here: a terminfo NO is never
+     * a veto, it leaves the DA1 arm byte-unchanged — the database is an
+     * accelerator, not an authority. Swap seam: this direct
+     * TerminalProbe::runProbe() consult is the whole stage the S4.2
+     * TermDb rework replaces in one move (s2-5 ledger).
      */
     private static function probeTerminfoSixel(): bool
     {
