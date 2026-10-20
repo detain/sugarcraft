@@ -35,12 +35,17 @@ use SugarCraft\Code\Tests\Support\ClaudeMcpHandshakeFixture;
  * would not break large tool calls. Without it, "15 seconds is too long" and
  * "15 seconds is what a 10 MiB write needs" are indistinguishable.
  *
- * ⚠️ IT ASSERTS AN ORDER OF MAGNITUDE, NOT A DURATION. The third take above is
- * 0.401s against 0.026s for the identical payload — a 15x spread on an idle box,
- * which is exactly why a tight timing assertion here would be a flake generator
- * on a machine running three test lanes. The claim is "far below the bound", and
- * the threshold is stated as a fraction of the bound rather than as a stopwatch
- * reading.
+ * ⚠️ IT ASSERTS A RATIO-TRACKED ORDER OF MAGNITUDE, NOT A STOPWATCH READING.
+ * The third take in the table above is 0.401s against 0.026s for the identical
+ * payload — a 15x spread on an IDLE box, and worse under load: the closeout at
+ * 47e8a1414 measured this row reddening at 4.08s against its then-3.0s flat
+ * allowance with 24 shard workers live on the box. So the budget is CALIBRATED:
+ * the same seam writes a 100x smaller payload first, timed, and the big write
+ * gets `calibration × ratio × slack`, floored at the historic 0.2-of-bound and
+ * capped at 0.8-of-bound so no amount of load can make the row accept a write
+ * that actually PAID the idle bound. Load on the numerator is load on the
+ * denominator; the claim "a healthy write is cheap RELATIVE to the bound"
+ * survives — the raw stopwatch never did.
  */
 final class McpWriteBudgetShapeTest extends TestCase
 {
@@ -53,25 +58,42 @@ final class McpWriteBudgetShapeTest extends TestCase
     private const LARGE_PAYLOAD_BYTES = 10_000_000;
 
     /**
+     * The calibration write: same seam, same healthy child, 100x smaller. Its
+     * measured time scales the big write's allowance by the wire-byte ratio, so
+     * a loaded box (which slows BOTH measurements) cannot redden the row for the
+     * reason the flat allowance did at the 47e8a1414 closeout (4.08s > 3.0s).
+     */
+    private const CALIBRATION_PAYLOAD_BYTES = 100_000;
+
+    /** Headroom over pure linear extrapolation of the calibration time. */
+    private const CALIBRATION_SLACK = 1.5;
+
+    /**
      * A healthy write must finish inside this FRACTION of
-     * `ClaudeCodeMcpClient::WRITE_IDLE_SECONDS`, rather than inside a constant
-     * of its own, so that the row tracks the bound it is about.
+     * `ClaudeCodeMcpClient::WRITE_IDLE_SECONDS` at MINIMUM — the historic flat
+     * budget survives as the FLOOR of the calibrated allowance, so on an idle
+     * box (where the calibration term lands below it) the row is byte-for-byte
+     * as strict as it ever was, and it tracks the bound it is about.
      *
-     * ⚠️ THE FRACTION PROTECTS ONE DIRECTION ONLY, and the doc-block used to
+     * ⚠️ THE FLOOR PROTECTS ONE DIRECTION ONLY, and the doc-block used to
      * claim both. WHAT IT SAID: "moving the bound cannot silently make this row
      * vacuous". WHAT IS TRUE NOW: SHRINKING the bound tightens this row, but
-     * RAISING it loosens it in exact proportion — at `WRITE_IDLE_SECONDS = 150.0`
-     * the budget becomes 30s and a healthy write measured at 0.4s would pass
-     * whatever it did. WHY THIS STILL EARNS ITS PLACE: the direction it does
-     * cover is the one that matters here, because the finding this row pins is
-     * that the write bound is far LONGER than the read loop under it, so the
-     * pressure on that constant is downward. A raise past a few seconds is a
-     * deliberate act that should bring its own measurement.
-     *
-     * Generous at 0.2 because the measured spread on an idle box is already 15x
-     * (0.026s to 0.401s, three takes, PHP 8.3.6).
+     * RAISING it loosens the floor in exact proportion — the CAP below is what
+     * keeps a raised bound from making the row vacuous in practice. WHY THIS
+     * STILL EARNS ITS PLACE: the direction that matters here is downward,
+     * because the finding this row pins is that the write bound is far LONGER
+     * than the read loop under it. A raise past a few seconds is a deliberate
+     * act that should bring its own measurement.
      */
     private const HEALTHY_WRITE_BUDGET_FRACTION = 0.2;
+
+    /**
+     * The allowance NEVER reaches the bound itself, however loaded the box
+     * measures the calibration to be: a write that pays the full idle bound is
+     * exactly the pathology ("the idle clock became a total one") every row
+     * here exists to refuse.
+     */
+    private const BUDGET_CAP_FRACTION = 0.8;
 
     private string $workDir = '';
 
@@ -96,45 +118,120 @@ final class McpWriteBudgetShapeTest extends TestCase
     public function testATenMegabytePayloadToAReadingChildCostsFarLessThanTheIdleBound(): void
     {
         $bound = self::writeIdleSeconds();
-        $budget = $bound * self::HEALTHY_WRITE_BUDGET_FRACTION;
 
-        $client = $this->clientReading();
+        $receipt = $this->workDir . '/timed_child_received.txt';
+        $client = $this->clientReading($receipt);
 
         try {
-            $message = McpMessage::request('1', 'tools/call', [
+            $large = McpMessage::request('1', 'tools/call', [
                 'name' => 'x',
                 'arguments' => ['t' => str_repeat('x', self::LARGE_PAYLOAD_BYTES)],
             ]);
+            $calibration = McpMessage::request('2', 'tools/call', [
+                'name' => 'x',
+                'arguments' => ['t' => str_repeat('x', self::CALIBRATION_PAYLOAD_BYTES)],
+            ]);
 
+            // THE INSTRUMENT, and the discovery that forced it (47e8a1414
+            // closeout): timing the parent-side sendMessage() return measures
+            // NOTHING about the child — with the 8 KB pipe full, a healthy
+            // fwrite parks in write(2) and RETURNS AT THE FIRST PROGRESS, so
+            // every sample lands at ~1 ms no matter how starved the reader is
+            // (measured: cal 0.001s while the same child took seconds to
+            // actually drain 10 MiB). What the row means is
+            // RECEIPT-LIMITED THROUGHPUT, so both legs are timed from
+            // first-byte-sent until the receipt shows the child's first read,
+            // with the pipe provably empty at each start (the settle polls,
+            // exact totals). And the calibration is deliberately taken as the
+            // FIRST read-burst the child serves: if the big write still pays
+            // the warm-up the calibration did not (SIGSTOP under sustained
+            // load), it has already proven throughput above the cold sample
+            // and the floor carries it. A warm calibration under-reports and
+            // reddens a healthy seam under load — measured the hard way.
             $this->assertGreaterThan(
                 65536,
-                strlen($message->toJson()),
+                strlen($large->toJson()) + 1,
                 'the payload no longer exceeds one pipe buffer, so this row is not testing a '
                 . 'multi-write at all and would pass against any bound whatsoever',
             );
+            $this->assertSame(
+                0,
+                $this->countReceipt($receipt),
+                'the child counted bytes before the test sent any — the receipt is not a clean '
+                . 'baseline and every timing below is meaningless',
+            );
 
-            $started = microtime(true);
-            $client->sendMessage($message);
-            $elapsed = microtime(true) - $started;
+            $calibrated = $this->measureReceived($client, $calibration, $receipt);
+            $elapsed = $this->measureReceived($client, $large, $receipt);
+            $allowance = $this->allowance($bound, $calibrated->seconds, $elapsed->bytes, $calibrated->bytes);
 
             $this->assertLessThan(
-                $budget,
-                $elapsed,
+                $allowance,
+                $elapsed->seconds,
                 sprintf(
-                    'a %d-byte message to a child that IS reading took %.3fs, past %.1f%% of '
-                    . 'the %.1fs idle bound. Either the write loop stopped resetting its clock '
-                    . 'on progress — which would turn the idle bound into a total one, the '
-                    . 'thing the standing rule on LLM-adjacent timeouts forbids — or this box '
-                    . 'is loaded enough that the row needs a different instrument.',
-                    strlen($message->toJson()),
-                    $elapsed,
+                    'a %d-byte message to a child that IS reading took %.3fs to fully arrive, past '
+                    . 'the calibrated allowance %.3fs (floor %.3fs = %.0f%% of the %.1fs bound, cap %.3fs, '
+                    . 'extrapolation %.3fs = the %.3fs %d-byte calibration write x wire ratio %.1f x %.1f slack). '
+                    . 'Either the write loop stopped resetting its clock on progress — which would '
+                    . 'turn the idle bound into a total one, the thing the standing rule on '
+                    . 'LLM-adjacent timeouts forbids — or this box is beyond even ratio-tracking '
+                    . 'and the row needs a quieter home.',
+                    $elapsed->bytes,
+                    $elapsed->seconds,
+                    $allowance,
+                    $bound * self::HEALTHY_WRITE_BUDGET_FRACTION,
                     self::HEALTHY_WRITE_BUDGET_FRACTION * 100,
                     $bound,
+                    $bound * self::BUDGET_CAP_FRACTION,
+                    $calibrated->seconds * ($elapsed->bytes / $calibrated->bytes) * self::CALIBRATION_SLACK,
+                    $calibrated->seconds,
+                    $calibrated->bytes,
+                    $elapsed->bytes / $calibrated->bytes,
+                    self::CALIBRATION_SLACK,
                 ),
             );
         } finally {
             $client->disconnect();
         }
+    }
+
+    /**
+     * Time ONE message end-to-end: from just before the first byte is handed to
+     * `sendMessage()` until the child's receipt shows ALL wire bytes received,
+     * with the pipe provably drained at the start (the previous leg settled to
+     * its own exact total). This is the cost the finding under test is about —
+     * how long a large tool call keeps the pipeline busy — not the parent-side
+     * fwrite return, which parks and resumes invisibly (see the row comment).
+     */
+    private function measureReceived(ClaudeCodeMcpClient $client, McpMessage $message, string $receipt): object
+    {
+        $bytes = strlen($message->toJson()) + 1;   // sendMessage() adds the newline
+        $before = $this->countReceipt($receipt);
+        $started = microtime(true);
+        $client->sendMessage($message);
+        $this->countAfterItSettles($receipt, $before + $bytes);
+
+        return (object) ['seconds' => microtime(true) - $started, 'bytes' => $bytes];
+    }
+
+    private function countReceipt(string $receipt): int
+    {
+        return is_file($receipt) ? (int) trim((string) file_get_contents($receipt)) : 0;
+    }
+
+    /**
+     * load-aware budget: linear extrapolation of the calibration write with
+     * slack, floored at the historic 0.2-of-bound and capped at 0.8-of-bound so
+     * the row can never be talked into accepting a write that paid the bound.
+     */
+    private function allowance(float $bound, float $calSeconds, int $largeBytes, int $calBytes): float
+    {
+        $extrapolated = $calSeconds * ($largeBytes / $calBytes) * self::CALIBRATION_SLACK;
+
+        return min(
+            $bound * self::BUDGET_CAP_FRACTION,
+            max($bound * self::HEALTHY_WRITE_BUDGET_FRACTION, $extrapolated),
+        );
     }
 
     /**

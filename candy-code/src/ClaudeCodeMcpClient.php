@@ -92,6 +92,15 @@ final class ClaudeCodeMcpClient
     private const WRITE_POLL_MICROS = 20000;
 
     /**
+     * Slice handed to one `fwrite()` inside {@see writeAll()} — caps the
+     * per-pass copying at one chunk (the shrinking-remainder it replaced made
+     * a 10 MiB send quadratic in memcpy; see the cursor comment there). Equal
+     * to the child-side read size in the fixtures and comfortably above any
+     * pipe capacity, so it never adds a syscall versus the old shape.
+     */
+    private const WRITE_CHUNK_BYTES = 65536;
+
+    /**
      * How long the child may accept ZERO stdin bytes before the write gives up.
      *
      * AN IDLE BOUND, DELIBERATELY, AND NOT A TOTAL ONE. A child that keeps
@@ -1153,10 +1162,20 @@ final class ClaudeCodeMcpClient
         $lastProgress = microtime(true);
         $consecutiveSelectFailures = 0;
         $livenessCheckedAt = self::nowSeconds();
+        // Cursor into $payload, NOT a shrinking string. WHAT THE SHRINKING
+        // STRING COST (measured at the 47e8a1414 closeout): stdin is
+        // non-blocking, so each pass takes at most the pipe's free ~8 KB, and
+        // re-slicing the REMAINDER with substr() every pass is O(n²) memcpy —
+        // 10 MiB paid ~1220 slices averaging 5 MB, ≈ 4.2s of pure copying for
+        // a child that read everything in well under a tenth of that
+        // (0.015s/1 MB and 0.033s/2 MB on the same run pinned the curve:
+        // size × 5 ⇒ time × 58). Chunking the slice caps per-pass copying at
+        // one chunk and the total at O(n).
+        $offset = 0;
 
-        while ($payload !== '') {
+        while ($offset < $total) {
             if (microtime(true) - $lastProgress >= $idleSeconds) {
-                return $total - strlen($payload);
+                return $offset;
             }
 
             // BEFORE the select, every pass. A child parked in `write(2)` on a
@@ -1178,7 +1197,7 @@ final class ClaudeCodeMcpClient
 
                 if (!$this->serverIsRunning()
                     || $consecutiveSelectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES) {
-                    return $total - strlen($payload);
+                    return $offset;
                 }
 
                 usleep(1000);
@@ -1195,7 +1214,7 @@ final class ClaudeCodeMcpClient
                 // idle bound against nobody. Rate-limited like readFrame()'s.
                 if (self::nowSeconds() - $livenessCheckedAt >= self::LIVENESS_CHECK_SECONDS) {
                     if (!$this->serverIsRunning()) {
-                        return $total - strlen($payload);
+                        return $offset;
                     }
                     $livenessCheckedAt = self::nowSeconds();
                 }
@@ -1205,10 +1224,10 @@ final class ClaudeCodeMcpClient
 
             // A dead child closes the read end; writing then raises a "broken
             // pipe" notice. Suppressed — the failed write is the signal.
-            $written = @fwrite($pipes[0], $payload);
+            $written = @fwrite($pipes[0], substr($payload, $offset, self::WRITE_CHUNK_BYTES));
 
             if ($written === false) {
-                return $total - strlen($payload);
+                return $offset;
             }
 
             if ($written === 0) {
@@ -1220,7 +1239,7 @@ final class ClaudeCodeMcpClient
             }
 
             $lastProgress = microtime(true);
-            $payload = substr($payload, $written);
+            $offset += $written;
         }
 
         fflush($pipes[0]);
