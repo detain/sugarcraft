@@ -47,6 +47,13 @@ namespace SugarCraft\Image;
  *   sixel_seqs) and its `ctx` row (chicle:611-615, the rep_seqs exemplar)
  *   have no SC rows at all: the eat pixel claims are dropped, deliberately,
  *   deferred with the vte/F-02 REP arm rather than silently omitted.
+ * - F-06 safe-symbol masks (chicle's per-row `safe_symbol_tags`, attached via
+ *   {@see TermInfo::$safeSymbols}): only the rows chicle curates are
+ *   restricted (linux console = ASCII, mintty/windows-console = BLOCK|BORDER);
+ *   everything else defaults to the full set. Chicle's LINUX_DESKTOP_SYMS
+ *   (BLOCK|BORDER on kitty-class desktop rows, excluding braille) is NOT
+ *   mirrored — SC braille canvases (sugar-charts) ride the full default,
+ *   recorded as a product decision in the S6.4 lane report.
  *
  * Pure data + pure functions: nothing here reads the environment, spawns a
  * process, or touches a terminal. {@see snapshotEnv()} is the only getenv
@@ -104,6 +111,7 @@ final class TermDb
      *     version: string|null,
      *     claims: list<TermInfo::PROTOCOL_*>,
      *     passthrough: array<string, bool>,
+     *     symbols?: int,
      *     env: list<array{op: string, cmp: string, key: string, value: string|null, priority: int}>
      * }>
      */
@@ -164,8 +172,12 @@ final class TermDb
         // mintty (chicle:731-738: iterm2+sixel, sixel overshoot quirk). Both
         // claims ride the union; Detect precedence resolves to iTerm2 exactly
         // as the old ladder hardcoded (OSC 1337 carries full-fidelity PNG).
+        // F-06: chicle attaches WIN_TERMINAL_SYMS to this row (:737) — mintty
+        // hosts cmd.exe sessions whose line-drawing coverage stops at the
+        // block/border families; mirrored as BLOCK|BORDER.
         ['name' => 'mintty', 'type' => self::TYPE_TERM, 'version' => null,
             'claims' => [TermInfo::PROTOCOL_ITERM2, TermInfo::PROTOCOL_SIXEL], 'passthrough' => [],
+            'symbols' => TermInfo::BLOCK_BORDER_ONLY,
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM', 'value' => 'mintty', 'priority' => 10],
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM_PROGRAM', 'value' => 'mintty', 'priority' => 0],
@@ -288,9 +300,12 @@ final class TermDb
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM', 'value' => 'st-256color', 'priority' => 10],
             ]],
         // the Linux console (chicle:725-729: "TERM=linux is probably the Linux
-        // console" — 16 colors, no graphics).
+        // console" — 16 colors, no graphics). F-06: chicle attaches
+        // LINUX_CONSOLE_SYMS = ASCII-only (:86/:729); its hurd twin
+        // (:676-680) has no SC row — recorded seam.
         ['name' => 'linux', 'type' => self::TYPE_TERM, 'version' => null,
             'claims' => [], 'passthrough' => [],
+            'symbols' => TermInfo::ASCII_ONLY,
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM', 'value' => 'linux', 'priority' => 10],
             ]],
@@ -307,9 +322,12 @@ final class TermDb
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_ISSET, 'key' => 'VTE_VERSION', 'value' => null, 'priority' => 0],
             ]],
-        // Windows console (chicle:857-860: ComSpec suffix).
+        // Windows console (chicle:857-860: ComSpec suffix). F-06: chicle
+        // attaches WIN_TERMINAL_SYMS = BLOCK|BORDER (:88/:860) — Win10 TH2+
+        // consoles draw ANSI and the box/block families, but not braille dots.
         ['name' => 'windows-console', 'type' => self::TYPE_TERM, 'version' => null,
             'claims' => [], 'passthrough' => [],
+            'symbols' => TermInfo::BLOCK_BORDER_ONLY,
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_SUFFIX, 'key' => 'ComSpec', 'value' => '\\cmd.exe', 'priority' => -5],
             ]],
@@ -399,6 +417,13 @@ final class TermDb
 
         $claims = self::mergeClaims($term['claims'] ?? [], $mux['claims'] ?? []);
 
+        // F-06: a class is safe on the chain only when every part that matched
+        // says so — the intersection reading of chicle's chain line
+        // (chafa-term-info.c:1691). A mux forwards UTF-8 text as-is, so its
+        // rows carry no restriction today; a missing key defaults to the full
+        // set exactly like chicle's untagged rows.
+        $safeSymbols = self::symbolsOf($term) & self::symbolsOf($mux);
+
         $passthrough = [];
         foreach ($claims as $protocol) {
             $passthrough[$protocol] = self::needsPassthroughFor($protocol, $term, $mux);
@@ -406,21 +431,35 @@ final class TermDb
 
         $chain = self::chainLabel($term, $mux);
 
-        return new TermInfo($chain, $claims, $passthrough, $mux === null ? null : self::rowLabel($mux));
+        return new TermInfo($chain, $claims, $passthrough, $mux === null ? null : self::rowLabel($mux), $safeSymbols);
+    }
+
+    /**
+     * F-06: the safe-symbol mask a matched row carries; absent means the full
+     * set (table default, per S6.4: restricted rows are the curated exception).
+     *
+     * @param array{name: string, version: string|null, claims: list<string>, passthrough: array<string, bool>, symbols: int}|null $row
+     */
+    private static function symbolsOf(?array $row): int
+    {
+        return $row === null ? TermInfo::ALL_SYMBOLS : $row['symbols'];
     }
 
     /**
      * Pick the label row of $type and merge the union of every matching row's
-     * claims — SC union semantics, see the class docblock.
+     * claims — SC union semantics, see the class docblock. F-06: the symbol
+     * mask intersects instead of unioning (conservative: every matching row
+     * of the type must allow a class for it to be safe).
      *
      * @param array<string, string> $env
-     * @return array{name: string, version: string|null, claims: list<string>, passthrough: array<string, bool>}|null
+     * @return array{name: string, version: string|null, claims: list<string>, passthrough: array<string, bool>, symbols: int}|null
      */
     private static function detectOfType(array $env, string $type): ?array
     {
         $best = null;
         $bestPri = null;
         $union = [];
+        $symbols = TermInfo::ALL_SYMBOLS;
 
         foreach (self::ROWS as $row) {
             if ($row['type'] !== $type) {
@@ -433,6 +472,7 @@ final class TermDb
             }
 
             $union = array_merge($union, $row['claims']);
+            $symbols &= $row['symbols'] ?? TermInfo::ALL_SYMBOLS;
 
             if ($bestPri === null || $pri > $bestPri || ($pri === $bestPri && self::isMoreSpecific($row, $best))) {
                 $bestPri = $pri;
@@ -445,7 +485,8 @@ final class TermDb
         }
 
         return ['name' => $best['name'], 'version' => $best['version'],
-            'claims' => array_values(array_unique($union)), 'passthrough' => $best['passthrough']];
+            'claims' => array_values(array_unique($union)), 'passthrough' => $best['passthrough'],
+            'symbols' => $symbols];
     }
 
     /** chicle's tie-break (:1114-1121): same name, a versioned row outranks its unversioned base. */
@@ -550,8 +591,8 @@ final class TermDb
      * terminal decides by the mux's map too (tmux: everything TRUE except
      * its native 3.4 sixel); a bare terminal claim never needs a wrapper.
      *
-     * @param array{name: string, version: string|null, claims: list<string>, passthrough: array<string, bool>}|null $term
-     * @param array{name: string, version: string|null, claims: list<string>, passthrough: array<string, bool>}|null $mux
+     * @param array{name: string, version: string|null, claims: list<string>, passthrough: array<string, bool>, symbols: int}|null $term
+     * @param array{name: string, version: string|null, claims: list<string>, passthrough: array<string, bool>, symbols: int}|null $mux
      */
     private static function needsPassthroughFor(string $protocol, ?array $term, ?array $mux): bool
     {

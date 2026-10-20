@@ -30,10 +30,46 @@ final class TermInfo
     public const PROTOCOLS = [self::PROTOCOL_KITTY, self::PROTOCOL_ITERM2, self::PROTOCOL_SIXEL];
 
     /**
+     * F-06: symbol classes — the subset of chafa's `ChafaSymbolTags`
+     * (chafa/chafa-symbol-map.h:34-58) whose glyphs SugarCraft renderers
+     * actually emit, narrowed to one bit per drawn class. Chicle tags each
+     * symbol with a set; SugarCraft tags each *terminal* with the set of
+     * classes it can draw, and consumers ask {@see symbolIsSafe()} before
+     * picking a glyph tier (chicle's `safe_symbol_tags` row field,
+     * chafa-term-db.c:156/:1071, consulted at symbol-map build time).
+     */
+    public const SYMBOL_ASCII = 1 << 0;
+    public const SYMBOL_BLOCK = 1 << 1;
+    public const SYMBOL_BORDER = 1 << 2;
+    public const SYMBOL_BRAILLE = 1 << 3;
+
+    /** Full set — what a modern Unicode terminal draws. The table default. */
+    public const ALL_SYMBOLS = self::SYMBOL_ASCII | self::SYMBOL_BLOCK | self::SYMBOL_BORDER | self::SYMBOL_BRAILLE;
+
+    /**
+     * chicle's `LINUX_CONSOLE_SYMS` (chafa-term-db.c:86): the Linux console
+     * and similar plain-vt seats draw no Unicode drawing glyphs at all.
+     */
+    public const ASCII_ONLY = self::SYMBOL_ASCII;
+
+    /**
+     * chicle's `WIN_TERMINAL_SYMS` (chafa-term-db.c:88): cmd.exe-era Windows
+     * consoles draw the block and border families but not the dot-pattern
+     * (braille) glyphs.
+     */
+    public const BLOCK_BORDER_ONLY = self::SYMBOL_BLOCK | self::SYMBOL_BORDER;
+
+    /**
      * @param list<self::PROTOCOL_*>  $claims      protocols the chain claims
      * @param array<string, bool>     $passthrough per-protocol "needs the mux passthrough wrapper";
      *                                             absent key = native (no wrapper)
      * @param string|null             $mux         label of the matched multiplexer row, if any
+     * @param int                     $safeSymbols F-06 bitmask of the symbol classes the chain
+     *                                             draws; the table default is the full set —
+     *                                             SC diverges from chicle's clueless-fallback
+     *                                             "dumb" row (chafa-term-db.c:1169, ASCII-only),
+     *                                             because "the table says nothing" is not
+     *                                             evidence of an ancient seat.
      */
     public function __construct(
         /** Human-readable match chain, innermost first: "tmux(3.4):xterm". */
@@ -41,6 +77,7 @@ final class TermInfo
         public readonly array $claims,
         public readonly array $passthrough,
         public readonly ?string $mux,
+        public readonly int $safeSymbols = self::ALL_SYMBOLS,
     ) {
         foreach ($claims as $protocol) {
             if (!in_array($protocol, self::PROTOCOLS, true)) {
@@ -63,6 +100,22 @@ final class TermInfo
     public function supports(string $protocol): bool
     {
         return in_array($protocol, $this->claims, true);
+    }
+
+    /**
+     * F-06: whether every symbol class in $classes is safe to draw on this
+     * chain. Pass one `SYMBOL_*` constant, or a union to require all of them.
+     * ASCII is always safe on any SugarCraft output path (7-bit bytes reach
+     * every seat the table knows about); the bit exists so the restricted
+     * presets can be spelled exactly like chicle's (`LINUX_CONSOLE_SYMS`).
+     */
+    public function symbolIsSafe(int $classes): bool
+    {
+        if ($classes === self::SYMBOL_ASCII) {
+            return true;
+        }
+
+        return ($this->safeSymbols & $classes) === $classes;
     }
 
     /**
