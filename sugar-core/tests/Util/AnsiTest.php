@@ -233,4 +233,38 @@ final class AnsiTest extends TestCase
             );
         }
     }
+
+    /**
+     * A-01 dedup pass: the SGR parameter spelling of a pen has one home.
+     * The full-sequence helpers, sugar-cellbuffer's SgrEmitter and
+     * sugar-image's OutputOptimizer all compose these parameter builders,
+     * so the spellings below are the monorepo-wide contract.
+     */
+    public function testPenParameterSpellingHasOneHome(): void
+    {
+        $this->assertSame('38;2;1;2;3', Ansi::fgRgbParams(1, 2, 3));
+        $this->assertSame('48;2;1;2;3', Ansi::bgRgbParams(1, 2, 3));
+        $this->assertSame('38;5;196', Ansi::fg256Params(196));
+        $this->assertSame('48;5;196', Ansi::bg256Params(196));
+
+        // Full sequences stay byte-identical to the pre-dedup spellings.
+        $this->assertSame("\x1b[38;2;1;2;3m", Ansi::fgRgb(1, 2, 3));
+        $this->assertSame("\x1b[48;2;1;2;3m", Ansi::bgRgb(1, 2, 3));
+        $this->assertSame("\x1b[38;5;196m", Ansi::fg256(196));
+        $this->assertSame("\x1b[48;5;196m", Ansi::bg256(196));
+
+        // Background re-spelling: colour selectors flip 38;->48;, everything
+        // else (bare attribute codes) passes through untouched.
+        $this->assertSame('48;2;1;2;3', Ansi::backgroundPenParams('38;2;1;2;3'));
+        $this->assertSame('48;5;196', Ansi::backgroundPenParams('38;5;196'));
+        $this->assertSame('1', Ansi::backgroundPenParams('1'));
+        $this->assertSame('39', Ansi::backgroundPenParams('39'));
+    }
+
+    /** A-01: the parameter builders keep the byte-range guard of their parents. */
+    public function testPenParameterBuildersKeepTheByteRangeGuard(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Ansi::fgRgbParams(256, 0, 0);
+    }
 }

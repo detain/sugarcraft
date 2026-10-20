@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Support;
 
 use SugarCraft\CellBuffer\Diff\RepeatGate;
+use SugarCraft\Core\Util\Ansi;
 
 /**
  * Streaming SGR pen-delta optimizer for character-mosaic emitters.
@@ -43,6 +44,15 @@ use SugarCraft\CellBuffer\Diff\RepeatGate;
  * RepeatCells level off (the default), the run buffer flushes literal
  * repeats in place — byte-identical to the pre-A-02 inline appends, which is
  * what keeps the frozen mosaic goldens the None-path proof.
+ *
+ * A-01 dedup pass: the third piece of the same job — the SGR PARAMETER
+ * spelling of a pen — also has one home now, sugar-core's
+ * {@see \SugarCraft\Core\Util\Ansi::fgRgbParams()} family (plus
+ * {@see \SugarCraft\Core\Util\Ansi::backgroundPenParams()} for the
+ * foreground→background selector rewrite). {@see self::trueColor()} /
+ * {@see self::indexed256()} and sugar-cellbuffer's SgrEmitter compose from
+ * it, so "38;2;r;g;b" cannot be spelled two ways. Only the run/pen POLICY
+ * stays local, per the paragraph above.
  */
 final class OutputOptimizer
 {
@@ -59,13 +69,13 @@ final class OutputOptimizer
     /** Normalized SGR parameters for a 24-bit colour. */
     public static function trueColor(int $r, int $g, int $b): string
     {
-        return "38;2;{$r};{$g};{$b}";
+        return Ansi::fgRgbParams($r, $g, $b);
     }
 
     /** Normalized SGR parameters for a 256-palette index. */
     public static function indexed256(int $index): string
     {
-        return "38;5;{$index}";
+        return Ansi::fg256Params($index);
     }
 
     /** SGR codes that switch an attribute channel on. */
@@ -205,7 +215,7 @@ final class OutputOptimizer
             }
 
             $restore[] = $entry === null ? $default
-                : ($channel === 'background' && str_starts_with($entry, '38;') ? '48;' . substr($entry, 3) : $entry);
+                : ($channel === 'background' ? Ansi::backgroundPenParams($entry) : $entry);
             $this->pen[$channel] = $entry;
         }
 
@@ -286,9 +296,7 @@ final class OutputOptimizer
         // Pen values are normalized to the foreground spelling ("38;2;r;g;b",
         // "38;5;i"); the background channel rewrites the colour selector so a
         // single value form serves both channels for delta tracking.
-        $params = $channel === 'background' && str_starts_with($value, '38;')
-            ? '48;' . substr($value, 3)
-            : $value;
+        $params = $channel === 'background' ? Ansi::backgroundPenParams($value) : $value;
         $this->buffer .= "\x1b[" . $params . 'm';
 
         $this->pen[$channel] = $value;

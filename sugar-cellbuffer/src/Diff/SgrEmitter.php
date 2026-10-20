@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CellBuffer\Diff;
 
 use SugarCraft\CellBuffer\Style;
+use SugarCraft\Core\Util\Ansi;
 
 /**
  * Shared SGR (Select Graphic Rendition) sequence emitter.
@@ -13,6 +14,13 @@ use SugarCraft\CellBuffer\Style;
  * Used by both {@see \SugarCraft\CellBuffer\Buffer::toAnsi()} (full repaint path)
  * and {@see DiffEncoder} (delta/diff path) to ensure byte-identical output
  * and to centralize the INVISIBLE (conceal) attribute handling.
+ *
+ * A-01 dedup pass: the SGR PARAMETER spelling is composed from sugar-core's
+ * {@see \SugarCraft\Core\Util\Ansi::fgRgbParams()}/{@see Ansi::bgRgbParams()}
+ * family — the same builders sugar-image's OutputOptimizer composes — so a
+ * pen value can never be spelled two ways across the monorepo. The run/pen
+ * POLICY (full SGR per style change here, per-channel deltas there) stays
+ * local by design.
  *
  * Mirrors the SGR emission logic shared by charmbracelet/lipgloss's
  * style.go and xterm's SGR sequences.
@@ -37,7 +45,7 @@ final class SgrEmitter
             $r = ($rgb >> 16) & 0xFF;
             $g = ($rgb >> 8) & 0xFF;
             $b = $rgb & 0xFF;
-            $codes[] = "38;2;{$r};{$g};{$b}";
+            $codes[] = Ansi::fgRgbParams($r, $g, $b);
         }
 
         if ($style->bg() !== null) {
@@ -45,7 +53,7 @@ final class SgrEmitter
             $r = ($rgb >> 16) & 0xFF;
             $g = ($rgb >> 8) & 0xFF;
             $b = $rgb & 0xFF;
-            $codes[] = "48;2;{$r};{$g};{$b}";
+            $codes[] = Ansi::bgRgbParams($r, $g, $b);
         }
 
         $attrs = $style->attrs();

@@ -339,6 +339,14 @@ kept as design rationale for what shipped._
   grid-side passes separate. Folding one into the other would force either a
   buffering render pass or a pen-state grid walk; the §4.15 dedup pass is the
   place to revisit, not a bugfix lane.
+  **A-01 dedup pass verdict (W10):** the run/pen POLICY split above stands —
+  but the one piece that was genuinely duplicated three ways, the SGR
+  PARAMETER SPELLING of a pen ("38;2;r;g;b" / "38;5;N"), now has a single
+  home: sugar-core `Ansi::fgRgbParams()`/`bgRgbParams()`/`fg256Params()`/
+  `bg256Params()` (+ `backgroundPenParams()` for the 38;→48; selector
+  rewrite). `OutputOptimizer::trueColor()`/`indexed256()` and sugar-cellbuffer's
+  `SgrEmitter` compose from it, so a pen value can never be spelled two ways.
+  Byte-identical by construction — the frozen mosaic digests are the proof.
 - **[blue-noise texture provenance (C-05)]** `OrderedTexture::blueNoise64()`
   embeds Christoph Peters' 64×64 void-and-cluster blue-noise table
   (LDR_RGB1_0.png, https://momentsingraphics.de/BlueNoise.html) released

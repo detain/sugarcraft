@@ -94,30 +94,77 @@ final class Ansi
 
     public static function fg256(int $index): string
     {
-        self::assertByte($index, '256-color index');
-        return self::CSI . '38;5;' . $index . 'm';
+        return self::CSI . self::fg256Params($index) . 'm';
     }
 
     public static function bg256(int $index): string
     {
-        self::assertByte($index, '256-color index');
-        return self::CSI . '48;5;' . $index . 'm';
+        return self::CSI . self::bg256Params($index) . 'm';
     }
 
     public static function fgRgb(int $r, int $g, int $b): string
     {
-        self::assertByte($r, 'red');
-        self::assertByte($g, 'green');
-        self::assertByte($b, 'blue');
-        return self::CSI . "38;2;$r;$g;{$b}m";
+        return self::CSI . self::fgRgbParams($r, $g, $b) . 'm';
     }
 
     public static function bgRgb(int $r, int $g, int $b): string
     {
+        return self::CSI . self::bgRgbParams($r, $g, $b) . 'm';
+    }
+
+    /**
+     * SGR parameter spelling for a 256-palette foreground pen ("38;5;N").
+     *
+     * A-01 dedup home: the three post-S2.2 attribute-run idioms keep their
+     * own run/pen POLICIES — {@see \SugarCraft\CellBuffer\Buffer::toAnsi()}
+     * coalesces a finished grid, sugar-image's OutputOptimizer streams
+     * per-channel pen deltas, and the helpers below emit full sequences —
+     * but they all compose the PARAMETER spelling here, so a pen value can
+     * never be spelled two ways across the monorepo.
+     */
+    public static function fg256Params(int $index): string
+    {
+        self::assertByte($index, '256-color index');
+        return '38;5;' . $index;
+    }
+
+    /** SGR parameter spelling for a 256-palette background pen ("48;5;N"). */
+    public static function bg256Params(int $index): string
+    {
+        self::assertByte($index, '256-color index');
+        return '48;5;' . $index;
+    }
+
+    /** SGR parameter spelling for a 24-bit foreground pen ("38;2;r;g;b"). */
+    public static function fgRgbParams(int $r, int $g, int $b): string
+    {
         self::assertByte($r, 'red');
         self::assertByte($g, 'green');
         self::assertByte($b, 'blue');
-        return self::CSI . "48;2;$r;$g;{$b}m";
+        return "38;2;$r;$g;{$b}";
+    }
+
+    /** SGR parameter spelling for a 24-bit background pen ("48;2;r;g;b"). */
+    public static function bgRgbParams(int $r, int $g, int $b): string
+    {
+        self::assertByte($r, 'red');
+        self::assertByte($g, 'green');
+        self::assertByte($b, 'blue');
+        return "48;2;$r;$g;{$b}";
+    }
+
+    /**
+     * Re-spell a foreground pen parameter string for the background channel.
+     *
+     * Pen values are normalized to the foreground spelling ("38;2;r;g;b",
+     * "38;5;N"), so the background channel rewrites the colour selector.
+     * Non-colour values (bare attribute codes) pass through unchanged.
+     */
+    public static function backgroundPenParams(string $foregroundParams): string
+    {
+        return str_starts_with($foregroundParams, '38;')
+            ? '48;' . substr($foregroundParams, 3)
+            : $foregroundParams;
     }
 
     public static function cursorUp(int $n = 1): string
