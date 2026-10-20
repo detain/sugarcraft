@@ -60,6 +60,7 @@ return [
     // Sixel
     'sixel.max_colors_out_of_range' => 'maxColors must be 1-256, got {maxColors}',
     'sixel.intensity_out_of_range'  => 'dither intensity must be a finite non-negative number, got {intensity}',
+    'sixel.alpha_threshold_out_of_range' => 'alphaThreshold must be 0-127 (GD alpha scale), got {alphaThreshold}',
     'sixel.canvas_too_large'        => 'Sixel canvas {width}×{height} px for a {cols}×{rows}-cell box exceeds the {max}-pixel ceiling',
 
     // Mosaic

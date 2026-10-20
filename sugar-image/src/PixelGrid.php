@@ -19,6 +19,15 @@ namespace SugarCraft\Image;
  * and alpha=0 maps to 0 (fully opaque). This is a simplification — true
  * alpha blending would require compositor support which these renderers
  * do not implement. Semi-transparent pixels will display as opaque.
+ *
+ * B-10: every builder takes an optional `int $alphaThreshold = 127` —
+ * the transparency test is `alpha >= threshold`, matching
+ * {@see \SugarCraft\Image\Renderer\SixelRenderer::withAlphaThreshold()}.
+ * At the default the `>= 127` test agrees with the historical `=== 127`
+ * on every GD pixel, so symbol-renderer bytes stay frozen; a lowered
+ * threshold promotes semi-transparent pixels into the null (hole) slot
+ * for the cell renderers, the PixelGrid mirror of chafa's
+ * `ch[3] < alpha_threshold` quantize skip.
  */
 final class PixelGrid
 {
@@ -39,11 +48,15 @@ final class PixelGrid
      *                         imagepalettetotruecolor() first if needed)
      * @param int      $cellW  Number of cells wide
      * @param int      $cellH  Number of cells tall
+     * @param int      $alphaThreshold
+     *                         B-10: GD alpha at which (and above) a pixel
+     *                         reads back as null; 127 (default) keeps the
+     *                         historical exact-127 hole test byte-identical.
      * @return self            2-D grid of `[r, g, b, ?int]` triples; alpha
      *                         is null for fully-transparent pixels, 0 for
      *                         fully-opaque pixels, 1-126 for semi-transparent
      */
-    public static function fromGd(\GdImage $img, int $cellW, int $cellH): self
+    public static function fromGd(\GdImage $img, int $cellW, int $cellH, int $alphaThreshold = 127): self
     {
         $srcW = imagesx($img);
         $srcH = imagesy($img);
@@ -78,12 +91,12 @@ final class PixelGrid
                 $topIdx = imagecolorat($scaled, $cx, $cy * 2);
                 $topC   = imagecolorsforindex($scaled, $topIdx);
                 // GD alpha: 0 = fully opaque, 127 = fully transparent.
-                // Map: alpha=127 → null (transparent), alpha=0 → non-null (opaque).
-                $topA   = $topC['alpha'] === 127 ? null : $topC['alpha'];
+                // B-10: alpha >= threshold → null (hole); below → opaque slot.
+                $topA   = $topC['alpha'] >= $alphaThreshold ? null : $topC['alpha'];
                 // Bottom half of the cell pair (lower pixel).
                 $botIdx = imagecolorat($scaled, $cx, $cy * 2 + 1);
                 $botC   = imagecolorsforindex($scaled, $botIdx);
-                $botA   = $botC['alpha'] === 127 ? null : $botC['alpha'];
+                $botA   = $botC['alpha'] >= $alphaThreshold ? null : $botC['alpha'];
                 $row[] = [
                     [$topC['red'], $topC['green'], $topC['blue'], $topA],
                     [$botC['red'], $botC['green'], $botC['blue'], $botA],
@@ -99,9 +112,10 @@ final class PixelGrid
 
     /**
      * Build a grid from raw GD image bytes (imagecreatefromstring path).
-     * Used for testing with fixed PNG fixtures.
+     * Used for testing with fixed PNG fixtures. The `$alphaThreshold` is
+     * B-10's hole cut-off, passed straight through to {@see fromGd()}.
      */
-    public static function fromString(string $bytes, int $cellW, int $cellH): self
+    public static function fromString(string $bytes, int $cellW, int $cellH, int $alphaThreshold = 127): self
     {
         $img = imagecreatefromstring($bytes);
         if ($img === false) {
@@ -110,7 +124,7 @@ final class PixelGrid
         if (!imageistruecolor($img)) {
             imagepalettetotruecolor($img);
         }
-        $grid = self::fromGd($img, $cellW, $cellH);
+        $grid = self::fromGd($img, $cellW, $cellH, $alphaThreshold);
         imagedestroy($img);
         return $grid;
     }
@@ -120,19 +134,24 @@ final class PixelGrid
      * back four quadrant values per cell (ul, ur, ll, lr).  Used by
      * QuarterBlockRenderer for 2×2 sub-pixel rendering.
      *
-     * Each quad carries the same binary-alpha slot as {@see fromGd()}:
-     * alpha 127 (fully transparent) reads back as null so downstream
-     * callers can exclude the quad from colour sampling instead of
-     * mistaking its stored RGB (often black) for image content (A-05a);
-     * alpha 0-126 is treated as opaque.
+     * Each quad carries the same threshold-alpha slot as {@see fromGd()}:
+     * pixels at or above `$alphaThreshold` (GD alpha 127 at the default,
+     * fully transparent) read back as null so downstream callers can
+     * exclude the quad from colour sampling instead of mistaking its
+     * stored RGB (often black) for image content (A-05a); alpha below the
+     * threshold is treated as opaque.
      *
      * @param \GdImage $img    Source image (must be truecolor)
      * @param int      $cellW  Number of terminal cells wide
      * @param int      $cellH  Number of terminal cells tall
+     * @param int      $alphaThreshold
+     *                         B-10: hole cut-off, same semantics as
+     *                         {@see fromGd()}'s; default 127 keeps the
+     *                         historical exact-127 test byte-identical.
      * @return self            2-D grid of 4-element [ul, ur, ll, lr] quads,
      *                         each `[r, g, b, ?int]`
      */
-    public static function fromGdQuarter(\GdImage $img, int $cellW, int $cellH): self
+    public static function fromGdQuarter(\GdImage $img, int $cellW, int $cellH, int $alphaThreshold = 127): self
     {
         $srcW = imagesx($img);
         $srcH = imagesy($img);
@@ -168,12 +187,12 @@ final class PixelGrid
                 foreach ($offsets as list($ox, $oy)) {
                     $color = imagecolorsforindex($scaled, imagecolorat($scaled, $ox, $oy));
                     // GD alpha: 0 = fully opaque, 127 = fully transparent.
-                    // Map: alpha=127 → null (transparent), else opaque.
+                    // B-10: alpha >= threshold → null (hole), below = opaque slot.
                     $quads[] = [
                         $color['red'],
                         $color['green'],
                         $color['blue'],
-                        $color['alpha'] === 127 ? null : $color['alpha'],
+                        $color['alpha'] >= $alphaThreshold ? null : $color['alpha'],
                     ];
                 }
                 $row[] = $quads;

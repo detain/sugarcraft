@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Renderer;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
@@ -76,6 +77,18 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     private const BASE_INTENSITY_256C = 0.1;
 
     /**
+     * B-10: default alpha threshold — GD's fully-transparent value (0 =
+     * opaque .. 127 = transparent). The hole test `alpha >= threshold` at
+     * the default therefore matches exactly today's `=== 127` semantics
+     * (GD clamps alpha to 127, so `>= 127` and `=== 127` agree on every
+     * pixel), keeping the byte-frozen default encodings untouched. A lower
+     * threshold widens the hole set to semi-transparent pixels, mirroring
+     * chafa's `color.ch[3] < alpha_threshold` quantize skip
+     * (chafa/internal/chafa-indexed-image.c:117) on GD's inverted scale.
+     */
+    public const DEFAULT_ALPHA_THRESHOLD = 127;
+
+    /**
      * C-04: dither bias intensity for the opt-in Ordered/Noise axes.
      * NULL (default) means "user did not ask" and behaves exactly as the
      * pre-C-04 renderer on every path — the default diffusion stream is
@@ -93,6 +106,19 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * @param float|null $intensity Ordered/Noise bias strength 0.0..1.0
      *                              (null = chafa's config default 1.0; the
      *                              depth ladder rides on Ordered only, C-07).
+     * @param int $alphaThreshold   B-10: GD-alpha hole cut-off 0..127 — pixels
+     *                              with `alpha >= threshold` become background
+     *                              holes and are excluded from the palette
+     *                              census. 127 (default) reproduces the
+     *                              pre-B-10 `=== 127` test byte-identically.
+     * @param Color|null $flattenBackground
+     *                              B-10: when set, semi-transparent pixels
+     *                              (0 < alpha < threshold) are composited onto
+     *                              this colour at base-read time, BEFORE any
+     *                              sampling or diffusion, mirroring chafa's
+     *                              prepare-pixels bg-carry so error diffusion
+     *                              works on what the terminal will show.
+     *                              Null (default) = no flattening.
      */
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
@@ -100,6 +126,8 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         private readonly int $cellWidth = 10,
         private readonly int $cellHeight = 20,
         ?float $intensity = null,
+        private readonly int $alphaThreshold = self::DEFAULT_ALPHA_THRESHOLD,
+        private readonly ?Color $flattenBackground = null,
     ) {
         if ($maxColors < 1 || $maxColors > 256) {
             throw new \InvalidArgumentException(
@@ -112,6 +140,11 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         if ($intensity !== null && (is_nan($intensity) || $intensity < 0.0)) {
             throw new \InvalidArgumentException(
                 Lang::t('sixel.intensity_out_of_range', ['intensity' => $intensity])
+            );
+        }
+        if ($alphaThreshold < 0 || $alphaThreshold > self::DEFAULT_ALPHA_THRESHOLD) {
+            throw new \InvalidArgumentException(
+                Lang::t('sixel.alpha_threshold_out_of_range', ['alphaThreshold' => $alphaThreshold])
             );
         }
         $this->intensity = $intensity === null ? null : min(1.0, $intensity);
@@ -355,6 +388,9 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * default fingerprint stays byte-identical (DiskCacheKeyTest), while
      * every ordered/noise render under a non-default bias gets its own
      * cache key instead of cross-serving the 1.0-bias bytes.
+     *
+     * B-10: threshold and flatten segments follow the same discipline —
+     * they appear only when they deviate from the byte-frozen default.
      */
     public function configFingerprint(): string
     {
@@ -362,7 +398,16 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             . '|maxColors=' . $this->maxColors
             . '|cellWidth=' . $this->cellWidth
             . '|cellHeight=' . $this->cellHeight
-            . ($this->intensity === null ? '' : '|intensity=' . $this->intensity);
+            . ($this->intensity === null ? '' : '|intensity=' . $this->intensity)
+            . ($this->alphaThreshold === self::DEFAULT_ALPHA_THRESHOLD
+                ? ''
+                : '|alphaThreshold=' . $this->alphaThreshold)
+            . ($this->flattenBackground === null
+                ? ''
+                : sprintf('|flatten=#%02X%02X%02X',
+                    $this->flattenBackground->r,
+                    $this->flattenBackground->g,
+                    $this->flattenBackground->b));
     }
 
     /**
@@ -373,7 +418,79 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      */
     public function withDither(Dither $dither): self
     {
-        return new self($dither, $this->maxColors, $this->cellWidth, $this->cellHeight, $this->intensity);
+        return new self(
+            $dither,
+            $this->maxColors,
+            $this->cellWidth,
+            $this->cellHeight,
+            $this->intensity,
+            $this->alphaThreshold,
+            $this->flattenBackground,
+        );
+    }
+
+    /**
+     * B-10: the GD-alpha hole cut-off in force (0..127; 127 = only fully
+     * transparent pixels are holes, the pre-B-10 behaviour).
+     */
+    public function alphaThreshold(): int
+    {
+        return $this->alphaThreshold;
+    }
+
+    /**
+     * B-10: the flatten background in force, or null when semi-transparent
+     * pixels keep their stored colour.
+     */
+    public function flattenBackground(): ?Color
+    {
+        return $this->flattenBackground;
+    }
+
+    /**
+     * B-10 copy with a different alpha threshold: pixels whose GD alpha
+     * reaches `$threshold` become background holes, and the hole decision
+     * happens before the pixel ever enters the palette census or the
+     * diffusion stream (chafa quantize_pixel skip semantics,
+     * chafa/internal/chafa-indexed-image.c:117-125 — lowered thresholds
+     * also shed semi-transparent fringe colours from median-cut buckets,
+     * the counterpart of chafa's MAX(alpha_threshold,1) sampler guard).
+     * 127 is byte-identical to the historical `=== 127` hole test; the
+     * extreme 0 declares every pixel (opaque included) a hole — legal, but
+     * the encode paints nothing.
+     */
+    public function withAlphaThreshold(int $threshold): self
+    {
+        return new self(
+            $this->dither,
+            $this->maxColors,
+            $this->cellWidth,
+            $this->cellHeight,
+            $this->intensity,
+            $threshold,
+            $this->flattenBackground,
+        );
+    }
+
+    /**
+     * B-10: opt-in pre-sampling flatten — every semi-transparent pixel
+     * (0 < alpha < threshold) is composited toward `$background` inside the
+     * base read, BEFORE quantisation or diffusion touch it, so the encoder
+     * dithers the colour the terminal will actually show instead of the raw
+     * un-premultiplied fringe (which is typically near-black — the
+     * dark-halo defect). `null` (default) disables flattening entirely.
+     */
+    public function withFlatten(?Color $background): self
+    {
+        return new self(
+            $this->dither,
+            $this->maxColors,
+            $this->cellWidth,
+            $this->cellHeight,
+            $this->intensity,
+            $this->alphaThreshold,
+            $background,
+        );
     }
 
     /**
@@ -391,12 +508,16 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     // ─── Pixel extraction ─────────────────────────────────────────────────────
 
     /**
-     * Quick full-canvas scan for any fully-transparent pixel (GD alpha 127).
+     * Quick full-canvas scan for any pixel at or above the alpha threshold
+     * (GD alpha >= 127 at the default = fully transparent).
      *
-     * GD resamples alpha by averaging, so only exact-127 pixels are treated
-     * as background; partially-blended edge pixels keep their colour. The
-     * scan short-circuits on the first hit — opaque images pay one pass of
-     * cheap integer tests, and only transparent ones pay the palette shift.
+     * B-10: with the default threshold only exact-127 pixels qualify, so the
+     * background-register decision stays byte-identical to the pre-B-10
+     * scan; a lowered threshold additionally counts semi-transparent pixels
+     * as holes (they will not be painted), keeping this census in lockstep
+     * with the hole mask in {@see indexRows()}. The scan short-circuits on
+     * the first hit — opaque images pay one pass of cheap integer tests, and
+     * only transparent ones pay the palette shift.
      */
     private function hasTransparentPixels(\GdImage $img): bool
     {
@@ -404,7 +525,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         $h = imagesy($img);
         for ($y = 0; $y < $h; $y++) {
             for ($x = 0; $x < $w; $x++) {
-                if ((imagecolorat($img, $x, $y) >> 24) === 127) {
+                if ((imagecolorat($img, $x, $y) >> 24) >= $this->alphaThreshold) {
                     return true;
                 }
             }
@@ -417,9 +538,11 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * building the palette. Sampling instead of reading every pixel keeps
      * median-cut cheap on the larger pixel canvas.
      *
-     * @param int $offset 1 when a background register is reserved — fully
-     *                    transparent pixels are no colour and must not dilute
-     *                    the median-cut buckets.
+     * @param int $offset 1 when a background register is reserved — pixels at
+     *                    or above the alpha threshold are holes, carry no
+     *                    colour, and must not dilute the median-cut buckets
+     *                    (B-10; chafa's sample_to_bins_impl drops exactly
+     *                    these, chafa/internal/chafa-palette.c:569).
      * @return list<array{int,int,int}>
      */
     private function samplePixels(\GdImage $img, int $max, int $offset = 0): array
@@ -440,14 +563,46 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                 // 0xAARRGGBB int — extract channels directly rather than paying for
                 // an imagecolorsforindex associative-array allocation per pixel.
                 $rgb = imagecolorat($img, $x, $y);
-                if ($offset === 1 && ($rgb >> 24) === 127) {
+                $alpha = ($rgb >> 24) & 0xFF;
+                // B-10 ORDERING LAW: the hole census runs FIRST — a pixel at
+                // or above the threshold never enters the sample, whether or
+                // not flattening is armed (flatten composites toward the bg
+                // for the terminal to PAINT; holes are never painted).
+                if ($offset === 1 && $alpha >= $this->alphaThreshold) {
                     continue;
                 }
-                $pixels[] = [($rgb >> 16) & 0xFF, ($rgb >> 8) & 0xFF, $rgb & 0xFF];
+                $r = ($rgb >> 16) & 0xFF;
+                $g = ($rgb >> 8) & 0xFF;
+                $b = $rgb & 0xFF;
+                // B-10: semi-transparent survivors are flattened onto the
+                // background here, before quantisation — the palette learns
+                // the colours the encoder will actually emit.
+                if ($this->flattenBackground !== null && $alpha > 0) {
+                    [$r, $g, $b] = $this->flattenOnto($r, $g, $b, $alpha, $this->flattenBackground);
+                }
+                $pixels[] = [$r, $g, $b];
             }
         }
 
         return $pixels;
+    }
+
+    /**
+     * B-10: src-over composite of one pixel's RGB toward the flatten
+     * background, on GD's inverted alpha scale (0 = opaque, 127 = fully
+     * transparent), so background weight is `alpha / 127`.
+     *
+     * @return array{int,int,int}
+     */
+    private static function flattenOnto(int $r, int $g, int $b, int $alpha, Color $bg): array
+    {
+        $t = $alpha / 127.0;
+
+        return [
+            (int) round($r + ($bg->r - $r) * $t),
+            (int) round($g + ($bg->g - $g) * $t),
+            (int) round($b + ($bg->b - $b) * $t),
+        ];
     }
 
     // ─── Quantizer ────────────────────────────────────────────────────────────
@@ -594,8 +749,9 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *
      *   • Euclidean nearest-palette lookup, memoised on a coarse 5-bit RGB cube
      *     (≤32768 entries) — identical key arithmetic to the old code.
-     *   • A fully-transparent pixel (GD alpha 127) maps to index 0 and diffuses
-     *     no error whenever a background register is reserved.
+     *   • A pixel at or above the alpha threshold (GD alpha 127 at the
+     *     default) maps to index 0 and diffuses no error whenever a
+     *     background register is reserved (B-10).
      *   • Error-diffusion dithering quantises each pixel, clamps the accumulated
      *     value to 0..255, and propagates the rounding error to unprocessed
      *     neighbours.
@@ -677,18 +833,36 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $textureY = $y + $yOrigin;
             for ($x = 0; $x < $w; $x++) {
                 $rgb = imagecolorat($img, $x, $y);
+                $alpha = ($rgb >> 24) & 0xFF;
+                // B-10: the hole census is decided FIRST and on the RAW
+                // alpha — lowering the threshold widens the hole set, and a
+                // hole is never flattened (unpainted pixels carry no colour
+                // to the terminal). ORDERING LAW: everything below — the
+                // flatten, the texture bias, the accumulator push — runs on
+                // the post-decision pixel, so both the sample census and the
+                // diffusion stream see transparent-excluded, optionally
+                // bg-composited colour.
+                $isHole = $offset === 1 && $alpha >= $this->alphaThreshold;
                 if ($offset === 1) {
-                    $holes[$y][$x] = (($rgb >> 24) & 0xFF) === 127;
+                    $holes[$y][$x] = $isHole;
                 }
-                $r = (float) (($rgb >> 16) & 0xFF);
-                $g = (float) (($rgb >> 8) & 0xFF);
-                $b = (float) ($rgb & 0xFF);
+                $r = ($rgb >> 16) & 0xFF;
+                $g = ($rgb >> 8) & 0xFF;
+                $b = $rgb & 0xFF;
+                if ($this->flattenBackground !== null && !$isHole && $alpha > 0) {
+                    // B-10: semi-transparent (0 < alpha < threshold) → src-over
+                    // onto the background BEFORE quantisation/diffusion.
+                    [$r, $g, $b] = self::flattenOnto($r, $g, $b, $alpha, $this->flattenBackground);
+                }
+                $rf = (float) $r;
+                $gf = (float) $g;
+                $bf = (float) $b;
                 if ($texture !== null) {
-                    $r = self::applyTextureMod($r, $texture->mod($x, $textureY, 0));
-                    $g = self::applyTextureMod($g, $texture->mod($x, $textureY, 1));
-                    $b = self::applyTextureMod($b, $texture->mod($x, $textureY, 2));
+                    $rf = self::applyTextureMod($rf, $texture->mod($x, $textureY, 0));
+                    $gf = self::applyTextureMod($gf, $texture->mod($x, $textureY, 1));
+                    $bf = self::applyTextureMod($bf, $texture->mod($x, $textureY, 2));
                 }
-                $row[] = [$r, $g, $b];
+                $row[] = [$rf, $gf, $bf];
             }
             $window[$y] = $row;
         };
