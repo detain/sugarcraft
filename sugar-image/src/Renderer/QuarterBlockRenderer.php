@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image\Renderer;
 
-use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\ColorUtil;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
 use SugarCraft\Image\PixelGrid;
+use SugarCraft\Image\Support\OutputOptimizer;
 
 /**
  * Quarter-block Unicode renderer using 16 glyphs (▘▝▖▗▀▄▌▐▙▟▛▜▞▚█).
@@ -68,34 +68,43 @@ final class QuarterBlockRenderer implements Renderer
             imagedestroy($img);
         }
 
+        $pen = new OutputOptimizer();
         $lines = [];
         foreach ($grid->cells as $row) {
-            $line = '';
             foreach ($row as $quads) {
-                $line .= self::renderCell($quads);
+                [$glyph, $fg, $bg] = self::cellPaint($quads);
+                $pen->cell($glyph, $fg, $bg);
             }
-            $lines[] = $line;
+            $lines[] = $pen->finishRow();
         }
 
         return implode("\n", $lines);
     }
 
     /**
-     * Render one 2×2 cell. The four quadrant colours are split into two groups
-     * (a 1-step 2-means around the most-distant pair); the glyph encodes which
-     * quadrants are the brighter "foreground" group, drawn in that group's
-     * average colour over the other group's average as the background.
+     * Resolve one 2×2 cell to (glyph, foreground, background). The four
+     * quadrant colours are split into two groups (a 1-step 2-means around the
+     * most-distant pair); the glyph encodes which quadrants are the brighter
+     * "foreground" group, drawn in that group's average colour over the other
+     * group's average as the background. Pen values are normalized SGR
+     * parameter strings for {@see OutputOptimizer} to diff; the mask is
+     * provably >= 1 (the seed pair splits the quadrants), so a space glyph
+     * never reaches this path.
      *
      * @param list<array{int,int,int}> $quads ul, ur, ll, lr
+     *
+     * @return array{string, string, string}
      */
-    private static function renderCell(array $quads): string
+    private static function cellPaint(array $quads): array
     {
         [$a, $b] = self::findSeedPair($quads);
 
         // A flat cell — all four quadrants identical — is a solid block.
         if (ColorUtil::squaredDistance($quads[$a], $quads[$b]) === 0) {
-            [$r, $g, $b] = $quads[0];
-            return Ansi::fgRgb($r, $g, $b) . Ansi::bgRgb($r, $g, $b) . self::GLYPH_MAP[15] . Ansi::reset();
+            [$r, $g, $bl] = $quads[0];
+            $rgb = OutputOptimizer::trueColor($r, $g, $bl);
+
+            return [self::GLYPH_MAP[15], $rgb, $rgb];
         }
 
         // Brighter seed is the foreground.
@@ -107,10 +116,11 @@ final class QuarterBlockRenderer implements Renderer
         [$mask, $fgSum, $bgSum, $fgN, $bgN] = self::groupQuadrantsBySeed($quads, $fgSeed, $bgSeed);
         [$fg, $bg] = self::computeCellColors($fgSeed, $bgSeed, $fgSum, $fgN, $bgSum, $bgN);
 
-        return Ansi::fgRgb($fg[0], $fg[1], $fg[2])
-            . Ansi::bgRgb($bg[0], $bg[1], $bg[2])
-            . self::GLYPH_MAP[$mask]
-            . Ansi::reset();
+        return [
+            self::GLYPH_MAP[$mask],
+            OutputOptimizer::trueColor($fg[0], $fg[1], $fg[2]),
+            OutputOptimizer::trueColor($bg[0], $bg[1], $bg[2]),
+        ];
     }
 
     /**

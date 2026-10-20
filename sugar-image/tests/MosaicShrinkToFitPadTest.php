@@ -22,8 +22,23 @@ use SugarCraft\Image\Scale;
  */
 final class MosaicShrinkToFitPadTest extends TestCase
 {
-    /** One fully-opaque red half-block cell, exactly as HalfBlockRenderer emits it. */
-    private const RED_CELL = "\x1b[38;2;255;0;0m\x1b[48;2;255;0;0m\u{2580}\x1b[0m";
+    /**
+     * The pen-delta row shape for fully-opaque red cells (A-01): the pair of
+     * pens is armed ONCE per row, identical neighbours ride the tracked pen,
+     * and the row closes with a scoped restore — not the pre-A-01 per-cell
+     * `ESC[0m`. RED_ARMS arms both pens; a trailing blank run drops the
+     * background mid-row (BG_RESTORE) and leaves only the fg restore.
+     */
+    private const RED_ARMS = "\x1b[38;2;255;0;0m\x1b[48;2;255;0;0m";
+    private const BG_RESTORE = "\x1b[49m";
+    private const ROW_RESTORE = "\x1b[39;49m";
+    private const ROW_RESTORE_FG = "\x1b[39m";
+
+    /** $cells opaque red glyphs with the pens armed once and the row restored. */
+    private static function redContent(int $cells): string
+    {
+        return self::RED_ARMS . str_repeat("\u{2580}", $cells) . self::ROW_RESTORE;
+    }
 
     private function solidRed(int $w, int $h): ImageSource
     {
@@ -45,7 +60,7 @@ final class MosaicShrinkToFitPadTest extends TestCase
         // Centre of the 80×160 sub-pixel canvas: padX = (80-40)/2 = 20 cols,
         // padY = (160-40)/2 = 60 sub-rows = 30 cell rows. Content spans
         // cell rows 30..49 (40 px = 40 sub-rows = 20 cell rows) and cols 20..59.
-        $contentRow = str_repeat(' ', 20) . str_repeat(self::RED_CELL, 40) . str_repeat(' ', 20);
+        $contentRow = str_repeat(' ', 20) . self::RED_ARMS . str_repeat("\u{2580}", 40) . self::BG_RESTORE . str_repeat(' ', 20) . self::ROW_RESTORE_FG;
         $expectedRows = array_merge(
             array_fill(0, 30, $blankRow),
             array_fill(0, 20, $contentRow),
@@ -65,7 +80,7 @@ final class MosaicShrinkToFitPadTest extends TestCase
         // same opaque block — 80 rows × 80 cells, no blanks. (Unchanged by the
         // fix; pinned so a future Fit rework reds this lane's contrast claim.)
         $this->assertSame(
-            implode("\n", array_fill(0, 80, str_repeat(self::RED_CELL, 80))),
+            implode("\n", array_fill(0, 80, self::redContent(80))),
             $fit,
         );
 
@@ -83,7 +98,7 @@ final class MosaicShrinkToFitPadTest extends TestCase
     {
         $out = $this->halfBlock(Scale::ShrinkToFit)->render($this->solidRed(40, 40), 40, 40);
 
-        $contentRow = str_repeat(self::RED_CELL, 40);
+        $contentRow = self::redContent(40);
         // Canvas 40×80 sub-rows, content rows 20..59 → cell rows 10..29.
         $expectedRows = array_merge(
             array_fill(0, 10, str_repeat(' ', 40)),
@@ -107,8 +122,8 @@ final class MosaicShrinkToFitPadTest extends TestCase
         $expectedRows = array_merge(
             array_fill(0, 3, str_repeat(' ', 7)),
             [
-                str_repeat(' ', 2) . str_repeat(self::RED_CELL, 2) . str_repeat(' ', 3),
-                str_repeat(' ', 2) . str_repeat(self::RED_CELL, 2) . str_repeat(' ', 3),
+                str_repeat(' ', 2) . self::RED_ARMS . "\u{2580}\u{2580}" . self::BG_RESTORE . str_repeat(' ', 3) . self::ROW_RESTORE_FG,
+                str_repeat(' ', 2) . self::RED_ARMS . "\u{2580}\u{2580}" . self::BG_RESTORE . str_repeat(' ', 3) . self::ROW_RESTORE_FG,
             ],
             array_fill(0, 3, str_repeat(' ', 7)),
         );
@@ -131,7 +146,7 @@ final class MosaicShrinkToFitPadTest extends TestCase
         $rows = explode("\n", $out);
         $this->assertCount(16, $rows);
         foreach ($rows as $row) {
-            $this->assertSame(str_repeat(self::RED_CELL, 80), $row);
+            $this->assertSame(self::redContent(80), $row);
         }
         $this->assertStringNotContainsString(' ', $out, 'shrink leg must not gain pad');
     }

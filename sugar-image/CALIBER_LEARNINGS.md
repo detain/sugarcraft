@@ -329,3 +329,13 @@ kept as design rationale for what shipped._
   whole-canvas pre-pass in `encodeInto()`. Band-local hole discovery would
   require deferring the header, which breaks the byte-identical-with-one-shot
   guarantee that #17 is built on.
+- **[Roadmap — emitter idiom split, do NOT unify]** `Support\OutputOptimizer`
+  (A-01/A-13/A-14) streams a render loop: it sees cells one at a time, holds
+  the six-channel pen delta over the row it is writing, and closes rows with a
+  scoped restore of the caller's entry style. sugar-cellbuffer's
+  `Buffer::toAnsi()` is an independent coalescer over a FINISHED cell grid —
+  different mechanism, different lifecycle, no shared state. Chafa likewise
+  keeps its printer-side pen delta (`emit_attributes_truecolor`) and its
+  grid-side passes separate. Folding one into the other would force either a
+  buffering render pass or a pen-state grid walk; the §4.15 dedup pass is the
+  place to revisit, not a bugfix lane.

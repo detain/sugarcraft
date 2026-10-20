@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image\Renderer;
 
-use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
 use SugarCraft\Image\PixelGrid;
+use SugarCraft\Image\Support\OutputOptimizer;
 
 /**
  * Universal fallback renderer using Unicode half-block (▀) with 24-bit
@@ -53,41 +53,40 @@ final class HalfBlockRenderer implements Renderer
             imagedestroy($img);
         }
 
+        $pen = new OutputOptimizer();
         $lines = [];
         foreach ($grid->cells as $row) {
-            $line = '';
             foreach ($row as $pairs) {
                 [$topR, $topG, $topB, $topA] = $pairs[0];
                 [$botR, $botG, $botB, $botA] = $pairs[1];
                 $topTransparent = ($topA === null);
                 $botTransparent = ($botA === null);
                 if ($topTransparent && $botTransparent) {
-                    // Both transparent: a plain space keeps the cell blank
+                    // Both transparent: a blank cell copies the previous
+                    // foreground (chafa blank idiom) — a space carries no
+                    // ink, and dropping the background keeps the cell empty
                     // (a bare ▀ would still print the terminal default fg in
                     // the upper half, showing a stripe over the backdrop).
-                    $line .= ' ';
+                    $pen->blank();
                 } elseif ($topTransparent) {
                     // Top pixel transparent, bottom opaque: ▄ (U+2584) whose
                     // FOREGROUND fills the LOWER half, so the bottom colour
                     // rides fg and the upper half stays terminal default.
-                    $line .= Ansi::fgRgb($botR, $botG, $botB)
-                        . "\u{2584}"
-                        . Ansi::reset();
+                    $pen->cell("\u{2584}", OutputOptimizer::trueColor($botR, $botG, $botB));
                 } elseif ($botTransparent) {
                     // Bottom pixel transparent, top opaque: show top half
                     // only via upper-half block (▀) with fg color.
-                    $line .= Ansi::fgRgb($topR, $topG, $topB)
-                        . "\u{2580}"
-                        . Ansi::reset();
+                    $pen->cell("\u{2580}", OutputOptimizer::trueColor($topR, $topG, $topB));
                 } else {
                     // Both opaque: standard half-block rendering
-                    $line .= Ansi::fgRgb($topR, $topG, $topB)
-                        . Ansi::bgRgb($botR, $botG, $botB)
-                        . "\u{2580}"
-                        . Ansi::reset();
+                    $pen->cell(
+                        "\u{2580}",
+                        OutputOptimizer::trueColor($topR, $topG, $topB),
+                        OutputOptimizer::trueColor($botR, $botG, $botB),
+                    );
                 }
             }
-            $lines[] = $line;
+            $lines[] = $pen->finishRow();
         }
 
         return implode("\n", $lines);

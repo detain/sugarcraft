@@ -55,8 +55,10 @@ final class HalfBlockTransparentTest extends TestCase
         $lines = $this->renderBranchCells();
         // ▄ (U+2584) is filled by its FOREGROUND in the lower half, so the
         // bottom colour rides fgRgb and the upper half shows terminal default.
+        // A-01/A-13: no per-cell reset any more — the row ends with the
+        // scoped fg restore so a caller pen survives the mosaic.
         $this->assertSame(
-            Ansi::fgRgb(0, 255, 0) . "\u{2584}" . Ansi::reset(),
+            Ansi::fgRgb(0, 255, 0) . "\u{2584}" . "\x1b[39m",
             $lines[1],
         );
     }
@@ -66,7 +68,7 @@ final class HalfBlockTransparentTest extends TestCase
         $lines = $this->renderBranchCells();
         // ▀ (U+2580) fg-fills its upper half — this branch was already correct.
         $this->assertSame(
-            Ansi::fgRgb(255, 0, 0) . "\u{2580}" . Ansi::reset(),
+            Ansi::fgRgb(255, 0, 0) . "\u{2580}" . "\x1b[39m",
             $lines[2],
         );
     }
@@ -74,8 +76,9 @@ final class HalfBlockTransparentTest extends TestCase
     public function testBothOpaqueRendersFgTopBgBottomUpperBlock(): void
     {
         $lines = $this->renderBranchCells();
+        // Both pens moved → one combined scoped restore sequence.
         $this->assertSame(
-            Ansi::fgRgb(0, 0, 255) . Ansi::bgRgb(255, 255, 0) . "\u{2580}" . Ansi::reset(),
+            Ansi::fgRgb(0, 0, 255) . Ansi::bgRgb(255, 255, 0) . "\u{2580}" . "\x1b[39;49m",
             $lines[3],
         );
     }
@@ -92,9 +95,12 @@ final class HalfBlockTransparentTest extends TestCase
         // 8x4_red.png: every cell is both-opaque red/red — no ▄ and no space.
         $image = ImageSource::fromFile(__DIR__ . '/../../tests/fixtures/8x4_red.png');
         $out = $this->renderer->render($image, 8, 4);
-        $cell = Ansi::fgRgb(255, 0, 0) . Ansi::bgRgb(255, 0, 0) . "\u{2580}" . Ansi::reset();
+        // A-01: identical neighbours ride the pen delta — the row arms the
+        // pair of pens once, paints all eight glyphs, and closes with one
+        // scoped restore (never the per-cell ESC[0m spam this used to pin).
+        $row = Ansi::fgRgb(255, 0, 0) . Ansi::bgRgb(255, 0, 0) . str_repeat("\u{2580}", 8) . "\x1b[39;49m";
 
-        $this->assertSame(implode("\n", array_fill(0, 4, str_repeat($cell, 8))), $out);
+        $this->assertSame(implode("\n", array_fill(0, 4, $row)), $out);
     }
 
     public function testSupportsAlphaReturnsFalse(): void
