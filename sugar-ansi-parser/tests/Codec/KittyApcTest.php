@@ -123,4 +123,42 @@ final class KittyApcTest extends TestCase
         self::assertNotNull($apc);
         self::assertSame('p', $apc->action());
     }
+
+    public function testBackslashBeforeADelimiterIsOrdinaryData(): void
+    {
+        // m1 (rev-w10-4): the protocol defines no escape grammar (upstream
+        // parse-graphics-command.h splits on plain ','/';' and accepts no
+        // string values), so `\,` and `\;` stay data bytes — pinned against
+        // any future silent-unescape invention.
+        $apc = KittyApc::parse('Ga=f,f=/p\,q;QUJD');
+
+        self::assertNotNull($apc);
+        self::assertSame(['a' => 'f', 'f' => '/p\\'], $apc->control());
+        self::assertSame('QUJD', $apc->payload());
+        self::assertSame(4, $apc->payloadSize());
+
+        $escapedSemi = KittyApc::parse('Ga=f\;b;QUJD');
+
+        self::assertNotNull($escapedSemi);
+        // The ';' starts the payload whether or not a backslash precedes it.
+        self::assertSame(['a' => 'f\\'], $escapedSemi->control());
+        self::assertSame('b;QUJD', $escapedSemi->payload());
+    }
+
+    public function testDescribeNeutralizesControlBytesInTheAction(): void
+    {
+        // m2 (rev-w10-4): APC string states Put bytes 0x00-0x17, so the
+        // quoted flag value must be escaped+clipped like Dcs::describe().
+        $apc = KittyApc::parse("Ga=f\n\x07;QUJD");
+
+        self::assertNotNull($apc);
+        self::assertSame('kitty graphics a=f\x0A\x07 (4 bytes)', $apc->describe());
+        self::assertStringNotContainsString("\n", $apc->describe());
+        self::assertStringNotContainsString("\x07", $apc->describe());
+
+        $long = KittyApc::parse('Ga=' . str_repeat('x', 97) . "\n;QUJD");
+
+        self::assertNotNull($long);
+        self::assertSame('kitty graphics a=' . str_repeat('x', 80) . '… (4 bytes)', $long->describe());
+    }
 }

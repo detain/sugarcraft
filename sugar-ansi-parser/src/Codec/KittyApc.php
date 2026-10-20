@@ -30,9 +30,21 @@ namespace SugarCraft\AnsiParser\Codec;
  * `kittyGraphicsControl()` (comma-joined `key=value`); this decoder is
  * deliberately lenient (unknown keys are kept in {@see control()}, malformed
  * tokens are skipped) because APC payloads are attacker-controlled.
+ *
+ * Delimiters are literal (m1, rev-w10-4): the protocol defines NO backslash
+ * escape grammar — kitty's own generated control-block parser
+ * (`kitty/parse-graphics-command.h`) is a flat state machine in which every
+ * value is a single-character flag or an integer followed by exactly one `,`
+ * (next pair) or `;` (payload start), and the spec carries no string-valued
+ * key at all (file paths ride the base64 payload for `t=f`). So `\;` and `\,`
+ * cannot appear in a frame kitty accepts, and we honour that by splitting on
+ * plain `,`/`;` with the backslash left as ordinary data — the same byte
+ * shapes upstream rejects as malformed, never silently reinterpreted.
  */
 final class KittyApc
 {
+    /** Longest flag-value excerpt `describe()` will quote, in bytes. */
+    private const LABEL_BYTES = 80;
     /**
      * @param array<string, string> $control Decoded control pairs, in wire order.
      */
@@ -200,7 +212,7 @@ final class KittyApc
     {
         $parts = ['kitty graphics'];
         if ($this->action() !== '') {
-            $parts[] = 'a=' . $this->action();
+            $parts[] = 'a=' . $this->safe($this->action());
         }
         $id = $this->intValue('i');
         if ($id !== null) {
@@ -236,5 +248,27 @@ final class KittyApc
         }
 
         return (int) $raw;
+    }
+
+    /**
+     * Escape+clip excerpt (m2, rev-w10-4): APC string states Put bytes
+     * 0x00-0x17 (Transitions), so a flag value can carry LF/BEL line
+     * injection; same discipline as {@see Dcs::safe()}. ESC itself cannot
+     * appear (it terminates the string).
+     */
+    private function safe(string $bytes): string
+    {
+        $clip = \strlen($bytes) > self::LABEL_BYTES;
+        if ($clip) {
+            $bytes = substr($bytes, 0, self::LABEL_BYTES);
+        }
+        $out = '';
+        $len = \strlen($bytes);
+        for ($i = 0; $i < $len; $i++) {
+            $byte = \ord($bytes[$i]);
+            $out .= ($byte < 0x20 || $byte > 0x7E) ? \sprintf('\\x%02X', $byte) : $bytes[$i];
+        }
+
+        return $clip ? $out . '…' : $out;
     }
 }

@@ -146,4 +146,20 @@ final class Iterm1337Test extends TestCase
         self::assertNull(Iterm1337::fromDcs(\ord('t'), 'other;abc'));
         self::assertNull(Iterm1337::fromDcs(\ord('t'), 'mux;plain-text'));
     }
+
+    public function testDescribeNeutralizesControlBytesFromTheDcsArm(): void
+    {
+        // m3 (rev-w10-4): via fromDcs the DCS body admits 0x00-0x17 Put bytes
+        // (the OSC path is protected by Transitions dropping them), so the
+        // non-File command verb must be escaped like the URL-decoded name.
+        $inner = "\x1b]1337;Po\x0b\n\x07";
+        $data = 'mux;' . str_replace("\x1b", "\x1b\x1b", $inner);
+
+        $seq = Iterm1337::fromDcs(\ord('t'), $data);
+
+        self::assertNotNull($seq);
+        self::assertSame("Po\x0b\n", $seq->command());
+        self::assertSame('iTerm2 Po\x0B\x0A', $seq->describe());
+        self::assertStringNotContainsString("\n", $seq->describe());
+    }
 }

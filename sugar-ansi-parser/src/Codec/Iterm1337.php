@@ -250,7 +250,11 @@ final class Iterm1337
     public function describe(): string
     {
         if (!$this->isFile()) {
-            return 'iTerm2 ' . ($this->command === '' ? '(empty)' : $this->command);
+            // m3 (rev-w10-4): via fromDcs the DCS body admits 0x00-0x17 Put
+            // bytes (the OSC path is protected — Transitions drops them in
+            // OscString), so the command verb needs the same escape as the
+            // URL-decoded name before reaching a log label.
+            return 'iTerm2 ' . ($this->command === '' ? '(empty)' : self::safe($this->command));
         }
 
         $parts = ['iTerm2 inline image'];
