@@ -1719,11 +1719,20 @@ final class Subcommands
     }
 
     /**
-     * The default clone: argv-array `git clone --quiet --depth 1 --no-tags`
-     * (no shell: URL quoting is argv's job, and `--` ends option parsing so
-     * a URL beginning with `-` stays a URL), wrapped by
-     * {@see ProcessContainment::spawnSpec()} so the clone leads its own
-     * session and dies in its own group.
+     * The default clone: argv-array `git -c protocol.ext.allow=never clone
+     * --quiet --depth 1 --no-tags` (no shell: URL quoting is argv's job, and
+     * `--` ends option parsing so a URL beginning with `-` stays a URL),
+     * wrapped by {@see ProcessContainment::spawnSpec()} so the clone leads
+     * its own session and dies in its own group.
+     *
+     * INT-M1: the `-c` leg IS the transport door, and it is part of the argv
+     * on purpose. {@see self::looksLikeGitUrl()} admits any string ending in
+     * `.git`, so the shape `ext::sh -c …x.git` reaches this spawn as what git
+     * parses as a remote helper URL. Modern git refuses the ext transport for
+     * user-initiated fetches by default, but a command-line `-c` outranks
+     * both an inherited `GIT_ALLOW_PROTOCOL` and any older git's defaults —
+     * the refusal then belongs to THIS spawn, not to the version and not to
+     * the operator's environment.
      *
      * @return array{ok: bool, detail: string}
      */
@@ -1733,7 +1742,7 @@ final class Subcommands
             // `@`: with no wrapper a failed exec raises E_WARNING from
             // proc_open() itself; the answer below is by return value.
             $process = @\proc_open(
-                ProcessContainment::spawnSpec(['git', 'clone', '--quiet', '--depth', '1', '--no-tags', '--', $url, $scratch]),
+                ProcessContainment::spawnSpec(['git', '-c', 'protocol.ext.allow=never', 'clone', '--quiet', '--depth', '1', '--no-tags', '--', $url, $scratch]),
                 [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
                 $pipes,
                 null,
@@ -1841,6 +1850,14 @@ final class Subcommands
      * the shapes `git clone` accepts. Deliberately strict: anything else
      * that is not a directory is refused, because the alternative to a
      * refusal here is handing an arbitrary string to a network client.
+     *
+     * INT-M1: the bare-`.git` arm is a broad net — it would let a remote
+     * helper URL like `ext::sh -c …x.git` through. That is survivable only
+     * because the clone itself pins `-c protocol.ext.allow=never` on the
+     * argv (see {@see self::bundlesCloneDefault()}), so the transport git
+     * would use to obey such a URL is refused at spawn no matter how wide
+     * this matcher casts. Tightening this predicate instead would reject
+     * legitimate `…/whatever.git` paths, so the belt lives at the spawn.
      */
     private static function looksLikeGitUrl(string $source): bool
     {

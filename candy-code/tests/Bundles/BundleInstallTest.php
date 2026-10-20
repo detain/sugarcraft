@@ -176,6 +176,46 @@ final class BundleInstallTest extends TestCase
         return $names;
     }
 
+    /**
+     * INT-M1: `looksLikeGitUrl` admits any `.git`-suffixed string, so the
+     * remote-helper shape `ext::sh -c …x.git` reaches the clone. The defence
+     * is the argv itself pinning `-c protocol.ext.allow=never`, so the refusal
+     * belongs to this spawn and not to the git version. A source-slice pin
+     * (not a live `git clone`) is what discriminates: modern git refuses `ext`
+     * by default too, so a real-clone test would stay green with the belt
+     * removed. The exact token order is asserted so dropping or reordering the
+     * `-c` leg reddens this.
+     */
+    public function testTheDefaultCloneArgvPinsTheExtTransportOffBeforeTheCloneToken(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Subcommands.php');
+
+        self::assertSame(
+            1,
+            substr_count($source, "\"git\", \"-c\", \"protocol.ext.allow=never\", \"clone\"")
+                + substr_count($source, "'git', '-c', 'protocol.ext.allow=never', 'clone'"),
+            'bundlesCloneDefault() lost its -c protocol.ext.allow=never belt ahead of the clone token',
+        );
+    }
+
+    /**
+     * INT-M1: an `ext::sh` helper URL (which `looksLikeGitUrl` admits because
+     * it ends in `.git`) is refused by the real clone leg and never executes
+     * the helper — the canary `touch` never lands on disk. Robust whether or
+     * not git is on PATH: a missing git is its own refusal with no spawn.
+     */
+    public function testAnExtHelperShapedSourceIsRefusedWithoutSpawningTheHelper(): void
+    {
+        $canary = $this->tempDir . '/ext-transport-canary.git';
+        // A single token ending in `.git` so looksLikeGitUrl routes to clone;
+        // if the ext helper ever ran, `touch` would create $canary.
+        $source = 'ext::sh -c touch ' . $canary;
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $this->verb('install', $source));
+        self::assertFileDoesNotExist($canary, 'the ext:: remote helper executed — the transport belt is open');
+        self::assertSame([], $this->entriesUnderRoot());
+    }
+
     /** A real bundle directory to install FROM, returned as its path. */
     private function stagedBundle(string $folder, ?string $name = null, bool $withGitDir = false): string
     {
