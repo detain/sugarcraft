@@ -68,6 +68,15 @@ $compressed = $renderer->renderWithOptions($image, 40, null, $opts);
 
 ## Supported image formats
 
+Codec matrix (sugar-image native paths only):
+
+| Container | sugar-image native | Notes |
+|---|---|---|
+| PNG (still + APNG) | ✅ decode | APNG frames via `fromAnimatedFile()` |
+| JPEG, static GIF | ✅ decode | GIF animates via `fromAnimatedFile()` |
+| WebP — static (VP8/VP8L/VP8X) | ✅ decode via `fromString()` | ext-gd WebP build |
+| WebP — animated (VP8X ANIM bit / ANMF) | ❌ refused by name | `UnsupportedFormatException` — needs chafa CLI or ffmpeg; the refusal is structural (pure-PHP RIFF walk), so the silent first-frame degrade class is closed on every host |
+
 - PNG, JPEG, static GIF — via ext-gd (`imagecreatefrompng`,
   `imagecreatefromjpeg`, `imagecreatefromgif`)
 - `ImageSource::fromString()` additionally accepts anything GD's

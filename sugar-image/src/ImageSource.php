@@ -73,6 +73,25 @@ final class ImageSource
     private const STAT_REGULAR_BIT = 0100000;
 
     /**
+     * E-05: ceiling on the number of RIFF chunks {@see self::webpCarriesAnimation()}
+     * walks before it gives up looking for animation proof. The walk is O(file)
+     * otherwise; a 2 GB WebP with a thousand padding chunks must not stall a
+     * render-loop ingress. Missing the budget is NOT a refusal (see the walk's
+     * documented posture).
+     */
+    private const MAX_RIFF_CHUNKS = 64;
+
+    /**
+     * E-06: ISOBMFF `ftyp` major brands with no PHP-side decoder. avif/avis are
+     * AVIF; heic/heix/hevx/heim/heis and the HEIF-family container brands
+     * mif1/msf1 cover the HEIC/HEVC-still line; 'jxl ' is boxed JPEG-XL.
+     * Deliberately EXCLUDES generic video brands (isom/mp41/avc1 …) so a
+     * mis-sniffed MP4 keeps today's GD-rejects-it posture instead of a claim
+     * this list cannot honour.
+     */
+    private const EXOTIC_FTYPO_BRANDS = ['avif', 'avis', 'heic', 'heix', 'hevx', 'heim', 'heis', 'mif1', 'msf1', 'jxl '];
+
+    /**
      * @param string $bytes    Raw image bytes (PNG/JPEG/GIF, or any other format
      *                         GD decodes when built via fromString())
      * @param string $format   MIME type: 'image/png', 'image/jpeg', 'image/gif',
@@ -271,6 +290,12 @@ final class ImageSource
      * non-PNG bytes to a terminal told they are PNG.
      *
      * @param string|null $sniffedMime getimagesizefromstring()'s `mime`, if any
+     * @throws UnsupportedFormatException  E-05 animated WebP (VP8X ANIM bit or
+     *                                    any ANMF chunk) and E-06 exotic
+     *                                    containers (AVIF/HEIF-family `ftyp`
+     *                                    brands, JXL codestream, TIFF) — both
+     *                                    refused on structure, before GD sees
+     *                                    the bytes
      */
     private static function detectImageFormat(string $bytes, ?string $sniffedMime = null): string
     {
@@ -289,11 +314,20 @@ final class ImageSource
         ) {
             return 'image/gif';
         }
-        // WebP: "RIFF" + 4 bytes + "WEBP"
+        // WebP: "RIFF" + 4 bytes + "WEBP". E-05: an animated WebP never gets a
+        // label — on hosts whose libwebp demuxes animation to a first frame, GD
+        // would decode one happy still from it; refusing on the STRUCTURE
+        // (VP8X ANIM bit / ANMF chunk) happens PRE-decode, host-independently.
         if (strlen($bytes) >= 12 && $bytes[0] === 'R' && $bytes[1] === 'I'
             && $bytes[2] === 'F' && $bytes[3] === 'F' && $bytes[8] === 'W'
             && $bytes[9] === 'E' && $bytes[10] === 'B' && $bytes[11] === 'P'
         ) {
+            if (self::webpCarriesAnimation($bytes) === true) {
+                throw new UnsupportedFormatException(Lang::t('image_source.anim_webp', [
+                    'format' => 'RIFF/WEBP with VP8X ANIM or ANMF chunks',
+                ]));
+            }
+
             return 'image/webp';
         }
 
@@ -305,6 +339,56 @@ final class ImageSource
 
         return 'application/octet-stream';
     }
+
+    /**
+     * Pure-PHP RIFF walk proving a WebP carries animation (E-05.1).
+     *
+     * Animation evidence, either half sufficient: a VP8X chunk whose flags
+     * byte has bit 1 (ANIM) set, or any ANMF chunk (a frame the VP8X header
+     * may have failed to advertise). Chunk sizes are honoured with the
+     * RIFF's even-padding rule, so an oversized or padded chunk cannot desync
+     * the walk into accusing an innocent sibling.
+     *
+     * Fail-safe posture, deliberately mirroring detectImageFormat()'s existing
+     * behavior for structures it cannot name: a malformed/truncated container,
+     * or a walk that exhausts {@see self::MAX_RIFF_CHUNKS}, returns null — NOT
+     * a refusal — and the bytes keep today's fate (GD validates and refuses
+     * them, or decodes them, exactly as before the walk existed). Only
+     * affirmative animation proof refuses. A static WebP therefore stays
+     * accepted byte-for-byte unchanged (the negative-polarity pin).
+     *
+     * @return bool|null  true = animated (refuse), false = proven static,
+     *                    null = not decidable as animated (fail safe)
+     */
+    private static function webpCarriesAnimation(string $bytes): ?bool
+    {
+        $size = unpack('V', substr($bytes, 4, 4))[1] ?? 0;
+        $end  = min(strlen($bytes), 8 + $size);
+        $i    = 12; // first chunk follows 'RIFF' + size + 'WEBP'
+        $seen = 0;
+
+        while ($i + 8 <= $end) {
+            if (++$seen > self::MAX_RIFF_CHUNKS) {
+                return null;
+            }
+            $tag  = substr($bytes, $i, 4);
+            $len  = unpack('V', substr($bytes, $i + 4, 4))[1] ?? 0;
+            $data = $i + 8;
+            if ($data + $len > $end) {
+                return null; // truncated chunk: not decidable, fail safe
+            }
+            if ($tag === 'ANMF') {
+                return true;
+            }
+            if ($tag === 'VP8X' && $len >= 1 && ((ord($bytes[$data]) & 0x02) !== 0)) {
+                return true;
+            }
+            $i = $data + $len + ($len % 2);
+        }
+
+        return $seen > 0 ? false : null; // zero well-formed chunks = not decidable
+    }
+
 
     /**
      * True when {@see self::$bytes} carry the PNG signature.

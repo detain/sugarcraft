@@ -13,6 +13,7 @@ return [
     'image_source.cannot_read'       => 'Cannot read file: {path}',
     'image_source.unsupported_format'=> 'Unsupported image format: {path}',
     'image_source.unsupported_mime'  => 'Unsupported MIME type: {mime}',
+    'image_source.anim_webp'         => 'Animated WebP ({format}) needs chafa or ffmpeg; sugar-image does not decode it',
     'image_source.no_gd'             => 'ext-gd is required but is not available',
     'image_source.gd_load_failed'    => 'GD failed to load image: {path}',
     'image_source.temp_failed'       => 'Failed to create temporary file for in-memory image',
