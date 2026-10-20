@@ -885,6 +885,10 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *                    full-canvas pass produces (D-02 band-split equality;
      *                    error diffusion is by design NOT sliceable this way,
      *                    which is why the reach window stays stateful above).
+     *                    The serpentine flip reads LOCAL $y, not $y +
+     *                    $yOrigin — latent phase trap: a per-band indexRows
+     *                    call would restart the snake mid-image (safe today,
+     *                    every call walks a whole canvas at $yOrigin = 0).
      * @return \Generator<int, list<int>>  row index → grid[row][col] palette index
      */
     private function indexRows(\GdImage $img, array $palette, Dither $dither, int $offset, int $yOrigin = 0): \Generator
@@ -992,9 +996,15 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             // Per chafa chafa-pixops.c:327-459 (fs_dither): even rows walk
             // left→right, odd rows right→left, and the kernel mirrors with
             // the direction so every tap still lands on an unprocessed
-            // pixel. Chafa parks the edge-bound error in padded
-            // accumulator cells it never renders; dropping it at the
-            // bounds test here is equivalent.
+            // pixel — that parity and mirroring is a faithful port. At the
+            // row ends chafa does NOT park error in padding: it FOLDS the
+            // boundary taps into the nearest visible cells
+            // (chafa-pixops.c:377-405 — the leftmost grain re-adds
+            // error_row[1]+1, the rightmost re-adds error_row[1]+x; the +2
+            // columns of its padded rows are memset-0 layout slack, not
+            // accumulators). SugarCraft drops out-of-bounds taps at the
+            // bounds test here — a real, disclosed divergence:
+            // conserved-vs-dropped error differs at the row ends.
             $reversed = $snake && (($y & 1) === 1);
             $row = array_fill(0, $w, 0);
             for ($i = 0; $i < $w; $i++) {

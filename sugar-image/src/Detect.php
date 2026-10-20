@@ -318,10 +318,11 @@ final class Detect
      * {@see \SugarCraft\CellBuffer\Diff\RepeatGate} byte arithmetic before
      * compressing a run.
      *
-     * This is the env-only truth table that lives until the S4.2 TermDb
-     * rework lands the audited per-terminal database on master — the seam
-     * is exactly one method body, mirroring how {@see probeTerminfoSixel()}
-     * names its own swap point. Conservative rows (ECMA-48 REP is a core
+     * This is the env-only truth table that lives until the audited
+     * per-terminal REP axis lands on the S4.2 TermDb table (F-01 shipped
+     * that table pixel-only, deliberately) — the seam is exactly one
+     * method body, mirroring how {@see probeTerminfoSixel()} names its own
+     * swap point. Conservative rows (ECMA-48 REP is a core
      * sequence; only two shapes are refused here):
      *  - no $TERM / TERM=dumb  → false (no escape-sequence guarantees);
      *  - TERM=screen*          → false (GNU screen keeps its own screen
@@ -329,8 +330,11 @@ final class Detect
      *    honour client REP);
      *  - everything else       → true (xterm-class: xterm, rxvt, vte/foot,
      *    kitty, alacritty, wezterm, mlterm, tmux). Per-emulator vetoes
-     *    beyond these rows are the TermDb table's job (s4.2), not a guess
-     *    the env ladder should make.
+     *    beyond these rows are the TermDb table's REP-axis follow-up, not
+     *    a guess the env ladder should make.
+     *
+     * TODO: supportsRepeat REP-axis chicle parity — follow-up E-ID mint at
+     * W5 docs (never claim parity now).
      */
     public static function supportsRepeat(): bool
     {
