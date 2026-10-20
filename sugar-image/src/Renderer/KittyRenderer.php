@@ -9,6 +9,7 @@ use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\KittyOptions;
 use SugarCraft\Image\Lang;
 use SugarCraft\Image\PixelGrid;
+use SugarCraft\Image\Support\GdAvailability;
 
 /**
  * Kitty graphics protocol renderer via chunked APC sequences.
@@ -34,6 +35,7 @@ use SugarCraft\Image\PixelGrid;
 final class KittyRenderer implements Renderer, IncrementalRenderer
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
+    use \SugarCraft\Image\Concerns\ResolvesRawPixelsTrait;
 
     /**
      * Render an image as a Kitty graphics protocol sequence.
@@ -261,6 +263,52 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
     }
 
     /**
+     * Transmit as RAW RGBA (`f=32`) — the GD-free wire format.
+     *
+     * F-13, per chafa's kitty path (chafa/internal/chafa-kitty-renderer.c
+     * sends raw RGBA quads and never encodes PNG): the payload is the
+     * flat R,G,B,A byte stream from {@see RawRgba} — supplied directly
+     * via `$rgba` (no GD at all) or decoded through GD when omitted.
+     * `s`/`v` carry the pixel dimensions; `c`/`r` stay the cell extent,
+     * and the payload rides the same F-11 raw-byte chunker
+     * ({@see KittyOptions::DEFAULT_CHUNK_BYTES}, multiples of 3 keep
+     * base64 padding off every non-final chunk even though quads may
+     * straddle slice boundaries — the terminal re-concatenates before
+     * interpreting pixels).
+     *
+     * This is an explicit opt-in: {@see render()} and
+     * {@see renderWithOptions()} keep emitting their historical f=100
+     * PNG frames byte-for-byte.
+     */
+    public function renderUncompressed(ImageSource $image, int $width, ?int $height = null, ?string $rgba = null): string
+    {
+        $effectiveHeight = $this->prepareRender($image, $width, $height);
+        $payload         = $this->resolveRgba($image, $rgba);
+
+        $chunks = $this->chunkPayload($payload, KittyOptions::DEFAULT_CHUNK_BYTES);
+        $total  = count($chunks);
+
+        $out = Ansi::kittyGraphicsBegin([
+            'c' => $width,
+            'r' => $effectiveHeight > 0 ? $effectiveHeight : 1,
+            'f' => 32,
+            's' => $image->width,
+            'v' => $image->height,
+        ]);
+
+        foreach ($chunks as $idx => $chunk) {
+            $out .= Ansi::kittyGraphicsChunk($chunk, $idx < $total - 1);
+        }
+        if ($total === 0) {
+            // Defensive parity with render(): an empty payload never
+            // emits m=0, so the transaction must still be closed.
+            $out .= Ansi::kittyGraphicsEnd();
+        }
+
+        return $out;
+    }
+
+    /**
      * Ensure PNG bytes, re-encoding if the source format is not PNG.
      *
      * Uses php://temp to handle GD builds that write to output instead of
@@ -273,6 +321,13 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         // Trust the bytes, not the label: f=100 tells the terminal the payload is PNG.
         if ($image->isPng()) {
             return $image->bytes;
+        }
+
+        // F-13: GD-absence now costs a translated refusal, not an
+        // undefined-function fatal, and the raw f=32 path above is the
+        // GD-free alternative for callers that hold pixels directly.
+        if (!GdAvailability::available()) {
+            throw new \RuntimeException(Lang::t('renderer.gd_unavailable'));
         }
 
         $src = @imagecreatefromstring($image->bytes);
