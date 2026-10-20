@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { CommandInfo, Delivery } from "../stores/session";
+import { loadPromptHistory, pushPromptHistory } from "../stores/promptHistory";
 import {
     MAX_PASTED_IMAGES,
     readPastedImages,
@@ -142,9 +143,20 @@ watch(
     },
 );
 
+/** WEB-5a-i: the persisted ring (cap and dedupe live in `stores/promptHistory`). */
+const history = ref<string[]>(loadPromptHistory());
+/** -1 while typing a fresh draft; ≥0 indexes `history` from the newest entry. */
+let historyIndex = -1;
+/** The draft recall interrupted, restored when recall walks back to the head. */
+let draftBackup = "";
+
 function submit(): void {
     const text = props.modelValue.trim();
     if (text === "" || props.disabled || blockedReason.value !== "") return;
+    // WEB-5a-i: the ring records what was sent, newest first (a failed
+    // delivery keeps its prompt too, as in a shell — the prompt happened).
+    history.value = pushPromptHistory(history.value, text);
+    historyIndex = -1;
     emit(
         "send",
         text,
@@ -153,10 +165,48 @@ function submit(): void {
     );
 }
 
+/** Ctrl+Up walks older, Ctrl+Down walks newer and lands back on the draft. */
+function recallHistory(older: boolean): boolean {
+    if (history.value.length === 0) return false;
+    if (!older && historyIndex === -1) return false;
+    if (historyIndex === -1) draftBackup = props.modelValue;
+    const next = older
+        ? Math.min(historyIndex + 1, history.value.length - 1)
+        : historyIndex - 1;
+    if (next === historyIndex) return true; // already at the oldest end: consume the key, change nothing
+    historyIndex = next;
+    emit(
+        "update:modelValue",
+        historyIndex === -1 ? draftBackup : (history.value[historyIndex] ?? ""),
+    );
+    return true;
+}
+
+/** Typing after a recall drops the recall position; the draft is live again. */
+function onInput(event: Event): void {
+    historyIndex = -1;
+    emit("update:modelValue", (event.target as HTMLTextAreaElement).value);
+}
+
 function onKeydown(event: KeyboardEvent): void {
+    if (
+        event.ctrlKey &&
+        !event.metaKey &&
+        suggestions.value.length === 0 &&
+        (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+        recallHistory(event.key === "ArrowUp")
+    ) {
+        event.preventDefault();
+        return;
+    }
     const commands = suggestions.value.length;
     const popup = commands > 0 ? commands : files.value.length;
-    if (popup > 0 && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+    if (
+        popup > 0 &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        (event.key === "ArrowDown" || event.key === "ArrowUp")
+    ) {
         event.preventDefault();
         selected.value =
             (selected.value + (event.key === "ArrowDown" ? 1 : popup - 1)) %
@@ -275,16 +325,11 @@ defineExpose({ focus: () => input.value?.focus() });
                 :placeholder="
                     busy
                         ? 'Type to queue, steer or interrupt…'
-                        : 'Message CandyCode… (Enter sends, Shift+Enter for a new line, / for commands, @ for files, paste images)'
+                        : 'Message CandyCode… (Enter sends, Shift+Enter for a new line, / for commands, @ for files, paste images, Ctrl+↑ history)'
                 "
                 aria-label="Message"
                 data-testid="composer-input"
-                @input="
-                    emit(
-                        'update:modelValue',
-                        ($event.target as HTMLTextAreaElement).value,
-                    )
-                "
+                @input="onInput"
                 @keydown="onKeydown"
                 @paste="onPaste"
             />
