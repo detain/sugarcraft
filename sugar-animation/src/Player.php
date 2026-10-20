@@ -50,6 +50,16 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
  * schedule with a fake clock; production reads `hrtime(true)` monotonic
  * nanoseconds.
  *
+ * E-10: a watching Player ({@see withWatch()}) re-runs its probe every
+ * {@see WATCH_POLL_SECONDS} on the same self-arming tick-chain discipline
+ * the schedule uses — chicle's `--watch` re-stat cycle
+ * (tools/chafa/chafa.c:896-940) as an event-loop timer, never a sleep. A
+ * probe that reports a new frame stream rebinds the Player in place via
+ * {@see withFrames()}: index, lap counter and epoch reset with the file,
+ * playback policy (preset, cadence, bounds, loops) survives — the
+ * destroy-and-recreate parity chicle reaches by literally destroying the
+ * media loader between files.
+ *
  * Keys: space — pause/resume.  ←/→ — manual step.  q/esc — quit.
  */
 final class Player implements Model
@@ -80,6 +90,21 @@ final class Player implements Model
     public const MAX_FPS = 100000.0;
 
     /**
+     * E-10: how often a watching Player re-runs its probe, in seconds —
+     * chicle's exact poll cadence for `--watch` (g_usleep(10000) at
+     * tools/chafa/chafa.c:926), delivered here as an event-loop timer
+     * instead of a sleep. Deviations from chicle, both deliberate: its
+     * 250 ms backoff while the file is missing (:932) is not copied (the
+     * probe owner decides what a failed stat costs; a stat(2) of a missing
+     * path is cheap), and its re-decode of the file on EVERY poll because
+     * "we can't rely on timestamps" (:913-914) is replaced by the host
+     * probe's own change token — the recommended token is dev+ino+size+
+     * mtime_ns, which catches renames-in-place and same-named rewrites a
+     * coarse-mtime check would miss.
+     */
+    public const WATCH_POLL_SECONDS = 0.01;
+
+    /**
      * @param list<Frame> $frames
      * @param ?\Closure():float $now E-09/E-03 clock seam: monotonic seconds;
      *        null (production) reads `hrtime(true) / 1e9`.
@@ -102,6 +127,13 @@ final class Player implements Model
      *        of the schedule counts one lap, a manual ←/→ step never does
      *        (user scrubbing is not a playthrough), and a frame-stream
      *        replacement resets it with the index.
+     * @param ?\Closure():?array{frames: list<Frame>, loops: ?int} $watch
+     *        E-10 watch seam: re-runs every {@see WATCH_POLL_SECONDS} while
+     *        the Player lives; returning null means "nothing changed", and
+     *        returning a frame list means "reload onto it" (the probe has
+     *        already read and decoded the changed file — the Player only
+     *        rebinds state). The closure must be cheap: it runs inside the
+     *        event loop on every poll.
      */
     public function __construct(
         public readonly array $frames,
@@ -115,6 +147,7 @@ final class Player implements Model
         private readonly ?float $anchor = null,
         public readonly ?int $loops = null,
         private readonly int $lapsCarried = 0,
+        private readonly ?\Closure $watch = null,
     ) {
         // Fail fast: a Player that cannot display its start frame is a wiring
         // bug at construction time, not a state to carry into update()/view().
@@ -129,10 +162,14 @@ final class Player implements Model
 
     public function init(): ?\Closure
     {
-        if ($this->frames === [] || $this->paused) {
-            return null;
+        $schedule = ($this->frames === [] || $this->paused)
+            ? null
+            : Cmd::tick($this->framePeriod($this->index), static fn (): Msg => new TickMsg());
+        if ($this->watch === null) {
+            return $schedule;
         }
-        return Cmd::tick($this->framePeriod($this->index), static fn (): Msg => new TickMsg());
+
+        return $schedule === null ? $this->armWatch() : Cmd::batch($schedule, $this->armWatch());
     }
 
     public function update(Msg $msg): array
@@ -185,6 +222,12 @@ final class Player implements Model
                 return [$this, Cmd::quit()];
             }
             return $this->advanceSchedule($now);
+        }
+        if ($msg instanceof WatchMsg) {
+            // E-10: the poll runs while paused too — a changed file while
+            // paused shows frame 0 of the NEW file on the still-paused
+            // screen, which is what a watching user came here to see.
+            return $this->onWatch();
         }
         if ($msg instanceof WindowSizeMsg) {
             // Re-clamp renderer to new window size, reserving one row for the
@@ -280,6 +323,42 @@ final class Player implements Model
     public function playOnce(): self
     {
         return $this->withLoops(1);
+    }
+
+    /**
+     * E-10: attach a watch probe. The closure is re-run every
+     * {@see WATCH_POLL_SECONDS} (see the constant's docblock for the chicle
+     * parity and the disclosed deviations); null = "no change", a frame
+     * list = "reload onto it now". Returns a new Player — the seam is
+     * state, not mutation.
+     *
+     * @param \Closure():?array{frames: list<Frame>, loops: ?int} $probe
+     */
+    public function withWatch(\Closure $probe): self
+    {
+        return $this->mutate(['watch' => $probe]);
+    }
+
+    /**
+     * E-10: rebind the playback to a different frame stream IN PLACE — the
+     * reload half of the watch cycle, exposed publicly so hosts can swap
+     * frames without rebuilding the Player. The position restarts (index 0,
+     * carried laps 0, epoch unanchored so the first tick of the new stream
+     * anchors by the E-03 next-arrival law); playback policy — preset,
+     * renderer, cadence, duration bound, loop bound, and the watch seam
+     * itself — survives. A caller that wants the loop bound re-derived from
+     * the new bytes chains {@see withLoops()} onto the result.
+     *
+     * @param list<Frame> $frames
+     */
+    public function withFrames(array $frames): self
+    {
+        return $this->mutate([
+            'frames' => array_values($frames),
+            'index' => 0,
+            'lapsCarried' => 0,
+            'anchor' => null,
+        ]);
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
@@ -411,6 +490,35 @@ final class Player implements Model
         }
 
         return [$this->anchored($landing, $now)->mutate(['lapsCarried' => $carried]), $this->armFromRel($this->framePeriod($landing))];
+    }
+
+    /**
+     * E-10: one watch poll. A probe failure or an empty reload never swaps
+     * the display (chicle's `if (media_loader)` guard: a file mid-rewrite
+     * keeps playing the last good stream rather than flashing "no frames");
+     * the chain re-arms in every outcome except an un-armed Player, so the
+     * watch outlives transient corruption exactly as the CLI loop did.
+     *
+     * @return array{Player, ?\Closure}
+     */
+    private function onWatch(): array
+    {
+        $probe = $this->watch;
+        if ($probe === null) {
+            return [$this, null];
+        }
+        $reload = $probe();
+        if ($reload === null || $reload['frames'] === []) {
+            return [$this, $this->armWatch()];
+        }
+        $next = $this->withFrames($reload['frames'])->withLoops($reload['loops']);
+
+        return [$next, $this->armWatch()];
+    }
+
+    private function armWatch(): \Closure
+    {
+        return Cmd::tick(self::WATCH_POLL_SECONDS, static fn (): Msg => new WatchMsg());
     }
 
     /**
