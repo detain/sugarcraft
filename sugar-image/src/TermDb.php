@@ -43,6 +43,10 @@ namespace SugarCraft\Image;
  *   tmux DISPLAY policy is owned by the F-04 termfeatures veto, not the table
  *   — laundering it through the database was the behavior the s2-5 pins fix.
  * - ISSET means set AND non-empty: an empty env value is not an advertisement.
+ * - Chicle's `eat` family (chafa-term-db.c:617-651 — every eat row carries
+ *   sixel_seqs) and its `ctx` row (chicle:611-615, the rep_seqs exemplar)
+ *   have no SC rows at all: the eat pixel claims are dropped, deliberately,
+ *   deferred with the vte/F-02 REP arm rather than silently omitted.
  *
  * Pure data + pure functions: nothing here reads the environment, spawns a
  * process, or touches a terminal. {@see snapshotEnv()} is the only getenv
@@ -179,8 +183,11 @@ final class TermDb
         // mlterm (chicle:741-746: iterm2+6ixel). SC DIVERGENCE: SugarCraft
         // classifies mlterm as a SIXEL terminal (its OSC 1337 emulation is
         // partial, and the old ladder + testSixelViaTermAloneWithoutXtermVersion
-        // pin sixel-only). chicle's -256color coverage relied on its terminfo
-        // consult; SC names the head directly (the old ladder's regex did too).
+        // pin sixel-only). The mlterm-256color head is named directly to
+        // preserve the pre-F-01 regex ladder; chicle's own mlterm arm is
+        // EXACT mlterm + $MLTERM isset (741-746), and chicle has NO
+        // terminfo consult — it answers from this table plus a live DA1
+        // round-trip (chafa-term.c:509-522).
         ['name' => 'mlterm', 'type' => self::TYPE_TERM, 'version' => null,
             'claims' => [TermInfo::PROTOCOL_SIXEL], 'passthrough' => [],
             'env' => [
@@ -229,7 +236,7 @@ final class TermDb
 
         // xterm: the version-advertisement row, the color rows, and SC's
         // sixel claim. chicle (:862-891) never claims sixel from xterm — the
-        // live probe (DA1/terminfo) was supposed to notice it. SugarCraft's
+        // live probe (DA1) was supposed to notice it. SugarCraft's
         // ladder did pre-claim (xterm ≥ 261 ships sixel; the old
         // hasSixelEnvHints ANDed the TERM head with XTERM_VERSION so that the
         // $TERM=xterm* namespace — claimed by nearly every emulator — only

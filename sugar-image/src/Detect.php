@@ -446,9 +446,11 @@ final class Detect
      *
      * Terminfo is a LOCAL database read (`infocmp -1 $TERM` parses termcap
      * files; no bytes touch the tty), which is why this answer can outrank
-     * a missing DA1 round-trip but not a live one under tmux veto — chafa
-     * consults the terminal database the same way for the same reason
-     * (chafa-term.c capability census, sixl among them).
+     * a missing DA1 round-trip but not a live one under tmux veto. The arm
+     * is a SugarCraft extension: chicle reads NO terminfo at all (zero
+     * tgetent/infocmp/setupterm call sites in chafa/) — its sixl answer is
+     * the built-in env-keyed table (chafa-term-db.c:1142-1161) plus the
+     * live DA1 (chafa-term.c:509-522).
      *
      * Returns false — never throws, never blocks on a terminal — for an
      * absent/dumb $TERM, an absent infocmp, or NO_COLOR/CLICOLOR=0
@@ -460,10 +462,11 @@ final class Detect
      * as a COMPLEMENT, not a replacement — the declarative table
      * {@see TermDb} took over the env stage ahead of this arm, and the live
      * infocmp consult stays as the long tail for $TERM entries the table
-     * does not name. chicle runs the same two-database split (its term-db.c
-     * table plus the terminal's own sixel_seqs terminfo entry); collapsing
-     * this arm into the table would be a behavior regression the DetectTest
-     * suite pins forbid.
+     * does not name. Chicle has no terminfo half — its detection is the
+     * term-db.c table plus the live DA1 only (PC-10); this arm is ours
+     * alone, a strict superset beside the table, and collapsing it into
+     * the table would be a behavior regression the DetectTest suite pins
+     * forbid.
      */
     private static function probeTerminfoSixel(): bool
     {
