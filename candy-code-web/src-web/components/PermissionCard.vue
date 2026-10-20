@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { keyArgument } from '../lib/format'
+import { askDiffPreview } from '../lib/lineDiff'
+import DiffView from './DiffView.vue'
 import type { PendingAsk } from '../protocol/generated'
 
 export type Reply = 'once' | 'always' | 'reject'
@@ -24,6 +26,14 @@ const alwaysLabel = computed(() => {
   const detail = scope ? Object.values(scope).filter((v) => v !== props.ask.tool).join(' ') : ''
   return detail !== '' ? `Always (${detail}, this session)` : 'Always (this session)'
 })
+
+/**
+ * WEB-5a-ii: when the ask echoes an Edit/Write tool input, show the change as a
+ * unified diff instead of a raw JSON dump. Fail-soft by construction: anything
+ * unrecognisable yields null and the card falls back to the raw arguments —
+ * the card is a security gate, it must never break on an unexpected payload.
+ */
+const preview = computed(() => askDiffPreview(props.ask.tool, props.ask.arguments))
 
 function answer(reply: Reply, cascade = false): void {
   if (busy.value || !props.canAnswer) return
@@ -57,7 +67,11 @@ function onKey(event: KeyboardEvent): void {
       <span v-if="what" class="what">{{ what }}</span>
     </header>
     <p v-if="ask.reason" class="reason">{{ ask.reason }}</p>
-    <details>
+    <details v-if="preview" class="diff-box" data-testid="ask-diff">
+      <summary>{{ preview.label }} (+{{ preview.added }} −{{ preview.removed }})</summary>
+      <DiffView :diff="preview.text" />
+    </details>
+    <details v-else>
       <summary>arguments</summary>
       <pre>{{ argsJson }}</pre>
     </details>
@@ -119,6 +133,9 @@ details summary {
   cursor: pointer;
   color: var(--muted);
   font-size: 0.8125rem;
+}
+.diff-box summary {
+  font-family: var(--mono);
 }
 pre {
   margin: 0.25rem 0 0;
