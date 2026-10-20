@@ -40,7 +40,7 @@ final class MentionIndex
     /** Candidates a single query hands to the popup, best-ranked first. */
     public const POPUP_LIMIT = 100;
 
-    /** Distinct (root, query) rank results kept for the life of the process. */
+    /** The last {@see RANK_MEMO_MAX} distinct (root, query) rank results kept. */
     private const RANK_MEMO_MAX = 64;
 
     /** @var array<string, list<string>> memo of {@see self::files()}, keyed by canonical root */
@@ -104,7 +104,13 @@ final class MentionIndex
             unset(self::$rankMemo[array_key_first(self::$rankMemo)]);
         }
 
-        return self::$rankMemo[$memoKey] = $scored;
+        // The memo keeps the FULL ranking and the ANSWER is sliced to this
+        // call's limit — the same contract the memo-hit path above honours
+        // (plan_comparison TUI-1): returning the store statement's value
+        // handed a caller of POPUP_LIMIT up to MAX_INDEXED_FILES rows on the
+        // first cold query, so the popup's wrap-count moved between the cold
+        // frame and every warm one.
+        return array_slice(self::$rankMemo[$memoKey] = $scored, 0, $limit);
     }
 
     /**
@@ -210,6 +216,13 @@ final class MentionIndex
     }
 
     /**
+     * THE COLD SYNC IS SYNCHRONOUS: the first `@` in a process pays one
+     * `git ls-files` on the UI's own thread, bounded by
+     * {@see GitRunner::DEFAULT_TIMEOUT_SECONDS} — the named 10-second ceiling
+     * the plan_comparison TUI-1 audit recorded as acceptable (once per root;
+     * the memo above is what makes it once). A root that git REFUSES is not
+     * an error: the listing comes back empty and the popup shows nothing.
+     *
      * @return list<string>
      */
     private static function discover(string $rootReal): array

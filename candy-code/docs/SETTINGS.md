@@ -1429,6 +1429,13 @@ view), then say the word.
   under the new map are announced as the same rows the launch reports — on
   the transcript and the error channel, never a second launch banner.
 
+Two overrides that name the SAME chord are one of those announced rows
+(plan_comparison TUI-4b): the alias table takes exactly one winner per
+pressed chord, decided by the /keys reference order — the row listed first
+wins, and the loser's override answers no key at all. The outcome is
+deterministic and file-order-independent; it is the silence that was the
+defect, so the collision row names both ids and the winner.
+
 A turn that is already running swallows nothing: slash commands are refused
 mid-turn, `/keys reload` included, so the effective moment is the first idle
 keystroke after the word. And because the launch registers the same setting
@@ -1453,9 +1460,10 @@ announces no Kitty protocol candy-code records a launch hint saying so
 key works.
 
 If you would rather keep Option for composing accents, alias the same
-commands to unclaimed Ctrl runes. This preset covers all five Alt commands
-above (stage 2 — paste into `~/.candy-code/config.json`, then `/keys
-reload`):
+commands to unclaimed Ctrl runes. This preset covers the three Alt commands
+whose rescue lands away from the prompt, and answers the prompt itself on the
+two runes that used to collide with it (stage 2 — paste into
+`~/.candy-code/config.json`, then `/keys reload`):
 
 ```json
 {
@@ -1463,17 +1471,29 @@ reload`):
         "chat.newline": "Ctrl+Q",
         "chat.plan-mode": "Ctrl+U",
         "chat.agents-strip": "Ctrl+T",
-        "agentview.next": "Ctrl+Y",
-        "agentview.prev": "Ctrl+E"
+        "permission.once": "Ctrl+Y",
+        "permission.deny": "Ctrl+E"
     }
 }
 ```
 
+An alias dispatches AS the target row's shipped chord, so the two `permission`
+rows matter here: they ship the BARE runes `y` and `n`, the keys the prompt
+answers, and `Ctrl+Y`/`Ctrl+E` land as exactly those — they answer a live
+prompt as if typed, and elsewhere they type the letter into the draft. The
+earlier preset aliased `agentview.next`/`agentview.prev` instead; their Alt
+targets no longer answer anything at a prompt (a prompt answers unmodified
+runes only — plan_comparison TUI-5), so agent-view paging keeps its shipped
+`Alt+N`/`Alt+P` and needs Option-as-Meta or a Kitty-speaking terminal on a Mac,
+like every other Alt chord the preset does not rescue.
+
 Two limits worth knowing. Aliases ADD chords — the shipped Alt chord keeps
-working beside the new one. And two motions cannot ride the map at all: word
+working beside the new one. And three things cannot ride the map at all: word
 motion (Alt+Left/Right) and the Alt+B/Alt+F word jumps are coded against raw
-keys, not registry rows, so on a non-Kitty Mac terminal they need
-Option-as-Meta. The preset deliberately avoids Ctrl+H, Ctrl+I, Ctrl+J and
+keys, not registry rows, and the agent-slot row `agents.slot` (`Alt+1…9`) is
+a RANGE, which names no single chord to alias onto — the validator refuses it
+as an override target. On a non-Kitty Mac those are silently lost, with no
+preset to blame. The preset deliberately avoids Ctrl+H, Ctrl+I, Ctrl+J and
 Ctrl+M: on every legacy decoder those bytes *are* Backspace, Tab, Enter and
 Escape and can never reach a handler as Ctrl runes. Ctrl+B is taken by the
 branch picker.

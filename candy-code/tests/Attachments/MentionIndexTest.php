@@ -98,6 +98,30 @@ final class MentionIndexTest extends TestCase
         $this->assertSame([], MentionIndex::rank('zzqx', $this->root));
     }
 
+    /**
+     * TUI-1 (plan_comparison): `rank()` must APPLY its `$limit` — on the cold
+     * memo-miss, where the store statement used to hand back the whole
+     * ranking it had just written, and on every later call, where the memo
+     * keeps the FULL ranking and each answer is sliced to its own limit. A
+     * cold frame that showed every match while warm frames showed `POPUP_LIMIT`
+     * moved the popup's wrap-count between the first `@` and the next.
+     */
+    public function testTheLimitIsAppliedColdAndWarmAndIsNotBakedIntoTheMemo(): void
+    {
+        $this->assertCount(5, MentionIndex::rankPaths('php', MentionIndex::files($this->root), 100), 'fixture: five tracked paths match "php", more than the limits below');
+
+        $cold = MentionIndex::rank('php', $this->root, 3);
+        $this->assertCount(3, $cold, 'the cold miss honoured neither the argument nor its own default shape');
+
+        $warm = MentionIndex::rank('php', $this->root, 3);
+        $this->assertSame($cold, $warm, 'the warm answer is byte-identical to the cold one');
+
+        $tighter = MentionIndex::rank('php', $this->root, 2);
+        $this->assertSame(\array_slice($cold, 0, 2), $tighter, 'a later call with a tighter limit slices the SAME memo — the store is the full ranking, the answer is the slice');
+
+        $this->assertCount(5, MentionIndex::rank('php', $this->root), 'and the default limit still sees the whole fixture');
+    }
+
     public function testTheEmptyPartialHeadsTheSortedListing(): void
     {
         $rows = MentionIndex::rank('', $this->root);

@@ -1921,6 +1921,87 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
+     * TUI-5 (plan_comparison stage 2): the answer arms read UNMODIFIED runes only.
+     *
+     * Measured before the gate: at a real gated prompt the shipped `Ctrl+A`
+     * chord matched the bare-`a` rune arm and wrote a session-always grant,
+     * and the documented Mac preset's alias replaying `Alt+N` matched the `n`
+     * arm and silently REFUSED the pending call. Both are keybinding chords,
+     * not answers — the rune table may read the letter, the prompt may not.
+     * Recovery is the documented one: the chord disarms like any non-answer,
+     * `Enter` re-arms, and the BARE rune still answers.
+     */
+    public function testAChordCarryingCtrlOrAltAnswersNothingAtALivePrompt(): void
+    {
+        foreach ([
+            'Ctrl+A' => new KeyMsg(KeyType::Char, 'a', ctrl: true),
+            'Ctrl+Y' => new KeyMsg(KeyType::Char, 'y', ctrl: true),
+            'Alt+N' => new KeyMsg(KeyType::Char, 'n', alt: true),
+        ] as $label => $chord) {
+            $blocked = $this->promptRaisedByTheRealGate();
+
+            [$kept] = $blocked->update($chord);
+            $this->assertNotNull($kept->pendingPermission(), "{$label} answered the prompt — the arm read a modified rune");
+            $this->assertSame(
+                PermissionPromptStage::Disarmed,
+                $kept->permissionStage(),
+                "{$label} is a chord, not an answer: like any non-answer it must take the answer keys away",
+            );
+            $this->assertSame([], $kept->permissionGrants(), "and {$label} wrote no session grant");
+
+            [$rearmed] = $kept->update(new KeyMsg(KeyType::Enter));
+            $this->assertSame(PermissionPromptStage::Armed, $rearmed->permissionStage(), "{$label} disarmed; Enter must re-arm");
+
+            [$answered] = $rearmed->update(new KeyMsg(KeyType::Char, 'y'));
+            $this->assertNull(
+                $answered->pendingPermission(),
+                "and the BARE answer rune still answers after {$label} disarmed the prompt",
+            );
+        }
+    }
+
+    /**
+     * TUI-5 (plan_comparison stage 2): the RE-KEYED Mac preset answers.
+     *
+     * The preset aliases `permission.once`/`permission.deny` — rows that ship
+     * the BARE runes `y`/`n` — onto `Ctrl+Y`/`Ctrl+E`. The chord lane of
+     * {@see KeyBindingRegistry::aliasPress()} replays each row's shipped chord
+     * UNMODIFIED, so the chord lands as exactly the keystroke the prompt
+     * answers, end to end: alias, then gate, then the real `Once` approval the
+     * fixture's batch releases. The old preset aliased bare-Alt rows instead;
+     * with the gate above that shape would type letters, never answer.
+     */
+    public function testTheMacPresetChordsAnswerTheLivePromptThroughTheAliasFunnel(): void
+    {
+        KeyBindingRegistry::useOverrides(['permission.once' => 'Ctrl+Y', 'permission.deny' => 'Ctrl+E']);
+
+        try {
+            $aliased = KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Char, 'y', ctrl: true));
+            $this->assertNotNull($aliased, 'fixture: the preset registers the chord');
+            $this->assertSame(KeyType::Char, $aliased->type);
+            $this->assertSame('y', $aliased->rune);
+            $this->assertFalse($aliased->ctrl, 'the alias lands as an UNMODIFIED rune — that is what makes it an answer');
+            $this->assertFalse($aliased->alt);
+
+            $blocked = $this->promptRaisedByTheRealGate();
+            [$answered, $cmd] = $blocked->update($aliased);
+            $this->assertNull($answered->pendingPermission(), 'Ctrl+Y ANSWERS the live prompt through the funnel');
+            $this->assertTrue($answered->inFlight, 'as an APPROVAL — a silent refusal would end the turn');
+            $this->assertNotNull($cmd, 'and the released batch hands back the Cmd, as bare "y" does');
+            $this->assertSame([], $answered->permissionGrants(), 'once, not always');
+
+            $denial = KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Char, 'e', ctrl: true));
+            $this->assertNotNull($denial);
+            $this->assertSame('n', $denial->rune);
+            $this->assertFalse($denial->ctrl, 'Ctrl+E lands as the unmodified bare n');
+            [$refused] = $this->promptRaisedByTheRealGate()->update($denial);
+            $this->assertNull($refused->pendingPermission(), 'Ctrl+E answers the prompt with the deny rune');
+        } finally {
+            KeyBindingRegistry::useOverrides([]);
+        }
+    }
+
+    /**
      * THE STATE ROUND 6 CALLED IMPOSSIBLE: a prompt up with the turn NOT in flight.
      *
      * Reached in one `update()` from the same real-gate fixture — an unstamped

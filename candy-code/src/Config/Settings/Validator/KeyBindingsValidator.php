@@ -127,7 +127,9 @@ final class KeyBindingsValidator implements SettingValidator
      *
      * @param array<array-key, mixed> $value binding id => replacement chord
      *
-     * @return list<string> one rendered row per stealing override
+     * @return list<string> one rendered row per collision: each stealing
+     *                      override, and each pair of overrides sharing one
+     *                      chord
      */
     public function collisionNotices(array $value): array
     {
@@ -173,6 +175,42 @@ final class KeyBindingsValidator implements SettingValidator
                     $binding->id,
                 );
             }
+        }
+
+        // OVERRIDE-VERSUS-OVERRIDE (plan_comparison TUI-4b): two ids naming
+        // the SAME pressed chord. The alias memos take one winner per chord
+        // by walking the /keys declaration order (`$pairs[$pressed] ??=`),
+        // so the earlier row wins and the later override lands on NOTHING —
+        // deterministic and file-order-independent, but silent without this
+        // row. Walked from the registry, not from `$value`, because the
+        // registry order IS the winner rule the memos apply.
+        /** @var array<string, string> $firstClaimant */
+        $firstClaimant = [];
+        foreach (KeyBindingRegistry::all() as $binding) {
+            $chord = $value[$binding->id] ?? null;
+            if (!\is_string($chord)) {
+                continue; // unset, or null: an unbound row claims no chord
+            }
+
+            $pressed = KeyBinding::parseChord($chord);
+            if ($pressed === null || !self::isAssignableChord($pressed)) {
+                continue; // pre-validate input cannot produce this; fail open
+            }
+
+            if (isset($firstClaimant[$pressed])) {
+                $rows[] = sprintf(
+                    'the keybindings overrides for "%s" and "%s" both claim %s; "%s" is listed first in the /keys reference and wins the chord, so "%s" answers no key at all',
+                    $firstClaimant[$pressed],
+                    $binding->id,
+                    $chord,
+                    $firstClaimant[$pressed],
+                    $binding->id,
+                );
+
+                continue;
+            }
+
+            $firstClaimant[$pressed] = $binding->id;
         }
 
         return $rows;

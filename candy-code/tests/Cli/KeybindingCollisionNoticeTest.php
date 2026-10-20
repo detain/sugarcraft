@@ -144,6 +144,43 @@ final class KeybindingCollisionNoticeTest extends TestCase
         self::assertSame([], KeyBindingsValidator::new()->collisionNotices([]));
     }
 
+    /**
+     * TUI-4 (plan_comparison TUI-4b): two overrides claiming the SAME chord
+     * were silent. The alias memos take one winner per pressed chord
+     * (`$pairs[$pressed] ??=` over the /keys declaration order), so the row
+     * listed first wins and the loser's override answers no key at all —
+     * deterministic, but invisible. The row names both ids and the winner;
+     * the law itself is documented beside it (`docs/SETTINGS.md`, the
+     * "`/keys reload`" section).
+     *
+     * `Ctrl+Z` ships on no row, so no override-versus-shipped line can join
+     * the census — the ONE row is provably the shared-chord shape.
+     */
+    public function testTwoOverridesSharingOneChordNameBothAndTheWinner(): void
+    {
+        $notices = KeyBindingsValidator::new()->collisionNotices([
+            'chat.palette' => 'Ctrl+Z',
+            'chat.repaint' => 'Ctrl+Z',
+        ]);
+
+        self::assertSame(1, \count($notices), 'a shared chord announces exactly one row, got: ' . print_r($notices, true));
+        self::assertStringContainsString('both claim Ctrl+Z', $notices[0]);
+        self::assertStringContainsString('"chat.palette" is listed first', $notices[0], 'chat.palette is declared at the reference before chat.repaint, and the memos walk the reference order');
+        self::assertStringContainsString('"chat.repaint" answers no key at all', $notices[0], 'the loser is named, not merely out-venced');
+        self::assertStringNotContainsString(self::ROW_FRAGMENT, $notices[0], 'this is its own shape, not a stolen shipped chord');
+
+        // And the row rides the launch seam, not just the validator call.
+        KeyBindingRegistry::useOverrides(['chat.palette' => 'Ctrl+Z', 'chat.repaint' => 'Ctrl+Z']);
+
+        Bootstrap::reportKeybindingCollisions();
+
+        $rows = array_values(array_filter(
+            Bootstrap::launchNotices(),
+            static fn (string $row): bool => str_contains($row, 'both claim'),
+        ));
+        self::assertCount(1, $rows, 'the shared-chord row must seat at launch like every other collision row');
+    }
+
     public function testTheDrainRunsWhereTheOverridesAreRegistered(): void
     {
         // The whole value of the row is that it prints at launch. A refactor

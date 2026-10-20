@@ -226,6 +226,47 @@ final class KeysReloadTest extends TestCase
         self::assertSame(0, self::countRowsContaining($rows, 'Refusing'), 'got: ' . print_r($rows, true));
     }
 
+    /**
+     * TUI-4 (plan_comparison TUI-4a): the PARSE half of fail-loud-keep-live.
+     *
+     * The validator pin above proves the map no longer validates; this proves
+     * the file cannot be READ. The tolerant readers answer `[]` to a torn
+     * save exactly as they do to an absent one, and a reload that applied
+     * that reading announced "0 override(s) live" over the top of a
+     * half-written file — silently wiping the live keymap the docs promise is
+     * kept "when the file no longer parses". Both polarities:
+     *
+     * - corrupt bytes: refusal row through the sink, live map UNTOUCHED;
+     * - valid bytes that simply omit `keybindings` (`json_encode([])` writes
+     *   `[]`, list-root and legal): a real removal, the empty map APPLIES —
+     *   the gate polishes unreadable files, never deletions.
+     */
+    public function testATornSaveKeepsTheLiveKeymapAndAValidEmptyOneStillClearsIt(): void
+    {
+        $this->writeSettings(['keybindings' => ['chat.palette' => 'Ctrl+Z']]);
+        Bootstrap::reloadKeybindings();
+        self::assertSame(['chat.palette' => 'Ctrl+Z'], KeyBindingRegistry::overrides(), 'fixture: an override is live before the torn write');
+
+        $path = $this->tempHome . '/.candy-code/config.json';
+        self::assertNotFalse(file_put_contents($path, '{"keybindings": {"chat.palette": "Ctr'));
+
+        RuntimeNoticeSink::drain();
+        Bootstrap::reloadKeybindings();
+
+        self::assertSame(['chat.palette' => 'Ctrl+Z'], KeyBindingRegistry::overrides(), 'the torn save must not cost the live keymap — reload keeps it');
+        $rows = RuntimeNoticeSink::drain();
+        self::assertSame(1, self::countRowsContaining($rows, 'reload refused'), 'the refusal must be announced, got: ' . print_r($rows, true));
+        self::assertSame(1, self::countRowsContaining($rows, 'not valid JSON'), 'and it says the file cannot be read, got: ' . print_r($rows, true));
+
+        // The acceptance polarity: valid JSON without the key is a removal.
+        $this->writeSettings([]);
+        RuntimeNoticeSink::drain();
+        Bootstrap::reloadKeybindings();
+
+        self::assertSame([], KeyBindingRegistry::overrides(), 'a well-formed empty map still clears the keymap — the gate refuses unreadable files, not deletions');
+        self::assertSame(0, self::countRowsContaining(RuntimeNoticeSink::drain(), 'reload refused'), 'and the clean read must not wear the refusal');
+    }
+
     public function testTheKeysRowCarriesTheReloadArgumentThroughTheRegistry(): void
     {
         $command = BuiltInCommands::forSpelling('keys');

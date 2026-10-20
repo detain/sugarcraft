@@ -11915,6 +11915,54 @@ final class Bootstrap
     }
 
     /**
+     * Whether the setting behind `/keys reload` CANNOT BE READ, as opposed to
+     * being read and refused: one of the user's OWN two files — the
+     * `config.json` of layer 4 and the `settings.json` of layer 3, the files
+     * that are the documented loud half of the settings read — is present and
+     * its bytes do not decode as JSON AT ALL (a torn save; an empty map, a
+     * scalar-root file that merely costs the key at the tolerant read, stays
+     * readable). {@see rawUserConfig()} and
+     * {@see LayeredSettings::readFile()} answer `[]` to exactly this shape for
+     * every other reader (a corrupt config must cost a setting, never a
+     * session), and the reload lane must not mistake that `[]` for "the
+     * user removed every override". Null when every present user file
+     * decodes; a raw reason (the shape `cli.keys.reload_refused` quotes) when
+     * one does not.
+     *
+     * The PROJECT files are deliberately not in this census: a corrupt
+     * project file drops the project tier's values at read, which is the
+     * silent-half doctrine untouched, and the preset and every documented
+     * `keybindings` producer live in the user's own files.
+     *
+     * @return ?string the refusal reason, or null when the reload may read
+     */
+    private static function keybindingsReloadParseFailure(): ?string
+    {
+        $paths = [self::userConfigPath()];
+        $userDir = self::userSettingsDirOrNull();
+        if ($userDir !== null) {
+            $paths[] = \rtrim($userDir, '/') . '/' . LayeredSettings::USER_FILE;
+        }
+
+        foreach ($paths as $path) {
+            if (!is_file($path)) {
+                continue; // absent is absent: the tolerant reading is correct
+            }
+
+            $contents = @file_get_contents($path);
+            if ($contents === false) {
+                return "the file '{$path}' is present but cannot be read";
+            }
+
+            if (json_decode($contents) === null && json_last_error() !== JSON_ERROR_NONE) {
+                return "the file '{$path}' is present but is not valid JSON — a half-written save?";
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * `/keys reload`: re-read the `keybindings` setting and re-apply it to
      * the LIVE registry — plan_comparison TUI-4a. NO file watcher: the user
      * edits the file and says the word, the same stance the MCP digest
@@ -11937,6 +11985,22 @@ final class Bootstrap
      */
     public static function reloadKeybindings(): void
     {
+        // Fail-loud-keep-live, the PARSE half (plan_comparison TUI-4a): the
+        // tolerant reader costs the whole `keybindings` key when a user's own
+        // file is half-written, and a reload that applied that absence would
+        // announce "reloaded — 0 override(s) live" over the top of a save
+        // torn mid-write. A corrupt file is not an empty map, and at reload
+        // time the live keymap outranks both readings of it. (LAUNCH keeps its
+        // silence: a corrupt config costs a setting, not the session — the
+        // reload lane is the loud half of that doctrine, the same half "your
+        // OWN two files" already belongs to.)
+        $parseFailure = self::keybindingsReloadParseFailure();
+        if ($parseFailure !== null) {
+            RuntimeNoticeSink::warn(Lang::t('cli.keys.reload_refused', ['reason' => $parseFailure]));
+
+            return;
+        }
+
         [$map, $reason] = self::keybindingsParse();
         if ($reason !== null) {
             \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(

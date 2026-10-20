@@ -4961,6 +4961,14 @@ final class Chat implements Model
      *   * one keystroke that is not an answer DISARMS it, because a person
      *     typing prose or a command is not a person answering;
      *   * while disarmed `y`/`n`/`a` do nothing at all;
+     *   * the answers are UNMODIFIED runes only: a `Char` press flagged Ctrl
+     *     or Alt answers nothing — modifier chords belong to the keybinding
+     *     registry, and at a live prompt they take the arm rule like prose
+     *     (plan_comparison TUI-5 stage 2, measured: un-gated, the shipped
+     *     `Ctrl+A` wrote a session grant at a real gated prompt). An override
+     *     whose TARGET row ships a bare rune — the re-keyed Mac preset's
+     *     `permission.once` on `Ctrl+Y` — replays the bare keystroke through
+     *     aliasPress() and answers exactly as if it had been typed.
      *   * `Enter` RE-ARMS and answers nothing — the recovery, without which a
      *     disarmed prompt could never be answered from the keyboard;
      *   * `Escape` is live in every stage, and refuses. Nothing a user TYPES
@@ -4994,6 +5002,8 @@ final class Chat implements Model
      *   | `no` / `nay`   | 1st        | `n`  | denied                         |
      *   | `a` / `also`   | 1st        | `a`  | ALWAYS, for the named scope    |
      *   | `p` / `please` | 1st        | `p`  | ALWAYS + saved rule (offered)  |
+     *   | `Ctrl+A`       | never      | --   | swallowed, prompt disarmed     |
+     *   | `Alt+N`        | never      | --   | swallowed, prompt disarmed     |
      *
      * Not one of the six slash commands reaches an answer at all.
      *
@@ -5032,7 +5042,17 @@ final class Chat implements Model
     private function handlePermissionKey(KeyMsg $msg): array
     {
         $rune = strtolower($msg->rune ?? '');
-        $isChar = $msg->type === KeyType::Char;
+        // TUI-5 stage 2: only an UNMODIFIED character answers. A `Char` press
+        // carrying Ctrl or Alt belongs to the keybinding registry, never to
+        // the prompt — matching the bare rune alone let the shipped `Ctrl+A`
+        // (chat.agents) write a session-long grant at a live gated prompt, and
+        // made the documented Mac preset's `Ctrl+Y` alias silently refuse the
+        // pending call (measured, plan_comparison TUI-5). An override that
+        // aliases a row shipped as a BARE rune replays that rune unmodified
+        // through aliasPress(), so the preset still answers — as a typed key
+        // would — while modifier chords take the arm rule below, disarming
+        // like any keystroke that is not an answer.
+        $isChar = $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt;
 
         // ── the rejection note, which only `r` at an armed prompt opens ──
         //
