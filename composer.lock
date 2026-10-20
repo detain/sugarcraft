@@ -62,16 +62,16 @@
         },
         {
             "name": "aws/aws-sdk-php",
-            "version": "3.401.2",
+            "version": "3.401.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/aws/aws-sdk-php.git",
-                "reference": "b1af9196bd0f94bcebdb6588a150dd85dc240758"
+                "reference": "7b8541e8a4f09cf4375eeef4de6c638dfb2dadbb"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/b1af9196bd0f94bcebdb6588a150dd85dc240758",
-                "reference": "b1af9196bd0f94bcebdb6588a150dd85dc240758",
+                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/7b8541e8a4f09cf4375eeef4de6c638dfb2dadbb",
+                "reference": "7b8541e8a4f09cf4375eeef4de6c638dfb2dadbb",
                 "shasum": ""
             },
             "require": {
@@ -153,9 +153,9 @@
             "support": {
                 "forum": "https://github.com/aws/aws-sdk-php/discussions",
                 "issues": "https://github.com/aws/aws-sdk-php/issues",
-                "source": "https://github.com/aws/aws-sdk-php/tree/3.401.2"
+                "source": "https://github.com/aws/aws-sdk-php/tree/3.401.3"
             },
-            "time": "2026-10-14T18:09:34+00:00"
+            "time": "2026-10-19T18:11:47+00:00"
         },
         {
             "name": "brick/math",
@@ -3440,7 +3440,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-code",
-                "reference": "8d62a4e685721741f58a71167b7bd0027c37318c"
+                "reference": "26606d000cb03db7587218415220623bb25c5ab0"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -3498,7 +3498,10 @@
             "autoload-dev": {
                 "psr-4": {
                     "SugarCraft\\Code\\Tests\\": "tests/"
-                }
+                },
+                "exclude-from-classmap": [
+                    "tests/fixtures/"
+                ]
             },
             "license": [
                 "MIT"
@@ -5290,7 +5293,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-core",
-                "reference": "59a5d928de9cb58fc4fec62089578f56287c4bf3"
+                "reference": "56fb199db246c1e05e9ccdc0486f87960162dc3b"
             },
             "require": {
                 "ext-intl": "*",
@@ -5313,7 +5316,11 @@
             "autoload-dev": {
                 "psr-4": {
                     "SugarCraft\\Core\\Tests\\": "tests/"
-                }
+                },
+                "exclude-from-classmap": [
+                    "tests/Support/exec_both_streams_child.php",
+                    "tests/Util/closed_descriptor_zero_probe.php"
+                ]
             },
             "scripts": {
                 "analyse": [
@@ -5361,7 +5368,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-dashboard",
-                "reference": "5beddb88a8ba05fb83c4e67de71f6694cac07274"
+                "reference": "80926f230d8e70316aa39764fa8fa1ffee46563c"
             },
             "require": {
                 "php": "^8.3",
@@ -5384,7 +5391,10 @@
             "autoload-dev": {
                 "psr-4": {
                     "SugarCraft\\Dashboard\\Tests\\": "tests/"
-                }
+                },
+                "exclude-from-classmap": [
+                    "tests/Plugin/Support/sdk-eof-exit-child.php"
+                ]
             },
             "license": [
                 "MIT"
