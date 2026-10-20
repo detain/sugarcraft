@@ -44,6 +44,24 @@ use InvalidArgumentException;
  * partitioned into exactly ONE band, and chafa's caller-side rule
  * (chafa-batch.c:153-159: with fewer than two threads the work runs inline in
  * the caller) becomes simply `count($bands) === 1` for every consumer.
+ *
+ * D-02b verdict note (S7.6, measured 2026-10-20): the worker-pool stage was
+ * SKIP-licensed out by data, so this partition keeps its planned consumers —
+ * cost gating and the incremental pump — and gains none. With forking banned
+ * (§0.13), a {@see \React\ChildProcess\Process} per band re-pays PHP
+ * exec+autoload+decode (~110–160 ms) PLUS the whole-canvas setup the encode
+ * front-loads (resample + palette build: 83 ms at 512 rows, 296 ms at 8190)
+ * PLUS — because SixelRenderer::encodeBandStream() exposes no band-seek seam —
+ * the full indexRows walk; 2/4/8 concurrent workers measured 0.58–0.91× of the
+ * single-process render at every height (240 px wide, Dither::None). The
+ * per-band marginal cost itself is ~1 ms, so it is the REPLICATED setup, not
+ * the split, that never pays. Byte parity across bands additionally needs the
+ * shared palette/register state a cold worker lacks (crop-split bands seam;
+ * each worker re-emits DECSIXEL header and terminator). Revisit only if a
+ * band-range + band-state seam lands in the renderer for a ≥8190-row workload
+ * class; the responsiveness goal is already served zero-fork by the landed
+ * D-05 slice pump ({@see \SugarCraft\Image\PacedAsyncRenderer} over
+ * {@see \SugarCraft\Image\Renderer\SixelRows}).
  */
 final class Bands
 {
