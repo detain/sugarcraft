@@ -92,6 +92,36 @@ final class DoctorBootProbeTest extends TestCase
         self::assertSame(self::PRELOADED, $this->unreadProbeInput());
     }
 
+    /**
+     * F-06: the doctor reports the safe text-cell symbol classes of the
+     * detected terminal, and it answers from the declarative TermDb table —
+     * pointing $TERM at the Linux console flips the reported set to the
+     * ASCII-only curation (chicle LINUX_CONSOLE_SYMS) with no tty probe,
+     * while a modern $TERM reports the full set.
+     */
+    public function testReportsSafeSymbolClassesFromTheTerminalTable(): void
+    {
+        $saved = getenv('TERM');
+        putenv('TERM=linux');
+        try {
+            $linux = (new Doctor())->execute(['id' => 'call_doctor'])->content();
+            // The chain suffix pins the TERM-row label whatever mux wraps it;
+            // the mask after ')' is the whole point of the pin.
+            self::assertStringContainsString('linux): ASCII.', $linux);
+            self::assertStringNotContainsString('BLOCK', $linux, 'ASCII-only seat must not be told blocks draw');
+        } finally {
+            $saved === false ? putenv('TERM') : putenv('TERM=' . $saved);
+        }
+
+        putenv('TERM=xterm-256color');
+        try {
+            $modern = (new Doctor())->execute(['id' => 'call_doctor'])->content();
+            self::assertStringContainsString('xterm-256color): ASCII, BLOCK, BORDER, BRAILLE.', $modern);
+        } finally {
+            $saved === false ? putenv('TERM') : putenv('TERM=' . $saved);
+        }
+    }
+
     private function unreadProbeInput(): string
     {
         self::assertNotNull($this->pair);

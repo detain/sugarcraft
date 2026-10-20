@@ -9,6 +9,8 @@ use SugarCraft\Code\ToolResult as BootProbe;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Image\Mosaic;
+use SugarCraft\Image\TermDb;
+use SugarCraft\Image\TermInfo;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
@@ -131,12 +133,44 @@ final class Doctor implements Tool, BuildsFromCatalog
             ? 'Universal Ctags with JSON output is installed: the repo map covers non-PHP files too.'
             : 'Universal Ctags (with +json) was not found: the repo map covers PHP files only.');
 
+        // F-06: report which text-cell glyph classes the terminal may actually
+        // draw, straight from the declarative TermDb table. This is a pure
+        // string consult of the inherited environment — like the rest of this
+        // tool it queries nothing and touches no tty (audit F-T6 holds).
+        $safe = TermDb::matchChain(TermDb::snapshotEnv());
+        $summary .= "\nSafe text-cell symbol classes ({$safe->chain}): "
+            . implode(', ', self::symbolClassNames($safe->safeSymbols)) . '.';
+
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
             content: $summary,
             imageBytes: self::capabilitySwatchPng($pixelGraphics),
             imageProtocol: $protocol,
         );
+    }
+
+    /**
+     * F-06: stable-name list of the drawn classes in a safeSymbols mask,
+     * low bit to high — the doctor's answer must read the same on every host
+     * with the same table, so order is by constant, never by set iteration.
+     *
+     * @return list<string>
+     */
+    private static function symbolClassNames(int $mask): array
+    {
+        $names = [];
+        foreach ([
+            TermInfo::SYMBOL_ASCII => 'ASCII',
+            TermInfo::SYMBOL_BLOCK => 'BLOCK',
+            TermInfo::SYMBOL_BORDER => 'BORDER',
+            TermInfo::SYMBOL_BRAILLE => 'BRAILLE',
+        ] as $class => $name) {
+            if (($mask & $class) !== 0) {
+                $names[] = $name;
+            }
+        }
+
+        return $names;
     }
 
     /**
