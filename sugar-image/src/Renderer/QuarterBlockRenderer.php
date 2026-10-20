@@ -32,9 +32,10 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * Higher visual fidelity than HalfBlockRenderer when Sixel/Kitty are
  * unavailable: 4 sub-pixel positions per cell vs 2.
  */
-final class QuarterBlockRenderer implements Renderer
+final class QuarterBlockRenderer implements Renderer, AcceptsOptimization
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
+    use \SugarCraft\Image\Concerns\OptimizationCarrierTrait;
     /**
      * 16 Unicode quadrant glyphs indexed by a 4-bit mask of which quadrants
      * belong to the FOREGROUND group: bit 0 = upper-left, bit 1 = upper-right,
@@ -81,7 +82,7 @@ final class QuarterBlockRenderer implements Renderer
             imagedestroy($img);
         }
 
-        $pen = new OutputOptimizer();
+        $pen = new OutputOptimizer(repeatCells: $this->emitsRepeatCells());
         $lines = [];
         foreach ($grid->cells as $row) {
             foreach ($row as $quads) {

@@ -6,6 +6,7 @@ namespace SugarCraft\Image;
 
 use SugarCraft\Image\Renderer\AsciiColorMode;
 use SugarCraft\Image\Renderer\AsciiRenderer;
+use SugarCraft\Image\Renderer\AcceptsOptimization;
 use SugarCraft\Image\Renderer\ChafaRenderer;
 use SugarCraft\Image\Renderer\ConfigFingerprintProvider;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
@@ -67,6 +68,14 @@ final class Mosaic
         private readonly ?int $forcedWidth,
         private readonly ?int $forcedHeight,
         private readonly ?Scale $scale,
+        /**
+         * A-02 {@see Optimization} mask (Optimization::bits() fold).
+         * 0 = None = every historical byte stream; a mask with
+         * RepeatCells is handed to cell-mosaic backends through
+         * {@see AcceptsOptimization} and always rides the poster cache key,
+         * so a same-protocol mosaic never cross-serves optimised bytes.
+         */
+        private readonly int $optimizations = 0,
     ) {}
 
     /**
@@ -301,15 +310,64 @@ final class Mosaic
             $inner = $this->renderer->inner();
 
             return $inner instanceof SixelRenderer
-                ? new self(new TmuxPassthroughDecorator($inner->withDither($dither)), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale)
+                ? new self(new TmuxPassthroughDecorator($inner->withDither($dither)), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale, $this->optimizations)
                 : $this;
         }
 
         if ($this->renderer instanceof SixelRenderer) {
-            return new self($this->renderer->withDither($dither), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale);
+            return new self($this->renderer->withDither($dither), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale, $this->optimizations);
         }
 
         return $this;
+    }
+
+    /**
+     * A-02: return a new Mosaic configured with optimization levels
+     * (chafa CHAFA_OPTIMIZATIONS ladder parity).
+     *
+     * ```php
+     * $mosaic = Mosaic::halfBlock()->withOptimization(Optimization::RepeatCells);
+     * ```
+     *
+     * The mask folds via {@see Optimization::bits()}. Semantics per level:
+     *  - ReuseAttributes (1) is DOCUMENTARY on this port: the streaming
+     *    pen-delta emitter shipped with A-01/S2.2 is unconditional, so the
+     *    flag changes no bytes and None cannot turn the delta off — that is
+     *    the level-1-vs-level-4 split, stated honestly instead of wiring a
+     *    second literal-emitter mode nobody asked for.
+     *  - RepeatCells (4) is the byte-changing level: cell-mosaic backends
+     *    (half/quarter block, ASCII — the renderers implementing
+     *    {@see AcceptsOptimization}) coalesce identical-glyph runs under an
+     *    unchanged pen into `ESC[count b`, gated by
+     *    {@see \SugarCraft\CellBuffer\Diff\RepeatGate::worth()} AND
+     *    {@see Detect::supportsRepeat()}. Pixel-protocol backends (sixel/
+     *    kitty/iterm2/chafa) carry no cell stream to coalesce: the mask
+     *    still rides their poster cache key but emits nothing.
+     *
+     * Default (Optimization::None, mask 0) is byte-frozen: every existing
+     * golden pins it.
+     */
+    public function withOptimization(Optimization ...$levels): self
+    {
+        $mask = Optimization::bits(...$levels);
+
+        $renderer = $this->renderer;
+        if ($renderer instanceof TmuxPassthroughDecorator) {
+            $inner = $renderer->inner();
+            if ($inner instanceof AcceptsOptimization) {
+                $renderer = new TmuxPassthroughDecorator($inner->withOptimizations($mask));
+            }
+        } elseif ($renderer instanceof AcceptsOptimization) {
+            $renderer = $renderer->withOptimizations($mask);
+        }
+
+        return new self($renderer, $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale, $mask);
+    }
+
+    /** The currently configured {@see Optimization} mask (0 = None). */
+    public function optimizations(): int
+    {
+        return $this->optimizations;
     }
 
     /**
@@ -683,7 +741,7 @@ final class Mosaic
      */
     public function withScale(Scale $scale): self
     {
-        return new self($this->renderer, $this->capability, $this->forcedWidth, $this->forcedHeight, $scale);
+        return new self($this->renderer, $this->capability, $this->forcedWidth, $this->forcedHeight, $scale, $this->optimizations);
     }
 
     /**
@@ -906,7 +964,11 @@ final class Mosaic
         $protocol = $this->protocol()
             . ($detail === null ? '' : ':' . $detail)
             . '|' . ($this->scale ?? Scale::Fill)->name
-            . ($fingerprint === '' ? '' : '|' . $fingerprint);
+            . ($fingerprint === '' ? '' : '|' . $fingerprint)
+            // A-02: only a NON-ZERO mask appends — mask 0 keeps every
+            // pre-A-02 poster key byte-identical (cache entries written
+            // before this level exist must still hit).
+            . ($this->optimizations === 0 ? '' : '|opt=' . $this->optimizations);
 
         return DiskCache::key($urlOrPath, $cellW, $cellH ?? self::AUTO_HEIGHT, $protocol);
     }

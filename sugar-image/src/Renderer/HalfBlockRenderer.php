@@ -30,9 +30,10 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * ▀ (U+2580, fg paints its UPPER half) with the top colour as
  * foreground. In both cases the other colour layer is omitted entirely.
  */
-final class HalfBlockRenderer implements Renderer, IncrementalRenderer
+final class HalfBlockRenderer implements Renderer, IncrementalRenderer, AcceptsOptimization
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
+    use \SugarCraft\Image\Concerns\OptimizationCarrierTrait;
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
@@ -71,7 +72,7 @@ final class HalfBlockRenderer implements Renderer, IncrementalRenderer
             imagedestroy($img);
         }
 
-        $pen = new OutputOptimizer();
+        $pen = new OutputOptimizer(repeatCells: $this->emitsRepeatCells());
         $first = true;
         foreach ($grid->cells as $row) {
             foreach ($row as $pairs) {

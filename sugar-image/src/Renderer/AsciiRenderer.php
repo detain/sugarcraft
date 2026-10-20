@@ -29,9 +29,10 @@ use SugarCraft\ColorProfile\Color;
  * quantizer stays the single implementation. The default ramp is byte-frozen —
  * every existing golden pins it.
  */
-final class AsciiRenderer implements Renderer
+final class AsciiRenderer implements Renderer, AcceptsOptimization
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
+    use \SugarCraft\Image\Concerns\OptimizationCarrierTrait;
 
     /** Standard 15-step luminance ramp, darkest → brightest. */
     private const RAMP = ' .,:;i1tfLCG08@';
@@ -73,7 +74,7 @@ final class AsciiRenderer implements Renderer
         imagedestroy($src);
 
         $rampMax = strlen($this->ramp) - 1;
-        $pen = new OutputOptimizer();
+        $pen = new OutputOptimizer(repeatCells: $this->emitsRepeatCells());
 
         try {
             $lines = [];

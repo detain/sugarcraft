@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image\Support;
 
+use SugarCraft\CellBuffer\Diff\RepeatGate;
+
 /**
  * Streaming SGR pen-delta optimizer for character-mosaic emitters.
  *
@@ -34,7 +36,13 @@ namespace SugarCraft\Image\Support;
  * Idiom split (recorded in CALIBER_LEARNINGS): sugar-cellbuffer's
  * Buffer::toAnsi() runs an independent adjacent-run coalescer over its own
  * cell grid. The two MUST NOT be unified — toAnsi walks a finished grid, this
- * optimizer streams a render loop.
+ * optimizer streams a render loop. What IS shared since A-02 is the
+ * REP-vs-literal decision itself: both paths consult
+ * {@see \SugarCraft\CellBuffer\Diff\RepeatGate::worth()}, so a run can never
+ * be compressed on one path and left literal on the other. With the
+ * RepeatCells level off (the default), the run buffer flushes literal
+ * repeats in place — byte-identical to the pre-A-02 inline appends, which is
+ * what keeps the frozen mosaic goldens the None-path proof.
  */
 final class OutputOptimizer
 {
@@ -68,16 +76,34 @@ final class OutputOptimizer
 
     private string $buffer = '';
 
+    /**
+     * Pending glyph run for the A-02 RepeatCells level: the last glyph the
+     * caller requested and how many cells of it are still unflushed. The
+     * run is flushed before ANY other byte (SGR, attribute toggle, row end)
+     * so interleaving with pen traffic is byte-exact, and at flush time
+     * {@see RepeatGate::worth()} decides literal-repeat vs `ESC[count b`.
+     * With the level off the gate never wins, so the flush writes exactly
+     * the bytes the pre-A-02 emitter wrote inline — None is the byte-
+     * identical path by construction.
+     */
+    private ?string $runGlyph = null;
+    private int $runCount = 0;
+
     /** @var array{foreground: ?string, background: ?string, bright: ?string, underline: ?string, inverse: ?string, blink: ?string} */
     private array $pen;
 
     /**
      * @param string|null $entryForeground SGR parameters of the caller's pen foreground (null = terminal default)
      * @param string|null $entryBackground SGR parameters of the caller's pen background (null = terminal default)
+     * @param bool $repeatCells A-02 Optimization::RepeatCells arm: coalesce repeated glyphs
+     *        through the run buffer so {@see RepeatGate} may encode winning runs as REP.
+     *        The capability AND-gate ({@see Detect::supportsRepeat()}) is applied by the
+     *        callers that turn this on — the optimizer itself stays a pure emitter.
      */
     public function __construct(
         private readonly ?string $entryForeground = null,
         private readonly ?string $entryBackground = null,
+        private readonly bool $repeatCells = false,
     ) {
         $this->pen = [
             'foreground' => $this->entryForeground,
@@ -99,12 +125,28 @@ final class OutputOptimizer
      */
     public function cell(string $glyph, ?string $foreground = null, ?string $background = null): void
     {
+        // A run continues only while the pen stays exactly where it is: the
+        // blank-cell fg-copy means a space cannot move the foreground channel,
+        // a background change always breaks the run (different paints).
+        $penUnchanged = ($glyph === ' ' || $foreground === $this->pen['foreground'])
+            && $background === $this->pen['background'];
+
+        if ($penUnchanged && $glyph === $this->runGlyph && $this->runCount > 0) {
+            $this->runCount++;
+
+            return;
+        }
+
+        $this->flushRun();
+
         if ($glyph !== ' ') {
             $this->setPen('foreground', $foreground);
         }
 
         $this->setPen('background', $background);
-        $this->buffer .= $glyph;
+
+        $this->runGlyph = $glyph;
+        $this->runCount = 1;
     }
 
     /**
@@ -132,6 +174,7 @@ final class OutputOptimizer
             return;
         }
 
+        $this->flushRun();
         $this->buffer .= "\x1b[" . ($on ? self::ON_CODES[$channel] : self::OFF_CODES[$channel]) . 'm';
         $this->pen[$channel] = $value;
     }
@@ -143,6 +186,10 @@ final class OutputOptimizer
      */
     public function finishRow(): string
     {
+        // The row's glyphs must precede the restore sequence: a pending run
+        // flushes into the buffer before any tail SGR is composed.
+        $this->flushRun();
+
         $restore = [];
 
         foreach (self::OFF_CODES as $channel => $off) {
@@ -194,6 +241,33 @@ final class OutputOptimizer
     public function background(): ?string
     {
         return $this->pen['background'];
+    }
+
+    /**
+     * Write the pending glyph run into the buffer: as `ESC[count-1 b` when
+     * the A-02 level is on and the repeat beats the framing arithmetic, else
+     * as literal repeats — which, byte for byte, is what the pre-run-buffer
+     * emitter appended inline.
+     */
+    private function flushRun(): void
+    {
+        if ($this->runGlyph === null || $this->runCount === 0) {
+            return;
+        }
+
+        $glyph = $this->runGlyph;
+        $count = $this->runCount;
+        $this->runGlyph = null;
+        $this->runCount = 0;
+
+        $repeats = $count - 1;
+        if ($this->repeatCells && $repeats > 0 && RepeatGate::worth($repeats, strlen($glyph))) {
+            $this->buffer .= $glyph . "\x1b[{$repeats}b";
+
+            return;
+        }
+
+        $this->buffer .= str_repeat($glyph, $count);
     }
 
     private function setPen(string $channel, ?string $value): void

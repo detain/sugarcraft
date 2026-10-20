@@ -31,6 +31,7 @@
         "php": "^8.3",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-animation": "dev-master",
+        "sugarcraft/sugar-cellbuffer": "dev-master",
         "sugarcraft/sugar-colorprofile": "dev-master",
         "ext-gd": "*",
         "ext-mbstring": "*",

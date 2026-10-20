@@ -48,6 +48,10 @@ final class GraphicsEmitterSeparationTest extends TestCase
         'IncrementalRenderer.php',
         'AsciiColorMode.php',
         'ConfigFingerprintProvider.php',
+        // A-02: the optional optimization contract — like Renderer.php itself,
+        // a shape file with zero emitter wiring (its docblock names the
+        // optimizer only in prose, which the token walker excludes by design).
+        'AcceptsOptimization.php',
     ];
 
     public function testTheTwoRostersCoverEveryRendererFile(): void

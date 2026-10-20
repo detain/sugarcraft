@@ -141,6 +141,12 @@ final class Detect
     private static ?Capability $cached = null;
 
     /**
+     * A-02 test seam: forced answer for {@see supportsRepeat()}.
+     * null means "no override — consult the env truth table".
+     */
+    private static ?bool $repeatOverride = null;
+
+    /**
      * Probe once and cache the result for the lifetime of this process.
      */
     public static function cached(): Capability
@@ -258,7 +264,7 @@ final class Detect
      */
     public static function reset(): void
     {
-        self::$cached      = null;
+        self::$cached       = null;
         self::$lastDa1Reply = null;
     }
 
@@ -300,6 +306,60 @@ final class Detect
     public static function autoPassthrough(): bool
     {
         return self::$autoPassthrough;
+    }
+
+    /**
+     * A-02 capability gate: does the current terminal interpret
+     * `ESC[count b` (REP — repeat the preceding graphic character)?
+     *
+     * chafa models this per-emulator in its term.c tables
+     * (CHAFA_TERM_SEQ_REPEAT_CHAR set only for the emulators audited to
+     * implement REP); a mosaic emitter must AND this fact with the
+     * {@see \SugarCraft\CellBuffer\Diff\RepeatGate} byte arithmetic before
+     * compressing a run.
+     *
+     * This is the env-only truth table that lives until the S4.2 TermDb
+     * rework lands the audited per-terminal database on master — the seam
+     * is exactly one method body, mirroring how {@see probeTerminfoSixel()}
+     * names its own swap point. Conservative rows (ECMA-48 REP is a core
+     * sequence; only two shapes are refused here):
+     *  - no $TERM / TERM=dumb  → false (no escape-sequence guarantees);
+     *  - TERM=screen*          → false (GNU screen keeps its own screen
+     *    buffer and is the one mainstream multiplexer not documented to
+     *    honour client REP);
+     *  - everything else       → true (xterm-class: xterm, rxvt, vte/foot,
+     *    kitty, alacritty, wezterm, mlterm, tmux). Per-emulator vetoes
+     *    beyond these rows are the TermDb table's job (s4.2), not a guess
+     *    the env ladder should make.
+     */
+    public static function supportsRepeat(): bool
+    {
+        if (self::$repeatOverride !== null) {
+            return self::$repeatOverride;
+        }
+
+        $term = (string) getenv('TERM');
+        if ($term === '' || $term === 'dumb') {
+            return false;
+        }
+
+        return !str_starts_with($term, 'screen');
+    }
+
+    /**
+     * Force the A-02 REP answer for tests (null restores the env table).
+     * Same shape as the other Detect tri-states: while overridden, the
+     * table below is never consulted.
+     */
+    public static function setSupportsRepeatOverride(?bool $supported): void
+    {
+        self::$repeatOverride = $supported;
+    }
+
+    /** Remove the override; {@see supportsRepeat()} goes back to the env table. */
+    public static function clearSupportsRepeatOverride(): void
+    {
+        self::$repeatOverride = null;
     }
 
     /**
