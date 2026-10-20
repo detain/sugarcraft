@@ -23,8 +23,11 @@ use InvalidArgumentException;
  *     (chafa-batch.c:98,119-124). The two are the same SHAPE (same band
  *     count, unit alignment, short final band) but not always the same cut:
  *     a binary-inexact units_per_batch makes chafa's running sum lag the
- *     exact division by one unit (12 bands over 64 units crosses 31.999…
- *     where intdiv says 32). The exact-integer cut is deliberate — the
+ *     exact division by one unit (measured under a faithful gfloat model:
+ *     12 bands over 64 units, units_per_batch = 5.33333349…, crosses
+ *     47.999996… at the 9th cut where intdiv says 48; the interior cuts
+ *     before it, including i=6, stay exact). The exact-integer cut is
+ *     deliberate — the
  *     boundary contract is pinned by the BandsTest invariants, not by chafa
  *     bit-parity, since chafa's band count comes from its thread-count
  *     ladder, which this stage does not reproduce (an S7.6 caller supplies
@@ -36,7 +39,7 @@ use InvalidArgumentException;
  *     the work" property chafa's truncation leg pins.
  *
  * The cost gate below implements chafa's refusal pattern
- * (chafa/internal/chafa-pixops.c:540 — palette building parallelizes only at
+ * (chafa/internal/chafa-palette.c:540 — palette building parallelizes only at
  * `n_bins >= 512`): a row range too short to pay for per-band fixed costs is
  * partitioned into exactly ONE band, and chafa's caller-side rule
  * (chafa-batch.c:153-159: with fewer than two threads the work runs inline in
