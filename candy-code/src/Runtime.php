@@ -5953,6 +5953,16 @@ final class Runtime
      * silent while a genuinely new set (or the same set returning after an
      * empty turn) speaks once.
      *
+     * SCOPED TO ONE ENGINE PROCESS (VIS-6 audit): the "already saw" memory
+     * lives in the process-held {@see sessionPromptMemo()} slot this method's
+     * holder comes from, so on the interactive pcntl-fork path — where each
+     * fresh child re-arms the holder — the row follows the stricter R9
+     * once-per-turn cadence and speaks on EVERY turn with non-empty recall,
+     * the notice riding the `RuntimeNoticeSink` transport socket back to the
+     * parent's pump. The silence for identical consecutive sets is real on
+     * the no-fork blocking fallback, where one process accumulates memo
+     * turns. The behavior as shipped stands; this paragraph scopes the claim.
+     *
      * `record()` and not `warn()`: this is ordinary information, not a
      * degraded path — it belongs in the transcript the pump drains, not the
      * error log. The pump turns each row into a uiOnly notice

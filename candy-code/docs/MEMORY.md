@@ -458,9 +458,13 @@ row — `💭 Recalled N notes for this turn` — through the runtime notice sin
 (`Runtime::primeMemoryRecall()` → `RuntimeNoticeSink::record()`, drained by
 `Chat::pumpRuntimeNotices()`). The row is uiOnly, so it lands in the transcript
 and never in the model's history or behind the prompt cache. It speaks once per
-change: a re-ranking identical to the last announced one stays silent, an empty
-recall never records a row, and the keyword-only re-prime inside a turn is
-silent by design — only the per-turn priming door announces.
+change — within one engine process: a re-ranking identical to the last announced
+one stays silent, an empty recall never records a row, and the keyword-only
+re-prime inside a turn is silent by design — only the per-turn priming door
+announces. On the fork path the silence clause cannot reach: the fresh child
+re-arms the dedupe latch and the notice rides the result socket back to the
+parent, so there the row follows the stricter once-per-turn cadence above and
+speaks on every turn with a non-empty recall.
 
 The standing instructions make the recall step mandatory: before answering a
 question about prior work — decisions, dates, people, preferences, open todos —
