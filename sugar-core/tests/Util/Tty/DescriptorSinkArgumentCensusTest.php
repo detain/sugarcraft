@@ -193,6 +193,15 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'candy-gifview, the app-package twin of the sugar-animation pin above.',
         ],
 
+        // ---- candy-image ------------------------------------------------
+        'candy-image/src/Cli.php::SizeIoctl::query(1)' => [
+            DescriptorSinkScanner::LITERAL_INT,
+            'CORRECT. viewportCells(). The literal 1 is STDOUT\'s descriptor, behind a '
+            . 'stream_isatty(STDOUT) gate -- the app-package twin of the candy-gifview pin '
+            . 'above, arriving with the F-18 viewer (s7-2 pick, W7 weld). See '
+            . 'SizeQueryDescriptorTest in candy-image.',
+        ],
+
         // ---- sugar-pty ---------------------------------------------------
         'sugar-pty/src/Posix/PosixTermios.php::posix_isatty($this->fd)' => [
             DescriptorSinkScanner::VARIABLE,
