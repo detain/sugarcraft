@@ -10,6 +10,7 @@ import AgentCatalogPanel from '../agents/AgentCatalogPanel.vue'
 import BackgroundPanel from './BackgroundPanel.vue'
 import ChangesPanel from './ChangesPanel.vue'
 import ContextPanel from './ContextPanel.vue'
+import GeneratePanel from './GeneratePanel.vue'
 import MemoryPanel from './MemoryPanel.vue'
 import RulesPanel from './RulesPanel.vue'
 import TodoPanel from './TodoPanel.vue'
@@ -99,6 +100,7 @@ function onKey(event: KeyboardEvent): void {
       <AgentCatalogPanel v-else-if="panels.active === 'catalog'" />
       <ChangesPanel v-else-if="panels.active === 'changes'" />
       <ContextPanel v-else-if="panels.active === 'context' && sessionId" :session-id="sessionId" />
+      <GeneratePanel v-else-if="panels.active === 'generate' && sessionId" :session-id="sessionId" />
     </div>
   </aside>
 </template>
