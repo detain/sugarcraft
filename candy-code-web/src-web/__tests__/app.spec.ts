@@ -6,6 +6,7 @@ import App from '../App.vue'
 import { SIGN_IN_CODE } from '../keys'
 import { createAppRouter } from '../router'
 import { useConnectionStore } from '../stores/connection'
+import { readPastedImages } from '../lib/paste'
 import { FakeSocket, FakeTimers, helloResult } from './fakes'
 
 function json(status: number, body: unknown): Response {
@@ -74,6 +75,17 @@ describe('App', () => {
     expect(region.exists()).toBe(true)
     expect(region.attributes('role')).toBe('status')
     expect(region.attributes('aria-live')).toBe('polite')
+  })
+
+  it('surfaces a skipped untyped paste at the app root instead of swallowing it (NIT web58-1)', async () => {
+    const { wrapper } = await mountApp({ fetch: async () => json(200, { ticket: 'tk', expiresInSeconds: 30 }) })
+    expect(wrapper.find('[data-testid="paste-notice"]').exists()).toBe(false)
+    await readPastedImages({ items: [{ kind: 'file', type: '', getAsFile: () => null }] })
+    await flushPromises()
+    const line = wrapper.find('[data-testid="paste-notice"]')
+    expect(line.exists()).toBe(true)
+    expect(line.text()).toContain('skipped')
+    expect(line.attributes('role')).toBe('status')
   })
 
   it('shows the sign-in form when the browser holds no session', async () => {

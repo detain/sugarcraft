@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bytesToBase64, MAX_PASTED_IMAGES, readPastedImages, type ClipboardItem } from '../paste'
+import { bytesToBase64, MAX_PASTED_IMAGES, onPasteNotice, readPastedImages, typelessPasteNotice, type ClipboardItem } from '../paste'
 
 function item(type: string, bytes: number[], name = ''): ClipboardItem {
   return {
@@ -44,5 +44,48 @@ describe('readPastedImages', () => {
   it('answers an empty clipboard with no images', async () => {
     expect(await readPastedImages(null)).toEqual([])
     expect(await readPastedImages({ items: [] })).toEqual([])
+  })
+})
+
+describe('paste rejection notices (NIT web58-1)', () => {
+  it('announces typeless entries instead of dropping them silently', async () => {
+    const notices: string[] = []
+    const stop = onPasteNotice((notice) => notices.push(notice))
+    const typeless: ClipboardItem = { kind: 'file', type: '', getAsFile: () => new File([Uint8Array.from(PNG)], '', { type: '' }) }
+    await readPastedImages({ items: [typeless, item('image/png', PNG)] })
+    stop()
+    expect(notices).toEqual([typelessPasteNotice(1)])
+    expect(notices[0]).toContain('skipped')
+    expect(notices[0]).toContain('image/png')
+  })
+
+  it('counts each typeless entry and says file for one, files for more', async () => {
+    const notices: string[] = []
+    const stop = onPasteNotice((notice) => notices.push(notice))
+    const entries: ClipboardItem[] = [
+      { kind: 'file', type: '', getAsFile: () => null },
+      { kind: 'file', type: '', getAsFile: () => null },
+      { kind: 'file', type: '', getAsFile: () => null },
+    ]
+    await readPastedImages({ items: entries })
+    stop()
+    expect(notices).toEqual([typelessPasteNotice(3)])
+    expect(typelessPasteNotice(1)).toContain('file was skipped')
+    expect(typelessPasteNotice(3)).toContain('files were skipped')
+  })
+
+  it('stays silent when every entry is typed — the notice is about the skip', async () => {
+    const notices: string[] = []
+    const stop = onPasteNotice((notice) => notices.push(notice))
+    await readPastedImages({ items: [item('image/png', PNG), { kind: 'string', type: 'text/plain', getAsFile: () => null }] })
+    stop()
+    expect(notices).toEqual([])
+  })
+
+  it('unsubscribe stops delivery', async () => {
+    const notices: string[] = []
+    onPasteNotice((notice) => notices.push(notice))()
+    await readPastedImages({ items: [{ kind: 'file', type: '', getAsFile: () => null }] })
+    expect(notices).toEqual([])
   })
 })

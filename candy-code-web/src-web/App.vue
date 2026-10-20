@@ -16,6 +16,7 @@ import { useLayoutStore } from './stores/layout'
 import { useSessionsStore } from './stores/sessions'
 import { NOTIFICATION_PROBLEM_TEXT, useSettingsStore } from './stores/settings'
 import { useQuestionAnnouncements } from './lib/questions'
+import { onPasteNotice } from './lib/paste'
 import SessionTools from './components/panels/SessionTools.vue'
 
 const connection = useConnectionStore()
@@ -44,6 +45,12 @@ const stopAttention = useAttention()
 // WEB-7a: questions announced in-page for screen readers (see lib/questions).
 const announcedQuestion = useQuestionAnnouncements()
 
+// NIT web58-1: a paste the reader had to skip says so, visibly (see lib/paste).
+const pasteNotice = ref('')
+const stopPasteNotice = onPasteNotice((notice) => {
+  pasteNotice.value = notice
+})
+
 function onPageHide(): void {
   connection.stop()
 }
@@ -71,6 +78,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pagehide', onPageHide)
   window.removeEventListener('pageshow', onPageShow)
   stopAttention()
+  stopPasteNotice()
 })
 
 async function signOut(): Promise<void> {
@@ -97,6 +105,7 @@ async function signOut(): Promise<void> {
     </header>
     <ConnectionBanner />
     <p class="sr-only" role="status" aria-live="polite" data-testid="question-announcement">{{ announcedQuestion }}</p>
+    <p v-if="pasteNotice !== ''" class="paste-notice" role="status" aria-live="polite" data-testid="paste-notice">{{ pasteNotice }}</p>
     <SessionTools v-if="!onLogin" :active-id="activeId" />
     <div class="body">
       <SessionSidebar v-if="!onLogin" class="side" :active-id="activeId" />
@@ -151,6 +160,11 @@ async function signOut(): Promise<void> {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.paste-notice {
+  margin: 0.25rem 1rem 0;
+  color: var(--warn);
+  font-size: 12px;
 }
 
 .status {

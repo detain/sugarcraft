@@ -38,6 +38,31 @@ function isPastedImageMime(type: string): type is PastedImageMime {
   return (PASTED_IMAGE_MIMES as readonly string[]).includes(type)
 }
 
+// ── rejection notices (NIT web58-1) ────────────────────────────────────
+// A paste entry the browser reports with no type at all cannot be matched
+// against the raster list, so it is skipped. Skipping it SILENTLY was the
+// complaint: the composer took nothing and said nothing. The reader emits a
+// notice over this channel; the app root renders it, same live-region idea
+// as the question announcements (lib/questions).
+
+type PasteNoticeListener = (notice: string) => void
+const noticeListeners = new Set<PasteNoticeListener>()
+
+/** Subscribe to paste rejections; returns the unsubscribe. */
+export function onPasteNotice(listener: PasteNoticeListener): () => void {
+  noticeListeners.add(listener)
+  return () => noticeListeners.delete(listener)
+}
+
+function announce(notice: string): void {
+  for (const listener of noticeListeners) listener(notice)
+}
+
+/** The notice text for $count typeless paste entries. */
+export function typelessPasteNotice(count: number): string {
+  return `${count} pasted ${count === 1 ? 'file was' : 'files were'} skipped: the browser reported no type, and only ${PASTED_IMAGE_MIMES.join(', ')} images can be sent.`
+}
+
 /** Base64 of bytes without building one giant string per slice (btoa is latin1). */
 export function bytesToBase64(bytes: Uint8Array): string {
   let binary = ''
@@ -64,7 +89,10 @@ async function readImage(file: File): Promise<PastedImage> {
  * not a pasted image here; the server would refuse it, the popup never offers it.
  */
 export async function readPastedImages(clipboard: ClipboardFiles | null | undefined, cap = MAX_PASTED_IMAGES): Promise<PastedImage[]> {
-  const files = Array.from(clipboard?.items ?? [])
+  const entries = Array.from(clipboard?.items ?? [])
+  const typeless = entries.filter((entry) => entry.kind === 'file' && entry.type === '').length
+  if (typeless > 0) announce(typelessPasteNotice(typeless))
+  const files = entries
     .filter((item) => item.kind === 'file' && isPastedImageMime(item.type))
     .map((item) => item.getAsFile())
     .filter((file): file is File => file !== null)
