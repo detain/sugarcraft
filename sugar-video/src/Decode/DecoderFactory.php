@@ -16,6 +16,12 @@ use SugarCraft\Video\Source\Probe;
  *     open() accepts the request headers; a .gif URL is still decoded by
  *     ffmpeg, not by the in-process GIF reader)
  *   - Else if source ends with .gif (case-insensitive) → GifDecoder
+ *   - Else if source is a LOCAL animated WebP (E-05.2) → AnimatedWebpDecoder
+ *     (ffmpeg cannot read WebP animation at all — it skips ANMF — so the old
+ *     ffmpeg route showed one silent base frame; the sniff is a header-only
+ *     container walk, and a still .webp never enters this branch, keeping its
+ *     ffmpeg/fallback route byte-unchanged. When this PHP's GD has no WebP,
+ *     the decoder raises the loud typed refusal instead of degrading.)
  *   - Else if ffmpeg is available → FfmpegDecoder
  *   - Else → GifDecoder (fallback; will fail on non-GIF source)
  */
@@ -46,9 +52,15 @@ final class DecoderFactory
             // pure PHP and has no transport, so a remote GIF handed to it would
             // die on a bogus path and its headers would have nowhere to ride.
             // Missing ffmpeg then fails loudly in FfmpegDecoder::open().
+            // The same is true of a remote .webp — animated sniffing is local-only.
             $decoder = new FfmpegDecoder($cellPxW, $cellPxH);
         } elseif ($isGif) {
             $decoder = new GifDecoder($cellPxW, $cellPxH);
+        } elseif (self::isLocalAnimatedWebp($source)) {
+            // E-05.2: animated WebP is a GD/container job, never an ffmpeg one.
+            // The decoder's open() raises the loud refusal when GD lacks WebP
+            // — silently handing the file to ffmpeg would show one base frame.
+            $decoder = new AnimatedWebpDecoder($cellPxW, $cellPxH);
         } elseif (Probe::hasFFmpeg()) {
             $decoder = new FfmpegDecoder($cellPxW, $cellPxH);
         } else {
@@ -58,5 +70,27 @@ final class DecoderFactory
 
         $decoder->open($source, $cellsW, $cellsH, $fps, $mode, $startSec, $headers);
         return $decoder;
+    }
+
+    /**
+     * True when $source names an existing LOCAL file with a .webp suffix
+     * (case-insensitive) whose container claims animation.
+     *
+     * Cheap by design: the suffix test short-circuits first, so a .mp4 never
+     * even opens; the sniff itself walks chunk headers only and stops at the
+     * first ANMF chunk or VP8X animation bit. Static pure (path → bool),
+     * unit-testable without spawning anything.
+     */
+    public static function isLocalAnimatedWebp(string $source): bool
+    {
+        if (preg_match('/\.webp$/i', $source) !== 1) {
+            return false;
+        }
+
+        if (FfmpegDecoder::isNetworkSource($source)) {
+            return false;
+        }
+
+        return is_file($source) && AnimatedWebpDecoder::isAnimated($source);
     }
 }

@@ -11,6 +11,7 @@ declare(strict_types=1);
 return [
     // Decoder errors
     'decoder.ffmpeg_missing' => 'ffmpeg not found on this host; mp4/avi/webm playback requires ffmpeg',
+    'decoder.webp_gd_missing' => 'this PHP cannot decode WebP (GD lacks WebP support); animated WebP playback requires it — ffmpeg has no animated-WebP decoder, so there is no external fallback',
 
     // GIF source ingress (E-11: the bounded one-time capture in GifDecoder::readBoundedBytes)
     'gif.source_unreadable' => 'sugar-video: GIF source "{path}" cannot be decoded — {reason}',

@@ -11,7 +11,7 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
-Terminal **video player** — plays `mp4` / `gif` / `avi` / `webm` and more on
+Terminal **video player** — plays `mp4` / `gif` / `avi` / `webm` / animated `webp` and more on
 the fly, rendering each frame as ASCII, ANSI 256-color, truecolor half-blocks,
 or via modern graphics protocols (sixel / kitty / iTerm2). Like `mpv -vo tct`,
 but in PHP and reusing the SugarCraft rendering stack throughout.
@@ -45,6 +45,9 @@ Requires:
 - PHP 8.3+
 - `ffmpeg` and `ffprobe` in `$PATH` for `mp4`/`avi`/`webm` playback
 - `ext-gd` for `.gif` playback (pure-PHP fallback, no ffmpeg needed)
+- `ext-gd` built with WebP for animated `.webp` playback (pure-PHP container
+  walk + per-frame GD decode — no ffmpeg needed, and no ffmpeg on a stock host
+  can decode animated WebP, so this is the route, not a fallback)
 - A terminal with at least 256-color support for ANSI modes
 
 ## Usage
