@@ -13,9 +13,12 @@ namespace SugarCraft\Image;
  * - `Atkinson` — Apple Atkinson: diffuses only ¾ of error (more contrast)
  * - `Ordered` — C-04: chafa-style ordered dither, a 16×16 Bayer texture biases each
  *   pixel before quantization (no error feedback; stateless per pixel)
+ * - `Noise` — C-05: blue-noise ordered dither, a 64×64 CC0 noise table biases each
+ *   pixel per channel before quantization (stateless; blue spectrum avoids visible
+ *   hatch structure)
  *
  * Default: `FloydSteinberg` — best quality/speed trade-off, matches xterm.
- * The Ordered axis is strictly opt-in; the default diffusion path is
+ * The Ordered/Noise axes are strictly opt-in; the default diffusion path is
  * byte-frozen post-C-01.
  */
 enum Dither: string
@@ -25,6 +28,7 @@ enum Dither: string
     case Stucki         = 'stucki';
     case Atkinson       = 'atkinson';
     case Ordered        = 'ordered';
+    case Noise          = 'noise';
 
     /**
      * Return the human-readable name for display.
@@ -37,6 +41,7 @@ enum Dither: string
             self::Stucki         => 'Stucki',
             self::Atkinson       => 'Atkinson',
             self::Ordered        => 'Ordered',
+            self::Noise          => 'Noise',
         };
     }
 }

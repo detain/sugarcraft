@@ -29,6 +29,17 @@ final class DitherTest extends TestCase
         $this->assertSame('Atkinson', Dither::Atkinson->label());
     }
 
+    public function testOrderedLabel(): void
+    {
+        // (C-04 arm, labelled test added with C-05 for per-case parity)
+        $this->assertSame('Ordered', Dither::Ordered->label());
+    }
+
+    public function testNoiseLabel(): void
+    {
+        $this->assertSame('Noise', Dither::Noise->label());
+    }
+
     public function testAllCasesHaveStringValues(): void
     {
         foreach (Dither::cases() as $case) {
@@ -61,5 +72,6 @@ final class DitherTest extends TestCase
         $this->assertSame('Stucki', $labels['stucki']);
         $this->assertSame('Atkinson', $labels['atkinson']);
         $this->assertSame('Ordered', $labels['ordered']);
+        $this->assertSame('Noise', $labels['noise']);
     }
 }

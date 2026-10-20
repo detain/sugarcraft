@@ -53,7 +53,17 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     private const RLE_LITERAL_LIMIT = 4;
 
     /**
-     * C-04: dither bias intensity for the opt-in Ordered axis.
+     * C-05: chafa folds this factor into the NOISE texture magnitude —
+     * chafa_dither_init()'s NOISE arm calls
+     * `chafa_gen_noise_matrix (dither->intensity * 0.1f)`, shrinking the
+     * table's ±128-scale offsets to ±12.8 so a full-intensity noise bias
+     * stays well inside one palette-bin width. Named here so the constant
+     * has a home (NTC-3).
+     */
+    private const NOISE_BIAS_SCALE = 0.1;
+
+    /**
+     * C-04: dither bias intensity for the opt-in Ordered/Noise axes.
      * NULL (default) means "user did not ask" and behaves exactly as the
      * pre-C-04 renderer on every path — the default diffusion stream is
      * byte-frozen post-C-01. Chafa's chafa_dither_init() clamps diffusion
@@ -67,7 +77,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *                        dimensions are multiplied by this so a sixel poster
      *                        fills its cell box (not one device pixel per cell).
      * @param int $cellHeight Pixel height of a terminal cell.
-     * @param float|null $intensity Ordered bias strength 0.0..1.0
+     * @param float|null $intensity Ordered/Noise bias strength 0.0..1.0
      *                              (null = chafa's config default 1.0; the
      *                              depth ladder rides on Ordered only, C-07).
      */
@@ -603,12 +613,12 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         $w = imagesx($img);
         $h = imagesy($img);
 
-        // C-04: Ordered is a bias texture, not an error diffusion — the
-        // old `$dither !== Dither::None` test would wrongly arm the kernel
-        // for it, so the arms are spelled out.
+        // C-04/C-05: Ordered and Noise are bias textures, not error
+        // diffusions — the old `$dither !== Dither::None` test would wrongly
+        // arm the kernel for them, so the arms are spelled out.
         $hasDiffusion = match ($dither) {
             Dither::FloydSteinberg, Dither::Stucki, Dither::Atkinson => true,
-            Dither::None, Dither::Ordered                            => false,
+            Dither::None, Dither::Ordered, Dither::Noise             => false,
         };
 
         // The lowest row a single pixel's error can still reach — the window
@@ -619,12 +629,14 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             // Named (not `default`) so a future Dither case that forgets to declare
             // its error-diffusion reach raises UnhandledMatchError here rather than
             // silently getting a 1-row window and corrupting output.
-            Dither::None, Dither::Ordered => 0,
+            Dither::None, Dither::Ordered, Dither::Noise => 0,
         };
 
-        $texture = $dither === Dither::Ordered
-            ? OrderedTexture::bayer16($this->orderedTextureMagnitude())
-            : null;
+        $texture = match ($dither) {
+            Dither::Ordered => OrderedTexture::bayer16($this->orderedTextureMagnitude()),
+            Dither::Noise   => OrderedTexture::blueNoise64($this->noiseTextureMagnitude()),
+            default         => null,
+        };
 
         /** @var array<int, list<array{float,float,float}>> $window  absolute row → RGB accumulators */
         $window = [];
@@ -736,6 +748,18 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     private function orderedTextureMagnitude(): float
     {
         return $this->intensity ?? 1.0;
+    }
+
+    /**
+     * C-05: Noise bias magnitude — chafa's chafa_dither_init() NOISE arm,
+     * `chafa_gen_noise_matrix (dither->intensity * 0.1f)`, with the base
+     * intensity left at 1.0: chafa-canvas.c (:591-614) applies the depth
+     * ladder to ORDERED only, so Noise never sees a maxColors-derived
+     * factor (pinned by SixelIntensityTest with C-07).
+     */
+    private function noiseTextureMagnitude(): float
+    {
+        return self::NOISE_BIAS_SCALE * ($this->intensity ?? 1.0);
     }
 
     /**

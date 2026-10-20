@@ -17,7 +17,8 @@ use SugarCraft\Image\Renderer\SixelRenderer;
  * split equality property (D-02 precondition) proves texture-phase grid rows
  * are invariant to how the canvas is chunked into bands. The default
  * diffusion path additionally carries a byte-frozen digest pin per the
- * orchestrator micro-4 ruling (Ordered is strictly opt-in).
+ * orchestrator micro-4 ruling (Ordered is strictly opt-in). C-05 extends
+ * every layer of that record to the 64x64 three-channel blue-noise texture.
  */
 final class OrderedTextureTest extends TestCase
 {
@@ -35,6 +36,14 @@ final class OrderedTextureTest extends TestCase
      * digest is re-captured there — disclosed).
      */
     private const ORDERED_GRADIENT_SHA1 = '7c1e6fd63bb3643b049249f98028486730c31ecf';
+
+    /**
+     * C-05: the recentered blue-noise render of the gradient fixture at the
+     * default (null) intensity. Captured by hand on the fixed tree; unlike
+     * the ordered digest this one is ladder-immune — chafa-canvas.c applies
+     * the depth ladder to ORDERED only, so C-07 must leave it untouched.
+     */
+    private const NOISE_GRADIENT_SHA1 = '22d77ec1f39c9a4fbed45db07989355b0189a100';
 
     /** chafa-util.c fill_matrix_r quadrant codes for (bx, by) bit pairs. */
     private const QUADRANT_CODE = [0, 3, 2, 1]; // index = bx*2 + by
@@ -230,6 +239,186 @@ final class OrderedTextureTest extends TestCase
 
         $this->assertStringStartsWith("\x1bP", $bytes);
         $this->assertStringEndsWith("\x1b\\", $bytes);
+    }
+
+    /**
+     * C-05: the embedded table must be chafa's blue_noise_src byte-for-byte
+     * (chafa-noise.c:30-224) — 192 hex lines of 64 bytes, 12,288 samples in
+     * total, read via reflection off the private const so the pin survives
+     * any refactor of the generator.
+     */
+    public function testTheBlueNoiseTableMatchesChafaBytesVerbatim(): void
+    {
+        $hex = (new \ReflectionClass(OrderedTexture::class))->getConstant('BLUE_NOISE_HEX');
+        $this->assertIsArray($hex);
+        $this->assertCount(192, $hex);
+        foreach ($hex as $i => $line) {
+            $this->assertSame(128, strlen($line), "table line $i width");
+            $this->assertTrue(ctype_xdigit($line), "table line $i is hex");
+        }
+
+        $bytes = hex2bin(implode('', $hex));
+        $this->assertNotFalse($bytes);
+        $this->assertSame(12288, strlen($bytes), '64 * 64 * 3 samples');
+        // sha1/sums of Christoph Peters' CC0 LDR_RGB1_0.png table as embedded
+        $this->assertSame('3f1877bbef85a8e088123e314ba136480d39c3a8', sha1($bytes));
+        $samples = array_values(unpack('C*', $bytes));
+        $this->assertSame(1566707, array_sum($samples));
+        $channels = [[], [], []];
+        foreach ($samples as $i => $byte) {
+            $channels[$i % 3][] = $byte;
+        }
+        $this->assertSame(
+            [522246, 522235, 522226],
+            [array_sum($channels[0]), array_sum($channels[1]), array_sum($channels[2])],
+            'per-channel byte sums (channel-interleaved layout intact)',
+        );
+    }
+
+    /**
+     * C-05: at magnitude 1.0 the recenter is exactly byte - 128 — chafa's
+     * `((gfloat) src[i] - 128.0f) * 1.0 + 0.5f` truncated (NTC-2 symmetric
+     * round makes the integers fall out identically) — and the layout is
+     * [pixel][channel] with pixel = x + y * 64, matching gen_mods' NOISE arm
+     * read texture_data[texture_index * channels + ch].
+     */
+    public function testBlueNoiseRecentringSubtractsTheMidpointAtUnitMagnitude(): void
+    {
+        $hex   = (new \ReflectionClass(OrderedTexture::class))->getConstant('BLUE_NOISE_HEX');
+        $bytes = hex2bin(implode('', $hex));
+        $this->assertNotFalse($bytes);
+
+        $texture = OrderedTexture::blueNoise64(1.0);
+        $this->assertSame(64, $texture->size);
+        $this->assertSame(3, $texture->channels);
+        $this->assertCount(12288, $texture->data);
+
+        for ($i = 0; $i < 12288; $i++) {
+            $this->assertSame(ord($bytes[$i]) - 128, $texture->data[$i], "sample $i");
+        }
+        // sum(bytes) - 12288 * 128
+        $this->assertSame(-6157, array_sum($texture->data));
+        $this->assertSame([-128, 127], [min($texture->data), max($texture->data)]);
+    }
+
+    /**
+     * C-05: unlike the Bayer texture (one offset for all channels, gen_mods
+     * non-NOISE arm), the NOISE arm is decorrelated per channel — across the
+     * full 64x64 tiling no cell has all three offsets equal, every cell spans
+     * a non-zero channel spread, and both axes wrap at 64.
+     */
+    public function testBlueNoiseChannelsAreDecorrelatedAndTiled(): void
+    {
+        $texture = OrderedTexture::blueNoise64(1.0);
+
+        $allEqual = 0;
+        for ($y = 0; $y < 64; $y++) {
+            for ($x = 0; $x < 64; $x++) {
+                $r = $texture->mod($x, $y, 0);
+                $g = $texture->mod($x, $y, 1);
+                $b = $texture->mod($x, $y, 2);
+                if ($r === $g && $g === $b) {
+                    $allEqual++;
+                }
+            }
+        }
+        $this->assertSame(0, $allEqual, 'blue-noise channels must be decorrelated');
+
+        for ($y = 0; $y < 70; $y++) {
+            for ($x = 0; $x < 70; $x++) {
+                $this->assertSame($texture->mod($x - 64, $y, 0), $texture->mod($x, $y, 0));
+                $this->assertSame($texture->mod($x, $y - 64, 1), $texture->mod($x, $y, 1));
+            }
+        }
+
+        // Independent channels collide at chance level only: 17 of 4096 r/g
+        // cells share an offset (a channel-copied texture would score 4096,
+        // and the ordered Bayer arm does — its uniformity is pinned above).
+        $rgEqual = 0;
+        for ($y = 0; $y < 64; $y++) {
+            for ($x = 0; $x < 64; $x++) {
+                if ($texture->mod($x, $y, 0) === $texture->mod($x, $y, 1)) {
+                    $rgEqual++;
+                }
+            }
+        }
+        $this->assertLessThan(100, $rgEqual, 'r/g streams must not be copies');
+    }
+
+    /** C-05: pure generator — deterministic, and magnitude scales symmetrically. */
+    public function testBlueNoiseIsDeterministicAndScalesSymmetrically(): void
+    {
+        $this->assertSame(
+            OrderedTexture::blueNoise64(0.1)->data,
+            OrderedTexture::blueNoise64(0.1)->data,
+        );
+
+        $hex   = (new \ReflectionClass(OrderedTexture::class))->getConstant('BLUE_NOISE_HEX');
+        $bytes = hex2bin(implode('', $hex));
+        $this->assertNotFalse($bytes);
+
+        $half = OrderedTexture::blueNoise64(0.5)->data;
+        foreach ([0, 1, 7621, 12287] as $i) {
+            $this->assertSame(
+                (int) round((ord($bytes[$i]) - 128.0) * 0.5),
+                $half[$i],
+                "sample $i at magnitude 0.5",
+            );
+        }
+    }
+
+    /**
+     * C-05/D-02 precondition: the NOISE texture (mask 63, magnitude
+     * 0.1 at default intensity) must share the ordered arm's band-split
+     * equality — absolute-phase reads make grid rows independent of
+     * band chunking — with the wrong-phase leg pinning non-vacuity.
+     */
+    public function testNoiseGridRowsAreInvariantToBandSplitting(): void
+    {
+        $gd = $this->strip(32, 40);
+
+        $full = $this->indexGrid($gd, Dither::Noise, yOrigin: 0);
+
+        $bottom = imagecrop($gd, ['x' => 0, 'y' => 20, 'width' => 32, 'height' => 20]);
+        $this->assertNotFalse($bottom);
+
+        $phaseRight = $this->indexGrid($bottom, Dither::Noise, yOrigin: 20);
+        $stitched   = array_merge(array_slice($full, 0, 20), $phaseRight);
+        $this->assertSame($full, $stitched, 'band-stitched noise rows must equal full-canvas rows');
+
+        $phaseWrong = $this->indexGrid($bottom, Dither::Noise, yOrigin: 0);
+        $this->assertNotSame(
+            array_slice($full, 20),
+            $phaseWrong,
+            'the fixture must actually cross noise phases — otherwise the equality leg is vacuous',
+        );
+    }
+
+    /**
+     * C-05: the noise render is digest-pinned, differs from None and
+     * Ordered, and its cache fingerprint is its own (D-04 key-capture);
+     * an explicit intensity of 1.0 must equal the null default (the
+     * chafa config default is 1.0 — null means "asked for nothing").
+     */
+    public function testNoiseRenderIsPinnedAndCacheDistinct(): void
+    {
+        $source = ImageSource::fromFile(__DIR__ . '/../fixtures/gradient_64x64.png');
+
+        $noise = new SixelRenderer(Dither::Noise);
+        $bytes = $noise->render($source, 16, 12);
+
+        $this->assertNotSame($bytes, (new SixelRenderer(Dither::None))->render($source, 16, 12));
+        $this->assertNotSame($bytes, (new SixelRenderer(Dither::Ordered))->render($source, 16, 12));
+        $this->assertSame(self::NOISE_GRADIENT_SHA1, sha1($bytes));
+        $this->assertSame(
+            $bytes,
+            (new SixelRenderer(Dither::Noise, intensity: 1.0))->render($source, 16, 12),
+            'intensity 1.0 is the null-default behaviour',
+        );
+        $this->assertSame(
+            'dither=noise|maxColors=256|cellWidth=10|cellHeight=20',
+            $noise->configFingerprint(),
+        );
     }
 
     /**

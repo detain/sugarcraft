@@ -339,3 +339,15 @@ kept as design rationale for what shipped._
   grid-side passes separate. Folding one into the other would force either a
   buffering render pass or a pen-state grid walk; the §4.15 dedup pass is the
   place to revisit, not a bugfix lane.
+- **[blue-noise texture provenance (C-05)]** `OrderedTexture::blueNoise64()`
+  embeds Christoph Peters' 64×64 void-and-cluster blue-noise table
+  (LDR_RGB1_0.png, https://momentsingraphics.de/BlueNoise.html) released
+  under CC0 — the same bytes chafa carries in chafa-noise.c
+  (`blue_noise_src`, attribution comment at :22-26). Keep the provenance in
+  sync if the table is ever re-rolled: the layout is channel-interleaved
+  `[pixel][ch]` with pixel = x + y*64 (gen_mods' NOISE read
+  `texture_data[texture_index * channels + ch]`), recentered as
+  `(byte - 128) * magnitude` with NTC-2 symmetric rounding, and the Sixel
+  renderer scales NOISE magnitude by `NOISE_BIAS_SCALE` (0.1) mirroring
+  chafa's `intensity * 0.1f` — unlike ORDERED, it never takes the depth
+  ladder (chafa-canvas.c applies the ladder to ORDERED only).
