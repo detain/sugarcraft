@@ -308,4 +308,133 @@ final class SixelStreamTest extends TestCase
             'an opened tmux envelope must be closed even when the first delivered write fails',
         );
     }
+
+    /**
+     * F-09: DECSIXEL repeat counts are capped at 255 — a decoder reading a
+     * pre-fix `!1024` sees `!1` and swallows `024` as resync/literal noise,
+     * corrupting the whole band. Per chafa `format_schar_reps`
+     * (chafa/internal/chafa-sixel-renderer.c:218-251) runs of 255+ split into
+     * repeated `!255` chunks plus a legal remainder, and runs of 1..3 stay
+     * bare literals.
+     */
+    public function testSolidBandOf1024PixelsSplitsIntoLegalRepeats(): void
+    {
+        // 1024 opaque columns: 4 chunks of !255 + remainder 4 (still >= 4,
+        // so the remainder itself rides as !4, not four literals).
+        $stream = $this->renderRedColumnsBand(1024, 0, 1023);
+
+        $this->assertStringContainsString('#0!255~!255~!255~!255~!4~', $stream, 'the solid run must arrive split at the 255 boundary');
+        $this->assertStringNotContainsString('!1024', $stream);
+        $this->assertEveryRepeatIsLegal($stream);
+    }
+
+    /**
+     * F-09: the width-1024 empty-alpha band — a wide transparent region is
+     * the routine trigger (widescreen content on a narrower canvas). The hole
+     * columns ride as a long run of the register-0 byte `?` (chr 63) and the
+     * run must split legally.
+     */
+    public function testEmptyAlphaBandOf1024PixelsSplitsIntoLegalRepeats(): void
+    {
+        // 64 opaque red columns, then 960 transparent holes.
+        $hole = chr(63);
+        $stream = $this->renderRedColumnsBand(1024, 0, 63);
+
+        $this->assertStringContainsString('#1!64~', $stream, 'register 0 is the transparent background, so red lives at register 1');
+        $expectedHoles = '!255' . $hole . '!255' . $hole . '!255' . $hole . '!195' . $hole;
+        $this->assertStringContainsString($expectedHoles, $stream, 'the 960-column transparent run must split into 3x!255 + !195');
+        $this->assertStringNotContainsString('!960', $stream);
+        $this->assertEveryRepeatIsLegal($stream);
+    }
+
+    /**
+     * F-09: a run whose length is an exact multiple of 255 leaves no
+     * remainder byte — the chunk loop covers it entirely.
+     */
+    public function testExactMultipleOf255EmitsChunksOnly(): void
+    {
+        $stream = $this->renderRedColumnsBand(510, 0, 509);
+
+        $this->assertStringContainsString('#0!255~!255~', $stream);
+        $this->assertStringNotContainsString('!510', $stream);
+        $this->assertEveryRepeatIsLegal($stream);
+    }
+
+    /**
+     * F-09: chafa keeps runs of 1..3 as bare repeated bytes (`!2`/`!3` cost
+     * more than the literals and buy nothing); 4 is the first count that
+     * rides as `!4`.
+     */
+    public function testShortRunsStayLiteralAndFourStaysCounted(): void
+    {
+        $hole = chr(63);
+        // 2 opaque red columns, then 4 transparent holes on a 6px band.
+        $stream = $this->renderRedColumnsBand(6, 0, 1);
+
+        $this->assertStringContainsString('#1~~!4' . $hole, $stream, 'a run of two repeats literally, a run of four counts');
+        $this->assertStringNotContainsString('!2~', $stream);
+        // The count-1 case: a band of alternating columns can never carry a
+        // `!1` — singles are bare bytes (and !1 is a decoder no-op at best).
+        $this->assertDoesNotMatchRegularExpression('/![1-3](?![0-9])/', $stream, 'runs under 4 must not emit !N repeats');
+    }
+
+    /**
+     * Build a one-band canvas at one pixel per cell: rows are a single 6-row
+     * band, columns 0..$pixelW-1 start fully transparent and [$redStart,
+     * $redEnd] is painted opaque red (redStart 0, redEnd pixelW-1 = solid).
+     */
+    private function renderRedColumnsBand(int $pixelW, int $redStart, int $redEnd): string
+    {
+        $bytes = $this->pngFromGd($pixelW, 6, function (\GdImage $im) use ($redStart, $redEnd): void {
+            $red = imagecolorallocate($im, 255, 0, 0);
+            $this->assertNotFalse($red);
+            imagefilledrectangle($im, $redStart, 0, $redEnd, imagesy($im) - 1, $red);
+        });
+        $image = new ImageSource($bytes, 'image/png', $pixelW, 6);
+
+        // cellWidth 1 → the requested width is the pixel width verbatim;
+        // cellHeight 6 → one band exactly covers the 6 source rows.
+        return (new SixelRenderer(Dither::None, 256, 1, 6))->render($image, $pixelW, 1);
+    }
+
+    /**
+     * GD-authored PNG bytes (house idiom per RenderAllocationGuardTest):
+     * truecolor canvas pre-filled fully transparent, painter composes on top.
+     */
+    private function pngFromGd(int $width, int $height, callable $painter): string
+    {
+        $im = imagecreatetruecolor($width, $height);
+        $this->assertNotFalse($im);
+        imagealphablending($im, false);
+        imagesavealpha($im, true);
+        $hole = imagecolorallocatealpha($im, 0, 0, 0, 127);
+        $this->assertNotFalse($hole);
+        imagefilledrectangle($im, 0, 0, $width - 1, $height - 1, $hole);
+        $painter($im);
+
+        ob_start();
+        imagepng($im);
+        $bytes = (string) ob_get_clean();
+        imagedestroy($im);
+
+        return $bytes;
+    }
+
+    /**
+     * Roadmap pin (chafa_improvemnts.md :959): every `!N` repeat token in the
+     * emitted stream must be a whole, legal 1..255 count.
+     */
+    private function assertEveryRepeatIsLegal(string $stream): void
+    {
+        $matches = [];
+        $count = preg_match_all('/!\d+/', $stream, $matches);
+        $this->assertGreaterThan(0, $count, 'the fixture must actually produce !N repeats to pin');
+        foreach ($matches[0] as $repeat) {
+            $this->assertSame(
+                1,
+                preg_match('/^!([1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/', $repeat),
+                'illegal sixel repeat count in ' . $repeat,
+            );
+        }
+    }
 }

@@ -39,6 +39,20 @@ final class SixelRenderer implements Renderer
     private const TRANSPARENT_BACKGROUND = '#0;2;P';
 
     /**
+     * F-09: DECSIXEL caps a `!N` repeat count at 255 — a decoder reading
+     * `!1024` sees `!1` then treats `0`/`2`/`4` as resync/literal noise and
+     * the band corrupts. Longer runs must split into `!255` chunks.
+     */
+    private const RLE_MAX_COUNT = 255;
+
+    /**
+     * F-09: chafa emits runs shorter than this as bare repeated bytes —
+     * `!2q` costs five bytes against `qq` for two, so repetition is both
+     * cheaper and free of any decoder that mis-handles short counts.
+     */
+    private const RLE_LITERAL_LIMIT = 4;
+
+    /**
      * @param int $cellWidth  Pixel width of a terminal cell — the render() cell
      *                        dimensions are multiplied by this so a sixel poster
      *                        fills its cell box (not one device pixel per cell).
@@ -838,12 +852,37 @@ final class SixelRenderer implements Renderer
 
     /**
      * One sixel data byte = `bits + 63` (printable range 63-126), run-length
-     * encoded as `!count byte` when a column run repeats.
+     * encoded per chafa's `format_schar_reps`
+     * (chafa/internal/chafa-sixel-renderer.c:218-251): counts of 4..254 ride
+     * as `!count byte`, runs of 255 or more split into repeated `!255`
+     * chunks plus remainder, and runs of 1..3 stay bare literals (F-09 —
+     * an uncapped `!900` is illegal SIXEL and corrupts the band on real
+     * decoders).
      */
     private function emitRle(int $bits, int $count): string
     {
         $char = chr(($bits & 0x3F) + 63);
 
-        return $count > 1 ? '!' . $count . $char : $char;
+        if ($count < self::RLE_LITERAL_LIMIT) {
+            return str_repeat($char, $count);
+        }
+
+        $out = '';
+        while ($count >= self::RLE_MAX_COUNT) {
+            $out .= '!' . self::RLE_MAX_COUNT . $char;
+            $count -= self::RLE_MAX_COUNT;
+        }
+
+        // The loop can only leave 0..254 behind; 0 means the chunks already
+        // covered the whole run (length 255, 510, 765, …).
+        if ($count === 0) {
+            return $out;
+        }
+
+        if ($count < self::RLE_LITERAL_LIMIT) {
+            return $out . str_repeat($char, $count);
+        }
+
+        return $out . '!' . $count . $char;
     }
 }
