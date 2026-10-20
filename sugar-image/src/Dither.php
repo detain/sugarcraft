@@ -8,8 +8,8 @@ namespace SugarCraft\Image;
  * Error-diffusion dithering algorithm selection for Sixel rendering.
  *
  * - `None` — nearest-color quantization, no dithering (fastest, flat fills)
- * - `FloydSteinberg` — classic FS: diffuses ¾ of error to 3 neighbors
- * - `Stucki` — Stucki variant: diffuses to 12 neighbors, slightly sharper
+ * - `FloydSteinberg` — classic FS: diffuses the whole error to 4 neighbors
+ * - `Stucki` — Stucki variant: diffuses the whole error to 12 neighbors, slightly sharper
  * - `Atkinson` — Apple Atkinson: diffuses only ¾ of error (more contrast)
  *
  * Default: `FloydSteinberg` — best quality/speed trade-off, matches xterm.

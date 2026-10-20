@@ -651,14 +651,14 @@ final class SixelRenderer implements Renderer
      *
      * Coefficient layouts (current pixel marked ·):
      *
-     * Floyd–Steinberg (propagates ¾ of error):
+     * Floyd–Steinberg (propagates the whole error):
      *    ·  7/16
-     *  3/16 5/16 7/16
+     *  3/16 5/16 1/16
      *
-     * Stucki (propagates to 12 neighbors, slightly sharper):
-     *    ·  8/42  4/42
-     *  2/42 8/42 4/42 2/42
-     *  1/42 2/42 4/42 2/42 1/42
+     * Stucki (propagates the whole error to 12 neighbors, slightly sharper):
+     *            ·     8/42  4/42
+     *  2/42  4/42  8/42  4/42  2/42
+     *  1/42  2/42  4/42  2/42  1/42
      *
      * Atkinson (Apple; propagates ¾, more contrast/lighter result):
      *    ·  1/8  1/8
@@ -686,11 +686,11 @@ final class SixelRenderer implements Renderer
             Dither::Stucki => [
                 [$x + 1, $y,     8.0 / 42.0],
                 [$x + 2, $y,     4.0 / 42.0],
-                [$x - 2, $y + 1, 1.0 / 42.0],
-                [$x - 1, $y + 1, 2.0 / 42.0],
-                [$x,     $y + 1, 4.0 / 42.0],
-                [$x + 1, $y + 1, 2.0 / 42.0],
-                [$x + 2, $y + 1, 1.0 / 42.0],
+                [$x - 2, $y + 1, 2.0 / 42.0],
+                [$x - 1, $y + 1, 4.0 / 42.0],
+                [$x,     $y + 1, 8.0 / 42.0],
+                [$x + 1, $y + 1, 4.0 / 42.0],
+                [$x + 2, $y + 1, 2.0 / 42.0],
                 [$x - 2, $y + 2, 1.0 / 42.0],
                 [$x - 1, $y + 2, 2.0 / 42.0],
                 [$x,     $y + 2, 4.0 / 42.0],
