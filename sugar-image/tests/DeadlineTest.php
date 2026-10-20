@@ -77,4 +77,71 @@ final class DeadlineTest extends TestCase
         usleep(20_000);
         $this->assertSame(0, $deadline->remaining(), 'remaining() must never go negative');
     }
+
+    /**
+     * D-06: the deterministic 400 µs-before-zero pin (no sleeps).
+     *
+     * The class seam is the private float targetNs the constructor already
+     * takes verbatim; reflection writes it so the residual is a chosen
+     * fraction of a millisecond. Today's contradiction — a live budget
+     * reading as expired — is exactly what this pins dead: 0 whole ms left
+     * AND not expired must hold at the same instant.
+     */
+    public function testFractionalMillisecondIsZeroWholeMsButNotExpired(): void
+    {
+        $deadline = Deadline::in(0);
+        $this->targetInTheFuture($deadline, 400_000.0); // 0.4 ms
+
+        $this->assertSame(0, $deadline->remainingMs(), 'floor must not inflate 0.4 ms to 1');
+        $this->assertFalse($deadline->isExpired(), '0.4 ms of live budget is NOT expired');
+    }
+
+    /**
+     * D-06: floor never rounds up — the sleeping-caller half of the split.
+     */
+    public function testRemainingMsFloorsInsteadOfRounding(): void
+    {
+        $deadline = Deadline::in(0);
+        $this->targetInTheFuture($deadline, 1_600_000.0); // 1.6 ms
+
+        $this->assertSame(1, $deadline->remainingMs(), 'round() would answer 2 and oversleep past the target');
+        $this->assertFalse($deadline->isExpired());
+    }
+
+    /**
+     * D-06: the deprecated alias delegates — remaining() and remainingMs()
+     * can no longer disagree at any reading.
+     */
+    public function testRemainingDelegatesToRemainingMs(): void
+    {
+        $deadline = Deadline::in(0);
+        $this->targetInTheFuture($deadline, 1_600_000.0); // 1.6 ms
+
+        $this->assertSame($deadline->remainingMs(), $deadline->remaining());
+        $this->assertSame(1, $deadline->remaining());
+    }
+
+    /**
+     * D-06: expiry judged on the ns clock — a target even 400 µs in the
+     * past is expired, and exactly-at-target is expired (nothing left).
+     */
+    public function testIsExpiredIsExactAtAndPastTheTarget(): void
+    {
+        $deadline = Deadline::in(0);
+        $this->targetInTheFuture($deadline, -400_000.0); // 0.4 ms ago
+
+        $this->assertTrue($deadline->isExpired());
+        $this->assertSame(0, $deadline->remainingMs());
+        $this->assertSame(0, $deadline->remaining());
+    }
+
+    /**
+     * D-06 seam: write the private ns target relative to "now" without a
+     * sleep, so edge readings are deterministic.
+     */
+    private function targetInTheFuture(Deadline $deadline, float $ns): void
+    {
+        $property = new \ReflectionProperty(Deadline::class, 'targetNs');
+        $property->setValue($deadline, hrtime(true) + $ns);
+    }
 }

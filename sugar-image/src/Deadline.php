@@ -32,17 +32,49 @@ final class Deadline
         return new self(hrtime(true) + $ms * 1_000_000.0);
     }
 
-    /** Remaining milliseconds, rounded, floored at 0. */
-    public function remaining(): int
+    /**
+     * D-06: Remaining whole milliseconds, floored, clamped at 0.
+     *
+     * Floor, never round: a caller sleeping `remainingMs() * 1000`
+     * microseconds stays inside the budget instead of overshooting the
+     * target by up to half a millisecond, which is what the old round()
+     * tail let `stream_select` waiters do. A zero here means "no WHOLE
+     * millisecond left" — not "expired"; a target still 400 µs away reads
+     * 0 and is very much alive. {@see isExpired()} answers the exact
+     * question on the nanosecond clock itself.
+     */
+    public function remainingMs(): int
     {
-        $r = $this->targetNs - hrtime(true);
+        $r = ($this->targetNs - hrtime(true)) / 1_000_000;
 
-        return $r <= 0 ? 0 : (int) round($r / 1_000_000);
+        return $r <= 0 ? 0 : (int) $r;
     }
 
-    /** Whether the budget has run out (nothing whole or partial left). */
+    /**
+     * D-06: Whether the budget has run out, judged on the raw ns clock.
+     *
+     * Exact `<= 0`: the target instant having been reached is expiry (zero
+     * budget left is nothing left to spend). Never derived through a
+     * rounded or floored ms reading — fractional budget still live must
+     * read as not-expired even while remainingMs() reads 0.
+     */
     public function isExpired(): bool
     {
-        return $this->remaining() === 0;
+        return $this->targetNs - hrtime(true) <= 0;
+    }
+
+    /**
+     * D-06: @deprecated alias for {@see remainingMs()}.
+     *
+     * This method used to round, so a 0.4 ms live budget read as 0/expired
+     * and a `remaining() * 1000`-microsecond sleep could run up to 0.5 ms
+     * past the target. It now delegates to the floored reading; existing
+     * callers (`Detect`'s stdin pumps) keep working and land on the safe
+     * side of the boundary. Prefer {@see remainingMs()} for sleeping and
+     * {@see isExpired()} for judging.
+     */
+    public function remaining(): int
+    {
+        return $this->remainingMs();
     }
 }
