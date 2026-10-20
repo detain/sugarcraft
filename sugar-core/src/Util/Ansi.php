@@ -1058,10 +1058,15 @@ final class Ansi
      *
      * Mirrors charmbracelet/x/ansi. Iterm2Renderer.
      *
-     * @param string $base64Png  Base64-encoded PNG bytes
+     * F-13: the payload format is signalled by the `type` argument —
+     * absent means PNG (the protocol default), `type=tiff` selects the
+     * uncompressed-TIFF container emitted by
+     * {@see \SugarCraft\Image\Codec\TiffUncompressed}.
+     *
+     * @param string $base64Png  Base64-encoded image bytes (PNG, or TIFF when `type` says so)
      * @param array  $opts       Optional keys: width, height (cell count or
      *                           Npx/Npt), preserveAspectRatio (bool),
-     *                           inline (bool, default true)
+     *                           inline (bool, default true), type ('tiff')
      */
     public static function iterm2InlineImage(string $base64Png, array $opts = []): string
     {
@@ -1079,6 +1084,11 @@ final class Ansi
         }
         if (isset($opts['preserveAspectRatio'])) {
             $args[] = 'preserveAspectRatio=' . ($opts['preserveAspectRatio'] ? '1' : '0');
+        }
+        // F-13: only emitted when explicitly set, so PNG transmissions (the
+        // absent case) keep their historical byte-exact envelope.
+        if (isset($opts['type'])) {
+            $args[] = 'type=' . $opts['type'];
         }
         $args[] = 'inline=1';
 
