@@ -1,0 +1,11 @@
+{
+    "title": "CandyImage — SugarCraft",
+    "description": "CandyImage: Terminal image viewer CLI — the chafa-independent front end of sugar-image.",
+    "ogTitle": "CandyImage — SugarCraft",
+    "ogDescription": "File in, best-protocol image out: auto/sixel/kitty/iterm2/half/quarter/ascii formats, cell sizing, and --dump-detect.",
+    "emoji": "🖼",
+    "displayName": "CandyImage",
+    "tagline": "Terminal image viewer CLI (F-18)",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">chafa CLI surface idea (<a href=\"https://github.com/hpjajak/chafa\" style=\"color: inherit;\">hpjajak/chafa</a>), not a port</span>\n          <span class=\"tag-chip\">image</span>\n          <span class=\"tag-chip\">sixel</span>\n          <span class=\"tag-chip\">kitty</span>\n          <span class=\"tag-chip\">iterm2</span>\n          <span class=\"tag-chip\">cli</span>"
+}

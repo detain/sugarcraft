@@ -125,6 +125,19 @@ though its kind is a library — it is a face of the app, not a primitive you
 compose with. A package that is useful on its own still needs a name of its
 own under the role rule above.
 
+### Ruling: namespace collision — `candy-image` (recorded 2026-10-21, F-18)
+
+The mechanical suffix rule (`candy-<sub>` → `SugarCraft\<PascalSub>\`) would
+give `candy-image` the namespace `SugarCraft\Image\` — already owned by the
+`sugar-image` library it fronts. A package must not share a namespace with
+another package, so the app takes `SugarCraft\CandyImage\` (composer
+`sugarcraft/candy-image`, dir `candy-image/`, class prefix `CandyImage`).
+The prefix is carried only to dodge the collision; the slug stays two words.
+
+| App | Mechanical ns | Collision owner | Ruling |
+|---|---|---|---|
+| **CandyImage** (`candy-image/`, `sugarcraft/candy-image`) | `SugarCraft\Image\` | `sugar-image/` (library) | Use `SugarCraft\CandyImage\`; the app and its library must not share one namespace. |
+
 ### Historical ruling: `candy-top` (recorded 2026-10-08, superseded by the 2026-10 law)
 
 Before the two-prefix law, `candy-top` was a *named exception*: the old cheat

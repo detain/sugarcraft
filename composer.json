@@ -51,6 +51,7 @@
         "sugarcraft/candy-codeshot": "dev-master",
         "sugarcraft/sugar-fuzzy": "dev-master",
         "sugarcraft/candy-gifview": "dev-master",
+        "sugarcraft/candy-image": "dev-master",
         "sugarcraft/sugar-quickpick": "dev-master",
         "sugarcraft/sugar-cli": "dev-master",
         "sugarcraft/sugar-treelist": "dev-master",
@@ -168,6 +169,13 @@
         {
             "type": "path",
             "url": "candy-gifview",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-image",
             "options": {
                 "symlink": true
             }

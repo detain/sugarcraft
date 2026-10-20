@@ -128,6 +128,9 @@ flag_management:
     - name: candy-gifview
       paths: ["candy-gifview/src/**"]
       carryforward: true
+    - name: candy-image
+      paths: ["candy-image/src/**"]
+      carryforward: true
     - name: sugar-video
       paths: ["sugar-video/src/**"]
       carryforward: true
@@ -409,6 +412,12 @@ component_management:
         - "candy-gifview/src/**"
       flag_regexes:
         - "^candy-gifview$"
+    - component_id: candy-image
+      name: candy-image
+      paths:
+        - "candy-image/src/**"
+      flag_regexes:
+        - "^candy-image$"
     - component_id: sugar-video
       name: sugar-video
       paths:
