@@ -351,3 +351,42 @@ kept as design rationale for what shipped._
   renderer scales NOISE magnitude by `NOISE_BIAS_SCALE` (0.1) mirroring
   chafa's `intensity * 0.1f` — unlike ORDERED, it never takes the depth
   ladder (chafa-canvas.c applies the ladder to ORDERED only).
+- **[pattern:pen-delta-sgr]** `Support\OutputOptimizer` (A-01) is the SGR
+  attribute-reuse idiom from chafa's `emit_attributes_truecolor`
+  (chafa-canvas-printer.c:139-215): pen state is keyed on the six SGR channels
+  the emitters actually use, and `cell()` prints only the sequences for
+  channels that CHANGE — an unchanged pen costs zero control bytes. Blanks
+  never waste a sequence: `blank()` copies the previous cell's foreground
+  (chafa symbol-table behavior), so a run of spaces behind a colour change
+  stays byte-free. Repeat glyph runs are coalesced and flushed BEFORE any
+  other byte (SGR, attribute toggle, row end) so interleaving with pen traffic
+  stays byte-exact. `finishRow()` closes with a scoped restore of the caller's
+  ENTRY style (foreground/background captured at construction) rather than a
+  blunt `ESC[0m`, so an app that launched the mosaic blinking/underlined keeps
+  its rendition. Byte-identical to the pre-A-02 inline appends by design — do
+  not "simplify" the delta into a per-cell reset.
+- **[gotcha:kernel-neighborhood-sum]** A diffusion kernel is only correct if
+  every source error weight lands on exactly one target offset: audit by
+  ROW-NEIGHBORHOOD SUM, not by eye. The shipped Stucki table had its `y+1` row
+  literally duplicating the `y+2` row, so the kernel conserved only 32 of 42
+  error units — 24% of the diffused error vanished silently and no render
+  snapshot caught it (C-01). `DitherKernelTest` now pins conservation per
+  kernel (Floyd–Steinberg 16/16, Stucki 42/42, Atkinson 6/8 halved) plus the
+  exact offset lists. Two laws when fixing a found defect: (1) grep for SECOND
+  copies of the table before editing — the "identical" charts-lib kernel was a
+  phantom (one code path already delegated to sugar-image, zero tests);
+  (2) an all-green suite does NOT prove a kernel — only the sum invariant does.
+- **[gotcha:dither-bias-architecture]** Ordered/blue-noise dithering here is
+  an ADDITIVE PRE-QUANTISATION BIAS folded into `loadBase()` (bias added to
+  the sample before palette projection), NOT a matrix-threshold dither like
+  chafa's. Consequence for reviewers: do not "port" chafa's threshold
+  semantics onto it; the bias form was chosen so the existing color distance
+  projection stays the sole quantiser (PC-8). The bias magnitude rides the
+  depth ladder for ORDERED only (chafa-canvas.c applies the ladder to ORDERED
+  noise, never to NOISE/blue-noise — see the provenance entry above).
+- **[convention:rec709-saturation]** Saturation/luma mixing uses ITU-R
+  Rec.709 coefficients (0.2126/0.7152/0.0722) deliberately. Chafa's
+  `boost_saturation_rgb` carries a 0.144 blue coefficient — a typo (its own
+  row sums to 1.0 only with 0.0722). We fixed upstream; DO NOT copy the 0.144
+  value back in the name of byte parity (B-15 / NTC-1 ruling: adopt upstream
+  technique, refuse upstream typos).
