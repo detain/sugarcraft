@@ -15,6 +15,7 @@ use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Image\Renderer\QuarterBlockRenderer;
 use SugarCraft\Image\Renderer\Renderer;
 use SugarCraft\Image\Renderer\SixelRenderer;
+use SugarCraft\Image\Renderer\SymbolMapRenderer;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Scale;
 use SugarCraft\Image\TmuxPassthrough;
@@ -299,6 +300,26 @@ final class Mosaic
     }
 
     /**
+     * Force the coverage-class symbol-map renderer (F-04/F-05).
+     *
+     * Unicode braille/sextant/octant/block glyphs plus Hamming-distance
+     * candidate search — pure inline SGR text, so the backend is always
+     * available. It does not join the auto() ladder (that would change
+     * default-path output); the font-coverage probe slot is a recorded
+     * seam (S7.1).
+     */
+    public static function symbolMap(): self
+    {
+        return new self(
+            new SymbolMapRenderer(),
+            Capability::universal(),
+            null,
+            null,
+            null,
+        );
+    }
+
+    /**
      * Return a new Mosaic with a different dither algorithm.
      * Only meaningful when the current renderer is a SixelRenderer (also
      * through a tmux passthrough envelope); returns the same instance
@@ -381,7 +402,7 @@ final class Mosaic
     }
 
     /**
-     * Stable backend name: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'quarterblock' | 'ascii' | 'chafa'.
+     * Stable backend name: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'quarterblock' | 'ascii' | 'chafa' | 'symbols'.
      * A-06: this slot names the PROTOCOL only. The three AsciiRenderer
      * colour arms all report 'ascii' here — pair with {@see modeDetail()}
      * wherever the encoded bytes must be told apart.
@@ -435,7 +456,7 @@ final class Mosaic
      */
     public static function supportedProtocols(): array
     {
-        return ['kitty', 'sixel', 'iterm2', 'halfblock', 'quarterblock', 'ascii', 'chafa'];
+        return ['kitty', 'sixel', 'iterm2', 'halfblock', 'quarterblock', 'ascii', 'chafa', 'symbols'];
     }
 
     /**
@@ -774,15 +795,15 @@ final class Mosaic
      * Accepts the vocabulary terminals/apps configure image output with —
      * `auto`, `sixel`, `kitty`, `iterm2`, `halfblock` (aliases `half`,
      * `ansi`), `quarterblock` (alias `quarter`), `ascii`, `ansi16`, `ansi256`,
-     * `truecolor`, `chafa` — case-insensitively, whitespace-trimmed.
+     * `truecolor`, `chafa`, `symbols` — case-insensitively, whitespace-trimmed.
      * `ansi16`/`ansi256`/`truecolor` select the ASCII ramp renderer tinted with
      * the matching colour mode, mirroring how the client config maps them.
      * A-06: those are INPUT spellings of the 'ascii' protocol's
      * colour arms — {@see modeDetail()} tells them apart; {@see protocol()}
      * answers 'ascii' for all of them.
      *
-     * {@see supportedProtocols()} answers the seven backend protocol slots —
-     * the count-7 roster pin in MosaicTest polices THAT roster, not this
+     * {@see supportedProtocols()} answers the eight backend protocol slots —
+     * the count-8 roster pin in MosaicTest polices THAT roster, not this
      * input vocabulary: alias spellings fold into halfblock and
      * quarterblock, and the colour-mode arms fold into 'ascii'.
      *
@@ -803,6 +824,7 @@ final class Mosaic
             'ansi256'      => self::ascii(AsciiColorMode::Ansi256),
             'truecolor'    => self::ascii(AsciiColorMode::TrueColor),
             'chafa'        => self::chafa(),
+            'symbols'      => self::symbolMap(),
             default        => null,
         };
     }

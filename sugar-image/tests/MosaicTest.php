@@ -202,6 +202,7 @@ final class MosaicTest extends TestCase
         $this->assertSame('quarterblock', Mosaic::quarterBlock()->protocol());
         $this->assertSame('chafa', Mosaic::chafa()->protocol());
         $this->assertSame('ascii', Mosaic::ascii()->protocol());
+        $this->assertSame('symbols', Mosaic::symbolMap()->protocol());
     }
 
     public function testSupportedProtocols(): void
@@ -214,7 +215,8 @@ final class MosaicTest extends TestCase
         $this->assertContains('quarterblock', $protocols);
         $this->assertContains('ascii', $protocols);
         $this->assertContains('chafa', $protocols);
-        $this->assertCount(7, $protocols);
+        $this->assertContains('symbols', $protocols);
+        $this->assertCount(8, $protocols);
     }
 
     public function testKittyFactoryMirrorsForceFactories(): void

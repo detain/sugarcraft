@@ -79,6 +79,7 @@ final class MosaicModeStringTest extends TestCase
             'ansi256'      => ['ansi256', AsciiRenderer::class],
             'truecolor'    => ['truecolor', AsciiRenderer::class],
             'chafa'        => ['chafa', ChafaRenderer::class],
+            'symbols'      => ['symbols', \SugarCraft\Image\Renderer\SymbolMapRenderer::class],
         ];
     }
 

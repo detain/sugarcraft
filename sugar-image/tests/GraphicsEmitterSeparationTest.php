@@ -25,7 +25,7 @@ final class GraphicsEmitterSeparationTest extends TestCase
      * The character-mosaic emitters that legitimately stream through the optimizer (A-01/A-13/A-14).
      * A new mosaic renderer must be added here deliberately — the completeness arm below reddens otherwise.
      */
-    private const MOSAIC_EMITTERS = ['AsciiRenderer.php', 'HalfBlockRenderer.php', 'QuarterBlockRenderer.php'];
+    private const MOSAIC_EMITTERS = ['AsciiRenderer.php', 'HalfBlockRenderer.php', 'QuarterBlockRenderer.php', 'SymbolMapRenderer.php'];
 
     /**
      * Every other file in src/Renderer must carry zero optimizer references: the four protocol/bridge

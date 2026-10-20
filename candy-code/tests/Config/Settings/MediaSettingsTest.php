@@ -150,7 +150,7 @@ final class MediaSettingsTest extends TestCase
             self::assertNotNull(Mosaic::fromModeString($word), "schema word '{$word}' is not a mosaic mode word");
         }
 
-        foreach (['sixel', 'kitty', 'iterm2', 'halfblock', 'half', 'ansi', 'quarterblock', 'quarter', 'ascii', 'ansi256', 'truecolor', 'chafa'] as $word) {
+        foreach (['sixel', 'kitty', 'iterm2', 'halfblock', 'half', 'ansi', 'quarterblock', 'quarter', 'ascii', 'ansi256', 'truecolor', 'chafa', 'symbols'] as $word) {
             self::assertContains($word, $values, "mosaic accepts '{$word}' but the schema does not");
         }
     }

@@ -61,6 +61,7 @@ final class MediaSettings implements SettingDefinitionSet
         'ansi256',
         'truecolor',
         'chafa',
+        'symbols',
     ];
 
     public static function category(): SettingCategory

@@ -61,7 +61,7 @@ registry rows:
 | `sd.defaultModel` | Fills the form's model slot when the server reports none you picked; unset means "whatever the server has loaded". |
 | `sd.presets` | Named parameter bundles (see below). |
 | `sd.savePattern` | The artifact filename template — bracketed tokens taken from the server's parameters (seed, steps, cfg, sampler, model, dimensions…), never from your prompt text. |
-| `ui.imageRenderMode` | Which terminal graphics protocol renders previews: `auto` or one of the words the mosaic ladder knows (kitty, iterm2, sixel, halfblock, quarterblock, ascii, chafa and their aliases). |
+| `ui.imageRenderMode` | Which terminal graphics protocol renders previews: `auto` or one of the words the mosaic ladder knows (kitty, iterm2, sixel, halfblock, quarterblock, ascii, chafa, symbols and their aliases). |
 | `ui.mediaDisplayOverrides` | Per-field size caps and fallbacks for the form, keyed by element id (see below). |
 
 Beyond the schema, three advanced keys are read raw from the provider-config
