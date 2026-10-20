@@ -171,13 +171,23 @@ final class ThinkingBlocksProductionFoldTest extends TestCase
             'the generated worker restores blocks when the row carries them and rehydrates [] for legacy rows');
     }
 
-    public function testTheTypedRowRebuildStatesTheBlocksLossInsteadOfHidingIt(): void
+    /**
+     * CTX-1: the disclosed loss is closed. The typed-row rebuild in
+     * toTypedMessages used to hand `[]` to the blocks argument while naming
+     * the loss in a comment; the root Message now carries a $thinkingBlocks
+     * column (persisted only-when-set, legacy rows read back empty), so the
+     * rebuild passes the row's own blocks — and the silent-default needle
+     * stays refused the other way: an explicit argument, never a dropped one.
+     */
+    public function testTheTypedRowRebuildCarriesTheBlocksOnRebuild(): void
     {
         $source = (string) file_get_contents(__DIR__ . '/../../src/Backend/EngineBackend.php');
 
         self::assertSame(0, substr_count($source, '$assistant->reasoning);'),
             'no AssistantMessage rebuild may leave the blocks argument to its default silently');
-        self::assertSame(1, substr_count($source, '$assistant->reasoning, null, false, []);'));
+        self::assertSame(1, substr_count($source, '$assistant->reasoning, null, false, $assistant->thinkingBlocks);'));
+        self::assertSame(0, substr_count($source, '$assistant->reasoning, null, false, []);'),
+            'the pre-column empty-array rebuild is gone, not merely out-numbered');
     }
 
     // -------------------------------------------------------------------------

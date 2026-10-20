@@ -354,6 +354,7 @@ final class UsageWiringTest extends TestCase
             'attachFile' => $base->attachFile('/tmp/x'),
             'attachImage' => $base->attachImage('/tmp/x.png'),
             'withToolCalls' => $base->withToolCalls([new \SugarCraft\Code\ToolCall('t', [], 'i')]),
+            'withThinkingBlocks' => $base->withThinkingBlocks([['type' => 'thinking', 'signature' => 's']]),
             'withToolResults' => $base->withToolResults([new \SugarCraft\Code\ToolResult('i', 'r')]),
             'withReasoning' => $base->withReasoning('because'),
             'withImage' => $base->withImage('bytes', 'kitty'),

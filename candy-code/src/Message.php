@@ -278,6 +278,24 @@ final class Message implements \JsonSerializable
          */
         public readonly bool $error = false,
         /**
+         * CTX-1: the SIGNED thinking blocks of an Anthropic extended-thinking
+         * reply — the structured arrays a provider's `thinkingBlocks()` hands
+         * back (type/signature/data or the provider's own shape), never plain
+         * reasoning text. Anthropic rejects a replay that DROPS a signed block
+         * from a turn the model already took, so a row resumed, re-served or
+         * forked after a restart must carry them verbatim: this column is why
+         * `EngineBackend::toTypedMessages()` used to reconstruct with `[]` and
+         * state the loss in a comment. Like every additive column here it
+         * persists through {@see jsonSerialize()} only-when-set — a row
+         * without blocks serialises byte-for-byte as before, so old checkpoint
+         * blobs keep their hashes — never travels through {@see toWire()},
+         * and a legacy row that predates the column reads back `[]`, exactly
+         * as every pre-column row does.
+         *
+         * @var list<array<string, mixed>>
+         */
+        public readonly array $thinkingBlocks = [],
+        /**
          * The row-identity token {@see rowKey()} returns. Never pass one:
          * null mints a fresh token, which is what a new row is, and
          * {@see mutate()} passes the original's on so a wither's copy stays
@@ -767,6 +785,20 @@ final class Message implements \JsonSerializable
     }
 
     /**
+     * CTX-1: carry the signed thinking blocks of the provider reply this row
+     * reconstructs, so a later resume/replay hands Anthropic its blocks back.
+     *
+     * @param list<array<string, mixed>> $thinkingBlocks
+     */
+    public function withThinkingBlocks(array $thinkingBlocks): self
+    {
+        return $this->mutate(['thinkingBlocks' => array_values(array_filter(
+            $thinkingBlocks,
+            static fn(mixed $block): bool => \is_array($block),
+        ))]);
+    }
+
+    /**
      * Mark (or clear, via false) this row as a failure the renderer must
      * paint as one — see $error's docblock. Implies nothing about $uiOnly:
      * every producer that flags an error today also marks it uiOnly, but
@@ -1004,6 +1036,7 @@ final class Message implements \JsonSerializable
             'turnTranscript' => $this->turnTranscript,
             'contextLedger' => $this->contextLedger,
             'error' => $this->error,
+            'thinkingBlocks' => $this->thinkingBlocks,
             'rowKey' => $this->rowKey,
         ], $changes));
     }
@@ -1138,6 +1171,7 @@ final class Message implements \JsonSerializable
             // pre-flag transcript holds - serialises byte-for-byte as before.
             ...($this->uiOnly ? ['uiOnly' => true] : []),
             ...($this->error ? ['error' => true] : []),
+            ...($this->thinkingBlocks !== [] ? ['thinkingBlocks' => $this->thinkingBlocks] : []),
             ...($this->pendingToolName !== null ? ['pendingToolName' => $this->pendingToolName] : []),
             // Identity (1.B-1) on the same only-when-set rule: an id-less row
             // encodes exactly as it did before, so the checkpoint blobs it
@@ -1253,6 +1287,13 @@ final class Message implements \JsonSerializable
             pendingToolName: $string($row['pendingToolName'] ?? null),
             uiOnly: ($row['uiOnly'] ?? false) === true,
             error: ($row['error'] ?? false) === true,
+            // CTX-1: tolerant like every additive column — a row written
+            // before it existed, or a hostile blob whose value is not a
+            // list, reads back the no-blocks default, never a crash.
+            thinkingBlocks: array_values(array_filter(
+                \is_array($row['thinkingBlocks'] ?? null) ? $row['thinkingBlocks'] : [],
+                static fn(mixed $block): bool => \is_array($block),
+            )),
             loopGuardStoppedBy: $string($row['loopGuardStoppedBy'] ?? null),
             id: ($string($row['id'] ?? null) ?? '') === '' ? null : $row['id'],
             ref: \is_int($row['ref'] ?? null) && $row['ref'] >= 1 ? $row['ref'] : null,

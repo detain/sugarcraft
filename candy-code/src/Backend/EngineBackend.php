@@ -2687,6 +2687,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     }
                 }
                 $turnRows[] = Message::assistant($row->content(), reasoning: $row->reasoning())
+                    // CTX-1: the step row keeps the signed blocks of the
+                    // reply it reconstructs, so a later resume replays the
+                    // turn Anthropic actually took.
+                    ->withThinkingBlocks($row->thinkingBlocks())
                     ->withToolCalls($calls)
                     ->withStepId($stepId)
                     ->withUserVisible(false);
@@ -2714,6 +2718,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // survives back to Chat/Renderer. withImage() does the same for an
         // image-bearing tool result (W1.G2 reachability fix).
         return Message::assistant($content, reasoning: $lastAssistant?->reasoning())
+            // CTX-1: the reply row carries the LAST assistant turn's signed
+            // blocks (the reasoning seam's companion — same $lastAssistant,
+            // same reason: history must replay what the model said).
+            ->withThinkingBlocks($lastAssistant?->thinkingBlocks() ?? [])
             ->withImage($lastImageBytes, $lastImageProtocol)
             ->withUsage(Usage::sum($stepUsages))
             ->withLengthStopped($lengthStopped)
@@ -5905,11 +5913,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             }
 
             if ($assistant !== null) {
-                // CTX-1: the untyped root Message carries no thinking-block
-                // column (weld follow-up: persist them on the session row),
-                // so this reconstruction is honestly empty - state it in the
-                // call rather than let two more defaults hide the loss.
-                $out[] = new AssistantMessage($assistant->content, $calls === [] ? null : $calls, $assistant->reasoning, null, false, []);
+                // CTX-1: the root Message carries the signed thinking blocks
+                // on its $thinkingBlocks column (persisted with the row), so
+                // the reconstruction hands Anthropic its blocks back instead
+                // of the empty array the pre-column code had to state.
+                $out[] = new AssistantMessage($assistant->content, $calls === [] ? null : $calls, $assistant->reasoning, null, false, $assistant->thinkingBlocks);
             }
             array_push($out, ...$answers);
         }
