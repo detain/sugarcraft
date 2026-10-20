@@ -156,13 +156,13 @@ jobs:
           composer install --prefer-dist --no-interaction --no-progress
           CANDY_CODE_PHAR="${GITHUB_WORKSPACE}/dist/candy-code.phar" vendor/bin/phpunit --no-coverage --filter PharCompatTest
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: candy-code-phar-${{ steps.tag.outputs.tag }}
-          path: |
-            dist/candy-code.phar
-            dist/candy-code.phar.sha256
-
+      # Deliberately NO upload-artifact step: nothing consumes a run artifact
+      # (single job, no needs:, and the Publish step below ships
+      # dist/candy-code.phar and its .sha256 directly as release assets), and
+      # deriving an artifact name from the tag carries the namespace '/' that
+      # upload-artifact refuses — run 39379594999 died on exactly that. If a
+      # future job ever needs the archive, add a sanitized name here
+      # (steps.tag output stripped of the `candy-code/` prefix), never the raw tag.
       - name: Publish GitHub release
         run: |
           set -euo pipefail
