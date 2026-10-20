@@ -8,12 +8,15 @@ namespace SugarCraft\Image;
  * Monotonic deadline tracker for I/O timeout management.
  *
  * The budget is spoken in milliseconds and the clock ({@see hrtime()}) runs
- * in nanoseconds. The ms↔ns seam lives in exactly these two methods, so a
- * caller feeding {@see remaining()} to stream_select as `$remaining * 1000`
- * microseconds waits real milliseconds — never the 1000x-short window a
- * microsecond-worth-of-a-nanosecond-budget used to arm (lane p2, N1: the
- * multi-chunk terminal-probe replies of Mosaic::auto() truncated after about
- * a millisecond of inter-chunk gap, silently degrading capability detection).
+ * in nanoseconds. The ms↔ns seam lives in {@see in()} (arming: ms widened to
+ * ns) and {@see remainingMs()} (reading: ns narrowed to whole ms, floored),
+ * with {@see isExpired()} judging on the raw ns clock; {@see remaining()} is
+ * the deprecated alias of remainingMs(). So a caller feeding remainingMs() to
+ * stream_select as `$ms * 1000` microseconds waits real milliseconds — never
+ * the 1000x-short window a microsecond-worth-of-a-nanosecond-budget used to
+ * arm (lane p2, N1: the multi-chunk terminal-probe replies of Mosaic::auto()
+ * truncated after about a millisecond of inter-chunk gap, silently degrading
+ * capability detection).
  */
 final class Deadline
 {
