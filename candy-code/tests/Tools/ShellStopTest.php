@@ -133,4 +133,21 @@ final class ShellStopTest extends TestCase
         self::assertSame([37], $attr($out));
         self::assertSame([38], $attr($stop));
     }
+
+    public function testAConfirmedStopOnTheDegradedPathDisclosesTheMissingGroup(): void
+    {
+        // SHL-1: `confirmed` on a host without setsid speaks only of the
+        // wrapper — the narration must say so on the degraded path and stay
+        // silent about it where the group really exists.
+        $paint = new \ReflectionMethod(ShellStop::class, 'paint');
+        $answer = ['wasRunning' => true, 'confirmed' => true, 'exitCode' => null, 'expired' => false];
+
+        $grouped = $paint->invoke(ShellStop::new(), 'sh-aaaaaaaa', $answer + ['grouped' => true]);
+        self::assertStringContainsString('is stopped (exit code unknown).', $grouped);
+        self::assertStringNotContainsString('setsid', $grouped, 'a host that had setsid is not made to apologise for it');
+
+        $degraded = $paint->invoke(ShellStop::new(), 'sh-aaaaaaaa', $answer + ['grouped' => false]);
+        self::assertStringContainsString('no setsid at spawn', $degraded);
+        self::assertStringContainsString('processes it started may still be running', $degraded);
+    }
 }

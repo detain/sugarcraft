@@ -192,4 +192,27 @@ final class ShellOutputTest extends TestCase
         $fresh->mergeSessionState([]);
         self::assertCount(1, $fresh->exportSessionState()[BackgroundShellRegistry::SESSION_STATE_KEY]);
     }
+
+    public function testThePaintedFinishNamesTheOutputCapWhenTheExitCodeSaysSo(): void
+    {
+        // SHL-1: the state word is where the model learns WHY a shell died
+        // at 153 — the note rides the read answer and the paint appends it.
+        $registry = $this->registry();
+        $tool = $this->tool($registry);
+        $started = $registry->start('exit 153', 'cap narration');
+        self::assertTrue($started['ok']);
+        $id = (string) $started['shell']['id'];
+        $this->settle($registry, $id);
+
+        $result = $tool->execute(['shell_id' => $id, 'cursor' => 0]);
+        self::assertFalse($result->isError());
+        self::assertStringContainsString('finished (exit 153) — output limit exceeded', $result->content());
+
+        $plain = $registry->start('exit 3', 'plain failure');
+        $plainId = (string) $plain['shell']['id'];
+        $this->settle($registry, $plainId);
+        $plainResult = $tool->execute(['shell_id' => $plainId, 'cursor' => 0]);
+        self::assertStringContainsString('finished (exit 3)', $plainResult->content());
+        self::assertStringNotContainsString('output limit exceeded', $plainResult->content());
+    }
 }

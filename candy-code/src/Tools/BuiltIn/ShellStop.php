@@ -26,6 +26,13 @@ use SugarCraft\Code\Tools\ToolResult;
  * the exit file landed or the leader stopped answering — and an unconfirmed
  * stop is narrated as unconfirmed, never as a kill.
  *
+ * THE GROUP PROMISE IS A `setsid` PROMISE (SHL-1). On a host without one the
+ * recorded pid never led a group, the ladder degrades to signalling the
+ * wrapper alone, and processes the command started may keep running. Rows
+ * carry that fact from spawn as `grouped`, and the confirmed answer says so
+ * out loud — `confirmed` on the degraded path means the wrapper is dead, and
+ * nothing more.
+ *
  * WRITE permission class, and this is the roster argument the review asks
  * for: ShellStop is a PROCESS MUTATION. It belongs on
  * {@see \SugarCraft\Code\Runtime::WRITE_CAPABLE_TOOL_NAMES} because a call
@@ -131,7 +138,7 @@ final readonly class ShellStop implements Tool, BuildsFromCatalog, TakesToolCall
     }
 
     /**
-     * @param array{wasRunning: bool, confirmed: bool, exitCode: ?int, expired: bool} $answer
+     * @param array{wasRunning: bool, confirmed: bool, grouped: bool, exitCode: ?int, expired: bool} $answer
      */
     private function paint(string $id, array $answer): string
     {
@@ -150,10 +157,11 @@ final readonly class ShellStop implements Tool, BuildsFromCatalog, TakesToolCall
         }
 
         return sprintf(
-            'shell %s %s%s.',
+            'shell %s %s%s%s.',
             $id,
             $answer['expired'] === true ? 'had been expired at the lifetime wall and is now' : 'is',
             $answer['exitCode'] !== null ? ' stopped (exit ' . $answer['exitCode'] . ')' : ' stopped (exit code unknown)',
+            $answer['grouped'] === true ? '' : ' — this host offered no setsid at spawn, so only the shell wrapper was signalled; processes it started may still be running',
         );
     }
 

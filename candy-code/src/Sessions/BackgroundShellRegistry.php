@@ -54,6 +54,16 @@ use SugarCraft\Code\Support\ProcessContainment;
  * by teardown, every signal is gated on members carrying the recorded pgid,
  * and the exposure is the same one every pid-caching killer accepts.
  *
+ * THE GROUP IS ONLY AS REAL AS `setsid` (SHL-1, honest half). Where no usable
+ * `setsid(1)` exists — macOS ships none with `-w`, Windows ships none at all —
+ * {@see ProcessContainment::spawnSpec()} hands back the plain string and the
+ * recorded pid is NOT a group leader: every group signal here degrades to the
+ * wrapper's own pid, and processes the command started outlive it. The row
+ * records that fact at spawn as `grouped` false; the status carries it, and
+ * {@see \SugarCraft\Code\Tools\BuiltIn\ShellStop} narrates a confirmed stop as
+ * per-pid-only when it is set — the same disclosure the synchronous
+ * containment path documents, spoken in the answer rather than hidden in it.
+ *
  * OUTPUT LANDS IN FILES, NOT PIPES. A background shell has no reader on the
  * parent side between calls, and keeping a pipe open across a later fork
  * hands the write end into every tool child — the fd-inheritance family the
@@ -64,6 +74,21 @@ use SugarCraft\Code\Support\ProcessContainment;
  * EXISTENCE-and-contents are the durable "settled" marker: no reader is
  * needed to learn that a shell finished, only to learn its code.
  *
+ * THE FILES ARE CAPPED AND SWEPT. An uncapped writer filled the filesystem
+ * inside the lifetime wall — `while :; do cat /dev/zero; done` needs minutes,
+ * not hours (SHL-1), which contradicted the synchronous path's 4 MiB spill
+ * doctrine. The wrapper therefore sets `ulimit -f` ({@see OUTPUT_LIMIT_BLOCKS},
+ * RLIMIT_FSIZE in the kernel's 512-byte blocks = 64 MiB per file), inherited by
+ * every child. A member writing past the cap dies of SIGXFSZ; the recorder
+ * outlives it (the recorder never writes to the capped sinks), so the exit file
+ * still lands and reads {@see OUTPUT_LIMIT_EXIT_CODE} = 128 + 25, which
+ * `ShellOutput` names as an output limit instead of leaving a bare number.
+ * The cap rides EVERY file the shell writes, not just the two sinks — a
+ * documented side effect, cheap against an unbounded loop. Corpses are swept:
+ * with the cap and the kernel leash below, shell files this launch no longer
+ * tracks are dead weight, and {@see start()} unlinks any whose row is gone and
+ * that have not changed for {@see CORPSE_RETENTION_SECONDS}.
+ *
  * LIFETIMES ARE BOUNDED. A shell may not outlive the max-lifetime wall
  * unnoticed: {@see status()}, {@see read()} and {@see stop()} enforce it
  * lazily (a still-live shell past the wall gets the TERM→grace→KILL ladder
@@ -71,7 +96,15 @@ use SugarCraft\Code\Support\ProcessContainment;
  * table — the same class of rule as `timeout` on the synchronous path, a
  * bound on the SHELL, never on a model request — so it is E646-clean.
  * {@see teardown()} is the hard guarantee: every live shell is killed and
- * every handle released.
+ * every handle released. The wall additionally does not depend on the launch
+ * staying alive: the wrapper runs the command under `timeout -s KILL` (probed
+ * at spawn, {@see buildWrapper()}) so even a `kill -9` of the PHP parent
+ * leaves the kernel enforcing the same bound. `-s KILL` is the deliberate
+ * spelling — a TERM first stage would target the group the exec'd timeout
+ * itself leads, so timeout would die by its own first rung before the
+ * escalation could fire and a TERM-proof member would survive the wall
+ * (measured; a KILL-only rung is one signal the kernel cannot be trapped
+ * out of, and it reaches the whole group).
  *
  * THE PAYLOAD CROSSES THE FORK AS PLAIN ARRAYS. Under the forked tool-child
  * path ({@see \SugarCraft\Code\Tools\CarriesSessionState}) a child's rows
@@ -116,6 +149,37 @@ final class BackgroundShellRegistry
 
     /** Hard ceiling on bytes one {@see read()} hands back, whatever the caller asked for. */
     public const MAX_READ_BYTES = 262144;
+
+    /**
+     * Per-file output cap handed to `ulimit -f`: RLIMIT_FSIZE counts in the
+     * kernel's 512-byte blocks, so 131072 blocks = 64 MiB. Generous enough
+     * that no build log a background shell plausibly produces is truncated,
+     * small enough that a runaway writer dies against the cap long before the
+     * disk does (SHL-1: the sync path spills at 4 MiB; an uncapped background
+     * writer filled the filesystem inside the lifetime wall).
+     */
+    public const OUTPUT_LIMIT_BLOCKS = 131072;
+
+    /** {@see OUTPUT_LIMIT_BLOCKS} expressed in bytes — the figure prose quotes. */
+    public const OUTPUT_LIMIT_BYTES = 67108864;
+
+    /**
+     * The exit code a capped shell settles with: 128 + SIGXFSZ (25), the same
+     * spelling on Linux and Darwin. The idiom mirrors the launch's other
+     * kernel-enforced budget (a wall-clock death reads 137 = 128 + SIGKILL).
+     * A command that chooses 153 for itself reads identically — the note's
+     * wording owns that ambiguity rather than hiding it.
+     */
+    public const OUTPUT_LIMIT_EXIT_CODE = 153;
+
+    /**
+     * Silence after which shell files with no row in the table are corpses:
+     * one day without a write, with no launch tracking the shell, outruns
+     * every legitimate reader, and the cap plus the kernel leash make the
+     * files dead weight rather than data worth hoarding ({@see start()}
+     * sweeps; retention is stated here so the sweep is a policy, not a hunch).
+     */
+    public const CORPSE_RETENTION_SECONDS = 86400;
 
     /** Poll cadence while the stop ladder waits for the group to go quiet. */
     private const STOP_POLL_SECONDS = 0.01;
@@ -207,19 +271,14 @@ final class BackgroundShellRegistry
         if ($failure !== null) {
             return ['ok' => false, 'error' => $failure];
         }
-
-        // The command runs inside `( ... )` so an `exit N` in the user's own
-        // text ends the SUBSHELL, never the wrapper — a bare append would let
-        // `exit 3` skip the trailer entirely (measured). The trailer then
-        // stamps `$?` into the exit file — whose path rides the env, so no
-        // figure is interpolated into the quoted string — and re-exits with
-        // the command's own code. Built from single-quoted segments because
-        // PHP interpolates `$SHELL_STATUS` inside a double-quoted string
-        // exactly as eagerly as `$foo` — only quoting keeps the child's
-        // variables verbatim. A wrapper killed before the trailer leaves the
-        // exit file empty: the honest `exitCode: null` of a signalled shell.
-        $trailer = chr(10) . 'SHELL_STATUS=$?; printf "%s" "$SHELL_STATUS" > "$' . self::EXIT_CODE_FILE_ENV . '"; exit "$SHELL_STATUS"';
-        $wrapped = 'bash -c ' . escapeshellarg('(' . $command . ')' . $trailer);
+        // A launch that never calls start() again leaves nothing to clean; a
+        // launch that does pays one scandir to keep the cap-and-leash doctrine
+        // from quietly becoming an unbounded inode budget (SHL-1). The sweep
+        // runs AFTER the row is registered below — deliberately the last act
+        // of start(): its filemtime() checks leave entries in PHP's stat
+        // cache, and a sink this launch is about to serve reads from must
+        // never be among the files it stats.
+        $wrapped = self::buildWrapper($command);
         $spawnSpec = ProcessContainment::spawnSpec($wrapped);
         $env = ProcessContainment::scrubbedEnv($envOverrides + [self::EXIT_CODE_FILE_ENV => $paths['exit']]);
         $descriptors = [
@@ -247,22 +306,129 @@ final class BackgroundShellRegistry
             'label' => $label,
             'pid' => $pid,
             'pgid' => $pid,
+            // Recorded AT SPAWN, not observed later: whether the containment
+            // wrapper really made this pid a group leader is a property of
+            // the spawn that no later call can re-derive ({@see the class
+            // doc-block's setsid paragraph}).
+            'grouped' => ProcessContainment::detachedSpawnBinary() !== '',
             'stdoutPath' => $paths['stdout'],
             'stderrPath' => $paths['stderr'],
             'exitPath' => $paths['exit'],
             'spawnedAt' => \microtime(true),
             'exitCode' => null,
+            'exitNote' => null,
+            // The stdout size the last read() mapped a cursor against; the
+            // shrink detection in read() needs a remembered size to tell a
+            // truncation from a caller's stale arithmetic.
+            'lastStdoutSize' => null,
             'stopped' => false,
             'expired' => false,
         ];
+        // Last act of a successful start, and only now: sweepCorpseFiles()
+        // stats name-shaped files it finds, and a filemtime() stat leaves the
+        // observed size in PHP's stat cache — for the shell being started
+        // here that would poison read()'s later filesize() with the empty
+        // sink's size (measured). With the row registered, this launch's own
+        // sinks are skipped as addressed; corpses and other registries'
+        // fresh files are none of read()'s business either way.
+        $this->sweepCorpseFiles();
 
         return ['ok' => true, 'shell' => $this->status($id)];
     }
 
     /**
-     * One row with its LIVE state resolved, plus `ageSeconds` and the
-     * lifetime verdict. Enforces the max-lifetime wall on a live shell
-     * before answering.
+     * Assemble the spawn wrapper: the recorded size cap, the parent-
+     * independent lifetime wall, and the exit-code recorder.
+     *
+     * The command runs inside `( ... )` so an `exit N` in the user's own
+     * text ends the SUBSHELL, never the wrapper — a bare append would let
+     * `exit 3` skip the trailer entirely (measured).
+     *
+     * The outer shell that {@see ProcessContainment::spawnSpec()} runs this
+     * string under is plain POSIX `sh` — no bashisms — and BOTH rungs `exec`,
+     * so the pid the containment spawn recorded stays the pid of the running
+     * wrapper chain: one process to signal, one group for the census. A
+     * non-exec layer here would move the shell's members into a second group
+     * and blind the member-alive check the stop ladder is built on.
+     *
+     * The recorder trailer: it stamps `$?` into the exit file — whose path
+     * rides the env, so no figure is interpolated into the quoted string —
+     * and re-exits with the command's own code. Built from single-quoted
+     * segments because PHP interpolates `$SHELL_STATUS` inside a
+     * double-quoted string exactly as eagerly as `$foo` — only quoting keeps
+     * the child's variables verbatim. A wrapper killed before the trailer
+     * leaves the exit file empty: the honest `exitCode: null` of a signalled
+     * shell. The trailer appears exactly ONCE in the spawn string — both
+     * timeout and fallback arms exec the same bound variable — so a shell is
+     * never double-recorded and a large command never pays for its text
+     * twice (embedding the literal in both arms blew the per-argument exec
+     * limit on a 72 KiB quoted command, measured).
+     *
+     * `timeout` is probed with `command -v`: hosts without coreutils (stock
+     * macOS) keep the size cap and lose only the parent-independent wall —
+     * the launch-side lazy ladder and the shutdown hook still apply there.
+     */
+    private static function buildWrapper(string $command): string
+    {
+        $trailer = chr(10) . 'SHELL_STATUS=$?; printf "%s" "$SHELL_STATUS" > "$' . self::EXIT_CODE_FILE_ENV . '"; exit "$SHELL_STATUS"';
+        $inner = escapeshellarg('(' . $command . ')' . $trailer);
+
+        // The inner command is bound ONCE (SHELL_INNER) and referenced by
+        // both arms: embedding the literal in two exec lines doubled the
+        // spawn string past the per-argument exec limit — a 72 KiB quoted
+        // command died in posix_spawn with E2BIG where the pre-cap wrapper
+        // started it fine (measured). The assignment lives only in the
+        // outer sh; whichever arm execs replaces the image and takes the
+        // variable name away with it, leaving the user's bash a normal env.
+        return 'ulimit -f ' . self::OUTPUT_LIMIT_BLOCKS
+            . '; SHELL_INNER=' . $inner
+            . '; if command -v timeout >/dev/null 2>&1; then exec timeout -s KILL ' . self::MAX_LIFETIME_SECONDS . ' bash -c "$SHELL_INNER"'
+            . '; else exec bash -c "$SHELL_INNER"; fi';
+    }
+
+    /** The cause a {@see OUTPUT_LIMIT_EXIT_CODE} settlement is narrated with. */
+    private static function outputLimitNote(): string
+    {
+        return sprintf(
+            'output limit exceeded: a process in the shell died writing past the %d MiB per-file cap (exit 153 = 128 + SIGXFSZ; a command choosing 153 itself reads the same)',
+            \intdiv(self::OUTPUT_LIMIT_BYTES, 1048576),
+        );
+    }
+
+    /**
+     * Unlink shell files whose row the launch no longer has and that have not
+     * changed within {@see CORPSE_RETENTION_SECONDS} — the sweep the OUTPUT
+     * doctrine promises: shells killed at the wall or stopped long ago leave
+     * capped-but-useless trios, and without this the session directory grows
+     * for the life of the disk. A row still in the table owns its files, live
+     * or settled: deleting under a reader's cursor is not cleaning.
+     */
+    private function sweepCorpseFiles(): void
+    {
+        $entries = @scandir($this->directory);
+        if ($entries === false) {
+            return; // no directory yet — start() creates it a moment later
+        }
+        $ceiling = \microtime(true) - self::CORPSE_RETENTION_SECONDS;
+        foreach ($entries as $entry) {
+            if (!\is_string($entry) || preg_match('/^(sh-[0-9a-f]{8})\.(?:out|err|exit)$/', $entry, $matches) !== 1) {
+                continue; // not shell files this tree owns the names of
+            }
+            if (isset($this->rows[$matches[1]])) {
+                continue; // still addressed by the table — not a corpse
+            }
+            $path = $this->directory . '/' . $entry;
+            $mtime = @filemtime($path);
+            if ($mtime !== false && (float) $mtime < $ceiling) {
+                @unlink($path);
+            }
+        }
+    }
+
+    /**
+     * One row with its LIVE state resolved, plus `ageSeconds`, the lifetime
+     * verdict, and the `exitNote` a cap death is narrated with. Enforces the
+     * max-lifetime wall on a live shell before answering.
      *
      * @return array<string, mixed>|null null when the id is not in the table
      */
@@ -276,6 +442,10 @@ final class BackgroundShellRegistry
         $state = $this->observe($shellId, $row);
         $row['state'] = $state['state'];
         $row['exitCode'] = $state['exitCode'];
+        // Derived on every status, never stored truth: the exit code alone
+        // decides whether the cap narrative applies, so a merged row that
+        // lost the note gets it back on the first observation.
+        $row['exitNote'] = $state['exitCode'] === self::OUTPUT_LIMIT_EXIT_CODE ? self::outputLimitNote() : null;
         $row['ageSeconds'] = \max(0.0, \microtime(true) - (float) $row['spawnedAt']);
         $this->rows[$shellId] = $row;
 
@@ -292,9 +462,13 @@ final class BackgroundShellRegistry
      * An explicit window or a threaded cursor paginates without skipping —
      * pagination never destroys unread output. The returned `cursor` is the
      * exact offset just past the last byte handed back; it never rewinds and
-     * never lies about position.
+     * never lies about position. A cursor past the end of a log that has
+     * since SHRUNK entirely restarts at the true end; when STDOUT ALONE
+     * shrinks beneath a threaded cursor, the per-stream offsets are computed
+     * independently — stderr resumes where the caller actually left it
+     * instead of at the fiction the global number now implies (SHL-1).
      *
-     * @return array{ok: bool, error?: string, stdout?: string, stderr?: string, cursor?: int, skippedBytes?: int, bytesAvailable?: int, state?: string, exitCode?: ?int, expired?: bool}
+     * @return array{ok: bool, error?: string, stdout?: string, stderr?: string, cursor?: int, skippedBytes?: int, bytesAvailable?: int, state?: string, exitCode?: ?int, exitNote?: ?string, expired?: bool}
      */
     public function read(string $shellId, int $cursor = 0, ?int $maxBytes = null): array
     {
@@ -307,6 +481,10 @@ final class BackgroundShellRegistry
 
         $stdoutSize = (int) (@filesize((string) $row['stdoutPath']) ?: 0);
         $stderrSize = (int) (@filesize((string) $row['stderrPath']) ?: 0);
+        // The raw entry cursor, kept before any clamping: the shrink remap
+        // below needs to know where the caller actually stood.
+        $entryCursor = $cursor;
+        $lastStdoutSize = isset($row['lastStdoutSize']) && \is_int($row['lastStdoutSize']) ? $row['lastStdoutSize'] : null;
         // filesize() can only fail on a vanished sink; a vanished sink reads
         // as zero bytes, which is the honest "nothing there" answer.
         $available = $stdoutSize + $stderrSize;
@@ -333,28 +511,50 @@ final class BackgroundShellRegistry
         // stdout-then-stderr: each file's slice starts at the cursor measured
         // from that stream's own beginning, so the per-file offsets are the
         // cursor clamped into stdout and the cursor-minus-stdout-size clamped
-        // into stderr (never negative, never past a stream's end).
+        // into stderr (never negative, never past a stream's end) — offsets
+        // computed INDEPENDENTLY against each stream's own size, because the
+        // combined arithmetic below only holds while both streams grow.
         $stdoutOffset = \min($cursor, $stdoutSize);
         $stderrOffset = \max(0, \min($cursor - $stdoutSize, $stderrSize));
+        if (\is_int($lastStdoutSize) && $lastStdoutSize > $stdoutSize && $entryCursor > $stdoutSize && $entryCursor <= $lastStdoutSize + $stderrSize) {
+            // STDOUT ALONE SHRANK beneath a cursor that had been inside it
+            // (SHL-1): the global cursor's stderr arithmetic was computed
+            // against the OLD stdout size, so re-deriving it from the shrunk
+            // size (or clamping to the combined end) would silently strand
+            // stderr bytes the caller never read — and pagination never
+            // destroys unread output. The caller's position in STDERR's own
+            // space is exactly what the remembered layout said it was; the
+            // truncated stdout is read from EOF onward. At the end of this
+            // read the cursor lands on the new true end (stdout size +
+            // stderr progress), which for a shrunk log is the honest
+            // position — the never-rewinds law speaks of unshrunk space.
+            $stdoutOffset = $stdoutSize;
+            $stderrOffset = \max(0, \min($entryCursor - $lastStdoutSize, $stderrSize));
+        }
         $stdout = $this->sliceFrom((string) $row['stdoutPath'], $stdoutOffset, $limit);
         $stderrBudget = $limit - \strlen($stdout['bytes']);
         $stderr = $this->sliceFrom((string) $row['stderrPath'], $stderrOffset, $stderrBudget);
+        $this->rows[$shellId]['lastStdoutSize'] = $stdoutSize;
         // The answered cursor is the global offset just past the last byte
-        // handed back: the entry cursor plus what was RETURNED, per file. A
-        // window that only fits part of stdout leaves stderr pending — the
-        // next step from the advanced cursor collects it. Advancing past
+        // handed back, RECOMPUTED from the per-file offsets rather than
+        // advanced from the entry cursor — identical arithmetic while both
+        // streams grow (the offsets start at the entry cursor), and the true
+        // end rather than a fiction once one of them has shrunk. A window
+        // that only fits part of stdout leaves stderr pending — the next
+        // step from the advanced cursor collects it. Advancing past
         // unreturned bytes would silently strand a stream.
-        $cursor += \strlen($stdout['bytes']) + \strlen($stderr['bytes']);
+        $nextCursor = $stdoutOffset + \strlen($stdout['bytes']) + $stderrOffset + \strlen($stderr['bytes']);
 
         return [
             'ok' => true,
             'stdout' => $stdout['bytes'],
             'stderr' => $stderr['bytes'],
-            'cursor' => $cursor,
+            'cursor' => $nextCursor,
             'skippedBytes' => $skipped,
             'bytesAvailable' => $available,
             'state' => (string) $row['state'],
             'exitCode' => $row['exitCode'],
+            'exitNote' => $row['exitNote'] ?? null,
             'expired' => (bool) $row['expired'],
         ];
     }
@@ -363,15 +563,17 @@ final class BackgroundShellRegistry
      * Stop one shell: TERM to the group, a bounded grace, KILL to the same
      * the same group, then a bounded confirmation. Unknown ids answer
      * `found` false; an already-settled shell is a no-op success — the
-     * ladder never signals a pid it has no claim on.
+     * ladder never signals a pid it has no claim on. `grouped` says whether
+     * the recorded pid actually led a process group (false where the host
+     * had no setsid at spawn — then `confirmed` speaks only of the wrapper).
      *
-     * @return array{found: bool, wasRunning: bool, confirmed: bool, exitCode: ?int, expired: bool}
+     * @return array{found: bool, wasRunning: bool, confirmed: bool, grouped: bool, exitCode: ?int, expired: bool}
      */
     public function stop(string $shellId): array
     {
         $row = $this->rows[$shellId] ?? null;
         if ($row === null) {
-            return ['found' => false, 'wasRunning' => false, 'confirmed' => false, 'exitCode' => null, 'expired' => false];
+            return ['found' => false, 'wasRunning' => false, 'confirmed' => false, 'grouped' => false, 'exitCode' => null, 'expired' => false];
         }
         $wasRunning = $this->observe($shellId, $row)['state'] === 'running';
         $confirmed = true;
@@ -386,6 +588,7 @@ final class BackgroundShellRegistry
             'found' => true,
             'wasRunning' => $wasRunning,
             'confirmed' => $confirmed,
+            'grouped' => (bool) ($settled['grouped'] ?? false),
             'exitCode' => $settled['exitCode'],
             'expired' => (bool) $settled['expired'],
         ];
@@ -837,11 +1040,19 @@ final class BackgroundShellRegistry
             'label' => \is_string($row['label'] ?? null) ? $row['label'] : '',
             'pid' => (int) $row['pid'],
             'pgid' => (int) $row['pgid'],
+            // A row that predates this field, or a forged one that omits it,
+            // loses the group promise — the conservative answer, since the
+            // flag only ever widens what a confirmed stop claims.
+            'grouped' => ($row['grouped'] ?? false) === true,
             'stdoutPath' => $paths['stdout'],
             'stderrPath' => $paths['stderr'],
             'exitPath' => $paths['exit'],
             'spawnedAt' => (float) $row['spawnedAt'],
             'exitCode' => $exitCode,
+            // The shrink memory belongs to the process that READ the files;
+            // a merged row carries its own if it has one, and nothing
+            // downstream may invent it.
+            'lastStdoutSize' => isset($row['lastStdoutSize']) && \is_int($row['lastStdoutSize']) && $row['lastStdoutSize'] >= 0 ? $row['lastStdoutSize'] : null,
             'stopped' => ($row['stopped'] ?? false) === true,
             'expired' => ($row['expired'] ?? false) === true,
         ];

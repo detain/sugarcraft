@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Sessions;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Sessions\BackgroundShellRegistry;
+use SugarCraft\Code\Support\ProcessContainment;
 
 /**
  * SHL-1: the background shell table — spawn, settle, cursor tail, the stop
@@ -546,5 +547,218 @@ final class BackgroundShellRegistryTest extends TestCase
                 $_SERVER['HOME'] = $previousServerHome;
             }
         }
+    }
+
+    public function testTheSizeCapFellsAFloodingShellAndTheRecordNamesTheCause(): void
+    {
+        $registry = $this->registry();
+        $started = $registry->start('cat /dev/zero 2>/dev/null', 'flood');
+        self::assertTrue($started['ok']);
+        $id = (string) $started['shell']['id'];
+
+        $settled = $this->waitFor(
+            $registry,
+            static fn (BackgroundShellRegistry $r): bool => ($r->status($id)['state'] ?? '') === 'finished',
+            15.0,
+        );
+        // try/finally: if the cap ever regresses, this test must not leave a
+        // shell writing into /tmp for the rest of the wall.
+        try {
+            self::assertTrue($settled, 'a shell writing past the cap must die at the cap, not run free to the wall');
+
+            $state = $registry->status($id);
+            self::assertSame(BackgroundShellRegistry::OUTPUT_LIMIT_EXIT_CODE, $state['exitCode'], 'SIGXFSZ death records 128 + 25 through the recorder trailer');
+            self::assertIsString($state['exitNote']);
+            self::assertStringContainsString('output limit exceeded', (string) $state['exitNote']);
+            $written = (int) filesize((string) $state['stdoutPath']);
+            self::assertLessThanOrEqual(BackgroundShellRegistry::OUTPUT_LIMIT_BYTES, $written, 'nothing may land past the cap');
+            self::assertGreaterThan(BackgroundShellRegistry::OUTPUT_LIMIT_BYTES - 1048576, $written, 'the cap bounds, it does not strangle — bytes up to the limit survive');
+        } finally {
+            $registry->stop($id);
+        }
+
+        // The small-write arm: a shell far under the cap is byte-for-byte the
+        // shell it was before the wrapper existed.
+        $small = $registry->start('printf small-ok', 'small');
+        self::assertTrue($small['ok']);
+        $smallId = (string) $small['shell']['id'];
+        self::assertTrue($this->waitFor(
+            $registry,
+            static fn (BackgroundShellRegistry $r): bool => ($r->status($smallId)['state'] ?? '') === 'finished',
+        ));
+        self::assertSame(0, $registry->status($smallId)['exitCode']);
+        self::assertNull($registry->status($smallId)['exitNote']);
+        self::assertSame('small-ok', (string) $registry->read($smallId, 0)['stdout']);
+    }
+
+    public function testANaturalExitOfTheCapCodeCarriesTheSameHonestNarration(): void
+    {
+        // The note is derived from the exit code alone — a command that
+        // CHOOSES 153 reads identically to one killed by SIGXFSZ, and the
+        // note's own sentence says so. The ambiguity is disclosed, not hidden.
+        $registry = $this->registry();
+        $started = $registry->start('exit 153', 'chose 153');
+        self::assertTrue($started['ok']);
+        $id = (string) $started['shell']['id'];
+        self::assertTrue($this->waitFor(
+            $registry,
+            static fn (BackgroundShellRegistry $r): bool => ($r->status($id)['state'] ?? '') === 'finished',
+        ));
+
+        self::assertSame(153, $registry->status($id)['exitCode']);
+        $note = (string) $registry->status($id)['exitNote'];
+        self::assertStringContainsString('output limit exceeded', $note);
+        self::assertStringContainsString('reads the same', $note);
+        self::assertStringContainsString('output limit exceeded', (string) $registry->read($id)['exitNote']);
+
+        $plain = $registry->start('exit 3', 'ordinary failure');
+        $plainId = (string) $plain['shell']['id'];
+        self::assertTrue($this->waitFor(
+            $registry,
+            static fn (BackgroundShellRegistry $r): bool => ($r->status($plainId)['state'] ?? '') === 'finished',
+        ));
+        self::assertSame(3, $registry->status($plainId)['exitCode']);
+        self::assertNull($registry->status($plainId)['exitNote']);
+    }
+
+    public function testTheWrapperSetsTheCapOnceExecsTheWallAndKeepsOneRecorder(): void
+    {
+        $wrapper = (new \ReflectionMethod(BackgroundShellRegistry::class, 'buildWrapper'))->invoke(null, 'true');
+        self::assertStringStartsWith('ulimit -f ' . BackgroundShellRegistry::OUTPUT_LIMIT_BLOCKS . ';', $wrapper, 'the size cap is the FIRST thing the shell does — a later ulimit would let an immediate flood outrun it');
+        self::assertSame(
+            BackgroundShellRegistry::OUTPUT_LIMIT_BYTES,
+            BackgroundShellRegistry::OUTPUT_LIMIT_BLOCKS * 512,
+            'RLIMIT_FSIZE counts 512-byte blocks; the pinned figures must agree',
+        );
+        self::assertStringContainsString('exec timeout -s KILL ' . BackgroundShellRegistry::MAX_LIFETIME_SECONDS . ' bash -c "$SHELL_INNER"', $wrapper, 'the wall must ride an exec so the recorded pid stays the group leader');
+        self::assertStringContainsString('; else exec bash -c "$SHELL_INNER"; fi', $wrapper, 'hosts without coreutils timeout keep the cap and the recorder — only the parent-independent wall degrades');
+        self::assertSame(1, substr_count($wrapper, 'SHELL_STATUS=$?'), 'the recorder rides the ONE bound inner literal both arms exec — never two copies');
+        $big = 'printf ' . str_repeat('x', 70_000) . '-TAILMARKER-';
+        $bigWrapper = (new \ReflectionMethod(BackgroundShellRegistry::class, 'buildWrapper'))->invoke(null, $big);
+        self::assertSame(1, substr_count($bigWrapper, '-TAILMARKER-'), 'the command text is embedded exactly once');
+        self::assertLessThan(131_072, \strlen($bigWrapper), 'the spawn string must stay under the per-argument exec limit');
+    }
+
+    public function testTheGroupedFlagIsRecordedAtSpawnAndSurvivesTheForkBoundary(): void
+    {
+        $registry = $this->registry();
+        $started = $registry->start('printf grouped; sleep 120', 'grouped pin');
+        self::assertTrue($started['ok']);
+        $id = (string) $started['shell']['id'];
+        $grouped = ProcessContainment::detachedSpawnBinary() !== '';
+
+        self::assertSame($grouped, $registry->status($id)['grouped'], 'grouped mirrors what the spawn actually had in front of it');
+
+        $export = $registry->toArray();
+        $receiver = $this->registry();
+        $receiver->merge($export);
+        self::assertSame($grouped, $receiver->status($id)['grouped'], 'a merged row keeps its spawn-time honesty');
+        self::assertArrayHasKey('lastStdoutSize', $receiver->status($id));
+
+        // A pre-SHL-1 export has no keys to carry: parseRow's defaults answer
+        // the CONSERVATIVE thing — not grouped, no remembered layout.
+        $legacy = $export;
+        unset($legacy[$id]['grouped'], $legacy[$id]['lastStdoutSize']);
+        $older = $this->registry();
+        $older->merge($legacy);
+        self::assertFalse($older->status($id)['grouped']);
+        self::assertNull($older->status($id)['lastStdoutSize']);
+
+        $answer = $registry->stop($id);
+        self::assertTrue($answer['found']);
+        self::assertSame($grouped, $answer['grouped'], 'stop answers with the flag the narrator needs');
+    }
+
+    public function testAStdoutThatShrinksAloneDoesNotStrandTheUnreadStderr(): void
+    {
+        $registry = $this->registry();
+        $started = $registry->start('sleep 30', 'shrink pin');
+        self::assertTrue($started['ok']);
+        $id = (string) $started['shell']['id'];
+
+        try {
+            $state = $registry->status($id);
+            $stdoutPath = (string) $state['stdoutPath'];
+            $stderrPath = (string) $state['stderrPath'];
+            self::assertSame(800, (int) file_put_contents($stdoutPath, str_repeat('A', 800)));
+            self::assertSame(500, (int) file_put_contents($stderrPath, str_repeat('B', 500)));
+
+            $first = $registry->read($id, 0, 512);
+            self::assertTrue($first['ok']);
+            self::assertSame(str_repeat('A', 512), $first['stdout']);
+            self::assertSame('', $first['stderr']);
+            self::assertSame(512, $first['cursor']);
+
+            $second = $registry->read($id, 512, 512);
+            self::assertSame(str_repeat('A', 288), $second['stdout']);
+            self::assertSame(str_repeat('B', 224), $second['stderr']);
+            self::assertSame(1024, $second['cursor']);
+
+            // The shell truncates its own stdout beneath the threaded cursor.
+            self::assertSame(100, (int) file_put_contents($stdoutPath, str_repeat('A', 100)));
+
+            $third = $registry->read($id, 512, 4096);
+            self::assertSame('', $third['stdout'], 'the truncated remainder is gone — the honest read is EOF on that stream');
+            self::assertSame(str_repeat('B', 500), $third['stderr'], 'the 276 stderr bytes the caller never saw must arrive, not be skipped by arithmetic against a stdout that no longer exists');
+            self::assertSame(600, $third['cursor'], 'the cursor lands on the new true end: the shrunk space never lied forward');
+
+            $fourth = $registry->read($id, 600, 4096);
+            self::assertSame('', $fourth['stdout']);
+            self::assertSame('', $fourth['stderr']);
+            self::assertSame(600, $fourth['cursor']);
+        } finally {
+            $registry->stop($id);
+        }
+    }
+
+    public function testTheNextLaunchSweepsCorpseFilesAndSparesEverythingAddressedOrFresh(): void
+    {
+        $registry = $this->registry();
+        $live = $registry->start('sleep 120', 'sweep live');
+        self::assertTrue($live['ok']);
+        $liveId = (string) $live['shell']['id'];
+        $settled = $registry->start('printf first', 'sweep seed');
+        $settledId = (string) $settled['shell']['id'];
+        self::assertTrue($this->waitFor(
+            $registry,
+            static fn (BackgroundShellRegistry $r): bool => ($r->status($settledId)['state'] ?? '') === 'finished',
+        ));
+
+        $directory = \dirname((string) $registry->status($liveId)['stdoutPath']);
+        $ancient = time() - BackgroundShellRegistry::CORPSE_RETENTION_SECONDS - 600;
+        foreach (['sh-deadbee1.out', 'sh-deadbee1.err', 'sh-deadbee1.exit'] as $corpse) {
+            file_put_contents($directory . '/' . $corpse, 'x');
+            touch($directory . '/' . $corpse, $ancient);
+        }
+        foreach (['sh-c0ffee01.out', 'sh-c0ffee01.err', 'sh-c0ffee01.exit'] as $fresh) {
+            file_put_contents($directory . '/' . $fresh, 'x');
+        }
+        file_put_contents($directory . '/unrelated.log', 'x');
+        touch($directory . '/unrelated.log', $ancient);
+        // Addressed-but-old files ride too: the live sink and the settled
+        // exit file are still owned by rows, and deleting under a reader is
+        // not cleaning.
+        touch((string) $registry->status($liveId)['stdoutPath'], $ancient);
+        touch((string) $registry->status($settledId)['exitPath'], $ancient);
+
+        $swept = $registry->start('printf sweeper', 'sweep run');
+        self::assertTrue($swept['ok']);
+        $sweptId = (string) $swept['shell']['id'];
+        self::assertTrue($this->waitFor(
+            $registry,
+            static fn (BackgroundShellRegistry $r): bool => ($r->status($sweptId)['state'] ?? '') === 'finished',
+        ));
+
+        foreach (['sh-deadbee1.out', 'sh-deadbee1.err', 'sh-deadbee1.exit'] as $corpse) {
+            self::assertFileDoesNotExist($directory . '/' . $corpse, 'a name-shaped corpse past retention is swept by the next launch');
+        }
+        foreach (['sh-c0ffee01.out', 'sh-c0ffee01.err', 'sh-c0ffee01.exit', 'unrelated.log'] as $kept) {
+            self::assertFileExists($directory . '/' . $kept, 'fresh files and anything not shaped like a sink survive the sweep');
+        }
+        self::assertFileExists((string) $registry->status($liveId)['stdoutPath'], 'a row still addresses this shell — old mtime or not, its files are not corpses');
+        self::assertFileExists((string) $registry->status($settledId)['exitPath']);
+        self::assertSame('first', (string) $registry->read($settledId, 0)['stdout']);
+
+        $registry->stop($liveId);
     }
 }

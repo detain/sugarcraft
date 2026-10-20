@@ -29,13 +29,19 @@ use SugarCraft\Code\Tools\ToolResult;
  * read is pagination — every byte at or above the cursor is owed and
  * nothing is destroyed; a huge backlog is walked with more steps. Cursor
  * values past the end of a log that has since SHRUNK (a shell truncating
- * its own output) restart at the true end; the cursor never rewinds and
- * never lies.
+ * its own output) restart at the true end; when only stdout shrinks, the
+ * streams' offsets are recomputed independently and stderr resumes where
+ * the caller left it — re-read bytes beat silently stranded ones. The
+ * cursor never rewinds and never lies about position.
  *
  * The state line is honest about what the launch can see: a shell with no
  * exit file yet reports `running` (or `unknown` when even the process is
  * unprovable here), and the max-lifetime wall is enforced on read, so a call
- * after the wall reports the shell expired rather than forever running.
+ * after the wall reports the shell expired rather than forever running. An
+ * exit code that names the output cap ({@see BackgroundShellRegistry::
+ * OUTPUT_LIMIT_EXIT_CODE}) is narrated with its cause — `output limit
+ * exceeded` — beside the number, because a bare 153 reads as mystery to the
+ * model and a truncated log is the fact it needs to know.
  *
  * READ permission class: this tool writes nothing and kills nothing — it
  * tails a file this launch created. Its sibling {@see ShellStop} carries the
@@ -161,6 +167,10 @@ final readonly class ShellOutput implements Tool, BuildsFromCatalog, TakesToolCa
             $answer['state'] === 'finished' => 'finished (exit code unknown)',
             default => (string) $answer['state'],
         };
+        $exitNote = (string) ($answer['exitNote'] ?? '');
+        if ($exitNote !== '') {
+            $state .= ' — ' . $exitNote;
+        }
 
         $head = sprintf('shell %s — %s', $id, $state);
         $notes = [];

@@ -798,6 +798,9 @@ final class ReadPathCensusTest extends TestCase
         'Sessions/BackgroundShellRegistry.php|scandir' => [
             'NAMES_ONLY — groupMemberAlive() enumerates /proc; the numeric names feed only the '
                 . 'stat reads above and nothing is admitted or refused on the listing itself',
+            'NAMES_ONLY — sweepCorpseFiles() (SHL-1) lists this registry\'s own 0700 directory '
+                . 'for `sh-<hex>.(out|err|exit)` names no row still owns; the names feed only an '
+                . 'mtime check and an unlink, and no content read follows the listing',
         ],
         'Sessions/BackgroundSupervisor.php|file_get_contents' => [
             'SELF_LOCATED — the IPC buffer this supervisor named for its own child (or one '
