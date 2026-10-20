@@ -8,6 +8,14 @@ namespace SugarCraft\Code\Observability;
  * Batching decorator over {@see OtelSink}: events accumulate and travel in
  * one OTLP render pass per batch instead of per event.
  *
+ * OBS-1: rendering is fallible — `OtelSink::encodeAll()` encodes with
+ * `JSON_THROW_ON_ERROR`, so a payload PCRE or a non-finite float rejects the
+ * whole batch at the encoder, not at the endpoint. The encode arm therefore
+ * runs INSIDE the no-throw contract below: a batch that cannot be rendered is
+ * dropped and counted ({@see encodeFailureCount()}), never thrown at the
+ * caller and never queued (raw events cannot be replayed after encoding
+ * closes spans).
+ *
  * Arms, all bounded and none timer-based:
  * - the buffer reaching `batchSize` renders and POSTs synchronously inside
  *   `consume()`,
@@ -35,6 +43,12 @@ final class BatchEventSink implements EventSink
     private array $unsent = [];
 
     private bool $closed = false;
+
+    /**
+     * Batches OBS-1 dropped at the encoder (render threw) rather than let
+     * the failure escape `consume()`/`flush()`.
+     */
+    private int $encodeFailures = 0;
 
     private readonly int $batchSize;
 
@@ -105,6 +119,12 @@ final class BatchEventSink implements EventSink
         return \count($this->unsent);
     }
 
+    /** Number of batches OBS-1 dropped because rendering itself threw. */
+    public function encodeFailureCount(): int
+    {
+        return $this->encodeFailures;
+    }
+
     private function exportBuffer(): void
     {
         if ([] === $this->pending) {
@@ -113,7 +133,18 @@ final class BatchEventSink implements EventSink
 
         $events = $this->pending;
         $this->pending = [];
-        $this->send($this->sink->encodeAll($events));
+        try {
+            $bodies = $this->sink->encodeAll($events);
+        } catch (\Throwable) {
+            // OBS-1: the encode arm used to sit outside any try while the
+            // class promised consume()/flush() never throw. A batch that
+            // cannot be rendered is lost and counted; undeliverable bytes
+            // must not poison the caller's turn.
+            ++$this->encodeFailures;
+
+            return;
+        }
+        $this->send($bodies);
     }
 
     /**

@@ -124,6 +124,42 @@ final class BatchEventSinkTest extends TestCase
         $this->assertFalse($sink->hasCarryOver());
     }
 
+    /**
+     * OBS-1: render failure was the one way the batch arm broke its
+     * never-throws promise — `encodeAll()`'s `JSON_THROW_ON_ERROR` sat
+     * outside any try while `consume()` and `flush()` promised silence, so a
+     * payload PCRE (a non-finite spend figure) escaped into the caller's
+     * turn. Such a batch is now dropped and counted, never thrown; the loss
+     * is visible on the diagnostic surface instead of vanishing silently.
+     */
+    public function testABatchThatCannotBeRenderedIsDroppedAndCountedNotThrown(): void
+    {
+        $sink = new BatchEventSink($this->collectorSink(), 2);
+
+        $sink->consume(new StepStarted(1, 9));
+        $sink->consume(new SpendCapBreached(1, INF, 1.0));
+
+        $this->assertSame([], $this->bodies, 'nothing was posted — the batch died at the encoder');
+        $this->assertSame(0, $sink->pendingCount(), 'the doomed batch left the buffer, it does not pile up');
+        $this->assertSame(1, $sink->encodeFailureCount());
+        $this->assertFalse($sink->hasCarryOver(), 'undeliverable bytes are not retryable carry-over');
+
+        // The sink stays usable: a later healthy batch flushes normally.
+        $sink->consume(new StepStarted(2, 9));
+        $sink->consume(new SpendCapBreached(2, 2.0, 1.0));
+        $this->assertCount(1, $this->bodies, 'the drop was one batch, not a wedged sink');
+        $this->assertSame(1, $sink->encodeFailureCount());
+
+        // The flush arm honours the same promise: an unrenderable partial
+        // batch at shutdown never escapes flush(). The StepStarted opens the
+        // span the breach closes — without one there is no body to render.
+        $shutdown = new BatchEventSink($this->collectorSink(), 5);
+        $shutdown->consume(new StepStarted(1, 9));
+        $shutdown->consume(new SpendCapBreached(1, INF, 1.0));
+        $shutdown->flush();
+        $this->assertSame(1, $shutdown->encodeFailureCount());
+    }
+
     private function collectorSink(): OtelSink
     {
         return OtelSink::withTransport(function (string $body): bool {
