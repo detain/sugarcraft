@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\ColorUtil;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
 use SugarCraft\Image\PixelGrid;
+use SugarCraft\Image\Symbol\CanvasMode;
 use SugarCraft\Image\Support\OutputOptimizer;
 
 /**
@@ -46,16 +47,6 @@ final class QuarterBlockRenderer implements Renderer, AcceptsOptimization, Confi
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
     use \SugarCraft\Image\Concerns\OptimizationCarrierTrait;
-
-    private CanvasMode $canvasMode = CanvasMode::TrueColor;
-
-    public function withCanvasMode(CanvasMode $canvasMode): self
-    {
-        $clone = clone $this;
-        $clone->canvasMode = $canvasMode;
-
-        return $clone;
-    }
 
     public function canvasMode(): CanvasMode
     {
