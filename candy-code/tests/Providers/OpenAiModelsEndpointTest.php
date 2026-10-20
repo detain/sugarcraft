@@ -131,4 +131,59 @@ final class OpenAiModelsEndpointTest extends TestCase
         $rebound = $provider->withModel('gpt-5');
         self::assertSame('https://relay.example/v1', $rebound->catalogKey());
     }
+
+    /**
+     * PRV-1 (MINOR-1): the factory always threads the SDK-default root so
+     * the catalog asks where the wire talks, but an unauthenticated GET of
+     * api.openai.com/models is a guaranteed 401 — on palette open it must
+     * spend no bytes, exactly like the `models all` door (whose comment
+     * names the same rule: "an anonymous api.openai.com call … no bytes
+     * spent"). The other polarities are the door's edges: a key in hand
+     * makes the same root askable, and an EXPLICIT base without a key is a
+     * self-hosted endpoint the operator named, so it still rides keyless.
+     */
+    public function testTheOpenAiCatalogDoorRefusesAKeylessAskAgainstThePublicApi(): void
+    {
+        $keyless = new OpenAIProvider(
+            $this->createMock(ClientContract::class),
+            'gpt-4o',
+            modelsBaseUrl: OpenAIProvider::SDK_DEFAULT_BASE,
+            modelsApiKey: null,
+        );
+        self::assertNull($keyless->catalogKey(), 'no credential means the public root is unaskable — no memo key, no fetch, no bytes');
+        self::assertNull($keyless->listModels());
+
+        $emptyKey = new OpenAIProvider(
+            $this->createMock(ClientContract::class),
+            'gpt-4o',
+            modelsBaseUrl: OpenAIProvider::SDK_DEFAULT_BASE,
+            modelsApiKey: '',
+        );
+        self::assertNull($emptyKey->catalogKey(), 'the empty string is as uncredentialed as null');
+
+        $sloppy = new OpenAIProvider(
+            $this->createMock(ClientContract::class),
+            'gpt-4o',
+            modelsBaseUrl: 'HTTPS://API.OPENAI.COM/v1/',
+            modelsApiKey: null,
+        );
+        self::assertNull($sloppy->catalogKey(), 'case and trailing-slash noise on the public root still trips the door');
+
+        $armed = new OpenAIProvider(
+            $this->createMock(ClientContract::class),
+            'gpt-4o',
+            modelsBaseUrl: OpenAIProvider::SDK_DEFAULT_BASE,
+            modelsApiKey: 'sk-real',
+        );
+        self::assertSame(OpenAIProvider::SDK_DEFAULT_BASE, $armed->catalogKey(), 'with a key the default root is exactly what is worth asking');
+        self::assertSame(OpenAIProvider::SDK_DEFAULT_BASE, $armed->withModel('gpt-5')->catalogKey(), 'rebinding keeps the credential threading — and with it the door polarity');
+
+        $relay = new OpenAIProvider(
+            $this->createMock(ClientContract::class),
+            'gpt-4o',
+            modelsBaseUrl: 'https://relay.example/v1',
+            modelsApiKey: null,
+        );
+        self::assertSame('https://relay.example/v1', $relay->catalogKey(), 'a configured non-default base rides keyless, as `models all` already asks it');
+    }
 }

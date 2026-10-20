@@ -27,6 +27,14 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
     use ReassemblesStreamedToolCalls;
 
     /**
+     * PRV-1 (MINOR-1): the public API root the SDK itself defaults to when
+     * no `baseUrl` is configured — the factory threads it so the catalog
+     * asks where the wire talks, and {@see askableCatalogBase()} names it
+     * as the one base a keyless ask may never target.
+     */
+    public const SDK_DEFAULT_BASE = 'https://api.openai.com/v1';
+
+    /**
      * E707 (round 81): the chat-completions `finish_reason` values that mean
      * the reply hit the OUTPUT ceiling rather than ending on its own. OpenAI's
      * documented terminating set is `stop` / `length` / `tool_calls` /
@@ -190,23 +198,40 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
     /** PRV-1: the version root the factory resolved, normalized for memo identity. */
     public function catalogKey(): ?string
     {
-        $base = $this->modelsBaseUrl;
-        if ($base === null || trim($base) === '') {
-            return null;
-        }
-
-        return rtrim($base, '/');
+        return $this->askableCatalogBase();
     }
 
-    /** PRV-1: one bounded `GET {base}/models`; null when no base was threaded. */
+    /** PRV-1: one bounded `GET {base}/models`; null when the base must not be asked. */
     public function listModels(): ?array
+    {
+        $base = $this->askableCatalogBase();
+
+        return $base === null ? null : OpenAiModelsEndpoint::fetch($base, $this->modelsApiKey);
+    }
+
+    /**
+     * The catalog base to ask, or null when it must not be asked at all.
+     * An empty base means "no catalog" (a hand-built provider); PRV-1
+     * MINOR-1 adds the second door — a keyless ask against the public API
+     * root is a guaranteed 401, an outbound request that can only fail,
+     * so the palette prefetch and `models all` skip it exactly alike.
+     * An explicit baseUrl still rides keyless: self-hosted
+     * OpenAI-compatible servers commonly speak `/models` without a key,
+     * and there the ask is not anonymous-by-guess but configured.
+     */
+    private function askableCatalogBase(): ?string
     {
         $base = $this->modelsBaseUrl;
         if ($base === null || trim($base) === '') {
             return null;
         }
 
-        return OpenAiModelsEndpoint::fetch($base, $this->modelsApiKey);
+        if (($this->modelsApiKey === null || $this->modelsApiKey === '')
+            && rtrim(strtolower(trim($base)), '/') === self::SDK_DEFAULT_BASE) {
+            return null;
+        }
+
+        return rtrim($base, '/');
     }
 
     public function supportsStreaming(): bool

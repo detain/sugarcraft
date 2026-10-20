@@ -147,10 +147,33 @@ final class ModelCatalogTest extends TestCase
 
         self::assertSame(['claude-sonnet-4-6'], ModelCatalog::litellm('anthropic', $table));
         self::assertSame(['claude-sonnet-4-6'], ModelCatalog::litellm('Anthropic', $table), 'the family lookup folds case like entry()');
-        self::assertSame(['vertex_ai/gemini-2.5-pro'], ModelCatalog::litellm('vertex', $table));
+        self::assertSame(['gemini-2.5-pro'], ModelCatalog::litellm('vertex', $table), 'PRV-1 MAJOR-1: the vertex_ai/ routing prefix is LiteLLM\'s namespace — the palette row is the native id Vertex accepts');
+        self::assertSame(['anthropic.claude-sonnet-4-5-v2:0'], ModelCatalog::litellm('bedrock', $table), 'PRV-1 MAJOR-1: bedrock/ strips, the :0 version suffix is native spelling and rides');
         self::assertSame([], ModelCatalog::litellm('sglang', $table), 'a self-hosted transport invents no hosted family');
         self::assertSame([], ModelCatalog::litellm('custom', $table));
         self::assertSame([], ModelCatalog::litellm('echo', $table));
+    }
+
+    /**
+     * PRV-1 (MAJOR-1): the palette's merged rows are what Chat persists and
+     * the transport wires — with a family-filtered LiteLLM tier they are all
+     * native endpoint ids, deduped against the bare and configured rows.
+     */
+    public function testTheMergedPaletteCarriesNativeLabelsNotRoutingAliases(): void
+    {
+        $table = ModelMetadata::fromTable([
+            'gpt-4o' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai'],
+            'openai/gpt-4o' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai'],
+            'openai/gpt-4.1-mini' => ['max_input_tokens' => 1_000_000, 'litellm_provider' => 'openai'],
+            'openrouter/meta-llama/llama-3.1-8b-instruct' => ['max_input_tokens' => 131_072, 'litellm_provider' => 'openai'],
+        ]);
+
+        $rows = ModelCatalog::merge(['gpt-4o'], ['gpt-4.1-mini'], ModelCatalog::litellm('openai', $table));
+
+        self::assertSame(['gpt-4o', 'gpt-4.1-mini'], $rows, 'the configured row leads, the stripped alias dedupes against the bare and the live tier, and the openrouter-foreign row is excluded');
+        foreach ($rows as $row) {
+            self::assertStringNotContainsString('/gpt', $row, 'no row persists as a LiteLLM routing alias');
+        }
     }
 
     public function testMergeKeepsTiersInOrderDeduplicatedAndCapped(): void

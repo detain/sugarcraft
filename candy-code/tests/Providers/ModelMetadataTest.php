@@ -172,6 +172,110 @@ final class ModelMetadataTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // PRV-1 (MAJOR-1): family-filtered candidates are native endpoint ids
+    // -------------------------------------------------------------------------
+
+    /**
+     * PRV-1: `openai/…` is LiteLLM's routing namespace, not part of what
+     * api.openai.com accepts — a family-filtered candidate list must hand
+     * out the native id, deduped against the bare row it aliases (the bare
+     * entry wins), while the unfiltered listing still rides table keys
+     * verbatim so entry() resolves every answer directly.
+     */
+    public function testPrefixedAliasesRideStrippedToTheirNativeIdAndBareEntriesWinCollisions(): void
+    {
+        $db = ModelMetadata::fromTable([
+            'openai/gpt-4o' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai', 'mode' => 'chat'],
+            'gpt-4o' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai', 'mode' => 'chat'],
+            'openai/gpt-4.1-mini' => ['max_input_tokens' => 1_000_000, 'litellm_provider' => 'openai', 'mode' => 'chat'],
+            'OpenAI/GPT-4o-Turbo' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai', 'mode' => 'chat'],
+        ]);
+
+        self::assertSame(
+            ['GPT-4o-Turbo', 'gpt-4.1-mini', 'gpt-4o'],
+            $db->candidates('openai'),
+            'the alias-only rows arrive as their native ids; the bare gpt-4o is offered once — as itself — even with the alias listed first',
+        );
+
+        // Without a family there is no endpoint to be native TO, so keys
+        // pass through verbatim — the pre-MAJOR-1 contract entry() needs.
+        self::assertSame(
+            ['OpenAI/GPT-4o-Turbo', 'gpt-4o', 'openai/gpt-4.1-mini', 'openai/gpt-4o'],
+            $db->candidates(),
+        );
+    }
+
+    /**
+     * PRV-1: a slash whose leading segment is not a recognized routing
+     * namespace proves nothing (it may be a native id or another gateway's
+     * form), and a KNOWN prefix naming a different family is unverifiable
+     * for this endpoint. Both fail safe: the row leaves the palette, and
+     * ids like these reach it instead through the endpoint's own live
+     * listing, where the server vouches for the spelling.
+     */
+    public function testUnknownAndForeignPrefixesAreExcludedFromTheFamilyPalette(): void
+    {
+        $db = ModelMetadata::fromTable([
+            'gpt-5-made-up' => ['max_input_tokens' => 400_000, 'litellm_provider' => 'openai', 'mode' => 'chat'],
+            'meta-llama/Llama-3.2-3B-Instruct' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai', 'mode' => 'chat'],
+            'groq/llama-3.3-70b-versatile' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai', 'mode' => 'chat'],
+        ]);
+
+        self::assertSame(
+            ['gpt-5-made-up'],
+            $db->candidates('openai'),
+            'meta-llama/… is not a LiteLLM provider name and groq/ names another family — neither is proven native here',
+        );
+        self::assertSame(
+            ['gpt-5-made-up', 'groq/llama-3.3-70b-versatile', 'meta-llama/Llama-3.2-3B-Instruct'],
+            $db->candidates(),
+            'the unfiltered listing is untouched by the family rule',
+        );
+    }
+
+    /**
+     * PRV-1: the stripped remainder keeps every separator real ids use —
+     * the Bedrock `:0` version suffix, the Vertex `@…` date pin, nested
+     * slashes for meta-namespaced ids, and full inference-profile ARNs,
+     * which are legitimate native Bedrock modelIds.
+     */
+    public function testColonsAtSignsNestedSlashesAndArnRemaindersRideTheNativeIdUntouched(): void
+    {
+        $db = ModelMetadata::fromTable([
+            'bedrock/anthropic.claude-sonnet-4-5-v2:0' => ['max_input_tokens' => 200_000, 'litellm_provider' => 'bedrock', 'mode' => 'chat'],
+            'bedrock/arn:aws:bedrock:us-east-1:000000000000:application-inference-profile/abc123' => ['max_input_tokens' => 200_000, 'litellm_provider' => 'bedrock', 'mode' => 'chat'],
+            'vertex_ai/claude-3-5-sonnet@20240620' => ['max_input_tokens' => 200_000, 'litellm_provider' => 'vertex_ai', 'mode' => 'chat'],
+            'sagemaker/meta/llama-3-8b-instruct' => ['max_input_tokens' => 8_192, 'litellm_provider' => 'sagemaker', 'mode' => 'chat'],
+        ]);
+
+        self::assertSame([
+            'anthropic.claude-sonnet-4-5-v2:0',
+            'arn:aws:bedrock:us-east-1:000000000000:application-inference-profile/abc123',
+        ], $db->candidates('bedrock'));
+        self::assertSame(['claude-3-5-sonnet@20240620'], $db->candidates('vertex_ai'));
+        self::assertSame(['meta/llama-3-8b-instruct'], $db->candidates('sagemaker'), 'only the leading namespace is stripped — inner slashes are the id');
+    }
+
+    /**
+     * PRV-1: a remainder that is not a model id is a dropped row, never a
+     * selectable wire error — junk characters, an empty tail behind the
+     * slash, and wildcard rows (respelled with chr(42) so the literal is
+     * not a glob-shaped token for GlobDialectDifferentialTest's corpus).
+     */
+    public function testJunkRemaindersAndPrefixedWildcardsAreDroppedNotOffered(): void
+    {
+        $wildcard = chr(42);
+        $db = ModelMetadata::fromTable([
+            'openai/not a model!' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai', 'mode' => 'chat'],
+            'openai/' . $wildcard => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai', 'mode' => 'chat'],
+            '-openai/leading-dash' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai', 'mode' => 'chat'],
+            'openai/' => ['max_input_tokens' => 128_000, 'litellm_provider' => 'openai', 'mode' => 'chat'],
+        ]);
+
+        self::assertSame([], $db->candidates('openai'));
+    }
+
+    // -------------------------------------------------------------------------
     // The cache and its refresh
     // -------------------------------------------------------------------------
 

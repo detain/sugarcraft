@@ -19,8 +19,10 @@ namespace SugarCraft\Code\Providers;
  * implementations.
  *
  * Deliberately NOT shapers: `bedrock` (its Converse transport carries no
- * thinking or effort field anywhere in this codebase today — mapping
- * would be forking wire work, §6.5 says refuse loudly instead),
+ * REQUEST-side thinking or effort control in this codebase — the
+ * response-side `reasoningContent` parse is a different matter and does
+ * live there; mapping the tier would be forking wire work, §6.5 says
+ * refuse loudly instead),
  * `custom` (an operator-defined endpoint: the app cannot know which of
  * its extensions reads the field, so `/effort` refuses rather than
  * implying a guarantee), `claude-code` (the tier belongs to the CLI it

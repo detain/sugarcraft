@@ -100,6 +100,69 @@ final class ModelMetadata
     private const MAX_RATE_PER_TOKEN = 1.0;
 
     /**
+     * PRV-1 (MAJOR-1): the leading segments that are LiteLLM ROUTING
+     * NAMESPACES — provider names the project's own set of hosted
+     * transports plus the common hosted families. A table key starting
+     * with one of these followed by `/` is an alias for the provider's
+     * NATIVE id (`openai/gpt-4o` means `gpt-4o` on api.openai.com), not
+     * a model the endpoint knows by that spelling.
+     *
+     * The list is deliberately conservative in the fail-safe direction:
+     * a missing name costs a palette row (the alias is dropped), while a
+     * wrong one could strip a slash that belongs to a real id. Unknown
+     * leading segments are NEVER stripped.
+     *
+     * @var list<string>
+     */
+    private const PROVIDER_PREFIXES = [
+        'ai21',
+        'aleph_alpha',
+        'anthropic',
+        'azure',
+        'azure_ai',
+        'baseten',
+        'bedrock',
+        'cerebras',
+        'codestral',
+        'cohere',
+        'dashscope',
+        'deepseek',
+        'doubao',
+        'featherless_ai',
+        'fireworks_ai',
+        'gemini',
+        'github_ai',
+        'github_copilot',
+        'groq',
+        'heroku',
+        'hosted_vllm',
+        'huggingface',
+        'jina_ai',
+        'lambda_ai',
+        'mistral',
+        'nebius',
+        'novita_nlp',
+        'nvidia_nim',
+        'ollama',
+        'ollama_chat',
+        'openai',
+        'openrouter',
+        'perplexity',
+        'publicai',
+        'sagemaker',
+        'scaleway',
+        'text-completion-azure',
+        'text-completion-openai',
+        'together_ai',
+        'vertex',
+        'vertex_ai',
+        'volc_engine',
+        'xai',
+        'xiaomi',
+        'zai',
+    ];
+
+    /**
      * Parsed tables per cache path, shared by every instance in the process
      * and inherited by forked turn children, so a figure cannot change under
      * a running session and the file is decoded once.
@@ -263,22 +326,44 @@ final class ModelMetadata
     /**
      * PRV-1 (§6.5): the model names this database knows, for filling the
      * model palette and `models all` without any provider round trip.
-     * Every entry is a table key verbatim, so {@see entry()} resolves each
-     * one directly — including hosted rows whose key carries the upstream
-     * prefix (`bedrock/…`, `vertex_ai/…`), whose spelling IS the name the
-     * hosted endpoint expects on the wire.
      *
-     * With a $providerHint, only rows LiteLLM attributes to that hosted
-     * family survive — the `litellm_provider` column is the table's only
-     * per-row attribution, matched case-insensitively exactly like entry()'s
-     * two-piece lookup. A self-hosted model that shares a name fragment
-     * with a hosted one has no litellm_provider row to speak of, which is
-     * the same honesty rule as the pricing match.
+     * WITHOUT a $providerHint every entry is a table key verbatim, so
+     * {@see entry()} resolves each one directly.
      *
-     * Wildcard pattern rows (`*`, `gpt-4*` — LiteLLM's defaults for
-     * unlisted variants) are never offered: they are price fallbacks, not
-     * selectable models. The result is sorted for stable palette order and
-     * capped at $limit rows when a limit is given.
+     * WITH a $providerHint (the palette and `models all` — the paths whose
+     * answer a user can SELECT and this app then WIREs), every entry is a
+     * valid native model id for that family's endpoint. The table carries
+     * routing-prefixed aliases next to the bare keys — `openai/gpt-4o`,
+     * `bedrock/anthropic.claude-…:0`, `vertex_ai/…` — and a prefix is
+     * LiteLLM's namespace, not part of what the endpoint accepts: wiring
+     * `openai/gpt-4o` to api.openai.com 400s every request. The rule, per
+     * row (matched case-insensitively against the row's own
+     * `litellm_provider`, exactly like entry()'s two-piece lookup, so a
+     * self-hosted name fragment never rides in — the same honesty rule as
+     * the pricing match):
+     *
+     *  - a slash-free key rides verbatim;
+     *  - a `{prefix}/{id}` key has its prefix stripped only when the
+     *    prefix is a recognized routing namespace AND names the very
+     *    family being queried (a foreign family's prefix on this row is
+     *    unverifiable for this endpoint);
+     *  - a key whose leading segment is NOT a recognized prefix is
+     *    excluded outright — nothing proves it is native to this endpoint
+     *    rather than another gateway's routing form, and an omitted row
+     *    is safe where a wire-invalid one is the MAJOR this rule closes.
+     *    (Such ids still reach the palette through the endpoint's own
+     *    live listing, where they come from the server that serves them.)
+     *
+     * The stripped remainder keeps its internal slashes, colons and at-
+     * signs untouched — Bedrock inference-profile ARNs, `…:0` version
+     * suffixes and `…@20240620` Vertex pins are native spellings. A
+     * stripped alias that names a bare row is the same string, so the
+     * dedupe leaves exactly one entry and the bare id is its spelling.
+     *
+     * Wildcard pattern rows (LiteLLM's defaults for unlisted variants —
+     * see the chr(42) respelling in the tests) are never offered: they
+     * are price fallbacks, not selectable models. The result is sorted
+     * for stable palette order and capped at $limit rows when given.
      *
      * @return list<string>
      */
@@ -290,7 +375,9 @@ final class ModelMetadata
         }
 
         $hint = $providerHint === null ? null : strtolower(trim($providerHint));
+
         $out = [];
+        $seen = [];
         foreach ($table as $model => $row) {
             if ($model === '' || str_contains($model, '*')) {
                 continue;
@@ -300,12 +387,63 @@ final class ModelMetadata
                 continue;
             }
 
-            $out[] = (string) $model;
+            $label = (string) $model;
+            if ($hint !== null && str_contains($label, '/')) {
+                $native = self::nativeAlias($label, $hint);
+                if ($native === null) {
+                    continue;
+                }
+
+                $label = $native;
+            }
+
+            // A stripped alias that equals a bare row is the SAME string,
+            // so the bare entry survives this exact-match dedupe either
+            // way — one row, native spelling, insertion order immaterial.
+            if (isset($seen[$label])) {
+                continue;
+            }
+
+            $seen[$label] = true;
+            $out[] = $label;
         }
 
         sort($out, SORT_STRING);
 
         return $limit > 0 ? array_slice($out, 0, $limit) : $out;
+    }
+
+    /**
+     * PRV-1 (MAJOR-1): the native endpoint id a `{prefix}/{id}` routing
+     * alias stands for, or null to drop the row from a family-filtered
+     * palette (unknown or foreign prefix, junk remainder).
+     */
+    private static function nativeAlias(string $key, string $hint): ?string
+    {
+        $slash = (int) strpos($key, '/');
+        $prefix = strtolower(substr($key, 0, $slash));
+        $rest = substr($key, $slash + 1);
+
+        if (!\in_array($prefix, self::PROVIDER_PREFIXES, true) || $prefix !== $hint) {
+            return null;
+        }
+
+        return $rest !== '' && self::isNativeModelId($rest) ? $rest : null;
+    }
+
+    /**
+     * Whether `$id` is a plausible native model id: a tight character
+     * grammar (letters, digits, and the `. _ : / @ + -` separators real
+     * ids use — nothing else), starting alphanumeric, no wildcards, and
+     * never absurdly long (ARNs and customer inference profiles are the
+     * legitimate long tail).
+     */
+    private static function isNativeModelId(string $id): bool
+    {
+        // The (?: group is load-bearing beyond grammar: a bare-class preg
+        // literal here would be glob-SHAPED to GlobDialectDifferentialTest's
+        // corpus harvest and drift its census for no reason.
+        return \strlen($id) <= 512 && preg_match('/^[A-Za-z0-9](?:[A-Za-z0-9._:\/@+\-]*)$/', $id) === 1;
     }
 
     /**

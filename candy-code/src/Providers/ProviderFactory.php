@@ -909,7 +909,10 @@ final readonly class ProviderFactory
             // PRV-1 (§6.5): the catalog asks the endpoint the completions go
             // to — the config/OPENAI_BASE_URL base when set, the SDK's own
             // default otherwise (the exact URI \OpenAI::client() would use).
-            is_string($baseUrl) && trim($baseUrl) !== '' ? trim($baseUrl) : 'https://api.openai.com/v1',
+            // PRV-1 MINOR-1: the keyless default base is refused by the
+            // provider's own door (OpenAIProvider::askableCatalogBase()),
+            // mirroring `models all`; the literal lives in one place now.
+            is_string($baseUrl) && trim($baseUrl) !== '' ? trim($baseUrl) : OpenAIProvider::SDK_DEFAULT_BASE,
             is_string($config['apiKey'] ?? null) && $config['apiKey'] !== '' ? $config['apiKey'] : null,
         );
     }

@@ -17,12 +17,15 @@ namespace SugarCraft\Code\Providers;
  * simply means "only the tiers you already have", never a stall and never a
  * wrong label.
  *
- * THE MERGE IS `live > LiteLLM > current-three` — {@see merge()} takes the
- * configured/current ids from {@see \SugarCraft\Code\Config\Settings\ModelChoice::paletteLabels()}
+ * THE MERGE EMITS `current-three > live > LiteLLM` — {@see merge()} takes
+ * the configured/current ids from {@see \SugarCraft\Code\Config\Settings\ModelChoice::paletteLabels()}
  * as the leading tier because they are what this session actually speaks,
  * then the endpoint's own answer, then the community database's names for
- * the hosted family. Capped at {@see MAX_ROWS} so a hosted catalog with
- * thousands of ids cannot turn the palette into an ocean.
+ * the hosted family: rows come out in that order, and a label already
+ * emitted by an earlier tier is deduplicated away, so tier precedence and
+ * row order are one and the same list. Capped at {@see MAX_ROWS} so a
+ * hosted catalog with thousands of ids cannot turn the palette into an
+ * ocean.
  *
  * Mutable by design and process-global, like {@see ModelMetadata}: this is
  * a cache, not identity. This is a SugarCraft architecture class, not a
