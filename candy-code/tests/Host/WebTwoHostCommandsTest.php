@@ -462,7 +462,10 @@ final class WebTwoHostCommandsTest extends TestCase
                 $loop->stop();
             }
         });
-        $guard = $loop->addTimer(15.0, static fn () => $loop->stop());
+        // rev-w7a MAJOR: the ceiling is a bounded drain guard, not a product
+        // timeout — a real forked turn is ~0.1s, but the ten-round host goal grind
+        // measured ~15.6s under load ~4.5, so 15s reddened deterministically.
+        $guard = $loop->addTimer(60.0, static fn () => $loop->stop());
         $loop->run();
         $loop->cancelTimer($poll);
         $loop->cancelTimer($guard);
