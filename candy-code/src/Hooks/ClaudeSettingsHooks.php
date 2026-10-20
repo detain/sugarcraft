@@ -58,7 +58,10 @@ use Symfony\Component\Yaml\Yaml;
  * that ruling lands, a `Notification` group contributes no rows; every
  * OTHER unknown event still walks into HookConfig's refusal. This paragraph
  * is the record: a user whose notification hook never fires finds the
- * deferral here rather than in a silent gap.
+ * deferral here rather than in a silent gap. That hard refusal for every
+ * other unknown event is itself the deliberate v1 ruling, not an oversight —
+ * skip-and-record would need its own ruling per future event, and a guard
+ * that cannot be mapped must never run silently.
  *
  * Relative commands are NOT anchored to the settings file's directory, and
  * that is CC's own semantics rather than an omission: Claude Code runs hook

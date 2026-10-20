@@ -285,4 +285,50 @@ final class PersonalInstructionFileTest extends TestCase
             clearstatcache();
         }
     }
+
+    /**
+     * INT-M2: a containment-refused primary must not silently close the
+     * personal channel. The refusal still records its loud provenance line,
+     * but `~/.claude/CLAUDE.md` then stands in exactly as it does when no
+     * primary exists — the gate's job is refusing the escaped symlink, not
+     * un-housing the operator's other personal file.
+     */
+    public function testARefusedPrimaryFallsThroughToTheClaudeFallback(): void
+    {
+        mkdir($this->tempDir . '/outside');
+        file_put_contents($this->tempDir . '/outside/secret.md', 'SECRETCANARY');
+        symlink($this->tempDir . '/outside/secret.md', $this->personalPath());
+        mkdir($this->tempDir . '/home/.claude', 0o700, true);
+        file_put_contents($this->claudeFallbackPath(), 'CLAUDECANARY');
+
+        $loader = new InstructionFileLoader($this->fixture->root());
+        $personal = $loader->loadPersonal();
+
+        self::assertCount(1, $personal);
+        self::assertSame($this->claudeFallbackPath(), $personal[0]['path']);
+        self::assertStringContainsString('CLAUDECANARY', (string) $personal[0]['body']);
+        self::assertStringNotContainsString('SECRETCANARY', (string) $personal[0]['body']);
+        self::assertArrayHasKey($this->personalPath(), $loader->refusedPaths());
+    }
+
+    /**
+     * INT-M2 polarity: when BOTH personal candidates escape their own
+     * directories, both refusals are recorded and the personal channel still
+     * yields nothing — the fall-through inherits the fallback's own gate, it
+     * does not widen it.
+     */
+    public function testBothPersonalCandidatesLinkedOutRecordBothRefusals(): void
+    {
+        mkdir($this->tempDir . '/outside');
+        file_put_contents($this->tempDir . '/outside/secret.md', 'SECRETCANARY');
+        symlink($this->tempDir . '/outside/secret.md', $this->personalPath());
+        mkdir($this->tempDir . '/home/.claude', 0o700, true);
+        symlink($this->tempDir . '/outside/secret.md', $this->claudeFallbackPath());
+
+        $loader = new InstructionFileLoader($this->fixture->root());
+
+        self::assertSame([], $loader->loadPersonal());
+        self::assertArrayHasKey($this->personalPath(), $loader->refusedPaths());
+        self::assertArrayHasKey($this->claudeFallbackPath(), $loader->refusedPaths());
+    }
 }

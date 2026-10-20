@@ -490,7 +490,9 @@ final class InstructionFileLoader
      * exist, Claude Code's personal memory file `~/.claude/CLAUDE.md` stands in
      * (roadmap 6.4): operators who have invested in that convention get their
      * context without being asked to duplicate it, and the two are never both
-     * read — the primary wins whenever it is a file.
+     * read — the primary wins whenever it is a file the containment gate
+     * ADOPTS; a containment-refused primary records its refusal and hands the
+     * stand-in role to the fallback (INT-M2, round r10 fix-lane).
      *
      * KEPT OUT OF {@see loadDocuments()} ON PURPOSE, because provenance picks the
      * framing: every document that list returns is repository-shipped and is
@@ -508,8 +510,12 @@ final class InstructionFileLoader
      * the same kind of hold RuleLoader keeps on `~/.candy-code/rules/*.md`, so
      * either file symlinked out of its directory is refused AND RECORDED exactly
      * as a user-tier rule would be, and its `@import`s are bounded by the same
-     * directory. Size ceiling, UTF-8 scrub and the shared dedup set are the
-     * root documents' own.
+     * directory. Refusal of the PRIMARY does not close the personal channel: its
+     * loud provenance line lands in {@see refusedPaths()} and the fallback is
+     * then judged on its own merits, the same as when no primary exists — a
+     * broken primary must not silently un-house the operator's other personal
+     * file. Size ceiling, UTF-8 scrub and the shared dedup set are the root
+     * documents' own.
      *
      * Memoized like the other whole-session loaders.
      *
@@ -528,16 +534,21 @@ final class InstructionFileLoader
         }
 
         $path = $dir . '/' . self::PERSONAL_FILENAME;
-        if (is_file($path)) {
-            $anchor = $dir;
-            if (!ContainedPath::within($path, $anchor)) {
-                $this->refusedPaths[$path] = 'the personal instruction file resolves outside ' . $anchor;
+        $anchor = $dir;
+        $primaryAdopted = is_file($path);
+        if ($primaryAdopted && !ContainedPath::within($path, $anchor)) {
+            // INT-M2: record the refusal loudly, then let the fallback below
+            // stand in exactly as it would when no primary exists — refusing
+            // the escaped symlink is the whole gate's job; quietly un-housing
+            // the operator's other personal file was never part of it.
+            $this->refusedPaths[$path] = 'the personal instruction file resolves outside ' . $anchor;
+            $primaryAdopted = false;
+        }
 
-                return [];
-            }
-        } else {
+        if (!$primaryAdopted) {
             // Claude Code's personal memory file stands in when the operator
-            // has not written ours (roadmap 6.4). The fallback is judged by ITS
+            // has not written ours (roadmap 6.4) — or when ours was written but
+            // containment-refused above (INT-M2). The fallback is judged by ITS
             // OWN compare against ITS OWN anchor — the `~/.claude` directory
             // beside the personal one — so neither candidate can borrow the
             // other's tolerance, and a symlinked fallback is refused AND
