@@ -100,10 +100,14 @@ final class GifDecoderTest extends TestCase
     }
 
     /**
-     * @testdox a positive startSec advances (best-effort) past the seeked frames
+     * @testdox a positive startSec past the only frame clamps onto it (E-11)
      *
-     * The fixture GIF has a single frame, so seeking to 1.0s @ 10fps (frame 10,
-     * clamped to the one available) lands past the end → next() is null.
+     * The fixture GIF has a single frame, so seeking to 1.0s @ 10fps (frame 10)
+     * clamps to index 0 — the last available frame — and next() hands it over.
+     * The pre-E-11 clamp used count() as the upper bound, put the cursor one
+     * slot beyond the only frame, and next() answered null; that overshoot is
+     * precisely the off-by-one GifDecoderSeekTest now pins against for real
+     * multi-frame GIFs, so this single-frame shape flipped in step.
      */
     public function testStartSecSeeksPastTheAvailableFrames(): void
     {
@@ -112,7 +116,8 @@ final class GifDecoderTest extends TestCase
         $decoder = new GifDecoder();
         $decoder->open($path, 1, 1, 10.0, Mode::HalfBlock, 1.0);
 
-        $this->assertNull($decoder->next(), 'a seek beyond the GIF lands past the end');
+        $this->assertNotNull($decoder->next(), 'a seek beyond the GIF clamps onto its last frame');
+        $this->assertNull($decoder->next(), 'and the stream is exhausted right after it');
         $decoder->close();
     }
 

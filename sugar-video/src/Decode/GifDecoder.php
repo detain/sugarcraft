@@ -69,6 +69,8 @@ final class GifDecoder implements Decoder
      * Graphics modes decode at the terminal's full pixel resolution
      * (cellsW·cellPxW × cellsH·cellPxH) so the image protocols get real detail —
      * the raw frame is handed to {@see GraphicsRenderer}, which encodes it once.
+     *
+     * @see GifDecoder::reopen() for the E-11 path-ingress note on re-decodes.
      */
     public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
@@ -114,8 +116,15 @@ final class GifDecoder implements Decoder
         // Best-effort time seek: all GIF frames are already in memory, so advance
         // the cursor to the frame at $startSec (clamped). GIF timing is per-frame,
         // so this uses the caller's nominal fps as an approximation.
+        //
+        // E-11: the clamp is symmetric. The old upper bound was count(), which put
+        // any seek that reached or rounded past the last frame one slot BEYOND it —
+        // next() hit EOF at once and the Player's loop wrapped to frame 0, so a
+        // late-time seek visibly jumped to START. Landing on the LAST frame is the
+        // honest semantics for a seek past the end, and max(0, …) keeps a negative
+        // nominal index off the cursor even if the > 0.0 guard above ever moves.
         if ($startSec > 0.0 && $fps > 0.0) {
-            $this->frameIndex = min(count($this->frames), (int) round($startSec * $fps));
+            $this->frameIndex = max(0, min(count($this->frames) - 1, (int) round($startSec * $fps)));
         }
     }
 
@@ -191,6 +200,17 @@ final class GifDecoder implements Decoder
      * to rebuild an rgb24 buffer nothing on this path reads would reintroduce
      * the per-pixel PHP loop the resample exists to avoid. It is also exactly
      * what {@see FfmpegDecoder} already hands the same renderer.
+     *
+     * E-11 double-loss, stated plainly: the decode grid is cell-quantised
+     * FIRST ({@see graphicsDecodeGrid()} shrinks to the source's own size and
+     * sugar-animation's cell budget), then this resample rebuilds the
+     * quantised grid into the full pixel box. `imagecopyresampled()` cannot
+     * restore detail discarded at decode time, so the frame loses twice —
+     * cell downsample, then smooth upscale — baking a softness chicle never
+     * shows, because chafa composites full-canvas RGBA and sizes output only
+     * at print time. The cure lives behind E-07's RGBA bytes ingress
+     * ({@see RgbFrame}, S6.3/S6.2): resample from true-colour pixels and
+     * delete this per-grid rebuild. It is deliberately NOT taken here.
      */
     private function upscaleToTarget(string $bytes, int $w, int $h): ?RgbFrame
     {
@@ -302,6 +322,14 @@ final class GifDecoder implements Decoder
      * @inheritDoc
      *
      * Closes and re-opens the decoder with the given parameters.
+     *
+     * E-11 (queued, NOT implemented): open()/reopen() read the PATH on every
+     * call, so a file mutated between open and reopen is re-decoded with
+     * different frame counts or dimensions mid-playback — the TOCTOU
+     * sugar-image hardened against in round 4 (bounded bytes ingress,
+     * ImageSource.php readBoundedRegularFile + decode-from-bytes) never
+     * landed here. The fix is E-07's `Decoder::decodeBytes()` seam: capture
+     * the bounded bytes once at open and reopen from them (S6.3).
      */
     public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
