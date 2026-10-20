@@ -11,7 +11,6 @@ use SugarCraft\Image\Capability;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\PacedAsyncRenderer;
-use SugarCraft\Image\PacedRenderSession;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
 use SugarCraft\Image\Renderer\IncrementalRenderer;
 use SugarCraft\Image\Renderer\KittyRenderer;

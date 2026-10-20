@@ -8,7 +8,6 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Capability;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
-use SugarCraft\Image\Renderer\HalfBlockRenderer;
 use SugarCraft\Image\Renderer\QuarterBlockRenderer;
 use SugarCraft\Image\Scale;
 

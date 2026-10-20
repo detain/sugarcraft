@@ -7,7 +7,6 @@ namespace SugarCraft\Image\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\ColorProfile\Probe\Capability;
-use SugarCraft\ColorProfile\Probe\TerminalProbe;
 
 /**
  * @covers \SugarCraft\Image\Mosaic::auto

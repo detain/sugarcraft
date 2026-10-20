@@ -12,7 +12,6 @@ use SugarCraft\Image\AdaptiveImage;
 use SugarCraft\Image\AsyncRenderer;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
-use SugarCraft\Image\SyncAsyncRenderer;
 
 final class AsyncRendererTest extends TestCase
 {

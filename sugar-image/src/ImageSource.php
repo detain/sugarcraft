@@ -6,7 +6,6 @@ namespace SugarCraft\Image;
 
 use React\Http\Browser;
 use React\Promise\PromiseInterface;
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Animation\Decoder as AnimationDecoder;
 use SugarCraft\Animation\Frame as AnimationFrame;
 

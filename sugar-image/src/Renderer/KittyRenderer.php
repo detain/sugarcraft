@@ -8,7 +8,6 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\KittyOptions;
 use SugarCraft\Image\Lang;
-use SugarCraft\Image\PixelGrid;
 use SugarCraft\Image\Support\GdAvailability;
 
 /**
