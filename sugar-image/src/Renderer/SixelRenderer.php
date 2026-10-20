@@ -119,6 +119,14 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *                              prepare-pixels bg-carry so error diffusion
      *                              works on what the terminal will show.
      *                              Null (default) = no flattening.
+     * @param bool $serpentine      C-08: serpentine (boustrophedon) scan for
+     *                              the diffusion kernels — odd rows walk x in
+     *                              reverse and the kernel mirrors horizontally,
+     *                              mirroring chafa's fs_dither row flip
+     *                              (chafa-pixops.c:327-459: `if (!(y & 1))
+     *                              forward else backwards`). Default false:
+     *                              the forward-only walk is what the
+     *                              byte-frozen digests were captured with.
      */
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
@@ -128,6 +136,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         ?float $intensity = null,
         private readonly int $alphaThreshold = self::DEFAULT_ALPHA_THRESHOLD,
         private readonly ?Color $flattenBackground = null,
+        private readonly bool $serpentine = false,
     ) {
         if ($maxColors < 1 || $maxColors > 256) {
             throw new \InvalidArgumentException(
@@ -391,6 +400,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *
      * B-10: threshold and flatten segments follow the same discipline —
      * they appear only when they deviate from the byte-frozen default.
+     * C-08: the serpentine segment likewise appears only when armed.
      */
     public function configFingerprint(): string
     {
@@ -407,7 +417,8 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                 : sprintf('|flatten=#%02X%02X%02X',
                     $this->flattenBackground->r,
                     $this->flattenBackground->g,
-                    $this->flattenBackground->b));
+                    $this->flattenBackground->b))
+            . ($this->serpentine ? '|serpentine=1' : '');
     }
 
     /**
@@ -426,6 +437,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->intensity,
             $this->alphaThreshold,
             $this->flattenBackground,
+            $this->serpentine,
         );
     }
 
@@ -469,6 +481,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->intensity,
             $threshold,
             $this->flattenBackground,
+            $this->serpentine,
         );
     }
 
@@ -490,6 +503,34 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->intensity,
             $this->alphaThreshold,
             $background,
+            $this->serpentine,
+        );
+    }
+
+    /**
+     * C-08: true when the diffusion walk snakes (odd rows reversed).
+     */
+    public function serpentine(): bool
+    {
+        return $this->serpentine;
+    }
+
+    /**
+     * C-08 copy with the serpentine scan armed. Only diffusion dithers are
+     * affected — Ordered is a position-taken bias and None has no walk to
+     * reverse, so both render byte-identically with or without it.
+     */
+    public function withSerpentine(bool $serpentine = true): self
+    {
+        return new self(
+            $this->dither,
+            $this->maxColors,
+            $this->cellWidth,
+            $this->cellHeight,
+            $this->intensity,
+            $this->alphaThreshold,
+            $this->flattenBackground,
+            $serpentine,
         );
     }
 
@@ -754,7 +795,9 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *     background register is reserved (B-10).
      *   • Error-diffusion dithering quantises each pixel, clamps the accumulated
      *     value to 0..255, and propagates the rounding error to unprocessed
-     *     neighbours.
+     *     neighbours. C-08 (opt-in, default OFF): with `serpentine` armed the
+     *     diffusion kernels snake — odd rows walk right→left and the kernel
+     *     mirrors horizontally, so taps always land on unvisited pixels.
      *
      * The rolling window is what makes it O(pixelW) not O(pixelW×pixelH): error
      * diffusion is strictly causal (it only reaches rows ≥ the current one), so
@@ -874,12 +917,24 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
 
         $cache = []; // 5-bit RGB cube → nearest colour of the BLOCK CENTRE (B-13), reused across pixels.
 
+        // C-08: serpentine only means anything for a walk that carries
+        // error — Ordered's bias is position-taken and None quantises
+        // cold, so both render byte-identically snaked or straight.
+        $snake = $this->serpentine && $hasDiffusion;
+
         for ($y = 0; $y < $h; $y++) {
-            $row = [];
-            for ($x = 0; $x < $w; $x++) {
+            // Per chafa chafa-pixops.c:327-459 (fs_dither): even rows walk
+            // left→right, odd rows right→left, and the kernel mirrors with
+            // the direction so every tap still lands on an unprocessed
+            // pixel. Chafa parks the edge-bound error in padded
+            // accumulator cells it never renders; dropping it at the
+            // bounds test here is equivalent.
+            $reversed = $snake && (($y & 1) === 1);
+            $row = array_fill(0, $w, 0);
+            for ($i = 0; $i < $w; $i++) {
+                $x = $reversed ? $w - 1 - $i : $i;
                 if ($offset === 1 && $holes[$y][$x]) {
-                    $row[] = 0;
-                    continue;
+                    continue; // hole: index 0, no error — left at the fill value
                 }
                 // Quantise the accumulated (possibly error-diffused) value.
                 [$r, $g, $b] = $window[$y][$x];
@@ -908,17 +963,21 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                 if ($hasDiffusion) {
                     [$pr, $pg, $pb] = $palette[$palIdx];
                     // Quantization error (original − quantized), intensity-scaled
-                    // (C-07, 1.0 by default), diffused downward.
+                    // (C-07, 1.0 by default), diffused onward.
+                    // C-08: on a reversed pass every horizontal tap mirrors
+                    // (x±1 → x∓1), so error keeps flowing to pixels the walk
+                    // has not visited yet.
                     $this->diffuseError(
                         $window, $w, $h, $x, $y,
                         ($clampedR - (float) $pr) * $diffusionStrength,
                         ($clampedG - (float) $pg) * $diffusionStrength,
                         ($clampedB - (float) $pb) * $diffusionStrength,
                         $dither,
+                        $reversed ? -1 : 1,
                     );
                 }
 
-                $row[] = $offset + $palIdx;
+                $row[$x] = $offset + $palIdx;
             }
             yield $y => $row;
 
@@ -1011,6 +1070,13 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *       1/8
      *
      * @param list<list<array{float,float,float}> $accum
+     * @param int $dxSign C-08: +1 on a forward row, -1 on a serpentine
+     *                    (reversed) row — the horizontal component of every
+     *                    tap mirrors with the walk direction, the analogue
+     *                    of chafa swapping its neighbour arguments when
+     *                    fs_dither walks right→left (chafa-pixops.c:327-459).
+     *                    Default +1 keeps the historical forward kernel and
+     *                    every existing caller byte-unchanged.
      */
     private function diffuseError(
         array &$accum,
@@ -1018,43 +1084,48 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         int $x, int $y,
         float $eR, float $eG, float $eB,
         Dither $dither,
+        int $dxSign = 1,
     ): void {
+        // Taps are (dx, dy, factor) RELATIVE to the diffusing pixel so the
+        // reversed pass mirrors the whole kernel by negating dx.
         $neighbors = match ($dither) {
             // Floyd–Steinberg: 4 neighbors
             Dither::FloydSteinberg => [
-                [$x + 1, $y,     7.0 / 16.0],
-                [$x - 1, $y + 1, 3.0 / 16.0],
-                [$x,     $y + 1, 5.0 / 16.0],
-                [$x + 1, $y + 1, 1.0 / 16.0],
+                [1,  0, 7.0 / 16.0],
+                [-1, 1, 3.0 / 16.0],
+                [0,  1, 5.0 / 16.0],
+                [1,  1, 1.0 / 16.0],
             ],
             // Stucki: 12 neighbors
             Dither::Stucki => [
-                [$x + 1, $y,     8.0 / 42.0],
-                [$x + 2, $y,     4.0 / 42.0],
-                [$x - 2, $y + 1, 2.0 / 42.0],
-                [$x - 1, $y + 1, 4.0 / 42.0],
-                [$x,     $y + 1, 8.0 / 42.0],
-                [$x + 1, $y + 1, 4.0 / 42.0],
-                [$x + 2, $y + 1, 2.0 / 42.0],
-                [$x - 2, $y + 2, 1.0 / 42.0],
-                [$x - 1, $y + 2, 2.0 / 42.0],
-                [$x,     $y + 2, 4.0 / 42.0],
-                [$x + 1, $y + 2, 2.0 / 42.0],
-                [$x + 2, $y + 2, 1.0 / 42.0],
+                [1,  0, 8.0 / 42.0],
+                [2,  0, 4.0 / 42.0],
+                [-2, 1, 2.0 / 42.0],
+                [-1, 1, 4.0 / 42.0],
+                [0,  1, 8.0 / 42.0],
+                [1,  1, 4.0 / 42.0],
+                [2,  1, 2.0 / 42.0],
+                [-2, 2, 1.0 / 42.0],
+                [-1, 2, 2.0 / 42.0],
+                [0,  2, 4.0 / 42.0],
+                [1,  2, 2.0 / 42.0],
+                [2,  2, 1.0 / 42.0],
             ],
             // Atkinson: 6 neighbors, only ¾ of error propagates
             Dither::Atkinson => [
-                [$x + 1, $y,     1.0 / 8.0],
-                [$x + 2, $y,     1.0 / 8.0],
-                [$x - 1, $y + 1, 1.0 / 8.0],
-                [$x,     $y + 1, 1.0 / 8.0],
-                [$x + 1, $y + 1, 1.0 / 8.0],
-                [$x,     $y + 2, 1.0 / 8.0],
+                [1,  0, 1.0 / 8.0],
+                [2,  0, 1.0 / 8.0],
+                [-1, 1, 1.0 / 8.0],
+                [0,  1, 1.0 / 8.0],
+                [1,  1, 1.0 / 8.0],
+                [0,  2, 1.0 / 8.0],
             ],
             default => [],
         };
 
-        foreach ($neighbors as [$nx, $ny, $factor]) {
+        foreach ($neighbors as [$dx, $dy, $factor]) {
+            $nx = $x + $dx * $dxSign;
+            $ny = $y + $dy;
             if ($nx >= 0 && $nx < $w && $ny >= 0 && $ny < $h) {
                 $accum[$ny][$nx][0] += $eR * $factor;
                 $accum[$ny][$nx][1] += $eG * $factor;
