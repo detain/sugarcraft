@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { keyArgument } from '../lib/format'
 import { askDiffPreview } from '../lib/lineDiff'
 import DiffView from './DiffView.vue'
+import MessageMarkdown from './MessageMarkdown.vue'
 import type { PendingAsk } from '../protocol/generated'
 
 export type Reply = 'once' | 'always' | 'reject'
@@ -51,6 +52,22 @@ const choices = computed<string[]>(() => {
   return list.length === 0 || list.length > 8 ? [] : list
 })
 
+/**
+ * WEB-5a-iv: a `PlanExit` ask carries the plan document in `arguments.plan`.
+ * Render it through the transcript's markdown surface; approval rides the
+ * existing `once` verdict (server: reply once → "Plan approved:").
+ */
+const planText = computed(() => {
+  const ask = props.ask
+  if (ask.tool !== 'PlanExit' || (ask.source ?? '') !== 'tool:PlanExit') return ''
+  const plan = (ask.arguments as { plan?: unknown }).plan
+  return typeof plan === 'string' ? plan : ''
+})
+const planSummary = computed(() => {
+  const summary = (props.ask.arguments as { summary?: unknown }).summary
+  return planText.value !== '' && typeof summary === 'string' ? summary : ''
+})
+
 function answer(reply: Reply, cascade = false, forcedNote?: string): void {
   if (busy.value || !props.canAnswer) return
   busy.value = true
@@ -88,6 +105,10 @@ function onKey(event: KeyboardEvent): void {
       <span v-if="what" class="what">{{ what }}</span>
     </header>
     <p v-if="ask.reason" class="reason">{{ ask.reason }}</p>
+    <div v-if="planText" class="plan-body" data-testid="ask-plan">
+      <p v-if="planSummary" class="plan-summary">{{ planSummary }}</p>
+      <MessageMarkdown :text="planText" />
+    </div>
     <details v-if="preview" class="diff-box" data-testid="ask-diff">
       <summary>{{ preview.label }} (+{{ preview.added }} −{{ preview.removed }})</summary>
       <DiffView :diff="preview.text" />
@@ -118,7 +139,7 @@ function onKey(event: KeyboardEvent): void {
       >{{ index + 1 }}. {{ option }}<span v-if="index === 0" class="recommended"> (recommended)</span></button>
     </div>
     <div class="actions">
-      <button type="button" class="primary" :disabled="busy || !canAnswer" data-testid="ask-once" @click="answer('once')">Allow once</button>
+      <button type="button" class="primary" :disabled="busy || !canAnswer" data-testid="ask-once" @click="answer('once')">{{ planText ? 'Approve plan' : 'Allow once' }}</button>
       <button v-if="offers.has('always')" type="button" :disabled="busy || !canAnswer" data-testid="ask-always" @click="answer('always')">{{ alwaysLabel }}</button>
       <button type="button" :disabled="busy || !canAnswer" data-testid="ask-reject" @click="answer('reject')">Reject</button>
       <button type="button" class="danger" :disabled="busy || !canAnswer" data-testid="ask-reject-stop" @click="answer('reject', true)">Reject &amp; stop</button>
@@ -168,6 +189,20 @@ details summary {
 }
 .diff-box summary {
   font-family: var(--mono);
+}
+.plan-body {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  max-height: 24rem;
+  overflow-y: auto;
+}
+.plan-summary {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.875rem;
 }
 .choices {
   display: flex;

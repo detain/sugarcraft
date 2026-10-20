@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import PermissionCard from '../PermissionCard.vue'
+import MessageMarkdown from '../MessageMarkdown.vue'
+import { markdownToHtml } from '../../lib/markdown'
 import type { PendingAsk } from '../../protocol/generated'
 
 function ask(over: Partial<PendingAsk>): PendingAsk {
@@ -93,4 +95,42 @@ describe('PermissionCard AskUser choice buttons (WEB-5a-iii)', () => {
     expect(wrapper.find('[data-testid="ask-always"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="ask-reject"]').exists()).toBe(true)
   })
+})
+
+describe('PermissionCard plan approval (WEB-5a-iv)', () => {
+  const planExit = ask({
+    tool: 'PlanExit',
+    source: 'tool:PlanExit',
+    arguments: { description: 'approve?', plan_path: '/tmp/plan.md', summary: 'Two steps', plan: '# Ship it\n\n- step one\n- step two\n' },
+    options: ['once', 'always', 'reject'],
+  })
+
+  it('renders the plan body through the markdown surface with an approval affordance', async () => {
+    const wrapper = mount(PermissionCard, { props: { ask: planExit, canAnswer: true } })
+    const plan = wrapper.find('[data-testid="ask-plan"]')
+    expect(plan.exists()).toBe(true)
+    // The body rides the transcript's own markdown component (DOMPurify needs
+    // a real DOM — happy-dom's walk is lossy — so the heading markup itself is
+    // pinned at the parser stage below, per this suite's markdown convention).
+    const md = plan.findComponent(MessageMarkdown)
+    expect(md.exists()).toBe(true)
+    expect(md.props('text')).toBe('# Ship it\n\n- step one\n- step two\n')
+    expect(plan.text()).toContain('Ship it')
+    expect(markdownToHtml(planExit.arguments.plan as string)).toContain('<h1>Ship it</h1>')
+    expect(wrapper.find('.plan-summary').text()).toBe('Two steps')
+    expect(wrapper.find('[data-testid="ask-once"]').text()).toBe('Approve plan')
+    await wrapper.find('[data-testid="ask-once"]').trigger('click')
+    const call = wrapper.emitted('answer')?.[0]
+    expect(call?.slice(0, 3)).toEqual(['once', false, ''])
+  })
+
+  it('leaves non-plan asks rendering no plan body', () => {
+    const wrapper = mount(PermissionCard, { props: { ask: askUserLike(), canAnswer: true } })
+    expect(wrapper.find('[data-testid="ask-plan"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="ask-once"]').text()).toBe('Allow once')
+  })
+
+  function askUserLike(): PendingAsk {
+    return ask({ tool: 'AskUser', source: 'tool:AskUser', arguments: { question: '?' } })
+  }
 })
