@@ -299,19 +299,12 @@ final class ScheduleRegistry
         }
     }
 
-    /** Write when the digest differs; a skipped write also skips the latch, so a peer's pending reload stays visible. */
-    private function writeLocked(): void
-    {
-        $payload = $this->payload();
-        if ($payload === $this->lastPayload) {
-            return; // the file already says exactly this: no write, no mtime churn
-        }
-        AtomicJsonFile::new($this->path)->withPermissions(0o600)->write($this->envelope());
-        $this->lastPayload = $payload;
-        $this->latch = $this->statLatch();
-    }
-
-    /** @return array{version: int, schedules: list<array<string, mixed>>} the file envelope for the current roster */
+    /**
+     * Serialize the roster the way the file holds it. {@see payload()} is this
+     * array digested, so the two are one source and cannot drift apart.
+     *
+     * @return array{version: int, schedules: list<array<string, mixed>>}
+     */
     private function envelope(): array
     {
         return [
@@ -323,10 +316,28 @@ final class ScheduleRegistry
         ];
     }
 
-    /** The canonical digest of the roster: what persist() would write, as one string. */
+    /** The canonical digest of {@see envelope()}: what a write would put on disk, as one string. */
     private function payload(): string
     {
         return json_encode($this->envelope(), JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * Write the roster under the lock the caller holds, skipping the write
+     * entirely when the digest says the file already says exactly this — and
+     * with it the latch, so a peer's pending reload stays visible to
+     * {@see reloadIfChanged()}.
+     */
+    private function writeLocked(): void
+    {
+        $envelope = $this->envelope();
+        $payload = json_encode($envelope, JSON_THROW_ON_ERROR);
+        if ($payload === $this->lastPayload) {
+            return; // no write, no new inode, no mtime churn for the siblings to chase
+        }
+        AtomicJsonFile::new($this->path)->withPermissions(0o600)->write($envelope);
+        $this->lastPayload = $payload;
+        $this->latch = $this->statLatch();
     }
 
     /**
