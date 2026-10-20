@@ -29,10 +29,12 @@ final class MenuBarLabelDerivationTest extends TestCase
      * derived text — and the menu text its description derives to.
      */
     private const DERIVED_LABELS = [
+        'effort' => 'Read or set',
         'keys' => 'Show the keyboard',
         'help' => 'List every slash',
         'permissions' => 'Show permission mode',
         'notices' => 'Show every warning',
+        'status' => 'Show where',
         'context' => 'Show what fills',
         'sweep' => 'Prune the tool outputs',
         'pruning' => 'Show or set',
@@ -49,6 +51,7 @@ final class MenuBarLabelDerivationTest extends TestCase
         'compact' => 'Manually compact chat',
         'clear' => 'Clear the transcript',
         'budget' => 'Show reported spend',
+        'usage' => 'Show the durable spend',
         'workflow' => 'Run, pause, resume',
         'memory' => 'Add, list, search',
         'skills' => 'List the invocable',
@@ -60,6 +63,8 @@ final class MenuBarLabelDerivationTest extends TestCase
         'review' => 'Review the diff',
         'security-review' => 'Security-review',
         'bg' => 'Run a task',
+        'schedules' => 'List, enable, disable',
+        'loop' => 'Re-run a prompt',
         'fork' => 'Clone',
         'websearch' => 'Search the web',
         'goal' => 'Work until a condition',
