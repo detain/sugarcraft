@@ -224,6 +224,7 @@ final class Mosaic
      *
      * ```php
      * $mosaic = Mosaic::ascii();                            // monochrome chars
+     * $mosaic = Mosaic::ascii(AsciiColorMode::Ansi16);      // 16-colour chars
      * $mosaic = Mosaic::ascii(AsciiColorMode::Ansi256);     // 256-colour chars
      * $mosaic = Mosaic::ascii(AsciiColorMode::TrueColor);   // 24-bit-colour chars
      * ```
@@ -328,9 +329,9 @@ final class Mosaic
 
     /**
      * Extra discriminator for when {@see protocol()} alone does not
-     * identify the encoded bytes. A-06: AsciiRenderer has three colour
-     * arms behind one protocol name, so an Ansi256/TrueColor ascii mosaic
-     * reports its {@see AsciiColorMode} value ('ansi256'/'truecolor')
+     * identify the encoded bytes. A-06: AsciiRenderer has four colour
+     * arms behind one protocol name, so an Ansi16/Ansi256/TrueColor ascii mosaic
+     * reports its {@see AsciiColorMode} value ('ansi16'/'ansi256'/'truecolor')
      * here; every other renderer — and the Mono ascii arm, whose protocol
      * name already is its mode value — reports null. A tmux-decorated
      * mosaic answers for its inner renderer, the same way the decorator's
@@ -708,13 +709,13 @@ final class Mosaic
      *
      * Accepts the vocabulary terminals/apps configure image output with —
      * `auto`, `sixel`, `kitty`, `iterm2`, `halfblock` (aliases `half`,
-     * `ansi`), `quarterblock` (alias `quarter`), `ascii`, `ansi256`,
+     * `ansi`), `quarterblock` (alias `quarter`), `ascii`, `ansi16`, `ansi256`,
      * `truecolor`, `chafa` — case-insensitively, whitespace-trimmed.
-     * `ansi256`/`truecolor` select the ASCII ramp renderer tinted with the
-     * matching colour mode, mirroring how the client config maps them.
-     * A-06: those two are legacy INPUT spellings of the 'ascii' protocol's
+     * `ansi16`/`ansi256`/`truecolor` select the ASCII ramp renderer tinted with
+     * the matching colour mode, mirroring how the client config maps them.
+     * A-06: those are INPUT spellings of the 'ascii' protocol's
      * colour arms — {@see modeDetail()} tells them apart; {@see protocol()}
-     * answers 'ascii' for all three.
+     * answers 'ascii' for all of them.
      *
      * Returns null on an unknown mode so callers can phrase the error in
      * their own words rather than unwinding an exception.
@@ -729,6 +730,7 @@ final class Mosaic
             'halfblock', 'half', 'ansi'  => self::halfBlock(),
             'quarterblock', 'quarter'    => self::quarterBlock(),
             'ascii'        => self::ascii(),
+            'ansi16'       => self::ascii(AsciiColorMode::Ansi16),
             'ansi256'      => self::ascii(AsciiColorMode::Ansi256),
             'truecolor'    => self::ascii(AsciiColorMode::TrueColor),
             'chafa'        => self::chafa(),

@@ -75,6 +75,7 @@ final class MosaicModeStringTest extends TestCase
             'quarterblock' => ['quarterblock', QuarterBlockRenderer::class],
             'quarter alias' => ['quarter', QuarterBlockRenderer::class],
             'ascii'        => ['ascii', AsciiRenderer::class],
+            'ansi16'       => ['ansi16', AsciiRenderer::class],
             'ansi256'      => ['ansi256', AsciiRenderer::class],
             'truecolor'    => ['truecolor', AsciiRenderer::class],
             'chafa'        => ['chafa', ChafaRenderer::class],
@@ -105,21 +106,23 @@ final class MosaicModeStringTest extends TestCase
     }
 
     /**
-     * A-06: protocol() reports 'ascii' for all three colour arms — the
-     * ramp words 'ansi256'/'truecolor' are accepted INPUT spellings that
-     * reach AsciiRenderer's colour axis, now carried by modeDetail()
-     * instead of leaking into the protocol slot.
+     * A-06: protocol() reports 'ascii' for all four colour arms — the
+     * ramp words 'ansi16'/'ansi256'/'truecolor' are accepted INPUT spellings
+     * that reach AsciiRenderer's colour axis, carried by modeDetail()
+     * instead of leaking into the protocol slot (B-12 added the ansi16 arm).
      */
-    public function testAnsi256AndTruecolorModesReachTheAsciiRendererColorMode(): void
+    public function testAnsi16Ansi256AndTruecolorModesReachTheAsciiRendererColorMode(): void
     {
-        // All three mode words resolve to the same PROTOCOL...
+        // All four mode words resolve to the same PROTOCOL...
         $this->assertSame('ascii', Mosaic::fromModeString('ascii')?->protocol());
+        $this->assertSame('ascii', Mosaic::fromModeString('ansi16')?->protocol());
         $this->assertSame('ascii', Mosaic::fromModeString('ansi256')?->protocol());
         $this->assertSame('ascii', Mosaic::fromModeString('truecolor')?->protocol());
 
         // ...and the colour arm — the thing that actually differs in the
         // encoded bytes — rides modeDetail(), null for the Mono arm.
         $this->assertNull(Mosaic::fromModeString('ascii')?->modeDetail());
+        $this->assertSame('ansi16', Mosaic::fromModeString('ansi16')?->modeDetail());
         $this->assertSame('ansi256', Mosaic::fromModeString('ansi256')?->modeDetail());
         $this->assertSame('truecolor', Mosaic::fromModeString('truecolor')?->modeDetail());
     }

@@ -49,6 +49,21 @@ final class AsciiRendererTest extends TestCase
     }
 
     /**
+     * B-12: the ansi16 arm rides Color::ansi16Sgr()'s base-16 foreground rules
+     * (30-37 normal, 90-97 bright) — never the 38; extended spelling — and the
+     * A-13 row-end scope stays intact (39m, never a clobber).
+     */
+    public function testAnsi16EmitsBaseSixteenForeground(): void
+    {
+        $out = (new AsciiRenderer(AsciiColorMode::Ansi16))->render($this->fixture(), 4, 2);
+
+        self::assertMatchesRegularExpression('/\x1b\[(?:3[0-7]|9[0-7])m/', $out, 'a coloured pixel must arm a base-16 foreground');
+        self::assertStringNotContainsString("\x1b[38;", $out, 'ansi16 must not fall through to an extended sequence');
+        self::assertStringContainsString("\x1b[39m", $out);
+        self::assertStringNotContainsString("\x1b[0m", $out);
+    }
+
+    /**
      * A-06: name() is the constant protocol identity 'ascii' for every
      * colour arm — the ramp moved to colorMode() so the PROTOCOL slot stops
      * leaking 'ansi256'/'truecolor' colour-mode names.
@@ -57,6 +72,7 @@ final class AsciiRendererTest extends TestCase
     {
         self::assertSame('ascii', (new AsciiRenderer(AsciiColorMode::Mono))->name());
         self::assertSame('ascii', (new AsciiRenderer(AsciiColorMode::Ansi256))->name());
+        self::assertSame('ascii', (new AsciiRenderer(AsciiColorMode::Ansi16))->name());
         self::assertSame('ascii', (new AsciiRenderer(AsciiColorMode::TrueColor))->name());
 
         self::assertSame(AsciiColorMode::Mono, (new AsciiRenderer(AsciiColorMode::Mono))->colorMode());

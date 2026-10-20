@@ -84,6 +84,7 @@ final class AsciiRenderer implements Renderer
                         AsciiColorMode::Mono      => null,
                         AsciiColorMode::TrueColor => OutputOptimizer::trueColor($r, $g, $b),
                         AsciiColorMode::Ansi256   => OutputOptimizer::indexed256((new Color($r, $g, $b))->toAnsi256Index()),
+                        AsciiColorMode::Ansi16    => (string) Color::ansi16Sgr((new Color($r, $g, $b))->toAnsi16Index(), false),
                     });
                 }
                 $lines[] = $pen->finishRow();
@@ -108,7 +109,7 @@ final class AsciiRenderer implements Renderer
     }
 
     /**
-     * The colour-ramp mode this renderer encodes with (Mono/Ansi256/TrueColor).
+     * The colour-ramp mode this renderer encodes with (Mono/Ansi16/Ansi256/TrueColor).
      * A-06 relocated this value out of {@see name()} so protocol() stops
      * leaking 'ansi256'/'truecolor' into the PROTOCOL slot; anything that
      * previously differentiated ascii variants by name() must key on this.
