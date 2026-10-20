@@ -1430,3 +1430,10 @@ candy-code/tests/Support/SessionRelaunchTest.php	0.000	4
 candy-code/tests/Tools/ParallelSafeDocblockTest.php	0.000	2
 candy-code/tests/Cli/SelfUpdateTest.php	12.78	17
 candy-code/tests/Support/VersionTest.php	13.18	27
+candy-code/tests/MCP/McpRedirectRefusalTest.php	0.33	8
+candy-code/tests/Server/ServerConfigHookModeInheritanceTest.php	0.30	18
+candy-code/tests/Session/SessionStoreBusyContentionTest.php	1.50	2
+candy-code/tests/Session/SessionStoreBusyTimeoutTest.php	0.61	3
+candy-code/tests/Session/SqliteConnectCensusTest.php	0.59	2
+candy-code/tests/Session/ThinkingBlocksTranscriptRoundTripTest.php	0.40	4
+candy-code/tests/Sessions/ScheduleCrossHostFireTest.php	0.59	7
