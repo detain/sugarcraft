@@ -18,7 +18,6 @@ declare(strict_types=1);
 namespace SugarCraft\ColorProfile;
 
 use SugarCraft\ColorProfile\Palette;
-use SugarCraft\ColorProfile\Profile;
 
 /**
  * Wraps a stream and degrades color escape sequences to match the target profile.
@@ -33,10 +32,10 @@ final class ProfileWriter
     private $stream;
 
     /** The color profile to degrade to. */
-    private Profile $profile;
+    private ColorProfile $profile;
 
     /** Detected from environment. */
-    private static function buildProfile(array $env, $stream): Profile
+    private static function buildProfile(array $env, $stream): ColorProfile
     {
         // Allow FORCE_COLOR / NO_COLOR / COLORTERM / TERM_PROGRAM / TERM to influence detection
         return Palette::detect($stream, $env);
@@ -47,7 +46,7 @@ final class ProfileWriter
      *
      * @param resource $stream The output stream to wrap (e.g. STDOUT, STDERR)
      */
-    public function __construct($stream, Profile $profile)
+    public function __construct($stream, ColorProfile $profile)
     {
         $this->stream = $stream;
         $this->profile = $profile;
@@ -68,7 +67,7 @@ final class ProfileWriter
     /**
      * Get the current target profile.
      */
-    public function profile(): Profile
+    public function profile(): ColorProfile
     {
         return $this->profile;
     }
@@ -78,7 +77,7 @@ final class ProfileWriter
      *
      * @return self A clone targeting $profile; the original is unchanged.
      */
-    public function withProfile(Profile $profile): self
+    public function withProfile(ColorProfile $profile): self
     {
         $clone = clone $this;
         $clone->profile = $profile;
@@ -96,9 +95,9 @@ final class ProfileWriter
      */
     public function write(string $data): int|false
     {
-        if ($this->profile === Profile::NoTTY) {
+        if ($this->profile === ColorProfile::NoTTY) {
             $data = Palette::stripAnsi($data);
-        } elseif ($this->profile !== Profile::TrueColor) {
+        } elseif ($this->profile !== ColorProfile::TrueColor) {
             // Pin to the configured profile — do NOT re-detect from ambient env.
             // Use null values to block parent state from leaking via $_ENV/getenv.
             // NO_COLOR=1 forces the intermediate Palette to NoTTY; then

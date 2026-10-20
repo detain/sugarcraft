@@ -32,7 +32,7 @@ final class Palette
      */
     private const MAX_SGR_PARAMS_BYTES = 4096;
 
-    private Profile $profile;
+    private ColorProfile $profile;
 
     /**
      * Detect the terminal color profile from the environment.
@@ -67,7 +67,7 @@ final class Palette
     /**
      * Get the detected profile.
      */
-    public function profile(): Profile
+    public function profile(): ColorProfile
     {
         return $this->profile;
     }
@@ -75,7 +75,7 @@ final class Palette
     /**
      * Override the detected profile (e.g. manually downgrade for testing).
      */
-    public function withProfile(Profile $profile): self
+    public function withProfile(ColorProfile $profile): self
     {
         $clone = clone $this;
         $clone->profile = $profile;
@@ -88,7 +88,7 @@ final class Palette
      * @param resource|null $stream
      * @param array<string,string|null> $env
      */
-    public static function detect($stream = null, array $env = []): Profile
+    public static function detect($stream = null, array $env = []): ColorProfile
     {
         return (new self($stream, $env))->profile();
     }
@@ -104,7 +104,7 @@ final class Palette
     /**
      * Static shortcut for one-off color conversion.
      */
-    public static function toProfile(Color $color, Profile $profile): Color
+    public static function toProfile(Color $color, ColorProfile $profile): Color
     {
         return $color->convert($profile);
     }
@@ -118,11 +118,11 @@ final class Palette
      */
     public function degrade(string $ansi): string
     {
-        if ($this->profile === Profile::NoTTY) {
+        if ($this->profile === ColorProfile::NoTTY) {
             return $this->stripAnsi($ansi);
         }
 
-        if ($this->profile === Profile::TrueColor) {
+        if ($this->profile === ColorProfile::TrueColor) {
             return $ansi; // No conversion needed
         }
 
@@ -166,11 +166,14 @@ final class Palette
     public function comment(): string
     {
         return match ($this->profile) {
-            Profile::TrueColor => 'fancy',
-            Profile::ANSI256   => '1990s fancy',
-            Profile::ANSI      => 'normcore',
-            Profile::Ascii     => 'ancient',
-            Profile::NoTTY     => 'naughty!',
+            ColorProfile::TrueColor => 'fancy',
+            ColorProfile::Ansi256   => '1990s fancy',
+            ColorProfile::Ansi240   => '1990s fancy, theme-safe',
+            ColorProfile::Ansi      => 'normcore',
+            ColorProfile::Ansi8     => 'CGA basic',
+            ColorProfile::Fgbg      => 'paper & ink',
+            ColorProfile::Ascii     => 'ancient',
+            ColorProfile::NoTTY     => 'naughty!',
         };
     }
 
@@ -222,11 +225,11 @@ final class Palette
         return $value === false ? null : $value;
     }
 
-    private static function detectProfile($stream, array $env): Profile
+    private static function detectProfile($stream, array $env): ColorProfile
     {
         // 1. CLICOLOR_FORCE=1 → TrueColor (overrides everything below)
         if (self::envValue($env, 'CLICOLOR_FORCE') === '1') {
-            return Profile::TrueColor;
+            return ColorProfile::TrueColor;
         }
 
         // 2. FORCE_COLOR: SugarCraft extension (level-based) — not in DetectionChain
@@ -238,10 +241,10 @@ final class Palette
             $force = \in_array(\strtolower($force), ['true', 'yes', 'on'], true) ? '3' : $force;
             $level = \intval($force);
             return match (true) {
-                $level >= 3 => Profile::TrueColor,
-                $level === 2 => Profile::ANSI256,
-                $level === 1 => Profile::ANSI,
-                default => Profile::Ascii,
+                $level >= 3 => ColorProfile::TrueColor,
+                $level === 2 => ColorProfile::Ansi256,
+                $level === 1 => ColorProfile::ANSI,
+                default => ColorProfile::Ascii,
             };
         }
 
@@ -253,7 +256,7 @@ final class Palette
         // explicit no-color environment (audit #2): the iTerm upgrade below
         // only runs when the chain allows color.
         if (!$chain->allowsColor()) {
-            return Profile::NoTTY;
+            return ColorProfile::NoTTY;
         }
 
         // 8-12: Return the profile from DetectionChain
@@ -262,7 +265,7 @@ final class Palette
         // TERM_PROGRAM=iTerm.app check (only if color is allowed)
         $termProgram = self::envValue($env, 'TERM_PROGRAM');
         if ($termProgram === 'iTerm.app') {
-            return Profile::TrueColor;
+            return ColorProfile::TrueColor;
         }
 
         // 13. TTY detection — Palette-specific (Probe and TerminalProbe don't
@@ -273,7 +276,7 @@ final class Palette
         // return NoTTY under any piped/CI stdout, regardless of $env.)
         if ($stream !== null && \function_exists('stream_isatty')) {
             if (!@\stream_isatty($stream)) {
-                return Profile::NoTTY;
+                return ColorProfile::NoTTY;
             }
         }
 
@@ -292,7 +295,7 @@ final class Palette
      * re-emitted per-profile rather than dropped or left at a depth the
      * terminal cannot address.
      */
-    private function rewriteAnsi(string $s, Profile $targetProfile): string
+    private function rewriteAnsi(string $s, ColorProfile $targetProfile): string
     {
         return \preg_replace_callback(
             '/\x1b\[([0-9;:]*)m/',
@@ -304,7 +307,7 @@ final class Palette
     /**
      * Rewrite one SGR parameter list (the text between `CSI` and `m`).
      */
-    private function rewriteSgr(string $params, Profile $target): string
+    private function rewriteSgr(string $params, ColorProfile $target): string
     {
         // Fast path: no extended-colour introducer → byte-identical passthrough.
         // (Leading zeros are valid ECMA-48 padding: `038` introduces colour 38.)
@@ -479,17 +482,21 @@ final class Palette
      * At ANSI256 an in-range slot is already exactly addressable, so it is
      * passed through as the slot the theme picked — decoding to RGB and
      * re-quantising could knock a themeable basic slot (0-15) onto the fixed
-     * cube and strip the user's palette. 38/48 at 16-colour depth collapse to
+     * cube and strip the user's palette. At ANSI240 (B-09, chafa's
+     * INDEXED_240) that mercy does not extend to slots 0-15: those vary with
+     * the user's theme and the 240-colour promise excludes them, so a
+     * `38;5;k` with k < 16 is decoded and re-quantised onto the fixed range
+     * instead of passed through. 38/48 at 16-colour depth collapse to
      * the 4-bit SGR; 58 keeps its introducer (underlines need a colour id a
      * 4-bit code cannot carry) pinned to the nearest of the 16 palette slots.
      *
      * @param list<int> $values
      */
-    private function emitColor(int $intro, int $kind, array $values, Profile $target): string
+    private function emitColor(int $intro, int $kind, array $values, ColorProfile $target): string
     {
         $slot = $kind === 5 ? $values[0] : null;
 
-        if ($target === Profile::ANSI256) {
+        if ($target === ColorProfile::Ansi256) {
             if ($slot !== null && $slot >= 0 && $slot <= 255) {
                 return "{$intro};5;{$slot}";
             }
@@ -499,7 +506,20 @@ final class Palette
             return "{$intro};5;{$color->toAnsi256Index()}";
         }
 
-        // ANSI / Ascii.
+        if ($target === ColorProfile::Ansi240) {
+            if ($slot !== null && $slot >= 16 && $slot <= 255) {
+                return "{$intro};5;{$slot}";
+            }
+            // Below 16 there is no honest passthrough: decode the themeable
+            // slot to its reference RGB and re-quantise — toAnsi256Index()
+            // lands exclusively on the fixed 16-255 range.
+            $color = $kind === 2
+                ? new Color($values[0], $values[1], $values[2])
+                : Color::fromAnsi256Index($slot ?? 0);
+            return "{$intro};5;{$color->toAnsi256Index()}";
+        }
+
+        // ANSI / ANSI 8 / FGBG / Ascii (58 keeps an indexed introducer).
         $color = $kind === 2
             ? new Color($values[0], $values[1], $values[2])
             : Color::fromAnsi256Index($slot ?? 0);

@@ -164,18 +164,16 @@ final class DetectionChain
     }
 
     /**
-     * Convert the detection level to a Profile enum.
+     * Convert the detection level to the profile enum.
+     *
+     * @deprecated B-09 — {@see Profile} is now a class_alias façade over
+     *             {@see ColorProfile}; this method and
+     *             {@see self::toColorProfile()} return the same thing.
+     *             Call toColorProfile() in new code.
      */
-    public function toProfile(): Profile
+    public function toProfile(): ColorProfile
     {
-        return match ($this->level) {
-            self::LEVEL_TRUECOLOR => Profile::TrueColor,
-            self::LEVEL_ANSI256 => Profile::ANSI256,
-            self::LEVEL_ANSI => Profile::ANSI,
-            self::LEVEL_ASCII => Profile::Ascii,
-            self::LEVEL_NONE => Profile::NoTTY,
-            default => Profile::ANSI,
-        };
+        return $this->toColorProfile();
     }
 
     /**

@@ -74,19 +74,27 @@ final class Color
      * Convert this color to the closest approximation representable in $profile.
      *
      * - TrueColor: returns a copy unchanged (already at max fidelity)
-     * - ANSI256:  rounds to the nearest 216-color cube or 24-step grey ramp
-     * - ANSI:     rounds to one of 16 standard terminal colors
+     * - Ansi256:  rounds to the nearest 216-color cube or 24-step grey ramp
+     * - Ansi240:  same quantiser — it lands exclusively on slots 16-255 by
+     *             construction, which IS the chafa INDEXED_240 promise (B-09)
+     * - Ansi:     rounds to one of 16 standard terminal colors
+     * - Ansi8:    rounds to one of the 8 basic terminal colors (slots 0-7)
+     * - Fgbg:     black or white by perceived brightness (the palette layer
+     *             of chafa's FGBG; inversion painting is render-side)
      * - Ascii:    returns black or white based on perceived luminance
      * - NoTTY:    returns a near-black or near-white for legibility
      */
-    public function convert(Profile $profile): self
+    public function convert(ColorProfile $profile): self
     {
         return match ($profile) {
-            Profile::TrueColor => $this,
-            Profile::ANSI256   => $this->toAnsi256(),
-            Profile::ANSI      => $this->toAnsi16(),
-            Profile::Ascii,
-            Profile::NoTTY     => $this->toAscii(),
+            ColorProfile::TrueColor => $this,
+            ColorProfile::Ansi256   => $this->toAnsi256(),
+            ColorProfile::Ansi240   => $this->toAnsi256(),
+            ColorProfile::Ansi      => $this->toAnsi16(),
+            ColorProfile::Ansi8     => $this->toAnsi8(),
+            ColorProfile::Fgbg,
+            ColorProfile::Ascii,
+            ColorProfile::NoTTY     => $this->toAscii(),
         };
     }
 
@@ -225,6 +233,29 @@ final class Color
         $best = 0;
         $bestDist = PHP_INT_MAX;
         foreach (self::ANSI16_RGB as $idx => [$pr, $pg, $pb]) {
+            $dist = ($this->r - $pr) ** 2 + ($this->g - $pg) ** 2 + ($this->b - $pb) ** 2;
+            if ($dist < $bestDist) {
+                $bestDist = $dist;
+                $best = $idx;
+            }
+        }
+        return $best;
+    }
+
+    /**
+     * Convert to the ANSI 8-color basic palette index (0-7).
+     *
+     * Nearest-by-squared-RGB over the eight BASIC slots of
+     * {@see self::ANSI16_RGB} — the bright half (8-15) is out of reach by
+     * definition. B-09 mints this level to mirror the low half of chafa's
+     * INDEXED_16_8 rung; every exact basic slot value round-trips to itself,
+     * the same property toAnsi16Index() pins for all 16.
+     */
+    public function toAnsi8Index(): int
+    {
+        $best = 0;
+        $bestDist = PHP_INT_MAX;
+        foreach (\array_slice(self::ANSI16_RGB, 0, 8, preserve_keys: true) as $idx => [$pr, $pg, $pb]) {
             $dist = ($this->r - $pr) ** 2 + ($this->g - $pg) ** 2 + ($this->b - $pb) ** 2;
             if ($dist < $bestDist) {
                 $bestDist = $dist;
@@ -386,6 +417,12 @@ final class Color
     private function toAnsi16(): self
     {
         [$r, $g, $b] = self::ANSI16_RGB[$this->toAnsi16Index()];
+        return new self($r, $g, $b, $this->a);
+    }
+
+    private function toAnsi8(): self
+    {
+        [$r, $g, $b] = self::ANSI16_RGB[$this->toAnsi8Index()];
         return new self($r, $g, $b, $this->a);
     }
 

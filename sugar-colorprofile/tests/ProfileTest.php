@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\ColorProfile\Tests;
 
+use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\ColorProfile\Profile;
 use PHPUnit\Framework\TestCase;
 
@@ -25,9 +26,15 @@ final class ProfileTest extends TestCase
 
     public function testDegradedToChain(): void
     {
+        // B-09: the chain gained the chafa-mirroring intermediate rungs
+        // (ANSI256 → Ansi240 → ANSI → Ansi8 → Fgbg → Ascii); full walk pinned
+        // in ColorProfileVocabularyTest::testLadderWalksAllEightRungs.
         $this->assertSame(Profile::ANSI256, Profile::TrueColor->degradedTo());
-        $this->assertSame(Profile::ANSI, Profile::ANSI256->degradedTo());
-        $this->assertSame(Profile::Ascii, Profile::ANSI->degradedTo());
+        $this->assertSame(ColorProfile::Ansi240, Profile::ANSI256->degradedTo());
+        $this->assertSame(Profile::ANSI, ColorProfile::Ansi240->degradedTo());
+        $this->assertSame(ColorProfile::Ansi8, Profile::ANSI->degradedTo());
+        $this->assertSame(ColorProfile::Fgbg, ColorProfile::Ansi8->degradedTo());
+        $this->assertSame(Profile::Ascii, ColorProfile::Fgbg->degradedTo());
         $this->assertSame(Profile::NoTTY, Profile::Ascii->degradedTo());
         $this->assertNull(Profile::NoTTY->degradedTo());
     }

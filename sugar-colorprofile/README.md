@@ -18,13 +18,13 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
 ## Features
 
 - **Detect terminal color profile** from environment variables and TTY info
-- **Profile enum**: `TrueColor` (24-bit) → `ANSI256` (255-color) → `ANSI` (16-color) → `Ascii` (no color) → `NoTTY`
-- **Color conversion**: downsample RGBA colors to any target profile
+- **ColorProfile enum** (B-09 canonical vocabulary): `TrueColor` (24-bit) → `Ansi256` (256-color) → `Ansi240` (fixed slots 16-255) → `Ansi` (16-color) → `Ansi8` (basic 8) → `Fgbg` (two-color fg/bg) → `Ascii` (black/white) → `NoTTY`; the former renderer-facing `Profile` enum is now a deprecated `class_alias` façade over it — every old `Profile::X` spelling still resolves
+- **Color conversion**: downsample RGBA colors to any target profile in one shared vocabulary (detection and renderer enums consolidated under B-09)
 - **ProfileWriter**: wrap a stream and automatically degrade color codes to match the terminal
 - **ANSI stripping**: `NoTTY` strips all ANSI sequences from output
 - **Environment-aware**: reads `TERM`, `COLORTERM`, `FORCE_COLOR`, `NO_COLOR`, `TERM_PROGRAM`
 - **Probe class**: static env-detection layer with precedence-ordered rules + infocmp Phase 2 upgrade
-- **ColorProfile enum**: SSOT env-detection enum (NoTTY/Ascii/Ansi/Ansi256/TrueColor) for libs that need raw profile values without constructing a Palette instance
+- **ColorProfile enum**: the single shared color-depth vocabulary (8 levels) — detection chain and renderer speak it together (B-09 consolidation)
 - **Perceptual color distance**: CIELAB conversion + ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ (CIEDE2000) metrics with an opt-in nearest-palette matcher (`NearestColor`), palette Lab values memoised for hot loops, a PCA-bucketed exact lookup index for repeated queries (`PaletteIndex`), and error-compensated quantization for dither chains (`NearestColor::withError()`)
 
 ## Install
@@ -58,26 +58,32 @@ $writer->write("\x1b[38;2;107;80;255mFancy text\x1b[0m\n");
 
 ## Profiles
 
-| Profile   | Colors | Description                      |
-|-----------|--------|----------------------------------|
-| TrueColor | 16.7M  | Full 24-bit RGB (24-bit ANSI)    |
-| ANSI256   | 256    | 216 cube + 24 grey + 16 standard |
-| ANSI      | 16     | Standard terminal colors         |
-| Ascii     | 2      | Black & white                    |
-| NoTTY     | 0      | No color (ANSI stripped)         |
+| ColorProfile | Colors    | Description                                     |
+|--------------|-----------|-------------------------------------------------|
+| TrueColor    | 16.7M     | Full 24-bit RGB (24-bit ANSI)                   |
+| Ansi256      | 256       | 216 cube + 24 grey + 16 standard                |
+| Ansi240      | 240       | Fixed palette only — slots 16-255 (chafa INDEXED_240) |
+| Ansi         | 16        | Standard terminal colors                        |
+| Ansi8        | 8         | Basic ANSI, no bright variants                  |
+| Fgbg         | 2         | Two-color fg/bg by brightness (chafa FGBG)      |
+| Ascii        | 2         | Black & white                                   |
+| NoTTY        | 0         | No color (ANSI stripped)                        |
+
+`Profile` is the deprecated alias of `ColorProfile` (B-09); `Profile::ANSI256`
+and `Profile::ANSI` keep resolving through deprecated constant bridges.
 
 ## Color Degradation
 
 ```php
 use SugarCraft\ColorProfile\Color;
+use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\ColorProfile\Palette;
-use SugarCraft\ColorProfile\Profile;
 
 $color = new Color(100, 50, 255, 255);
 
 // Downsample to an explicit profile (static one-off shortcut)
-$ansi256 = Palette::toProfile($color, Profile::ANSI256); // nearest cube/grey index
-$ansi    = Palette::toProfile($color, Profile::ANSI);    // nearest of the 16 slots
+$ansi256 = Palette::toProfile($color, ColorProfile::Ansi256); // nearest cube/grey index
+$ansi    = Palette::toProfile($color, ColorProfile::Ansi);    // nearest of the 16 slots
 
 echo $ansi256->toAnsi256Foreground(); // "\x1b[38;5;…m"
 echo $ansi->toAnsi16Foreground();     // "\x1b[…m" — 4-bit SGR
@@ -185,7 +191,7 @@ if (Probe::reducedMotion()) {
 
 ## ColorProfile Enum
 
-`ColorProfile` is the SSOT enum for environment-driven color capability. It is used by `Probe` and consumed by libs that need the raw profile value (sugar-log, sugar-image, candy-codeshot, sugar-vterm).
+`ColorProfile` is the single shared color-depth vocabulary (B-09): the detection chain speaks it, `Palette`/`ProfileWriter` degrade against it, and libs that need the raw profile value consume it directly (sugar-log, sugar-image, candy-codeshot, sugar-vterm). `Profile` remains only as a deprecated `class_alias` façade over it.
 
 ```php
 use SugarCraft\ColorProfile\ColorProfile;
@@ -195,15 +201,21 @@ $profile = Probe::colorProfile();
 
 // Human-readable label
 echo $profile->label(); // "TrueColor"
+
+// Request-side arms (detection never emits these):
+$writer = $writer->withProfile(ColorProfile::Ansi240); // never touch slots 0-15
 ```
 
 | Case      | Value       | Label        |
 |-----------|-------------|--------------|
-| `NoTTY`  | `'notty'`    | No TTY       |
-| `Ascii`  | `'ascii'`    | ASCII        |
-| `Ansi`   | `'ansi'`     | ANSI         |
-| `Ansi256` | `'ansi256'`  | ANSI 256     |
 | `TrueColor` | `'truecolor'` | TrueColor  |
+| `Ansi256` | `'ansi256'`  | ANSI 256     |
+| `Ansi240` | `'ansi240'`  | ANSI 240     |
+| `Ansi`   | `'ansi'`     | ANSI         |
+| `Ansi8`  | `'ansi8'`    | ANSI 8       |
+| `Fgbg`   | `'fgbg'`     | FGBG         |
+| `Ascii`  | `'ascii'`    | ASCII        |
+| `NoTTY`  | `'notty'`    | No TTY       |
 
 ## Architecture
 
@@ -211,8 +223,8 @@ echo $profile->label(); // "TrueColor"
 SugarCraft\ColorProfile\
 ├── Color          — RGBA color value object with conversion methods (Color::namedColors() lists standard names)
 ├── Palette        — instance-based detection + degradation + ProfileWriter
-├── Profile         — legacy detection enum (richest→simplest order)
-├── ColorProfile    — new SSOT detection enum (simplest→richest order, Probe-driven)
+├── ColorProfile   — THE color-depth enum (8 levels, richest→simplest; B-09 consolidation)
+├── Profile        — deprecated class_alias façade over ColorProfile (B-09)
 ├── Probe           — static env-probe layer (colorProfile/isNoColor/isForceColor/reducedMotion)
 ├── StandardColors  — ANSI/ANSI256 standard palette
 ├── ProfileWriter  — stream wrapper for automatic color degradation
