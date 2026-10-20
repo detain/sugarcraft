@@ -280,9 +280,18 @@ final class GifDecoder implements Decoder
      * Read the whole file, once, under the same hard gates sugar-image's
      * round-4 hardening applies (E-11): the path is opened exactly one time,
      * the entry must be a regular file at BOTH the stat and the post-open
-     * fstat (a swap between the two is a TOCTOU plant), and the capture is
-     * bounded by {@see MAX_SOURCE_BYTES} with one byte of over-read so an
-     * exactly-at-cap file still fails loud instead of silently truncating.
+     * fstat (a swap between the two is a TOCTOU plant).
+     *
+     * The capture is bounded on TWO axes, and this method enforces only the
+     * first. SIZE is bounded by {@see MAX_SOURCE_BYTES}, read with one byte
+     * of over-read so a file that yields more than the cap — even one whose
+     * stat size understated it (the swap the post-open fstat cannot see if
+     * it lands between stat and read) — fails loud rather than being
+     * silently truncated to the ceiling. A file exactly AT the cap is
+     * ACCEPTED: the gate is `size > cap`, not `>=`. COUNT is bounded
+     * separately, downstream: the canonical sugar-animation decoder this
+     * buffer feeds truncates the frame stream at MAX_FRAMES (256), so even
+     * an in-cap GIF cannot pin an unbounded number of frames in memory.
      *
      * @throws \RuntimeException on missing, non-regular, unreadable, or oversized source
      */

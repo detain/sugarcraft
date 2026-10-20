@@ -9,7 +9,7 @@ use SugarCraft\Video\Decode\GifDecoder;
 use SugarCraft\Video\Render\Mode;
 
 /**
- * E-11: the TOCTOU cure — a GifDecoder reads its source EXACTLY ONCE at
+ * E-07: the bytes-ingress seam that cures the E-11 TOCTOU — a GifDecoder reads its source EXACTLY ONCE at
  * open and every later decode (including reopen of the same path) runs over
  * the captured bytes, so mutating or replacing the file underneath a live
  * player can no longer change what plays mid-session.
@@ -234,5 +234,39 @@ final class GifDecoderBytesIngressTest extends TestCase
             $this->assertStringContainsString('above the', $e->getMessage());
             $this->assertStringContainsString('byte ceiling', $e->getMessage());
         }
+    }
+
+    /**
+     * @testdox a source EXACTLY at the byte ceiling opens and decodes (the cap is `>`, not `>=`) (E-07)
+     */
+    public function testExactlyAtCapSourceIsAccepted(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $gif = $this->createBlackGif(4, 3);
+        $gifBytes = (string) file_get_contents($gif);
+
+        // Pad AFTER the GIF trailer. The block walk stops at the 0x3B trailer
+        // (sugar-animation Decoder), so the trailing filler is never parsed
+        // as frames — it exists only to bring the stat size to exactly the
+        // ceiling. That is the one shape the over-read guard must ACCEPT: a
+        // `>=` gate would silently refuse a legal at-cap source, and a
+        // truncating read would feed the decoder a clipped container.
+        $padded = $gifBytes . str_repeat("\x00", GifDecoder::MAX_SOURCE_BYTES - strlen($gifBytes));
+        $this->assertSame(GifDecoder::MAX_SOURCE_BYTES, strlen($padded));
+
+        $path = $this->track(sys_get_temp_dir() . '/sugar-video-e07-capexact-' . uniqid('', true) . '.gif');
+        if ((int) @file_put_contents($path, $padded) <= 0) {
+            $this->markTestSkipped('filesystem cannot hold a ' . GifDecoder::MAX_SOURCE_BYTES . '-byte test file');
+        }
+
+        $decoder = new GifDecoder();
+        $decoder->open($path, 4, 3, 10.0, Mode::Ascii);
+        $frame = $decoder->next();
+        $decoder->close();
+
+        $this->assertNotNull($frame, 'an exactly-at-cap source must open and decode — not be refused, not be truncated');
     }
 }
