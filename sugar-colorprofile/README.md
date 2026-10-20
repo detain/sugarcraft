@@ -25,7 +25,7 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
 - **Environment-aware**: reads `TERM`, `COLORTERM`, `FORCE_COLOR`, `NO_COLOR`, `TERM_PROGRAM`
 - **Probe class**: static env-detection layer with precedence-ordered rules + infocmp Phase 2 upgrade
 - **ColorProfile enum**: SSOT env-detection enum (NoTTY/Ascii/Ansi/Ansi256/TrueColor) for libs that need raw profile values without constructing a Palette instance
-- **Perceptual color distance**: CIELAB conversion + ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ (CIEDE2000) metrics with an opt-in nearest-palette matcher (`NearestColor`), palette Lab values memoised for hot loops
+- **Perceptual color distance**: CIELAB conversion + ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ (CIEDE2000) metrics with an opt-in nearest-palette matcher (`NearestColor`), palette Lab values memoised for hot loops, and a PCA-bucketed exact lookup index for repeated queries (`PaletteIndex`)
 
 ## Install
 
@@ -97,6 +97,7 @@ use SugarCraft\ColorProfile\ColorDistance;
 use SugarCraft\ColorProfile\ColorMath;
 use SugarCraft\ColorProfile\DeltaE;
 use SugarCraft\ColorProfile\NearestColor;
+use SugarCraft\ColorProfile\PaletteIndex;
 
 // sRGB -> linear -> XYZ (D65) -> CIELAB
 $lab  = ColorMath::toLab(64, 96, 128);         // ['l' => …, 'a' => …, 'b' => …]
@@ -114,6 +115,13 @@ $index   = $matcher->ansi256(new Color(30, 120, 30));
 // Arbitrary palette (list or map), returns the key of the winner
 $brand = ['logo' => new Color(10, 20, 30), 'accent' => new Color(240, 250, 255)];
 $key   = $matcher->closest(new Color(12, 34, 56), $brand);
+
+// Repeated lookups over one fixed palette: the PCA-bucketed index (B-04).
+// Answers EXACTLY what the brute-force scan answers (lowest index on ties) —
+// it only trades construction cost for a sublinear lookup. Euclidean and Cie76
+// only; those are the metrics that admit a distance-preserving rotation.
+$idx  = PaletteIndex::fromPalette(NearestColor::palette256(), ColorDistance::Cie76);
+$near = $idx->nearest(new Color(30, 120, 30));                    // === $matcher->ansi256(...)
 ```
 
 The 256-entry and 16-entry palette Lab tables are memoised statically, so a warm
