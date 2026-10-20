@@ -2120,6 +2120,13 @@ final class SessionHost
      * are read at CALL time — not because a host can late-mint (its id is
      * `readonly`, named before the first turn), but because one shape for
      * both sinks is one shape to keep correct.
+     *
+     * W7a-1: the threaded model wins, exactly as Chat's sink prefers it, and
+     * the fallback reads {@see backend()} — the SESSION's live backend — not
+     * the workspace's. After a served `/model` the workspace backend is the
+     * launch provider while turns run on the override; reading the workspace
+     * here billed every auxiliary call against the model that no longer
+     * answers.
      */
     private function usageRecordSink(): ?\Closure
     {
@@ -2128,12 +2135,12 @@ final class SessionHost
             return null;
         }
 
-        return function (Usage $usage) use ($store): void {
-            $backend = $this->workspace->backend;
+        return function (Usage $usage, ?string $model = null) use ($store): void {
+            $backend = $this->backend();
             $store->appendUsageRecord(
                 $this->sessionId,
                 $usage,
-                $backend instanceof EngineBackend ? $backend->model() : null,
+                $model ?? ($backend instanceof EngineBackend ? $backend->model() : null),
             );
         };
     }

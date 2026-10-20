@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Host;
 
+use PDO;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Backend\EngineBackend;
@@ -29,6 +30,7 @@ use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Providers\RebindsModel;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
+use SugarCraft\Code\Usage;
 
 /**
  * WEB-2: compact, model, init, goal and grind gained host bodies, so the
@@ -222,6 +224,43 @@ final class WebTwoHostCommandsTest extends TestCase
         self::assertStringContainsString('cannot rebind its model', $flagged[0]->content);
     }
 
+    /**
+     * W7a-1: the serve path's durable ledger row must carry the model that
+     * ACTUALLY answered. Before this, the sink read the workspace backend —
+     * the launch provider — while turns after `/model` run on the session
+     * override, so a served switch mis-stamped every later usage row.
+     */
+    public function testTheSinkStampsTheSessionBackendAfterAModelSwitch(): void
+    {
+        $pdo = $this->recordModelForSessionBackend(
+            static function (SessionHost $host): void {
+                (new \ReflectionProperty(SessionHost::class, 'sessionBackend'))->setValue(
+                    $host,
+                    EngineBackend::new(new ScriptedProvider([]), 'switched-model'),
+                );
+            },
+        );
+
+        self::assertSame('switched-model', $pdo->query("SELECT model FROM usage_records WHERE session_id = 's'")->fetchColumn(),
+            'the fallback reads the session backend, not the launch provider');
+    }
+
+    public function testTheSinkPrefersTheThreadedModelOverAnyBackend(): void
+    {
+        $pdo = $this->recordModelForSessionBackend(threaded: 'judge-9');
+
+        self::assertSame('judge-9', $pdo->query("SELECT model FROM usage_records WHERE session_id = 's'")->fetchColumn());
+    }
+
+    /** Without a session override, the plain launch path stamps exactly as before. */
+    public function testTheSinkOnAnUnswitchedSessionStampsTheWorkspaceModel(): void
+    {
+        $pdo = $this->recordModelForSessionBackend();
+
+        self::assertSame('launch-model', $pdo->query("SELECT model FROM usage_records WHERE session_id = 's'")->fetchColumn(),
+            'no thread and no override: byte-identical to the pre-W7a answer');
+    }
+
     public function testAnUnknownProviderAnswersWhereTheBackendFactoryRefusesIt(): void
     {
         $host = $this->host(backendFactory: static function (string $provider): \SugarCraft\Code\Backend {
@@ -375,6 +414,32 @@ final class WebTwoHostCommandsTest extends TestCase
     private static function backend(SessionHost $host): \SugarCraft\Code\Backend
     {
         return (new \ReflectionMethod(SessionHost::class, 'backend'))->invoke($host);
+    }
+
+    /**
+     * Drive the host's real sink closure once and hand back a PDO on the
+     * session db, so each test asserts on the model the durable row carries.
+     *
+     * @param (\Closure(SessionHost): void)|null $applySessionBackend
+     */
+    private function recordModelForSessionBackend(?\Closure $applySessionBackend = null, ?string $threaded = null): PDO
+    {
+        $launch = EngineBackend::new(new ScriptedProvider([]), 'launch-model');
+        $host = SessionHost::new(
+            's',
+            WorkspaceContext::new(sessionStore: $this->store, backend: $launch),
+            history: [],
+            customCommands: [],
+        );
+        if ($applySessionBackend !== null) {
+            $applySessionBackend($host);
+        }
+
+        $sink = (new \ReflectionMethod(SessionHost::class, 'usageRecordSink'))->invoke($host);
+        self::assertNotNull($sink, 'a host on the enhanced store carries a sink');
+        $sink(Usage::new(totalTokens: 10, costUsd: 0.05), $threaded);
+
+        return new PDO('sqlite:' . $this->dir . '/session.db');
     }
 
     /** Run the shared loop until the host lets go of the session — bounded. */
