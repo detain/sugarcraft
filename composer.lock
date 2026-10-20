@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3c5eb27217f207a00f93e9d635387784",
+    "content-hash": "6de6f042d4feb1476ea68c599f1c91b5",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4076,6 +4076,75 @@
             }
         },
         {
+            "name": "sugarcraft/candy-image",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-image",
+                "reference": "545f6decfaae072b28b096575045dc8714820940"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/sugar-animation": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
+                "sugarcraft/sugar-image": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "suggest": {
+                "ext-gd": "Required to decode image files (via sugarcraft/sugar-image); every render path in this app needs it."
+            },
+            "bin": [
+                "bin/candy-image"
+            ],
+            "type": "project",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\CandyImage\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\CandyImage\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Terminal image viewer CLI (F-18) — the chafa-independent front end of sugarcraft/sugar-image: file in, best-protocol image out, zero new render logic.",
+            "homepage": "https://sugarcraft.github.io/lib/candy-image.html",
+            "keywords": [
+                "chafa",
+                "cli",
+                "halfblock",
+                "image",
+                "iterm2",
+                "kitty",
+                "sixel",
+                "sugarcraft",
+                "tui",
+                "viewer"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-image/issues",
+                "source": "https://github.com/sugarcraft/candy-image",
+                "docs": "https://sugarcraft.github.io/lib/candy-image.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-kv",
             "version": "dev-master",
             "dist": {
@@ -5848,7 +5917,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-image",
-                "reference": "655c98421e83fe8ae532770a479477d6264b4f9b"
+                "reference": "8b11c11ccb8f747e6a58db14d9b372d97919f2e9"
             },
             "require": {
                 "ext-gd": "*",
@@ -5856,6 +5925,7 @@
                 "php": "^8.3",
                 "react/promise": "^3.3",
                 "sugarcraft/sugar-animation": "dev-master",
+                "sugarcraft/sugar-cellbuffer": "dev-master",
                 "sugarcraft/sugar-colorprofile": "dev-master",
                 "sugarcraft/sugar-core": "dev-master"
             },
@@ -8603,6 +8673,7 @@
         "sugarcraft/candy-gifview": 20,
         "sugarcraft/candy-git": 20,
         "sugarcraft/candy-git-server": 20,
+        "sugarcraft/candy-image": 20,
         "sugarcraft/candy-kv": 20,
         "sugarcraft/candy-mail": 20,
         "sugarcraft/candy-mdview": 20,
