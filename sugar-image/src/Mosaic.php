@@ -721,6 +721,11 @@ final class Mosaic
      * colour arms — {@see modeDetail()} tells them apart; {@see protocol()}
      * answers 'ascii' for all of them.
      *
+     * {@see supportedProtocols()} answers the seven backend protocol slots —
+     * the count-7 roster pin in MosaicTest polices THAT roster, not this
+     * input vocabulary: alias spellings fold into halfblock and
+     * quarterblock, and the colour-mode arms fold into 'ascii'.
+     *
      * Returns null on an unknown mode so callers can phrase the error in
      * their own words rather than unwinding an exception.
      */

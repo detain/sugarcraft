@@ -133,4 +133,70 @@ final class MosaicModeStringTest extends TestCase
         $this->assertNull(Mosaic::fromModeString(''));
         $this->assertNull(Mosaic::fromModeString('  '));
     }
+
+    /**
+     * A-06: the docblock above fromModeString() and the method's match arms are
+     * one contract stated twice, so the prose is re-derived from the code
+     * rather than hand-copied: the set of backticked words in the docblock
+     * must equal the set of string-literal arms the method matches. A spelling
+     * added on either side without the other reddens this pin.
+     */
+    public function testDocblockVocabularyEqualsTheMatchArmRoster(): void
+    {
+        $accepted = $this->acceptedSpellings();
+        $doc = (new \ReflectionMethod(Mosaic::class, 'fromModeString'))->getDocComment();
+        $this->assertIsString($doc);
+
+        preg_match_all('/`([a-z0-9]+)`/', $doc, $documented);
+        sort($accepted);
+        $prose = array_values(array_unique($documented[1]));
+        sort($prose);
+
+        $this->assertSame(
+            $accepted,
+            $prose,
+            'Every accepted spelling must be documented, and every documented word must be accepted'
+        );
+    }
+
+    /**
+     * A-06: the behaviour-matrix provider must feed every accepted spelling —
+     * a future match arm with no provider row (or a provider word the method
+     * stopped accepting) reddens this pin before the matrix could go stale.
+     */
+    public function testModeProviderFeedsEveryAcceptedSpelling(): void
+    {
+        $accepted = $this->acceptedSpellings();
+        $provider = array_map(
+            static fn (array $row): string => $row[0],
+            self::modeProvider()
+        );
+        sort($accepted);
+        $words = array_values(array_unique($provider));
+        sort($words);
+
+        $this->assertSame($accepted, $words);
+    }
+
+    /**
+     * @return list<string> the spellings fromModeString() actually matches,
+     *         derived from its source slice (no hand-typed roster)
+     */
+    private function acceptedSpellings(): array
+    {
+        $method = new \ReflectionMethod(Mosaic::class, 'fromModeString');
+        $file = $method->getFileName();
+        $this->assertIsString($file);
+        $lines = file($file);
+        $this->assertIsArray($lines);
+
+        $body = implode('', array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        ));
+        preg_match_all("/'([a-z0-9]+)'/", $body, $arms);
+
+        return array_values(array_unique($arms[1]));
+    }
 }
