@@ -687,9 +687,12 @@ final class ImageSource
      * is swapped to a FIFO in the nanoseconds before `fopen()` still blocks the open —
      * POSIX offers no non-blocking `fopen()`/`O_NONBLOCK` path through PHP's stream
      * layer, and any later re-open of `$path` would re-expose the same window. This is
-     * why {@see self::animatedFramesFromGif()} decodes from the bytes read HERE and hands
-     * sugar-animation a private temp copy (round-4 HIGH): the attacker-reachable path is
-     * opened at most once, so a post-read swap cannot be re-followed. Closing the last
+     * why {@see self::animatedFramesFromGif()} decodes from the bytes read HERE and —
+     * since E-07 — hands sugar-animation those bytes directly through its bytes-ingress
+     * decoder (`decodeGifFramesFromBytes`): the attacker-reachable path is opened
+     * exactly once on the whole GIF route, so a post-read swap cannot be re-followed
+     * at all (the round-4 HIGH private-temp-copy staging was the pre-E-07 mitigation of
+     * the sibling's path-only signature, and is gone). Closing the last
      * microsecond needs O_NONBLOCK at the host/loader boundary, out of scope for a
      * pure-PHP library; callers must not point `$path` at attacker-writable directories.
      *
@@ -855,11 +858,13 @@ final class ImageSource
             ]));
         }
 
-        // Hand flip a PRIVATE temp file of the bytes we already validated and bounded,
-        // so its own `file_get_contents($path)` cannot be redirected by a post-read path
-        // swap (round-4 HIGH): the descriptor we opened is the one we read, and flip
-        // re-reads the same validated content, not the attacker-reachable original path.
-        $flipFrames = self::decodeGifFramesFromBytesSafely($bytes, $w, $h);
+        // Hand flip the bytes we already validated and bounded (E-07): the
+        // sibling decoder has no path to re-open, so a post-read swap of the
+        // original path cannot be re-followed — the single-descriptor ingress
+        // above is the only open of `$path` this route performs, and the round-4
+        // temp-copy staging this call replaces was only ever a mitigation of
+        // flip's missing bytes-ingress, not a property of the format.
+        $flipFrames = self::decodeGifFramesFromBytes($bytes, $w, $h);
 
         // Defence in depth: the offset lists agreed, so flip's per-frame materialisation
         // must equal the honest count. Never return an animation whose frame count
@@ -874,7 +879,7 @@ final class ImageSource
         $frames  = [];
         $delays  = [];
         foreach ($flipFrames as $frame) {
-            $frames[] = self::gifFrameToImageSource($frame, $w, $h, $maxPixels);
+            $frames[] = self::gifFrameToImageSource($frame, $maxPixels);
             // flip carries the GCE delay in centiseconds; Animation speaks ms.
             $delays[] = $frame->delay * 10;
         }
@@ -1101,79 +1106,61 @@ final class ImageSource
     }
 
     /**
-     * Drive sugar-animation's decoder over the ALREADY-VALIDATED bytes via a private,
-     * 0600, unique temp file, under a temporary error handler so a corrupt GIF
-     * (which trips GD/`imagecreatefromstring` warnings inside the sibling) and any
-     * foreign exception surface as one clean, translated fail-fast rather than warning
-     * text sprayed across a terminal or an untranslated RuntimeException.
+     * Drive sugar-animation's decoder over the ALREADY-VALIDATED bytes — the
+     * E-07 bytes-ingress twin of its path decode — under a temporary error
+     * handler so a corrupt GIF (which trips GD/`imagecreatefromstring`
+     * warnings inside the sibling) and any foreign exception surface as one
+     * clean, translated fail-fast rather than warning text sprayed across a
+     * terminal or an untranslated RuntimeException.
      *
-     * Writing to a fresh temp file (rather than passing the caller's `$path`) closes the
-     * cross-open TOCTOU: sugar-animation re-reads the file by name, so a swap of the original
-     * path after our bounded read could otherwise hand it an arbitrarily large file
-     * (bypassing `MAX_BYTES`) and size its canvas from the re-read header (round-4 HIGH).
-     * The temp inode is private, unlink-on-exit, and holds exactly the bytes we audited.
+     * There is deliberately NO path parameter: this method structurally cannot
+     * re-open anything. The previous route staged the bytes into a private
+     * 0600 temp file because `Decoder::decode()` spoke only path-ingress
+     * (round-4 HIGH) — a mitigation of the cross-open TOCTOU that E-07's
+     * `Decoder::decodeBytes()` removes at the root: the sibling now decodes
+     * the exact string this loader read once through the bounded descriptor,
+     * and no second open of any name happens anywhere on the GIF route.
+     *
+     * Frames are requested with `$withCanvasRgba` so {@see self::gifFrameToImageSource()}
+     * consumes the lossless packed pixels instead of re-walking the cell grid.
      *
      * @return list<AnimationFrame>
      */
-    private static function decodeGifFramesFromBytesSafely(string $bytes, int $w, int $h): array
+    private static function decodeGifFramesFromBytes(string $bytes, int $w, int $h): array
     {
-        $tmp = @tempnam(sys_get_temp_dir(), 'mosaic-gif-');
-        if ($tmp === false) {
-            throw new \InvalidArgumentException(Lang::t('animation.gif_decode_failed', [
-                'reason' => 'unable to stage a private temp file for the GIF frame decoder',
-            ]));
-        }
+        $handler = static function (int $severity, string $message, string $file, int $line): bool {
+            throw new \ErrorException($message, 0, $severity, $file, $line);
+        };
 
+        set_error_handler($handler);
         try {
-            // 0600 so only this process can read the staged file even briefly.
-            @chmod($tmp, 0600);
-            if (@file_put_contents($tmp, $bytes) === false) {
-                throw new \InvalidArgumentException(Lang::t('animation.gif_decode_failed', [
-                    'reason' => 'unable to write the staged GIF bytes',
-                ]));
-            }
-
-            $handler = static function (int $severity, string $message, string $file, int $line): bool {
-                throw new \ErrorException($message, 0, $severity, $file, $line);
-            };
-            set_error_handler($handler);
-            try {
-                $frames = AnimationDecoder::decode($tmp, $w, $h);
-            } catch (\Throwable $e) {
-                throw new \InvalidArgumentException(Lang::t('animation.gif_decode_failed', [
-                    'reason' => $e->getMessage(),
-                ]));
-            } finally {
-                restore_error_handler();
-            }
+            /** @var list<AnimationFrame> $frames */
+            $frames = iterator_to_array(AnimationDecoder::decodeBytes($bytes, $w, $h, true), preserve_keys: false);
 
             return $frames;
+        } catch (\Throwable $e) {
+            throw new \InvalidArgumentException(Lang::t('animation.gif_decode_failed', [
+                'reason' => $e->getMessage(),
+            ]));
         } finally {
-            @unlink($tmp);
+            restore_error_handler();
         }
     }
 
     /**
-     * Convert one sugar-animation frame (a cell grid of RGB triples or null) to an
-     * RGBA PNG-backed {@see ImageSource}. Null cells become fully transparent.
+     * Convert one sugar-animation frame to an RGBA PNG-backed {@see ImageSource}.
+     *
+     * E-07: the frame's packed pre-downsample canvas ({@see AnimationFrame::rgbaBytes()},
+     * sized by its own `rgbaWidth()/rgbaHeight()`) rides straight into `fromRgb()` —
+     * the cell-grid re-walk that used to rebuild these bytes triple-traversed the
+     * pixel data (canvas → cell arrays → string) and made the sibling's 100k-cell
+     * budget this loader's ceiling for no added fidelity at the 1:1 grid this call
+     * asks for. Null-cell transparency and alpha 255/opaque encode identically in
+     * both representations (pinned by ImageSourceGifBytesIngressTest).
      */
-    private static function gifFrameToImageSource(AnimationFrame $frame, int $w, int $h, int $maxPixels): self
+    private static function gifFrameToImageSource(AnimationFrame $frame, int $maxPixels): self
     {
-        $cells = $frame->cells;
-        $bytes = '';
-        for ($cy = 0; $cy < $h; $cy++) {
-            $row = $cells[$cy] ?? [];
-            for ($cx = 0; $cx < $w; $cx++) {
-                $cell = $row[$cx] ?? null;
-                if ($cell === null) {
-                    $bytes .= "\x00\x00\x00\x00";
-                } else {
-                    $bytes .= chr($cell[0]) . chr($cell[1]) . chr($cell[2]) . "\xff";
-                }
-            }
-        }
-
-        return self::fromRgb($bytes, $w, $h, true, $maxPixels);
+        return self::fromRgb($frame->rgbaBytes(), $frame->rgbaWidth(), $frame->rgbaHeight(), true, $maxPixels);
     }
 
     /**
