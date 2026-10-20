@@ -205,4 +205,32 @@ final class AnsiTest extends TestCase
         $this->assertSame("\x1b_\x1b\\", Ansi::apc(''));
         $this->assertSame("\x1b^\x1b\\", Ansi::pm(''));
     }
+
+    /**
+     * F-09: repeat counts on sixel pixel data are capped like chafa's
+     * format_schar_reps (chafa/internal/chafa-sixel-renderer.c:218-251) —
+     * 255+ splits into `!255` chunks, 4..254 counts, 1..3 bare literals.
+     */
+    public function testSixelPixelDataSplitsOversizedRepeatCounts(): void
+    {
+        // Palette index 1 maps to byte '@' (chr(1 + 63)).
+        $this->assertSame('@', Ansi::sixelPixelData([1]));
+        $this->assertSame('@@', Ansi::sixelPixelData([1], 2), 'runs under 4 repeat as bare bytes');
+        $this->assertSame('@@@', Ansi::sixelPixelData([1], 3));
+        $this->assertSame('!4@', Ansi::sixelPixelData([1], 4));
+        $this->assertSame('!255@!45@', Ansi::sixelPixelData([1], 300), 'a 300-run splits into one !255 chunk plus !45');
+        $this->assertSame('!255@!255@', Ansi::sixelPixelData([1], 510), 'an exact multiple leaves no remainder');
+
+        // Roadmap bound pin: every emitted repeat token is a legal 1..255.
+        $matches = [];
+        $count = preg_match_all('/!\d+/', Ansi::sixelPixelData([0], 1024), $matches);
+        $this->assertGreaterThan(0, $count);
+        foreach ($matches[0] as $repeat) {
+            $this->assertSame(
+                1,
+                preg_match('/^!([1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/', $repeat),
+                'illegal sixel repeat count in ' . $repeat,
+            );
+        }
+    }
 }

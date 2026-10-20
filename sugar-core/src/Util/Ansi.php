@@ -1289,9 +1289,11 @@ final class Ansi
      * represent the six rows: bit 0 = top row of the band, bit 5 = bottom.
      * The byte value is the palette index ORed with 0x3F (63).
      *
-     * A repeat count prefix "pn" (where n>1) precedes runs of the same
-     * palette index for column efficiency, encoded as (count + 63) using
-     * printable ASCII range 63-126.
+     * A repeat count prefix "!" precedes runs of the same palette index for
+     * column efficiency. Per DECSIXEL the count is capped at 255 (F-09, mirroring
+     * chafa's format_schar_reps in chafa/internal/chafa-sixel-renderer.c:218-251):
+     * runs of 255 or more split into repeated "!255" chunks, and runs of 1..3
+     * emit as bare repeated bytes instead of a counted form.
      *
      * Mirrors charmbracelet/x/ansi. SixelRenderer.
      *
@@ -1303,12 +1305,29 @@ final class Ansi
     public static function sixelPixelData(array $column, ?int $repeat = null): string
     {
         $pal = $column[0] ?? 0;
-        if ($repeat !== null && $repeat > 1) {
-            // Repeat count encoding: (count + 63) for printable range.
-            $byte = chr(self::toSixelByte($pal) + 63);
-            return '!' . ((string) $repeat) . $byte;
+        $byte = chr(self::toSixelByte($pal) + 63);
+        $count = max(1, $repeat ?? 1);
+
+        if ($count < 4) {
+            return str_repeat($byte, $count);
         }
-        return chr(self::toSixelByte($pal) + 63);
+
+        $out = '';
+        while ($count >= 255) {
+            $out .= '!255' . $byte;
+            $count -= 255;
+        }
+
+        // The loop only leaves 0..254 behind; 0 means the chunks covered the
+        // whole run (length 255, 510, 765, …).
+        if ($count === 0) {
+            return $out;
+        }
+        if ($count < 4) {
+            return $out . str_repeat($byte, $count);
+        }
+
+        return $out . '!' . $count . $byte;
     }
 
     /**
