@@ -16,9 +16,9 @@ use React\Promise\PromiseInterface;
  * E722 audit note about a "64 MiB stderr cap" has no referent here at all
  * (erratum: no such cap exists anywhere in sugar-image or its history —
  * the only external children in the lib are {@see \SugarCraft\Image\Renderer\ChafaRenderer}'s
- * probe and render: render() spawns with fd 2 inherited; the probe's
- * transient fd-2 pipe is closed before reaping — nothing buffers at either
- * site, so no cap is warranted).
+ * probe and render: since D-07 the render redirects fd 2 to a private
+ * 0600 temp-file sink and drains stdout under ChafaRenderer::MAX_STDOUT_BYTES;
+ * the probe's transient fd-2 pipe is closed before reaping).
  *
  * Implement this to provide alternate async backends (e.g. a worker pool
  * or pcntl-fork-based process per render) — and inherit the tree's

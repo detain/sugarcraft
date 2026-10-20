@@ -18,10 +18,12 @@ use SugarCraft\Image\Renderer\ChafaRenderer;
  *
  *  - render() drains stdout to EOF, maps a non-zero exit to a typed
  *    failure, and leaves NO live or zombie child behind (proc_close reaps);
- *  - the child's stderr is INHERITED, never a reader-less pipe — a flood
- *    larger than the 64KB kernel buffer cannot wedge the render the way it
- *    would if the descriptor spec ever grew an unread `2 => pipe` entry
- *    (sugar-video's F7 deadlock, structurally mirrored here);
+ *  - the child's stderr lands in a private 0600 temp-file sink (D-07),
+ *    never on the caller's fd 2 and never on a reader-less pipe — a flood
+ *    larger than the 64KB kernel buffer can neither scribble over the
+ *    TUI nor wedge the render the way an unread `2 => pipe` entry would
+ *    (sugar-video's F7 deadlock, structurally mirrored here; the sink
+ *    content itself is pinned behaviourally in ChafaRendererStderrTest);
  *  - available() probes without leaking a pipe or a process.
  *
  * The flood pin runs under a `timeout -s KILL` leash (r69 law: a wait-loop
@@ -33,9 +35,6 @@ use SugarCraft\Image\Renderer\ChafaRenderer;
  */
 final class ChafaRendererChildTest extends TestCase
 {
-    /** Bytes the fake floods to stderr — 4x the 64KB kernel pipe buffer. */
-    private const FLOOD_BYTES = 256 * 1024;
-
     /** Wall leash for the flooded render harness. */
     private const HARNESS_TIMEOUT_SECONDS = 15;
 
@@ -128,42 +127,53 @@ final class ChafaRendererChildTest extends TestCase
     }
 
     /**
-     * @testdox the descriptor spec pipes ONLY stdout — stderr is never a reader-less pipe
+     * @testdox the descriptor spec pipes stdout and FILES stderr — never a reader-less pipe, never the caller's fd 2
      *
-     * Structural half of the flood posture: the render() spec is a
-     * single-entry array. Add `2 => ['pipe','w']` without a reader and
-     * ffmpeg… chafa dies exactly like sugar-video's F7 deadlock — this pin
-     * reads red at the source, and the leashed flood test below reads red
-     * at the behaviour.
+     * D-07 rewrote this pin (E722's posture was "stderr inherited"; the
+     * inherited fd 2 was the defect — chafa's error sentences scribbled
+     * over the live TUI frame). The shape being pinned now: exactly one
+     * pipe (stdout, read to EOF) and a `['file', $errPath, 'w']` sink on
+     * fd 2. Add `2 => ['pipe','w']` without a reader and chafa dies
+     * exactly like sugar-video's F7 deadlock — this pin reads red at the
+     * source, and the leashed flood test below reads red at the behaviour.
      */
-    public function testRenderDescriptorSpecIsStdoutPipeOnly(): void
+    public function testRenderDescriptorSpecIsStdoutPipeAndStderrFileSink(): void
     {
         $source = (string) file_get_contents(__DIR__ . '/../src/Renderer/ChafaRenderer.php');
 
         $this->assertStringContainsString(
-            "\$descriptorSpec = [1 => ['pipe', 'w']];",
+            "\$descriptorSpec = [1 => ['pipe', 'w'], 2 => ['file', \$errPath, 'w']];",
             $source,
-            'render() must hold exactly one pipe — stdout',
+            'render() must hold exactly one pipe (stdout) plus a file sink on fd 2',
         );
         $this->assertStringNotContainsString(
             '$pipes[2]',
             $source,
             'nothing may read (or ignore) a captured stderr pipe',
         );
+        $this->assertStringNotContainsString(
+            'stream_get_contents($pipes[1])',
+            $source,
+            'stdout must ride the bounded drain, never an unbounded slurp',
+        );
     }
 
     /**
-     * @testdox a 256KiB stderr flood cannot wedge a render — proven inside a leashed child
+     * @testdox a 256KiB stderr flood cannot wedge a render and cannot reach the caller's fd 2 — proven inside a leashed child
      *
-     * Behavioural half of E722's mosaic posture. The real chafa is absent on
-     * CI and rendering inside THIS process would let the flood hit PHPUnit's
-     * own stderr, so the render runs in a `php -r` child whose stderr is a
-     * FILE sink (unbounded — the flood can never block on it). The fake
-     * floods 256KiB to stderr, then answers on stdout. Today that lands in
-     * milliseconds. If the spec ever grows an unread stderr PIPE, the fake
-     * blocks at ~64KiB, stdout never closes, the harness parks inside
-     * render(), the leash fires, and the missing DONE marker reads RED —
-     * bounded, never a hang.
+     * Behavioural half of the D-07 posture. The real chafa is absent on
+     * CI and rendering inside THIS process would mix the flood with
+     * PHPUnit's own stderr, so the render runs in a `php -r` child whose
+     * stderr is a FILE the harness owns. Since D-07 the fake's flood
+     * lands in the renderer's private sink (unlinked at settle) — the
+     * harness file must stay EMPTY. If the spec ever regrows an unread
+     * stderr PIPE, the fake blocks at ~64KiB, stdout never closes, the
+     * harness parks inside render(), the leash fires, and the missing
+     * DONE marker reads RED — bounded, never a hang. If the sink leg is
+     * dropped and fd 2 is merely inherited again, the flood hits the
+     * harness file and the zero-size pin reads RED. That pin moved here
+     * from the old "flood really was written" size assertion, which
+     * inverted polarity with D-07.
      */
     public function testStderrFloodRenderCompletesInALeashedChild(): void
     {
@@ -206,10 +216,10 @@ final class ChafaRendererChildTest extends TestCase
             'the flooded child must still deliver its stdout and reach DONE inside the leash',
         );
         $this->assertSame(0, $exit, 'the leashed harness must exit cleanly');
-        $this->assertGreaterThanOrEqual(
-            self::FLOOD_BYTES,
-            filesize($errLog),
-            'the flood must have really been written — an empty sink would void the polarity',
+        $this->assertSame(
+            0,
+            (int) filesize($errLog),
+            'D-07: the flood belongs to the renderer\'s private sink — nothing may reach the caller\'s fd 2',
         );
         $this->assertChildReaped();
     }

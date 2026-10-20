@@ -18,6 +18,31 @@ final class ChafaRenderer implements Renderer
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
 
     /**
+     * D-07: hard ceiling on the bytes the render keeps from the child's
+     * stdout. Legitimate chafa output at poster scale is a few megabytes;
+     * anything past 32 MiB is runaway, not art. The drain keeps the first
+     * this-many bytes and keeps reading to EOF beyond it (drain-to-null),
+     * so the child never blocks on a full pipe nor dies of EPIPE.
+     */
+    public const MAX_STDOUT_BYTES = 32 * 1024 * 1024;
+
+    /** D-07: read chunk for {@see drainStdout()}. */
+    private const STDOUT_CHUNK_BYTES = 65536;
+
+    /**
+     * D-07: how many trailing bytes of the child's stderr sink ride into
+     * the failure message — chafa's own sentences are one-liners, and 8 KiB
+     * bounds the exception even if the child flooded diagnostics.
+     */
+    public const STDERR_TAIL_BYTES = 8 * 1024;
+
+    /** D-07: post-stdout-EOF budget for the child to exit on its own. */
+    private const REAP_WAIT_MS = 5000;
+
+    /** D-07: budget a SIGTERM gets before the ladder reaches for SIGKILL. */
+    private const TERM_GRACE_MS = 1000;
+
+    /**
      * Memoised result of {@see available()} — null means not yet probed,
      * true/false are cached for the lifetime of the process.
      *
@@ -106,33 +131,157 @@ final class ChafaRenderer implements Renderer
 
         $cmd[] = self::scratchFile($image->bytes);
 
-        $descriptorSpec = [1 => ['pipe', 'w']];
+        // D-07: the child's diagnostics go to a private file sink, never to
+        // this process's stderr. An inherited fd 2 let chafa's own error
+        // sentences scribble over the TUI frame AND discarded the failure
+        // reason — the user saw "exit code 1" while the actual sentence went
+        // to the tty. tempnam() creates the file 0600; the 'w' open reuses
+        // that mode. A file sink also satisfies the NO READER-LESS PIPES
+        // law (AsyncRenderer): there is never a reader to block.
+        $errPath = tempnam(sys_get_temp_dir(), 'schafaerr');
+        if ($errPath === false) {
+            throw new \RuntimeException(Lang::t('image_source.temp_failed'));
+        }
+
+        $descriptorSpec = [1 => ['pipe', 'w'], 2 => ['file', $errPath, 'w']];
         $process = @proc_open($cmd, $descriptorSpec, $pipes);
 
-        if ($process === false) {
-            throw new \RuntimeException(Lang::t('chafa.not_found'));
-        }
+        try {
+            if ($process === false) {
+                foreach ($pipes ?? [] as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
 
-        if (!is_resource($process)) {
-            throw new \RuntimeException(Lang::t('chafa.command_failed', ['error' => 'proc_open returned false']));
-        }
+                throw new \RuntimeException(Lang::t('chafa.not_found'));
+            }
 
-        $stdout = stream_get_contents($pipes[1]);
-        if ($stdout === false) {
-            $stdout = '';
-        }
+            if (!is_resource($process)) {
+                throw new \RuntimeException(Lang::t('chafa.command_failed', ['error' => 'proc_open returned false']));
+            }
 
-        fclose($pipes[1]);
+            $stdout = self::drainStdout($pipes[1]);
+            fclose($pipes[1]);
 
-        $exitCode = proc_close($process);
+            $exitCode = self::reap($process);
 
-        if ($exitCode !== 0) {
-            throw new \RuntimeException(
-                Lang::t('chafa.command_failed', ['error' => "exit code $exitCode"])
-            );
+            if ($exitCode !== 0) {
+                $tail = self::stderrTail($errPath);
+                throw new \RuntimeException(
+                    Lang::t('chafa.command_failed', [
+                        'error' => $tail === '' ? "exit code $exitCode" : "exit code $exitCode: $tail",
+                    ])
+                );
+            }
+        } finally {
+            // Every settle path — success, failure, or a throw between the
+            // spawn and here — releases the sink file.
+            @unlink($errPath);
         }
 
         return $stdout;
+    }
+
+    /**
+     * Read the child's stdout under {@see MAX_STDOUT_BYTES}: keep the head,
+     * drain the remainder to null. Returning early without draining would
+     * hand the child an EPIPE mid-write — a truncated encode reported as a
+     * render we asked for. A blocking pipe never returns an empty success,
+     * so "" (EOF or dead-pipe) ends the loop.
+     *
+     * @param resource $pipe
+     */
+    private static function drainStdout($pipe): string
+    {
+        $stdout = '';
+        while (true) {
+            $chunk = fread($pipe, self::STDOUT_CHUNK_BYTES);
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            $room = self::MAX_STDOUT_BYTES - strlen($stdout);
+            if ($room > 0) {
+                $stdout .= strlen($chunk) <= $room ? $chunk : substr($chunk, 0, $room);
+            }
+            if (feof($pipe)) {
+                break;
+            }
+        }
+
+        return $stdout;
+    }
+
+    /**
+     * Reap ladder for a child whose stdout has already EOF-ed: poll for a
+     * natural exit, escalate TERM(15) -> KILL(9), always end in
+     * proc_close() so the wait happens there regardless.
+     *
+     * The deadlines here are a test/slice budget, NEVER a kill-on-request-
+     * time policy (E646 blanket-timeout ban): this function puts no bound
+     * on chafa's rendering work — {@see drainStdout()} reads to EOF however
+     * long a legitimate encode takes (a poster may run minutes). It bounds
+     * only the wait for a child that has ALREADY closed stdout to leave the
+     * process table; past that point, waiting forever can never rescue slow
+     * work, only mask a wedged process. Signal numbers are literals because
+     * ext-pcntl is not a requirement of this lib.
+     *
+     * @param resource $process
+     */
+    private static function reap($process): int
+    {
+        $deadline = microtime(true) + self::REAP_WAIT_MS / 1000;
+        while (self::childRunning($process) && microtime(true) < $deadline) {
+            usleep(10_000);
+        }
+
+        if (self::childRunning($process)) {
+            proc_terminate($process, 15);
+            $grace = microtime(true) + self::TERM_GRACE_MS / 1000;
+            while (self::childRunning($process) && microtime(true) < $grace) {
+                usleep(10_000);
+            }
+            if (self::childRunning($process)) {
+                proc_terminate($process, 9);
+            }
+        }
+
+        return proc_close($process);
+    }
+
+    private static function childRunning($process): bool
+    {
+        return proc_get_status($process)['running'];
+    }
+
+    /**
+     * Last {@see STDERR_TAIL_BYTES} of the child's stderr sink, fail-soft:
+     * an unreadable sink costs us the sentence, never the exception — the
+     * exit code is already in the message around this tail.
+     */
+    private static function stderrTail(string $path): string
+    {
+        $size = @filesize($path);
+        if ($size === false || $size === 0) {
+            return '';
+        }
+
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return '';
+        }
+
+        try {
+            $offset = max(0, $size - self::STDERR_TAIL_BYTES);
+            if ($offset > 0 && fseek($handle, $offset) !== 0) {
+                return '';
+            }
+            $tail = stream_get_contents($handle);
+        } finally {
+            fclose($handle);
+        }
+
+        return $tail === false ? '' : rtrim($tail);
     }
 
     /**

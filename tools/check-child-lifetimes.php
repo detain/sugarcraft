@@ -134,6 +134,18 @@ final class CheckChildLifetimes
                 . 'cannot outlive the dashboard; the fd≥3 inheritance exposure stands and this '
                 . 'row is where it stays written down for sugar-dashboard to own.',
         ],
+        'sugar-image/src/Renderer/ChafaRenderer.php::render' => [
+            'count' => 1,
+            'reason' => 'chafa CLI child: stdout pipe, fd 2 a private temp-file sink (D-07 — never '
+                . 'the caller\'s fd 2, never a reader-less pipe). The scanner stops at self::reap, '
+                . 'which polls stdout-EOF-ed exit under bounded post-EOF budgets (E646 slice '
+                . 'budget, not a kill-on-request-time policy), escalates 15→9, and ends in '
+                . 'proc_close() on EVERY path out of itself — no early return or throw exists '
+                . 'between its spawn hand-off and that close. drainStdout reads to EOF (drains '
+                . 'past its cap, so the child never EPIPEs), and the try/finally unlinks the sink '
+                . 'on every settle path. ChafaRendererStderrTest pins the ladder under a '
+                . 'timeout-KILL leash.',
+        ],
         'sugar-video/src/AudioPlayer.php::start' => [
             'count' => 1,
             'reason' => 'ffplay/mpv companion with all-/dev/null FILE sinks (no parent-side pipe '
