@@ -129,6 +129,12 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *                              forward else backwards`). Default false:
      *                              the forward-only walk is what the
      *                              byte-frozen digests were captured with.
+     *                              Chafa parity here is the walk-direction
+     *                              flip only; the boundary fold-vs-drop
+     *                              divergence (chafa folds edge taps into
+     *                              the nearest visible cell, SugarCraft
+     *                              drops them) is disclosed at
+     *                              Ditherer::indexRows().
      * @param bool $mltermEdgeRows  F-03: mlterm workaround — force the global
      *                              first/last band of a transparent canvas to
      *                              carry a full-width run on the background
