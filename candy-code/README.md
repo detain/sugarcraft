@@ -2358,7 +2358,7 @@ final class MyProvider implements ProviderInterface
 cd candy-code && composer install && vendor/bin/phpunit
 ```
 
-**23,434 tests / 564,030 assertions, 0 failures, 2 skipped** — the whole of
+**24,845 tests / 582,380 assertions, 0 failures, 3 skipped** — the whole of
 `candy-code/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
 in 22m51s (measured 2026-10-18). The two skips are expected and rostered: one
@@ -2390,7 +2390,7 @@ bash scripts/parallel-tests.sh \
 ```
 
 K defaults to min(nproc, 24): measured 2026-10-18 on a 64-core box, the
-23,434-test suite medians are 185s at K=8, 108.5s at K=16, 102.5s at K=24,
+24,845-test suite medians are 185s at K=8, 108.5s at K=16, 102.5s at K=24,
 and 105.5s at K=32 — wall time falls until the slowest single test file
 (KeyHelpTest, ~108s) becomes the floor, which it does from K=16 up. The old
 K=8 cap was a mis-measurement of the 11.5k-test era: K=8 measured WORSE
