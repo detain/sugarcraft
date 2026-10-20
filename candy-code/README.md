@@ -1987,6 +1987,9 @@ candy-code serve                     # WebSocket + HTTP server for the web UI, u
                                      #   [--detach] [--parent-pid PID]
 candy-code serve status|stop|logs|url|token
                                      # the running server: stop [--force], logs [-f], token [--rotate]
+candy-code self-update [--check]     # replace this phar with the latest verified release;
+                                     #   --check only compares versions (exit 1 when one is newer)
+candy-code self-update --rollback    # restore the kept pre-swap phar, exactly once
 candy-code attach [<session>]        # the TUI on a session of the running server — turns run there
                                      #   [--url URL]
 candy-code acp                       # an Agent Client Protocol agent on stdio, for an editor to start

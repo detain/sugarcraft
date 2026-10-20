@@ -23,7 +23,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
 /**
  * The real CLI subcommands — `mcp list`, `session list|show|rename|delete|
  * pin|unpin|archive|unarchive`, `models`, `doctor`, `bundles list|install`,
- * `serve` and `completion bash|zsh|fish` (crush_code.md Phase 4 item 6; the
+ * `serve`, `self-update` and `completion bash|zsh|fish` (crush_code.md Phase 4 item 6; the
  * session verbs past
  * `list`/`delete` are Appendix P §3.4; `serve` is Appendix O §4.7, its body in
  * {@see Serve} — the one verb that keeps running rather than answering, and
@@ -32,7 +32,9 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * session, and only once it has connected; `acp` is roadmap 5.9, its body in
  * {@see Acp} — the one verb whose stdin and stdout belong to another
  * program, an editor speaking the Agent Client Protocol, and which runs turns
- * without a screen).
+ * without a screen); `self-update` is DST-3, its body in {@see SelfUpdate} —
+ * the one verb that rewrites the file it was launched from (a phar-only
+ * swap, sidecar-verified before the rename, with a one-shot `--rollback`).
  *
  * EVERY ONE ANSWERS WITHOUT A SESSION. `bin/candy-code` dispatches these in the
  * same pre-flight place it dispatches `--help` and `--version`, before
@@ -102,6 +104,7 @@ final class Subcommands
         return match ($args->subcommand) {
             'doctor'     => self::doctor($args),
             'models'     => self::models($args),
+            'self-update' => SelfUpdate::run($args),
             'login'      => self::login($args),
             'session'    => self::session($args),
             'serve'      => Serve::run($args),
@@ -2547,6 +2550,7 @@ final class Subcommands
         'login' => 'cli.completion.verb.login',
         'mcp' => 'cli.completion.verb.mcp',
         'models' => 'cli.completion.verb.models',
+        'self-update' => 'cli.completion.verb.self_update',
         'serve' => 'cli.completion.verb.serve',
         'session' => 'cli.completion.verb.session',
     ];

@@ -305,7 +305,7 @@ final class ReadmeRosterDriftTest extends TestCase
         class_exists(ArgvParser::class);
         $section = $this->section('Subcommands');
 
-        preg_match_all('/^candy-code ([a-z]+)/m', $section, $m);
+        preg_match_all('/^candy-code ([a-z][a-z-]*)/m', $section, $m);
         $documented = array_values(array_unique($m[1]));
         sort($documented);
 

@@ -172,6 +172,7 @@ return [
     'cli.completion.verb.mcp' => 'Inspect the project MCP configuration',
     'cli.completion.verb.models' => 'List the providers this install can select',
     'cli.completion.verb.run' => 'Run a single prompt and exit (alias for --prompt)',
+    'cli.completion.verb.self_update' => 'Replace the phar install with the latest verified release',
     'cli.completion.verb.serve' => 'Run the WebSocket server for the web UI',
     'cli.completion.verb.session' => 'Manage stored sessions',
     'cli.completion.verb_argument' => '{verb} argument',
@@ -286,6 +287,15 @@ session; acp runs turns for an editor, until the editor disconnects):
                          equivalent .mcp.json block to stdout. Prints only
                          the document and writes no file; the renames the
                          translation made are listed on stderr.
+  self-update [--check] [--rollback]
+                         Replace this phar install with the latest published
+                         candy-code release, sha256-verified against the
+                         release sidecar BEFORE the swap; the running phar is
+                         kept as <phar>.old and --rollback restores exactly
+                         that copy once. --check only reports current vs
+                         latest and exits 1 when an update is available. A
+                         Composer install is refused loudly, naming the
+                         composer update command to run instead.
   serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <list>]
         [--allowed-ips <list>] [--allowed-origin <list>] [--allow-dir-browse]
         [--browse-root <dir>] [--web-root <dir>] [--no-web] [--allow-bypass]
@@ -819,6 +829,32 @@ TXT,
     'cli.refuse.no_project_root' => 'cannot determine a project root — the process working directory is unavailable (deleted or unreadable). Pass --root <dir>.',
     'cli.refuse.not_searchable' => '{dir} is not searchable by this process',
     'cli.refuse.world_writable' => '{path} is writable by every account on this machine, so the permission policy and hook chain it carries are not this user\'s. Refusing to start rather than run policy anyone could have written — `chmod o-w {path}`.',
+    'cli.selfupdate.check_available' => 'candy-code: update available — this install is {current}, the latest release is {latest}. (--check reports only; nothing was installed.)',
+    'cli.selfupdate.check_unknown' => 'candy-code: cannot compare this install ({current}) with the latest release ({latest}).',
+    'cli.selfupdate.check_up_to_date' => 'candy-code: up to date — this install is {current}, the latest release is {latest}.',
+    'cli.selfupdate.composer_mode' => 'candy-code: self-update replaces a phar install, and this copy was installed through Composer — there is no phar here to swap. Update it with: {command} (a global install runs `composer global update sugarcraft/candy-code` instead).',
+    'cli.selfupdate.dir_not_writable' => 'candy-code: cannot replace the phar — directory {dir} is not writable.',
+    'cli.selfupdate.downgrade_refused' => 'candy-code: refusing to downgrade — this install is {current}, the latest release is {latest}. (--rollback restores the kept copy; nothing else goes backwards.)',
+    'cli.selfupdate.download_failed' => 'candy-code: could not download {asset}: {reason}',
+    'cli.selfupdate.empty_download' => 'candy-code: the download of {asset} produced no bytes.',
+    'cli.selfupdate.fetch_failed' => 'candy-code: could not read the release list: {reason}',
+    'cli.selfupdate.flags_exclusive' => '--check and --rollback are alternatives; pass one.',
+    'cli.selfupdate.hash_mismatch' => 'candy-code: the downloaded phar hashes to {actual}, not the {expected} the sidecar signs. Nothing was swapped.',
+    'cli.selfupdate.hash_unreadable' => 'nothing (the temp file could not be read)',
+    'cli.selfupdate.installed' => 'candy-code: self-update replaced {path} ({from} -> {to}); the previous phar is kept at {old} — `self-update --rollback` restores it once.',
+    'cli.selfupdate.no_release' => 'candy-code: no published candy-code release carries both {phar} and {sidecar}.',
+    'cli.selfupdate.phar_not_writable' => 'candy-code: cannot replace the phar — {path} is not writable.',
+    'cli.selfupdate.preserve_failed' => 'candy-code: the running phar could not be copied to {old}; nothing was swapped.',
+    'cli.selfupdate.rename_failed' => 'candy-code: the verified phar could not be moved into place; the running copy is intact and the kept copy remains at {old}.',
+    'cli.selfupdate.rollback_failed' => 'candy-code: could not restore {old} over {path}.',
+    'cli.selfupdate.rollback_missing' => 'candy-code: no kept copy to restore: {old} does not exist (it appears only after a successful update).',
+    'cli.selfupdate.rollback_restored' => 'candy-code: rollback restored {old} over {path}; the kept copy is consumed, this restore is one-shot.',
+    'cli.selfupdate.sidecar_malformed' => 'candy-code: the {asset} sidecar is not a lowercase 64-hex-digit sha256 for {phar}. Nothing was swapped.',
+    'cli.selfupdate.sidecar_names' => 'candy-code: the sidecar names {found}, not {phar}. Nothing was swapped.',
+    'cli.selfupdate.uncomparable' => 'candy-code: this install reports {current}, which is not a release version self-update can order.',
+    'cli.selfupdate.unexpected_operand' => '{operand}: candy-code self-update takes no operands.',
+    'cli.selfupdate.up_to_date' => 'candy-code: self-update: this install is already the latest release ({current}).',
+    'cli.selfupdate.usage' => 'Usage: candy-code self-update [--check] [--rollback]',
     'cli.serve.already_running' => 'a server is already running from {dir} — stop it with: candy-code serve stop',
     'cli.serve.already_running_pid' => 'a server is already running from {dir} (pid {pid}, {url}) — stop it with: candy-code serve stop',
     'cli.serve.also' => 'Also: {problems}.',

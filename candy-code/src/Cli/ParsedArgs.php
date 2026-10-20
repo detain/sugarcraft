@@ -53,7 +53,7 @@ final readonly class ParsedArgs
      *
      * @var list<string>
      */
-    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'login', 'mcp', 'models', 'serve', 'session'];
+    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'login', 'mcp', 'models', 'self-update', 'serve', 'session'];
 
     /**
      * The flags each subcommand verb owns, keyed by verb: `true` when the flag
@@ -102,6 +102,12 @@ final readonly class ParsedArgs
             '--rotate' => false,
             '--web-root' => true,
             '-f' => false,
+        ],
+        // `self-update` (DST-3): a phar-only verb; both switches are bare,
+        // and taking both is a usage error the verb itself decides.
+        'self-update' => [
+            '--check' => false,
+            '--rollback' => false,
         ],
         'session' => [
             '--all' => false,
