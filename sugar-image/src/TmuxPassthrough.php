@@ -16,7 +16,13 @@ namespace SugarCraft\Image;
  * `tools/chafa/chafa.c:1124`); sugar-image previously only documented the
  * manual `set -g allow-passthrough on` in {@see TmuxPassthroughDecorator}.
  *
- * Transaction shape (pane-scoped, per chicle's choice at :1813-1816):
+ * Transaction shape — pane-scoped, a DELIBERATE divergence from chicle:
+ * chicle's own commands carry NO target flag (:1817 show, :1830 set,
+ * :1855 restore, :1860 -u), so tmux treats them as writes to the
+ * session-GLOBAL option, and :1813-1816 is its re-entry guard, not a
+ * scope precedent. We target the pane because an untargeted flip would
+ * change every window of a shared server for the life of the render —
+ * least-surprise blast radius, one pane per graphics run.
  *
  *  - {@see ensure()} asks `tmux show-options -pqv allow-passthrough`. A
  *    non-empty answer is the current value; an empty answer means the
