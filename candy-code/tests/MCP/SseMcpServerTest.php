@@ -64,6 +64,13 @@ final class SseMcpServerTest extends TestCase
     /** @var list<(\Closure(RequestInterface): void)|null> one per queued POST */
     private array $postHooks = [];
 
+    /**
+     * MCP-4 (audit re-run F-1): when set, the NEXT logged POST is answered
+     * with this response instead of the 202 delivery — the evil-redirect
+     * fixture. It is consumed on first use.
+     */
+    private ?Response $postRefuse = null;
+
     /** Session spec consumed at (re)connect time. */
     private ?string $endpointData = '/messages';
 
@@ -98,6 +105,7 @@ final class SseMcpServerTest extends TestCase
         $this->sleeps = [];
         $this->postLog = [];
         $this->postHooks = [];
+        $this->postRefuse = null;
         $this->authDirs = [];
         $this->endpointData = '/messages';
         $this->headStatusLine = 'HTTP/1.1 200 OK';
@@ -285,6 +293,49 @@ final class SseMcpServerTest extends TestCase
         }
         self::assertNotNull($failure, 'expected the redirect refusal');
         self::assertStringContainsString('does not follow redirects', $failure);
+    }
+
+    /**
+     * MCP-4 (audit re-run F-1): the GET head gate has long refused to follow
+     * redirects; this is the POST side of the same law. A 3xx naming an
+     * off-origin Location is refused BY NAME, and no second request — bearer
+     * or body — is ever sent. The fixture client rides a real HandlerStack,
+     * so Guzzle's redirect middleware is in play exactly as in production:
+     * delete `allow_redirects` from sendPost() and this pin records the evil
+     * hop with the bearer on it.
+     *
+     * @return array<string, array{0: int}>
+     */
+    public static function redirectStatuses(): array
+    {
+        return ['301' => [301], '302' => [302], '307' => [307], '308' => [308]];
+    }
+
+    /**
+     * @param int $status
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('redirectStatuses')]
+    public function testARedirectedPostIsRefusedAndTheBearerNeverHops(int $status): void
+    {
+        $this->postRefuse = new Response($status, ['Location' => 'http://evil.example/stolen']);
+        $sse = $this->server(headers: ['Authorization' => 'Bearer mcp-4-sse-canary']);
+
+        $failure = null;
+        try {
+            $sse->start();
+        } catch (\RuntimeException $e) {
+            $failure = $e->getMessage();
+        }
+        self::assertNotNull($failure, "HTTP {$status} redirect was accepted");
+        self::assertStringContainsString('does not follow redirects', $failure);
+        self::assertStringContainsString("HTTP {$status}", $failure);
+        self::assertCount(1, $this->postLog, 'the redirect produced a second, off-origin request');
+        self::assertSame('locked.example', $this->postLog[0][0]->getUri()->getHost());
+        self::assertSame(
+            'Bearer mcp-4-sse-canary',
+            $this->postLog[0][0]->getHeaderLine('Authorization'),
+            'the pin must ride a request that actually carried the bearer',
+        );
     }
 
     public function testAUnauthorizedGetRaisesTheTypedAuthExceptionBeforeAnyPost(): void
@@ -706,6 +757,7 @@ final class SseMcpServerTest extends TestCase
         $this->rawSpec = null;
         $this->terminateStream = false;
         $this->postHooks = [];
+        $this->postRefuse = null;
     }
 
     /**
@@ -736,7 +788,12 @@ final class SseMcpServerTest extends TestCase
             name: 'sse-demo',
             url: $url,
             headers: $headers,
-            httpClient: new Client(['handler' => $this->actorHandler()]),
+            // MCP-4 (audit re-run F-1): the fixture handler rides a REAL
+            // HandlerStack, so Guzzle's redirect middleware participates
+            // exactly as it does in production — a raw-closure handler would
+            // bypass every default middleware and could never catch a
+            // bearer-carrying follow.
+            httpClient: new Client(['handler' => HandlerStack::create($this->actorHandler())]),
             authStore: $store,
             pidProvider: $pidProvider,
             toolTimeoutSeconds: $toolTimeoutSeconds,
@@ -797,6 +854,14 @@ final class SseMcpServerTest extends TestCase
     {
         return function (RequestInterface $request, array $options) {
             $this->postLog[] = [$request, $options];
+            if ($this->postRefuse !== null) {
+                // MCP-4 (audit re-run F-1): logged FIRST, so a followed
+                // redirect would log a SECOND entry — the hop itself.
+                $refuse = $this->postRefuse;
+                $this->postRefuse = null;
+
+                return new FulfilledPromise($refuse);
+            }
             if ($this->postHooks === []) {
                 // \Error, deliberately: it must NOT be catchable by the
                 // transport's catch(\Exception) wrappers — an unexpected POST

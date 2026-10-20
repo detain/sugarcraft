@@ -723,6 +723,9 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
         return $this->httpClient->post($this->postTarget, $this->connectionOptions() + [
             'json' => $payload,
             'headers' => $this->wireHeaders(),
+            // MCP-4 (audit re-run F-1): the bearer and the JSON-RPC body ride
+            // this POST; a Location pointing off-origin must not receive them.
+            'allow_redirects' => false,
             'http_errors' => false,
             'connect_timeout' => self::CONNECT_TIMEOUT_SECONDS,
             'timeout' => self::POST_TIMEOUT_SECONDS,
@@ -752,6 +755,9 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
                     'reason' => $message,
                 ]],
                 'headers' => $this->wireHeaders(),
+                // MCP-4 (audit re-run F-1): best-effort delivery never means
+                // best-effort egress — the bearer still must not hop.
+                'allow_redirects' => false,
                 'http_errors' => false,
                 'timeout' => self::CANCEL_NOTICE_TIMEOUT_SECONDS,
                 'connect_timeout' => self::CANCEL_NOTICE_TIMEOUT_SECONDS,
@@ -1366,6 +1372,16 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
 
         if ($status === 401 || $status === 403) {
             throw new HttpMcpAuthRequiredException($this->name, $status);
+        }
+
+        // MCP-4 (audit re-run F-1): a 3xx is refused by name, never relayed as
+        // the body's words — sendPost() refused to follow it, and the refusal
+        // belongs to the redirect itself. Mirrors the event-stream GET gate in
+        // assertStreamHead(), POST-side.
+        if ($status >= 300 && $status < 400) {
+            throw new \RuntimeException(trim("HTTP {$status} {$response->getReasonPhrase()}")
+                . ': the endpoint POST was redirected, and this transport does not follow redirects'
+                . ' (a redirect could carry the bearer and the request body off the configured origin)');
         }
 
         $decoded = json_decode($body, true);

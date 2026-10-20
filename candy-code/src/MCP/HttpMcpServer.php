@@ -311,6 +311,9 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
             try {
                 $this->httpClient->delete($this->url, [
                     'headers' => $this->wireHeaders(),
+                    // MCP-4 (audit re-run F-1): the bearer rides this request
+                    // too — a redirected DELETE must not carry it off-origin.
+                    'allow_redirects' => false,
                     'http_errors' => false,
                     'timeout' => self::DELETE_TIMEOUT_SECONDS,
                 ]);
@@ -743,6 +746,13 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
         return $this->httpClient->post($this->url, $this->connectionOptions() + [
             'json' => $payload,
             'headers' => $this->wireHeaders(),
+            // MCP-4 (audit re-run F-1): never follow a redirect. Every POST here
+            // carries the bearer and the whole JSON-RPC body; Guzzle's default
+            // policy would re-send both to whatever host the Location header
+            // names (up to ten cross-host hops, re-POSTing on 307/308). The
+            // refusal is assertSuccess()'s, mirroring the GET gate this transport
+            // family already had for the event stream.
+            'allow_redirects' => false,
             // Statuses are this class's to interpret: a 404 on a session-bearing
             // request is the expiry signal, not a generic failure.
             'http_errors' => false,
@@ -904,6 +914,16 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
 
         $body = (string) $response->getBody()->read(4096);
         $this->closeBody($response);
+
+        // MCP-4 (audit re-run F-1): a 3xx is not a diagnosis to relay — it is
+        // an egress attempt. send() refused to follow it (allow_redirects), so
+        // the hop surfaces here and is refused BY NAME, mirroring the
+        // event-stream GET gate in SseMcpServer::assertStreamHead().
+        if ($status >= 300 && $status < 400) {
+            throw new \RuntimeException(trim("HTTP {$status} {$response->getReasonPhrase()}")
+                . ': the JSON-RPC POST was redirected, and this transport does not follow redirects'
+                . ' (a redirect could carry the bearer and the request body off the configured origin)');
+        }
 
         $decoded = json_decode($body, true);
         $detail = is_array($decoded) && isset($decoded['error'])

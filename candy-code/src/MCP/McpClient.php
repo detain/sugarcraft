@@ -159,7 +159,11 @@ final class McpClient
     ) {
         // Injectable so tests can supply a MockHandler-backed client; defaults to
         // a real client for production use.
-        $this->httpClient = $httpClient ?? new Client(['timeout' => 30]);
+        // MCP-4 (audit re-run F-1): the client-level default refuses redirects
+        // too — every http/sse leg inherits the no-egress posture even if a
+        // future call site forgets its per-request option (the transports set
+        // it per-request as the load-bearing gate; this is the belt).
+        $this->httpClient = $httpClient ?? new Client(['timeout' => 30, 'allow_redirects' => false]);
         $this->agentPreset = $agentPreset;
         $this->unrestricted = $unrestricted;
         $this->denyPatterns = $denyPatterns;

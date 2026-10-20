@@ -675,7 +675,12 @@ final class OAuthClientRegistration
             $response = $this->httpClient->request(
                 $options['method'] ?? 'GET',
                 $url,
-                array_diff_key($options, ['method' => true]),
+                // MCP-4 (audit re-run F-1): these legs carry the refresh token,
+                // the authorization code, and registration access tokens. A
+                // redirect must never move them off the issuer the store is
+                // keyed to, so the refusal is FORCED FIRST — a caller's
+                // options array can never re-arm Guzzle's follow-by-default.
+                ['allow_redirects' => false] + array_diff_key($options, ['method' => true]),
             );
 
             $body = $response->getBody()->getContents();
