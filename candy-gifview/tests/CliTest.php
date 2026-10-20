@@ -248,7 +248,7 @@ final class CliTest extends TestCase
     public static function refusalCases(): array
     {
         return [
-            'unknown flag'  => ['--watch=now', 'unknown option'],
+            'unknown flag'  => ['--bogus=now', 'unknown option'],
             'zero fps'      => ['--fps=0', 'invalid value'],
             'word speed'    => ['--speed=lots', 'invalid value'],
             'empty value'   => ['--duration=', 'invalid value'],

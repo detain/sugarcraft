@@ -28,8 +28,14 @@ candy-gifview my-animation.gif density # ASCII luminance ramp
 | `--fps=N`             | Play at a uniform N frames/second instead of the GIF's delays.    |
 | `--speed=N\|Nfps\|max`| N × the GIF's nominal rate; `Nfps` is an absolute rate; `max` burns frames as fast as the scheduler floors allow (chicle parity). |
 | `--duration=SECONDS`  | Stop after SECONDS of playback (a schedule deadline in the model — no wall-clock kill). |
+| `--watch`             | Reload automatically when the source file changes (chicle's run_watch as a 10 ms event-loop poll; E-10). Bare flag — it takes no value. |
 
 Flags may appear before or after the positional `<gif>` and preset token.
+
+A GIF's authored NETSCAPE loop count is honoured by default (E-02): `raw N`
+means N extra repeats after the first play (so N+1 total passes) and `raw 0`
+— like a file with no loop extension at all, the deliberate divergence from
+libnsgif's single-play default — plays forever.
 
 ## Keys
 
