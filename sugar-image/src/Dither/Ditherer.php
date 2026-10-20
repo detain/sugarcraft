@@ -60,6 +60,11 @@ final class Ditherer
      * @param int $alphaThreshold GD-alpha hole cut-off the caller validated
      * @param Color|null $flattenBackground B-10 flatten target, or null
      * @param bool $serpentine C-08 opt-in snake walk
+     * @param int $grainWidth C-09: grain horizontal size in source pixels
+     *                        (chafa dither_size); 1 = today's per-pixel walk
+     * @param int $grainHeight C-09: grain vertical size; the pair must
+     *                         divide the canvas (checked in indexRows, the
+     *                         only place geometry is known)
      */
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
@@ -68,7 +73,27 @@ final class Ditherer
         private readonly int $alphaThreshold = 127,
         private readonly ?Color $flattenBackground = null,
         private readonly bool $serpentine = false,
+        private readonly int $grainWidth = 1,
+        private readonly int $grainHeight = 1,
     ) {
+        if ($grainWidth < 1 || $grainHeight < 1) {
+            throw new \InvalidArgumentException(
+                'dither grain must be at least 1 pixel per side'
+            );
+        }
+    }
+
+    /**
+     * C-09: grain dimensions in source pixels (1x1 = per-pixel walk).
+     */
+    public function grainWidth(): int
+    {
+        return $this->grainWidth;
+    }
+
+    public function grainHeight(): int
+    {
+        return $this->grainHeight;
     }
 
     /**
@@ -152,6 +177,16 @@ final class Ditherer
         $w = imagesx($img);
         $h = imagesy($img);
 
+        // C-09: with a grain armed, the diffusion unit is a whole
+        // grain-width x grain-height block — one mean, one lookup, one
+        // spread (chafa fs_dither_grain). The 1x1 default below stays the
+        // byte-frozen pixel walk, branch-free.
+        if ($this->grainWidth !== 1 || $this->grainHeight !== 1) {
+            yield from $this->indexGrainRows($img, $palette, $offset, $yOrigin);
+
+            return;
+        }
+
         // C-04/C-05: Ordered and Noise are bias textures, not error
         // diffusions — the old `$dither !== Dither::None` test would wrongly
         // arm the kernel for them, so the arms are spelled out.
@@ -196,42 +231,10 @@ final class Ditherer
         // mirroring chafa's simple_dither pass running ahead of palette lookup
         // (chafa-pixops.c fs/ordered walk order).
         $loadBase = function (int $y) use ($img, $w, $offset, $texture, $yOrigin, &$window, &$holes): void {
-            $row = [];
-            $textureY = $y + $yOrigin;
-            for ($x = 0; $x < $w; $x++) {
-                $rgb = imagecolorat($img, $x, $y);
-                $alpha = ($rgb >> 24) & 0xFF;
-                // B-10: the hole census is decided FIRST and on the RAW
-                // alpha — lowering the threshold widens the hole set, and a
-                // hole is never flattened (unpainted pixels carry no colour
-                // to the terminal). ORDERING LAW: everything below — the
-                // flatten, the texture bias, the accumulator push — runs on
-                // the post-decision pixel, so both the sample census and the
-                // diffusion stream see transparent-excluded, optionally
-                // bg-composited colour.
-                $isHole = $offset === 1 && $alpha >= $this->alphaThreshold;
-                if ($offset === 1) {
-                    $holes[$y][$x] = $isHole;
-                }
-                $r = ($rgb >> 16) & 0xFF;
-                $g = ($rgb >> 8) & 0xFF;
-                $b = $rgb & 0xFF;
-                if ($this->flattenBackground !== null && !$isHole && $alpha > 0) {
-                    // B-10: semi-transparent (0 < alpha < threshold) → src-over
-                    // onto the background BEFORE quantisation/diffusion.
-                    [$r, $g, $b] = self::flattenOnto($r, $g, $b, $alpha, $this->flattenBackground);
-                }
-                $rf = (float) $r;
-                $gf = (float) $g;
-                $bf = (float) $b;
-                if ($texture !== null) {
-                    $rf = self::applyTextureMod($rf, $texture->mod($x, $textureY, 0));
-                    $gf = self::applyTextureMod($gf, $texture->mod($x, $textureY, 1));
-                    $bf = self::applyTextureMod($bf, $texture->mod($x, $textureY, 2));
-                }
-                $row[] = [$rf, $gf, $bf];
+            [$window[$y], $rowHoles] = $this->loadBaseRow($img, $y, $w, $offset, $texture, $yOrigin);
+            if ($offset === 1) {
+                $holes[$y] = $rowHoles;
             }
-            $window[$y] = $row;
         };
 
         // Prime the window: rows [0, reach] before any row is quantised.
@@ -334,6 +337,216 @@ final class Ditherer
             $next = $y + $reach + 1;
             if ($next < $h) {
                 $loadBase($next);
+            }
+        }
+    }
+
+    /**
+     * Read one pixel row's raw colour into floating-point accumulators;
+     * when a background register is reserved, return which pixels are
+     * holes so the diffusion pass (which carries colour, not transparency)
+     * can skip them exactly as the old full-canvas builder did. C-04: the
+     * ordered bias is added HERE — before quantisation, after nothing
+     * diffuses — mirroring chafa's simple_dither pass running ahead of
+     * palette lookup (chafa-pixops.c fs/ordered walk order).
+     *
+     * B-10: the hole census is decided FIRST and on the RAW alpha —
+     * lowering the threshold widens the hole set, and a hole is never
+     * flattened (unpainted pixels carry no colour to the terminal).
+     * ORDERING LAW: everything below — the flatten, the texture bias, the
+     * accumulator push — runs on the post-decision pixel, so both the
+     * sample census and the diffusion stream see transparent-excluded,
+     * optionally bg-composited colour.
+     *
+     * C-09: the loader is shared with the grain walk; it never touches
+     * error state, so the reach-window ordering law of indexRows() stays
+     * in the caller (grain mode accumulates error on its own grid).
+     *
+     * @return array{array<int, array{float,float,float}>, array<int,bool>}
+     *         [rgb accumulator row, hole mask row (meaningful at offset 1)]
+     */
+    private function loadBaseRow(\GdImage $img, int $y, int $w, int $offset, ?OrderedTexture $texture, int $yOrigin): array
+    {
+        $row = [];
+        $rowHoles = [];
+        $textureY = $y + $yOrigin;
+        for ($x = 0; $x < $w; $x++) {
+            $rgb = imagecolorat($img, $x, $y);
+            $alpha = ($rgb >> 24) & 0xFF;
+            $isHole = $offset === 1 && $alpha >= $this->alphaThreshold;
+            if ($offset === 1) {
+                $rowHoles[$x] = $isHole;
+            }
+            $r = ($rgb >> 16) & 0xFF;
+            $g = ($rgb >> 8) & 0xFF;
+            $b = $rgb & 0xFF;
+            if ($this->flattenBackground !== null && !$isHole && $alpha > 0) {
+                // B-10: semi-transparent (0 < alpha < threshold) -> src-over
+                // onto the background BEFORE quantisation/diffusion.
+                [$r, $g, $b] = self::flattenOnto($r, $g, $b, $alpha, $this->flattenBackground);
+            }
+            $rf = (float) $r;
+            $gf = (float) $g;
+            $bf = (float) $b;
+            if ($texture !== null) {
+                $rf = self::applyTextureMod($rf, $texture->mod($x, $textureY, 0));
+                $gf = self::applyTextureMod($gf, $texture->mod($x, $textureY, 1));
+                $bf = self::applyTextureMod($bf, $texture->mod($x, $textureY, 2));
+            }
+            $row[] = [$rf, $gf, $bf];
+        }
+
+        return [$row, $rowHoles];
+    }
+
+    /**
+     * C-09: chafa's fs_dither_grain (chafa-pixops.c:211-298) — the unit of
+     * error propagation is a whole grain (grainWidth x grainHeight source
+     * pixels = one output cell): pixels are biased and summed, the mean
+     * takes ONE nearest-palette lookup, and only then is the error split
+     * into the diffusion taps. The spread rides {@see diffuseError()} on a
+     * grain-space accumulator grid, so the tap tables stay single-sourced.
+     *
+     * Departures from the C original, all deliberate:
+     *  - chafa's grains are power-of-two (shift maths); a non-negative sum
+     *    divided by the pixel count floors identically to ">> shift", so
+     *    any grain size >= 1 is accepted. The overflow term keeps the
+     *    floor semantics of the arithmetic shift for negative excesses.
+     *  - chafa sums EVERY pixel of the grain because its background-carry
+     *    already painted transparency; SC holes carry nothing, so the mean
+     *    divides by the OPAQUE count and a fully-holed grain is skipped
+     *    with no error consumed or spread (the alpha_sum == 0 return).
+     *  - the chosen index REPLICATES across every pixel slot of the grain
+     *    — the "spread" of the survey wording, and the shape the S6.2
+     *    per-cell consumers read (one cell per grain).
+     *
+     * @param list<array{int,int,int}> $palette
+     * @return \Generator<int, list<int>>
+     */
+    private function indexGrainRows(\GdImage $img, array $palette, int $offset, int $yOrigin): \Generator
+    {
+        $w = imagesx($img);
+        $h = imagesy($img);
+        $gw = $this->grainWidth;
+        $gh = $this->grainHeight;
+        // chafa guards the same rule with g_assert in fs_dither.
+        if ($w % $gw !== 0 || $h % $gh !== 0) {
+            throw new \InvalidArgumentException(sprintf(
+                'dither grain must divide the canvas evenly: %dx%d canvas with %dx%d grain',
+                $w,
+                $h,
+                $gw,
+                $gh
+            ));
+        }
+
+        $cols = intdiv($w, $gw);
+        $rows = intdiv($h, $gh);
+
+        $hasDiffusion = match ($this->dither) {
+            Dither::FloydSteinberg, Dither::Stucki, Dither::Atkinson => true,
+            Dither::None, Dither::Ordered, Dither::Noise             => false,
+        };
+        $texture = $this->texture;
+        $diffusionStrength = $this->intensity ?? 1.0;
+
+        $cache = []; // B-13 memo, same block-representative discipline as the pixel walk.
+        $index = PaletteIndex::fromPalette(
+            array_map(static fn(array $rgb): PaletteColor => new PaletteColor($rgb[0], $rgb[1], $rgb[2]), $palette),
+            ColorDistance::Euclidean,
+        );
+
+        // Pre-allocated grain-space error grid: unlike the pixel walk,
+        // where loadBaseRow seeds every accumulator cell, the grain grid
+        // starts empty and diffuseError's += would read undefined keys
+        // (a PHP warning on every fresh cell). Zero-filling the grid up
+        // front costs cols x rows triples and keeps the tap writes
+        // silent — and it must stay live to the end: dropping a consumed
+        // row would re-introduce the missing-key reads on its successors.
+        /** @var array<int, array<int, array{float,float,float}>> $accum */
+        $accum = [];
+        for ($gy = 0; $gy < $rows; $gy++) {
+            $accum[$gy] = array_fill(0, $cols, [0.0, 0.0, 0.0]);
+        }
+        $snake = $this->serpentine && $hasDiffusion;
+
+        for ($gy = 0; $gy < $rows; $gy++) {
+            $base = [];
+            $holes = [];
+            for ($k = 0; $k < $gh; $k++) {
+                [$base[$k], $holes[$k]] = $this->loadBaseRow($img, $gy * $gh + $k, $w, $offset, $texture, $yOrigin);
+            }
+            /** @var array<int, list<int>> $out pixel row -> palette indices (holes stay 0) */
+            $out = [];
+            for ($k = 0; $k < $gh; $k++) {
+                $out[$k] = array_fill(0, $w, 0);
+            }
+
+            $reversed = $snake && (($gy & 1) === 1);
+            for ($i = 0; $i < $cols; $i++) {
+                $gx = $reversed ? $cols - 1 - $i : $i;
+                $err = $accum[$gy][$gx];
+
+                $sum = [0.0, 0.0, 0.0];
+                $overflow = [0.0, 0.0, 0.0];
+                $count = 0;
+                for ($k = 0; $k < $gh; $k++) {
+                    for ($j = 0; $j < $gw; $j++) {
+                        $px = $gx * $gw + $j;
+                        if ($offset === 1 && $holes[$k][$px]) {
+                            continue;
+                        }
+                        $count++;
+                        for ($ch = 0; $ch < 3; $ch++) {
+                            $v = $base[$k][$px][$ch] + $err[$ch];
+                            if ($v < 0) {
+                                $overflow[$ch] += $v;
+                                $v = 0.0;
+                            } elseif ($v > 255) {
+                                $overflow[$ch] += $v - 255.0;
+                                $v = 255.0;
+                            }
+                            $sum[$ch] += $v;
+                        }
+                    }
+                }
+                if ($count === 0) {
+                    continue; // all-hole grain: unpainted, error neither consumed nor spread
+                }
+
+                $meanR = (int) floor($sum[0] / $count);
+                $meanG = (int) floor($sum[1] / $count);
+                $meanB = (int) floor($sum[2] / $count);
+
+                $br = ($meanR & ~7) | 4;
+                $bg = ($meanG & ~7) | 4;
+                $bb = ($meanB & ~7) | 4;
+                $key = (($br >> 3) << 10) | (($bg >> 3) << 5) | ($bb >> 3);
+                $palIdx = $cache[$key] ??= $index->nearest(new PaletteColor($br, $bg, $bb));
+
+                if ($hasDiffusion) {
+                    [$pr, $pg, $pb] = $palette[$palIdx];
+                    // chafa: (next_error >> shift) + (mean - col) * intensity,
+                    // floored mean overflow riding at full weight.
+                    self::diffuseError(
+                        $accum, $cols, $rows, $gx, $gy,
+                        floor($overflow[0] / $count) + ((float) $meanR - (float) $pr) * $diffusionStrength,
+                        floor($overflow[1] / $count) + ((float) $meanG - (float) $pg) * $diffusionStrength,
+                        floor($overflow[2] / $count) + ((float) $meanB - (float) $pb) * $diffusionStrength,
+                        $this->dither,
+                        $reversed ? -1 : 1,
+                    );
+                }
+
+                for ($k = 0; $k < $gh; $k++) {
+                    for ($j = 0; $j < $gw; $j++) {
+                        $out[$k][$gx * $gw + $j] = $offset + $palIdx;
+                    }
+                }
+            }
+
+            for ($k = 0; $k < $gh; $k++) {
+                yield $gy * $gh + $k => $out[$k];
             }
         }
     }

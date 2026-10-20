@@ -245,16 +245,18 @@ final class SixelAlphaTest extends TestCase
         );
         $this->assertLessThan((int) $push, (int) $composite, 'flatten must run before the push');
 
-        // indexRows loadBase leg: $isHole decision < flattenOnto < $row[] push.
-        // C-06: the base read moved with indexRows into the shared Ditherer;
-        // the ordering law is the same walk, so the slice reads that file.
+        // loadBaseRow leg: $isHole decision < flattenOnto < $row[] push.
+        // C-06 moved the base read with indexRows into the shared Ditherer;
+        // C-09 hoisted it out of the closure into loadBaseRow() so the grain
+        // walk shares it — the ordering law is the same walk, and the slice
+        // now reads that method's body.
         $ditherSource = (new \ReflectionClass(Ditherer::class))->getFileName();
         $ditherCode = file_get_contents($ditherSource);
         $this->assertIsString($ditherCode);
         $rows = substr(
             $ditherCode,
-            (int) strpos($ditherCode, '$loadBase = function'),
-            (int) strpos($ditherCode, '// Prime the window'),
+            (int) strpos($ditherCode, 'private function loadBaseRow'),
+            (int) strpos($ditherCode, 'return [$row, $rowHoles];'),
         );
         $holeSet = strpos($rows, '$isHole =');
         $rowsComposite = strpos($rows, 'flattenOnto(');
