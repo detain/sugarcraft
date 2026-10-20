@@ -9348,7 +9348,10 @@ DOC;
     {
         static $root = null;
         if ($root === null) {
-            $root = sys_get_temp_dir() . '/candy-code-runtime-ruleless-root';
+            // Entropy in the name is both the house rule (ProcessUniqueTempName
+            // — shards would collide on a fixed leaf) and the need: concurrent
+            // phpunit processes each own one directory and never see each other.
+            $root = sys_get_temp_dir() . '/candy-code-runtime-ruleless-' . getmypid() . '-' . bin2hex(random_bytes(4));
             if (!is_dir($root)) {
                 mkdir($root, 0700, true);
             }
