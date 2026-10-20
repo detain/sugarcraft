@@ -82,6 +82,17 @@ final class LumaRamp
     /**
      * Return the character for a given 0-255 luminance value.
      *
+     * MICRO-14 seam: this walk is the LEGACY floor quantiser — the table maps
+     * `floor(luma * len / 256)` over the FULL table length, the tplay/glyph
+     * convention. The canonical sugar-image AsciiRenderer (which this lib's
+     * {@see AsciiRenderer} bridge delegates to) rounds instead:
+     * `round(luma / 255 * (len - 1))`. The two distributions differ on 59 of
+     * 256 lumas for the standard ramp (33 darker below the middle, 26
+     * brighter at/above it); both are monotone, and the video player
+     * (`Player::renderCells()`) still paints through THIS path. The
+     * divergence is a behaviour pin, not a bug to "fix" without a product
+     * decision — see tests/LumaRampQuantisationSeamTest.php.
+     *
      * @param float  $luma Luminance value 0.0 - 255.0
      * @param string $ramp Ramp name: 'minimal', 'standard', 'dense' (default: 'standard')
      * @return string Single character representing the luminance
