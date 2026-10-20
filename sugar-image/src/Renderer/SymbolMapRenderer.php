@@ -65,6 +65,11 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     /** chafa `--symbols=` selector expression, or null for the default corpus. */
     private ?string $symbolSelector = null;
 
+    /** chafa canvas-init solid_char (chafa-canvas.c:573); see {@see solidChar()}. */
+    private bool $solidCharResolved = false;
+
+    private ?string $solidCharCache = null;
+
     private ?string $defaultFg;
 
     private ?string $defaultBg;
@@ -118,8 +123,9 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
      * F-17/REACH-A04: select the glyph corpus with chafa's `--symbols=`
      * tag grammar ({@see SymbolMap::withSelectors()}). The default corpus
      * (W6's 676 entries) stays byte-frozen; a selector widens the map to
-     * the full 1,261-glyph narrow array or narrows it to one class
-     * family. An invalid expression throws at configuration time.
+     * the full 1,260-glyph narrow array (1,251 under the BAD-vetoing `all`)
+     * or narrows it to one class family. An invalid expression throws at
+     * configuration time.
      */
     public function withSymbolSelectors(string $selectors): self
     {
@@ -336,8 +342,15 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
             }
         }
         if ($flat) {
-            // One colour everywhere: the solid block reproduces it exactly.
-            return ["\u{2588}", $rgb0, $rgb0];
+            $solid = $this->solidChar();
+            if ($solid !== null) {
+                // One colour everywhere: the best available solid
+                // reproduces it exactly.
+                return [$solid, $rgb0, $rgb0];
+            }
+            // The selection holds no usable solid (chafa's
+            // find_best_solid_char returned 0): the flat cell rides the
+            // ordinary symbol path below, exactly like chafa's fall-through.
         }
 
         if ($this->canvasMode === CanvasMode::Fgbg) {
@@ -352,6 +365,44 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
         $pens = $this->scoredPens($pixels, SymbolMap::coverageOf($def->bits));
 
         return [$def->char, $pens[1], $pens[0]];
+    }
+
+    /**
+     * chafa's find_best_solid_char (chafa/chafa-canvas.c:335-374), resolved
+     * once at canvas init (chafa-canvas.c:573) and memoized here the same
+     * way: U+2588 when the selection holds it
+     * ({@see SymbolMap::hasSymbol()}); otherwise the nearest corpus symbol
+     * to full coverage when it leaves at most 32 pixels unpainted (chafa's
+     * hamming_distance <= 32 gate against the all-ones bitmap); otherwise
+     * null — chafa's 0 return — and flat cells fall through to the ordinary
+     * symbol path. Before F-17/rev-w10-2 M2 this shortcut returned U+2588
+     * unguarded, so `--symbols=braille` still painted 449 of 450 flat cells
+     * with a glyph the selection had forbidden.
+     *
+     * Adaptation at the A-05b fill-map seam: chafa consults its separate
+     * fill_symbol_map first (has_symbol on both maps, then
+     * find_fill_candidates); this port has no fill map, so both fill
+     * lookups collapse into the single symbol-map walk below — the
+     * candidate bitmap 0xffffffffffffffff arrives as the int -1 in PHP
+     * two's complement (findCandidates' popcount is sign-safe).
+     */
+    private function solidChar(): ?string
+    {
+        if ($this->solidCharResolved) {
+            return $this->solidCharCache;
+        }
+        $this->solidCharResolved = true;
+
+        if ($this->map->hasSymbol(0x2588)) {
+            return $this->solidCharCache = "\u{2588}";
+        }
+
+        $candidates = $this->map->findCandidates(-1, false, 8);
+        if ($candidates !== [] && $candidates[0][0]->bgWeight() <= 32) {
+            return $this->solidCharCache = $candidates[0][0]->char;
+        }
+
+        return null;
     }
 
     /**

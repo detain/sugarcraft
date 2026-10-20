@@ -390,6 +390,20 @@ final class SymbolMapTest extends TestCase
         $this->assertCount(673, $this->map->withSelectors('-stipple')->defs());
     }
 
+    public function testHasSymbolMirrorsChafasSelectionMembership(): void
+    {
+        // F-17: chafa_symbol_map_has_symbol (chafa-symbol-map.c:1137),
+        // the gate of the solid-cell ladder.
+        $this->assertTrue($this->map->hasSymbol(0x2588));
+        $this->assertFalse($this->map->hasSymbol(0x20), 'the default corpus carries no space glyph — blanks ride the literal fallback');
+        $this->assertTrue($this->map->withSelectors('all+ambiguous')->hasSymbol(0x20), 'the ASCII table enters through the full array');
+        $this->assertFalse($this->map->hasSymbol(0x1FB4C), 'the legacy block tier rides the full array, not the default corpus');
+
+        $braille = $this->map->withSelectors('braille');
+        $this->assertFalse($braille->hasSymbol(0x2588));
+        $this->assertTrue($braille->hasSymbol(0x28FF));
+    }
+
     public function testSelectorErrorsFailFast(): void
     {
         $this->expectException(\InvalidArgumentException::class);

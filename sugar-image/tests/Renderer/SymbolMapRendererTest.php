@@ -153,6 +153,83 @@ final class SymbolMapRendererTest extends TestCase
         $this->assertStringContainsString('38;2;12;200;60', $out);
     }
 
+    public function testTheSolidShortcutVetoesGlyphsOutsideTheSelection(): void
+    {
+        // F-17/rev-w10-2 M2: chafa's find_best_solid_char
+        // (chafa/chafa-canvas.c:335-374) guards the solid emission with
+        // has_symbol(0x2588) and falls through a <=32-pixel candidate
+        // ladder when the selection lacks it. The pre-fix shortcut was
+        // unguarded: `--symbols=braille` still painted U+2588 into every
+        // flat cell (449 of 450 cells in the reviewer's production proof).
+        $swatch = self::solidSwatch(12, 200, 60);
+
+        // Ladder hit: the legacy tier holds no U+2588, but its 7/8 fills
+        // leave 7 pixels unpainted; the U+1FB4C/U+1FB5D tie (bgWeight 7)
+        // resolves in corpus build order, as chafa's insertion-sorted
+        // buffer does.
+        $legacy = (new SymbolMapRenderer())->withSymbolSelectors('legacy')->render($swatch, 1);
+        $this->assertStringNotContainsString("\u{2588}", $legacy);
+        $this->assertStringContainsString("\u{1FB4C}", $legacy);
+
+        // Ladder refusal: the best full-coverage braille dot (U+28FF)
+        // leaves 48 pixels unpainted, over chafa's 32 gate, so flat cells
+        // ride the ordinary symbol path and come out blank braille.
+        $braille = (new SymbolMapRenderer())->withSymbolSelectors('braille')->render($swatch, 1);
+        $this->assertStringNotContainsString("\u{2588}", $braille);
+        $this->assertStringContainsString("\u{2800}", $braille);
+
+        // Default corpus unchanged: has_symbol(0x2588) short-circuits to
+        // the solid block, so every frozen digest keeps its bytes.
+        $default = (new SymbolMapRenderer())->render($swatch, 1);
+        $this->assertStringContainsString("\u{2588}", $default);
+    }
+
+    public function testFlatCellsActuallyMoveUnderTheSymbolsDialEndToEnd(): void
+    {
+        // F-17/rev-w10-2 M2 production reachability: the photo-ish frame
+        // (two flat swatch cells, a gradient and a checker cell) through
+        // the same renderer dial candy-image's --symbols= threads. The
+        // reviewer's complaint was that the dial was a no-op on flat
+        // cells — here it must move them.
+        $image = self::photoFrame();
+
+        $default = (new SymbolMapRenderer())->render($image, 4);
+        $braille = (new SymbolMapRenderer())->withSymbolSelectors('braille')->render($image, 4);
+
+        $this->assertGreaterThan(0, substr_count($default, "\u{2588}"), 'the flat cells paint solid on the default corpus');
+        $this->assertSame(0, substr_count($braille, "\u{2588}"), 'a selection without U+2588 may never paint it');
+        $this->assertNotSame($default, $braille);
+    }
+
+    private static function solidSwatch(int $r, int $g, int $b): ImageSource
+    {
+        $img = imagecreatetruecolor(8, 8);
+        imagefill($img, 0, 0, imagecolorallocate($img, $r, $g, $b));
+
+        return ImageSource::fromGd($img, 'image/png');
+    }
+
+    /** 32x8 GD: cells 0-1 flat swatches, cell 2 horizontal gradient, cell 3 checker. */
+    private static function photoFrame(): ImageSource
+    {
+        $img = imagecreatetruecolor(32, 8);
+        imagefill($img, 0, 0, imagecolorallocate($img, 240, 30, 30));
+        imagefilledrectangle($img, 8, 0, 15, 7, imagecolorallocate($img, 20, 60, 230));
+        for ($x = 0; $x < 8; $x++) {
+            $c = (int) round($x * 255 / 7);
+            imagefilledrectangle($img, 16 + $x, 0, 16 + $x, 7, imagecolorallocate($img, $c, $c, 90));
+        }
+        $dark = imagecolorallocate($img, 10, 10, 10);
+        $light = imagecolorallocate($img, 245, 245, 245);
+        for ($y = 0; $y < 8; $y++) {
+            for ($x = 0; $x < 8; $x++) {
+                imagesetpixel($img, 24 + $x, $y, ($x + $y) % 2 === 0 ? $dark : $light);
+            }
+        }
+
+        return ImageSource::fromGd($img, 'image/png');
+    }
+
     public function testTheRendererIsDeterministicAcrossRendersAndInstances(): void
     {
         $image = ImageSource::fromFile(self::GRADIENT);

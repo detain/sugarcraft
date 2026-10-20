@@ -451,6 +451,23 @@ final class SymbolMap
     }
 
     /**
+     * chafa_symbol_map_has_symbol (chafa-symbol-map.c:1137): whether the
+     * selection holds a codepoint. The solid-cell shortcut consults it for
+     * U+2588 (see {@see \SugarCraft\Image\Renderer\SymbolMapRenderer}'s
+     * solid ladder).
+     */
+    public function hasSymbol(int $codepoint): bool
+    {
+        foreach ($this->defs as $def) {
+            if (mb_ord($def->char) === $codepoint) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Apply chafa's `--symbols=` tag selector grammar over the FULL narrow
      * corpus (1,260 unique glyphs), returning a new map holding the selection in
      * corpus build order.
