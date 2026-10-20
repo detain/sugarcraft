@@ -317,10 +317,18 @@ final class Quantizer
                 continue;
             }
 
+            // chafa's vec ops apply the coefficient BEFORE the square
+            // (chafa-palette.c:491-495: hadamard(tv, tv, pnn_coeffs[j])
+            // then hadamard(tv, tv, tv)) — the term is Σ (c·d)², not
+            // Σ c·d². The collapsed form Σ_j c_{j,c} would make the green
+            // channel's weight negative; squaring per-row keeps every
+            // channel's aggregate Σ_j c_{j,c}² positive, as chafa intends.
             for ($j = 0; $j < 3; $j++) {
                 $c = self::COEFFS[$j];
-                $nerr += $nerr2 * self::RATIO
-                    * ($c[0] * $dr * $dr + $c[1] * $dg * $dg + $c[2] * $db * $db);
+                $wr = $c[0] * $dr;
+                $wg = $c[1] * $dg;
+                $wb = $c[2] * $db;
+                $nerr += $nerr2 * self::RATIO * ($wr * $wr + $wg * $wg + $wb * $wb);
                 if ($nerr >= $err) {
                     break;
                 }

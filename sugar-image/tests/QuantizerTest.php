@@ -121,9 +121,9 @@ final class QuantizerTest extends TestCase
         // quanfn ladder or the export rounding moves these.
         $samples = self::lcgSamples(1024);
 
-        $this->assertSame('44522aaf0cf1cd4a4f303c33722210e40b964ca3', sha1((string) json_encode(Quantizer::build($samples, 32, 3))));
-        $this->assertSame('dcef3e1e62d5da7a6b3ea10fa2ef6ed0b93cc5cf', sha1((string) json_encode(Quantizer::build($samples, 32, 4))));
-        $this->assertSame('177d06d700d55ca1622bd1ba4ff46fd64536559b', sha1((string) json_encode(Quantizer::build($samples, 64, 5))));
+        $this->assertSame('f531fb2708605e6e56d9dd5b39f2325f3cf4fb2c', sha1((string) json_encode(Quantizer::build($samples, 32, 3))));
+        $this->assertSame('c96388d091ab0910e3c9a48a9f1e693a525146cd', sha1((string) json_encode(Quantizer::build($samples, 32, 4))));
+        $this->assertSame('053f754b1c6ef091460acb3adfbac05ca81e09a6', sha1((string) json_encode(Quantizer::build($samples, 64, 5))));
     }
 
     public function testPaletteEntriesStayInChannelRange(): void

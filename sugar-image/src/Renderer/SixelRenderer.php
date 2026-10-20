@@ -392,8 +392,10 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * rightmost pixels are transparent; chafa forces full width exactly on
      * is_global_first_row || is_global_last_row (chafa-sixel-renderer.c:415-440)
      * and flushes the trailing run with one pen (`#0?W`). Here only fully-empty
-     * edge bands can lack the full-width sweep at all — emitRleForColor() walks
-     * every column of the band on each colour pass, so any non-empty band
+     * edge bands can lack the full-width sweep at all — emitBandRuns() feeds
+     * every column of the band on each colour pass (stored columns answer
+     * their mask, gaps answer zero bits, the tail closes at full width), so
+     * any non-empty band
      * already advances the graphics position across the whole row. Deviation
      * disclosed: chafa re-checks per transparent pixel, SugarCraft keys on the
      * empty-body case, which is its only observable form of the same defect.
