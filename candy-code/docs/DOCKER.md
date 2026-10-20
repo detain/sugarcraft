@@ -2,12 +2,26 @@
 
 The `serve` verb ships with an application image definition at
 [`Dockerfile`](../Dockerfile) and a publishing workflow at
-`.github/workflows/candy-code-image.yml` in the monorepo. The workflow builds
-on every `candy-code/**` change and pushes to GitHub Container Registry:
+`.github/workflows/candy-code-image.yml` in the monorepo. The workflow
+publishes on every push to `master` that touches `candy-code/**` — it tags
+`:latest` plus the bare commit sha and pushes to GitHub Container Registry:
 
 ```
 docker pull ghcr.io/detain/sugarcraft-candy-code:latest
 ```
+
+> **Registry status.** Every workflow run before the build fix failed at
+> `composer create-project`: `php:8.3-cli` ships neither ext-zip nor an
+> archive binary (the first error, masking the rest), and once extraction
+> works, `sugar-image`/`candy-mosaic` hard-require `ext-gd`, which the base
+> image lacked too. The Dockerfile now installs `unzip` and builds `gd`;
+> the registry package still 404s until the first green workflow run with
+> these fixes lands on `master`. The build has been proved end-to-end
+> locally (container `--version` and `/api/health` included), and PRs
+> touching the image now proof-build before merge, so a broken Dockerfile
+> cannot silently ride `master` again. Until that first green run, build
+> locally (see [Building locally](#building-locally) below) or pin to no
+> image.
 
 The image resolves the app from the **published** package stream (Composer
 `dev-master`), never from a monorepo working tree, so its contents track the
