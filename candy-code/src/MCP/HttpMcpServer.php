@@ -36,6 +36,8 @@ use SugarCraft\McpClient\RequestIdSequence;
  */
 final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptProvider
 {
+    use WalksProviderPages;
+
     /** The version this client advertises in `initialize` (unchanged by MCP-2). */
     public const PROTOCOL_VERSION = '2024-11-05';
 
@@ -476,81 +478,25 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
      * per-call, never cached: a resource roster changes while the server
      * runs, and the launch freeze is a TOOL-surface law.
      *
+     * MCP-4 (audit re-run F-2): the loop and the envelope gate are the ONE
+     * shared {@see WalksProviderPages} implementation; this class contributes
+     * only its wire call and its exact refusal bytes.
+     *
      * @return list<array<mixed>>
      */
     private function collectProviderPages(string $method, string $key): array
     {
-        $entries = [];
-        $seenCursors = [];
-        $params = null;
-
-        for ($page = 1; $page <= self::MAX_TOOL_PAGES; $page++) {
-            $result = $this->requireProviderResult(
-                $method,
-                $this->request($method, $params, $this->toolOptions()),
-            );
-
-            $rows = $result[$key] ?? [];
-
-            if (!is_array($rows)) {
-                $rows = [];
-            }
-
-            foreach ($rows as $row) {
-                if (is_array($row)) {
-                    $entries[] = $row;
-                }
-            }
-
-            $cursor = $result['nextCursor'] ?? null;
-
-            if (!is_string($cursor) || $cursor === '') {
-                return $entries;
-            }
-
-            if (isset($seenCursors[$cursor])) {
-                throw new \RuntimeException(
-                    $method . ' repeated cursor ' . $cursor . ' at page ' . $page
-                    . ' — refusing to walk a pagination loop',
-                );
-            }
-            $seenCursors[$cursor] = true;
-            $params = ['cursor' => $cursor];
-        }
-
-        throw new \RuntimeException($method . ' still had a nextCursor after '
-            . self::MAX_TOOL_PAGES . ' pages — refusing to return a truncated roster');
-    }
-
-    /**
-     * The one gate every provider page and every read/get answer passes, in
-     * the wording family {@see requireToolsListPage()} established for the
-     * tools roster.
-     *
-     * @param array<mixed>|null $data
-     * @return array<mixed>
-     */
-    private function requireProviderResult(string $method, ?array $data): array
-    {
-        if ($data === null) {
-            throw new \RuntimeException($method . ' returned an invalid response');
-        }
-
-        if (isset($data['error'])) {
-            throw new \RuntimeException($method . ' refused' . self::describeError($data['error']));
-        }
-
-        if (!array_key_exists('result', $data)) {
-            throw new \RuntimeException($method . ' returned no result');
-        }
-
-        $result = $data['result'];
-
-        if (!is_array($result)) {
-            throw new \RuntimeException($method . ' returned a malformed result');
-        }
-
-        return $result;
+        return $this->walkProviderPages(
+            $key,
+            self::MAX_TOOL_PAGES,
+            function (?array $params) use ($method): array {
+                return $this->requireProviderResult($method, $this->request($method, $params, $this->toolOptions()));
+            },
+            fn (string $cursor, int $page): string => $method . ' repeated cursor ' . $cursor . ' at page ' . $page
+                . ' — refusing to walk a pagination loop',
+            fn (): string => $method . ' still had a nextCursor after '
+                . self::MAX_TOOL_PAGES . ' pages — refusing to return a truncated roster',
+        );
     }
 
     /**

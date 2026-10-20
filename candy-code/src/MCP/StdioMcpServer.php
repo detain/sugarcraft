@@ -51,6 +51,7 @@ use SugarCraft\Code\Support\ProcessContainment;
  */
 final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptProvider
 {
+    use WalksProviderPages;
     /**
      * Handshake ceiling default, DERIVED from the library constant so the two
      * cannot drift — the library doc-block explains why the number is
@@ -339,6 +340,11 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
      * servers answer -32601 — that is a diagnosis, not "empty"), and a reply
      * whose result is missing or not an object.
      *
+     * MCP-4 (audit re-run F-2): this declaration SHADOWS the trait
+     * {@see WalksProviderPages::requireProviderResult()} of the same name
+     * (class methods win over trait methods) — the stdio reply is a typed
+     * McpMessage, not a parsed array, and this family names the server.
+     *
      * @return array<mixed>
      */
     private function requireProviderResult(string $method, ?\SugarCraft\McpClient\McpMessage $reply): array
@@ -370,50 +376,32 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
      * or non-array row would warn inside `foreach` (the parseTools lesson,
      * measured on the tools path), and junk elements are not rows.
      *
+     * MCP-4 (audit re-run F-2): the loop is the ONE shared
+     * {@see WalksProviderPages} implementation; this class contributes only
+     * its transport call and its name-embedded refusal bytes. This class also
+     * DECLARES its own {@see requireProviderResult()} — by PHP's precedence a
+     * class method shadows the trait's identically-named one — because a
+     * stdio reply is a typed McpMessage, not a parsed array, and its refusal
+     * family names the server.
+     *
      * @return list<array<mixed>>
      */
     private function collectProviderPages(string $method, string $key): array
     {
-        $entries = [];
-        $seenCursors = [];
-        $params = null;
-
-        for ($page = 1; $page <= self::MAX_PROVIDER_PAGES; $page++) {
-            $result = $this->requireProviderResult($method, $this->transport->request(
-                $method,
-                $params,
-                $this->providerDeadline(),
-            ));
-
-            $rows = $result[$key] ?? [];
-
-            if (!is_array($rows)) {
-                $rows = [];
-            }
-
-            foreach ($rows as $row) {
-                if (is_array($row)) {
-                    $entries[] = $row;
-                }
-            }
-
-            $cursor = $result['nextCursor'] ?? null;
-
-            if (!is_string($cursor) || $cursor === '') {
-                return $entries;
-            }
-
-            if (isset($seenCursors[$cursor])) {
-                throw new \RuntimeException(
-                    "MCP server {$this->name} repeated {$method} cursor {$cursor} at page {$page} — refusing to walk a pagination loop",
-                );
-            }
-            $seenCursors[$cursor] = true;
-            $params = ['cursor' => $cursor];
-        }
-
-        throw new \RuntimeException("MCP server {$this->name} {$method} still had a nextCursor after "
-            . self::MAX_PROVIDER_PAGES . ' pages — refusing to return a truncated roster');
+        return $this->walkProviderPages(
+            $key,
+            self::MAX_PROVIDER_PAGES,
+            function (?array $params) use ($method): array {
+                return $this->requireProviderResult($method, $this->transport->request(
+                    $method,
+                    $params,
+                    $this->providerDeadline(),
+                ));
+            },
+            fn (string $cursor, int $page): string => "MCP server {$this->name} repeated {$method} cursor {$cursor} at page {$page} — refusing to walk a pagination loop",
+            fn (): string => "MCP server {$this->name} {$method} still had a nextCursor after "
+                . self::MAX_PROVIDER_PAGES . ' pages — refusing to return a truncated roster',
+        );
     }
 
     /**
