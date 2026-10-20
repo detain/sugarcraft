@@ -116,6 +116,96 @@ final class PlayerCatchUpTest extends TestCase
         }
     }
 
+    /**
+     * E-03: the arm clamp in armFromRel() is load-bearing and was
+     * suite-invisible (rev-s2-7 MAJOR-1). A fake-clock tick arriving
+     * STRICTLY less than MIN_TICK_CS before its next deadline — here
+     * 1/512 s = 0.195 cs, exact in binary — must arm exactly the floor,
+     * never the raw sub-tick delta: a 0.002 s arm spins the loop at
+     * flood rate for that slice instead of pacing it. Both shapes are
+     * pinned: the in-cycle arrival and one arriving after the modulo
+     * wrap (where nextDueRel carries the cycle offset). Deleting the
+     * max() and arming the raw distance reddens both floor assertions.
+     */
+    public function testSubCentisecondArrivalsArmTheFlooredTickNotTheRawDelta(): void
+    {
+        $const = (new \ReflectionClass(Player::class))->getReflectionConstant('MIN_TICK_CS');
+        $this->assertNotNull($const);
+        $floor = $const->getValue() / 100.0;
+        $player = $this->scheduledPlayer([25, 25, 25, 25]);
+        $this->assertSame(0.25, $this->armSeconds($player->init()));
+
+        // Anchor the schedule on its deadline grid: arrival exactly on
+        // frame 1's boundary arms the plain 0.25 s distance — a value
+        // ABOVE the floor passes through untouched.
+        $this->fakeNow = 0.25;
+        [$player, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(1, $player->index);
+        $this->assertSame(0.25, $this->armSeconds($cmd));
+
+        // In-cycle sub-floor arrival: 0.998046875 s sits inside frame 3's
+        // window [0.75, 1.0), raw distance 2^-9 s < the floor.
+        $this->fakeNow = 0.998046875;
+        [$player, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(3, $player->index, 'the late arrival resolves onto the current window');
+        $this->assertSame($floor, $this->armSeconds($cmd),
+            'a sub-floor arrival arms MIN_TICK_CS, never the raw sub-centisecond delta');
+
+        // Post-wrap twin: 1.498046875 s is 2^-9 short of the 1.5 s
+        // deadline in cycle 2, resolved from frame 3 — schedule-relative
+        // arithmetic must clamp on the cycle-offset arm too.
+        $this->fakeNow = 1.498046875;
+        [$player, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(1, $player->index, 'the post-wrap arrival resolves through the schedule');
+        $this->assertSame($floor, $this->armSeconds($cmd),
+            'the clamp holds on cycle-offset arms');
+    }
+
+    /**
+     * E-09: a fractional fps is ACCEPTED and rides its exact cadence
+     * end-to-end — 0.5 fps arms a 2.0 s tick (the period is a power of
+     * two, so every scheduled number here is exact in binary), through
+     * init() and one schedule-driven re-arm, ignoring the GIF delays.
+     */
+    public function testFractionalFixedFpsArmsItsExactCadenceEndToEnd(): void
+    {
+        $player = $this->scheduledPlayer([25, 25, 25])->withFixedFps(0.5);
+        $this->assertSame(0.5, $player->fixedFps);
+        $this->assertSame(2.0, $this->armSeconds($player->init()));
+
+        $this->fakeNow = 2.0;
+        [$player, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(1, $player->index);
+        $this->assertSame(2.0, $this->armSeconds($cmd), 'uniform half-second cadence, not the GIF delays');
+    }
+
+    /**
+     * E-09: a fractional duration bound fires on the exact schedule tie.
+     * 0.75 s keeps playing through the grid ticks strictly before it and
+     * quits when the position reaches it (>= comparison on the tie), with
+     * no wall-clock timer armed (E646-clean).
+     */
+    public function testFractionalMaxSecondsQuitsOnTheExactTie(): void
+    {
+        $player = $this->scheduledPlayer([25, 25, 25, 25])->withMaxSeconds(0.75);
+        $this->assertSame(0.75, $player->maxSeconds);
+
+        $this->fakeNow = 0.25;
+        [$player, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(1, $player->index);
+        $this->armSeconds($cmd);
+
+        $this->fakeNow = 0.5;
+        [$player, $cmd] = $player->update(new TickMsg());
+        $this->assertSame(2, $player->index);
+        $this->armSeconds($cmd);
+
+        $this->fakeNow = 0.75;
+        [, $cmd] = $player->update(new TickMsg());
+        $this->assertNotNull($cmd);
+        $this->assertInstanceOf(QuitMsg::class, $cmd(), 'the fractional bound quits on the tie');
+    }
+
     public function testPauseResumeAnchorsFreshPeriodAndNeverAccruesPausedTime(): void
     {
         $player = $this->scheduledPlayer([25, 25, 25]);

@@ -79,7 +79,7 @@ final class AnimationTimingParityTest extends TestCase
         [$player, $closure] = $this->playerFromDelays([0, 0])->update(new TickMsg());
         self::assertNotNull($closure, 'playing player must re-arm after a tick');
         self::assertSame($this->floorSeconds(), $closure()->seconds,
-            'update() re-arms from the CURRENT frame (delay 0) — the floor must hold there too');
+            'update() re-arms from the ARRIVED frame (delay 0) — the floor must hold there too');
         self::assertSame($this->floorSeconds(), $player->init()()->seconds,
             'the advanced frame is also delay 0 and stays floored');
     }
