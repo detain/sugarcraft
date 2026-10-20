@@ -14,9 +14,12 @@ namespace SugarCraft\Video\Tests\Support;
  * committed binaries. NOTHING animates through ffmpeg here — the animation
  * container is assembled by {@see animContainer()} per the RFC-9649/ANMF
  * layout the decoder documents (verified field-for-field against a real
- * ffmpeg+libwebp WebPAnimEncoder output; see the lane report). Full-canvas
- * offsets are the one value where the spec's half-unit encoding and ffmpeg's
- * own muxer agree trivially (0), so the builder sidesteps that swamp.
+ * ffmpeg+libwebp WebPAnimEncoder output; see the lane report). The spec's
+ * half-unit offset encoding is NOT sidestepped: animContainer() stores x/y
+ * as real half-canvas units (>> 1 per RFC 9649), so non-zero frame offsets
+ * encode faithfully; full-canvas frames are merely the case where that and
+ * ffmpeg's muxer trivially agree (0). Odd-pixel offsets truncate toward
+ * floor — unexercised by these fixtures (rev-s7-3 note).
  *
  * Frame geometry note baked into the literals: the 32x32 stills decode to
  * 32x32; the ALPH-carrying one is 16x16 mid-blue at ~50% alpha; the small
