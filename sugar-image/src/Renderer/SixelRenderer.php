@@ -127,6 +127,15 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *                              forward else backwards`). Default false:
      *                              the forward-only walk is what the
      *                              byte-frozen digests were captured with.
+     * @param bool $mltermEdgeRows  F-03: mlterm workaround — force the global
+     *                              first/last band of a transparent canvas to
+     *                              carry a full-width run on the background
+     *                              register (chafa-sixel-renderer.c:330-410
+     *                              build_sixel_row_ansi `force_full_width`,
+     *                              applied at :415-440 to
+     *                              is_global_first_row || is_global_last_row).
+     *                              Default false: auto-enabling belongs to the
+     *                              F-02 TermDb capability table, not here.
      */
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
@@ -137,6 +146,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         private readonly int $alphaThreshold = self::DEFAULT_ALPHA_THRESHOLD,
         private readonly ?Color $flattenBackground = null,
         private readonly bool $serpentine = false,
+        private readonly bool $mltermEdgeRows = false,
     ) {
         if ($maxColors < 1 || $maxColors > 256) {
             throw new \InvalidArgumentException(
@@ -305,16 +315,18 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             // `if ($bandBottom < $pixelH)` join.
             $rowsInBand = [];
             $firstBand = true;
+            $writtenRows = 0;
             foreach ($this->indexRows($resized, $palette, $this->dither, $offset) as $gridRow) {
                 $rowsInBand[] = $gridRow;
                 if (count($rowsInBand) === 6) {
-                    $write($this->bandBytes($rowsInBand, $pixelW, $palette, $offset, $firstBand));
+                    $writtenRows += 6;
+                    $write($this->bandBytes($rowsInBand, $pixelW, $palette, $offset, $firstBand, $writtenRows >= $pixelH));
                     $rowsInBand = [];
                     $firstBand = false;
                 }
             }
             if ($rowsInBand !== []) {
-                $write($this->bandBytes($rowsInBand, $pixelW, $palette, $offset, $firstBand));
+                $write($this->bandBytes($rowsInBand, $pixelW, $palette, $offset, $firstBand, true));
             }
 
             $write(Ansi::sixelTerminator());
@@ -342,12 +354,30 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * indices) so {@see emitBand()} is agnostic to where the band sits in the
      * full canvas.
      *
+     * F-03: when the mlterm quirk is armed, a GLOBAL edge band (first or last)
+     * of a transparent canvas that encodes to NOTHING at all is replaced by a
+     * full-width zero-bit run on the background register. Per mlterm's own
+     * comment in chafa (chafa-sixel-renderer.c:330-410 build_sixel_row_ansi):
+     * mlterm shows garbage unless the entire first row is drawn even when its
+     * rightmost pixels are transparent; chafa forces full width exactly on
+     * is_global_first_row || is_global_last_row (chafa-sixel-renderer.c:415-440)
+     * and flushes the trailing run with one pen (`#0?W`). Here only fully-empty
+     * edge bands can lack the full-width sweep at all — emitRleForColor() walks
+     * every column of the band on each colour pass, so any non-empty band
+     * already advances the graphics position across the whole row. Deviation
+     * disclosed: chafa re-checks per transparent pixel, SugarCraft keys on the
+     * empty-body case, which is its only observable form of the same defect.
+     *
      * @param list<list<int>>          $bandRows
      * @param list<array{int,int,int}> $palette
      */
-    private function bandBytes(array $bandRows, int $pixelW, array $palette, int $offset, bool $firstBand): string
+    private function bandBytes(array $bandRows, int $pixelW, array $palette, int $offset, bool $firstBand, bool $lastBand): string
     {
         $body = $this->emitBand($bandRows, 0, count($bandRows), $pixelW, $palette, $offset);
+
+        if ($body === '' && $this->mltermEdgeRows && $offset === 1 && ($firstBand || $lastBand)) {
+            $body = Ansi::sixelColorSelect(0) . $this->emitRle(0, $pixelW);
+        }
 
         return ($firstBand ? '' : '-') . $body;
     }
@@ -418,7 +448,8 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                     $this->flattenBackground->r,
                     $this->flattenBackground->g,
                     $this->flattenBackground->b))
-            . ($this->serpentine ? '|serpentine=1' : '');
+            . ($this->serpentine ? '|serpentine=1' : '')
+            . ($this->mltermEdgeRows ? '|mlterm=1' : '');
     }
 
     /**
@@ -438,6 +469,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->alphaThreshold,
             $this->flattenBackground,
             $this->serpentine,
+            $this->mltermEdgeRows,
         );
     }
 
@@ -482,6 +514,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $threshold,
             $this->flattenBackground,
             $this->serpentine,
+            $this->mltermEdgeRows,
         );
     }
 
@@ -504,6 +537,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->alphaThreshold,
             $background,
             $this->serpentine,
+            $this->mltermEdgeRows,
         );
     }
 
@@ -531,6 +565,38 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $this->alphaThreshold,
             $this->flattenBackground,
             $serpentine,
+            $this->mltermEdgeRows,
+        );
+    }
+
+    /**
+     * F-03: true when the mlterm first/last-row quirk is armed.
+     */
+    public function mltermEdgeRows(): bool
+    {
+        return $this->mltermEdgeRows;
+    }
+
+    /**
+     * F-03 copy with the mlterm edge-band quirk armed. The quirk only ever
+     * fires on a canvas that carries the transparent background register
+     * (offset 1) whose global first or last band encodes to nothing at all;
+     * those bands then draw a full-width zero-bit run on register 0 so the
+     * graphics position advances across the whole row. Off by default until
+     * the F-02 TermDb table can select it per terminal.
+     */
+    public function withMltermEdgeRows(bool $mltermEdgeRows = true): self
+    {
+        return new self(
+            $this->dither,
+            $this->maxColors,
+            $this->cellWidth,
+            $this->cellHeight,
+            $this->intensity,
+            $this->alphaThreshold,
+            $this->flattenBackground,
+            $this->serpentine,
+            $mltermEdgeRows,
         );
     }
 

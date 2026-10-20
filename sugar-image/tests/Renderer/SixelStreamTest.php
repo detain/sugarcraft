@@ -437,4 +437,139 @@ final class SixelStreamTest extends TestCase
             );
         }
     }
+
+    /**
+     * F-03 helper: chunk stream of an $bands-row canvas at one pixel per cell
+     * where rows $redFrom..$redTo (absolute pixel rows) are opaque red and
+     * every other row is a fully-transparent hole.
+     *
+     * @return list<string>
+     */
+    private function f03Chunks(SixelRenderer $renderer, int $pixelW, int $bands, int $redFrom, int $redTo): array
+    {
+        $bytes = $this->pngFromGd($pixelW, $bands * 6, function (\GdImage $im) use ($pixelW, $redFrom, $redTo): void {
+            $red = imagecolorallocate($im, 255, 0, 0);
+            $this->assertNotFalse($red);
+            imagefilledrectangle($im, 0, $redFrom, $pixelW - 1, $redTo, $red);
+        });
+        $image = new ImageSource($bytes, 'image/png', $pixelW, $bands * 6);
+
+        return $this->collect($renderer, $image, $pixelW, $bands);
+    }
+
+    /**
+     * F-03: with the quirk OFF (the shipped default) fully-transparent edge
+     * bands encode to NOTHING — the first band lands as an empty chunk and the
+     * last as a bare graphics-newline. This is the mlterm-defect shape and it
+     * is byte-frozen: arming the quirk must be the only thing that changes it.
+     */
+    public function testEmptyEdgeBandsStayEmptyByDefault(): void
+    {
+        // 4 bands: top and bottom fully transparent, middle two opaque red.
+        $plain = array_slice($this->f03Chunks(new SixelRenderer(Dither::None, 256, 1, 6), 4, 4, 6, 17), 1, -1);
+        $explicitOff = array_slice($this->f03Chunks((new SixelRenderer(Dither::None, 256, 1, 6))->withMltermEdgeRows(false), 4, 4, 6, 17), 1, -1);
+
+        $this->assertSame(['', '-#1!4~', '-#1!4~', '-'], $plain, 'edge bands must collapse to empty bodies today');
+        $this->assertSame($plain, $explicitOff, 'the explicit-off wither must be the default');
+    }
+
+    /**
+     * F-03: armed, a fully-transparent GLOBAL FIRST band draws a full-width
+     * zero-bit run on the background register — chafa's force_full_width pen
+     * (chafa-sixel-renderer.c:330-410), flushed with one pen like chafa's
+     * trailing '?' run. Width is honoured verbatim (W=4 → !4, W=10 → !10), so
+     * the run spans the whole row the way mlterm's bug demands.
+     */
+    public function testArmedQuirkDrawsFullWidthRunOnEmptyFirstBand(): void
+    {
+        $armed = (new SixelRenderer(Dither::None, 256, 1, 6))->withMltermEdgeRows();
+
+        $chunks = $this->f03Chunks($armed, 4, 4, 6, 17);
+        $this->assertSame('#0!4?', $chunks[1], 'first empty band must carry the full-width background run');
+
+        $wide = $this->f03Chunks($armed, 10, 2, 6, 11);
+        $this->assertSame('#0!10?', $wide[1], 'the run must span the canvas width, not a constant');
+        $this->assertStringEndsWith('-#1!10~', $wide[2], 'the opaque band keeps its normal body after the widened run');
+    }
+
+    /**
+     * F-03: armed, the GLOBAL LAST empty band gets the same run (chafa applies
+     * force_full_width to is_global_first_row || is_global_last_row,
+     * chafa-sixel-renderer.c:415-440) while INTERIOR empty bands stay exactly
+     * as bare as the default — the quirk is an edge repair, not a global
+     * padding policy.
+     */
+    public function testArmedQuirkHitsOnlyGlobalEdgeBands(): void
+    {
+        // 5 bands: b0 empty (first), b1 red, b2/b3 empty (interior), b4 empty (last).
+        $armed = (new SixelRenderer(Dither::None, 256, 1, 6))->withMltermEdgeRows();
+        $chunks = $this->f03Chunks($armed, 4, 5, 6, 11);
+
+        $this->assertSame(
+            ['#0!4?', '-#1!4~', '-', '-', '-#0!4?'],
+            array_slice($chunks, 1, -1),
+            'edges carry the run; interior empties keep the bare newline',
+        );
+    }
+
+    /**
+     * F-03: the quirk never fires without a background register (offset 0 —
+     * emitBand cannot produce an empty body there), so an opaque canvas is
+     * byte-identical armed or not, on the corpus and on a solid fixture.
+     */
+    public function testQuirkIsByteInertOnOpaqueCanvases(): void
+    {
+        $plain = new SixelRenderer(Dither::None, 256, 1, 6);
+        $armed = $plain->withMltermEdgeRows();
+
+        $solid = $this->f03Chunks($plain, 6, 2, 0, 11);
+        $armedSolid = $this->f03Chunks($armed, 6, 2, 0, 11);
+        $this->assertSame($solid, $armedSolid, 'a canvas with no holes has no empty band to force');
+
+        $image = ImageSource::fromFile(__DIR__ . '/../fixtures/8x4_red.png');
+        $this->assertSame($plain->render($image, 8, 4), $armed->render($image, 8, 4));
+        $this->assertSame(
+            (new SixelRenderer())->render($image, 8, 4),
+            (new SixelRenderer())->withMltermEdgeRows()->render($image, 8, 4),
+            'default cells must be inert too',
+        );
+    }
+
+    /**
+     * F-03: the streaming path and the one-shot render must agree under the
+     * quirk exactly as they do without it (both funnel through encodeInto).
+     */
+    public function testStreamAndRenderAgreeUnderQuirk(): void
+    {
+        $armed = (new SixelRenderer(Dither::None, 256, 1, 6))->withMltermEdgeRows();
+        $bytes = $this->pngFromGd(4, 24, function (\GdImage $im): void {
+            $red = imagecolorallocate($im, 255, 0, 0);
+            $this->assertNotFalse($red);
+            imagefilledrectangle($im, 0, 6, 3, 17, $red);
+        });
+        $image = new ImageSource($bytes, 'image/png', 4, 24);
+
+        $this->assertSame($armed->render($image, 4, 4), implode('', $this->collect($armed, $image, 4, 4)));
+        // And arming moved bytes versus the default on this hole-bearing canvas.
+        $this->assertNotSame((new SixelRenderer(Dither::None, 256, 1, 6))->render($image, 4, 4), $armed->render($image, 4, 4));
+    }
+
+    /**
+     * F-03: the flag is configuration — it rides the cache fingerprint (a
+     * quirk-built blob must never serve a plain cache entry) and survives
+     * every other wither.
+     */
+    public function testQuirkRidesFingerprintAndWithersCarryIt(): void
+    {
+        $renderer = new SixelRenderer(Dither::FloydSteinberg, 3, 1, 1);
+        $this->assertStringEndsWith('|mlterm=1', $renderer->withMltermEdgeRows()->configFingerprint());
+        $this->assertStringNotContainsString('mlterm', $renderer->configFingerprint(), 'the default fingerprint stays untouched');
+
+        $stacked = $renderer->withSerpentine()->withMltermEdgeRows()->withAlphaThreshold(90)->withDither(Dither::Stucki);
+        $this->assertTrue($stacked->mltermEdgeRows());
+        $this->assertTrue($stacked->serpentine(), 'mlterm wither must not drop the snake');
+        $this->assertSame(90, $stacked->alphaThreshold());
+        $this->assertSame(Dither::Stucki, $stacked->dither());
+        $this->assertStringContainsString('|serpentine=1|mlterm=1', $stacked->configFingerprint());
+    }
 }
