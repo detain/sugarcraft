@@ -15,7 +15,9 @@ use SugarCraft\Code\LSP\LspResponse;
  * What was broken: fd 2 was read only from inside an exchange — every pass of
  * {@see LspConnection::writeMessage()}, every {@see LspConnection::refill()},
  * and once in `stopProcess()`. A server that logs while the parent IDLES fills
- * the 65536-byte pipe and blocks in `write(2)` until the next exchange's first
+ * the stderr pipe (65536 bytes in the canonical configuration; the 47e8a1414
+ * closeout measured this deployment's proc_open pipes parking at 8192) and
+ * blocks in `write(2)` until the next exchange's first
  * pass frees it (E503 measured the self-heal at ~20 ms into that exchange).
  *
  * What was claimed as the fix, and why it is NOT what shipped: "fd 2 on the
@@ -53,8 +55,23 @@ final class LspConnectionStderrIdleDrainTest extends TestCase
     /** First bytes the fixture writes to fd 2. */
     private const MARKER = "LSP-IDLE-STDERR-MARKER\n";
 
-    /** Above the 65536 pipe capacity, inside ONE drain pass (16 × 8192). */
+    /**
+     * Above EVERY modern Linux pipe capacity (canonical 65536; this deployment
+     * measured 8192), so the writer provably parks in `write(2)`, yet inside one
+     * drain pass's stated bound (16 × 8192 = 131072).
+     */
     private const FLOOD_BYTES = 100000;
+
+    /**
+     * PIPE_BUF — the size any Linux pipe is guaranteed to accept into an EMPTY
+     * pipe atomically. The fixture's first leg writes exactly this, touches the
+     * FILLED handshake, and only THEN starts the leg that must park: the
+     * handshake therefore proves ≥ 4096 flood bytes are IN THE KERNEL PIPE
+     * before the measured tick runs, with no producer-scheduling race. (A
+     * capacity-sized first leg was tried first and was wrong here — capacity
+     * 8192 means even a 65536 write parks mid-leg.)
+     */
+    private const PARKED_LEG_BYTES = 4096;
 
     /** The ring cap in LspConnection (MAX_STDERR_BYTES is private there). */
     private const TAIL_CAP = 65536;
@@ -89,33 +106,55 @@ final class LspConnectionStderrIdleDrainTest extends TestCase
 
     /**
      * THE HEADLINE. A child floods fd 2 PAST THE PIPE CAPACITY WHILE NO EXCHANGE
-     * IS IN FLIGHT — the exact shape E475 named unread — and ONE
-     * {@see LspConnection::pumpStderr()} call consumes the pipe and releases the
+     * IS IN FLIGHT — the exact shape E475 named unread — and the owner's
+     * {@see LspConnection::pumpStderr()} calls consume the pipe and release the
      * writer.
      *
-     * The release is observable, not asserted into existence: the child parked
-     * its `fwrite()` at 100000 > 65536 bytes, so its DONE file can appear only
-     * once ≥ 34464 bytes have been read out of fd 2. The negative control before
-     * the tick pins the child really is blocked (DONE still absent after a
-     * settle); the ticks after it are therefore the CAUSE. One pass absorbs up to
-     * 131072 bytes, so a single call must be enough once the flood is actually in
-     * the pipe — the pump re-ticks only while it has seen NOTHING, which waits out
-     * a descheduled child without excusing a drain gap; if one real pass is not
-     * enough, the row goes red on the timeout naming the bytes consumed, which is
-     * the regression signal, not a fixture race.
+     * Determinism comes from a two-leg fixture, not from sleep: leg 1 writes
+     * {@see PARKED_LEG_BYTES} (PIPE_BUF — provably accepted into any empty pipe),
+     * touches the FILLED handshake, then leg 2 starts the flood that parks in
+     * `write(2)` (FLOOD exceeds every capacity; measured pre-tick DONE-absence
+     * is the witness, and the anti-self-scheduling E537 tail-empty assert rides
+     * the same moment). With FILLED observed, the measured tick can never meet
+     * an empty pipe.
+     *
+     * The honesty note the old comment lacked: ONE bounded pass does NOT
+     * provably take the whole 100000 bytes on a small-capacity pipe — each read
+     * wakes the parked writer and the pass ends at its first zero-timeout
+     * empty-select, a producer-scheduling race no test-side bound removes
+     * (changing the pass to WAIT for refill would put blocking into the
+     * production seam; ruled out of scope for a cure). So the row pins the two
+     * claims that are each deterministic and each red under an E475 regression:
+     * (1) the FIRST call alone drains at least the parked leg — a zero-drain
+     * seam dies HERE, naming bytes; (2) bounded repeat calls release the child
+     * — a half-draining seam (the pre-cure shape: stop at first sight of
+     * bytes, deadlock the writer) dies on the DONE wait.
      */
-    public function testOnePumpStderrCallConsumesAFloodWrittenWhileNoExchangeIsInFlight(): void
+    public function testPumpStderrDrainsAFloodThatParkedTheWriter(): void
     {
         $started = $this->tempDir . '/started';
         $done = $this->tempDir . '/done';
+        $filled = $this->tempDir . '/filled';
         $connection = $this->connectFixture(
             $started,
             $done,
-            sprintf('$s = str_repeat("e", %d - strlen($m)); fwrite(STDERR, $m . $s);', self::FLOOD_BYTES),
+            sprintf(
+                '$w = $m . str_repeat("e", %d - strlen($m));'
+                . ' fwrite(STDERR, substr($w, 0, %d));'
+                . ' file_put_contents(%s, "1");'
+                . ' fwrite(STDERR, substr($w, %d));',
+                self::FLOOD_BYTES,
+                self::PARKED_LEG_BYTES,
+                var_export($filled, true),
+                self::PARKED_LEG_BYTES,
+            ),
         );
 
         try {
-            $this->waitForFile($started, 'the fixture never began its stderr flood');
+            // The handshake that MATTERS is "flood bytes are in the kernel
+            // pipe", not merely "the child began": waiting on FILLED removes
+            // the producer-scheduling race from the measured tick entirely.
+            $this->waitForFile($filled, 'the fixture never got its first flood leg into the fd 2 pipe');
             $this->assertSame(
                 '',
                 $connection->stderrTail(),
@@ -136,27 +175,35 @@ final class LspConnectionStderrIdleDrainTest extends TestCase
             );
 
             $connection->pumpStderr();
+            $firstCall = strlen($connection->stderrTail());
+            $this->assertGreaterThanOrEqual(
+                self::PARKED_LEG_BYTES,
+                $firstCall,
+                'the FIRST pumpStderr() call drained less than the provably-parked '
+                . self::PARKED_LEG_BYTES . '-byte leg of the flood (took ' . $firstCall
+                . ') — a seam that consumes nothing while the parent idles is the exact '
+                . 'E475 defect this row exists to catch',
+            );
 
-            // ONE tick is the claim, but the tick must MEET the flood: a child
-            // descheduled between touching STARTED and starting its fwrite
-            // would leave a single pass draining nothing, and the DONE wait
-            // below would then redden a correct implementation on pure
-            // scheduling. Keep ticking until the drain SEES BYTES - the
-            // observable that flood is in the pipe - bounded by the same
-            // handshake budget; a flood that never arrives still goes red on
-            // the tail-cap assert (0 bytes consumed, named there) rather than
-            // as a fixture race.
-            $floodDeadline = microtime(true) + self::HANDSHAKE_BOUND_SECONDS;
-            while ($connection->stderrTail() === '' && microtime(true) < $floodDeadline) {
+            // Bounded repeat of the SAME public call: with the writer parked,
+            // the pipe can only be empty between a pass's last read and the
+            // child's next write, so every tick takes ≥ one leg; the flood
+            // cannot outlive the loop. A DONE failure here names the drain gap
+            // (the pre-cure deadlock shape), not a fixture race.
+            $ticks = 1;
+            $releaseDeadline = microtime(true) + self::HANDSHAKE_BOUND_SECONDS;
+            while (! is_file($done) && $ticks < 64 && microtime(true) < $releaseDeadline) {
                 $connection->pumpStderr();
-                usleep(5_000);
+                $ticks++;
+                usleep(1_000);
             }
 
-            $this->waitForFile($done, sprintf(
-                'one pumpStderr() pass did not release a child blocked after %d bytes of stderr — '
-                . 'the tick consumed %d bytes although one pass is bounded at 131072 and the '
-                . 'flood is inside one pass; a surviving drain gap here is the E475 regression '
-                . 'this row exists to catch',
+            $this->assertFileExists($done, sprintf(
+                '%d pumpStderr() calls did not release a child blocked after %d bytes of stderr — '
+                . 'the ticks consumed %d bytes although each call is bounded at 131072 and the '
+                . 'FILLED handshake proves the flood was in the pipe; a surviving drain gap here '
+                . 'is the E475 regression this row exists to catch',
+                $ticks,
                 self::FLOOD_BYTES,
                 strlen($connection->stderrTail()),
             ));
