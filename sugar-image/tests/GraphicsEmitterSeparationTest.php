@@ -31,14 +31,21 @@ final class GraphicsEmitterSeparationTest extends TestCase
      * Every other file in src/Renderer must carry zero optimizer references: the four protocol/bridge
      * renderers (graphics blobs or subprocess bytes), plus the interface, the colour-mode enum and the
      * fingerprint contract that share the directory.
+     *
+     * D-05 additions judged here deliberately: IncrementalRenderer.php is a contract sharing the
+     * directory with Renderer.php (same optional-interface posture as ConfigFingerprintProvider), and
+     * SixelRows.php wraps the sixel DCS band stream — a protocol blob the pen cannot diff, exactly
+     * like the SixelRenderer whose laziness it exposes.
      */
     private const MUST_STAY_APART = [
         'SixelRenderer.php',
+        'SixelRows.php',
         'KittyRenderer.php',
         'Iterm2Renderer.php',
         'ChafaRenderer.php',
         'OrderedTexture.php',
         'Renderer.php',
+        'IncrementalRenderer.php',
         'AsciiColorMode.php',
         'ConfigFingerprintProvider.php',
     ];

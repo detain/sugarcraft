@@ -31,7 +31,7 @@ use SugarCraft\Image\PixelGrid;
  * (~60B of parameters) clear as well. Pinned for BOTH modes by
  * KittyFrameSizeTest::testEveryFrameOfALargeCompressedTransmissionStaysWithinTheCap.
  */
-final class KittyRenderer implements Renderer
+final class KittyRenderer implements Renderer, IncrementalRenderer
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
 
@@ -45,13 +45,31 @@ final class KittyRenderer implements Renderer
      */
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
+        // Whole-buffer implode over the frame generator (D-05) — the same
+        // twin shape SixelRenderer::render() uses over encodeInto(), so the
+        // one-shot and incremental paths share one byte source.
+        return implode('', iterator_to_array($this->renderRows($image, $width, $height), false));
+    }
+
+    /**
+     * Yield the transmission one protocol frame at a time (D-05).
+     *
+     * Units are APC frames — the begin frame, then one data chunk frame per
+     * raw-byte slice (base64 encoded as it is handed out, so a paced pump
+     * spreads the encode cost), then the transaction-closing frame when the
+     * payload was empty. Concatenation reproduces {@see render()} exactly.
+     * The PNG normalisation itself is a whole-image step and lands on the
+     * first advance; for an already-PNG source that step is the byte borrow.
+     */
+    public function renderRows(ImageSource $image, int $width, ?int $height = null): \Generator
+    {
         $effectiveHeight = $this->prepareRender($image, $width, $height);
 
         $pngBytes = $this->ensurePng($image);
-        $chunks   = $this->chunkPayload($pngBytes, KittyOptions::DEFAULT_CHUNK_BYTES);
-        $total    = count($chunks);
+        $chunkBytes = KittyOptions::DEFAULT_CHUNK_BYTES;
+        $total = $pngBytes === '' ? 0 : (int) ceil(strlen($pngBytes) / $chunkBytes);
 
-        $out = Ansi::kittyGraphicsBegin([
+        yield Ansi::kittyGraphicsBegin([
             'c' => $width,
             'r' => $effectiveHeight,
             // f=100 declares the payload as PNG. An absent `f` means raw
@@ -61,16 +79,14 @@ final class KittyRenderer implements Renderer
             'f' => 100,
         ]);
 
-        foreach ($chunks as $idx => $chunk) {
-            $more = ($idx < $total - 1);
-            $out .= Ansi::kittyGraphicsChunk($chunk, $more);
+        $seen = 0;
+        foreach ($this->payloadChunks($pngBytes, $chunkBytes) as $chunk) {
+            yield Ansi::kittyGraphicsChunk($chunk, ++$seen < $total);
         }
         if ($total === 0) {
             // The final m=0 data chunk never ran — close the transaction.
-            $out .= Ansi::kittyGraphicsEnd();
+            yield Ansi::kittyGraphicsEnd();
         }
-
-        return $out;
     }
 
     public function name(): string
@@ -300,10 +316,20 @@ final class KittyRenderer implements Renderer
      */
     private function chunkPayload(string $payload, int $chunkBytes): array
     {
+        return iterator_to_array($this->payloadChunks($payload, $chunkBytes), false);
+    }
+
+    /**
+     * @return \Generator<int,string> base64 slices of the raw payload
+     */
+    private function payloadChunks(string $payload, int $chunkBytes): \Generator
+    {
         if ($payload === '') {
-            return [];
+            return;
         }
 
-        return array_map('base64_encode', str_split($payload, $chunkBytes));
+        foreach (str_split($payload, $chunkBytes) as $slice) {
+            yield base64_encode($slice);
+        }
     }
 }

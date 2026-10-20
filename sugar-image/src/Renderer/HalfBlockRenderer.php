@@ -30,11 +30,29 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * ▀ (U+2580, fg paints its UPPER half) with the top colour as
  * foreground. In both cases the other colour layer is omitted entirely.
  */
-final class HalfBlockRenderer implements Renderer
+final class HalfBlockRenderer implements Renderer, IncrementalRenderer
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
+    {
+        // Whole-buffer implode over the row generator, so the one-shot and
+        // incremental paths can never drift (D-05; same twin shape as
+        // SixelRenderer::render() over encodeInto()).
+        return implode('', iterator_to_array($this->renderRows($image, $width, $height), false));
+    }
+
+    /**
+     * Yield the frame one display row at a time (D-05).
+     *
+     * Each unit is one cell row of inline text — every row after the first is
+     * prefixed with its joining newline, so concatenation reproduces
+     * {@see render()} exactly. The grid itself materialises on the first
+     * advance (GD decode + resample are whole-image steps today); what the
+     * pump interleaves between slices is the per-row SGR emission, and — the
+     * point of the exercise — other loop watchers.
+     */
+    public function renderRows(ImageSource $image, int $width, ?int $height = null): \Generator
     {
         $effectiveHeight = $this->prepareRender($image, $width, $height);
 
@@ -54,7 +72,7 @@ final class HalfBlockRenderer implements Renderer
         }
 
         $pen = new OutputOptimizer();
-        $lines = [];
+        $first = true;
         foreach ($grid->cells as $row) {
             foreach ($row as $pairs) {
                 [$topR, $topG, $topB, $topA] = $pairs[0];
@@ -86,10 +104,9 @@ final class HalfBlockRenderer implements Renderer
                     );
                 }
             }
-            $lines[] = $pen->finishRow();
+            yield ($first ? '' : "\n") . $pen->finishRow();
+            $first = false;
         }
-
-        return implode("\n", $lines);
     }
 
     public function name(): string
