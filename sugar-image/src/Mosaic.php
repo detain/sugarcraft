@@ -247,12 +247,16 @@ final class Mosaic
      * $mosaic = Mosaic::sixel();                        // Floyd–Steinberg (default)
      * $mosaic = Mosaic::sixel(Dither::Stucki);          // Stucki dithering
      * $mosaic = Mosaic::sixel(Dither::None);            // no dithering
+     * $mosaic = Mosaic::sixel(Dither::Ordered, intensity: 0.5); // half-strength ordered bias
      * ```
+     *
+     * C-07: $intensity threads through to the renderer's dither bias
+     * (null = chafa config default 1.0 — the byte-frozen legacy shape).
      */
-    public static function sixel(Dither $dither = Dither::FloydSteinberg): self
+    public static function sixel(Dither $dither = Dither::FloydSteinberg, ?float $intensity = null): self
     {
         return new self(
-            new SixelRenderer($dither),
+            new SixelRenderer($dither, intensity: $intensity),
             Capability::universal(),
             null,
             null,

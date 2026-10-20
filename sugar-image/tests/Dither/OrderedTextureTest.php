@@ -29,13 +29,15 @@ final class OrderedTextureTest extends TestCase
     private const FROZEN_NONE_SHA1 = 'c65c8465e501645f8eb6c76bb46a97cf38e948d0';
 
     /**
-     * C-04: the recentered ordered render of the gradient fixture. Captured
-     * by hand on the fixed tree (this lib ships no golden-update env —
-     * plan_chafa §4.11); the value follows the C-07 depth ladder (the
-     * C-04 commit predates the ladder, so the pre-ladder magnitude 1.0
-     * digest is re-captured there — disclosed).
+     * The recentered ordered render of the gradient fixture AT THE DEPTH
+     * LADDER (C-07): default maxColors 256 → base 0.1 × intensity 1.0, so
+     * the bias is ±12.8 — not the pre-ladder ±128 of the C-04 intermediate.
+     * Captured by hand on the fixed tree (this lib ships no golden-update
+     * env — plan_chafa §4.11); the re-capture replacing C-04's
+     * 7c1e6fd63bb3643b049249f98028486730c31ecf is disclosed in C-07's
+     * commit message.
      */
-    private const ORDERED_GRADIENT_SHA1 = '7c1e6fd63bb3643b049249f98028486730c31ecf';
+    private const ORDERED_GRADIENT_SHA1 = 'e33a46749dea58f66367240f658d23e849f55365';
 
     /**
      * C-05: the recentered blue-noise render of the gradient fixture at the

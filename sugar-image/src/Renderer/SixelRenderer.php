@@ -63,6 +63,19 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     private const NOISE_BIAS_SCALE = 0.1;
 
     /**
+     * C-07: chafa's depth base-intensity ladder (chafa-canvas.c:56-59,
+     * applied to the ORDERED arm only at :591-614 — TRUECOLOR/256/240 →
+     * 0.1, 16 colors → 0.25, 8 colors → 0.5, FG/BG → 1.0). Sixel has no
+     * discrete canvas-type knob, so $maxColors is the depth proxy: the
+     * 17..239 span collapses onto the 0.1 rung (fine bins want the weak
+     * bias) — a disclosed interpolation of chafa's step function.
+     */
+    private const BASE_INTENSITY_FGBG = 1.0;
+    private const BASE_INTENSITY_8C   = 0.5;
+    private const BASE_INTENSITY_16C  = 0.25;
+    private const BASE_INTENSITY_256C = 0.1;
+
+    /**
      * C-04: dither bias intensity for the opt-in Ordered/Noise axes.
      * NULL (default) means "user did not ask" and behaves exactly as the
      * pre-C-04 renderer on every path — the default diffusion stream is
@@ -93,9 +106,10 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                 Lang::t('sixel.max_colors_out_of_range', ['maxColors' => $maxColors])
             );
         }
-        // `!($intensity >= 0.0)` instead of `< 0` so NaN is refused too
-        // (every NaN comparison is false — fail fast, never silently bias).
-        if ($intensity !== null && !($intensity >= 0.0)) {
+        // Explicit is_nan: unlike IEEE/C, PHP orders NAN above every number
+        // (`NAN >= 0.0` is TRUE there), so the `!($x >= 0.0)` trick would
+        // let it through — refuse it by name, and negatives by sign.
+        if ($intensity !== null && (is_nan($intensity) || $intensity < 0.0)) {
             throw new \InvalidArgumentException(
                 Lang::t('sixel.intensity_out_of_range', ['intensity' => $intensity])
             );
@@ -638,6 +652,14 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             default         => null,
         };
 
+        // C-07: chafa scales the diffusion error itself — chafa-pixops.c
+        // (fs_dither_grain): `(accum - col) * dither->intensity` before the
+        // kernel split. With intensity null the factor is exactly 1.0 and
+        // float × 1.0 is bit-exact, so the byte-frozen default stream is
+        // untouched; chafa's init also clamps diffusion strength to 1.0
+        // (MIN(intensity, 1.0)) — the ctor clamp above already mirrors it.
+        $diffusionStrength = $this->intensity ?? 1.0;
+
         /** @var array<int, list<array{float,float,float}>> $window  absolute row → RGB accumulators */
         $window = [];
         /** @var array<int, list<bool>> $holes  absolute row → transparent-pixel mask */
@@ -711,12 +733,13 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
 
                 if ($hasDiffusion) {
                     [$pr, $pg, $pb] = $palette[$palIdx];
-                    // Quantization error (original − quantized), diffused downward.
+                    // Quantization error (original − quantized), intensity-scaled
+                    // (C-07, 1.0 by default), diffused downward.
                     $this->diffuseError(
                         $window, $w, $h, $x, $y,
-                        $clampedR - (float) $pr,
-                        $clampedG - (float) $pg,
-                        $clampedB - (float) $pb,
+                        ($clampedR - (float) $pr) * $diffusionStrength,
+                        ($clampedG - (float) $pg) * $diffusionStrength,
+                        ($clampedB - (float) $pb) * $diffusionStrength,
                         $dither,
                     );
                 }
@@ -740,14 +763,27 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * C-04: Ordered bias magnitude — the user intensity folded straight
-     * through, matching chafa's chafa_dither_init() ORDERED arm
-     * (`chafa_gen_bayer_matrix (TEXTURE_DIM, intensity)`). The depth base
-     * from chafa-canvas.c:591-614 multiplies in with C-07.
+     * C-04/C-07: Ordered bias magnitude — chafa folds the depth base into
+     * the config intensity before reaching chafa_dither_init()
+     * (chafa-canvas.c:591-614: `dither_intensity * config.dither_intensity`,
+     * then `chafa_gen_bayer_matrix (TEXTURE_DIM, intensity)`), so this is
+     * base(maxColors) × user(null = 1.0). The base is a pure function of
+     * maxColors — pinned by SixelIntensityTest per chafa-canvas.c:56-59.
      */
     private function orderedTextureMagnitude(): float
     {
-        return $this->intensity ?? 1.0;
+        return $this->orderedDepthBase() * ($this->intensity ?? 1.0);
+    }
+
+    /** C-07: the depth rung of the ordered ladder (see BASE_INTENSITY_*). */
+    private function orderedDepthBase(): float
+    {
+        return match (true) {
+            $this->maxColors > 16 => self::BASE_INTENSITY_256C,
+            $this->maxColors > 8  => self::BASE_INTENSITY_16C,
+            $this->maxColors > 2  => self::BASE_INTENSITY_8C,
+            default               => self::BASE_INTENSITY_FGBG,
+        };
     }
 
     /**
