@@ -3,7 +3,8 @@
 /**
  * F-18: behavioural pins for the candy-image front end — usage/help exits,
  * the flag grammar (values, formats, scale, size box), the refusal surface
- * (chafa by design, symbols/screen-passthrough by unwired app-surface dial),
+ * (chafa by design, screen-passthrough by unwired app-surface dial), the
+ * REACH-A04 dial flags (--symbols / --canvas / --work),
  * and the terminal-detection dump. The blocking render path is pinned in
  * RenderSmokeTest; the blocking animation loop never runs here — the $play
  * seam returns the wired Player.
@@ -142,13 +143,56 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('F-18', $err);
     }
 
-    public function testSymbolsFlagStaysRefusedThoughTheEngineLanded(): void
+    public function testSymbolsSelectorIsAcceptedAndValidated(): void
     {
-        [$exit, , $err] = self::drive(['--symbols=braille', 'x.png']);
+        // REACH-A04: chafa's tag-selector grammar now reaches the library.
+        // A missing file still exits INPUT — proof the flag itself parsed.
+        [$exit, , $err] = self::drive(['--symbols=braille', '/nonexistent.png']);
+        $this->assertSame(Cli::EXIT_INPUT, $exit, $err);
 
+        [$exit, , $err] = self::drive(['--symbols=block+braille-legacy', '/nonexistent.png']);
+        $this->assertSame(Cli::EXIT_INPUT, $exit, $err);
+
+        [$exit, , $err] = self::drive(['--symbols=notaclass', 'x.png']);
         $this->assertSame(Cli::EXIT_USAGE, $exit);
-        $this->assertStringContainsString('--symbols is not available on this base', $err);
-        $this->assertStringContainsString('deliberately does not wire the app-surface dial', $err);
+        $this->assertStringContainsString('unknown symbol class', $err);
+
+        [$exit, , $err] = self::drive(['--symbols', 'x.png']);
+        $this->assertSame(Cli::EXIT_USAGE, $exit);
+        $this->assertStringContainsString("invalid value '' for --symbols", $err);
+    }
+
+    public function testSymbolsFormatIsAWiredRenderer(): void
+    {
+        [$exit, , $err] = self::drive(['--format=symbols', '/nonexistent.png']);
+
+        $this->assertSame(Cli::EXIT_INPUT, $exit, 'the format is known, the file is not: ' . $err);
+        $this->assertStringNotContainsString('unknown render format', $err);
+    }
+
+    public function testCanvasFlagAcceptsTheFourRungsAndRefusesOthers(): void
+    {
+        foreach (['truecolor', 'ansi256', 'ansi16', 'fgbg'] as $mode) {
+            [$exit] = self::drive(['--canvas=' . $mode, '/nonexistent.png']);
+            $this->assertSame(Cli::EXIT_INPUT, $exit, $mode);
+        }
+
+        [$exit, , $err] = self::drive(['--canvas=mono', 'x.png']);
+        $this->assertSame(Cli::EXIT_USAGE, $exit);
+        $this->assertStringContainsString("invalid value 'mono' for --canvas", $err);
+    }
+
+    public function testWorkFlagAcceptsChafaIntegersAndTheFloatDial(): void
+    {
+        foreach (['1', '5', '9', '0.5', '0.75'] as $value) {
+            [$exit] = self::drive(['--work=' . $value, '/nonexistent.png']);
+            $this->assertSame(Cli::EXIT_INPUT, $exit, $value);
+        }
+
+        foreach (['0', '10', 'abc', '-1'] as $value) {
+            [$exit] = self::drive(['--work=' . $value, 'x.png']);
+            $this->assertSame(Cli::EXIT_USAGE, $exit, $value);
+        }
     }
 
     public function testScreenPassthroughStaysRefusedThoughS71Landed(): void

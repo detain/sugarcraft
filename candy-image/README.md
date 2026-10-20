@@ -24,13 +24,18 @@ composer require sugarcraft/candy-image
 candy-image photo.png                    # auto-detect + render
 candy-image --dump-detect                # why is my image blank?
 candy-image --format=half --size=80x24 logo.png
+candy-image --format=symbols --symbols=ascii logo.png   # ASCII-art tier
+candy-image --format=symbols --canvas=ansi256 --work=7 logo.png
 ```
 
 ## Options
 
 | Option                  | Meaning                                                          |
 |-------------------------|------------------------------------------------------------------|
-| `--format=F`            | Force a protocol: `auto` `sixel` `kitty` `iterm2` `half` (`halfblock`) `quarter` (`quarterblock`) `ascii` `ansi16` `ansi256` `truecolor`. |
+| `--format=F`            | Force a protocol: `auto` `sixel` `kitty` `iterm2` `half` (`halfblock`) `quarter` (`quarterblock`) `ascii` `ansi16` `ansi256` `truecolor` `symbols`. |
+| `--symbols=CLASS[+CLASS…]` | Select the symbol tier's glyph corpus with chafa's tag-selector grammar (`all`, `block`, `border`, `braille`, `ascii`, `latin`, `legacy`, `sextant`, `octant`, `technical`, `geometric`, `stipple`, `wedge`, …; `+` adds, `-` removes, a leading sign is relative to the default corpus). Default: sugar-image's byte-frozen 676-glyph corpus. |
+| `--canvas=MODE`         | Colour canvas for the text tiers: `truecolor` (default) `ansi256` `ansi16` `fgbg`. A no-op on backends without the dial. |
+| `--work=N`              | Candidate-search effort: chafa's integer `1`–`9` (config float = N/10) or the sugar-image dial `0.0`–`1.0`; `9` runs the exhaustive path. |
 | `--size=WxH`            | Render box in terminal cells (chafa spelling).                    |
 | `--width=N` / `--height=N` | Individual box legs; cannot be mixed with `--size`. Defaults: viewport columns × aspect-derived rows. |
 | `--scale=S`             | Fit policy: `fit` `shrink` `fill` `stretch` `none` `crop` (maps onto `SugarCraft\Image\Scale`). |
@@ -49,7 +54,8 @@ candy-image --format=half --size=80x24 logo.png
 | `--dump-detect`  | ✅          | chafa's debugging gold, re-expressed over `Detect` + `TermDb` + the palette probe. |
 | `--passthrough`  | ✅ `auto`/`none` | `tmux` (force) and `screen` (the S7.1 ScreenPassthrough decorator) refuse with a pointer — no seam on this base yet. |
 | `--polite`       | ✅ no-op    | sugar-image has no async worker model; every render is already "polite". |
-| `--symbols`      | ⏭ refuses   | the symbol-map renderer (S6.2) is not on this base; `quarter`/`half` are the text-grid tiers. |
+| `--symbols`      | ✅ tag classes | chafa's `--symbols=` class grammar over the ported narrow corpus (1,260 glyphs: ASCII, Latin, block table, legacy, misc, braille, sextant, octant). `[chars]` literal sets and codepoint ranges are not implemented. |
+| `--canvas` / `--work` | ✅ (REACH-A04) | the A-07 canvas and A-08 work-factor dials, threaded onto whichever backend speaks them. |
 | `--probe=off`    | ⏭ refuses   | `Detect` exposes no env-only probe seam yet. |
 | everything else  | ⏭ refuses   | out of scope for a thin composition-only viewer (façade law): the capability stays in the libs. |
 

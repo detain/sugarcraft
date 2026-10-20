@@ -32,7 +32,7 @@ final class LangTest extends TestCase
             'bad_value' => ['cli.bad_value'],
             'bad_format' => ['cli.bad_format'],
             'chafa_refused' => ['cli.chafa_refused'],
-            'symbols_refused' => ['cli.symbols_refused'],
+            'bad_symbols' => ['cli.bad_symbols'],
             'passthrough_refused' => ['cli.passthrough_refused'],
             'too_many' => ['cli.too_many'],
             'no_frames' => ['cli.no_frames'],

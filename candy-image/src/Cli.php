@@ -13,6 +13,8 @@ use SugarCraft\Image\Detect;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Scale;
+use SugarCraft\Image\Symbol\CanvasMode;
+use SugarCraft\Image\Symbol\SymbolMap;
 use SugarCraft\Image\TermDb;
 use SugarCraft\Pty\SizeIoctl;
 
@@ -32,12 +34,12 @@ use SugarCraft\Pty\SizeIoctl;
  * Chafa flag-compat vocabulary (survey :870-875) and what this base honors:
  * --format/--size/--scale/--probe-shape/--dump-detect are wired; --polite is
  * an accepted no-op (this viewer always renders inline and synchronously);
- * --symbols and --passthrough=screen refuse with a pointer: the backing
- * features (S6.2 symbol-map engine / S7.1 Screen envelope) HAVE landed in
- * sugar-image, but the app-surface dials are deliberately unwired here
- * (symbols deferred per REACH-A04; the Screen envelope is detection-chosen,
- * never forced); --probe=off has
- * no seam in Detect yet, so the spelling is refused like any unknown flag.
+ * --symbols=CLASS[+CLASS...], --canvas=MODE and --work=N thread the
+ * sugar-image dials REACH-A04 minted (F-17 symbol corpus selectors,
+ * A-07 canvas mode, A-08 work factor) — a no-op on backends that do not
+ * speak the dial. --passthrough=screen refuses with a pointer: the S7.1
+ * Screen envelope is detection-chosen, never forced. --probe=off has no
+ * seam in Detect yet, so the spelling is refused like any unknown flag.
  * --format=chafa is REFUSED by design: F-18's whole point is a viewer that
  * does not shell out to chafa.
  */
@@ -62,6 +64,7 @@ final class Cli
         'auto', 'sixel', 'kitty', 'iterm2',
         'half', 'halfblock', 'quarter', 'quarterblock',
         'ascii', 'ansi16', 'ansi256', 'truecolor',
+        'symbols', 'symbol', 'sym',
     ];
 
     /** chicle-style --scale spellings mapped onto the Scale enum. */
@@ -98,6 +101,9 @@ final class Cli
         $animate = false;
         $dump = false;
         $passthrough = 'auto';
+        $symbols = null;
+        $canvas = null;
+        $work = null;
         $sizeSeen = false;
 
         foreach (array_slice($argv, 1) as $token) {
@@ -130,12 +136,6 @@ final class Cli
                 continue;
             }
 
-            if ($token === '--symbols' || str_starts_with($token, '--symbols=')) {
-                \fwrite($stderr, Lang::t('cli.symbols_refused') . "\n");
-
-                return self::EXIT_USAGE;
-            }
-
             if (\str_starts_with($token, '--')) {
                 $flag = substr($token, 2);
                 $raw = null;
@@ -144,7 +144,7 @@ final class Cli
                     $flag = substr($flag, 0, $eq);
                 }
 
-                if (!in_array($flag, ['format', 'width', 'height', 'size', 'scale', 'passthrough'], true)) {
+                if (!in_array($flag, ['format', 'width', 'height', 'size', 'scale', 'passthrough', 'symbols', 'canvas', 'work'], true)) {
                     \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => $flag]) . "\n");
 
                     return self::EXIT_USAGE;
@@ -212,6 +212,41 @@ final class Cli
                         }
                         $scale = $case;
                         break;
+                    case 'symbols':
+                        // REACH-A04/F-17: chafa's tag-selector grammar; the
+                        // library validates (unknown class = configuration
+                        // error, never a silently empty corpus).
+                        try {
+                            SymbolMap::new()->withSelectors($raw);
+                        } catch (\InvalidArgumentException) {
+                            \fwrite($stderr, Lang::t('cli.bad_symbols', ['value' => $raw]) . "\n");
+
+                            return self::EXIT_USAGE;
+                        }
+                        $symbols = $raw;
+                        break;
+                    case 'canvas':
+                        $mode = CanvasMode::tryFrom(strtolower($raw));
+                        if ($mode === null) {
+                            return $bad();
+                        }
+                        $canvas = $mode;
+                        break;
+                    case 'work':
+                        // chafa's --work is the integer 1..9 (config float /
+                        // 10); sugar-image's dial is the 0..1 float, so both
+                        // spellings land on the same value.
+                        if (preg_match('/^\d+(?:\.\d+)?$/', $raw) !== 1) {
+                            return $bad();
+                        }
+                        $value = (float) $raw;
+                        // chafa's own range is 1..9; 0 would silence the
+                        // candidate window, so it refuses like 10+.
+                        if ($value <= 0.0 || $value > 9.0) {
+                            return $bad();
+                        }
+                        $work = $value > 1.0 ? $value / 10.0 : $value;
+                        break;
                     case 'passthrough':
                         $value = strtolower($raw);
                         if ($value === 'auto' || $value === 'none') {
@@ -264,6 +299,15 @@ final class Cli
 
         try {
             $mosaic = Mosaic::fromModeString($format) ?? Mosaic::auto();
+            if ($symbols !== null) {
+                $mosaic = $mosaic->withSymbolSelectors($symbols);
+            }
+            if ($canvas !== null) {
+                $mosaic = $mosaic->withCanvasMode($canvas);
+            }
+            if ($work !== null) {
+                $mosaic = $mosaic->withWorkFactor($work);
+            }
             if ($scale !== null) {
                 $mosaic = $mosaic->withScale($scale);
             }

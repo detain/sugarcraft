@@ -134,6 +134,30 @@ final class RenderSmokeTest extends TestCase
         $this->assertGreaterThanOrEqual(2, count($rows));
     }
 
+    public function testSymbolsTierRendersAndTheReachA04DialsMoveTheBytes(): void
+    {
+        $png = $this->pngFixture();
+
+        $render = static function (array $args) use ($png): string {
+            [$stdout, $stderr] = self::pipes();
+            $exit = Cli::main(array_merge(['candy-image'], $args, [$png]), $stdout, $stderr);
+            self::assertSame(Cli::EXIT_OK, $exit, self::drain($stderr));
+            $bytes = self::drain($stdout);
+            self::assertStringContainsString("\x1b[", $bytes, 'symbols output carries SGR styling');
+
+            return $bytes;
+        };
+
+        $default = $render(['--format=symbols', '--width=6']);
+        $selected = $render(['--format=symbols', '--width=6', '--symbols=braille']);
+        $quantized = $render(['--format=symbols', '--width=6', '--canvas=ansi16']);
+        $exhaustive = $render(['--format=symbols', '--width=6', '--work=9']);
+
+        $this->assertNotSame($default, $selected, '--symbols=braille must change the corpus');
+        $this->assertNotSame($default, $quantized, '--canvas=ansi16 must change the pens');
+        $this->assertNotSame($default, $exhaustive, '--work=9 must reach the exhaustive search');
+    }
+
     public function testScaleFlagIsAcceptedOnTheRenderPath(): void
     {
         $png = $this->pngFixture();
