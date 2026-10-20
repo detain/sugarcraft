@@ -56,7 +56,17 @@ interface Handler
     /**
      * Dispatch a completed DCS sequence.
      *
-     * @param int        $final        Final byte that ended the prelude (0x40-0x7E).
+     * F-16: `$final === 0` means no final byte (0x40-0x7E) was ever seen.
+     * The VT500 grammar lets DcsEntry hand the control bytes 0x08-0x0D (and a
+     * tmux-quirk ESC) straight into the string payload, so such a sequence
+     * dispatches with this sentinel. Zero is not a legal DCS final byte, so it
+     * is unambiguous; see {@see \SugarCraft\AnsiParser\Codec\Dcs} for the
+     * structured decoder. A DCS that HAS a final byte but no ST is not
+     * truncated: `$data` carries the bytes that arrived and `$final` is the
+     * real final byte (sixel detection works at end-of-stream). A DCS still
+     * in its prelude at end-of-stream is aborted and dispatches nothing.
+     *
+     * @param int        $final        Final byte that ended the prelude (0x40-0x7E); 0 = truncated.
      * @param list<int>  $params       Numeric params; -1 marks a missing/default param.
      * @param int        $prefix       Private-marker byte; 0 if none.
      * @param int        $intermediate Intermediate byte; 0 if none.

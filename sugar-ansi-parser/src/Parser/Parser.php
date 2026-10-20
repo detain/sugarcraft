@@ -150,6 +150,12 @@ final class Parser
      * Force any in-flight string sequence (OSC/DCS/SOS/PM/APC) to
      * dispatch with whatever payload has been collected, and return
      * to ground. Useful at end-of-stream.
+     *
+     * F-16: only a DCS that reached DcsString is flushed. A DCS still in its
+     * PRELUDE (DcsEntry/DcsParam/DcsIntermediate — no final byte ever seen)
+     * is an aborted sequence and dispatches nothing; its raw bytes are the
+     * caller's tail (candy-ansi-inspect recovers them itself). Fabricating a
+     * dispatch here would change that library's byte-fidelity goldens.
      */
     public function flush(): void
     {
