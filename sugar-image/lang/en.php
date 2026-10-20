@@ -50,6 +50,12 @@ return [
     'renderer.gd_load_failed' => 'GD failed to load image',
     'renderer.gd_resize_failed' => 'GD failed to resize the image',
     'renderer.gd_encode_failed' => 'GD failed to re-encode the image as PNG',
+    'renderer.gd_unavailable'   => 'ext-gd is unavailable and no raw RGBA buffer was supplied',
+
+    // Codecs (F-13 GD-free encoders)
+    'codec.raw_rgba_bad_dimensions' => 'Raw RGBA dimensions must be positive, got {width}x{height}',
+    'codec.raw_rgba_size_mismatch'  => 'Raw RGBA payload is {actual} bytes; expected {expected} for a {width}x{height} grid',
+    'codec.tiff_too_large'          => 'Uncompressed TIFF strip of {bytes} bytes crosses the 32-bit TIFF offset ceiling',
     'renderer.gzcompress_failed' => 'gzcompress() failed — image data could not be compressed',
 
     // Chafa
