@@ -48,6 +48,16 @@ final class Detect
     /** @var resource|null */
     private static $probeStdin = null;
 
+    /**
+     * F-05 opt-out: when false, {@see TmuxPassthrough::ensure()} refuses to
+     * touch the tmux `allow-passthrough` option at all. Library politeness
+     * for embedders that own their tmux configuration — chafa gates the
+     * same way CLI-side before ever calling the applier
+     * (chicle-options.c:2412-2418 "only if both detected and desired, and
+     * a graphics protocol is desired").
+     */
+    private static bool $autoPassthrough = true;
+
     /** Raw bytes of the last DA1 reply, for debugging / testing. */
     private static ?string $lastDa1Reply = null;
 
@@ -145,6 +155,24 @@ final class Detect
     public static function setProbeStdin($fd): void
     {
         self::$probeStdin = $fd;
+    }
+
+    /**
+     * Opt the automatic tmux `allow-passthrough` transaction on or off
+     * (F-05). Default on; {@see TmuxPassthrough::ensure()} consults this
+     * on every call. Takes effect immediately for future probes — an
+     * already-open transaction is NOT rolled back here; retire it via
+     * {@see TmuxPassthrough::retire()}.
+     */
+    public static function setAutoPassthrough(bool $enabled): void
+    {
+        self::$autoPassthrough = $enabled;
+    }
+
+    /** Whether {@see setAutoPassthrough()} currently permits the F-05 transaction. */
+    public static function autoPassthrough(): bool
+    {
+        return self::$autoPassthrough;
     }
 
     /**

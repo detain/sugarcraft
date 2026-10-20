@@ -15,6 +15,7 @@ use SugarCraft\Image\Renderer\Renderer;
 use SugarCraft\Image\Renderer\SixelRenderer;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Scale;
+use SugarCraft\Image\TmuxPassthrough;
 use SugarCraft\Image\TmuxPassthroughDecorator;
 use SugarCraft\ColorProfile\Probe\TerminalProbe;
 use SugarCraft\ColorProfile\Probe\ProbeReport;
@@ -547,6 +548,14 @@ final class Mosaic
         // through to the inner terminal.
         if ($cap->inTmux) {
             $renderer = new TmuxPassthroughDecorator($renderer);
+        }
+
+        // F-05: the envelope only lands if tmux's allow-passthrough toggle
+        // is on — flip it transactionally for the process lifetime when a
+        // pixel protocol is in play (chicle-options.c:2412-2418 gates the
+        // same way; text fallback emits nothing that needs the toggle).
+        if ($cap->inTmux && self::hasGraphicsProtocol($cap)) {
+            TmuxPassthrough::ensure();
         }
 
         return new self($renderer, $cap, null, null, null);

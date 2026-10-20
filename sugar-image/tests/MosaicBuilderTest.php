@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Image\Detect;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
@@ -48,6 +49,8 @@ final class MosaicBuilderTest extends TestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+        // F-05: re-arm the default any test opted out of (see the tmux dither pin).
+        Detect::setAutoPassthrough(true);
         foreach ($this->savedEnv as $key => $value) {
             if ($value === false) {
                 unset($_ENV[$key]);
@@ -123,6 +126,10 @@ final class MosaicBuilderTest extends TestCase
         putenv('TERM=xterm');
         $_ENV['TMUX'] = '/tmp/tmux-1000/default,1234,0';
         putenv('TMUX=/tmp/tmux-1000/default,1234,0');
+        // F-05 opted this pin out of the allow-passthrough transaction: the
+        // fake TMUX is decoration for the envelope/dither wiring under test,
+        // and the transaction itself is pinned in TmuxPassthroughTest.
+        Detect::setAutoPassthrough(false);
 
         $renderer = Mosaic::builder()
             ->withDither(Dither::Atkinson)

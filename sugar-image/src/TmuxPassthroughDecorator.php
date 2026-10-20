@@ -18,9 +18,13 @@ use SugarCraft\Image\Renderer\SixelRenderer;
  *
  * where any lone \x1b inside the payload is doubled (\x1b\x1b).
  *
- * tmux must have `allow-passthrough on` set (default: off in tmux 3.3+):
- *
- *   set -g allow-passthrough on
+ * Since F-05 the option itself is managed: when {@see Mosaic} mints a
+ * capability that runs under tmux with a pixel protocol, {@see
+ * TmuxPassthrough::ensure()} flips `allow-passthrough` on (pane-scoped)
+ * for the process and restores the prior value at retire/shutdown.
+ * Manual configuration (`set -g allow-passthrough on`) remains the
+ * fallback when the transaction is opted out via {@see
+ * Detect::setAutoPassthrough(false)} or tmux refuses the toggle.
  *
  * @see https://github.com/tmux/tmux/wiki/Passthrough
  */
