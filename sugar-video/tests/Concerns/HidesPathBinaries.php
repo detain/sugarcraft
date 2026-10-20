@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Video\Tests\Concerns;
 
+use SugarCraft\Video\Source\Probe;
+
 /**
  * Simulates a host with no toolchain binaries (ffmpeg/ffprobe/ffplay/mpv)
  * by pointing PATH at an empty directory for the duration of a callback.
@@ -31,11 +33,14 @@ trait HidesPathBinaries
 
         $originalPath = getenv('PATH');
         putenv('PATH=' . $emptyDir);
+        // F-17 memo must not answer across a PATH flip (see StubbedPathBinaries).
+        Probe::clearBinaryCacheForTesting();
 
         try {
             return $fn();
         } finally {
             putenv($originalPath === false ? 'PATH' : 'PATH=' . $originalPath);
+            Probe::clearBinaryCacheForTesting();
             @rmdir($emptyDir);
         }
     }

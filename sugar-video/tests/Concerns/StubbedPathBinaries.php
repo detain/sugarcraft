@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Video\Tests\Concerns;
 
+use SugarCraft\Video\Source\Probe;
+
 /**
  * Makes named binaries (ffplay/mpv/…) resolvable on a host that may not have
  * them, by pointing PATH at a private directory of inert executable stubs for
@@ -45,11 +47,16 @@ trait StubbedPathBinaries
 
             $originalPath = getenv('PATH');
             putenv('PATH=' . $dir);
+            // F-17: the memo must not answer across a PATH swap in either
+            // direction — a stubbed lookup leaking past this callback would
+            // hand the next test a resolved path it then DELETES.
+            Probe::clearBinaryCacheForTesting();
 
             try {
                 $fn($dir);
             } finally {
                 putenv($originalPath === false ? 'PATH' : 'PATH=' . $originalPath);
+                Probe::clearBinaryCacheForTesting();
             }
         } finally {
             foreach ($names as $name) {
