@@ -74,6 +74,7 @@ final class DetectClosedStdinTest extends TestCase
             putenv($key);
         }
         Detect::clearTmuxTermFeaturesOverride();
+        Detect::setTerminfoSixelOverride(false);
     }
 
     protected function tearDown(): void
@@ -81,6 +82,7 @@ final class DetectClosedStdinTest extends TestCase
         Detect::reset();
         Detect::setProbeStdin(null);
         Detect::clearTmuxTermFeaturesOverride();
+        Detect::clearTerminfoSixelOverride();
         foreach ($this->envSnapshot as $key => $value) {
             if ($value === false) {
                 putenv($key);

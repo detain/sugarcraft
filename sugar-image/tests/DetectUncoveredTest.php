@@ -25,6 +25,7 @@ final class DetectUncoveredTest extends TestCase
         }
         Detect::reset();
         Detect::clearTmuxTermFeaturesOverride();
+        Detect::setTerminfoSixelOverride(false);
     }
 
     protected function tearDown(): void
@@ -39,6 +40,7 @@ final class DetectUncoveredTest extends TestCase
         Detect::reset();
         Detect::setProbeStdin(null);
         Detect::clearTmuxTermFeaturesOverride();
+        Detect::clearTerminfoSixelOverride();
         parent::tearDown();
     }
 

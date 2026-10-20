@@ -28,6 +28,7 @@ final class DetectTest extends TestCase
         }
         Detect::reset();
         Detect::clearTmuxTermFeaturesOverride();
+        Detect::setTerminfoSixelOverride(false);
     }
 
     protected function tearDown(): void
@@ -43,6 +44,7 @@ final class DetectTest extends TestCase
         Detect::reset();
         Detect::setProbeStdin(null);
         Detect::clearTmuxTermFeaturesOverride();
+        Detect::clearTerminfoSixelOverride();
         if (isset($GLOBALS['__candy_non_interactive'])) {
             unset($GLOBALS['__candy_non_interactive']);
         }

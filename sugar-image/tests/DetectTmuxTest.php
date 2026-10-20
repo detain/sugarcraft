@@ -66,6 +66,7 @@ final class DetectTmuxTest extends TestCase
         putenv('TMUX=/tmp/s25-made-up.sock,99999,0');
         Detect::reset();
         Detect::clearTmuxTermFeaturesOverride();
+        Detect::setTerminfoSixelOverride(false);
         Detect::setAutoPassthrough(false); // no F-05 transaction from these probes
     }
 
@@ -74,6 +75,7 @@ final class DetectTmuxTest extends TestCase
         Detect::reset();
         Detect::setProbeStdin(null);
         Detect::clearTmuxTermFeaturesOverride();
+        Detect::clearTerminfoSixelOverride();
         Detect::setAutoPassthrough(true);
         foreach ($this->open as $handle) {
             if (\is_resource($handle)) {

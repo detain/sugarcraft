@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image;
 
+use SugarCraft\ColorProfile\Probe\Capability as ProbeCapability;
+use SugarCraft\ColorProfile\Probe\TerminalProbe;
 use SugarCraft\Core\Util\TtyDetect;
 
 /**
@@ -91,6 +93,24 @@ final class Detect
      */
     private static ?array $tmuxFeaturesOverride = null;
 
+    /**
+     * F-07 test seam: forced terminfo answer for {@see probeTerminfoSixel()}.
+     * null means "no override — run a live TerminalProbe". Unlike the F-04
+     * feature list this stage has no AUTO polarity to preserve: a false
+     * answer falls through to the DA1 arm (exactly the pre-F-07 world), so a
+     * plain ?bool suffices where F-04 needed the sentinel wrapper.
+     */
+    private static ?bool $terminfoSixelOverride = null;
+
+    /**
+     * F-07 seam: the probe object the live arm consults; null constructs a
+     * default TerminalProbe on each need (Detect::probe() caches
+     * process-wide, so this runs at most once anyway). Tests inject a
+     * subclass faking the protected runCommand/infocmpAvailable arms — the
+     * override contract sugar-colorprofile documents for exactly that.
+     */
+    private static ?TerminalProbe $terminfoProbe = null;
+
     /** Raw bytes of the last DA1 reply, for debugging / testing. */
     private static ?string $lastDa1Reply = null;
 
@@ -168,6 +188,23 @@ final class Detect
         // feature-list NO (below) skips the round-trip outright: its answer
         // is already known and the query is the thing F-04 distrusts.
         if ($features !== false) {
+            // F-07: consult the terminal database BEFORE the DA1 round-trip
+            // (same ordering logic as chafa: a local fact costs nothing, a
+            // live query costs a timeout). A sixl/Sixel/Ss1 capability in
+            // the entry is a definite published fact about $TERM, so
+            // TERM-only sixel terminals are recognised without waiting on
+            // any reply at all. Only TRUE promotes; "no sixl" and "cannot
+            // ask" both leave the DA1 arm exactly as F-04 left it. Under a
+            // definite feature-list VETO the stage is skipped: terminfo
+            // describes the emulator $TERM names, not tmux's display
+            // policy — a veto must not be laundered back into a sixel
+            // claim through the database.
+            if (!$cap->sixel && self::probeTerminfoSixel()) {
+                $result = Capability::sixel(self::probeFontSize(), $inTmux);
+                self::drainStdin(50, self::stdinFd());
+                return $result;
+            }
+
             $sixelViaDa1 = self::probeDa1();
             if ($sixelViaDa1 === true) {
                 $result = Capability::sixel(self::probeFontSize(), $inTmux);
@@ -258,6 +295,33 @@ final class Detect
     }
 
     /**
+     * F-07 test seam: pin the terminfo sixl answer without touching a real
+     * terminal database. true = short-circuit the ladder to sixel; false =
+     * "terminfo says nothing", fall through to the DA1 arm. While overridden
+     * no infocmp process is ever spawned.
+     */
+    public static function setTerminfoSixelOverride(bool $present): void
+    {
+        self::$terminfoSixelOverride = $present;
+    }
+
+    /** Remove the override; {@see probeTerminfoSixel()} consults the live probe again. */
+    public static function clearTerminfoSixelOverride(): void
+    {
+        self::$terminfoSixelOverride = null;
+    }
+
+    /**
+     * F-07 seam: substitute the {@see TerminalProbe} the live arm runs
+     * (null restores default construction). The capability table itself
+     * stays in sugar-colorprofile — this is wiring, not a second lookup.
+     */
+    public static function setTerminfoProbe(?TerminalProbe $probe): void
+    {
+        self::$terminfoProbe = $probe;
+    }
+
+    /**
      * F-04: tri-state answer to "can the terminal OUTSIDE this tmux pane
      * display sixels?", mirroring {@see chafa}'s `ChicleTristate`
      * (chicle-options.c:1760-1796).
@@ -283,6 +347,39 @@ final class Detect
         $reply = self::runTmuxFeatureQuery();
 
         return $reply === null ? null : self::parseTermFeatures($reply);
+    }
+
+    /**
+     * F-07: whether the terminfo entry for $TERM declares a Sixel graphics
+     * capability, consulted through sugar-colorprofile's TerminalProbe
+     * (its Phase 2, sugar-colorprofile/src/Probe/TerminalProbe.php:247-259
+     * and the name-position matcher at :297-324). The SIXEL_TERMCAPS table
+     * lives THERE on purpose; this call site owns only the wiring.
+     *
+     * Terminfo is a LOCAL database read (`infocmp -1 $TERM` parses termcap
+     * files; no bytes touch the tty), which is why this answer can outrank
+     * a missing DA1 round-trip but not a live one under tmux veto — chafa
+     * consults the terminal database the same way for the same reason
+     * (chafa-term.c capability census, sixl among them).
+     *
+     * Returns false — never throws, never blocks on a terminal — for an
+     * absent/dumb $TERM, an absent infocmp, or NO_COLOR/CLICOLOR=0
+     * suppression (the probe's own ladder rules, which terminate its
+     * capability phases). Only TRUE promotes here.
+     */
+    private static function probeTerminfoSixel(): bool
+    {
+        if (self::$terminfoSixelOverride !== null) {
+            return self::$terminfoSixelOverride;
+        }
+
+        $probe = self::$terminfoProbe ?? new TerminalProbe();
+
+        // interactive=false: this stage is the terminal DATABASE question,
+        // never an escape-query round-trip — pinning it false also keeps a
+        // production call from writing probe bytes to a tty the caller has
+        // not entered query mode on.
+        return $probe->runProbe([], false)->has(ProbeCapability::Sixel);
     }
 
     /**
