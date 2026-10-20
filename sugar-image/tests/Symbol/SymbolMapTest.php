@@ -10,13 +10,17 @@ use SugarCraft\Image\Symbol\SymbolMap;
 use SugarCraft\Image\Symbol\SymbolTags;
 
 /**
- * A-04: coverage-class symbol engine pins (plan_chafa S6.2).
+ * A-04/F-17: coverage-class symbol engine pins (plan_chafa S6.2, W10).
  *
- * The braille / sextant / octant bitmaps are checked against oracles
- * re-derived in-test from the Unicode character properties themselves
- * (dot cell positions, the 2x3 sextant grid with its two shared middle
- * rows, the octant 4x2 band layout) — never from the port's own
- * generator, so a transcription slip here cannot validate itself.
+ * The braille / sextant / octant / eighth-block bitmaps are checked against
+ * oracles re-derived in-test from the Unicode character properties
+ * themselves (dot cell positions, the 2x3 sextant grid with its two shared
+ * middle rows, the octant 4x2 band layout, the eighth-block FRACTION in the
+ * character NAME) — never from the port's own generator, so a transcription
+ * slip here cannot validate itself. The ported ASCII/Latin/misc/legacy
+ * tables are checked structurally plus against semantic spot facts (space
+ * empty, '.' bottom-only, 'o' a ring) because their outlines are hand-drawn
+ * font approximations with no independent oracle.
  */
 final class SymbolMapTest extends TestCase
 {
@@ -30,6 +34,27 @@ final class SymbolMapTest extends TestCase
         6 => [4, 5],
         7 => [6, 1],
         8 => [6, 5],
+    ];
+
+    /**
+     * U+1FB80–U+1FB8B eighth-block names, from the Unicode 15.0 chart.
+     * The oracle parses the FRACTION out of these names and derives the
+     * bitmap itself — the implementation's (axis, eighths) table is never
+     * consulted.
+     */
+    private const EIGHTH_BLOCK_NAMES = [
+        0x1FB80 => 'UPPER AND LOWER ONE EIGHTH BLOCK',
+        0x1FB81 => 'HORIZONTAL ONE EIGHTH BLOCK-1358',
+        0x1FB82 => 'UPPER ONE QUARTER BLOCK',
+        0x1FB83 => 'UPPER THREE EIGHTHS BLOCK',
+        0x1FB84 => 'UPPER FIVE EIGHTHS BLOCK',
+        0x1FB85 => 'UPPER THREE QUARTERS BLOCK',
+        0x1FB86 => 'UPPER SEVEN EIGHTHS BLOCK',
+        0x1FB87 => 'RIGHT ONE QUARTER BLOCK',
+        0x1FB88 => 'RIGHT THREE EIGHTHS BLOCK',
+        0x1FB89 => 'RIGHT FIVE EIGHTHS BLOCK',
+        0x1FB8A => 'RIGHT THREE QUARTERS BLOCK',
+        0x1FB8B => 'RIGHT SEVEN EIGHTHS BLOCK',
     ];
 
     private SymbolMap $map;
@@ -221,6 +246,210 @@ final class SymbolMapTest extends TestCase
             $this->assertSame($def->weight, array_sum($cov));
             $this->assertSame(64 - $def->weight, $def->bgWeight());
         }
+    }
+
+
+    public function testTheEighthBlockTierMatchesTheUnicodeFractionNames(): void
+    {
+        $legacy = $this->map->withSelectors('legacy');
+        $eighth = [];
+        foreach ($legacy->defs() as $def) {
+            $cp = mb_ord($def->char);
+            if ($cp >= 0x1FB80 && $cp <= 0x1FB8B) {
+                $eighth[$cp] = $def;
+            }
+        }
+
+        $this->assertSame(array_keys(self::EIGHTH_BLOCK_NAMES), array_keys($eighth), 'the whole 1FB80..1FB8B family, in order');
+
+        foreach (self::EIGHTH_BLOCK_NAMES as $cp => $name) {
+            if (class_exists(\IntlChar::class)) {
+                $this->assertSame($name, \IntlChar::charName($cp), 'the chart name this oracle parses');
+            }
+
+            [$axis, $eighths] = self::fractionFromName($name);
+            $this->assertSame(
+                self::eighthBlockBitmap($axis, $eighths),
+                $eighth[$cp]->bits,
+                sprintf('U+%04X (%s)', $cp, $name)
+            );
+            $this->assertSame(0, $eighth[$cp]->tags & SymbolTags::SEXTANT, 'the eighth family is not a sextant');
+            $this->assertNotSame(0, $eighth[$cp]->tags & SymbolTags::LEGACY);
+        }
+    }
+
+    public function testTheFullNarrowCorpusIsChafasSymbolArray(): void
+    {
+        $all = $this->map->withSelectors('all')->defs();
+
+        // chafa's narrow symbol array at 413b76e4d: 95 ASCII + 365 Latin +
+        // 229 block-table + 23 misc-narrow, then 256 braille + 59 sextant +
+        // 234 octants (the kana table is 16x8-only and contributes none).
+        // U+00B7 is spelled by both latin.h and misc-narrow.h; chafa's
+        // codepoint-keyed hash keeps one, so the corpus is 1,260 unique.
+        $this->assertCount(1260, $all);
+
+        $ords = array_map(static fn (SymbolDef $d): int => mb_ord($d->char), $all);
+        $this->assertCount(1260, array_unique($ords), 'no codepoint may appear twice');
+
+        $ranges = static function (array $cps, int $lo, int $hi): int {
+            return count(array_filter($cps, static fn (int $c): bool => $c >= $lo && $c <= $hi));
+        };
+        $this->assertSame(95, $ranges($ords, 0x20, 0x7E), 'ASCII set');
+        $this->assertSame(365, $ranges($ords, 0xA1, 0x3F6), 'Latin/Greek set');
+        $this->assertSame(127, $ranges($ords, 0x2500, 0x259F), 'basic block table');
+        $this->assertSame(102, $ranges($ords, 0x1FB3C, 0x1FBAE), 'legacy + eighth block entries');
+        $this->assertSame(256, $ranges($ords, 0x2800, 0x28FF), 'braille');
+        $this->assertSame(59, $ranges($ords, 0x1FB00, 0x1FB3A), 'sextants');
+
+        // Build order is chafa's symbol_defs order: ASCII, Latin, block
+        // table, misc, then the generated tiers. The misc table's U+00B7
+        // keeps the latin slot (chafa's hash-replace position).
+        $this->assertSame(0x20, $ords[0]);
+        $this->assertSame(0xA1, $ords[95]);
+        $this->assertSame(0x2500, $ords[460]);
+        $this->assertSame(0x1FB3C, $ords[587]);
+        $this->assertSame(0x1FB80, $ords[677]);
+        $this->assertSame(0x2190, $ords[689], 'misc-narrow opens on the leftwards arrow');
+        $this->assertSame(0x2800, $ords[711], 'braille follows the tables');
+        $this->assertSame(0x1FB00, $ords[967], 'sextants follow braille');
+        $this->assertSame(0x1CEA8, $ords[1026], 'octants close the corpus (octant 1; octant 0 is the skipped U+00A0)');
+
+        // chafa's hash replace keeps the LATER table's glyph for U+00B7 —
+        // misc-narrow's 2x2 DOT, not latin.h's single pixel.
+        $middleDot = $all[array_search(0xB7, $ords, true)];
+        $this->assertSame(4, $middleDot->weight);
+        $this->assertNotSame(0, $middleDot->tags & SymbolTags::DOT);
+    }
+
+    public function testThePortedTablesCarryPlausibleVerbatimCoverage(): void
+    {
+        $ascii = [];
+        foreach ($this->map->withSelectors('ascii')->defs() as $def) {
+            $ascii[mb_ord($def->char)] = $def;
+        }
+
+        $this->assertSame(0, $ascii[0x20]->weight, 'space paints nothing');
+        $this->assertSame(0, $ascii[0x20]->bits);
+
+        $dot = $ascii[0x2E];
+        $this->assertGreaterThan(0, $dot->weight);
+        $this->assertSame(0, $dot->bits & self::rowMask(0), 'a full stop never touches the top row');
+
+        // chafa draws its lowercase 'o' in the middle band (rows 3-6), a
+        // closed ring one pixel in from both sides.
+        $o = $ascii[0x6F];
+        $this->assertGreaterThan(12, $o->weight);
+        $this->assertSame(0, $o->bits & self::rowMask(0), "'o' leaves the top row free");
+        $this->assertSame(0, $o->bits & self::rowMask(7), "'o' leaves the bottom row free");
+        $this->assertSame(0, $o->bits & (1 << (63 - 24)), "'o' leaves its left edge open");
+        $this->assertNotSame(0, $o->bits & (1 << (63 - 25)), "'o' paints one pixel in");
+
+        $latin = $this->map->withSelectors('latin')->defs();
+        $this->assertCount(459, $latin, 'Latin includes the ASCII glyphs; U+00B7 belongs to misc-narrow after the dedupe');
+        foreach ($latin as $def) {
+            $this->assertSame(64, $def->weight + $def->bgWeight());
+        }
+    }
+
+    public function testSelectorsMirrorChafasTagGrammar(): void
+    {
+        $this->assertCount(256, $this->map->withSelectors('braille')->defs());
+        $this->assertCount(0, $this->map->withSelectors('none')->defs());
+        $this->assertCount(286, $this->map->withSelectors('block+braille')->defs());
+        $this->assertCount(865, $this->map->withSelectors('all-legacy')->defs());
+        $this->assertCount(1260, $this->map->withSelectors('all')->defs());
+
+        // Signs persist across comma-separated tokens (chafa parse_selectors).
+        $this->assertCount(286, $this->map->withSelectors('block,braille')->defs());
+
+        // A leading sign is relative to the map's current corpus.
+        $this->assertCount(676, $this->map->withSelectors('+stipple')->defs(), 'stipple already rides the default corpus');
+        $this->assertCount(673, $this->map->withSelectors('-stipple')->defs());
+    }
+
+    public function testSelectorErrorsFailFast(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->map->withSelectors('notaclass');
+    }
+
+    public function testEmptySelectorExpressionFailsFast(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->map->withSelectors('  ');
+    }
+
+    public function testKanaIsWideOnlyAndThereforeOutsideTheNarrowCorpus(): void
+    {
+        // chafa-symbols-kana.h carries 16x8 outlines only; chafa's
+        // init_symbol_array() skips those (they are the wide symbols2
+        // array, the unported A-09 engine), so no kana codepoint can ever
+        // appear in the narrow corpus.
+        foreach ($this->map->withSelectors('all')->defs() as $def) {
+            $cp = mb_ord($def->char);
+            $this->assertFalse($cp >= 0x3040 && $cp <= 0x30FF, sprintf('U+%04X is a wide kana glyph', $cp));
+        }
+    }
+
+    private static function rowMask(int $y): int
+    {
+        $mask = 0;
+        for ($x = 0; $x < 8; $x++) {
+            $mask |= 1 << (63 - ($y * 8 + $x));
+        }
+
+        return $mask;
+    }
+
+    /** @return array{0:string, 1:int} axis, eighths parsed from the Unicode name */
+    private static function fractionFromName(string $name): array
+    {
+        if ($name === 'UPPER AND LOWER ONE EIGHTH BLOCK') {
+            return ['both', 1];
+        }
+        if (str_starts_with($name, 'HORIZONTAL ONE EIGHTH BLOCK')) {
+            return ['stripes', 1];
+        }
+
+        $fractions = [
+            'ONE QUARTER' => 2,
+            'THREE EIGHTHS' => 3,
+            'FIVE EIGHTHS' => 5,
+            'THREE QUARTERS' => 6,
+            'SEVEN EIGHTHS' => 7,
+        ];
+        foreach ($fractions as $word => $eighths) {
+            if ($name === 'UPPER ' . $word . ' BLOCK') {
+                return ['upper', $eighths];
+            }
+            if ($name === 'RIGHT ' . $word . ' BLOCK') {
+                return ['right', $eighths];
+            }
+        }
+
+        throw new \InvalidArgumentException('unparsable eighth-block name: ' . $name);
+    }
+
+    private static function eighthBlockBitmap(string $axis, int $eighths): int
+    {
+        $bitmap = 0;
+        for ($y = 0; $y < 8; $y++) {
+            for ($x = 0; $x < 8; $x++) {
+                $on = match ($axis) {
+                    'upper' => $y < $eighths,
+                    'right' => $x >= 8 - $eighths,
+                    'both' => $y === 0 || $y === 7,
+                    'stripes' => in_array($y, [0, 2, 4, 7], true),
+                    default => false,
+                };
+                if ($on) {
+                    $bitmap |= 1 << (63 - ($y * 8 + $x));
+                }
+            }
+        }
+
+        return $bitmap;
     }
 
     private function bitsFor(int $cp): int

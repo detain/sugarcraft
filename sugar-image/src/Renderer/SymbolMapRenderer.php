@@ -62,6 +62,9 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
 
     private float $workFactor = self::DEFAULT_WORK_FACTOR;
 
+    /** chafa `--symbols=` selector expression, or null for the default corpus. */
+    private ?string $symbolSelector = null;
+
     private ?string $defaultFg;
 
     private ?string $defaultBg;
@@ -112,6 +115,29 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     }
 
     /**
+     * F-17/REACH-A04: select the glyph corpus with chafa's `--symbols=`
+     * tag grammar ({@see SymbolMap::withSelectors()}). The default corpus
+     * (W6's 676 entries) stays byte-frozen; a selector widens the map to
+     * the full 1,261-glyph narrow array or narrows it to one class
+     * family. An invalid expression throws at configuration time.
+     */
+    public function withSymbolSelectors(string $selectors): self
+    {
+        $clone = new self($this->map->withSelectors($selectors), $this->defaultFg, $this->defaultBg);
+        $clone->canvasMode = $this->canvasMode;
+        $clone->workFactor = $this->workFactor;
+        $clone->candidateObserver = $this->candidateObserver;
+        $clone->symbolSelector = $selectors;
+
+        return $clone;
+    }
+
+    public function symbolSelector(): ?string
+    {
+        return $this->symbolSelector;
+    }
+
+    /**
      * Only non-default rungs fingerprint: the default (TrueColor, work
      * 0.5) reports '' so existing poster-cache keys never churn.
      */
@@ -123,6 +149,9 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
         }
         if ($this->workFactor !== self::DEFAULT_WORK_FACTOR) {
             $parts[] = 'work=' . (string) $this->workFactor;
+        }
+        if ($this->symbolSelector !== null) {
+            $parts[] = 'symbols=' . $this->symbolSelector;
         }
 
         return implode('|', $parts);

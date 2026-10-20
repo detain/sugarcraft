@@ -8,7 +8,7 @@ via ext-gd and rendered via the best available protocol:
 - **iTerm2 inline images** (OSC 1337) — iTerm2, wezterm, mintty
 - **Half-block Unicode** (▀ + 24-bit fg/bg) — universal fallback
 - **Quarter-block Unicode** (░▒▓█ 2×2) — higher fidelity than half-block
-- **Symbols** (braille/sextant/octant glyph cells) — coverage-class rendering chosen by Hamming-distance candidate search (the chafa symbol engine)
+- **Symbols** (braille/sextant/octant/block glyph cells) — coverage-class rendering chosen by Hamming-distance candidate search (the chafa symbol engine). `SymbolMap::withSelectors()` applies chafa's `--symbols=` tag grammar over the full 1,260-glyph narrow corpus (ASCII/Latin/misc/legacy tables, the U+1FB80–U+1FB8B eighth-block tier, braille, sextants, octants); the default 676-glyph corpus is byte-frozen.
 
 ```sh
 composer require sugarcraft/sugar-image

@@ -63,6 +63,43 @@ final class SymbolMapRendererTest extends TestCase
         $this->assertSame('4e4ca0847ee3d4395be1e89d4740e7f11afd2931', sha1($slow));
     }
 
+    public function testSymbolSelectorsReachTheCorpusAndTheCacheFingerprint(): void
+    {
+        // REACH-A04/F-17: the `--symbols=` selector rides the renderer —
+        // a braille-only corpus cannot pick the block glyphs the default
+        // corpus prefers on this fixture, so the bytes move, and the
+        // fingerprint (poster-cache key) records the selection.
+        $image = ImageSource::fromFile(self::QB);
+        $default = new SymbolMapRenderer();
+
+        $braille = $default->withSymbolSelectors('braille');
+        $ascii = $default->withSymbolSelectors('ascii');
+
+        $this->assertSame('', $default->configFingerprint());
+        $this->assertSame('symbols=braille', $braille->configFingerprint());
+        $this->assertSame('braille', $braille->symbolSelector());
+
+        $defaultBytes = $default->render($image, 4);
+        $brailleBytes = $braille->render($image, 4);
+        $asciiBytes = $ascii->render($image, 4);
+
+        $this->assertNotSame($defaultBytes, $brailleBytes);
+        $this->assertNotSame($defaultBytes, $asciiBytes);
+        $this->assertNotSame($brailleBytes, $asciiBytes);
+
+        // Braille-only output can only paint braille glyphs (U+2800–U+28FF).
+        preg_match_all('/[\x{2800}-\x{28FF}]/u', $brailleBytes, $m);
+        $this->assertGreaterThan(0, count($m[0]));
+        preg_match_all('/[\x{2500}-\x{259F}]/u', $brailleBytes, $blocks);
+        $this->assertSame([], $blocks[0], 'no block glyph may survive a braille-only selection');
+    }
+
+    public function testAnUnknownSymbolSelectorThrowsAtConfigurationTime(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new SymbolMapRenderer())->withSymbolSelectors('notaclass');
+    }
+
     public function testAFullyTransparentCanvasIsBareWhitespace(): void
     {
         $img = imagecreatetruecolor(8, 8);

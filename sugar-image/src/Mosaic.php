@@ -323,13 +323,22 @@ final class Mosaic
      * available. A-04 seats it in the auto() ladder BELOW the chafa shell
      * rung and ABOVE the HalfBlock fallback; explicit halfBlock() and
      * fromModeString('halfblock') selection is untouched. The canvas rung
-     * and work factor ride the A-07/A-08 dials.
+     * and work factor ride the A-07/A-08 dials; $symbols is chafa's
+     * `--symbols=` selector expression (REACH-A04/F-17) selecting the
+     * glyph corpus — null keeps the byte-frozen default corpus.
      */
-    public static function symbols(CanvasMode $canvas = CanvasMode::TrueColor, float $workFactor = SymbolMapRenderer::DEFAULT_WORK_FACTOR): self
-    {
+    public static function symbols(
+        CanvasMode $canvas = CanvasMode::TrueColor,
+        float $workFactor = SymbolMapRenderer::DEFAULT_WORK_FACTOR,
+        ?string $symbols = null,
+    ): self {
         $renderer = (new SymbolMapRenderer())
             ->withCanvasMode($canvas)
             ->withWorkFactor($workFactor);
+
+        if ($symbols !== null) {
+            $renderer = $renderer->withSymbolSelectors($symbols);
+        }
 
         return new self(
             $renderer,
@@ -356,6 +365,33 @@ final class Mosaic
         }
 
         $configured = $renderer->withCanvasMode($canvasMode);
+
+        return new self(
+            $envelope !== null ? $envelope->decorate($configured) : $configured,
+            $this->capability,
+            $this->forcedWidth,
+            $this->forcedHeight,
+            $this->scale,
+            $this->optimizations,
+        );
+    }
+
+    /**
+     * REACH-A04/F-17: select the symbol corpus with chafa's `--symbols=`
+     * tag grammar when the active backend is the symbol-map renderer
+     * (also through a passthrough envelope); same instance otherwise.
+     * An invalid expression throws — never a silently empty corpus.
+     */
+    public function withSymbolSelectors(string $selectors): self
+    {
+        $envelope = $this->renderer instanceof PassthroughDecorator ? $this->renderer : null;
+        $renderer = $envelope?->inner() ?? $this->renderer;
+
+        if (!$renderer instanceof SymbolMapRenderer) {
+            return $this;
+        }
+
+        $configured = $renderer->withSymbolSelectors($selectors);
 
         return new self(
             $envelope !== null ? $envelope->decorate($configured) : $configured,

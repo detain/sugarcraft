@@ -49,6 +49,55 @@ final class SymbolTags
     public const EXTRA = 1 << 30;
     public const BAD = self::AMBIGUOUS | self::UGLY;
 
+    /**
+     * chafa's `--symbols=` class names (chafa-symbol-map.c parse_symbol_tag).
+     * `all` is every tag except EXTRA and BAD; `none` selects nothing.
+     *
+     * @var array<string, int>
+     */
+    private const SELECTOR_NAMES = [
+        'all' => ~(self::EXTRA | self::BAD),
+        'none' => self::NONE,
+        'space' => self::SPACE,
+        'solid' => self::SOLID,
+        'stipple' => self::STIPPLE,
+        'block' => self::BLOCK,
+        'border' => self::BORDER,
+        'diagonal' => self::DIAGONAL,
+        'dot' => self::DOT,
+        'quad' => self::QUAD,
+        'half' => self::HALF,
+        'hhalf' => self::HHALF,
+        'vhalf' => self::VHALF,
+        'inverted' => self::INVERTED,
+        'braille' => self::BRAILLE,
+        'sextant' => self::SEXTANT,
+        'wedge' => self::WEDGE,
+        'technical' => self::TECHNICAL,
+        'geometric' => self::GEOMETRIC,
+        'ascii' => self::ASCII,
+        'alpha' => self::ALPHA,
+        'digit' => self::DIGIT,
+        'narrow' => self::NARROW,
+        'wide' => self::WIDE,
+        'ambiguous' => self::AMBIGUOUS,
+        'ugly' => self::UGLY,
+        'extra' => self::EXTRA,
+        'alnum' => self::ALNUM,
+        'bad' => self::BAD,
+        'legacy' => self::LEGACY,
+        'latin' => self::LATIN,
+        'import' => self::IMPORTED,
+        'imported' => self::IMPORTED,
+        'octant' => self::OCTANT,
+    ];
+
+    /** Tag mask for a `--symbols=` class name, or null when unknown. */
+    public static function selectorMask(string $name): ?int
+    {
+        return self::SELECTOR_NAMES[strtolower($name)] ?? null;
+    }
+
     private function __construct()
     {
     }
