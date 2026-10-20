@@ -12,7 +12,7 @@ namespace SugarCraft\Image\Symbol;
  * the SymbolDef for callers that want to restrict a pick to, say,
  * BRAILLE or STIPPLE families.
  *
- * Mirrors chafa.ChafaSymbolTag (chafa/chafa.h).
+ * Mirrors chafa.ChafaSymbolTag (chafa/chafa-symbol-map.h:33-68).
  */
 final class SymbolTags
 {
@@ -47,7 +47,7 @@ final class SymbolTags
     public const IMPORTED = 1 << 25;
     public const OCTANT = 1 << 26;
     public const EXTRA = 1 << 30;
-    public const BAD = 2147483647;
+    public const BAD = self::AMBIGUOUS | self::UGLY;
 
     private function __construct()
     {

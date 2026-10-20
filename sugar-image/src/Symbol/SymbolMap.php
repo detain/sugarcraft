@@ -6,7 +6,7 @@ namespace SugarCraft\Image\Symbol;
 
 /**
  * Coverage-class symbol engine — the glyph corpus and candidate search
- * behind the 'symbols' render tier (F-04/F-05).
+ * behind the 'symbols' render tier (A-04).
  *
  * Corpus build order mirrors chafa's init_symbol_array_narrow() exactly:
  * the 127 non-wide entries of the basic block-elements/box-drawing table
@@ -40,10 +40,15 @@ namespace SugarCraft\Image\Symbol;
  * carry no such flags, so the ░▒▓ stipple glyphs ride the corpus as
  * ordinary candidates and the fill-map selection semantics stay a seam.
  *
- * A-09 note: wide-glyph (2x8) symbol pairs exist in chafa's
- * init_symbol_array_wide but no inline-text renderer here emits
- * double-width cells; supporting them would need cell-width
- * bookkeeping in OutputOptimizer — design note only, not implemented.
+ * A-09 design note (recorded, NOT implemented): chafa carries wide
+ * glyphs as ChafaSymbol2 sym[2] pairs — one 16x8-pixel cell split into
+ * two 8x8 halves, scored as hd[0] + hd[1] (inverse against 128). The
+ * symbol renderer trials wide-vs-narrow with a four-cell lookback ring
+ * and replaces the run when the summed error drops; the printer then
+ * emits the lead cell and skips c==0 continuation cells, adding a space
+ * when a transparent cell precedes a continuation. The right primitive
+ * already exists here: sugar-cellbuffer Cell::continuation(); what is
+ * missing is double-width emission bookkeeping in OutputOptimizer.
  */
 final class SymbolMap
 {
@@ -515,20 +520,34 @@ final class SymbolMap
 
     /**
      * Informational tags for the basic table (v1 does not filter on tags);
-     * the block/stipple/diagonal families follow chafa's block headers.
+     * transcribed from chafa's own per-glyph tag lists in
+     * chafa/internal/chafa-symbols-block.h (v1 does not filter on tags).
      */
     private static function basicTags(int $cp): int
     {
-        if ($cp === 0x2588) {
-            return SymbolTags::SOLID | SymbolTags::BLOCK;
-        }
+        // Block glyph family 0x2580-0x259F: chafa's exact per-codepoint tags.
         if ($cp >= 0x2580 && $cp <= 0x259F) {
-            if ($cp >= 0x2591 && $cp <= 0x2593) {
-                return SymbolTags::STIPPLE;
-            }
-
-            return SymbolTags::BLOCK | SymbolTags::HHALF | SymbolTags::QUAD;
+            return match (true) {
+                $cp === 0x2580 => SymbolTags::BLOCK | SymbolTags::VHALF | SymbolTags::QUAD | SymbolTags::OCTANT | SymbolTags::INVERTED,
+                $cp === 0x2584 => SymbolTags::BLOCK | SymbolTags::VHALF | SymbolTags::QUAD | SymbolTags::OCTANT,
+                $cp === 0x2582 || $cp === 0x2586 => SymbolTags::BLOCK | SymbolTags::OCTANT,
+                $cp === 0x2588 => SymbolTags::BLOCK | SymbolTags::SOLID | SymbolTags::QUAD | SymbolTags::SEXTANT | SymbolTags::OCTANT,
+                $cp === 0x258C => SymbolTags::BLOCK | SymbolTags::HHALF | SymbolTags::QUAD | SymbolTags::SEXTANT | SymbolTags::OCTANT,
+                $cp === 0x2590 => SymbolTags::BLOCK | SymbolTags::HHALF | SymbolTags::QUAD | SymbolTags::SEXTANT | SymbolTags::OCTANT | SymbolTags::INVERTED,
+                $cp >= 0x2591 && $cp <= 0x2593 => SymbolTags::STIPPLE,
+                $cp === 0x2594 || $cp === 0x2595 => SymbolTags::BLOCK | SymbolTags::INVERTED,
+                \in_array($cp, [0x2596, 0x2597, 0x2598, 0x259A, 0x259D], true) => SymbolTags::BLOCK | SymbolTags::QUAD | SymbolTags::OCTANT,
+                \in_array($cp, [0x2599, 0x259B, 0x259C, 0x259E, 0x259F], true) => SymbolTags::BLOCK | SymbolTags::QUAD | SymbolTags::OCTANT | SymbolTags::INVERTED,
+                default => SymbolTags::BLOCK,
+            };
         }
+
+        if (\in_array($cp, [0x2504, 0x2505, 0x2506, 0x2507, 0x2508, 0x2509, 0x250A, 0x250B,
+            0x254C, 0x254D, 0x254E, 0x254F, 0x2574, 0x2575, 0x2576, 0x2577, 0x2578, 0x2579,
+            0x257A, 0x257B], true)) {
+            return SymbolTags::BORDER | SymbolTags::DOT;
+        }
+
         if ($cp >= 0x2571 && $cp <= 0x2573) {
             return SymbolTags::BORDER | SymbolTags::DIAGONAL;
         }

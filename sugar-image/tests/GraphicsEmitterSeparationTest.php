@@ -52,6 +52,12 @@ final class GraphicsEmitterSeparationTest extends TestCase
         // a shape file with zero emitter wiring (its docblock names the
         // optimizer only in prose, which the token walker excludes by design).
         'AcceptsOptimization.php',
+        // A-07/A-08: the optional canvas-mode and work-factor contracts —
+        // pure shape files like AcceptsOptimization.php itself (their
+        // docblocks name the optimizer only in prose, if at all; the token
+        // walker excludes comments by design).
+        'CanvasModeConfigurable.php',
+        'WorkFactorConfigurable.php',
     ];
 
     public function testTheTwoRostersCoverEveryRendererFile(): void
