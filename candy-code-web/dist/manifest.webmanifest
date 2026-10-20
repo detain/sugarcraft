@@ -1,0 +1,14 @@
+{
+  "name": "CandyCode",
+  "short_name": "CandyCode",
+  "description": "Browser client for a candy-code server: watch sessions, answer permission prompts, steer turns.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "theme_color": "#1a1b26",
+  "background_color": "#1a1b26",
+  "icons": [
+    { "src": "./icon-240.png", "sizes": "240x240", "type": "image/png" },
+    { "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
