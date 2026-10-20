@@ -60,6 +60,14 @@ namespace SugarCraft\Image\Symbol;
  * (16x8, two 8x8 halves scored as hd[0]+hd[1]), which is the unported
  * A-09 engine, not a coverage-class table. Recorded, not ported.
  *
+ * The opt-in LATIN tier ({@see withLatin()}) is a SEPARATE additive path
+ * (SYMBOL-LATIN, W10): chafa's 365 narrow chafa-symbols-latin.h glyphs
+ * (U+00A1–U+03F6, table {@see SymbolSetLatin}) appended AFTER the current
+ * corpus, so the default 676-entry prefix — and every byte-frozen render
+ * digest — stays untouched. It coexists with {@see withSelectors()}, which
+ * reaches the same glyphs at their chafa build-order positions through the
+ * `latin` tag class; the two paths keep their own transcriptions.
+ *
  * Selection mirrors chafa's chafa_symbol_map_apply_selectors() /
  * char_is_selected(): selectors apply in order and the LAST match wins;
  * a token without a leading +/- clears the map first and signs persist
@@ -256,15 +264,60 @@ final class SymbolMap
     /** @var list<SymbolDef> */
     private readonly array $defs;
 
-    /** @param list<SymbolDef> $defs */
-    private function __construct(array $defs)
+    private readonly bool $latin;
+
+    /**
+     * @param list<SymbolDef> $defs  the corpus in build order
+     * @param bool $latin whether the opt-in LATIN tier is appended
+     *                    (see {@see withLatin()})
+     */
+    private function __construct(array $defs, bool $latin = false)
     {
         $this->defs = $defs;
+        $this->latin = $latin;
     }
 
     public static function new(): self
     {
         return new self(self::defaultCorpus());
+    }
+
+    /**
+     * Opt-in LATIN tier: chafa's 365 narrow chafa-symbols-latin.h glyphs
+     * (U+00A1-U+03F6, table {@see SymbolSetLatin}) appended after the
+     * current corpus.
+     *
+     * chafa's own model — the default symbol map selects only the BLOCK,
+     * BORDER and SPACE tags (chafa/chafa-canvas-config.c:73-75), so latin
+     * and friends are reached through the --symbols tag selectors, never
+     * the default. Appending last keeps candidate tie order stable and
+     * leaves the default corpus — and every byte-frozen render digest —
+     * untouched. Idempotent: a map that already carries the tier returns
+     * itself.
+     *
+     * Seam (W10 weld): the flag is carried by withLatin()-built maps only;
+     * a withSelectors() result resets it, so composing
+     * withLatin() after a relative withSelectors() on a latin map would
+     * re-append the tier. Not exercised by any consumer.
+     */
+    public function withLatin(): self
+    {
+        if ($this->latin) {
+            return $this;
+        }
+
+        $extra = [];
+        foreach (SymbolSetLatin::OUTLINES as $cp => $outline) {
+            $extra[] = self::outlineDef($cp, $outline, SymbolTags::LATIN);
+        }
+
+        return new self([...$this->defs, ...$extra], true);
+    }
+
+    /** Whether the opt-in LATIN tier is appended (see {@see withLatin()}). */
+    public function hasLatin(): bool
+    {
+        return $this->latin;
     }
 
     /**
@@ -387,7 +440,8 @@ final class SymbolMap
     }
 
     /**
-     * The full corpus in build order (basic, braille, sextant, octant).
+     * The corpus in build order (basic, braille, sextant, octant) — then the
+     * opt-in LATIN tier when {@see withLatin()} was used.
      *
      * @return list<SymbolDef>
      */
