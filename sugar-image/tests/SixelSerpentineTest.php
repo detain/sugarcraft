@@ -16,6 +16,7 @@ namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Dither;
+use SugarCraft\Image\Dither\Ditherer;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Renderer\SixelRenderer;
 
@@ -208,9 +209,7 @@ final class SixelSerpentineTest extends TestCase
             $accum[] = $line;
         }
 
-        $method = new \ReflectionMethod(SixelRenderer::class, 'diffuseError');
-        $method->setAccessible(true);
-        $method->invokeArgs(new SixelRenderer(), [&$accum, $w, $h, $x, $y, 1.0, 0.0, 0.0, $dither, -1]);
+        Ditherer::diffuseError($accum, $w, $h, $x, $y, 1.0, 0.0, 0.0, $dither, -1);
 
         $expected = array_fill(0, $h, array_fill(0, $w, 0.0));
         foreach ($taps as [$dx, $dy, $factor]) {

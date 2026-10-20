@@ -18,6 +18,7 @@ namespace SugarCraft\Image\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Image\Dither;
+use SugarCraft\Image\Dither\Ditherer;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\PixelGrid;
 use SugarCraft\Image\Renderer\SixelRenderer;
@@ -245,10 +246,15 @@ final class SixelAlphaTest extends TestCase
         $this->assertLessThan((int) $push, (int) $composite, 'flatten must run before the push');
 
         // indexRows loadBase leg: $isHole decision < flattenOnto < $row[] push.
+        // C-06: the base read moved with indexRows into the shared Ditherer;
+        // the ordering law is the same walk, so the slice reads that file.
+        $ditherSource = (new \ReflectionClass(Ditherer::class))->getFileName();
+        $ditherCode = file_get_contents($ditherSource);
+        $this->assertIsString($ditherCode);
         $rows = substr(
-            $code,
-            (int) strpos($code, '$loadBase = function'),
-            (int) strpos($code, '// Prime the window'),
+            $ditherCode,
+            (int) strpos($ditherCode, '$loadBase = function'),
+            (int) strpos($ditherCode, '// Prime the window'),
         );
         $holeSet = strpos($rows, '$isHole =');
         $rowsComposite = strpos($rows, 'flattenOnto(');

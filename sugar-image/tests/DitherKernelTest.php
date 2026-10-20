@@ -6,13 +6,14 @@ namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Dither;
-use SugarCraft\Image\Renderer\SixelRenderer;
+use SugarCraft\Image\Dither\Ditherer;
 
 /**
  * C-01: kernel-conservation and impulse-response pins for the error-diffusion
- * tables in {@see SixelRenderer::diffuseError()}.
+ * tables in {@see Ditherer::diffuseError()}.
  *
- * Form per plan_chafa S2.1: reflection-invoke the private diffuseError() on a
+ * Form per plan_chafa S2.1 (C-06 relocated the kernel to the shared
+ * Ditherer): drive the public static diffuseError() on a
  * 5×4 accumulator with a unit error at the cell that keeps EVERY kernel tap in
  * bounds (x=2 of width 5, y=1 of height 4 — the widest row reaches x±2 and the
  * deepest row y+2), then assert
@@ -178,7 +179,7 @@ final class DitherKernelTest extends TestCase
     }
 
     /**
-     * Drive the private diffuseError() with a unit error on one channel.
+     * Drive the shared Ditherer::diffuseError() with a unit error on one channel.
      *
      * The impulse grid in {@see testImpulseResponseMatchesCanonicalOffsetsAndWeights()}
      * already pins that every cell no canonical tap names — including the
@@ -200,11 +201,8 @@ final class DitherKernelTest extends TestCase
         $errors = [0.0, 0.0, 0.0];
         $errors[$channel] = 1.0;
 
-        $method = new \ReflectionMethod(SixelRenderer::class, 'diffuseError');
-        $method->setAccessible(true);
-        $method->invokeArgs(
-            new SixelRenderer(),
-            [&$accum, self::W, self::H, self::X, self::Y, $errors[0], $errors[1], $errors[2], $dither],
+        Ditherer::diffuseError(
+            $accum, self::W, self::H, self::X, self::Y, $errors[0], $errors[1], $errors[2], $dither,
         );
 
         return $accum;
