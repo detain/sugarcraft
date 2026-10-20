@@ -50,3 +50,47 @@ describe('PermissionCard diff preview (WEB-5a-ii)', () => {
     expect(wrapper.find('pre').text()).toContain('git push')
   })
 })
+
+describe('PermissionCard AskUser choice buttons (WEB-5a-iii)', () => {
+  const askUser = ask({
+    tool: 'AskUser',
+    source: 'tool:AskUser',
+    arguments: { description: 'pick one', question: 'Favorite color?', options: ['Blue', 'Green'] },
+    options: ['once', 'always', 'reject'],
+  })
+
+  it('offers one button per choice and answers with the exact option string', async () => {
+    const wrapper = mount(PermissionCard, { props: { ask: askUser, canAnswer: true } })
+    const buttons = wrapper.findAll('[data-testid="ask-choice"]')
+    expect(buttons).toHaveLength(2)
+    expect(buttons[0]?.text()).toBe('1. Blue (recommended)')
+    await buttons[1]?.trigger('click')
+    const call = wrapper.emitted('answer')?.[0]
+    expect(call?.slice(0, 3)).toEqual(['once', false, 'Green'])
+  })
+
+  it('falls back to the free-text note when there are too many choices', () => {
+    const many = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
+    const wrapper = mount(PermissionCard, {
+      props: {
+        ask: ask({ ...askUser, arguments: { question: '?', options: many } }),
+        canAnswer: true,
+      },
+    })
+    expect(wrapper.findAll('[data-testid="ask-choice"]')).toHaveLength(0)
+  })
+
+  it('ignores embedded option lists on tools that are not AskUser', () => {
+    const wrapper = mount(PermissionCard, {
+      props: { ask: ask({ arguments: { command: 'ls', options: ['Blue'] } }), canAnswer: true },
+    })
+    expect(wrapper.findAll('[data-testid="ask-choice"]')).toHaveLength(0)
+  })
+
+  it('leaves the verdict buttons untouched alongside the choices', () => {
+    const wrapper = mount(PermissionCard, { props: { ask: askUser, canAnswer: true } })
+    expect(wrapper.find('[data-testid="ask-once"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="ask-always"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="ask-reject"]').exists()).toBe(true)
+  })
+})
