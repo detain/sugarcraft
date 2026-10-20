@@ -17,11 +17,25 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
  * Loads every frame up-front (the decoder caps at 256); frame k is due at
  * `anchor + C[k]` where C is the prefix sum of the frame periods (modulo one
  * cycle of total length T), and each TickMsg re-arms the loop for the NEXT
- * frame's deadline — `max(nextDue - now, MIN_TICK_CS)`, never a fresh full
- * delay. A slow render or a stalled loop therefore costs lateness, not
- * drift: the following tick resolves its index straight from the elapsed
- * position and skips ahead when frames fell behind (the ArtLoop philosophy —
- * the displayed frame is a total function of elapsed time). Before E-03 the
+ * frame's deadline — `max(nextDue - now, MIN_TICK_CS)` — never a fresh copy
+ * of the CURRENT frame's delay. While the elapsed position resolves to a
+ * frame OTHER than the one on screen the table stays absolute from the
+ * kickoff origin: an overrun costs lateness, not drift, and the tick skips
+ * straight to its landing frame (the ArtLoop philosophy — on that path the
+ * displayed frame is a total function of elapsed time). The table DOES
+ * rescale at the wrap boundary, however: when the elapsed position lands
+ * back inside the window of the frame already on screen — which every stall
+ * of at least one full cycle does, as does a pump fired inside the current
+ * window — the tick force-advances exactly ONE frame and re-anchors the
+ * epoch to wall-clock now, so that frame holds a fresh full period. Post-
+ * wrap the cadence (the per-lap sequence of holds) is therefore preserved
+ * while the epoch is re-based, bounding the catch-up to one advance per
+ * tick. The naive alternative — continuing the absolute table without re-
+ * basing — was rejected because the force-advanced frame would survive only
+ * the sliver of window left before its table deadline (arbitrarily short
+ * partial holds at every stall boundary); the re-anchor is the shipped
+ * choice and PlayerScheduleTest pins the resulting index/arm stream against
+ * an independent walk. Before E-03 the
  * Player re-armed the current frame's full delay on every tick, so the
  * per-frame period was `delay + handling + render time` and playback
  * silently stretched under load — the docblock here used to promise
