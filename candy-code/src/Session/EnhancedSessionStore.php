@@ -2479,22 +2479,30 @@ final class EnhancedSessionStore
      * model was threaded carry a null model and group together under it —
      * the renderer says so honestly rather than inventing a name.
      *
+     * `$windowDays` (OBS-3) trims to the last N whole UTC days INCLUSIVE of
+     * today: the cutoff is midnight UTC of today minus N−1 days, so `/usage
+     * 7` answers "this day and the six before it" — a boundary stable to the
+     * day, never a sliding now-minus-168h whose span drifts mid-page. The
+     * zone is UTC because the day bucket is `date(ts, 'unixepoch')`; the
+     * page labels it (the audit's m-9: an unlabeled UTC bucket reads as a
+     * local one to every viewer west of Greenwich).
+     *
      * The unpriced bit is MAX per group, so a group with one blind row is a
      * blind group, and the `≥` law (SES-1) says so wherever the group's
      * dollars are printed.
      *
      * @return list<array{day: string, model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>
      */
-    public function usageDayModelRollups(?string $sessionId = null): array
+    public function usageDayModelRollups(?string $sessionId = null, ?int $windowDays = null): array
     {
-        $where = $sessionId === null ? '' : ' WHERE session_id = ?';
+        $clause = self::usageWindowClause($sessionId, $windowDays);
         $stmt = $this->pdo->prepare('
             SELECT date(ts, \'unixepoch\') AS day, model, COUNT(*), COALESCE(SUM(total_tokens), 0), COALESCE(SUM(cost_usd), 0.0), COALESCE(MAX(unpriced), 0)
-              FROM usage_records' . $where . '
+              FROM usage_records' . $clause['where'] . '
              GROUP BY day, model
              ORDER BY day DESC, model
         ');
-        $stmt->execute($sessionId === null ? [] : [$sessionId]);
+        $stmt->execute($clause['params']);
 
         $rows = [];
         foreach ($stmt->fetchAll(PDO::FETCH_NUM) as $row) {
@@ -2514,20 +2522,22 @@ final class EnhancedSessionStore
 
     /**
      * The same ledger folded by MODEL alone, newest activity first — the
-     * per-model totals `/usage` prints under the day grid.
+     * per-model totals `/usage` prints under the day grid. `$windowDays`
+     * trims exactly as {@see usageDayModelRollups()} does, so the totals
+     * row, the model table and the day grid answer for one window.
      *
      * @return list<array{model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>
      */
-    public function usageModelRollups(?string $sessionId = null): array
+    public function usageModelRollups(?string $sessionId = null, ?int $windowDays = null): array
     {
-        $where = $sessionId === null ? '' : ' WHERE session_id = ?';
+        $clause = self::usageWindowClause($sessionId, $windowDays);
         $stmt = $this->pdo->prepare('
             SELECT model, COUNT(*), COALESCE(SUM(total_tokens), 0), COALESCE(SUM(cost_usd), 0.0), COALESCE(MAX(unpriced), 0)
-              FROM usage_records' . $where . '
+              FROM usage_records' . $clause['where'] . '
              GROUP BY model
              ORDER BY MAX(ts) DESC
         ');
-        $stmt->execute($sessionId === null ? [] : [$sessionId]);
+        $stmt->execute($clause['params']);
 
         $rows = [];
         foreach ($stmt->fetchAll(PDO::FETCH_NUM) as $row) {
@@ -2542,6 +2552,34 @@ final class EnhancedSessionStore
         $stmt->closeCursor();
 
         return $rows;
+    }
+
+    /**
+     * OBS-3: one WHERE builder for both `/usage` folds, so a window can
+     * never narrow one table and not the other. Null window and null scope
+     * keep the clause empty — the byte-identical SQL every pre-window row of
+     * this store answered from.
+     *
+     * @return array{where: string, params: list<string|int>}
+     */
+    private static function usageWindowClause(?string $sessionId, ?int $windowDays): array
+    {
+        $conditions = [];
+        $params = [];
+        if ($sessionId !== null) {
+            $conditions[] = 'session_id = ?';
+            $params[] = $sessionId;
+        }
+        if ($windowDays !== null) {
+            $conditions[] = 'ts >= ?';
+            // Midnight UTC today, N-1 days back: whole UTC days inclusive.
+            $params[] = (int) (floor(time() / 86400) * 86400) - ($windowDays - 1) * 86400;
+        }
+
+        return [
+            'where' => $conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions),
+            'params' => $params,
+        ];
     }
 
     /**

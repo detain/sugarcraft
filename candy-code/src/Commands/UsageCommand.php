@@ -14,6 +14,14 @@ use SugarCraft\Code\Lang;
  * Usage:
  *   /usage       — this session's rows
  *   /usage all   — every session the ledger holds
+ *   /usage 7     — the last seven whole UTC days, this session
+ *   /usage 30 all — the same window across every session (order-free:
+ *                  `/usage all 30` is the same page; OBS-3)
+ *
+ * OBS-3: the windows land because 7-of-30-day produce-errors with NO written
+ * judgment was the audit's finding — an argument the ledger could answer was
+ * rejected at the parser. A junk argument still gets the usage line: a typo'd
+ * window must not silently print the whole history.
  *
  * WHAT `/budget` IS NOT. `/budget` reads the in-process tracker: what THIS
  * launch has reported, reset by every restart. `/usage` reads the
@@ -43,7 +51,7 @@ final class UsageCommand
      * reason names it; the empty-LEDGER case is both lists present and
      * empty, which renders the grid with `none` sections, not an apology.
      */
-    private const REQUIRED_FACTS = ['scopeAll', 'days', 'models', 'reason'];
+    private const REQUIRED_FACTS = ['scopeAll', 'windowDays', 'days', 'models', 'reason'];
 
     /** Column widths shared by the header and the rows — one sprintf, so the two cannot misalign. */
     private const ROW_FORMAT = '  %-11s %-22s %6s %9s %11s';
@@ -55,6 +63,8 @@ final class UsageCommand
      *
      * @param array<string, mixed> $facts
      *                                    - scopeAll: bool — all sessions or this one
+     *                                    - windowDays: ?int — OBS-3: the last N whole
+     *                                      UTC days, null spans the whole ledger
      *                                    - days: ?list<array{day: string, model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>
      *                                    - models: ?list<array{model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>
      *                                    - reason: string — the stated cause when days is null
@@ -85,6 +95,9 @@ final class UsageCommand
             Lang::t('cmd.usage.subtitle'),
             '',
             Lang::t('cmd.usage.scope', ['scope' => Lang::t($facts['scopeAll'] ? 'cmd.usage.scope.all' : 'cmd.usage.scope.session')]),
+            // OBS-3: the window prints on its own line only when one was
+            // asked for — the no-window page keeps its exact old bytes.
+            ...(null === $facts['windowDays'] ? [] : [Lang::t('cmd.usage.window', ['days' => (string) $facts['windowDays']])]),
             self::totalsLine($models),
             '',
             Lang::t('cmd.usage.day', ['count' => (string) count($days)]),

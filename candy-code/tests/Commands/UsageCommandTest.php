@@ -82,7 +82,7 @@ final class UsageCommandTest extends TestCase
         }
 
         $added = array_slice($this->submit($this->usageChat(draft: '/usage nope'))->history, 2);
-        self::assertSame('Usage: /usage [all] — fold the durable ledger by day and model, this session or every session.', $added[1]->content);
+        self::assertSame('Usage: /usage [7|30|all] — fold the durable ledger by day (whole UTC days) and model, this session or every session.', $added[1]->content);
     }
 
     public function testAChatWithoutADurableStoreSaysUnavailableRatherThanZeroSpent(): void
@@ -91,7 +91,7 @@ final class UsageCommandTest extends TestCase
 
         self::assertSame(4, \count(explode("\n", $page)), 'title + subtitle + blank + stated reason');
         self::assertStringContainsString('Durable ledger: unavailable — no durable ledger store is open here', $page);
-        self::assertStringNotContainsString('By day:', $page, 'an unreadable ledger does not pretend to have folded it');
+        self::assertStringNotContainsString('By day', $page, 'an unreadable ledger does not pretend to have folded it (OBS-3: zone-agnostic needle — the header today reads "By day (UTC)" and must not appear either)');
     }
 
     public function testTheHostRestatesWhatTheStoreActuallyFolded(): void
@@ -117,6 +117,51 @@ final class UsageCommandTest extends TestCase
         self::assertStringContainsString('$2.2000', $global);
     }
 
+    /**
+     * OBS-3: the window fact prints its own line between scope and totals —
+     * and only when one was asked for, so every pre-window page keeps its
+     * exact bytes. The day header names the zone (audit m-9: a UTC bucket
+     * without a label reads local to everyone west of Greenwich).
+     */
+    public function testTheWindowLinePrintsWhenGivenAndTheDayHeaderNamesItsZone(): void
+    {
+        $plain = UsageCommand::compose(self::facts());
+        self::assertStringNotContainsString('Window:', 'no window, no line');
+        self::assertStringContainsString('By day (UTC): 0 groups', $plain);
+
+        $windowed = UsageCommand::compose(self::facts(windowDays: 7));
+        $lines = explode("\n", $windowed);
+        $scopeAt = array_search('Scope: this session', $lines, true);
+        self::assertNotFalse($scopeAt);
+        self::assertSame('Window: last 7 whole UTC days, today included', $lines[$scopeAt + 1], 'the window qualifies the scope line it follows');
+    }
+
+    /**
+     * OBS-3 through the parser: 7 and 30 answer instead of a usage error,
+     * order-free, and a junk token still refuses loudly rather than silently
+     * widening the page.
+     */
+    public function testTheParserAcceptsWindowsInEitherOrderAndStillRefusesJunk(): void
+    {
+        $store = new EnhancedSessionStore($this->tempDir . '/parse.db');
+        $store->createSession('p1', 'x', 'y');
+        $store->appendUsageRecord('p1', Usage::new(100, 1.0), 'workhorse');
+        $context = CommandContext::new(sessionId: 'p1', sessionStore: $store);
+        $command = new UsageHostCommand();
+
+        foreach (['/usage 7', '/usage 30', '/usage all 7', '/usage 30 all'] as $line) {
+            $page = $command->run($context, $line)->rows[1]->content;
+            self::assertStringContainsString('Window: last', $page, $line . ' answers with a window line');
+        }
+        self::assertStringContainsString('Scope: all sessions', $command->run($context, '/usage all 7')->rows[1]->content);
+        self::assertStringContainsString('Scope: this session', $command->run($context, '/usage 7')->rows[1]->content);
+        self::assertStringNotContainsString('Window:', $command->run($context, '/usage')->rows[1]->content, 'bare and all keep the old page');
+        self::assertStringNotContainsString('Window:', $command->run($context, '/usage all')->rows[1]->content);
+
+        self::assertSame('Usage: /usage [7|30|all] — fold the durable ledger by day (whole UTC days) and model, this session or every session.', $command->run($context, '/usage 14')->rows[1]->content, 'a window the ledger cannot name is a usage error, not a wider page');
+        self::assertStringStartsWith('Usage: /usage', $command->run($context, '/usage all alls')->rows[1]->content);
+    }
+
     // ── the pure composer ────────────────────────────────────────────────
 
     public function testAnEmptyLedgerStillPrintsEveryHeaderWithItsZero(): void
@@ -125,7 +170,7 @@ final class UsageCommandTest extends TestCase
         $lines = explode("\n", $page);
 
         self::assertCount(self::PAGE_SKELETON_LINES + 2, $lines, 'two sections, each with its `none` sentinel');
-        self::assertStringContainsString('By day: 0 groups', $page);
+        self::assertStringContainsString('By day (UTC): 0 groups', $page);
         self::assertStringContainsString('By model: 0 groups', $page);
         self::assertSame(2, preg_match_all('/^\s+none$/m', $page));
         self::assertStringContainsString('Totals: 0 calls, 0 tokens, $0.0000', $page, 'an honest zero gets no ≥ prefix');
@@ -152,7 +197,7 @@ final class UsageCommandTest extends TestCase
             'Scope: this session',
             'Totals: 3 calls, 340 tokens, ≥$4.0000',
             '',
-            'By day: 2 groups',
+            'By day (UTC): 2 groups',
             '  Date        Model                   Calls    Tokens       Spend',
             "  $day  alpha                       2       300     $4.0000",
             "  $day  (unrecorded)                1        40  ≥$0.0000",
@@ -214,7 +259,7 @@ final class UsageCommandTest extends TestCase
         ));
 
         self::assertCount(self::PAGE_SKELETON_LINES + 1 + 1, explode("\n", $page), 'a hostile name buys one grid cell, never a header');
-        self::assertSame(1, preg_match_all('/^By day: \d+ groups$/m', $page));
+        self::assertSame(1, preg_match_all('/^By day \(UTC\): \d+ groups$/m', $page), 'OBS-3: the one real header matches its own shape; the injected "By day:" line cannot forge it');
         self::assertStringNotContainsString("\x1b", $page);
         self::assertStringNotContainsString("\r", $page);
         self::assertStringContainsString('evil', $page, 'the text stays visible — escaped, not deleted');
@@ -232,7 +277,42 @@ final class UsageCommandTest extends TestCase
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('days');
 
-        UsageCommand::compose(['scopeAll' => false, 'models' => [], 'reason' => '']);
+        UsageCommand::compose(['scopeAll' => false, 'windowDays' => null, 'models' => [], 'reason' => '']);
+    }
+
+    /**
+     * OBS-3 through the store: the rollups' window is whole UTC days
+     * inclusive of today, and BOTH folds honour it, so the totals line can
+     * never sum a wider span than the grid prints. Rows ride a raw INSERT
+     * with an explicit stamp because `appendUsageRecord` always writes now —
+     * readers that care WHEN a row landed need back-dated fixtures.
+     */
+    public function testTheStoreFoldsHonourTheWindowAndAgreeWithEachOther(): void
+    {
+        $dbPath = $this->tempDir . '/sessions.db';
+        $store = new EnhancedSessionStore($dbPath);
+        $pdo = new \PDO('sqlite:' . $dbPath);
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $stmt = $pdo->prepare('
+            INSERT INTO usage_records
+                (session_id, ts, model, total_tokens, input_tokens, output_tokens,
+                 cache_read_tokens, cache_creation_tokens, reasoning_tokens, cost_usd, unpriced)
+            VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, ?, 0)
+        ');
+        // today, 5 days ago, and 10 days ago — a 7-day window keeps the
+        // first two, a 30-day window keeps all three.
+        foreach ([0, 5, 10] as $ago) {
+            $stmt->execute(['w', time() - $ago * 86400, 'workhorse', 10, 0.5]);
+        }
+
+        $week = $store->usageDayModelRollups('w', 7);
+        self::assertCount(2, $week, 'whole UTC days: the day ten back is outside a seven-day window that includes today');
+        $weekTotals = $store->usageModelRollups('w', 7);
+        self::assertSame(array_sum(array_column($week, 'calls')), $weekTotals[0]['calls'], 'both folds answer the same window');
+
+        $month = $store->usageDayModelRollups('w', 30);
+        self::assertCount(3, $month);
+        self::assertCount(3, $store->usageDayModelRollups('w'), 'the no-window fold keeps spanning the whole ledger');
     }
 
     // ── helpers ──────────────────────────────────────────────────────────
@@ -243,9 +323,9 @@ final class UsageCommandTest extends TestCase
      *
      * @return array<string, mixed>
      */
-    private static function facts(array $days = [], array $models = []): array
+    private static function facts(array $days = [], array $models = [], ?int $windowDays = null): array
     {
-        return ['scopeAll' => false, 'days' => $days, 'models' => $models, 'reason' => ''];
+        return ['scopeAll' => false, 'windowDays' => $windowDays, 'days' => $days, 'models' => $models, 'reason' => ''];
     }
 
     /** @return array{day: string, model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool} */
