@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image\Renderer;
 
+use SugarCraft\ColorProfile\Color as PaletteColor;
+use SugarCraft\ColorProfile\ColorDistance;
+use SugarCraft\ColorProfile\PaletteIndex;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Image\Dither;
@@ -1076,6 +1079,19 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
 
         $cache = []; // 5-bit RGB cube → nearest colour of the BLOCK CENTRE (B-13), reused across pixels.
 
+        // F-14: nearest lookup now rides the B-04 PaletteIndex. The metric is
+        // pinned to Euclidean because its recheck is the same integer-sum
+        // comparison the old linear walk made — including lowest-index ties —
+        // while the default Cie76 would reorder answers (differentially
+        // pinned in SixelStreamTest). fromPalette() memoises per palette
+        // byte-identity (md5 + CACHE_LIMIT), so per-frame sugar-video
+        // re-encodes that rebuild an identical palette short-circuit the
+        // histogram build: the palette-hash short-circuit, across encodes.
+        $index = PaletteIndex::fromPalette(
+            array_map(static fn(array $rgb): PaletteColor => new PaletteColor($rgb[0], $rgb[1], $rgb[2]), $palette),
+            ColorDistance::Euclidean,
+        );
+
         // C-08: serpentine only means anything for a walk that carries
         // error — Ordered's bias is position-taken and None quantises
         // cold, so both render byte-identically snaked or straight.
@@ -1123,7 +1139,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                 $bg = ($gi & ~7) | 4;
                 $bb = ($bi & ~7) | 4;
                 $key = (($br >> 3) << 10) | (($bg >> 3) << 5) | ($bb >> 3);
-                $palIdx = $cache[$key] ??= $this->nearestColor($br, $bg, $bb, $palette);
+                $palIdx = $cache[$key] ??= $index->nearest(new PaletteColor($br, $bg, $bb));
 
                 if ($hasDiffusion) {
                     [$pr, $pg, $pb] = $palette[$palIdx];
@@ -1299,27 +1315,13 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         }
     }
 
-    // ─── Palette & nearest-color ──────────────────────────────────────────────
-
-    /** @param list<array{int,int,int}> $palette */
-    private function nearestColor(int $r, int $g, int $b, array $palette): int
-    {
-        $best     = 0;
-        $bestDist = PHP_INT_MAX;
-        foreach ($palette as $i => $entry) {
-            $dr   = $r - $entry[0];
-            $dg   = $g - $entry[1];
-            $db   = $b - $entry[2];
-            $dist = $dr * $dr + $dg * $dg + $db * $db;
-            if ($dist < $bestDist) {
-                $bestDist = $dist;
-                $best     = $i;
-            }
-        }
-        return $best;
-    }
-
     // ─── Sixel encoding ───────────────────────────────────────────────────────
+
+    /**
+     * F-14 removed the private linear nearestColor walk: the B-13 memo's miss
+     * handler rides the shared PaletteIndex (B-04) instead, and a fourth
+     * nearest-path in this file is banned by the single-implementation law.
+     */
 
     /**
      * @param list<array{int,int,int}> $palette
@@ -1351,13 +1353,24 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         array $palette,
         int $offset = 0,
     ): string {
-        // Discover which palette indices appear in this band.
+        // F-14 band-diff: one sweep builds a per-colour column bitset
+        // (palette index → column → 6-row mask), replacing the old two-pass
+        // shape (discovery walk, then a per-colour full-width re-walk). The
+        // emitted bytes are the same by construction: a column absent from a
+        // colour's mask carries bits 0, exactly the value the per-colour walk
+        // recomputed for it. Grid rows are full-width by construction
+        // (indexRows materialises every column via array_fill), so the old
+        // `?? []` / `?? 0` defensives were unreachable and are dropped.
+        /** @var array<int, array<int, int>> $masks */
+        $masks = [];
         $activeColors = [];
         for ($row = $bandTop; $row < $bandBottom; $row++) {
-            foreach ($grid[$row] ?? [] as $pal) {
+            $bit = 1 << ($row - $bandTop);
+            foreach ($grid[$row] as $col => $pal) {
                 if ($offset === 1 && $pal === 0) {
-                    continue;
+                    continue; // hole: paints no colour register
                 }
+                $masks[$pal][$col] = ($masks[$pal][$col] ?? 0) | $bit;
                 $activeColors[$pal] = true;
             }
         }
@@ -1379,49 +1392,51 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             $first = false;
 
             $out .= Ansi::sixelColorSelect($palIndex);
-            $out .= $this->emitRleForColor($grid, $palIndex, $bandTop, $bandBottom, $width);
+            $out .= $this->emitBandRuns($masks[$palIndex], $width);
         }
 
         return $out;
     }
 
     /**
-     * Emit RLE-encoded sixel data for one colour across an entire band width.
+     * Feed the stored (column → bitmask) sparse mask through the RLE run
+     * state machine as the identical per-column bit sequence the full-width
+     * walk used to produce: gaps answer bits 0, stored columns answer their
+     * mask, and the tail to $width closes the band.
      *
-     * @param list<list<int>> $grid
+     * @param array<int, int> $cols column index → 6-row bitmask (only stored
+     *                              where at least one row paints)
      */
-    private function emitRleForColor(
-        array $grid,
-        int $palIndex,
-        int $bandTop,
-        int $bandBottom,
-        int $width,
-    ): string {
+    private function emitBandRuns(array $cols, int $width): string
+    {
+        ksort($cols, SORT_NUMERIC);
+
         $out = '';
-        $col = 0;
         $runCount = 0;
         $prevBits = -1;
 
-        while ($col < $width) {
-            // The data byte holds ONLY the 6-row bitmask for the active
-            // colour (the colour itself was selected above).
-            $bits = 0;
-            for ($row = $bandTop; $row < $bandBottom; $row++) {
-                if (($grid[$row][$col] ?? 0) === $palIndex) {
-                    $bits |= (1 << ($row - $bandTop));
-                }
-            }
-
+        $feed = function (int $bits, int $len) use (&$out, &$runCount, &$prevBits): void {
             if ($bits === $prevBits) {
-                $runCount++;
-            } else {
-                if ($runCount > 0) {
-                    $out .= $this->emitRle($prevBits, $runCount);
-                }
-                $prevBits = $bits;
-                $runCount = 1;
+                $runCount += $len;
+                return;
             }
-            $col++;
+            if ($runCount > 0) {
+                $out .= $this->emitRle($prevBits, $runCount);
+            }
+            $prevBits = $bits;
+            $runCount = $len;
+        };
+
+        $col = 0;
+        foreach ($cols as $mCol => $bits) {
+            if ($mCol > $col) {
+                $feed(0, $mCol - $col);
+            }
+            $feed($bits, 1);
+            $col = $mCol + 1;
+        }
+        if ($col < $width) {
+            $feed(0, $width - $col);
         }
 
         if ($runCount > 0) {

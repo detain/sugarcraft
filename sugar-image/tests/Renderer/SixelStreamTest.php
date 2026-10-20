@@ -6,6 +6,9 @@ namespace SugarCraft\Image\Tests\Renderer;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ColorProfile\Color;
+use SugarCraft\ColorProfile\ColorDistance;
+use SugarCraft\ColorProfile\PaletteIndex;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
@@ -644,5 +647,108 @@ final class SixelStreamTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         (new SixelRenderer())->withQuality(10);
+    }
+
+    /**
+     * F-14: representative render corpus with base-tree digests (captured
+     * BEFORE the band-diff landed, stream == render on every row). The
+     * changed-columns bitset + PaletteIndex palette-hash memo are an
+     * optimisation only: any byte moving here is a visual regression, not
+     * a speed-up. Covers holes (transparent Atkinson), trailing zero runs
+     * (tall-cells None), full-width masks (flat red), 16-colour budgets,
+     * and both frozen gradient digests.
+     *
+     * @return array<string, array{0: string, 1: string, 2: int, 3: int|null, 4: string, 5: int}>
+     */
+    public static function bandDiffCorpus(): array
+    {
+        return [
+            'flat red, default cells' => ['d883ac34846a2a92d12e03f16e4f793e354a4ad9', '8x4_red.png', 8, 4, 'floyd-steinberg', 256],
+            'opaque noise, truecolor dither' => ['c79e84bfb8cfee4e0b240e73f62a5908b84f98c4', '500x400_noise.png', 30, 24, 'stucki', 256],
+            'transparent hole, atkinson' => ['3cfb0a6f317d70ca178fd3731fe3346a6e4589ad', '2x2_transparent_halfblock.png', 12, null, 'atkinson', 256],
+            'few colours, no dither' => ['84610010b5e8708a6a58b464658afc50593be96f', '500x400_noise.png', 17, null, 'none', 16],
+            'aspect-derived height' => ['cba4a1239583bc5108ca41104e511079773721b6', '8x4_red.png', 13, null, 'floyd-steinberg', 256],
+            'tall cell box' => ['aa3e43fa4ad1f7e34db6685a683f23adb1af9464', '500x400_noise.png', 9, 7, 'none', 256],
+            'gradient, no dither' => ['c65c8465e501645f8eb6c76bb46a97cf38e948d0', 'gradient_64x64.png', 16, 12, 'none', 256],
+            'gradient, floyd-steinberg' => ['47d7e3d7b2e1a1a3e21e363f836d6d03410987f8', 'gradient_64x64.png', 16, 12, 'floyd-steinberg', 256],
+        ];
+    }
+
+    #[DataProvider('bandDiffCorpus')]
+    public function testBandDiffGuardKeepsRepresentativeBytesFrozen(
+        string $digest, string $file, int $width, ?int $height, string $dither, int $maxColors,
+    ): void {
+        $renderer = new SixelRenderer(Dither::from($dither), $maxColors);
+        $image = ImageSource::fromFile(__DIR__ . '/../fixtures/' . $file);
+
+        $this->assertSame($digest, sha1($renderer->render($image, $width, $height)), $file . ' ' . $dither);
+        $this->assertSame($digest, sha1(implode('', $this->collect($renderer, $image, $width, $height))), 'streamed concat rides the same bytes');
+    }
+
+    /**
+     * F-14: the PaletteIndex (Euclidean) that now answers the B-13 memo
+     * misses must agree with the retired linear nearestColor walk on EVERY
+     * pixel of a fixed synthetic palette sweep — including the lowest-index
+     * tie leg (a duplicated palette entry sits equidistant from probe (5,0,0)).
+     * This is the differential proof that the nearest-path fold changed no
+     * index, hence no byte.
+     */
+    public function testPaletteIndexAnswersTheOldBruteForceWalk(): void
+    {
+        $palette = [[250, 0, 0], [255, 7, 7], [0, 0, 0], [10, 0, 0], [0, 20, 0], [0, 0, 30]];
+        for ($i = 0; $i < 18; $i++) {
+            $palette[] = [$i * 14 & 0xFF, ($i * 37 + 8) & 0xFF, ($i * 91 + 200) & 0xFF];
+        }
+        $palette[] = [10, 0, 0]; // duplicate of index 3 → forced tie at (5,0,0)
+
+        $index = PaletteIndex::fromPalette(
+            array_map(static fn(array $rgb): Color => new Color($rgb[0], $rgb[1], $rgb[2]), $palette),
+            ColorDistance::Euclidean,
+        );
+
+        // Exact tie legs: at (5,0,0) the black and the red edge sit both 25
+        // away — lowest index (the black at 2) must answer. At (10,0,0) the
+        // duplicate of index 3 is equidistant (0) — index 3 still answers,
+        // the duplicate at 12 must not.
+        $this->assertSame(2, self::bruteNearest(5, 0, 0, $palette));
+        $this->assertSame(2, $index->nearest(new Color(5, 0, 0)), 'lowest index wins exact ties');
+        $this->assertSame(3, self::bruteNearest(10, 0, 0, $palette));
+        $this->assertSame(3, $index->nearest(new Color(10, 0, 0)), 'duplicate entry never steals its own index');
+
+        $seed = 12345;
+        for ($q = 0; $q < 512; $q++) {
+            $seed = ($seed * 1103515245 + 12345) % 2147483648;
+            $r = ($seed >> 16) & 0xFF;
+            $g = ($seed >> 8) & 0xFF;
+            $b = $seed & 0xFF;
+            $this->assertSame(
+                self::bruteNearest($r, $g, $b, $palette),
+                $index->nearest(new Color($r, $g, $b)),
+                'LCG probe ' . $q . " ($r,$g,$b) diverged",
+            );
+        }
+    }
+
+    /**
+     * F-14: in-test replica of the retired private nearestColor walk —
+     * integer squared-Euclidean, strict < so the lowest index wins ties.
+     *
+     * @param list<array{int,int,int}> $palette
+     */
+    private static function bruteNearest(int $r, int $g, int $b, array $palette): int
+    {
+        $best     = 0;
+        $bestDist = PHP_INT_MAX;
+        foreach ($palette as $i => $entry) {
+            $dr   = $r - $entry[0];
+            $dg   = $g - $entry[1];
+            $db   = $b - $entry[2];
+            $dist = $dr * $dr + $dg * $dg + $db * $db;
+            if ($dist < $bestDist) {
+                $bestDist = $dist;
+                $best     = $i;
+            }
+        }
+        return $best;
     }
 }

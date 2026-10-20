@@ -255,6 +255,11 @@ final class SixelRendererTest extends TestCase
      * the same colour — and that colour depended on scan arrival order.
      * Pin: the fixture pair genuinely splits under per-pixel nearest lookups,
      * yet both orderings of the same two pixels agree.
+     * F-14 note: the old ground-truth oracle reflected the private
+     * nearestColor walk; F-14 retires that walk (the shared PaletteIndex
+     * answers misses now), so the oracle is replicated in-test below — the
+     * exact integer math the removed method used, pinned differentially
+     * against PaletteIndex itself in SixelStreamTest.
      */
     public function testColorMemoAnswersTheBlockCentreNotTheFirstPixel(): void
     {
@@ -263,18 +268,39 @@ final class SixelRendererTest extends TestCase
         // Ground truth first: the two pixels are exact matches of DIFFERENT
         // palette entries, and they share one 8³ block — without this the
         // pin below would be vacuous.
-        $nearest = new \ReflectionMethod(SixelRenderer::class, 'nearestColor');
-        $nearest->setAccessible(true);
-        $this->assertSame(0, $nearest->invoke($this->renderer, 250, 0, 0, $palette));
-        $this->assertSame(1, $nearest->invoke($this->renderer, 255, 7, 7, $palette));
+        $this->assertSame(0, self::bruteNearest(250, 0, 0, $palette));
+        $this->assertSame(1, self::bruteNearest(255, 7, 7, $palette));
         $this->assertSame(250 >> 3, 255 >> 3, 'fixture pixels must share the memo block');
 
         // Fixed memo: both cells answer nearest(colour of block centre),
         // identical for either arrival order.
         $centreR = (250 & ~7) | 4;
-        $expected = $nearest->invoke($this->renderer, $centreR, 4, 4, $palette);
+        $expected = self::bruteNearest($centreR, 4, 4, $palette);
         $this->assertSame([$expected, $expected], $this->indexFirstRow(250, 0, 0, 255, 7, 7, $palette));
         $this->assertSame([$expected, $expected], $this->indexFirstRow(255, 7, 7, 250, 0, 0, $palette));
+    }
+
+    /**
+     * F-14: in-test replica of the retired private nearestColor walk —
+     * integer squared-Euclidean, strict < so the lowest index wins ties.
+     *
+     * @param list<array{int,int,int}> $palette
+     */
+    private static function bruteNearest(int $r, int $g, int $b, array $palette): int
+    {
+        $best     = 0;
+        $bestDist = PHP_INT_MAX;
+        foreach ($palette as $i => $entry) {
+            $dr   = $r - $entry[0];
+            $dg   = $g - $entry[1];
+            $db   = $b - $entry[2];
+            $dist = $dr * $dr + $dg * $dg + $db * $db;
+            if ($dist < $bestDist) {
+                $bestDist = $dist;
+                $best     = $i;
+            }
+        }
+        return $best;
     }
 
     /**
