@@ -103,9 +103,13 @@ final readonly class ParsedArgs
             '--web-root' => true,
             '-f' => false,
         ],
-        // `self-update` (DST-3): a phar-only verb; both switches are bare,
-        // and taking both is a usage error the verb itself decides.
+        // `self-update` (DST-3): a phar-only verb; all switches are bare,
+        // and taking --check with either other one is a usage error the verb
+        // itself decides. `--allow-unsigned` skips only the pinned-key
+        // signature leg (dev/test for a release whose signing has not
+        // landed); the sha256 leg is never bypassable.
         'self-update' => [
+            '--allow-unsigned' => false,
             '--check' => false,
             '--rollback' => false,
         ],

@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Cli;
 
 use Composer\InstalledVersions;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Support\Version;
 use SugarCraft\Code\Workspace\GitRunner;
 use SugarCraft\Cli\HelpText;
 
@@ -100,9 +101,27 @@ final class Help
      * checkout (a dist copy under some consumer's `vendor/`, where any git
      * answer would describe the CONSUMER's repository) keep the Composer
      * reference, and tagged versions are untouched by all of this.
+     *
+     * DST-1/DST-3: inside a phar the archive's own build manifest is the
+     * authority, consulted BEFORE `InstalledVersions`. The frozen `vendor/`
+     * baked into a release archive carries the ROOT package's dev guess —
+     * `dev-master (311f572)` was what the shipped 0.1.0 phar reported — so
+     * the Composer metadata cannot answer for an artifact whose version was
+     * stamped at build time. When the manifest names a version this class
+     * can order, that is the answer; a dev-built archive (whose stamp is
+     * `dev-build`) falls through to every arm below unchanged, which is the
+     * honest report for a working-tree build.
      */
     public static function versionString(): string
     {
+        $archive = self::hostArchive();
+        if ($archive !== '') {
+            $stamped = Version::fromPharMetadata($archive);
+            if ($stamped !== null) {
+                return $stamped;
+            }
+        }
+
         // Guarded rather than assumed: a consumer vendoring this package under
         // a non-Composer autoloader (PSR-4 map, phar) gets "unknown" instead of
         // a fatal error on the one command that exists to be diagnostic.
@@ -125,6 +144,53 @@ final class Help
         }
 
         return self::versionStringFor($pretty, $reference);
+    }
+
+    /**
+     * Test seam only (house shape: `SelfUpdate::useErrorStreamForTesting`).
+     * Pretends the process was launched from the phar at $path — pass null
+     * to restore auto-detection. Without it the DST-1 metadata arm of
+     * {@see versionString()} is unreachable from the suite, because a
+     * phpunit process never lives inside an archive; the non-injected
+     * self-update pin drives the real resolution path through here.
+     */
+    public static function pretendHostArchiveForTesting(?string $path): void
+    {
+        self::$hostArchiveOverride = $path;
+    }
+
+    private static ?string $hostArchiveOverride = null;
+
+    /**
+     * The filesystem path of the phar this process was launched from, or ''
+     * when it was not launched from one.
+     *
+     * TWO shapes, both measured on real builds (the same pair
+     * `bin/candy-code`'s autoload guard addresses): `\Phar::running(false)`
+     * answers the archive while code runs from inside it, and answers '' in
+     * the STUB context — where the process IS the archive. In the stub
+     * context this file's `__DIR__` is the archive root itself, so a
+     * `.phar`-suffixed `__DIR__` is the archive path (a `.phar`-suffixed
+     * `__FILE__` would name a FILE ending in .phar, never the enclosing
+     * archive — a one-token bug that reads as working). The suffix gate
+     * keeps a stray `.phar`-named plain file from being parsed, and a
+     * non-phar install (composer, monorepo checkout, this suite) pays two
+     * string checks and answers '' every time.
+     */
+    private static function hostArchive(): string
+    {
+        if (self::$hostArchiveOverride !== null) {
+            return self::$hostArchiveOverride;
+        }
+
+        $running = \Phar::running(false);
+        if ($running !== '') {
+            return $running;
+        }
+
+        $file = __DIR__;
+
+        return \str_ends_with($file, '.phar') ? $file : '';
     }
 
     /**

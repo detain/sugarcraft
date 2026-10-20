@@ -287,12 +287,15 @@ session; acp runs turns for an editor, until the editor disconnects):
                          equivalent .mcp.json block to stdout. Prints only
                          the document and writes no file; the renames the
                          translation made are listed on stderr.
-  self-update [--check] [--rollback]
+  self-update [--check] [--rollback] [--allow-unsigned]
                          Replace this phar install with the latest published
                          candy-code release, sha256-verified against the
                          release sidecar BEFORE the swap; the running phar is
                          kept as <phar>.old and --rollback restores exactly
-                         that copy once. --check only reports current vs
+                         that copy once. When a signing public key is pinned
+                         in the release source, the candy-code.phar.minisig
+                         signature must verify too (--allow-unsigned skips
+                         only that leg). --check only reports current vs
                          latest and exits 1 when an update is available. A
                          Composer install is refused loudly, naming the
                          composer update command to run instead.
@@ -838,7 +841,7 @@ TXT,
     'cli.selfupdate.download_failed' => 'candy-code: could not download {asset}: {reason}',
     'cli.selfupdate.empty_download' => 'candy-code: the download of {asset} produced no bytes.',
     'cli.selfupdate.fetch_failed' => 'candy-code: could not read the release list: {reason}',
-    'cli.selfupdate.flags_exclusive' => '--check and --rollback are alternatives; pass one.',
+    'cli.selfupdate.flags_exclusive' => '--check reports only; pass it alone, not with --rollback or --allow-unsigned.',
     'cli.selfupdate.hash_mismatch' => 'candy-code: the downloaded phar hashes to {actual}, not the {expected} the sidecar signs. Nothing was swapped.',
     'cli.selfupdate.hash_unreadable' => 'nothing (the temp file could not be read)',
     'cli.selfupdate.installed' => 'candy-code: self-update replaced {path} ({from} -> {to}); the previous phar is kept at {old} — `self-update --rollback` restores it once.',
@@ -849,12 +852,15 @@ TXT,
     'cli.selfupdate.rollback_failed' => 'candy-code: could not restore {old} over {path}.',
     'cli.selfupdate.rollback_missing' => 'candy-code: no kept copy to restore: {old} does not exist (it appears only after a successful update).',
     'cli.selfupdate.rollback_restored' => 'candy-code: rollback restored {old} over {path}; the kept copy is consumed, this restore is one-shot.',
+    'cli.selfupdate.signature_invalid' => 'candy-code: the {asset} does not verify the downloaded {phar} against the pinned release key. Nothing was swapped.',
+    'cli.selfupdate.signature_missing' => 'candy-code: this release carries no {asset}, and the pinned release key requires one for {phar}. Nothing was swapped (--allow-unsigned is the dev-only bypass).',
     'cli.selfupdate.sidecar_malformed' => 'candy-code: the {asset} sidecar is not a lowercase 64-hex-digit sha256 for {phar}. Nothing was swapped.',
     'cli.selfupdate.sidecar_names' => 'candy-code: the sidecar names {found}, not {phar}. Nothing was swapped.',
     'cli.selfupdate.uncomparable' => 'candy-code: this install reports {current}, which is not a release version self-update can order.',
     'cli.selfupdate.unexpected_operand' => '{operand}: candy-code self-update takes no operands.',
+    'cli.selfupdate.unsigned_allowed' => 'candy-code: --allow-unsigned skips the pinned-key signature leg; the sha256 sidecar still bound these bytes. Dev/test bypass — never a release habit.',
     'cli.selfupdate.up_to_date' => 'candy-code: self-update: this install is already the latest release ({current}).',
-    'cli.selfupdate.usage' => 'Usage: candy-code self-update [--check] [--rollback]',
+    'cli.selfupdate.usage' => 'Usage: candy-code self-update [--check] [--rollback] [--allow-unsigned]',
     'cli.serve.already_running' => 'a server is already running from {dir} — stop it with: candy-code serve stop',
     'cli.serve.already_running_pid' => 'a server is already running from {dir} (pid {pid}, {url}) — stop it with: candy-code serve stop',
     'cli.serve.also' => 'Also: {problems}.',

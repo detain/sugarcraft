@@ -15,10 +15,12 @@ use GuzzleHttp\Psr7\Utils;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
 use SugarCraft\Code\Cli\ArgvParser;
+use SugarCraft\Code\Cli\Help;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\ParsedArgs;
 use SugarCraft\Code\Cli\SelfUpdate;
 use SugarCraft\Code\Support\Version;
+use SugarCraft\Code\Tests\Support\MintsStampedPharTrait;
 
 /**
  * DST-3: `candy-code self-update` end to end against a fake release server.
@@ -31,11 +33,32 @@ use SugarCraft\Code\Support\Version;
  * Client::request path (Guzzle's stock StreamHandler is not an option: it
  * refuses the file:// scheme outright). The phar under swap is a stub
  * archive; the swap machinery treats bytes, and \Phar::running is replaced by
- * the $pharPath seam.
+ * the $pharPath seam. The sole exception is the DST-1 stamp pin: reading a
+ * real minted archive needs a child process, provided by the shared
+ * {@see MintsStampedPharTrait} helper, and never a socket either.
  */
 final class SelfUpdateTest extends TestCase
 {
+    use MintsStampedPharTrait;
+
     private const SERVER_ORIGIN = 'http://fake-candy-code-server.invalid';
+
+    /**
+     * TEST-ONLY Ed25519 keypair (DST-3 signature pins): generated once by
+     * `sodium_crypto_sign_keypair()` on the build box and frozen here so the
+     * pins verify without signing at runtime — a runner whose PHP was built
+     * without ext-sodium still exercises every keyless and fail-closed
+     * polarity through the same constants. Nothing real is signed: the key
+     * has no identity outside this file.
+     */
+    private const FIXTURE_PUBLIC_KEY_BASE64 = '3f6JBhTbQUb28TeT6ygMqnETA46TgDdVEp39HUC8eUg=';
+
+    private const FIXTURE_VALID_SIGNATURE = 'bJUCdn/br90XhiaIUKmeLFmDylCIDo7NCW8AJmvPUk7MP8Qr7XF5sfGUhI2yeDYybBca6Fad4nCbqzSwKBXRCw==';
+
+    /** The same keypair's signature over OTHER bytes: structurally valid, cryptographically forged. */
+    private const FIXTURE_FORGED_SIGNATURE = 'mV4B/yaL1+gXurXu02mi4WBE5gfeTKNhdNlc3/xUpHUrycDIesPZXiN1/X8+gmmM2jD3DGNU/ZZlGxrPURPnAg==';
+
+    private const SIGNED_PAYLOAD_BYTES = 'UPDATED-PHAR-BYTES';
 
     private string $dir;
 
@@ -146,7 +169,7 @@ final class SelfUpdateTest extends TestCase
      *
      * @return array<array-key, mixed>
      */
-    private function stageRelease(string $tag, string $pharBytes, ?string $sidecarBody = null, bool $withSidecar = true, bool $draft = false, bool $prerelease = false): array
+    private function stageRelease(string $tag, string $pharBytes, ?string $sidecarBody = null, bool $withSidecar = true, bool $draft = false, bool $prerelease = false, ?string $sigBody = null): array
     {
         $slug = \strtr($tag, ['/' => '-']);
         $assets = [[
@@ -154,6 +177,13 @@ final class SelfUpdateTest extends TestCase
             'browser_download_url' => self::SERVER_ORIGIN . '/' . $slug . '.phar',
         ]];
         self::assertNotFalse(\file_put_contents($this->dir . '/srv/' . $slug . '.phar', $pharBytes));
+        if ($sigBody !== null) {
+            \file_put_contents($this->dir . '/srv/' . $slug . '.minisig', $sigBody);
+            $assets[] = [
+                'name' => SelfUpdate::SIGNATURE_ASSET,
+                'browser_download_url' => self::SERVER_ORIGIN . '/' . $slug . '.minisig',
+            ];
+        }
         if ($withSidecar) {
             $body = $sidecarBody ?? (\hash('sha256', $pharBytes) . '  ' . SelfUpdate::PHAR_ASSET . "\n");
             self::assertNotFalse(\file_put_contents($this->dir . '/srv/' . $slug . '.sha256', $body));
@@ -204,6 +234,16 @@ final class SelfUpdateTest extends TestCase
 
         $rollback = self::selfUpdateArgs(['self-update', '--rollback']);
         self::assertSame(['--rollback' => true], $rollback->subcommandFlags);
+
+        $bypass = self::selfUpdateArgs(['self-update', '--allow-unsigned']);
+        self::assertSame(['--allow-unsigned' => true], $bypass->subcommandFlags);
+        self::assertSame([], $bypass->unknownFlags);
+
+        // The parser accepts the combination; run() is what refuses it (pinned
+        // in testUsageErrorsCostExitTwo), because only run() knows --check reports.
+        $mixed = self::selfUpdateArgs(['self-update', '--check', '--allow-unsigned']);
+        self::assertSame(['--check' => true, '--allow-unsigned' => true], $mixed->subcommandFlags);
+        self::assertSame([], $mixed->unknownFlags);
 
         self::assertSame(['--check'], self::selfUpdateArgs(['--check', 'self-update'])->unknownFlags);
         self::assertSame(['--allow-remote'], self::selfUpdateArgs(['self-update', '--allow-remote'])->unknownFlags);
@@ -433,6 +473,7 @@ final class SelfUpdateTest extends TestCase
     public function testUsageErrorsCostExitTwo(): void
     {
         self::assertSame(NonInteractive::EXIT_CONFIG, SelfUpdate::run(self::selfUpdateArgs(['self-update', '--check', '--rollback'])));
+        self::assertSame(NonInteractive::EXIT_CONFIG, SelfUpdate::run(self::selfUpdateArgs(['self-update', '--check', '--allow-unsigned'])));
         self::assertSame(NonInteractive::EXIT_CONFIG, SelfUpdate::run(self::selfUpdateArgs(['self-update', 'extra'])));
     }
 
@@ -456,6 +497,10 @@ final class SelfUpdateTest extends TestCase
         self::assertSame('v0.10.0', $selected['version']);
         self::assertStringEndsWith('candy-code-v0.10.0.phar', $selected['pharUrl']);
         self::assertStringEndsWith('candy-code-v0.10.0.sha256', $selected['sidecarUrl']);
+        // None of the staged releases carries a signature asset: a keyless
+        // release stays SELECTABLE, and its sig URL is the empty string the
+        // pinned-key leg reads as "absent", never a guess.
+        self::assertSame('', $selected['sigUrl']);
 
         self::assertNull(SelfUpdate::selectRelease([]));
         self::assertNull(SelfUpdate::selectRelease([['tag_name' => 'candy-code/v1.0.0']]));
@@ -482,5 +527,216 @@ final class SelfUpdateTest extends TestCase
         self::assertNull(Version::compare('dev-master', 'v0.1.0'));
         self::assertFalse(Version::isComparable('dev-master'));
         self::assertTrue(Version::isComparable('v1.2.3'));
+    }
+
+    /**
+     * DST-1: the bug that shipped dead-on-arrival. Every other pin in this
+     * file injects the current version — production does not, and the
+     * non-injected path resolved through the frozen `InstalledVersions`
+     * baked into the archive (`dev-master (311f572)` on the shipped 0.1.0
+     * phar), so `isComparable` was false and every real invocation —
+     * `--check` included, even when up to date — exited 1 on
+     * "uncomparable". This drives run() with NO $currentVersion against a
+     * real stamped archive (minted by child process, read by
+     * `Version::fromPharMetadata`): the stamp must win over whatever the
+     * Composer metadata guesses, and the compare/swap legs must run on it.
+     */
+    public function testTheRealResolutionPathOrdersAgainstTheStampedArchive(): void
+    {
+        $stamped = self::mintStampedPhar('candy-code/v0.1.0');
+        Help::pretendHostArchiveForTesting($stamped);
+
+        try {
+            $available = SelfUpdate::run(
+                self::selfUpdateArgs(['self-update', '--check']),
+                $this->fakeServerClient(),
+                $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', 'NEW')]),
+                $this->livePharPath(),
+            );
+            self::assertSame(NonInteractive::EXIT_FAILURE, $available);
+            $text = $this->errorText();
+            self::assertStringContainsString('update available', $text);
+            self::assertStringContainsString('v0.1.0', $text, 'the stamp, not the frozen composer guess, is what --check reported as this install');
+            self::assertStringNotContainsString('dev-master', $text, 'the frozen dev guess must not reach the report from inside a stamped archive');
+
+            $this->resetErrorStream();
+
+            $upToDate = SelfUpdate::run(
+                self::selfUpdateArgs(['self-update', '--check']),
+                $this->fakeServerClient(),
+                $this->releasesUrl([$this->stageRelease('candy-code/v0.1.0', 'NEW')]),
+                $this->livePharPath(),
+            );
+            self::assertSame(NonInteractive::EXIT_OK, $upToDate, 'a stamped install CAN be recognised as current — the shipped phar could never');
+            self::assertStringContainsString('up to date', $this->errorText());
+
+            $this->resetErrorStream();
+
+            self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL-PHAR-BYTES'));
+            $installed = SelfUpdate::run(
+                self::selfUpdateArgs(['self-update']),
+                $this->fakeServerClient(),
+                $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', 'UPDATED-PHAR-BYTES')]),
+                $this->livePharPath(),
+            );
+            self::assertSame(NonInteractive::EXIT_OK, $installed, 'the full swap runs off the real resolution, not just --check');
+            self::assertStringContainsString('v0.1.0 -> v9.9.9', $this->errorText());
+            self::assertSame('UPDATED-PHAR-BYTES', \file_get_contents($this->livePharPath()));
+        } finally {
+            Help::pretendHostArchiveForTesting(null);
+            self::discardStampedPhar($stamped);
+        }
+    }
+
+    /**
+     * DST-3: the pinned-key leg in all its polarities, driven through the
+     * $publicKey parameter (production reads the same code off
+     * `SelfUpdate::PUBLIC_KEY_BASE64`, which ships EMPTY — the keyless
+     * state leg d pins). The fixture signatures are precomputed so a PHP
+     * built without ext-sodium still judges every leg: the source's own
+     * function_exists guard makes it refuse loudly there, and that fail-
+     * closed polarity is what leg e asserts when the extension is absent.
+     */
+    public function testThePinnedKeyLegStopsWhatItPromisesToStop(): void
+    {
+        self::assertSame('', SelfUpdate::PUBLIC_KEY_BASE64, 'the shipped constant is the NAMED keyless state — if you populated it, this pin is your reminder to re-read the owner actions in its docblock');
+
+        // a. forged-but-structurally-valid signature: loud refusal either way.
+        self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
+        $forged = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', self::SIGNED_PAYLOAD_BYTES, sigBody: self::FIXTURE_FORGED_SIGNATURE . "\n")]),
+            $this->livePharPath(),
+            'v0.1.0',
+            self::FIXTURE_PUBLIC_KEY_BASE64,
+        );
+        self::assertSame(NonInteractive::EXIT_FAILURE, $forged);
+        self::assertStringContainsString('does not verify', $this->errorText());
+        self::assertStringContainsString(SelfUpdate::SIGNATURE_ASSET, $this->errorText());
+        self::assertSame('ORIGINAL', \file_get_contents($this->livePharPath()));
+        self::assertFileDoesNotExist($this->livePharPath() . '.old');
+        self::assertSame([], \glob($this->livePharPath() . '.tmp-' . \chr(42)), 'the refused temp is deleted');
+
+        $this->resetErrorStream();
+
+        // b. key populated, release carries no minisig: refusal naming the bypass.
+        $missing = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', self::SIGNED_PAYLOAD_BYTES)]),
+            $this->livePharPath(),
+            'v0.1.0',
+            self::FIXTURE_PUBLIC_KEY_BASE64,
+        );
+        self::assertSame(NonInteractive::EXIT_FAILURE, $missing);
+        $text = $this->errorText();
+        self::assertStringContainsString('carries no ' . SelfUpdate::SIGNATURE_ASSET, $text);
+        self::assertStringContainsString('--allow-unsigned', $text);
+        self::assertSame('ORIGINAL', \file_get_contents($this->livePharPath()));
+
+        $this->resetErrorStream();
+
+        // c. --allow-unsigned bypasses the signature leg alone — the sha256
+        // sidecar still certified these bytes before the notice printed.
+        $bypassed = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update', '--allow-unsigned']),
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', self::SIGNED_PAYLOAD_BYTES)]),
+            $this->livePharPath(),
+            'v0.1.0',
+            self::FIXTURE_PUBLIC_KEY_BASE64,
+        );
+        self::assertSame(NonInteractive::EXIT_OK, $bypassed);
+        $text = $this->errorText();
+        self::assertStringContainsString('--allow-unsigned skips', $text);
+        self::assertStringContainsString('sha256', $text, 'the notice must say what still bound the bytes');
+        self::assertSame(self::SIGNED_PAYLOAD_BYTES, \file_get_contents($this->livePharPath()));
+
+        $this->resetErrorStream();
+        self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
+
+        // d. keyless state: the constant ships empty, so a release that DOES
+        // carry a minisig swaps on the sidecar alone — the signature is
+        // ignored without a key to verify it against.
+        $keyless = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', self::SIGNED_PAYLOAD_BYTES, sigBody: self::FIXTURE_VALID_SIGNATURE)]),
+            $this->livePharPath(),
+            'v0.1.0',
+        );
+        self::assertSame(NonInteractive::EXIT_OK, $keyless, 'the empty constant is the documented keyless state, not a half-enabled pinned mode');
+        self::assertStringNotContainsString('--allow-unsigned skips', $this->errorText());
+        self::assertSame(self::SIGNED_PAYLOAD_BYTES, \file_get_contents($this->livePharPath()));
+
+        $this->resetErrorStream();
+        self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
+
+        // e. the valid signature under the matching key. With ext-sodium the
+        // crypto decides: swap. Without it, verifyDetached's function_exists
+        // guard fails CLOSED: refusal. Both polarities are correct behavior;
+        // silence here would let an unverifiable artifact through.
+        $verified = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', self::SIGNED_PAYLOAD_BYTES, sigBody: self::FIXTURE_VALID_SIGNATURE)]),
+            $this->livePharPath(),
+            'v0.1.0',
+            self::FIXTURE_PUBLIC_KEY_BASE64,
+        );
+        if (\function_exists('sodium_crypto_sign_verify_detached')) {
+            self::assertSame(NonInteractive::EXIT_OK, $verified);
+            self::assertSame(self::SIGNED_PAYLOAD_BYTES, \file_get_contents($this->livePharPath()));
+        } else {
+            self::assertSame(NonInteractive::EXIT_FAILURE, $verified, 'without sodium the pinned leg refuses rather than trusts');
+            self::assertStringContainsString('does not verify', $this->errorText());
+            self::assertSame('ORIGINAL', \file_get_contents($this->livePharPath()));
+        }
+    }
+
+    /**
+     * DST-3: the pure verifier's malformed-input refusals, pinned at the unit
+     * level so the end-to-end legs above can own their own story. Every shape
+     * here answers false WITHOUT reaching crypto: the guard order (empty
+     * payload → missing-extension check → strict base64 → exact lengths) is
+     * what makes a hostile asset fail closed on any runner.
+     */
+    public function testVerifyDetachedRefusesEveryMalformedShape(): void
+    {
+        self::assertFalse(SelfUpdate::verifyDetached('', self::FIXTURE_VALID_SIGNATURE, self::FIXTURE_PUBLIC_KEY_BASE64), 'an empty payload never verifies, extension or not');
+        self::assertFalse(SelfUpdate::verifyDetached(self::SIGNED_PAYLOAD_BYTES, 'not base64 at all!!', self::FIXTURE_PUBLIC_KEY_BASE64), 'non-strict base64 in the signature slot is a refusal, not a crash');
+        self::assertFalse(SelfUpdate::verifyDetached(self::SIGNED_PAYLOAD_BYTES, self::FIXTURE_VALID_SIGNATURE, 'not-a-key'), 'non-strict base64 in the key slot likewise');
+        self::assertFalse(SelfUpdate::verifyDetached(self::SIGNED_PAYLOAD_BYTES, self::FIXTURE_VALID_SIGNATURE, \base64_encode('short-key')), 'a key that is not SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES raw bytes is refused');
+        self::assertFalse(SelfUpdate::verifyDetached(self::SIGNED_PAYLOAD_BYTES, \base64_encode('short-sig'), self::FIXTURE_PUBLIC_KEY_BASE64), 'a signature that is not SODIUM_CRYPTO_SIGN_BYTES raw bytes is refused');
+
+        if (\function_exists('sodium_crypto_sign_verify_detached')) {
+            self::assertTrue(SelfUpdate::verifyDetached(self::SIGNED_PAYLOAD_BYTES, self::FIXTURE_VALID_SIGNATURE, self::FIXTURE_PUBLIC_KEY_BASE64), 'the fixture pair must verify where crypto exists — otherwise leg a proves nothing');
+            self::assertFalse(SelfUpdate::verifyDetached(self::SIGNED_PAYLOAD_BYTES, self::FIXTURE_FORGED_SIGNATURE, self::FIXTURE_PUBLIC_KEY_BASE64));
+            // The surrounding-whitespace tolerance the sidecar pattern uses (a
+            // trailing newline from `echo` must not fail a real signature).
+            self::assertTrue(SelfUpdate::verifyDetached(self::SIGNED_PAYLOAD_BYTES, ' ' . self::FIXTURE_VALID_SIGNATURE . "\n", self::FIXTURE_PUBLIC_KEY_BASE64));
+        }
+    }
+
+    /**
+     * DST-3: selection reports the signature URL when the release carries
+     * the asset, and the keyless leg of the roster stays selectable — the
+     * asset's presence is a fact about the release, the requirement is a
+     * fact about the pinned key state, and the two must not be conflated.
+     */
+    public function testSelectionReportsTheSignatureUrlOnlyWhenTheReleaseCarriesOne(): void
+    {
+        $entries = [
+            $this->stageRelease('candy-code/v1.0.0', 'OLD-ONE'),
+            $this->stageRelease('candy-code/v2.0.0', 'NEW-TWO', sigBody: self::FIXTURE_VALID_SIGNATURE),
+        ];
+        $this->releasesUrl($entries);
+        $decoded = \json_decode((string) \file_get_contents($this->dir . '/srv/releases.json'), true);
+
+        $selected = SelfUpdate::selectRelease($decoded);
+        self::assertIsArray($selected);
+        self::assertSame('v2.0.0', $selected['version']);
+        self::assertStringEndsWith('candy-code-v2.0.0.minisig', $selected['sigUrl']);
     }
 }

@@ -18,7 +18,9 @@ namespace SugarCraft\Code\Support;
  * nothing). The ordering rule `self-update` needs is three integers, and a
  * class this small cannot rot into a second source of truth about
  * releases: it parses what it is handed and compares, and knows nothing
- * about where either string came from.
+ * about where either string came from — except the one source it DOES own:
+ * {@see self::fromPharMetadata()} is the single reader of the version a phar
+ * build stamps into its archive manifest (DST-1).
  *
  * WHAT IT REFUSES. Anything that is not exactly `X.Y.Z` (with one optional
  * leading `v`, which is what this repo's release tags carry:
@@ -31,6 +33,14 @@ namespace SugarCraft\Code\Support;
  */
 final class Version
 {
+    /**
+     * The one release namespace whose tags name a candy-code version. It is
+     * a SUPPORT constant (DST-1/DST-3): the phar build stamps its metadata
+     * with the full tag, `self-update` filters tags by it, and the version
+     * reader strips it — three readers, one spelling, no local copy to drift.
+     */
+    public const TAG_PREFIX = 'candy-code/';
+
     private function __construct()
     {
     }
@@ -85,5 +95,57 @@ final class Version
     public static function isComparable(string $version): bool
     {
         return self::parse($version) !== null;
+    }
+
+    /**
+     * The version string a phar archive at $path was built to carry, or null
+     * when the archive answers none this class can order.
+     *
+     * DST-1/DST-3 (the dead-on-arrival fix): `tools/build-phar.php` stamps
+     * `metadata['version']` with the release tag, and NOTHING used to read it
+     * back — the frozen `vendor/` inside the artifact made Composer's
+     * `InstalledVersions` report the root's stale `dev-master`, so `--version`
+     * lied and `self-update`'s ordering refused on the only install mode the
+     * verb exists to serve. The archive's own manifest is the authority for
+     * the archive; this is the sole reader of that stamp.
+     *
+     * The tag arrives prefixed (`candy-code/v0.1.0` — what `git describe`
+     * answers and what the release carries); the {@see self::TAG_PREFIX}
+     * decoration is stripped here so callers get the version itself. A stamp
+     * that is not a `v?X.Y.Z` under any spelling (`dev-build`, a foreign
+     * namespace, junk of the wrong type) answers null: fail-closed, so a
+     * dev-built archive falls through to the Composer/checkout arms instead
+     * of shipping a version the release stream cannot order against.
+     *
+     * Every failure to OPEN the archive is likewise null, never an exception
+     * — `--version` must answer on a machine whose phar is unreadable, and
+     * `self-update` reads this before its own gates have said a word.
+     */
+    public static function fromPharMetadata(string $path): ?string
+    {
+        if ($path === '' || !\is_file($path)) {
+            return null;
+        }
+
+        try {
+            $metadata = (new \Phar($path))->getMetadata();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (!\is_array($metadata)) {
+            return null;
+        }
+        $stamp = $metadata['version'] ?? null;
+        if (!\is_string($stamp)) {
+            return null;
+        }
+
+        $stamp = \trim($stamp);
+        if (\str_starts_with($stamp, self::TAG_PREFIX)) {
+            $stamp = \substr($stamp, \strlen(self::TAG_PREFIX));
+        }
+
+        return self::isComparable($stamp) ? $stamp : null;
     }
 }

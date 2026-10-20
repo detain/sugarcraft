@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Support\Version;
 use SugarCraft\Code\Tests\Support\SuiteSkipRoster;
 
 /**
@@ -445,6 +446,54 @@ final class PharCompatTest extends TestCase
         self::assertStringContainsString('UncommittedWip.php', $probe['out']);
     }
 
+    /**
+     * DST-1: the build stamp round-trips through the runtime reader, and
+     * SOURCE_DATE_EPOCH pins `built_at` for reproducible release builds.
+     * Child-process build (the LAW 3 door pattern), so no skip gate and no
+     * roster entry: `-d phar.readonly=0` lives in the argv, never in the
+     * suite's ini. Reading the artifact back in-process is always legal —
+     * `phar.readonly` forbids writing archives, not opening them.
+     */
+    public function testTheBuildStampRoundTripsThroughTheReaderAndHonorsSourceDateEpoch(): void
+    {
+        $root = $this->scratchPackage();
+        // OUTSIDE the frozen git tree: an artifact under $root would make the
+        // very next clean-tree preflight read its own output as dirt. A DIR
+        // on the mintedPaths list, because purgeTree only descends dirs.
+        $dist = $root . '-dist';
+        $this->mintedPaths[] = $dist;
+        $out = $dist . '/stamped.phar';
+
+        $epoch = 1234567890;
+        $build = self::launch(
+            [\PHP_BINARY, '-d', 'phar.readonly=0', $root . '/tools/build-phar.php', '--out=' . $out, '--version=candy-code/v9.9.9'],
+            $this->freshPharHome(),
+            ['SOURCE_DATE_EPOCH' => (string) $epoch],
+        );
+        self::assertSame(0, $build['rc'], 'clean stamped build rc/err: ' . $build['err']);
+        self::assertTrue(is_file($out), 'the stamped build must produce the artifact');
+
+        self::assertSame('v9.9.9', Version::fromPharMetadata($out), 'the tag decoration is stripped and the version read back — end to end through the real build tool');
+
+        $manifest = (new \Phar($out))->getMetadata();
+        self::assertIsArray($manifest);
+        self::assertSame('2009-02-13T23:31:30+00:00', $manifest['built_at'], 'SOURCE_DATE_EPOCH must decide built_at verbatim, in UTC');
+
+        // Second polarity: no epoch in the child env, the wall clock answers
+        // exactly as before (the unset default stays byte-compatible).
+        $unpinned = $dist . '/wall.phar';
+        $second = self::launch(
+            [\PHP_BINARY, '-d', 'phar.readonly=0', $root . '/tools/build-phar.php', '--out=' . $unpinned, '--version=candy-code/v9.9.9'],
+            $this->freshPharHome(),
+        );
+        self::assertSame(0, $second['rc'], 'unstamped build rc/err: ' . $second['err']);
+        $wall = (new \Phar($unpinned))->getMetadata();
+        self::assertIsArray($wall);
+        self::assertNotSame('2009-02-13T23:31:30+00:00', $wall['built_at'], 'without SOURCE_DATE_EPOCH the epoch fixture value must NOT appear');
+        self::assertLessThan(120, abs(time() - (int) strtotime((string) $wall['built_at'])), 'unset epoch keeps the wall clock');
+        self::assertSame('v9.9.9', Version::fromPharMetadata($unpinned), 'the stamp is independent of the clock mode');
+    }
+
     // ------------------------------------------------------------------
     // REAL-ARCHIVE ARM (CI-gated) — the built phar boots and its scanners live
     // ------------------------------------------------------------------
@@ -469,6 +518,15 @@ final class PharCompatTest extends TestCase
         $version = self::launch([\PHP_BINARY, $phar, '--version'], $this->freshPharHome());
         self::assertSame(0, $version['rc'], 'version rc/stderr: ' . $version['err']);
         self::assertStringStartsWith('candy-code', ltrim($version['out']));
+
+        // DST-1: the banner must BE the archive's own stamp, not the frozen
+        // dev-master guess the shipped 0.1.0 phar reported. This is the
+        // release-shape proof the unit pins cannot make: a real archive,
+        // booted as a real main script, answering with a version
+        // `Version::isComparable` accepts and `self-update` can order.
+        $stamped = Version::fromPharMetadata($phar);
+        self::assertNotNull($stamped, 'a CANDY_CODE_PHAR release archive must carry a comparable metadata stamp');
+        self::assertSame('candy-code ' . $stamped . "\n", $version['out'], 'the banner is the stamp — metadata read end to end');
 
         // Stage 2 — a headless echo-provider turn lands as clean JSON with a
         // fresh HOME (offline: no provider selection inherited from the shell).

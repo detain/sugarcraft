@@ -81,14 +81,49 @@ jobs:
       - name: Build the archive
         run: |
           set -euo pipefail
+          # SOURCE_DATE_EPOCH pins metadata['built_at'] to the tagged commit's
+          # date so rebuilds of one tag agree on the stamp (DST-1 reproducibility
+          # note); the byte-level guarantee still stops at the moving dev-master
+          # dependency window disclosed in this file's header.
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT '${{ steps.tag.outputs.tag }}')"
           php -d phar.readonly=0 candy-code/tools/build-phar.php \
             --out=dist/candy-code.phar \
             --version='${{ steps.tag.outputs.tag }}'
+
+      - name: Sign the archive (pinned-key mode)
+        # OPTIONAL step by design: without the CANDY_CODE_SIGNING_KEY secret it
+        # skips green and the release ships unsigned. When the owner populates
+        # the secret AND SelfUpdate::PUBLIC_KEY_BASE64 (the two halves of the
+        # same Ed25519 keypair), this emits candy-code.phar.minisig — the
+        # base64 detached signature `self-update` then REQUIRES, verified
+        # against the key pinned in source rather than against anything the
+        # release channel controls.
+        run: |
+          set -euo pipefail
+          if [ -z "${CANDY_CODE_SIGNING_KEY:-}" ]; then
+            echo "::notice::CANDY_CODE_SIGNING_KEY secret not set — shipping unsigned (keyless state)"
+            exit 0
+          fi
+          php -r '
+            $key = base64_decode(getenv("CANDY_CODE_SIGNING_KEY"), true);
+            if ($key === false || strlen($key) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
+              fwrite(STDERR, "CANDY_CODE_SIGNING_KEY must be the base64 of the 64-byte sodium secret key\n");
+              exit(1);
+            }
+            $sig = sodium_crypto_sign_detached(file_get_contents("dist/candy-code.phar"), $key);
+            file_put_contents("dist/candy-code.phar.minisig", base64_encode($sig) . "\n");
+          '
+          cat dist/candy-code.phar.minisig
+        env:
+          CANDY_CODE_SIGNING_KEY: ${{ secrets.CANDY_CODE_SIGNING_KEY }}
 
       - name: Checksum
         run: |
           set -euo pipefail
           (cd dist && sha256sum candy-code.phar > candy-code.phar.sha256)
+          if [ -f dist/candy-code.phar.minisig ]; then
+            (cd dist && sha256sum candy-code.phar.minisig > candy-code.phar.minisig.sha256)
+          fi
           cat dist/candy-code.phar.sha256
 
       - name: Smoke — version
@@ -167,11 +202,15 @@ jobs:
         run: |
           set -euo pipefail
           tag='${{ steps.tag.outputs.tag }}'
+          assets=(dist/candy-code.phar dist/candy-code.phar.sha256)
+          if [ -f dist/candy-code.phar.minisig ]; then
+            assets+=(dist/candy-code.phar.minisig dist/candy-code.phar.minisig.sha256)
+          fi
           notes="Self-contained candy-code PHAR built by .github/workflows/release-phar.yml at commit ${GITHUB_SHA}.\n\nVerify: sha256sum -c candy-code.phar.sha256\n\nRun: php candy-code.phar --version"
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" dist/candy-code.phar dist/candy-code.phar.sha256 --clobber
+            gh release upload "$tag" "${assets[@]}" --clobber
           else
-            gh release create "$tag" dist/candy-code.phar dist/candy-code.phar.sha256 \
+            gh release create "$tag" "${assets[@]}" \
               --title "candy-code ${tag#candy-code/}" --verify-tag --notes "$(printf '%b' "$notes")"
           fi
         env:

@@ -13,6 +13,7 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tests\Config\EnvRosterDriftTest;
 use SugarCraft\Code\Tests\Config\Support\EnvReadScanner;
 use SugarCraft\Code\Tests\Support\FlushesLocaleMemoisedCataloguesTrait;
+use SugarCraft\Code\Tests\Support\MintsStampedPharTrait;
 use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Code\Workspace\GitRunner;
 
@@ -20,6 +21,7 @@ final class HelpTest extends TestCase
 {
     use SlicesDeclaredMethodsTrait;
     use FlushesLocaleMemoisedCataloguesTrait;
+    use MintsStampedPharTrait;
 
     private const LANG_DIR = __DIR__ . '/../../lang';
 
@@ -837,5 +839,39 @@ final class HelpTest extends TestCase
             ),
             Help::versionString(),
         );
+    }
+
+    /**
+     * DST-1: when the host archive carries a comparable stamp, that IS the
+     * answer to `--version` — consulted BEFORE the frozen Composer metadata
+     * that made the shipped 0.1.0 phar report `dev-master (311f572)` and
+     * thereby killed `self-update` at the door. The dev-built sibling pins
+     * the fall-through: an archive without a release stamp yields to the
+     * exact same string a non-phar install answers, unchanged.
+     */
+    public function testVersionStringAnswersWithTheStampedHostArchiveBeforeComposer(): void
+    {
+        // Capture the non-phar answer first: it is the fall-through target,
+        // whatever this runner's Composer metadata happens to say.
+        $fallback = Help::versionString();
+
+        $stamped = self::mintStampedPhar('candy-code/v7.8.9');
+        try {
+            Help::pretendHostArchiveForTesting($stamped);
+            $this->assertSame('v7.8.9', Help::versionString(), 'the stamp is the version inside a release archive');
+            $this->assertStringStartsWith('candy-code v7.8.9', Help::version(), 'and the banner carries it');
+        } finally {
+            Help::pretendHostArchiveForTesting(null);
+            self::discardStampedPhar($stamped);
+        }
+
+        $dev = self::mintStampedPhar('dev-build');
+        try {
+            Help::pretendHostArchiveForTesting($dev);
+            $this->assertSame($fallback, Help::versionString(), 'a dev-built archive falls through to the Composer arms unchanged');
+        } finally {
+            Help::pretendHostArchiveForTesting(null);
+            self::discardStampedPhar($dev);
+        }
     }
 }

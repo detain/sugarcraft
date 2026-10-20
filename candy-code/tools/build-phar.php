@@ -13,6 +13,14 @@ declare(strict_types=1);
  * not the phar contents), so the shipped php.ini default of On is exactly
  * right for users.
  *
+ * REPRODUCIBILITY OF THE STAMP: `metadata['built_at']` honors
+ * SOURCE_DATE_EPOCH when the environment exports one (a release workflow
+ * can pin it to the tag's commit date; the stamp is then that instant in
+ * UTC and rebuilds agree byte-wise on this field). Unset, the wall clock
+ * answers — the historical behavior. The version stamp itself is read back
+ * at runtime by `Version::fromPharMetadata()` (DST-1/DST-3: nothing used to
+ * consume it, so the shipped phar reported the frozen dev-master).
+ *
  * WHY THE BUILD MUST RUN FROM A CLEAN PUBLISHED VENDOR
  * ====================================================
  * This is a monorepo, and {@see scripts/refresh-deps.php --mode=linked}
@@ -234,10 +242,22 @@ if (!str_starts_with($binSource, "#!/usr/bin/env php\n<?php")) {
 }
 
 if ($version === null) {
-    $described = @shell_exec('git -C ' . escapeshellarg($package) . ' describe --tags --abbrev=0 2>/dev/null');
+    // Namespace-filtered: this monorepo's tag stream is shared by every lib,
+    // so an unfiltered `describe --tags` would stamp some other package's
+    // tag onto a candy-code artifact. No candy-code tag reachable => dev-build,
+    // which Version::fromPharMetadata() refuses to read as a version.
+    $described = @shell_exec('git -C ' . escapeshellarg($package) . ' describe --tags --abbrev=0 --match ' . escapeshellarg('candy-code/v*') . ' 2>/dev/null');
     $version = is_string($described) && trim($described) !== '' ? trim($described) : 'dev-build';
 }
 $commit = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' rev-parse HEAD 2>/dev/null'));
+
+// Reproducibility (DST-1 minor): honor SOURCE_DATE_EPOCH so a release
+// workflow can export the tag's commit date and get a byte-stable
+// built_at; unset, the wall clock answers exactly as before.
+$sourceEpoch = getenv('SOURCE_DATE_EPOCH');
+$builtAt = preg_match('/^\d+$/', $sourceEpoch === false ? '' : $sourceEpoch) === 1
+    ? (new DateTimeImmutable('@' . (int) $sourceEpoch))->setTimezone(new DateTimeZone('UTC'))->format('c')
+    : date('c');
 
 @mkdir(dirname($outArg), 0o755, true);
 @unlink($outArg);
@@ -255,7 +275,7 @@ foreach ($files as $file) {
 fwrite(STDERR, sprintf("build-phar: all %d files buffered (%.1fs); sealing (per-entry signatures + tar write)\n", $added, (hrtime(true) - $tick) / 1e9));
 $phar->setMetadata([
     'version'   => $version,
-    'built_at'  => date('c'),
+    'built_at'  => $builtAt,
     'commit'    => $commit !== '' ? $commit : null,
     'php_built' => PHP_VERSION,
     'entry'     => 'bin/candy-code (as stub)',

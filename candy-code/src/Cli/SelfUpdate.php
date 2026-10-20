@@ -15,7 +15,7 @@ use SugarCraft\Code\Support\Version;
  * published one, verified before the swap, with the pre-swap copy kept for a
  * one-shot rollback (plan_comparison DST-3).
  *
- *     self-update [--check] [--rollback]
+ *     self-update [--check] [--rollback] [--allow-unsigned]
  *
  * PHAR-MODE ONLY. The verb acts on the file `bin/candy-code` was launched
  * from: `\Phar::running(false)`. On a Composer install that answer is the
@@ -29,51 +29,66 @@ use SugarCraft\Code\Support\Version;
  * GitHub release stream, so the repo-wide `/releases/latest` answer is
  * usually some other library's tag. The lookup is the one-page list
  * (`?per_page=100`), filtered to non-draft, non-prerelease releases whose
- * tag starts with `candy-code/`, that carry BOTH assets
- * (`candy-code.phar` and `candy-code.phar.sha256`), and highest by
+ * tag starts with {@see Version::TAG_PREFIX}, that carry BOTH required
+ * assets (`candy-code.phar` and `candy-code.phar.sha256`), and highest by
  * {@see Version::compare()} — the newest CANDY-CODE release, not the newest
- * release.
+ * release. The signature asset (`candy-code.phar.minisig`) is OPTIONAL at
+ * selection: whether it is REQUIRED is a fact about the pinned-key state,
+ * not about the release, and the two must not be conflated.
  *
  * HOW THE SWAP HAPPENS. The sidecar is fetched first and must parse to a
  * lowercase 64-hex-digit digest (its optional name field must match the phar
  * asset it signs). The phar is then downloaded to a temp file IN THE PHAR'S
  * OWN DIRECTORY (a rename only exchanges atoms inside one filesystem), its
  * sha256 is computed over the finished file and compared with
- * `hash_equals()`, and only then is the running phar copied to
- * `<phar>.old` and the temp renamed over it. Every refusal before the rename
- * deletes the temp and leaves the running phar byte-identical; a mismatch
- * that fires after the copy still leaves `.old` as the exact prior bytes.
- * `--rollback` renames `<phar>.old` back over the phar — consuming it in the
- * rename, so the restore is one-shot by construction and touches no network.
+ * `hash_equals()`. If a signing key is pinned (see TRUST MODEL below) the
+ * detached signature leg runs next, against those same temp bytes. Only then
+ * is the running phar copied to `<phar>.old` and the temp renamed over it.
+ * Every refusal before the rename deletes the temp and leaves the running
+ * phar byte-identical; a mismatch that fires after the copy still leaves
+ * `.old` as the exact prior bytes. `--rollback` renames `<phar>.old` back
+ * over the phar — consuming it in the rename, so the restore is one-shot by
+ * construction and touches no network.
  *
- * TRUST MODEL, HONESTLY. Both the phar and its sidecar come from the same
- * origin (GitHub release assets, over TLS), and nothing in this repo pins a
- * signing key. The hash therefore bounds transport corruption, asset mixups
- * and tampering with the phar ALONE; a party who controls the release can
- * replace the sidecar in the same breath, and no locally pinned hash they
- * cannot also change would notice. A fixed embedded key was rejected on the
- * same grounds: a key this command cannot rotate is ceremony, not security —
- * rotation is exactly the capability that makes a pinned key load-bearing.
- * The residual is named: trust in the GitHub account that owns the repo.
+ * TRUST MODEL, HONESTLY — TWO STATES. Both the phar and its sidecar come
+ * from the same origin (GitHub release assets, over TLS). Keyless state
+ * (the shipped one: {@see SelfUpdate::PUBLIC_KEY_BASE64} is the empty
+ * string): the hash bounds transport corruption, asset mixups and tampering
+ * with the phar ALONE; a party who controls the release can replace the
+ * sidecar in the same breath. The residual is named: trust in the GitHub
+ * account that owns the repo. Pinned state (once the owner populates the
+ * constant): a release whose `candy-code.phar.minisig` is ABSENT, or does
+ * not verify against the pinned Ed25519 key, is REFUSED LOUDLY — the sha256
+ * sidecar alone no longer gates the swap, and an attacker who owns the
+ * release stream can no longer sign their own poisoned bytes. The pinned key
+ * can be rotated by shipping a new phar; until that first self-update, a
+ * wrong-key emergency needs the fresh-installer path (download + checksum by
+ * hand) — the same window every pinned-key updater carries.
  *
  * EXITS. 0: up to date (--check or not), a verified swap completed, a
  * rollback restored. 1: composer-mode refusal, an unwritable target, a
- * refused downgrade, a comparison that cannot be made, a fetch or hash
- * failure, --check finding an update available (that is the scripted answer
- * to "should I update?"). 2: usage errors (unknown operand, `--check`
- * together with `--rollback`).
+ * refused downgrade, a comparison that cannot be made, a fetch, hash or
+ * signature failure, --check finding an update available (that is the
+ * scripted answer to "should I update?"). 2: usage errors (unknown operand,
+ * `--check` together with `--rollback` or `--allow-unsigned`).
+ * `--allow-unsigned` is the dev-only bypass of the signature leg in pinned
+ * state; it never bypasses the sha256 sidecar and is refused next to
+ * `--check` (there is nothing to bypass when nothing is swapped).
  *
  * TIME BOUNDS follow the E646 rule: a connect ceiling and a per-read
  * ceiling, deliberately no total request timeout — a 100 MB phar download on
  * a slow link is legitimate work that a blanket clock would abort. The read
  * ceiling is what kills a stalled transfer.
  *
- * The $http / $releasesUrl / $pharPath / $currentVersion parameters exist for
- * the suite: `SelfUpdateTest` mounts a fake release server as a Guzzle
- * handler on a real client's middleware stack (canned release JSON and asset
- * bytes over canonical http routes, zero sockets, zero real network), swaps
- * a stub archive standing in for the phar, and names the installed version so
- * the ordering arms are reachable without a real tag checkout.
+ * The $http / $releasesUrl / $pharPath / $currentVersion / $publicKey
+ * parameters exist for the suite: `SelfUpdateTest` mounts a fake release
+ * server as a Guzzle handler on a real client's middleware stack (canned
+ * release JSON and asset bytes over canonical http routes, zero sockets,
+ * zero real network), swaps a stub archive standing in for the phar, and may
+ * name the installed version or the pinned key directly. When
+ * $currentVersion is NOT injected, resolution runs for real through
+ * `Help::versionString()`, which reads the host archive's stamped metadata
+ * (DST-1) — the end-to-end shape the shipped phar actually takes.
  * {@see useErrorStreamForTesting} redirects the report lines. Production
  * dispatch supplies none of them.
  */
@@ -82,12 +97,41 @@ final class SelfUpdate
     /**
      * Every candy-code release tag on the shared repo stream starts with
      * this; the tag's remainder is the version {@see Version} can order.
+     * The single home of the literal is {@see Version::TAG_PREFIX} — the
+     * phar stamp and the release filter must strip the same string.
      */
-    public const TAG_PREFIX = 'candy-code/';
+    public const TAG_PREFIX = Version::TAG_PREFIX;
 
     public const PHAR_ASSET = 'candy-code.phar';
 
     public const SIDECAR_ASSET = 'candy-code.phar.sha256';
+
+    /**
+     * The detached-signature asset ({@see verifyDetached} consumes it).
+     * Base64 of a 64-byte Ed25519 signature over the phar bytes, the
+     * minisign public-key flavour of "sign the artifact" without shipping a
+     * parser for minisign's key-id framing — sodium is the smallest path in
+     * the standard library that verifies a detached signature.
+     */
+    public const SIGNATURE_ASSET = 'candy-code.phar.minisig';
+
+    /**
+     * OWNER SEAM — ships as the EMPTY STRING (the documented keyless state;
+     * the class docblock's TRUST MODEL says exactly what that buys and what
+     * it does not). To move the tool into pinned state the owner:
+     *
+     *   1. `php -r '$k=sodium_crypto_sign_keypair(); echo base64_encode(sodium_crypto_sign_secretkey($k)),"\n",base64_encode(sodium_crypto_sign_publickey($k)),"\n";'`
+     *   2. put the first line in the `CANDY_CODE_SIGNING_KEY` repository
+     *      secret (the release workflow's signing step reads it);
+     *   3. put the second line here, as this constant's value.
+     *
+     * Secret and constant are both-or-neither: a populated constant with no
+     * secret means every release lacks the asset and self-update refuses
+     * them all (loudly, by design). Until tagged releases carry the asset,
+     * enabling the key makes older releases unupdatable — re-tag or use
+     * `--allow-unsigned` by hand during the transition.
+     */
+    public const PUBLIC_KEY_BASE64 = '';
 
     /**
      * The release list of the repository that publishes this tool's phar.
@@ -131,10 +175,12 @@ final class SelfUpdate
         ?string $releasesUrl = null,
         ?string $pharPath = null,
         ?string $currentVersion = null,
+        ?string $publicKey = null,
     ): int {
         $check = isset($args->subcommandFlags['--check']);
         $rollback = isset($args->subcommandFlags['--rollback']);
-        if ($check && $rollback) {
+        $allowUnsigned = isset($args->subcommandFlags['--allow-unsigned']);
+        if ($check && ($rollback || $allowUnsigned)) {
             return NonInteractive::failUsage(
                 'candy-code: ' . Lang::t('cli.selfupdate.flags_exclusive'),
                 $args->outputFormat,
@@ -287,6 +333,25 @@ final class SelfUpdate
             return NonInteractive::EXIT_FAILURE;
         }
 
+        // Pinned-key leg, after the hash (the temp bytes are the real
+        // artifact now) and before the copy (nothing to roll back from if
+        // the key rejects). Empty key = the shipped keyless state: the leg
+        // does not exist, and no --allow-unsigned notice is printed for it.
+        $key = $publicKey ?? self::PUBLIC_KEY_BASE64;
+        if ($key !== '') {
+            if ($allowUnsigned) {
+                self::stderr(Lang::t('cli.selfupdate.unsigned_allowed'));
+            } else {
+                $refusal = self::verifySignature($http, $release, $temp, $key);
+                if ($refusal !== null) {
+                    self::forget($temp);
+                    self::stderr($refusal);
+
+                    return NonInteractive::EXIT_FAILURE;
+                }
+            }
+        }
+
         // Keep the running phar BEFORE exchanging it: without a preserved
         // copy there is nothing --rollback could restore, and a verb that
         // takes away its own undo is not one this verb wants to be.
@@ -316,15 +381,18 @@ final class SelfUpdate
 
     /**
      * The newest candy-code release in a decoded GitHub release list that
-     * carries both assets, or null when none does.
+     * carries both required assets, or null when none does.
      *
      * Pure over the decoded JSON so the selection rules — prefix, draft and
      * prerelease skipping, the two-asset requirement, numeric ordering — are
-     * pinned directly, independently of any transport.
+     * pinned directly, independently of any transport. The signature URL is
+     * REPORTED (`''` when absent) but never REQUIRED here: keyless releases
+     * stay selectable in keyless state, and requiring the asset is the
+     * pinned-key leg's decision at swap time.
      *
      * @param array<array-key, mixed> $releases
      *
-     * @return array{version: string, pharUrl: string, sidecarUrl: string}|null
+     * @return array{version: string, pharUrl: string, sidecarUrl: string, sigUrl: string}|null
      */
     public static function selectRelease(array $releases): ?array
     {
@@ -343,6 +411,7 @@ final class SelfUpdate
             }
             $pharUrl = null;
             $sidecarUrl = null;
+            $sigUrl = '';
             $assets = $release['assets'] ?? [];
             if (!\is_array($assets)) {
                 continue;
@@ -359,6 +428,8 @@ final class SelfUpdate
                     $pharUrl = $url;
                 } elseif ((string) ($asset['name'] ?? '') === self::SIDECAR_ASSET) {
                     $sidecarUrl = $url;
+                } elseif ((string) ($asset['name'] ?? '') === self::SIGNATURE_ASSET) {
+                    $sigUrl = $url;
                 }
             }
             if ($pharUrl === null || $sidecarUrl === null) {
@@ -367,14 +438,14 @@ final class SelfUpdate
             if ($best !== null && (Version::compare($version, $best['version']) ?? -1) <= 0) {
                 continue;
             }
-            $best = ['version' => $version, 'pharUrl' => $pharUrl, 'sidecarUrl' => $sidecarUrl];
+            $best = ['version' => $version, 'pharUrl' => $pharUrl, 'sidecarUrl' => $sidecarUrl, 'sigUrl' => $sigUrl];
         }
 
         return $best;
     }
 
     /**
-     * The lowercase 64-hex-digit digest a sidecar body signs with, or null
+     * The lowercase 64-hex-digit digest a sidecar signs with, or null
      * when it is not that shape. Fails closed on uppercase hex, on a short
      * digest, and on anything the sha256sum spelling does not produce.
      */
@@ -399,6 +470,66 @@ final class SelfUpdate
         }
 
         return $m[1];
+    }
+
+    /**
+     * Verify the temp phar's detached signature against the pinned key.
+     * Returns the refusal text (never silent) or null when the bytes are
+     * signed by the key. A release that carries NO signature asset is a
+     * refusal in pinned state — a key that only vets artifacts which happen
+     * to ship signatures is a key an attacker can route around by deleting
+     * one asset.
+     */
+    private static function verifySignature(ClientInterface $http, array $release, string $temp, string $key): ?string
+    {
+        if ($release['sigUrl'] === '') {
+            return Lang::t('cli.selfupdate.signature_missing', ['asset' => self::SIGNATURE_ASSET, 'phar' => self::PHAR_ASSET]);
+        }
+        try {
+            $signatureBody = (string) $http->request('GET', $release['sigUrl'])->getBody()->getContents();
+        } catch (TransferException $e) {
+            return Lang::t('cli.selfupdate.download_failed', ['asset' => self::SIGNATURE_ASSET, 'reason' => $e->getMessage()]);
+        }
+        $payload = \file_get_contents($temp);
+        if ($payload === false || !self::verifyDetached($payload, $signatureBody, $key)) {
+            return Lang::t('cli.selfupdate.signature_invalid', ['asset' => self::SIGNATURE_ASSET, 'phar' => self::PHAR_ASSET]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Pure Ed25519 detached verification: is $signatureBody the base64 of a
+     * signature by $publicKeyBase64 over exactly $payload? Every malformed
+     * shape — empty payload, non-strict base64, wrong-length raw halves, a
+     * missing sodium extension — answers FALSE (refuse), never an exception
+     * and never a trust. Surrounding whitespace is tolerated in both base64
+     * slots because release-asset bodies carry trailing newlines.
+     */
+    public static function verifyDetached(string $payload, string $signatureBody, string $publicKeyBase64): bool
+    {
+        // Guard FIRST: the SODIUM_CRYPTO_SIGN_* constants below only exist
+        // when the extension does, and an extension-less PHP must answer
+        // "refuse" rather than fatal on a constant lookup.
+        if ($payload === '' || !\function_exists('sodium_crypto_sign_verify_detached')) {
+            return false;
+        }
+        $signature = \base64_decode(\trim($signatureBody), true);
+        $publicKey = \base64_decode(\trim($publicKeyBase64), true);
+        if (
+            $signature === false
+            || $publicKey === false
+            || \strlen($signature) !== SODIUM_CRYPTO_SIGN_BYTES
+            || \strlen($publicKey) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES
+        ) {
+            return false;
+        }
+
+        try {
+            return \sodium_crypto_sign_verify_detached($signature, $payload, $publicKey);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

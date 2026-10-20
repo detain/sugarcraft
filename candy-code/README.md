@@ -94,6 +94,14 @@ composer require sugarcraft/candy-code        # as a dependency; the binary is v
 composer install && ./bin/candy-code
 ```
 
+Or run the single-file phar — no Composer, no `vendor/`: download
+`candy-code.phar` and its `candy-code.phar.sha256` sidecar from the
+`candy-code/v*` releases at <https://github.com/detain/sugarcraft/releases>,
+verify with `sha256sum -c candy-code.phar.sha256`, run with
+`php candy-code.phar` (a release whose source pins a signing key also
+carries `candy-code.phar.minisig`, verified by `candy-code self-update`
+before any swap). `self-update` keeps the phar current from then on.
+
 Requirements: PHP 8.3+, `ext-sqlite3` (it backs the Team task list) and
 `pdo_sqlite` (the session store),
 `ext-curl` for the HTTP providers, and `ext-mbstring` with `ext-intl` (text
@@ -1990,6 +1998,8 @@ candy-code serve status|stop|logs|url|token
 candy-code self-update [--check]     # replace this phar with the latest verified release;
                                      #   --check only compares versions (exit 1 when one is newer)
 candy-code self-update --rollback    # restore the kept pre-swap phar, exactly once
+candy-code self-update --allow-unsigned
+                                     # skip only the pinned-key signature leg (dev/test)
 candy-code attach [<session>]        # the TUI on a session of the running server — turns run there
                                      #   [--url URL]
 candy-code acp                       # an Agent Client Protocol agent on stdio, for an editor to start
