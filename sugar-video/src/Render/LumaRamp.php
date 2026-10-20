@@ -21,7 +21,7 @@ final class LumaRamp
     public const CHARS1 = ' .:-=+*#%@';
 
     /**
-     * Standard 16-character ramp for general use.
+     * Standard 15-character ramp for general use.
      */
     public const CHARS2 = ' .,:;i1tfLCG08@';
 
