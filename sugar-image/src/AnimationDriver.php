@@ -7,6 +7,7 @@ namespace SugarCraft\Image;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Model;
+use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Image\Renderer\Renderer;
 
 /**
@@ -14,15 +15,31 @@ use SugarCraft\Image\Renderer\Renderer;
  * contract so it can be embedded in a Program or composed into a parent
  * Model via {@see \SugarCraft\Core\Composite}.
  *
- * Frame timing uses {@see Cmd::tick()}; per-frame delete-and-redraw
- * uses the {@see Renderer::delete()} API added in step 07.12.
+ * Frame timing uses {@see Cmd::tick()}; per-frame redraw uses the
+ * {@see Renderer::delete()} API added in step 07.12, emitted in the
+ * order that renderer family's delete semantics allow.
  *
- * For renderers that support targeted deletion (Kitty, iTerm2),
- * `view()` emits `delete($id) . render($frame)` so the screen shows
- * only the current frame. For renderers that do not (Sixel, HalfBlock,
- * QuarterBlock, Chafa), `Renderer::delete()` returns '' and the
- * existing cell grid is naturally overwritten on the next render —
- * this is correct per step 07.12.
+ * E-15: delete-before-redraw left a per-frame empty-cell window (visible
+ * flicker). The fix is per family, because the one delete() contract has
+ * three implementations:
+ * - Kitty (stable-id capable): {@see KittyRenderer::renderFrame()} commits
+ *   the new frame FIRST, into one of two alternating placement slots
+ *   (`imageId`, `imageId + 1` — chafa's
+ *   `placement_id + frame_count % 2` double-buffer parity,
+ *   tools/chafa/chafa.c:833), and only then the OTHER slot is deleted.
+ *   The screen never shows an empty image cell, and because each frame
+ *   carries a stable id, delete() finally targets images this driver
+ *   actually placed (the interface render() transmits anonymous ids, so
+ *   the old delete($id) retired nothing and frames accumulated).
+ * - iTerm2/WezTerm: delete() is `OSC 1337;Pop` — it removes the TOPMOST
+ *   image and ignores the id. Deleting after the redraw would retire the
+ *   frame just committed, so this family keeps delete-then-render; its
+ *   empty-cell window is inherent to Pop and fixable only with
+ *   id-targeted delete in sugar-core's Ansi (out of this step's scope).
+ * - Renderers without targeted deletion (Sixel, HalfBlock, QuarterBlock,
+ *   Chafa): `Renderer::delete()` returns '' and the existing cell grid is
+ *   naturally overwritten on the next render — order is moot; the emitted
+ *   bytes are unchanged (correct per step 07.12).
  *
  * Mirrors no upstream — this is a SugarCraft addition.
  */
@@ -102,14 +119,31 @@ final class AnimationDriver implements Model
     }
 
     /**
-     * Emit delete + render for the current frame.
+     * E-15: Emit the current frame, committing it before any retire byte.
+     *
+     * Kitty renderers get the double-buffered shape: `renderFrame(new) .
+     * delete(other)` — new frame lands first, the other slot is retired
+     * after, so there is no empty-cell window. All other renderers keep
+     * the pre-E-15 byte stream `delete($imageId) . render($frame)`: for
+     * ''-delete backends the order is invisible, and for Pop-based
+     * iTerm2/WezTerm deleting after the redraw would retire the frame
+     * just committed (see class docblock).
      *
      * @return string
      */
     public function view(): string
     {
+        $frame = $this->animation->frames[$this->index];
+
+        if ($this->renderer instanceof KittyRenderer) {
+            $newId = $this->imageId + ($this->index % 2);
+            $oldId = $this->imageId + (($this->index + 1) % 2);
+
+            return $this->renderer->renderFrame($frame, $this->cellWidth, $this->cellHeight, $newId)
+                . $this->renderer->delete((string) $oldId);
+        }
+
         $delete = $this->renderer->delete((string) $this->imageId);
-        $frame  = $this->animation->frames[$this->index];
         $render = $this->renderer->render($frame, $this->cellWidth, $this->cellHeight);
 
         return $delete . $render;
@@ -145,7 +179,10 @@ final class AnimationDriver implements Model
     }
 
     /**
-     * Change the image id used for targeted delete+redraw on Kitty/iTerm2.
+     * E-15: Change the base of the driver's stable image-id pair.
+     *
+     * The kitty double-buffer reserves `imageId` and `imageId + 1` as its
+     * two placement slots; choose a pair no other kitty image uses.
      */
     public function withImageId(int $imageId): self
     {
