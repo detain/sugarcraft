@@ -300,17 +300,54 @@ final class KeysReloadTest extends TestCase
     {
         $source = (string) file_get_contents((new \ReflectionClass($class))->getFileName());
 
-        $start = strpos($source, 'static function ' . $method . '(');
-        self::assertIsInt($start, $method . ' must exist on ' . $class);
-        $open = strpos($source, '{', $start);
-        self::assertIsInt($open);
+
+        // E276 doctrine, two halves. THE ANCHOR: the declaration is located
+        // on the token stream — a docblock spelling `static function name(`
+        // is not the declaration, and byte-anchoring there slices the file
+        // mid-comment so the whole tail lexes as one T_COMMENT. THE WALK:
+        // depth counts every token that OPENS a brace — block `{` (its own
+        // single-char token), interpolated `{$` (T_CURLY_OPEN), deprecated
+        // `${` (T_DOLLAR_OPEN_CURLY_BRACES) — never raw bytes, so a string
+        // literal carrying an unmatched brace can neither end the body
+        // early nor swallow its closer. The bare `}` needs no id arm.
+        $tokens = \PhpToken::tokenize($source);
+        $count = \count($tokens);
+        $nameAt = -1;
+        for ($i = 0; $i < $count; $i++) {
+            if ($tokens[$i]->id !== \T_FUNCTION) {
+                continue;
+            }
+            for ($j = $i + 1; $j < $count; $j++) {
+                if ($tokens[$j]->id === \T_WHITESPACE || $tokens[$j]->text === '&') {
+                    continue;
+                }
+                if ($tokens[$j]->id === \T_STRING && $tokens[$j]->text === $method) {
+                    $nameAt = $j;
+                }
+                break;
+            }
+            if ($nameAt >= 0) {
+                break;
+            }
+        }
+        self::assertNotSame(-1, $nameAt, $method . ' must exist on ' . $class);
 
         $depth = 0;
-        for ($i = $open; $i < strlen($source); $i++) {
-            if ($source[$i] === '{') {
+        $openPos = 0;
+        for ($i = $nameAt + 1; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if ($token->text === '{' && $token->id !== \T_CURLY_OPEN) {
+                if ($depth === 0) {
+                    $openPos = $token->pos;
+                }
                 $depth++;
-            } elseif ($source[$i] === '}' && --$depth === 0) {
-                return substr($source, $open, $i - $open + 1);
+            } elseif ($token->id === \T_CURLY_OPEN || $token->id === \T_DOLLAR_OPEN_CURLY_BRACES) {
+                $depth++;
+            } elseif ($token->text === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return substr($source, $openPos, $token->pos - $openPos + 1);
+                }
             }
         }
 

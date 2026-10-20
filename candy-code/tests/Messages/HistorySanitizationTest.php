@@ -415,8 +415,12 @@ final class HistorySanitizationTest extends TestCase
      */
     public function testVertexAnthropicConverterSeesFullyPairedTurns(): void
     {
+        // PRV-2 (w5b) threaded the request's resolved thinking budget into the
+        // walk; this history carries no signed blocks, so the neutral budget
+        // is null — the replay gate never opens on this fixture either way.
         $turns = $this->invokePrivateMethod($this->makeProvider('vertex'), 'formatAnthropicMessages', [
             $this->choke($this->nastyHistory()),
+            null,
         ]);
 
         $this->assertNotSame([], $turns);

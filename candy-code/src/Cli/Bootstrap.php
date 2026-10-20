@@ -882,6 +882,16 @@ final class Bootstrap
         . '(%s) and shown nowhere else, in %s; move a file out if it belongs to another project';
 
     /**
+     * W4/MacAlt: the one-line hint that Alt chords may die on a Mac terminal
+     * that maps Option to dead keys. It carries no arguments, so unlike the
+     * formats above it is a whole sentence, not a printf shape; it still
+     * rides translated() through the catalogue so the launch row is recorded
+     * in English and painted in the operator locale, exactly like every
+     * other launch notice.
+     */
+    public const MAC_ALT_NOTICE_TEXT = 'Alt chords may be disabled on this Mac terminal: enable "Use Option as Meta key" (Terminal.app) or "Left Option: Esc+" (iTerm2), or run /keys reload after choosing Ctrl aliases — see docs/SETTINGS.md (a Kitty-speaking terminal needs neither)';
+
+    /**
      * The catalogue key each launch-notice text above is translated through
      * (audit 15b-14, step 15b-14-2), keyed by the English text itself.
      *
@@ -936,6 +946,7 @@ final class Bootstrap
         self::MCP_SERVER_CHANGED_FORMAT => 'cli.launch.mcp_server_changed',
         self::MCP_SERVER_ADDED_FORMAT => 'cli.launch.mcp_server_added',
         self::MEMORY_LEGACY_BOUND_NOTICE_FORMAT => 'cli.launch.memory_legacy_bound',
+        self::MAC_ALT_NOTICE_TEXT => 'cli.launch.mac_alt_notice',
     ];
 
     /**
@@ -12002,7 +12013,7 @@ final class Bootstrap
             return null;
         }
 
-        return Lang::t('cli.launch.mac_alt_notice');
+        return self::translated(self::MAC_ALT_NOTICE_TEXT);
     }
 
     /** Whether the ambient terminal environment names a kitty-speaking emulator. */

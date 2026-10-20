@@ -95,6 +95,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 ['rulesState'],
             ],
             'withMaxSteps' => [static fn(EngineBackend $b): EngineBackend => $b->withMaxSteps(3), ['maxSteps']],
+            // AUT-4 (w3h): the JSON Answer Contract a --json-schema turn asks for.
+            'withJsonSchema' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withJsonSchema(['type' => 'object']),
+                ['jsonSchema'],
+            ],
             'withSpendCap' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withSpendCap(9.0, 4.0),
                 ['spendCapUsd', 'sessionSpendAtStartUsd'],

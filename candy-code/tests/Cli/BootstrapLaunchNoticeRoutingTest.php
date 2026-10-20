@@ -1026,8 +1026,16 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             $prefix .= $key . '=' . escapeshellarg($value) . ' ';
         }
 
+        // cwd is pinned to the scratch dir: launched from a checkout that
+        // ships .claude/settings.json, INT-4's untrusted-project-hooks notice
+        // would ride into the exact-count arithmetic of every case below —
+        // noise this file does not guard (INT-4 has its own pins) and which
+        // would make these launches depend on what the running tree happens
+        // to carry. The script and its redirections are absolute paths, so
+        // the child's cwd is otherwise meaningless to them.
         exec(sprintf(
-            '%stimeout -s KILL 20 %s %s >%s 2>%s',
+            'cd %s && %stimeout -s KILL 20 %s %s >%s 2>%s',
+            escapeshellarg($this->tmpDir),
             $prefix,
             escapeshellarg(PHP_BINARY),
             escapeshellarg($script),

@@ -188,10 +188,15 @@ PHP;
         // scope tracking: every `function name(` the source declares must
         // come back as a method of Chat, no more and no fewer.
         $path = \dirname(__DIR__, 2) . '/src/Chat.php';
-        \preg_match_all('/^\s*(?:(?:public|private|protected|static|final|abstract)\s+)*function\s+&?(\w+)\s*\(/m', (string) \file_get_contents($path), $m);
+        $source = (string) \file_get_contents($path);
+        \preg_match_all('/^\s*(?:(?:public|private|protected|static|final|abstract)\s+)*function\s+&?(\w+)\s*\(/m', $source, $m);
 
+        // extract() is called directly, NOT extractFile(): Chat.php outgrew
+        // MAX_FILE_BYTES (the repo-map skip-gate, pinned by its own test
+        // above), and the gate would return [] here, silently emptying this
+        // regression net. What is under test is token tracking, not the gate.
         $methods = [];
-        foreach (PhpSymbolExtractor::new()->extractFile($path, 'src/Chat.php') as $tag) {
+        foreach (PhpSymbolExtractor::new()->extract($source, 'src/Chat.php') as $tag) {
             if ($tag->type === Tag::TYPE_METHOD) {
                 self::assertSame('Chat', $tag->scope);
                 $methods[] = $tag->name;

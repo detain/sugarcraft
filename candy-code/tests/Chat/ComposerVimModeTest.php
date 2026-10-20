@@ -353,7 +353,7 @@ final class ComposerVimModeTest extends TestCase
         MentionIndex::forget();
         $root = sys_get_temp_dir() . '/w6b-vim-popup-' . uniqid('p', true);
         mkdir($root . '/src', recursive: true);
-        exec('git init --quiet ' . escapeshellarg($root));
+        exec('git init --quiet ' . escapeshellarg($root) . ' 2>&1');
         foreach (['src/Chat.php', 'src/Renderer.php', 'index.php'] as $file) {
             touch($root . '/' . $file);
         }
@@ -372,7 +372,7 @@ final class ComposerVimModeTest extends TestCase
             self::assertFalse($killed->mentionPopupOpen());
         } finally {
             MentionIndex::forget();
-            exec('rm -rf ' . escapeshellarg($root));
+            exec('rm -rf ' . escapeshellarg($root) . ' 2>&1');
         }
     }
 

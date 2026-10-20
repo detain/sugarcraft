@@ -743,17 +743,38 @@ final class LspConnectionStdinWedgeTest extends TestCase
                 'the next exchange did not free a server parked on a full stderr pipe, so E475 '
                 . 'is a DEADLOCK rather than a stall and its severity needs re-triaging',
             );
+            $writtenByChild = (int) ($response->result['stderrWritten'] ?? 0);
+
+            // Absorb the flood to the ring cap through the SAME exchange pump
+            // this row exists to prove, rather than assuming one kernel pipe
+            // holds it. PIPE CAPACITY IS NOT A CONSTANT ON THIS BOX: the
+            // user-wide pipe-page soft limit (pipe-user-pages-soft) degrades a
+            // newly created pipe to a handful of pages while the shard battery
+            // saturates total pipe memory, and W5 measured the 65536 figure on
+            // an idle box. A parked writer re-parks a few pages at a time while
+            // the loop keeps asking, so the drain this class performs is what
+            // gets counted, however small each pass is.
+            $cap = $this->maxStderrBytes();
+            for ($pump = 0; $pump < 32; $pump++) {
+                $later = $connection->sendRequest('textDocument/hover', ['x' => 1 + $pump]);
+                $this->assertFalse($later->isError, 'exchange ' . $pump . ' after the stall did not free the child');
+                $writtenByChild = max($writtenByChild, (int) ($later->result['stderrWritten'] ?? 0));
+                if ($writtenByChild > $cap && strlen($connection->stderrTail()) >= $cap) {
+                    break;
+                }
+            }
+
             $this->assertGreaterThan(
-                65536,
-                $response->result['stderrWritten'] ?? 0,
-                'the server never got past one pipe buffer, so it was never blocked and this row '
+                $cap,
+                $writtenByChild,
+                'the server never got past one drain-cap worth of stderr, so it was never blocked and this row '
                 . 'is not about the stall at all',
             );
             $this->assertSame(
-                65536,
+                $cap,
                 strlen($connection->stderrTail()),
-                'the parent did not retain a full buffer of the flood, so the drain that freed '
-                . 'the child is not the one this class performs',
+                'even after thirty-two exchanges the parent did not retain a full buffer of the flood, so the '
+                . 'drain that freed the child is not the one this class performs',
             );
         } finally {
             $connection->disconnect();

@@ -415,6 +415,18 @@ final class MaximsSectionTest extends TestCase
         $provider = new EchoProvider();
         $runtime = new Runtime($provider, new HookManager(new HookRegistry()));
 
-        return [$runtime, App::new($provider, 'echo')];
+        // Hermetic bareness: the App root is pinned to an empty directory so
+        // the standing slab never walks the CHECKOUT's own rule tiers — a
+        // running tree ships .claude/rules and .cursor/rules (INT-2), which
+        // would append one <project-instructions> layer per always-on file
+        // and turn "bare" into "however many rule files this machine's clone
+        // happens to carry". The shape this class claims is the bare App's:
+        // base, maxims, repo-map, memory, skill listing, env — nothing else.
+        $bareRoot = sys_get_temp_dir() . '/candy-code-maxims-bare-root';
+        if (!is_dir($bareRoot)) {
+            mkdir($bareRoot, 0700, true);
+        }
+
+        return [$runtime, App::new($provider, 'echo')->withRoot($bareRoot)];
     }
 }

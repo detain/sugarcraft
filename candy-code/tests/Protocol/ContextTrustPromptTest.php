@@ -9,6 +9,7 @@ use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Protocol\TrustAsks;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tests\Support\McpLaunchEnabledTrait;
 
 /**
  * WEB-3b: the server-scope trust prompt. A `context.sources` measurement that
@@ -22,6 +23,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 final class ContextTrustPromptTest extends TestCase
 {
     use HomeSandboxTrait;
+    use McpLaunchEnabledTrait;
 
     private ProtocolFixture $fixture;
 
@@ -30,6 +32,11 @@ final class ContextTrustPromptTest extends TestCase
     protected function setUp(): void
     {
         TrustAsks::resetForTesting();
+        // Shards launch with CANDY_CODE_MCP_DISABLE=1 (E737 gate); the
+        // context-trust verdicts this file proves are only produced on the
+        // MCP-enabled launch path, so arm it per-test exactly like the MCP
+        // suites do.
+        $this->armMcpLaunchEnabled();
         $this->homeRoot = \sys_get_temp_dir() . '/w5e-home-' . \uniqid('', true);
         $this->useHomeSandbox($this->homeRoot);
         \mkdir($this->homeRoot . '/.candy-code', 0o700, true);
@@ -40,6 +47,7 @@ final class ContextTrustPromptTest extends TestCase
     protected function tearDown(): void
     {
         TrustAsks::resetForTesting();
+        $this->restoreMcpLaunchEnabled();
         $this->fixture->tearDown();
         $this->restoreHomeSandbox();
         $this->purgeTree($this->homeRoot);
