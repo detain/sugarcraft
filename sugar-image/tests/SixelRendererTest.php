@@ -164,6 +164,7 @@ final class SixelRendererTest extends TestCase
         $this->assertSame('floyd-steinberg', Dither::FloydSteinberg->value);
         $this->assertSame('stucki', Dither::Stucki->value);
         $this->assertSame('atkinson', Dither::Atkinson->value);
+        $this->assertSame('ordered', Dither::Ordered->value);
     }
 
     public function testDitherEnumLabels(): void
@@ -172,6 +173,7 @@ final class SixelRendererTest extends TestCase
         $this->assertSame('Floyd–Steinberg', Dither::FloydSteinberg->label());
         $this->assertSame('Stucki', Dither::Stucki->label());
         $this->assertSame('Atkinson', Dither::Atkinson->label());
+        $this->assertSame('Ordered', Dither::Ordered->label());
     }
 
     public function testSixelRendererDefaultIsFloydSteinberg(): void
@@ -186,6 +188,7 @@ final class SixelRendererTest extends TestCase
         yield 'floyd-steinberg' => [Dither::FloydSteinberg];
         yield 'stucki' => [Dither::Stucki];
         yield 'atkinson' => [Dither::Atkinson];
+        yield 'ordered' => [Dither::Ordered];
     }
 
     /**

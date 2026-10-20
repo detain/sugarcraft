@@ -60,5 +60,6 @@ final class DitherTest extends TestCase
         $this->assertSame('Floyd–Steinberg', $labels['floyd-steinberg']);
         $this->assertSame('Stucki', $labels['stucki']);
         $this->assertSame('Atkinson', $labels['atkinson']);
+        $this->assertSame('Ordered', $labels['ordered']);
     }
 }

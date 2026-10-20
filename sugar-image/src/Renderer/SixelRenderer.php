@@ -53,22 +53,44 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     private const RLE_LITERAL_LIMIT = 4;
 
     /**
+     * C-04: dither bias intensity for the opt-in Ordered axis.
+     * NULL (default) means "user did not ask" and behaves exactly as the
+     * pre-C-04 renderer on every path — the default diffusion stream is
+     * byte-frozen post-C-01. Chafa's chafa_dither_init() clamps diffusion
+     * strength to 1.0 and feeds ordered/noise magnitudes straight through,
+     * so values above 1.0 clamp here and negatives/NaN are refused.
+     */
+    private readonly ?float $intensity;
+
+    /**
      * @param int $cellWidth  Pixel width of a terminal cell — the render() cell
      *                        dimensions are multiplied by this so a sixel poster
      *                        fills its cell box (not one device pixel per cell).
      * @param int $cellHeight Pixel height of a terminal cell.
+     * @param float|null $intensity Ordered bias strength 0.0..1.0
+     *                              (null = chafa's config default 1.0; the
+     *                              depth ladder rides on Ordered only, C-07).
      */
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
         private readonly int $maxColors = 256,
         private readonly int $cellWidth = 10,
         private readonly int $cellHeight = 20,
+        ?float $intensity = null,
     ) {
         if ($maxColors < 1 || $maxColors > 256) {
             throw new \InvalidArgumentException(
                 Lang::t('sixel.max_colors_out_of_range', ['maxColors' => $maxColors])
             );
         }
+        // `!($intensity >= 0.0)` instead of `< 0` so NaN is refused too
+        // (every NaN comparison is false — fail fast, never silently bias).
+        if ($intensity !== null && !($intensity >= 0.0)) {
+            throw new \InvalidArgumentException(
+                Lang::t('sixel.intensity_out_of_range', ['intensity' => $intensity])
+            );
+        }
+        $this->intensity = $intensity === null ? null : min(1.0, $intensity);
     }
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
@@ -304,23 +326,30 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * changes the palette, and the cell-pixel geometry resamples to a
      * different pixel canvas, so two SixelRenderers named 'sixel' with any
      * of these differing must never cross-serve a poster cache entry.
+     *
+     * C-04: the intensity segment appears ONLY when set — the pinned
+     * default fingerprint stays byte-identical (DiskCacheKeyTest), while
+     * every ordered/noise render under a non-default bias gets its own
+     * cache key instead of cross-serving the 1.0-bias bytes.
      */
     public function configFingerprint(): string
     {
         return 'dither=' . $this->dither->value
             . '|maxColors=' . $this->maxColors
             . '|cellWidth=' . $this->cellWidth
-            . '|cellHeight=' . $this->cellHeight;
+            . '|cellHeight=' . $this->cellHeight
+            . ($this->intensity === null ? '' : '|intensity=' . $this->intensity);
     }
 
     /**
-     * A copy of this renderer using $dither, keeping its colour budget and
-     * cell-pixel geometry — so re-tinting a configured Sixel (custom
-     * maxColors or real terminal cell sizes) never silently resets them.
+     * A copy of this renderer using $dither, keeping its colour budget,
+     * bias intensity and cell-pixel geometry — so re-tinting a configured
+     * Sixel (custom maxColors or real terminal cell sizes) never silently
+     * resets them.
      */
     public function withDither(Dither $dither): self
     {
-        return new self($dither, $this->maxColors, $this->cellWidth, $this->cellHeight);
+        return new self($dither, $this->maxColors, $this->cellWidth, $this->cellHeight, $this->intensity);
     }
 
     /**
@@ -561,13 +590,26 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * @param list<array{int,int,int}> $palette
      * @param int $offset 1 when register 0 is the transparent background —
      *                    opaque pixels index from $offset and holes map to 0.
+     * @param int $yOrigin C-04: absolute pixel row of this call's row 0 — the
+     *                    texture phase is taken on $y + $yOrigin, so encoding
+     *                    a band sub-image yields exactly the grid rows the
+     *                    full-canvas pass produces (D-02 band-split equality;
+     *                    error diffusion is by design NOT sliceable this way,
+     *                    which is why the reach window stays stateful above).
      * @return \Generator<int, list<int>>  row index → grid[row][col] palette index
      */
-    private function indexRows(\GdImage $img, array $palette, Dither $dither, int $offset): \Generator
+    private function indexRows(\GdImage $img, array $palette, Dither $dither, int $offset, int $yOrigin = 0): \Generator
     {
         $w = imagesx($img);
         $h = imagesy($img);
-        $hasDiffusion = $dither !== Dither::None;
+
+        // C-04: Ordered is a bias texture, not an error diffusion — the
+        // old `$dither !== Dither::None` test would wrongly arm the kernel
+        // for it, so the arms are spelled out.
+        $hasDiffusion = match ($dither) {
+            Dither::FloydSteinberg, Dither::Stucki, Dither::Atkinson => true,
+            Dither::None, Dither::Ordered                            => false,
+        };
 
         // The lowest row a single pixel's error can still reach — the window
         // must keep every row awaiting an inbound contribution.
@@ -577,8 +619,12 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             // Named (not `default`) so a future Dither case that forgets to declare
             // its error-diffusion reach raises UnhandledMatchError here rather than
             // silently getting a 1-row window and corrupting output.
-            Dither::None => 0,
+            Dither::None, Dither::Ordered => 0,
         };
+
+        $texture = $dither === Dither::Ordered
+            ? OrderedTexture::bayer16($this->orderedTextureMagnitude())
+            : null;
 
         /** @var array<int, list<array{float,float,float}>> $window  absolute row → RGB accumulators */
         $window = [];
@@ -588,19 +634,27 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         // Read one row's raw pixels into floating-point accumulators; when a
         // background register is reserved, remember which pixels are holes so
         // the diffusion pass (which carries colour, not transparency) can skip
-        // them exactly as the old full-canvas builder did.
-        $loadBase = function (int $y) use ($img, $w, $offset, &$window, &$holes): void {
+        // them exactly as the old full-canvas builder did. C-04: the ordered
+        // bias is added HERE — before quantisation, after nothing diffuses —
+        // mirroring chafa's simple_dither pass running ahead of palette lookup
+        // (chafa-pixops.c fs/ordered walk order).
+        $loadBase = function (int $y) use ($img, $w, $offset, $texture, $yOrigin, &$window, &$holes): void {
             $row = [];
+            $textureY = $y + $yOrigin;
             for ($x = 0; $x < $w; $x++) {
                 $rgb = imagecolorat($img, $x, $y);
                 if ($offset === 1) {
                     $holes[$y][$x] = (($rgb >> 24) & 0xFF) === 127;
                 }
-                $row[] = [
-                    (float) (($rgb >> 16) & 0xFF),
-                    (float) (($rgb >> 8) & 0xFF),
-                    (float) ($rgb & 0xFF),
-                ];
+                $r = (float) (($rgb >> 16) & 0xFF);
+                $g = (float) (($rgb >> 8) & 0xFF);
+                $b = (float) ($rgb & 0xFF);
+                if ($texture !== null) {
+                    $r = self::applyTextureMod($r, $texture->mod($x, $textureY, 0));
+                    $g = self::applyTextureMod($g, $texture->mod($x, $textureY, 1));
+                    $b = self::applyTextureMod($b, $texture->mod($x, $textureY, 2));
+                }
+                $row[] = [$r, $g, $b];
             }
             $window[$y] = $row;
         };
@@ -671,6 +725,36 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                 $loadBase($next);
             }
         }
+    }
+
+    /**
+     * C-04: Ordered bias magnitude — the user intensity folded straight
+     * through, matching chafa's chafa_dither_init() ORDERED arm
+     * (`chafa_gen_bayer_matrix (TEXTURE_DIM, intensity)`). The depth base
+     * from chafa-canvas.c:591-614 multiplies in with C-07.
+     */
+    private function orderedTextureMagnitude(): float
+    {
+        return $this->intensity ?? 1.0;
+    }
+
+    /**
+     * C-04: chafa_gen_mods + dither_pixel_u32 — split the signed texture
+     * offset into saturating pos/neg modifiers and add them to one channel.
+     * Alpha never passes through here (holes short-circuit above; GD has no
+     * per-channel alpha in the accumulator), matching chafa's `for (i=0; i<3)`
+     * loop bound.
+     */
+    private static function applyTextureMod(float $value, int $mod): float
+    {
+        $pos = max(0, min(255, $mod));
+        $neg = max(0, min(255, -$mod));
+
+        $biased = $value + $pos;
+        $biased = min($biased, 255.0);
+        $biased -= $neg;
+
+        return max($biased, 0.0);
     }
 
     /**
