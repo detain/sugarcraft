@@ -20,6 +20,16 @@ use SugarCraft\Image\PixelGrid;
  * (The previous shape sliced a 4092-character BASE64 stream, putting 4101
  * bytes on the wire per data frame: kitty truncates such frames and the
  * image corrupts.) Terminals handle aspect-ratio and scaling.
+ *
+ * Chunk-boundary note (s1-3 review m3, gzip path): the POST-gzip stream
+ * rides the SAME 3-byte-aligned raw slices, so base64 padding can only
+ * ever land on the trailing chunk — whose slice is by construction no
+ * larger than a full one. Worst-case data frame is therefore
+ * 9 + 4·ceil(2967/3) = 3965 bytes: the ≤2 bytes of ceil-to-4 slack never
+ * push any frame past the cap, and the 128-byte param reserve in
+ * {@see KittyOptions::DEFAULT_CHUNK_BYTES} keeps the widest begin frame
+ * (~60B of parameters) clear as well. Pinned for BOTH modes by
+ * KittyFrameSizeTest::testEveryFrameOfALargeCompressedTransmissionStaysWithinTheCap.
  */
 final class KittyRenderer implements Renderer
 {
