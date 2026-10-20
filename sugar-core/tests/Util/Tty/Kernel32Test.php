@@ -115,6 +115,40 @@ final class Kernel32Test extends TestCase
         $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
     }
 
+    /**
+     * A-10 (structural pin): the native GetConsoleMode call receives a
+     * handle materialized from the $h parameter, not a freshly-zeroed pointer.
+     *
+     * WHY A SOURCE SHAPE AND NOT A BEHAVIOR: on Linux ffi() throws before any
+     * native call exists, so the defect this guards (the body historically cast
+     * a zero-initialised intptr_t inline — a NULL handle — which made every
+     * Windows call return false and WindowsBackend's raw-mode saves capture
+     * mode 0 via `?? 0`) can only be pinned from the declaration itself.
+     * WindowsConsole::enable() cannot honour its save/restore contract on real
+     * Windows while this returns false unconditionally, so the pin ships with
+     * A-10 rather than as a follow-up.
+     */
+    public function testGetConsoleModeBodiesPassTheHandleArgumentToTheNativeCall(): void
+    {
+        $src     = (string) file_get_contents((new \ReflectionClass(Kernel32::class))->getFileName());
+        $start   = strpos($src, 'public function getConsoleMode(');
+        self::assertNotFalse($start, 'Kernel32 no longer declares getConsoleMode() — update this pin, do not delete it.');
+        $end     = strpos($src, "\n    }\n", $start);
+        self::assertNotFalse($end, 'Could not find the end of getConsoleMode().');
+        $body    = substr($src, $start, $end - $start);
+
+        self::assertStringContainsString(
+            '$handle->cdata = $h;',
+            $body,
+            'getConsoleMode() must materialize its FFI handle from the $h parameter (mirror setConsoleMode()); a zero-initialised pointer is ERROR_INVALID_HANDLE on every call.',
+        );
+        self::assertStringContainsString(
+            'GetConsoleMode($handle',
+            $body,
+            'getConsoleMode() must pass the materialized $handle to the native call, not construct an inline cast.',
+        );
+    }
+
     public function testSetConsoleModeRequiresWindows(): void
     {
         $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');

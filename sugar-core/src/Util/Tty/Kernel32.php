@@ -265,11 +265,19 @@ CPROTO
 
     public function getConsoleMode(int $h): int|false
     {
+        // A-10: the handle MUST be materialized from $h before the call.
+        // WHAT THIS USED TO SAY: nothing — the body silently passed a
+        // freshly-zeroed intptr_t cast to void*, i.e. a NULL handle, so every
+        // real call returned false (ERROR_INVALID_HANDLE) on Windows and
+        // WindowsBackend's raw-mode saves captured mode 0 via `?? 0`, "saving"
+        // a mode that would wipe ENABLE_PROCESSED_OUTPUT on restore.
+        // WHAT IS TRUE NOW: the same handle-spelling setConsoleMode() below
+        // already uses, which is the shape the live path requires.
+        $handle = \FFI::cast('void*', \FFI::new('intptr_t'));
+        $handle->cdata = $h;
+
         $mode = $this->ffi()->new('unsigned long');
-        $ok   = $this->ffi()->GetConsoleMode(
-            \FFI::cast('void*', \FFI::new('intptr_t')),
-            \FFI::addr($mode),
-        );
+        $ok   = $this->ffi()->GetConsoleMode($handle, \FFI::addr($mode));
 
         return $ok ? $mode->cdata : false;
     }
