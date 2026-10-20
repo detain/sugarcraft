@@ -20,6 +20,19 @@ final class Capability
         public readonly ?CellSize $cellSize,
         /** True when TMUX env var is set (requires allow-passthrough on). */
         public readonly bool $inTmux,
+        /**
+         * F-08: terminal default foreground from the OSC 10 query, lowercase
+         * 6-hex-digit 'rrggbb' — the same packed 0xRRGGBB fact chafa stores
+         * from its reply parse (chafa-term.c:403-409 probe_color_to_packed_
+         * rgb); where chafa keeps -1 for "unknown" the null of this ?string
+         * carries it. Reply components are scaled by the XTerm/Xcms rule —
+         * digits replicated to 16 bits, high byte taken, identical to
+         * chafa's /256 on the 16-bit replies chafa models. Null until
+         * probed AND answered — see {@see Detect::probeDefaultColors()}.
+         */
+        public readonly ?string $defaultFg = null,
+        /** F-08: OSC 11 default background, same representation and sentinel. */
+        public readonly ?string $defaultBg = null,
     ) {}
 
     /**
@@ -72,6 +85,31 @@ final class Capability
             $this->chafa,
             $cellSize,
             $this->inTmux,
+            // F-08: colors survive a cell-size change — the two carriers are
+            // orthogonal facets of the same probe, neither may blank the other.
+            $this->defaultFg,
+            $this->defaultBg,
+        );
+    }
+
+    /**
+     * F-08: Return a copy of this capability with the terminal's reported
+     * default colours attached (lowercase 'rrggbb', null keeps unknown),
+     * shaped exactly like {@see withCellSize()} — the OSC 10/11 answers
+     * ride onto whichever protocol rung the ladder answered on.
+     */
+    public function withDefaultColors(?string $defaultFg, ?string $defaultBg): self
+    {
+        return new self(
+            $this->sixel,
+            $this->kitty,
+            $this->iterm2,
+            $this->halfblock,
+            $this->chafa,
+            $this->cellSize,
+            $this->inTmux,
+            $defaultFg,
+            $defaultBg,
         );
     }
 

@@ -15,6 +15,10 @@ use SugarCraft\Core\Util\TtyDetect;
  * chafa's 1338-line built-in terminal table — and a table claim is only
  * ever UPGRADED by a live DA1 reply, never downgraded through it.
  *
+ * F-08: the OSC 10/11 default fg/bg query is a DETECTION surface only —
+ * the answers ride {@see Capability::$defaultFg}/{@see Capability::$defaultBg}
+ * and no renderer consumes them yet (consumer wiring is the W6/W7 seam).
+ *
  * Probes environment variables and sends DA1 queries to determine
  * which image-rendering protocols the current terminal supports.
  * Results are cached per-process.
@@ -32,6 +36,38 @@ final class Detect
     private const XTWINOP_16  = "\x1b[16t";          // cell pixel size
     private const XTWINOP_18  = "\x1b[18t";          // terminal cell count
     private const TIMEOUT_MS  = 100;
+
+    /**
+     * F-08: the OSC 10/11 default fg/bg query pair, emitted as ONE write so
+     * the terminal can pipeline both replies inside one read window. The
+     * bytes are chafa's exactly (chafa-term-db.c:249/253): ``ESC ] 10 ; ? ST``
+     * and ``ESC ] 11 ; ? ST`` — note the ``;`` BEFORE the ``?`` (the survey's
+     * ``\e]10?\e\\`` spelling was wrong; disk bytes win).
+     */
+    private const OSC_COLOR_QUERIES = "\x1b]10;?\x1b\\\x1b]11;?\x1b\\";
+
+    /**
+     * F-08: total wall budget for the colour window. Chafa's sync probe runs
+     * the whole query batch against ONE caller-passed deadline (every
+     * in_sync_pull waits only what remains — chafa-term.c:1013-1020; the
+     * chicle caller feeds min(probe_duration×1000, G_MAXINT) ms, default
+     * probe_duration 5 s — chicle-options.c:2138-2139, .h:64). We keep that
+     * single-shared-deadline shape at a fixed budget: this many
+     * milliseconds, {@see OSC_WINDOW_SLICES} reads' worth of patience.
+     */
+    private const OSC_WINDOW_MS = 300;
+
+    /** F-08: read attempts inside {@see OSC_WINDOW_MS}; bounds a slow dribbler. */
+    private const OSC_WINDOW_SLICES = 3;
+
+    /**
+     * F-08: hard cap on captured bytes for the pair. Chafa's READ_BUF_MAX
+     * (chafa-term.c:58) is a PER-READ buffer size; ours is per-window
+     * because the terminator check runs on the accumulated buffer. A real
+     * reply pair is a few dozen bytes — anything past this cap is typed
+     * noise or a corrupt stream, and the read gives up rather than ride it.
+     */
+    private const OSC_REPLY_MAX_BYTES = 4096;
 
     /**
      * F-04: the tmux format string carrying the OUTER terminal's negotiated
@@ -71,6 +107,28 @@ final class Detect
      * do — echo-safe by the same argument as the DA1 pattern.
      */
     public const XTWINOPS_REPLY_TERMINATOR = '/\e\[[468];[\d;]*t/';
+
+    /**
+     * F-08: terminator for an OSC 10 (default foreground) reply:
+     * `` ESC ] 10 ; rgb:x/y/z (ST|BEL) `` with 1-4 hex digits per component.
+     *
+     * It demands the ``rgb:`` prefix and the full hex triplet — a shape the
+     * query (`` ESC ] 10 ; ? ST ``) never carries and typed text cannot
+     * fabricate, so echoed query bytes and stray user keystrokes can neither
+     * terminate the read nor fake a reply (ISS-048 polarity, applied to the
+     * OSC reply space). BEL is accepted alongside ST because xterm-class
+     * terminals close string sequences either way. Public so tests pin its
+     * polarity; scope note: XTerm replies ``rgb:``, and the '#rrggbb'
+     * spelling some emulators use is NOT modelled here — chafa's reply
+     * parser is triplet-only (probe_color_to_packed_rgb), and this stage
+     * ports exactly that.
+     */
+    public const OSC10_REPLY_TERMINATOR
+        = '/\e\]10;rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})(?:\e\\\\|\x07)/';
+
+    /** F-08: OSC 11 (default background) twin of {@see OSC10_REPLY_TERMINATOR}. */
+    public const OSC11_REPLY_TERMINATOR
+        = '/\e\]11;rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})(?:\e\\\\|\x07)/';
 
     /**
      * F-19: plausibility ceilings for an XTWINOPS reply. Chafa's real
@@ -187,9 +245,7 @@ final class Detect
 
         // Env vars gave a definite answer — no DA1 needed.
         if ($cap->kitty || $cap->iterm2) {
-            $result = $cap->withCellSize(self::probeFontSize());
-            self::drainStdin(50, self::stdinFd());
-            return $result;
+            return self::finishProbe($cap->withCellSize(self::probeFontSize()));
         }
 
         // F-04: inside tmux the pane's DA1 reply answers FOR TMUX, not for
@@ -207,9 +263,7 @@ final class Detect
             // The outer terminal does sixel and a sixel-capable tmux (3.3+)
             // renders it in-pane; the DA1 round-trip could only agree — skip
             // it, like chicle short-circuits on its TRUE tristate.
-            $result = Capability::sixel(self::probeFontSize(), $inTmux);
-            self::drainStdin(50, self::stdinFd());
-            return $result;
+            return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux));
         }
 
         // Run DA1 sixel probing BEFORE font-size probing so that in tests
@@ -230,16 +284,12 @@ final class Detect
             // policy — a veto must not be laundered back into a sixel
             // claim through the database.
             if (!$cap->sixel && self::probeTerminfoSixel()) {
-                $result = Capability::sixel(self::probeFontSize(), $inTmux);
-                self::drainStdin(50, self::stdinFd());
-                return $result;
+                return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux));
             }
 
             $sixelViaDa1 = self::probeDa1();
             if ($sixelViaDa1 === true) {
-                $result = Capability::sixel(self::probeFontSize(), $inTmux);
-                self::drainStdin(50, self::stdinFd());
-                return $result;
+                return self::finishProbe(Capability::sixel(self::probeFontSize(), $inTmux));
             }
         }
 
@@ -252,10 +302,33 @@ final class Detect
             $cap = Capability::unknown(null, $inTmux);
         }
 
-        $result = $cap->withCellSize(self::probeFontSize());
         // Drain any remaining probe-response bytes so they don't appear
         // as stray output before the image render.
+        return self::finishProbe($cap->withCellSize(self::probeFontSize()));
+    }
+
+    /**
+     * F-08: the single exit of every probe path — attach the OSC 10/11
+     * default-colour answers, then drain leftover bytes.
+     *
+     * WHY THE COLOUR STAGE RUNS LAST (disclosed divergence from chafa):
+     * chicle's sync_probe batches FG/BG/geometry/DA1 in ONE write and
+     * multiplexes every reply in a single event loop (chafa-term.c:969+),
+     * so there its colour queries go FIRST. Our ladder reads the query
+     * socket stage by stage with per-stage reads; a colour read placed
+     * earlier would swallow the DA1/font reply bytes still buffered for
+     * the later stages (the ordering hazard documented above probeDa1()'s
+     * call site). As the last reader it can only consume bytes no earlier
+     * stage claimed, and a terminal that answers nothing costs the one
+     * shared window exactly once.
+     */
+    private static function finishProbe(Capability $result): Capability
+    {
+        [$defaultFg, $defaultBg] = self::probeDefaultColors();
+        $result = $result->withDefaultColors($defaultFg, $defaultBg);
+
         self::drainStdin(50, self::stdinFd());
+
         return $result;
     }
 
@@ -933,6 +1006,123 @@ final class Detect
         // We scan for either ";4" or "?4" to cover all known formats.
         return (str_contains($reply, ';4;') || str_contains($reply, ';4c')
             || str_contains($reply, '?4c'));
+    }
+
+    /**
+     * F-08: ask the terminal for its default foreground and background
+     * colours (OSC 10;? / OSC 11;?) and narrow the replies to 'rrggbb'.
+     *
+     * The shape mirrors {@see probeDa1()}: the same interactive-tty gate,
+     * one write of both query bytes to STDOUT, reads from {@see stdinFd()}
+     * (the setProbeStdin seam is what makes this hermetically testable),
+     * and a fail-soft return of [null, null] on every non-answer — a
+     * terminal that does not know OSC colour simply spends the window.
+     *
+     * The window is {@see OSC_WINDOW_MS} TOTAL, not per slice: the select
+     * waits the deadline's full remaining time, so a silent terminal costs
+     * one 300 ms wait (a fresh budget per slice would run to 900 ms — the
+     * absent-reply pins in DetectQueryTest hold both bounds and die on that
+     * mutation), and the slice count only bounds an emulator that dribbles
+     * bytes without ever completing a reply pair.
+     *
+     * @return array{0: ?string, 1: ?string} [defaultFg, defaultBg], 'rrggbb'
+     */
+    private static function probeDefaultColors(): array
+    {
+        if (!self::isInteractiveTty()) {
+            return [null, null];
+        }
+
+        $fd = self::stdinFd();
+        if ($fd === null) {
+            return [null, null]; // E318 family: no usable descriptor 0, nothing to read
+        }
+
+        $written = @fwrite(STDOUT, self::OSC_COLOR_QUERIES);
+        if ($written === false || $written !== strlen(self::OSC_COLOR_QUERIES)) {
+            return [null, null];
+        }
+        fflush(STDOUT);
+
+        $buf      = '';
+        $deadline = Deadline::in(self::OSC_WINDOW_MS);
+        for ($slice = 0; $slice < self::OSC_WINDOW_SLICES; $slice++) {
+            $remaining = $deadline->remainingMs();
+            if ($remaining <= 0) {
+                break; // window spent
+            }
+            $r = [$fd];
+            $w = $e = null;
+            /** @var int|false */
+            $changed = @stream_select($r, $w, $e, 0, $remaining * 1000);
+            if ($changed === false) {
+                break; // signal-interrupted select: no safe window left (probeDa1 law)
+            }
+            if ($changed === 0) {
+                continue; // silent wait: the loop-head deadline judges what remains
+            }
+            $chunk = @fread($fd, 8192);
+            if ($chunk === false) {
+                break; // a read error reads as end-of-stream
+            }
+            if ($chunk === '') {
+                continue; // EOF-ready descriptor: the slice count bounds it
+            }
+            $buf .= $chunk;
+            if (strlen($buf) > self::OSC_REPLY_MAX_BYTES) {
+                break; // past the cap this is not a reply pair; bail loud-silent
+            }
+            if (preg_match(self::OSC10_REPLY_TERMINATOR, $buf) === 1
+                && preg_match(self::OSC11_REPLY_TERMINATOR, $buf) === 1
+            ) {
+                break; // the complete pair is in hand — stop early
+            }
+        }
+
+        return [
+            self::parseOscColor($buf, self::OSC10_REPLY_TERMINATOR),
+            self::parseOscColor($buf, self::OSC11_REPLY_TERMINATOR),
+        ];
+    }
+
+    /**
+     * F-08: narrow a reply buffer to 'rrggbb' for one OSC colour slot.
+     *
+     * Every component is scaled by the XTerm/Xcms rule: fewer than four
+     * hex digits are cyclically replicated to a 16-bit word and the 8-bit
+     * answer is its high byte. For the shapes chafa models — 16-bit
+     * replies narrowed by /256 in probe_color_to_packed_rgb
+     * (chafa-term.c:403-409) — this is the same result; the rule also
+     * places 1- and 3-digit replies on the intensity scale the XTerm
+     * spec puts them on (digit counts beyond chafa's own parser are not
+     * observable in this legacy snapshot, which carries no OSC parser).
+     * Because the narrowing never rounds up, 0xffff maps to 255 and
+     * full-intensity replies stay full-intensity. A buffer the terminator
+     * did not match is 'unknown' → null — the sentinel the ?string field
+     * carries where chafa keeps -1.
+     */
+    private static function parseOscColor(string $reply, string $terminator): ?string
+    {
+        if (preg_match($terminator, $reply, $m) !== 1) {
+            return null;
+        }
+
+        $hex = '';
+        for ($i = 1; $i <= 3; $i++) {
+            // XTerm/Xcms scaling: a component of fewer than four digits is
+            // cyclically replicated to 16 bits ('f' → 'ffff', '123' →
+            // '1231') and the 8-bit answer is that word's high byte. For the
+            // 4- and 2-digit reply shapes this is byte-identical to chafa's
+            // /256 narrowing (chafa-term.c:403-409); it additionally keeps
+            // 1- and 3-digit replies on the intensity scale the XTerm spec
+            // puts them on — the salvage round measured the earlier len<=2
+            // direct branch answering '0f' for 'f' and '01' for '123', and
+            // this legacy chafa snapshot carries no OSC parser to parity-
+            // check those legs against, so the spec rule is the authority.
+            $hex .= substr(substr(str_repeat($m[$i], 4), 0, 4), 0, 2);
+        }
+
+        return strtolower($hex);
     }
 
     /**
