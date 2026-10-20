@@ -75,21 +75,30 @@ final class MosaicTest extends TestCase
 
     public function testAsciiFactoryMono(): void
     {
+        // A-06: Mono's protocol already IS its mode value, so modeDetail()
+        // stays null — the 'ascii' name alone identifies the bytes.
         $m = Mosaic::ascii();
         $this->assertSame('ascii', $m->protocol());
+        $this->assertNull($m->modeDetail());
         $this->assertInstanceOf(AsciiRenderer::class, $this->getRenderer($m));
     }
 
     public function testAsciiFactoryTrueColor(): void
     {
+        // A-06: protocol() names the PROTOCOL ('ascii'), never the colour
+        // arm; modeDetail() carries the arm that distinguishes the bytes.
         $m = Mosaic::ascii(AsciiColorMode::TrueColor);
-        $this->assertSame('truecolor', $m->protocol());
+        $this->assertSame('ascii', $m->protocol());
+        $this->assertSame('truecolor', $m->modeDetail());
     }
 
     public function testAsciiFactoryAnsi256(): void
     {
+        // A-06: see testAsciiFactoryTrueColor — 'ansi256' is colour detail,
+        // not a protocol name.
         $m = Mosaic::ascii(AsciiColorMode::Ansi256);
-        $this->assertSame('ansi256', $m->protocol());
+        $this->assertSame('ascii', $m->protocol());
+        $this->assertSame('ansi256', $m->modeDetail());
     }
 
     public function testSixelFactoryDefault(): void

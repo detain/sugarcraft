@@ -97,9 +97,27 @@ final class AsciiRenderer implements Renderer
         return implode("\n", $lines);
     }
 
+    /**
+     * A-06: the protocol slot carries the protocol, not the colour ramp.
+     * All three AsciiColorMode arms encode through the same ASCII-symbol
+     * protocol, so name() is the constant 'ascii'; the colour depth a
+     * particular renderer instance encodes at is its own axis, exposed by
+     * {@see colorMode()} for cache-key discriminators and future callers.
+     */
     public function name(): string
     {
-        return $this->color->value;
+        return 'ascii';
+    }
+
+    /**
+     * The colour-ramp mode this renderer encodes with (Mono/Ansi256/TrueColor).
+     * A-06 relocated this value out of {@see name()} so protocol() stops
+     * leaking 'ansi256'/'truecolor' into the PROTOCOL slot; anything that
+     * previously differentiated ascii variants by name() must key on this.
+     */
+    public function colorMode(): AsciiColorMode
+    {
+        return $this->color;
     }
 
     public function supportsAlpha(): bool

@@ -316,10 +316,38 @@ final class Mosaic
 
     /**
      * Stable backend name: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'quarterblock' | 'ascii' | 'chafa'.
+     * A-06: this slot names the PROTOCOL only. The three AsciiRenderer
+     * colour arms all report 'ascii' here — pair with {@see modeDetail()}
+     * wherever the encoded bytes must be told apart.
      */
     public function protocol(): string
     {
         return $this->renderer->name();
+    }
+
+    /**
+     * Extra discriminator for when {@see protocol()} alone does not
+     * identify the encoded bytes. A-06: AsciiRenderer has three colour
+     * arms behind one protocol name, so an Ansi256/TrueColor ascii mosaic
+     * reports its {@see AsciiColorMode} value ('ansi256'/'truecolor')
+     * here; every other renderer — and the Mono ascii arm, whose protocol
+     * name already is its mode value — reports null. A tmux-decorated
+     * mosaic answers for its inner renderer, the same way the decorator's
+     * 'tmux(<inner>)' name does.
+     */
+    public function modeDetail(): ?string
+    {
+        $renderer = $this->renderer instanceof TmuxPassthroughDecorator
+            ? $this->renderer->inner()
+            : $this->renderer;
+
+        if (!$renderer instanceof AsciiRenderer) {
+            return null;
+        }
+
+        $mode = $renderer->colorMode();
+
+        return $mode === AsciiColorMode::Mono ? null : $mode->value;
     }
 
     /**
@@ -592,7 +620,7 @@ final class Mosaic
     }
 
     /**
-     * Build a Mosaic from a protocol mode string.
+     * Build a Mosaic from a render-mode string.
      *
      * Accepts the vocabulary terminals/apps configure image output with —
      * `auto`, `sixel`, `kitty`, `iterm2`, `halfblock` (aliases `half`,
@@ -600,6 +628,9 @@ final class Mosaic
      * `truecolor`, `chafa` — case-insensitively, whitespace-trimmed.
      * `ansi256`/`truecolor` select the ASCII ramp renderer tinted with the
      * matching colour mode, mirroring how the client config maps them.
+     * A-06: those two are legacy INPUT spellings of the 'ascii' protocol's
+     * colour arms — {@see modeDetail()} tells them apart; {@see protocol()}
+     * answers 'ascii' for all three.
      *
      * Returns null on an unknown mode so callers can phrase the error in
      * their own words rather than unwinding an exception.
@@ -754,14 +785,23 @@ final class Mosaic
 
     /**
      * Poster cache key: DiskCache::key() over (url, cellW, cellH-sentinel,
-     * protocol|scale). The scale rides in the protocol segment because it
-     * changes the encoded bytes (Fill crops, Fit letterboxes) for an
-     * otherwise identical (url, size, protocol) tuple — two mosaics at
+     * protocol[:modeDetail]|scale). The scale rides in the protocol segment
+     * because it changes the encoded bytes (Fill crops, Fit letterboxes) for
+     * an otherwise identical (url, size, protocol) tuple — two mosaics at
      * different scales must never cross-serve each other's cache entries.
+     * A-06: since the ascii protocol name no longer carries the colour arm,
+     * modeDetail() rides in the same segment (':ansi256'/':truecolor') so
+     * the three ascii arms stay cache-distinct. Mono keeps the exact
+     * pre-A-06 segment; the two non-Mono arms deliberately move to new keys
+     * (old entries simply age out — a changed key is a miss, never a
+     * wrong-serve).
      */
     private function posterCacheKey(string $urlOrPath, int $cellW, ?int $cellH): string
     {
-        $protocol = $this->protocol() . '|' . ($this->scale ?? Scale::Fill)->name;
+        $detail = $this->modeDetail();
+        $protocol = $this->protocol()
+            . ($detail === null ? '' : ':' . $detail)
+            . '|' . ($this->scale ?? Scale::Fill)->name;
 
         return DiskCache::key($urlOrPath, $cellW, $cellH ?? self::AUTO_HEIGHT, $protocol);
     }

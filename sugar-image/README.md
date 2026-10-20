@@ -138,8 +138,10 @@ $mosaic = Mosaic::probe();
 $cache  = new DiskCache($_SERVER['HOME'] . '/.cache/posters', maxEntries: 512);
 
 // Key includes the protocol — the same image at the same size encodes
-// differently for sixel vs kitty vs half-block.
-$key = DiskCache::key($url, width: 24, height: 36, protocol: $mosaic->protocol());
+// differently for sixel vs kitty vs half-block. A-06: the ASCII renderer's
+// colour arms share one protocol name, so pass protocol() plus modeDetail()
+// (Mosaic::posterCacheKey does exactly this) to keep them cache-distinct.
+$key = DiskCache::key($url, width: 24, height: 36, protocol: $mosaic->protocol() . ($mosaic->modeDetail() ? ':' . $mosaic->modeDetail() : ''));
 
 $ansi = $cache->getOrCompute($key, fn (): string =>
     $mosaic->render(ImageSource::fromUrl($url), 24, 36));

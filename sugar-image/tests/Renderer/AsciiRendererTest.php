@@ -47,11 +47,20 @@ final class AsciiRendererTest extends TestCase
         self::assertStringContainsString("\x1b[38;5;", $out);
     }
 
-    public function testNameMatchesColourModeForCacheKeying(): void
+    /**
+     * A-06: name() is the constant protocol identity 'ascii' for every
+     * colour arm — the ramp moved to colorMode() so the PROTOCOL slot stops
+     * leaking 'ansi256'/'truecolor' colour-mode names.
+     */
+    public function testNameIsTheConstantProtocolAndColourModeRidesColorMode(): void
     {
         self::assertSame('ascii', (new AsciiRenderer(AsciiColorMode::Mono))->name());
-        self::assertSame('ansi256', (new AsciiRenderer(AsciiColorMode::Ansi256))->name());
-        self::assertSame('truecolor', (new AsciiRenderer(AsciiColorMode::TrueColor))->name());
+        self::assertSame('ascii', (new AsciiRenderer(AsciiColorMode::Ansi256))->name());
+        self::assertSame('ascii', (new AsciiRenderer(AsciiColorMode::TrueColor))->name());
+
+        self::assertSame(AsciiColorMode::Mono, (new AsciiRenderer(AsciiColorMode::Mono))->colorMode());
+        self::assertSame(AsciiColorMode::Ansi256, (new AsciiRenderer(AsciiColorMode::Ansi256))->colorMode());
+        self::assertSame(AsciiColorMode::TrueColor, (new AsciiRenderer(AsciiColorMode::TrueColor))->colorMode());
     }
 
     public function testWidthOnlyDerivesHeightFromAspectRatio(): void

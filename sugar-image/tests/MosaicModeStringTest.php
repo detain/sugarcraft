@@ -57,7 +57,10 @@ final class MosaicModeStringTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: string, 1: string}> mode → [protocol, renderer FQCN]
+     * @return array<string, array{0: string, 1: string}> mode input word → renderer FQCN
+     *         (row[0] is the word fed to fromModeString(); A-06 left the
+     *         'ansi256'/'truecolor' legacy spellings accepted as INPUT, but
+     *         they are colour arms of the 'ascii' protocol, not protocols)
      */
     public static function modeProvider(): array
     {
@@ -101,14 +104,24 @@ final class MosaicModeStringTest extends TestCase
         $this->assertSame('halfblock', Mosaic::fromModeString('HALF')?->protocol());
     }
 
+    /**
+     * A-06: protocol() reports 'ascii' for all three colour arms — the
+     * ramp words 'ansi256'/'truecolor' are accepted INPUT spellings that
+     * reach AsciiRenderer's colour axis, now carried by modeDetail()
+     * instead of leaking into the protocol slot.
+     */
     public function testAnsi256AndTruecolorModesReachTheAsciiRendererColorMode(): void
     {
-        // AsciiRenderer::name() is the AsciiColorMode value, so protocol()
-        // distinguishes the three ramp modes — 'ansi256'/'truecolor' must
-        // not collapse onto plain 'ascii'.
+        // All three mode words resolve to the same PROTOCOL...
         $this->assertSame('ascii', Mosaic::fromModeString('ascii')?->protocol());
-        $this->assertSame('ansi256', Mosaic::fromModeString('ansi256')?->protocol());
-        $this->assertSame('truecolor', Mosaic::fromModeString('truecolor')?->protocol());
+        $this->assertSame('ascii', Mosaic::fromModeString('ansi256')?->protocol());
+        $this->assertSame('ascii', Mosaic::fromModeString('truecolor')?->protocol());
+
+        // ...and the colour arm — the thing that actually differs in the
+        // encoded bytes — rides modeDetail(), null for the Mono arm.
+        $this->assertNull(Mosaic::fromModeString('ascii')?->modeDetail());
+        $this->assertSame('ansi256', Mosaic::fromModeString('ansi256')?->modeDetail());
+        $this->assertSame('truecolor', Mosaic::fromModeString('truecolor')?->modeDetail());
     }
 
     public function testUnknownModeReturnsNullForCallerPhrasedErrors(): void
