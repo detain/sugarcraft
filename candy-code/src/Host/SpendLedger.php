@@ -74,7 +74,18 @@ final class SpendLedger
      */
     private static function boundAmount(TokenTracker $tracker): string
     {
-        return ($tracker->hasUnpricedUsage() ? '≥$' : '$') . sprintf('%.4f', $tracker->totalCost());
+        return self::boundUsd($tracker->hasUnpricedUsage(), $tracker->totalCost());
+    }
+
+    /**
+     * The same law as {@see boundAmount()} one seam further out: for sums
+     * the ledger is not holding — the mid-turn breach event, the compaction
+     * refusals, a host snapshot — the caller carries the unpriced bit and
+     * the bound is spelled here, so `≥$` has ONE spelling in the app.
+     */
+    public static function boundUsd(bool $unpriced, float $usd): string
+    {
+        return ($unpriced ? '≥$' : '$') . sprintf('%.4f', $usd);
     }
 
     /**
@@ -188,7 +199,10 @@ final class SpendLedger
     {
         return Lang::t('host.spend.mid_turn', [
             'calls' => $event->completedCalls,
-            'spent' => sprintf('%.4f', $event->spentUsd),
+            // SES-1 (≥ law): the figure carries its own bound, same as
+            // refusalNotice() above — a breach sum that counts an unpriced
+            // step is a LOWER BOUND and must not print as a measurement.
+            'spent' => self::boundUsd($event->unpriced, $event->spentUsd),
             'cap' => sprintf('%.4f', $event->capUsd),
         ]);
     }

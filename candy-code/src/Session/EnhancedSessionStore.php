@@ -1046,6 +1046,9 @@ final class EnhancedSessionStore
     /** @var array<string, true> root + reason pairs already announced */
     private static array $announcedMissingSnapshots = [];
 
+    /** SES-1: whether this process has yet told the user the ledger refused a row. */
+    private static bool $announcedDroppedUsage = false;
+
     /**
      * Snapshot refs of rows the current write deleted, dropped once it
      * commits — never inside the write lock, and never for a rolled-back one.
@@ -1340,6 +1343,33 @@ final class EnhancedSessionStore
     public static function forgetAnnouncedSnapshots(): void
     {
         self::$announcedMissingSnapshots = [];
+    }
+
+    /**
+     * SES-1: say once per process that the durable ledger refused a spend
+     * row, with the store's own reason. Once, because a lock that is held
+     * for real (a wedged sibling process) would otherwise print one transcript
+     * row per provider call, and every row is re-sent to the model. The
+     * fail-soft return is unchanged: this names the drop, it does not undo it.
+     */
+    private static function announceDroppedUsageRecord(string $sessionId, \Throwable $error): void
+    {
+        if (self::$announcedDroppedUsage) {
+            return;
+        }
+        self::$announcedDroppedUsage = true;
+
+        RuntimeNoticeSink::warn(sprintf(
+            'The durable spend ledger could not record a provider call for session %s: %s. This launch keeps counting in memory; /usage reads low for whatever was dropped.',
+            $sessionId,
+            $error->getMessage(),
+        ));
+    }
+
+    /** Forget whether the dropped-usage notice has shown. For tests. */
+    public static function forgetDroppedUsageNotice(): void
+    {
+        self::$announcedDroppedUsage = false;
     }
 
     /**
@@ -2392,7 +2422,17 @@ final class EnhancedSessionStore
 
                 $this->sessionStore->addSessionSpend($sessionId, $usage->costUsd, $usage->unpricedModel !== null);
             });
-        } catch (\Throwable) {
+        } catch (\Throwable $error) {
+            // SES-1: still fail-soft — the in-process tracker carries this
+            // session's truth and a busy database must never cost the user
+            // their turn — but "soft" was never meant to mean SILENT. The
+            // drop lands on the runtime-notice seam once per process, the
+            // same channel (and the same latch shape) as the missing-snapshot
+            // notice below; a row lost to SQLITE_BUSY is something the
+            // session can no longer DO with its money figures, and `/usage`
+            // reading low is not self-evident anywhere else.
+            self::announceDroppedUsageRecord($sessionId, $error);
+
             return false;
         }
 

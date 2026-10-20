@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Session;
 
 use PDO;
+use SugarCraft\Code\Support\SqliteConnect;
 
 /**
  * SQLite session persistence with WAL mode.
@@ -130,8 +131,7 @@ final class SessionStore
         // for a database that pre-existed with looser permissions.
         $previousUmask = umask(0077);
         try {
-            $this->pdo = new PDO("sqlite:$dbPath");
-            $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $this->pdo = SqliteConnect::open($dbPath);
             $this->pdo->exec('PRAGMA journal_mode=WAL');
             // Foreign keys are OFF by default in SQLite and must be enabled per
             // connection. Without this the FK/ON DELETE CASCADE clauses below are

@@ -153,7 +153,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — THIRTY-NINE
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FORTY
  *     of them, in SEVENTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
@@ -740,7 +740,11 @@ final class StderrEmitterCensusTest extends TestCase
         // cannot learn from anywhere else until they try. One site behind a
         // once-per-directory-and-reason latch, so a refusal that repeats on
         // every turn (the home directory) is one row per session.
-        'src/Session/EnhancedSessionStore.php' => 1,
+        // SES-1 grew the second: appendUsageRecord()'s dropped spend row, same
+        // once-per-process latch shape, same routing answer — a ledger that
+        // reads low is something the session can no longer DO with its money
+        // figures, invisible anywhere else until /usage is believed.
+        'src/Session/EnhancedSessionStore.php' => 2,
         // The system-prompt skill listing cut by its byte budget. The routing
         // decision: a listing the user did not know was cut is exactly what the
         // notice seam is for — "this session got smaller", the same family as

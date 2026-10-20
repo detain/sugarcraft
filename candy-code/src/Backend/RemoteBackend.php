@@ -364,7 +364,7 @@ final class RemoteBackend implements InteractiveTurn, ObservesReasoning
                     return;
 
                 case SessionEvent::SPEND_CAP_BREACHED:
-                    $onEvent?->__invoke(new SpendCapBreached((int) ($data['calls'] ?? 0), (float) ($data['spent'] ?? 0.0), (float) ($data['cap'] ?? 0.0)));
+                    $onEvent?->__invoke(new SpendCapBreached((int) ($data['calls'] ?? 0), (float) ($data['spent'] ?? 0.0), (float) ($data['cap'] ?? 0.0), (bool) ($data['unpriced'] ?? false)));
 
                     return;
 

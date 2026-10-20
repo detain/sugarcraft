@@ -31,6 +31,22 @@ final class SessionSnapshotTest extends TestCase
         self::assertSame(7, $wire['lastSeq']);
     }
 
+    /**
+     * SES-1 (≥ law): the spend figure's companion bit ships on the snapshot
+     * payload the way Message::jsonSerialize ships its additive columns —
+     * only when set, so a priced snapshot stays byte-identical for clients
+     * that predate the key, and a lower-bound sum is never presented blind.
+     */
+    public function testTheSpendBoundBitShipsOnlyWhenSet(): void
+    {
+        self::assertArrayNotHasKey('spendUnpriced', SessionSnapshot::new('s', spentUsd: 0.25)->toArray());
+        self::assertArrayNotHasKey('spendUnpriced', SessionSnapshot::new('s', spentUsd: 0.25, spendUnpriced: false)->toArray());
+
+        $bound = SessionSnapshot::new('s', spentUsd: 0.25, spendUnpriced: true)->toArray();
+        self::assertTrue($bound['spendUnpriced']);
+        self::assertSame(0.25, $bound['spentUsd'], 'the figure rides unchanged; the bit qualifies it');
+    }
+
     public function testAnIdleSnapshotOmitsTheTurn(): void
     {
         $wire = SessionSnapshot::new('s')->toArray();

@@ -51,9 +51,6 @@ final class EmbeddingCache
     /** Texts per embedder call: one request per batch of misses. */
     public const BATCH_SIZE = 64;
 
-    /** How long a lookup waits on another process's write lock, in seconds. */
-    private const BUSY_TIMEOUT_SECONDS = 2;
-
     /** SQLITE_CORRUPT and SQLITE_NOTADB: a cache file worth deleting. */
     private const DAMAGED_CODES = [11, 26];
 
@@ -324,9 +321,7 @@ final class EmbeddingCache
 
         $previousUmask = umask(0077);
         try {
-            $db = new \PDO('sqlite:' . $this->file);
-            $db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-            $db->setAttribute(\PDO::ATTR_TIMEOUT, self::BUSY_TIMEOUT_SECONDS);
+            $db = \SugarCraft\Code\Support\SqliteConnect::open($this->file);
             // A derived cache: a crash costs a recompute, never a note.
             $db->exec('PRAGMA synchronous = OFF');
             $db->exec(

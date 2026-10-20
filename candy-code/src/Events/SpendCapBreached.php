@@ -43,10 +43,20 @@ final readonly class SpendCapBreached
      *                              step of THIS turn the provider billed.
      * @param float $capUsd         the cap that was reached, as the user set
      *                              it via `$CANDY_CODE_MAX_COST` / `/budget`.
+     * @param bool  $unpriced       SES-1 (≥ law): whether the $spentUsd sum
+     *                              includes any billed step whose model has
+     *                              no price on file — then the figure is a
+     *                              LOWER BOUND and every surface that prints
+     *                              it must say `≥$`, exactly as
+     *                              {@see \SugarCraft\Code\Host\SpendLedger}
+     *                              does for the session's live total.
+     *                              False on priced sums and on every frame
+     *                              written before this field existed.
      */
     public function __construct(
         public int $completedCalls,
         public float $spentUsd,
         public float $capUsd,
+        public bool $unpriced = false,
     ) {}
 }

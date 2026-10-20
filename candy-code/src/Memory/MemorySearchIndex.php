@@ -56,9 +56,6 @@ final class MemorySearchIndex
      */
     private const WEIGHTS = '0.0, 1.0, 0.5, 2.0';
 
-    /** How long a search waits on another process's write lock, in seconds. */
-    private const BUSY_TIMEOUT_SECONDS = 2;
-
     /** SQLITE_CORRUPT and SQLITE_NOTADB: a cache file worth deleting. */
     private const DAMAGED_CODES = [11, 26];
 
@@ -192,9 +189,7 @@ final class MemorySearchIndex
         // journal file too.
         $previousUmask = umask(0077);
         try {
-            $db = new \PDO('sqlite:' . $this->location);
-            $db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-            $db->setAttribute(\PDO::ATTR_TIMEOUT, self::BUSY_TIMEOUT_SECONDS);
+            $db = \SugarCraft\Code\Support\SqliteConnect::open($this->location);
 
             // A derived cache: a crash costs a rebuild, never a note, so it
             // does not pay for an fsync per search.

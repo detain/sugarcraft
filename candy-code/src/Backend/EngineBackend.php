@@ -1610,6 +1610,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
             return $spent + ($siblingSpend?->spentByOthers()?->costUsd ?? 0.0);
         };
+        // SES-1 (≥ law): the companion bit to the boundary spend above —
+        // whether any step THIS sum counts came from a model with no price
+        // on file (or a sibling's billed step did). A breach whose spend is
+        // a lower bound must print as one; the check walks the same inputs
+        // $spentSoFarUsd walks, so the pair can never disagree.
+        $unpricedAtBoundary = static function () use (&$stepUsages, $siblingSpend): bool {
+            foreach ($stepUsages as $stepUsage) {
+                if ($stepUsage?->unpricedModel !== null) {
+                    return true;
+                }
+            }
+
+            return $siblingSpend?->spentByOthers()?->unpricedModel !== null;
+        };
 
         // Read once and hand to both resolvers, so a turn touches the config
         // file at most one time however many settings are resolved off it.
@@ -2488,7 +2502,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     // nothing (see the event's own docblock). $step is 0-based,
                     // so the calls made number $step + 1.
                     if ($onEvent !== null) {
-                        $onEvent(new SpendCapBreached($step + 1, $sessionSpendAtBoundary, $this->spendCapUsd));
+                        $onEvent(new SpendCapBreached($step + 1, $sessionSpendAtBoundary, $this->spendCapUsd, $unpricedAtBoundary()));
                     }
 
                     $stoppedBySpendCap = true;
@@ -5394,6 +5408,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 'calls' => $event->completedCalls,
                 'spent' => $event->spentUsd,
                 'cap' => $event->capUsd,
+                // SES-1: additive. A frame this build reads from an older
+                // writer simply lacks the key and decodes priced.
+                'unpriced' => $event->unpriced,
             ];
         }
 
@@ -5503,7 +5520,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 return null;
             }
 
-            return new SpendCapBreached($calls, (float) $spent, (float) $cap);
+            return new SpendCapBreached($calls, (float) $spent, (float) $cap, ($encoded['unpriced'] ?? false) === true);
         }
 
         if ($kind === 'media_progress') {

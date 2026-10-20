@@ -45,6 +45,14 @@ final class SessionSnapshot
         public readonly ?string $turnId,
         public readonly float $spentUsd,
         public readonly int $lastSeq,
+        /**
+         * SES-1 (≥ law): whether {@see $spentUsd} is a LOWER BOUND because
+         * the session counted a call from a model with no price on file —
+         * the companion bit the dollar surfaces all carry, so a client
+         * never renders a blind sum as a measurement. Additive: hosts that
+         * do not know it pass nothing, and the wire key stays absent.
+         */
+        public readonly bool $spendUnpriced = false,
     ) {
     }
 
@@ -60,8 +68,9 @@ final class SessionSnapshot
         ?string $turnId = null,
         float $spentUsd = 0.0,
         int $lastSeq = 0,
+        bool $spendUnpriced = false,
     ): self {
-        return new self($sessionId, array_values($history), array_values($queued), $busy, $turnId, $spentUsd, $lastSeq);
+        return new self($sessionId, array_values($history), array_values($queued), $busy, $turnId, $spentUsd, $lastSeq, $spendUnpriced);
     }
 
     /** The session's status word (Appendix O §6.5 `session.status`): busy or idle. */
@@ -126,6 +135,10 @@ final class SessionSnapshot
             'queued' => $this->queued,
             'spentUsd' => $this->spentUsd,
             'lastSeq' => $this->lastSeq,
+            // SES-1: only when set, on the Message::jsonSerialize precedent —
+            // a priced snapshot serialises byte-for-byte as before, and a
+            // client reads `payload['spendUnpriced'] ?? false` tolerantly.
+            ...($this->spendUnpriced ? ['spendUnpriced' => true] : []),
         ], static fn (mixed $value): bool => $value !== null);
 
         return $page === null ? $shape : $shape + $page;

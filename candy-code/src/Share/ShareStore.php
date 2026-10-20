@@ -77,8 +77,7 @@ final class ShareStore
         $existed = is_file($dbPath);
         $previousUmask = umask(0077);
         try {
-            $pdo = new \PDO('sqlite:' . $dbPath);
-            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+            $pdo = \SugarCraft\Code\Support\SqliteConnect::open($dbPath);
             $pdo->exec('PRAGMA journal_mode=WAL');
         } finally {
             umask($previousUmask);

@@ -353,8 +353,7 @@ final class Subcommands
     {
         $error = '';
         try {
-            $pdo = new \PDO(self::SESSION_STORE_PROBE_DSN);
-            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+            $pdo = \SugarCraft\Code\Support\SqliteConnect::openDsn(self::SESSION_STORE_PROBE_DSN);
             $pdo->exec('CREATE VIRTUAL TABLE candy_code_fts5_probe USING ' . $module . '(body, tokenize = \'porter unicode61\')');
             $pdo->exec('INSERT INTO candy_code_fts5_probe(body) VALUES (\'fts5 probe sentence\')');
             $answered = (int) $pdo->query('SELECT COUNT(*) FROM candy_code_fts5_probe WHERE body MATCH \'fts5\'')->fetchColumn() === 1;

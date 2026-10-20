@@ -83,6 +83,21 @@ final class SpendLedgerTest extends TestCase
         );
     }
 
+    /**
+     * SES-1 (≥ law): a mid-turn breach whose sum includes a call from a model
+     * with no price on file must print the bound form, like the refusal and
+     * the status line already do. The bare `$` the mid-turn notice used for
+     * unpriced sessions is the leak this pins shut; the priced bytes are
+     * asserted above so the flag stays provably additive.
+     */
+    public function testTheMidTurnNoticeBoundsAnUnpricedSpendFigure(): void
+    {
+        self::assertSame(
+            '_Spend cap reached mid-turn: aborted after provider call 2 — ≥$0.4000 of the $0.2500 cap spent. No further calls were made this turn; /budget raises the cap._',
+            SpendLedger::new()->midTurnNotice(new SpendCapBreached(2, 0.4, 0.25, unpriced: true)),
+        );
+    }
+
     public function testTheStatusLineSaysNotReportedLowerBoundOrTheFigure(): void
     {
         $ledger = SpendLedger::new();

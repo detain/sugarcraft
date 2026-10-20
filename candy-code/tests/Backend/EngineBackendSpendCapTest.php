@@ -361,6 +361,17 @@ final class EngineBackendSpendCapTest extends TestCase
         $this->assertSame(3, $decoded->completedCalls);
         $this->assertEqualsWithDelta(0.25, $decoded->spentUsd, 0.000001);
         $this->assertEqualsWithDelta(1.5, $decoded->capUsd, 0.000001);
+        $this->assertFalse($decoded->unpriced, 'a priced breach crosses the codec priced');
+
+        $unpriced = $this->invokeStatic('decodeEvent', [$this->invokeStatic('encodeEvent', [new SpendCapBreached(3, 0.25, 1.5, unpriced: true)])]);
+        $this->assertInstanceOf(SpendCapBreached::class, $unpriced);
+        $this->assertTrue($unpriced->unpriced, 'SES-1: the companion bit rides the frame, so a forked breach still prints its bound');
+
+        // Legacy frames written before the bit existed carry no key; they must
+        // keep decoding as priced rather than trip the malformed-frame door.
+        $legacy = $this->invokeStatic('decodeEvent', [['kind' => 'spend_cap', 'calls' => 3, 'spent' => 0.25, 'cap' => 1.5]]);
+        $this->assertInstanceOf(SpendCapBreached::class, $legacy);
+        $this->assertFalse($legacy->unpriced);
     }
 
     public function testTheCodecRefusesAMalformedSpendCapFrame(): void

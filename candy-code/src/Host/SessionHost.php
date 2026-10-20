@@ -355,6 +355,9 @@ final class SessionHost
             $this->turnId(),
             $this->spentUsd(),
             $lastSeq,
+            // SES-1 (≥ law): the spend figure's companion bit, straight off
+            // the same tracker spentUsd() reads, so the pair cannot disagree.
+            $this->spend->hasUnpricedUsage(),
         );
     }
 

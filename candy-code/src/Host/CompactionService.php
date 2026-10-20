@@ -746,10 +746,12 @@ final class CompactionService
      * $spentUsd and $capUsd are the session's provider-reported spend and its
      * cap, in US dollars.
      */
-    public function spendCapCompactionNotice(float $spentUsd, float $capUsd, string $tail): string
+    public function spendCapCompactionNotice(float $spentUsd, float $capUsd, string $tail, bool $unpriced = false): string
     {
         return Lang::t('host.compact.spend_cap', [
-            'spent' => sprintf('%.4f', $spentUsd),
+            // SES-1 (≥ law): the session figure is the ledger's own bound
+            // spelling, cap stays a plain measurement.
+            'spent' => SpendLedger::boundUsd($unpriced, $spentUsd),
             'cap' => sprintf('%.4f', $capUsd),
         ]) . $tail;
     }
@@ -759,11 +761,11 @@ final class CompactionService
      * raise the cap (to twice the spend so far) and run the command again for
      * model-written summaries. See {@see spendCapCompactionNotice()}.
      */
-    public function compactCommandCapNotice(float $spentUsd, float $capUsd): string
+    public function compactCommandCapNotice(float $spentUsd, float $capUsd, bool $unpriced = false): string
     {
         return $this->spendCapCompactionNotice($spentUsd, $capUsd, Lang::t('host.compact.spend_cap.command', [
             'raise' => sprintf('%.2f', $spentUsd * 2),
-        ]));
+        ]), $unpriced);
     }
 
     /**
@@ -771,12 +773,13 @@ final class CompactionService
      * the prompt goes out against the heuristic rewrite regardless — no advice
      * to run `/compact`, for the reason {@see spendCapCompactionNotice()} gives.
      */
-    public function parkedTurnCapNotice(float $spentUsd, float $capUsd): string
+    public function parkedTurnCapNotice(float $spentUsd, float $capUsd, bool $unpriced = false): string
     {
         return $this->spendCapCompactionNotice(
             $spentUsd,
             $capUsd,
-            Lang::t('host.compact.spend_cap.parked', ['raise' => sprintf('%.2f', $spentUsd * 2)])
+            Lang::t('host.compact.spend_cap.parked', ['raise' => sprintf('%.2f', $spentUsd * 2)]),
+            $unpriced,
         );
     }
 

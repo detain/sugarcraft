@@ -12,6 +12,7 @@ use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookManager;
+use SugarCraft\Code\Host\SpendLedger;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\DenialKind;
@@ -2051,7 +2052,9 @@ final class NonInteractive
      *
      * The reason reuses the host ledger's own mid-turn sentence —
      * {@see \SugarCraft\Code\Host\SpendLedger::midTurnNotice()} — under the
-     * same key and the same `%.4f` money shape, because "refused to start"
+     * same key and the same bound-money shape ({@see SpendLedger::boundUsd()},
+     * SES-1: an unpriced breach sum prints `≥$` here exactly as the TUI
+     * prints it), because "refused to start"
      * and "aborted mid-turn" are different promises about money and the
      * wording that keeps them apart exists once. A re-spelling here would be
      * the drift this method's whole `host.spend.mid_turn` choice refuses.
@@ -2065,7 +2068,7 @@ final class NonInteractive
             'kind' => self::SPEND_CAP_ROW_KIND,
             'reason' => Lang::t('host.spend.mid_turn', [
                 'calls' => $event->completedCalls,
-                'spent' => \sprintf('%.4f', $event->spentUsd),
+                'spent' => SpendLedger::boundUsd($event->unpriced, $event->spentUsd),
                 'cap' => \sprintf('%.4f', $event->capUsd),
             ]),
         ];

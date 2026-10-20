@@ -1926,7 +1926,7 @@ final class BinCandyCodeDispatchTest extends TestCase
      * which the two answers differ, so the check is pinned in the two ways
      * that do not need one: the failing branch is driven directly with a DSN
      * no driver claims, and the probe's DSN scheme is compared against the
-     * literal in SessionStore's own constructor.
+     * literal in the connector SessionStore opens through.
      */
     public function testThePdoProbeExercisesTheDriverTheSessionStoreOpens(): void
     {
@@ -1961,6 +1961,12 @@ final class BinCandyCodeDispatchTest extends TestCase
         );
         $storeSource .= (string) \file_get_contents(
             (string) (new \ReflectionClass(\SugarCraft\Code\Session\SessionStore::class))->getFileName(),
+        );
+        // SES-1: the store's constructor opens through Support\SqliteConnect,
+        // so the DSN literal now lives there — the pin follows the connect,
+        // which is what "the driver the session store opens" has always named.
+        $storeSource .= (string) \file_get_contents(
+            \dirname(__DIR__, 2) . '/src/Support/SqliteConnect.php',
         );
         \preg_match('/new PDO\("([a-z0-9]+):/i', $storeSource, $m);
         $this->assertNotEmpty($m, 'could not find the session store\'s PDO DSN');

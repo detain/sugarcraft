@@ -367,9 +367,7 @@ final class TagCache
     {
         $previousUmask = \umask(0077);
         try {
-            $pdo = new \PDO('sqlite:' . $dbPath);
-            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-            $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 5);
+            $pdo = \SugarCraft\Code\Support\SqliteConnect::open($dbPath);
             $pdo->exec('PRAGMA journal_mode=WAL');
             // A derived cache: a crash may cost the last writes, never a
             // source file, so it does not pay for an fsync per commit.

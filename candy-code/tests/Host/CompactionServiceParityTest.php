@@ -373,6 +373,31 @@ final class CompactionServiceParityTest extends TestCase
     }
 
     /**
+     * SES-1 (≥ law): the compact-path cap notices take the session figure
+     * through the same bound spelling as the refusal and mid-turn notices,
+     * so an unpriced-model breach never prints its sum as a measurement.
+     * The priced bytes stay byte-identical — the flag is additive.
+     */
+    public function testTheCapNoticesBoundAnUnpricedSpendFigure(): void
+    {
+        $service = CompactionService::new();
+
+        self::assertStringStartsWith(
+            'Spend cap reached (≥$1.5000 of $1.0000), so the model was not asked to summarise',
+            $service->compactCommandCapNotice(1.5, 1.0, unpriced: true),
+        );
+        self::assertStringStartsWith(
+            'Spend cap reached (≥$1.5000 of $1.0000)',
+            $service->parkedTurnCapNotice(1.5, 1.0, unpriced: true),
+        );
+        self::assertStringStartsWith(
+            'Spend cap reached ($1.5000 of $1.0000)',
+            $service->spendCapCompactionNotice(1.5, 1.0, ''),
+            'a priced session keeps the blind-dollar-free old bytes; the flag defaults off',
+        );
+    }
+
+    /**
      * Both spend-cap answers open with the one shared sentence, and the parked
      * submission's own rows — the prompt and the notes bracketed by the park
      * notice — are what the pre-turn checkpoint drops, nothing else.
