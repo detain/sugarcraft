@@ -39,9 +39,12 @@ use SugarCraft\Video\Subtitle\WebVtt;
  * FrameRenderer (ascii/ansi256/truecolor/half-block).
  *
  * Repaint: view() returns the FULL current frame every call. sugar-core's
- * Renderer already diffs each frame against the previously rendered one and
- * emits only the minimal terminal update, so the Player does not (and must
- * not) diff inside view() — doing so would double-diff and corrupt output.
+ * Renderer owns the diffing: it compares the new frame against the
+ * previously rendered one and re-sends only the rows that changed — at ROW
+ * granularity by default, with finer cell-granularity diffing opt-in via
+ * ProgramOptions. The Player must not diff inside view(): the framework
+ * diffs against the last rendered OUTPUT, so handing it a partial frame
+ * would desync that comparison and corrupt the screen.
  *
  * Keys:
  *   Space       — pause / resume
@@ -857,9 +860,11 @@ final class Player implements Model
      * Render the current frame to a full ANSI string.
      *
      * view() always emits the COMPLETE current frame. sugar-core's Renderer
-     * diffs it against the previously rendered frame and writes only the
-     * minimal terminal update, so there is intentionally no cell-diff here —
-     * diffing inside view() would double-diff the framework's own diff and
+     * diffs it against the previously rendered frame and re-sends only the
+     * rows that changed (row granularity by default; cell-granularity
+     * diffing is opt-in through ProgramOptions), so there is intentionally
+     * no diffing here — the framework diffs against the last rendered
+     * OUTPUT, and a partial view() string would desync that comparison and
      * corrupt the screen.
      *
      * Ascii/TrueColor/HalfBlock render through a sugar-cellbuffer Buffer (the
