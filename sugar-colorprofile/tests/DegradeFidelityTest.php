@@ -169,8 +169,9 @@ final class DegradeFidelityTest extends TestCase
             // hot pink: (255,95,175) d=100+25 vs grey (180 avg) far → cube 16+180+6+3
             'hot pink'      => [[255, 105, 180], 205],
             // dark grey 63: nearest level per axis is 95 (cube d=3072) but grey bin
-            // round((63-8)/10)=6 → (68,68,68) d=75 → ramp 232+6
-            'charcoal'      => [[63, 63, 63], 238],
+            // round((63-8)/10)=6 ties 58 and 68 at d=75 → B-05 neighbour probe keeps
+            // the lower bin (brute-force lowest-index rule) → ramp 232+5
+            'charcoal'      => [[63, 63, 63], 237],
             // violet: (95,95,255) d=144+225 beats grey (avg 147 → 148: d huge) → 16+36+6+5
             'violet'        => [[107, 80, 255], 63],
             // dark green: g=128 → level 2 (135) → 16+2*6=28

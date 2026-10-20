@@ -187,12 +187,24 @@ final class Color
             + 6 * self::nearestCubeLevel($this->g)
             + self::nearestCubeLevel($this->b);
 
-        // Greyscale candidate (232-255): levels 8, 18, …, 238.
+        // Greyscale candidates (232-255): levels 8, 18, …, 238. The mean
+        // bin alone can land one slot off on an exact ramp midpoint
+        // (avg = 13, 23, …, 233), so probe bin-1, bin, bin+1 in ascending
+        // order and keep the first strict minimum — at a tie that is the
+        // lower bin, matching a brute-force lowest-index scan. B-05.
         $avg = ($this->r + $this->g + $this->b) / 3.0;
         $greyBin = max(0, min(23, (int) \round(($avg - 8.0) / 10.0)));
-        $greyIdx = 232 + $greyBin;
+        $greyIdx = 232;
+        $greyDist = \PHP_INT_MAX;
+        for ($k = max(0, $greyBin - 1); $k <= min(23, $greyBin + 1); $k++) {
+            $d = self::distToCubeIndex($this, 232 + $k);
+            if ($d < $greyDist) {
+                $greyDist = $d;
+                $greyIdx = 232 + $k;
+            }
+        }
 
-        return self::distToCubeIndex($this, $cubeIdx) <= self::distToCubeIndex($this, $greyIdx)
+        return self::distToCubeIndex($this, $cubeIdx) <= $greyDist
             ? $cubeIdx
             : $greyIdx;
     }
