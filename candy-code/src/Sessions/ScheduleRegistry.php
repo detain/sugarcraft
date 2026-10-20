@@ -31,6 +31,25 @@ use SugarCraft\Code\Support\PrivateDir;
  * Ephemeral rows need no lock: they exist in exactly one process by
  * construction.
  *
+ * WHY THE LOCK IS RE-READ (AUT-1 MAJOR-1). A flock excludes claims that
+ * OVERLAP; it is a mutex, not a causality token. A host whose head reload
+ * landed BEFORE a peer's persist but whose claim lands AFTER the peer released
+ * would, on the snapshot alone, re-fire every row the peer already fired.
+ * So due-ness is decided twice: from the snapshot to find candidates, and
+ * from a fresh read INSIDE the claim to grant them (`skipped-stale` — the row
+ * does not advance, it just waits for the next slot). The peer wrote while
+ * holding this same row lock, so the fresh read inside it cannot miss the
+ * peer's advance.
+ *
+ * WHY EVERY WRITE HOLDS A LOCK. `schedules.json` is one file carrying every
+ * row, so any whole-file write is a chance to revert a peer's add, delete,
+ * disable or edit. {@see persist()} therefore takes the shared
+ * {@see FILE_LOCK_NAME} lock (never held while a row lock is awaited, so the
+ * two lock kinds cannot deadlock, always row-then-file), skips the write when
+ * the canonical digest says the file already says exactly this, and
+ * {@see advance()} re-bases the one row it moves onto that fresh copy — a busy
+ * row's clock move can no longer resurrect a schedule another host deleted.
+ *
  * WHY THE ADVANCE COMES BEFORE THE SPAWN. A fire claims the row, moves
  * `nextDue` past every missed slot ({@see Schedule::nextDueAfter()} — the
  * overrun skip), persists, and only then spawns. If the spawn dies the row
@@ -55,6 +74,27 @@ final class ScheduleRegistry
 
     private const FILE_SCHEDULES_KEY = 'schedules';
 
+    /**
+     * The lock stem covering every whole-file write. It is a dot-prefixed
+     * name, and a schedule's name must match `^[a-z0-9]`, so no row can ever
+     * claim it — the file lock and the per-row locks live side by side in one
+     * directory without a possible collision.
+     */
+    private const FILE_LOCK_NAME = '.file';
+
+    /**
+     * How long a writer waits for the file lock before giving up. The section
+     * it protects is a stat, a read and an atomic rename — no spawn, no
+     * model call lives inside it — so contention means a peer mid-rename, and
+     * 2s of 10ms polls is orders of magnitude more patient than that needs.
+     * This is a lock backoff, not a request ceiling (the E646 law stands: no
+     * timeout bounds any schedule's fire path).
+     */
+    private const FILE_LOCK_RETRIES = 200;
+
+    /** Poll interval between file-lock attempts, in microseconds. */
+    private const FILE_LOCK_RETRY_MICROSECONDS = 10_000;
+
     /** Persisted rows keyed by name, in file order. The only mutable state that touches disk. */
     private array $rows = [];
 
@@ -69,6 +109,12 @@ final class ScheduleRegistry
 
     /** mtime/size/ino stamp of the last read (or write), so stat() can stay rare. */
     private ?array $latch = null;
+
+    /** The file lock this process holds right now, or null; persist() re-uses it rather than re-entering flock. */
+    private ?array $fileLock = null;
+
+    /** Canonical JSON of the roster as last read or written — the digest a no-op persist() skips on. */
+    private ?string $lastPayload = null;
 
     private function __construct(
         public readonly ?string $path,
@@ -222,21 +268,65 @@ final class ScheduleRegistry
         }
     }
 
-    /** Write the PERSISTED rows (and only those) back to disk. */
+    /**
+     * Write the PERSISTED rows (and only those) back to disk, under the file
+     * lock, and only when the roster actually differs from what the lock was
+     * taken to protect. A caller holding no lock that cannot take one inside
+     * {@see FILE_LOCK_RETRIES} polls refuses loudly — a `/schedules delete`
+     * that silently did not delete would be worse than an error the human
+     * can repeat.
+     */
     public function persist(): void
     {
         if ($this->path === null) {
             throw new \RuntimeException('This registry has no backing file to persist to.');
         }
-        $payload = [
+        if ($this->fileLock !== null) {
+            $this->writeLocked();
+
+            return;
+        }
+        $lock = $this->claimFileLock();
+        if ($lock === null) {
+            throw new \RuntimeException('another host is writing schedules.json right now; repeat the command.');
+        }
+        $this->fileLock = $lock;
+        try {
+            $this->writeLocked();
+        } finally {
+            $this->releaseLock($lock);
+            $this->fileLock = null;
+        }
+    }
+
+    /** Write when the digest differs; a skipped write also skips the latch, so a peer's pending reload stays visible. */
+    private function writeLocked(): void
+    {
+        $payload = $this->payload();
+        if ($payload === $this->lastPayload) {
+            return; // the file already says exactly this: no write, no mtime churn
+        }
+        AtomicJsonFile::new($this->path)->withPermissions(0o600)->write($this->envelope());
+        $this->lastPayload = $payload;
+        $this->latch = $this->statLatch();
+    }
+
+    /** @return array{version: int, schedules: list<array<string, mixed>>} the file envelope for the current roster */
+    private function envelope(): array
+    {
+        return [
             self::FILE_VERSION_KEY => self::VERSION,
             self::FILE_SCHEDULES_KEY => array_values(array_map(
                 static fn (Schedule $row): array => $row->toArray(),
                 $this->rows,
             )),
         ];
-        AtomicJsonFile::new($this->path)->withPermissions(0o600)->write($payload);
-        $this->latch = $this->statLatch();
+    }
+
+    /** The canonical digest of the roster: what persist() would write, as one string. */
+    private function payload(): string
+    {
+        return json_encode($this->envelope(), JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -262,9 +352,9 @@ final class ScheduleRegistry
 
     /**
      * Evaluate every due PERSISTED row: claim the row's lock, skip when
-     * another host holds it or a run of this name is still in flight, advance
-     * the clock, spawn through $spawn, and remember the session so the pump
-     * can {@see clearFired()} when it settles.
+     * another host holds it or a run of this name is still in flight, re-read
+     * the disk inside the claim, advance the clock, spawn through $spawn, and
+     * remember the session so the pump can {@see clearFired()} when it settles.
      *
      * @param \Closure(Schedule, int): (?string) $spawn receives the row and the
      *        tick's now-stamp, returns the spawned session id or null; throws
@@ -283,7 +373,7 @@ final class ScheduleRegistry
                 // The previous run is still going: skip this slot but move the
                 // clock, so the row does not fire the instant it settles and a
                 // wedged daemon cannot pile up a backlog of fires.
-                $this->advance($row, $now);
+                $this->advance($name, $now);
                 $results[] = ['name' => $name, 'action' => 'skipped-busy', 'sessionId' => $this->fired[$name]];
 
                 continue;
@@ -297,9 +387,25 @@ final class ScheduleRegistry
                 continue;
             }
             try {
-                $this->advance($row, $now);
+                // AUT-1 MAJOR-1: the claim excludes overlapping claims only. A
+                // peer that fired this row and RELEASED before our claim lands
+                // must not be answered with a second fire off our stale head
+                // snapshot, so due-ness is re-decided from the disk copy the
+                // peer's write produced — read while holding the same lock the
+                // peer wrote under, so it cannot be older than that write.
+                $this->reloadIfChanged();
+                $current = $this->rows[$name] ?? null;
+                if ($current === null || !$current->isDue($now)) {
+                    // Deleted, disabled, or already fired by a peer: the clock
+                    // is the peer's (or nobody's) now, and this tick touches
+                    // neither.
+                    $results[] = ['name' => $name, 'action' => 'skipped-stale'];
+
+                    continue;
+                }
+                $this->advance($name, $now);
                 try {
-                    $sessionId = $spawn($row, $now);
+                    $sessionId = $spawn($current, $now);
                 } catch (\Throwable $e) {
                     // The advance STAYS: a refused launch announces once per
                     // period, never once per tick, and a transient handshake
@@ -322,14 +428,49 @@ final class ScheduleRegistry
     }
 
     /**
-     * Roll the clock forward past every missed slot and persist. Split from
-     * the fire so the skipped-busy path advances too (that is the point: a
+     * Roll one row's clock forward past every missed slot and persist. Split
+     * from the fire so the skipped-busy path advances too (that is the point: a
      * still-running row is exactly the row we must not fire twice).
+     *
+     * The move is RE-BASED, not re-persisted: the row is re-read from disk
+     * under the file lock, its slot recomputed from THAT copy, and only it is
+     * touched. Every other row in the write is the peer's freshest state, so a
+     * busy host's clock can no longer roll back an add, delete, disable or
+     * prompt edit that landed while it was spawning. A row that vanished from
+     * disk stays vanished — the advance has nothing to advance and writes
+     * nothing. A clock that did not move (a peer already moved it past $now)
+     * writes nothing either: no spurious mtime churn to drag every sibling
+     * into a reload.
      */
-    private function advance(Schedule $row, int $now): void
+    private function advance(string $name, int $now): void
     {
-        $this->noteNextDue($row->name, $row->nextDueAfter($now));
-        $this->persist();
+        if ($this->path === null) {
+            return; // nothing to persist, and the row cannot be shared with a peer
+        }
+        $lock = $this->claimFileLock();
+        if ($lock === null) {
+            // A peer is mid-write. Skipping is safe here in a way it is not
+            // for a human command: the row is due again next tick, and the
+            // advance is arithmetic on `now`, so nothing is lost by waiting.
+            return;
+        }
+        $this->fileLock = $lock;
+        try {
+            $this->reloadIfChanged();
+            $current = $this->rows[$name] ?? null;
+            if ($current === null) {
+                return;
+            }
+            $nextDue = $current->nextDueAfter($now);
+            if ($nextDue === $current->nextDue) {
+                return;
+            }
+            $this->noteNextDue($name, $nextDue);
+            $this->persist();
+        } finally {
+            $this->releaseLock($lock);
+            $this->fileLock = null;
+        }
     }
 
     /** Mark the row busy with the session that is running it. */
@@ -365,6 +506,7 @@ final class ScheduleRegistry
     {
         $this->loadErrors = [];
         $this->rows = [];
+        $this->lastPayload = null; // until a clean read says otherwise, every persist is a real write
         if ($this->path === null) {
             return;
         }
@@ -378,7 +520,8 @@ final class ScheduleRegistry
             return;
         }
         if ($document === []) {
-            return; // absent file is simply an empty roster
+            $this->lastPayload = $this->payload(); // an absent file is the empty roster, and persist() may skip to it
+            return;
         }
         $version = $document[self::FILE_VERSION_KEY] ?? null;
         if ($version !== self::VERSION) {
@@ -414,6 +557,12 @@ final class ScheduleRegistry
             }
             $this->rows[$row->name] = $row;
         }
+        // The digest of what was just read: a later persist() of an unchanged
+        // roster is a no-op write, which is what keeps a busy row's clock
+        // handling from churning the mtime every tick. A file that refused to
+        // parse (version/shape errors above) deliberately leaves this null —
+        // persisting over content this build could not read is not a skip.
+        $this->lastPayload = $this->payload();
     }
 
     /**
@@ -469,6 +618,25 @@ final class ScheduleRegistry
             @fwrite($handle, (string) getmypid());
 
             return ['handle' => $handle, 'path' => $lockPath];
+        }
+
+        return null;
+    }
+
+    /**
+     * Claim the whole-file write lock, polling briefly for a peer caught
+     * mid-rename (see {@see FILE_LOCK_RETRIES}).
+     *
+     * @return array{handle: resource, path: string}|null
+     */
+    private function claimFileLock(): ?array
+    {
+        for ($attempt = 0; $attempt < self::FILE_LOCK_RETRIES; ++$attempt) {
+            $lock = $this->claimLock(self::FILE_LOCK_NAME);
+            if ($lock !== null) {
+                return $lock;
+            }
+            \usleep(self::FILE_LOCK_RETRY_MICROSECONDS);
         }
 
         return null;

@@ -653,6 +653,9 @@ final class TreeWideGuardRosterTest extends TestCase
         'Sessions/BackgroundSupervisorReapTest.php' => ['glob($this->tempDir.\'/*\')'],
         // the supervisor test tears down the temp root its fixtures live in.
         'Sessions/BackgroundSupervisorTest.php' => ['scandir($tempRoot)'],
+        // AUT-1: tearDown()'s clearTree() empties the sys_get_temp_dir() duel
+        // sandbox setUp() made (schedules.json plus the lock dir the claims create).
+        'Sessions/ScheduleCrossHostFireTest.php' => ['scandir($path)'],
         // removeTestProject() tears down the sys_get_temp_dir() project
         // createTestProject() made.
         'Skills/SkillManagerTest.php' => ['RecursiveDirectoryIterator($dir,\RecursiveDirectoryIterator::SKIP_DOTS)'],
