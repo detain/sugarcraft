@@ -287,6 +287,67 @@ final class DetectQueryTest extends TestCase
     }
 
     /**
+     * F-08: continuation — the pair-completion `&&` break pinned staggered.
+     * The preload pin above hands fg and bg in ONE chunk, so it stays green
+     * even if `&&` decays to `||` (the pair is in hand at the first read
+     * either way). Here a real writer child delivers bg ~80 ms after fg — a
+     * single-threaded test process cannot interleave writes with the probe's
+     * select waits, so the stagger has to come from its own process. Under
+     * `||` the loop breaks at the fg chunk, defaultBg reads as null, and the
+     * unread bg bytes go stale on the descriptor (the steal shape); the exit
+     * code of the writer then also diverges once its pipe closes mid-sleep.
+     * Under `&&` the loop holds the remaining window, bg lands, and the
+     * pair break fires at its arrival. The wall bounds are shape guards, not
+     * the break's sole owners: the lower bound pins that the reply really was
+     * staggered (a vacuous instant pair would read <40 ms), the upper bound
+     * guards pathological re-read stalls — under a break-removal mutation
+     * THIS test can stay fast (the exited writer's EOF keeps the slices
+     * spinning without waiting; measured), which is why break-presence is
+     * owned by testAReplyPairEndsTheWindowEarly's never-closing preload
+     * writer. The value pair pins the `&&` — this test is its sole
+     * discriminator.
+     */
+    public function testAStaggeredReplyPairLandsBothDefaults(): void
+    {
+        // printf octal spelling: the replies carry raw ESC bytes and an ST
+        // terminator; a lone trailing backslash in the format would be
+        // implementation-defined, so the terminator rides as '\\' (two
+        // characters) and prints as backslash.
+        $fgReply = '\033]10;rgb:6a/7b/8c\033\\\\';
+        $bgReply = '\033]11;rgb:de/ad/be\033\\\\';
+
+        $process = proc_open(
+            ['sh', '-c', 'printf ' . escapeshellarg($fgReply) . '; sleep 0.08; printf ' . escapeshellarg($bgReply)],
+            [['file', '/dev/null', 'r'], ['pipe', 'w'], ['file', '/dev/null', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+
+        stream_set_read_buffer($pipes[1], 0);
+        stream_set_blocking($pipes[1], false);
+
+        try {
+            Detect::setProbeStdin($pipes[1]);
+            $stage = new \ReflectionMethod(Detect::class, 'probeDefaultColors');
+
+            $start = hrtime(true);
+            [$fg, $bg] = $stage->invoke(null);
+            $tookMs = (hrtime(true) - $start) / 1_000_000;
+        } finally {
+            fclose($pipes[1]);
+            // Already exited on the green path; on the broken `||` path its
+            // later printf meets a closed pipe and dies of SIGPIPE — both
+            // shapes are reaped here, the value assertions carry the verdict.
+            proc_close($process);
+        }
+
+        $this->assertSame('6a7b8c', $fg, 'the staggered fg reply did not land');
+        $this->assertSame('deadbe', $bg, 'the read broke on the lone fg reply — the pair-completion && early-exited as ||');
+        $this->assertGreaterThanOrEqual(40, $tookMs, 'both replies arrived before any stagger could exist (' . $tookMs . ' ms)');
+        $this->assertLessThan(250, $tookMs, 'the pair break did not fire once the complete reply was in hand (' . $tookMs . ' ms)');
+    }
+
+    /**
      * The byte cap: more than OSC_REPLY_MAX_BYTES of non-reply bytes is not
      * a colour answer at any length — the read bails fast and reports
      * unknown. Deleting the cap leg turns "fast" into "full window", which
