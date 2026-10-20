@@ -594,6 +594,10 @@ final class TreeWideGuardRosterTest extends TestCase
         // setUp() made (session.db, repo, fake HOME and all) before the rmdir.
         'Cli/NonInteractiveSessionPersistenceTest.php' => ['scandir($path)'],
         'Cli/RulesStateWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
+        // DST-3: deleteTree() in tearDown() empties the sys_get_temp_dir()
+        // release sandbox setUp() made; the globs assert the swap's .tmp-*
+        // sibling left no residue inside that same sandbox.
+        'Cli/SelfUpdateTest.php' => ['scandir($path)', "glob(\$this->livePharPath().'.tmp-'.\\chr(42))"],
         'Cli/SubcommandsMcpImportTest.php' => ['scandir($this->tempDir)'],
         'Commands/McpAuthLoginGuidanceTest.php' => ['glob($this->tempDir.\'/*\')'],
         // w3c (VIS-3): tearDown's removeTree() lists the temp home setUp() made.

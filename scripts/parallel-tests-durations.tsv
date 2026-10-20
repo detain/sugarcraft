@@ -1428,3 +1428,5 @@ candy-code/tests/Providers/CompleteResponseUsageCarrierTest.php	0.000	4
 candy-code/tests/Providers/ToolCallFallbackIdAlphabetTest.php	0.000	4
 candy-code/tests/Support/SessionRelaunchTest.php	0.000	4
 candy-code/tests/Tools/ParallelSafeDocblockTest.php	0.000	2
+candy-code/tests/Cli/SelfUpdateTest.php	12.78	17
+candy-code/tests/Support/VersionTest.php	13.18	27

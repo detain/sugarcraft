@@ -90,12 +90,14 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     answer. Step 3.D-2: `NonInteractive::fireSessionEnd()`'s one line when
  *     a SessionEnd hook refuses, stderr-only because the session is over.)
  *  2. `STDERR` captured into a variable or property and written through later —
- *     TWO sites: {@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt}, whose
+ *     THREE sites: {@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt}, whose
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
- *     `candy-code: ` shapes through it, and plan_rename.md 8A's
+ *     `candy-code: ` shapes through it, plan_rename.md 8A's
  *     `bin/candy-code`, which hands the constant to `LegacyMigration::run()`
- *     as the launch's notice channel before any sink exists.
- *     A grep for `fwrite(STDERR` cannot see either file at all.
+ *     as the launch's notice channel before any sink exists, and DST-3's
+ *     {@see \SugarCraft\Code\Cli\SelfUpdate}, whose `$errorStream` test seam
+ *     defaults to `\STDERR` for the headless verb's report and refusal lines.
+ *     A grep for `fwrite(STDERR` cannot see any of these files at all.
  *  3. `error_log(…)` — TWENTY-FIVE sites across twelve files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
@@ -378,6 +380,11 @@ final class StderrEmitterCensusTest extends TestCase
         // not something the session can no longer do.
         'bin/candy-code' => 1,
         'src/Cli/HeadlessPermissionPrompt.php' => 1,
+        // DST-3: SelfUpdate's report() writes through the test-rebindable
+        // $errorStream ?? STDERR handle. The routing decision is stderr alone:
+        // self-update is a headless verb with no session running, so neither
+        // the transcript seam nor the notice sink can host its refusals.
+        'src/Cli/SelfUpdate.php' => 1,
     ];
 
     /**
@@ -551,6 +558,11 @@ final class StderrEmitterCensusTest extends TestCase
         // PLG-1 2026-10-19: +4 — the two `bundles` dispatch refusals, the
         // installer's needs_source refusal, and the shared `bundlesLine`
         // writer all carry the `candy-code: ` message prefix.
+        // DST-3: two `candy-code: ` envelope literals in SelfUpdate's failUsage
+        // doors — the flag-exclusivity refusal and the unexpected-operand
+        // refusal. Same stderr-only decision as every sibling: the verb runs
+        // before any session exists, so there is no transcript to name.
+        'src/Cli/SelfUpdate.php' => 2,
         'src/Cli/Subcommands.php' => 37,
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,
