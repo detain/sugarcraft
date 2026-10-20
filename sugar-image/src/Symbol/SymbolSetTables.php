@@ -6,7 +6,8 @@ namespace SugarCraft\Image\Symbol;
 
 /**
  * The chafa narrow symbol tables this port had not yet carried: the ASCII
- * glyph set (U+0020–U+007E), the Latin/Greek set (U+00A1–U+03F6), the
+ * glyph set (U+0020–U+007E), its orphaned alternate face ASCII_IBM, the
+ * Latin/Greek set (U+00A1–U+03F6), the
  * misc-narrow set (U+2190–U+25FC) and the "Symbols for Legacy Computing"
  * block entries of chafa's block table (U+1FB3C–U+1FBAE) that are neither
  * the generated sextant range nor the eighth-block tier.
@@ -128,6 +129,127 @@ final class SymbolSetTables
         0x7C => ['        |   X    |   X    |   X    |   X    |   X    |   X    |        ', SymbolTags::ASCII | SymbolTags::LATIN],
         0x7D => ['        |  XX    |    X   |     X  |    X   |    X   |  XX    |        ', SymbolTags::ASCII | SymbolTags::LATIN],
         0x7E => [' XX   X |X  XXX  |        |        |        |        |        |        ', SymbolTags::ASCII | SymbolTags::LATIN],
+    ];
+
+    /**
+     * chafa's orphaned chafa-symbols-ascii-ibm.h: an alternate ASCII face
+     * (U+0020-U+007E, 95 glyphs) tagged exactly like chafa-symbols-ascii.h
+     * (ASCII, plus ALPHA for A-Z/a-z, DIGIT for 0-9, SPACE for U+0020) —
+     * the IBM PC/VGA 8x8 bitmap font as transcribed by Daniel Hepper's
+     * public-domain font8x8 collection (provenance block at the header top,
+     * chafa-symbols-ascii-ibm.h:1-52).
+     *
+     * chafa ships the header but never #includes it: the symbol_defs[]
+     * include list at chafa/internal/chafa-symbols.c:150-157 names only
+     * ascii/latin/block/kana/misc-narrow, and the tag enum has no IBM bit —
+     * so upstream offers NO selector vocabulary for it. Codepoints collide
+     * 1:1 with the ASCII table, and chafa's codepoint-keyed model hosts one
+     * face per map, which makes this data a FACE SWAP for the ascii tier
+     * ({@see SymbolMap::withAsciiIbm()}), never a selector class of its own;
+     * inventing an "ibm" tag would break the 1:1 SELECTOR_NAMES↔chafa
+     * parse_symbol_tag correspondence. KANA-tier precedent: §4.15(11).
+     *
+     * Transcribed VERBATIM from /home/sites/chafa @ 413b76e4d,
+     * chafa/internal/chafa-symbols-ascii-ibm.h:55-1288 — 95 entries,
+     * declared tags only, outline rows joined by '|', 'X' = set.
+     * Digest-pinned by SymbolSetAsciiIbmTest.
+     */
+    private const ASCII_IBM = [
+        0x20 => ['        |        |        |        |        |        |        |        ', SymbolTags::ASCII | SymbolTags::SPACE],
+        0x21 => ['   XX   |  XXXX  |  XXXX  |   XX   |   XX   |        |   XX   |        ', SymbolTags::ASCII],
+        0x22 => [' XX XX  | XX XX  |        |        |        |        |        |        ', SymbolTags::ASCII],
+        0x23 => [' XX XX  | XX XX  |XXXXXXX | XX XX  |XXXXXXX | XX XX  | XX XX  |        ', SymbolTags::ASCII],
+        0x24 => ['  XX    | XXXXX  |XX      | XXXX   |    XX  |XXXXX   |  XX    |        ', SymbolTags::ASCII],
+        0x25 => ['        |XX   XX |XX  XX  |   XX   |  XX    | XX  XX |XX   XX |        ', SymbolTags::ASCII],
+        0x26 => ['  XXX   | XX XX  |  XXX   | XXX XX |XX XXX  |XX  XX  | XXX XX |        ', SymbolTags::ASCII],
+        0x27 => [' XX     | XX     |XX      |        |        |        |        |        ', SymbolTags::ASCII],
+        0x28 => ['   XX   |  XX    | XX     | XX     | XX     |  XX    |   XX   |        ', SymbolTags::ASCII],
+        0x29 => [' XX     |  XX    |   XX   |   XX   |   XX   |  XX    | XX     |        ', SymbolTags::ASCII],
+        0x2A => ['        | XX  XX |  XXXX  |XXXXXXXX|  XXXX  | XX  XX |        |        ', SymbolTags::ASCII],
+        0x2B => ['        |  XX    |  XX    |XXXXXX  |  XX    |  XX    |        |        ', SymbolTags::ASCII],
+        0x2C => ['        |        |        |        |        |  XX    |  XX    | XX     ', SymbolTags::ASCII],
+        0x2D => ['        |        |        |XXXXXX  |        |        |        |        ', SymbolTags::ASCII],
+        0x2E => ['        |        |        |        |        |  XX    |  XX    |        ', SymbolTags::ASCII],
+        0x2F => ['     XX |    XX  |   XX   |  XX    | XX     |XX      |X       |        ', SymbolTags::ASCII],
+        0x30 => [' XXXXX  |XX   XX |XX  XXX |XX XXXX |XXXX XX |XXX  XX | XXXXX  |        ', SymbolTags::ASCII | SymbolTags::DIGIT],
+        0x31 => ['  XX    | XXX    |  XX    |  XX    |  XX    |  XX    |XXXXXX  |        ', SymbolTags::ASCII | SymbolTags::DIGIT],
+        0x32 => [' XXXX   |XX  XX  |    XX  |  XXX   | XX     |XX  XX  |XXXXXX  |        ', SymbolTags::ASCII | SymbolTags::DIGIT],
+        0x33 => [' XXXX   |XX  XX  |    XX  |  XXX   |    XX  |XX  XX  | XXXX   |        ', SymbolTags::ASCII | SymbolTags::DIGIT],
+        0x34 => ['   XXX  |  XXXX  | XX XX  |XX  XX  |XXXXXXX |    XX  |   XXXX |        ', SymbolTags::ASCII | SymbolTags::DIGIT],
+        0x35 => ['XXXXXX  |XX      |XXXXX   |    XX  |    XX  |XX  XX  | XXXX   |        ', SymbolTags::ASCII | SymbolTags::DIGIT],
+        0x36 => ['  XXX   | XX     |XX      |XXXXX   |XX  XX  |XX  XX  | XXXX   |        ', SymbolTags::ASCII | SymbolTags::DIGIT],
+        0x37 => ['XXXXXX  |XX  XX  |    XX  |   XX   |  XX    |  XX    |  XX    |        ', SymbolTags::ASCII | SymbolTags::DIGIT],
+        0x38 => [' XXXX   |XX  XX  |XX  XX  | XXXX   |XX  XX  |XX  XX  | XXXX   |        ', SymbolTags::ASCII | SymbolTags::DIGIT],
+        0x39 => [' XXXX   |XX  XX  |XX  XX  | XXXXX  |    XX  |   XX   | XXX    |        ', SymbolTags::ASCII | SymbolTags::DIGIT],
+        0x3A => ['        |  XX    |  XX    |        |        |  XX    |  XX    |        ', SymbolTags::ASCII],
+        0x3B => ['        |  XX    |  XX    |        |        |  XX    |  XX    | XX     ', SymbolTags::ASCII],
+        0x3C => ['   XX   |  XX    | XX     |XX      | XX     |  XX    |   XX   |        ', SymbolTags::ASCII],
+        0x3D => ['        |        |XXXXXX  |        |        |XXXXXX  |        |        ', SymbolTags::ASCII],
+        0x3E => [' XX     |  XX    |   XX   |    XX  |   XX   |  XX    | XX     |        ', SymbolTags::ASCII],
+        0x3F => [' XXXX   |XX  XX  |    XX  |   XX   |  XX    |        |  XX    |        ', SymbolTags::ASCII],
+        0x40 => [' XXXXX  |XX   XX |XX XXXX |XX XXXX |XX XXXX |XX      | XXXX   |        ', SymbolTags::ASCII],
+        0x41 => ['  XX    | XXXX   |XX  XX  |XX  XX  |XXXXXX  |XX  XX  |XX  XX  |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x42 => ['XXXXXX  | XX  XX | XX  XX | XXXXX  | XX  XX | XX  XX |XXXXXX  |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x43 => ['  XXXX  | XX  XX |XX      |XX      |XX      | XX  XX |  XXXX  |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x44 => ['XXXXX   | XX XX  | XX  XX | XX  XX | XX  XX | XX XX  |XXXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x45 => ['XXXXXXX | XX   X | XX X   | XXXX   | XX X   | XX   X |XXXXXXX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x46 => ['XXXXXXX | XX   X | XX X   | XXXX   | XX X   | XX     |XXXX    |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x47 => ['  XXXX  | XX  XX |XX      |XX      |XX  XXX | XX  XX |  XXXXX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x48 => ['XX  XX  |XX  XX  |XX  XX  |XXXXXX  |XX  XX  |XX  XX  |XX  XX  |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x49 => [' XXXX   |  XX    |  XX    |  XX    |  XX    |  XX    | XXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x4A => ['   XXXX |    XX  |    XX  |    XX  |XX  XX  |XX  XX  | XXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x4B => ['XXX  XX | XX  XX | XX XX  | XXXX   | XX XX  | XX  XX |XXX  XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x4C => ['XXXX    | XX     | XX     | XX     | XX   X | XX  XX |XXXXXXX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x4D => ['XX   XX |XXX XXX |XXXXXXX |XXXXXXX |XX X XX |XX   XX |XX   XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x4E => ['XX   XX |XXX  XX |XXXX XX |XX XXXX |XX  XXX |XX   XX |XX   XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x4F => ['  XXX   | XX XX  |XX   XX |XX   XX |XX   XX | XX XX  |  XXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x50 => ['XXXXXX  | XX  XX | XX  XX | XXXXX  | XX     | XX     |XXXX    |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x51 => [' XXXX   |XX  XX  |XX  XX  |XX  XX  |XX XXX  | XXXX   |   XXX  |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x52 => ['XXXXXX  | XX  XX | XX  XX | XXXXX  | XX XX  | XX  XX |XXX  XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x53 => [' XXXX   |XX  XX  |XXX     | XXX    |   XXX  |XX  XX  | XXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x54 => ['XXXXXX  |X XX X  |  XX    |  XX    |  XX    |  XX    | XXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x55 => ['XX  XX  |XX  XX  |XX  XX  |XX  XX  |XX  XX  |XX  XX  |XXXXXX  |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x56 => ['XX  XX  |XX  XX  |XX  XX  |XX  XX  |XX  XX  | XXXX   |  XX    |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x57 => ['XX   XX |XX   XX |XX   XX |XX X XX |XXXXXXX |XXX XXX |XX   XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x58 => ['XX   XX |XX   XX | XX XX  |  XXX   |  XXX   | XX XX  |XX   XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x59 => ['XX  XX  |XX  XX  |XX  XX  | XXXX   |  XX    |  XX    | XXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x5A => ['XXXXXXX |XX   XX |X   XX  |   XX   |  XX  X | XX  XX |XXXXXXX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x5B => [' XXXX   | XX     | XX     | XX     | XX     | XX     | XXXX   |        ', SymbolTags::ASCII],
+        0x5C => ['XX      | XX     |  XX    |   XX   |    XX  |     XX |      X |        ', SymbolTags::ASCII],
+        0x5D => [' XXXX   |   XX   |   XX   |   XX   |   XX   |   XX   | XXXX   |        ', SymbolTags::ASCII],
+        0x5E => ['   X    |  XXX   | XX XX  |XX   XX |        |        |        |        ', SymbolTags::ASCII],
+        0x5F => ['        |        |        |        |        |        |XXXXXXX |        ', SymbolTags::ASCII],
+        0x60 => ['  XX    |  XX    |   XX   |        |        |        |        |        ', SymbolTags::ASCII],
+        0x61 => ['        |        | XXXX   |    XX  | XXXXX  |XX  XX  | XXX XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x62 => ['XXX     | XX     | XX     | XXXXX  | XX  XX | XX  XX |XX XXX  |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x63 => ['        |        | XXXX   |XX  XX  |XX      |XX  XX  | XXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x64 => ['   XXX  |    XX  |    XX  | XXXXX  |XX  XX  |XX  XX  | XXX XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x65 => ['        |        | XXXX   |XX  XX  |XXXXXX  |XX      | XXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x66 => ['  XXX   | XX XX  | XX     |XXXX    | XX     | XX     |XXXX    |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x67 => ['        |        | XXX XX |XX  XX  |XX  XX  | XXXXX  |    XX  |XXXXX   ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x68 => ['XXX     | XX     | XX XX  | XXX XX | XX  XX | XX  XX |XXX  XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x69 => ['  XX    |        | XXX    |  XX    |  XX    |  XX    | XXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x6A => ['    XX  |        |    XX  |    XX  |    XX  |XX  XX  |XX  XX  | XXXX   ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x6B => ['XXX     | XX     | XX  XX | XX XX  | XXXX   | XX XX  |XXX  XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x6C => [' XXX    |  XX    |  XX    |  XX    |  XX    |  XX    | XXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x6D => ['        |        |XX  XX  |XXXXXXX |XXXXXXX |XX X XX |XX   XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x6E => ['        |        |XXXXX   |XX  XX  |XX  XX  |XX  XX  |XX  XX  |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x6F => ['        |        | XXXX   |XX  XX  |XX  XX  |XX  XX  | XXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x70 => ['        |        |XX XXX  | XX  XX | XX  XX | XXXXX  | XX     |XXXX    ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x71 => ['        |        | XXX XX |XX  XX  |XX  XX  | XXXXX  |    XX  |   XXXX ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x72 => ['        |        |XX XXX  | XXX XX | XX  XX | XX     |XXXX    |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x73 => ['        |        | XXXXX  |XX      | XXXX   |    XX  |XXXXX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x74 => ['   X    |  XX    | XXXXX  |  XX    |  XX    |  XX X  |   XX   |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x75 => ['        |        |XX  XX  |XX  XX  |XX  XX  |XX  XX  | XXX XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x76 => ['        |        |XX  XX  |XX  XX  |XX  XX  | XXXX   |  XX    |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x77 => ['        |        |XX   XX |XX X XX |XXXXXXX |XXXXXXX | XX XX  |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x78 => ['        |        |XX   XX | XX XX  |  XXX   | XX XX  |XX   XX |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x79 => ['        |        |XX  XX  |XX  XX  |XX  XX  | XXXXX  |    XX  |XXXXX   ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x7A => ['        |        |XXXXXX  |X  XX   |  XX    | XX  X  |XXXXXX  |        ', SymbolTags::ASCII | SymbolTags::ALPHA],
+        0x7B => ['   XXX  |  XX    |  XX    |XXX     |  XX    |  XX    |   XXX  |        ', SymbolTags::ASCII],
+        0x7C => ['   XX   |   XX   |   XX   |        |   XX   |   XX   |   XX   |        ', SymbolTags::ASCII],
+        0x7D => ['XXX     |  XX    |  XX    |   XXX  |  XX    |  XX    |XXX     |        ', SymbolTags::ASCII],
+        0x7E => [' XXX XX |XX XXX  |        |        |        |        |        |        ', SymbolTags::ASCII],
     ];
     private const LATIN = [
         0xA1 => ['        |   X    |        |   X    |   X    |   X    |   X    |        ', SymbolTags::LATIN],
@@ -617,6 +739,17 @@ final class SymbolSetTables
     public static function ascii(): array
     {
         return self::ASCII;
+    }
+
+    /**
+     * The alternate ASCII face of chafa's orphaned chafa-symbols-ascii-ibm.h
+     * (see the {@see self::ASCII_IBM} docblock for the chafa-wiring verdict).
+     *
+     * @return array<int, array{0:string, 1:int}> codepoint => [outline, declared tags]
+     */
+    public static function asciiIbm(): array
+    {
+        return self::ASCII_IBM;
     }
 
     /** @return array<int, array{0:string, 1:int}> */

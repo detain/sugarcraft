@@ -8,6 +8,15 @@ namespace SugarCraft\Image\Symbol;
  * Coverage-class symbol engine — the glyph corpus and candidate search
  * behind the 'symbols' render tier (A-04).
  *
+ * SYMBOL-TIER W11: the chafa narrow tables ascii (95), misc-narrow (23)
+ * and the orphaned ascii-ibm (95) alternate face are all carried verbatim
+ * in {@see SymbolSetTables}; ascii and misc-narrow ride the corpus and the
+ * tag grammar (their own tags plus technical/geometric/dot and the nine
+ * AMBIGUOUS BAD-vetoes) with no extra opt-in — fully live. ascii-ibm can
+ * only be a face swap, never a selector class (chafa declares no IBM tag
+ * and its codepoints collide with the ascii table), so it rides through
+ * {@see withAsciiIbm()}.
+ *
  * Corpus build order mirrors chafa's init_symbol_array_narrow() exactly:
  * the 127 non-wide entries of the basic block-elements/box-drawing table
  * (U+2500–U+259F), then the 256 braille dots (U+2800–U+28FF), the 59
@@ -266,15 +275,20 @@ final class SymbolMap
 
     private readonly bool $latin;
 
+    private readonly bool $asciiIbm;
+
     /**
      * @param list<SymbolDef> $defs  the corpus in build order
      * @param bool $latin whether the opt-in LATIN tier is appended
      *                    (see {@see withLatin()})
+     * @param bool $asciiIbm whether the ascii tier carries the IBM face
+     *                       (see {@see withAsciiIbm()})
      */
-    private function __construct(array $defs, bool $latin = false)
+    private function __construct(array $defs, bool $latin = false, bool $asciiIbm = false)
     {
         $this->defs = $defs;
         $this->latin = $latin;
+        $this->asciiIbm = $asciiIbm;
     }
 
     public static function new(): self
@@ -311,13 +325,58 @@ final class SymbolMap
             $extra[] = self::outlineDef($cp, $outline, SymbolTags::LATIN);
         }
 
-        return new self([...$this->defs, ...$extra], true);
+        return new self([...$this->defs, ...$extra], true, $this->asciiIbm);
     }
 
     /** Whether the opt-in LATIN tier is appended (see {@see withLatin()}). */
     public function hasLatin(): bool
     {
         return $this->latin;
+    }
+
+    /**
+     * Swap the ascii tier (U+0020–U+007E) to chafa's orphaned IBM face —
+     * the verbatim chafa-symbols-ascii-ibm.h transcription in
+     * {@see SymbolSetTables::ASCII_IBM}.
+     *
+     * chafa never wires that header (symbol_defs[] includes only
+     * ascii/latin/block/kana/misc-narrow — see the table docblock), and
+     * because codepoints collide 1:1 the ascii data can only be a FACE
+     * SWAP, never a selector class; the ASCII/ALPHA/DIGIT/SPACE tags it
+     * declares keep the tier reachable through every selector the regular
+     * ascii face answers to. Codepoints the map does not carry are
+     * untouched, so on the default corpus (no ascii glyphs) this is a
+     * no-op flag; a later withSelectors() re-derives the corpus from
+     * {@see self::fullCorpus()} and selects the face-swapped glyphs.
+     * Idempotent; unlike the latin seam above, the flag SURVIVES
+     * withSelectors() — the face is not an appended tier, so preserving
+     * it cannot double-apply.
+     */
+    public function withAsciiIbm(): self
+    {
+        if ($this->asciiIbm) {
+            return $this;
+        }
+
+        $table = SymbolSetTables::asciiIbm();
+        $defs = [];
+        foreach ($this->defs as $def) {
+            $cp = mb_ord($def->char);
+            if (isset($table[$cp])) {
+                [$outline, $declared] = $table[$cp];
+                $defs[] = self::outlineDef($cp, $outline, $declared);
+            } else {
+                $defs[] = $def;
+            }
+        }
+
+        return new self($defs, $this->latin, true);
+    }
+
+    /** Whether the ascii tier carries the IBM face (see {@see withAsciiIbm()}). */
+    public function hasAsciiIbm(): bool
+    {
+        return $this->asciiIbm;
     }
 
     /**
@@ -343,13 +402,19 @@ final class SymbolMap
      * sextant and octant tiers. The kana table contributes nothing (16x8
      * outlines only — see the class docblock).
      *
+     * @param bool $asciiIbm swap the ascii table for chafa's orphaned IBM
+     *                       face ({@see withAsciiIbm()}); positions, count
+     *                       and every other table are untouched, so the
+     *                       1,260-entry shape and the U+00B7 collapse law
+     *                       hold for either face.
+     *
      * @return list<SymbolDef>
      */
-    private static function fullCorpus(): array
+    private static function fullCorpus(bool $asciiIbm = false): array
     {
         $defs = [];
 
-        foreach (SymbolSetTables::ascii() as $cp => [$outline, $declared]) {
+        foreach ($asciiIbm ? SymbolSetTables::asciiIbm() : SymbolSetTables::ascii() as $cp => [$outline, $declared]) {
             $defs[] = self::outlineDef($cp, $outline, $declared);
         }
         foreach (SymbolSetTables::latin() as $cp => [$outline, $declared]) {
@@ -514,7 +579,7 @@ final class SymbolMap
         }
 
         $picked = [];
-        foreach (self::fullCorpus() as $def) {
+        foreach (self::fullCorpus($this->asciiIbm) as $def) {
             $cp = mb_ord($def->char);
             $tags = $def->tags | self::defaultTagsFor($cp);
             $selected = $base[$cp] ?? false;
@@ -534,7 +599,7 @@ final class SymbolMap
             }
         }
 
-        return new self($picked);
+        return new self($picked, asciiIbm: $this->asciiIbm);
     }
 
     /**
