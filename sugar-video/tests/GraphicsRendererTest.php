@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Image\Renderer\ChafaRenderer;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Render\GraphicsRenderer;
 use SugarCraft\Video\Render\Mode;
@@ -233,15 +232,12 @@ final class GraphicsRendererTest extends TestCase
     }
 
     /**
-     * @testdox a PNG-payload Sixel frame contains the DCS intro when chafa is available
+     * @testdox a PNG-payload Sixel frame contains the DCS intro via the pure-PHP encoder
      */
-    public function testPngFrameRendersSixelDcsWhenChafaAvailable(): void
+    public function testPngFrameRendersSixelDcsViaPurePhpEncoder(): void
     {
         if (!extension_loaded('gd')) {
             $this->markTestSkipped('GD required');
-        }
-        if (!ChafaRenderer::available()) {
-            $this->markTestSkipped('chafa binary not available — sixel falls back to pure-PHP encoder');
         }
 
         $png = self::makePng(40, 40);
@@ -250,6 +246,26 @@ final class GraphicsRendererTest extends TestCase
         $output = (new GraphicsRenderer(Mode::Sixel))->render($frame, Mode::Sixel);
 
         $this->assertStringContainsString("\x1bP", $output, 'sixel output carries the DCS intro');
+    }
+
+    /**
+     * @testdox the retired external sixel encoder is not referenced by the renderer
+     *
+     * W10 §4.15 item 2 (F-18): sugar-video's own sixel shell-out — the
+     * ChafaRenderer::available() preference on the Sixel arm, which spawned
+     * the external encoder when it was on PATH — was retired. Sixel is
+     * encoded in pure PHP by sugar-image's SixelRenderer. This source pin
+     * keeps the external encoder from being silently reintroduced: re-adding
+     * the class token or its argv flags fails here on every machine, whether
+     * or not the binary is installed.
+     */
+    public function testTheExternalSixelEncoderIsNotReferencedByTheRenderer(): void
+    {
+        $source = file_get_contents(__DIR__ . '/../src/Render/GraphicsRenderer.php');
+        $this->assertIsString($source, 'GraphicsRenderer source must be readable');
+
+        $this->assertStringNotContainsString('ChafaRenderer', $source, 'the retired external encoder must not be re-wired');
+        $this->assertStringNotContainsString('--scale=max', $source, 'the retired encoder argv must not return');
     }
 
     /**

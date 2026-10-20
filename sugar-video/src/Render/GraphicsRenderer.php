@@ -6,7 +6,6 @@ namespace SugarCraft\Video\Render;
 
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Dither;
-use SugarCraft\Image\Renderer\ChafaRenderer;
 use SugarCraft\Image\Renderer\Iterm2Renderer;
 use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Image\Renderer\Renderer;
@@ -26,15 +25,14 @@ use SugarCraft\Video\Decode\RgbFrame;
  *   - **iTerm2 / Kitty**: the PNG is base64'd straight into the protocol envelope
  *     — no per-pixel PHP work, the terminal does the scaling. Full resolution,
  *     essentially free per frame.
- *   - **Sixel**: prefer `chafa` (a C encoder that quantises + dithers + sizes to
- *     the cell box far faster than PHP can) when it is on PATH; otherwise fall
- *     back to the pure-PHP {@see SixelRenderer}, which is correct but slow.
+ *   - **Sixel**: the pure-PHP {@see SixelRenderer} — this path spawns no
+ *     external binary (the former external-encoder preference was retired in
+ *     W10, §4.15 item 2; see the README for the capability note).
  *
  * The cell footprint is recovered from the frame's pixel size and the cell pixel
  * geometry, so a renderer that wants cells (all of them) gets the right count.
  *
- * @see Mosaic::sixel()  For the pure-PHP sixel fallback.
- * @see ChafaRenderer    For the fast external sixel encoder.
+ * @see SixelRenderer  The pure-PHP sixel encoder behind the Sixel mode.
  */
 final class GraphicsRenderer implements FrameRenderer
 {
@@ -95,25 +93,17 @@ final class GraphicsRenderer implements FrameRenderer
     }
 
     /**
-     * Pick the sugar-image renderer for the current mode. Sixel prefers the
-     * fast `chafa` encoder and falls back to the pure-PHP encoder (constructed
-     * with the real cell pixel size so its canvas matches the frame exactly).
+     * Pick the sugar-image renderer for the current mode. Sixel is encoded in
+     * pure PHP by {@see SixelRenderer}, constructed with the real cell pixel
+     * size so its canvas matches the frame exactly; no external binary is
+     * spawned from this path.
      */
     private function pickRenderer(): Renderer
     {
         return match ($this->mode) {
             Mode::Iterm2 => new Iterm2Renderer(),
             Mode::Kitty  => new KittyRenderer(),
-            // `--scale=max` makes chafa upscale the frame to fill the cell box
-            // (aspect-preserving) instead of drawing it at native pixel size —
-            // chafa's `--exact-size=auto` otherwise renders sixel 1:1 when the
-            // frame is smaller than the on-screen area, leaving the video tiny.
-            // `--polite on` inhibits chafa's cursor-hide / sixel-mode toggles so the
-            // output is a bare sixel DCS blob — no per-frame flicker, and it embeds
-            // cleanly inside the surrounding TEA frame.
-            Mode::Sixel  => ChafaRenderer::available()
-                ? new ChafaRenderer(['--scale=max', '--polite', 'on'], 'sixels')
-                : new SixelRenderer(Dither::FloydSteinberg, 256, $this->cellPxW, $this->cellPxH),
+            Mode::Sixel  => new SixelRenderer(Dither::FloydSteinberg, 256, $this->cellPxW, $this->cellPxH),
             default => throw new \InvalidArgumentException(
                 "GraphicsRenderer does not support mode {$this->mode->value}"
             ),

@@ -304,6 +304,8 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 
 - **GIF playback fills the terminal in HalfBlock mode** (each cell = 2 source rows). In text modes (ascii/ansi256/truecolor) the GIF renders at its native pixel dimensions without 2× vertical scaling.
 
+- **Sixel encoding is pure PHP (no external accelerator).** `sixel` mode encodes through sugar-image's `SixelRenderer`; the former preference for an external `chafa` binary on PATH was retired in W10 (§4.15 item 2, the decision that line reserved after `candy-image` shipped as the chafa frontend). Frames are decoded at full cell-resolution pixels, so the pure-PHP encoder needs no upscaling and the DCS output is protocol-identical; the trade-off is PHP time per large sixel frame, and no child process is ever spawned from the video render path.
+
 - **Seek is fast, slightly less frame-exact (keyframe snap).** `seekToSeconds()`
   uses ffmpeg *input* seeking (`-ss` placed before `-i`), which decodes from the
   keyframe at or just before the requested time rather than walking the whole
