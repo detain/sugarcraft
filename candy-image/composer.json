@@ -1,0 +1,59 @@
+{
+    "name": "sugarcraft/candy-image",
+    "description": "Terminal image viewer CLI (F-18) — the chafa-independent front end of sugarcraft/sugar-image: file in, best-protocol image out, zero new render logic.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "cli",
+        "image",
+        "viewer",
+        "sixel",
+        "kitty",
+        "iterm2",
+        "halfblock",
+        "chafa",
+        "sugarcraft"
+    ],
+    "homepage": "https://sugarcraft.github.io/lib/candy-image.html",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-image/issues",
+        "source": "https://github.com/sugarcraft/candy-image",
+        "docs": "https://sugarcraft.github.io/lib/candy-image.html"
+    },
+    "bin": [
+        "bin/candy-image"
+    ],
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/sugar-core": "dev-master",
+        "sugarcraft/sugar-animation": "dev-master",
+        "sugarcraft/sugar-image": "dev-master",
+        "sugarcraft/sugar-pty": "dev-master"
+    },
+    "suggest": {
+        "ext-gd": "Required to decode image files (via sugarcraft/sugar-image); every render path in this app needs it."
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\CandyImage\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\CandyImage\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
