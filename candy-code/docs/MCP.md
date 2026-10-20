@@ -124,8 +124,14 @@ answered here:
   name-for-name where you both declare.
 - **The freeze covers both files.** Each tier the launch read is digested at
   the instant its client is memoised, the drift line answers for either, and
-  the client's memo key composites the two paths — creating your file
-  mid-session neither reconnects nor re-reads anything, and the `CANDY_CODE_MCP_DISABLE`
+  the client's memo key composites the two paths — nothing happens to either
+  file automatically mid-session, and the manual stop/start pair
+  `/mcp reconnect` runs does re-read them, because a start is a fresh
+  `loadConfig()` off disk. What refuses changed bytes is the launch-digest
+  drift gate in front of that pair: if either file moved since the launch
+  digest, the gate prints its verdict and the pair never runs, so new bytes
+  are never honoured — the E703-α freeze rests on the gate, not on a
+  never-re-read mechanism. The `CANDY_CODE_MCP_DISABLE`
   switch answers for both tiers at once.
 
 ---
