@@ -609,6 +609,36 @@ final class Color
         return Ansi::CSI . $code . 'm';
     }
 
+    /**
+     * Downsample to the xterm-256 fixed palette (slots 16-255).
+     *
+     * DELIBERATE DIVERGENCE — sugar-colorprofile's B-05 grey walk. The
+     * sibling encoder `SugarCraft\ColorProfile\Color::toAnsi256Index()`
+     * probes grey bins bin-1/bin/bin+1 and keeps the first strict minimum,
+     * so an exact grey-ramp midpoint resolves to the DARKER bin; this method
+     * keeps the single rounded bin, so the same midpoint resolves to the
+     * BRIGHTER one. Measured boundary (636,056-colour step-3 census): the
+     * encoders disagree on 3,803 colours and every one sits on the midpoint
+     * plane — channel sum exactly 39 + 30k (k = 0..22, i.e. avg = 13, 23,
+     * …, 233) — where the returned slot is exactly one higher on this side.
+     * At a midpoint the two grey slots are equidistant: for levels g and
+     * g+10, d(g) - d(g+10) = 60 * (avg - g - 5), zero exactly there. The
+     * seam is therefore a tie-side convention, never a distance cost.
+     *
+     * Why the single bin stays here rather than adopting B-05's walk:
+     * (1) dependency direction — this class lives in the base library and
+     * sugar-colorprofile requires sugar-core, so calling the B-05 rule from
+     * here would invert the closure; (2) call census — the only callers of
+     * this private method are {@see toSgr()} and {@see toUnderline()} on an
+     * Ansi256 profile for a colour that carries no palette slot, and no
+     * consumer pins both encoders against one corpus; (3) the choice is
+     * arbitrary by construction, so a 3-probe walk buys no distance.
+     *
+     * The boundary is pinned from the profile side by
+     * `sugar-colorprofile/tests/Nearest256GreySeamTest.php` (the lib that
+     * can see both) — §4.15's "mint the seam when a consumer pins both
+     * paths" row, discharged 2026-10-21.
+     */
     private function nearest256(): int
     {
         // Cube candidate (indices 16-231).
@@ -620,6 +650,9 @@ final class Color
         $cubeIdx = 16 + 36 * $q($this->r) + 6 * $q($this->g) + $q($this->b);
 
         // Grayscale candidate (indices 232-255). Levels: 8, 18, ..., 238.
+        // Single rounded bin on purpose: the midpoint tie rounds UP here
+        // while sugar-colorprofile's B-05 walk rounds DOWN — see this
+        // method's docblock for the measured seam and why it is not walked.
         $avg     = ($this->r + $this->g + $this->b) / 3.0;
         $grayBin = (int) round(($avg - 8.0) / 10.0);
         $grayBin = max(0, min(23, $grayBin));
