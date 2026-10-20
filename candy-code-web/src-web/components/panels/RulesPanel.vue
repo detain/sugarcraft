@@ -23,20 +23,34 @@ const loading = ref(false)
 const loaded = ref(false)
 const error = ref<string | null>(null)
 
+/**
+ * WEB-1c review MINOR-1: the session-switch race, fixed with the same
+ * generation latch AboutModal carries (:34-47). load() awaits; a sessionId
+ * change starts a SECOND load while the first is still in flight, and both
+ * settle on the same refs. Every visit stamps its own number, and a settle
+ * that arrives after a newer load began belongs to a superseded session —
+ * dropped, answers AND errors: the previous session's mode, rules or grants
+ * must never repaint the panel the new session is about to fill.
+ */
+let generation = 0
+
 async function load(): Promise<void> {
+  const mine = ++generation
   loading.value = true
   error.value = null
   try {
     const result = await connection.request('permission.rules', props.sessionId === null ? {} : { sessionId: props.sessionId })
+    if (mine !== generation) return
     mode.value = result.mode
     modeSource.value = result.modeSource ?? null
     rules.value = result.rules
     sessionGrants.value = result.sessionGrants
     loaded.value = true
   } catch (failure) {
+    if (mine !== generation) return
     error.value = describe(failure)
   } finally {
-    loading.value = false
+    if (mine === generation) loading.value = false
   }
 }
 

@@ -60,6 +60,31 @@ describe('RulesPanel (WEB-1c)', () => {
     await wire.fail('permission.rules', -32001, 'forbidden', 'principal lacks read')
     expect(wrapper.find('[data-testid="rules-error"]').text()).toContain('principal lacks read')
   })
+
+  it('a late answer for the previous session never repaints the panel (MINOR-1 generation latch)', async () => {
+    await wire.connect()
+    const wrapper = mount(RulesPanel, { props: { sessionId: 'sA' } })
+    await flushPromises()
+    // sA's request is still in flight when the session changes; sB loads fresh.
+    await wrapper.setProps({ sessionId: 'sB' })
+    await flushPromises()
+    const frames = wire.sent('permission.rules')
+    expect(frames).toHaveLength(2)
+    expect(frames[0]?.params).toEqual({ sessionId: 'sA' })
+    expect(frames[1]?.params).toEqual({ sessionId: 'sB' })
+
+    // The newer answer lands first…
+    wire.socket().answer({ mode: 'plan', modeSource: null, rules: [{ pattern: 'Edit(a)', action: 'ask' }], sessionGrants: [] }, frames[1]?.id as string)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="rules-mode"]').text()).toBe('mode: plan')
+    // …and the superseded sA answer that lands after it is dropped whole.
+    wire.socket().answer({ mode: 'default', modeSource: 'config', rules: [{ pattern: 'Bash(rm:*)', action: 'deny' }], sessionGrants: ['A-grant'] }, frames[0]?.id as string)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="rules-mode"]').text()).toBe('mode: plan')
+    expect(wrapper.find('[data-testid="rules-source"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="grants-none"]').text()).toContain('Nothing has been granted')
+    expect(wrapper.findAll('[data-testid="grant-row"]')).toHaveLength(0)
+  })
 })
 
 describe('AgentCatalogPanel (WEB-1c)', () => {
