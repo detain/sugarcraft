@@ -786,8 +786,9 @@ final class Mosaic
     /**
      * Poster cache key: DiskCache::key() over (url, cellW, cellH-sentinel,
      * protocol[:modeDetail]|scale). The scale rides in the protocol segment
-     * because it changes the encoded bytes (Fill crops, Fit letterboxes) for
-     * an otherwise identical (url, size, protocol) tuple — two mosaics at
+     * because it changes the encoded bytes (Fill crops, Fit scales either
+     * direction, ShrinkToFit refuses to enlarge) for an otherwise identical
+     * (url, size, protocol) tuple — two mosaics at
      * different scales must never cross-serve each other's cache entries.
      * A-06: since the ascii protocol name no longer carries the colour arm,
      * modeDetail() rides in the same segment (':ansi256'/':truecolor') so

@@ -10,11 +10,27 @@ namespace SugarCraft\Image;
 enum Scale
 {
     /**
-     * Preserve aspect ratio; fit the entire image within the target bounds.
-     * If the image is smaller than the target, it is centred with padding.
-     * The rendered size is ≤ the target cell dimensions.
+     * Preserve aspect ratio; scale the image — in BOTH directions — so the
+     * whole image fits inside the target bounds. A source smaller than the
+     * target is upscaled to fill it; nothing is padded or centred here
+     * (C-10: the previous docblock promised padding the code never did).
+     * For the shrink-only, pad-the-remainder behaviour, use
+     * {@see Scale::ShrinkToFit}.
      */
     case Fit;
+
+    /**
+     * Preserve aspect ratio; shrink the image into the target bounds but
+     * never enlarge it. A source that already fits keeps its native size —
+     * the remainder of the box is left for the renderer to pad around the
+     * (centred) image. The rendered size is ≤ both the target and the
+     * source.
+     *
+     * Mirrors chafa's CHAFA_TUCK_SHRINK_TO_FIT
+     * (chafa/internal/chafa-math-util.c:70-79): when the image already fits
+     * the destination, alignment only — no scaling.
+     */
+    case ShrinkToFit;
 
     /**
      * Preserve aspect ratio; fill the entire target bounds.
@@ -67,6 +83,7 @@ enum Scale
 
         return match ($this) {
             self::Fit     => $this->fit($srcW, $srcH, $dstW, $dstH),
+            self::ShrinkToFit => $this->shrinkToFit($srcW, $srcH, $dstW, $dstH),
             self::Fill    => $this->fill($srcW, $srcH, $dstW, $dstH),
             self::Stretch => ['srcX' => 0, 'srcY' => 0, 'srcW' => $srcW, 'srcH' => $srcH,
                               'dstW' => $dstW, 'dstH' => $dstH],
@@ -78,11 +95,34 @@ enum Scale
 
     /**
      * Fit: scale so the entire image fits within dst, preserving aspect ratio.
-     * Scales by the smaller factor so neither dimension exceeds target.
+     * Scales by the smaller factor so neither dimension exceeds target. The
+     * factor is unclamped: a source smaller than the target is upscaled
+     * (C-10 honesty — {@see Scale::ShrinkToFit} refuses it).
      */
     private function fit(int $srcW, int $srcH, int $dstW, int $dstH): array
     {
         $factor = min($dstW / $srcW, $dstH / $srcH);
+        $renderW = (int) round($srcW * $factor);
+        $renderH = (int) round($srcH * $factor);
+
+        return [
+            'srcX' => 0, 'srcY' => 0,
+            'srcW' => $srcW, 'srcH' => $srcH,
+            'dstW' => max(1, $renderW),
+            'dstH' => max(1, $renderH),
+        ];
+    }
+
+    /**
+     * ShrinkToFit: like fit() but the factor is floored at 1 — never
+     * enlarge (C-10, per chafa chafa-math-util.c:70-79). When the source
+     * already fits, both legs stay at native size (the caller/renderer
+     * centres and pads the remainder); otherwise it shrinks by the smaller
+     * factor so neither dimension exceeds the target.
+     */
+    private function shrinkToFit(int $srcW, int $srcH, int $dstW, int $dstH): array
+    {
+        $factor = min(1.0, $dstW / $srcW, $dstH / $srcH);
         $renderW = (int) round($srcW * $factor);
         $renderH = (int) round($srcH * $factor);
 

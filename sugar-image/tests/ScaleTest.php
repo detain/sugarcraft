@@ -11,6 +11,11 @@ final class ScaleTest extends TestCase
 {
     // ─── Scale::Fit ─────────────────────────────────────────────────────────
 
+    /**
+     * C-10: Fit scales in BOTH directions — these pins record the honest
+     * upscale behaviour (4×2 into 8×8 enlarges 2×); padding was never what
+     * Fit did. The shrink-only, enlarge-refusing mode is Scale::ShrinkToFit.
+     */
     public function testFitScalesToFitWithinBounds(): void
     {
         // 4×2 image rendered at 8×8 target.
@@ -47,6 +52,71 @@ final class ScaleTest extends TestCase
         $this->assertSame(8, $r['srcH']);
         $this->assertSame(8, $r['dstW']);
         $this->assertSame(8, $r['dstH']);
+    }
+
+    // ─── Scale::ShrinkToFit (C-10) ─────────────────────────────────────────
+
+    /**
+     * C-10: provider over (src,dst) pairs for the chafa
+     * CHAFA_TUCK_SHRINK_TO_FIT behaviour — enlarge refused, shrink honoured,
+     * exact fit untouched, 1px edges.
+     */
+    public static function shrinkToFitProvider(): array
+    {
+        return [
+            // 40×40 icon into 80×80: fits entirely → alignment only, NO upscale.
+            'enlarge refused'      => [40, 40, 80, 80, 40, 40],
+            // 4×2 into 8×8: the exact pair Fit above upscales 2×; here it stays native.
+            'enlarge refused tiny' => [4, 2, 8, 8, 4, 2],
+            // 200×100 into 80×80: factor = min(0.4, 0.8) = 0.4 → 80×40.
+            'shrink honoured'      => [200, 100, 80, 80, 80, 40],
+            // Tall shrink: factor = min(8/2, 8/4)... src 2×16 into 8×8 → 1×8.
+            'shrink tall'          => [2, 16, 8, 8, 1, 8],
+            // Exact fit: ratio lands on 1 from both legs, nothing moves.
+            'exact fit'            => [80, 60, 80, 60, 80, 60],
+            // 1px source, generous box: stays 1×1.
+            'one pixel source'     => [1, 1, 80, 80, 1, 1],
+            // 1px box: source floors to 1×1, never 0.
+            'one pixel box'        => [40, 20, 1, 1, 1, 1],
+            // Sub-round shrink: 3×1 into 1×1 → factor 1/3 → round(1)=1 (≥1 floor).
+            'sub-round shrink'     => [3, 1, 1, 1, 1, 1],
+        ];
+    }
+
+    /**
+     * C-10: ShrinkToFit never enlarges and never exceeds either the box or
+     * the source; the src rect always stays full-source (this mode crops nothing).
+     *
+     * @dataProvider shrinkToFitProvider
+     */
+    public function testShrinkToFitRefusesToEnlarge(int $sw, int $sh, int $dw, int $dh, int $expW, int $expH): void
+    {
+        $r = Scale::ShrinkToFit->computeDimensions($sw, $sh, $dw, $dh);
+
+        $this->assertSame(0, $r['srcX']);
+        $this->assertSame(0, $r['srcY']);
+        $this->assertSame($sw, $r['srcW']);
+        $this->assertSame($sh, $r['srcH']);
+        $this->assertSame($expW, $r['dstW']);
+        $this->assertSame($expH, $r['dstH']);
+        $this->assertLessThanOrEqual($dw, $r['dstW']);
+        $this->assertLessThanOrEqual($dh, $r['dstH']);
+        $this->assertLessThanOrEqual($sw, $r['dstW'], 'never upscales width');
+        $this->assertLessThanOrEqual($sh, $r['dstH'], 'never upscales height');
+        $this->assertGreaterThanOrEqual(1, $r['dstW']);
+        $this->assertGreaterThanOrEqual(1, $r['dstH']);
+    }
+
+    /**
+     * C-10: the chafa precondition spelled directly — a source that already
+     * fits inside the box comes back at native size (factor == 1 leg-wise).
+     */
+    public function testShrinkToFitKeepsFittingSourceAtNativeSize(): void
+    {
+        $r = Scale::ShrinkToFit->computeDimensions(40, 40, 80, 80);
+
+        $this->assertSame(40, $r['dstW']);
+        $this->assertSame(40, $r['dstH']);
     }
 
     // ─── Scale::Fill ─────────────────────────────────────────────────────────
@@ -222,10 +292,10 @@ final class ScaleTest extends TestCase
         $this->assertSame(1, $r['dstH']);
     }
 
-    public function testAllFiveScaleModesExist(): void
+    public function testAllSixScaleModesExist(): void
     {
-        $cases = [Scale::Fit, Scale::Fill, Scale::Stretch, Scale::None, Scale::Crop];
-        $names = ['Fit', 'Fill', 'Stretch', 'None', 'Crop'];
+        $cases = [Scale::Fit, Scale::ShrinkToFit, Scale::Fill, Scale::Stretch, Scale::None, Scale::Crop];
+        $names = ['Fit', 'ShrinkToFit', 'Fill', 'Stretch', 'None', 'Crop'];
 
         foreach ($names as $i => $name) {
             $this->assertSame($name, $cases[$i]->name);
