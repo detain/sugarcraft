@@ -209,19 +209,25 @@ final class WebTwoHostCommandsTest extends TestCase
             'the launch workspace is untouched: the switch is session-scoped, settings stay whole');
         $rows = $host->history();
         $row = end($rows);
-        self::assertStringContainsString('Switched this session to rebindable new-model', $row->content);
+        // W7a-2: the reply is the native sentence pair. This fixture has no
+        // SettingsWriter service, so the switch reports itself as session-only.
+        self::assertStringContainsString("Switched to provider 'rebindable', model 'new-model'", $row->content);
     }
 
-    public function testAModelTheProviderCannotServeIsRefusedLoudly(): void
+    /**
+     * W7a-2: the RebindsModel door is gone — the native engine takes a model
+     * by label — so the only loud refusal left is the native one: a backend
+     * that is not an engine has no model to switch.
+     */
+    public function testAModelOnANonEngineBackendIsRefusedWithTheNativeVerdict(): void
     {
-        $scripted = EngineBackend::new(new ScriptedProvider([]), 'fixed');
-        $host = $this->host(backendFactory: static fn (string $provider): \SugarCraft\Code\Backend => $scripted);
+        $host = $this->host(backendFactory: static fn (string $provider): \SugarCraft\Code\Backend => new EchoBackend());
 
-        $host->runCommand('model', 'scripted other-model');
+        $host->runCommand('model', 'echo other-model');
 
         $flagged = array_values(array_filter($host->history(), static fn (Message $m): bool => $m->error));
         self::assertCount(1, $flagged);
-        self::assertStringContainsString('cannot rebind its model', $flagged[0]->content);
+        self::assertStringContainsString('does not take a model choice', $flagged[0]->content);
     }
 
     /**
