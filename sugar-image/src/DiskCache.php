@@ -64,8 +64,15 @@ final class DiskCache
      * v7: Sixel alpha — transparent pixels now emit the `#0;2;P` background
      *     register with the colour palette shifted to 1..N instead of blending
      *     to black, so cached sixel blobs for alpha-bearing sources changed.
+     * v8: D-04/C-01/B-13 — the poster key now carries the renderer config
+     *     fingerprint for fingerprinting renderers (dither / maxColors / cell
+     *     geometry, chafa options / format), the Stucki kernel conserves
+     *     42/42, and the sixel nearest-colour memo answers the block centre
+     *     instead of the first pixel that warmed the entry; sixel blobs
+     *     cached under v7 can encode all three defects, so every prior entry
+     *     is retired rather than selectively re-keyed.
      */
-    private const FORMAT_VERSION = 7;
+    private const FORMAT_VERSION = 8;
 
     /**
      * @param string $dir         Directory that holds the cache entries

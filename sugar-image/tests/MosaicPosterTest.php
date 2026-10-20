@@ -7,7 +7,9 @@ namespace SugarCraft\Image\Tests;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
+use ReflectionMethod;
 use SugarCraft\Image\DiskCache;
+use SugarCraft\Image\Dither;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Scale;
@@ -93,6 +95,31 @@ final class MosaicPosterTest extends TestCase
         $this->assertNotSame('', $out);
         $this->assertTrue($cache->has($key), 'miss must populate the cache');
         $this->assertSame($out, $cache->get($key));
+    }
+
+    public function testPosterDitherConfigMissesTheOtherDitherPosterEntry(): void
+    {
+        $this->startServer();
+        $cache = new DiskCache($this->cacheDir);
+        $url   = "http://127.0.0.1:{$this->port}/poster.png";
+
+        $fs     = Mosaic::sixel(Dither::FloydSteinberg);
+        $stucki = Mosaic::sixel(Dither::Stucki);
+        $fsKey  = $this->posterKey($fs, $url);
+        $stKey  = $this->posterKey($stucki, $url);
+
+        $this->assertNotSame($fsKey, $stKey, 'D-04: same url+size+protocol, different dither, different key');
+        $cache->put($fsKey, 'FS-CACHED');
+
+        // The warmed arm hits without touching the network…
+        $this->assertSame('FS-CACHED', $fs->poster($url, 8, 4, $cache, ['127.0.0.1']));
+
+        // …and the cold arm must render fresh instead of being served the
+        // FS entry (pre-D-04 both names hashed to 'sixel|Fill' and did).
+        $out = $stucki->poster($url, 8, 4, $cache, ['127.0.0.1']);
+        $this->assertNotSame('FS-CACHED', $out);
+        $this->assertSame($out, $cache->get($stKey));
+        $this->assertSame('FS-CACHED', $cache->get($fsKey), 'the FS entry must survive untouched');
     }
 
     public function testPosterWithoutCacheStillRenders(): void
@@ -257,6 +284,15 @@ final class MosaicPosterTest extends TestCase
      * Real `php -S` loopback server serving the fixture PNG at /poster.png —
      * a blocking stream fetch (sync poster()) needs an out-of-process listener.
      */
+    /** D-04: derive the renderer's poster key from Mosaic itself (private). */
+    private function posterKey(Mosaic $mosaic, string $url): string
+    {
+        $method = new ReflectionMethod(Mosaic::class, 'posterCacheKey');
+        $method->setAccessible(true);
+
+        return $method->invoke($mosaic, $url, 8, 4);
+    }
+
     private function startServer(): void
     {
         $this->serverDir = LoopbackHttpServer::makeTempDir();

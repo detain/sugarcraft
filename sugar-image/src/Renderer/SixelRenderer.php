@@ -26,7 +26,7 @@ use SugarCraft\Image\Lang;
  * desired (e.g. terminals that advertise Sixel but have limited
  * truecolor support).
  */
-final class SixelRenderer implements Renderer
+final class SixelRenderer implements Renderer, ConfigFingerprintProvider
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
 
@@ -296,6 +296,21 @@ final class SixelRenderer implements Renderer
     public function dither(): Dither
     {
         return $this->dither;
+    }
+
+    /**
+     * D-04: every ctor config that changes the encoded bytes rides the
+     * fingerprint — dither arms the index grid differently, maxColors
+     * changes the palette, and the cell-pixel geometry resamples to a
+     * different pixel canvas, so two SixelRenderers named 'sixel' with any
+     * of these differing must never cross-serve a poster cache entry.
+     */
+    public function configFingerprint(): string
+    {
+        return 'dither=' . $this->dither->value
+            . '|maxColors=' . $this->maxColors
+            . '|cellWidth=' . $this->cellWidth
+            . '|cellHeight=' . $this->cellHeight;
     }
 
     /**
@@ -595,7 +610,7 @@ final class SixelRenderer implements Renderer
             $loadBase($y);
         }
 
-        $cache = []; // coarse 5-bit RGB cube → palette index, reused across pixels.
+        $cache = []; // 5-bit RGB cube → nearest colour of the BLOCK CENTRE (B-13), reused across pixels.
 
         for ($y = 0; $y < $h; $y++) {
             $row = [];
@@ -613,8 +628,20 @@ final class SixelRenderer implements Renderer
                 $ri = (int) round($clampedR);
                 $gi = (int) round($clampedG);
                 $bi = (int) round($clampedB);
-                $key = (($ri >> 3) << 10) | (($gi >> 3) << 5) | ($bi >> 3);
-                $palIdx = $cache[$key] ??= $this->nearestColor($ri, $gi, $bi, $palette);
+                // B-13: key AND lookup input snap together to the block
+                // representative — the memo stores the nearest colour of the
+                // 8³-block CENTRE, not of whichever pixel happened to warm
+                // the entry first. A lookup for any pixel in the block then
+                // asks (and caches) the same question, so the chosen index
+                // is arrival-order-independent (the pre-fix first-wins 5-bit
+                // memo made dither walks position-order-dependent). The key
+                // space stays 32³ = 32768 entries per render — bounded by
+                // construction.
+                $br = ($ri & ~7) | 4;
+                $bg = ($gi & ~7) | 4;
+                $bb = ($bi & ~7) | 4;
+                $key = (($br >> 3) << 10) | (($bg >> 3) << 5) | ($bb >> 3);
+                $palIdx = $cache[$key] ??= $this->nearestColor($br, $bg, $bb, $palette);
 
                 if ($hasDiffusion) {
                     [$pr, $pg, $pb] = $palette[$palIdx];

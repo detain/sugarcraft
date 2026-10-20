@@ -13,7 +13,7 @@ use SugarCraft\Image\Lang;
  * Chafa is a command-line image-to-terminal converter that supports
  * true-color, transparency, and various output formats.
  */
-final class ChafaRenderer implements Renderer
+final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
 {
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
 
@@ -361,6 +361,18 @@ final class ChafaRenderer implements Renderer
     public function name(): string
     {
         return 'chafa';
+    }
+
+    /**
+     * D-04: the CLI options and the output format both change chafa's
+     * encoded bytes for identical input, so both ride the fingerprint —
+     * Mosaic::chafa('--colors=16') must never serve a '--colors=256'
+     * cache entry (or a symbols-format one) back.
+     */
+    public function configFingerprint(): string
+    {
+        return 'opts=' . implode(',', $this->options)
+            . '|format=' . ($this->format ?? '');
     }
 
     /**

@@ -218,6 +218,77 @@ final class SixelRendererTest extends TestCase
         $stucki = (new SixelRenderer(Dither::Stucki))->render($source, 16, 12);
 
         $this->assertNotSame($none, $stucki);
+
+        // C-01: with the y+1 row fixed to the canonical 2,4,8,4,2 the Stucki
+        // arm diffuses the full 42/42, so its gradient bytes are now a locked
+        // canonical vector. Digest captured by hand on the fixed tree at the
+        // C-01+C-02/B-13 tip (no golden-update env in this lib — see
+        // plan_chafa §4.11); any drift in the kernel, the walk, or the memo
+        // reddens here on top of the unit-level DitherKernelTest pins.
+        $this->assertSame(
+            '65dbd3c6bf1d7ac45791084aff0b47533221d150',
+            sha1($stucki),
+            'Stucki gradient stream must match the canonical-kernel encoding',
+        );
+
+        // The three diffusion arms are pairwise distinct — a dither setting
+        // that silently collapses onto another is a wiring bug, not a style
+        // choice.
+        $fs       = (new SixelRenderer(Dither::FloydSteinberg))->render($source, 16, 12);
+        $atkinson = (new SixelRenderer(Dither::Atkinson))->render($source, 16, 12);
+        $this->assertNotSame($fs, $stucki);
+        $this->assertNotSame($stucki, $atkinson);
+        $this->assertNotSame($fs, $atkinson);
+    }
+
+    /**
+     * B-13: the 5-bit nearest-colour memo must answer with the nearest colour
+     * of its 8×8×8 block CENTRE for every pixel sharing the block. Pre-B-13
+     * it stored the nearest colour of whichever pixel warmed the key first,
+     * so two same-block pixels split across palette entries silently became
+     * the same colour — and that colour depended on scan arrival order.
+     * Pin: the fixture pair genuinely splits under per-pixel nearest lookups,
+     * yet both orderings of the same two pixels agree.
+     */
+    public function testColorMemoAnswersTheBlockCentreNotTheFirstPixel(): void
+    {
+        $palette = [[250, 0, 0], [255, 7, 7]];
+
+        // Ground truth first: the two pixels are exact matches of DIFFERENT
+        // palette entries, and they share one 8³ block — without this the
+        // pin below would be vacuous.
+        $nearest = new \ReflectionMethod(SixelRenderer::class, 'nearestColor');
+        $nearest->setAccessible(true);
+        $this->assertSame(0, $nearest->invoke($this->renderer, 250, 0, 0, $palette));
+        $this->assertSame(1, $nearest->invoke($this->renderer, 255, 7, 7, $palette));
+        $this->assertSame(250 >> 3, 255 >> 3, 'fixture pixels must share the memo block');
+
+        // Fixed memo: both cells answer nearest(colour of block centre),
+        // identical for either arrival order.
+        $centreR = (250 & ~7) | 4;
+        $expected = $nearest->invoke($this->renderer, $centreR, 4, 4, $palette);
+        $this->assertSame([$expected, $expected], $this->indexFirstRow(250, 0, 0, 255, 7, 7, $palette));
+        $this->assertSame([$expected, $expected], $this->indexFirstRow(255, 7, 7, 250, 0, 0, $palette));
+    }
+
+    /**
+     * Drive the private indexRows() over a 2×1 truecolour strip.
+     *
+     * @param list<array{int,int,int}> $palette
+     * @return list<int>
+     */
+    private function indexFirstRow(int $r0, int $g0, int $b0, int $r1, int $g1, int $b1, array $palette): array
+    {
+        $gd = imagecreatetruecolor(2, 1);
+        $this->assertNotFalse($gd);
+        imagesetpixel($gd, 0, 0, imagecolorallocate($gd, $r0, $g0, $b0));
+        imagesetpixel($gd, 1, 0, imagecolorallocate($gd, $r1, $g1, $b1));
+
+        $method = new \ReflectionMethod(SixelRenderer::class, 'indexRows');
+        $method->setAccessible(true);
+        $rows = $method->invoke($this->renderer, $gd, $palette, Dither::None, 0);
+
+        return iterator_to_array($rows)[0];
     }
 
     public function testAtkinsonDitherDiffersFromNoDither(): void

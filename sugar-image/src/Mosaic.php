@@ -7,6 +7,7 @@ namespace SugarCraft\Image;
 use SugarCraft\Image\Renderer\AsciiColorMode;
 use SugarCraft\Image\Renderer\AsciiRenderer;
 use SugarCraft\Image\Renderer\ChafaRenderer;
+use SugarCraft\Image\Renderer\ConfigFingerprintProvider;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
 use SugarCraft\Image\Renderer\Iterm2Renderer;
 use SugarCraft\Image\Renderer\KittyRenderer;
@@ -868,10 +869,10 @@ final class Mosaic
 
     /**
      * Poster cache key: DiskCache::key() over (url, cellW, cellH-sentinel,
-     * protocol[:modeDetail]|scale). The scale rides in the protocol segment
-     * because it changes the encoded bytes (Fill crops, Fit scales either
-     * direction, ShrinkToFit refuses to enlarge) for an otherwise identical
-     * (url, size, protocol) tuple — two mosaics at
+     * protocol[:modeDetail]|scale[|configFingerprint]). The scale rides in the
+     * protocol segment because it changes the encoded bytes (Fill crops, Fit
+     * scales either direction, ShrinkToFit refuses to enlarge) for an
+     * otherwise identical (url, size, protocol) tuple — two mosaics at
      * different scales must never cross-serve each other's cache entries.
      * A-06: since the ascii protocol name no longer carries the colour arm,
      * modeDetail() rides in the same segment (':ansi256'/':truecolor') so
@@ -879,14 +880,41 @@ final class Mosaic
      * pre-A-06 segment; the two non-Mono arms deliberately move to new keys
      * (old entries simply age out — a changed key is a miss, never a
      * wrong-serve).
+     * D-04: the same collision exists BELOW the protocol name — a Sixel
+     * renderer's dither/maxColors/cell geometry and a Chafa renderer's CLI
+     * options change the bytes while name() stays constant — so the
+     * renderer's {@see ConfigFingerprintProvider::configFingerprint()} rides
+     * as a trailing segment. Renderers without byte-varying config answer
+     * '' and their segments (and keys) stay byte-identical; the segment is
+     * appended only when non-empty, exactly like modeDetail's.
      */
     private function posterCacheKey(string $urlOrPath, int $cellW, ?int $cellH): string
     {
         $detail = $this->modeDetail();
+        $fingerprint = $this->rendererConfigFingerprint();
         $protocol = $this->protocol()
             . ($detail === null ? '' : ':' . $detail)
-            . '|' . ($this->scale ?? Scale::Fill)->name;
+            . '|' . ($this->scale ?? Scale::Fill)->name
+            . ($fingerprint === '' ? '' : '|' . $fingerprint);
 
         return DiskCache::key($urlOrPath, $cellW, $cellH ?? self::AUTO_HEIGHT, $protocol);
+    }
+
+    /**
+     * D-04: the renderer's byte-varying config fingerprint, '' when the
+     * renderer declares none. A tmux-decorated mosaic answers for its inner
+     * renderer — the envelope re-wraps bytes identically around whatever the
+     * inner encodes, so the inner config is what must discriminate cache
+     * entries (same posture as {@see modeDetail()}).
+     */
+    private function rendererConfigFingerprint(): string
+    {
+        $renderer = $this->renderer instanceof TmuxPassthroughDecorator
+            ? $this->renderer->inner()
+            : $this->renderer;
+
+        return $renderer instanceof ConfigFingerprintProvider
+            ? $renderer->configFingerprint()
+            : '';
     }
 }

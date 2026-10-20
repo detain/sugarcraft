@@ -12,6 +12,11 @@ use SugarCraft\Image\ImageSource;
  * Each backend (Sixel, Kitty, iTerm2, HalfBlock) implements this
  * interface. Renderers are immutable — all configuration is supplied
  * at construction time via their own factory methods.
+ *
+ * D-04: a backend whose construction config changes the encoded bytes
+ * beyond what name() identifies (Sixel's dither, Chafa's CLI options)
+ * additionally implements {@see ConfigFingerprintProvider} so the poster
+ * disk cache can tell two same-name configurations apart.
  */
 interface Renderer
 {
