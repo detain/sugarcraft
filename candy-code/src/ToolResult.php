@@ -78,7 +78,7 @@ final class ToolResult
      *
      * THE LADDER, for the record (crush_media §8.2, sugar-image
      * `Detect.php:17` precedence): the `auto` image ladder is
-     * kitty > iterm2 > sixel > chafa > halfblock. sugar-video's VIDEO
+     * kitty > iterm2 > sixel > chafa > symbols > halfblock. sugar-video's VIDEO
      * ladder is deliberately different (sixel-first, crush_media §8.3) --
      * do not "harmonize" them. Grid layouts force cell renderers
      * regardless of mode (crush_media W2.4/W5.6).
@@ -93,7 +93,7 @@ final class ToolResult
      * @param string|null $imageBytes Raw image bytes captured by the tool (e.g. a screenshot), if any
      * @param string|null $imagePath Filesystem path the image was captured from/saved to, if any
      * @param string|null $imageProtocol The sugar-image protocol ({@see Mosaic::protocol()}) detected
-     *                                   at capture time -- 'kitty'|'sixel'|'iterm2'|'halfblock'|'quarterblock'|'chafa'
+     *                                   at capture time -- 'kitty'|'sixel'|'iterm2'|'halfblock'|'quarterblock'|'chafa'|'symbols'
      * @param string|null $diff Raw unified diff produced by an edit-shaped tool, kept OFF $result
      *                          so a renderer can hand it straight to a diff viewer instead of
      *                          string-scanning free text (mirrors {@see EngineToolResult::diff()})
