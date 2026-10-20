@@ -483,6 +483,22 @@ jobs:
       # 330-600s on 2026-10-06 — two shards were killed at exactly 600s while
       # still passing. 1200 restores ~2x headroom on the slowest legit shard
       # and still bounds a hung one well under the ~30 min serial run.
+      - name: Install ripgrep (candy-code)
+        if: matrix.lib == 'candy-code'
+        # GrepEngineDifferentialTest::parityCases() answers [] when rg is
+        # absent (there is no second engine to diff); PHPUnit 10 promotes an
+        # empty data provider to a suite-load ERROR, so the candy-code cell
+        # was structurally dead on ubuntu-latest, which ships no ripgrep
+        # (ci.yml run 39365805245, release-phar run 39371841327). Installing
+        # rg runs the parity legs for real — the honest cure is never a
+        # placeholder leg, and a host-side skip would hide the same void.
+        run: |
+          set -euo pipefail
+          command -v rg >/dev/null 2>&1 && exit 0
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ripgrep
+          rg --version
+
       - name: Run tests (candy-code — sharded, E671)
         if: matrix.lib == 'candy-code'
         run: |
@@ -817,6 +833,19 @@ jobs:
       # The engine is still pcov (setup-php above); only the report SHAPE
       # (K files merged) changed, and merge-clover.php refuses missing or
       # malformed shard reports fail-closed.
+      - name: Install ripgrep (candy-code)
+        if: matrix.lib == 'candy-code'
+        # Same void as the test job: without rg the GrepEngineDifferential
+        # parity provider is empty and PHPUnit 10 errors the whole candy-code
+        # cell at suite-load. The sharded coverage run below loads the same
+        # suite, so it needs the same binary present.
+        run: |
+          set -euo pipefail
+          command -v rg >/dev/null 2>&1 && exit 0
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ripgrep
+          rg --version
+
       - name: Run tests with coverage (candy-code — sharded, E691)
         if: matrix.lib == 'candy-code'
         run: |

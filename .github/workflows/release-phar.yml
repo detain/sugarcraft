@@ -127,6 +127,22 @@ jobs:
         env:
           PHAR_PATH: ${{ github.workspace }}/dist/candy-code.phar
 
+      - name: Install ripgrep for the heavy arm
+        # The phpunit invocation below loads the WHOLE suite's data providers
+        # before filtering; GrepEngineDifferentialTest::parityCases() answers
+        # [] when rg is absent and PHPUnit 10 promotes an empty data set to a
+        # suite-load ERROR — this step died 2F/2E on run 39371841327 at
+        # exactly that pair. ubuntu-latest ships no ripgrep, and the runner
+        # already installed the dev vendor from apt-adjacent network above, so
+        # installing rg here is no new privilege class. The parity legs then
+        # run for real (the cure is never a placeholder data leg).
+        run: |
+          set -euo pipefail
+          command -v rg >/dev/null 2>&1 && exit 0
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ripgrep
+          rg --version
+
       - name: PharCompatTest heavy arm
         # The archive is real; run the suite's CANDY_CODE_PHAR-gated stage 4
         # against it (the docblock at PharCompatTest promises this workflow
