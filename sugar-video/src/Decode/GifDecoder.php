@@ -12,8 +12,9 @@ use SugarCraft\Video\Render\Mode;
 /**
  * Decoder implementation that wraps sugar-animation's pure-PHP GIF decoder.
  *
- * Uses AnimationDecoder::decode() to get a list of AnimationFrame objects, then
- * converts each frame's cell grid to an RgbFrame:
+ * Uses AnimationDecoder::decodeBytes() (E-07/E-11) to get a stream of
+ * AnimationFrame objects over bytes captured ONCE at open, then converts each
+ * frame's cell grid to an RgbFrame:
  *   - AnimationFrame::$cells is list<list<array{0:int,1:int,2:int}|null>>
  *   - null cells become black [0, 0, 0]
  *   - Each row is left-to-right, top-to-bottom scanning
@@ -26,12 +27,41 @@ use SugarCraft\Video\Render\Mode;
  */
 final class GifDecoder implements Decoder
 {
+    /**
+     * Byte ceiling for the open-time GIF capture, mirroring sugar-image's
+     * `ImageSource::MAX_BYTES` (E-11): the whole point of holding the bytes
+     * is that no LATER read can surprise us with more, so the ceiling must
+     * fire at the first (and only) read.
+     */
+    public const MAX_SOURCE_BYTES = 67_108_864; // 64 MiB
+
+    /**
+     * `st_mode` masks used by {@see readBoundedBytes()} to prove the source
+     * is a regular file at every check, mirroring the constants
+     * sugar-image's round-4 hardened ingress uses (same S_IFmt/S_IFREG pair).
+     */
+    private const STAT_TYPE_MASK = 0170000;
+    private const STAT_REGULAR_BIT = 0100000;
+
     /** @var list<AnimationFrame> */
     private array $frames = [];
 
     private int $frameIndex = 0;
     private int $cellsW = 0;
     private int $cellsH = 0;
+
+    /**
+     * The container bytes captured at open (E-11). Every decode this object
+     * performs — open, re-hydrate, reopen — runs over THIS buffer, never over
+     * the caller's path again: a file swapped beneath a live player used to
+     * change frame counts and dimensions mid-playback, the exact cross-open
+     * TOCTOU sugar-image hardened against in round 4. Survives close() by
+     * design (bounded by MAX_SOURCE_BYTES, released with the object); a fresh
+     * open of a DIFFERENT source replaces it.
+     */
+    private ?string $bytes = null;
+
+    private string $bytesSource = '';
 
     /**
      * Graphics modes only: the pixel box the frame must be presented at,
@@ -70,7 +100,7 @@ final class GifDecoder implements Decoder
      * (cellsW·cellPxW × cellsH·cellPxH) so the image protocols get real detail —
      * the raw frame is handed to {@see GraphicsRenderer}, which encodes it once.
      *
-     * @see GifDecoder::reopen() for the E-11 path-ingress note on re-decodes.
+     * @see GifDecoder::reopen() for the E-11 bytes-ingress note on re-decodes.
      */
     public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
@@ -85,6 +115,33 @@ final class GifDecoder implements Decoder
                 'source' => $source,
             ]));
         }
+
+        // E-11/E-07: the source is read EXACTLY ONCE, here, bounded by
+        // MAX_SOURCE_BYTES. From this point on every decode in this object's
+        // lifetime — including reopen() — runs over $this->bytes, never over
+        // $source again, so no later mutation of the file can change what
+        // plays. A refusal (missing, non-regular, oversized) is a fail-loud
+        // RuntimeException before any grid is computed.
+        $this->bytes = self::readBoundedBytes($source);
+        $this->bytesSource = $source;
+
+        $this->hydrate($cellsW, $cellsH, $fps, $mode, $startSec, $headers);
+    }
+
+    /**
+     * Rebuild the frame list from the bytes already captured at open.
+     *
+     * Split out of {@see open()} so reopen() of the SAME source can refresh
+     * the playback state without touching the filesystem again (E-11). The
+     * header-drop notice belongs to the callers — they still have $source.
+     */
+    private function hydrate(int $cellsW, int $cellsH, float $fps, ?Mode $mode, float $startSec): void
+    {
+        $bytes = $this->bytes;
+        if ($bytes === null) {
+            throw new \RuntimeException('GIF hydrate called without a captured source — open() must precede it.');
+        }
+
         $this->cellsW = $cellsW;
         $this->cellsH = $cellsH;
         $this->frameIndex = 0;
@@ -92,10 +149,11 @@ final class GifDecoder implements Decoder
         // Decode the GIF using sugar-animation's pure-PHP decoder, at the resolution the
         // render mode needs: graphics modes want full pixel resolution; the text
         // modes scale the cell grid by their source-pixels-per-cell packing.
+        // E-07: the decode runs over the captured bytes, not the path.
         if ($mode?->isGraphics() ?? false) {
             $this->targetW = max(1, $cellsW * $this->cellPxW);
             $this->targetH = max(1, $cellsH * $this->cellPxH);
-            [$decodeW, $decodeH] = $this->graphicsDecodeGrid($source, $this->targetW, $this->targetH);
+            [$decodeW, $decodeH] = $this->graphicsDecodeGrid($bytes, $this->targetW, $this->targetH);
         } else {
             $this->targetW = 0;
             $this->targetH = 0;
@@ -108,7 +166,7 @@ final class GifDecoder implements Decoder
         // (see FfmpegDecoder), so translate narrowly instead of letting the
         // engine-level error class escape.
         try {
-            $this->frames = AnimationDecoder::decode($source, $decodeW, $decodeH);
+            $this->frames = iterator_to_array(AnimationDecoder::decodeBytes($bytes, $decodeW, $decodeH), preserve_keys: false);
         } catch (\ValueError $e) {
             throw new \RuntimeException("GIF decode failed: {$e->getMessage()}", 0, $e);
         }
@@ -164,14 +222,17 @@ final class GifDecoder implements Decoder
      *
      * @return array{0:int,1:int}
      */
-    private function graphicsDecodeGrid(string $source, int $targetW, int $targetH): array
+    private function graphicsDecodeGrid(string $bytes, int $targetW, int $targetH): array
     {
         $w = $targetW;
         $h = $targetH;
 
-        $size = @getimagesize($source);
-        if (is_array($size) && $size[0] > 0 && $size[1] > 0 && ($size[0] < $w || $size[1] < $h)) {
-            $scale = min($size[0] / $w, $size[1] / $h);
+        // E-11: dimensions come from the captured bytes' logical screen
+        // descriptor, not @getimagesize($path) — the path must stay dead after
+        // the one open-time capture.
+        [$srcW, $srcH] = self::gifScreenDims($bytes);
+        if ($srcW > 0 && $srcH > 0 && ($srcW < $w || $srcH < $h)) {
+            $scale = min($srcW / $w, $srcH / $h);
             $w = max(1, (int) round($w * $scale));
             $h = max(1, (int) round($h * $scale));
         }
@@ -183,6 +244,108 @@ final class GifDecoder implements Decoder
         }
 
         return [$w, $h];
+    }
+
+    /**
+     * The GIF logical-screen size read straight from the container bytes.
+     *
+     * Bytes 0-5 are the signature, 6-9 the two little-endian uint16s of the
+     * logical screen descriptor. Anything that is not a recognisable GIF87a /
+     * GIF89a screen returns [0, 0] — the same "no size known" answer
+     * `@getimagesize()` used to give on a non-image, so callers treat it as
+     * "skip the source-size shrink" and let the decoder's own gates refuse.
+     *
+     * @return array{0:int,1:int}
+     */
+    private static function gifScreenDims(string $bytes): array
+    {
+        if (strlen($bytes) < 13) {
+            return [0, 0];
+        }
+
+        $signature = substr($bytes, 0, 6);
+        if ($signature !== 'GIF87a' && $signature !== 'GIF89a') {
+            return [0, 0];
+        }
+
+        $lsd = unpack('vwidth/vheight', substr($bytes, 6, 4));
+        if (!is_array($lsd) || !isset($lsd['width'], $lsd['height'])) {
+            return [0, 0];
+        }
+
+        return [(int) $lsd['width'], (int) $lsd['height']];
+    }
+
+    /**
+     * Read the whole file, once, under the same hard gates sugar-image's
+     * round-4 hardening applies (E-11): the path is opened exactly one time,
+     * the entry must be a regular file at BOTH the stat and the post-open
+     * fstat (a swap between the two is a TOCTOU plant), and the capture is
+     * bounded by {@see MAX_SOURCE_BYTES} with one byte of over-read so an
+     * exactly-at-cap file still fails loud instead of silently truncating.
+     *
+     * @throws \RuntimeException on missing, non-regular, unreadable, or oversized source
+     */
+    private static function readBoundedBytes(string $source): string
+    {
+        $stat = @stat($source);
+        if ($stat === false) {
+            throw new \RuntimeException(Lang::t('gif.source_unreadable', [
+                'path' => $source,
+                'reason' => 'no such file or directory',
+            ]));
+        }
+
+        if (($stat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_BIT) {
+            throw new \RuntimeException(Lang::t('gif.source_unreadable', [
+                'path' => $source,
+                'reason' => 'not a regular file',
+            ]));
+        }
+
+        $handle = @fopen($source, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException(Lang::t('gif.source_unreadable', [
+                'path' => $source,
+                'reason' => 'unreadable before open',
+            ]));
+        }
+
+        try {
+            $afterOpen = fstat($handle);
+            if (!is_array($afterOpen) || (($afterOpen['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_BIT)) {
+                throw new \RuntimeException(Lang::t('gif.source_unreadable', [
+                    'path' => $source,
+                    'reason' => 'not a regular file after open',
+                ]));
+            }
+
+            if ((int) $afterOpen['size'] > self::MAX_SOURCE_BYTES) {
+                throw new \RuntimeException(Lang::t('gif.source_too_large', [
+                    'size' => (int) $afterOpen['size'],
+                    'max' => self::MAX_SOURCE_BYTES,
+                ]));
+            }
+
+            $bytes = stream_get_contents($handle, self::MAX_SOURCE_BYTES + 1);
+            if ($bytes === false) {
+                throw new \RuntimeException(Lang::t('gif.source_unreadable', [
+                    'path' => $source,
+                    'reason' => 'read failed',
+                ]));
+            }
+
+            if (strlen($bytes) > self::MAX_SOURCE_BYTES) {
+                throw new \RuntimeException(Lang::t('gif.source_too_large', [
+                    'size' => strlen($bytes),
+                    'max' => self::MAX_SOURCE_BYTES,
+                ]));
+            }
+
+            return $bytes;
+        } finally {
+            fclose($handle);
+        }
     }
 
     /**
@@ -208,9 +371,12 @@ final class GifDecoder implements Decoder
      * restore detail discarded at decode time, so the frame loses twice —
      * cell downsample, then smooth upscale — baking a softness chicle never
      * shows, because chafa composites full-canvas RGBA and sizes output only
-     * at print time. The cure lives behind E-07's RGBA bytes ingress
-     * ({@see RgbFrame}, S6.3/S6.2): resample from true-colour pixels and
-     * delete this per-grid rebuild. It is deliberately NOT taken here.
+     * at print time. E-07's RGBA bytes ingress has SINCE LANDED
+     * ({@see AnimationFrame::rgbaBytes()}, S6.3), so the remaining work is
+     * only the rework itself: resample from true-colour pixels and delete
+     * this per-grid rebuild. It is deliberately NOT taken in S6.3 — this
+     * step's contract is bytes ingress + the TOCTOU reopen cure, and the
+     * render path keeps consuming cells so every digest stays put.
      */
     private function upscaleToTarget(string $bytes, int $w, int $h): ?RgbFrame
     {
@@ -311,6 +477,12 @@ final class GifDecoder implements Decoder
 
     /**
      * @inheritDoc
+     *
+     * Drops the decoded frames and rewinds the cursor. The captured bytes are
+     * KEPT on purpose (E-11): a reopen of the same source must be able to
+     * re-hydrate without re-reading the path, and the buffer is already
+     * bounded by {@see MAX_SOURCE_BYTES} — it is released when this object
+     * dies, or replaced when a DIFFERENT source is opened.
      */
     public function close(): void
     {
@@ -321,19 +493,33 @@ final class GifDecoder implements Decoder
     /**
      * @inheritDoc
      *
-     * Closes and re-opens the decoder with the given parameters.
+     * Closes and re-hydrates the decoder with the given parameters.
      *
-     * E-11 (queued, NOT implemented): open()/reopen() read the PATH on every
-     * call, so a file mutated between open and reopen is re-decoded with
-     * different frame counts or dimensions mid-playback — the TOCTOU
-     * sugar-image hardened against in round 4 (bounded bytes ingress,
-     * ImageSource.php readBoundedRegularFile + decode-from-bytes) never
-     * landed here. The fix is E-07's `Decoder::decodeBytes()` seam: capture
-     * the bounded bytes once at open and reopen from them (S6.3).
+     * E-11 (IMPLEMENTED, S6.3): the historical bug was that open()/reopen()
+     * re-read the PATH on every call, so a file mutated between open and
+     * reopen was re-decoded with different frame counts or dimensions
+     * mid-playback — the cross-open TOCTOU sugar-image hardened against in
+     * round 4. It never landed here. It lands now: the bytes are captured
+     * once in {@see open()} and a reopen of the SAME source re-hydrates from
+     * that capture without touching the filesystem again. Reopening a
+     * DIFFERENT source takes the fresh-capture path (a legit playlist hop).
      */
     public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
         $this->close();
+
+        if ($this->bytes !== null && $source === $this->bytesSource) {
+            if ($headers !== []) {
+                error_log(Lang::t('header.ignored_local_source', [
+                    'count' => count($headers),
+                    'source' => $source,
+                ]));
+            }
+
+            $this->hydrate($cellsW, $cellsH, $fps, $mode, $startSec, $headers);
+            return;
+        }
+
         $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec, $headers);
     }
 

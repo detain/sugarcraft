@@ -12,6 +12,10 @@ return [
     // Decoder errors
     'decoder.ffmpeg_missing' => 'ffmpeg not found on this host; mp4/avi/webm playback requires ffmpeg',
 
+    // GIF source ingress (E-11: the bounded one-time capture in GifDecoder::readBoundedBytes)
+    'gif.source_unreadable' => 'sugar-video: GIF source "{path}" cannot be decoded — {reason}',
+    'gif.source_too_large' => 'sugar-video: GIF source is {size} bytes, above the {max} byte ceiling — the whole file must fit in memory before playback starts',
+
     // Remote-source request headers (see Source/HttpHeaders — rejected before anything
     // reaches ffmpeg, because a CR/LF in a header value is request smuggling)
     'header.invalid_name' => 'Invalid HTTP header name {name}: must be a non-empty token with no CR, LF, NUL or ":" in it',
