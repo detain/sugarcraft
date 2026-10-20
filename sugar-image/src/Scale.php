@@ -73,10 +73,20 @@ enum Scale
      *                  Source crop rect and the destination size to pass to the
      *                  renderer.  dstW/dstH are > 0; srcW/srcH are >= 1 so the
      *                  rect is always a legal crop source (lane p2, N2).
+     * @throws \InvalidArgumentException if the SOURCE has a non-positive side
+     *                  (C-11: the old guard echoed src<=0 unchanged, breaking
+     *                  the documented src>=1 invariant this very enum's fill()
+     *                  and crop() floors were written to protect; a zero-sided
+     *                  source rect reaches imagecrop downstream and GD fails
+     *                  there — fail fast at the boundary instead).
      */
     public function computeDimensions(int $srcW, int $srcH, int $dstW, int $dstH): array
     {
-        if ($dstW <= 0 || $dstH <= 0 || $srcW <= 0 || $srcH <= 0) {
+        if ($srcW <= 0 || $srcH <= 0) {
+            throw new \InvalidArgumentException("source rect {$srcW}x{$srcH} is empty");
+        }
+
+        if ($dstW <= 0 || $dstH <= 0) {
             return ['srcX' => 0, 'srcY' => 0, 'srcW' => $srcW, 'srcH' => $srcH,
                     'dstW' => max(1, $dstW), 'dstH' => max(1, $dstH)];
         }

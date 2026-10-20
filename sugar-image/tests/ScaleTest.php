@@ -284,12 +284,88 @@ final class ScaleTest extends TestCase
         }
     }
 
-    public function testZeroOrNegativeDimensionsReturnsSafeDefaults(): void
+    /**
+     * C-11: the old guard echoed src<=0 unchanged, violating the documented
+     * src>=1 invariant (and the imagecrop/GD hazard it exists to prevent).
+     * A non-positive SOURCE now throws instead of quietly re-writing geometry.
+     */
+    public static function emptySourceProvider(): array
     {
-        $r = Scale::Fit->computeDimensions(0, 0, 0, 0);
+        return [
+            'zero width'      => [0, 200, 40, 20],
+            'zero height'     => [200, 0, 40, 20],
+            'both zero'       => [0, 0, 0, 0],
+            'negative width'  => [-5, 10, 40, 20],
+            'negative height' => [10, -5, 40, 20],
+        ];
+    }
+
+    /**
+     * C-11: every mode refuses a degenerate source rect up front.
+     *
+     * @dataProvider emptySourceProvider
+     */
+    public function testEmptySourceThrows(int $sw, int $sh, int $dw, int $dh): void
+    {
+        foreach (Scale::cases() as $mode) {
+            $threw = false;
+            try {
+                $mode->computeDimensions($sw, $sh, $dw, $dh);
+            } catch (\InvalidArgumentException) {
+                $threw = true;
+            }
+            $this->assertTrue($threw, $mode->name . " {$sw}x{$sh}->{$dw}x{$dh} echoed a degenerate source");
+        }
+    }
+
+    /**
+     * C-11: the message names the empty rect so callers can diagnose it.
+     */
+    public function testEmptySourceRefusalNamesTheRect(): void
+    {
+        try {
+            Scale::Fit->computeDimensions(0, 200, 40, 20);
+            $this->fail('expected InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('0x200', $e->getMessage());
+        }
+    }
+
+    /**
+     * C-11: a degenerate DESTINATION with a legal source keeps the existing
+     * intent — dst legs floored at 1, full-source rect echoed.
+     */
+    public function testZeroDestinationFloorsToOneWithLegalSource(): void
+    {
+        $r = Scale::Fit->computeDimensions(8, 8, 0, 0);
 
         $this->assertSame(1, $r['dstW']);
         $this->assertSame(1, $r['dstH']);
+        $this->assertSame(8, $r['srcW']);
+        $this->assertSame(8, $r['srcH']);
+    }
+
+    /**
+     * C-11: property-style pin — for every mode and every legal-source pair
+     * (including the aspect degeneracies from lane p2 N2), the returned rect
+     * can never carry a zero-sided source or destination again.
+     */
+    public function testEveryModeKeepsThePositiveRectInvariant(): void
+    {
+        $pairs = [
+            [4, 2, 8, 8], [8, 2, 8, 8], [100, 1, 1, 1000], [1, 100, 1000, 1],
+            [100, 300, 40, 20], [300, 100, 40, 20], [1, 1, 1, 1], [80, 60, 16, 32],
+        ];
+        foreach (Scale::cases() as $mode) {
+            foreach ($pairs as [$sw, $sh, $dw, $dh]) {
+                $r = $mode->computeDimensions($sw, $sh, $dw, $dh);
+
+                $this->assertGreaterThanOrEqual(1, $r['srcW'], $mode->name . " {$sw}x{$sh}->{$dw}x{$dh} srcW");
+                $this->assertGreaterThanOrEqual(1, $r['srcH'], $mode->name . " {$sw}x{$sh}->{$dw}x{$dh} srcH");
+                $this->assertGreaterThanOrEqual(1, $r['dstW'], $mode->name . " {$sw}x{$sh}->{$dw}x{$dh} dstW");
+                $this->assertGreaterThanOrEqual(1, $r['dstH'], $mode->name . " {$sw}x{$sh}->{$dw}x{$dh} dstH");
+            }
+        }
     }
 
     public function testAllSixScaleModesExist(): void
