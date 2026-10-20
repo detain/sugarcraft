@@ -15,6 +15,12 @@ import { useContextSourcesStore } from '../../stores/contextSources'
  * WEB-3b: the trust prompt rides the same answer (`sources.trust`). Its
  * verdict buttons call `context.trust` on the Approve scope; the root and
  * reason stay plain spans under the same rule.
+ *
+ * WEB-3b review MINOR-3: the session-tier wording speaks the truth of the
+ * frozen-trust-roster law (`trustedRootsForThisProcess`): a session grant
+ * only silences further prompts for this process — nothing it does can
+ * start servers in the current run, only a saved (user-tier) trust does,
+ * at next launch. "Trust (this run)" read as activation; it is not.
  */
 const props = defineProps<{ sessionId: string }>()
 
@@ -159,13 +165,13 @@ onMounted(() => void context.load(props.sessionId))
         </template>
         <p v-if="trustError" class="error" role="alert" data-testid="context-trust-error">{{ trustError }}</p>
         <div v-if="context.sources.trust?.status === 'asked'" class="actions">
-          <button type="button" data-testid="context-trust-session" :disabled="busy || !canAnswer" @click="answer('grant', 'session')">Trust (this run)</button>
+          <button type="button" data-testid="context-trust-session" :disabled="busy || !canAnswer" @click="answer('grant', 'session')">Silence prompts (this run)</button>
           <button type="button" data-testid="context-trust-user" :disabled="busy || !canAnswer" @click="answer('grant', 'user')">Always trust</button>
           <button type="button" data-testid="context-trust-reject" :disabled="busy || !canAnswer" @click="answer('reject', 'session')">Leave untrusted</button>
         </div>
         <p v-else-if="context.sources.trust" class="meta" data-testid="context-trust-settled">
           <template v-if="context.sources.trust.status === 'granted'">
-            {{ context.sources.trust.persisted ? 'Trusted and written to your user config — the servers start at the next launch.' : 'Trusted for this server run — nothing was written.' }}
+            {{ context.sources.trust.persisted ? 'Trusted and written to your user config — the servers start at the next launch.' : 'Question settled for this run — the trust roster was frozen at launch, so this grant only silences further prompts while this server process runs; the servers start after a saved (user-tier) trust at next launch.' }}
           </template>
           <template v-else>Left untrusted — nothing of this project starts.</template>
         </p>

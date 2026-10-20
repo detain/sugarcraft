@@ -149,7 +149,7 @@ describe('ContextPanel trust prompt (WEB-3b)', () => {
     expect(root.element.tagName).toBe('SPAN')
     expect(root.text()).toBe('/repo/project')
     expect(section.find('a').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="context-trust-session"]').text()).toBe('Trust (this run)')
+    expect(wrapper.find('[data-testid="context-trust-session"]').text()).toBe('Silence prompts (this run)')
     expect(wrapper.find('[data-testid="context-trust-user"]').text()).toBe('Always trust')
     expect(wrapper.find('[data-testid="context-trust-reject"]').text()).toBe('Leave untrusted')
   })
@@ -184,7 +184,14 @@ describe('ContextPanel trust prompt (WEB-3b)', () => {
     expect(wire.sent('context.trust').at(-1)?.params).toEqual({ askId: 'trust-9f0e1d2c3', decision: 'grant', remember: 'session' })
     await wire.answer('context.trust', { askId: 'trust-9f0e1d2c3', status: 'granted', persisted: false })
     await flushPromises()
-    expect(wrapper.find('[data-testid="context-trust-settled"]').text()).toContain('this server run')
+    // WEB-3b MINOR-3: the session-tier line speaks the frozen-trust truth —
+    // prompt-silencing only, activation needs a saved (user-tier) trust.
+    const settled = wrapper.find('[data-testid="context-trust-settled"]').text()
+    expect(settled).toContain('Question settled for this run')
+    expect(settled).toContain('frozen at launch')
+    expect(settled).toContain('silences further prompts')
+    expect(settled).toContain('user-tier')
+    expect(settled).not.toContain('Trusted for this server run')
   })
 
   it('ignores prompts measured for another session', async () => {
