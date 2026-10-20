@@ -540,6 +540,25 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'accounting in tools/check-child-lifetimes.php. NOT FIXABLE FROM THIS '
                 . 'PACKAGE.',
         ],
+        // chafa-campaign W1 D-07 put the chafa-binary encode child in the
+        // reachable closure; W9 weld licensed it here per the guard's own
+        // both-halves protocol (this row + finding 29 of the lib's file).
+        'sugar-image/Renderer/ChafaRenderer.php::render' => [
+            'count' => 1,
+            'reason' => 'the chafa-binary encode child. The scanner reads it as unclassified '
+                . 'rather than short because $process goes to is_resource() and then across '
+                . 'the cross-function self::reap() it cannot follow. The ladder itself bounds '
+                . 'the child — poll to REAP_WAIT_MS, TERM(15), grace, KILL(9), unconditional '
+                . 'proc_close() — and the D-07 hygiene is full: fd 2 rides a tempnam 0600 '
+                . 'file sink, stdout is capped at MAX_STDOUT_BYTES, the finally releases the '
+                . 'sink on every settle path. The row is here rather than a CLOSING_HELPERS '
+                . 'promotion because short is not structural: an exception raised between the '
+                . 'spawn and the reap call bypasses the ladder (the finally unlinks only the '
+                . 'sink file), and E425 warns a helper row can hide a finding. The lifetime '
+                . 'half is accounted in tools/check-child-lifetimes.php (D-07 row). Filed as '
+                . 'finding 29 of findings/sugar-image.md. NOT FIXABLE FROM THIS PACKAGE — '
+                . 'sugar-image owns it.',
+        ],
     ];
 
     /**

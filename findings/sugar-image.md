@@ -548,6 +548,27 @@ The Sixel protocol can represent transparency via a transparent color index, but
 
 ---
 
+### 29. `ChafaRenderer::render()` spawns the chafa child with an fd 3+ silent spec — exposure licensed at the guard 🟡 W9: LICENSED (ACCOUNTED_FOR_IN_LIBS row; reaping inside render() on every path is the real fix)
+
+**File**: `src/Renderer/ChafaRenderer.php` (spawn inside `render()`)
+
+The `proc_open` spec names fd 1 (pipe) and fd 2 (a `tempnam` 0600 file sink) and says nothing about
+fd 3+, so while the child runs it inherits every descriptor this process happened to hold open —
+E365's shape. The D-07 hygiene around the site is full (`self::reap()` polls to `REAP_WAIT_MS`,
+escalates TERM(15) → KILL(9), ends in an unconditional `proc_close()`; stdout is capped at
+`MAX_STDOUT_BYTES`; the sink is unlinked in a `finally`), and `tools/check-child-lifetimes.php`
+counts it as accounted. What it is NOT is structurally short: an exception raised between the
+spawn and the `self::reap()` call bypasses the ladder, because the `finally` releases only the
+sink file — which is why the candy-code descriptor guard licenses the site in
+`ACCOUNTED_FOR_IN_LIBS` rather than promoting it via a `CLOSING_HELPERS` row (E425: a helper row
+is a name-level claim that can hide the finding).
+
+**Fix if ever reopened**: reap the child inside `render()` on every path out (e.g. close/reap in
+the `finally` itself, guarded by an already-reaped flag), and only then consider the
+`CLOSING_HELPERS` door.
+
+---
+
 ## Positive Findings
 
 The following are genuinely good patterns worth highlighting:
