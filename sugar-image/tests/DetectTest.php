@@ -16,12 +16,14 @@ final class DetectTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Snapshot and clear relevant env vars so each test starts clean.
-        // TMUX is in the cleared set because of F-04: with it set, probe()
-        // would consult the REAL tmux server (this suite may itself run
-        // inside one) and the outer terminal's feature list could veto or
+        // F-01: the cleared set is exactly TermDb::ENV_KEYS — the env vars
+        // the terminal database consults — so the negative pins stay
+        // hermetic on machines that leak KONSOLE_VERSION or GHOSTTY_BIN_DIR.
+        // TMUX is in the set because of F-04: with it set, probe() would
+        // consult the REAL tmux server (this suite may itself run inside
+        // one) and the outer terminal's feature list could veto or
         // short-circuit the sixel expectations pinned here.
-        $keys = ['KITTY_WINDOW_ID', 'TERM_PROGRAM', 'LC_TERMINAL', 'TERM', 'XTERM_VERSION', 'TMUX'];
+        $keys = \SugarCraft\Image\TermDb::ENV_KEYS;
         foreach ($keys as $key) {
             $this->savedEnv[$key] = getenv($key);
             putenv($key);
@@ -222,6 +224,55 @@ final class DetectTest extends TestCase
         $this->assertFalse($cap->kitty);
         $this->assertFalse($cap->iterm2);
         $this->assertFalse($cap->sixel);
+    }
+
+    /**
+     * F-01 no-downgrade law: a Sixel claim that came from the terminal
+     * database stays claimed even when the live DA1 reply denies sixel.
+     * (The DA1 arm is true-only promotion — the reverse channel would let a
+     * middlebox or a lying pane erase a published capability the table just
+     * certified. This is the pin the S4.2 review brief asks to redden if
+     * someone ever routes a table claim through the reply for demotion.)
+     */
+    public function testTableSixelClaimSurvivesNegativeDa1Reply(): void
+    {
+        putenv('TERM=mlterm');
+
+        $pair = $this->createStreamPair();
+        stream_set_blocking($pair['write'], false);
+        stream_set_blocking($pair['read'], false);
+        Detect::setProbeStdin($pair['read']);
+        Detect::reset();
+
+        // DA1 reply with no sixel bit.
+        @fwrite($pair['write'], "\x1b[?62;0c");
+        @fflush($pair['write']);
+
+        $cap = Detect::probe();
+
+        @fclose($pair['write']);
+
+        $this->assertTrue($cap->sixel, 'a table claim must not be downgraded by a negative DA1 reply');
+        $this->assertFalse($cap->kitty);
+        $this->assertFalse($cap->iterm2);
+    }
+
+    /**
+     * F-01 precedence union: an advertisement ($KITTY_WINDOW_ID) and a $TERM
+     * row (mlterm) can match at once; the family precedence resolves it to
+     * Kitty exactly as the old hardcoded ladder did (its kitty block was
+     * checked first).
+     */
+    public function testKittyAdvertisementOutranksTermSixelClaim(): void
+    {
+        putenv('TERM=mlterm');
+        putenv('KITTY_WINDOW_ID=7');
+
+        $cap = Detect::probe();
+
+        $this->assertTrue($cap->kitty);
+        $this->assertFalse($cap->sixel, 'Capability::kitty keeps the single-family shape — sixel rides the precedence decision, not the union');
+        $this->assertFalse($cap->iterm2);
     }
 
     public function testCachedReturnsSameInstance(): void

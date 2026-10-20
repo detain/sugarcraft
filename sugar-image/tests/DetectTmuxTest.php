@@ -54,7 +54,9 @@ final class DetectTmuxTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $keys = ['TMUX', 'TERM', 'TERM_PROGRAM', 'KITTY_WINDOW_ID', 'XTERM_VERSION', 'LC_TERMINAL', 'PATH'];
+        // F-01: clear exactly the keys TermDb consults (see DetectTest),
+        // plus PATH — this file plants a fake tmux binary on it.
+        $keys = array_merge(\SugarCraft\Image\TermDb::ENV_KEYS, ['PATH']);
         foreach ($keys as $key) {
             $this->savedEnv[$key] = getenv($key);
             putenv($key);

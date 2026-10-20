@@ -18,7 +18,8 @@ final class DetectUncoveredTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $keys = ['KITTY_WINDOW_ID', 'TERM_PROGRAM', 'LC_TERMINAL', 'TERM', 'XTERM_VERSION', 'TMUX'];
+        // F-01: clear exactly the keys TermDb consults (see DetectTest).
+        $keys = \SugarCraft\Image\TermDb::ENV_KEYS;
         foreach ($keys as $key) {
             $this->savedEnv[$key] = getenv($key);
             putenv($key);

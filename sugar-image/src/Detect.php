@@ -11,6 +11,10 @@ use SugarCraft\Core\Util\TtyDetect;
 /**
  * Terminal image-protocol capability detection.
  *
+ * F-01: the env stage is a {@see TermDb} consult — a declarative port of
+ * chafa's 1338-line built-in terminal table — and a table claim is only
+ * ever UPGRADED by a live DA1 reply, never downgraded through it.
+ *
  * Probes environment variables and sends DA1 queries to determine
  * which image-rendering protocols the current terminal supports.
  * Results are cached per-process.
@@ -387,9 +391,15 @@ final class Detect
      * suppression (the probe's own ladder rules, which terminate its
      * capability phases). Only TRUE promotes here: a terminfo NO is never
      * a veto, it leaves the DA1 arm byte-unchanged — the database is an
-     * accelerator, not an authority. Swap seam: this direct
-     * TerminalProbe::runProbe() consult is the whole stage the S4.2
-     * TermDb rework replaces in one move (s2-5 ledger).
+     * accelerator, not an authority. F-01 note: the s2-5 ledger's swap seam
+     * ("the whole stage the S4.2 TermDb rework replaces in one move") landed
+     * as a COMPLEMENT, not a replacement — the declarative table
+     * {@see TermDb} took over the env stage ahead of this arm, and the live
+     * infocmp consult stays as the long tail for $TERM entries the table
+     * does not name. chicle runs the same two-database split (its term-db.c
+     * table plus the terminal's own sixel_seqs terminfo entry); collapsing
+     * this arm into the table would be a behavior regression the DetectTest
+     * suite pins forbid.
      */
     private static function probeTerminfoSixel(): bool
     {
@@ -984,62 +994,38 @@ final class Detect
     }
 
     /**
-     * Detect based solely on environment variables (no TTY I/O).
+     * F-01: the environment stage is now a terminal-database consult.
+     *
+     * Snapshots the env vars {@see TermDb} knows about, resolves the chained
+     * {@see TermInfo}, and maps it to a Capability under SugarCraft's family
+     * precedence (Kitty > iTerm2 > Sixel) — the same order the pre-F-01
+     * hardcoded ladder checked its three `if` blocks in, so every env answer
+     * is byte-identical to the old one; what changed is that terminals the
+     * ladder never named (konsole ≥ 22.03.70, foot via its prefix rule, warp,
+     * contour, yaft, rio, mintty-as-$TERM, the tmux ≥ 3.4 native-sixel row)
+     * are now recognized, and terminals chicle proves color-only (alacritty,
+     * st, linux, plain xterm/vte) can be *listed* as known-nothing instead of
+     * silently falling through.
      */
     private static function probeEnv(bool $inTmux = false): Capability
     {
-        // Kitty: KITTY_WINDOW_ID set, or known kitty-family $TERM, or ghostty/WezTerm.
-        if (getenv('KITTY_WINDOW_ID') !== false
-            || getenv('TERM_PROGRAM') === 'WezTerm'
-            || getenv('TERM_PROGRAM') === 'ghostty'
-            || preg_match('/xterm-kitty/i', (string) getenv('TERM')) === 1
-        ) {
+        $info = TermDb::matchChain(TermDb::snapshotEnv());
+
+        // Family precedence: the old ladder's block order is now the table's
+        // resolution order (wezterm/mintty/rio claim several protocols at
+        // once; the first hit wins exactly as before — pinned by
+        // testWezTermIsKittyOnlyNotIterm2 and testIterm2ViaTermProgramMintty).
+        if ($info->supports(TermInfo::PROTOCOL_KITTY)) {
             return Capability::kitty(null, $inTmux);
         }
-
-        // iTerm2: iTerm.app, iTerm2, mintty, or LC_TERMINAL=iTerm2. mintty
-        // implements the iTerm2 OSC 1337 File= inline-image protocol (as well as
-        // Sixel); OSC 1337 carries PNG bytes at full fidelity, so it is preferred.
-        // Note: WezTerm is handled exclusively in the Kitty block above
-        // (Kitty protocol family takes precedence; WezTerm is not iTerm2).
-        $termProgram = (string) getenv('TERM_PROGRAM');
-        $lcTerminal = (string) getenv('LC_TERMINAL');
-        if ($termProgram === 'iTerm.app'
-            || $termProgram === 'iTerm2'
-            || $termProgram === 'mintty'
-            || $lcTerminal === 'iTerm2'
-        ) {
+        if ($info->supports(TermInfo::PROTOCOL_ITERM2)) {
             return Capability::iterm2(null, $inTmux);
         }
-
-        // Sixel: strong env-var hints ($TERM mlterm/foot, or xterm with XTERM_VERSION).
-        if (self::hasSixelEnvHints()) {
+        if ($info->supports(TermInfo::PROTOCOL_SIXEL)) {
             return Capability::sixel(null, $inTmux);
         }
 
         // Half-block: always available.
         return Capability::unknown(null, $inTmux);
-    }
-
-    /**
-     * Terminals known to support Sixel based purely on environment variables.
-     *
-     * mlterm and foot are identified by their own `$TERM` entries alone — neither
-     * sets `$XTERM_VERSION`, so gating them on it (as an earlier revision did) left
-     * them reachable only through the DA1 round-trip, which a non-interactive stdin
-     * (pipe, daemon, harness) never gets to make. `$TERM=xterm*` is claimed by
-     * nearly every emulator, so only real xterm — which exports `$XTERM_VERSION` —
-     * counts there.
-     */
-    private static function hasSixelEnvHints(): bool
-    {
-        $term         = (string) getenv('TERM');
-        $xtermVersion = (string) getenv('XTERM_VERSION');
-
-        if (preg_match('/^(mlterm(-256color)?|foot(-extra|-direct)?)$/i', $term) === 1) {
-            return true;
-        }
-
-        return $xtermVersion !== '' && preg_match('/^xterm(-256color)?$/i', $term) === 1;
     }
 }
