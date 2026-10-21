@@ -984,54 +984,6 @@ final class Bootstrap
     private static array $reportedUntrustedHookFiles = [];
 
 
-
-    /**
-     * The config FILE `--config` named, or null to discover
-     * `~/.candy-code/config.json` — see {@see useConfigPath()}.
-     */
-    private static ?string $configPathOverride = null;
-
-    /**
-     * The model `--model` named, or null to fall back to `$CANDY_CODE_MODEL`
-     * and then the provider default — see {@see useModel()}.
-     */
-    private static ?string $modelOverride = null;
-
-    /**
-     * Where `bin/candy-code`'s `TuiErrorLog::install()` sent `error_log()` for
-     * this TUI run, or null when it left the operator's own destination in
-     * place — see {@see useTuiErrorLog()}.
-     */
-    private static ?string $tuiErrorLog = null;
-
-    /**
-     * Which session a TUI launch opens — see {@see useSessionLaunch()}.
-     * 'new' (the default), 'continue', or 'resume'.
-     */
-    private static string $sessionLaunchMode = 'new';
-
-    /** The id or name `--resume` named; null with 'resume' opens the picker. */
-    private static ?string $sessionLaunchTarget = null;
-
-    /**
-     * Where the ↑/↓ prompt history lives, when something other than
-     * `~/.candy-code/prompt_history.jsonl` — see {@see pinPromptHistoryPath()}.
-     */
-    private static ?string $promptHistoryPath = null;
-
-    /**
-     * The RAW, UNVALIDATED string `--permission-mode` named, or null when the
-     * flag was absent — see {@see usePermissionMode()} for why it is stored
-     * unvalidated.
-     */
-    private static ?string $permissionModeOverride = null;
-
-    /**
-     * The RAW, UNVALIDATED string `--max-cost` named, or null when the flag
-     * was absent — see {@see useMaxCost()} for why it is stored unvalidated.
-     */
-    private static ?string $maxCostOverride = null;
-
     /**
      * The trusted project roots this process resolved, keyed by the
      * `config.json` they came out of — see {@see trustedRootsForThisProcess()}
@@ -3686,7 +3638,7 @@ final class Bootstrap
                 self::userSettingsDirOrNull(),
                 self::userConfigPath(),
                 array_filter(getenv(), 'is_string'),
-                self::$permissionModeOverride === null ? [] : ['--permission-mode' => self::$permissionModeOverride],
+                LaunchContext::permissionModeOverride() === null ? [] : ['--permission-mode' => LaunchContext::permissionModeOverride()],
                 // The editor's provider choices: the same list the Ctrl+P
                 // "Switch model" palette offers.
                 \SugarCraft\Code\Config\Settings\OptionsProvider::new()->withList(
@@ -4262,26 +4214,13 @@ final class Bootstrap
     private const MAX_TOOL_STEPS_CONFIG_KEY = 'maxToolSteps';
 
     /**
-     * The RAW string `--max-turns` named, or null. Declared and read inside
-     * this resolver region — the flag exists only to speak into
-     * {@see resolvedMaxToolSteps()}. {@see useMaxTurns()} for why it is
-     * stored RAW; {@see maxTurns()} for the judgment.
+     * Delegates to {@see LaunchContext::useMaxTurns()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    private static ?string $maxTurnsOverride = null;
-
-    /**
-     * Register `--max-turns <n>` for this process. See {@see useMaxCost()}
-     * for why this is a static storing the RAW value: the number is judged
-     * by {@see maxTurns()}, which throws {@see PermissionConfigException}
-     * where the dispatch can catch it — one-shot runs in
-     * {@see NonInteractive::run()}'s own pre-flight try, the TUI through the
-     * backend construction `bin/candy-code` wraps — so a ceiling that is
-     * present and unusable refuses the launch with exit 2 rather than
-     * silently running uncapped, exactly as a bad `--max-cost` does.
-     */
-    public static function useMaxTurns(?string $maxTurns): void
+public static function useMaxTurns(?string $maxTurns): void
     {
-        self::$maxTurnsOverride = ($maxTurns === null || $maxTurns === '') ? null : $maxTurns;
+        LaunchContext::useMaxTurns($maxTurns);
     }
 
     /**
@@ -4302,7 +4241,7 @@ final class Bootstrap
      */
     public static function maxTurns(): ?int
     {
-        $raw = self::$maxTurnsOverride;
+        $raw = LaunchContext::maxTurnsOverride();
         if ($raw === null) {
             return null;
         }
@@ -4657,70 +4596,43 @@ final class Bootstrap
     public static function userConfigPath(): string
     {
         // `--config <path>` wins over discovery — see {@see useConfigPath()}.
-        return self::$configPathOverride ?? self::configDirPath() . '/config.json';
+        return LaunchContext::configPathOverride() ?? self::configDirPath() . '/config.json';
     }
 
     /**
-     * Point every reader of the per-user `config.json` at $path instead of the
-     * discovered `~/.candy-code/config.json` — what `--config <path>` does.
-     *
-     * PROCESS-WIDE STATIC, not a parameter, because this class is a static
-     * facade whose config readers sit five and six calls below the two entry
-     * points `bin/candy-code` calls ({@see app()} and, through
-     * {@see NonInteractive::run()}, {@see backend()}): threading a path
-     * through every one of them would touch far more of this file than the
-     * flag is worth, and would still leave {@see readUserConfig()}'s other
-     * callers — `EngineBackend`'s per-turn dispatch settings among them —
-     * reading the discovered file while the rest of the process read the
-     * chosen one. `bin/candy-code` sets it once, after
-     * {@see ArgvParser::configError()} has established the file is readable
-     * and before either dispatch. Tests must reset it with null.
-     *
-     * WHAT IT DOES NOT MOVE, stated exactly: this names one FILE. The agents/,
-     * skills/, workflows/ and hooks trees, the session store and the memory
-     * store all still resolve off `~/.candy-code`. Nor does it relax the home
-     * -ownership gate — {@see permissionConfig()} still calls
-     * {@see trustedConfigDirPath()} for its throw before honouring the
-     * override, so a process that cannot establish whose home it is refuses to
-     * start whether or not a config file was named on the command line.
+     * Delegates to {@see LaunchContext::useConfigPath()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function useConfigPath(?string $path): void
+public static function useConfigPath(?string $path): void
     {
-        self::$configPathOverride = $path;
+        LaunchContext::useConfigPath($path);
     }
 
     /**
-     * Register the session `-c`/`--continue` or `--resume` asked for, for this
-     * process — the same process-wide seam as {@see useModel()}, and under the
-     * same clear-what-you-set test contract documented there.
-     *
-     * With neither flag a launch opens a NEW session: two terminals must never
-     * land on the same conversation now that each saves its transcript as it
-     * changes, and "start fresh, continue on request" is what every comparable
-     * agent CLI does. ↑ still reaches the previous session's prompts, because
-     * recall reads the cross-session {@see PromptHistory}, not the transcript.
+     * Delegates to {@see LaunchContext::useSessionLaunch()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function useSessionLaunch(bool $continue, bool $resume = false, ?string $target = null): void
+public static function useSessionLaunch(bool $continue, bool $resume = false, ?string $target = null): void
     {
-        self::$sessionLaunchMode = $resume ? 'resume' : ($continue ? 'continue' : 'new');
-        self::$sessionLaunchTarget = $resume && $target !== null && $target !== '' ? $target : null;
+        LaunchContext::useSessionLaunch($continue, $resume, $target);
     }
 
     /**
-     * Point the prompt history at $path instead of `~/.candy-code`, or back at
-     * the default with null. For the test suite, which pins it into its sandbox
-     * so a test that presses Enter on a {@see chat()}-built Chat can never add
-     * its prompt to the developer's own ↑ history.
+     * Delegates to {@see LaunchContext::pinPromptHistoryPath()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function pinPromptHistoryPath(?string $path): void
+public static function pinPromptHistoryPath(?string $path): void
     {
-        self::$promptHistoryPath = $path;
+        LaunchContext::pinPromptHistoryPath($path);
     }
 
     /** The cross-session prompt file ↑/↓ recall reads and Enter appends to. */
     public static function promptHistory(): PromptHistory
     {
-        return new PromptHistory(self::$promptHistoryPath ?? self::configDir() . '/prompt_history.jsonl');
+        return new PromptHistory(LaunchContext::promptHistoryPath() ?? self::configDir() . '/prompt_history.jsonl');
     }
 
     /**
@@ -4731,18 +4643,18 @@ final class Bootstrap
      */
     public static function sessionLaunchError(): ?string
     {
-        if (self::$sessionLaunchMode !== 'resume' || self::$sessionLaunchTarget === null) {
+        if (LaunchContext::sessionLaunchMode() !== 'resume' || LaunchContext::sessionLaunchTarget() === null) {
             return null;
         }
 
         try {
-            $found = self::findSession(self::sessionStore(false), self::$sessionLaunchTarget);
+            $found = self::findSession(self::sessionStore(false), LaunchContext::sessionLaunchTarget());
         } catch (\Throwable $e) {
             return 'candy-code: ' . Lang::t('cli.argv.resume.store_unavailable', ['error' => $e->getMessage()]);
         }
 
         return $found === null
-            ? 'candy-code: ' . Lang::t('cli.argv.resume.not_found', ['target' => self::$sessionLaunchTarget])
+            ? 'candy-code: ' . Lang::t('cli.argv.resume.not_found', ['target' => LaunchContext::sessionLaunchTarget()])
             : null;
     }
 
@@ -4798,7 +4710,7 @@ final class Bootstrap
             return ['id' => (string) $attached->sessionId(), 'name' => $attached->sessionName(), 'history' => $attached->history(), 'picker' => false];
         }
 
-        if (self::$sessionLaunchMode === 'continue') {
+        if (LaunchContext::sessionLaunchMode() === 'continue') {
             // The newest session WITH a conversation, not the newest row — and,
             // in this order, the newest one recorded under this cwd before any
             // other project's (ISS-026). A launch quit without typing is newer
@@ -4827,8 +4739,8 @@ final class Bootstrap
             return ['id' => $id, 'name' => $name, 'history' => Chat::loadTranscript($store, $id), 'picker' => false];
         }
 
-        if (self::$sessionLaunchMode === 'resume' && self::$sessionLaunchTarget !== null) {
-            $row = self::findSession($store, self::$sessionLaunchTarget);
+        if (LaunchContext::sessionLaunchMode() === 'resume' && LaunchContext::sessionLaunchTarget() !== null) {
+            $row = self::findSession($store, LaunchContext::sessionLaunchTarget());
             if ($row !== null) {
                 $id = (string) $row['id'];
                 $name = \is_string($row['name'] ?? null) && $row['name'] !== '' ? $row['name'] : null;
@@ -4875,7 +4787,7 @@ final class Bootstrap
             }
         }
 
-        return ['id' => $id, 'name' => null, 'history' => [], 'picker' => self::$sessionLaunchMode === 'resume', 'mint' => $mint];
+        return ['id' => $id, 'name' => null, 'history' => [], 'picker' => LaunchContext::sessionLaunchMode() === 'resume', 'mint' => $mint];
     }
 
     /**
@@ -4898,114 +4810,43 @@ final class Bootstrap
     }
 
     /**
-     * Register `--model <name>` for this process.
-     *
-     * A PROCESS-WIDE STATIC for the same reason {@see useConfigPath()} is one,
-     * and deliberately following that precedent rather than inventing a third
-     * mechanism: `bin/candy-code` has THREE dispatch paths — `Subcommands`,
-     * `NonInteractive::run()` and `Program`/{@see app()} — and only the last
-     * goes through {@see chat()}. A flag threaded as a parameter into `chat()`
-     * would silently do nothing for `candy-code -p "..."`, which enters at
-     * {@see backend()}/{@see backendFor()} instead. One static registered
-     * before either dispatch is read identically by all three.
-     *
-     * WHAT `--model` MEANS, because the surrounding code disagrees with itself
-     * about the word: it names a MODEL, the same domain as `$CANDY_CODE_MODEL`
-     * ("Model name (overrides provider default)" on the help screen), and it is
-     * resolved by {@see selectedModelName()}. It is NOT a provider. The Ctrl+P
-     * palette's entry labelled "Switch model" calls
-     * {@see backendFor()}, whose first parameter is a PROVIDER name, and that
-     * label is the reason this needed settling in writing: the two are
-     * independent axes and this flag is the model one.
-     *
-     * No top-level `model` key backs it. The persisted choice is the per-provider
-     * `models` map in {@see \SugarCraft\Code\Config\LayeredSettings::LAYERED_KEYS}
-     * (decision D9), which this flag OUTRANKS for every provider — see
-     * {@see selectedModelName()}, where the flag, `$CANDY_CODE_MODEL` and that
-     * map are resolved in one place.
-     *
-     * ## TEST ISOLATION — read this before calling either setter from a test
-     *
-     * This static and {@see usePermissionMode()}'s LIVE FOR THE WHOLE PROCESS
-     * and are NOT reset between test cases or between test classes. A class
-     * that sets one and does not clear it decides the launch of every test that
-     * runs after it, in any file, for the rest of the suite.
-     *
-     * There is deliberately no automatic reset. That matches
-     * {@see useConfigPath()}, which has behaved this way since it was written
-     * and which `BootstrapConfigPathOverrideTest` and
-     * `BootstrapLayeredSettingsTest` each clear in their own `tearDown()`.
-     * Generalising the reset was considered and declined: it would mean a
-     * shared trait or a suite-wide hook that, to be coherent, would have to
-     * take over `useConfigPath()` too — a new mechanism for three statics whose
-     * existing convention already works and is followed everywhere it applies.
-     *
-     * **So the convention is the contract: clear what you set.**
-     * `Tests\Cli\LaunchFlagsTest` clears both in `setUp()` AND `tearDown()`,
-     * which is the pattern to copy — the `setUp()` half also makes that class
-     * immune to a leak from somewhere else.
+     * Delegates to {@see LaunchContext::useModel()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function useModel(?string $model): void
+public static function useModel(?string $model): void
     {
-        self::$modelOverride = ($model === null || $model === '') ? null : $model;
+        LaunchContext::useModel($model);
     }
 
     /**
-     * Register where the TUI's `error_log` redirect landed — {@see app()}
-     * passes on `TuiErrorLog::install()`'s answer from `bin/candy-code`.
-     *
-     * A REGISTRATION RATHER THAN A NOTICE RAISED IN THE BINARY because the
-     * launch-notice list is the LAUNCH's: {@see chat()} starts it empty, so a
-     * row seeded before the Chat was built would be wiped before anyone read
-     * it. {@see reportTuiErrorLogFallback()} reads this at construction time,
-     * beside the other launch reports. Null clears it, the
-     * clear-what-you-set convention {@see useModel()} documents.
+     * Delegates to {@see LaunchContext::useTuiErrorLog()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function useTuiErrorLog(?string $destination): void
+public static function useTuiErrorLog(?string $destination): void
     {
-        self::$tuiErrorLog = ($destination === null || $destination === '') ? null : $destination;
+        LaunchContext::useTuiErrorLog($destination);
     }
 
     /**
-     * Register `--permission-mode <mode>` for this process. See
-     * {@see useModel()} for why this is a static rather than a parameter.
-     *
-     * STORED RAW AND VALIDATED LATER, on purpose. {@see permissionModeFrom()}
-     * THROWS {@see PermissionConfigException} for a value that is not a mode,
-     * and `bin/candy-code` catches that exception around its dispatch block —
-     * but registration happens BEFORE that `try`, so validating here would let
-     * the exception escape as an uncaught fatal instead of the exit-2 usage
-     * error (with the JSON error document under `--output-format json`) that
-     * every other bad permission value produces. Deferring the check to
-     * {@see permissionGate()} puts it inside the `try` and reuses the one
-     * error message shape, which then names `--permission-mode` as its source
-     * exactly as it names `$CANDY_CODE_PERMISSION_MODE` or the config file.
-     *
-     * DOCUMENTED CONSEQUENCE: a subcommand that never builds a gate (`completion`,
-     * `--help`, `--version`) does not validate the value, so
-     * `candy-code --permission-mode nonsense completion bash` succeeds. The flag
-     * is inert on those paths anyway; failing them would cost a second, eager
-     * validation site that could drift from this one.
+     * Delegates to {@see LaunchContext::usePermissionMode()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function usePermissionMode(?string $mode): void
+public static function usePermissionMode(?string $mode): void
     {
-        self::$permissionModeOverride = ($mode === null || $mode === '') ? null : $mode;
+        LaunchContext::usePermissionMode($mode);
     }
 
     /**
-     * Register `--max-cost <usd>` for this process. See {@see useModel()} for
-     * why this is a static rather than a parameter, and
-     * {@see usePermissionMode()} for why it is stored RAW: the number is
-     * judged by {@see maxCostUsd()}, which throws
-     * {@see PermissionConfigException} inside `bin/candy-code`'s dispatch
-     * `try` — where it becomes the same exit-2 usage error (with the JSON
-     * error document under `--output-format json`) that an unusable
-     * `$CANDY_CODE_MAX_COST` or `maxCostUsd` setting already produces —
-     * rather than as an uncaught fatal at registration time.
+     * Delegates to {@see LaunchContext::useMaxCost()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function useMaxCost(?string $maxCost): void
+public static function useMaxCost(?string $maxCost): void
     {
-        self::$maxCostOverride = ($maxCost === null || $maxCost === '') ? null : $maxCost;
+        LaunchContext::useMaxCost($maxCost);
     }
 
     /**
@@ -5032,8 +4873,8 @@ final class Bootstrap
      */
     private static function selectedModelName(string $providerName): ?string
     {
-        if (self::$modelOverride !== null) {
-            return self::$modelOverride;
+        if (LaunchContext::modelOverride() !== null) {
+            return LaunchContext::modelOverride();
         }
 
         $env = getenv('CANDY_CODE_MODEL');
@@ -6438,18 +6279,18 @@ final class Bootstrap
      */
     public static function reportTuiErrorLogFallback(): void
     {
-        if (self::$tuiErrorLog === null) {
+        if (LaunchContext::tuiErrorLog() === null) {
             return;
         }
 
         $home = HomeDirectory::owned();
-        if ($home !== null && self::$tuiErrorLog === rtrim($home, '/') . '/' . TuiErrorLog::RELATIVE_PATH) {
+        if ($home !== null && LaunchContext::tuiErrorLog() === rtrim($home, '/') . '/' . TuiErrorLog::RELATIVE_PATH) {
             return;
         }
 
-        self::warnLaunchRows([self::discardsWhatIsWritten(self::$tuiErrorLog)
+        self::warnLaunchRows([self::discardsWhatIsWritten(LaunchContext::tuiErrorLog())
             ? sprintf(self::translated(self::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT), '~/' . TuiErrorLog::RELATIVE_PATH)
-            : sprintf(self::translated(self::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT), '~/' . TuiErrorLog::RELATIVE_PATH, self::$tuiErrorLog)]);
+            : sprintf(self::translated(self::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT), '~/' . TuiErrorLog::RELATIVE_PATH, LaunchContext::tuiErrorLog())]);
     }
 
     /**
@@ -7713,7 +7554,7 @@ final class Bootstrap
         // `??` short-circuits, so a later source's BAD value is still never
         // validated (and so never throws) once an earlier source has answered.
         $candidates = [
-            '--permission-mode' => self::$permissionModeOverride,
+            '--permission-mode' => LaunchContext::permissionModeOverride(),
             '$' . self::PERMISSION_MODE_ENV => $envRaw,
             self::PERMISSION_MODE_CONFIG_KEY . ' in '
                 . self::permissionKeySource($layers, self::PERMISSION_MODE_CONFIG_KEY) => $configRaw,
@@ -7875,7 +7716,7 @@ final class Bootstrap
     {
         $configDir = self::trustedConfigDirPath();
         $discovered = $configDir . '/config.json';
-        $path = self::$configPathOverride ?? $discovered;
+        $path = LaunchContext::configPathOverride() ?? $discovered;
         $settingsPath = rtrim($configDir, '/') . '/' . LayeredSettings::USER_FILE;
 
         return self::withoutEmptyPermissionOverrides([
@@ -10958,8 +10799,8 @@ final class Bootstrap
      */
     public static function maxCostUsd(): ?float
     {
-        if (self::$maxCostOverride !== null) {
-            return self::parseSpendCap(self::$maxCostOverride, 'cli.refuse.max_cost_flag');
+        if (LaunchContext::maxCostOverride() !== null) {
+            return self::parseSpendCap(LaunchContext::maxCostOverride(), 'cli.refuse.max_cost_flag');
         }
 
         $raw = getenv('CANDY_CODE_MAX_COST');

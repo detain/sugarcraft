@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Config;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Lang;
 
@@ -40,7 +41,7 @@ final class LayeredSettingsTest extends TestCase
         // sibling test's leftover override — or the suite-pinned HOME's real
         // config.json — can never leak rows into the exact counts below; the
         // branch short-circuits when the explicit path IS the audited one.
-        $this->savedConfigOverride = (new \ReflectionProperty(Bootstrap::class, 'configPathOverride'))->getValue();
+        $this->savedConfigOverride = (new \ReflectionProperty(LaunchContext::class, 'configPathOverride'))->getValue(); // W7-D: store moved to LaunchContext
         Bootstrap::useConfigPath($this->userDir . '/config.json');
     }
 
