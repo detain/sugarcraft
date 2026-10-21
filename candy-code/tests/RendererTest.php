@@ -842,7 +842,7 @@ final class RendererTest extends TestCase
         // (`/theme`: `/rewind` was this example until it gained its `[n]`
         // hint, audit 15b-25, and `/sessions` until it gained `[<query>]`.)
         $bare = (string) preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($this->chat(buf: '/the')));
-        $this->assertStringContainsString('/theme — Switch the color theme', $bare);
+        $this->assertStringContainsString('/theme — Switch the colour theme', $bare);
     }
 
     /**
