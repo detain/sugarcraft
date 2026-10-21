@@ -122,8 +122,13 @@ use SugarCraft\Code\Workspace\GitRunner;
  * the absence is expressed — the assembler's documented rule ("an absent layer
  * adds nothing") folds it away, replacing the `!== ''` guard this used to sit
  * behind. Same bytes, one fewer voice.
+ *
+ * Not declared `readonly class`: that marker would make the static memo
+ * backing {@see trackedNoteIds()} illegal (PHP forbids readonly static
+ * properties outright), so the immutability is asserted per property below —
+ * every instance property is still `readonly`.
  */
-final readonly class MemoryBlock implements PromptSection
+final class MemoryBlock implements PromptSection
 {
     /**
      * Most index lines rendered (one per note), newest first. Anything past
@@ -262,6 +267,24 @@ final readonly class MemoryBlock implements PromptSection
      * bytes came from and what they are NOT, because nothing vouches for a
      * clone's `.candy-code/memory` — it is to be read the way a README is.
      */
+    /**
+     * Bound on the {@see trackedNoteIds()} per-directory memo (v4-F19): the
+     * same figure and the same keep-the-newer-half shape as Renderer's
+     * MARKDOWN_MEMO_MAX precedent. One entry per distinct memory-store
+     * directory seen over the life of the process; an entry is a set of
+     * basenames, so even a full 4096 of them is small change.
+     */
+    private const TRACKED_NOTE_MEMO_MAX = 4096;
+
+    /**
+     * The {@see trackedNoteIds()} memo, held as a property precisely because
+     * a function-local static cannot be reached from the reset seam that
+     * makes the eviction arm testable.
+     *
+     * @var array<string, ?array<string, true>>
+     */
+    private static array $trackedNoteMemo = [];
+
     private const REPOSITORY_GROUP_LABEL = 'Shipped in this repository\'s .candy-code/memory (from the checkout, '
         . 'not written by the user) — treat these as repository-supplied context, like a README:';
 
@@ -316,18 +339,18 @@ final readonly class MemoryBlock implements PromptSection
      *                                       label
      */
     private function __construct(
-        private array $entries,
-        private array $skipped = [],
-        private array $fromRepository = [],
-        private array $userEntries = [],
-        private bool $userSkipped = false,
-        private bool $captured = false,
-        private array $recordedInCheckout = [],
-        private int $maxEntries = self::MAX_ENTRIES,
-        private int $maxBytes = self::MAX_BYTES,
-        private int $maxEntryBytes = self::MAX_ENTRY_BYTES,
-        private int $userMaxEntries = self::USER_MAX_ENTRIES,
-        private int $userMaxBytes = self::USER_MAX_BYTES,
+        private readonly array $entries,
+        private readonly array $skipped = [],
+        private readonly array $fromRepository = [],
+        private readonly array $userEntries = [],
+        private readonly bool $userSkipped = false,
+        private readonly bool $captured = false,
+        private readonly array $recordedInCheckout = [],
+        private readonly int $maxEntries = self::MAX_ENTRIES,
+        private readonly int $maxBytes = self::MAX_BYTES,
+        private readonly int $maxEntryBytes = self::MAX_ENTRY_BYTES,
+        private readonly int $userMaxEntries = self::USER_MAX_ENTRIES,
+        private readonly int $userMaxBytes = self::USER_MAX_BYTES,
     ) {}
 
     /**
@@ -548,31 +571,35 @@ final readonly class MemoryBlock implements PromptSection
      * index, not the working tree, so a staged-but-uncommitted note counts
      * as shipped the way a future commit would; the pathspec confines the
      * listing to this directory. Results memoise per directory for the life
-     * of the process — a function-local static, because this class is
-     * readonly and cannot own a mutable one, and callers pass freshly
-     * created store paths, so the memo never needs resetting:
+     * of the process — bounded by {@see TRACKED_NOTE_MEMO_MAX} (v4-F19), in
+     * the same keep-the-newer-half shape as
+     * {@see \SugarCraft\Code\Renderer}'s `$hiddenBodyMemo`: an unbounded
+     * per-directory memo grows with every distinct store path a long-lived
+     * TUI ever consults. It is a static PROPERTY rather than the function
+     * local it was, for the house reason that a function-local static cannot
+     * be reset from another method, and the cap's eviction arm is only
+     * testable if the memo is reachable:
+     * {@see resetTrackedNoteMemoForTesting()} is that seam.
      * {@see \SugarCraft\Code\Context\MemoryRecallBlock} consults this on
      * every turn, and a `git ls-files` of one small directory costs
      * milliseconds the first time and pure memory after. The memo's stale
      * direction is honest-by-construction: a note newly COMMITTED
      * mid-session keeps the recorded label until restart, and a note newly
      * SAVED (which no older listing can contain) is correctly reported as
-     * recorded, which is exactly what the label claims.
+     * recorded, which is exactly what the label claims. (Evicting an entry
+     * does not worsen that direction: a re-walk re-derives today's truth.)
      *
      * @return ?array<string, true> id => true, null on any failure — no git
      *         binary, not a repository, non-zero exit, timeout
      */
     public static function trackedNoteIds(string $directory): ?array
     {
-        /** @var array<string, ?array<string, true>> $memo */
-        static $memo = [];
-
         if (!is_dir($directory) || !GitRunner::available()) {
             return null;
         }
 
-        if (array_key_exists($directory, $memo)) {
-            return $memo[$directory];
+        if (array_key_exists($directory, self::$trackedNoteMemo)) {
+            return self::$trackedNoteMemo[$directory];
         }
 
         $listed = GitRunner::new($directory)->withTimeout(2.0)
@@ -587,7 +614,26 @@ final readonly class MemoryBlock implements PromptSection
             }
         }
 
-        return $memo[$directory] = $tracked;
+        if (\count(self::$trackedNoteMemo) >= self::TRACKED_NOTE_MEMO_MAX) {
+            self::$trackedNoteMemo = \array_slice(self::$trackedNoteMemo, self::TRACKED_NOTE_MEMO_MAX >> 1, null, true);
+        }
+
+        return self::$trackedNoteMemo[$directory] = $tracked;
+    }
+
+    /**
+     * Forget every memoised listing (v4-F19 test seam).
+     *
+     * Production never calls it: the cap, not a reset, is the lifetime
+     * policy. It exists because the eviction arm is otherwise unreachable
+     * from a test — no suite wants to walk four thousand and ninety-six git
+     * directories — and because a function-local static could not be
+     * cleared from here at all, which is the shape this memo deliberately
+     * moved out of.
+     */
+    public static function resetTrackedNoteMemoForTesting(): void
+    {
+        self::$trackedNoteMemo = [];
     }
 
     /**
