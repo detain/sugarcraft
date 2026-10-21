@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Renderer\QuarterBlockRenderer;
+use SugarCraft\Image\Symbol\CanvasMode;
 
 final class QuarterBlockRendererTest extends TestCase
 {
@@ -248,6 +249,55 @@ final class QuarterBlockRendererTest extends TestCase
 
         $this->assertSame(' ', $out);
         $this->assertStringNotContainsString("\x1b[", $out);
+    }
+
+    /**
+     * A-07 Fgbg truth pin: with every quadrant snapping onto the
+     * white/black reference pair, a top-black / bottom-white cell resolves
+     * its orientation by the group-luma swap (the swapped split's brighter
+     * pen rides the foreground) and emits NEITHER leg — CanvasMode::fgSgr
+     * and CanvasMode::bgSgr both return null for Fgbg, so the terminal
+     * default paints the cell. The byte output is the bare ▄ glyph with
+     * zero SGR, directly contradicting the docblock's earlier claim that
+     * the background leg quantizes onto the eight dark ANSI colours.
+     */
+    public function testFgbgSnapsToWhiteBlackAndEmitsNeitherPenLeg(): void
+    {
+        $image = $this->cellImage([
+            [[0, 0, 0, 0], [0, 0, 0, 0]],
+            [[255, 255, 255, 0], [255, 255, 255, 0]],
+        ]);
+
+        $out = $this->renderer->withCanvasMode(CanvasMode::Fgbg)->render($image, 1, 1);
+
+        $this->assertSame("\u{2584}", $out, 'Fgbg paints the cell on terminal defaults — no pen SGR at all');
+        $this->assertStringNotContainsString("\x1b[", $out, 'both fg and bg legs are null for Fgbg');
+    }
+
+    /**
+     * A-07 Fgbg quantization is the white/black luma pair, not the eight
+     * dark ANSI colours: a near-black 15-value lower-right quadrant snaps
+     * to the same black pen as the three zero quadrants, so every one of
+     * the four opaque quadrants scores identically. The 1..7 half-search
+     * therefore returns a tie and the first (lowest) scored split's
+     * orientation is kept unchanged at equal group luma — ▘ (UL alone,
+     * mask 1) — while TrueColor, scoring raw averages, still favours the
+     * solid lower-right ▗ (mask 8). The divergence of the two glyphs
+     * under Fgbg is the observable fingerprint of white/black snapping.
+     */
+    public function testFgbgWhiteBlackSnapDivergesFromTrueColorPenScoring(): void
+    {
+        $image = $this->cellImage([
+            [[0, 0, 0, 0], [0, 0, 0, 0]],
+            [[0, 0, 0, 0], [15, 15, 15, 0]],
+        ]);
+
+        $trueColor = $this->renderer->render($image, 1, 1);
+        $fgbg = $this->renderer->withCanvasMode(CanvasMode::Fgbg)->render($image, 1, 1);
+
+        $this->assertStringContainsString("\u{2597}", $trueColor, 'TrueColor: lower-right ▗ is its own bright pen');
+        $this->assertSame("\u{2598}", $fgbg, 'Fgbg: 15 snaps to the shared black pen, tie keeps ▘ with no SGR');
+        $this->assertStringNotContainsString("\x1b[", $fgbg);
     }
 
     /**

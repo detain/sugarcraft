@@ -38,10 +38,16 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * onto the palette BEFORE the membership split is scored, so the chosen
  * glyph is optimal for what the terminal can actually paint. TrueColor
  * (the default) scores and paints raw averages — byte-frozen against the
- * pre-A-07 corpus. Fgbg runs the chafa discipline: the foreground leg is
- * the terminal default, the background leg quantizes onto the eight dark
- * ANSI colours, and both split orientations are scored (fixed pens
- * break the complement symmetry that licenses the 1..7 half-search).
+ * pre-A-07 corpus. Fgbg snaps the SCORING pens to the white/black
+ * reference pair ({@see CanvasMode::quantizeRgb()}) but emits neither
+ * leg — {@see CanvasMode::fgSgr()} and {@see CanvasMode::bgSgr()} both
+ * return null, so the terminal default paints both sides of every cell.
+ * (Score-model/emit-model divergence, chafa-faithful: chafa treats the
+ * fg leg as default, not as white.) The 1..7 half-search stays complete
+ * under Fgbg too: error(mask,fg,bg) equals error(~mask,bg,fg) for ANY
+ * pens, fixed-palette included, so each split's orientation is resolved
+ * by the group-luma heuristic in {@see bestCell()}, never by re-scoring
+ * the complement.
  */
 final class QuarterBlockRenderer implements Renderer, AcceptsOptimization, ConfigFingerprintProvider, CanvasModeConfigurable
 {
