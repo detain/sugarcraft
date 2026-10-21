@@ -7,6 +7,11 @@
  * answers from the env table and Mosaic's always-available floor renders,
  * so these pins assert the honest shape (exit 0, non-empty ANSI bytes) and
  * the animate pass-through wiring via the $play seam.
+ *
+ * Hermeticity note: {@see setUp()} pins the env keys the detection ladder
+ * consults (see {@see HERMETIC_ENV_KEYS}) because a tmux-hosted runner's
+ * exported TERM_PROGRAM/TERM_PROGRAM_VERSION alone would steer auto-format
+ * onto the sixel passthrough regardless of TMUX or the piped STDOUT.
  */
 
 declare(strict_types=1);
@@ -20,11 +25,51 @@ use SugarCraft\CandyImage\Cli;
 
 final class RenderSmokeTest extends TestCase
 {
+    /**
+     * Env keys whose ambient values steer the auto-format ladder: TMUX and
+     * TERM gate Detect's direct getenv() reads, and TERM_PROGRAM /
+     * TERM_PROGRAM_VERSION are consulted by the F-01 TermDb table
+     * ({@see \SugarCraft\Image\TermDb::snapshotEnv()}).
+     *
+     * WHY THESE FOUR: a tmux-hosted runner exports TERM_PROGRAM=tmux and
+     * TERM_PROGRAM_VERSION into every pane, and the mux table rows answer
+     * sixel from that pair even when TMUX is unset — so the naive
+     * `env -u TMUX` shape still lands auto-format on the sixel passthrough
+     * (the l11 audit's "not hermetic on tmux hosts" finding). Pinning the
+     * whole consulted set to the documented no-graphics shape (TERM=dumb,
+     * everything else absent) makes the ANSI floor deterministic without
+     * touching the detector.
+     */
+    private const HERMETIC_ENV_KEYS = ['TERM', 'TERM_PROGRAM', 'TERM_PROGRAM_VERSION', 'TMUX'];
+
+    /** @var array<string, string|false> pre-test getenv() snapshots, false = unset */
+    private array $ambientEnv = [];
+
     /** @var list<string> */
     private array $artifacts = [];
 
+    protected function setUp(): void
+    {
+        foreach (self::HERMETIC_ENV_KEYS as $key) {
+            $this->ambientEnv[$key] = getenv($key);
+        }
+        putenv('TERM_PROGRAM');
+        putenv('TERM_PROGRAM_VERSION');
+        putenv('TMUX');
+        putenv('TERM=dumb');
+    }
+
     protected function tearDown(): void
     {
+        foreach ($this->ambientEnv as $key => $value) {
+            if ($value === false) {
+                putenv($key);
+            } else {
+                putenv($key . '=' . $value);
+            }
+        }
+        $this->ambientEnv = [];
+
         foreach ($this->artifacts as $path) {
             if (is_file($path)) {
                 @unlink($path);
