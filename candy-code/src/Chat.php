@@ -2312,7 +2312,7 @@ final class Chat implements Model
             'currentSessionId' => $sessionId,
             'currentSessionName' => $name,
             // ISS-102: wherever a session comes to the front, its tab opens.
-            'openTabs' => $this->tabsOpening($sessionId, $name),
+            'openTabs' => $this->tabState->opening($sessionId, $name),
             // ISS-102: leaving the launched session abandons its
             // pending mint — an unspoken launch must never materialize.
             'sessionMint' => null,
@@ -3991,16 +3991,12 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        $cycled = $this->tabState->tabs->handleKey(
-            $direction > 0 ? SessionTabs::CTRL_TAB : SessionTabs::CTRL_SHIFT_TAB,
-        );
-        // handleKey answers null for keys it does not own and returns the
-        // same instance when there is nothing to cycle to; both are no-ops.
-        if ($cycled === null || $cycled === $this->tabState->tabs) {
+        $cycled = $this->tabState->cycled($direction);
+        if ($cycled === null) {
             return [$this, null];
         }
 
-        $target = $cycled->activeTab();
+        $target = $cycled->tabs->activeTab();
         if ($target === null || $target->id === $this->currentSessionId) {
             return [$this, null];
         }
@@ -8738,10 +8734,7 @@ final class Chat implements Model
         // the session the tab names. Under an open palette or picker the pair
         // is not a rename — those overlays own the screen.
         $now = microtime(true);
-        $previous = $this->tabState->lastClick;
-        $isDoubleClick = $previous !== null
-            && $previous[0] === $id
-            && $now - $previous[1] <= self::TAB_DOUBLE_CLICK_SECONDS;
+        $isDoubleClick = $this->tabState->isDoubleClick($id, $now, self::TAB_DOUBLE_CLICK_SECONDS);
         if ($isDoubleClick && $id === $this->currentSessionId && $this->palette === null && $this->sessionPicker === null) {
             $clicked = $this->mutate(['lastTabClick' => null]);
 
@@ -8770,7 +8763,7 @@ final class Chat implements Model
         // A lazily opened session whose row the first prompt has not minted
         // yet is a real tab a click must be able to come back to;
         // switchToSession() treats its absent transcript as empty.
-        if (!in_array($id, array_column($this->tabState->tabs->tabs(), 'id'), true)) {
+        if (!$this->tabState->hasTab($id)) {
             return [$this, null];
         }
 
@@ -9605,7 +9598,7 @@ final class Chat implements Model
         return $this->mutate([
             'currentSessionId' => $currentSessionId,
             // ISS-102: a session put in front of the user is a tab opened.
-            'openTabs' => $this->tabsOpening($currentSessionId, $this->currentSessionName),
+            'openTabs' => $this->tabState->opening($currentSessionId, $this->currentSessionName),
             'sessionMint' => null,
         ]);
     }
@@ -9627,25 +9620,6 @@ final class Chat implements Model
         ($this->sessionMint)();
 
         return $this->mutate(['sessionMint' => null]);
-    }
-
-    /**
-     * {@see openTabs()} with $sessionId's tab focused: the already-open tab
-     * when one exists, a fresh one otherwise (ISS-102).
-     *
-     * The id-existence guard is load-bearing — {@see SessionTabs::openTab()}
-     * appends unconditionally, and a second openTab for the same session
-     * would duplicate its id in the tab order.
-     */
-    private function tabsOpening(string $sessionId, ?string $name): SessionTabs
-    {
-        foreach ($this->tabState->tabs->tabs() as $tab) {
-            if ($tab->id === $sessionId) {
-                return $this->tabState->tabs->setActiveTab($sessionId);
-            }
-        }
-
-        return $this->tabState->tabs->openTab($sessionId, $name ?? '');
     }
 
     /**
@@ -13181,7 +13155,7 @@ final class Chat implements Model
                     $changes['currentSessionId'] = $effect->sessionId();
                     // ISS-102: `/branch` moves this window onto its copy —
                     // the session coming to the front opens its tab.
-                    $changes['openTabs'] = $this->tabsOpening(
+                    $changes['openTabs'] = $this->tabState->opening(
                         $effect->sessionId(),
                         $this->storedSessionName($effect->sessionId()),
                     );
@@ -19272,7 +19246,7 @@ final class Chat implements Model
             'currentSessionId' => $sessionId,
             'currentSessionName' => null,
             // ISS-102: New session opens a tab.
-            'openTabs' => $this->tabsOpening($sessionId, null),
+            'openTabs' => $this->tabState->opening($sessionId, null),
             'sessionMint' => null,
         ]), null];
     }
@@ -19458,7 +19432,7 @@ final class Chat implements Model
             'currentSessionName' => $name,
             // ISS-102: a landed handoff is a session in front of the user —
             // its tab opens like every other route's.
-            'openTabs' => $this->tabsOpening($msg->sessionId, $name),
+            'openTabs' => $this->tabState->opening($msg->sessionId, $name),
             'sessionMint' => null,
             'currentSessionTitleSource' => $name === null ? null : $this->storedTitleSource($msg->sessionId),
             // A store that keeps no transcripts (a bare SessionStore) still

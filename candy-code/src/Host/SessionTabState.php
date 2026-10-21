@@ -101,6 +101,65 @@ final class SessionTabState
     }
 
     /**
+     * $sessionId's tab focused in the tab model: the already-open tab when
+     * one exists, a fresh one otherwise (ISS-102).
+     *
+     * The id-existence guard is load-bearing — {@see SessionTabs::openTab()}
+     * appends unconditionally, and a second openTab for the same session
+     * would duplicate its id in the tab order.
+     */
+    public function opening(string $sessionId, ?string $name): SessionTabs
+    {
+        foreach ($this->tabs->tabs() as $tab) {
+            if ($tab->id === $sessionId) {
+                return $this->tabs->setActiveTab($sessionId);
+            }
+        }
+
+        return $this->tabs->openTab($sessionId, $name ?? '');
+    }
+
+    /**
+     * Ctrl+Tab / Ctrl+Shift+Tab through the tab strip: the state with the
+     * next tab active, or null for a no-op. {@see SessionTabs::handleKey()}
+     * answers null for keys it does not own and returns the same instance
+     * when there is nothing to cycle to; both are no-ops.
+     */
+    public function cycled(int $direction): ?self
+    {
+        $cycled = $this->tabs->handleKey(
+            $direction > 0 ? SessionTabs::CTRL_TAB : SessionTabs::CTRL_SHIFT_TAB,
+        );
+
+        if ($cycled === null || $cycled === $this->tabs) {
+            return null;
+        }
+
+        return $this->with(['openTabs' => $cycled]);
+    }
+
+    /** Is $id one of the tabs OPENED this run (ISS-102)? */
+    public function hasTab(string $id): bool
+    {
+        return \in_array($id, array_column($this->tabs->tabs(), 'id'), true);
+    }
+
+    /**
+     * Does a click on $id at $now, against this state's last-click memo,
+     * make a double-click? The window arrives as a parameter so Chat's
+     * public {@see \SugarCraft\Code\Chat::TAB_DOUBLE_CLICK_SECONDS} stays
+     * the single number tests and callers read.
+     */
+    public function isDoubleClick(string $id, float $now, float $windowSeconds): bool
+    {
+        $previous = $this->lastClick;
+
+        return $previous !== null
+            && $previous[0] === $id
+            && $now - $previous[1] <= $windowSeconds;
+    }
+
+    /**
      * Apply tab-surface overrides to a copy of this state.
      *
      * @param array<string, mixed> $overrides Chat-era change keys (see
