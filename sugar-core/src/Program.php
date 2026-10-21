@@ -23,6 +23,7 @@ use SugarCraft\Core\Util\NullLogger;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
+use WeakReference;
 
 /**
  * The Elm-architecture runtime: ties together input, model, render,
@@ -86,6 +87,23 @@ final class Program
      * recovery bytes (cursor show, alt-screen leave, mode-offs) twice.
      */
     private bool $terminalAttached = false;
+    /**
+     * The signal number that asked this run to stop, or null when no
+     * signal did. Written only by the SIGINT/SIGTERM/SIGHUP arms of
+     * {@see installSignalHandlers()} routing through {@see stopProgram()};
+     * read via {@see stopSignal()} so a bin can honour the shell's
+     * 128+N exit convention instead of reporting a signal-killed session
+     * as a clean 0. Reset at the top of every run().
+     */
+    private ?int $stopSignal = null;
+    /**
+     * One-shot latch for the shutdown-release hook armed by
+     * {@see armTerminalReleaseHook()}. setupTerminal() runs again on every
+     * suspend/resume and release/restore pairing, but a process may be
+     * given only ONE shutdown hook per Program — re-registration would
+     * multiply the release bytes on the stranded path.
+     */
+    private bool $terminalReleaseHookArmed = false;
     private ?Recorder $recorder = null;
     /** @var array<string, array{0: mixed, 1: Subscription}> */
     private array $activeSubscriptions = [];
@@ -418,6 +436,9 @@ final class Program
     {
         $this->log('info', 'program starting');
         $this->running = true;
+        // A re-run must not carry the previous run's stop reason into
+        // stopSignal(): reset before anything in this run can record one.
+        $this->stopSignal = null;
         $this->setupTerminal();
         $this->installSignalHandlers();
 
@@ -568,6 +589,27 @@ final class Program
     public function wait(): bool
     {
         return !$this->running;
+    }
+
+    /**
+     * Which signal asked the most recent {@see run()} to stop, or null
+     * when none did.
+     *
+     * The loop can stop for reasons the program itself asked for — a
+     * {@see QuitMsg} (via {@see quit()}), a {@see kill()}, or a model that
+     * raised InterruptMsg from its own keymap — and those are cooperative
+     * exits a well-behaved bin still answers with its conventional 0.
+     * The accessor returns an int only when an OS signal (SIGINT, SIGTERM,
+     * SIGHUP) asked for the stop, which is when the shell convention
+     * belongs on the wire: the bin exits 128+N — 130 after a delivered
+     * SIGINT, 143 after a plain `kill`, 129 after the controlling terminal
+     * closed — so scripts and supervisors read the run the same way they
+     * read any signal-terminated child. The FIRST signal wins; later ones
+     * arrive into a loop already winding down.
+     */
+    public function stopSignal(): ?int
+    {
+        return $this->stopSignal;
     }
 
     /**
@@ -1334,6 +1376,11 @@ final class Program
         $this->activeBracketedPaste = $this->options->bracketedPaste;
         $this->tty->enableRawMode();
         $this->terminalAttached = true;
+        // Arm only while actually attached: a Program that gets here,
+        // detaches cleanly, and never returns has a down latch the hook
+        // checks — registration itself is one-shot, so the ordering just
+        // keeps the "armed" latch honest with the first real acquisition.
+        $this->armTerminalReleaseHook();
     }
 
     /**
@@ -1379,6 +1426,80 @@ final class Program
         $this->activeMouseMode = MouseMode::Off;
         $this->activeFocusReporting = false;
         $this->activeBracketedPaste = false;
+    }
+
+    /**
+     * Arm the process-shutdown backstop exactly once per Program.
+     *
+     * run()'s finally restores the terminal for every path it sees — the
+     * clean return, the early quit, and a Throwable escaping the loop.
+     * What it cannot see is an `exit()`/`die()` (or a zend bailout that
+     * skips finally blocks) landing between setupTerminal() and that
+     * finally. Pending finally blocks do NOT run on those exits, but
+     * registered shutdown functions DO — and without this backstop every
+     * sugar-core consumer would have to re-invent candy-code's bin guard
+     * to keep from stranding the user's terminal mid-raw-mode. With it,
+     * the library that entered the alt screen is the library that leaves it.
+     *
+     * The closure holds a WeakReference, not $this: a finished Program —
+     * every one this process will ever run, in a long test suite or a
+     * relaunching server — must not be pinned alive by the shutdown queue,
+     * and a collected Program by definition can no longer own the streams
+     * the hook would write to. The pid is captured at registration and
+     * compared at fire time: a forked child copies the shutdown queue, and
+     * the child exiting must not vomit the release bytes into the parent's
+     * terminal (the same install-pid discipline as bin/candy-code's guard).
+     */
+    private function armTerminalReleaseHook(): void
+    {
+        if ($this->terminalReleaseHookArmed) {
+            return;
+        }
+        $this->terminalReleaseHookArmed = true;
+        $program = WeakReference::create($this);
+        $installPid = getmypid();
+        register_shutdown_function(static function () use ($program, $installPid): void {
+            $target = $program->get();
+            if ($target !== null) {
+                $target->releaseTerminalForShutdown($installPid);
+            }
+        });
+    }
+
+    /**
+     * The shutdown hook's body: release a terminal this Program still
+     * holds, if and only if this process is still the one that held it.
+     *
+     * Every gate before the bytes is what makes firing on EVERY process
+     * exit safe: a run that already unwound through teardown (latch down),
+     * a forked child (pid mismatch — the parent owns this terminal), or a
+     * closed output resource have nothing to release. The one state left —
+     * attached at shutdown — is precisely the stranded terminal.
+     *
+     * The kitty pop travels unconditionally: an unbalanced `CSI < 1 u` is
+     * ignored by a terminal that never took the push, and a stranded run
+     * cannot ask which of them it hit — the same byte-set reasoning as
+     * candy-code's bin guard. teardownTerminal() after it is the latch-
+     * gated, mode-conditional remainder (termios restore included — the one
+     * job a bytes-only guard can never do).
+     *
+     * Invoked from the closure registered in {@see armTerminalReleaseHook()};
+     * the recovery pins drive it directly because a test suite may not
+     * fork-and-exit inside the runner.
+     */
+    private function releaseTerminalForShutdown(int $installPid): void
+    {
+        if (!$this->terminalAttached) {
+            return;
+        }
+        if ($installPid !== getmypid()) {
+            return;
+        }
+        if (!is_resource($this->output)) {
+            return;
+        }
+        $this->writeOutput(Ansi::popKittyKeyboard());
+        $this->teardownTerminal();
     }
 
     /**
@@ -1610,10 +1731,16 @@ final class Program
     /**
      * Cooperative loop stop shared by the SIGINT/SIGTERM/SIGHUP arms: mark
      * the run finished and unblock the loop so run() unwinds into its
-     * finally, which performs the full terminal teardown.
+     * finally, which performs the full terminal teardown. The optional
+     * signal argument is recorded — first one wins — for
+     * {@see stopSignal()}; every non-signal stop path (QuitMsg, kill(),
+     * model-raised InterruptMsg) never passes it and leaves the run clean.
      */
-    private function stopProgram(): void
+    private function stopProgram(?int $signal = null): void
     {
+        if ($signal !== null && $this->stopSignal === null) {
+            $this->stopSignal = $signal;
+        }
         $this->running = false;
         $this->loop->stop();
     }
@@ -1639,7 +1766,7 @@ final class Program
             $this->asyncSignals = true;
         }
         $this->installProgramSignal(SIGINT, function (): void {
-            $this->stopProgram();
+            $this->stopProgram(SIGINT);
         });
         // rv-tui-1 (crush-review-1014): a plain `kill <pid>` (SIGTERM) and a
         // closed terminal (SIGHUP) used to die default-style mid-frame — the
@@ -1651,12 +1778,12 @@ final class Program
         // restoreSignalHandlers() hands each signal back via the prev map.
         if (defined('SIGTERM')) {
             $this->installProgramSignal(SIGTERM, function (): void {
-                $this->stopProgram();
+                $this->stopProgram(SIGTERM);
             });
         }
         if (defined('SIGHUP')) {
             $this->installProgramSignal(SIGHUP, function (): void {
-                $this->stopProgram();
+                $this->stopProgram(SIGHUP);
             });
         }
         if (defined('SIGWINCH')) {
