@@ -210,7 +210,7 @@ final class ReadPathCensusTest extends TestCase
                 . 'proc_open() just created for it, so no party outside this process can '
                 . 'name it; the child refuses a value that is not is_file(). Same verdict '
                 . 'AND, since round 60, the same MECHANISM as '
-                . 'Sessions/BackgroundSupervisor.php|require: '
+                . 'Background/BackgroundSupervisor.php|require: '
                 . 'ProcessExecutor::autoloadPath() delegates to '
                 . 'BackgroundSupervisor::autoloadPath(), which asks the live Composer '
                 . 'ClassLoader first. It used to do its own two-climb arithmetic, which '
@@ -799,13 +799,13 @@ final class ReadPathCensusTest extends TestCase
             'CALLER_SUPPLIED — gitBranchAt(): that gitdir\'s HEAD, the same file `git branch --show-current` '
                 . 'reads; 4 KB, and only a `ref: refs/heads/<name>` line is kept, as the session\'s branch',
         ],
-        'Sessions/BackgroundSessionRunner.php|file_get_contents' => [
+        'Background/BackgroundSessionRunner.php|file_get_contents' => [
             'SELF_LOCATED — the per-spawn token file the supervisor minted in its 0700 '
                 . 'IPC dir, read to authenticate the daemon\'s handshake (audit M5)',
             'SELF_LOCATED — the same token file, re-read per connection to gate '
                 . 'HEARTBEAT/RESUME/STOP (audit M5)',
         ],
-        'Sessions/BackgroundSessionRunner.php|fopen' => [
+        'Background/BackgroundSessionRunner.php|fopen' => [
             // w1e (v1-m-2, spine commit eb07cb95b): both opens are the same
             // sidecar rotation on the path `$this->bufferPath . '.log'` — a
             // file this daemon process creates beside the buffer file it
@@ -817,27 +817,27 @@ final class ReadPathCensusTest extends TestCase
                 . 'path, truncated in place so the O_APPEND writer\'s open '
                 . 'file description keeps feeding the fresh log',
         ],
-        'Sessions/BackgroundShellRegistry.php|file_get_contents' => [
+        'Background/BackgroundShellRegistry.php|file_get_contents' => [
             'PROCESS_DERIVED — groupMemberAlive() (SHL-1) reads /proc/<pid>/stat for the numeric '
                 . 'entries the scandir below enumerated, to reject zombies from the liveness answer; '
                 . 'no config, project or $HOME path reaches the name',
             'SELF_LOCATED — readExitFile() reads back the exit-code file the wrapper child wrote '
                 . 'into this registry\'s own 0700 directory; a non-numeric body answers null',
         ],
-        'Sessions/BackgroundShellRegistry.php|fopen' => [
+        'Background/BackgroundShellRegistry.php|fopen' => [
             'SELF_LOCATED — sinkFiles() creates the stdout/stderr/exit sinks with `xb` in the '
                 . 'registry\'s own directory before the fork, settled to 0600',
             'SELF_LOCATED — sliceFrom() opens a capture file this registry created to tail from '
                 . 'the caller\'s cursor; the size guard answers before the open ever happens',
         ],
-        'Sessions/BackgroundShellRegistry.php|scandir' => [
+        'Background/BackgroundShellRegistry.php|scandir' => [
             'NAMES_ONLY — groupMemberAlive() enumerates /proc; the numeric names feed only the '
                 . 'stat reads above and nothing is admitted or refused on the listing itself',
             'NAMES_ONLY — sweepCorpseFiles() (SHL-1) lists this registry\'s own 0700 directory '
                 . 'for `sh-<hex>.(out|err|exit)` names no row still owns; the names feed only an '
                 . 'mtime check and an unlink, and no content read follows the listing',
         ],
-        'Sessions/BackgroundSupervisor.php|file_get_contents' => [
+        'Background/BackgroundSupervisor.php|file_get_contents' => [
             'SELF_LOCATED — the IPC buffer this supervisor named for its own child (or one '
                 . 'reconnect() adopted from the index after vetting its directory)',
             'SELF_LOCATED — the per-spawn token file this supervisor minted, read to '
@@ -854,13 +854,13 @@ final class ReadPathCensusTest extends TestCase
                 . 'pair — inside the same 0700 IPC directory; only rows whose askId is the '
                 . 'content-hash shape and whose reply is a known word are read at all',
         ],
-        'Sessions/BackgroundPermissionRelay.php|file_get_contents' => [
+        'Background/BackgroundPermissionRelay.php|file_get_contents' => [
             'SELF_LOCATED — the SERVER-MINTED answer file this relay was handed at spawn (F1): '
                 . 'a path this daemon could not derive, inside the supervisor-minted 0700 IPC '
                 . 'directory; only lines whose askId AND askToken both match the question being '
                 . 'awaited and whose reply is a valid word settle it (ISS-004, F2)',
         ],
-        'Sessions/BackgroundSupervisor.php|glob' => [
+        'Background/BackgroundSupervisor.php|glob' => [
             'NAMES_ONLY — the startup sweep (audit BG-2) lists `candy_code_bg_<uid>_*` names in the '
                 . 'temp dir; each candidate is then lstat-checked as a real directory of this uid '
                 . 'in the exact minted shape, and no content is read',
@@ -873,23 +873,23 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — ownedActiveSummaries() (roadmap 4.3-2) lists the same index directory; '
                 . 'the record is read by the file_get_contents above',
         ],
-        'Sessions/BackgroundSupervisor.php|fopen' => [
+        'Background/BackgroundSupervisor.php|fopen' => [
             'SELF_LOCATED — one index record a supervisor of this uid wrote 0600 into its own 0700 '
                 . 'index directory, lstat-checked as a regular file of this uid, opened r+ and '
                 . 'flock()ed to claim it; every path it names is re-vetted before use (recordIpc())',
         ],
-        'Sessions/BackgroundSupervisor.php|require' => [
+        'Background/BackgroundSupervisor.php|require' => [
             'PROCESS_DERIVED — inside the GENERATED child script: the composer autoload of the '
                 . 'installation already executing this code, found via the live ClassLoader\'s own '
                 . 'file. A hostile autoloader there is one this process has already loaded',
         ],
-        'Sessions/BackgroundSupervisor.php|scandir' => [
+        'Background/BackgroundSupervisor.php|scandir' => [
             'NAMES_ONLY — the same sweep lists one vetted IPC directory\'s entries to stat their '
                 . 'type and age; nothing is read, and a directory holding anything but regular '
                 . 'files and sockets is left whole',
         ],
         // AUT-1 (plan_comparison §3): per-row fire-claim locks.
-        'Sessions/ScheduleRegistry.php|fopen' => [
+        'Background/ScheduleRegistry.php|fopen' => [
             'SELF_LOCATED — claimLock() creates one schedule\'s fire-claim lock file with `c` '
                 . 'inside the 0700 `schedules/` directory beside this registry\'s own config path, '
                 . 'settles it to 0600 before any payload, and flock()s it non-blocking (the '
@@ -1291,7 +1291,7 @@ final class ReadPathCensusTest extends TestCase
             [
                 'Agents/ProcessExecutor.php|require',
                 'Commands/Specs/BuiltInCommands.php|require',
-                'Sessions/BackgroundSupervisor.php|require',
+                'Background/BackgroundSupervisor.php|require',
                 'Workflows/WorkflowRegistry.php|require',
             ],
             array_keys($execute),
@@ -1326,7 +1326,7 @@ final class ReadPathCensusTest extends TestCase
             // ContainedPath inventory came to list a file that never called it.
             'a mention in a doc-comment' => ["<?php /** calls glob() over src/ */\n\$x = 1;", 0],
             'a declaration of a same-named method' => ['<?php class C { public function file($p) {} }', 0],
-            // GENERATED CODE. src/Sessions/BackgroundSupervisor.php builds its
+            // GENERATED CODE. src/Background/BackgroundSupervisor.php builds its
             // forked child's source as a string and `require`s the autoloader
             // inside it; a token scan of the outer file cannot see that, so string
             // literals are re-tokenised. This is a real execute path, not a
@@ -1350,7 +1350,7 @@ final class ReadPathCensusTest extends TestCase
     public function testTheGeneratedChildScriptsRequireIsSeenInTheRealFile(): void
     {
         $sinks = $this->sinksIn(
-            (string) file_get_contents($this->srcDir . '/Sessions/BackgroundSupervisor.php'),
+            (string) file_get_contents($this->srcDir . '/Background/BackgroundSupervisor.php'),
         );
 
         $this->assertContains('require', $sinks, 'the forked child\'s autoload require');
@@ -1404,7 +1404,7 @@ final class ReadPathCensusTest extends TestCase
     /**
      * Every sink spelling in $code, as it should be named in the ledger.
      *
-     * STRING LITERALS ARE RE-TOKENISED, not skipped: `src/Sessions/BackgroundSupervisor.php`
+     * STRING LITERALS ARE RE-TOKENISED, not skipped: `src/Background/BackgroundSupervisor.php`
      * builds its forked child's whole source as a string and `require`s inside it,
      * which is an execute path an executable-token scan cannot see. Only the
      * `require`/`include` family is looked for in there — a sink NAME inside an

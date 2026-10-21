@@ -480,7 +480,7 @@ one":
   its `tools:` (argument-scoped entries included) is the stage's whole grant.
   See [`WORKFLOWS.md`](WORKFLOWS.md).
 - **`/bg` and `/fork`** run a task in a background session
-  (`src/Sessions/BackgroundSessionRunner.php`) as the roster's `default`
+  (`src/Background/BackgroundSessionRunner.php`) as the roster's `default`
   agent, else its first NATIVE entry — a foreign import never takes the slot
   a position-zero fallback lands on — else the built-in `coder`,
   consulting nothing else of the preset but its provider, model and

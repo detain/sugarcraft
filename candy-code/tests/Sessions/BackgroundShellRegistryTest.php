@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
-use SugarCraft\Code\Sessions\BackgroundShellRegistry;
+use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Support\ProcessContainment;
 
 /**

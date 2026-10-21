@@ -11,7 +11,7 @@ use SugarCraft\Code\Cli\HeadlessPermissionPrompt;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Permissions\PermissionMode;
-use SugarCraft\Code\Sessions\BackgroundSessionRunner;
+use SugarCraft\Code\Background\BackgroundSessionRunner;
 use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Code\Tools\ToolCall;
 
@@ -218,7 +218,7 @@ final class ConsolePermissionApproverWiringTest extends TestCase
      * The background-session daemon is the OTHER console caller, and the
      * reasoning that keeps the approver off the TUI does not reach it.
      *
-     * {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::spawnSession()}
+     * {@see \SugarCraft\Code\Background\BackgroundSupervisor::spawnSession()}
      * hands the daemon `['file', '/dev/null', 'r']` as descriptor 0, so its
      * stdin is not a terminal and the prompt can never read a keystroke that
      * belonged to anyone else — measured, not assumed:

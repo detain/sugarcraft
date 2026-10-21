@@ -66,8 +66,9 @@ final class HeadlessPermissionPromptAttachmentTest extends TestCase
      * @var array<string, int>
      */
     private const ATTACHING_SITES = [
+        // W5-C (v4:F5): ascending walk order — src/Background/ now precedes src/Cli/.
+        'src/Background/BackgroundSessionRunner.php' => 2,
         'src/Cli/NonInteractive.php' => 2,
-        'src/Sessions/BackgroundSessionRunner.php' => 2,
     ];
 
     /**

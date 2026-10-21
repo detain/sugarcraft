@@ -15,8 +15,8 @@ use SugarCraft\Code\Host\TurnRunner;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
-use SugarCraft\Code\Sessions\ActiveSubagentsBlock;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\ActiveSubagentsBlock;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 

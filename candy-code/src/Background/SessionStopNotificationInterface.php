@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Code\Sessions;
+namespace SugarCraft\Code\Background;
 
 /**
  * Optional companion to {@see SessionNotificationInterface} for listeners that

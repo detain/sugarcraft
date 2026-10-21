@@ -977,7 +977,7 @@ final class Chat implements Model
          * makes `/bg` answer with the same "<thing> not configured" line the
          * other optional collaborators on this class use.
          */
-        private readonly ?\SugarCraft\Code\Sessions\BackgroundSupervisor $backgroundSupervisor = null,
+        private readonly ?\SugarCraft\Code\Background\BackgroundSupervisor $backgroundSupervisor = null,
     /**
          * Last status this Chat reported for each background session, keyed
          * by session id (crush_feat.md section 5 E4).
@@ -1700,7 +1700,7 @@ final class Chat implements Model
          * clock state that `serve` and `/schedules` must see through whichever
          * clone is on screen.
          */
-        private readonly ?\SugarCraft\Code\Sessions\ScheduleRegistry $scheduleRegistry = null,
+        private readonly ?\SugarCraft\Code\Background\ScheduleRegistry $scheduleRegistry = null,
     /**
          * TUI-3A: the composer's vim OPERATOR state (pending `d`/`y` plus the
          * delete/yank register) — the app-side half of the mode, above the
@@ -9537,7 +9537,7 @@ final class Chat implements Model
     /**
      * The background-session supervisor `/bg` and `/fork` dispatch onto, if set.
      */
-    public function backgroundSupervisor(): ?\SugarCraft\Code\Sessions\BackgroundSupervisor
+    public function backgroundSupervisor(): ?\SugarCraft\Code\Background\BackgroundSupervisor
     {
         return $this->backgroundSupervisor;
     }
@@ -9551,7 +9551,7 @@ final class Chat implements Model
      * clone spawned become unreachable (the same reasoning as
      * {@see \SugarCraft\Code\Backend\CancellationToken}).
      */
-    public function withBackgroundSupervisor(?\SugarCraft\Code\Sessions\BackgroundSupervisor $supervisor): self
+    public function withBackgroundSupervisor(?\SugarCraft\Code\Background\BackgroundSupervisor $supervisor): self
     {
         return $this->mutate(['backgroundSupervisor' => $supervisor]);
     }
@@ -9561,13 +9561,13 @@ final class Chat implements Model
      * like the supervisor — a wither clone must keep pointing at the same
      * clock, or the /schedules surface and the pump diverge).
      */
-    public function withScheduleRegistry(?\SugarCraft\Code\Sessions\ScheduleRegistry $registry): self
+    public function withScheduleRegistry(?\SugarCraft\Code\Background\ScheduleRegistry $registry): self
     {
         return $this->mutate(['scheduleRegistry' => $registry]);
     }
 
     /** The AUT-1 roster this session fires from, if any. */
-    public function scheduleRegistry(): ?\SugarCraft\Code\Sessions\ScheduleRegistry
+    public function scheduleRegistry(): ?\SugarCraft\Code\Background\ScheduleRegistry
     {
         return $this->scheduleRegistry;
     }
@@ -11181,7 +11181,7 @@ final class Chat implements Model
         // daemon's answer verbatim, and an `@path` in that answer is the
         // model's text, not the user asking for a file.
         $mentionsAreTheUsers = $expanded === null
-            && !\SugarCraft\Code\Sessions\BackgroundSession::isAnnouncement($text);
+            && !\SugarCraft\Code\Background\BackgroundSession::isAnnouncement($text);
         if ($expanded !== null) {
             // AN EXPANSION THAT PRODUCED NOTHING IS REFUSED, not sent. The
             // empty-draft guard at the top of this method runs against the
@@ -16828,7 +16828,7 @@ final class Chat implements Model
 
     /**
      * Handle /bg (alias /background) — {@see \SugarCraft\Code\Host\Commands\BackgroundCommand}: dispatch
-     * a task onto the {@see \SugarCraft\Code\Sessions\BackgroundSupervisor}
+     * a task onto the {@see \SugarCraft\Code\Background\BackgroundSupervisor}
      * off-turn and hand the prompt straight back, or `/bg stop <id>`. The
      * answer lands later as a {@see BackgroundSessionSpawnedMsg} or
      * {@see BackgroundSessionStoppedMsg}.
@@ -19708,7 +19708,7 @@ final class Chat implements Model
      * the first two; the other two document themselves at their `if`.
      *
      *   - waking up often enough to run
-     *     {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::tick()},
+     *     {@see \SugarCraft\Code\Background\BackgroundSupervisor::tick()},
      *     which is what flips a session whose heartbeats have stopped to
      *     `Stalled` and back again. Before this returned anything, that
      *     method had no caller on the live path at all.
@@ -19966,7 +19966,7 @@ final class Chat implements Model
     }
 
     /**
-     * Run one poll of {@see \SugarCraft\Code\Sessions\BackgroundSupervisor}
+     * Run one poll of {@see \SugarCraft\Code\Background\BackgroundSupervisor}
      * and announce whatever changed since the previous poll.
      *
      * Terminal sessions drop out of `getActiveSessions()`, so a session that
@@ -19977,7 +19977,7 @@ final class Chat implements Model
      * THE RESULT COMES BACK (roadmap 4.3-1). A session that settles —
      * completed, failed, stopped or timed out — is reported twice: the status
      * notice every transition gets, and its
-     * {@see \SugarCraft\Code\Sessions\BackgroundSession::announcement()} as
+     * {@see \SugarCraft\Code\Background\BackgroundSession::announcement()} as
      * a USER-ROLE turn, so the model that started the work reads the answer and
      * its stats rather than the user copying it across. Before this the daemon
      * buffered the output, the supervisor restored it onto the session, and
@@ -20054,7 +20054,7 @@ final class Chat implements Model
             // A session re-adopted at launch (roadmap 4.3-3) was not started
             // by this run: "is now running" read as if it had just begun.
             $notices[] = Message::notice(Lang::t(
-                $previous === \SugarCraft\Code\Sessions\BackgroundSupervisor::ADOPTED_STATUS
+                $previous === \SugarCraft\Code\Background\BackgroundSupervisor::ADOPTED_STATUS
                     ? 'chat.background.readopted'
                     : 'chat.background.status',
                 ['id' => $id, 'name' => $name, 'status' => $status],
@@ -20141,7 +20141,7 @@ final class Chat implements Model
         $notices = [];
         $supervisor = $this->backgroundSupervisor;
         if ($supervisor !== null) {
-            foreach ($registry->fireDue($now, \SugarCraft\Code\Sessions\ScheduleSpawner::closure(
+            foreach ($registry->fireDue($now, \SugarCraft\Code\Background\ScheduleSpawner::closure(
                 $supervisor,
                 $this->agentManager,
                 $this->projectRoot,

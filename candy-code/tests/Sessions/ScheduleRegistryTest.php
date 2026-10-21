@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Sessions\Schedule;
-use SugarCraft\Code\Sessions\ScheduleRegistry;
+use SugarCraft\Code\Background\Schedule;
+use SugarCraft\Code\Background\ScheduleRegistry;
 
 /**
  * AUT-1's roster: the file half (0600, load refusals, reload-on-stat), the

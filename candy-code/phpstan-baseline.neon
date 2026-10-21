@@ -1840,49 +1840,49 @@ parameters:
 			message: '#^Call to function is_array\(\) with array\{command\: string, pid\: int, running\: bool, signaled\: bool, stopped\: bool, exitcode\: int, termsig\: int, stopsig\: int\} will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 1
-			path: src/Sessions/BackgroundShellRegistry.php
+			path: src/Background/BackgroundShellRegistry.php
 
 		-
 			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 1
-			path: src/Sessions/BackgroundShellRegistry.php
+			path: src/Background/BackgroundShellRegistry.php
 
 		-
 			message: '#^PHPDoc tag @param for parameter \$sleeper with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
 			identifier: parameter.phpDocType
 			count: 1
-			path: src/Sessions/BackgroundShellRegistry.php
+			path: src/Background/BackgroundShellRegistry.php
 
 		-
-			message: '#^PHPDoc type for property SugarCraft\\Code\\Sessions\\BackgroundShellRegistry\:\:\$sleeper with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
+			message: '#^PHPDoc type for property SugarCraft\\Code\\Background\\BackgroundShellRegistry\:\:\$sleeper with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
 			identifier: property.phpDocType
 			count: 1
-			path: src/Sessions/BackgroundShellRegistry.php
+			path: src/Background/BackgroundShellRegistry.php
 
 		-
 			message: '#^Variable \$handle on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.variable
 			count: 1
-			path: src/Sessions/BackgroundShellRegistry.php
+			path: src/Background/BackgroundShellRegistry.php
 
 		-
 			message: '#^Negated boolean expression is always false\.$#'
 			identifier: booleanNot.alwaysFalse
 			count: 1
-			path: src/Sessions/BackgroundSupervisor.php
+			path: src/Background/BackgroundSupervisor.php
 
 		-
 			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
 			identifier: identical.alwaysFalse
 			count: 1
-			path: src/Sessions/BackgroundSupervisor.php
+			path: src/Background/BackgroundSupervisor.php
 
 		-
 			message: '#^Anonymous function never returns null so it can be removed from the return type\.$#'
 			identifier: return.unusedType
 			count: 1
-			path: src/Sessions/ScheduleSpawner.php
+			path: src/Background/ScheduleSpawner.php
 
 		-
 			message: '#^Parameter \#1 \$skills of method SugarCraft\\Code\\Skills\\SkillRegistry\:\:register\(\) expects array\<string, SugarCraft\\Code\\Skills\\Skill\>, array\<int, SugarCraft\\Code\\Skills\\Skill\> given\.$#'

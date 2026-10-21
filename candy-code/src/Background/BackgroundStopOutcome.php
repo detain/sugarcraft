@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Code\Sessions;
+namespace SugarCraft\Code\Background;
 
 /**
  * What {@see BackgroundSupervisor::stopSession()} actually achieved (audit BG-1).

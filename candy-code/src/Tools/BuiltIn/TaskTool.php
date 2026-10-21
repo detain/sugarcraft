@@ -323,7 +323,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * @param string|null $transcriptRoot where each run's
      *        {@see SubAgentTranscriptLog} goes; null is
      *        {@see SubAgentTranscriptLog::defaultRoot()} ({@see withTranscriptRoot()})
-     * @param \SugarCraft\Code\Sessions\BackgroundSupervisor|null $backgroundSupervisor
+     * @param \SugarCraft\Code\Background\BackgroundSupervisor|null $backgroundSupervisor
      *        what a background run is spawned through (roadmap 4.3-2,
      *        {@see withBackgroundSupervisor()}); null runs every call in the
      *        foreground
@@ -356,7 +356,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         private ?SiblingSpendLedger $siblingSpend = null,
         private ?\Closure $activityClock = null,
         private ?string $transcriptRoot = null,
-        private ?\SugarCraft\Code\Sessions\BackgroundSupervisor $backgroundSupervisor = null,
+        private ?\SugarCraft\Code\Background\BackgroundSupervisor $backgroundSupervisor = null,
         private string $backgroundDirectory = '',
         private int $delegationDepth = 0,
         private int $maxDelegationDepth = self::MAX_DELEGATION_DEPTH,
@@ -399,7 +399,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * session as the HOST's, so the host's own supervisor adopts it on its
      * next poll and announces the result ({@see BackgroundSupervisor::adoptHandedOff()}).
      */
-    public function withBackgroundSupervisor(\SugarCraft\Code\Sessions\BackgroundSupervisor $supervisor, string $workingDirectory): self
+    public function withBackgroundSupervisor(\SugarCraft\Code\Background\BackgroundSupervisor $supervisor, string $workingDirectory): self
     {
         return $this->mutate(['backgroundSupervisor' => $supervisor, 'backgroundDirectory' => $workingDirectory]);
     }
@@ -419,7 +419,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     }
 
     /** What a background run is spawned through, or null when none is bound. */
-    public function backgroundSupervisor(): ?\SugarCraft\Code\Sessions\BackgroundSupervisor
+    public function backgroundSupervisor(): ?\SugarCraft\Code\Background\BackgroundSupervisor
     {
         return $this->backgroundSupervisor;
     }
@@ -1063,7 +1063,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * with its id (roadmap 4.3-2).
      *
      * The daemon runs the delegation through this tool in its own process
-     * ({@see \SugarCraft\Code\Sessions\BackgroundSessionRunner}), so the
+     * ({@see \SugarCraft\Code\Background\BackgroundSessionRunner}), so the
      * preset's grants, model, effort and step cap hold, the run is resumable,
      * and the session's permission mode rides along: it is never run under
      * a wider one than the session that asked. With nobody at a terminal, a
@@ -1188,11 +1188,11 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     /**
      * Spawn the background session that runs $agentName on $prompt — or, with
      * $resumeId, continues that saved run with $prompt — through this tool in
-     * the session daemon ({@see \SugarCraft\Code\Sessions\BackgroundSessionRunner}).
+     * the session daemon ({@see \SugarCraft\Code\Background\BackgroundSessionRunner}).
      *
      * @throws \Throwable when the session cannot be started
      */
-    private function spawnDelegation(string $agentName, string $prompt, string $description, string $model, string $resumeId): \SugarCraft\Code\Sessions\BackgroundSession
+    private function spawnDelegation(string $agentName, string $prompt, string $description, string $model, string $resumeId): \SugarCraft\Code\Background\BackgroundSession
     {
         $agent = $this->agentManager?->get($agentName);
         $engine = $this->engine;
@@ -1218,7 +1218,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             agent: trim($engine->model()) === '' ? $agent : $agent->withModel($engine->model()),
             task: $prompt,
             workingDirectory: $this->backgroundDirectory !== '' ? $this->backgroundDirectory : (getcwd() ?: '.'),
-            tags: ['task', \SugarCraft\Code\Sessions\BackgroundSupervisor::AGENT_TAG_PREFIX . $agentName],
+            tags: ['task', \SugarCraft\Code\Background\BackgroundSupervisor::AGENT_TAG_PREFIX . $agentName],
             delegation: $delegation,
         );
     }

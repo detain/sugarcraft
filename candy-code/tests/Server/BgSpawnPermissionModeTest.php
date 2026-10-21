@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Server\ServerConfig;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Tests\Sessions\StoppableDaemonFixtureTrait;
 use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
@@ -20,7 +20,7 @@ use SugarCraft\Code\Tests\Server\Support\WireClient;
  *
  * The proof is the daemon's own answer: the backend stub echoes
  * `MODE[$CANDY_CODE_PERMISSION_MODE]`, so what the test reads back is the
- * very environment {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner::backend()}
+ * very environment {@see \SugarCraft\Code\Background\BackgroundSessionRunner::backend()}
  * settled before building the gate — spawn config → argv → putenv → backend
  * env walked end to end, with no reflection onto internals.
  *

@@ -636,7 +636,7 @@ final class BootstrapTest extends TestCase
         $chat = Bootstrap::chat($this->isolatedHome());
 
         $this->assertInstanceOf(
-            \SugarCraft\Code\Sessions\BackgroundSupervisor::class,
+            \SugarCraft\Code\Background\BackgroundSupervisor::class,
             $chat->backgroundSupervisor(),
         );
     }

@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Code\App;
 
 use SugarCraft\Core\Msg;
-use SugarCraft\Code\Sessions\BackgroundStopOutcome;
+use SugarCraft\Code\Background\BackgroundStopOutcome;
 use SugarCraft\Code\Chat;
 
 /**
  * Internal Msg carrying the OUTCOME of a `/bg stop <id>` (audit BG-1).
  *
- * {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::stopSession()} waits —
+ * {@see \SugarCraft\Code\Background\BackgroundSupervisor::stopSession()} waits —
  * boundedly, but for up to several seconds on its signal rungs — for the
  * daemon to exit, so it runs inside the Cmd {@see Chat::handleBackgroundCommand()}
  * returns rather than inside `update()`, the same reason

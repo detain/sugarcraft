@@ -12,8 +12,8 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\DenialKind;
-use SugarCraft\Code\Sessions\BackgroundSessionRunner;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSessionRunner;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**
@@ -89,7 +89,7 @@ final class BackgroundSessionRunnerTest extends TestCase
      *
      * The consequence was not confined to the daemon. The supervisor's only
      * completion signal is a DEAD PID
-     * ({@see \SugarCraft\Code\Sessions\BackgroundSupervisor::reapFinishedDaemon()}),
+     * ({@see \SugarCraft\Code\Background\BackgroundSupervisor::reapFinishedDaemon()}),
      * so a `supervise()` parked in that wait means the session reports
      * "running" for the life of the process, the unix socket is never unlinked,
      * and both processes leak.
@@ -152,7 +152,7 @@ final class BackgroundSessionRunnerTest extends TestCase
             declare(strict_types=1);
             require {$this->export($autoload)};
 
-            \$runner = new SugarCraft\Code\Sessions\BackgroundSessionRunner(
+            \$runner = new SugarCraft\Code\Background\BackgroundSessionRunner(
                 sessionId: 'sess_stop_1',
                 socketPath: {$this->export($buffer . '.sock')},
                 bufferPath: {$this->export($buffer)},
@@ -420,7 +420,7 @@ final class BackgroundSessionRunnerTest extends TestCase
                 exit(0);
             }
 
-            \$runner = new SugarCraft\Code\Sessions\BackgroundSessionRunner(
+            \$runner = new SugarCraft\Code\Background\BackgroundSessionRunner(
                 sessionId: 'sess_e229',
                 socketPath: {$this->export($socket)},
                 bufferPath: {$this->export($buffer)},
@@ -644,7 +644,7 @@ final class BackgroundSessionRunnerTest extends TestCase
      * transcript, and this is why the record is collapsed to one line.
      *
      * The buffer is a line protocol:
-     * {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::restoreOutput()}
+     * {@see \SugarCraft\Code\Background\BackgroundSupervisor::restoreOutput()}
      * drops a line only when THAT LINE starts with `[session:`, so a two-line
      * record would have its first line dropped and its second restored as
      * model output — a hook author's error text quoted back to the user as if
@@ -710,7 +710,7 @@ final class BackgroundSessionRunnerTest extends TestCase
      * MEASURED (round 49, mutation M3): renaming the constant to
      * `[session:task:refused]` left the whole suite green, because every
      * assertion elsewhere is written against the constant and moves with it,
-     * and because {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner::executeTask()}
+     * and because {@see \SugarCraft\Code\Background\BackgroundSessionRunner::executeTask()}
      * writes its outcome line last, so the refusal never IS the last
      * `[session:task:` line today. So the danger is latent rather than live —
      * and it is exactly the kind that an ordering change makes live without
@@ -942,7 +942,7 @@ final class BackgroundSessionRunnerTest extends TestCase
     public function testHeartbeatIntervalStaysUnderTheSupervisorTimeout(): void
     {
         $this->assertLessThan(
-            \SugarCraft\Code\Sessions\BackgroundSupervisor::HEARTBEAT_TIMEOUT_SECS,
+            \SugarCraft\Code\Background\BackgroundSupervisor::HEARTBEAT_TIMEOUT_SECS,
             BackgroundSessionRunner::HEARTBEAT_INTERVAL_SECS,
         );
     }
@@ -1254,7 +1254,7 @@ final class BackgroundSessionRunnerTest extends TestCase
         // the clock. A trim moved OFF the cadence (say, onto every accept)
         // re-drives the disk for a reason the 5 s stamp already serves.
         $source = (string) file_get_contents(
-            \dirname(__DIR__, 2) . '/src/Sessions/BackgroundSessionRunner.php',
+            \dirname(__DIR__, 2) . '/src/Background/BackgroundSessionRunner.php',
         );
         self::assertSame(
             1,

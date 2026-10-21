@@ -22,7 +22,7 @@ use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
-use SugarCraft\Code\Sessions\BackgroundShellRegistry;
+use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Tools\CarriesSessionState;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
 
@@ -86,7 +86,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * the command's output while it runs (WEB-4). Null — every launch-built
      * and standalone caller — streams nothing, exactly as before.
  *
- * $registry (SHL-1) is the launch's {@see \SugarCraft\Code\Sessions\BackgroundShellRegistry},
+ * $registry (SHL-1) is the launch's {@see \SugarCraft\Code\Background\BackgroundShellRegistry},
  * the table `run_in_background` spawns into and ShellOutput/ShellStop read.
  * Null — a standalone Bash, an embedder’s context built without one — makes
  * `run_in_background` an immediate refusal, never a silently-different spawn.

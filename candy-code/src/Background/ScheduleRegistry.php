@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Code\Sessions;
+namespace SugarCraft\Code\Background;
 
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Code\Support\HomeDirectory;

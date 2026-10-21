@@ -6,12 +6,12 @@ namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
-use SugarCraft\Code\Sessions\BackgroundPermissionRelay;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSessionRunner;
-use SugarCraft\Code\Sessions\BackgroundSessionStatus;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
-use SugarCraft\Code\Sessions\SessionNotificationInterface;
+use SugarCraft\Code\Background\BackgroundPermissionRelay;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSessionRunner;
+use SugarCraft\Code\Background\BackgroundSessionStatus;
+use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Background\SessionNotificationInterface;
 
 final class BackgroundSupervisorTest extends TestCase
 {

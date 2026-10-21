@@ -57,8 +57,8 @@ use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\PromptHistory;
 use SugarCraft\Code\Session\SessionStore;
-use SugarCraft\Code\Sessions\BackgroundShellRegistry;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundShellRegistry;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Skills\Skill;
 use SugarCraft\Code\Skills\SkillLoader;
 use SugarCraft\Code\Skills\SkillManager;
@@ -1395,7 +1395,7 @@ final class Bootstrap
      *  - a child exiting through PHP's normal shutdown ran the inherited hook and
      *    stopped the LIVE session's servers;
      *  - a child that started servers of its OWN — which
-     *    {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner::executeTask()}
+     *    {@see \SugarCraft\Code\Background\BackgroundSessionRunner::executeTask()}
      *    does, via `chdir()` -> {@see backend()} -> {@see tools()} — had them in
      *    a map the parent's {@see stopMcpServers()} never iterates, so they
      *    outlived the worker with nothing left to stop them.
@@ -1695,7 +1695,7 @@ final class Bootstrap
             // the workspace so a TUI and `serve` built on it share one clock —
             // and so the row locks, not luck, decide who fires when two hosts
             // run on one home anyway.
-            scheduleRegistry: $workspace->service(\SugarCraft\Code\Sessions\ScheduleRegistry::class),
+            scheduleRegistry: $workspace->service(\SugarCraft\Code\Background\ScheduleRegistry::class),
             // The same root the tools above are jailed to. Chat's own
             // pipeline builds hook contexts and spawns background sessions
             // without an App or Runtime in reach, so it needs its own copy
@@ -2271,7 +2271,7 @@ final class Bootstrap
             // /schedules, serve's BackgroundEvents). Reload-on-stat-change
             // keeps hand-edits landing within a tick of the roster's own
             // clock, so nothing else needs to watch the file.
-            ->withService(\SugarCraft\Code\Sessions\ScheduleRegistry::class, \SugarCraft\Code\Sessions\ScheduleRegistry::loadDefault());
+            ->withService(\SugarCraft\Code\Background\ScheduleRegistry::class, \SugarCraft\Code\Background\ScheduleRegistry::loadDefault());
 
         $events = $transcripts->events();
 
@@ -6862,7 +6862,7 @@ final class Bootstrap
                 // "present but unusable" may not degrade into a shorter guard
                 // chain nobody was told about. PermissionConfigException is
                 // what `bin/candy-code`, {@see NonInteractive::run()} and
-                // {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner}
+                // {@see \SugarCraft\Code\Background\BackgroundSessionRunner}
                 // already turn into a clean exit-2 usage report.
                 throw new PermissionConfigException(
                     Lang::t('cli.refuse.hook_chain', ['error' => $e->getMessage()]),
@@ -9292,7 +9292,7 @@ final class Bootstrap
      * of its own: it inherits this one, and the inherited hook is CORRECT in the
      * child because {@see stopMcpServers()} acts only on `getmypid()`'s bucket of
      * {@see $mcpClients}. So a child that starts servers of its own —
-     * {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner::executeTask()}
+     * {@see \SugarCraft\Code\Background\BackgroundSessionRunner::executeTask()}
      * reaches {@see tools()} after a `chdir()` — has them stopped when it exits,
      * while the live session's servers are untouched. Both halves of that are
      * measured in

@@ -8240,7 +8240,7 @@ DOC;
         );
         $this->assertSame(
             ['file_put_contents', 'fopen', 'ftruncate', 'fwrite', 'unlink'],
-            array_keys(self::writePrimitivesCalledIn($src . '/Sessions/BackgroundSessionRunner.php')),
+            array_keys(self::writePrimitivesCalledIn($src . '/Background/BackgroundSessionRunner.php')),
             'BackgroundSessionRunner.php spells its writes `@\file_put_contents(...)` / `@\unlink(...)` and, '
                 . 'since the sidecar-log rotation of eb07cb95b, `@\fopen(...)` / `@\ftruncate(...)` too',
         );

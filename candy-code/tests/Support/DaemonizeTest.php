@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\Daemonize;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\PrivateDir;

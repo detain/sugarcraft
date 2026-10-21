@@ -16,8 +16,8 @@ use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
 use SugarCraft\Code\App\BackgroundTickMsg;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
-use SugarCraft\Code\Sessions\BackgroundSessionRunner;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSessionRunner;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**

@@ -20,7 +20,7 @@ use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Session\EnhancedSessionStore;
-use SugarCraft\Code\Sessions\BackgroundStopOutcome;
+use SugarCraft\Code\Background\BackgroundStopOutcome;
 use SugarCraft\Code\App\SideQuestionAnsweredMsg;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 use SugarCraft\Code\Workflows\WorkflowResult;

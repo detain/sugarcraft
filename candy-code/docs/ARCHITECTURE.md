@@ -1014,7 +1014,7 @@ completion can legitimately run for tens of minutes.
 | `~/.candy-code/mailboxes/` | `Agents\Live\AgentInbox` | messages to a running delegated run, `<session>/<agent>/inbox.jsonl`, read at its step boundaries; a message from the user carries the launch key's HMAC; swept with its session, as `subagents/` is |
 | `<tmp>/sc_runtime_tool_<id>.board` | `Agents\Board\Board` | one parallel `Task` batch's shared board: the posts its members make with `BoardPost`, one JSON line each, in a 0600 file created before the batch forks (when two or more members can join) and removed when the batch is over; a file a killed process leaves goes with the batch's other `sc_runtime_tool_` files in the next launch's one-hour sweep |
 | `<workflowsPath>/.running/` | `Workflows\WorkflowEngine` | pause files |
-| `<tmp>/candy_code_bg_<uid>_index/` | `Sessions\BackgroundSupervisor` | one record per running background session (`/bg`, `/fork`, background `Task`), so a restart re-adopts its daemon and the host adopts one its turn child spawned |
+| `<tmp>/candy_code_bg_<uid>_index/` | `Background\BackgroundSupervisor` | one record per running background session (`/bg`, `/fork`, background `Task`), so a restart re-adopts its daemon and the host adopts one its turn child spawned |
 
 **Transcript rows have an identity.** `EnhancedSessionStore::saveTranscript()`
 writes transcript schema version 2: every row has an id, `m_<session>_<ref>`, and a
@@ -1122,7 +1122,7 @@ are never deleted. A shadow repository's unreachable objects are collected by
 `Workspace\ShadowGarbageCollector`: at most once a day per shadow, only past
 1,000 loose objects, in the foreground under a 10-second budget.
 
-`Sessions\Background*` runs a task in a detached session (`/bg`, `/fork`) with
+`Background\Background*` runs a task in a detached session (`/bg`, `/fork`) with
 its own runner and supervisor, and so does a background `Task`: the turn's
 forked child spawns the daemon, the index record names the host as its owner,
 and the host's supervisor adopts it on its next poll

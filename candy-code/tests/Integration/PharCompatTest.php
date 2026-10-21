@@ -58,7 +58,7 @@ final class PharCompatTest extends TestCase
         'src/Server/Workspace/WorkspaceHostClient.php' => [
             'spawnSpec([\PHP_BINARY,',
         ],
-        'src/Sessions/BackgroundSupervisor.php' => [
+        'src/Background/BackgroundSupervisor.php' => [
             // The inline `-r` daemon launch: a literal argv array, one token
             // per line at this indent.
             "\$cmd = [\n            PHP_BINARY,\n            '-r',",

@@ -13,10 +13,10 @@ use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
 use SugarCraft\Code\App\BackgroundSessionStoppedMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Role;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSessionStatus;
-use SugarCraft\Code\Sessions\BackgroundStopOutcome;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSessionStatus;
+use SugarCraft\Code\Background\BackgroundStopOutcome;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Tests\Sessions\StoppableDaemonFixtureTrait;
 
 /**

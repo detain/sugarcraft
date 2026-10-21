@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Cli\HeadlessPermissionPrompt;
 use SugarCraft\Code\Hooks\HookResult;
-use SugarCraft\Code\Sessions\BackgroundPermissionRelay;
+use SugarCraft\Code\Background\BackgroundPermissionRelay;
 use SugarCraft\Code\Tools\ToolCall;
 
 use function file_exists;

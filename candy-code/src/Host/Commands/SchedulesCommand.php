@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Host\Commands;
 
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Sessions\ScheduleRegistry;
+use SugarCraft\Code\Background\ScheduleRegistry;
 
 /**
  * `/schedules` (alias `/schedule`) — the read and control surface for

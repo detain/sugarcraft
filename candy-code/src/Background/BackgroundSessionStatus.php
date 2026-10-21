@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Code\Sessions;
+namespace SugarCraft\Code\Background;
 
 /**
  * Lifecycle status of a background session.

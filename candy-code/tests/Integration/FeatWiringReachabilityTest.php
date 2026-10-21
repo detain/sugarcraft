@@ -23,7 +23,7 @@ use SugarCraft\Code\Providers\EmbeddingsRequest;
 use SugarCraft\Code\Providers\EmbeddingsResponse;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Renderer as LiveRenderer;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\Tool;

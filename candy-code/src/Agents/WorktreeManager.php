@@ -82,7 +82,7 @@ use SugarCraft\Code\Workspace\GitRunner;
  * the run ends and sweeps stale ones, and
  * {@see \SugarCraft\Code\Host\Commands\BackgroundCommand::spawnThunk()}
  * builds one for a `/bg` session run as such an agent, and
- * {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner} builds one for
+ * {@see \SugarCraft\Code\Background\BackgroundSessionRunner} builds one for
  * a background `Task` (the daemon's own process, off any turn of the
  * session that started it).
  *

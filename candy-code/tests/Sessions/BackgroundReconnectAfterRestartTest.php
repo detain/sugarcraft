@@ -14,10 +14,10 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSessionRunner;
-use SugarCraft\Code\Sessions\BackgroundSessionStatus;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSessionRunner;
+use SugarCraft\Code\Background\BackgroundSessionStatus;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Usage;
 use React\Promise\PromiseInterface;
 

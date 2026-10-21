@@ -12,8 +12,8 @@ use SugarCraft\Code\App\BackgroundSessionStoppedMsg;
 use SugarCraft\Code\Host\TitleService;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\Sessions\BackgroundStopOutcome;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundStopOutcome;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Skills\SkillSource;
 
 /**
@@ -339,7 +339,7 @@ final class BackgroundCommand implements HostCommand
      * The agent a background session runs as: a registered "default", then
      * the first NATIVE roster entry, then a synthesised stand-in — the chain
      * {@see spawnThunk()} documented, lifted out of it (AUT-1) so
-     * {@see \SugarCraft\Code\Sessions\ScheduleSpawner::closure()} shares ONE
+     * {@see \SugarCraft\Code\Background\ScheduleSpawner::closure()} shares ONE
      * copy rather than a second drift family.
      */
     public static function rosterAgent(?AgentManager $agentManager): Agent

@@ -7,11 +7,11 @@ namespace SugarCraft\Code\Tests\Host;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Host\BackgroundEvents;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSessionStatus;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
-use SugarCraft\Code\Sessions\Schedule;
-use SugarCraft\Code\Sessions\ScheduleRegistry;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSessionStatus;
+use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Background\Schedule;
+use SugarCraft\Code\Background\ScheduleRegistry;
 
 /**
  * AUT-1 serve half: the clock rides the EXISTING `BackgroundEvents::poll()`

@@ -2008,7 +2008,7 @@ final class NonInteractive
      *
      * The right owner is a class that knows it owns the console, and there are
      * exactly two such paths in `src/` — this one and
-     * {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner}, whose fd 2
+     * {@see \SugarCraft\Code\Background\BackgroundSessionRunner}, whose fd 2
      * is the session log. Neither opens an alternate screen. The TUI is not
      * silent about these either; it draws a refusal struck through
      * ({@see \SugarCraft\Code\Chat::isDeniedResult()}), which is why the gap
@@ -2200,7 +2200,7 @@ final class NonInteractive
      * THE CLASSIFICATION IS NO LONGER SPELLED HERE EITHER (E292). WHAT THIS
      * METHOD USED TO BE: an `instanceof ToolFinished`, an `isError()` guard
      * and a {@see DenialKind::classify()} call —
-     * {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner::noticeRefusal()}
+     * {@see \SugarCraft\Code\Background\BackgroundSessionRunner::noticeRefusal()}
      * asked the same three questions in another file. Not the same LINES,
      * which is the part that mattered: its copy walked
      * `Chat::DENIED_ERROR_PREFIXES` with a `foreach` and a `str_starts_with`,

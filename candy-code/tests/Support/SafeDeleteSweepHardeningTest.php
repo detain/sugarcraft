@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Tests\Support;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Commands\ShareCommand;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\MediaStore;
 use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Support\ToolIpcFiles;

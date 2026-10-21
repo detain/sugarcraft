@@ -1538,7 +1538,8 @@ final class StderrEmitterCensusTest extends TestCase
         // Roadmap 4.9's background-Task fix added a third builder, the
         // background daemon's BackgroundSessionRunner.
         self::assertSame(
-            ['src/Cli/Bootstrap.php' => 1, 'src/Host/Commands/BackgroundCommand.php' => 1, 'src/Sessions/BackgroundSessionRunner.php' => 1],
+            // W5-C (v4:F5): the runner's path changed, so ksort() lands it first.
+            ['src/Background/BackgroundSessionRunner.php' => 1, 'src/Cli/Bootstrap.php' => 1, 'src/Host/Commands/BackgroundCommand.php' => 1],
             $built,
             'the set of files that construct — or statically call — a WorktreeManager moved. Its five '
                 . 'seam sites fire wherever it is built: re-read WorktreeManager\'s class doc-block (which '

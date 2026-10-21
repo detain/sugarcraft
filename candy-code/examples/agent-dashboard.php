@@ -30,10 +30,10 @@ use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Providers\EchoProvider;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSessionStatus;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSessionStatus;
 use SugarCraft\Code\Agents\SubAgent;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tui\Pane;
 

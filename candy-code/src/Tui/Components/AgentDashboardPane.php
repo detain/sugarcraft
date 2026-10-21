@@ -9,8 +9,8 @@ use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSessionStatus;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSessionStatus;
 use SugarCraft\Code\Tui\AgentDisplayState;
 use SugarCraft\Code\Tui\AgentLabelFolding;
 use SugarCraft\Code\Tui\AgentOutputPane;
@@ -34,7 +34,7 @@ use SugarCraft\Overlay\Veil;
  * Renders every live worker in ONE ordered list: each run of the {@see Agent}s
  * registered on {@see \SugarCraft\Code\Agents\AgentManager} followed by the
  * {@see BackgroundSession}s owned by
- * {@see \SugarCraft\Code\Sessions\BackgroundSupervisor}, grouped for display
+ * {@see \SugarCraft\Code\Background\BackgroundSupervisor}, grouped for display
  * into Working / Needs input / Ready / Completed.
  *
  * Three design constraints this class exists to satisfy:
@@ -512,7 +512,7 @@ final class AgentDashboardPane
      *
      * NO STALL WARNING HERE, AND THAT IS NOT AN OVERSIGHT. Stall detection is
      * fed from exactly one place — {@see
-     * \SugarCraft\Code\Sessions\BackgroundSupervisor::onSessionStreaming()}
+     * \SugarCraft\Code\Background\BackgroundSupervisor::onSessionStreaming()}
      * calls `track()` as a background session's chunks arrive — so a background
      * session is the only thing the detector has ever observed a token rate
      * for. A registered agent reaches this pane through `AgentManager`, whose
@@ -593,7 +593,7 @@ final class AgentDashboardPane
      * A background session's display state, with a byte-bounded output tail.
      *
      * $stall is the session's entry from {@see
-     * \SugarCraft\Code\Sessions\BackgroundSupervisor::getStallWarnings()},
+     * \SugarCraft\Code\Background\BackgroundSupervisor::getStallWarnings()},
      * or null when it is not stalling. Passing it is what makes
      * {@see AgentOutputPane}'s stall branch reachable at all: that pane has
      * always rendered an amber border and a warning line for a non-null
@@ -685,7 +685,7 @@ final class AgentDashboardPane
      * This pane's untrusted-text boundary.
      *
      * Everything the dashboard draws — a session's `output` (byte-for-byte
-     * what {@see \SugarCraft\Code\Sessions\BackgroundSupervisor} read off the
+     * what {@see \SugarCraft\Code\Background\BackgroundSupervisor} read off the
      * daemonised child's IPC socket, i.e. raw model and tool output), its
      * name/task, and an agent's name/description/model — is attacker-
      * influenced text going straight to a terminal. The chat path holds this

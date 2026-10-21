@@ -10,7 +10,7 @@ namespace SugarCraft\Code\Support;
  * directory, not a symlink, owned by this uid, mode exactly 0700 (Appendix O
  * §4.6; roadmap O-4a).
  *
- * Moved out of {@see \SugarCraft\Code\Sessions\BackgroundSupervisor}, which
+ * Moved out of {@see \SugarCraft\Code\Background\BackgroundSupervisor}, which
  * carried the rule twice (its IPC directory and its session index), so the
  * server's state directory ({@see \SugarCraft\Code\Server\StateDir}) holds
  * its singleton lock and discovery file to the same rule rather than a third

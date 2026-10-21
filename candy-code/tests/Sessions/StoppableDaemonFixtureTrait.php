@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Sessions;
 
 use SugarCraft\Code\Agents\Agent;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ProcessTree;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 

@@ -11,8 +11,8 @@ use SugarCraft\Code\Host\Commands\LoopCommand;
 use SugarCraft\Code\Host\Commands\SchedulesCommand;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\Sessions\Schedule;
-use SugarCraft\Code\Sessions\ScheduleRegistry;
+use SugarCraft\Code\Background\Schedule;
+use SugarCraft\Code\Background\ScheduleRegistry;
 
 /**
  * AUT-1 command surface: `/loop` registers an in-process ephemeral row (never

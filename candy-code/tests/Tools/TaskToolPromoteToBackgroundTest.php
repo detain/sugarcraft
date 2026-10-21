@@ -13,7 +13,7 @@ use SugarCraft\Code\Agents\SuspendedDelegations;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Providers\CompleteResponse;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tests\Sessions\StoppableDaemonFixtureTrait;
 use SugarCraft\Code\Tests\Support\RosterAgent;

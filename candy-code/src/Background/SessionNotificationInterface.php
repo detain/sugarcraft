@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Code\Sessions;
+namespace SugarCraft\Code\Background;
 
 /**
  * Contract for receiving background session notifications.

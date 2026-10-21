@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Sessions\BackgroundShellRegistry;
+use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 
 /**

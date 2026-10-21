@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Agents;
 
 use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Providers\CompleteRequest;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Tools\Tool;
@@ -958,7 +958,7 @@ final class ProcessExecutor implements ExecutorInterface
      *
      * ## WHAT IS TRUE NOW
      *
-     * {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::autoloadPath()}
+     * {@see \SugarCraft\Code\Background\BackgroundSupervisor::autoloadPath()}
      * already solved exactly this for the session daemon — it is `public
      * static` for reuse, it asks the LIVE `\Composer\Autoload\ClassLoader`
      * for the autoloader this process is actually running under, and only

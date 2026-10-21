@@ -19,7 +19,7 @@ namespace SugarCraft\Code\Support;
  * the outcome, not the shape).
  *
  * TWO SHAPES, ONE SEQUENCE — a move out of
- * {@see \SugarCraft\Code\Sessions\BackgroundSupervisor}, not a second copy:
+ * {@see \SugarCraft\Code\Background\BackgroundSupervisor}, not a second copy:
  *
  *  - {@see code()}: the sequence as PHP source, for the `php -r` launcher the
  *    supervisor spawns for `/bg`. Its stdio is set by the spawn's descriptor

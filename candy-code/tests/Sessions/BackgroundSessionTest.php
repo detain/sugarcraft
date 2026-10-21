@@ -8,8 +8,8 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentStatus;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSessionStatus;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSessionStatus;
 
 final class BackgroundSessionTest extends TestCase
 {

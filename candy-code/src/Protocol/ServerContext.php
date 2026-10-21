@@ -176,7 +176,7 @@ final class ServerContext
                     // which process fires it, so two hosts on one home get one
                     // fire. Fired sessions are ordinary daemons, so their
                     // `bg.started` rows come from this poll's own status diff.
-                    $workspace->service(\SugarCraft\Code\Sessions\ScheduleRegistry::class),
+                    $workspace->service(\SugarCraft\Code\Background\ScheduleRegistry::class),
                     $workspace->agentManager,
                 );
             }

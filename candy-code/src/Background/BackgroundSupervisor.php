@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Code\Sessions;
+namespace SugarCraft\Code\Background;
 
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Support\Daemonize;
@@ -975,7 +975,7 @@ if ($autoload === null || !is_file($autoload)) {
 }
 require $autoload;
 
-exit(\SugarCraft\Code\Sessions\BackgroundSessionRunner::main(json_decode(%s, true)));
+exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, true)));
 ',
             var_export(self::autoloadPath(), true),
             var_export($bufferPath, true),

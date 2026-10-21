@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Code\Sessions;
+namespace SugarCraft\Code\Background;
 
 use SugarCraft\Code\Context\PromptFence;
 use SugarCraft\Code\Message;
