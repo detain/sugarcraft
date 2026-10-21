@@ -268,8 +268,15 @@ final class SymbolSetKanaTest extends TestCase
         $this->assertCount(1251, $all->defs(), 'the narrow all-count is untouched by the wide tier');
         $this->assertCount(181, $all->wideDefs(), 'WIDE is inside all: ~(EXTRA|BAD)');
 
+        // MAJOR-2 parity (audit l6): the generated braille/sextant/octant
+        // tiers keep their raw tier tags — chafa's generators set sym->sc
+        // directly (chafa-symbols.c:271, :331, :486) and never run
+        // def_to_symbol — so they contribute NO NARROW. `narrow` selects
+        // the hand-authored tiers only: 711 unique header codepoints less
+        // the nine misc-narrow.h AMBIGUOUS BAD-vetoes = 702 (was 1,251
+        // while the walk OR-ed derived tags onto the generated tiers).
         $narrow = SymbolMap::new()->withSelectors('narrow');
-        $this->assertCount(1251, $narrow->defs());
+        $this->assertCount(702, $narrow->defs());
         $this->assertCount(0, $narrow->wideDefs(), 'kana never carries NARROW');
 
         $ambiguous = SymbolMap::new()->withSelectors('ambiguous');

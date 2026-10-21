@@ -34,9 +34,19 @@ namespace SugarCraft\Image\Symbol;
  * (chafa/chafa-symbol-map.c:240), while the corpus generators pack a
  * truthy coverage.
  * findCandidates() reproduces chafa's insertion-sorted 8-slot buffer
- * statement-for-statement, tie order included: equal distances keep the
+ * mechanism statement-for-statement: equal distances keep the
  * earlier-scanned symbol first, and the inverse pass (hd' = 64-hd) is
- * gated against the tail slot exactly like the direct pass.
+ * gated against the tail slot exactly like the direct pass. The scan
+ * ORDER is the known divergence: chafa qsorts its symbol array by
+ * (popcount, codepoint) at compile time (compare_symbols_popcount,
+ * chafa/chafa-symbol-map.c:357-370, qsorted at :428) and walks that, so a
+ * tied-distance winner can differ between the two. A faithful port of the
+ * sort was measured (audit fix lane FA-5): it flips the byte-frozen
+ * default-corpus render digests (24829bdb…, the ansi16 and quantized-pens
+ * family, the WideErrorGuardPin ' ▘' row) because those were captured over
+ * build-order winners, and the re-pin-vs-divergence ruling sits with the
+ * owner — so this walk stays in build order. findWideCandidates() scans in
+ * chafa's sort already (compare_symbols2_popcount, :373-395).
  *
  * PC-14 (fixed-palette quantize-before-scoring) lives in
  * {@see CanvasMode}; the work-factor top-K clamp lives in the renderer
@@ -81,10 +91,13 @@ namespace SugarCraft\Image\Symbol;
  * Selection mirrors chafa's chafa_symbol_map_apply_selectors() /
  * char_is_selected(): selectors apply in order and the LAST match wins;
  * a token without a leading +/- clears the map first and signs persist
- * across comma-separated tokens; `all` is ~(EXTRA|BAD); a glyph's
- * effective tags are its declared tags OR the default tags derived from
- * its codepoint (chafa's def_to_symbol, AMBIGUOUS masked off); BAD is
- * auto-excluded unless a selector names it. The `[chars]` literal-set and
+ * across comma-separated tokens; `all` is ~(EXTRA|BAD); a hand-authored
+ * glyph's effective tags are its declared tags OR the default tags derived
+ * from its codepoint (chafa's def_to_symbol, AMBIGUOUS masked off) while
+ * the generated braille/sextant/octant tiers keep the raw tier tag chafa's
+ * generators write into sym->sc — no NARROW envelope (chafa-symbols.c:271,
+ * :331, :486); BAD is auto-excluded unless a selector names it. The
+ * `[chars]` literal-set and
  * codepoint-range selector forms are NOT implemented (documented seam —
  * sugar-image has no font probe, so tag classes are the useful subset).
  *
@@ -782,7 +795,7 @@ final class SymbolMap
         $picked = [];
         foreach (self::fullCorpus($this->asciiIbm) as $def) {
             $cp = mb_ord($def->char);
-            if ($select($def->tags | self::defaultTagsFor($cp), $base[$cp] ?? false)) {
+            if ($select(self::effectiveTags($def->tags, $cp), $base[$cp] ?? false)) {
                 $picked[] = $def;
             }
         }
@@ -795,7 +808,7 @@ final class SymbolMap
         $pickedWide = [];
         foreach (self::fullWideCorpus() as $def) {
             $cp = mb_ord($def->char);
-            if ($select($def->tags | self::defaultTagsFor($cp), $baseWide[$cp] ?? false)) {
+            if ($select(self::effectiveTags($def->tags, $cp), $baseWide[$cp] ?? false)) {
                 $pickedWide[] = $def;
             }
         }
@@ -844,20 +857,42 @@ final class SymbolMap
     }
 
     /**
-     * chafa's get_default_tags_for_char(): WIDE for the wide-capable block
-     * this port carries (g_unichar_iswide over U+3041-U+30FE; NARROW is
-     * derived only when the glyph is not wide, exactly like chafa). Chafa's
-     * AMBIGUOUS wide-cjk envelope stays underived — the corpus carries no
-     * glyph inside it, and every AMBIGUOUS the selection sees is declared
-     * by its table. def_to_symbol() ORs these into a glyph's declared
-     * tags and masks AMBIGUOUS off, so selectors see the C build's
-     * effective tags.
+     * chafa's get_default_tags_for_char() (chafa/internal/chafa-symbols.c
+     * :509-549): WIDE from g_unichar_iswide for the wide-capable block this
+     * port carries (U+3041-U+30FE), else the AMBIGUOUS wide-cjk envelope
+     * (masked downstream, never observable in today's corpus); AMBIGUOUS by
+     * mark/zero-width/ambiguous-range tables; UGLY by the emoji and meta
+     * range tables — which, as in chafa, PRECEDE the ASCII/TECHNICAL/
+     * GEOMETRIC/BRAILLE/SEXTANT ladder in the same elseif chain; then
+     * ALPHA/DIGIT by character class, and NARROW derived only when the
+     * glyph is not wide, exactly like chafa.
+     *
+     * chafa ORs this into every hand-authored def's declared tags at build
+     * time through def_to_symbol(), masking AMBIGUOUS (its own FIXME at
+     * :556 admits g_unichar_iswide marks too much for the narrow tables),
+     * while the generated tiers set sym->sc raw and never pass through it.
+     * {@see self::effectiveTags()} is that fold; the derivations no corpus
+     * glyph observes through it are pinned through reflection in
+     * SymbolMapTest because the law, not the today-outcome, is the port.
      */
     private static function defaultTagsFor(int $cp): int
     {
-        $tags = self::isWideCodepoint($cp) ? SymbolTags::WIDE : SymbolTags::NARROW;
+        $tags = SymbolTags::NONE;
 
-        if ($cp <= 0x7F) {
+        if (self::isWideCodepoint($cp)) {
+            $tags |= SymbolTags::WIDE;
+        } elseif (self::isWideCjkCodepoint($cp) && !self::isPrivateUse($cp)) {
+            $tags |= SymbolTags::AMBIGUOUS;
+        }
+
+        if (self::isMarkCodepoint($cp) || self::isZeroWidthCodepoint($cp)
+            || self::codepointInRanges($cp, self::AMBIGUOUS_RANGES)) {
+            $tags |= SymbolTags::AMBIGUOUS;
+        }
+
+        if (self::codepointInRanges($cp, self::EMOJI_RANGES) || self::codepointInRanges($cp, self::META_RANGES)) {
+            $tags |= SymbolTags::UGLY;
+        } elseif ($cp <= 0x7F) {
             $tags |= SymbolTags::ASCII;
         } elseif ($cp >= 0x2300 && $cp <= 0x23FF) {
             $tags |= SymbolTags::TECHNICAL;
@@ -877,7 +912,134 @@ final class SymbolMap
             $tags |= SymbolTags::DIGIT;
         }
 
+        if (($tags & SymbolTags::WIDE) === 0) {
+            $tags |= SymbolTags::NARROW;
+        }
+
         return $tags;
+    }
+
+    /**
+     * chafa's def_to_symbol() effective-tag law (:551-558): a hand-authored
+     * def's stored sc is its declared tags OR its codepoint's default tags
+     * with the AMBIGUOUS derivation masked off; the generated tiers never
+     * run through it and keep their raw tier sc. chafa computes this once
+     * at compile time; this port keeps defs byte-identical to the
+     * transcribed tables (and the shipped corpus digests untouched) and
+     * folds the same arithmetic at selection-walk time — the question
+     * char_is_selected() asks of chafa's stored sc is answered identically.
+     */
+    private static function effectiveTags(int $declared, int $cp): int
+    {
+        if (self::isGeneratedCodepoint($cp)) {
+            return $declared;
+        }
+
+        return $declared | (self::defaultTagsFor($cp) & ~SymbolTags::AMBIGUOUS);
+    }
+
+    /**
+     * The codepoints the generated tiers own: chafa's
+     * generate_braille_symbols() fills U+2800-U+28FF,
+     * generate_sextant_symbols() U+1FB00-U+1FB3A and
+     * generate_octant_symbols() the octant map inside U+1CD00-U+1D000
+     * (chafa/internal/chafa-symbols.c:231-491). No hand-authored narrow
+     * header declares a codepoint in any of these spans — the legacy block
+     * tier starts at U+1FB3C, past the sextant run, and the eighth tier at
+     * U+1FB80 likewise — so the ranges are an exact generated-tier test.
+     */
+    private static function isGeneratedCodepoint(int $cp): bool
+    {
+        return ($cp >= 0x2800 && $cp <= 0x28FF)
+            || ($cp >= 0x1FB00 && $cp <= 0x1FB3B)
+            || ($cp >= 0x1CD00 && $cp <= 0x1D000);
+    }
+
+    /**
+     * chafa's static ambiguous_ranges[] (chafa/internal/chafa-symbols.c
+     * :93-120), transcribed verbatim.
+     */
+    private const AMBIGUOUS_RANGES = [
+        [0x00AD, 0x00AD], [0x2196, 0x21FF], [0x222C, 0x2237], [0x2245, 0x2269],
+        [0x226D, 0x2279], [0x2295, 0x22AF], [0x22BF, 0x22BF], [0x22C8, 0x22FF],
+        [0x2300, 0x23FF], [0x2460, 0x24FF], [0x25A0, 0x25FF], [0x2700, 0x27BF],
+        [0x27C0, 0x27E5], [0x27F0, 0x27FF], [0x2900, 0x297F], [0x2980, 0x29FF],
+        [0x2B00, 0x2BFF], [0x1F100, 0x1F1FF],
+    ];
+
+    /** chafa's emoji_ranges[] (:122-134), transcribed verbatim. */
+    private const EMOJI_RANGES = [
+        [0x2600, 0x26FF], [0x1F000, 0x1FB3B], [0x1FBCB, 0x1FFFF], [0x534D, 0x534D],
+    ];
+
+    /** chafa's meta_ranges[] (:136-146), transcribed verbatim. */
+    private const META_RANGES = [
+        [0x0640, 0x0640], [0x2FF0, 0x2FFF],
+    ];
+
+    /** chafa's in_ranges() helper. */
+    private static function codepointInRanges(int $cp, array $ranges): bool
+    {
+        foreach ($ranges as [$first, $last]) {
+            if ($cp >= $first && $cp <= $last) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** chafa's is_private_use() (:501-507). */
+    private static function isPrivateUse(int $cp): bool
+    {
+        return ($cp >= 0xE000 && $cp <= 0xF8FF)
+            || ($cp >= 0xF0000 && $cp <= 0xFFFFF)
+            || ($cp >= 0x100000 && $cp <= 0x10FFFF);
+    }
+
+    /**
+     * The wide-cjk EAW-A/W/F blocks chafa's iswide_cjk() answers true for.
+     * Every hit also carries AMBIGUOUS via this arm alone (no corpus glyph
+     * is here — hand-authored or generated) and def_to_symbol masks
+     * AMBIGUOUS, so the arm never moves a selection in this corpus; it is
+     * the law as chafa spells it, complete for future def sites.
+     */
+    private static function isWideCjkCodepoint(int $cp): bool
+    {
+        return ($cp >= 0x1100 && $cp <= 0x115F)
+            || ($cp >= 0x2E80 && $cp <= 0x303E)
+            || ($cp >= 0x3041 && $cp <= 0x33FF)
+            || ($cp >= 0x3400 && $cp <= 0x4DBF)
+            || ($cp >= 0x4E00 && $cp <= 0x9FFF)
+            || ($cp >= 0xA000 && $cp <= 0xA4CF)
+            || ($cp >= 0xAC00 && $cp <= 0xD7A3)
+            || ($cp >= 0xF900 && $cp <= 0xFAFF)
+            || ($cp >= 0xFE10 && $cp <= 0xFE19)
+            || ($cp >= 0xFE30 && $cp <= 0xFE6F)
+            || ($cp >= 0xFF00 && $cp <= 0xFF60)
+            || ($cp >= 0xFFE0 && $cp <= 0xFFE6);
+    }
+
+    /** chafa's g_unichar_ismark() arm. */
+    private static function isMarkCodepoint(int $cp): bool
+    {
+        $char = mb_chr($cp, 'UTF-8');
+
+        return $char !== false && preg_match('/^\p{M}$/u', $char) === 1;
+    }
+
+    /**
+     * chafa's iszerowidth(): joiners, non-joiners, the ZWSP and kin. The
+     * PCRE Mn|Cf classes are a documented approximation — no hand-authored
+     * corpus codepoint is inside either class (every table glyph is a
+     * visible one), so the approximation is unobservable here.
+     */
+    private static function isZeroWidthCodepoint(int $cp): bool
+    {
+        $char = mb_chr($cp, 'UTF-8');
+
+        return $char !== false
+            && (preg_match('/^\p{Mn}$/u', $char) === 1 || preg_match('/^\p{Cf}$/u', $char) === 1);
     }
 
     /**
@@ -885,7 +1047,8 @@ final class SymbolMap
      * the corpus this port carries: today the kana block chafa compiles
      * into symbols2. A future wide tier extending the wide array extends
      * this ladder (and it, not the AMBIGUOUS wide-cjk envelope chafa also
-     * derives, is what tags the glyphs here).
+     * derives, is what tags the glyphs here — {@see self::effectiveTags()}
+     * masks the derived AMBIGUOUS exactly as def_to_symbol does).
      */
     private static function isWideCodepoint(int $cp): bool
     {

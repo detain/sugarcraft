@@ -390,6 +390,77 @@ final class SymbolMapTest extends TestCase
         $this->assertCount(673, $this->map->withSelectors('-stipple')->defs());
     }
 
+    public function testTheGeneratedTiersStayRawUnderTheNarrowSelector(): void
+    {
+        // MAJOR-2 parity (audit l6): chafa's generate_braille_symbols(),
+        // generate_sextant_symbols() and generate_octant_symbols() set
+        // sym->sc directly to the tier tag (chafa/internal/chafa-symbols.c
+        // :271, :331, :486) and never pass through def_to_symbol(), so a
+        // braille cell carries no NARROW for the `narrow` class to select.
+        // Of the 1,260-entry narrow array 711 codepoints are hand-authored
+        // by the five headers; the nine misc-narrow.h AMBIGUOUS
+        // declarations are BAD-vetoed, leaving 702 — not today's 1,251.
+        $narrow = array_map(
+            static fn (SymbolDef $d): int => mb_ord($d->char),
+            $this->map->withSelectors('narrow')->defs()
+        );
+        $this->assertCount(702, $narrow);
+        $this->assertNotContains(0x2800, $narrow, 'the braille tier is raw BRAILLE, never NARROW');
+        $this->assertNotContains(0x1FB00, $narrow, 'the sextant tier is raw LEGACY|SEXTANT');
+        $this->assertNotContains(0x1CD09, $narrow, 'the octant tier is raw LEGACY|OCTANT');
+        $this->assertContains(0x2588, $narrow, 'the hand-authored block tier derives NARROW like chafa does');
+        $this->assertContains(0x23BA, $narrow, 'U+23BA derives AMBIGUOUS but def_to_symbol masks it out of the effective tags');
+
+        $all = $this->map->withSelectors('all')->defs();
+        foreach ($all as $def) {
+            if (mb_ord($def->char) === 0x2800) {
+                $this->assertSame(SymbolTags::BRAILLE, $def->tags, 'the selection keeps defs on their raw tier tags');
+
+                return;
+            }
+        }
+        $this->fail('U+2800 missing from the all selection');
+    }
+
+    public function testDefaultTagsDeriveAmbiguousAndUglyLikeChafa(): void
+    {
+        // MAJOR-2 parity: chafa's get_default_tags_for_char()
+        // (chafa/internal/chafa-symbols.c:509-549) derives AMBIGUOUS and
+        // UGLY, not just the NARROW/WIDE tier and the
+        // ASCII/TECHNICAL/GEOMETRIC/BRAILLE/SEXTANT ladder. The selector
+        // walk masks AMBIGUOUS at def_to_symbol's own site (:551-558) and
+        // no hand-authored corpus codepoint trips UGLY today (probe:
+        // /tmp/opencode/chafa-study/audit-fix/5/probe-out.txt), so the
+        // derivation is pinned through reflection — the table law is the
+        // contract even where this corpus cannot observe it.
+        $derive = new \ReflectionMethod(SymbolMap::class, 'defaultTagsFor');
+        $derive->setAccessible(true);
+
+        // U+00AD SOFT HYPHEN: in the ambiguous range table, not a letter.
+        $this->assertSame(SymbolTags::NARROW | SymbolTags::AMBIGUOUS, $derive->invoke(null, 0x00AD));
+        // U+23BA: TECHNICAL by the ladder AND AMBIGUOUS by 0x2300-0x23FF.
+        $this->assertSame(SymbolTags::NARROW | SymbolTags::TECHNICAL | SymbolTags::AMBIGUOUS, $derive->invoke(null, 0x23BA));
+        // U+2600: emoji range 0x2600-0x26FF is UGLY. chafa's EAW-A data
+        // (glib, not shipped here) would also mark it AMBIGUOUS; the port's
+        // wide-cjk approximation covers the EAW-W blocks only, so the pin
+        // demands UGLY+NARROW and the ladder's suppression — UGLY's elseif
+        // chain PRECEDES the ladder. (EAW-WIDE codepoints outside the
+        // carried kana block — U+2FF0, the emoji planes — would answer WIDE
+        // through glib's iswide; the port's WIDE envelope is deliberately
+        // the tiers it carries, see isWideCodepoint(), so no pin is minted
+        // where the two engines' answers differ.)
+        $ugly = $derive->invoke(null, 0x2600);
+        $this->assertNotSame(0, $ugly & SymbolTags::UGLY, 'emoji range derives UGLY');
+        $this->assertNotSame(0, $ugly & SymbolTags::NARROW);
+        $this->assertSame(0, $ugly & (SymbolTags::GEOMETRIC | SymbolTags::TECHNICAL | SymbolTags::ASCII), 'the ladder is the elseif tail — UGLY preempts it');
+        // U+3041: g_unichar_iswide answers WIDE first, the wide-cjk
+        // AMBIGUOUS arm is an elseif and never runs; NARROW derives only
+        // when the glyph is not wide.
+        $this->assertSame(SymbolTags::WIDE | SymbolTags::ALPHA, $derive->invoke(null, 0x3041));
+        // U+0041: ladder ASCII + ALPHA, NARROW.
+        $this->assertSame(SymbolTags::NARROW | SymbolTags::ASCII | SymbolTags::ALPHA, $derive->invoke(null, 0x0041));
+    }
+
     public function testHasSymbolMirrorsChafasSelectionMembership(): void
     {
         // F-17: chafa_symbol_map_has_symbol (chafa-symbol-map.c:1137),
