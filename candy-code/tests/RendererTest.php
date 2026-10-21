@@ -13,6 +13,7 @@ use SugarCraft\Style\Style;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
@@ -167,7 +168,7 @@ final class RendererTest extends TestCase
             $chat = new Chat(
                 sessionStore: $store,
                 currentSessionId: 'session-b',
-                openTabs: self::openTabsFor(['session-a', 'session-b'], ['session-a' => 'Alpha', 'session-b' => 'Beta']),
+                tabState: new SessionTabState(tabs: self::openTabsFor(['session-a', 'session-b'], ['session-a' => 'Alpha', 'session-b' => 'Beta'])),
             );
 
             $out = Renderer::render($chat);

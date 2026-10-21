@@ -14,6 +14,7 @@ use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Host\TitleService;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
@@ -282,7 +283,7 @@ final class RenameInlineTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $this->store,
             currentSessionId: 's1',
-            lastTabClick: ['s1', microtime(true) - Chat::TAB_DOUBLE_CLICK_SECONDS - 1.0],
+            tabState: SessionTabState::forLaunch('s1', null)->withClick(['s1', microtime(true) - Chat::TAB_DOUBLE_CLICK_SECONDS - 1.0]),
         );
 
         [$next] = $this->clickTab($stale, 's1');
@@ -362,7 +363,7 @@ final class RenameInlineTest extends TestCase
             inputBuf: $buf,
             backend: new EchoBackend(),
             sessionStore: $this->store,
-            openTabs: $openTabs,
+            tabState: $openTabs === null ? null : new SessionTabState(tabs: $openTabs),
             currentSessionId: 's1',
             currentSessionName: $name,
             titleBackend: $titled ? $this->titleBackend() : null,

@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
@@ -296,7 +297,7 @@ final class SessionCommandTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $this->sessionStore,
             currentSessionId: $ids[0],
-            openTabs: self::tabsFromStore($this->sessionStore, activeId: $ids[0]),
+            tabState: new SessionTabState(tabs: self::tabsFromStore($this->sessionStore, activeId: $ids[0])),
         );
 
         [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true));
@@ -315,7 +316,7 @@ final class SessionCommandTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $this->sessionStore,
             currentSessionId: $ids[0],
-            openTabs: self::tabsFromStore($this->sessionStore, activeId: $ids[0]),
+            tabState: new SessionTabState(tabs: self::tabsFromStore($this->sessionStore, activeId: $ids[0])),
         );
 
         [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true, shift: true));

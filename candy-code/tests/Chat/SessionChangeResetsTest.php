@@ -12,6 +12,7 @@ use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\ReportsContextWindow;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
@@ -131,7 +132,7 @@ final class SessionChangeResetsTest extends TestCase
             backend: self::backend(),
             sessionStore: $this->store,
             currentSessionId: 'session-a',
-            openTabs: self::tabsFromStore($this->store, activeId: 'session-a'),
+            tabState: new SessionTabState(tabs: self::tabsFromStore($this->store, activeId: 'session-a')),
             consecutiveRefillCompactions: IdleCompactionPolicy::REFILL_LIMIT,
         );
         $this->assertTrue(IdleCompactionPolicy::thrashTripped(IdleCompactionPolicy::REFILL_LIMIT));

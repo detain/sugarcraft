@@ -12,8 +12,9 @@ use SugarCraft\Code\Tui\SessionTabs;
  *
  * The tab strip, Ctrl+Tab cycling, and the click route all read
  * `Chat::openTabs()` now — a store listing alone opens nothing. Tests that
- * want a multi-tab fixture pass one of these to the Chat constructor's
- * `openTabs:` parameter instead of seeding extra `sessions` rows.
+ * want a multi-tab fixture pass one of these in the constructor's
+ * `tabState:` fold (`new SessionTabState(tabs: ...)`, v4 split-plan S3)
+ * instead of seeding extra `sessions` rows.
  */
 trait OpensSessionTabs
 {
