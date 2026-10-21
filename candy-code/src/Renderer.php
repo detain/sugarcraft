@@ -2682,7 +2682,7 @@ final class Renderer
     /** The frame glyph the live spinner should paint ({@see AgentLiveRegistry}). */
     private static function liveSpinner(Chat $chat): string
     {
-        return AgentLiveRegistry::SPINNER[$chat->agentLive()->spinnerFrame()];
+        return AgentLiveRegistry::spinnerGlyph($chat->agentLive()->spinnerFrame());
     }
 
     /**
@@ -3531,10 +3531,11 @@ final class Renderer
 
         // Backstop for terminals too narrow for even the current tab and the
         // marker (under ~8 columns). Cut with the zones removed, as
-        // fitStatusBar() does, so a cut can never leave half a sentinel pair.
+        // fitStatusBar() does, so a cut can never leave half a sentinel pair,
+        // and with the shared ellipsising clip so the cut is legible as one.
         $plain = self::stripZoneMarkers($strip);
 
-        return Width::string($plain) > $cols ? Width::truncate($plain, $cols) : $strip;
+        return Width::string($plain) > $cols ? self::clipWithEllipsis($plain, $cols) : $strip;
     }
 
     /**
@@ -3555,10 +3556,16 @@ final class Renderer
      * Grapheme-aware ({@see Width::truncate()}), so a wide or combining
      * cluster is never split. A budget under one cell yields the empty string.
      *
-     * The file's one shared ellipsising clip — session tabs, the key-help
-     * rows (ISS-099), and, since the CL-2 pane auto-dock made the
-     * agent-composer ghost overrun a docked pane's text column,
-     * {@see renderInput()}'s ghost too.
+     * The file's one shared ellipsising clip — session tabs (their narrow
+     * backstop included), the key-help rows (ISS-099), and, since the CL-2 pane
+     * auto-dock made the agent-composer ghost overrun a docked pane's text
+     * column, {@see renderInput()}'s ghost too. The ellipsis-policy adoption
+     * (W2-D) moved the transcript's compressed-section row, the live image
+     * preview caption, the permission mode-hint row, and the landed-image
+     * text alternative ({@see imageAltLine()}) onto it, so any row that was cut
+     * says so; rows whose docblock states a reason to stay a bare chop
+     * (the zone-sentinel status bar, the compaction boundary, the collapsed
+     * image notice, the attachment chip) keep their markerless clip.
      */
     private static function clipWithEllipsis(string $name, int $budget): string
     {
@@ -4436,11 +4443,11 @@ final class Renderer
 
     /**
      * `▣ Compressed b3 · Auth system exploration · −41.0K +2.4K` — one dim
-     * row, clipped to the pane, never wrapped.
+     * row, clipped to the pane with the shared ellipsising clip, never wrapped.
      */
     private static function compressedSectionRow(\SugarCraft\Code\Context\Pruning\CompressionBlock $block, Theme $theme, int $width): string
     {
-        return self::dim($theme)->render(Width::truncate(
+        return self::dim($theme)->render(self::clipWithEllipsis(
             '▣ ' . Lang::t('tui.chat.compressed_section', [
                 'label' => $block->label(),
                 'topic' => self::oneLine((string) $block->topic),
@@ -5235,7 +5242,51 @@ final class Renderer
             return $hit['body'];
         }
 
-        return $mosaic->isInline() ? $hit['body'] : $images->place($hit['body'], $cols, $rows);
+        // a11y-F7: the picture always lands with a text alternative, so a
+        // screen reader, a copy-out, or a terminal that silently drops the
+        // pixel protocol still learns what is there. Built per call, never
+        // cached: the cache key is picture-only by design and the row depends
+        // on the pane width and theme of the frame being built.
+        $alt = self::imageAltLine($result, $theme, $width, $mosaic);
+
+        return $alt . "\n" . ($mosaic->isInline() ? $hit['body'] : $images->place($hit['body'], $cols, $rows));
+    }
+
+    /**
+     * The dim text alternative that rides every landed {@see renderToolImage()}
+     * preview: `image: shot.png (20×10, render kitty)`.
+     *
+     * a11y-F7: a rendered picture is invisible to anything that reads a
+     * transcript as text. The row names the file when the source has one, the
+     * source's pixel dimensions when the header is readable, and the render
+     * mode that actually painted it (protocol plus {@see Mosaic::modeDetail()}
+     * for the colour arms that share one protocol name) — the same vocabulary
+     * {@see collapsedImageNotice()} established.
+     *
+     * One logical row, cut with the shared ellipsising clip so a narrow pane
+     * never sees a wrapped description. The literal `image:` / `render` words
+     * stay untranslated because this lane cannot edit `lang/en.php`; the
+     * closeout owns minting a `tui.tool.image_shown` key (DOC-ROW seam).
+     */
+    private static function imageAltLine(ToolResult $result, Theme $theme, int $width, Mosaic $mosaic): string
+    {
+        $path = $result->imagePath;
+        $file = $path === null || $path === '' ? '' : self::oneLine(basename($path));
+        // Same header-only probe collapsedImageNotice() uses: cheap per frame,
+        // and an unreadable header only costs the dimensions leg, never a lie.
+        $size = @getimagesizefromstring((string) $result->imageBytes);
+        $dimensions = \is_array($size) && $size[0] > 0 && $size[1] > 0 ? "{$size[0]}×{$size[1]}" : '';
+
+        $detail = $mosaic->modeDetail();
+        $mode = self::oneLine($mosaic->protocol()) . ($detail === null ? '' : ':' . self::oneLine($detail));
+
+        $parts = $dimensions === '' ? [] : [$dimensions];
+        $parts[] = 'render ' . $mode;
+
+        return self::dim($theme)->render(self::clipWithEllipsis(
+            'image:' . ($file === '' ? '' : ' ' . $file) . ' (' . implode(', ', $parts) . ')',
+            max(1, $width),
+        ));
     }
 
     /**
@@ -5596,7 +5647,7 @@ final class Renderer
         // activity lines use; no registry (a bare preview render) parks on
         // the first frame instead of a hardcoded glyph.
         $spinner = Style::new()->foreground($theme->assistantLabel)->render(
-            $queued ? '◌' : \SugarCraft\Code\Agents\Live\AgentLiveRegistry::SPINNER[$agents?->spinnerFrame() ?? 0],
+            $queued ? '◌' : \SugarCraft\Code\Agents\Live\AgentLiveRegistry::spinnerGlyph($agents?->spinnerFrame() ?? 0),
         );
         $running = $spinner . ' ' . self::dim($theme)->render(Lang::t($queued ? 'tui.tool.queued' : 'tui.tool.running', ['call' => self::oneLine($msg->content)]));
         $running .= self::agentLines($runs, $theme, $width, $agents);
@@ -5634,7 +5685,7 @@ final class Renderer
         $block = '';
         $caption = self::previewCaption($slot['progress'], $slot['eta']);
         if ($caption !== '') {
-            $block .= "\n" . self::dim($theme)->render(Width::truncate($caption, $width));
+            $block .= "\n" . self::dim($theme)->render(self::clipWithEllipsis($caption, $width));
         }
 
         if ($slot['frameB64'] !== null) {
@@ -7045,7 +7096,7 @@ final class Renderer
 
         // Which mode asked, and how to change it, for a question about a call
         // (not the model's own questions): one faint row, the short form on a
-        // narrow box, clipped rather than wrapped.
+        // narrow box, ellipsised with the shared clip rather than wrapped.
         $mode = $question === null ? self::permissionModeName($chat) : null;
         if ($mode !== null) {
             $hint = Lang::t('tui.permission.mode_hint', ['mode' => $mode]);
@@ -7053,7 +7104,7 @@ final class Renderer
                 $hint = Lang::t('tui.permission.mode_hint_short', ['mode' => $mode]);
             }
             $lines[] = '';
-            $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render(Width::truncate($hint, $inner));
+            $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render(self::clipWithEllipsis($hint, $inner));
         }
 
         return Style::new()

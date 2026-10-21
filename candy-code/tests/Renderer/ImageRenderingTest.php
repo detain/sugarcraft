@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Renderer;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
@@ -180,8 +181,70 @@ final class ImageRenderingTest extends TestCase
     }
 
     // =========================================================================
-    // Real tmux: the probe, not a fixture, is what flips the behaviour
+    // a11y-F7: the text alternative riding every landed preview
     // =========================================================================
+
+    /**
+     * The expanded picture is invisible to anything that reads the transcript
+     * as text, so every landed preview now carries a dim `image: …` row naming
+     * the file, the source's pixel dimensions, and the render mode — and it
+     * sits ABOVE the picture (the marker block), like the preview caption sits
+     * above its frame.
+     */
+    public function testEveryLandedPreviewCarriesItsTextAlternative(): void
+    {
+        $view = Renderer::renderView($this->chatWithImage(Mosaic::sixel(), path: '/tmp/shots/doctor-report.png'));
+
+        $this->assertStringContainsString('image: doctor-report.png (20×10, render sixel)', $view->body);
+        $altPos = strpos($view->body, 'image:');
+        $markPos = strpos($view->body, self::MARKER);
+        $this->assertIsInt($markPos, 'fixture: the marker block landed');
+        $this->assertIsInt($altPos, 'fixture: the alternative landed');
+        $this->assertLessThan($markPos, $altPos, 'the alternative names the picture above it');
+    }
+
+    /** A source without a path still gets the row; only the file leg is missing. */
+    public function testTheTextAlternativeDegradesGracefullyWithoutAPath(): void
+    {
+        $view = Renderer::renderView($this->chatWithImage(Mosaic::sixel()));
+
+        $this->assertStringContainsString('image: (20×10, render sixel)', $view->body);
+    }
+
+    /** The inline (half-block) leg is a landed preview too — same row, no image layer. */
+    public function testTheInlineLegAlsoCarriesTheTextAlternative(): void
+    {
+        $mosaic = $this->tmuxMosaic(new HalfBlockRenderer(), Capability::unknown(null, true));
+        // 20×4: a 20×10 source scales to a 20-row inline block that pushes the
+        // caption above the renderView window; the point of THIS leg is the
+        // row, not the scrollback.
+        $view = Renderer::renderView($this->chatWithImage($mosaic, bytes: $this->pngBytes(20, 4)));
+
+        $this->assertTrue($mosaic->isInline(), 'fixture: the inline leg');
+        $this->assertStringContainsString('image: ', $view->body);
+    }
+
+    /**
+     * The alternative is built per frame, never cached with the picture: a
+     * roomy first render must not smuggle an un-cut row into a later narrow
+     * one (the cache key is picture-only by design).
+     */
+    public function testTheTextAlternativeIsCutWithTheEllipsisAndNeverServedFromCache(): void
+    {
+        $bytes = $this->pngBytes(20, 10);
+        Renderer::renderView($this->chatWithImage(Mosaic::sixel(), bytes: $bytes, path: '/tmp/long/doctor-report.png', cols: 80));
+
+        $narrow = Renderer::renderView($this->chatWithImage(Mosaic::sixel(), bytes: $bytes, path: '/tmp/long/doctor-report.png', cols: 24));
+        $rows = array_values(array_filter(
+            explode("\n", (string) preg_replace('/\e\[[0-9;]*m/', '', $narrow->body)),
+            static fn (string $row): bool => str_starts_with($row, 'image:'),
+        ));
+        $this->assertNotSame([], $rows, 'fixture: the narrow frame carries the alternative');
+        foreach ($rows as $row) {
+            $this->assertStringEndsWith('…', $row, 'the cached-wide row must be re-cut for the narrow pane: ' . json_encode($row));
+            $this->assertLessThanOrEqual(24, Width::of($row));
+        }
+    }
 
     /**
      * End-to-end inside a real `tmux` server: candy-code's own render path,
@@ -253,19 +316,20 @@ final class ImageRenderingTest extends TestCase
         return (string) ob_get_clean();
     }
 
-    private function chatWithImage(Mosaic $mosaic, bool $expanded = true, ?string $bytes = null): Chat
+    private function chatWithImage(Mosaic $mosaic, bool $expanded = true, ?string $bytes = null, ?string $path = null, int $cols = 80): Chat
     {
         $result = new ToolResult(
             name: 'Doctor',
             result: 'terminal capability report',
             id: 'call_img',
             imageBytes: $bytes ?? $this->pngBytes(),
+            imagePath: $path,
         );
 
         return new Chat(
             history: [Message::user('/doctor'), Message::assistant('')->withToolResults([$result])],
             rows: 40,
-            cols: 80,
+            cols: $cols,
             expanded: $expanded ? ['call_img' => true] : [],
             mosaic: $mosaic,
         );

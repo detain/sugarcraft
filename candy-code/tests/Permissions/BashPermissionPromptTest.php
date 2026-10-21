@@ -211,6 +211,21 @@ final class BashPermissionPromptTest extends TestCase
             [$tiny] = $this->asking(self::bash('git status', 'Status'), null, $cols);
             self::assertFitsWidth(self::plain($tiny), $cols);
         }
+
+        // W2-D ellipsis policy: at 20 columns even the short form is cut, and
+        // the cut must announce itself — a `mode:` row ending in `…` exists
+        // (under the raw Width::truncate the 14th cell was the space before
+        // `/permissions`, so no such row exists). The prompt's wrapped tail
+        // also starts `mode: default)`; the ellipsis filter separates them.
+        [$tiny] = $this->asking(self::bash('git status', 'Status'), null, 20);
+        $hintCuts = array_values(array_filter(
+            explode("\n", self::plain($tiny)),
+            static fn (string $row): bool => (bool) preg_match('/(?:mode:[^│]*)…/u', $row),
+        ));
+        self::assertNotSame([], $hintCuts, 'the 20-column mode-hint row must end in the marker');
+        foreach ($hintCuts as $hint) {
+            self::assertLessThanOrEqual(20, Width::string($hint));
+        }
     }
 
     /** Wrapped to the box, elided in the MIDDLE (the tail is where `| sh` lives), never wider than the terminal. */
