@@ -58,6 +58,7 @@ use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Permissions\DenialKind;
+use SugarCraft\Code\Permissions\PermissionFlow;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
 use SugarCraft\Code\Permissions\PermissionReply;
@@ -839,54 +840,13 @@ final class Chat implements Model
          */
         private readonly ?Backend $titleBackend = null,
         /**
-         * The permission prompt currently blocking this turn, or null when
-         * nothing is waiting on the user (crush_feat.md §1 E2). Set by
-         * {@see requestPermission()}, cleared by {@see answerPermission()};
-         * {@see Renderer} reads it through {@see pendingPermission()}.
+         * The transient state of the permission prompt that may be blocking
+         * this turn (crush_feat.md §1 E2) — prompt, stage, settle-handle,
+         * parked batch, open scope editor — as the value object
+         * {@see PermissionFlow} describes. The durable `permissionGrants`
+         * map below is deliberately NOT part of it: different lifetime.
          */
-        private readonly ?PermissionRequestMsg $pendingPermission = null,
-        /**
-         * How far $pendingPermission is along at answering itself, and the
-         * reason an ordinary slash command typed at a live prompt no longer
-         * answers it — see {@see handlePermissionKey()} for the rule and the
-         * measured table, and {@see PermissionPromptStage} for the states.
-         *
-         * Meaningless while $pendingPermission is null; every raise sets it
-         * back to {@see PermissionPromptStage::Armed} ({@see requestPermission()}
-         * is the ONLY writer of a non-null $pendingPermission, so arming there
-         * covers a first ask and a queued one alike).
-         */
-        private readonly PermissionPromptStage $permissionStage = PermissionPromptStage::Armed,
-        /**
-         * The {@see Deferred} whose promise is the Cmd that keeps the turn
-         * suspended while $pendingPermission is showing. Answering resolves
-         * it, which is the whole "block on a UI decision" mechanism - the
-         * same Deferred object is shared by every `mutate()` clone in
-         * between, so the Chat instance that receives the reply settles the
-         * promise the Chat instance that raised the prompt handed out.
-         */
-        private readonly ?Deferred $permissionDeferred = null,
-        /**
-         * The gated batch parked while $pendingPermission is showing, in
-         * {@see gateToolCall()}'s return shape.
-         *
-         * Carried across the pause rather than re-gated on resume so the
-         * `PreToolUse` chain runs EXACTLY once per tool call: re-gating would
-         * fire every hook's side effects (AuditHook's log line, accumulated
-         * state) a second time, and would re-ask the question the user just
-         * answered.
-         *
-         * @var list<array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext, 3: ?\SugarCraft\Code\Hooks\HookResult, 4: string}>
-         */
-        private readonly array $pendingPermissionJobs = [],
-        /**
-         * The modal's scope editor (`e`) while it is open: the draft that was
-         * in the box when it opened (put back when it closes), and why the
-         * last Enter was refused. Null while the editor is closed.
-         *
-         * @var array{draft: string, error: ?string}|null
-         */
-        private readonly ?array $permissionScopeEdit = null,
+        private readonly PermissionFlow $flow = new PermissionFlow(),
         /**
          * The session's {@see PermissionReply::Always} answers, as the
          * grant map {@see \SugarCraft\Code\Permissions\SessionPermissionMemo}
@@ -3181,7 +3141,7 @@ final class Chat implements Model
         //     $pendingPermission, and mutate() carries it forward, so
         //     prompt-up-and-idle is a state update() itself produces. The
         //     public constructor reaches it too — parameters are not
-        //     visibility-scoped, so `new Chat(pendingPermission: $ask)` builds
+        //     visibility-scoped, so `new Chat(flow: new PermissionFlow(pendingPermission: $ask))` builds
         //     it with no exception. No WIRED producer sends a second
         //     AssistantMsg while a prompt is up (beginToolCalls() parks the
         //     WHOLE gated batch on the first ask and dispatches nothing, so the
@@ -3229,7 +3189,7 @@ final class Chat implements Model
         // waiting on this answer, so without this arm every reply keystroke
         // would be discarded and the prompt could never be answered, and
         // Escape would abort the whole turn rather than refuse this one call.
-        if ($this->pendingPermission !== null) {
+        if ($this->flow->pendingPermission !== null) {
             return $this->handlePermissionKey($msg);
         }
         // P-A4: the inline session-title editor owns the keyboard while it is
@@ -4731,7 +4691,7 @@ final class Chat implements Model
      */
     private function answerPermission(PermissionReply $reply, string $note = '', ?string $scope = null, bool $persist = false): array
     {
-        $request = $this->pendingPermission;
+        $request = $this->flow->pendingPermission;
         if ($request === null) {
             return [$this, null];
         }
@@ -4759,7 +4719,7 @@ final class Chat implements Model
             'scope' => $remembered,
         ]))];
 
-        $jobs = $this->pendingPermissionJobs;
+        $jobs = $this->flow->jobs;
         $cleared = [
             'pendingPermission' => null,
             // Reset with the prompt rather than left behind: the stage is only
@@ -4775,7 +4735,7 @@ final class Chat implements Model
         // Settle the waiting Cmd before anything else: whatever happens next
         // returns its own Cmd, and a promise left pending here would keep the
         // Program waiting on a decision that has already been made.
-        $this->permissionDeferred?->resolve(null);
+        $this->flow->deferred?->resolve(null);
 
         // THE ENGINE PATH (roadmap 1.C-2) has no batch here to resume or end:
         // the call belongs to the forked turn child, which is blocked on this
@@ -4948,7 +4908,7 @@ final class Chat implements Model
      * ── THE ARM RULE, and the defect it closes ──
      *
      * This arm sits above the input box ({@see update()}, the
-     * `$this->pendingPermission !== null` check), so while a prompt is up EVERY
+     * `$this->flow->pendingPermission !== null` check), so while a prompt is up EVERY
      * `Char` key reaches here and nothing types. That alone made an ordinary
      * slash command an answer: `/agents` hit `a` on its second keystroke and
      * wrote a session-long grant, `/init` hit `n` on its third and denied the
@@ -5059,7 +5019,7 @@ final class Chat implements Model
         // The note is typed into the draft box — the one text editor this
         // model has — so here every key edits it, and only Enter (refuse with
         // it) and Escape (back to the question, text kept) do anything else.
-        if ($this->permissionStage === PermissionPromptStage::WritingNote) {
+        if ($this->flow->stage === PermissionPromptStage::WritingNote) {
             if ($msg->type === KeyType::Escape) {
                 return [$this->mutate(['permissionStage' => PermissionPromptStage::Armed]), null];
             }
@@ -5071,7 +5031,7 @@ final class Chat implements Model
                 // Empty, it stays a decline; `PlanExit`'s note is feedback on
                 // a plan NOT approved, so it stays a refusal.
                 $answers = $note !== ''
-                    && $this->pendingPermission?->pendingAsk?->question() === \SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME;
+                    && $this->flow->pendingPermission?->pendingAsk?->question() === \SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME;
 
                 return $this->withInputBuf('')->answerPermission($answers ? PermissionReply::Once : PermissionReply::Reject, $note);
             }
@@ -5086,7 +5046,7 @@ final class Chat implements Model
         // grant and allows the call — or, when it is not a pattern that
         // covers this call, says why and stays open; Escape goes back to the
         // question.
-        if ($this->permissionStage === PermissionPromptStage::EditingScope) {
+        if ($this->flow->stage === PermissionPromptStage::EditingScope) {
             if ($msg->type === KeyType::Escape) {
                 return [$this->closingScopeEditor()->mutate(['permissionStage' => PermissionPromptStage::Armed]), null];
             }
@@ -5095,7 +5055,7 @@ final class Chat implements Model
                 $refusal = $this->permissionScopeRefusal($scope);
                 if ($refusal !== null) {
                     return [$this->mutate(['permissionScopeEdit' => [
-                        'draft' => $this->permissionScopeEdit['draft'] ?? '',
+                        'draft' => $this->flow->scopeEdit['draft'] ?? '',
                         'error' => $refusal,
                     ]]), null];
                 }
@@ -5129,7 +5089,7 @@ final class Chat implements Model
             return $this->answerPermission(PermissionReply::Reject);
         }
 
-        if ($this->permissionStage === PermissionPromptStage::Disarmed) {
+        if ($this->flow->stage === PermissionPromptStage::Disarmed) {
             return [$this, null];
         }
 
@@ -5139,9 +5099,9 @@ final class Chat implements Model
         // ({@see \SugarCraft\Code\Tools\BuiltIn\AskUserTool::answer()}) — and
         // `a` is not on offer, since there is no call to allow for the session:
         // it falls through to the arm rule below like any other non-answer.
-        $question = $this->pendingPermission?->pendingAsk?->question();
+        $question = $this->flow->pendingPermission?->pendingAsk?->question();
         if ($question !== null && $isChar && preg_match('/\A[1-9]\z/', $rune) === 1) {
-            $choices = $this->pendingPermission?->pendingAsk?->choices() ?? [];
+            $choices = $this->flow->pendingPermission?->pendingAsk?->choices() ?? [];
             if ((int) $rune <= \count($choices)) {
                 return $this->answerPermission(PermissionReply::Once, $rune);
             }
@@ -5204,7 +5164,7 @@ final class Chat implements Model
         // answer, so it must not fall through to the arm rule below where a
         // non-answer key silently disarms the prompt.
         if ($isChar && $rune === 'v') {
-            $pending = $this->pendingPermission;
+            $pending = $this->flow->pendingPermission;
             if ($pending !== null) {
                 return [$this->toggleToolOutput($pending->toolCall->id), null];
             }
@@ -5366,7 +5326,7 @@ final class Chat implements Model
      */
     public function pendingPermission(): ?PermissionRequestMsg
     {
-        return $this->pendingPermission;
+        return $this->flow->pendingPermission;
     }
 
     /**
@@ -5381,7 +5341,7 @@ final class Chat implements Model
      */
     public function permissionStage(): PermissionPromptStage
     {
-        return $this->permissionStage;
+        return $this->flow->stage;
     }
 
     /**
@@ -5412,7 +5372,7 @@ final class Chat implements Model
      */
     public function permissionAlwaysScope(): ?string
     {
-        $request = $this->pendingPermission;
+        $request = $this->flow->pendingPermission;
         if ($request === null) {
             return null;
         }
@@ -5424,7 +5384,7 @@ final class Chat implements Model
                 : null;
         }
 
-        foreach ($this->pendingPermissionJobs as $job) {
+        foreach ($this->flow->jobs as $job) {
             if ($job[0] === $request->toolCall && $job[3] !== null) {
                 if (!$job[3]->isRememberable()) {
                     return null;
@@ -5467,7 +5427,7 @@ final class Chat implements Model
      */
     private function permissionPersistPatterns(): array
     {
-        $request = $this->pendingPermission;
+        $request = $this->flow->pendingPermission;
         if ($request === null) {
             return [];
         }
@@ -5584,7 +5544,7 @@ final class Chat implements Model
      */
     public function permissionEditableScope(): ?string
     {
-        $request = $this->pendingPermission;
+        $request = $this->flow->pendingPermission;
         if ($request === null || $this->permissionAlwaysScope() === null) {
             return null;
         }
@@ -5601,7 +5561,7 @@ final class Chat implements Model
      */
     public function permissionScopeError(): ?string
     {
-        $error = $this->permissionScopeEdit['error'] ?? null;
+        $error = $this->flow->scopeEdit['error'] ?? null;
 
         return \is_string($error) ? $error : null;
     }
@@ -5613,7 +5573,7 @@ final class Chat implements Model
      */
     private function permissionScopeRefusal(string $scope): ?string
     {
-        $request = $this->pendingPermission;
+        $request = $this->flow->pendingPermission;
         if ($request === null) {
             return Lang::t('chat.permission.scope_invalid');
         }
@@ -5633,7 +5593,7 @@ final class Chat implements Model
     /** This Chat with the scope editor closed and the draft it held back in the box. */
     private function closingScopeEditor(): self
     {
-        $draft = $this->permissionScopeEdit['draft'] ?? '';
+        $draft = $this->flow->scopeEdit['draft'] ?? '';
 
         return $this->mutate(['permissionScopeEdit' => null])->withInputBuf(\is_string($draft) ? $draft : '');
     }
@@ -5647,7 +5607,7 @@ final class Chat implements Model
      */
     public function permissionAlwaysAsks(): ?string
     {
-        $request = $this->pendingPermission;
+        $request = $this->flow->pendingPermission;
         if ($request === null || $this->permissionAlwaysScope() !== null) {
             return null;
         }
@@ -5661,7 +5621,7 @@ final class Chat implements Model
             return $ask->alwaysAsks !== '' ? $ask->alwaysAsks : Lang::t('chat.permission.always_asks.unattributed');
         }
 
-        foreach ($this->pendingPermissionJobs as $job) {
+        foreach ($this->flow->jobs as $job) {
             if ($job[0] === $request->toolCall && $job[3] !== null) {
                 $reason = \SugarCraft\Code\Backend\PendingAsk::alwaysAsksReason($request->toolCall->name, $job[3]);
 
@@ -6257,11 +6217,11 @@ final class Chat implements Model
             // Every settlement of the turn's questions is part of its durable
             // story (roadmap O-2f), whoever settled it.
             $this->turnRunner()->recordEvent($this->liveTurn($generation), $event);
-            $open = $this->pendingPermission?->pendingAsk;
+            $open = $this->flow->pendingPermission?->pendingAsk;
             if ($open === null || $open->askId !== $event->askId) {
                 return [$this, $more];
             }
-            $this->permissionDeferred?->resolve(null);
+            $this->flow->deferred?->resolve(null);
 
             return [$this->mutate([
                 'pendingPermission' => null,
@@ -6299,7 +6259,7 @@ final class Chat implements Model
             // One modal at a time: the question goes back to the head of the
             // inbox and the tool-event tick, which runs while a turn is in
             // flight, offers it again once the prompt that is up is answered.
-            if ($this->pendingPermission !== null) {
+            if ($this->flow->pendingPermission !== null) {
                 $this->liveToolEvents->exchangeArray([$entry, ...$this->liveToolEvents->getArrayCopy()]);
 
                 return [$this, null];
@@ -8922,7 +8882,7 @@ final class Chat implements Model
      */
     private function refuseMouseDispatch(string $zoneId): ?array
     {
-        if ($this->keyHelp !== null || $this->pendingPermission !== null) {
+        if ($this->keyHelp !== null || $this->flow->pendingPermission !== null) {
             return [$this, null];
         }
 
@@ -10962,11 +10922,7 @@ final class Chat implements Model
             'hooks' => $this->hooks,
             'currentSessionName' => $this->currentSessionName,
             'titleBackend' => $this->titleBackend,
-            'pendingPermission' => $this->pendingPermission,
-            'permissionStage' => $this->permissionStage,
-            'permissionDeferred' => $this->permissionDeferred,
-            'pendingPermissionJobs' => $this->pendingPermissionJobs,
-            'permissionScopeEdit' => $this->permissionScopeEdit,
+            'flow' => $this->flow,
             'permissionGrants' => $this->permissionGrants,
             'expanded' => $this->expanded,
             'paletteMru' => $this->paletteMru,
@@ -11128,6 +11084,14 @@ final class Chat implements Model
         // every one of those writes.
         if (array_key_exists('inputBuf', $changes) && !array_key_exists('input', $changes)) {
             unset($constructorProps['input']);
+        }
+
+        // Prompt-state changes name PermissionFlow slots, not Chat fields:
+        // settle them onto the flow and strip them from the spread, so
+        // `new self(...)` below never receives a named argument it lacks.
+        $constructorProps['flow'] = $this->flow->with($changes);
+        foreach (array_keys(PermissionFlow::OVERRIDE_KEYS) as $flowKey) {
+            unset($changes[$flowKey]);
         }
 
         return new self(...array_merge($constructorProps, $changes));
@@ -12383,7 +12347,7 @@ final class Chat implements Model
             && $draft !== ''
             && !str_starts_with($draft, '/')
             && $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -16361,7 +16325,7 @@ final class Chat implements Model
             || $this->inputBuf !== ''
             || $this->queuedPrompts !== []
             || $this->keyHelp !== null
-            || $this->pendingPermission !== null
+            || $this->flow->pendingPermission !== null
             || $this->palette !== null
             || $this->sessionPicker !== null
             || $this->dirPicker !== null
@@ -18492,7 +18456,7 @@ final class Chat implements Model
     public function slashMenuOwnsTab(): bool
     {
         return $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -18583,7 +18547,7 @@ final class Chat implements Model
     public function mentionOwnsTab(): bool
     {
         return $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -18607,7 +18571,7 @@ final class Chat implements Model
     {
         return !$this->mentionMenuDismissed
             && $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -20502,7 +20466,7 @@ final class Chat implements Model
             && $this->inputBuf === ''
             && $this->queuedPrompts === []
             && $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null

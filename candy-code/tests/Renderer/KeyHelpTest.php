@@ -27,6 +27,7 @@ use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Permissions\PermissionFlow;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
@@ -2463,11 +2464,12 @@ final class KeyHelpTest extends TestCase
         // prompt is armed" is pinned here on its own. Reached through the
         // public constructor, the same API surface `pendingPermission`'s own
         // tests use: parameters are not visibility-scoped, so a Chat can be
-        // built carrying a stage with no prompt to go with it.
+        // built carrying a stage with no prompt to go with it (the
+        // flow value object names its slots without the Chat prefix).
         [$raised] = (new Chat(
             history: [],
             inputBuf: '',
-            permissionStage: PermissionPromptStage::Disarmed,
+            flow: new PermissionFlow(stage: PermissionPromptStage::Disarmed),
         ))->update(new \SugarCraft\Code\PermissionRequestMsg(
             Message::assistant(''),
             new \SugarCraft\Code\ToolCall('bash', [], 'call_1'),

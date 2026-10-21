@@ -9,9 +9,9 @@ use RuntimeException;
 use SugarCraft\Code\Chat;
 
 /**
- * Chat is 103 constructor fields deep, and {@see Chat::mutate()} re-keys them
+ * Chat is 99 constructor fields deep, and {@see Chat::mutate()} re-keys them
  * into `new self(...)` by a HAND-MAINTAINED literal array: one `'name' => $this->name`
- * row per field, 103 rows today, kept in step purely by discipline. The map's own
+ * row per field, 99 rows today, kept in step purely by discipline. The map's own
  * comment (src/Chat.php, F11 scar) states the failure mode: a field missing from
  * this map silently resets on the next keystroke — the user types one character
  * and some piece of live session state evaporates. Nothing in the suite noticed,
@@ -36,7 +36,7 @@ use SugarCraft\Code\Chat;
  *     the mechanism changes, the guard must be re-derived consciously, not left
  *     reading a map nobody spreads).
  *
- * Exact parity (103/103, set-difference empty both ways) is asserted as
+ * Exact parity (99/99, set-difference empty both ways) is asserted as
  * SUBSET-PAIRS, never as a pinned numeral: legitimate field additions with their
  * rows must stay green, and only the unpaired shapes go red.
  *
