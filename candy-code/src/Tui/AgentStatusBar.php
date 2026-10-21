@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tui;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Lang;
 use SugarCraft\Style\Style;
 use SugarCraft\Code\Theme;
@@ -142,8 +144,24 @@ final class AgentStatusBar
     }
 
     /**
-     * Truncate a string to at most $maxWidth characters, appending "…"
-     * when truncation occurs.  Preserves multibyte characters.
+     * Truncate a string to at most $maxWidth CELLS, appending "…" when
+     * truncation occurs.
+     *
+     * Measurement and cutting both route through the canonical {@see Width}
+     * (ICU UAX#29 clusters + the Markus-Kuhn cell table) rather than a local
+     * per-codepoint guess. The private table this replaces mis-scored every
+     * combining mark, ZWJ sequence and emoji (an emoji read as 1 cell, a
+     * family emoji as 5), and — worse — byte-sliced the result outright on
+     * invalid UTF-8: `preg_split('//u')` returns false there, so the old
+     * fallback was a raw `substr` cutting mid-codepoint, a mojibake row in the
+     * bar. The status line is drawn on one terminal row, so an under-count
+     * pushes it past the pane width; the canonical measure is the fix.
+     *
+     * The overflow leg first runs the text through {@see Sanitize::untrusted()}:
+     * an agent operation is model/tool-supplied, and dropping escape and
+     * control bytes before we cut keeps both the cell math honest and the
+     * terminal safe. A string that already fits is returned byte-for-byte
+     * unchanged, so the common short-operation path is untouched.
      */
     private static function truncate(string $text, int $maxWidth): string
     {
@@ -151,86 +169,10 @@ final class AgentStatusBar
             return '';
         }
 
-        // Measure by visual width (accounts for wide / combining chars).
-        $width = self::visualWidth($text);
-        if ($width <= $maxWidth) {
+        if (Width::of($text) <= $maxWidth) {
             return $text;
         }
 
-        // Back up to the last codepoint that fits.
-        $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
-        if ($chars === false) {
-            return self::truncateAscii($text, $maxWidth);
-        }
-
-        $result = '';
-        $w = 0;
-        foreach ($chars as $char) {
-            $charWidth = self::charWidth($char);
-            if ($w + $charWidth > $maxWidth - 1) { // leave room for "…"
-                break;
-            }
-            $result .= $char;
-            $w += $charWidth;
-        }
-
-        return $result . "\u{2026}";
-    }
-
-    /**
-     * Compute visual width of a string for truncation purposes.
-     * East Asian wide characters count as 2; control characters as 0.
-     */
-    private static function visualWidth(string $text): int
-    {
-        $width = 0;
-        $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        foreach ($chars as $char) {
-            $width += self::charWidth($char);
-        }
-
-        return $width;
-    }
-
-    /**
-     * Width of a single codepoint: 0 for control, 1 for regular, 2 for wide/EastAsian.
-     */
-    private static function charWidth(string $char): int
-    {
-        $code = mb_ord($char, 'UTF-8');
-        if ($code === false || $code < 32) {
-            return 0;
-        }
-
-        // East Asian Wide (W) and Full-width (F) categories.
-        if (
-            ($code >= 0x1100 && $code <= 0x115F)   // Hangul Jamo
-            || ($code >= 0x2329 && $code <= 0x232A) // Angle brackets
-            || ($code >= 0x2E80 && $code <= 0x303E) // CJK Radicals … Cao
-            || ($code >= 0x3040 && $code <= 0xA4CF) // Hiragana … Yi
-            || ($code >= 0xAC00 && $code <= 0xD7A3) // Hangul Syllables
-            || ($code >= 0xF900 && $code <= 0xFAFF) // CJK Compatibility Ideographs
-            || ($code >= 0xFE10 && $code <= 0xFE1F) // Vertical forms
-            || ($code >= 0xFE30 && $code <= 0xFE6F) // CJK Compatibility Forms … Small Form Variants
-            || ($code >= 0xFF00 && $code <= 0xFFE5) // Full-width forms
-            || ($code >= 0x20000 && $code <= 0x2FFFD) // CJK Unified Ideographs Extension B …
-            || ($code >= 0x30000 && $code <= 0x3FFFD) // CJK Unified Ideographs Extension G …
-        ) {
-            return 2;
-        }
-
-        return 1;
-    }
-
-    /**
-     * ASCII-only fallback truncate when preg_split fails.
-     */
-    private static function truncateAscii(string $text, int $maxWidth): string
-    {
-        if (strlen($text) <= $maxWidth - 1) {
-            return $text;
-        }
-
-        return substr($text, 0, $maxWidth - 1) . "\u{2026}";
+        return Width::truncate(Sanitize::untrusted($text), max(0, $maxWidth - 1)) . "\u{2026}";
     }
 }

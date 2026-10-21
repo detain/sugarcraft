@@ -9,6 +9,7 @@ use SugarCraft\Code\Tui\AgentDisplayState;
 use SugarCraft\Code\Tui\AgentStatusBar;
 use SugarCraft\Code\Theme;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 
 /**
  * @see AgentDisplayState
@@ -395,5 +396,158 @@ final class AgentStatusBarTest extends TestCase
             self::theme()->shellMuted->toFg(ColorProfile::TrueColor),
             $line,
         );
+    }
+
+    // =========================================================================
+    // Truncation cell discipline (tui-F-2) — the status line is painted on ONE
+    // terminal row, so a mis-count pushes it past the pane width. The private
+    // per-codepoint table this guards used to score every emoji as 1 cell, a
+    // ZWJ family as 5, a combining base+mark pair as 2, and — on invalid
+    // UTF-8, where preg_split('//u') returns false — byte-slice a raw substr
+    // mid-codepoint. The fixtures below are planted Unicode strings whose TRUE
+    // cell count is asserted with a hardcoded expected value and cross-checked
+    // against the canonical Width measure, so the pin does not grade the code
+    // against itself.
+    // =========================================================================
+
+    /**
+     * Invoke the private static AgentStatusBar::truncate() cell budget.
+     */
+    private static function truncatingOperation(string $text, int $maxWidth): string
+    {
+        $method = new \ReflectionMethod(AgentStatusBar::class, 'truncate');
+        $method->setAccessible(true);
+
+        /** @var string $result */
+        $result = $method->invoke(null, $text, $maxWidth);
+
+        return $result;
+    }
+
+    public function testTruncateReturnsEmptyStringUnchanged(): void
+    {
+        $this->assertSame('', self::truncatingOperation('', 30));
+    }
+
+    public function testTruncateKeepsFittingTextByteIdentical(): void
+    {
+        $fits = 'Reading auth.php';
+        $this->assertSame($fits, self::truncatingOperation($fits, 30));
+    }
+
+    public function testTruncatePacksAsciiToBudgetMinusTheEllipsis(): void
+    {
+        $result = self::truncatingOperation(str_repeat('x', 40), 30);
+        $this->assertSame(str_repeat('x', 29) . "\u{2026}", $result);
+    }
+
+    public function testTruncateScoresEmojiAsTwoCellsNotOne(): void
+    {
+        // 20 grinning faces = 40 cells; the old table read them as 20 and let
+        // the whole run through un-truncated, blowing the 30-cell budget.
+        $emoji = "\u{1F600}";
+        $result = self::truncatingOperation(str_repeat($emoji, 20), 30);
+
+        $this->assertLessThanOrEqual(30, Width::of($result), 'operation overflowed its cell budget');
+        $this->assertSame(14, substr_count($result, $emoji), 'emoji must count two cells each');
+        $this->assertStringEndsWith("\u{2026}", $result);
+    }
+
+    public function testTruncateScoresCombiningClustersAsOneCellEach(): void
+    {
+        // "e" + U+0301 is ONE cluster of ONE cell. The old table charged 2 and
+        // walked per codepoint, so it cut between a base and its mark, leaving
+        // a dangling "e". The result must be whole clusters only.
+        $cluster = "e\u{0301}";
+        $result = self::truncatingOperation(str_repeat($cluster, 40), 30);
+
+        $this->assertSame(str_repeat($cluster, 29) . "\u{2026}", $result);
+        $this->assertMatchesRegularExpression('/^(?:e\x{0301})*\x{2026}$/u', $result, 'orphaned combining base');
+    }
+
+    public function testTruncateNeverSplitsAZwjFamilyCluster(): void
+    {
+        // 👨‍👩‍👧 is one 2-cell cluster. The old per-codepoint walk
+        // charged its five codepoints individually and cut mid-sequence,
+        // stranding a dangling ZWJ before the ellipsis.
+        $family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
+        $result = self::truncatingOperation(str_repeat($family, 20), 30);
+
+        $this->assertLessThanOrEqual(30, Width::of($result));
+        $this->assertStringEndsWith("\u{2026}", $result);
+        $body = substr($result, 0, -strlen("\u{2026}"));
+
+        // Every retained family carries both of its ZWJ joiners: the body is a
+        // whole number of families, never a half-joined one.
+        $this->assertSame(
+            substr_count($body, $family) * 2,
+            substr_count($body, "\u{200D}"),
+            'ZWJ family was split at the cut',
+        );
+        $this->assertGreaterThan(0, substr_count($body, $family));
+    }
+
+    public function testTruncateScoresRegionalFlagPairAsTwoCells(): void
+    {
+        $flag = "\u{1F1FA}\u{1F1F8}";
+        $result = self::truncatingOperation(str_repeat($flag, 20), 30);
+
+        $this->assertLessThanOrEqual(30, Width::of($result));
+        $this->assertSame(14, substr_count($result, $flag));
+    }
+
+    public function testTruncateScoresCjkAsTwoCells(): void
+    {
+        $han = "\u{4F60}"; // 你
+        $result = self::truncatingOperation(str_repeat($han, 20), 30);
+
+        $this->assertSame(14, substr_count($result, $han));
+        $this->assertStringEndsWith("\u{2026}", $result);
+    }
+
+    public function testTruncateNeverByteSlicesInvalidUtf8(): void
+    {
+        // A lone continuation lead byte at the tail: the old preg_split('//u')
+        // returned false and the fallback did a raw substr, emitting invalid
+        // UTF-8 (mojibake) into the bar. The cell route must stay well-formed.
+        $overlong = str_repeat('x', 35) . "\xC3";
+        $result = self::truncatingOperation($overlong, 30);
+
+        $this->assertTrue(
+            mb_check_encoding($result, 'UTF-8'),
+            'truncate emitted invalid UTF-8',
+        );
+        $this->assertLessThanOrEqual(30, Width::of($result));
+    }
+
+    public function testTruncateStripsControlBytesFromAnOverflowingOperation(): void
+    {
+        // A model-supplied operation carrying a BEL/CSI must not smuggle the
+        // escape through the overflow leg — Sanitize::untrusted() is applied
+        // there before the cut.
+        $result = self::truncatingOperation("a\x07b" . str_repeat('x', 40), 30);
+
+        $this->assertStringNotContainsString("\x07", $result);
+        $this->assertLessThanOrEqual(30, Width::of($result));
+    }
+
+    public function testRenderAgentLineTruncatesAnEmojiOperationInCells(): void
+    {
+        // Integration: the production budget is 30 cells (renderAgentLine
+        // passes 30). Twenty emoji used to ride in whole; now the operation
+        // slot holds 14 of them plus the ellipsis.
+        $agent = new AgentDisplayState(
+            name: 'coder-1',
+            status: 'working',
+            operation: str_repeat("\u{1F600}", 20),
+            elapsedSeconds: 10,
+            tokensUsed: 100,
+            costUsd: 0.0003,
+        );
+
+        $line = AgentStatusBar::renderAgentLine($agent, self::theme());
+
+        $this->assertSame(14, substr_count($line, "\u{1F600}"));
+        $this->assertStringContainsString("\u{2026}", $line);
     }
 }
