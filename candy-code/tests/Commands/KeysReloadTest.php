@@ -11,6 +11,7 @@ use ReflectionProperty;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Commands\Specs\BuiltInCommands;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
@@ -424,7 +425,7 @@ final class KeysReloadTest extends TestCase
     /** @return array<int|string, mixed> */
     private static function readLaunchStatic(string $name): array
     {
-        $property = new ReflectionProperty(Bootstrap::class, $name);
+        $property = new ReflectionProperty(LaunchNotices::class, $name);
         $property->setAccessible(true);
 
         /** @var array<int|string, mixed> $value */
@@ -436,7 +437,7 @@ final class KeysReloadTest extends TestCase
     /** @param array<int|string, mixed> $value */
     private static function writeLaunchStatic(string $name, array $value): void
     {
-        $property = new ReflectionProperty(Bootstrap::class, $name);
+        $property = new ReflectionProperty(LaunchNotices::class, $name);
         $property->setAccessible(true);
         $property->setValue(null, $value);
     }

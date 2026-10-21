@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchNotices;
 
 /**
  * v2:a11y-F3: a launch on a TTY whose terminal identifies itself as the
@@ -139,7 +140,7 @@ final class BootstrapTerminalGuidanceNoticeTest extends TestCase
             'launchNoticesDropped' => [],
             'reportedPermissionConfigWarnings' => [],
         ] as $name => $value) {
-            $property = new \ReflectionProperty(Bootstrap::class, $name);
+            $property = new \ReflectionProperty(LaunchNotices::class, $name);
             $property->setAccessible(true);
             $property->setValue(null, $value);
         }

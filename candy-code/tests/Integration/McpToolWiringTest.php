@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\AgentPreset;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\MCP\ClaudeCodeMcpServer;
 use SugarCraft\Code\MCP\McpRouter;
@@ -610,7 +611,7 @@ final class McpToolWiringTest extends TestCase
      *
      * LEFT PRINTING RATHER THAN SILENCED, deliberately, and round 44 re-argued
      * it rather than inheriting it. The only way to quiet it is to pre-seed
-     * `Bootstrap::$reportedPermissionConfigWarnings` by reflection so the
+     * `LaunchNotices::$reportedPermissionConfigWarnings` by reflection so the
      * de-dup returns early. That WOULD work — the seam records the transcript
      * row BEFORE delegating for stderr — but the pre-seed has to reproduce the
      * message verbatim, and the message interpolates a tmpdir path and a
@@ -643,7 +644,7 @@ final class McpToolWiringTest extends TestCase
         //
         // HOW IT COUNTS WITHOUT READING THE MESSAGE.
         // Bootstrap::warnPermissionConfigOnce() writes to stderr if and only if
-        // it adds a key to $reportedPermissionConfigWarnings — it returns early
+        // it adds a key to LaunchNotices::$reportedPermissionConfigWarnings — it returns early
         // when the key is present, and otherwise records and delegates. So the
         // GROWTH of that map across this call is the number of stderr lines the
         // seam emitted, and it is reword-proof: a reworded message is still one
@@ -677,7 +678,7 @@ final class McpToolWiringTest extends TestCase
         // line, no new assertion, byte-identical figures. When it does fire in
         // isolation, the seed lands BEFORE the snapshot, so the counted delta
         // and both figures stay exactly what they were.
-        $seen = new \ReflectionProperty(Bootstrap::class, 'reportedPermissionConfigWarnings');
+        $seen = new \ReflectionProperty(LaunchNotices::class, 'reportedPermissionConfigWarnings');
         if (!self::credsNoticeSeedPresent((array) $seen->getValue())) {
             $this->seedCredsNoticeThroughProduction();
         }

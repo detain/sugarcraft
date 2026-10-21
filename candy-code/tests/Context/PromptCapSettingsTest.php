@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Context;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Config\Settings\ApplyMode;
 use SugarCraft\Code\Config\Settings\RiskClass;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
@@ -323,7 +324,7 @@ final class PromptCapSettingsTest extends TestCase
     private function resetLaunchNotices(): void
     {
         foreach (['launchNotices', 'launchNoticesDropped'] as $property) {
-            (new \ReflectionProperty(Bootstrap::class, $property))->setValue(null, []);
+            (new \ReflectionProperty(LaunchNotices::class, $property))->setValue(null, []);
         }
     }
 }

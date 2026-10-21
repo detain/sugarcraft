@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Config\Settings\Validator\KeyBindingsValidator;
 
@@ -211,7 +212,7 @@ final class KeybindingCollisionNoticeTest extends TestCase
     /** @return array<int|string, mixed> */
     private static function readNoticeStatic(string $name): array
     {
-        $property = new \ReflectionProperty(Bootstrap::class, $name);
+        $property = new \ReflectionProperty(LaunchNotices::class, $name);
         $property->setAccessible(true);
 
         /** @var array<int|string, mixed> $value */
@@ -223,7 +224,7 @@ final class KeybindingCollisionNoticeTest extends TestCase
     /** @param array<int|string, mixed> $value */
     private static function writeNoticeStatic(string $name, array $value): void
     {
-        $property = new \ReflectionProperty(Bootstrap::class, $name);
+        $property = new \ReflectionProperty(LaunchNotices::class, $name);
         $property->setAccessible(true);
         $property->setValue(null, $value);
     }

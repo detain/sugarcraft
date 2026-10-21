@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Config\PolicySnapshot;
 use SugarCraft\Code\Hooks\HookManager;
 
@@ -237,7 +238,7 @@ final class PolicyFreshnessQuarantineTest extends TestCase
             'launchNotices' => [],
             'launchNoticesDropped' => [],
         ] as $name => $value) {
-            $property = new \ReflectionProperty(Bootstrap::class, $name);
+            $property = new \ReflectionProperty(LaunchNotices::class, $name);
             $property->setAccessible(true);
             $property->setValue(null, $value);
         }

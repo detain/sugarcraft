@@ -12,6 +12,7 @@ use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Commands\NoticesCommand;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\CompleteResponse;
@@ -72,16 +73,16 @@ final class NoticesCommandTest extends TestCase
         $this->sandbox = sys_get_temp_dir() . '/crush-notices-' . bin2hex(random_bytes(6));
         $this->useHomeSandbox($this->sandbox . '/home');
 
-        $seated = new \ReflectionProperty(Bootstrap::class, 'launchNotices');
-        $dropped = new \ReflectionProperty(Bootstrap::class, 'launchNoticesDropped');
+        $seated = new \ReflectionProperty(LaunchNotices::class, 'launchNotices');
+        $dropped = new \ReflectionProperty(LaunchNotices::class, 'launchNoticesDropped');
         $this->seatedBefore = $seated->getValue();
         $this->droppedBefore = $dropped->getValue();
     }
 
     protected function tearDown(): void
     {
-        (new \ReflectionProperty(Bootstrap::class, 'launchNotices'))->setValue(null, $this->seatedBefore);
-        (new \ReflectionProperty(Bootstrap::class, 'launchNoticesDropped'))->setValue(null, $this->droppedBefore);
+        (new \ReflectionProperty(LaunchNotices::class, 'launchNotices'))->setValue(null, $this->seatedBefore);
+        (new \ReflectionProperty(LaunchNotices::class, 'launchNoticesDropped'))->setValue(null, $this->droppedBefore);
 
         $this->restoreHomeSandbox();
         if (is_dir($this->sandbox)) {
@@ -394,14 +395,14 @@ final class NoticesCommandTest extends TestCase
      */
     private function seedStatics(array $seated, array $dropped): void
     {
-        (new \ReflectionProperty(Bootstrap::class, 'launchNotices'))->setValue(null, $seated);
-        (new \ReflectionProperty(Bootstrap::class, 'launchNoticesDropped'))->setValue(null, $dropped);
+        (new \ReflectionProperty(LaunchNotices::class, 'launchNotices'))->setValue(null, $seated);
+        (new \ReflectionProperty(LaunchNotices::class, 'launchNoticesDropped'))->setValue(null, $dropped);
     }
 
     /** @return list<string>|array<string, bool> */
     private static function readNoticeStatic(string $name): array
     {
-        return (new \ReflectionProperty(Bootstrap::class, $name))->getValue();
+        return (new \ReflectionProperty(LaunchNotices::class, $name))->getValue();
     }
 
     private static function readProperty(object $subject, string $name): mixed
