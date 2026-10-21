@@ -122,16 +122,19 @@ final class SelfUpdate
     /**
      * PINNED 2026-10-20 (the owner action below is complete): this is the
      * public half of the release-signing Ed25519 keypair; the secret half
-     * lives as the paired repository secret CANDY_CODE_SIGNING_KEY, which
-     * the release workflow's signing step reads to emit the minisig asset.
+     * lives as the repository secret SUGARCRAFT_SIGNING_KEY, which the
+     * release workflows' signing steps read to emit the minisig asset. The
+     * secret is sugarcraft-wide by design — one owner keypair signs the
+     * phars of candy-code, candy-top, and future app releases; each app
+     * still verifies against its own pinned copy of THIS public half.
      * Base64 of the raw 32-byte sodium public key — exactly what
      * {@see verifyDetached()} parses.
      *
      * To ROTATE the keypair the owner:
      *
      *   1. `php -r '$k=sodium_crypto_sign_keypair(); echo base64_encode(sodium_crypto_sign_secretkey($k)),"\n",base64_encode(sodium_crypto_sign_publickey($k)),"\n";'`
-     *   2. put the first line in the `CANDY_CODE_SIGNING_KEY` repository
-     *      secret (the release workflow's signing step reads it);
+     *   2. put the first line in the `SUGARCRAFT_SIGNING_KEY` repository
+     *      secret (every release workflow's signing step reads it);
      *   3. put the second line here, as this constant's value.
      *
      * Secret and constant are both-or-neither: a populated constant with no

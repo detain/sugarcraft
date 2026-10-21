@@ -91,8 +91,10 @@ jobs:
             --version='${{ steps.tag.outputs.tag }}'
 
       - name: Sign the archive (pinned-key mode)
-        # OPTIONAL step by design: without the CANDY_CODE_SIGNING_KEY secret it
-        # skips green and the release ships unsigned. When the owner populates
+        # OPTIONAL step by design: without the SUGARCRAFT_SIGNING_KEY secret it
+        # skips green and the release ships unsigned. The secret is shared
+        # sugarcraft-wide — one owner keypair signs every app's phar, and each
+        # app pins the public half in its own source. When the owner populates
         # the secret AND SelfUpdate::PUBLIC_KEY_BASE64 (the two halves of the
         # same Ed25519 keypair), this emits candy-code.phar.minisig — the
         # base64 detached signature `self-update` then REQUIRES, verified
@@ -100,14 +102,14 @@ jobs:
         # release channel controls.
         run: |
           set -euo pipefail
-          if [ -z "${CANDY_CODE_SIGNING_KEY:-}" ]; then
-            echo "::notice::CANDY_CODE_SIGNING_KEY secret not set — shipping unsigned (keyless state)"
+          if [ -z "${SUGARCRAFT_SIGNING_KEY:-}" ]; then
+            echo "::notice::SUGARCRAFT_SIGNING_KEY secret not set — shipping unsigned (keyless state)"
             exit 0
           fi
           php -r '
-            $key = base64_decode(getenv("CANDY_CODE_SIGNING_KEY"), true);
+            $key = base64_decode(getenv("SUGARCRAFT_SIGNING_KEY"), true);
             if ($key === false || strlen($key) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
-              fwrite(STDERR, "CANDY_CODE_SIGNING_KEY must be the base64 of the 64-byte sodium secret key\n");
+              fwrite(STDERR, "SUGARCRAFT_SIGNING_KEY must be the base64 of the 64-byte sodium secret key\n");
               exit(1);
             }
             $sig = sodium_crypto_sign_detached(file_get_contents("dist/candy-code.phar"), $key);
@@ -115,7 +117,7 @@ jobs:
           '
           cat dist/candy-code.phar.minisig
         env:
-          CANDY_CODE_SIGNING_KEY: ${{ secrets.CANDY_CODE_SIGNING_KEY }}
+          SUGARCRAFT_SIGNING_KEY: ${{ secrets.SUGARCRAFT_SIGNING_KEY }}
 
       - name: Checksum
         run: |
