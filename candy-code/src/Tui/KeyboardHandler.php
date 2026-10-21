@@ -365,14 +365,14 @@ final class KeyboardHandler
      * all. Two guarantees overlap to make it unobservable.
      *
      * Inside these states claim rule 2 claims every key `chatOwns()` has
-     * not already taken — NOT every key, and the difference is measured: six
+     * not already taken — NOT every key, and the difference is measured: nine
      * chords escape rule 2 in `Pane::Agents`, pinned by name in
      * `KeyboardHandlerTest::testOnlyChatsOwnChordsEscapeTheShellInTheAgentPane()`.
      * The conclusion does not depend on the imprecision, because the conjunct
      * only ever governs the runes in
      * {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}, which is the
      * two runes, `r` and the dual-claim `g`, and `Ctrl+R` is not one of the
-     * six — so rule 2 does claim it inside these states, and the conjunct still
+     * nine — so rule 2 does claim it inside these states, and the conjunct still
      * cannot change the outcome there. Outside them
      * `KeyBindingRegistryTest::testTheTwoClaimSetsAreDisjoint()` keeps every
      * yielded rune out of {@see shellCtrlRunes()} except the one declared live
