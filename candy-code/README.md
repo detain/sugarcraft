@@ -252,7 +252,7 @@ all one component tree — not two parallel UIs.
 | `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
 | `Ctrl+P` | Command palette (fuzzy, grouped by category, biased by most-recently-used) |
 | `Ctrl+O` | Expand or collapse the tool output and thought at the row cursor — see the fine print below. |
-| `Ctrl+F` | Walk the transcript row cursor one row older, toggling nothing — see the fine print below. |
+| `Ctrl+F` | Walk the transcript row cursor one row older, toggling nothing — the focused row now paints in the theme's active style, so the settled cursor is visible. See the fine print below. |
 | `Ctrl+V` | Attach the **image** on the system clipboard to the draft as an `@` mention — see the fine print below. |
 | `Ctrl+R` | Session picker — resume, rename, delete, pin, fork and archive from keyboard or mouse — see the fine print below. |
 | `Ctrl+D` | Open the image generation form — see the fine print below. |
