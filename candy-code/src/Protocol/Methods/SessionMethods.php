@@ -54,7 +54,7 @@ final class SessionMethods
         $registry->add(MethodSpec::new('session.delete', Scope::Write, 'Delete a session and its history.', self::delete(...), true));
         $registry->add(MethodSpec::new('session.export', Scope::Read, 'A session\'s transcript as markdown, json or text.', self::export(...)));
         $registry->add(MethodSpec::new('session.setMode', Scope::Write, 'The permission mode the session\'s next turns run in.', self::setMode(...), true));
-        $registry->add(MethodSpec::new('session.share', Scope::Write, 'Publish an HTML snapshot of a session as a self-hosted share page at /s/{token} (SES-3).', self::share(...), true));
+        $registry->add(MethodSpec::new('session.share', Scope::Write, 'Publish an HTML snapshot of a session as a self-hosted share page at /s/{token}.', self::share(...), true));
         $registry->add(MethodSpec::new('session.unshare', Scope::Write, 'Revoke a share page by token; it 404s from its next request.', self::unshare(...), true));
     }
 

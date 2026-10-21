@@ -3854,7 +3854,7 @@
             }
         },
         "session.share": {
-            "description": "Publish an HTML snapshot of a session as a self-hosted share page at /s/{token} (SES-3).",
+            "description": "Publish an HTML snapshot of a session as a self-hosted share page at /s/{token}.",
             "scope": "write",
             "idempotent": true,
             "params": {
