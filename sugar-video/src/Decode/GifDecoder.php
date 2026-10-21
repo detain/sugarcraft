@@ -157,8 +157,9 @@ final class GifDecoder implements Decoder
         $this->frameIndex = 0;
 
         // Decode the GIF using sugar-animation's pure-PHP decoder, at the resolution the
-        // render mode needs: graphics modes want full pixel resolution; the text
-        // modes scale the cell grid by their source-pixels-per-cell packing.
+        // render mode needs: graphics modes decode at the source's own pixel size so the
+        // resident grid is loss-free and the single resample lands at use time (E-11);
+        // the text modes scale the cell grid by their source-pixels-per-cell packing.
         // E-07: the decode runs over the captured bytes, not the path.
         if ($mode?->isGraphics() ?? false) {
             $this->targetW = max(1, $cellsW * $this->cellPxW);
@@ -264,31 +265,52 @@ final class GifDecoder implements Decoder
      * source pixel per cell, so 384k cells would have been a multi-second,
      * multi-gigabyte way to fail instead of an instant one.
      *
-     * Two bounds, both of which shrink the request uniformly so the aspect
-     * ratio survives:
+     * E-11 (taken at W11): the grid is the SOURCE'S OWN SIZE, never a
+     * box-derived intermediate. The old rule shrank the pixel box by
+     * `min(srcW/targetW, srcH/targetH)` — so a 120×60 GIF presented into an
+     * 80×24 cell box decoded at 100×60, a 1.2× horizontal squeeze baked in by
+     * the PHP area-average — and then {@see upscaleToTarget()} stretched that
+     * squeezed grid to 800×480. Two lossy resamples with an invented aspect in
+     * the middle is the double-loss this method's successor closes; chicle
+     * and chafa never had it because they composite full-canvas RGBA and size
+     * output only at print time.
      *
-     *  1. THE SOURCE'S OWN SIZE. Asking a 120×60 GIF for 800×480 is 53× its
-     *     real resolution — every one of those pixels is invented by the
-     *     slowest resampler in the stack. The upscale to the terminal's box
-     *     happens later, in C, in {@see upscaleToTarget()}.
-     *  2. sugar-animation's cap, for the case where the source genuinely is huge.
+     * Asking for exactly the screen size makes sugar-animation's
+     * `sampleCanvas()` a 1:1 pixel copy (every cell's source span collapses
+     * to one pixel), so the resident cell grid IS the composited frame — same
+     * indexed representation, same MAX_CELLS residency envelope E-12 keeps,
+     * just no invented aspect. The one and only resample then happens at use
+     * time in true-colour space, current frame only, in {@see upscaleToTarget()}.
+     *
+     * For sources larger than the cap the grid shrinks UNIFORMLY — a
+     * `sqrt` fit that preserves the source's own aspect — because the cap is
+     * a residency bound, not a presentation choice. An unreadable logical
+     * screen descriptor (crafts the decoder's own gates refuse anyway) falls
+     * back to the legacy box-derived grid.
      *
      * @return array{0:int,1:int}
      */
     private function graphicsDecodeGrid(string $bytes, int $targetW, int $targetH): array
     {
-        $w = $targetW;
-        $h = $targetH;
-
         // E-11: dimensions come from the captured bytes' logical screen
         // descriptor, not @getimagesize($path) — the path must stay dead after
         // the one open-time capture.
         [$srcW, $srcH] = self::gifScreenDims($bytes);
-        if ($srcW > 0 && $srcH > 0 && ($srcW < $w || $srcH < $h)) {
-            $scale = min($srcW / $w, $srcH / $h);
-            $w = max(1, (int) round($w * $scale));
-            $h = max(1, (int) round($h * $scale));
+
+        if ($srcW > 0 && $srcH > 0) {
+            $w = $srcW;
+            $h = $srcH;
+            if ($w * $h > AnimationDecoder::MAX_CELLS) {
+                $scale = sqrt(AnimationDecoder::MAX_CELLS / ($w * $h));
+                $w = max(1, (int) floor($w * $scale));
+                $h = max(1, (int) floor($h * $scale));
+            }
+
+            return [$w, $h];
         }
+
+        $w = $targetW;
+        $h = $targetH;
 
         if ($w * $h > AnimationDecoder::MAX_CELLS) {
             $scale = sqrt(AnimationDecoder::MAX_CELLS / ($w * $h));
@@ -426,19 +448,24 @@ final class GifDecoder implements Decoder
      * the per-pixel PHP loop the resample exists to avoid. It is also exactly
      * what {@see FfmpegDecoder} already hands the same renderer.
      *
-     * E-11 double-loss, stated plainly: the decode grid is cell-quantised
-     * FIRST ({@see graphicsDecodeGrid()} shrinks to the source's own size and
-     * sugar-animation's cell budget), then this resample rebuilds the
-     * quantised grid into the full pixel box. `imagecopyresampled()` cannot
-     * restore detail discarded at decode time, so the frame loses twice —
-     * cell downsample, then smooth upscale — baking a softness chicle never
-     * shows, because chafa composites full-canvas RGBA and sizes output only
-     * at print time. E-07's RGBA bytes ingress has SINCE LANDED
-     * ({@see AnimationFrame::rgbaBytes()}, S6.3), so the remaining work is
-     * only the rework itself: resample from true-colour pixels and delete
-     * this per-grid rebuild. It is deliberately NOT taken in S6.3 — this
-     * step's contract is bytes ingress + the TOCTOU reopen cure, and the
-     * render path keeps consuming cells so every digest stays put.
+     * E-11 SINGLE-RESAMPLE DESIGN (taken at W11): because the decode grid is
+     * the source's own pixel size, the cells arriving here ARE 1:1 composited
+     * source pixels, and this method is the one lossy step between container
+     * and presentation. The true-colour rebuild + resample below is the
+     * transient per-frame RGBA pass: it materializes ONLY the current frame,
+     * inside these braces, and every GD allocation is destroyed before
+     * returning — the resident form stays the indexed cell grid, so E-12's
+     * ban on holding N × W × H × 4 for the playback lifetime is untouched
+     * (decode-time capture via {@see AnimationFrame::rgbaBytes()} was ruled
+     * out for exactly that reason: hydrate() holds every frame eagerly).
+     *
+     * Filter semantics mirror chafa's DEFAULT canvas scaler: chafa sizes the
+     * composited RGBA canvas at print time through smolscale, which picks its
+     * filter from the scale factor (weighted averaging when minifying,
+     * bilinear when magnifying); GD's `imagecopyresampled` is the PHP analog
+     * of exactly those semantics, so that is the mirror. Nearest exists in
+     * chafa only as an explicit option, never as the default — and the player
+     * inherits it here as an absence, honestly disclosed.
      */
     private function upscaleToTarget(string $bytes, int $w, int $h): ?RgbFrame
     {
