@@ -417,7 +417,7 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "TWELVE spellings remain by hand, in SEVEN files" — plus the eleven the
+     * "THIRTEEN spellings remain by hand, in EIGHT files" — plus the eleven the
      * inventory deliberately EXCLUDES, named here so the exclusion is a recorded
      * decision rather than a hole. `WorktreeManager`'s pair matches relative paths
      * against a glob directory; it is not a boundary compare. `SkillLoader`'s one
@@ -459,6 +459,12 @@ final class ContainedPathInventoryTest extends TestCase
                 'Agents/AgentPresetRegistry.php' => 1,
                 'Agents/WorktreeManager.php' => 2,
                 'Chat.php' => 1,
+                // plan_comparison W4-B (/export): the shelf gate in
+                // homeShelfTarget() admits only the subtree under
+                // `~/.candy-code` — a boundary that admits or refuses where a
+                // file is written, not an abbreviation, so it lands in the
+                // inventory rather than the exclusion paragraph.
+                'Commands/ExportCommand.php' => 1,
                 'Diagnostics/TuiErrorLog.php' => 1,
                 'Hooks/BuiltIn/BashEscapeDenyHook.php' => 1,
                 'Permissions/ReadOnlyCommands.php' => 2,
@@ -489,8 +495,8 @@ final class ContainedPathInventoryTest extends TestCase
         );
 
         unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Server/Http/Router.php'], $counts['Server/Http/SharePageController.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php'], $counts['Tools/Concerns/BuildsUnifiedDiff.php'], $counts['Support/StartupSummary.php']);
-        $this->assertSame(12, array_sum($counts), 'containment spellings still by hand');
-        $this->assertCount(7, $counts, 'files still holding one');
+        $this->assertSame(13, array_sum($counts), 'containment spellings still by hand');
+        $this->assertCount(8, $counts, 'files still holding one');
     }
 
     /**

@@ -337,6 +337,11 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             'README.md' => ReadmeSettingsTierClaimTest::class
                 . '::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem',
             'docs/ENVIRONMENT.md' => self::PAGE_QUOTE_IS_PROSE,
+            // D1-fix (plan_comparison audit 2026-10-21): the CI page's stop-flag
+            // paragraph writes the prefix in backticks while describing what a
+            // `text` run and the unpriced-model notice print — prose about the
+            // shape, not a quotation of a rendered line.
+            'docs/CI.md' => self::PAGE_QUOTE_IS_PROSE,
             'docs/SETTINGS.md' => ReadmeSettingsTierClaimTest::class
                 . '::testTheSettingsPageQuotesTheSameLaunchReportByteForByte',
             // rename lane f1: the "Upgrading from sugar-crush" section quotes a // @rename-keep
