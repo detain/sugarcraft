@@ -64,6 +64,7 @@ candy-code/tests/Backend/EngineBackendTest.php	4.923	35
 candy-code/tests/Tools/PtyRunToolTest.php	4.919	13
 candy-code/tests/Server/WorkspaceHostTest.php	4.554	8
 candy-code/tests/Support/ForkedChildExitConventionTest.php	4.496	4
+candy-code/tests/Commands/ExportCommandTest.php	4.400	24
 candy-code/tests/Tui/AgentSplitCompositorTest.php	4.384	27
 candy-code/tests/Integration/ParallelTaskFanOutCapTest.php	4.305	4
 candy-code/tests/Providers/RuntimeRetryAfterProductionPathTest.php	4.269	4

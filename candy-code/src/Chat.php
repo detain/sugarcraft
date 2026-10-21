@@ -12504,7 +12504,7 @@ final class Chat implements Model
      * image artifacts is not a read.
      */
     private const READ_ONLY_COMMANDS = [
-        'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
+        'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share', 'export',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
         'context', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status', 'usage',
@@ -15057,6 +15057,19 @@ final class Chat implements Model
     private function handleShareCommand(string $inputBuf): array
     {
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\ShareHostCommand(), $inputBuf);
+    }
+
+    /**
+     * Handle /export — {@see \SugarCraft\Code\Host\Commands\ExportHostCommand},
+     * the raw local copy path: same rows and formats as `/share`, minus the
+     * SEC-4 redactor, because a file on the user's own machine is their own
+     * record (plan W4-B, audit 2026-10-21).
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleExportCommand(string $inputBuf): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\ExportHostCommand(), $inputBuf);
     }
 
     /**
