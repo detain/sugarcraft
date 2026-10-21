@@ -65,9 +65,10 @@ namespace SugarCraft\Image\Symbol;
  *  - the remaining chafa narrow tables carried verbatim by
  *    {@see SymbolSetTables} (ASCII, Latin, misc-narrow, legacy block).
  * chafa-symbols-kana.h is 16x8-outline-only, so the kana set contributes
- * NOTHING to the narrow array — it belongs to chafa's wide symbols2
- * (16x8, two 8x8 halves scored as hd[0]+hd[1]), which is the unported
- * A-09 engine, not a coverage-class table. Recorded, not ported.
+ * NOTHING to the narrow array — it is chafa's wide symbols2 tier (16x8,
+ * two 8x8 halves scored as hd[0]+hd[1]), carried by {@see SymbolSetKana}
+ * and partitioned into {@see self::$wideDefs} exactly like chafa's
+ * init_symbol_array_wide() keeps the two arrays separate.
  *
  * The opt-in LATIN tier ({@see withLatin()}) is a SEPARATE additive path
  * (SYMBOL-LATIN, W10): chafa's 365 narrow chafa-symbols-latin.h glyphs
@@ -273,9 +274,17 @@ final class SymbolMap
     /** @var list<SymbolDef> */
     private readonly array $defs;
 
+    /** @var list<WideSymbolDef> chafa's wide symbols2 array (A-09); empty on every narrow-only map */
+    private readonly array $wideDefs;
+
     private readonly bool $latin;
 
     private readonly bool $asciiIbm;
+
+    private readonly bool $kana;
+
+    /** Memo of the popcount-sorted wide scan order (chafa sorts symbols2 at init). */
+    private ?array $sortedWideDefs = null;
 
     /**
      * @param list<SymbolDef> $defs  the corpus in build order
@@ -283,12 +292,23 @@ final class SymbolMap
      *                    (see {@see withLatin()})
      * @param bool $asciiIbm whether the ascii tier carries the IBM face
      *                       (see {@see withAsciiIbm()})
+     * @param list<WideSymbolDef> $wideDefs the selection's wide (16x8,
+     *                       two-cell) glyphs (see {@see withKana()})
+     * @param bool $kana whether the opt-in KANA wide tier is appended
+     *                   (see {@see withKana()})
      */
-    private function __construct(array $defs, bool $latin = false, bool $asciiIbm = false)
-    {
+    private function __construct(
+        array $defs,
+        bool $latin = false,
+        bool $asciiIbm = false,
+        array $wideDefs = [],
+        bool $kana = false,
+    ) {
         $this->defs = $defs;
         $this->latin = $latin;
         $this->asciiIbm = $asciiIbm;
+        $this->wideDefs = $wideDefs;
+        $this->kana = $kana;
     }
 
     public static function new(): self
@@ -377,6 +397,70 @@ final class SymbolMap
     public function hasAsciiIbm(): bool
     {
         return $this->asciiIbm;
+    }
+
+    /**
+     * Opt-in KANA wide tier: chafa's 181 16x8 chafa-symbols-kana.h glyphs
+     * (U+3041-U+30FE, table {@see SymbolSetKana}) appended after the
+     * current wide selection as chafa's wide symbols2 pairs
+     * ({@see WideSymbolDef}) — never the narrow corpus.
+     *
+     * chafa's init_symbol_array_wide() takes exactly these glyphs (outline
+     * length 128 and a wide codepoint) into symbols2 while
+     * init_symbol_array_narrow() skips them, so a kana glyph can only ever
+     * be picked by the A-09 wide machinery, and only when a selection
+     * carries wide glyphs at all: with zero wide defs the wide pass is
+     * structurally inert (chafa's update_cells_wide early-returns on
+     * n_symbols2 == 0), which is the byte-freeze door for every existing
+     * digest. Idempotent; like {@see withLatin()} the flag is carried by
+     * withKana()-built maps only and a withSelectors() result rebuilds the
+     * wide selection from the tag grammar instead.
+     */
+    public function withKana(): self
+    {
+        if ($this->kana) {
+            return $this;
+        }
+
+        return new self($this->defs, $this->latin, $this->asciiIbm, [...$this->wideDefs, ...self::fullWideCorpus()], true);
+    }
+
+    /** Whether the opt-in KANA wide tier is appended (see {@see withKana()}). */
+    public function hasKana(): bool
+    {
+        return $this->kana;
+    }
+
+    /**
+     * The map's wide (two-cell) selection in build order — chafa's
+     * symbols2 array. Empty on every narrow-only map, so the A-09 render
+     * pass never activates for the default corpus or the latin/ascii-ibm
+     * tiers.
+     *
+     * @return list<WideSymbolDef>
+     */
+    public function wideDefs(): array
+    {
+        return $this->wideDefs;
+    }
+
+    /**
+     * chafa's wide symbols2 array as built from symbol_defs[]: today the
+     * kana table only — the single 16x8 tier chafa compiles in. Declared
+     * tags are CHAFA_SYMBOL_TAG_NONE; selection sees the effective tags
+     * from {@see defaultTagsFor()} (WIDE | ALPHA), exactly like chafa's
+     * def_to_symbol.
+     *
+     * @return list<WideSymbolDef>
+     */
+    private static function fullWideCorpus(): array
+    {
+        $defs = [];
+        foreach (SymbolSetKana::OUTLINES as $cp => $outline) {
+            $defs[] = WideSymbolDef::fromOutline16x8(self::chr($cp), $outline, 0);
+        }
+
+        return $defs;
     }
 
     /**
@@ -533,8 +617,9 @@ final class SymbolMap
     }
 
     /**
-     * Apply chafa's `--symbols=` tag selector grammar over the FULL narrow
-     * corpus (1,260 unique glyphs), returning a new map holding the selection in
+     * Apply chafa's `--symbols=` tag selector grammar over the FULL corpus —
+     * the narrow array (1,260 unique glyphs) and the wide symbols2 array
+     * (181 kana glyphs) — returning a new map holding each selection in its
      * corpus build order.
      *
      * Grammar (chafa_symbol_map_apply_selectors): classes are separated by
@@ -543,8 +628,9 @@ final class SymbolMap
      * selector decides a glyph. `all` is every tag except EXTRA and BAD,
      * `none` selects nothing, and BAD (AMBIGUOUS|UGLY) is auto-excluded
      * unless a selector names it — so `all` selects 1,251 of the 1,260-entry
-     * array, the nine misc-narrow emoji-variant glyphs staying out exactly
-     * as in chafa. A string that BEGINS with `+`/`-` is
+     * narrow array, the nine misc-narrow emoji-variant glyphs staying out
+     * exactly as in chafa, plus the 181 WIDE-tagged kana glyphs into the
+     * wide selection. A string that BEGINS with `+`/`-` is
      * relative to this map's current corpus, otherwise it replaces it.
      * Unknown class names throw (fail fast, never a silent empty corpus).
      *
@@ -578,28 +664,45 @@ final class SymbolMap
             $autoExclude &= ~$mask;
         }
 
-        $picked = [];
-        foreach (self::fullCorpus($this->asciiIbm) as $def) {
-            $cp = mb_ord($def->char);
-            $tags = $def->tags | self::defaultTagsFor($cp);
-            $selected = $base[$cp] ?? false;
+        $baseWide = [];
+        if ($relative) {
+            foreach ($this->wideDefs as $def) {
+                $baseWide[mb_ord($def->char)] = true;
+            }
+        }
 
+        $select = static function (int $tags, bool $selected) use ($rules, $autoExclude): bool {
             foreach ($rules as [$mask, $add]) {
                 if (($tags & $mask) !== 0) {
                     $selected = $add;
                 }
             }
 
-            if (($tags & $autoExclude) !== 0) {
-                $selected = false;
-            }
+            return ($tags & $autoExclude) !== 0 ? false : $selected;
+        };
 
-            if ($selected) {
+        $picked = [];
+        foreach (self::fullCorpus($this->asciiIbm) as $def) {
+            $cp = mb_ord($def->char);
+            if ($select($def->tags | self::defaultTagsFor($cp), $base[$cp] ?? false)) {
                 $picked[] = $def;
             }
         }
 
-        return new self($picked, asciiIbm: $this->asciiIbm);
+        // chafa rebuilds the wide symbols2 array through the same selector
+        // walk (apply_selectors feeds both init_symbol_array_* passes), so
+        // the tag grammar reaches kana exactly the way it reaches narrow
+        // tiers; with no wide glyph inside the selection the result is the
+        // byte-frozen narrow-only map.
+        $pickedWide = [];
+        foreach (self::fullWideCorpus() as $def) {
+            $cp = mb_ord($def->char);
+            if ($select($def->tags | self::defaultTagsFor($cp), $baseWide[$cp] ?? false)) {
+                $pickedWide[] = $def;
+            }
+        }
+
+        return new self($picked, asciiIbm: $this->asciiIbm, wideDefs: $pickedWide);
     }
 
     /**
@@ -643,14 +746,18 @@ final class SymbolMap
     }
 
     /**
-     * chafa's get_default_tags_for_char(), minus the width classes (this
-     * port carries no Unicode width table; every corpus glyph is narrow).
-     * def_to_symbol() ORs these into a glyph's declared tags and masks
-     * AMBIGUOUS off, so selectors see the C build's effective tags.
+     * chafa's get_default_tags_for_char(): WIDE for the wide-capable block
+     * this port carries (g_unichar_iswide over U+3041-U+30FE; NARROW is
+     * derived only when the glyph is not wide, exactly like chafa). Chafa's
+     * AMBIGUOUS wide-cjk envelope stays underived — the corpus carries no
+     * glyph inside it, and every AMBIGUOUS the selection sees is declared
+     * by its table. def_to_symbol() ORs these into a glyph's declared
+     * tags and masks AMBIGUOUS off, so selectors see the C build's
+     * effective tags.
      */
     private static function defaultTagsFor(int $cp): int
     {
-        $tags = SymbolTags::NARROW;
+        $tags = self::isWideCodepoint($cp) ? SymbolTags::WIDE : SymbolTags::NARROW;
 
         if ($cp <= 0x7F) {
             $tags |= SymbolTags::ASCII;
@@ -673,6 +780,18 @@ final class SymbolMap
         }
 
         return $tags;
+    }
+
+    /**
+     * The wide-capable envelope g_unichar_iswide answers true for inside
+     * the corpus this port carries: today the kana block chafa compiles
+     * into symbols2. A future wide tier extending the wide array extends
+     * this ladder (and it, not the AMBIGUOUS wide-cjk envelope chafa also
+     * derives, is what tags the glyphs here).
+     */
+    private static function isWideCodepoint(int $cp): bool
+    {
+        return $cp >= 0x3041 && $cp <= 0x30FF;
     }
 
     /**
@@ -717,6 +836,80 @@ final class SymbolMap
         $n = min($valid, $limit);
         for ($k = 0; $k < $n; $k++) {
             $out[] = [$this->defs[$cand[$k][0]], $cand[$k][2]];
+        }
+
+        return $out;
+    }
+
+    /**
+     * A-09: chafa's find_wide_candidates (chafa-symbol-map.c:1268) — the
+     * same 8-slot insertion buffer over the WIDE selection, but the
+     * distance is the joint hamming of the two 8x8 halves against the
+     * candidate's sym[0]/sym[1] pair, seeded at hd 129 with the inverse
+     * trial at 128 - hd. The scan order is chafa's own:
+     * compare_symbols2_popcount sorts symbols2 ascending by joint weight
+     * then codepoint (stable across equal keys), not build order — the
+     * wide array is sorted at init in the C, and this port keeps that
+     * law so ties resolve exactly like chafa's.
+     *
+     * An empty wide selection yields the empty list, which is the
+     * structural byte-freeze door: the renderer's wide pass can never
+     * commit over a narrow pair when no wide candidate exists.
+     *
+     * @return list<array{0:WideSymbolDef, 1:bool}> sorted ascending by joint distance
+     *
+     * @throws \InvalidArgumentException on a limit below 1
+     */
+    public function findWideCandidates(int $bitmapLeft, int $bitmapRight, bool $allowInverse, int $limit): array
+    {
+        if ($limit < 1) {
+            throw new \InvalidArgumentException('candidate limit must be >= 1, got ' . $limit);
+        }
+        if ($this->wideDefs === []) {
+            return [];
+        }
+
+        // chafa sorts symbols2 once at init; memoized per map instance.
+        $sorted = $this->sortedWideDefs;
+        if ($sorted === null) {
+            $sorted = $this->wideDefs;
+            usort(
+                $sorted,
+                static fn (WideSymbolDef $a, WideSymbolDef $b): int
+                    => $a->weight !== $b->weight
+                        ? $a->weight <=> $b->weight
+                        : mb_ord($a->char) <=> mb_ord($b->char),
+            );
+            $this->sortedWideDefs = $sorted;
+        }
+
+        $cand = array_fill(0, 8, [0, 129, false]);
+
+        foreach ($sorted as $i => $def) {
+            $hd = self::popcount($bitmapLeft ^ $def->bitsLeft) + self::popcount($bitmapRight ^ $def->bitsRight);
+            if ($hd < $cand[7][1]) {
+                self::insertCandidate($cand, [$i, $hd, false]);
+            }
+            if ($allowInverse) {
+                $hd = 128 - $hd;
+                if ($hd < $cand[7][1]) {
+                    self::insertCandidate($cand, [$i, $hd, true]);
+                }
+            }
+        }
+
+        $valid = 0;
+        foreach ($cand as $slot) {
+            if ($slot[1] > 128) {
+                break;
+            }
+            $valid++;
+        }
+
+        $out = [];
+        $n = min($valid, $limit);
+        for ($k = 0; $k < $n; $k++) {
+            $out[] = [$sorted[$cand[$k][0]], $cand[$k][2]];
         }
 
         return $out;

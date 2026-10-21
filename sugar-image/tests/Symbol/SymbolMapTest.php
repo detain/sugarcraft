@@ -419,9 +419,10 @@ final class SymbolMapTest extends TestCase
     public function testKanaIsWideOnlyAndThereforeOutsideTheNarrowCorpus(): void
     {
         // chafa-symbols-kana.h carries 16x8 outlines only; chafa's
-        // init_symbol_array() skips those (they are the wide symbols2
-        // array, the unported A-09 engine), so no kana codepoint can ever
-        // appear in the narrow corpus.
+        // init_symbol_array_narrow() skips those into the wide symbols2
+        // array (the KANA tier — since w11-2 carried by SymbolSetKana in
+        // this port), so no kana codepoint can ever appear in the narrow
+        // corpus — wide or not.
         foreach ($this->map->withSelectors('all')->defs() as $def) {
             $cp = mb_ord($def->char);
             $this->assertFalse($cp >= 0x3040 && $cp <= 0x30FF, sprintf('U+%04X is a wide kana glyph', $cp));
