@@ -18,7 +18,7 @@ final readonly class StageResult
      * @param WorkflowStatus    $status       Current execution status of the stage.
      * @param string|null       $output       Stage-level output string, if any.
      * @param string|null       $error        Stage-level error message, if any.
-     * @param AgentResult[]     $agents       Results for each agent executed within this stage.
+     * @param \SugarCraft\Code\Agents\AgentResult[] $agents Results for each agent executed within this stage.
      * @param \DateTimeImmutable $startedAt    Wall-clock time the stage began.
      * @param \DateTimeImmutable|null $completedAt Wall-clock time the stage finished, or null if still running.
      */
