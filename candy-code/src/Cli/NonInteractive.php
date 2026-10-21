@@ -249,7 +249,7 @@ final class NonInteractive
     {
         if ($args->prompt === null || \trim($args->prompt) === '') {
             return self::failUsage(
-                'candy-code: ' . Lang::t('cli.noninteractive.no_prompt'),
+                Lang::t('cli.noninteractive.no_prompt'),
                 $outputFormat,
             );
         }
@@ -274,7 +274,7 @@ final class NonInteractive
             // mislabeled provider failure.
             Bootstrap::maxTurns();
         } catch (PermissionConfigException $e) {
-            return self::failUsage('candy-code: ' . $e->getMessage(), $outputFormat);
+            return self::failUsage($e->getMessage(), $outputFormat);
         }
 
         // AUT-4: `--json-schema` is DECODED here, at the CLI boundary —
@@ -286,7 +286,7 @@ final class NonInteractive
         try {
             $jsonSchema = self::decodeJsonSchema($args->jsonSchema);
         } catch (\InvalidArgumentException $e) {
-            return self::failUsage('candy-code: ' . $e->getMessage(), $outputFormat);
+            return self::failUsage($e->getMessage(), $outputFormat);
         }
 
         // Step 3.D-2: only a run that built its own backend owns the session
@@ -337,7 +337,7 @@ final class NonInteractive
                     // prompt, so a picker request reaches here only from an
                     // in-process caller that registered the launch itself.
                     return self::failUsage(
-                        'candy-code: ' . Lang::t('cli.argv.resume_picker_with_prompt'),
+                        Lang::t('cli.argv.resume_picker_with_prompt'),
                         $outputFormat,
                         Lang::t('cli.argv.hint.resume_needs_target'),
                     );
@@ -581,8 +581,11 @@ final class NonInteractive
         try {
             $message = $backend->complete($history, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning);
         } catch (\Throwable $e) {
-            \fwrite(\STDERR, $e->getMessage() . "\n");
-            self::emitErrorDocument($outputFormat, 'backend', $e->getMessage(), null, $refusals);
+            // 1021 F-7: same choke as failUsage() — the emitter owns the
+            // stderr label, the document carries the raw sentence.
+            $raw = self::unlabel($e->getMessage());
+            \fwrite(\STDERR, self::ERROR_LABEL . $raw . "\n");
+            self::emitErrorDocument($outputFormat, 'backend', $raw, null, $refusals);
 
             return self::EXIT_FAILURE;
         }
@@ -832,7 +835,7 @@ final class NonInteractive
             self::emitErrorDocument(
                 $outputFormat,
                 'hook',
-                'candy-code: ' . Lang::t('cli.noninteractive.turn_hook_blocked', ['reason' => $blocked]),
+                Lang::t('cli.noninteractive.turn_hook_blocked', ['reason' => $blocked]),
                 null,
                 $refusals,
             );
@@ -873,7 +876,11 @@ final class NonInteractive
      * behind it.
      *
      * @param string $message One line, and also the JSON document's
-     *   `error.message`.
+     *   `error.message` — WITHOUT the app label. A leading {@see
+     *   self::ERROR_LABEL} is accepted and stripped here, so callers that
+     *   still bake it (external usage errors, the pre-F-7 spelling) neither
+     *   double it on stderr nor leak it into the document: 1021 F-7 made the
+     *   emitter the label's only owner.
      * @param string|null $hint An extra stderr-only line (e.g. "Try
      *   `candy-code --help`…"). Deliberately not part of the document: a
      *   machine consumer branches on `error.type`, and the hint is prose
@@ -881,10 +888,34 @@ final class NonInteractive
      */
     public static function failUsage(string $message, string $outputFormat, ?string $hint = null): int
     {
-        \fwrite(\STDERR, $message . "\n" . ($hint === null ? '' : $hint . "\n"));
-        self::emitErrorDocument($outputFormat, 'usage', $message, null);
+        $raw = self::unlabel($message);
+        \fwrite(\STDERR, self::ERROR_LABEL . $raw . "\n" . ($hint === null ? '' : $hint . "\n"));
+        self::emitErrorDocument($outputFormat, 'usage', $raw, null);
 
         return self::EXIT_CONFIG;
+    }
+
+    /**
+     * 1021 F-7: the single label every stderr emitter of this class prepends.
+     * JSON documents carry NO label — the choke points (failUsage,
+     * failJsonSchemaUnsupported, failUnusableProvider) apply it to stderr
+     * only, so `error.message` holds one sentence regardless of who composed
+     * it.
+     */
+    private const ERROR_LABEL = 'candy-code: ';
+
+    /**
+     * Remove a leading {@see self::ERROR_LABEL} if present; leave everything
+     * else byte-identical. Tolerates both caller spellings (labeled legacy
+     * strings from `bin` and Bootstrap, raw sentences from this file's
+     * post-F-7 callers) without double-labeling stderr or shipping the label
+     * inside a machine-consumed document.
+     */
+    private static function unlabel(string $message): string
+    {
+        return \str_starts_with($message, self::ERROR_LABEL)
+            ? \substr($message, \strlen(self::ERROR_LABEL))
+            : $message;
     }
 
     /**
@@ -955,13 +986,13 @@ final class NonInteractive
      */
     private static function failJsonSchemaUnsupported(?string $provider, string $outputFormat): int
     {
-        $message = 'candy-code: ' . Lang::t(
+        $message = Lang::t(
             $provider === null
                 ? 'cli.noninteractive.json_schema_no_backend'
                 : 'cli.noninteractive.json_schema_unsupported',
             ['name' => $provider ?? ''],
         );
-        \fwrite(\STDERR, $message . "\n");
+        \fwrite(\STDERR, self::ERROR_LABEL . $message . "\n");
         self::emitErrorDocument($outputFormat, 'json_schema_unsupported', $message, $provider);
 
         return self::EXIT_CONFIG;
@@ -1007,16 +1038,23 @@ final class NonInteractive
             ? Lang::t('cli.noninteractive.provider_remedy_env')
             : Lang::t('cli.noninteractive.provider_remedy_config', ['path' => Bootstrap::userConfigPath()]);
 
+        // 1021 F-7: the document carries the TYPED provider_unusable sentence
+        // — the same text the operator sees — instead of the bare exception,
+        // which was the inverse of every other error surface (the exception
+        // message names the provider, but only the sentence says the run
+        // REFUSED because of it). Label stays on stderr alone.
+        $sentence = Lang::t('cli.noninteractive.provider_unusable', [
+            'provider' => $providerName,
+            'error' => $e->getMessage(),
+        ]);
+
         \fwrite(
             \STDERR,
-            'candy-code: ' . Lang::t('cli.noninteractive.provider_unusable', [
-                'provider' => $providerName,
-                'error' => $e->getMessage(),
-            ]) . "\n"
-            . 'candy-code: ' . Lang::t('cli.noninteractive.provider_refusing', ['remedy' => $remedy]) . "\n",
+            self::ERROR_LABEL . $sentence . "\n"
+            . self::ERROR_LABEL . Lang::t('cli.noninteractive.provider_refusing', ['remedy' => $remedy]) . "\n",
         );
 
-        self::emitErrorDocument($outputFormat, 'provider_configuration', $e->getMessage(), $providerName);
+        self::emitErrorDocument($outputFormat, 'provider_configuration', $sentence, $providerName);
 
         return self::EXIT_CONFIG;
     }

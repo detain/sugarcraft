@@ -535,7 +535,13 @@ final class StderrEmitterCensusTest extends TestCase
         // +3 in AUT-2: the defensive picker failUsage, the session-funnel
         // degrade line, and the save-degrade line — all stderr-only, the same
         // pre-launch/after-answer exit-shape decision as --max-cost's family.
-        'src/Cli/NonInteractive.php' => 17, // +2 AUT-4 refusal prefixes (gate line + decode failUsage)
+        // 1021 F-7 took it BACK to ten: the single-choke label — one
+        // ERROR_LABEL const owns the prefix on stderr, the three document
+        // emitters (failUsage, failJsonSchemaUnsupported, failUnusableProvider)
+        // ship raw `error.message`, and the eight literals this file baked into
+        // caller arguments and document arguments are gone. The ten that
+        // remain are stderr-alone notices that never reach a document.
+        'src/Cli/NonInteractive.php' => 10, // +2 AUT-4 refusal prefixes (gate line + decode failUsage)
         // E701: mcpAuth's five failUsage shapes (no action, unknown action,
         // JSON refusal, bad --timeout, missing server) took eleven to sixteen.
         // E710: mcpImport adds the funnel prefix literal plus its five door
