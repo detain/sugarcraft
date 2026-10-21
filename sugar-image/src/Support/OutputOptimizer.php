@@ -26,6 +26,11 @@ use SugarCraft\Core\Util\Ansi;
  * (entry style). Emission is a pure delta: bytes leave this class only when
  * a channel's value differs from the tracked one.
  *
+ * A-09 double-width cells need no bookkeeping here: the renderer emits a
+ * wide lead and simply never calls cell() for its continuation half (the
+ * C's `if (cell->c == 0) continue;`), and both halves share the lead's
+ * pen pair, so the delta tracking stays exact across the gap.
+ *
  * A-14 row capacity: chafa preallocates each row at
  * (cells+1)*(TERM_SEQ_MAX*3+6)+1 (chafa-canvas-printer.c:654-669). PHP strings
  * grow on their own, so the analogue here is the documented worst-case bound

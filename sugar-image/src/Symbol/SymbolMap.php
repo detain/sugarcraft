@@ -88,15 +88,22 @@ namespace SugarCraft\Image\Symbol;
  * codepoint-range selector forms are NOT implemented (documented seam —
  * sugar-image has no font probe, so tag classes are the useful subset).
  *
- * A-09 design note (recorded, NOT implemented): chafa carries wide
- * glyphs as ChafaSymbol2 sym[2] pairs — one 16x8-pixel cell split into
- * two 8x8 halves, scored as hd[0] + hd[1] (inverse against 128). The
- * symbol renderer trials wide-vs-narrow with a four-cell lookback ring
- * and replaces the run when the summed error drops; the printer then
- * emits the lead cell and skips c==0 continuation cells, adding a space
- * when a transparent cell precedes a continuation. The right primitive
- * already exists here: sugar-cellbuffer Cell::continuation(); what is
- * missing is double-width emission bookkeeping in OutputOptimizer.
+ * A-09 (implemented): wide glyphs ride as {@see WideSymbolDef} sym[2]
+ * pairs — one 16x8-pixel cell split into two 8x8 halves, scored jointly
+ * as hd[0] + hd[1] (inverse against 128). The symbol renderer trials
+ * wide-vs-narrow with a lookback pass over each row
+ * ({@see SymbolMapRenderer::applyWidePass()} — chafa's N_BUF_CELLS=4 ring
+ * is a memory optimization this port has no use for; it materializes
+ * whole rows) and replaces the pair on a strictly lower summed error.
+ * The double-width emission bookkeeping resolved to a skip at the
+ * emission call itself: a committed continuation carries a null glyph
+ * and the renderer never feeds it to OutputOptimizer, mirroring the
+ * printer's `if (cell->c == 0) continue;` byte-for-byte — no optimizer
+ * change was needed because both halves share one pen pair. The C's
+ * "add a space when a transparent cell precedes a continuation" idiom
+ * lives on the fg-only pass only; this port's transparency discipline
+ * never wide-commits over a transparent half, so it is unreachable here
+ * (recorded deviation in applyWidePass).
  */
 final class SymbolMap
 {
@@ -442,6 +449,32 @@ final class SymbolMap
     public function wideDefs(): array
     {
         return $this->wideDefs;
+    }
+
+    /**
+     * A-09: the wide selection in chafa's symbols2 scan order — joint
+     * popcount ascending, ties by codepoint ascending
+     * ({@see findWideCandidates()} narrows inside the same order; the
+     * renderer's exhaustive path walks it directly, so ties resolve
+     * exactly like the C's init-sorted array).
+     *
+     * @return list<WideSymbolDef>
+     */
+    public function wideCorpus(): array
+    {
+        if ($this->sortedWideDefs === null) {
+            $sorted = $this->wideDefs;
+            usort(
+                $sorted,
+                static fn (WideSymbolDef $a, WideSymbolDef $b): int
+                    => $a->weight !== $b->weight
+                        ? $a->weight <=> $b->weight
+                        : mb_ord($a->char) <=> mb_ord($b->char),
+            );
+            $this->sortedWideDefs = $sorted;
+        }
+
+        return $this->sortedWideDefs;
     }
 
     /**
@@ -865,22 +898,11 @@ final class SymbolMap
         if ($limit < 1) {
             throw new \InvalidArgumentException('candidate limit must be >= 1, got ' . $limit);
         }
-        if ($this->wideDefs === []) {
-            return [];
-        }
 
         // chafa sorts symbols2 once at init; memoized per map instance.
-        $sorted = $this->sortedWideDefs;
-        if ($sorted === null) {
-            $sorted = $this->wideDefs;
-            usort(
-                $sorted,
-                static fn (WideSymbolDef $a, WideSymbolDef $b): int
-                    => $a->weight !== $b->weight
-                        ? $a->weight <=> $b->weight
-                        : mb_ord($a->char) <=> mb_ord($b->char),
-            );
-            $this->sortedWideDefs = $sorted;
+        $sorted = $this->wideCorpus();
+        if ($sorted === []) {
+            return [];
         }
 
         $cand = array_fill(0, 8, [0, 129, false]);
