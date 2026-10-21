@@ -55,9 +55,10 @@ use SugarCraft\Code\Tools\Tool;
  * "class not found", until they moved to one file each — and
  * `src/ToolRegistry.php` once declared
  * `SugarCraft\Code\Tool` — one `use` away from colliding with the tool
- * interface — until E14 moved the registry pair into
- * `SugarCraft\Code\Registry` (`src/Registry/`), where
- * `tests/ToolRegistryTest.php` now imports it from.
+ * interface — until the registry pair moved into
+ * `SugarCraft\Code\Registry` (`src/Registry/`) for its final years; that
+ * namespace, its directory and its test file have all since been retired,
+ * so no path in this sentence names a live file any more.
  * {@see declaredTypes()} is what the scan reads now — and since the redeclare
  * finding (audit id E-six-thirty-one, spelled out so this guarded document
  * carries no integer the src/ census can grow into) what its RESOLUTION GATE

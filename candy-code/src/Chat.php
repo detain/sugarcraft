@@ -10416,7 +10416,7 @@ final class Chat implements Model
      * and its agents run exactly as given.
      *
      * @param \SugarCraft\Code\Agents\SubAgent[] $agents
-     * @return \Generator<AgentResult>
+     * @return \Generator<\SugarCraft\Code\Agents\AgentResult>
      * @throws \RuntimeException When no pool or config is available
      */
     public function executeAgents(array $agents, \SugarCraft\Code\Providers\CompleteRequest $request): \Generator
