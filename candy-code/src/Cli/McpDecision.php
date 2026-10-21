@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Cli;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\MCP\McpTrustPins;
 use SugarCraft\Code\Support\ContainedPath;
+use SugarCraft\Code\Support\EnvBool;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProjectRoot;
 
@@ -220,6 +221,8 @@ final class McpDecision
      * THE SPELLING behind {@see Bootstrap::MCP_DISABLE_ENV}, one place so the
      * narrower truthy vocabulary — only `1`, `true`, `yes`, case-insensitive
      * — cannot drift into the flag-style default-everything-on convention.
+     * The vocabulary itself is {@see EnvBool::isTrue()}, the single owner of
+     * the narrow house law; this method is one of its consumers.
      * Deliberately NOT the `!== false && !== '' && !== '0'` shape the other
      * switches use: here the DEFAULT-ON side must be every value, so a
      * launcher that cannot control what its environment carries (a shard
@@ -228,9 +231,10 @@ final class McpDecision
      */
     public static function mcpDisabledByEnvironment(): bool
     {
-        $value = getenv(Bootstrap::MCP_DISABLE_ENV);
-
-        return $value !== false && \in_array(strtolower($value), ['1', 'true', 'yes'], true);
+        // W7-D fold (weld-7 flag): this was the second inline copy of the narrow
+        // house law. `getenv(...)` stays spelled out at the call site — the env
+        // rosters attribute the read to the literal it carries here.
+        return EnvBool::isTrue(getenv(Bootstrap::MCP_DISABLE_ENV));
     }
 
     /**
