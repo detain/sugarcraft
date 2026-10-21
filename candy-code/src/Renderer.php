@@ -3141,10 +3141,13 @@ final class Renderer
         $age = null;
 
         // Reverse walk, first carrier wins — see the docblock's "newest
-        // usable report" reasoning. array_reverse copies the list; a history
-        // long enough to make that cost columns the terminal does not have is
-        // a history that has already compacted (see Chat's context tiers).
-        foreach (array_reverse($chat->history) as $message) {
+        // usable report" reasoning. Walked by index rather than array_reverse()
+        // (v4:F18): the copy would materialise the FULL transcript on every
+        // paint frame, while only the newest carrier is ever read. History is
+        // a list (never key-hole-punched), so the indexed access is total.
+        $history = $chat->history;
+        for ($i = count($history) - 1; $i >= 0; --$i) {
+            $message = $history[$i];
             $usage = $message->usage;
             if ($usage === null) {
                 continue;
