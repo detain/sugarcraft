@@ -508,7 +508,11 @@ final class StderrEmitterCensusTest extends TestCase
         // W5-A moved one of Chat's three literals (the awaiting-approval
         // title) into Permissions/PermissionPrompt.php with armAsk(); the
         // roster follows the code, the decision above is unchanged.
-        'src/Chat.php' => 2,
+        // W7-S4 moved one of the two remaining literals (the turn-finished
+        // title) out of route() into the turn-completion family handler; the
+        // roster follows the code, the decision above is unchanged.
+        'src/Chat.php' => 1,
+        'src/Chat/Handlers/HandlesTurnCompletion.php' => 1,
         // +2 each for the session-launch flags: ArgvParser's two refusals
         // (--continue with --resume, either with -p) and Bootstrap's two
         // --resume target errors. All four are pre-launch usage errors printed

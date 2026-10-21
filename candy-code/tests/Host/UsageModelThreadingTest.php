@@ -238,6 +238,12 @@ final class UsageModelThreadingTest extends TestCase
         // name, because the chat backend's live model is already the honest
         // answer there.
         $chat = file_get_contents(dirname(__DIR__, 2) . '/src/Chat.php');
+        // W7-S4: the auxiliary settle arms moved out of route() into
+        // src/Chat/Handlers/ traits — this census now spans every handler
+        // file so the site counts keep naming the wiring that exists.
+        foreach (glob(dirname(__DIR__, 2) . '/src/Chat/Handlers/*.php') ?: [] as $handler) {
+            $chat .= file_get_contents($handler);
+        }
 
         self::assertStringContainsString(
             '$this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink(), $model);',
