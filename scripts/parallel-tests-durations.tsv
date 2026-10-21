@@ -395,6 +395,7 @@ candy-code/tests/Media/InfotextTest.php	0.490	25
 candy-code/tests/StdinConstantReaderCensusTest.php	0.490	23
 candy-code/tests/Diagnostics/RuntimeNoticeSinkStderrTest.php	0.489	5
 candy-code/tests/Permissions/ChatAlwaysGrantScopeTest.php	0.487	5
+candy-code/tests/Permissions/PermissionFsmExtractionParityTest.php	0.485	15
 candy-code/tests/Chat/SessionCommandTest.php	0.483	14
 candy-code/tests/Tui/TuiLangTest.php	0.482	9
 candy-code/tests/Chat/BackgroundStopCommandTest.php	0.480	5
