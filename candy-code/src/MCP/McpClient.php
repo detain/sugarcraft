@@ -56,7 +56,7 @@ final class McpClient
     /**
      * The preset of the agent currently driving this client, if any. When set,
      * listTools()/callTool()/callToolByName() are filtered through McpRouter
-     * against $agentPreset->mcpServers.
+     * against `$agentPreset->mcpServers`.
      */
     private ?AgentPreset $agentPreset;
 
@@ -172,7 +172,7 @@ final class McpClient
     /**
      * Set (or clear) the preset of the agent driving this client, so that
      * subsequent listTools()/callTool()/callToolByName() calls are routed
-     * through McpRouter::resolveAllowedTools() against the preset's mcpServers
+     * through McpRouter::resolveAllowedTools() against the preset's `mcpServers`
      * allowlist rather than exposing every configured server unconditionally.
      */
     public function setAgentPreset(?AgentPreset $agentPreset): void
@@ -851,7 +851,7 @@ final class McpClient
 
     /**
      * Call a tool on a specific server. Rejected when the current agent
-     * preset's mcpServers allowlist does not cover $serverName, so a caller
+     * preset's `mcpServers` allowlist does not cover $serverName, so a caller
      * cannot bypass listTools() filtering by naming a denied server directly.
      * With no preset attached, rejected unconditionally unless $unrestricted
      * was explicitly set at construction time.
