@@ -528,8 +528,11 @@ final class Subcommands
                 // than by doctor()'s generic wrapper so the line names the
                 // policy instead of a class name.
                 try {
-                    $gate = Bootstrap::permissionGate();
-                    $tui = Bootstrap::permissionGate(interactive: true);
+                    // announceBypassMode: false — this probe READS the policy to
+                    // diagnose it; the bypass transcript row describes a session
+                    // about to run, and doctor starts none (audit v3:U-F3).
+                    $gate = Bootstrap::permissionGate(announceBypassMode: false);
+                    $tui = Bootstrap::permissionGate(interactive: true, announceBypassMode: false);
                 } catch (PermissionConfigException $e) {
                     return ['status' => 'FAIL', 'detail' => $e->getMessage()];
                 }

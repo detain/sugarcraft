@@ -7720,10 +7720,16 @@ final class Bootstrap
      * @param bool $interactive true for the TUI launch, whose default mode is
      *   {@see INTERACTIVE_DEFAULT_PERMISSION_MODE}; every console path leaves it
      *   false
+     * @param bool $announceBypassMode false for READ-ONLY PROBES — `doctor`'s
+     *   permission-policy row resolves the gate to DIAGNOSE a config, never to
+     *   begin a session, and the bypass transcript row is a statement about the
+     *   session about to run ("every tool call runs without a prompt"). A
+     *   read-only diagnosis emitting it would advertise a launch that is not
+     *   happening; real launch paths leave the flag at its default
      *
      * @throws PermissionConfigException when a present permission input cannot be used
      */
-    public static function permissionGate(bool $interactive = false): PermissionGate
+    public static function permissionGate(bool $interactive = false, bool $announceBypassMode = true): PermissionGate
     {
         // The LAYERS rather than the merge, so the refusal below can name the
         // file the bad value actually came from — see
@@ -7792,7 +7798,7 @@ final class Bootstrap
         // (owner ruling: the default stands; the silence is what changes).
         // `warnPermissionConfigInTranscript` de-dups by message identity, so
         // the per-turn re-resolutions of this method cost one notice total.
-        if ($mode === PermissionMode::BypassPermissions) {
+        if ($announceBypassMode && $mode === PermissionMode::BypassPermissions) {
             self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.bypass_mode'));
         }
 
