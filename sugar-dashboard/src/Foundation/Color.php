@@ -10,4 +10,4 @@ declare(strict_types=1);
 // See sugar-dashboard/CALIBER_LEARNINGS.md entry [pattern:dual-foundation-ssot].
 
 // phpcs:ignore
-\class_alias(\SugarCraft\Core\Util\Color::class, 'SugarCraft\Dashboard\Foundation\Color');
+class_alias(\SugarCraft\Core\Util\Color::class, 'SugarCraft\Dashboard\Foundation\Color');
