@@ -49,20 +49,23 @@ final class SubcommandsMcpImportTest extends TestCase
 
     public function testTheImportDoorRefusesEveryIncompleteOperandShape(): void
     {
+        // 1021 F-7 (w1a follow-up): the envelope's `error.message` is the raw
+        // Subcommands sentence — the `candy-code: ` label these pins used to
+        // bake in belongs to the stderr twin, per the single choke.
         self::assertSame(
-            'candy-code: mcp import: no source given',
+            'mcp import: no source given',
             $this->usageDoor(['mcp', 'import', '--output-format', 'json']),
         );
         self::assertSame(
-            'candy-code: mcp import gemini: unknown source',
+            'mcp import gemini: unknown source',
             $this->usageDoor(['mcp', 'import', 'gemini', $this->operandFile('cfg.json', '{}'), '--output-format', 'json']),
         );
         self::assertSame(
-            'candy-code: mcp import: no file given',
+            'mcp import: no file given',
             $this->usageDoor(['mcp', 'import', 'claude', '--output-format', 'json']),
         );
         self::assertSame(
-            'candy-code: mcp import: unexpected operand second',
+            'mcp import: unexpected operand second',
             $this->usageDoor(['mcp', 'import', 'claude', $this->operandFile('cfg.json', '{"mcpServers":{}}'), 'second', '--output-format', 'json']),
         );
     }
@@ -71,8 +74,9 @@ final class SubcommandsMcpImportTest extends TestCase
     {
         $missing = $this->tempDir . '/does-not-exist.json';
 
+        // 1021 F-7: raw envelope message (see the import-door test above).
         self::assertSame(
-            'candy-code: mcp import: cannot read ' . $missing,
+            'mcp import: cannot read ' . $missing,
             $this->usageDoor(['mcp', 'import', 'claude', $missing, '--output-format', 'json']),
         );
     }

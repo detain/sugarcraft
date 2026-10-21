@@ -172,20 +172,25 @@ final class SessionSubcommandsTest extends TestCase
 
     public function testABadLimitAndAFlagForAnotherActionAreUsageErrors(): void
     {
+        // 1021 F-7 (w1a follow-up): these envelope pins previously carried the
+        // `candy-code: ` label inside `error.message` — the contaminated
+        // contract F-7 removed. Under the single choke the document carries
+        // the raw sentence and stderr carries the label; the strings below
+        // are the Subcommands' own messages, label-free.
         self::assertSame(
-            'candy-code: session list --limit 0: not a positive whole number',
+            'session list --limit 0: not a positive whole number',
             $this->usageDoor(['session', 'list', '--limit', '0']),
         );
         self::assertSame(
-            'candy-code: session show: --all does not apply to this action',
+            'session show: --all does not apply to this action',
             $this->usageDoor(['session', 'show', 'sess-main-0001', '--all']),
         );
         self::assertSame(
-            'candy-code: session list: --with-children does not apply to this action',
+            'session list: --with-children does not apply to this action',
             $this->usageDoor(['session', 'list', '--with-children']),
         );
-        self::assertSame('candy-code: session list extra: unexpected operand', $this->usageDoor(['session', 'list', 'extra']));
-        self::assertSame('candy-code: session frob: unknown action', $this->usageDoor(['session', 'frob']));
+        self::assertSame('session list extra: unexpected operand', $this->usageDoor(['session', 'list', 'extra']));
+        self::assertSame('session frob: unknown action', $this->usageDoor(['session', 'frob']));
     }
 
     // ── target resolution ────────────────────────────────────────────────
@@ -208,7 +213,8 @@ final class SessionSubcommandsTest extends TestCase
         self::assertSame(NonInteractive::EXIT_CONFIG, $rc);
         $error = json_decode($out, true)['error'];
         self::assertSame('usage', $error['type']);
-        self::assertSame('candy-code: session pin sess-: ambiguous id prefix, 2 sessions match', $error['message']);
+        // 1021 F-7: the envelope message is the raw sentence (stderr owns the label).
+        self::assertSame('session pin sess-: ambiguous id prefix, 2 sessions match', $error['message']);
         self::assertFalse($this->store->listSessionsFiltered(
             \SugarCraft\Code\Session\SessionQuery::new()->withPinnedFirst(),
         )[0]->pinned, 'nothing was pinned');
@@ -220,8 +226,9 @@ final class SessionSubcommandsTest extends TestCase
         self::assertSame(NonInteractive::EXIT_FAILURE, $rc);
         self::assertSame('not-found', json_decode($out, true)['error']['type']);
 
-        self::assertSame('candy-code: session show: no session id given', $this->usageDoor(['session', 'show']));
-        self::assertSame('candy-code: session rename: no title given', $this->usageDoor(['session', 'rename', 'sess-main-0001']));
+        // 1021 F-7: raw envelope sentences, label lives on stderr.
+        self::assertSame('session show: no session id given', $this->usageDoor(['session', 'show']));
+        self::assertSame('session rename: no title given', $this->usageDoor(['session', 'rename', 'sess-main-0001']));
     }
 
     // ── show / rename / pin / archive / delete ───────────────────────────
