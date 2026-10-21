@@ -57,7 +57,9 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — thirty-one sites (PLG-1 2026-10-19: +1 in
+ *  1. `fwrite(STDERR, …)` — thirty-two sites (1021 INFO-4 2026-10-21: +1 in
+ *     `ArgvParser::noticePromptOverride()`, the duplicate-prompt notice,
+ *     stderr-alone like the usage errors the parser already hands off; PLG-1 2026-10-19: +1 in
  *     `bundles` — the installer's refusals and the listing's warning echoes
  *     share the one `bundlesLine` writer; AUT-4 2026-10-19: +1 in
  *     `NonInteractive::failJsonSchemaUnsupported()`, stderr-alone beside the usage line;
@@ -318,6 +320,11 @@ final class StderrEmitterCensusTest extends TestCase
         // Stderr alone: stdout is the editor's JSON-RPC stream, and an editor
         // shows an agent's stderr as its log.
         'src/Cli/Acp.php' => 1,
+        // 1021 INFO-4 2026-10-21: +1 — `noticePromptOverride()`, the one line
+        // saying a second `-p`/`--prompt` value overrides an earlier one.
+        // Stderr alone: stdout is the answer (or the document) on every
+        // format, and the notice fires before the parser knows which it is.
+        'src/Cli/ArgvParser.php' => 1,
         // O-8a: `attach`'s fail(), the one line saying why it could not reach
         // a server. Stderr alone: it is written before any TUI or session
         // exists, and the verb then exits 1.
@@ -513,7 +520,7 @@ final class StderrEmitterCensusTest extends TestCase
         // pre-launch exit-2 usage decision.
         // AUT-5 took it to thirty-one: --max-turns' same three refusal shapes,
         // the same pre-launch exit-2 usage decision.
-        'src/Cli/ArgvParser.php' => 34, // +3 AUT-4 --json-schema refusal family
+        'src/Cli/ArgvParser.php' => 35, // +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021)
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
         // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own
