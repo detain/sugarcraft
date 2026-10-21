@@ -113,7 +113,9 @@ final class TurnPathContractTest extends TestCase
         NonInteractive::pinStreamOutputForTesting(null);
         $this->restoreHomeSandbox();
         if (is_dir($this->contractHome)) {
-            exec('rm -rf ' . escapeshellarg($this->contractHome));
+            // ChildStderrCaptureTest: fd 2 must not ride onto the suite's own —
+            // merge it into the stdout exec() already captures.
+            exec('rm -rf ' . escapeshellarg($this->contractHome) . ' 2>&1');
         }
     }
 

@@ -17,7 +17,9 @@ use PHPUnit\Framework\TestCase;
  *    that is called from exactly four places: Chat's config-change closure
  *    (`chat()`), the shell's layout hook (`app()`), the launch's settings
  *    write door (`settingsWriter()`), and the project-MCP trust grant
- *    (`trustProjectMcp()`);
+ *    (`McpDecision::trustProjectMcp()` since the w4a launch split —
+ *    `Bootstrap::trustProjectMcp()` is a delegating shim and writes nothing
+ *    itself);
  *  - that `candy-code login` persists a typed provider key through the same
  *    door (`Subcommands::loginStoreKey()`, plan_comparison W4 PRV-4);
  *  - that {@see \SugarCraft\Code\Config\Settings\SettingsWriter} is built in
@@ -41,7 +43,7 @@ final class SettingsWriterCensusTest extends TestCase
         'Cli/Bootstrap.php::app' => 1,
         'Cli/Bootstrap.php::chat' => 1,
         'Cli/Bootstrap.php::settingsWriter' => 1,
-        'Cli/Bootstrap.php::trustProjectMcp' => 1,
+        'Cli/McpDecision.php::trustProjectMcp' => 1,
         'Cli/Subcommands.php::loginStoreKey' => 1,
     ];
 
