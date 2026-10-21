@@ -135,6 +135,13 @@ final class NearestColor
      * channel keeps its push into the next lookup — is written back through
      * $err, forming the error-diffusion chain that pairs with ordered dithering.
      *
+     * The mirror is float-vs-integer, by choice and disclosed: chafa's
+     * compensation lands in a gint16 (damped fraction truncated before the
+     * clamp; residual computed from the truncated integer) while this
+     * implementation rounds for the lookup and keeps the fraction in the
+     * residual — see the inline note in the body for the two behavioral
+     * consequences.
+     *
      * $err is a channel accumulator `[r, g, b]` in 0-255 units (floats, or
      * ints); passing null (or by reference a variable that is null) means
      * "no feedback" and the call is exactly {@see self::ansi256()} — plain
@@ -168,9 +175,16 @@ final class NearestColor
             }
         }
 
-        // Damped feedback, chafa :1170-1175. The lookup uses the clamped,
-        // rounded result (Color's ctor clamps); the residual written back uses
-        // the unclamped float, chafa :1189-1192.
+        // Damped feedback, chafa :1170-1175 and :1189-1192 — with one
+        // disclosed arithmetic split: chafa stores the damped compensation
+        // in gint16, so it TRUNCATES toward zero before clamping to 0..255
+        // for the lookup, and its residual is that truncated (unclamped)
+        // integer minus the found color. We keep $damped as exact float:
+        // the lookup rounds it (round-half-away; Color's ctor clamps) and
+        // the residual written back is the full-precision unclamped
+        // difference. In practice: a fractional compensation >= .5 inside
+        // the gamut lands one palette code higher than chafa would pick,
+        // and our residual carries the compensation fraction chafa drops.
         $damped = [];
         foreach ([0 => $color->r, 1 => $color->g, 2 => $color->b] as $i => $channel) {
             $damped[$i] = $channel + ($err[$i] * self::ERROR_DAMPING) / 16;
