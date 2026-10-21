@@ -5338,12 +5338,19 @@ final class Renderer
      *
      * The line budget is applied before the character budget so a result that
      * is short in lines but enormous in one of them still gets clipped; both
-     * limits set `overflow`. Character counting is mb_*-based because tool
-     * output is arbitrary UTF-8 and a byte-wise cut could split a codepoint
-     * and put a lone continuation byte on the terminal wire.
+     * limits set `overflow`. The character budget is measured in DISPLAY CELLS
+     * ({@see Width::of()}) and cut on grapheme clusters with inline ANSI
+     * preserved ({@see Width::truncateAnsi()}). Every other width budget in the
+     * renderer is in cells; the previous mb_* count was per CODEPOINT, so the
+     * fold point drifted by script — a CJK or emoji tool dump folded at roughly
+     * double its visible length relative to ASCII. For plain ASCII (and for a
+     * precomposed character like "é", one codepoint and one cell) the two
+     * counts agree, so the common path is byte-for-byte unchanged. A byte-wise
+     * cut is still never used: it could split a codepoint and put a lone
+     * continuation byte on the terminal wire.
      *
      * @param int $maxLines Maximum lines to keep; values below 1 are treated as 1
-     * @param int $maxChars Maximum characters to keep; values below 1 are treated as 1
+     * @param int $maxChars Maximum visible cells to keep; values below 1 are treated as 1
      *
      * @return array{output: string, overflow: bool}
      */
@@ -5364,8 +5371,8 @@ final class Renderer
         }
 
         $clipped = implode("\n", $rows);
-        if (mb_strlen($clipped) > $maxChars) {
-            $clipped = mb_substr($clipped, 0, $maxChars);
+        if (Width::of($clipped) > $maxChars) {
+            $clipped = Width::truncateAnsi($clipped, $maxChars);
             $overflow = true;
         }
 
