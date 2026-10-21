@@ -9,7 +9,7 @@ namespace SugarCraft\Image;
  *
  * Mirrors chafa `chafa/internal/chafa-palette.c:616` (`pnn_palette`) and its
  * helpers — the algorithm chafa itself credits to nQuant by Mark Tyler,
- * Dmitry Groshev and Miller Cy Chan (chafa-palette.c:390-395, with the
+ * Dmitry Groshev and Miller Cy Chan (chafa-palette.c:393-396, with the
  * literature pointers DOI:10.1117/1.1412423 / DOI:10.1117/1.1604396 kept
  * there). Samples are histogrammed into one bin per 4-bit-per-channel colour
  * cell (the -w ladder in {@see self::bitsForQuality()} selects 3, 4 or 5
@@ -28,7 +28,7 @@ namespace SugarCraft\Image;
  *  • arithmetic is double, not C float. Distances and merge weights are
  *    well below 2^53, so comparisons are order-exact.
  *  • no density retry pass: chafa re-samples at step 1 when fewer than 256
- *    opaque pixels landed in bins (chafa-palette.c:637-644); the caller
+ *    opaque pixels landed in bins (chafa-palette.c:639-647); the caller
  *    hands us an already-strided list, so the guard lives there instead
  *    (fewer samples than colours ⇒ median-cut, see SixelRenderer).
  *  • no per-bin saturation at PNN_BIN_MAX_SAMPLES (2^24) — unreachable at a
@@ -137,14 +137,14 @@ final class Quantizer
         $bins = self::histogram($samples, $bitsPerCh);
         $n = count($bins);
 
-        // ─── Weights and count quantization (chafa-palette.c:668-690) ────
+        // ─── Weights and count quantization (chafa-palette.c:671-694) ────
         $quanRt = 1;
         if ($nCols < 16) {
             $quanRt = -1;
         }
         $weight = min(0.9, $nCols / $n);
         $rgbw = self::RGB_WEIGHTS;
-        // chafa-palette.c:673 guards the weight flip with `rgbw.g < 1.0 &&
+        // chafa-palette.c:677 guards the weight flip with `rgbw.g < 1.0 &&
         // rgbw.g >= coeffs[0].g`; both legs are structurally true at the
         // initial (0.299, 0.587, 0.114) vector, so the block is kept in its
         // chafa shape — a future perceptual weights knob would move them.
@@ -285,7 +285,7 @@ final class Quantizer
     }
 
     /**
-     * chafa `find_nearest` (chafa-palette.c:455-503): walk the successor
+     * chafa `find_nearest` (chafa-palette.c:461-509): walk the successor
      * chain of $index and take the candidate with the lowest population-
      * weighted PNN merge error. The chain stops at index 0 (the
      * terminator), so candidates are strictly the bins AFTER $index in
@@ -345,7 +345,7 @@ final class Quantizer
     }
 
     /**
-     * chafa `quanfn` (chafa-palette.c:442-453): population shaping applied
+     * chafa `quanfn` (chafa-palette.c:446-459): population shaping applied
      * to bin counts before merging. Rungs: >1 truncating sqrt, 1 float
      * sqrt, 0 identity, <0 truncating cbrt (with the floor-correction
      * documented in the class docblock).
