@@ -13,7 +13,9 @@ use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Message;
 use SugarCraft\Code\ToolCall;
+use SugarCraft\Code\ToolResult;
 
     /**
  * Everything the live permission prompt offers the user, derived from the
@@ -698,5 +700,123 @@ final class PermissionPrompt
                 'agent' => $origin->name !== '' ? $origin->name : $origin->id,
             ]),
         ]));
+    }
+
+    /**
+     * The label `always` records for this ask: the user-written scope
+     * (`e`) labelled through the memo, or the gate's own
+     * {@see alwaysScope()} when no scope was written.
+     */
+    public function rememberedLabel(PermissionRequestMsg $request, ?string $scope): ?string
+    {
+        return $scope !== null
+            ? \SugarCraft\Code\Permissions\SessionPermissionMemo::scopeLabel(
+                $scope,
+                $request->pendingAsk?->tool ?? $request->toolCall->name,
+                $request->pendingAsk?->arguments ?? $request->toolCall->arguments,
+                $this->projectRoot,
+            )
+            : $this->alwaysScope();
+    }
+
+    /**
+     * The session grants after an `always` answer at an engine-path ask:
+     * the user-written scope recorded as a pattern, else a grant for this
+     * exact call, appended to the grants already held.
+     */
+    public function enginePathGrants(array $grants, PendingAsk $ask, ?string $scope): array
+    {
+        $memo = \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($grants);
+        $memo = ($scope === null ? null : $memo->withPattern($scope, $ask->tool, $ask->arguments, $this->projectRoot))
+            ?? $memo->withGrant($ask->tool, $ask->arguments, $this->projectRoot);
+
+        return [...$grants, ...$memo->grants()];
+    }
+
+    /** What the transcript row says the user answered a delegated ask with. */
+    public static function answeredLabel(PermissionReply $reply, PendingAsk $ask, string $note): string
+    {
+        return match (true) {
+            $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) => Lang::t('chat.permission.answer.always'),
+            $reply->permits() => Lang::t('chat.permission.answer.once'),
+            default => $note === ''
+                ? Lang::t('chat.permission.answer.refused')
+                : Lang::t('chat.permission.answer.refused_note', ['note' => $note]),
+        };
+    }
+
+    /**
+     * The two transcript rows a user refusal leaves when the batch path
+     * ends the turn.
+     *
+     * A rejection's feedback is the model's to read, on this path as
+     * on the engine one (1.C-2).
+     */
+    public static function refusalPair(PermissionRequestMsg $request, string $note): array
+    {
+        $refusal = \SugarCraft\Code\Permissions\ApprovalVerdict::rejectedByUser($note)
+            ->denialMessage("{$request->toolCall->name} was not run.");
+
+        return [
+            // Deliberately AGENT-VISIBLE (audit 15b-03): EngineBackend's
+            // toTypedMessages() flattens tool calls and results away,
+            // so on that path this note is the model's only record
+            // that the call it asked for was refused.
+            Message::system('_' . DenialKind::Refused->reason($refusal) . '_'),
+            // The refusal also has to exist as a RESULT, not only as
+            // a system note (crush_feat.md §1 E7): the assistant
+            // message above carries the tool call, so leaving it
+            // unanswered puts a tool_use block on the next request's
+            // wire with no matching tool_result. It doubles as the
+            // producer for the struck-through denied row
+            // {@see Renderer::renderToolResults()} draws.
+            Message::assistant('')->withToolResults([ToolResult::denied(
+                $request->toolCall->name,
+                DenialKind::Refused,
+                $refusal,
+                $request->toolCall->id,
+            )]),
+        ];
+    }
+
+    /**
+     * The outstanding question for $call among the parked batch jobs, if it
+     * has one — slot 3 carries the HookResult ask exactly as the inline
+     * lookup read it; untyped here so the method stays the byte-equivalent
+     * of the loop it replaces.
+     */
+    public static function askFor(array $jobs, ToolCall $call)
+    {
+        foreach ($jobs as $job) {
+            if ($job[0] === $call) {
+                return $job[3];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The parked batch after the user answered: drop ONLY the ASK they
+     * just answered (plus, under a fresh Always grant, other queued asks
+     * the same grant answers) — consent for one call is not consent for
+     * another. Slot 4 (the pre-hook note) rides across the re-entry so a
+     * settled question's model-visible context reaches the result the same
+     * way an immediate permission's does.
+     */
+    public static function releasedJobs(array $jobs, ToolCall $answeredCall, array $grants, ?string $root): array
+    {
+        return array_map(
+            static function (array $job) use ($answeredCall, $grants, $root): array {
+                if ($job[3] === null) {
+                    return $job;
+                }
+
+                $answered = $job[0] === $answeredCall || self::grantCovers($grants, $job[0], $job[3], $root);
+
+                return $answered ? [$job[0], $job[1], $job[2], null, $job[4]] : $job;
+            },
+            $jobs,
+        );
     }
 }

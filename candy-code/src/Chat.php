@@ -4399,14 +4399,7 @@ final class Chat implements Model
         // one transcript row that says what was allowed, and where to undo it.
         $remembered = null;
         if ($reply === PermissionReply::Always) {
-            $remembered = $scope !== null
-                ? \SugarCraft\Code\Permissions\SessionPermissionMemo::scopeLabel(
-                    $scope,
-                    $request->pendingAsk?->tool ?? $request->toolCall->name,
-                    $request->pendingAsk?->arguments ?? $request->toolCall->arguments,
-                    $this->projectRoot(),
-                )
-                : $this->permissionAlwaysScope();
+            $remembered = $this->permissionPrompt()->rememberedLabel($request, $scope);
         }
         // `p` saves exactly what `a` would remember, so the write happens on
         // this answer's own patterns — read BEFORE the prompt comes down,
@@ -4452,10 +4445,7 @@ final class Chat implements Model
             $ask = $request->pendingAsk;
             $remembers = $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) && !$ask->isSettled();
             if ($remembers) {
-                $memo = \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants);
-                $memo = ($scope === null ? null : $memo->withPattern($scope, $ask->tool, $ask->arguments, $this->projectRoot()))
-                    ?? $memo->withGrant($ask->tool, $ask->arguments, $this->projectRoot());
-                $cleared['permissionGrants'] = [...$this->permissionGrants, ...$memo->grants()];
+                $cleared['permissionGrants'] = $this->permissionPrompt()->enginePathGrants($this->permissionGrants, $ask, $scope);
             }
             $ask->reply($reply, $note === '' ? null : $note);
             if ($remembers) {
@@ -4475,13 +4465,7 @@ final class Chat implements Model
                 $cleared['history'] = [...($cleared['history'] ?? $this->history), Message::notice(Lang::t('chat.permission.subagent_answered', [
                     'agent' => $origin->name !== '' ? $origin->name : $origin->id,
                     'tool' => $ask->tool,
-                    'answer' => match (true) {
-                        $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) => Lang::t('chat.permission.answer.always'),
-                        $reply->permits() => Lang::t('chat.permission.answer.once'),
-                        default => $note === ''
-                            ? Lang::t('chat.permission.answer.refused')
-                            : Lang::t('chat.permission.answer.refused_note', ['note' => $note]),
-                    },
+                    'answer' => PermissionPrompt::answeredLabel($reply, $ask, $note),
                 ]))];
             }
 
@@ -4494,11 +4478,6 @@ final class Chat implements Model
         // of the likelier places for a queue to have accumulated. The permitting
         // path below keeps the turn running and deliberately does not drain.
         if (!$reply->permits()) {
-            // A rejection's feedback is the model's to read, on this path as
-            // on the engine one (1.C-2).
-            $refusal = \SugarCraft\Code\Permissions\ApprovalVerdict::rejectedByUser($note)
-                ->denialMessage("{$request->toolCall->name} was not run.");
-
             return self::releaseQueuedPrompts([$this->mutate([
                 ...$cleared,
                 'inFlight' => false,
@@ -4508,28 +4487,7 @@ final class Chat implements Model
                 // placeholders, and this batch never got that far), and a
                 // transcript that shows the refusal without showing what was
                 // refused is worse than showing neither.
-                'history' => [
-                    ...$this->history,
-                    $request->assistantMessage,
-                    // Deliberately AGENT-VISIBLE (audit 15b-03): EngineBackend's
-                    // toTypedMessages() flattens tool calls and results away,
-                    // so on that path this note is the model's only record
-                    // that the call it asked for was refused.
-                    Message::system('_' . DenialKind::Refused->reason($refusal) . '_'),
-                    // The refusal also has to exist as a RESULT, not only as
-                    // a system note (crush_feat.md §1 E7): the assistant
-                    // message above carries the tool call, so leaving it
-                    // unanswered puts a tool_use block on the next request's
-                    // wire with no matching tool_result. It doubles as the
-                    // producer for the struck-through denied row
-                    // {@see Renderer::renderToolResults()} draws.
-                    Message::assistant('')->withToolResults([ToolResult::denied(
-                        $request->toolCall->name,
-                        DenialKind::Refused,
-                        $refusal,
-                        $request->toolCall->id,
-                    )]),
-                ],
+                'history' => [...$this->history, $request->assistantMessage, ...PermissionPrompt::refusalPair($request, $note)],
             ]), null]);
         }
 
@@ -4543,13 +4501,7 @@ final class Chat implements Model
             // rememberNative() remembers nothing for an ask a hook other than
             // the gate raised (or a security finding), so "Always" there
             // settles as "Once": the question will be put again next call.
-            $answeredAsk = null;
-            foreach ($jobs as $job) {
-                if ($job[0] === $request->toolCall) {
-                    $answeredAsk = $job[3];
-                    break;
-                }
-            }
+            $answeredAsk = PermissionPrompt::askFor($jobs, $request->toolCall);
 
             if ($answeredAsk !== null) {
                 $grants = self::rememberNative($grants, $request->toolCall, $answeredAsk, $this->projectRoot(), $scope);
@@ -4568,22 +4520,7 @@ final class Chat implements Model
         // keeps its ASK, because consent for one call is not consent for
         // another.
         $root = $this->projectRoot();
-        $jobs = array_map(
-            static function (array $job) use ($request, $grants, $root): array {
-                if ($job[3] === null) {
-                    return $job;
-                }
-
-                $answered = $job[0] === $request->toolCall || self::grantCovers($grants, $job[0], $job[3], $root);
-
-                // Drop ONLY the ASK the user just answered; slot 4 (the pre-hook
-                // note) rides across the re-entry so a settled question's
-                // model-visible context reaches the result the same way an
-                // immediate permission's does.
-                return $answered ? [$job[0], $job[1], $job[2], null, $job[4]] : $job;
-            },
-            $jobs,
-        );
+            $jobs = PermissionPrompt::releasedJobs($jobs, $request->toolCall, $grants, $root);
 
         foreach ($jobs as [$call, , , $ask]) {
             if ($ask !== null) {
