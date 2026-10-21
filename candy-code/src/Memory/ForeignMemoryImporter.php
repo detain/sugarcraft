@@ -9,6 +9,7 @@ use SugarCraft\Code\Context\Utf8Scrub;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Agents\MemoryScope;
 use SugarCraft\Code\Skills\SkillSource;
 
@@ -238,7 +239,7 @@ final class ForeignMemoryImporter
             } catch (\Throwable $e) {
                 // One unparseable foreign file must not abort the import of
                 // every other entry in the directory.
-                error_log("candy-code: ForeignMemoryImporter: skipping {$file}: {$e->getMessage()}");
+                Log::sub(Log::FOREIGN_MEMORY_IMPORTER, "skipping {$file}: {$e->getMessage()}");
                 continue;
             }
 

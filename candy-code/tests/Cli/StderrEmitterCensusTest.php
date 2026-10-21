@@ -103,7 +103,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\SelfUpdate}, whose `$errorStream` test seam
  *     defaults to `\STDERR` for the headless verb's report and refusal lines.
  *     A grep for `fwrite(STDERR` cannot see any of these files at all.
- *  3. `error_log(…)` — FOURTEEN sites across ten files. MEASURED on this
+ *  3. `error_log(…)` — EIGHT sites across seven files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
  *     destination configured, this IS stderr. Three of them appear in the
@@ -417,8 +417,6 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const ERROR_LOG_SITES = [
-        'src/Agents/AgentWorkerPool.php' => 3,
-        'src/Agents/ForeignAgentPresetRegistry.php' => 2,
         // WorktreeManager HAD FOUR AND HAS NONE, which is the largest single
         // move this roster has recorded, and it is the reason to read a fall
         // here as a fall in EMITTERS rather than in diagnostics: all four of
@@ -460,7 +458,6 @@ final class StderrEmitterCensusTest extends TestCase
         // notice — so it earns no `candy-code: ` literal and no MESSAGE_SHAPES
         // row by design, exactly like the default-off RuleLoader funnel above.
         'src/Host/TurnRunner.php' => 1,
-        'src/Memory/ForeignMemoryImporter.php' => 1,
         // 3 until round 48 routed the two argument-decode refusals onto the
         // seam (E192). The one left is flagTruncationRiskInLatestToolResults(),
         // which PREDICTS a risk rather than reporting a failure — the routing
@@ -475,7 +472,10 @@ final class StderrEmitterCensusTest extends TestCase
         // rows are being folded behind Log channel by channel; when the last
         // one lands, this roster states the choke point and a raw call
         // anywhere else in src/ reds.
-        'src/Support/Log.php' => 1,
+        'src/Support/Log.php' => 1,        // W7-C C3 folded the Agents/Memory family (AgentWorkerPool 3,
+        // ForeignAgentPresetRegistry 2, ForeignMemoryImporter 1) behind
+        // Log::sub(); identical bytes, literals now in the facade envelope.
+
     ];
 
     /**
@@ -499,8 +499,6 @@ final class StderrEmitterCensusTest extends TestCase
         // prefix in one literal is one row here and its message on channel 3
         // is one row there — the two rosters agree on these nine files by
         // construction, and MEASURED to do so when the literals were written.
-        'src/Agents/AgentWorkerPool.php' => 3,
-        'src/Agents/ForeignAgentPresetRegistry.php' => 2,
         // Not stderr: roadmap 5.14a's terminal notifications (turn finished,
         // goal settled, waiting for approval) carry the app's name as the
         // OSC 9 / bell notification's title, written to the TERMINAL through
@@ -589,7 +587,6 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/Subcommands.php' => 37,
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,
-        'src/Memory/ForeignMemoryImporter.php' => 1,
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the
