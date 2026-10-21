@@ -320,6 +320,12 @@ final class DocsQuickstartTest extends TestCase
             'fixture-lib/src/Tag.php' => "<?php\nnamespace SugarCraft\\Fixture;\n#[\\Attribute]\nfinal class Tag { public function __construct(public readonly string \$name, public readonly array \$extra = []) {} }\n",
             'fixture-lib/src/Sealed.php' => "<?php\nnamespace SugarCraft\\Fixture;\nfinal class Sealed { private function __construct() {} public static function new(): self { return new self(); } }\n",
             'fixture-lib/src/StringAlias.php' => "<?php\nnamespace SugarCraft\\Fixture;\nclass_alias('SugarCraft\\Fixture\\Sub\\Region', 'SugarCraft\\Fixture\\StringAlias');\n",
+            // S14: the FQ-spelled redirect (PHP 8: one T_NAME_FULLY_QUALIFIED
+            // token) — the leg must resolve it like the bare spellings above.
+            'fixture-lib/src/QualifiedAlias.php' => "<?php\nnamespace SugarCraft\\Fixture;\n\\class_alias(\\SugarCraft\\Fixture\\Sub\\Region::class, 'SugarCraft\\Fixture\\QualifiedAlias');\n",
+            // ...and only it: a qualified call to a NON-class_alias function
+            // must not be mistaken for a façade declaration (fail closed).
+            'fixture-lib/src/Impostor.php' => "<?php\nnamespace SugarCraft\\Fixture;\n\\FixtureSubs\\define_alias(\\SugarCraft\\Fixture\\Sub\\Region::class, 'SugarCraft\\Fixture\\Impostor');\n",
             'fixture-lib/src/Stage.php' => <<<'PHP'
                 <?php
                 namespace SugarCraft\Fixture;
@@ -377,6 +383,7 @@ final class DocsQuickstartTest extends TestCase
             \SugarCraft\Fixture\Sealed::new();
             Alias::zero()->width();
             \SugarCraft\Fixture\StringAlias::zero()->width();
+            \SugarCraft\Fixture\QualifiedAlias::zero()->width();
             $m = new \SugarCraft\Fixture\Magic();
             $m->anything();
             (new \SugarCraft\Fixture\External())->vendorMethod();
@@ -454,6 +461,10 @@ final class DocsQuickstartTest extends TestCase
         yield 'unknown fully-qualified class' => [
             "\$x = new \\SugarCraft\\Fixture\\Gone();\n",
             'SugarCraft\\Fixture\\Gone does not exist',
+        ];
+        yield 'S14 fail-closed: qualified non-alias call is not a facade' => [
+            "\$x = \\SugarCraft\\Fixture\\Impostor::zero();\n",
+            'SugarCraft\\Fixture\\Impostor does not exist',
         ];
         yield 'SugarCraft class used without its import' => [
             "\$v = Veil::new();\n",
@@ -619,9 +630,20 @@ final class DocsQuickstartTest extends TestCase
         return \is_array($tok) && \preg_match('/^[A-Za-z_\x80-\xff][\w\x80-\xff]*$/', $tok[1]) === 1;
     }
 
+    /** Name-shaped tokens: PHP 8 splits qualified/FQ names into their own token classes. */
+    private const NAME_TOKENS = [\T_STRING, \T_NAME_QUALIFIED, \T_NAME_FULLY_QUALIFIED];
+
     private static function isName(mixed $tok): bool
     {
-        return \is_array($tok) && \in_array($tok[0], [\T_STRING, \T_NAME_QUALIFIED, \T_NAME_FULLY_QUALIFIED], true);
+        return \is_array($tok) && \in_array($tok[0], self::NAME_TOKENS, true);
+    }
+
+    /** Final segment of a possibly-qualified name token's text. */
+    private static function nameTail(string $text): string
+    {
+        $slash = \strrpos($text, '\\');
+
+        return $slash === false ? $text : \substr($text, $slash + 1);
     }
 
     /**
@@ -915,8 +937,18 @@ final class DocsQuickstartTest extends TestCase
 
         if ($info === null) {
             // A façade file that only aliases a canonical type: class_alias(Canonical::class, This::class).
+            // S14 (audit l10): PHP 8 lexes the FQ-spelled `\class_alias(` as
+            // ONE T_NAME_FULLY_QUALIFIED token, so a T_STRING-only match was
+            // blind to redirect files written that way. Match on the FINAL
+            // segment of any name token; a qualified name whose tail is not
+            // class_alias (the Impostor fixture) stays un-accused.
             for ($i = 0; $i < $n; $i++) {
-                if (\is_array($t[$i]) && $t[$i][0] === \T_STRING && \strcasecmp($t[$i][1], 'class_alias') === 0 && ($t[$i + 1] ?? null) === '(') {
+                if (
+                    \is_array($t[$i])
+                    && \in_array($t[$i][0], self::NAME_TOKENS, true)
+                    && \strcasecmp(self::nameTail($t[$i][1]), 'class_alias') === 0
+                    && ($t[$i + 1] ?? null) === '('
+                ) {
                     $arg = $t[$i + 2] ?? null;
                     if (self::isName($arg)) {
                         $canonical = self::resolveName($arg[1], $namespace, $imports);
