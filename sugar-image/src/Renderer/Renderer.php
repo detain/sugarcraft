@@ -39,6 +39,18 @@ interface Renderer
     /**
      * True if this backend supports partial transparency (alpha channel).
      * Half-block does not; Sixel and Kitty do.
+     *
+     * A-12 (chafa campaign): ADVISORY — capability reporting, not mode
+     * selection. No logic consumer exists tree-wide (the tmux/screen
+     * passthrough decorators only forward it; chafa by contrast drives
+     * its own ladder from equivalent flags). The flag answers "can
+     * SEMI-transparent pixels composite?", not "are transparent pixels
+     * mishandled?": the text renderers honour FULLY transparent pixels
+     * by omitting the pen so the terminal default shows through — see
+     * the class docblock of {@see HalfBlockRenderer} and A-05a in
+     * {@see QuarterBlockRenderer}. Giving this boolean teeth (alpha-
+     * heavy source + no-alpha backend → prefer a graphics rung) is a
+     * future auto-ladder decision, not present behaviour.
      */
     public function supportsAlpha(): bool;
 
