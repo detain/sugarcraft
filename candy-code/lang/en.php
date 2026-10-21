@@ -3075,9 +3075,9 @@ TXT,
     // --- fix-app-launch 2026-10-14 ---
     'appLaunch.doctor.mbstring_missing' => 'missing — frame width maths (mb_*) cannot run; reinstall PHP with ext-mbstring',
     'appLaunch.doctor.intl_missing' => 'missing — grapheme/IntlChar width maths cannot run; reinstall PHP with ext-intl',
-    'appLaunch.notice.policy_changed' => '⚠ config.json or hooks.yaml changed since the last launch. New project hooks stay quarantined for this launch only — review ~/.candy-code/config.json and hooks.yaml, then they are honoured.',
-    'appLaunch.notice.project_policy_changed' => '⚠ The hooks.yaml of a trusted project carries entries the last launch never saw. New project hooks stay quarantined for this launch only — review that repository\'s .candy-code/hooks.yaml, then they are honoured.',
-    'appLaunch.notice.bypass_mode' => '⚠ Permission mode is bypass-permissions: every tool call runs without a prompt. Change it with /permissions (TUI), --permission-mode, or set a different permission mode in ~/.candy-code/config.json.',
+    'appLaunch.notice.policy_changed' => '⚠ config.json or hooks.yaml changed since the last launch. New project hooks stay quarantined for this launch only — review ~/.candy-code/config.json and hooks.yaml, then they are honoured',
+    'appLaunch.notice.project_policy_changed' => '⚠ The hooks.yaml of a trusted project carries entries the last launch never saw. New project hooks stay quarantined for this launch only — review that repository\'s .candy-code/hooks.yaml, then they are honoured',
+    'appLaunch.notice.bypass_mode' => '⚠ Permission mode is bypass-permissions: every tool call runs without a prompt. Change it with /permissions (TUI), --permission-mode, or set a different permission mode in ~/.candy-code/config.json',
 
     // --- fix-w2-chat 2026-10-14 ---
     'chat.launch.echo_backend' => 'No provider is configured, so this session runs on the built-in offline echo backend — replies are echoed locally, no model is called. Run `candy-code doctor` to see what a provider needs, then press Ctrl+P to switch model once one is configured.',

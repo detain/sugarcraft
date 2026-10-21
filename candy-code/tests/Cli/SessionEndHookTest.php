@@ -68,7 +68,7 @@ final class SessionEndHookTest extends TestCase
 
         $line = NonInteractive::fireSessionEnd($manager, '', '/p', 'other');
 
-        self::assertSame("candy-code: SessionEnd hook \"archive\" refused: hook failed: RuntimeException: cannot archive\n", $line);
+        self::assertSame("candy-code: SessionEnd hook `archive` refused: hook failed: RuntimeException: cannot archive\n", $line);
     }
 
     public function testNoChainOrNoSessionEndHookIsANoOp(): void

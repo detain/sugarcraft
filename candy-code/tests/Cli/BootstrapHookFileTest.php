@@ -431,7 +431,7 @@ YAML);
 
         $stderr = $this->stderrOfABuiltBackend(root: '.');
 
-        $this->assertStringContainsString('"' . realpath($this->project) . '"', $stderr);
+        $this->assertStringContainsString('`' . realpath($this->project) . '`', $stderr);
         $this->assertStringNotContainsString('Add "." to', $stderr);
     }
 
