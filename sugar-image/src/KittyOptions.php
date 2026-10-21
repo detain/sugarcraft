@@ -323,7 +323,11 @@ final class KittyOptions
     {
         return [
             'a' => $this->action,
-            'i' => $this->imageId !== 0 ? $this->imageId : null,
+            // S7.1 follow-up (audit row S1.9/M2): 0 is a real kitty image
+            // id, not an unset sentinel — withImageId(0) used to serialize
+            // as null and the driver placed un-addressable frames. Other
+            // zero fields keep their omit-when-default shape.
+            'i' => $this->imageId,
             'z' => $this->zIndex !== 0 ? $this->zIndex : null,
             // 'o' is the spec's transmission-compression key; 'f' stays the
             // data format and is emitted by the renderer as a constant 100.

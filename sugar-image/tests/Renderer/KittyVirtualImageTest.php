@@ -37,17 +37,18 @@ final class KittyVirtualImageTest extends TestCase
         $this->assertStringEndsWith("\x1b_Ga=p,i=1,U=1\x1b\\", $out);
     }
 
-    public function testUseVirtualWithoutImageIdOmitsI(): void
+    public function testUseVirtualWithoutImageIdCarriesAZeroId(): void
     {
         $image = ImageSource::fromFile(__DIR__ . '/../fixtures/4x2.png');
         $opts  = KittyOptions::transmit()->withUseVirtual(true);
 
         $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
 
-        // Store frame still opens with a=T,U=1 but no i=.
-        $this->assertStringStartsWith("\x1b_Ga=T,U=1,f=100,q=2,c=8,r=4,m=1;\x1b\\", $out);
-        // Control frame still places virtually, still without i=.
-        $this->assertStringEndsWith("\x1b_Ga=p,U=1\x1b\\", $out);
+        // S1.9/M2: the default transmit's id 0 is real and now serializes —
+        // both frames carry i=0 (previously i= was dropped and the placed
+        // image was un-addressable by any consumer that chose id 0).
+        $this->assertStringStartsWith("\x1b_Ga=T,U=1,i=0,f=100,q=2,c=8,r=4,m=1;\x1b\\", $out);
+        $this->assertStringEndsWith("\x1b_Ga=p,i=0,U=1\x1b\\", $out);
     }
 
     public function testUseVirtualWithZIndexStoresZOnTheStoreFrame(): void

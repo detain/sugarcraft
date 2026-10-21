@@ -83,13 +83,13 @@ final class KittyOptionsTest extends TestCase
         $this->assertStringContainsString('f=100', $out);
     }
 
-    public function testKittyOptionsToArrayOmitsZeroDefaults(): void
+    public function testKittyOptionsToArraySerializesZeroImageIdButOmitsOtherZeroDefaults(): void
     {
         $opts = KittyOptions::transmit(0);
         $arr  = $opts->toArray();
 
-        // imageId=0 should be omitted (null)
-        $this->assertNull($arr['i']);
+        // S1.9/M2 cure: id 0 is a real addressable image, serialized as-is.
+        $this->assertSame(0, $arr['i']);
         // z=0 should be omitted
         $this->assertNull($arr['z']);
         // no compression requested → o omitted, and f never carries

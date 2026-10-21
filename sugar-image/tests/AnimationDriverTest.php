@@ -10,6 +10,7 @@ use SugarCraft\Image\AnimationDriver;
 use SugarCraft\Image\FrameTickMsg;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
+use SugarCraft\Image\Renderer\KittyRenderer;
 
 /**
  * Tests for AnimationDriver — verifies the render+delete cycle with a
@@ -204,6 +205,26 @@ final class AnimationDriverTest extends TestCase
         $expected = $this->renderer->render($this->frames[0], 4, 2);
 
         $this->assertSame($expected, $out);
+    }
+
+    public function testZeroImageIdIsAddressableOnTheKittyWire(): void
+    {
+        $kitty  = new KittyRenderer();
+        $driver = new AnimationDriver(
+            animation:  $this->animation,
+            renderer:   $kitty,
+            cellWidth:  4,
+            cellHeight: 2,
+            imageId:    0,
+        );
+
+        // S1.9/M2 cure: id 0 used to serialize as null, so the frame was
+        // transmitted with no i= at all and delete() could never target it.
+        $this->assertStringStartsWith("\x1b_Ga=T,i=0,f=100,q=2,c=4,r=2,m=1;\x1b\\", $driver->view());
+
+        // Nonzero edge pair for the same serialization flip.
+        $driver = $driver->withImageId(42);
+        $this->assertStringStartsWith("\x1b_Ga=T,i=42,f=100,q=2,c=4,r=2,m=1;\x1b\\", $driver->view());
     }
 
     public function testWithIndexReturnsNewInstance(): void
