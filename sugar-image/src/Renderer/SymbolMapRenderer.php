@@ -474,7 +474,12 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
             $narrowA = $painted[$cx - 1][3];
             $narrowB = $painted[$cx][3];
             if ($narrowA === 0 || $narrowB === 0) {
-                continue; // blank or perfect solid — see the A-05a note above
+                // Load-bearing (rev-w11-2 M-1), not defense-in-depth: under
+                // Fgbg pickWide skips the opaque-halves check and halfError
+                // skips alpha-null pixels, so without this veto a wide pair
+                // commits over a solid or transparent half — the A-05a note
+                // above. Pinned by WideErrorGuardPinTest.
+                continue;
             }
 
             $wide = $this->pickWide($row[$cx - 1], $row[$cx]);

@@ -101,9 +101,9 @@ namespace SugarCraft\Image\Symbol;
  * printer's `if (cell->c == 0) continue;` byte-for-byte — no optimizer
  * change was needed because both halves share one pen pair. The C's
  * "add a space when a transparent cell precedes a continuation" idiom
- * lives on the fg-only pass only; this port's transparency discipline
- * never wide-commits over a transparent half, so it is unreachable here
- * (recorded deviation in applyWidePass).
+ * rides all four printer passes (chafa-canvas-printer.c:242/368/461/557),
+ * firing on fg AND bg transparent; this port never wide-commits over a
+ * transparent half, so it is unreachable here (deviation in applyWidePass).
  */
 final class SymbolMap
 {
