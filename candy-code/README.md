@@ -1865,6 +1865,14 @@ retries on `1` would otherwise retry it forever. It also covers a subcommand
 handed a missing or unknown operand (`candy-code session`, `candy-code mcp
 bogus`, `candy-code completion tcsh`).
 
+A stop by signal is a fourth outcome outside this table, and the TUI is the
+surface that reports it: when SIGINT, SIGTERM or SIGHUP ends the loop, the
+process exits `128+N` — `130`, `143` and `129` respectively — after the full
+teardown (terminal recovery, session persistence) that a cooperative quit
+runs, so the code tells a supervisor that *it* ended the run, not that the
+run failed. A loop the program stopped itself — `/exit`, `q`, a model-raised
+interrupt — remains a clean `0`.
+
 `--output-format json` applies to `doctor`, `models`, every `session` verb,
 `mcp list` and `mcp import`, producing the same `{"result": …}` envelope the
 one-shot path does, and
@@ -1930,7 +1938,9 @@ exits `1`, so the failure is visible to a script that never reads the text. A
 second `-p`/`--prompt` is no longer taken silently either: the last value still
 wins, and one line arrives on stderr naming what happened.
 
-Three keys are **conditional**: `refusals`, `session_id` and `usage`.
+Six keys are **conditional**: `refusals`, `session_id` and `usage`, and the
+stop trio `steps_truncated`, `length_stopped` and `loop_guard_stopped_by`
+named below.
 A turn that
 blocked a tool call — a permission ASK that nothing could answer, an explicit
 `n` at the prompt, a hook that denied the call outright — adds
@@ -1975,13 +1985,26 @@ one line per refusal, naming the tool and quoting the reason the model was
 given — which opens with `Hook denied:`, `Permission denied:` or `Permission
 required:` depending on whether a hook objected, you answered no, or nothing
 was attached to ask. The announcement happens on the one-shot path itself, so
-it appears on **both** formats: stdout under `text` stays the answer and
-nothing else, and under `json` it stays exactly one object, so a shell
+it appears on **both** formats: stdout under `text` stays the answer and never
+a refusal line (the stop trailer below is part of the answer itself), and
+under `json` it stays exactly one object, so a shell
 pipeline and `jq` are both unaffected. The interactive TUI has never had this
 gap — it draws a refused call struck through — but a **background session**
 still does: its runner calls the backend with a token callback and no event
 callback, so nothing downstream ever sees the refusal to announce it. That
 gap is known and recorded.
+
+**A turn the engine stopped early says so.** When the step ceiling, the
+provider's output limit, or the repeat-call loop guard ended the turn, a
+`--output-format text` run appends one plain, ANSI-free trailer line per stop
+condition after the answer, and a `json` run (or a stream-json run's final
+line) gains the matching conditional keys: `steps_truncated: true`,
+`length_stopped: true`, or `loop_guard_stopped_by: "<tool>"` — present only
+when that stop happened, absent rather than false, so `jq` consumers see the
+same presence discipline as the other optional keys. A clean turn still ends
+at the answer alone. The exit code never changes for a stopped-but-answered
+run: `0` still means an answer arrived, and these markers mean it is a
+partial one.
 
 Three of the seven are **not** `NonInteractive::emitErrorDocument()`'s, and
 that is the thing to know if you are reading the source to find where a type
