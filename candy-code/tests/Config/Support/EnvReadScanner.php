@@ -96,6 +96,40 @@ final class EnvReadScanner
     public const NAME_PATTERN = '/^CANDY_CODE_[A-Z0-9_]+$/';
 
     /**
+     * The SECOND alphabet: environment variables outside our own prefix that
+     * `src/` nonetheless READS — the provider credential and endpoint family
+     * (`ANTHROPIC_API_KEY`, `OPENAI_BASE_URL`, `AWS_REGION`, …) and the two
+     * Claude Code names the foreign-memory import reads where Claude Code
+     * keeps its own state (`CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_PROJECT_DIR_NAME`).
+     *
+     * WHY AN EXACT LIST AND NOT A PREFIX RULE: the `CANDY_CODE_` family earns
+     * fail-closed treatment because every occurrence of one of OUR names is a
+     * promise this package made — an unplaced literal is a defect to report.
+     * An external name appears in string literals for reasons that are not
+     * reads at all: scrub lists, error-hint maps, login tables. Reporting
+     * those as unplaced promises would have the census crying wolf on shapes
+     * that are correct by design, so the ambient half of the alphabet is an
+     * explicit allowlist of names, and an ambient literal joins the census
+     * ONLY when a call shape proves the read (S1, S3, S4).
+     *
+     * The OS-family names (`PATH`, `HOME`, `TMPDIR`, the locale trio) are NOT
+     * listed here: they already have their own bidirectional oracle
+     * (`EnvRosterDriftTest` pins them against the page's "OS variables"
+     * table), and a name policed twice from two places drifts once.
+     *
+     * `GOOGLE_APPLICATION_CREDENTIALS` is deliberately absent: nothing in
+     * `src/` reads it — the Google SDK vendored beside this package does, at
+     * its own layer — and a census does not document what the code it scans
+     * never touches.
+     */
+    public const AMBIENT_PATTERN = '/^(?:' . self::AMBIENT_NAMES . ')$/';
+
+    /** The alternation body shared by {@see AMBIENT_PATTERN} and the roster scrape. */
+    public const AMBIENT_NAMES = 'ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL'
+        . '|AWS_DEFAULT_REGION|AWS_REGION|CLAUDE_CODE_PROJECT_DIR_NAME|CLAUDE_CONFIG_DIR'
+        . '|GCP_PROJECT_ID|GEMINI_API_KEY|GEMINI_BASE_URL|OPENAI_API_KEY|OPENAI_BASE_URL|OPENAI_ORG_ID|SGLANG_API_KEY';
+
+    /**
      * The synthetic token id for a string whose value is assembled at runtime.
      *
      * A negative id cannot collide with a real `T_*` constant, which are all
@@ -106,6 +140,16 @@ final class EnvReadScanner
 
     /** @var array<string, list<string>> name => "label:line [shape]" */
     private array $reads = [];
+
+    /**
+     * Ambient (non-prefixed) names with a PROVEN read, same record shape as
+     * {@see $reads}, kept in its own channel: `reads()` feeds the help-screen
+     * roster and the `CANDY_CODE_*` table census, neither of which is written
+     * to speak the provider family's name.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $ambientReads = [];
 
     /** @var list<array{0: string, 1: string}> [name, "label:line"] */
     private array $unplaced = [];
@@ -304,6 +348,27 @@ final class EnvReadScanner
     }
 
     /**
+     * Ambient (non-`CANDY_CODE_*`) names with a proven read, name => sites.
+     *
+     * Only the shapes that DEMONSTRATE a read land here — an ambient literal
+     * the classifier cannot place is a mention in a scrub list or a hint map,
+     * which is ordinary prose with quotes around it, not a defect. The failure
+     * mode this channel does NOT cover is an ambient name assembled from
+     * pieces at runtime: fragments speak the CANDY alphabet, and no shipped
+     * code builds one of these names in pieces (measured over `src/` when the
+     * channel was cut).
+     *
+     * @return array<string, list<string>>
+     */
+    public function ambientReads(): array
+    {
+        $out = $this->ambientReads;
+        ksort($out);
+
+        return $out;
+    }
+
+    /**
      * Occurrences the scanner could not place, and constants it could not
      * follow to a `getenv()`.
      *
@@ -322,7 +387,7 @@ final class EnvReadScanner
             }
         }
         foreach ($this->constValue as $constant => $value) {
-            if (!isset($this->reads[$value])) {
+            if (!isset($this->reads[$value]) && !isset($this->ambientReads[$value])) {
                 $out[] = 'const ' . $constant . ' = ' . $value . ' — declared, but no occurrence reaches getenv()';
             }
         }
@@ -543,7 +608,10 @@ final class EnvReadScanner
                 continue;
             }
             $value = self::stringValue($token);
-            if ($value === null || preg_match(self::NAME_PATTERN, $value) !== 1) {
+            if ($value === null
+                || (preg_match(self::NAME_PATTERN, $value) !== 1
+                    && preg_match(self::AMBIENT_PATTERN, $value) !== 1)
+            ) {
                 continue;
             }
             if (($sig[$i - 1]['text'] ?? '') === '=' && ($sig[$i - 3]['text'] ?? '') === 'const') {
@@ -562,7 +630,15 @@ final class EnvReadScanner
 
             if ($sig[$i]['id'] === \T_CONSTANT_ENCAPSED_STRING) {
                 $value = self::stringValue($sig[$i]);
-                if ($value === null || preg_match(self::NAME_PATTERN, $value) !== 1) {
+                if ($value === null) {
+                    continue;
+                }
+                if (preg_match(self::AMBIENT_PATTERN, $value) === 1) {
+                    $this->scanAmbient($sig, $i, $n, $value, $label);
+
+                    continue;
+                }
+                if (preg_match(self::NAME_PATTERN, $value) !== 1) {
                     continue;
                 }
                 // The constant's DECLARATION is not a read; its uses are.
@@ -589,6 +665,18 @@ final class EnvReadScanner
             ) {
                 $value = $this->constValue[$sig[$i]['text']];
                 $first = $i - 2;
+                if (preg_match(self::AMBIENT_PATTERN, $value) === 1) {
+                    // S2 through the ambient alphabet: `getenv(self::X_ENV)`
+                    // is the Claude Code pair's only read shape, so the
+                    // constant-follows-to-a-read rule applies to names the
+                    // page tabulates no less than to names we own.
+                    $shape = $this->classify($sig, $first, $n);
+                    if ($shape !== null) {
+                        $this->ambientReads[$value][] = $label . ':' . $sig[$i]['line'] . ' [' . $shape . ']';
+                    }
+
+                    continue;
+                }
             } else {
                 continue;
             }
@@ -602,6 +690,36 @@ final class EnvReadScanner
             }
             $this->reads[$value][] = $site . ' [' . $shape . ']';
         }
+    }
+
+    /**
+     * One ambient-alphabet literal, placed or ignored — never reported.
+     *
+     * Shares {@see classify()} with the CANDY half because the call shapes
+     * that prove a read are the language's, not the prefix's: `getenv(`,
+     * a forwarded parameter, a `foreach` head whose variable reaches
+     * `getenv()`. A constant declaration and a piece glued to `.` are
+     * skipped the same way the main path skips them; the difference is what
+     * happens to a miss. The CANDY path files it under `unplaced` because an
+     * occurrence of our own name that is neither a read nor a rescued
+     * mention is a defect; an ambient miss is a scrub-list row, so it is
+     * simply not evidence of anything.
+     */
+    private function scanAmbient(array $sig, int $i, int $n, string $value, string $label): void
+    {
+        if (($sig[$i - 1]['text'] ?? '') === '=' && ($sig[$i - 3]['text'] ?? '') === 'const') {
+            return;
+        }
+        if (($sig[$i - 1]['text'] ?? '') === '.' || ($sig[$i + 1]['text'] ?? '') === '.') {
+            return;
+        }
+
+        $shape = $this->classify($sig, $i, $n);
+        if ($shape === null) {
+            return;
+        }
+
+        $this->ambientReads[$value][] = $label . ':' . $sig[$i]['line'] . ' [' . $shape . ']';
     }
 
     private static function literal(string $token): ?string

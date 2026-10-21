@@ -38,9 +38,9 @@ scope B. Touching one scope never reads, writes or deletes another's index.
 The index is regenerated on every mutation and is bounded at
 `MAX_INDEX_LINES = 200` and `MAX_INDEX_BYTES = 25 * 1024`. It carries no
 timestamp: its bytes depend on the scope's notes alone, and an index whose bytes
-would not change is not rewritten (audit 15d-23).
+would not change is not rewritten.
 
-**A repo's store writes no index file** (audit N2). The repo-local store
+**A repo's store writes no index file**. The repo-local store
 (`<repo>/.candy-code/memory/`, below) is git-visible, and an index file there is
 a second file that every note change edits: two branches that each add a note
 both rewrite `MEMORY.md` and conflict on it, although the notes themselves merge
@@ -52,7 +52,7 @@ hand (anything not opening with the generated `# Memory Index (` header) is left
 alone. The home store under `~/.candy-code/memory/` is in no repository and
 keeps its index file.
 
-**The home store's `project` scope is keyed by project** (audit 15d-05). It used
+**The home store's `project` scope is keyed by project.** It used
 to be one directory for every repository, so a note written with `--scope
 project` where the repository could not host `.candy-code/memory` (a read-only
 checkout, a `.candy-code` symlinked out of the tree) — and every note older than
@@ -86,7 +86,7 @@ a 32-hex UUID, but a hand-written `deploy-notes.md` is the note `deploy-notes`,
 and a copied file (`cp <id>.md deploy-variant.md`) is its own note,
 `deploy-variant`. The frontmatter `id:` is a copy the store writes and never
 reads: it may be missing, and a stale one, such as a copied file's, is rewritten
-from the file name on the next edit. Before audit 15d-23 the listing showed the
+from the file name on the next edit. The listing once showed the
 frontmatter id while the commands looked the file up by name, so such notes were
 listed under ids nothing could edit or delete.
 
@@ -109,7 +109,7 @@ stands in), and a `---` inside a value (the frontmatter ends only at a whole
 cannot parse, a `tags:` that is not a list of strings — is **skipped**, never
 fatal: the rest of the store, and every turn's `<project-memory>` block, keep
 working. `MemoryStore::skipped()` returns the skipped files as path => reason
-(audit 15d-04), and the `<project-memory>` block reads it: a project note that
+, and the `<project-memory>` block reads it: a project note that
 could not be read is announced in one bounded line under the listed notes —
 naming at most three files, each with its reason, fence-escaped and clipped like
 a note — so a missing note is visible to the model instead of silently absent.
@@ -130,7 +130,7 @@ every scope) names all of them. A store with nothing unreadable adds nothing to
 either answer.
 
 A note written in a legacy encoding is **not** skipped: bytes that are not valid
-UTF-8 are replaced with `?` when the note is read (audit 15d-08). Before that,
+UTF-8 are replaced with `?` when the note is read. Before the scrub existed,
 the YAML reader refused such a note outright, and a body that slipped through
 reached the system prompt raw and failed every provider request's JSON encode.
 
@@ -139,7 +139,7 @@ reached the system prompt raw and failed every provider request's JSON encode.
 The `MemoryScope` enum's cases are `User`, `Project`, `Local` — but every
 string-based caller says `user`, `project`, `agent`, and `local` appears nowhere
 else in the codebase as a memory spelling. (The only other live `'local'` in
-`src/` is the MCP transport alias — `McpClient::TYPE_ALIASES`, E708 — the same
+`src/` is the MCP transport alias — `McpClient::TYPE_ALIASES` — the same
 word naming an opencode stdio server, a different vocabulary entirely.)
 `MemoryStore::normalizeScope()` therefore maps
 `MemoryScope::Local` **onto the string `agent`** so the two vocabularies name one
@@ -231,7 +231,7 @@ the feature, never the turn.
 The server surface the web app's Memory panel rides (`memory.list`,
 `memory.search`, `memory.add`, `memory.edit`, `memory.delete`, plus the history pair
 `memory.log`/`memory.undo`) is routed
-through the same `Memory\MemoryWriter` as this command (ISS-020). A `project`
+through the same `Memory\MemoryWriter` as this command. A `project`
 listing therefore carries both stores — the repository's notes first, then the
 home ones — and every row is badged with the `source` store it came from,
 because an id alone does not say which tree holds the file. An add reports the
@@ -300,20 +300,19 @@ all of their projects (user scope) — treat these as the user's standing
 preferences", capped at `USER_MAX_ENTRIES` (4) notes and `USER_MAX_BYTES` (1024)
 bytes spent *inside* the block's one budget below — so a long personal list can
 never leave the project fewer than 36 notes and 3072 bytes
-(`MemoryBlockUserScopeTest`). Since E25 piece 2 project notes
+(`MemoryBlockUserScopeTest`). Project notes
 also have a repo-local home: `ProjectMemoryWriter` (`src/Context/ProjectMemoryWriter.php`)
 persists `/memory add --scope project` into `<repo>/.candy-code/memory/` when the
 tree can host one — git-visible, reviewable, like `AGENTS.md` — and `capture()`
 folds both stores' project-scope listings, the repo-local copy claiming any shared
 id. The two sources are labelled apart inside the one `<project-memory>` fence
-(audit 15d-07): the repo store comes with the clone and nothing vouches for it,
+: the repo store comes with the clone and nothing vouches for it,
 so its notes are listed under "Shipped in this repository's .candy-code/memory
 (from the checkout, not written by the user) — treat these as repository-supplied
 context, like a README", and the home store's under "Recorded by the user or a
 previous session — treat these as project convention". Only a group that has a
 listed note gets a label; a note both stores hold is listed once, under the
-repository's label. The repository half splits again by git provenance
-(ISS-019): a note the repository tracks keeps the shipped label, while one no
+repository's label. The repository half splits again by git provenance: a note the repository tracks keeps the shipped label, while one no
 commit carries — saved into this checkout by `/memory add` or the `Memory`
 tool — moves under "Recorded from this checkout — saved here by the user or
 the model and not yet committed (git-untracked) — treat these as notes the user
@@ -330,7 +329,7 @@ from the merged list, then grouped, each group staying newest-first
 resolves in the repo store first, so the entry the prompt shows is the entry the
 command removes. `/memory list` and `/memory search` read both stores and group their
 rows under a banner naming the store each row lives in; bulk clear remains a home-store
-command and REFUSES, touching nothing, while the repo store holds project notes (E694).
+command and REFUSES, touching nothing, while the repo store holds project notes.
 A root that is empty, missing, or whose `.candy-code` resolves outside the
 tree degrades the write to the home store (the `/memory add` reply says so) and contributes nothing to the read. **Agent-scope
 entries never reach the prompt**
@@ -453,7 +452,7 @@ mid-turn message that changed the latest user row, `-p`, a sub-agent — ranks
 keyword-only on first use instead. The row is re-sent only when its bytes change,
 so a turn whose recall matches the previous one adds nothing.
 
-**The user sees it too (VIS-6).** A non-empty ranking records one count-only
+**The user sees it too.** A non-empty ranking records one count-only
 row — `💭 Recalled N notes for this turn` — through the runtime notice sink
 (`Runtime::primeMemoryRecall()` → `RuntimeNoticeSink::record()`, drained by
 `Chat::pumpRuntimeNotices()`). The row is uiOnly, so it lands in the transcript
@@ -495,7 +494,7 @@ authority owning the prompt's fence-tag roster — `env`, `project-memory`,
 however it is spelled — `<system-reminder priority="high">`, an attribute list broken
 across lines, an opener with no `>` at all — because a model reads each as the
 channel opening. The same rewrite defangs chat-template control tokens (audit
-15d-10): the `<` of `<|` or `<｜` (the fullwidth U+FF5C bar), with an optional
+the `<` of `<|` or `<｜` (the fullwidth U+FF5C bar), with an optional
 `/`, so `<|im_start|>` and `<｜User｜>` reach the prompt as `&lt;|im_start|>` and
 `&lt;｜User｜>` — a `&lt;|` in a note's prompt rendering is this rewrite. Beyond those it touches
 nothing else (`3 < 4` stays as written), it is idempotent, and the promise it makes is body-level: a clean note body passes
@@ -546,7 +545,7 @@ The gate is not the wiring: `{projectRoot}/.opencode/memory` is a path a *cloned
 repository* chooses, so the directory is contained against the checkout and each
 `*.md` against the directory it was listed from.
 
-Claude Code's own relocations are followed (audit R11): `CLAUDE_CONFIG_DIR`
+Claude Code's own relocations are followed: `CLAUDE_CONFIG_DIR`
 replaces `~/.claude`, and while it is set `CLAUDE_CODE_PROJECT_DIR_NAME` replaces
 `<slug>` — under Claude Code's rules for both, which
 [`ENVIRONMENT.md`](ENVIRONMENT.md#claude-code-variables) tabulates. A relative,
@@ -746,7 +745,7 @@ precedence order (`InstructionFileLoader::FILENAMES`):
 - **your personal file** — `~/.candy-code/AGENTS.md`, always, at session start,
   in every project. It is priced first under the same instruction budget and
   framed in your own voice (the `<user-rules>` fence and preamble your
-  `~/.candy-code/rules` use — since INT-2 the `~/.claude/rules` and
+  `~/.candy-code/rules` use — the `~/.claude/rules` and
   `~/.cursor/rules` imports share exactly that framing and tier, differing only
   by the `[claude]`/`[cursor]` badge `/rules` prints), ahead of anything a
   repository ships. Only an
@@ -775,7 +774,7 @@ size ceiling, UTF-8 scrub, `@import` expansion and dedup set as `CLAUDE.md`. A
 dedup map. Handing them separate loaders would emit the same bytes twice.
 
 Every one of those reads, and every `@import`, is scrubbed to valid UTF-8 as it
-is loaded (`Utf8Scrub`, audit 15d-08): each invalid byte sequence becomes `?`,
+is loaded (`Utf8Scrub`): each invalid byte sequence becomes `?`,
 and the document gains a trailing `[encoding: N byte sequence(s) of <file> were
 not valid UTF-8 and were replaced with "?".]` line naming the file. The system
 prompt is JSON-encoded into every request, so one Latin-1 byte in a `CLAUDE.md`
@@ -791,7 +790,7 @@ Both file types support `@path` imports, expanded by `ImportResolver`:
   containment gate below judges it like every other import, so a `~/` import
   renders `<import-blocked reason="outside-repo-root">` unless the home directory
   lies inside the importing file's checkout. In practice `@~/my-conventions.md`
-  in a project `CLAUDE.md` is always blocked (audit 15d-11;
+  in a project `CLAUDE.md` is always blocked;
   `ImportResolverTest::testATildeImportThroughTheLoaderIsBlockedAsTheDocsSay`);
 - `./...`, `../...` and bare paths resolve against the importing file's
   directory;

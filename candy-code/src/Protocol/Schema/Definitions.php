@@ -93,7 +93,7 @@ final class Definitions
                 'status' => Schema::enum(['idle', 'busy', 'waiting_permission']),
                 'turnId' => Schema::string(),
                 'messages' => Schema::arrayOf(Schema::map(Schema::any()))->describe('Transcript rows, as they are saved; a paged snapshot carries only its window.'),
-                'totalMessages' => Schema::integer(0)->describe('Paged snapshots (ISS-058): every row the session holds.'),
+                'totalMessages' => Schema::integer(0)->describe('Paged snapshots: every row the session holds.'),
                 'oldestIndex' => Schema::integer(0)->describe('Paged snapshots: index of the first carried row in the full history; appending never shifts it.'),
                 'hasMoreOlder' => Schema::boolean()->describe('Paged snapshots: older rows exist; ask session.get with beforeIndex = oldestIndex.'),
                 'queued' => Schema::arrayOf(Schema::string()),
@@ -133,7 +133,7 @@ final class Definitions
                 'content' => Schema::string(),
                 'createdAt' => Schema::string(),
                 'modifiedAt' => Schema::string(),
-                'source' => Schema::enum(['home', 'repo'])->describe('Which store holds the note: the repository\'s .candy-code/memory/ or the home directory (ISS-020).'),
+                'source' => Schema::enum(['home', 'repo'])->describe('Which store holds the note: the repository\'s .candy-code/memory/ or the home directory.'),
             ], ['id', 'scope', 'content', 'source']),
             self::ENVELOPE => Schema::object([
                 'sessionId' => Schema::ref(self::SESSION_ID)->nullable(),
@@ -196,7 +196,7 @@ final class Definitions
                     'bytes' => Schema::integer(0),
                     'tier' => Schema::enum(['project', 'personal']),
                 ], ['path', 'bytes', 'tier']))->nullable()->describe('The documents the system prompt splices — names and sizes, bodies never (roadmap VIS-2a); null when this server could not price them.'),
-                'memorySections' => Schema::arrayOf(Schema::ref(self::MEMORY_ENTRY))->describe('Every note of both stores across all scopes, the `memory.list` grouping rule (repo rows first, ISS-020).'),
+                'memorySections' => Schema::arrayOf(Schema::ref(self::MEMORY_ENTRY))->describe('Every note of both stores across all scopes, the `memory.list` grouping rule (repo rows first).'),
                 'skills' => Schema::arrayOf(Schema::object([
                     'name' => Schema::string(),
                     'tier' => Schema::string()->describe('Who put the file there — a SkillOrigin value, not the format.'),
@@ -211,7 +211,7 @@ final class Definitions
                         'transport' => Schema::string(),
                         'trust' => Schema::enum(['trusted'])->describe('Rows exist only while the file is trusted; the http entry\'s URL stays off the wire (the `server.hello` media restraint, restated).'),
                     ], ['name', 'transport', 'trust'])),
-                ], ['status', 'error', 'skipped', 'servers'])->describe('The `.mcp.json` declaration as `candy-code mcp list` reads it (ISS-091 census), minus per-entry details.'),
+                ], ['status', 'error', 'skipped', 'servers'])->describe('The `.mcp.json` declaration as `candy-code mcp list` reads it, minus per-entry details.'),
                 'untrusted' => Schema::arrayOf(Schema::object([
                     'path' => Schema::string(4096),
                     'reason' => Schema::string(),

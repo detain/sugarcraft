@@ -53,7 +53,7 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
 7. **Instruction documents** — `InstructionFileLoader::loadRoot()` then `loadForced()` (read
    through their path-keyed sibling `loadDocuments()`), each non-blank document its own
    `project-instructions` fence with the project-authority preamble. Budgeted like the rules
-   (audit 15d-09, C3): each document's framed, post-escape section is held to
+   : each document's framed, post-escape section is held to
    `Runtime::MAX_INSTRUCTION_DOCUMENT_BYTES` and all of them together to
    `Runtime::MAX_INSTRUCTION_BYTES`, and the loader does not read a file over
    `InstructionFileLoader::MAX_DOCUMENT_BYTES` at all. A document that does not fit is never
@@ -61,7 +61,7 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    in a deferral fence, and a `refusedPaths()` entry. An `@import` that would carry its document
    past that ceiling is replaced at its import site by an `import-deferred` note carrying the same
    pointer line. The verdicts are made in one place, `Runtime::planInstructionDocuments()`, which
-   the launch also runs so one launch notice can name each file left out and why (audit R1).
+   the launch also runs so one launch notice can name each file left out and why.
 8. **Project-tier rules** — the same `project-instructions` fence and preamble as the documents,
    because the authorship claim is identical: bytes shipped inside the checkout. A
    `paths:`-scoped project rule is skipped here the same way.
@@ -84,7 +84,7 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    `EngineBackend::compactorConfig()` — the `withCompactorConfig()` one, else
    `CompactorConfig::fromSettings()` over your settings — which gives the same skill budgets,
    because no settings key feeds them; it is the source the launch notice prices against. Each build records its
-   deferrals on `Runtime::skillDeferrals()`, and the launch names them in one notice (audit R1).
+   deferrals on `Runtime::skillDeferrals()`, and the launch names them in one notice.
 11. **Skill listing** — `SkillMatcher::listForPrompt()` names the remaining *discovered* skills at
     level-1 metadata (name and description), excluding those whose bodies the previous slot
     already carries. PerTurn. Fenced `available-skills` with the skill-listing preamble and
@@ -94,8 +94,8 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
     to one line, `PromptFence::escape()`d, then clipped to `SkillPromptLine::LISTING_MAX_BYTES`, and
     opened with a provenance badge from `SkillOrigin::badge()` — `[built-in]`, `[user]`,
     `[project]`, plus `foreign: claude` or `foreign: opencode` for another tool's format
-    (audit 15d-02). `SkillPathNudge` uses the same helper at its own entry cap, without the badge.
-    Beyond the per-line clip the joined listing is bounded in AGGREGATE (ISS-022): lines ride newest
+    . `SkillPathNudge` uses the same helper at its own entry cap, without the badge.
+    Beyond the per-line clip the joined listing is bounded in AGGREGATE: lines ride newest
     source file first within a tier, and whatever `skills.listingMaxBytes` (default 8192) cannot seat
     together with the collapse line is replaced by one `- N more skills; call Skill to list them`
     line, the drop announced once per process through `RuntimeNoticeSink` — never a silent gap.
@@ -290,7 +290,7 @@ instruction slab (user rules, `CLAUDE.md`/`AGENTS.md` with their `@import`s, for
 rules) — are memoised per **session** through `Context\SessionPromptMemo`, not per `Runtime`
 (which is per turn). They are read once, at the session's first build, and stay frozen until the
 session's entries are dropped with `SessionPromptMemo::forget()`: on `/clear` or after a
-compaction or rewind. A different session id arriving is no longer such a point (ISS-054): the
+compaction or rewind. A different session id arriving is no longer such a point: the
 memo is bucketed per session id anyway, and a serve-mode hub that multiplexes sessions on one
 backend now keeps every session's warm prefix instead of rebuilding a full repo and symbol map on
 each hop. `EngineBackend` reads that point off the history each turn runs on
@@ -378,7 +378,7 @@ other:
   `harness-injected` is the roster's one pre-registered, defang-only tag: nothing emits it yet, and
   a tag added before the bytes that need it is free, whereas a tag added after leaves a forging
   window. `available-skills` is the fence around the skill listing (slot 11), whose names and
-  descriptions are skill authors' text (audit 15d-02). `turn-context` and `system-notice` fence
+  descriptions are skill authors' text. `turn-context` and `system-notice` fence
   user-role rows outside the system prompt — the per-step state row and a history notice kept in
   place — and are on the roster so no repository byte can spell either harness voice.
 - **Attribute-bearing and unterminated tags count.** A roster name matches when whitespace, `/`,
@@ -386,7 +386,7 @@ other:
   list broken across lines and an unterminated `<system-reminder foo="x"` all lose their `<` — a
   reader model takes each for the channel opening. `<envx>` (another name) and `< env>` (not tag
   syntax) stay byte-intact.
-- **Chat-template control tokens too (audit 15d-10).** The same rewrite defangs the `<` of a
+- **Chat-template control tokens too.** The same rewrite defangs the `<` of a
   control-token opener, `<|` or `<｜` (the fullwidth U+FF5C bar) with an optional `/` after the
   `<` — the bars `PromptFence::CONTROL_TOKEN_PIPES` lists — so `<|im_start|>` and `<｜User｜>`
   reach the prompt as `&lt;|im_start|>` and `&lt;｜User｜>`. The roster guards the fences a model *reads*; these guard the role boundaries a tokenizer
@@ -408,7 +408,7 @@ other:
   `/u` pattern on invalid input does not degrade, it fails. The roster names are ASCII.
   Encodability is a separate guarantee, made earlier: every loader that reads a prompt source
   off disk — instruction files and their imports, rules, skills, memory notes, the repo map's
-  manifests — scrubs it to valid UTF-8 through `Utf8Scrub` (audit 15d-08), because the prompt
+  manifests — scrubs it to valid UTF-8 through `Utf8Scrub`, because the prompt
   is JSON-encoded into every request and one invalid byte used to fail all of them.
 
 The provenance voice rides under its opener, split from the escaped body by a blank line:
@@ -449,8 +449,8 @@ but they consume slots from the same cap: `CacheBreakpoints::BUDGET_WITH_AUTOMAT
 explicit budget minus one. Input already breaching the cap on foreign marks throws rather than
 returning a doomed request.
 
-**It is armed on two wires: Claude on `vertex` and the native `anthropic` arm** (audit A15,
-ISS-023). The shared `AnthropicMessagesWire` trait hands every Anthropic-shaped request body to
+**It is armed on two wires: Claude on `vertex` and the native `anthropic` arm**.
+The shared `AnthropicMessagesWire` trait hands every Anthropic-shaped request body to
 `apply()` just before it is sent — on `VertexProvider`'s `:rawPredict` and on
 `AnthropicProvider`'s `POST /v1/messages` — which is every step of a turn.
 The system prompt rides in as a leading `role: system` turn **in block form** and is lifted back
@@ -552,7 +552,7 @@ reason each stays out:
   renders into every session — but what is ignored is now NAMED, not silent: the
   `FrontmatterKeyAudit` `INERT[RULE]` roster carries `keywords`, so a rule file
   declaring it gets an audit row at launch. The `models:` half shipped its
-  mechanism (ISS-068): `RuleLoader::matchesSessionModel()` judges a rule's
+  mechanism: `RuleLoader::matchesSessionModel()` judges a rule's
   `models:` globs against the session model — case-insensitive `fnmatch` against both the
   full identifier and the part after its last `/` — and `load()` drops the rule when the
   model is known and no pattern matches. The seam is closed: the prompt assembly in

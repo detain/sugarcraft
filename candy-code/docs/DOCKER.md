@@ -122,6 +122,22 @@ The build context is the `candy-code/` directory; the Dockerfile COPYs only
 the entrypoint script and pulls the rest from Packagist, so a dirty working
 tree cannot leak into an image built from this definition.
 
+## Long-lived containers and `/tmp`
+
+Agent results, hook sidecars, and shell-out scratch live under the system
+temporary directory — among them the `sc_pool_<pid>_<hex>` result directories
+each agent run claims. The process reclaims them when their reader finishes,
+and a startup sweep bounds what a crash can strand: entries older than an hour
+whose owning process is gone are released, while anything never stamped is
+left alone — a sweep that guesses ownership deletes live state. What the app
+cannot control is the host's own policy for `/tmp`: under systemd,
+`tmpfiles.d` ages temporary files out on a distro-configured deadline, and a
+container kept up for weeks will eventually have live scratch removed under
+it. A long-lived container should therefore point `TMPDIR` at a persistent
+volume instead of the built-in `/tmp`; the startup environment reads it (a
+mid-process `putenv` does not move `sys_get_temp_dir()` — see
+[ENVIRONMENT.md](ENVIRONMENT.md) for the `TMPDIR` row).
+
 ## See also
 
 - [SERVER.md](SERVER.md) — the serve surface, tokens and the wire protocol.
