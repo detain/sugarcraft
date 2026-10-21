@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Config;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\LayeredSettings;
+use SugarCraft\Code\Lang;
 
 /**
  * The layering itself, driven directly: precedence, the two whitelists, the two
@@ -20,6 +22,7 @@ final class LayeredSettingsTest extends TestCase
     private string $tmpRoot;
     private string $projectRoot;
     private string $userDir;
+    private ?string $savedConfigOverride = null;
 
     protected function setUp(): void
     {
@@ -31,10 +34,19 @@ final class LayeredSettingsTest extends TestCase
 
         mkdir($this->projectRoot . '/' . LayeredSettings::dir(), 0o700, true);
         mkdir($this->userDir, 0o700, true);
+
+        // keyAuditRows now consults Bootstrap::userConfigPath() (v1 F-6
+        // residual). Pin the override at THIS test's own user-tier file so a
+        // sibling test's leftover override — or the suite-pinned HOME's real
+        // config.json — can never leak rows into the exact counts below; the
+        // branch short-circuits when the explicit path IS the audited one.
+        $this->savedConfigOverride = (new \ReflectionProperty(Bootstrap::class, 'configPathOverride'))->getValue();
+        Bootstrap::useConfigPath($this->userDir . '/config.json');
     }
 
     protected function tearDown(): void
     {
+        Bootstrap::useConfigPath($this->savedConfigOverride);
         $this->removeTree($this->tmpRoot);
 
         parent::tearDown();
@@ -617,6 +629,66 @@ final class LayeredSettingsTest extends TestCase
 
         self::assertCount(1, $userOnly);
         self::assertStringContainsString($this->userDir . '/config.json', $userOnly[0]);
+    }
+
+    /**
+     * v1 F-4: a corrupt PROJECT-tier file used to fail open silently while a
+     * corrupt USER file is an exit-2 fatal. The audit walk now names it; a
+     * valid-but-empty `{}` still says nothing (empty is not corrupt), and
+     * the APPLY path keeps its silence — projectLayer with an untrusted root
+     * never opens these files at all, which is the existing trust model
+     * kept honest: announcement is the diagnosis channel's job, application
+     * is the trust grant's.
+     */
+    public function testTheAuditNamesACorruptProjectFileWhileTheApplyPathStaysSilent(): void
+    {
+        $shared = $this->projectRoot . '/' . LayeredSettings::SHARED_PATH;
+        file_put_contents($shared, '{"maxToolSteps": ');
+
+        json_decode('{"maxToolSteps": ');
+        $reason = json_last_error_msg();
+
+        $rows = LayeredSettings::keyAuditRows($this->userDir, $this->projectRoot);
+        $joined = implode("\n", $rows);
+
+        self::assertCount(1, $rows, $joined);
+        self::assertStringContainsString(Lang::t('cli.settings.corrupt_file', ['file' => $shared, 'error' => $reason]), $joined);
+
+        // Same corrupt file, untrusted apply: nothing merges and nothing is
+        // even attempted to be read.
+        self::assertSame([], LayeredSettings::projectLayer($this->projectRoot, false), 'an untrusted root contributes no settings');
+        self::assertSame([], LayeredSettings::projectFiles($this->projectRoot, false), 'the untrusted walk does not open the files');
+
+        // A valid empty object is not corrupt: silence.
+        file_put_contents($shared, '{}');
+        self::assertSame([], LayeredSettings::keyAuditRows($this->userDir, $this->projectRoot));
+    }
+
+    /**
+     * v1 F-6 residual: `--config <file>` REPLACES the user-tier config.json,
+     * and the audit used to read only the configDir() location — nonsense
+     * provider values in the file actually in use fell back to their
+     * defaults with no word while the identical nonsense in a user file
+     * warns. The override is now audited too, and not double-audited when it
+     * IS the file the audit already reads.
+     */
+    public function testTheAuditCoversAnExplicitConfigFileThatReplacesTheUserTier(): void
+    {
+        $explicit = $this->tmpRoot . '/chosen.json';
+        file_put_contents($explicit, '{"bogusKeyNoMatchQz": 1, "maxToolSteps": "lots"}');
+        Bootstrap::useConfigPath($explicit);
+
+        $rows = LayeredSettings::keyAuditRows($this->userDir);
+        $joined = implode("\n", $rows);
+
+        self::assertCount(2, $rows, $joined);
+        self::assertStringContainsString('bogusKeyNoMatchQz in ' . $explicit, $joined);
+        self::assertStringContainsString('maxToolSteps in ' . $explicit . ' will fall back to its default', $joined);
+
+        // No double-report: when the explicit file IS the audited user file,
+        // its rows appear once.
+        $rowsTwice = LayeredSettings::keyAuditRows(dirname($explicit));
+        self::assertCount(2, $rowsTwice, implode("\n", $rowsTwice));
     }
 
     /**

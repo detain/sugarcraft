@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Config;
 
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\Settings\SettingType;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
 use SugarCraft\Code\Lang;
@@ -1288,10 +1289,82 @@ final class LayeredSettings
         if ($root !== null && trim($root) !== '') {
             foreach (self::projectFiles($root, true) as $path => $decoded) {
                 $rows = [...$rows, ...self::auditTopLevelKeys((string) $path, $decoded, self::PROJECT_TIER_KEYS)];
+
+                // v1 F-4: a corrupt project-tier file used to fail open with
+                // no word while a corrupt USER file is an exit-2 fatal. The
+                // audit walk already reads these files (the doc-block above
+                // argues why: reading is not applying), so this tier's
+                // nonsense now surfaces at launch and from `doctor` — for
+                // the TRUSTED-root walk, which is what this call takes.
+                // Nothing is recorded for an untrusted root's apply path
+                // ({@see projectLayer()} never consults this), which is the
+                // existing trust model kept honest.
+                if ($decoded === []) {
+                    $reason = self::unusableSettingsFileReason((string) $path);
+                    if ($reason !== null) {
+                        $rows[] = Lang::t('cli.settings.corrupt_file', [
+                            'file' => (string) $path,
+                            'error' => $reason,
+                        ]);
+                    }
+                }
             }
         }
 
+        // v1 F-6 residual: an explicit --config file REPLACES the user-tier
+        // config.json the first line above reads, but configDir() ignores the
+        // override — so provider nonsense in the file actually in use fell
+        // back to defaults silently while the same value in a user file
+        // warns. Audit the override too when it is not the file already
+        // covered (`doctor` passes dirname(Bootstrap::userConfigPath()), so
+        // there the two coincide and this adds nothing).
+        $explicit = Bootstrap::userConfigPath();
+        if ($explicit !== '' && $explicit !== $configPath) {
+            $rows = [...$rows, ...self::auditTopLevelKeys($explicit, self::decodedFile($explicit), SettingsSchema::keys())];
+        }
+
         return $rows;
+    }
+
+    /**
+     * Why this settings file is present but unusable, or null when it is
+     * simply absent, unreadable, or a valid (even empty) JSON object.
+     *
+     * Re-reads the raw bytes on purpose: {@see readFile()}'s tolerance is the
+     * very thing being diagnosed — it folds missing, unparseable, and empty
+     * all into `[]`, and this has to tell `{}` (a valid file that
+     * contributes nothing) from `[` (a corrupt one). A file whose bytes
+     * cannot be read at all stays silent: the existing doc-block in
+     * {@see readFile()} argues that chmod'd-away invisibility is deliberate,
+     * and v1 F-4 is about announcing corruption in files we can see.
+     */
+    private static function unusableSettingsFileReason(string $path): ?string
+    {
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $raw = @file_get_contents($path);
+        if ($raw === false) {
+            return null;
+        }
+
+        $decoded = json_decode($raw);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return json_last_error_msg();
+        }
+
+        if ($decoded instanceof \stdClass) {
+            return null; // a valid object, `{}` included: empty is not corrupt
+        }
+
+        if (is_array($decoded)) {
+            // json_decode's array shape only exists for `[...]` and `[]`;
+            // objects came back as stdClass above.
+            return 'a JSON array, not an object';
+        }
+
+        return 'not a JSON object'; // null, or a bare scalar
     }
 
     
