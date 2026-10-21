@@ -57,7 +57,10 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — thirty-two sites (1021 INFO-4 2026-10-21: +1 in
+ *  1. `fwrite(STDERR, …)` — thirty-three sites (D1-fix 2026-10-21: +1 in
+ *     `NonInteractive::noticeUnpricedModel()`, the `-p` unpriced-model line
+ *     beside the attachment notice, stderr-only because stdout carries the
+ *     answer and its stop trailer; 1021 INFO-4 2026-10-21: +1 in
  *     `ArgvParser::noticePromptOverride()`, the duplicate-prompt notice,
  *     stderr-alone like the usage errors the parser already hands off; PLG-1 2026-10-19: +1 in
  *     `bundles` — the installer's refusals and the listing's warning echoes
@@ -351,7 +354,7 @@ final class StderrEmitterCensusTest extends TestCase
         // the answer proceeds without history) and the save-degrade line
         // (answer already echoed; a failed persist cannot retract it). Both
         // stderr alone by design: stdout is the answer and nothing else.
-        'src/Cli/NonInteractive.php' => 13, // +1 AUT-4 failJsonSchemaUnsupported
+        'src/Cli/NonInteractive.php' => 14, // +1 D1-fix 2026-10-21 noticeUnpricedModel (was +1 AUT-4 failJsonSchemaUnsupported at 13)
         // O-3a: `serve`'s one funnel (Serve::stderr()) for its startup lines,
         // request log and stop notice. Stderr alone: no session exists to
         // carry a transcript notice, and the terminal running the server is

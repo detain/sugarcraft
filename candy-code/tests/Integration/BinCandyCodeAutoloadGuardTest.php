@@ -32,9 +32,9 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is THIRTY-TWO:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is THIRTY-THREE:
  *
- *  - {@see \SugarCraft\Code\Cli\NonInteractive}, thirteen —
+ *  - {@see \SugarCraft\Code\Cli\NonInteractive}, fourteen —
  *    `run()` four times (a thrown backend error, an answer that would not encode
  *    as JSON, and the two AUT-2 session-degrade lines), `failUsage()`, `failUnusableProvider()`,
  *    and — added by AUT-4 — `failJsonSchemaUnsupported()`, the refusal line for a
@@ -48,7 +48,9 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  *    line per `-p` mention notice or unseen image. And — added by step 3.D-2 —
  *    `fireSessionEnd()`, one line when a SessionEnd hook refuses or throws. And
  *    — added by ISS-080 — the second line inside `readStdinIfPiped()`: the
- *    stdin-silent grace notice, stdout staying the answer alone.
+ *    stdin-silent grace notice, stdout staying the answer alone. And — added
+ *    by the D1-fix of plan_comparison audit 2026-10-21 — `noticeUnpricedModel()`,
+ *    one line per `-p` run that billed an unpriced model.
  *  - {@see \SugarCraft\Code\Cli\ArgvParser}, one — added by 1021 INFO-4 —
  *    `noticePromptOverride()`, the once-per-parse line saying a second
  *    `-p`/`--prompt` value replaced the first. The parser's only write, and
