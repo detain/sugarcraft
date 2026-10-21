@@ -7,6 +7,8 @@ asking.
 | Page | What it answers | Read it when |
 |---|---|---|
 | [GLOSSARY.md](GLOSSARY.md) | What TUI, MCP, OSC 52, sixel, PTY, SGR… mean | Any page's vocabulary stops you |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Dev modes, the sharded suite, the drift guards, docs cadence | You are changing this package's code or docs |
+| [ADDING_A_PROVIDER.md](ADDING_A_PROVIDER.md) | The provider contract: capabilities, carrier fields, registration, behavior laws | You are wiring a new model API |
 | [COMMANDS.md](COMMANDS.md) | Every slash command, argument-for-argument | You want to know what you can type |
 | [SETTINGS.md](SETTINGS.md) | Every config key, its tier and its risk | You are editing `config.json` |
 | [ENVIRONMENT.md](ENVIRONMENT.md) | Every environment variable the app reads | You are configuring a shell, container or CI job |

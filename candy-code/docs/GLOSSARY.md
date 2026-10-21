@@ -20,6 +20,25 @@ listed where first-time readers hit them; each entry names where to read more.
 | **SSRF** | Server-Side Request Forgery — tricking a program into making requests to an address the attacker cannot reach directly (e.g. cloud metadata, localhost services). Why outbound fetches are jail-checked. |
 | **TUI** | Terminal User Interface — an interactive full-screen program drawn with text (panes, menus, keybindings), as opposed to a line-by-line CLI. CandyCode's main mode is a TUI; `-p` is the non-TUI one-shot path. |
 
+## Identifier conventions in code comments
+
+Reading `src/` and `tests/`, you will meet short audit-style labels —
+`E707`, `ISS-037`, `SEC-3`, `TUI-4a`, `round-81`. They are **internal
+working identifiers** from the hardening and comparison programs: each one
+named a specific finding, and the comment carrying it explains why the code
+looks the way it does ("the brake the spend cap cannot be", "refuses while
+it stands"). Two rules govern them:
+
+- **Comments and changelogs carry them; user-facing prose does not.** The
+  docs in this directory state the current behavior without citing the
+  ticket that produced it. If you find a bare ID token in a docs page, it
+  is drift — strip it and keep the sentence.
+- **They are not resolvable outside the repo.** There is no issue tracker
+  behind them; the ledger that defined them lives under `docs/plans/` in
+  the monorepo. A code comment naming `E707` is pointing at history, not
+  at a dependency. Treat the label as decoration and the sentence around
+  it as the contract.
+
 ## See also
 
 - [`README.md`](README.md) — the index of every page in this directory.
