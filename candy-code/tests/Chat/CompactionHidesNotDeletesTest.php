@@ -391,6 +391,6 @@ final class CompactionHidesNotDeletesTest extends TestCase
     private function renderHistory(array $history, Theme $theme, int $width): string
     {
         return (new \ReflectionMethod(Renderer::class, 'renderHistory'))
-            ->invoke(null, $history, $theme, $width, [], new ImageLayer(), null, 10);
+            ->invoke(null, $history, $theme, $width, [], new ImageLayer(), null, 10, null, null, null, Renderer::publishedFrame());
     }
 }

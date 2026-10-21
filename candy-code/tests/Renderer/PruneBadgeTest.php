@@ -62,6 +62,7 @@ final class PruneBadgeTest extends TestCase
             new ImageLayer(),
             null,
             0,
+            Renderer::publishedFrame(),
             null,
             $ledger,
         );

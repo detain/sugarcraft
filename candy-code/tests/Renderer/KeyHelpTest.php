@@ -1563,7 +1563,7 @@ final class KeyHelpTest extends TestCase
     private function overlay(Chat $chat): array
     {
         $rendered = (new \ReflectionMethod(Renderer::class, 'renderKeyHelp'))
-            ->invoke(null, $chat, $chat->theme());
+            ->invoke(null, $chat, $chat->theme(), Renderer::publishedFrame());
 
         return $rendered === '' ? [] : explode("\n", $rendered);
     }
@@ -3009,7 +3009,7 @@ final class KeyHelpTest extends TestCase
      */
     private function statusBar(Chat $chat): string
     {
-        $bar = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat);
+        $bar = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat, Renderer::publishedFrame());
 
         return (string) (new \ReflectionMethod(Renderer::class, 'stripZoneMarkers'))->invoke(null, $bar);
     }

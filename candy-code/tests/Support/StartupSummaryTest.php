@@ -360,7 +360,7 @@ final class StartupSummaryTest extends TestCase
         // list is not THIS launch's story, so VIS-1's summary must not speak
         // for it — the faint placeholder stays.
         $out = (new \ReflectionMethod(Renderer::class, 'renderHistory'))
-            ->invoke(null, [], Theme::default(), 100, [], new ImageLayer(), null, 10, null, null, null);
+            ->invoke(null, [], Theme::default(), 100, [], new ImageLayer(), null, 10, null, null, null, Renderer::publishedFrame());
 
         $this->assertStringContainsString('empty conversation', $out);
         $this->assertStringStartsWith("\e[2m", $out);
