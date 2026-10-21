@@ -154,6 +154,13 @@ final class SecretEnvScrubTest extends TestCase
         yield 'pgpassword no underscore' => ['PGPASSWORD', true];
         yield 'password prefix is not a suffix' => ['PASSWORD_HINT', false];
         yield 'database pool url is not the url' => ['DATABASE_POOL_URL', false];
+        // SEC-2 (audit 2026-10-21): the generic vendor spellings.
+        yield 'generic key suffix' => ['GITHUB_KEY', true];
+        yield 'wallet key suffix' => ['MONERO_WALLET_KEY', true];
+        yield 'license suffix' => ['ACME_LICENSE', true];
+        yield 'private key path is still key-shaped' => ['SSH_PRIVATE_KEY', true];
+        yield 'key without the underscore' => ['KEYAGENT', false];
+        yield 'license as a prefix is not a suffix' => ['LICENSE_SERVER_URL', false];
     }
 
     /**
