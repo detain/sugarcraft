@@ -2934,10 +2934,11 @@ final class Renderer
      * carries a real zone (`pane:menu`), so it is the worst row to admit a
      * forged one on.
      *
-     * {@see Width::truncate()} rather than {@see clipToWidth()}: it iterates
-     * grapheme CLUSTERS, so it cannot cut a base character away from its
-     * combining marks, whereas `clipToWidth()` cuts with `mb_substr()` on
-     * codepoints. The clip announces itself with an ellipsis, the same way
+     * {@see Width::truncate()} iterates grapheme
+     * CLUSTERS, so it cannot cut a base character away from its combining
+     * marks. `clipToWidth()` is now cluster-safe on that same primitive
+     * (tui-F-3), but it also applies an already-fits early return and its own
+     * column accounting, so this segment clips through {@see Width} directly. The clip announces itself with an ellipsis, the same way
      * {@see \SugarCraft\Code\Hooks\ScriptHook::clip()} does, so a status
      * line that is being truncated reads as truncated rather than as a command
      * that stopped talking mid-word.
@@ -3140,10 +3141,13 @@ final class Renderer
         $age = null;
 
         // Reverse walk, first carrier wins — see the docblock's "newest
-        // usable report" reasoning. array_reverse copies the list; a history
-        // long enough to make that cost columns the terminal does not have is
-        // a history that has already compacted (see Chat's context tiers).
-        foreach (array_reverse($chat->history) as $message) {
+        // usable report" reasoning. Walked by index rather than array_reverse()
+        // (v4:F18): the copy would materialise the FULL transcript on every
+        // paint frame, while only the newest carrier is ever read. History is
+        // a list (never key-hole-punched), so the indexed access is total.
+        $history = $chat->history;
+        for ($i = count($history) - 1; $i >= 0; --$i) {
+            $message = $history[$i];
             $usage = $message->usage;
             if ($usage === null) {
                 continue;
@@ -5337,12 +5341,19 @@ final class Renderer
      *
      * The line budget is applied before the character budget so a result that
      * is short in lines but enormous in one of them still gets clipped; both
-     * limits set `overflow`. Character counting is mb_*-based because tool
-     * output is arbitrary UTF-8 and a byte-wise cut could split a codepoint
-     * and put a lone continuation byte on the terminal wire.
+     * limits set `overflow`. The character budget is measured in DISPLAY CELLS
+     * ({@see Width::of()}) and cut on grapheme clusters with inline ANSI
+     * preserved ({@see Width::truncateAnsi()}). Every other width budget in the
+     * renderer is in cells; the previous mb_* count was per CODEPOINT, so the
+     * fold point drifted by script — a CJK or emoji tool dump folded at roughly
+     * double its visible length relative to ASCII. For plain ASCII (and for a
+     * precomposed character like "é", one codepoint and one cell) the two
+     * counts agree, so the common path is byte-for-byte unchanged. A byte-wise
+     * cut is still never used: it could split a codepoint and put a lone
+     * continuation byte on the terminal wire.
      *
      * @param int $maxLines Maximum lines to keep; values below 1 are treated as 1
-     * @param int $maxChars Maximum characters to keep; values below 1 are treated as 1
+     * @param int $maxChars Maximum visible cells to keep; values below 1 are treated as 1
      *
      * @return array{output: string, overflow: bool}
      */
@@ -5363,8 +5374,8 @@ final class Renderer
         }
 
         $clipped = implode("\n", $rows);
-        if (mb_strlen($clipped) > $maxChars) {
-            $clipped = mb_substr($clipped, 0, $maxChars);
+        if (Width::of($clipped) > $maxChars) {
+            $clipped = Width::truncateAnsi($clipped, $maxChars);
             $overflow = true;
         }
 
@@ -6252,10 +6263,43 @@ final class Renderer
      * truncation rules.
      *
      * Plain text only: it measures with {@see Width::string()} and cuts with
-     * `mb_substr()`, neither of which can see an SGR escape, so every caller
-     * clips BEFORE it styles.
+     * {@see Width::truncate()}, neither of which can see an SGR escape, so
+     * every caller clips BEFORE it styles. The cut walks grapheme clusters, so
+     * it lands on a cluster boundary and never orphans a combining mark from
+     * its base.
      */
     private static function clipToWidth(string $text, int $cols): string
+    {
+        if ($cols <= 0) {
+            return '';
+        }
+        if (Width::string($text) <= $cols) {
+            return $text;
+        }
+
+        // Room for the ellipsis: Width::truncate() fits the kept text to
+        // $cols - 1 cells so the appended "…" lands the run on exactly $cols.
+        // The previous cut used mb_substr() per CODEPOINT — a base+mark pair
+        // read as two, so a slice between them emitted a floating combining
+        // mark (or dropped a base while its mark rode into the ellipsis).
+        return Width::truncate($text, $cols - 1) . '…';
+    }
+
+    /**
+     * Clip a SHORT, SCRIPT-FIXED banner row (the input-draft "↑ N lines
+     * above"/"↓ N lines below" scroll indicators) to $cols, ellipsis included.
+     *
+     * These labels keep the raw per-codepoint {@see mb_substr()} cut the shared
+     * {@see clipToWidth()} used to perform, for one reason: the row's only
+     * variable part is an integer count and its widest character is a single
+     * codepoint arrow (U+2191/U+2193), so there are no combining marks, ZWJ
+     * runs or wide sequences for a cluster-aware cut to re-order. Routing them
+     * through Width::truncate() would be a no-op on every real input while
+     * silently re-flowing the shipped goldens; this documents that the ASCII
+     * budget is intentional, not an oversight, and confines the codepoint cut
+     * to the one call site family where it is provably equivalent.
+     */
+    private static function clipAsciiBanner(string $text, int $cols): string
     {
         if ($cols <= 0) {
             return '';
@@ -7843,7 +7887,8 @@ final class Renderer
      *
      * @param list<string> $rows
      * @param string       $clean  the sanitized draft, pre-cursor-splice
-     * @param int          $at     byte offset of the caret into $clean
+     * @param int          $at     codepoint offset of the caret into $clean,
+     *                             snapped to a grapheme-cluster boundary
      * @param bool         $indented whether rows 0.. carry the prompt indent
      * @param int          $textWidth the draft column every row was wrapped at
      *
@@ -7889,11 +7934,11 @@ final class Renderer
         if ($start > 0) {
             array_unshift(
                 $window,
-                ($indented ? '  ' : '') . $moreStyle->render(self::clipToWidth(Lang::t('tui.input.lines_above', ['count' => $start]), $textWidth)),
+                ($indented ? '  ' : '') . $moreStyle->render(self::clipAsciiBanner(Lang::t('tui.input.lines_above', ['count' => $start]), $textWidth)),
             );
         }
         if ($end < $count) {
-            $window[] = ($indented ? '  ' : '') . $moreStyle->render(self::clipToWidth(Lang::t('tui.input.lines_below', ['count' => $count - $end]), $textWidth));
+            $window[] = ($indented ? '  ' : '') . $moreStyle->render(self::clipAsciiBanner(Lang::t('tui.input.lines_below', ['count' => $count - $end]), $textWidth));
         }
 
         return $window;

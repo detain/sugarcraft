@@ -624,6 +624,47 @@ final class RendererTest extends TestCase
         $this->assertTrue($collapsed['overflow']);
     }
 
+    /**
+     * ux-m1: the fold budget is DISPLAY CELLS, so the same 8-cell allowance
+     * yields the same visible length regardless of script. Under the old
+     * per-codepoint count, ten grinning faces (20 cells, 10 codepoints) folded
+     * at 8 EMOJI = 16 cells — double the width an ASCII body would occupy.
+     */
+    public function testCollapseToolOutputBudgetsCellsNotCodepointsForEmoji(): void
+    {
+        $emoji = "\u{1F600}";
+        $collapsed = Renderer::collapseToolOutput(str_repeat($emoji, 10), 10, 8);
+
+        $this->assertSame(str_repeat($emoji, 4), $collapsed['output']);
+        $this->assertSame(8, Width::of($collapsed['output']));
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    public function testCollapseToolOutputFoldPointIsScriptStableForCjk(): void
+    {
+        $han = "\u{4F60}"; // 你, 2 cells
+        $collapsed = Renderer::collapseToolOutput(str_repeat($han, 10), 10, 8);
+
+        $this->assertSame(str_repeat($han, 4), $collapsed['output'], 'a 8-cell budget must fit four wide glyphs, not eight');
+        $this->assertSame(8, Width::of($collapsed['output']));
+    }
+
+    /**
+     * Escape bytes are not display width: the budget is spent on visible
+     * cells, and the inline SGR (plus its trailing reset) survive the cut.
+     * The old codepoint count charged the escape itself, folding the visible
+     * body short of the allowance and potentially mid-sequence.
+     */
+    public function testCollapseToolOutputDoesNotChargeEscapeBytesAgainstTheCellBudget(): void
+    {
+        $body = "\x1b[31m" . str_repeat('x', 30) . "\x1b[0m";
+        $collapsed = Renderer::collapseToolOutput($body, 10, 10);
+
+        $this->assertSame(10, Width::of($collapsed['output']), 'the visible budget was under-filled');
+        $this->assertStringContainsString("\x1b[31m", $collapsed['output'], 'the inline colour was dropped');
+        $this->assertStringContainsString("\x1b[0m", $collapsed['output'], 'the trailing reset was lost');
+    }
+
     public function testCollapseToolOutputHandlesEmptyAndDegenerateLimits(): void
     {
         $this->assertSame(['output' => '', 'overflow' => false], Renderer::collapseToolOutput('', 10, 100));

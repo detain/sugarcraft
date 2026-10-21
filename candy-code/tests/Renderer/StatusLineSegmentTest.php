@@ -300,9 +300,9 @@ final class StatusLineSegmentTest extends TestCase
         self::assertLessThanOrEqual(90, Width::of($bar));
 
         // THE DISCRIMINATOR: the segment is a whole number of COMPLETE
-        // clusters. A codepoint-wise cut (`mb_substr()`, which
-        // {@see Renderer::clipToWidth()} uses) can stop between the `e` and its
-        // mark and leave a bare `e` at the end; a grapheme-wise cut cannot.
+        // clusters. A codepoint-wise cut (`mb_substr()`) can stop between the
+        // `e` and its mark and leave a bare `e` at the end; a grapheme-wise cut
+        // ({@see Renderer::clipToWidth()}, cluster-safe since tui-F-3) cannot.
         //
         // Measured on the SEGMENT, not on the bar: the bar's own prose
         // ("Enter", "send", "menu", "exit") contributes five bare `e`s, and the
@@ -673,6 +673,33 @@ final class StatusLineSegmentTest extends TestCase
     private function transcriptSignature(Chat $chat): array
     {
         return array_map('spl_object_id', $chat->history);
+    }
+
+    /**
+     * v4:F18: the walk in {@see Renderer::cacheIndicator()} is index-based and
+     * runs BACKWARDS so the newest usage carrier wins. Seeding two carriers
+     * with different rates makes the direction observable — a forward walk
+     * (or any reordering) paints the stale 98% report and reddens here, which
+     * is the pin that lets the copy-avoiding walk be trusted as behavior-
+     * preserving against the array_reverse() original.
+     */
+    public function testTheCachePieceTakesTheNewestUsageCarrierInHistory(): void
+    {
+        $chat = (new Chat(
+            history: [
+                Message::user('hello', self::ANCHOR - 700),
+                Message::assistant('First.', self::ANCHOR - 600)->withUsage(Usage::new(8100, 0.05, 200, 100, 7800, 0)),
+                Message::user('again', self::ANCHOR - 60),
+                Message::assistant('Second.', self::ANCHOR - 5)->withUsage(Usage::new(600, 0.02, 300, 100, 200, 0)),
+            ],
+            backend: new EchoBackend(),
+        ))->withSize(100, 30);
+
+        $segment = $this->cacheSegment($chat, 60, (float) self::ANCHOR);
+
+        self::assertStringContainsString('40% cache · 5s', $segment, 'the newest carrier (200/500, 5s old) is the painted report');
+        self::assertStringNotContainsString('98%', $segment, 'the older 7800/8000 carrier must never reach the bar');
+        self::assertStringNotContainsString('600s', $segment, 'and neither must its age');
     }
 
     /**
