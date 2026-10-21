@@ -51,19 +51,23 @@ use SugarCraft\Code\Support\Version;
  * construction and touches no network.
  *
  * TRUST MODEL, HONESTLY — TWO STATES. Both the phar and its sidecar come
- * from the same origin (GitHub release assets, over TLS). Keyless state
- * (the shipped one: {@see SelfUpdate::PUBLIC_KEY_BASE64} is the empty
- * string): the hash bounds transport corruption, asset mixups and tampering
- * with the phar ALONE; a party who controls the release can replace the
- * sidecar in the same breath. The residual is named: trust in the GitHub
- * account that owns the repo. Pinned state (once the owner populates the
- * constant): a release whose `candy-code.phar.minisig` is ABSENT, or does
- * not verify against the pinned Ed25519 key, is REFUSED LOUDLY — the sha256
- * sidecar alone no longer gates the swap, and an attacker who owns the
- * release stream can no longer sign their own poisoned bytes. The pinned key
- * can be rotated by shipping a new phar; until that first self-update, a
- * wrong-key emergency needs the fresh-installer path (download + checksum by
- * hand) — the same window every pinned-key updater carries.
+ * from the same origin (GitHub release assets, over TLS). Keyless state (a
+ * build whose {@see SelfUpdate::PUBLIC_KEY_BASE64} is the empty string —
+ * every phar shipped before 2026-10-20): the hash bounds transport
+ * corruption, asset mixups and tampering with the phar ALONE; a party who
+ * controls the release can replace the sidecar in the same breath. The
+ * residual is named: trust in the GitHub account that owns the repo.
+ * Pinned state (THE SHIPPED ONE since 2026-10-20 — the owner action in the
+ * constant's docblock is done): a release whose `candy-code.phar.minisig`
+ * is ABSENT, or does not verify against the pinned Ed25519 key, is REFUSED
+ * LOUDLY — the sha256 sidecar alone no longer gates the swap, and an
+ * attacker who owns the release stream can no longer sign their own poisoned
+ * bytes. The pinned key can be rotated by shipping a new phar; until that
+ * first self-update, a wrong-key emergency needs the fresh-installer path
+ * (download + checksum by hand) — the same window every pinned-key updater
+ * carries. Releases tagged before the keypair existed carry no signature
+ * asset and are therefore unupdatable from a pinned build: re-tag or use
+ * `--allow-unsigned` by hand during the transition.
  *
  * EXITS. 0: up to date (--check or not), a verified swap completed, a
  * rollback restored. 1: composer-mode refusal, an unwritable target, a
@@ -116,9 +120,14 @@ final class SelfUpdate
     public const SIGNATURE_ASSET = 'candy-code.phar.minisig';
 
     /**
-     * OWNER SEAM — ships as the EMPTY STRING (the documented keyless state;
-     * the class docblock's TRUST MODEL says exactly what that buys and what
-     * it does not). To move the tool into pinned state the owner:
+     * PINNED 2026-10-20 (the owner action below is complete): this is the
+     * public half of the release-signing Ed25519 keypair; the secret half
+     * lives as the paired repository secret CANDY_CODE_SIGNING_KEY, which
+     * the release workflow's signing step reads to emit the minisig asset.
+     * Base64 of the raw 32-byte sodium public key — exactly what
+     * {@see verifyDetached()} parses.
+     *
+     * To ROTATE the keypair the owner:
      *
      *   1. `php -r '$k=sodium_crypto_sign_keypair(); echo base64_encode(sodium_crypto_sign_secretkey($k)),"\n",base64_encode(sodium_crypto_sign_publickey($k)),"\n";'`
      *   2. put the first line in the `CANDY_CODE_SIGNING_KEY` repository
@@ -131,7 +140,7 @@ final class SelfUpdate
      * enabling the key makes older releases unupdatable — re-tag or use
      * `--allow-unsigned` by hand during the transition.
      */
-    public const PUBLIC_KEY_BASE64 = '';
+    public const PUBLIC_KEY_BASE64 = 'izi+7OlG5PTqGBpv03s2jnc5vRdxnChdBZIonN67T6o=';
 
     /**
      * The release list of the repository that publishes this tool's phar.
@@ -335,7 +344,8 @@ final class SelfUpdate
 
         // Pinned-key leg, after the hash (the temp bytes are the real
         // artifact now) and before the copy (nothing to roll back from if
-        // the key rejects). Empty key = the shipped keyless state: the leg
+        // the key rejects). Empty key = the keyless state (the pre-2026-10-20
+        // shipped shape, reachable in tests by injecting ''): the leg
         // does not exist, and no --allow-unsigned notice is printed for it.
         $key = $publicKey ?? self::PUBLIC_KEY_BASE64;
         if ($key !== '') {

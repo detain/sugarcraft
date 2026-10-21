@@ -320,12 +320,16 @@ final class SelfUpdateTest extends TestCase
     public function testTheHappySwapLeavesTheOldBytesInOneShotReserve(): void
     {
         self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL-PHAR-BYTES'));
+        // The empty injected key keeps this test on the swap MECHANICS; the
+        // pinned default (no injection) is pinned by
+        // testTheShippedKeyIsPinnedAndTheDefaultRefusesUnsignedReleases.
         $exit = SelfUpdate::run(
             self::selfUpdateArgs(['self-update']),
             $this->fakeServerClient(),
             $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', 'UPDATED-PHAR-BYTES')]),
             $this->livePharPath(),
             'v0.1.0',
+            '',
         );
         self::assertSame(NonInteractive::EXIT_OK, $exit);
         self::assertSame('UPDATED-PHAR-BYTES', \file_get_contents($this->livePharPath()));
@@ -384,12 +388,15 @@ final class SelfUpdateTest extends TestCase
     public function testRollbackRestoresByteIdenticalAndIsConsumedByTheRestore(): void
     {
         self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL-PHAR-BYTES'));
+        // Keyless ('') injection: this test owns the one-shot rollback
+        // mechanic, not the signature leg.
         $installed = SelfUpdate::run(
             self::selfUpdateArgs(['self-update']),
             $this->fakeServerClient(),
             $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', 'UPDATED-PHAR-BYTES')]),
             $this->livePharPath(),
             'v0.1.0',
+            '',
         );
         self::assertSame(NonInteractive::EXIT_OK, $installed);
 
@@ -573,11 +580,16 @@ final class SelfUpdateTest extends TestCase
             $this->resetErrorStream();
 
             self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL-PHAR-BYTES'));
+            // null $currentVersion keeps the DST-1 "no version injection"
+            // story; '' injects the keyless shape so this test owns version
+            // resolution, not the signature leg.
             $installed = SelfUpdate::run(
                 self::selfUpdateArgs(['self-update']),
                 $this->fakeServerClient(),
                 $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', 'UPDATED-PHAR-BYTES')]),
                 $this->livePharPath(),
+                null,
+                '',
             );
             self::assertSame(NonInteractive::EXIT_OK, $installed, 'the full swap runs off the real resolution, not just --check');
             self::assertStringContainsString('v0.1.0 -> v9.9.9', $this->errorText());
@@ -591,16 +603,17 @@ final class SelfUpdateTest extends TestCase
     /**
      * DST-3: the pinned-key leg in all its polarities, driven through the
      * $publicKey parameter (production reads the same code off
-     * `SelfUpdate::PUBLIC_KEY_BASE64`, which ships EMPTY — the keyless
-     * state leg d pins). The fixture signatures are precomputed so a PHP
-     * built without ext-sodium still judges every leg: the source's own
-     * function_exists guard makes it refuse loudly there, and that fail-
-     * closed polarity is what leg e asserts when the extension is absent.
+     * `SelfUpdate::PUBLIC_KEY_BASE64`, pinned 2026-10-20 — the production
+     * default itself is pinned by
+     * {@see testTheShippedKeyIsPinnedAndTheDefaultRefusesUnsignedReleases},
+     * and leg d pins the pre-pinned keyless shape). The fixture signatures
+     * are precomputed so a PHP built without ext-sodium still judges every
+     * leg: the source's own function_exists guard makes it refuse loudly
+     * there, and that fail-closed polarity is what leg e asserts when the
+     * extension is absent.
      */
     public function testThePinnedKeyLegStopsWhatItPromisesToStop(): void
     {
-        self::assertSame('', SelfUpdate::PUBLIC_KEY_BASE64, 'the shipped constant is the NAMED keyless state — if you populated it, this pin is your reminder to re-read the owner actions in its docblock');
-
         // a. forged-but-structurally-valid signature: loud refusal either way.
         self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
         $forged = SelfUpdate::run(
@@ -656,17 +669,19 @@ final class SelfUpdateTest extends TestCase
         $this->resetErrorStream();
         self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
 
-        // d. keyless state: the constant ships empty, so a release that DOES
-        // carry a minisig swaps on the sidecar alone — the signature is
-        // ignored without a key to verify it against.
+        // d. keyless state (the shape of every phar shipped before the key
+        // was pinned 2026-10-20, simulated by injecting the empty key): a
+        // release that DOES carry a minisig swaps on the sidecar alone — the
+        // signature is ignored without a key to verify it against.
         $keyless = SelfUpdate::run(
             self::selfUpdateArgs(['self-update']),
             $this->fakeServerClient(),
             $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', self::SIGNED_PAYLOAD_BYTES, sigBody: self::FIXTURE_VALID_SIGNATURE)]),
             $this->livePharPath(),
             'v0.1.0',
+            '',
         );
-        self::assertSame(NonInteractive::EXIT_OK, $keyless, 'the empty constant is the documented keyless state, not a half-enabled pinned mode');
+        self::assertSame(NonInteractive::EXIT_OK, $keyless, 'an empty key is the documented keyless state, not a half-enabled pinned mode');
         self::assertStringNotContainsString('--allow-unsigned skips', $this->errorText());
         self::assertSame(self::SIGNED_PAYLOAD_BYTES, \file_get_contents($this->livePharPath()));
 
@@ -693,6 +708,38 @@ final class SelfUpdateTest extends TestCase
             self::assertStringContainsString('does not verify', $this->errorText());
             self::assertSame('ORIGINAL', \file_get_contents($this->livePharPath()));
         }
+    }
+
+    /**
+     * DST-3 owner action (pinned 2026-10-20): the production DEFAULT is now
+     * pinned state. Half one pins the constant's shape: non-empty, strict
+     * base64 decoding to exactly the 32-byte raw public key verifyDetached()
+     * parses, and distinct from this file's test-only fixture key (a pinned
+     * key that matched the fixture would make every fixture leg above
+     * vacuous). Half two drives run() with NO key injection — the exact
+     * production shape — against a release lacking the minisig asset: the
+     * pinned default must refuse it loudly. Blanking the constant reddens
+     * both halves.
+     */
+    public function testTheShippedKeyIsPinnedAndTheDefaultRefusesUnsignedReleases(): void
+    {
+        self::assertNotSame('', SelfUpdate::PUBLIC_KEY_BASE64, 'the shipped constant is the PINNED state since 2026-10-20 — blanking it silently downgrades every build to keyless');
+        $raw = \base64_decode(SelfUpdate::PUBLIC_KEY_BASE64, true);
+        self::assertNotFalse($raw, 'the constant must be strict base64');
+        self::assertSame(32, \strlen((string) $raw), 'the constant must be the base64 of the raw 32-byte sodium public key exactly as verifyDetached() parses it');
+        self::assertNotSame(self::FIXTURE_PUBLIC_KEY_BASE64, SelfUpdate::PUBLIC_KEY_BASE64, 'production and fixture keys must stay distinct or the fixture legs prove nothing');
+
+        self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
+        $exit = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', self::SIGNED_PAYLOAD_BYTES)]),
+            $this->livePharPath(),
+            'v0.1.0',
+        );
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit, 'the production default (no key injection) is pinned state: an unsigned release is refused');
+        self::assertStringContainsString('carries no ' . SelfUpdate::SIGNATURE_ASSET, $this->errorText());
+        self::assertSame('ORIGINAL', \file_get_contents($this->livePharPath()), 'the refusal never touches the live bytes');
     }
 
     /**
