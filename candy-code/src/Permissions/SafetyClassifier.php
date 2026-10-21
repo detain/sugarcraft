@@ -317,6 +317,18 @@ final class SafetyClassifier
             '\b(?:env|printenv)(?:\s+-\S+)*\s*\|\s*grep\s+(?:-\S+\s+)*["\x27]?[\w*.^]*KEY',
             'strings\s+.*\.env',
             'python[\d.]*\s+.*-c\s+.*os\.environ\[',
+            // SEC-1: `/proc/<pid>/environ` is the parent's environment —
+            // same-uid readable, and the ProcessContainment scrub only
+            // reaches the CHILD's own copy, so a scrubbed child could still
+            // read the live provider keys out of the process it was spawned
+            // from. `live-credentials` sits in PermissionGate's
+            // SECURITY_CATEGORIES, so this asks every time under `auto`,
+            // session grants included; ReadOnlyCommands refuses the parsed
+            // spellings outright. This row keeps the raw-text shapes the
+            // word scan cannot see (a `cd` into the directory followed by a
+            // bare read of the file) in the same security class.
+            '(?:^|/)proc/(?:[^/\s]*/)*environ\b',
+            'cd\s+\S*proc/[^\n]*\benviron\b',
         ],
         'package-registry-sideload' => [
             'npm\s+install\s+.*--registry\s+https://registry\.npmjs\.org',
