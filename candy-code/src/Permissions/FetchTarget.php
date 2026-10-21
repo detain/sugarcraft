@@ -25,10 +25,13 @@ namespace SugarCraft\Code\Permissions;
  * {@see fromUrl()}`=== null`, and each caller decides what an unparseable URL
  * means in its own direction (a restrictive rule fires, a grant does not).
  *
- * HONEST LIMIT: this judges the FIRST hop. WebFetch follows up to three
- * redirects, re-checking each target's address but not any permission rule,
- * so `Allow WebFetch(domain:example.com)` also reaches wherever example.com
- * redirects to. Granting a domain is granting its redirects.
+ * FIRST HOP ONLY — but the follow-up is covered elsewhere. This object
+ * judges the URL the model asked for. WebFetch follows up to three
+ * redirects and re-checks every target both at the address and against the
+ * user's configured rules (SEC-3, round w1c: the `redirectRulePolicy` veto
+ * defaults to `configuredRedirectRefusal()`), so
+ * `Allow WebFetch(domain:example.com)` does not silently reach a host the
+ * rules refuse — granting a domain no longer grants its redirects.
  */
 final class FetchTarget
 {
