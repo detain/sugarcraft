@@ -514,6 +514,7 @@ candy-code/tests/Diagnostics/NoticeSinkIsolationTest.php	0.243	6
 candy-code/tests/Server/HelloMediaFlagsTest.php	0.241	4
 candy-code/tests/Tools/ShellStopTest.php	0.240	6
 candy-code/tests/Renderer/StatusBarModelAndReadOnlyTest.php	0.239	10
+candy-code/tests/Renderer/FocusedToolRowHighlightTest.php	0.239	10
 candy-code/tests/Backend/TurnContextPersistedTest.php	0.238	3
 candy-code/tests/Permissions/AlwaysAllowReliabilityTest.php	0.238	5
 candy-code/tests/SuiteRootRunRefusalTest.php	0.237	4
@@ -739,6 +740,7 @@ candy-code/tests/Backend/InTurnPruneTest.php	0.059	4
 candy-code/tests/Context/MemoryRecallBlockTest.php	0.059	14
 candy-code/tests/Cli/BootstrapContextWindowTest.php	0.058	5
 candy-code/tests/Cli/DoctorFts5ProbeTest.php	0.058	4
+candy-code/tests/Chat/RouteTraitParityTest.php	0.058	4
 candy-code/tests/Chat/CompactionLiveSettingsTest.php	0.057	12
 candy-code/tests/Cli/AgentManagerWiringTest.php	0.057	26
 candy-code/tests/Commands/GenerateCommandTest.php	0.057	23
@@ -1129,6 +1131,7 @@ candy-code/tests/Support/FrontmatterTest.php	0.005	23
 candy-code/tests/Tools/WebSearchToolTest.php	0.005	28
 candy-code/tests/ToolTypeAdapterTest.php	0.005	17
 candy-code/tests/Tui/SessionPickerWidgetTest.php	0.005	13
+candy-code/tests/Support/LogTest.php	0.005	5
 candy-code/tests/Agents/WorktreeManagerConfigOriginTest.php	0.004	4
 candy-code/tests/App/DockSeedTest.php	0.004	15
 candy-code/tests/App/PaneFocusCycleTest.php	0.004	14
@@ -1162,6 +1165,7 @@ candy-code/tests/Tools/BuiltIn/CompressToolTest.php	0.004	15
 candy-code/tests/Tools/Catalog/ToolCatalogTest.php	0.004	9
 candy-code/tests/Tools/ToolCallTest.php	0.004	32
 candy-code/tests/Tui/AgentLabelFoldingTest.php	0.004	13
+candy-code/tests/Support/EnvBoolTest.php	0.004	25
 candy-code/tests/Agents/PresetUnsupportedFieldFailsLoudTest.php	0.003	5
 candy-code/tests/Agents/ShippedPresetSkillGrantTest.php	0.003	7
 candy-code/tests/Agents/SubAgentTest.php	0.003	30
