@@ -179,11 +179,15 @@ final class SettingsSchemaTest extends TestCase
         }
     }
 
-    /** D7: literal English now, the i18n key kept for later. */
+    /** D7: label and help both resolve through `lang/en.php` (W3-B). */
     public function testEveryDefinitionCarriesAnEnglishLabelHelpAndI18nKeys(): void
     {
+        $english = require __DIR__ . '/../../../lang/en.php';
+
         foreach (SettingsSchema::all() as $definition) {
             self::assertNotSame('', trim($definition->help), "{$definition->key} has no help text");
+            self::assertArrayHasKey($definition->helpKey, $english, "{$definition->key} help is not catalogued in lang/en.php");
+            self::assertSame($english[$definition->helpKey], $definition->help, "{$definition->key} help does not equal its lang/en.php entry");
             self::assertNotSame($definition->key, $definition->label, "{$definition->key} has no label of its own");
             self::assertSame('settings.' . $definition->key . '.label', $definition->labelKey);
             self::assertSame('settings.' . $definition->key . '.help', $definition->helpKey);

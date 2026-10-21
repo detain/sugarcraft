@@ -31,7 +31,9 @@ use SugarCraft\Code\Config\Settings\Validator\UrlValidator;
  * A label is user-facing: each definition passes `Lang::t()` of its
  * {@see $labelKey} to {@see withLabel()} (audit 15b-14), so {@see $label} is
  * already in the active locale and its English lives in `lang/en.php`. Help
- * text is still literal English; {@see $helpKey} names where it will move.
+ * text rides the same rails: each definition passes `Lang::t()` of its
+ * {@see $helpKey} to {@see withHelp()} (W3-B), so {@see $help} is rendered,
+ * not a literal waiting to move.
  */
 final class SettingDefinition
 {

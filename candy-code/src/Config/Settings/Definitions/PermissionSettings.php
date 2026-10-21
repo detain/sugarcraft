@@ -43,7 +43,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withEnumValues(array_map(static fn (PermissionMode $m): string => $m->value, PermissionMode::cases()))
                 ->withOptionsSource(OptionsSource::PermissionModes)
                 ->withLabel(Lang::t('settings.permissionMode.label'))
-                ->withHelp('How tool calls are gated. Never taken from a project file.')
+                ->withHelp(Lang::t('settings.permissionMode.help'))
                 // D5: the TUI asks by default; `-p` and the daemon have nobody
                 // to ask, so they keep the schema default.
                 ->withDefaultText('`default` (TUI); `bypass-permissions` (`-p`, daemon)')
@@ -54,7 +54,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withStrict()
                 ->withUi(UiEditability::Complex)
                 ->withLabel(Lang::t('settings.permissionRules.label'))
-                ->withHelp('Ordered allow / deny / ask rules matched against each tool call.')
+                ->withHelp(Lang::t('settings.permissionRules.help'))
                 ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
             // Roadmap 5.11-2: user tier only (never a project's to switch on),
             // because every review is a paid call on the title model.
@@ -63,7 +63,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
                 ->withLabel(Lang::t('settings.autoReview.label'))
-                ->withHelp('Under auto, a call the safety classifier flags (other than a security finding, which always asks) is reviewed by the title model, which allows it, asks you or denies it.')
+                ->withHelp(Lang::t('settings.autoReview.help'))
                 ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
             // Roadmap N-P4g: Auto's circuit breaker, promoted from the gate's
             // constants. User tier only (Security): a repository raising them
@@ -77,7 +77,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, 100)
                 ->withLabel(Lang::t('settings.permissions.autoStrikeLimit.label'))
-                ->withHelp('Under auto, this many blocked calls of one category in a row turn the next one into a question.')
+                ->withHelp(Lang::t('settings.permissions.autoStrikeLimit.help'))
                 ->withReaderSymbol(PermissionGate::class . '::autoBreakerLimits')
                 ->withReadBy('`PermissionGate::evaluateAuto()`, `autoBreaker()` → `autoBreakerLimits()`'),
             SettingDefinition::new(PermissionGate::TOTAL_LIMIT_SETTING, SettingType::Int, PermissionGate::TOTAL_BLOCK_THRESHOLD)
@@ -87,7 +87,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, 1000)
                 ->withLabel(Lang::t('settings.permissions.autoTotalLimit.label'))
-                ->withHelp('Under auto, once this many calls have been blocked in a session every further block asks you instead.')
+                ->withHelp(Lang::t('settings.permissions.autoTotalLimit.help'))
                 ->withReaderSymbol(PermissionGate::class . '::autoBreakerLimits')
                 ->withReadBy('`PermissionGate::evaluateAuto()`, `autoBreaker()` → `autoBreakerLimits()`'),
             // User decision 2026-10-11: under default and accept-edits a Bash
@@ -102,7 +102,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withLabel(Lang::t('settings.permissions.autoAllowReadOnly.label'))
-                ->withHelp('Under default and accept-edits, run a Bash line made only of read-only commands (ls, cat, grep, git log, …; no file redirection, no substitution, cd only inside the project) without asking. A project may only switch it off.')
+                ->withHelp(Lang::t('settings.permissions.autoAllowReadOnly.help'))
                 ->withReaderSymbol(ReadOnlyCommands::class . '::autoAllowEnabled')
                 ->withReadBy('`PermissionGate::evaluateDefault()` / `evaluateAcceptEdits()` → `readOnlyAutoAllow()` → `ReadOnlyCommands::autoAllowEnabled()`'),
             SettingDefinition::new('secretEnvAllowlist', SettingType::StringList, [])
@@ -111,7 +111,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::List)
                 ->withLabel(Lang::t('settings.secretEnvAllowlist.label'))
-                ->withHelp('Credential-shaped variable names (or globs) Bash, Grep and script hooks still inherit.')
+                ->withHelp(Lang::t('settings.secretEnvAllowlist.help'))
                 ->withReaderSymbol(Bootstrap::class . '::installSecretEnvAllowlist')
                 ->withReadBy('`Bootstrap::tools()` → `installSecretEnvAllowlist()`'),
             SettingDefinition::new('trustedProjectHooks', SettingType::StringList, [])
@@ -121,7 +121,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::List)
                 ->withValidators(AbsolutePathValidator::new())
                 ->withLabel(Lang::t('settings.trustedProjectHooks.label'))
-                ->withHelp('Project roots whose .candy-code/hooks.yaml may run.')
+                ->withHelp(Lang::t('settings.trustedProjectHooks.help'))
                 ->withReaderSymbol(Bootstrap::class . '::trustedRootsForThisProcess'),
             SettingDefinition::new('trustedProjectMcp', SettingType::StringList, [])
                 ->withCategory(SettingCategory::Permissions)
@@ -130,7 +130,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::List)
                 ->withValidators(AbsolutePathValidator::new())
                 ->withLabel(Lang::t('settings.trustedProjectMcp.label'))
-                ->withHelp('Project roots whose .mcp.json servers may be launched.')
+                ->withHelp(Lang::t('settings.trustedProjectMcp.help'))
                 ->withReaderSymbol(Bootstrap::class . '::projectMcpIsTrusted'),
             SettingDefinition::new('trustedProjectCommands', SettingType::StringList, [])
                 ->withCategory(SettingCategory::Permissions)
@@ -139,7 +139,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::List)
                 ->withValidators(AbsolutePathValidator::new())
                 ->withLabel(Lang::t('settings.trustedProjectCommands.label'))
-                ->withHelp('Project roots whose slash commands may run !`cmd` shell blocks.')
+                ->withHelp(Lang::t('settings.trustedProjectCommands.help'))
                 ->withReaderSymbol(Bootstrap::class . '::projectCommandShellIsTrusted'),
             SettingDefinition::new('trustedProjectSettings', SettingType::StringList, [])
                 ->withCategory(SettingCategory::Permissions)
@@ -148,7 +148,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::List)
                 ->withValidators(AbsolutePathValidator::new())
                 ->withLabel(Lang::t('settings.trustedProjectSettings.label'))
-                ->withHelp('Project roots whose .candy-code/settings*.json may set the project-tier keys.')
+                ->withHelp(Lang::t('settings.trustedProjectSettings.help'))
                 ->withReaderSymbol(Bootstrap::class . '::projectSettingsTrusted'),
         ];
     }

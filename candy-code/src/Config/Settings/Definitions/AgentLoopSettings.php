@@ -39,7 +39,7 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withEnvVar('CANDY_CODE_DISABLE_PARALLEL_TOOL_CALLS')
                 ->withLabel(Lang::t('settings.parallelToolCalls.label'))
-                ->withHelp('Run a turn\'s read-only tool calls concurrently.')
+                ->withHelp(Lang::t('settings.parallelToolCalls.help'))
                 ->withReaderSymbol(EngineBackend::class . '::complete'),
             SettingDefinition::new('parallelToolDeadlineSeconds', SettingType::Int, Runtime::PARALLEL_TOOL_DEADLINE_SECONDS)
                 ->withCategory(SettingCategory::AgentLoop)
@@ -50,7 +50,7 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withEnvVar('CANDY_CODE_PARALLEL_TOOL_DEADLINE')
                 ->withRange(1)
                 ->withLabel(Lang::t('settings.parallelToolDeadlineSeconds.label'))
-                ->withHelp('Wall-clock ceiling for one batch of concurrently dispatched tool calls.')
+                ->withHelp(Lang::t('settings.parallelToolDeadlineSeconds.help'))
                 ->withReaderSymbol(EngineBackend::class . '::complete'),
             SettingDefinition::new('maxToolSteps', SettingType::Int)
                 ->withCategory(SettingCategory::AgentLoop)
@@ -62,7 +62,7 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1)
                 ->withLabel(Lang::t('settings.maxToolSteps.label'))
-                ->withHelp('Provider calls one turn may make; unset keeps the engine default.')
+                ->withHelp(Lang::t('settings.maxToolSteps.help'))
                 ->withReaderSymbol(Bootstrap::class . '::resolvedMaxToolSteps')
                 ->withReadBy('`Bootstrap::backend()`, `Chat::applySettings()` → `resolvedMaxToolSteps()`'),
             // Roadmap N-P4g: the persistent `/budget`. User tier only (Spend):
@@ -79,7 +79,7 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withEnvVar('CANDY_CODE_MAX_COST')
                 ->withValidators(SpendCapValidator::new())
                 ->withLabel(Lang::t('settings.maxCostUsd.label'))
-                ->withHelp('Refuse new turns once the provider-reported spend of a launch reaches this many US dollars; unset is no cap. /budget changes it for the running launch only.')
+                ->withHelp(Lang::t('settings.maxCostUsd.help'))
                 ->withDefaultText('unset (no cap)')
                 ->withReaderSymbol(Bootstrap::class . '::maxCostUsd')
                 ->withReadBy('`Bootstrap::workspace()`, `Chat::applySettings()` → `maxCostUsd()` → `persistedMaxCostUsd()`'),
