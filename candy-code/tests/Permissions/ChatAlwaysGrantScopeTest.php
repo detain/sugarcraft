@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tests\Permissions;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\AsyncCmd;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookContext;
@@ -17,12 +17,12 @@ use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Hooks\ScriptHook;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\PermissionReplyMsg;
+use SugarCraft\Code\App\PermissionReplyMsg;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\ToolCall;
-use SugarCraft\Code\ToolResultsMsg;
+use SugarCraft\Code\App\ToolResultsMsg;
 
 /**
  * Audit F-P9 (the dormant Chat tool path): "Always" used to be filed as

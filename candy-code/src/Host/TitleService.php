@@ -9,12 +9,12 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\PromptSuggestionMsg;
+use SugarCraft\Code\App\PromptSuggestionMsg;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Session\TitleSource;
-use SugarCraft\Code\SessionTitledMsg;
+use SugarCraft\Code\App\SessionTitledMsg;
 
 /**
  * The two cheap side-calls a session makes on its tool-less title backend:

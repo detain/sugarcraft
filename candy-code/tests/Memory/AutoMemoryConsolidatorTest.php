@@ -13,7 +13,7 @@ use SugarCraft\Code\Memory\ConsolidationOp;
 use SugarCraft\Code\Memory\ConsolidationPlan;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Memory\MemoryWriter;
-use SugarCraft\Code\MemoryConsolidatedMsg;
+use SugarCraft\Code\App\MemoryConsolidatedMsg;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Usage;

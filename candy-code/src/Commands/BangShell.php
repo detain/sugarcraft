@@ -9,7 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Code\Backend\CancellationToken;
-use SugarCraft\Code\BangShellResultMsg;
+use SugarCraft\Code\App\BangShellResultMsg;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionDecision;

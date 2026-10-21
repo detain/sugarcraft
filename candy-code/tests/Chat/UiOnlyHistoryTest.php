@@ -19,7 +19,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
-use SugarCraft\Code\SessionTitledMsg;
+use SugarCraft\Code\App\SessionTitledMsg;
 
 /**
  * Audit 15b-03: Chat's history holds rows that exist only for the person at

@@ -32,7 +32,7 @@ use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
 use SugarCraft\Code\Permissions\PermissionReply;
-use SugarCraft\Code\PermissionReplyMsg;
+use SugarCraft\Code\App\PermissionReplyMsg;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\SessionStore;
@@ -1698,7 +1698,7 @@ final class KeyHelpTest extends TestCase
      */
     private function blockedOnPermission(string $tool = 'Bash', ?int $generation = null): Chat
     {
-        [$blocked] = $this->chat()->update(new \SugarCraft\Code\PermissionRequestMsg(
+        [$blocked] = $this->chat()->update(new \SugarCraft\Code\App\PermissionRequestMsg(
             Message::assistant(''),
             new \SugarCraft\Code\ToolCall($tool, ['description' => 'rm'], 'call_1'),
             'Run rm -rf build/?',
@@ -2034,7 +2034,7 @@ final class KeyHelpTest extends TestCase
     {
         $blocked = $this->promptRaisedByTheRealGate();
 
-        [$separated] = $blocked->update(new \SugarCraft\Code\AssistantMsg(Message::assistant('late reply')));
+        [$separated] = $blocked->update(new \SugarCraft\Code\App\AssistantMsg(Message::assistant('late reply')));
 
         $this->assertNotNull(
             $separated->pendingPermission(),
@@ -2113,7 +2113,7 @@ final class KeyHelpTest extends TestCase
         foreach (array_fill(0, 8, new KeyMsg(KeyType::Left)) as $left) {
             [$seeded] = $seeded->update($left);
         }
-        [$blocked] = $seeded->update(new \SugarCraft\Code\PermissionRequestMsg(
+        [$blocked] = $seeded->update(new \SugarCraft\Code\App\PermissionRequestMsg(
             Message::assistant(''),
             new \SugarCraft\Code\ToolCall('bash', ['description' => 'rm'], 'call_1'),
             'Run rm -rf build/?',
@@ -2406,7 +2406,7 @@ final class KeyHelpTest extends TestCase
             [$chat] = $chat->update(new KeyMsg(KeyType::Char, $rune));
         }
         [$chat] = $chat->update(new KeyMsg(KeyType::Enter));
-        [$first] = $chat->update(new \SugarCraft\Code\AssistantMsg(
+        [$first] = $chat->update(new \SugarCraft\Code\App\AssistantMsg(
             Message::assistant('running')->withToolCalls([
                 new \SugarCraft\Code\ToolCall('Bash', ['command' => 'touch a'], 'call_a'),
                 new \SugarCraft\Code\ToolCall('Bash', ['command' => 'make b'], 'call_b'),
@@ -2470,7 +2470,7 @@ final class KeyHelpTest extends TestCase
             history: [],
             inputBuf: '',
             flow: new PermissionFlow(stage: PermissionPromptStage::Disarmed),
-        ))->update(new \SugarCraft\Code\PermissionRequestMsg(
+        ))->update(new \SugarCraft\Code\App\PermissionRequestMsg(
             Message::assistant(''),
             new \SugarCraft\Code\ToolCall('bash', [], 'call_1'),
             'Run it?',
@@ -2517,7 +2517,7 @@ final class KeyHelpTest extends TestCase
             $loop->cancelTimer($safety);
         }
 
-        $this->assertInstanceOf(\SugarCraft\Code\ToolResultsMsg::class, $resolved, 'the released batch did not complete');
+        $this->assertInstanceOf(\SugarCraft\Code\App\ToolResultsMsg::class, $resolved, 'the released batch did not complete');
     }
 
     /**
@@ -2561,7 +2561,7 @@ final class KeyHelpTest extends TestCase
         }
         [$inFlight] = $typed->update(new KeyMsg(KeyType::Enter));
 
-        [$blocked] = $inFlight->update(new \SugarCraft\Code\AssistantMsg(
+        [$blocked] = $inFlight->update(new \SugarCraft\Code\App\AssistantMsg(
             Message::assistant('running')->withToolCalls([
                 new \SugarCraft\Code\ToolCall('bash', ['cmd' => 'rm -rf build/'], 'call_1'),
             ]),
@@ -2958,7 +2958,7 @@ final class KeyHelpTest extends TestCase
             'turn in flight, big context' => static fn(int $cols, int $rows): Chat
                 => $hugeFlight->withSize($cols, $rows),
             'prompt pending' => function (int $cols, int $rows): Chat {
-                [$blocked] = $this->chat('', $cols, $rows)->update(new \SugarCraft\Code\PermissionRequestMsg(
+                [$blocked] = $this->chat('', $cols, $rows)->update(new \SugarCraft\Code\App\PermissionRequestMsg(
                     Message::assistant(''),
                     new \SugarCraft\Code\ToolCall('Bash', ['description' => 'rm'], 'call_1'),
                     'Run rm -rf build/?',
@@ -3064,8 +3064,8 @@ final class KeyHelpTest extends TestCase
         [$sent] = $this->chat('hello')->update(new KeyMsg(KeyType::Enter));
         $this->assertTrue($sent->inFlight, 'fixture: a turn must be in flight');
 
-        $ask = static fn(?int $generation): \SugarCraft\Code\PermissionRequestMsg
-            => new \SugarCraft\Code\PermissionRequestMsg(
+        $ask = static fn(?int $generation): \SugarCraft\Code\App\PermissionRequestMsg
+            => new \SugarCraft\Code\App\PermissionRequestMsg(
                 Message::assistant(''),
                 new \SugarCraft\Code\ToolCall('Bash', ['description' => 'rm'], 'call_1'),
                 'Run rm -rf build/?',
@@ -3196,7 +3196,7 @@ final class KeyHelpTest extends TestCase
      * segment is `$short`, OR by a name this file IMPORTED as an alias of
      * `$short`. A previous revision called the first of those "the only form that
      * constructs one by name", and that was false in the most idiomatic direction
-     * available: with `use SugarCraft\Code\PermissionRequestMsg as Ask;` at the
+     * available: with `use SugarCraft\Code\App\PermissionRequestMsg as Ask;` at the
      * top, `new Ask(…)` really is a `T_NEW` followed by a `T_STRING` and really
      * does build one — measured against a real fourth test file that drove a real
      * prompt while this scan reported three. That gap is CLOSED here (the `use …
@@ -3346,7 +3346,7 @@ final class KeyHelpTest extends TestCase
      *
      * The refutation, verbatim, was three lines:
      *
-     *     use SugarCraft\Code\PermissionRequestMsg as Ask;
+     *     use SugarCraft\Code\App\PermissionRequestMsg as Ask;
      *     $m = new Ask(Message::assistant('x'), new ToolCall('bash', [], '1'), 'p?', null);
      *
      * That file drove a real prompt. `constructs()` reported three files, so the
@@ -3358,8 +3358,8 @@ final class KeyHelpTest extends TestCase
     {
         $seen = [
             'plain new' => '<?php $m = new PermissionRequestMsg($a, $b, "p", null);',
-            'fully qualified' => '<?php $m = new \SugarCraft\Code\PermissionRequestMsg($a, $b, "p", null);',
-            'aliased import' => '<?php use SugarCraft\Code\PermissionRequestMsg as Ask; $m = new Ask($a, $b, "p", null);',
+            'fully qualified' => '<?php $m = new \SugarCraft\Code\App\PermissionRequestMsg($a, $b, "p", null);',
+            'aliased import' => '<?php use SugarCraft\Code\App\PermissionRequestMsg as Ask; $m = new Ask($a, $b, "p", null);',
         ];
         $blind = [
             'variable class name' => '<?php $c = PermissionRequestMsg::class; $m = new $c($a, $b, "p", null);',

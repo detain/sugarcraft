@@ -12,7 +12,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
-use SugarCraft\Code\BangShellResultMsg;
+use SugarCraft\Code\App\BangShellResultMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\BangShell;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;

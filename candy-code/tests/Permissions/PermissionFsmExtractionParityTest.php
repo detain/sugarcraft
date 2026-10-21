@@ -184,7 +184,7 @@ final class PermissionFsmExtractionParityTest extends TestCase
             $armAsk->getParameters(),
         );
         self::assertSame(
-            ['SugarCraft\Code\PermissionRequestMsg', 'int', 'array', 'SugarCraft\Code\Agents\Live\AgentLiveRegistry'],
+            ['SugarCraft\Code\App\PermissionRequestMsg', 'int', 'array', 'SugarCraft\Code\Agents\Live\AgentLiveRegistry'],
             $types,
             'armAsk takes the prompt message, the generation guard value, the history for AskOrigin labels and the live-registry handle — the four reads the original body needed.',
         );

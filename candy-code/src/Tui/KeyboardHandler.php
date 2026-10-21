@@ -135,7 +135,7 @@ final class KeyboardHandler
      * Element 1 is consumed by {@see App::consumeShellCmd()}, which translates
      * it into shell state, into keystrokes the hosted Chat already answers, or
      * (the agent commands, roadmap P-D3) into an
-     * {@see \SugarCraft\Code\AgentControlMsg} for the runs it names.
+     * {@see \SugarCraft\Code\App\AgentControlMsg} for the runs it names.
      *
      * @return array{0: App, 1: ?object}|null [newApp, command], or null when
      *         the key is not the shell's and must fall through to Chat.
@@ -822,7 +822,7 @@ final class KeyboardHandler
      *
      * Stopping a run is the turn's own `cancel_tool` (1.C-4b) for the Task
      * call it runs under, so it reaches the chat as a
-     * {@see \SugarCraft\Code\CancelAgentRunMsg} for
+     * {@see \SugarCraft\Code\App\CancelAgentRunMsg} for
      * {@see App::consumeShellCmd()} to deliver. Opening a run is
      * {@see App::openAgent()}, the Agent View (P-C2).
      *
@@ -853,10 +853,10 @@ final class KeyboardHandler
             'enter' => [$app->openAgent($focused->id), null],
             'c' => $focused->isFinished()
                 ? [$app, null]
-                : [$app, new \SugarCraft\Code\CancelAgentRunMsg($focused->parentCallId)],
+                : [$app, new \SugarCraft\Code\App\CancelAgentRunMsg($focused->parentCallId)],
             'x' => $focused->isFinished()
                 ? [$app->dismissFromAgentStrip($focused->id), null]
-                : [$app, new \SugarCraft\Code\CancelAgentRunMsg($focused->parentCallId)],
+                : [$app, new \SugarCraft\Code\App\CancelAgentRunMsg($focused->parentCallId)],
             'escape', 'alt+up' => [$app->withAgentStripFocus(null), null],
             'alt+down' => [$app, null],
             default => null,
@@ -934,7 +934,7 @@ final class KeyboardHandler
     /**
      * Act on a key the open Agent View answers (roadmap P-C2). `$key` is the
      * key's {@see KeyMsg::string()} spelling. Leaving is a
-     * {@see \SugarCraft\Code\CloseAgentViewMsg} for
+     * {@see \SugarCraft\Code\App\CloseAgentViewMsg} for
      * {@see App::consumeShellCmd()} to deliver, so the hosted chat hears it
      * and disarms its `Esc` `Esc` cancel; a sibling is opened in place, and
      * `Alt+N`/`Alt+P` past either end of the batch do nothing.
@@ -950,13 +950,13 @@ final class KeyboardHandler
             $target = (string) $app->agentViewTarget;
 
             return match (strtolower($key)) {
-                'c' => [$app, new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::CANCEL, [$target])],
-                'p' => [$app, new \SugarCraft\Code\AgentControlMsg(
-                    $app->isAgentPaused($target) ? \SugarCraft\Code\AgentControlMsg::RESUME : \SugarCraft\Code\AgentControlMsg::PAUSE,
+                'c' => [$app, new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::CANCEL, [$target])],
+                'p' => [$app, new \SugarCraft\Code\App\AgentControlMsg(
+                    $app->isAgentPaused($target) ? \SugarCraft\Code\App\AgentControlMsg::RESUME : \SugarCraft\Code\App\AgentControlMsg::PAUSE,
                     [$target],
                 )],
                 's' => [$app, new StopAllAgentsCmd()],
-                'o' => [$app, new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::OPEN_SESSION, [$target])],
+                'o' => [$app, new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::OPEN_SESSION, [$target])],
                 // P-E3: the run hands itself to a background session at its
                 // next tool or step, and its Task call returns at once. A run
                 // that cannot go is refused by the chat, in a notice row.
@@ -964,7 +964,7 @@ final class KeyboardHandler
                     ($run = $app->chat?->agentLive()->get($target)) === null || $run->isFinished() || (string) $run->parentAgentId !== ''
                         ? $app
                         : $app->withStatus(Lang::t('tui.agent.backgrounding', ['name' => $run->name])),
-                    new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::BACKGROUND, [$target]),
+                    new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::BACKGROUND, [$target]),
                 ],
                 default => [$app, null],
             };
@@ -972,9 +972,9 @@ final class KeyboardHandler
 
         return match (strtolower($key)) {
             'ctrl+x' => [$app->withAgentViewLeader(true), null],
-            'escape', 'alt+up' => [$app, new \SugarCraft\Code\CloseAgentViewMsg()],
+            'escape', 'alt+up' => [$app, new \SugarCraft\Code\App\CloseAgentViewMsg()],
             'enter' => self::composerSends($app)
-                ? [$app, new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::MESSAGE, $app->agentComposerTargets())]
+                ? [$app, new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::MESSAGE, $app->agentComposerTargets())]
                 : null,
             'alt+n' => [($next = $app->agentViewSibling(1)) === null ? $app : $app->openAgentView($next), null],
             'alt+p' => [($prev = $app->agentViewSibling(-1)) === null ? $app : $app->openAgentView($prev), null],
@@ -1049,7 +1049,7 @@ final class KeyboardHandler
 
             return [
                 $app->withAgentViewMode(AgentViewMode::Attach),
-                $entry === null ? null : new \SugarCraft\Code\OpenAgentViewMsg($entry->key ?? $entry->name, null, $entry->name),
+                $entry === null ? null : new \SugarCraft\Code\App\OpenAgentViewMsg($entry->key ?? $entry->name, null, $entry->name),
             ];
         }
 
@@ -1084,7 +1084,7 @@ final class KeyboardHandler
         if ($key === 'escape') {
             return [
                 $app->withAgentViewMode(AgentViewMode::List),
-                $app->agentViewTarget === null ? null : new \SugarCraft\Code\CloseAgentViewMsg(),
+                $app->agentViewTarget === null ? null : new \SugarCraft\Code\App\CloseAgentViewMsg(),
             ];
         }
 

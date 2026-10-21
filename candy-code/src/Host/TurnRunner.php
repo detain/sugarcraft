@@ -7,13 +7,13 @@ namespace SugarCraft\Code\Host;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Msg;
 use SugarCraft\Code\Agents\AgentManager;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\InteractiveTurn;
 use SugarCraft\Code\Backend\ObservesReasoning;
-use SugarCraft\Code\BackendToolEventsMsg;
+use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\Pruning\ContextLedger;
 use SugarCraft\Code\Context\Pruning\PruningMode;
@@ -786,7 +786,7 @@ final class TurnRunner
      *
      * @param list<Message> $history
      */
-    public static function approvedPlanExit(array $history): ?\SugarCraft\Code\PermissionModeToggledMsg
+    public static function approvedPlanExit(array $history): ?\SugarCraft\Code\App\PermissionModeToggledMsg
     {
         for ($i = \count($history) - 1; $i >= 0; $i--) {
             $row = $history[$i];

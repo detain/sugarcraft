@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;

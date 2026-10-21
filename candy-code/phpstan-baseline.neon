@@ -2311,13 +2311,13 @@ parameters:
 			path: src/Tui/KeyboardHandler.php
 
 		-
-			message: '#^Method SugarCraft\\Code\\Tui\\KeyboardHandler\:\:handleAgentAttachKey\(\) should return array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\Tui\\Commands\\KeyCmd\|null\} but returns array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\CloseAgentViewMsg\|null\}\.$#'
+			message: '#^Method SugarCraft\\Code\\Tui\\KeyboardHandler\:\:handleAgentAttachKey\(\) should return array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\Tui\\Commands\\KeyCmd\|null\} but returns array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\App\\CloseAgentViewMsg\|null\}\.$#'
 			identifier: return.type
 			count: 1
 			path: src/Tui/KeyboardHandler.php
 
 		-
-			message: '#^Method SugarCraft\\Code\\Tui\\KeyboardHandler\:\:handleAgentPeekKey\(\) should return array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\Tui\\Commands\\KeyCmd\|null\}\|null but returns array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\OpenAgentViewMsg\|null\}\.$#'
+			message: '#^Method SugarCraft\\Code\\Tui\\KeyboardHandler\:\:handleAgentPeekKey\(\) should return array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\Tui\\Commands\\KeyCmd\|null\}\|null but returns array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\App\\OpenAgentViewMsg\|null\}\.$#'
 			identifier: return.type
 			count: 1
 			path: src/Tui/KeyboardHandler.php

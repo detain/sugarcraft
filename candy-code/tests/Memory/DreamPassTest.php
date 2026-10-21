@@ -6,13 +6,13 @@ namespace SugarCraft\Code\Tests\Memory;
 
 use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\SessionPromptMemo;
-use SugarCraft\Code\DreamPassCompletedMsg;
+use SugarCraft\Code\App\DreamPassCompletedMsg;
 use SugarCraft\Code\Memory\AutoMemoryConsolidator;
 use SugarCraft\Code\Memory\CompactionJournal;
 use SugarCraft\Code\Memory\DreamMemoryView;

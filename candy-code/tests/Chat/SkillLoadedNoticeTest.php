@@ -14,9 +14,9 @@ use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\DenialKind;
 use SugarCraft\Code\ToolCall;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\ToolResult;
-use SugarCraft\Code\ToolResultsMsg;
+use SugarCraft\Code\App\ToolResultsMsg;
 use SugarCraft\Code\Tools\ToolResult as EngineToolResult;
 
 /**

@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Permissions;
 use React\Promise\Deferred;
 use SugarCraft\Code\Backend\PendingAsk;
 use SugarCraft\Code\Chat;
-use SugarCraft\Code\PermissionRequestMsg;
+use SugarCraft\Code\App\PermissionRequestMsg;
 use SugarCraft\Code\Config\Settings\SettingsTier;
 use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Hooks\HookResult;

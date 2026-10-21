@@ -344,7 +344,7 @@ final class SessionPickerActionsTest extends TestCase
         // Roadmap P-C2: the shell opens the read-only Agent View on it.
         $this->assertInstanceOf(\Closure::class, $cmd);
         $msg = $cmd();
-        $this->assertInstanceOf(\SugarCraft\Code\OpenAgentViewMsg::class, $msg);
+        $this->assertInstanceOf(\SugarCraft\Code\App\OpenAgentViewMsg::class, $msg);
         $this->assertSame($sub, $msg->childSessionId);
         $this->assertSame('explore', $msg->name);
     }

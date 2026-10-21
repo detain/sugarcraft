@@ -18,14 +18,14 @@ use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\App\SelectSkillMsg;
 use SugarCraft\Code\Backend\EchoBackend;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\PermissionRequestMsg;
+use SugarCraft\Code\App\PermissionRequestMsg;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
@@ -789,7 +789,7 @@ final class KeyBindingDriftTest extends TestCase
             },
             'chat.accept-suggestion' => function (array $k): void {
                 $history = [Message::user('fix it'), Message::assistant('Fixed.')];
-                [$suggested] = $this->chat($history)->update(new \SugarCraft\Code\PromptSuggestionMsg('run the tests', 0, count($history), null));
+                [$suggested] = $this->chat($history)->update(new \SugarCraft\Code\App\PromptSuggestionMsg('run the tests', 0, count($history), null));
                 [$next] = $suggested->update($k[0]);
                 $this->assertSame('run the tests', $next->inputBuf);
             },
@@ -991,7 +991,7 @@ final class KeyBindingDriftTest extends TestCase
                     [$next, $cmd] = $this->chat([], 'look at ')->update($k[0]);
                     $this->assertNotNull($cmd, 'the chord must read the clipboard');
                     $answer = $cmd();
-                    $this->assertInstanceOf(\SugarCraft\Code\ClipboardImagePastedMsg::class, $answer);
+                    $this->assertInstanceOf(\SugarCraft\Code\App\ClipboardImagePastedMsg::class, $answer);
                     [$pasted] = $next->update($answer);
 
                     $this->assertMatchesRegularExpression('~^look at @/\S+\.png $~', $pasted->inputBuf);
@@ -2989,7 +2989,7 @@ final class KeyBindingDriftTest extends TestCase
             $loop->cancelTimer($safety);
         }
 
-        $this->assertInstanceOf(\SugarCraft\Code\ToolResultsMsg::class, $resolved, 'the released batch did not complete');
+        $this->assertInstanceOf(\SugarCraft\Code\App\ToolResultsMsg::class, $resolved, 'the released batch did not complete');
     }
 
     /** A live, ARMED permission prompt on a `Bash` call. */

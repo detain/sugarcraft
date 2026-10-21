@@ -16,7 +16,7 @@ use SugarCraft\Code\Context\Compaction\HistoryFingerprint;
 use SugarCraft\Code\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCompactor;
-use SugarCraft\Code\HistoryCompactedMsg;
+use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\Host\CompactionService;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Usage;

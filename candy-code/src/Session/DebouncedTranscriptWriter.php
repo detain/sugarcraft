@@ -14,7 +14,7 @@ use SugarCraft\Code\Message;
  * each settled reply re-encoded and rewrote the whole conversation on the TUI
  * thread. This object holds the newest unsaved snapshot instead, and Chat
  * declares a tick subscription for as long as {@see hasPending()} is true;
- * each {@see \SugarCraft\Code\TranscriptFlushMsg} it delivers writes the
+ * each {@see \SugarCraft\Code\App\TranscriptFlushMsg} it delivers writes the
  * snapshot once.
  *
  * A SUBSCRIPTION, NOT A RETURNED Cmd. `Program` keeps a keyed tick alive while

@@ -30,7 +30,7 @@ use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Session\EnhancedSessionStore;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Tools\ToolResult as EngineToolResult;
 
 /**

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Code\Message;
@@ -183,7 +183,7 @@ final class CallbackAuthoredRefusalTest extends TestCase
         }
 
         self::assertInstanceOf(
-            \SugarCraft\Code\ToolResultsMsg::class,
+            \SugarCraft\Code\App\ToolResultsMsg::class,
             $resolved,
             'tool execution did not complete within the test timeout',
         );

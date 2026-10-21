@@ -8,14 +8,14 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionReply;
-use SugarCraft\Code\PermissionRequestMsg;
+use SugarCraft\Code\App\PermissionRequestMsg;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\SessionStore;
@@ -841,7 +841,7 @@ final class InFlightInputQueueTest extends TestCase
             'fixture: and the queue must survive the prompt going up',
         );
 
-        [$denied, $cmd] = $pending->update(new \SugarCraft\Code\PermissionReplyMsg(PermissionReply::Reject));
+        [$denied, $cmd] = $pending->update(new \SugarCraft\Code\App\PermissionReplyMsg(PermissionReply::Reject));
 
         $this->assertNotNull($cmd, 'the queued prompt has to be dispatched by something');
         $this->assertSame([], $denied->queuedPrompts(), 'the queue drained rather than stranding');

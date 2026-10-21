@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests;
 
 use SugarCraft\Core\Msg;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use PHPUnit\Framework\TestCase;

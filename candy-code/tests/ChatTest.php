@@ -15,8 +15,8 @@ use SugarCraft\Code\Agents\AgentPoolConfig;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\AgentResult;
-use SugarCraft\Code\AssistantMsg;
-use SugarCraft\Code\BackendToolEventsMsg;
+use SugarCraft\Code\App\AssistantMsg;
+use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Events\ToolFinished;
@@ -40,14 +40,14 @@ use SugarCraft\Core\BatchMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Session\SessionStore;
-use SugarCraft\Code\SessionTitledMsg;
+use SugarCraft\Code\App\SessionTitledMsg;
 use SugarCraft\Code\Usage;
-use SugarCraft\Code\BackgroundSessionSpawnedMsg;
-use SugarCraft\Code\BackgroundTickMsg;
+use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
+use SugarCraft\Code\App\BackgroundTickMsg;
 use SugarCraft\Code\Sessions\BackgroundSession;
 use SugarCraft\Code\Sessions\BackgroundSessionStatus;
 use SugarCraft\Code\Sessions\BackgroundSupervisor;
-use SugarCraft\Code\PermissionReplyMsg;
+use SugarCraft\Code\App\PermissionReplyMsg;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
@@ -480,7 +480,7 @@ final class ChatTest extends TestCase
     {
         $chat = new Chat(history: [Message::assistant('Old.', null, 'settled thought')], inFlight: true);
         $chat->enqueueReasoning('still thinking');
-        [$chat] = $chat->update(new \SugarCraft\Code\ToolEventPumpMsg());
+        [$chat] = $chat->update(new \SugarCraft\Code\App\ToolEventPumpMsg());
 
         [$open] = $chat->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
 
@@ -2886,7 +2886,7 @@ final class ChatTest extends TestCase
             $loop->cancelTimer($safety);
         }
 
-        $this->assertInstanceOf(\SugarCraft\Code\ToolResultsMsg::class, $resolved, 'tool execution did not complete within the test timeout');
+        $this->assertInstanceOf(\SugarCraft\Code\App\ToolResultsMsg::class, $resolved, 'tool execution did not complete within the test timeout');
 
         [$final] = $afterPlaceholders->update($resolved);
 
@@ -3170,14 +3170,14 @@ final class ChatTest extends TestCase
         ($backend->emit)(ToolStarted::fromCall($call));
         $this->assertTrue($afterSubmit->inFlight);
 
-        [$running, $more] = $afterSubmit->update(new \SugarCraft\Code\ToolEventPumpMsg());
+        [$running, $more] = $afterSubmit->update(new \SugarCraft\Code\App\ToolEventPumpMsg());
         $placeholder = $running->history[count($running->history) - 1];
         $this->assertSame('call_1', $placeholder->pendingToolCallId);
         $this->assertStringContainsString('running: bash(command: "ls")', \SugarCraft\Code\Renderer::render($running));
         $this->assertNull($more, 'nothing else was queued, so the pump should not re-schedule');
 
         ($backend->emit)(ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')));
-        [$done] = $running->update(new \SugarCraft\Code\ToolEventPumpMsg());
+        [$done] = $running->update(new \SugarCraft\Code\App\ToolEventPumpMsg());
 
         $this->assertSame([], array_filter($done->history, static fn (Message $m): bool => $m->pendingToolCallId !== null));
         $withResults = array_values(array_filter($done->history, static fn (Message $m): bool => $m->toolResults !== []));
@@ -3197,7 +3197,7 @@ final class ChatTest extends TestCase
         $sub = $subs->all()[0];
         $this->assertSame(\SugarCraft\Core\Kind::Tick, $sub->kind);
         $this->assertSame(0.1, $sub->params['seconds']);
-        $this->assertInstanceOf(\SugarCraft\Code\ToolEventPumpMsg::class, ($sub->produce)());
+        $this->assertInstanceOf(\SugarCraft\Code\App\ToolEventPumpMsg::class, ($sub->produce)());
     }
 
     public function testToolEventPumpSubscriptionIsDroppedOnceTheInboxIsEmptyAndTheTurnIsOver(): void
@@ -3221,12 +3221,12 @@ final class ChatTest extends TestCase
         $chat->enqueueToolEvent(ToolStarted::fromCall($call));
         $chat->enqueueToolEvent(ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')));
 
-        [$running, $cmd] = $chat->update(new \SugarCraft\Code\ToolEventPumpMsg());
+        [$running, $cmd] = $chat->update(new \SugarCraft\Code\App\ToolEventPumpMsg());
         // One event per update() is what makes the running state a rendered
         // frame rather than a state the transcript skips straight past.
         $this->assertSame('call_1', $running->history[count($running->history) - 1]->pendingToolCallId);
         $this->assertInstanceOf(\Closure::class, $cmd);
-        $this->assertInstanceOf(\SugarCraft\Code\ToolEventPumpMsg::class, $cmd());
+        $this->assertInstanceOf(\SugarCraft\Code\App\ToolEventPumpMsg::class, $cmd());
 
         [$done, $noMore] = $running->update($cmd());
         $this->assertSame([], array_filter($done->history, static fn (Message $m): bool => $m->pendingToolCallId !== null));
@@ -3245,7 +3245,7 @@ final class ChatTest extends TestCase
         [$typed] = $chat->update(new KeyMsg(KeyType::Char, 'x'));
         $this->assertCount(1, $typed->liveToolEvents());
 
-        [$running] = $typed->update(new \SugarCraft\Code\ToolEventPumpMsg());
+        [$running] = $typed->update(new \SugarCraft\Code\App\ToolEventPumpMsg());
         $this->assertSame('call_1', $running->history[count($running->history) - 1]->pendingToolCallId);
     }
 
@@ -3257,7 +3257,7 @@ final class ChatTest extends TestCase
         $chat->enqueueToolEvent(ToolStarted::fromCall($call), 3);
         $chat->enqueueToolEvent(ToolStarted::fromCall($call), 7);
 
-        [$skipped, $cmd] = $chat->update(new \SugarCraft\Code\ToolEventPumpMsg());
+        [$skipped, $cmd] = $chat->update(new \SugarCraft\Code\App\ToolEventPumpMsg());
         $this->assertSame([], $skipped->history, 'a stale event was applied to the live transcript');
         $this->assertInstanceOf(\Closure::class, $cmd, 'skipping must not strand the events behind it');
 
@@ -3281,7 +3281,7 @@ final class ChatTest extends TestCase
 
         ($backend->emit)(ToolStarted::fromCall($call));
         ($backend->emit)(ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')));
-        $drained = $this->drainBackendEvents($afterSubmit, new \SugarCraft\Code\ToolEventPumpMsg());
+        $drained = $this->drainBackendEvents($afterSubmit, new \SugarCraft\Code\App\ToolEventPumpMsg());
 
         $backend->deferred->resolve(Message::assistant('there is one file'));
 
@@ -4248,7 +4248,7 @@ final class ChatTest extends TestCase
         $this->assertNull($settled->promptSuggestion(), 'nothing is shown before the answer lands');
 
         $landed = $this->resolveAsyncCmd($cmd);
-        $this->assertInstanceOf(\SugarCraft\Code\PromptSuggestionMsg::class, $landed);
+        $this->assertInstanceOf(\SugarCraft\Code\App\PromptSuggestionMsg::class, $landed);
         [$shown] = $settled->update($landed);
 
         $this->assertSame('run the tests', $shown->promptSuggestion());
@@ -4310,7 +4310,7 @@ final class ChatTest extends TestCase
     public function testRightOnAnEmptyBoxTakesTheSuggestionAsTheDraft(): void
     {
         $history = [Message::user('fix it'), Message::assistant('Fixed.')];
-        [$chat] = (new Chat(history: $history))->update(new \SugarCraft\Code\PromptSuggestionMsg('run the tests', 0, 2, null));
+        [$chat] = (new Chat(history: $history))->update(new \SugarCraft\Code\App\PromptSuggestionMsg('run the tests', 0, 2, null));
 
         [$taken, $cmd] = $chat->update(new KeyMsg(KeyType::Right, ''));
 
@@ -4337,15 +4337,15 @@ final class ChatTest extends TestCase
         $history = [Message::user('fix it'), Message::assistant('Fixed.')];
         $chat = new Chat(history: $history, titleBackend: $this->suggestionBackend('x'));
 
-        [$wrongTurn] = $chat->update(new \SugarCraft\Code\PromptSuggestionMsg('stale', 7, 2, null));
+        [$wrongTurn] = $chat->update(new \SugarCraft\Code\App\PromptSuggestionMsg('stale', 7, 2, null));
         $this->assertNull($wrongTurn->promptSuggestion(), 'another turn\'s suggestion');
-        [$wrongLength] = $chat->update(new \SugarCraft\Code\PromptSuggestionMsg('stale', 0, 1, null));
+        [$wrongLength] = $chat->update(new \SugarCraft\Code\App\PromptSuggestionMsg('stale', 0, 1, null));
         $this->assertNull($wrongLength->promptSuggestion(), 'a transcript that grew since');
-        [$wrongSession] = $chat->update(new \SugarCraft\Code\PromptSuggestionMsg('stale', 0, 2, 'other-session'));
+        [$wrongSession] = $chat->update(new \SugarCraft\Code\App\PromptSuggestionMsg('stale', 0, 2, 'other-session'));
         $this->assertNull($wrongSession->promptSuggestion(), 'another session\'s suggestion');
 
         // Latched, then invalidated by the conversation moving on.
-        [$shown] = $chat->update(new \SugarCraft\Code\PromptSuggestionMsg('run the tests', 0, 2, null));
+        [$shown] = $chat->update(new \SugarCraft\Code\App\PromptSuggestionMsg('run the tests', 0, 2, null));
         $this->assertSame('run the tests', $shown->promptSuggestion());
         [$typed] = $shown->update(new KeyMsg(KeyType::Char, 'x'));
         [$sent] = $typed->update(new KeyMsg(KeyType::Enter, ''));
@@ -4369,7 +4369,7 @@ final class ChatTest extends TestCase
     public function testTheModelsAnswerIsReducedToOneSafeLine(string $raw, ?string $expected): void
     {
         [$chat] = (new Chat(history: [Message::user('a'), Message::assistant('b')]))
-            ->update(new \SugarCraft\Code\PromptSuggestionMsg($raw, 0, 2, null));
+            ->update(new \SugarCraft\Code\App\PromptSuggestionMsg($raw, 0, 2, null));
 
         $this->assertSame($expected, $chat->promptSuggestion());
     }
@@ -4536,7 +4536,7 @@ final class ChatTest extends TestCase
         $this->assertInstanceOf(BatchMsg::class, $batch);
 
         $titled = $this->resolveAsyncCmd($batch->cmds[1]);
-        $this->assertInstanceOf(\SugarCraft\Code\SessionTitledMsg::class, $titled);
+        $this->assertInstanceOf(\SugarCraft\Code\App\SessionTitledMsg::class, $titled);
         $this->assertSame('', $titled->title, 'an unusable answer yields no title');
         $this->assertNull($store->getSession('sess-empty')['name'], 'and nothing is persisted');
 
@@ -4854,7 +4854,7 @@ final class ChatTest extends TestCase
             $loop->cancelTimer($safety);
         }
 
-        $this->assertInstanceOf(\SugarCraft\Code\ToolResultsMsg::class, $resolved, 'tool execution did not complete within the test timeout');
+        $this->assertInstanceOf(\SugarCraft\Code\App\ToolResultsMsg::class, $resolved, 'tool execution did not complete within the test timeout');
 
         [$final] = $model->update($resolved);
 

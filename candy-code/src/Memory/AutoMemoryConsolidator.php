@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Memory;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Msg;
 use SugarCraft\Code\Backend;
-use SugarCraft\Code\MemoryConsolidatedMsg;
+use SugarCraft\Code\App\MemoryConsolidatedMsg;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Support\AtomicFileWriter;

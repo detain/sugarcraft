@@ -10,7 +10,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Diagnostics\NoticeSink;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Host\WorkspaceContext;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Tui\AgentStrip;
 
 /**

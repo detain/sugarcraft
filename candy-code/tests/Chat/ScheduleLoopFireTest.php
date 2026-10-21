@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Agents\Agent;
-use SugarCraft\Code\BackgroundTickMsg;
+use SugarCraft\Code\App\BackgroundTickMsg;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Lang;

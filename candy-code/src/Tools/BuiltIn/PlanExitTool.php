@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tools\BuiltIn;
 
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Hooks\HookResult;
-use SugarCraft\Code\PermissionModeToggledMsg;
+use SugarCraft\Code\App\PermissionModeToggledMsg;
 use SugarCraft\Code\Permissions\ApprovalVerdict;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;

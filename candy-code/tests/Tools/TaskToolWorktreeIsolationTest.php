@@ -10,7 +10,7 @@ use SugarCraft\Code\Agents\Isolation;
 use SugarCraft\Code\Agents\PathJail as AgentPathJail;
 use SugarCraft\Code\Agents\SuspendedDelegations;
 use SugarCraft\Code\Agents\WorktreeManager;
-use SugarCraft\Code\BackgroundSessionSpawnedMsg;
+use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Host\Commands\BackgroundCommand;
 use SugarCraft\Code\Providers\CompleteResponse;

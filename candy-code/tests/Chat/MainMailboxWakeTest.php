@@ -13,7 +13,7 @@ use SugarCraft\Code\Agents\Live\AgentMessage;
 use SugarCraft\Code\Agents\Live\AgentRunCards;
 use SugarCraft\Code\Agents\Live\SubAgentTranscriptLog;
 use SugarCraft\Code\Backend\EngineBackend;
-use SugarCraft\Code\BackgroundTickMsg;
+use SugarCraft\Code\App\BackgroundTickMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;

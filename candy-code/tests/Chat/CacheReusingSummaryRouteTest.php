@@ -19,7 +19,7 @@ use SugarCraft\Code\Backend\SummarisesWithCache;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCompactor;
-use SugarCraft\Code\HistoryCompactedMsg;
+use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\Host\CompactionService;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Messages\UserMessage;

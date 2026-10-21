@@ -7,13 +7,13 @@ namespace SugarCraft\Code\Tests\Chat;
 use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Memory\AutoMemoryConsolidator;
 use SugarCraft\Code\Memory\MemoryStore;
-use SugarCraft\Code\MemoryConsolidatedMsg;
+use SugarCraft\Code\App\MemoryConsolidatedMsg;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Usage;
 

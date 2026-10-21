@@ -388,7 +388,7 @@ final class RendererTest extends TestCase
     {
         $history = [Message::user('fix it', 0), Message::assistant('Fixed.', 0)];
         [$chat] = (new Chat(history: $history))->withSize($cols, 30)
-            ->update(new \SugarCraft\Code\PromptSuggestionMsg($suggestion, 0, 2, null));
+            ->update(new \SugarCraft\Code\App\PromptSuggestionMsg($suggestion, 0, 2, null));
 
         return $chat;
     }
@@ -1779,7 +1779,7 @@ final class RendererTest extends TestCase
         ?\SugarCraft\Code\Backend\PendingAsk $pendingAsk = null,
     ): Chat {
         [$blocked] = $this->sizedChat([Message::user('clean up')], $cols, $rows)->update(
-            new \SugarCraft\Code\PermissionRequestMsg(
+            new \SugarCraft\Code\App\PermissionRequestMsg(
                 Message::assistant(''),
                 new \SugarCraft\Code\ToolCall($toolName, $arguments, 'call_1'),
                 $prompt,
@@ -1958,7 +1958,7 @@ final class RendererTest extends TestCase
         [$opened] = $this->sizedChat([])->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
         $this->assertStringContainsString('New session', Renderer::render($opened));
 
-        [$blocked] = $opened->update(new \SugarCraft\Code\PermissionRequestMsg(
+        [$blocked] = $opened->update(new \SugarCraft\Code\App\PermissionRequestMsg(
             Message::assistant(''),
             new \SugarCraft\Code\ToolCall('Bash', [], 'call_1'),
             'Really?',
@@ -2015,7 +2015,7 @@ final class RendererTest extends TestCase
     public function testModalShrinksToNarrowTerminals(): void
     {
         [$blocked] = $this->sizedChat([Message::user('hi')], cols: 40)->update(
-            new \SugarCraft\Code\PermissionRequestMsg(
+            new \SugarCraft\Code\App\PermissionRequestMsg(
                 Message::assistant(''),
                 new \SugarCraft\Code\ToolCall('Bash', ['description' => 'Delete the build directory'], 'call_1'),
                 'Run it?',

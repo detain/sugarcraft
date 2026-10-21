@@ -17,7 +17,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
-use SugarCraft\Code\SessionTitledMsg;
+use SugarCraft\Code\App\SessionTitledMsg;
 use SugarCraft\Code\Usage;
 
 /**

@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Agents\MemoryScope;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;

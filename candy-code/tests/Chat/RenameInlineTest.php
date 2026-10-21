@@ -21,7 +21,7 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 use SugarCraft\Code\Session\TitleSource;
-use SugarCraft\Code\SessionTitledMsg;
+use SugarCraft\Code\App\SessionTitledMsg;
 use SugarCraft\Code\Usage;
 
 /**

@@ -16,7 +16,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
-use SugarCraft\Code\HistoryCompactedMsg;
+use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\Host\CompactionService;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;

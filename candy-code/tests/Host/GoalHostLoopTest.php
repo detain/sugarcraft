@@ -10,7 +10,7 @@ use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Goal\GoalMode;
 use SugarCraft\Code\Goal\GoalState;
-use SugarCraft\Code\GoalJudgedMsg;
+use SugarCraft\Code\App\GoalJudgedMsg;
 use SugarCraft\Code\Goal\GoalVerdict;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\WorkspaceContext;

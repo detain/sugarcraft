@@ -14,7 +14,7 @@ use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Backend\EchoBackend;
-use SugarCraft\Code\CancelledWorkflowReportMsg;
+use SugarCraft\Code\App\CancelledWorkflowReportMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;

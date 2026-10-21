@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Support;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\McpLoginProgressMsg;
+use SugarCraft\Code\App\McpLoginProgressMsg;
 
 /**
  * MCP-5: the process slots behind an in-TUI `mcp auth login <server>`.

@@ -177,7 +177,7 @@ final class BootstrapTest extends TestCase
         // real launch→mint chain, closure and all.
         $this->assertSame([], array_column($store->listSessions(), 'id'), 'an unspoken launch writes no row');
 
-        [$spoken] = $chat->update(new \SugarCraft\Code\InitialPromptMsg('first words'));
+        [$spoken] = $chat->update(new \SugarCraft\Code\App\InitialPromptMsg('first words'));
 
         $this->assertSame(
             [$sessionId],
@@ -210,7 +210,7 @@ final class BootstrapTest extends TestCase
 
         $store = $second->sessionStore();
         $this->assertInstanceOf(\SugarCraft\Code\Session\EnhancedSessionStore::class, $store);
-        [$secondSpoken] = $second->update(new \SugarCraft\Code\InitialPromptMsg('remember me'));
+        [$secondSpoken] = $second->update(new \SugarCraft\Code\App\InitialPromptMsg('remember me'));
         $this->assertNotNull($store->getSession((string) $second->currentSessionId()), 'the dispatch minted the row');
         // The settled turn is what `--continue` reopens; write the final
         // transcript state directly (the debounced writer has no tick loop
@@ -323,7 +323,7 @@ final class BootstrapTest extends TestCase
         $this->assertSame($second->chat?->currentSessionId(), $second->sessionId);
         $this->assertSame([], $second->chat?->sessionStore()?->listSessions() ?? []);
 
-        $second->chat?->update(new \SugarCraft\Code\InitialPromptMsg('first words'));
+        $second->chat?->update(new \SugarCraft\Code\App\InitialPromptMsg('first words'));
 
         $this->assertSame([$second->sessionId], array_column($second->chat?->sessionStore()?->listSessions() ?? [], 'id'));
     }

@@ -96,7 +96,6 @@ use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
 use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Config\LayeredSettings;
-use SugarCraft\Code\ClipboardImagePastedMsg;
 use SugarCraft\Code\Media\ImageIngress;
 use SugarCraft\Code\Support\ClipboardImage;
 use SugarCraft\Code\Support\HomeDirectory;
@@ -455,13 +454,13 @@ final class App implements Model
         /**
          * What became of the messages the user sent delegated runs from the
          * Agent View composer (roadmap P-D2), newest last and capped at
-         * {@see AGENT_MESSAGES_KEPT} — one {@see \SugarCraft\Code\AgentMessageSentMsg}
+         * {@see AGENT_MESSAGES_KEPT} — one {@see \SugarCraft\Code\App\AgentMessageSentMsg}
          * per run and message, a follow-up's later state replacing its
          * earlier one. The view draws each as a `you → <agent> · …` row
          * until the run's own log shows it delivered
          * ({@see agentViewSentRows()}).
          *
-         * @var list<\SugarCraft\Code\AgentMessageSentMsg>
+         * @var list<\SugarCraft\Code\App\AgentMessageSentMsg>
          */
         public readonly array $agentMessages = [],
         /**
@@ -706,7 +705,7 @@ final class App implements Model
      *     buffer by {@see \SugarCraft\Code\Tui\AgentOutputPane}'s Attach mode.
      *
      * Opening the run that is already open is the view's refresh — see
-     * {@see \SugarCraft\Code\OpenAgentViewMsg}.
+     * {@see \SugarCraft\Code\App\OpenAgentViewMsg}.
      */
     public function openAgentView(string $id, ?string $childSessionId = null, ?string $name = null): self
     {
@@ -966,14 +965,14 @@ final class App implements Model
      *
      * @return array{0: self, 1: ?\Closure}
      */
-    public function deliverAgentControl(\SugarCraft\Code\AgentControlMsg $control): array
+    public function deliverAgentControl(\SugarCraft\Code\App\AgentControlMsg $control): array
     {
         if ($control->agentIds === []) {
             return [$this->withStatus(match ($control->verb) {
-                \SugarCraft\Code\AgentControlMsg::RESUME => Lang::t('tui.app.no_agent.resume'),
-                \SugarCraft\Code\AgentControlMsg::PAUSE => Lang::t('tui.app.no_agent.pause'),
-                \SugarCraft\Code\AgentControlMsg::OPEN_SESSION => Lang::t('tui.app.no_agent.open'),
-                \SugarCraft\Code\AgentControlMsg::MESSAGE => Lang::t('tui.app.no_agent.message'),
+                \SugarCraft\Code\App\AgentControlMsg::RESUME => Lang::t('tui.app.no_agent.resume'),
+                \SugarCraft\Code\App\AgentControlMsg::PAUSE => Lang::t('tui.app.no_agent.pause'),
+                \SugarCraft\Code\App\AgentControlMsg::OPEN_SESSION => Lang::t('tui.app.no_agent.open'),
+                \SugarCraft\Code\App\AgentControlMsg::MESSAGE => Lang::t('tui.app.no_agent.message'),
                 default => Lang::t('tui.app.no_agent.stop'),
             }), null];
         }
@@ -982,25 +981,25 @@ final class App implements Model
         $names = $this->agentNames($control->agentIds);
         $now = microtime(true);
         switch ($control->verb) {
-            case \SugarCraft\Code\AgentControlMsg::CANCEL:
+            case \SugarCraft\Code\App\AgentControlMsg::CANCEL:
                 $armed = $this->agentCancelArmed;
                 if ($armed !== null && $armed['ids'] === $control->agentIds && $now - $armed['at'] <= self::AGENT_HARD_CANCEL_SECONDS) {
-                    $control = new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::STOP, $control->agentIds);
+                    $control = new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::STOP, $control->agentIds);
                     $app = $app->withStatus(Lang::t('tui.app.agent_stopping', ['names' => $names]));
                 } else {
                     $app = $app->mutate(agentCancelArmed: ['ids' => $control->agentIds, 'at' => $now])
                         ->withStatus(Lang::t('tui.app.agent_cancel_armed', ['names' => $names]));
                 }
                 break;
-            case \SugarCraft\Code\AgentControlMsg::PAUSE:
+            case \SugarCraft\Code\App\AgentControlMsg::PAUSE:
                 $app = $app->mutate(agentPaused: array_values(array_unique([...$this->agentPaused, ...$control->agentIds])))
                     ->withStatus(Lang::t('tui.app.agent_pausing', ['names' => ucfirst($names)]));
                 break;
-            case \SugarCraft\Code\AgentControlMsg::RESUME:
+            case \SugarCraft\Code\App\AgentControlMsg::RESUME:
                 $app = $app->mutate(agentPaused: array_values(array_diff($this->agentPaused, $control->agentIds)))
                     ->withStatus(Lang::t('tui.app.agent_resumed', ['names' => ucfirst($names)]));
                 break;
-            case \SugarCraft\Code\AgentControlMsg::OPEN_SESSION:
+            case \SugarCraft\Code\App\AgentControlMsg::OPEN_SESSION:
                 $app = $app->closeAgentView();
                 break;
         }
@@ -1048,13 +1047,13 @@ final class App implements Model
      * state of the same message — a follow-up that replied or failed —
      * replaces the earlier one, so each message keeps one row.
      */
-    public function recordAgentMessage(\SugarCraft\Code\AgentMessageSentMsg $sent): self
+    public function recordAgentMessage(\SugarCraft\Code\App\AgentMessageSentMsg $sent): self
     {
         $kept = $this->agentMessages;
-        if ($sent->status === \SugarCraft\Code\AgentMessageSentMsg::REPLIED || $sent->status === \SugarCraft\Code\AgentMessageSentMsg::FAILED) {
+        if ($sent->status === \SugarCraft\Code\App\AgentMessageSentMsg::REPLIED || $sent->status === \SugarCraft\Code\App\AgentMessageSentMsg::FAILED) {
             for ($i = \count($kept) - 1; $i >= 0; $i--) {
                 if ($kept[$i]->agentId === $sent->agentId && $kept[$i]->text === $sent->text
-                    && $kept[$i]->status === \SugarCraft\Code\AgentMessageSentMsg::RESUMING) {
+                    && $kept[$i]->status === \SugarCraft\Code\App\AgentMessageSentMsg::RESUMING) {
                     array_splice($kept, $i, 1);
                     break;
                 }
@@ -2742,10 +2741,10 @@ final class App implements Model
             $msg instanceof SelectSkillMsg => self::withoutEngineCmd($this->dispatch($msg)),
             // A click on an `agent:` zone in the chat (P-B3), the picker's
             // sub-agent row, and the open view's own tail tick (P-C2).
-            $msg instanceof \SugarCraft\Code\OpenAgentViewMsg => [$this->openAgentView($msg->agentId, $msg->childSessionId, $msg->name), null],
-            $msg instanceof \SugarCraft\Code\CloseAgentViewMsg => $this->closeAgentView()->delegateToChat($msg),
+            $msg instanceof \SugarCraft\Code\App\OpenAgentViewMsg => [$this->openAgentView($msg->agentId, $msg->childSessionId, $msg->name), null],
+            $msg instanceof \SugarCraft\Code\App\CloseAgentViewMsg => $this->closeAgentView()->delegateToChat($msg),
             // P-D2: the chat's answer to the Agent View composer's send.
-            $msg instanceof \SugarCraft\Code\AgentMessageSentMsg => [$this->recordAgentMessage($msg), null],
+            $msg instanceof \SugarCraft\Code\App\AgentMessageSentMsg => [$this->recordAgentMessage($msg), null],
             $msg instanceof KeyMsg => $this->handleKey($msg),
             $msg instanceof MouseMsg => $this->handleShellMouse($msg),
             $msg instanceof BackgroundColorMsg => $this->observeBackground($msg),
@@ -3923,7 +3922,7 @@ final class App implements Model
      * anything to translate into: {@see \SugarCraft\Code\Tui\Commands\CancelAgentCmd},
      * {@see \SugarCraft\Code\Tui\Commands\ResumeAgentCmd} and
      * {@see \SugarCraft\Code\Tui\Commands\StopAllAgentsCmd} now become an
-     * {@see \SugarCraft\Code\AgentControlMsg} for the runs they name —
+     * {@see \SugarCraft\Code\App\AgentControlMsg} for the runs they name —
      * delivered through each run's mailbox, which reaches a run wherever it
      * runs, so the shell needs no worker pool of its own — and
      * {@see \SugarCraft\Code\Tui\Commands\GroupInputCmd} turns the Agent
@@ -3946,31 +3945,31 @@ final class App implements Model
             $cmd instanceof CancelCmd => $this->feedChat([new KeyMsg(KeyType::Escape)]),
             // The live agents strip's stop (P-B3): the turn's own cancel_tool
             // for that run's Task call, which the chat owns.
-            $cmd instanceof \SugarCraft\Code\CancelAgentRunMsg => $this->delegateToChat($cmd),
+            $cmd instanceof \SugarCraft\Code\App\CancelAgentRunMsg => $this->delegateToChat($cmd),
             // The Agent View composer (P-D2): the runs' mailboxes are the
             // chat's, so the shell names the runs and the chat sends.
-            $cmd instanceof \SugarCraft\Code\AgentControlMsg => $this->deliverAgentControl($cmd),
+            $cmd instanceof \SugarCraft\Code\App\AgentControlMsg => $this->deliverAgentControl($cmd),
             // P-D3: the four commands that used to be inert. The dashboard's
             // c/r name its selected row's run; s stops every running run;
             // Ctrl+G turns the composer's broadcast on or off.
             $cmd instanceof \SugarCraft\Code\Tui\Commands\CancelAgentCmd => $this->deliverAgentControl(
-                new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::CANCEL, $this->dashboardRunIds($cmd->agentIndex)),
+                new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::CANCEL, $this->dashboardRunIds($cmd->agentIndex)),
             ),
             $cmd instanceof \SugarCraft\Code\Tui\Commands\ResumeAgentCmd => $this->deliverAgentControl(
-                new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::RESUME, $this->dashboardRunIds($cmd->agentIndex)),
+                new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::RESUME, $this->dashboardRunIds($cmd->agentIndex)),
             ),
             $cmd instanceof \SugarCraft\Code\Tui\Commands\StopAllAgentsCmd => $this->deliverAgentControl(
-                new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::CANCEL, $this->runningAgentIds()),
+                new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::CANCEL, $this->runningAgentIds()),
             ),
             $cmd instanceof \SugarCraft\Code\Tui\Commands\GroupInputCmd => [$this->toggleAgentBroadcast(), null],
             // The Agent View (P-C2): the dashboard's Peek → Attach `Enter`
             // opens it, and `Esc`/`Alt+↑` in it, or the dashboard's `q`,
             // leave it — the chat hears the close, to disarm its `Esc` `Esc`.
-            $cmd instanceof \SugarCraft\Code\OpenAgentViewMsg => [$this->openAgentView($cmd->agentId, $cmd->childSessionId, $cmd->name), null],
-            $cmd instanceof \SugarCraft\Code\CloseAgentViewMsg,
+            $cmd instanceof \SugarCraft\Code\App\OpenAgentViewMsg => [$this->openAgentView($cmd->agentId, $cmd->childSessionId, $cmd->name), null],
+            $cmd instanceof \SugarCraft\Code\App\CloseAgentViewMsg,
             $cmd instanceof \SugarCraft\Code\Tui\Commands\QuitAgentViewCmd => $this->agentViewTarget === null
                 ? [$this->closeAgentView(), null]
-                : $this->closeAgentView()->delegateToChat(new \SugarCraft\Code\CloseAgentViewMsg()),
+                : $this->closeAgentView()->delegateToChat(new \SugarCraft\Code\App\CloseAgentViewMsg()),
             default => [$this, null],
         };
     }
@@ -4652,7 +4651,7 @@ final class App implements Model
             $subscriptions = ($subscriptions ?? new Subscriptions())->withTick(
                 self::AGENT_VIEW_SUBSCRIPTION . $id,
                 self::AGENT_VIEW_TICK_SECONDS,
-                static fn (): CoreMsg => new \SugarCraft\Code\OpenAgentViewMsg($id),
+                static fn (): CoreMsg => new \SugarCraft\Code\App\OpenAgentViewMsg($id),
             );
         }
 
@@ -4670,7 +4669,7 @@ final class App implements Model
             $subscriptions = ($subscriptions ?? new Subscriptions())->withTick(
                 self::IDLE_COMPACT_SUBSCRIPTION,
                 self::IDLE_COMPACT_TICK_SECONDS,
-                static fn (): CoreMsg => new \SugarCraft\Code\IdleCompactTickMsg(),
+                static fn (): CoreMsg => new \SugarCraft\Code\App\IdleCompactTickMsg(),
             );
         }
 

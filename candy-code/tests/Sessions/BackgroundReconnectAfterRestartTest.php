@@ -9,7 +9,7 @@ use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EchoBackend;
-use SugarCraft\Code\BackgroundTickMsg;
+use SugarCraft\Code\App\BackgroundTickMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Message;

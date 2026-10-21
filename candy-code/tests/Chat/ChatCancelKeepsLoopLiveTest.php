@@ -10,7 +10,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
@@ -18,7 +18,7 @@ use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessTree;
 use SugarCraft\Code\Tests\Support\ProcessTreeKillTest;
 use SugarCraft\Code\ToolCall;
-use SugarCraft\Code\ToolResultsMsg;
+use SugarCraft\Code\App\ToolResultsMsg;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 
 /**

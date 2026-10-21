@@ -11,7 +11,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Session\DebouncedTranscriptWriter;
 use SugarCraft\Code\Session\EnhancedSessionStore;
-use SugarCraft\Code\TranscriptFlushMsg;
+use SugarCraft\Code\App\TranscriptFlushMsg;
 use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 
 /**
