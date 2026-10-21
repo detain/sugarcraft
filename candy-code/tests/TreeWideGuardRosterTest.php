@@ -623,7 +623,11 @@ final class TreeWideGuardRosterTest extends TestCase
         'Diagnostics/RuntimeNoticeSinkStderrTest.php' => ['glob($this->scratch.\'/*\')'],
         // tearDown() removes the sys_get_temp_dir() home setUp() made.
         'Diagnostics/TuiErrorLogTest.php' => ['scandir($path)'],
-        'Host/UsageModelThreadingTest.php' => ['glob($this->tempDir.\'/*\')'],
+        // W7-S4 (row retired, provenance): the auxiliary-engine model census now
+        // also walks src/Chat/Handlers/*.php from the package root, so the
+        // derivation promotes the file through channel B and settles membership
+        // BEFORE consulting the residue — the tempDir glob can never be read
+        // again, and rule 33 says the licence goes with the promotion.
         'Host/WebTwoHostCommandsTest.php' => ['glob($this->dir.\'/*\')'],
         'Integration/BinCandyCodeAutoloadGuardTest.php' => ['scandir($dir)'],
         'Integration/BinCandyCodeDispatchTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
