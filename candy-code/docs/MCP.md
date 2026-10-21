@@ -428,7 +428,7 @@ here, so this is the worked answer to "how would I do that?". Shortest honest
 form: **write the file, trust the root, relaunch** — there is no registration
 step for anything that does not demand OAuth login. (Your own
 `~/.candy-code/mcp.json` skips the middle step: see
-[Two tiers, one precedence](#two-tiers-one-precedence-mcp-3).)
+[Two tiers, one precedence](#two-tiers-one-precedence).)
 
 A stdio server and three zero-auth remotes, in candy-code's native config spelling:
 
@@ -610,7 +610,7 @@ Sharing is made safe in the transport:
 follow the `mcp__<server>__<tool>` convention, which is what permission rule
 patterns like `mcp__git__*` match — see [`PERMISSIONS.md`](PERMISSIONS.md).
 One server can opt out of that shape by being too talkative; see
-[Deferred schemas: `mcp_list` and `mcp_call`](#deferred-schemas-mcp_list-and-mcp_call-mcp-7).
+[Deferred schemas: `mcp_list` and `mcp_call`](#deferred-schemas-mcp_list-and-mcp_call).
 
 The client is built `unrestricted: true`, which is the opposite of what it looks
 like. `McpClient::listTools()` fails *closed* without an `AgentPreset`, and the
