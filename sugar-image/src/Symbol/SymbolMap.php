@@ -347,6 +347,11 @@ final class SymbolMap
      * Flag law (F-17, unchanged): withSelectors() results reset the
      * latin flag; the flag records withLatin()-built provenance, while
      * codepoint presence — not the flag — is what makes an append a no-op.
+     *
+     * A-05 (state-carry law): like every tier ADDER, this one composes
+     * onto the current map — the wide selection and kana flag ride
+     * through untouched, so withKana()->withLatin() keeps the 181-glyph
+     * symbols2 tier (chafa's symbol sets are cumulative per map instance).
      */
     public function withLatin(): self
     {
@@ -363,7 +368,7 @@ final class SymbolMap
             $extra[] = self::outlineDef($cp, $outline, SymbolTags::LATIN);
         }
 
-        return new self([...$this->defs, ...$extra], true, $this->asciiIbm);
+        return new self([...$this->defs, ...$extra], true, $this->asciiIbm, $this->wideDefs, $this->kana);
     }
 
     /** Whether the opt-in LATIN tier is appended (see {@see withLatin()}). */
@@ -389,6 +394,12 @@ final class SymbolMap
      * Idempotent; unlike the latin seam above, the flag SURVIVES
      * withSelectors() — the face is not an appended tier, so preserving
      * it cannot double-apply.
+     *
+     * A-05 (state-carry law): the face swap rewrites only carried ASCII
+     * codepoints, so the wide symbols2 selection and kana flag ride
+     * through untouched — withKana()->withAsciiIbm() keeps the 181-glyph
+     * tier (the face is orthogonal to the wide partition; chafa hosts
+     * one narrow face per map and its wide array shares no codepoint).
      */
     public function withAsciiIbm(): self
     {
@@ -408,7 +419,7 @@ final class SymbolMap
             }
         }
 
-        return new self($defs, $this->latin, true);
+        return new self($defs, $this->latin, true, $this->wideDefs, $this->kana);
     }
 
     /** Whether the ascii tier carries the IBM face (see {@see withAsciiIbm()}). */
@@ -709,6 +720,17 @@ final class SymbolMap
      * wide selection. A string that BEGINS with `+`/`-` is
      * relative to this map's current corpus, otherwise it replaces it.
      * Unknown class names throw (fail fast, never a silent empty corpus).
+     *
+     * A-05 (state-carry audit, verdict: coherent): this REBUILD is not an
+     * adder — both tier flags reset (F-17 provenance law, withKana()
+     * docblock) — yet nothing is silently dropped: the wide symbols2
+     * selection is filtered through the same tag walk as the narrow array,
+     * so a kana-reachable selector (`all`, `wide`, `alpha` — kana carries
+     * effective WIDE | ALPHA) carries the 181-glyph tier through, and
+     * `block` (or any non-reachable class) prunes it exactly the way it
+     * prunes a narrow class. That is chafa's apply_selectors feeding both
+     * init_symbol_array_* passes; a documented reset, not the defect the
+     * tier adders carried before A-05.
      *
      * Seam: chafa's `[chars]` literal sets and codepoint ranges are not
      * implemented — tag classes are the useful subset for this port.
