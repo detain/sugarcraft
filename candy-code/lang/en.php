@@ -621,6 +621,10 @@ Environment variables:
                           server starts. Unset, 0 or any other value keeps
                           MCP enabled — unlike the flag-style variables,
                           only these three words count.
+   CANDY_CODE_QUIET_LOGS  1, true or yes (case-insensitive) silences the
+                          error_log() side-channel process-wide at its one
+                          sink; unset, 0 or any other value keeps the
+                          diagnostics flowing. Launch-only, no settings key.
    CANDY_CODE_REDUCED_MOTION
                           1, true or yes (case-insensitive) pins the agent
                           spinner to one static frame — for motion-sensitive
