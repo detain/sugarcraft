@@ -179,5 +179,6 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - `sugar-spring.md`, `candy-flappy.md` — 2 honey-* project audits
 - `sugar-widgets.md` through `candy-ssh-launcher.md` — 22 sugar-* project audits (incl. `candy-kv.md`, first-ever audit, 2026-09-15, E719)
 - `monorepo-audit-2026-05-27.md`, `vcr_use_findings.md`, `improvements-2026-05.md` — 3 internal work records relocated out of `docs/` on 2026-10-08
+- chafa→SugarCraft campaign (W0-W11, closed 2026-10-21): residual-minors ledger + dispositions live at `prompt_kit/findings/chafa/README.md` (WM1-WM4 queued for weld doc commit; audit-record governance gaps closed in the untracked `plan_chafa.md` errata sweep)
 
 **Total: 63 findings files covering 58 projects** — the 58 project audits (2026-06-30 pass plus `candy-kv.md` and later per-lib arrivals), `repeated_logic.md`, this `README.md`, and the 3 relocated work records. The `plan.md` index, per-lib `plan_<slug>.md` remediation plans, and `findings_resume_plan.md` / `resume_prompt.md` are tracked separately.
