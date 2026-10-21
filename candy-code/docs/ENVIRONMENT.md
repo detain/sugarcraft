@@ -204,12 +204,15 @@ Export is **dark by default**: with no endpoint below, `Chat` carries a
 These are read by `ProviderFactory` when it builds a provider's *default*
 config — that is, when you select a provider by name and do not pass an
 explicit config array. Supplying the credential in a config array instead
-takes priority; nothing here is consulted in that case.
+takes priority; nothing here is consulted in that case. The `claude-code`
+launch additionally forwards the `ANTHROPIC_*` trio into the environment of
+the `claude` binary it spawns.
 
 | Variable | Provider | Description |
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | `openai`, optionally `codex` | API key. Defaults to the empty string, which the provider will reject. The `codex` arm needs it only when the operator chooses key billing over `codex login`: otherwise the subscription token lives in `~/.codex`, untouched by this process. |
 | `OPENAI_ORG_ID` | `openai` | Optional organization ID. Defaults to `null`. |
+| `OPENAI_BASE_URL` | `openai`, `sglang`, `custom` | Base URL for the OpenAI-shaped endpoints — the counterpart of `ANTHROPIC_BASE_URL` for that family, aimed at gateways like OpenRouter or a self-hosted server. Defaults per type: the library's own for `openai`, `http://localhost:30000` for `sglang`, `http://localhost:8080` for `custom`. |
 | `ANTHROPIC_API_KEY` | `anthropic`, `claude-code` | API key, sent as `x-api-key`. |
 | `ANTHROPIC_AUTH_TOKEN` | `claude-code` | Alternative bearer credential, forwarded into the `claude` binary's environment. It only matters with the provider block's `bare: false` (ISS-078): a default bare spawn reads no OAuth token and no user state, and requires `ANTHROPIC_API_KEY` (or `apiKeyHelper`) instead. |
 | `ANTHROPIC_BASE_URL` | `anthropic`, `claude-code` | API base URL, the root without `/v1`. Defaults to `https://api.anthropic.com`. The `anthropic` type sends to `<base>/v1/messages`; a base that already ends in `/v1` is used as it is. |
@@ -218,9 +221,14 @@ takes priority; nothing here is consulted in that case.
 | `GEMINI_API_KEY` | `gemini` | API key for the native Gemini endpoint, sent as the `x-goog-api-key` header (PRV-3). Defaults to the empty string, which the provider will reject. |
 | `GEMINI_BASE_URL` | `gemini` | API base URL. Defaults to `https://generativelanguage.googleapis.com`; the requests go to `<base>/v1beta/models/<model>:generateContent` (and `:streamGenerateContent?alt=sse`), and a base that already ends in `/v1` or `/v1beta` is used as it is. |
 
-`bedrock` reads no variable of its own here — it relies on the AWS SDK's
-ambient credential chain (`AWS_*` variables, `~/.aws/credentials`, instance
-roles), resolved by `aws/aws-sdk-php` rather than by CandyCode.
+`bedrock` reads two variables of its own, both naming the region; credentials
+stay the AWS SDK's ambient chain (`AWS_*` variables, `~/.aws/credentials`,
+instance roles), resolved by `aws/aws-sdk-php` rather than by CandyCode.
+
+| Variable | Provider | Description |
+|----------|----------|-------------|
+| `AWS_REGION` | `bedrock` | Region the request is signed against, consulted first. |
+| `AWS_DEFAULT_REGION` | `bedrock` | Region fallback when `AWS_REGION` is unset; with neither set, the provider signs against its built-in `us-east-1`. |
 
 `CUSTOM_PROVIDER_API_KEY` is the *default* variable name for
 `CustomProvider::openAiCompatibleFromEnv()`, but that is a caller-supplied
@@ -305,6 +313,7 @@ Read for their standard meanings, not as CandyCode settings:
 | `PATH` | Resolving MCP server executables and the git binary. |
 | `VISUAL`, `EDITOR` | The editor `/editor` opens to compose a prompt — `VISUAL` first, then `EDITOR`, then `vi` (`notepad` on Windows). Run through the shell, so a value with arguments (`code --wait`) works. |
 | `TMUX`, `TERM_PROGRAM` | Multiplexer detection (tmux vs iTerm2) for split-pane support. |
+| `TERM` | Terminal capability hints. On a tty, a value of `dumb` earns a launch notice pointing at the one-shot paths, which render no interface a dumb terminal can mishandle. `TERM` and `TERM_PROGRAM` are also searched together for `kitty`, `ghostty` or `wezterm` — a name in either value is the flag that makes CandyCode try the kitty keyboard protocol negotiation. |
 | `COLORFGBG` | Background detection for the `adaptive` theme — the *last* resort, consulted when `CANDY_CODE_BACKGROUND` has not settled it **and** the terminal has not answered the OSC 11 background query the TUI sends at startup (it has not answered *yet* during the first frames after launch; it never will on a terminal that does not implement the query, over a pipe, or on the one-shot `-p`/`run` path, which starts no TUI and so never asks). The **last** `;`-separated field is the background — xterm/rxvt emit a three-field `fg;faint;bg` form as well as the usual two — and it is read as an xterm-256 palette index put through a luminance test, not matched against a list of "light" indices. Anything that is not a palette index at all (the literal `default`, an empty or malformed value, a number above 255) reads as dark. |
 | `LANG`, `LC_ALL`, `LC_MESSAGES` | The launch locale. `Lang::useLaunchLocale()` (called by `bin/candy-code` before anything is printed) reads them in that precedence — `LC_ALL` first, then `LC_MESSAGES`, then `LANG` — takes the first non-empty answer, strips the encoding/modifier suffix (`fr_FR.UTF-8@euro` → `fr-fr`), and loads the matching `lang/<tag>.php` translation. A value of `C` or `POSIX` (encoding included, as in `C.UTF-8`) means the untranslated messages, English here; so does no variable at all, or a value that is not a language tag. |
 | `DISPLAY`, `WAYLAND_DISPLAY` | Clipboard backend selection. When `WAYLAND_DISPLAY` names a compositor the image/text clipboard prefers `wl-copy`/`wl-paste`; when `DISPLAY` names an X server it prefers `xclip`/`xsel` (macOS takes `pbcopy`/`pngpaste` before either is consulted). On a headless box neither is set, so the host-tool branch silently does not exist and OSC 52 is the only copy path — worth knowing before `Ctrl+V` appears to do nothing in a container. |
