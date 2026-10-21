@@ -121,6 +121,29 @@ final class SessionTabStripClipTest extends TestCase
         self::assertStringNotContainsString('…', $strip);
     }
 
+    /**
+     * W2-D ellipsis policy: the whole-strip backstop cuts with the shared
+     * ellipsising clip. Five and six columns are the discriminating widths:
+     * the plain strip `[]|… +7` cut there leaves a trailing space or `+`
+     * under a raw `Width::truncate`, never the announcing `…`. The strip is
+     * driven directly — at these sizes the shell's own first frame row is
+     * chrome, not the strip.
+     */
+    public function testTheBackstopCutOfTheWholeStripIsAnnouncedByTheEllipsis(): void
+    {
+        [$store, $ids] = $this->longNamedStore(8);
+        $render = new \ReflectionMethod(Renderer::class, 'renderSessionTabStrip');
+
+        foreach ([5, 6] as $cols) {
+            $chat = (new Chat(sessionStore: $store, currentSessionId: $ids[0], openTabs: self::tabsFromStore($store, activeId: $ids[0])))->withSize($cols, 24);
+            $strip = (string) $render->invoke(null, $chat);
+            $plain = (string) preg_replace('/\x{e000}(?:[^\x{e001}]*)\x{e001}/u', '', $strip);
+
+            self::assertStringEndsWith('…', $plain, "the {$cols}-column strip must end in the marker: " . json_encode($plain));
+            self::assertLessThanOrEqual($cols, Width::string($plain));
+        }
+    }
+
     #[DataProvider('widths')]
     public function testTheCurrentTabStaysVisibleWhenItIsTheLastOfTwenty(int $cols): void
     {
