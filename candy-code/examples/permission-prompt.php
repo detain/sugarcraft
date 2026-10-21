@@ -39,7 +39,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\PermissionRequestMsg;
+use SugarCraft\Code\App\PermissionRequestMsg;
 use SugarCraft\Code\Providers\EchoProvider;
 use SugarCraft\Code\ToolCall;
 

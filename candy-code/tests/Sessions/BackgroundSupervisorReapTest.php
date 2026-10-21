@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Tests\Support\TokenFunctionRanges;
 
@@ -49,7 +49,7 @@ use SugarCraft\Code\Tests\Support\TokenFunctionRanges;
  * `terminateAndClose()` and
  * {@see testReapIfExitedNeverSignalsAChildThatIsStillRunning()} goes red.
  *
- * NOTE ON OWNERSHIP: round 53's file split gives `src/Sessions/BackgroundSupervisor.php`
+ * NOTE ON OWNERSHIP: round 53's file split gives `src/Background/BackgroundSupervisor.php`
  * to lane b and `tests/Sessions/` to lane e. This file is new rather than an
  * edit to an existing one precisely so the two can merge without a conflict.
  */

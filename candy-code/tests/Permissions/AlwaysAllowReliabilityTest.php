@@ -15,14 +15,14 @@ use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\PermissionReplyMsg;
+use SugarCraft\Code\App\PermissionReplyMsg;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Permissions\SafetyClassifier;
 use SugarCraft\Code\Permissions\SessionPermissionMemo;
 use SugarCraft\Code\Session\EnhancedSessionStore;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Tools\ToolCall as EngineToolCall;
 
 /**

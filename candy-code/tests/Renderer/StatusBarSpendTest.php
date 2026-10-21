@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tests\Renderer;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;

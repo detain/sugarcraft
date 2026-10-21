@@ -149,7 +149,7 @@ final class ProcessReaper
      * {@see \SugarCraft\Code\Hooks\ScriptHook} and
      * {@see \SugarCraft\Code\Config\StatusLineCommand}, and the
      * `pcntl_fork()`ed worker of
-     * {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner} share ONE
+     * {@see \SugarCraft\Code\Background\BackgroundSessionRunner} share ONE
      * escalation sequence instead of each keeping a private copy. Three
      * hand-rolled ladders is one too many: a copy is where a rung drifts.
      *
@@ -234,7 +234,7 @@ final class ProcessReaper
      *
      * The counterpart to {@see terminateAndClose()}, for the one shape where
      * signalling would be actively wrong: a launcher whose whole job is to fork
-     * and get out of the way. {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::spawnSession()}
+     * and get out of the way. {@see \SugarCraft\Code\Background\BackgroundSupervisor::spawnSession()}
      * has exactly that — a `php -r` process that double-forks a detached daemon
      * and exits. It always exits within milliseconds, so a plain `proc_close()`
      * would in practice be free; but "in practice" is a race, and if the reap

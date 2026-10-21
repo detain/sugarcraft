@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Permissions;
 
 use React\Promise\Deferred;
-use SugarCraft\Code\PermissionRequestMsg;
+use SugarCraft\Code\App\PermissionRequestMsg;
 
 /**
  * The prepared half of raising a permission prompt: what

@@ -24,7 +24,7 @@ use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Hooks\ScriptHook;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
-use SugarCraft\Code\TurnHooksResolvedMsg;
+use SugarCraft\Code\App\TurnHooksResolvedMsg;
 
 use function React\Promise\resolve;
 

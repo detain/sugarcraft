@@ -11,7 +11,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Agents\Live\ActivityItem;
 use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Code\Backend\EchoBackend;
-use SugarCraft\Code\BackendToolEventsMsg;
+use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Events\ToolFinished;
@@ -19,7 +19,7 @@ use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**

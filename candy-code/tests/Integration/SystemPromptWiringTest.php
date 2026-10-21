@@ -538,7 +538,7 @@ final class SystemPromptWiringTest extends TestCase
             $loop->cancelTimer($safety);
         }
 
-        $this->assertInstanceOf(\SugarCraft\Code\AssistantMsg::class, $resolved, 'the completion did not finish within the test timeout');
+        $this->assertInstanceOf(\SugarCraft\Code\App\AssistantMsg::class, $resolved, 'the completion did not finish within the test timeout');
 
         [$final] = $afterSubmit->update($resolved);
         $answer = $final->history[array_key_last($final->history)]->content;

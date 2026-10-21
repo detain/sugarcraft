@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Tests\Memory;
 use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend\EngineBackend;
-use SugarCraft\Code\DreamPassCompletedMsg;
+use SugarCraft\Code\App\DreamPassCompletedMsg;
 use SugarCraft\Code\Memory\AutoMemoryConsolidator;
 use SugarCraft\Code\Memory\CompactionJournal;
 use SugarCraft\Code\Memory\DreamPass;

@@ -8,14 +8,14 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
-use SugarCraft\Code\StatusLineResultMsg;
-use SugarCraft\Code\StatusLineTickMsg;
+use SugarCraft\Code\App\StatusLineResultMsg;
+use SugarCraft\Code\App\StatusLineTickMsg;
 use SugarCraft\Code\Usage;
 
 /**

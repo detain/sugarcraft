@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Task;
 use SugarCraft\Code\Agents\TaskList;
 use SugarCraft\Code\Agents\TaskStatus;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
 
 /**

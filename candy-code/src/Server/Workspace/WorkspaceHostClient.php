@@ -12,7 +12,7 @@ use React\Promise\PromiseInterface;
 use React\Socket\Connection as SocketConnection;
 use SugarCraft\Code\Host\RemoteSessionHost;
 use SugarCraft\Code\Server\ServerConfig;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Support\ProcessContainment;

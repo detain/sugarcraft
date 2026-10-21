@@ -20,8 +20,8 @@ use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\SessionPermissionMemo;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
-use SugarCraft\Code\Sessions\ScheduleRegistry;
+use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Background\ScheduleRegistry;
 use SugarCraft\Code\Tools\BuiltIn\WebSearch;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 

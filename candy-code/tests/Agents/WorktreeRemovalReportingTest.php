@@ -445,10 +445,12 @@ final class WorktreeRemovalReportingTest extends TestCase
         self::assertFileExists($root . '/bin/candy-code');
 
         self::assertSame(
+            // W5-C (v4:F5): the runner's directory renamed, so the walk's
+            // ascending order lands src/Background/ ahead of src/Cli/.
             [
+                'src/Background/BackgroundSessionRunner.php: new',
                 'src/Cli/Bootstrap.php: new',
                 'src/Host/Commands/BackgroundCommand.php: new',
-                'src/Sessions/BackgroundSessionRunner.php: new',
             ],
             self::sitesIn($files, $root),
         );

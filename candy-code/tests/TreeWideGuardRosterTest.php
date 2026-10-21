@@ -666,6 +666,8 @@ final class TreeWideGuardRosterTest extends TestCase
         ],
         // w1e (v1-m-2): the sidecar-retention asserts glob the rotated `$buffer.log*`
         // files their own test wrote next to a tempnam() buffer — never the package.
+        // W5-C (v4:F5): src/Sessions/ became src/Background/, but tests/Sessions/
+        // did NOT move, so these three keys stay tests-relative as written.
         'Sessions/BackgroundSessionRunnerTest.php' => ['glob($sidecar.\'*\')'],
         'Sessions/BackgroundSupervisorReapTest.php' => ['glob($this->tempDir.\'/*\')'],
         // the supervisor test tears down the temp root its fixtures live in.

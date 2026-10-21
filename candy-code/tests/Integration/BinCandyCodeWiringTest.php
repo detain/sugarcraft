@@ -641,7 +641,7 @@ final class BinCandyCodeWiringTest extends TestCase
         // doctor call) that hands off to the AssistantMsg once drained - so
         // follow the Cmd chain instead of applying a single Msg.
         $this->assertInstanceOf(
-            \SugarCraft\Code\BackendToolEventsMsg::class,
+            \SugarCraft\Code\App\BackendToolEventsMsg::class,
             $resolved,
             'doctor tool call did not complete within the test timeout',
         );

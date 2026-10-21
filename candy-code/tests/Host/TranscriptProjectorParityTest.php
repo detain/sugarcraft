@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tests\Host;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EchoBackend;
-use SugarCraft\Code\BackendToolEventsMsg;
+use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolStarted;
@@ -14,7 +14,7 @@ use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Host\TranscriptProjector;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\ToolCall;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\ToolResult;
 use SugarCraft\Code\Tools\ToolResult as EngineToolResult;
 

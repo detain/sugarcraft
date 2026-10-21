@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
-use SugarCraft\Code\Sessions\BackgroundShellRegistry;
+use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Tools\CarriesSessionState;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;

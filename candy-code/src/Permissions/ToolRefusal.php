@@ -16,7 +16,7 @@ use SugarCraft\Code\Events\ToolFinished;
  * about the same event and neither can see the other:
  * {@see \SugarCraft\Code\Cli\NonInteractive::refusalFrom()} builds the
  * `refusals` array of a `--output-format json` document, and
- * {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner::noticeRefusal()}
+ * {@see \SugarCraft\Code\Background\BackgroundSessionRunner::noticeRefusal()}
  * writes one line into a daemon's sidecar log. Both were the same shape —
  * "is this a `ToolFinished`, did it error, does its text open with a roster
  * entry" — spelled twice in two files, one of them `private`. The duplicate

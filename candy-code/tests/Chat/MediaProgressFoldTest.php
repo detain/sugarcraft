@@ -6,14 +6,14 @@ namespace SugarCraft\Code\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EchoBackend;
-use SugarCraft\Code\BackendToolEventsMsg;
+use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Events\MediaProgress;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Media\PreviewSlots;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**

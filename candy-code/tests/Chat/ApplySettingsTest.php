@@ -25,7 +25,7 @@ use SugarCraft\Code\Config\Settings\UiEditability;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Providers\EchoProvider;
 use SugarCraft\Code\Renderer;
-use SugarCraft\Code\StatusLineTickMsg;
+use SugarCraft\Code\App\StatusLineTickMsg;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tui\Settings\SettingsSavedMsg;
 use SugarCraft\Code\Tui\Settings\SettingsToastExpiredMsg;

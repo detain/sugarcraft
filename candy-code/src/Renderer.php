@@ -45,6 +45,7 @@ use SugarCraft\Code\Tui\SessionPicker;
 use SugarCraft\Code\Tui\Components\AgentDashboardPane;
 use SugarCraft\Code\Util\TokenCount;
 use SugarCraft\Code\Tui\Components\PaneLabel;
+use SugarCraft\Code\App\ToolResultsMsg;
 
 /**
  * Pure view function for {@see Chat} — the renderer that actually paints

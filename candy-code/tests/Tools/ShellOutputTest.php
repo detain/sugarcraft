@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Tests\Tools;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulePathNudge;
-use SugarCraft\Code\Sessions\BackgroundShellRegistry;
+use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\BuiltIn\ShellOutput;

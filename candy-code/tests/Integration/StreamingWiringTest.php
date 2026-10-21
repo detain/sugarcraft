@@ -9,7 +9,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
@@ -28,7 +28,7 @@ use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Runtime;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
 
@@ -549,7 +549,7 @@ final class StreamingWiringTest extends TestCase
 
     /**
      * Deltas the pump never reached before the turn settled are dropped, not
-     * replayed into {@see \SugarCraft\Code\BackendToolEventsMsg}: that queue
+     * replayed into {@see \SugarCraft\Code\App\BackendToolEventsMsg}: that queue
      * carries tool lifecycle states, and the settled Message beside them
      * already contains every byte those deltas described. Replaying them would
      * also crash the tool-event arm, which has no case for text.

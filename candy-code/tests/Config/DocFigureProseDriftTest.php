@@ -2861,7 +2861,7 @@ final class DocFigureProseDriftTest extends TestCase
         // Wildcard split deliberately: a glued `*` literal here would be
         // harvested as glob-shaped and drift the PathGlob corpus figure
         // (E686 tranche-7's M7 lesson).
-        $tableEnd = strpos($arch, '`Sessions\\Background' . '*' . '`');
+        $tableEnd = strpos($arch, '`Background\Background' . '*' . '`');
         self::assertIsInt($tableStart);
         self::assertIsInt($tableEnd);
         $segment = substr($arch, $tableStart, $tableEnd - $tableStart);
@@ -2910,7 +2910,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame('.running', (new \ReflectionClassConstant('SugarCraft\Code\Workflows\WorkflowEngine', 'PAUSE_DIR'))->getValue(), 'the pause directory constant no longer spells .running — table cell drifted');
         self::assertSame(
             'candy_code_bg_<uid>_index',
-            \SugarCraft\Code\Sessions\BackgroundSupervisor::IPC_DIR_PREFIX . '<uid>' . \SugarCraft\Code\Sessions\BackgroundSupervisor::INDEX_DIR_SUFFIX,
+            \SugarCraft\Code\Background\BackgroundSupervisor::IPC_DIR_PREFIX . '<uid>' . \SugarCraft\Code\Background\BackgroundSupervisor::INDEX_DIR_SUFFIX,
             'the session index directory no longer spells candy_code_bg_<uid>_index — table cell drifted',
         );
 

@@ -6,11 +6,11 @@ namespace SugarCraft\Code\Host;
 
 use SugarCraft\Code\Backend\ChildChannel;
 use SugarCraft\Code\Protocol\EventType;
-use SugarCraft\Code\Sessions\BackgroundPermissionRelay;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
-use SugarCraft\Code\Sessions\ScheduleRegistry;
-use SugarCraft\Code\Sessions\ScheduleSpawner;
+use SugarCraft\Code\Background\BackgroundPermissionRelay;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Background\ScheduleRegistry;
+use SugarCraft\Code\Background\ScheduleSpawner;
 use SugarCraft\Code\Agents\AgentManager;
 
 /**

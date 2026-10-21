@@ -9,7 +9,7 @@ use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Commands\MemoryHistoryCommand;
 use SugarCraft\Code\Context\SessionPromptMemo;
-use SugarCraft\Code\DreamPassCompletedMsg;
+use SugarCraft\Code\App\DreamPassCompletedMsg;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Message;
@@ -680,7 +680,7 @@ PROMPT;
     }
 
     /** The dream commit's subject: what was applied, counted from the outcome, not the model's report. */
-    private static function subject(\SugarCraft\Code\MemoryConsolidatedMsg $outcome, int $entries): string
+    private static function subject(\SugarCraft\Code\App\MemoryConsolidatedMsg $outcome, int $entries): string
     {
         return sprintf(
             '%s — saved %d, updated %d, removed %d from %d journal %s',

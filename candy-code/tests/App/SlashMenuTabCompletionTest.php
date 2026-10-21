@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\App\App;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Hooks\HookContext;
@@ -345,7 +345,7 @@ final class SlashMenuTabCompletionTest extends TestCase
      * mid-turn user is likeliest to have up.
      *
      * The prompt is raised through the REAL PreToolUse gate rather than by
-     * constructing a {@see \SugarCraft\Code\PermissionRequestMsg} here,
+     * constructing a {@see \SugarCraft\Code\App\PermissionRequestMsg} here,
      * deliberately: `Renderer\KeyHelpTest::testTheGuardMutationDomainIsThe
      * FilesThatBuildAPermissionRequestMsg()` pins the set of files that
      * construct one at exactly four, because that set is the domain

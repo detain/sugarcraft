@@ -13,8 +13,8 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionLock;
-use SugarCraft\Code\SessionLockRetryMsg;
-use SugarCraft\Code\TranscriptFlushMsg;
+use SugarCraft\Code\App\SessionLockRetryMsg;
+use SugarCraft\Code\App\TranscriptFlushMsg;
 use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 
 /**

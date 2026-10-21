@@ -316,7 +316,7 @@ final class WorkflowCommand implements HostCommand
      * Step a workflow fiber from the event loop until it terminates, and
      * resolve with its report — the text of the reply that settles the run
      * (`Chat` lands it as an `AssistantMsg`, or as a
-     * {@see \SugarCraft\Code\CancelledWorkflowReportMsg} once Esc Esc released
+     * {@see \SugarCraft\Code\App\CancelledWorkflowReportMsg} once Esc Esc released
      * the turn; a headless host appends it the same way).
      *
      * ## The invariant this exists to hold
@@ -361,7 +361,7 @@ final class WorkflowCommand implements HostCommand
      * THE PARTIAL REPORT STILL LANDS, marked cancelled
      * ({@see describeWorkflowResult()}): the stages that ran really ran and
      * cost money, and dropping the report would leave no record of them. It
-     * arrives as a {@see \SugarCraft\Code\CancelledWorkflowReportMsg}, NOT an AssistantMsg,
+     * arrives as a {@see \SugarCraft\Code\App\CancelledWorkflowReportMsg}, NOT an AssistantMsg,
      * because the cancel already released the turn — by the time the run
      * winds down the user may have started another, and an AssistantMsg would
      * settle that one on this run's behalf. This used to be a known

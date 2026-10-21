@@ -6,8 +6,8 @@ namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
-use SugarCraft\Code\Sessions\BackgroundPermissionRelay;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundPermissionRelay;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 
 use function json_encode;
 

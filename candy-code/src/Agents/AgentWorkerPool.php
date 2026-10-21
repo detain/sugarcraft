@@ -493,7 +493,7 @@ final class AgentWorkerPool
         // so release it here — otherwise it would block the rmdir below and
         // leak a sentinel-bearing directory per pool. Only a plain file at the
         // marker name is ours to unlink (a planted link proves nothing), the
-        // same rule {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::releaseSentinelIfOwn()} follows.
+        // same rule {@see \SugarCraft\Code\Background\BackgroundSupervisor::releaseSentinelIfOwn()} follows.
         $marker = rtrim($this->resultDir, '/') . '/' . SafeDelete::SENTINEL;
         if (is_file($marker) && !is_link($marker)) {
             @unlink($marker);

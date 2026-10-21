@@ -17,7 +17,7 @@ use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Providers\ToolCallParser\DsmlToolCallParser;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Role;
-use SugarCraft\Code\RuntimeNoticePumpMsg;
+use SugarCraft\Code\App\RuntimeNoticePumpMsg;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
 use SugarCraft\Code\Tests\Support\DiscardsErrorLogTrait;

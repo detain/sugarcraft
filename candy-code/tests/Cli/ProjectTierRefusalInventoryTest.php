@@ -406,7 +406,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Session.php|.config/candy-code' => self::USER,
         // SHL-1: the background-shell capture root, `~/.candy-code/shells`,
         // anchored at HomeDirectory::owned() — files THIS launch writes.
-        'Sessions/BackgroundShellRegistry.php|.candy-code/shells' => self::USER,
+        'Background/BackgroundShellRegistry.php|.candy-code/shells' => self::USER,
         // 5.4-3: the dream pass's skill drafts, `~/.candy-code/skills-proposed`,
         // and the user's live tree an accepted draft is copied into — both under
         // HomeDirectory::owned(), so a checkout cannot place either. The settings
@@ -447,7 +447,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Commands/ForeignCommandDiscovery.php|.config/opencode' => self::USER,
         // AUT-1 (lane w5c): the schedule store is a user home file (0600,
         // `~`), same basis as the shells and media rows.
-        'Sessions/ScheduleRegistry.php|.candy-code/schedules.json' => self::USER,
+        'Background/ScheduleRegistry.php|.candy-code/schedules.json' => self::USER,
 
         // Neither: not a tier this collector is about.
         'Agents/WorktreeConfig.php|.candy-code/worktrees' => self::NOT_A_TIER,

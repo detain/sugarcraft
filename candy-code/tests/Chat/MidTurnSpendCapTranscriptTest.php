@@ -9,7 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Backend\EngineBackend;
-use SugarCraft\Code\BackendToolEventsMsg;
+use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Events\SpendCapBreached;
@@ -20,7 +20,7 @@ use SugarCraft\Code\Providers\EmbeddingsRequest;
 use SugarCraft\Code\Providers\EmbeddingsResponse;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Role;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Usage;
 use SugarCraft\Code\Util\TokenTracker;
 

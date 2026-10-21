@@ -14,7 +14,7 @@ use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\ReportsContextWindow;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
-use SugarCraft\Code\HistoryCompactedMsg;
+use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;

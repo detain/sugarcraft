@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Protocol\Schema;
 
 use SugarCraft\Code\Media\MediaKind;
 use SugarCraft\Code\Permissions\PermissionMode;
-use SugarCraft\Code\Sessions\BackgroundSessionStatus;
+use SugarCraft\Code\Background\BackgroundSessionStatus;
 
 /**
  * The shapes several methods and events share, published once under the

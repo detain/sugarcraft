@@ -818,7 +818,7 @@ final class McpToolWiringTest extends TestCase
 
     /**
      * A FORKED WORKER OWNS ITS OWN SERVERS, and only its own.
-     * {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner::executeTask()} is
+     * {@see \SugarCraft\Code\Background\BackgroundSessionRunner::executeTask()} is
      * exactly this shape — `pcntl_fork()`, `chdir()`, `backend()`, `tools()` — so
      * a worker really does start servers in a process that inherited the parent's
      * client map.

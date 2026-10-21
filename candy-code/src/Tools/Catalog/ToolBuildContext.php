@@ -33,7 +33,7 @@ use SugarCraft\Code\Tools\ReadLedger;
  * build. Defaulted, so a context built without one (a test, an embedder)
  * still gives its tools one shared ledger.
  *
- * `backgroundShells` is the session's {@see \SugarCraft\Code\Sessions\BackgroundShellRegistry}
+ * `backgroundShells` is the session's {@see \SugarCraft\Code\Background\BackgroundShellRegistry}
  * (SHL-1): Bash's `run_in_background` spawns into it, ShellOutput tails it,
  * and ShellStop kills through it — three tools, one table, for the same
  * one-instance reason as the ledger. NULL (the default, for a context built
@@ -55,7 +55,7 @@ final readonly class ToolBuildContext
         public bool $fdAvailable = false,
         public ?MemoryWriter $memory = null,
         public ReadLedger $readLedger = new ReadLedger(),
-        public ?\SugarCraft\Code\Sessions\BackgroundShellRegistry $backgroundShells = null,
+        public ?\SugarCraft\Code\Background\BackgroundShellRegistry $backgroundShells = null,
         /**
          * This launch's frozen MCP bridge/dispatch split (MCP-7), null when no
          * client exists. Carried as data so the pair can be conditionally

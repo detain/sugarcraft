@@ -18,7 +18,7 @@ use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ServerContext;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Session\EnhancedSessionStore;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 
 /**

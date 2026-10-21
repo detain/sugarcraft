@@ -156,7 +156,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
         // only `proc_close()` is on the handshake-timeout branch - the happy
         // path never reaps. The scanner reports `unclassified` for exactly
         // that reason and is right to.
-        'Sessions/BackgroundSupervisor.php::spawnSession' => [
+        'Background/BackgroundSupervisor.php::spawnSession' => [
             'count' => 1,
             'reason' => 'double-forked session daemon whose happy path never reaps; E366 HIGH',
         ],
@@ -171,7 +171,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
         // Death is accounted two ways: teardown() group-kills every live
         // shell at exit (Bootstrap::stopBackgroundShells), and a settled
         // shell's wrapper exits itself, reparenting to the reaper.
-        'Sessions/BackgroundShellRegistry.php::start' => [
+        'Background/BackgroundShellRegistry.php::start' => [
             'count' => 1,
             'reason' => 'long-lived background shell with file sinks for stdio; group-killed by '
                 . 'ShellStop, the lifetime wall, and the launch teardown hook',

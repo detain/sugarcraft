@@ -17,7 +17,7 @@ use SugarCraft\Code\Diagnostics\NoticeSink;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Role;
-use SugarCraft\Code\RuntimeNoticePumpMsg;
+use SugarCraft\Code\App\RuntimeNoticePumpMsg;
 use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;

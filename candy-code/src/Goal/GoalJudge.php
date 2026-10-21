@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Goal;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Msg;
 use SugarCraft\Code\Backend;
-use SugarCraft\Code\GoalJudgedMsg;
+use SugarCraft\Code\App\GoalJudgedMsg;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Support\TranscriptDigest;
 

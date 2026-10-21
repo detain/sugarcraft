@@ -9,7 +9,7 @@ use SugarCraft\Code\App\App;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Providers\ProviderInterface;
-use SugarCraft\Code\RuntimeNoticePumpMsg;
+use SugarCraft\Code\App\RuntimeNoticePumpMsg;
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\Msg\FocusGainedMsg;
 

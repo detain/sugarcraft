@@ -28,7 +28,7 @@ use SugarCraft\Code\Support\ProcessContainment;
  * leaking root from taking the others down and lets the gateway recycle an
  * idle one ({@see Gateway}).
  *
- * THE HANDSHAKE, mirroring {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::spawnSession()}
+ * THE HANDSHAKE, mirroring {@see \SugarCraft\Code\Background\BackgroundSupervisor::spawnSession()}
  * ("bind after spawn, prove it is the child"): {@see WorkspaceHostClient}
  * spawns this with an argv that carries nothing but the PHP binary and this
  * entry point, then binds a UNIX listener of its own; this reads ONE JSON

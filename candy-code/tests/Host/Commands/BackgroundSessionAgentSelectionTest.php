@@ -114,7 +114,7 @@ final class BackgroundSessionAgentSelectionTest extends TestCase
     public function testTheDaemonArgReadsExportedModelNotTheRawAgentModel(): void
     {
         $source = (string) file_get_contents(
-            \dirname(__DIR__, 3) . '/src/Sessions/BackgroundSupervisor.php',
+            \dirname(__DIR__, 3) . '/src/Background/BackgroundSupervisor.php',
         );
 
         $start = strpos($source, '$agent->provider,');

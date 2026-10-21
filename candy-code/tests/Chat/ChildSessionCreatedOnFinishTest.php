@@ -23,7 +23,7 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tests\Support\RosterAgent;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall;

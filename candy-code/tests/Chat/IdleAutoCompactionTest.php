@@ -17,7 +17,7 @@ use SugarCraft\Code\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
-use SugarCraft\Code\HistoryCompactedMsg;
+use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\Host\CompactionService;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\ProviderInterface;
@@ -193,7 +193,7 @@ final class IdleAutoCompactionTest extends TestCase
 
         $this->assertFalse($chat->shouldWatchIdleCompaction());
 
-        [$after, $cmd] = $chat->update(new \SugarCraft\Code\IdleCompactTickMsg());
+        [$after, $cmd] = $chat->update(new \SugarCraft\Code\App\IdleCompactTickMsg());
         $this->assertSame($chat, $after, 'a tick into an opted-out session changes nothing');
         $this->assertNull($cmd);
         $this->assertSame(0, $summarizer->calls);
@@ -247,7 +247,7 @@ final class IdleAutoCompactionTest extends TestCase
     {
         $chat = $this->chat(self::bigIdlePairs(), idleSince: new \DateTimeImmutable('-2 hours'), summarizer: $summarizer);
 
-        [$next, $cmd] = $chat->update(new \SugarCraft\Code\IdleCompactTickMsg());
+        [$next, $cmd] = $chat->update(new \SugarCraft\Code\App\IdleCompactTickMsg());
 
         $this->assertNotNull($cmd, 'the request rides a Cmd like every other summarization');
         $this->assertSame(0, $summarizer->calls, 'the tick builds the request; executing it is the runner\'s');
@@ -263,7 +263,7 @@ final class IdleAutoCompactionTest extends TestCase
 
     public function testTheTickStaysSilentForEveryNotNow(): void
     {
-        $tick = new \SugarCraft\Code\IdleCompactTickMsg();
+        $tick = new \SugarCraft\Code\App\IdleCompactTickMsg();
 
         // Under tier (short transcript), however long the idle.
         $short = $this->chat([Message::user('hi'), Message::assistant('hello')], idleSince: new \DateTimeImmutable('-7 days'));
@@ -295,7 +295,7 @@ final class IdleAutoCompactionTest extends TestCase
             summarizer: $summarizer,
         );
 
-        [$next, $cmd] = $chat->update(new \SugarCraft\Code\IdleCompactTickMsg());
+        [$next, $cmd] = $chat->update(new \SugarCraft\Code\App\IdleCompactTickMsg());
 
         $this->assertSame(0, $summarizer->calls, 'heuristic mode never pays for a round-trip');
         $this->assertTrue(self::mentions($next->history, self::FOLDED_MARK), 'the free fold landed immediately');
@@ -315,7 +315,7 @@ final class IdleAutoCompactionTest extends TestCase
             summarizer: $summarizer,
         );
 
-        [$next, $cmd] = $chat->update(new \SugarCraft\Code\IdleCompactTickMsg());
+        [$next, $cmd] = $chat->update(new \SugarCraft\Code\App\IdleCompactTickMsg());
 
         $this->assertSame(0, $summarizer->calls, 'a cap-breached session cannot buy the model\'s opinion');
         $this->assertTrue(self::mentions($next->history, self::FOLDED_MARK), 'the free fold still ran');
@@ -336,7 +336,7 @@ final class IdleAutoCompactionTest extends TestCase
         // The over-tier test passes (it is what routes into the fold), but the
         // heuristic has no leading run to condense — nothing lands, no row.
         $before = $chat->history;
-        [$next, $cmd] = $chat->update(new \SugarCraft\Code\IdleCompactTickMsg());
+        [$next, $cmd] = $chat->update(new \SugarCraft\Code\App\IdleCompactTickMsg());
 
         $this->assertFalse(self::mentions($next->history, self::FOLDED_MARK), 'a silent zero-savings attempt');
         $this->assertSame($before, $next->history);
@@ -475,10 +475,10 @@ final class IdleAutoCompactionTest extends TestCase
         // held, and the dispatch gate (pinned here at the Chat level) keeps
         // the idle fold from asking while the tick's own latch is out.
         $chat = $this->chat(self::bigIdlePairs(), idleSince: new \DateTimeImmutable('-2 hours'));
-        [$folded] = $chat->update(new \SugarCraft\Code\IdleCompactTickMsg());
+        [$folded] = $chat->update(new \SugarCraft\Code\App\IdleCompactTickMsg());
         $this->assertNotNull(self::idleLatchOf($folded), 'control: the fold is out');
 
-        [, $second] = $folded->update(new \SugarCraft\Code\IdleCompactTickMsg());
+        [, $second] = $folded->update(new \SugarCraft\Code\App\IdleCompactTickMsg());
         $this->assertNull($second, 'a second tick while the first is out asks nobody');
     }
 }

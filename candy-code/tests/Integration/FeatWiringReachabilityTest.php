@@ -23,7 +23,7 @@ use SugarCraft\Code\Providers\EmbeddingsRequest;
 use SugarCraft\Code\Providers\EmbeddingsResponse;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Renderer as LiveRenderer;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\Tool;
@@ -137,7 +137,7 @@ final class FeatWiringReachabilityTest extends TestCase
         // makes the row (and the strip, tabs, /branch) reachable for real.
         $this->assertSame([], array_column($store->listSessions(), 'id'), 'an unspoken launch writes no row');
 
-        [$spoken] = $chat->update(new \SugarCraft\Code\InitialPromptMsg('first words'));
+        [$spoken] = $chat->update(new \SugarCraft\Code\App\InitialPromptMsg('first words'));
 
         $this->assertSame(
             [$sessionId],
@@ -164,7 +164,7 @@ final class FeatWiringReachabilityTest extends TestCase
         // ISS-102: two unspoken launches, zero rows. A row appears when a
         // prompt dispatches, and only then.
         $this->assertCount(0, $second->sessionStore()?->listSessions() ?? []);
-        $second->update(new \SugarCraft\Code\InitialPromptMsg('first words'));
+        $second->update(new \SugarCraft\Code\App\InitialPromptMsg('first words'));
 
         try {
             Bootstrap::useSessionLaunch(true);

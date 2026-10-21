@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Host\WorkspaceContext;
-use SugarCraft\Code\InitialPromptMsg;
+use SugarCraft\Code\App\InitialPromptMsg;
 use SugarCraft\Code\Session\PromptHistory;
 use SugarCraft\Code\Support\AiCommentWatcher;
 use SugarCraft\Code\Theme;

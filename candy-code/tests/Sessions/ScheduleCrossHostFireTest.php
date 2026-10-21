@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Sessions\Schedule;
-use SugarCraft\Code\Sessions\ScheduleRegistry;
+use SugarCraft\Code\Background\Schedule;
+use SugarCraft\Code\Background\ScheduleRegistry;
 use SugarCraft\Code\Tests\Support\RunsWallClockBoundedChildTrait;
 
 /**
@@ -336,8 +336,8 @@ final class ScheduleCrossHostFireTest extends TestCase
 
             require __AUTOLOAD__;
 
-            use SugarCraft\Code\Sessions\Schedule;
-            use SugarCraft\Code\Sessions\ScheduleRegistry;
+            use SugarCraft\Code\Background\Schedule;
+            use SugarCraft\Code\Background\ScheduleRegistry;
 
             $registry = ScheduleRegistry::atPath((string) $argv[1]);
             $registry->load();

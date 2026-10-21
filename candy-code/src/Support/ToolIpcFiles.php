@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support;
 
 use SugarCraft\Code\Agents\AgentWorkerPool;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 
 /**
  * The temp files a forked tool child hands its result back through, and the
@@ -414,7 +414,7 @@ final class ToolIpcFiles
      * empties them — but a SIGKILLed or fatally interrupted host process runs
      * no destructor, and until now no sweep covered the prefix: {@see sweep()}
      * only unlinks flat FILES, and
-     * {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::sweepStaleIpcDirs()}
+     * {@see \SugarCraft\Code\Background\BackgroundSupervisor::sweepStaleIpcDirs()}
      * only knew the `bg_*` daemons' directories. Killed daemons of THIS kind
      * stranded their IPC directories forever, one per process, in /tmp.
      *
