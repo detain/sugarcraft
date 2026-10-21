@@ -40,6 +40,7 @@ use SugarCraft\Code\Tui\SessionPicker;
 use SugarCraft\Code\Tui\SessionTabs;
 use SugarCraft\Code\Tui\TextSelection;
 use SugarCraft\Code\Tui\Components\PaneLabel;
+use SugarCraft\Code\Support\EnvBool;
 use SugarCraft\Code\Support\SystemClipboard;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Attachments\MentionIndex;
@@ -6052,7 +6053,7 @@ final class Chat implements Model
      */
     public static function mouseMode(): MouseMode
     {
-        $off = self::envFlag('CANDY_CODE_DISABLE_MOUSE')
+        $off = EnvBool::isSet(\getenv('CANDY_CODE_DISABLE_MOUSE'))
             || !\SugarCraft\Code\Config\Settings\UiSettings::bool('mouse');
 
         return $off ? MouseMode::Off : MouseMode::CellMotion;
@@ -6067,7 +6068,7 @@ final class Chat implements Model
     public static function mouseClicksEnabled(): bool
     {
         return self::mouseMode() !== MouseMode::Off
-            && !self::envFlag('CANDY_CODE_DISABLE_MOUSE_CLICKS')
+            && !EnvBool::isSet(\getenv('CANDY_CODE_DISABLE_MOUSE_CLICKS'))
             && \SugarCraft\Code\Config\Settings\UiSettings::bool('mouseClicks');
     }
 
@@ -7453,18 +7454,6 @@ final class Chat implements Model
             openTty: true,
 
         );
-    }
-
-    /**
-     * Treats an unset, empty, or literal `0` value as "not set" so
-     * `CANDY_CODE_DISABLE_MOUSE=0` reads as "leave the mouse on" rather than
-     * as any-value-means-true.
-     */
-    private static function envFlag(string $name): bool
-    {
-        $value = getenv($name);
-
-        return $value !== false && $value !== '' && $value !== '0';
     }
 
     public function backend(): Backend
