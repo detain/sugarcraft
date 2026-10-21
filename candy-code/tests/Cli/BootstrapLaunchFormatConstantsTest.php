@@ -2135,7 +2135,8 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $root = dirname(__DIR__, 2) . '/src/Cli/';
 
         return (string) file_get_contents((string) (new \ReflectionClass(Bootstrap::class))->getFileName())
-            . (string) file_get_contents($root . 'LaunchNotices.php');
+            . (string) file_get_contents($root . 'LaunchNotices.php')
+            . (string) file_get_contents($root . 'McpDecision.php');
     }
 
     /**

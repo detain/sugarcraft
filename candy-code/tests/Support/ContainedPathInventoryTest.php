@@ -177,7 +177,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Agents/WorktreeConfig.php' => 2,
         'Agents/WorktreeManager.php' => 2,
         'Bundles/BundleDiscovery.php' => 1,
-        'Cli/Bootstrap.php' => 1,
+        'Cli/McpDecision.php' => 1,
         'Commands/CommandLoader.php' => 2,
         'Commands/CommandSpec.php' => 1,
         'Config/LayeredSettings.php' => 2,
@@ -219,13 +219,13 @@ final class ContainedPathInventoryTest extends TestCase
     /**
      * `Host/Commands/MemoryCommand.php` is the SIXTEENTH file (the gate sat in
      * `Chat.php` until roadmap O-2h moved `/memory` there), and like
-     * `Cli/Bootstrap.php` it arrived with the operation it gates — a WRITE
+     * `Cli/McpDecision.php` it arrived with the operation it gates — a WRITE
      * rather than a read: the `/memory import` sentinel directory
      * `.candy-code/memory` under the project root is chosen by the clone, so
      * `MemoryCommand::writeImportSentinel()` anchors it before recording anything (and lands the file by temp-create
      * + rename, so the compare plus the rename together leave a planted
      * symlink neither a read target nor a write path). ONE compare, the
-     * Bootstrap shape: the boundary is the project root and the guarded path
+     * McpDecision shape: the boundary is the project root and the guarded path
      * is a single directory, not a walk over a directory's entries.
      *
      * `Config/LayeredSettings.php` is the THIRTEENTH file, and it arrived with
@@ -235,7 +235,7 @@ final class ContainedPathInventoryTest extends TestCase
      * is read. TWO compares for the layer as a whole rather than two per file —
      * `below()` on the directory once, then `within()` per file — which is the
      * anchor-plus-entry pair `Commands/CommandLoader.php` holds and NOT
-     * `Cli/Bootstrap.php`'s single compare, because here the boundary is not the
+     * `Cli/McpDecision.php`'s single compare, because here the boundary is not the
      * root: `.candy-code` is a directory inside it that one committed symlink
      * relocates wholesale, and a per-file check inside a relocated directory
      * passes. Both boundaries are driven by
@@ -256,14 +256,14 @@ final class ContainedPathInventoryTest extends TestCase
      * whoever authored that `*.md`, which for the project tier is whoever wrote
      * the repository — and confines it to the checkout before a byte is read.
      * ONE compare rather than the anchor-plus-entry pair its sibling
-     * `Commands/CommandLoader.php` holds, for `Cli/Bootstrap.php`'s reason: the
+     * `Commands/CommandLoader.php` holds, for `Cli/McpDecision.php`'s reason: the
      * boundary here IS the root, and a tree cannot be confined to itself.
      *
      * `Context/RepoMapBlock.php` is the FOURTEENTH file, and it too arrived with
      * the read it gates: the `<repo-map>` prompt block walks the directories a
      * manifest's `autoload.psr-4` names, and those values are written by whoever
      * wrote the repository — `"../../.."` is a legal one. ONE compare, for
-     * `Cli/Bootstrap.php`'s reason: the boundary IS the root, and a tree cannot
+     * `Cli/McpDecision.php`'s reason: the boundary IS the root, and a tree cannot
      * be confined to itself. `within()` and not `below()`, because a prefix
      * mapped to `""` means the package root itself.
      *
@@ -288,13 +288,14 @@ final class ContainedPathInventoryTest extends TestCase
      * now reads the sentence back out of that file and compares it to this
      * array, so the two cannot drift apart again.
      *
-     * `Cli/Bootstrap.php` is the eleventh file, and it arrived with the READ it
-     * gates: `mcpClient()` resolves `$root/.mcp.json`, a repository-chosen file
+     * `Cli/McpDecision.php` holds the eleventh file's slot (it arrived as
+     * `Cli/Bootstrap.php` and was re-pathed by the S1 extraction), and it arrived with the READ it
+     * gates: `mcpConfigDecision()` resolves `$root/.mcp.json`, a repository-chosen file
      * whose entries `proc_open()` arbitrary commands, and nothing in `src/` built
      * an {@see \SugarCraft\Code\MCP\McpClient} before it — which is why
      * {@see ReadPathCensusTest}'s row for `MCP/McpClient.php` read
      * `CALLER_SUPPLIED — nothing in src/ builds one yet` and now reads
-     * `CONTAINED_UPSTREAM:Cli/Bootstrap.php`. ONE compare rather than the
+     * `CONTAINED_UPSTREAM:Cli/McpDecision.php`. ONE compare rather than the
      * anchor-plus-entry pair, because the boundary here IS `$root` and a tree
      * cannot be confined to itself; the same shape as `WorktreeManager`'s two
      * entry-level compares.
