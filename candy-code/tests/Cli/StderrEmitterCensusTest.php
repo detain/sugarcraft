@@ -103,7 +103,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\SelfUpdate}, whose `$errorStream` test seam
  *     defaults to `\STDERR` for the headless verb's report and refusal lines.
  *     A grep for `fwrite(STDERR` cannot see any of these files at all.
- *  3. `error_log(…)` — TWENTY-FIVE sites across twelve files. MEASURED on this
+ *  3. `error_log(…)` — TWENTY-SIX sites across thirteen files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
  *     destination configured, this IS stderr. Three of them appear in the
@@ -476,6 +476,12 @@ final class StderrEmitterCensusTest extends TestCase
         // the call still fires, with the raw text the model sent.
         'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
         'src/Skills/SkillLoader.php' => 2,
+        // W7-C: this row is the façade's own sink — as of this commit the
+        // single call site that will ever be added here by design. The other
+        // rows are being folded behind Log channel by channel; when the last
+        // one lands, this roster states the choke point and a raw call
+        // anywhere else in src/ reds.
+        'src/Support/Log.php' => 1,
     ];
 
     /**
