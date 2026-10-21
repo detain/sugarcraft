@@ -40,6 +40,18 @@ final class KittyOptions
      */
     public const MAX_CHUNK_BYTES = 3063;
 
+    /**
+     * S7.1: the kitty `U` placement parameter — text/image stacking at the
+     * destination of an a=p place frame. 1 composites the image UNDER the
+     * text (text renders over it), 0 places it OVER the text. The F-10
+     * place path emitted 1 unconditionally (chafa's virtual-pair default);
+     * {@see self::withPlacementU()} makes the other side expressible.
+     *
+     * @see https://sw.kovidgoyal.net/kitty/graphics-protocol/ (placement action, U key)
+     */
+    public const PLACEMENT_UNDER_TEXT = 1;
+    public const PLACEMENT_OVER_TEXT  = 0;
+
     private function __construct(
         private readonly string $action,
         private readonly int $imageId,
@@ -52,9 +64,9 @@ final class KittyOptions
         /**
          * F-10: when true, the transmit stores the image as virtual —
          * the store frame carries U=1 (the background compositor renders
-         * it UNDER the text) and a control-only a=p,U=1 frame follows the
-         * payload chunks to place the stored image. The payload itself
-         * always rides a=T data chunks; a=p never carries data.
+         * it UNDER the text) and a control-only a=p,U=<placement> frame
+         * follows the payload chunks to place the stored image. The payload
+         * itself always rides a=T data chunks; a=p never carries data.
          *
          * @see https://sw.kovidgoyal.net/kitty/graphics-protocol/ (U flag)
          */
@@ -64,6 +76,14 @@ final class KittyOptions
          * a multiple of 3; null means {@see self::DEFAULT_CHUNK_BYTES}.
          */
         private readonly ?int $chunkBytes,
+        /**
+         * S7.1: the `U` value carried by placement frames — both the a=p
+         * place frame and the trailing frame of a virtual transmit pair.
+         * Defaults to {@see self::PLACEMENT_UNDER_TEXT}, which is byte-
+         * identical to what the renderer emitted before the value became
+         * settable; {@see self::withPlacementU()} opens the over-text side.
+         */
+        private readonly int $placementU = self::PLACEMENT_UNDER_TEXT,
     ) {}
 
     /**
@@ -82,6 +102,7 @@ final class KittyOptions
             offsetY:    0,
             useVirtual: false,
             chunkBytes: null,
+            placementU: self::PLACEMENT_UNDER_TEXT,
         );
     }
 
@@ -105,6 +126,7 @@ final class KittyOptions
             offsetY:    $y,
             useVirtual: false,
             chunkBytes: null,
+            placementU: self::PLACEMENT_UNDER_TEXT,
         );
     }
 
@@ -124,6 +146,7 @@ final class KittyOptions
             offsetY:    $this->offsetY,
             useVirtual: $this->useVirtual,
             chunkBytes: $this->chunkBytes,
+            placementU: $this->placementU,
         );
     }
 
@@ -156,12 +179,16 @@ final class KittyOptions
             offsetY:    $this->offsetY,
             useVirtual: $this->useVirtual,
             chunkBytes: $this->chunkBytes,
+            placementU: $this->placementU,
         );
     }
 
     /**
      * F-10: enable virtual placement — store with a=T,U=1, then place via
-     * a trailing control-only a=p,U=1 frame (composited under the text).
+     * a trailing control-only a=p,U=<placement> frame. The trailing frame's
+     * U follows {@see self::withPlacementU()} (S7.1); the store frame's U=1
+     * is fixed because it is the background-compositor flag, not a stacking
+     * choice (chafa emits `U=1` on every transmit it may later place).
      */
     public function withUseVirtual(bool $useVirtual = true): self
     {
@@ -176,6 +203,42 @@ final class KittyOptions
             offsetY:    $this->offsetY,
             useVirtual: $useVirtual,
             chunkBytes: $this->chunkBytes,
+            placementU: $this->placementU,
+        );
+    }
+
+    /**
+     * S7.1: choose the `U` value emitted on placement frames — both an
+     * explicit {@see self::place()} and the trailing frame of a virtual
+     * transmit pair.
+     *
+     * @param int $u  {@see self::PLACEMENT_UNDER_TEXT} (1, the default —
+     *                text renders over the image) or
+     *                {@see self::PLACEMENT_OVER_TEXT} (0, the image covers
+     *                the text at the destination).
+     * @throws \InvalidArgumentException  if $u is neither 0 nor 1: the kitty
+     *                spec's placement action accepts only these two values.
+     */
+    public function withPlacementU(int $u): self
+    {
+        if ($u !== self::PLACEMENT_OVER_TEXT && $u !== self::PLACEMENT_UNDER_TEXT) {
+            throw new \InvalidArgumentException(
+                "Kitty placement U must be 0 (over text) or 1 (under text), got {$u}"
+            );
+        }
+
+        return new self(
+            action:     $this->action,
+            imageId:    $this->imageId,
+            zIndex:     $this->zIndex,
+            compress:   $this->compress,
+            cellWidth:  $this->cellWidth,
+            cellHeight: $this->cellHeight,
+            offsetX:    $this->offsetX,
+            offsetY:    $this->offsetY,
+            useVirtual: $this->useVirtual,
+            chunkBytes: $this->chunkBytes,
+            placementU: $u,
         );
     }
 
@@ -210,6 +273,7 @@ final class KittyOptions
             offsetY:    $this->offsetY,
             useVirtual: $this->useVirtual,
             chunkBytes: $this->chunkBytes,
+            placementU: $this->placementU,
         );
     }
 
@@ -250,6 +314,7 @@ final class KittyOptions
             offsetY:    $this->offsetY,
             useVirtual: $this->useVirtual,
             chunkBytes: $normalized,
+            placementU: $this->placementU,
         );
     }
 
@@ -286,6 +351,12 @@ final class KittyOptions
     public function useVirtual(): bool
     {
         return $this->useVirtual;
+    }
+
+    /** @internal */
+    public function placementU(): int
+    {
+        return $this->placementU;
     }
 
     /** @internal */

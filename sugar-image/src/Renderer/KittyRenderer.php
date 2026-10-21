@@ -101,7 +101,9 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
      * F-10: chain withUseVirtual(true) on a transmit to store the image
      * with the virtual flag (a=T,U=1), stream its payload in m=1/m=0 data
      * chunks, then composite it under the text with a trailing control-
-     * only a=p,U=1 frame — a=p never carries payload.
+     * only a=p frame — a=p never carries payload. S7.1: the trailing
+     * frame's U (and an explicit place()'s U) follow withPlacementU();
+     * the default keeps both frames byte-identical to F-10's output.
      *
      * @param KittyOptions $opts  Use {@see KittyOptions::transmit()} for inline
      *                            transmission (a=T), {@see KittyOptions::place()}
@@ -122,13 +124,13 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
 
         if ($opts->isPlace()) {
             // F-10: Place is a one-shot control frame — it must NOT open a
-            // chunked transmission (nothing would close it). U=1 marks it
-            // virtual: the background compositor places the stored image
-            // UNDER the text instead of over it.
+            // chunked transmission (nothing would close it). S7.1: the U
+            // value rides the options (default 1 = under text, the value
+            // this frame emitted before the seam existed; 0 = over text).
             return Ansi::kittyGraphicsControl([
                 'a' => 'p',
                 'i' => $optsArr['i'],
-                'U' => 1,
+                'U' => $opts->placementU(),
                 'x' => $optsArr['x'],
                 'y' => $optsArr['y'],
                 'z' => $optsArr['z'],
@@ -188,11 +190,13 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         }
         if ($useVirtual) {
             // F-10: placement control frame — attributes only, no payload;
-            // it composites the just-stored virtual image under the text.
+            // by default it composites the just-stored virtual image under
+            // the text. S7.1: U follows the options, so withPlacementU(0)
+            // flips this same frame to over-text placement.
             $out .= Ansi::kittyGraphicsControl([
                 'a' => 'p',
                 'i' => $optsArr['i'],
-                'U' => 1,
+                'U' => $opts->placementU(),
             ]);
         }
 

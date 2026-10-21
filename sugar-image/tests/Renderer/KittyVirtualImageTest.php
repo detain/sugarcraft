@@ -99,7 +99,8 @@ final class KittyVirtualImageTest extends TestCase
 
         $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
 
-        // F-10: placement is always virtual-flagged (composited under text).
+        // F-10/S7.1: placement carries U by default (composited under text);
+        // this frame proves the default, pinned byte-exact.
         $this->assertSame("\x1b_Ga=p,i=1,U=1,x=5,y=10,z=5\x1b\\", $out);
     }
 
