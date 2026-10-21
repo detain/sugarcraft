@@ -1148,6 +1148,124 @@ final class BackgroundSessionRunnerTest extends TestCase
         }
     }
 
+    // =========================================================================
+    // v1-m-2 sidecar retention. The daemon's fd1/fd2 ride `$bufferPath.'.log'`
+    // with no writer-side rotation, so the SUPERVISOR trims it on the heartbeat
+    // cadence — truncate IN PLACE (the inherited O_APPEND description follows
+    // the inode a rename would escape) with a one-generation `.1` tail copy.
+    // =========================================================================
+
+    private function trimSidecar(string $buffer): void
+    {
+        $method = new \ReflectionMethod(BackgroundSessionRunner::class, 'trimSidecarLog');
+        $method->invoke($this->runner($buffer));
+    }
+
+    /** @return array{int, int} the [ceiling, tail] private constants */
+    private function sidecarCeilings(): array
+    {
+        $class = new \ReflectionClass(BackgroundSessionRunner::class);
+
+        return [
+            (int) $class->getReflectionConstant('LOG_SIDECAR_MAX_BYTES')->getValue(),
+            (int) $class->getReflectionConstant('LOG_SIDECAR_TAIL_BYTES')->getValue(),
+        ];
+    }
+
+    public function testTheSidecarTrimLeavesFilesBelowTheCeilingUntouched(): void
+    {
+        $buffer = $this->bufferPath();
+        [$ceiling] = $this->sidecarCeilings();
+        $sidecar = $buffer . '.log';
+        $payload = str_repeat("warning: provider retried\n", intdiv($ceiling, 27));
+        file_put_contents($sidecar, $payload);
+        $this->paths[] = $sidecar;
+        $this->paths[] = $sidecar . '.1';
+
+        $this->trimSidecar($buffer);
+
+        self::assertSame($payload, (string) file_get_contents($sidecar));
+        self::assertFileDoesNotExist($sidecar . '.1');
+    }
+
+    public function testTheSidecarTrimKeepsTheNewestTailAndResetsTheLog(): void
+    {
+        $buffer = $this->bufferPath();
+        [$ceiling, $tailBytes] = $this->sidecarCeilings();
+        $sidecar = $buffer . '.log';
+        // Marked payloads: the exact preserved window is pin-able byte-for-byte,
+        // and the head marker proves nothing of the OLD half survives by path.
+        $payload = 'HEAD-MARKER ' . str_repeat('x', $ceiling - 12) . str_repeat('y', $tailBytes) . 'TAIL-MARKER';
+        file_put_contents($sidecar, $payload);
+        $this->paths[] = $sidecar;
+        $this->paths[] = $sidecar . '.1';
+
+        $this->trimSidecar($buffer);
+
+        self::assertSame('', (string) file_get_contents($sidecar), 'the same inode must be truncated, not replaced');
+        self::assertSame(
+            substr($payload, -$tailBytes),
+            (string) file_get_contents($sidecar . '.1'),
+            'the preserved copy must be exactly the newest tail window',
+        );
+    }
+
+    public function testTheSidecarTrimRetainsExactlyOneGenerationAcrossRepeatOverflows(): void
+    {
+        $buffer = $this->bufferPath();
+        [$ceiling, $tailBytes] = $this->sidecarCeilings();
+        $sidecar = $buffer . '.log';
+        $first = 'AAAAAAAA' . str_repeat('x', $ceiling + 64);
+        file_put_contents($sidecar, $first);
+        $this->trimSidecar($buffer);
+
+        $second = 'BBBBBBBB' . str_repeat('y', $ceiling + 64);
+        file_put_contents($sidecar, $second);
+        $this->trimSidecar($buffer);
+
+        // Bounded retention: two files, never one per rotation.
+        self::assertSame(
+            [$sidecar, $sidecar . '.1'],
+            glob($sidecar . '*'),
+            'a repeat overflow must REPLACE the one-generation copy, not accumulate',
+        );
+        self::assertSame(substr($second, -$tailBytes), (string) file_get_contents($sidecar . '.1'));
+        self::assertSame('', (string) file_get_contents($sidecar));
+    }
+
+    public function testTheSidecarTrimIsSilentWhenTheSidecarNeverOpened(): void
+    {
+        $buffer = $this->bufferPath();
+        $this->paths[] = $buffer . '.log';
+        $this->paths[] = $buffer . '.log.1';
+
+        $this->trimSidecar($buffer);
+
+        self::assertFileDoesNotExist($buffer . '.log');
+        self::assertFileDoesNotExist($buffer . '.log.1');
+    }
+
+    public function testTheHeartbeatArmTrimsTheSidecarOnItsCadence(): void
+    {
+        // The trim is load-bearing only if the live loop reaches it; supervise()
+        // cannot be driven in-process (it exits with the session), so this pins
+        // the call site structurally: the heartbeat arm must contain exactly one
+        // trimSidecarLog() between stamping the heartbeat record and re-arming
+        // the clock. A trim moved OFF the cadence (say, onto every accept)
+        // re-drives the disk for a reason the 5 s stamp already serves.
+        $source = (string) file_get_contents(
+            \dirname(__DIR__, 2) . '/src/Sessions/BackgroundSessionRunner.php',
+        );
+        self::assertSame(
+            1,
+            preg_match(
+                '/session:heartbeat.*?\$this->trimSidecarLog\(\);.*?\$lastHeartbeat = \\\\time\(\);/s',
+                $source,
+            ),
+            'the heartbeat arm must stamp, trim, and re-arm in that order',
+        );
+    }
+
     /** A `custom` provider whose API key exists, under a private empty HOME. */
     private function customProviderHomeSandbox(): array
     {
