@@ -25,6 +25,7 @@ use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\PermissionRequestMsg;
+use SugarCraft\Code\Permissions\PermissionFlow;
 use SugarCraft\Code\Providers\EchoProvider;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Session\SessionStore;
@@ -972,7 +973,7 @@ final class MouseModalGuardTest extends TestCase
             currentSessionId: 'session-b',
             openTabs: self::tabsFromStore($store, activeId: 'session-b'),
             agentManager: $manager,
-            pendingPermission: $prompt,
+            flow: new PermissionFlow(pendingPermission: $prompt),
         );
     }
 

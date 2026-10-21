@@ -58,6 +58,8 @@ use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Permissions\DenialKind;
+use SugarCraft\Code\Permissions\PermissionFlow;
+use SugarCraft\Code\Permissions\PermissionPrompt;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
 use SugarCraft\Code\Permissions\PermissionReply;
@@ -673,7 +675,7 @@ final class Chat implements Model
         private readonly ?\SugarCraft\Code\Agents\AgentWorkerPool $effectivePool = null,
         ?WorkflowEngineInterface $workflowEngine = null,
         ?AgentManager $agentManager = null,
-        /**
+    /**
          * Thresholds the context tiers use. Promoted to a property so
          * {@see mutate()} can carry it: it used to be a plain parameter that
          * only reached the constructor, and mutate() passed `null` in its
@@ -686,13 +688,13 @@ final class Chat implements Model
         ?MemoryStore $memoryStore = null,
         \SugarCraft\Code\Session\SessionStore|\SugarCraft\Code\Session\EnhancedSessionStore|null $sessionStore = null,
         ?string $currentSessionId = null,
-        /**
+    /**
          * The tab model to start from (ISS-102); null seeds the single tab
          * for $currentSessionId — or the library's default "main" tab when
          * there is no session yet.
          */
         ?SessionTabs $openTabs = null,
-        /**
+    /**
          * ISS-102 lazy row minter: a closure creating $currentSessionId's
          * store row, invoked once by the first {@see dispatchTurn()}.
          * Null when the row already exists (resumed session, `/branch`,
@@ -700,9 +702,9 @@ final class Chat implements Model
          */
         ?\Closure $sessionMint = null,
         private readonly ?\DateTimeImmutable $lastActivityAt = null,
-        /** Highlighted row in the "/" popup (see {@see slashMenuMatches()}). */
+    /** Highlighted row in the "/" popup (see {@see slashMenuMatches()}). */
         private readonly int $slashMenuIndex = 0,
-        /**
+    /**
          * TUI-1: highlighted row in the `@` mention popup (see
          * {@see mentionPopupRows()}). Like slashMenuIndex, reset whenever the
          * draft TEXT changes; a caret move between two mention tokens can land
@@ -710,16 +712,16 @@ final class Chat implements Model
          * clamps rather than trusting it.
          */
         private readonly int $mentionMenuIndex = 0,
-        /**
+    /**
          * TUI-1: Escape closes the mention popup; it stays closed until the
          * draft text changes again (reset with the index in the two funnels).
          */
         private readonly bool $mentionMenuDismissed = false,
-        /** Active {@see Theme} name (see {@see theme()}); resolved lazily, not stored as an object. */
+    /** Active {@see Theme} name (see {@see theme()}); resolved lazily, not stored as an object. */
         private readonly string $themeName = 'dark',
-        /** Ctrl+P command palette state; null when closed. */
+    /** Ctrl+P command palette state; null when closed. */
         private readonly ?PaletteState $palette = null,
-        /**
+    /**
          * Optional callable(string $key, string $value): void, fired by FOUR
          * DOORS: the Ctrl+P palette's Switch Model row, `/model <provider>`,
          * the palette's Switch Theme row, and `/theme <name>`.
@@ -752,7 +754,7 @@ final class Chat implements Model
          * that never call withOnConfigChange()/pass one to the constructor.
          */
         private readonly ?\Closure $onConfigChange = null,
-        /**
+    /**
          * Bumped by every submit()/beginToolCalls()/finishToolCalls() call that schedules a
          * backend Cmd; stamped onto that Cmd's eventual {@see AssistantMsg}
          * so a reply for a turn that was later aborted (see Escape-Escape
@@ -760,7 +762,7 @@ final class Chat implements Model
          * dropped in update() rather than appended after newer messages.
          */
         private readonly int $generation = 0,
-        /**
+    /**
          * Shared cancel flag for the turn currently in flight; null when
          * idle. See {@see \SugarCraft\Code\Backend\CancellationToken}'s
          * docblock for why this can't be a normal immutable value-object
@@ -768,13 +770,13 @@ final class Chat implements Model
          * already-scheduled Cmd captured.
          */
         private readonly ?CancellationToken $inFlightCancellation = null,
-        /**
+    /**
          * Wall-clock timestamp (microtime(true)) of the most recent
          * un-paired Escape press; null once consumed/expired. Drives the
          * double-Escape-to-abort window in update().
          */
         private readonly ?float $lastEscapeAt = null,
-        /**
+    /**
          * Real terminal dimensions, sourced from {@see WindowSizeMsg} - the
          * one size sugar-core's Program actually dispatches at startup AND
          * again on every SIGWINCH resize (see Program::installSignalHandlers()).
@@ -789,7 +791,7 @@ final class Chat implements Model
          */
         private readonly ?int $rows = null,
         private readonly ?int $cols = null,
-        /**
+    /**
          * The sugar-image probe-once capability instance (W1.G2/E2 - see
          * {@see ToolResult::mosaic()}'s docblock), exposed here per
          * crush_feat.md section 9's literal `new Chat(..., mosaic: $mosaic)`
@@ -801,7 +803,7 @@ final class Chat implements Model
          * test that never needs it.
          */
         private readonly ?\SugarCraft\Image\Mosaic $mosaic = null,
-        /**
+    /**
          * Hook chain gating this Chat's OWN ({@see registerTool()}) tool
          * calls, so `PreToolUse`/`PostToolUse` fire for a call no matter
          * which of the two pipelines crush_feat.md §1 D describes dispatched
@@ -817,7 +819,7 @@ final class Chat implements Model
          * hands the engine backend.
          */
         private readonly ?HookManager $hooks = null,
-        /**
+    /**
          * Name of the current session, once it has one — set by the user's
          * `/rename`, or by the background auto-title call (see
          * {@see scheduleTitleGeneration()}). Non-null is the "already
@@ -825,7 +827,7 @@ final class Chat implements Model
          * durable copy, this is the in-memory mirror the UI reads.
          */
         private readonly ?string $currentSessionName = null,
-        /**
+    /**
          * Dedicated cheap/small-model Backend for the one-shot session
          * title call. opencode's #20269 was a main-model parameter leaking
          * into the small-model title request through a shared request
@@ -838,56 +840,15 @@ final class Chat implements Model
          * this same backend and is likewise skipped when it is null.
          */
         private readonly ?Backend $titleBackend = null,
-        /**
-         * The permission prompt currently blocking this turn, or null when
-         * nothing is waiting on the user (crush_feat.md §1 E2). Set by
-         * {@see requestPermission()}, cleared by {@see answerPermission()};
-         * {@see Renderer} reads it through {@see pendingPermission()}.
+    /**
+         * The transient state of the permission prompt that may be blocking
+         * this turn (crush_feat.md §1 E2) — prompt, stage, settle-handle,
+         * parked batch, open scope editor — as the value object
+         * {@see PermissionFlow} describes. The durable `permissionGrants`
+         * map below is deliberately NOT part of it: different lifetime.
          */
-        private readonly ?PermissionRequestMsg $pendingPermission = null,
-        /**
-         * How far $pendingPermission is along at answering itself, and the
-         * reason an ordinary slash command typed at a live prompt no longer
-         * answers it — see {@see handlePermissionKey()} for the rule and the
-         * measured table, and {@see PermissionPromptStage} for the states.
-         *
-         * Meaningless while $pendingPermission is null; every raise sets it
-         * back to {@see PermissionPromptStage::Armed} ({@see requestPermission()}
-         * is the ONLY writer of a non-null $pendingPermission, so arming there
-         * covers a first ask and a queued one alike).
-         */
-        private readonly PermissionPromptStage $permissionStage = PermissionPromptStage::Armed,
-        /**
-         * The {@see Deferred} whose promise is the Cmd that keeps the turn
-         * suspended while $pendingPermission is showing. Answering resolves
-         * it, which is the whole "block on a UI decision" mechanism - the
-         * same Deferred object is shared by every `mutate()` clone in
-         * between, so the Chat instance that receives the reply settles the
-         * promise the Chat instance that raised the prompt handed out.
-         */
-        private readonly ?Deferred $permissionDeferred = null,
-        /**
-         * The gated batch parked while $pendingPermission is showing, in
-         * {@see gateToolCall()}'s return shape.
-         *
-         * Carried across the pause rather than re-gated on resume so the
-         * `PreToolUse` chain runs EXACTLY once per tool call: re-gating would
-         * fire every hook's side effects (AuditHook's log line, accumulated
-         * state) a second time, and would re-ask the question the user just
-         * answered.
-         *
-         * @var list<array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext, 3: ?\SugarCraft\Code\Hooks\HookResult, 4: string}>
-         */
-        private readonly array $pendingPermissionJobs = [],
-        /**
-         * The modal's scope editor (`e`) while it is open: the draft that was
-         * in the box when it opened (put back when it closes), and why the
-         * last Enter was refused. Null while the editor is closed.
-         *
-         * @var array{draft: string, error: ?string}|null
-         */
-        private readonly ?array $permissionScopeEdit = null,
-        /**
+        private readonly PermissionFlow $flow = new PermissionFlow(),
+    /**
          * The session's {@see PermissionReply::Always} answers, as the
          * grant map {@see \SugarCraft\Code\Permissions\SessionPermissionMemo}
          * reads (`rule:<pattern>` / `call:<exact call>` => true) — opencode's
@@ -898,7 +859,7 @@ final class Chat implements Model
          * @var array<string, bool>
          */
         private readonly array $permissionGrants = [],
-        /**
+    /**
          * Tool-call ids whose output the user has toggled AWAY from the
          * default, keyed by id ({@see ToolResult::$id}): `true` for a call
          * opened while calls start collapsed, `false` for one closed while
@@ -915,7 +876,7 @@ final class Chat implements Model
          * @var array<string, bool>
          */
         private readonly array $expanded = [],
-        /**
+    /**
          * Most-recently-used Ctrl+P palette rows, most recent FIRST, capped
          * at {@see PALETTE_MRU_LIMIT} (crush_feat.md §4 E7). Only consulted
          * by the empty-query root list ({@see paletteMatchResults()}), which
@@ -931,7 +892,7 @@ final class Chat implements Model
          * @var list<string>
          */
         private readonly array $paletteMru = [],
-        /**
+    /**
          * How many lines the transcript is scrolled back from the newest
          * one (crush_feat.md §8 E4). 0 pins the view to the bottom, which
          * is what every non-wheel path leaves it at.
@@ -949,7 +910,7 @@ final class Chat implements Model
          * actually building.
          */
         private readonly int $scrollOffset = 0,
-        /**
+    /**
          * ISS-051: payloads of pastes too big to type into a visible box,
          * collapsed to a one-line chip IN the draft instead of the verbatim
          * text a 300-line paste used to dump there. Keyed by the exact chip
@@ -967,9 +928,9 @@ final class Chat implements Model
          * @var array<string, string>
          */
         private readonly array $pasteChips = [],
-        /** Number of chips issued; exists only to make chip texts distinct. */
+    /** Number of chips issued; exists only to make chip texts distinct. */
         private readonly int $pasteCounter = 0,
-        /**
+    /**
          * Supervisor the `/bg` and `/fork` commands dispatch onto
          * (crush_feat.md section 5 E3). Before this, `BackgroundSupervisor`
          * had no caller anywhere in the codebase: the fork+daemonize,
@@ -982,7 +943,7 @@ final class Chat implements Model
          * other optional collaborators on this class use.
          */
         private readonly ?\SugarCraft\Code\Sessions\BackgroundSupervisor $backgroundSupervisor = null,
-        /**
+    /**
          * Last status this Chat reported for each background session, keyed
          * by session id (crush_feat.md section 5 E4).
          *
@@ -997,7 +958,7 @@ final class Chat implements Model
          * @var array<string, string> session id => BackgroundSessionStatus::value
          */
         private readonly array $backgroundStatuses = [],
-        /**
+    /**
          * The live session picker overlay, or null when it is closed
          * (crush_feat.md section 5 E8).
          *
@@ -1014,7 +975,7 @@ final class Chat implements Model
          * a dispatch arm the other's routing block already claimed.
          */
         private readonly ?SessionPicker $sessionPicker = null,
-        /**
+    /**
          * The shared live tool-event inbox - see the {@see $liveToolEvents}
          * property docblock for why it is mutable and why every `mutate()`
          * clone must be handed the SAME instance. Defaulting to null (and
@@ -1024,7 +985,7 @@ final class Chat implements Model
          * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|ToolProgress|SubAgentActivity|TokenDelta|ReasoningDelta}>|null
          */
         ?\ArrayObject $liveToolEvents = null,
-        /**
+    /**
          * The in-flight assistant reply as far as it has arrived — the
          * accumulation of this turn's {@see TokenDelta}s, drained off
          * {@see $liveToolEvents} by {@see pumpLiveToolEvents()}
@@ -1058,7 +1019,7 @@ final class Chat implements Model
          * deliberately out of scope here.
          */
         private readonly string $streamingText = '',
-        /**
+    /**
          * The model's THINKING so far this step — the accumulation of this
          * turn's {@see ReasoningDelta}s, drained off {@see $liveToolEvents} by
          * {@see pumpLiveToolEvents()} (E456/E494).
@@ -1079,7 +1040,7 @@ final class Chat implements Model
          * {@see Renderer} paints from the transcript instead.
          */
         private readonly string $reasoningText = '',
-        /**
+    /**
          * The project root this session was launched against — `--root`'s
          * value as {@see \SugarCraft\Code\Cli\Bootstrap::chat()} resolved
          * it, or null for a Chat built without one.
@@ -1094,7 +1055,7 @@ final class Chat implements Model
          * item 6).
          */
         private readonly ?string $projectRoot = null,
-        /**
+    /**
          * Scroll position of the in-app keybinding reference, in lines from
          * its first row; null while the reference is closed (crush_code.md
          * Phase 8 item 2). One nullable int rather than a bool plus an int
@@ -1109,7 +1070,7 @@ final class Chat implements Model
          * re-clamped in {@see Renderer::renderView()}.
          */
         private readonly ?int $keyHelp = null,
-        /**
+    /**
          * The draft's editing widget — `sugar-forms`' {@see TextArea}, which
          * owns the value AND the cursor (crush_code.md Phase 3 item 1).
          *
@@ -1120,7 +1081,7 @@ final class Chat implements Model
          * across a clone — see the reseed guard there.
          */
         ?TextArea $input = null,
-        /**
+    /**
          * The session's spend accumulator — see the {@see $tokenTracker}
          * property docblock for why the SAME instance has to reach every
          * clone. Null allocates a fresh one, which keeps every existing
@@ -1128,7 +1089,7 @@ final class Chat implements Model
          * offline run tracks a real (empty) total rather than none at all.
          */
         ?TokenTracker $tokenTracker = null,
-        /**
+    /**
          * Hard ceiling on this session's provider spend in US dollars, or null
          * for no cap (crush_code.md Phase 5 item 7). Set from
          * `$CANDY_CODE_MAX_COST` at launch and from `/budget <n>` at runtime.
@@ -1151,7 +1112,7 @@ final class Chat implements Model
          * {@see spendCapReached()} be one comparison.
          */
         private readonly ?float $maxCostUsd = null,
-        /**
+    /**
          * Dedicated tool-less Backend for `/compact`'s model-written exchange
          * summaries (crush_code.md Phase 5 item 6), built by
          * {@see \SugarCraft\Code\Cli\Bootstrap::summaryBackend()}.
@@ -1170,7 +1131,7 @@ final class Chat implements Model
          * used ({@see ContextCompactor::generateExchangeSummary()}).
          */
         private readonly ?Backend $summaryBackend = null,
-        /**
+    /**
          * Identifies the `/compact` summarization currently out at the model,
          * or null when none is (crush_code.md Phase 5 item 6).
          *
@@ -1198,7 +1159,7 @@ final class Chat implements Model
          * root is {@see handlePaletteNewSession()}.
          */
         private readonly ?string $pendingCompactionId = null,
-        /**
+    /**
          * The idle auto-fold's own latch (CTX-5): `{id, fingerprint,
          * sessionId}` for the summarisation request the idle watch put out, or
          * null when none is out. Its own latch rather than
@@ -1213,7 +1174,7 @@ final class Chat implements Model
          * {@see sessionChangeResets()} also releases this latch.
          */
         private readonly ?array $pendingIdleCompaction = null,
-        /**
+    /**
          * How many AUTOMATIC-tier compactions in a row have left the context back
          * at or over the tier that asked for them — the circuit breaker's counter
          * (prompt_expand.md §4.23, which records that Claude Code shipped the
@@ -1250,7 +1211,7 @@ final class Chat implements Model
          * one, so the breaker guards only the tier that acts on its own.
          */
         private readonly int $consecutiveRefillCompactions = 0,
-        /**
+    /**
          * Prompts the user pressed Enter on WHILE a turn was in flight, oldest
          * first — the queue the user asked for ("new messages should be typable
          * and sendable (well really queued for processing if its mid processing
@@ -1284,7 +1245,7 @@ final class Chat implements Model
          * @var list<string>
          */
         private readonly array $queuedPrompts = [],
-        /**
+    /**
          * The submission whose turn-lifecycle hook chain is running in a forked
          * child right now (audit 15b-04), or null when none is.
          *
@@ -1304,7 +1265,7 @@ final class Chat implements Model
          * @var ?array{text: string, draft: string, cursor: int}
          */
         private readonly ?array $pendingTurnHooks = null,
-        /**
+    /**
          * The verdicts a forked turn-hook chain returned, set ONLY for the length
          * of the {@see submit()} re-entry {@see resumeTurnHooks()} runs, which
          * {@see dispatchTurnHooks()} consumes instead of running the hooks a
@@ -1314,7 +1275,7 @@ final class Chat implements Model
          * @var ?array{text: string, prompt: Hooks\HookResult, session: ?Hooks\HookResult, boxOccupied: bool}
          */
         private readonly ?array $resolvedTurnHooks = null,
-        /**
+    /**
          * The file-based command whose template is being expanded in a forked
          * child right now (audit 15b-20), or null when none is.
          *
@@ -1329,7 +1290,7 @@ final class Chat implements Model
          * @var ?array{text: string, draft: string, cursor: int}
          */
         private readonly ?array $pendingCustomCommand = null,
-        /**
+    /**
          * The expansion a forked child produced, consumed by
          * {@see expandCustomCommand()} in place of expanding the template again
          * — which would run every `` !`…` `` a second time. Matched on the typed
@@ -1346,7 +1307,7 @@ final class Chat implements Model
          * @var ?array{text: string, expanded: string}
          */
         private readonly ?array $resolvedCustomCommand = null,
-        /**
+    /**
          * Discovers `*.md` commands under `~/.candy-code/commands` and
          * `<root>/.candy-code/commands` (crush_code.md Phase 2 item 4). Null —
          * the default — means no file-based commands at all, which is what every
@@ -1361,7 +1322,7 @@ final class Chat implements Model
          * `error_log()`.
          */
         private readonly ?CommandLoader $commandLoader = null,
-        /**
+    /**
          * Pre-resolved {@see $customCommands}; null asks the constructor to load
          * from {@see $commandLoader}. Present so {@see mutate()} can carry the
          * cache across a clone — and so a test can inject a map without touching
@@ -1370,7 +1331,7 @@ final class Chat implements Model
          * @var array<string, CommandSpec>|null
          */
         ?array $customCommands = null,
-        /**
+    /**
          * Whether the operator has opted THIS project root in to running the
          * `` !`cmd` `` form of a PROJECT-tier command file
          * ({@see \SugarCraft\Code\Cli\Bootstrap::projectCommandShellIsTrusted()}
@@ -1390,7 +1351,7 @@ final class Chat implements Model
          * permission gate adds on top of it.
          */
         private readonly bool $projectCommandsTrusted = false,
-        /**
+    /**
          * Whether THIS Chat is the process's drain owner for
          * {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink} (E171).
          *
@@ -1424,7 +1385,7 @@ final class Chat implements Model
          * decision and are made in the same method.
          */
         private readonly bool $drainsRuntimeNotices = false,
-        /**
+    /**
          * The launch's rulebook toggle set, shared by reference with the backend
          * that builds each turn's App. Null — which is every caller except
          * {@see \SugarCraft\Code\Cli\Bootstrap::chat()} and a test that wants to
@@ -1435,7 +1396,7 @@ final class Chat implements Model
          *      two owners instead of a copy pushed to each.
          */
         ?RulesState $rulesState = null,
-        /**
+    /**
          * The {@see rawTokenProxy()} figure — PRE-calibration, deliberately:
          * pairing a real against a calibrated estimate would fold the prior
          * factor into the observation — for the history THIS Chat dispatched
@@ -1448,7 +1409,7 @@ final class Chat implements Model
          * with a dispatch estimate it did not pay for.
          */
         private readonly ?int $promptEstimateAtDispatch = null,
-        /**
+    /**
          * Empirical scale factor from the ESTIMATOR's unit (script-weighted
          * {@see TokenEstimate} + 10 per message, {@see rawTokenProxy()}) to the PROVIDER's
          * counted tokens, derived from the last
@@ -1463,7 +1424,7 @@ final class Chat implements Model
          * reader; see it for the unit caveat the clamp bounds exist to cap.
          */
         private readonly ?float $tokenEstimateCalibration = null,
-        /**
+    /**
          * The search tool `/websearch` runs on, so the command's success path
          * is reachable without a live SearXNG endpoint.
          *
@@ -1477,7 +1438,7 @@ final class Chat implements Model
          * a transcript regression.
          */
         private readonly ?WebSearch $webSearch = null,
-        /**
+    /**
          * The grayed "you might say next" suggestion the empty input box
          * shows (→ accepts it), with the conversation state it was written
          * for: the turn `generation`, the `history` length and the session.
@@ -1489,25 +1450,25 @@ final class Chat implements Model
          * @var array{text: string, generation: int, historyCount: int, sessionId: ?string}|null
          */
         private readonly ?array $promptSuggestion = null,
-        /**
+    /**
          * The cross-session prompt file ↑/↓ recall reads at launch and every
          * Enter appends to. Null — tests and embedders — keeps recall on the
          * transcript's user rows, exactly as before the file existed;
          * {@see \SugarCraft\Code\Cli\Bootstrap::chat()} wires the real one.
          */
         private readonly ?PromptHistory $promptHistory = null,
-        /** Pre-resolved {@see $inputHistory}; null reads {@see $promptHistory}. */
+    /** Pre-resolved {@see $inputHistory}; null reads {@see $promptHistory}. */
         ?array $inputHistory = null,
-        /**
+    /**
          * Index into {@see recallEntries()} of the entry ↑/↓ last put in the
          * box, or null when the user is not walking history. Walking stops by
          * itself the moment the draft stops matching that entry — see
          * {@see isWalkingHistory()} — so no edit path has to clear it.
          */
         private readonly ?int $inputHistoryCursor = null,
-        /** The draft the box held when the walk began; ↓ past the newest entry gives it back. */
+    /** The draft the box held when the walk began; ↓ past the newest entry gives it back. */
         private readonly string $inputHistoryDraft = '',
-        /**
+    /**
          * Whether the turn in flight is a `/workflow run` or `/workflow resume`
          * — a fiber {@see driveWorkflowFiber()} steps — rather than a model
          * turn (audit WF-4). Read only by {@see submit()}'s mid-turn gate,
@@ -1522,9 +1483,9 @@ final class Chat implements Model
          * command is refused while it runs — so the flag cannot outlive it.
          */
         private readonly bool $workflowTurnInFlight = false,
-        /** Shared transcript writer; null builds this lineage's own. See {@see $transcriptWriter}. */
+    /** Shared transcript writer; null builds this lineage's own. See {@see $transcriptWriter}. */
         ?DebouncedTranscriptWriter $transcriptWriter = null,
-        /**
+    /**
          * Whether this Chat takes the single-writer lock on the session it has
          * open (audit SES-3(b)). Off by default — tests and embedders that
          * build two Chats on one store keep working — and switched on by
@@ -1532,27 +1493,27 @@ final class Chat implements Model
          * calls on every real launch.
          */
         private readonly bool $sessionLocking = false,
-        /** The lock this Chat holds on {@see $currentSessionId}, when locking is on and it won it. */
+    /** The lock this Chat holds on {@see $currentSessionId}, when locking is on and it won it. */
         private readonly ?SessionLock $sessionLock = null,
-        /**
+    /**
          * True when another TUI holds the open session's lock: the transcript
          * is shown, but nothing that would write to the session or start a
          * turn runs, and nothing is saved. `/branch` forks the session into a
          * new one this window owns. See {@see readOnlyRefusal()}.
          */
         private readonly bool $readOnlySession = false,
-        /**
+    /**
          * The last draft a read-only window refused, held so the box is free
          * for `/branch` and put back once the fork succeeds — see
          * {@see refuseReadOnly()}.
          */
         private readonly ?string $readOnlyDraft = null,
-        /**
+    /**
          * The words left on the command line (`candy-code fix the bug`),
          * submitted as the first prompt from {@see init()} (audit CLI-2(b)).
          */
         private readonly ?string $initialPrompt = null,
-        /**
+    /**
          * `\Closure(string $provider): Backend` — how a provider switch
          * (Ctrl+P "Switch model", `/model <provider>`) builds the replacement
          * backend (N-P3a). {@see \SugarCraft\Code\Cli\Bootstrap::chat()}
@@ -1564,7 +1525,7 @@ final class Chat implements Model
          * this Chat holds; see {@see selectPaletteProvider()}.
          */
         private readonly ?\Closure $backendFactory = null,
-        /**
+    /**
          * The project-root collaborators this Chat's session runs in — the
          * non-UI half of {@see \SugarCraft\Code\Cli\Bootstrap::chat()}, built by
          * {@see \SugarCraft\Code\Cli\Bootstrap::workspace()} (roadmap O-2a).
@@ -1582,7 +1543,7 @@ final class Chat implements Model
          * which drain the workspace's own inbox.
          */
         private readonly ?\SugarCraft\Code\Host\WorkspaceContext $workspace = null,
-        /**
+    /**
          * Roadmap 1.C-4: the latest `step` frame of an engine turn — its step
          * number and the request's context pressure — read by the status
          * bar and by the Escape arm (a turn that reports steps can stop at a
@@ -1592,11 +1553,11 @@ final class Chat implements Model
          * {@see liveStep()}.
          */
         private readonly ?\SugarCraft\Code\Events\StepStarted $liveStep = null,
-        /** Roadmap 1.C-4: the latest `usage` frame of that turn — see {@see liveUsage()}. */
+    /** Roadmap 1.C-4: the latest `usage` frame of that turn — see {@see liveUsage()}. */
         private readonly ?\SugarCraft\Code\Events\UsageUpdated $liveUsage = null,
-        /** The generation {@see $liveStep} and {@see $liveUsage} belong to. */
+    /** The generation {@see $liveStep} and {@see $liveUsage} belong to. */
         private readonly int $liveStepGeneration = -1,
-        /**
+    /**
          * Who set {@see $currentSessionName} (roadmap P-A4): `User` for
          * `/rename` and the inline title editor, `Auto` for a latched
          * generated title, null when unknown — unnamed, or a name read back
@@ -1606,7 +1567,7 @@ final class Chat implements Model
          * {@see mutate()} whenever the session changes.
          */
         private readonly ?\SugarCraft\Code\Session\TitleSource $currentSessionTitleSource = null,
-        /**
+    /**
          * The inline session-title editor (roadmap P-A4), or null when closed.
          * Opened by a bare `/rename`, the palette's "Rename session…" and a
          * double-click on the current tab; while open it owns the keyboard
@@ -1616,7 +1577,7 @@ final class Chat implements Model
          * one session can never rename another.
          */
         private readonly ?\SugarCraft\Forms\TextInput\TextInput $titleEditor = null,
-        /**
+    /**
          * The last click on a session tab — `[tab id, microtime]` — so a
          * second click on the same tab within {@see TAB_DOUBLE_CLICK_SECONDS}
          * reads as a double-click. Kept here because sugar-mouse's
@@ -1625,7 +1586,7 @@ final class Chat implements Model
          * @var array{0: string, 1: float}|null
          */
         private readonly ?array $lastTabClick = null,
-        /**
+    /**
          * Settings keys a save changed while a turn was running whose apply
          * rebuilds the engine (roadmap N-P3, Appendix N §4.8) — parked here
          * and applied by {@see update()} once no turn is in flight, so the
@@ -1635,7 +1596,7 @@ final class Chat implements Model
          * @var list<string>
          */
         private readonly array $pendingSettingsApply = [],
-        /**
+    /**
          * What the last settings save did, as a sugar-toast alert painted
          * over the frame's top-right corner (N-P3), or null. Never a
          * transcript row: a "setting changed" row would be sent to the
@@ -1644,9 +1605,9 @@ final class Chat implements Model
          * tick delivers.
          */
         private readonly ?\SugarCraft\Toast\Toast $settingsToast = null,
-        /** Stamp of {@see $settingsToast}: an older toast's expiry tick must not clear a newer one. */
+    /** Stamp of {@see $settingsToast}: an older toast's expiry tick must not clear a newer one. */
         private readonly int $settingsToastGeneration = 0,
-        /**
+    /**
          * The AHEAD-OF-NEED compaction summary (roadmap 2.10), or null when
          * none is out or held.
          *
@@ -1671,19 +1632,19 @@ final class Chat implements Model
          * @var array{id: string, sessionId: ?string, fingerprint: Context\Compaction\HistoryFingerprint, summaries: ?array<string, string>}|null
          */
         private readonly ?array $backgroundSummary = null,
-        /**
+    /**
          * The `/new` folder picker ({@see handleNewCommand()}), while it is up:
          * it owns every key until it closes, like {@see $sessionPicker}.
          */
         private readonly ?\SugarCraft\Code\Tui\DirectoryPicker\DirectoryPicker $dirPicker = null,
-        /**
+    /**
          * The Ctrl+G history search ({@see buildHistorySearch()}), while it is
          * up: it owns every key until it closes, like {@see $sessionPicker},
          * and it restores the draft it was opened on when the user escapes out
          * of it (the seed it carries — plan_comparison TUI-2).
          */
         private readonly ?\SugarCraft\Code\Tui\HistorySearch $historySearch = null,
-        /**
+    /**
          * The directory `/new` chose to restart candy-code in — another
          * project root, which this process (one root per process, Bootstrap's
          * statics) cannot serve. Set together with `Cmd::quit()`; read by
@@ -1691,7 +1652,7 @@ final class Chat implements Model
          * ({@see pendingRelaunch()}, {@see \SugarCraft\Code\Support\SessionRelaunch}).
          */
         private readonly ?string $relaunchDir = null,
-        /**
+    /**
          * The AUT-1 clock's roster (plan_comparison.md §3): persisted
          * `schedules.json` rows plus this process's `/loop` rows. The TUI is a
          * cron HOST — `pumpBackgroundSessions()` evaluates the roster on the
@@ -1705,7 +1666,7 @@ final class Chat implements Model
          * clone is on screen.
          */
         private readonly ?\SugarCraft\Code\Sessions\ScheduleRegistry $scheduleRegistry = null,
-        /**
+    /**
          * TUI-3A: the composer's vim OPERATOR state (pending `d`/`y` plus the
          * delete/yank register) — the app-side half of the mode, above the
          * sugar-forms Vim layer that owns the state machine itself. See
@@ -1715,7 +1676,7 @@ final class Chat implements Model
          * an evaporating register would make `y` unobservable.
          */
         public readonly ComposerVim $composerVim = new ComposerVim(),
-        /**
+    /**
          * Passive observer over the typed event DTOs (roadmap OBS-1). It
          * defaults to {@see NullEventSink} so an unconfigured session pays
          * one no-op call per folded event; Bootstrap installs the OTLP sink
@@ -3181,7 +3142,7 @@ final class Chat implements Model
         //     $pendingPermission, and mutate() carries it forward, so
         //     prompt-up-and-idle is a state update() itself produces. The
         //     public constructor reaches it too — parameters are not
-        //     visibility-scoped, so `new Chat(pendingPermission: $ask)` builds
+        //     visibility-scoped, so `new Chat(flow: new PermissionFlow(pendingPermission: $ask))` builds
         //     it with no exception. No WIRED producer sends a second
         //     AssistantMsg while a prompt is up (beginToolCalls() parks the
         //     WHOLE gated batch on the first ask and dispatches nothing, so the
@@ -3229,7 +3190,7 @@ final class Chat implements Model
         // waiting on this answer, so without this arm every reply keystroke
         // would be discarded and the prompt could never be answered, and
         // Escape would abort the whole turn rather than refuse this one call.
-        if ($this->pendingPermission !== null) {
+        if ($this->flow->pendingPermission !== null) {
             return $this->handlePermissionKey($msg);
         }
         // P-A4: the inline session-title editor owns the keyboard while it is
@@ -4369,337 +4330,35 @@ final class Chat implements Model
      * pattern {@see waitForToolChildrenAsync()} already uses for tool
      * children.
      *
+     * W5-A: the generation guard, the origin label and the title build moved
+     * to {@see PermissionPrompt::armAsk()}; the suspend-and-arm sequence here
+     * is unchanged, value for value.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function requestPermission(PermissionRequestMsg $msg): array
     {
-        // An ASK for a turn that was abandoned (double-Escape) or otherwise
-        // superseded can still land: the PreToolUse chain that raised it ran
-        // against the generation that was current when the batch was gated.
-        // Putting its prompt up would suspend a turn nobody is waiting on, and
-        // would force inFlight true behind an overlay that OUTRANKS the prompt
-        // (see Renderer::renderView()'s chain). The message carries a
-        // generation for exactly this comparison; the AssistantMsg arm in
-        // update() is the pattern, and $generation being null still means
-        // "unstamped, apply it" there and here alike.
-        //
-        // DORMANT DEFENCE, stated as such rather than as a live path closed --
-        // the same honest form shellOwnsKeyboard()'s unobservable conjunct is
-        // documented in. Measured: the two Chat-native callers build the ASK
-        // with $this->generation on the very object they then call
-        // (beginToolCalls() and answerPermission(), and mutate() touches no
-        // 'generation' at either site), so the comparison below is
-        // tautologically FALSE at both. The THIRD constructor in `src/`, the
-        // engine path wired by roadmap 1.C-2 (pumpLiveToolEvents()), stamps
-        // the inbox entry's generation only after comparing it equal to
-        // $this->generation and answering a stale question itself -- so it
-        // cannot make the comparison true either.
-        //
-        // What that bounds is which tests can watch this guard FIRE. It does
-        // NOT bound which tests reach a STAMPED ask, and the first version of
-        // this comment claimed the second: ChatTest's whole permission suite
-        // reaches one, through exactly the two producers above. They cannot
-        // make the comparison true, which is the property -- not that they
-        // never get here. No count is given for that suite either; the
-        // previous revision said "14 ChatTest tests" and it was correct when
-        // written, which is the exact shape every stale figure in this comment
-        // has had. Rows 3 and 4 below measure it when a reader mutates.
-        //
-        // FIND THE RIGHT SITE BEFORE MUTATING. This exact predicate --
-        // `$msg->generation !== null && $msg->generation !== $this->generation`
-        // -- appears FOUR times in this file: update()'s AssistantMsg arm, this
-        // method, finishToolCalls() and applyBackendToolEvent(). THREE of the
-        // four bodies are byte-identical apart from indentation -- the first
-        // three named. applyBackendToolEvent()'s is not: its arm bills the
-        // superseded turn's usage before dropping its events, because the chain
-        // it breaks means no AssistantMsg is ever synthesised for that turn and
-        // update()'s accounting arm is never reached. So a replace-first sed
-        // lands on the AssistantMsg arm, not here; the previous revision of this
-        // table did exactly that and then recorded the wrong site's numbers as a
-        // refutation of the right ones. The table below is therefore anchored by
-        // SITE, and the mis-site's figures are kept beside it as the tell.
-        // Reproduce with
-        // `grep -nF 'generation !== null && $msg->generation !== $this->generation' src/Chat.php`.
-        //
-        // The four sites, which method owns each, and WHICH THREE are mutually
-        // indistinguishable are asserted rather than narrated, by
-        // KeyHelpTest::testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods().
-        //
-        // Mutations of the guard belonging to THIS method -- the block
-        // immediately below this comment, inside requestPermission() -- each judged
-        // by the targeted files going red. NO LINE NUMBER is given, deliberately:
-        // the previous two revisions carried one ("1175", corrected to "1220"), it
-        // was wrong both times because editing this comment moves the guard under
-        // it, and the grep above plus the four-site test already name the site
-        // exactly. A figure that cannot survive its own paragraph does not belong
-        // in the paragraph.
-        //
-        // The TRIO column carries NAMES, not counts, for the same reason. The
-        // revision before last recorded "1 failure / 1 error / 1 error / 1
-        // failure" and "raw trio totals 2 / 2 / 2 / 2"; rows 3 and 4 were 3 raw /
-        // 2 behavioural even as it was written, because the test added in that
-        // very commit (testThePromptAndTheReferenceCannotBothBeRaisedByRealInput)
-        // reaches a stamped-and-current ask and so trips them. A trio count is
-        // fed by the files being measured; a class name (STALE / CURRENT) is not.
-        //
-        // The CHATTEST column carries counts, and the round that replaced them
-        // with a name made the column worse rather than better -- see below the
-        // table. A name is only an improvement when it identifies the population;
-        // "the permission suite" identified neither of the two it was applied to.
-        //
-        //   | mutation                     | trio (behavioural)   | ChatTest        |
-        //   |------------------------------|----------------------|-----------------|
-        //   | guard deleted                | STALE only           | green           |
-        //   | throw when the guard FIRES   | STALE only           | green           |
-        //   | throw on ANY stamped ask     | STALE + CURRENT      | 14 errors       |
-        //   | 2nd conjunct dropped, so     | STALE + CURRENT      | 1 error,        |
-        //   | every stamped ask is dropped |                      | 11 failures,    |
-        //   |                              |                      | 6 warnings      |
-        //
-        // The ChatTest figures are counts again, with their domain, because the
-        // revision that replaced them with the NAME "the permission suite" named
-        // a population that does not exist: the two rows report 14 and 12
-        // problems, and ChatTest has no 14-test and no 12-test suite to be. What
-        // the two rows share is the population, and THAT is the durable label:
-        // both reds land on the SAME ELEVEN ChatTest methods, measured by name --
-        // testApprovingAnAskDispatchesTheRewrittenCallTheUserWasShown,
-        // testASessionGrantCannotSilentlyDispatchAnAsksOwnRewrite,
-        // testAskHookSuspendsTheTurnInsteadOfRunningOrDenyingTheCall,
-        // testTheSuspendingCmdStaysPendingUntilTheUserAnswers,
-        // testOnceReplyRunsTheToolAndGatesItExactlyOnce,
-        // testAlwaysReplyGrantsTheToolForTheRestOfTheSession,
-        // testRejectReplyRefusesTheCallAndEndsTheTurn,
-        // testPermissionKeysDecideThePrompt, testUnmappedKeyLeavesThePermissionPromptUp,
-        // testAnsweringOneAskDoesNotReleaseTheOtherCallsInTheBatch and
-        // testAlwaysForOneToolDoesNotReleaseAnAskForAnother. The counts differ
-        // only because testPermissionKeysDecideThePrompt is a data-provider test:
-        // row 3 reds all four of its data sets (y / a / n / escape), row 4 only
-        // the two approving ones -- and the reason is worth recording, because it
-        // is this round's own rule seen from the other side. Under row 4 the ask
-        // is dropped, so the turn is left NOT in flight; the refusing sets assert
-        // exactly `!inFlight`, so they pass VACUOUSLY on a prompt that never
-        // appeared. Measured: the "y" set fails on `!$answered->inFlight` in
-        // `ChatTest::testPermissionKeysDecideThePrompt()`. Domain of both
-        // figures: tests/ChatTest.php alone at 215 tests, mutated at
-        // requestPermission()'s guard (the site this comment sits above) in a
-        // sandbox copy of this lib, PHP 8.3.6. Counts go stale; the eleven names
-        // and the data-provider explanation are what survive a test being added.
-        //
-        // where the two trio classes are, and this is the RULE that keeps the table
-        // true as tests are added:
-        //
-        //   STALE   -- a test that hands this method a stamped ask from a SUPERSEDED
-        //              turn. Exactly one exists and only one can exist per distinct
-        //              way of building one:
-        //              KeyHelpTest::testASupersededAskNeverPutsUpAPrompt().
-        //   CURRENT -- every test that reaches a stamped ask AT ALL, whoever built
-        //              it. Open-ended by construction, and RE-ENUMERATED by running
-        //              row 3 and reading the reds back rather than by reasoning about
-        //              who ought to be in it, because the previous revision's list of
-        //              "the three KeyHelpTest tests" was short by one BEFORE this
-        //              round touched anything (testEachQueuedAskArmsAfresh reaches a
-        //              stamped ask through answerPermission()'s resume path and was
-        //              not listed). Re-measured at THIS commit, row 3 reds these SIX:
-        //              KeyHelpTest::testWithAPromptUpNeitherKeyReachesItsOverlay(),
-        //              KeyHelpTest::testAKeyThePromptActsOnReachesItAndYApprovesRatherThanRefuses(),
-        //              KeyHelpTest::testAPromptOutlivesItsTurnAndTheReferenceIsStillRefused(),
-        //              KeyHelpTest::testEachQueuedAskArmsAfresh(),
-        //              MouseModalGuardTest::testAClickUnderALivePromptIsRefusedExactlyAsTheKeyIs() and
-        //              MouseModalGuardTest::testAPromptRaisedOverAnOpenOverlayOutranksItOnBothDevices(),
-        //              the last two being the members from outside KeyHelpTest -- both
-        //              drive a real PreToolUse ask hook to put a modal up, one for the
-        //              click path to be refused by and one to establish that a prompt
-        //              over an open overlay is a state real input can build at all.
-        //              Row 3's raw total is 8: these six, the STALE member, and the
-        //              text pin.
-        //              testThePromptAndTheReferenceCannotBothBeRaisedByRealInput() is
-        //              NOT a member: it was split into the first two above and now
-        //              stops at the in-flight half.
-        //
-        // Rows 1 and 2 are bounded, rows 3 and 4 are not, and that difference is the
-        // whole content of the table. Row 2 is the honest bound on OBSERVABILITY:
-        // exactly one test anywhere can watch this branch being taken. Row 3 is what
-        // refutes the wording that claimed no other test can even REACH a stamped
-        // ask. Row 4 changes BEHAVIOUR as well as observability, which is why its
-        // ChatTest column is the loud one: the stamped-and-current path is what
-        // ChatTest exercises.
-        //
-        // Measured with this comment: RendererTest, Commands/KeyBindingDriftTest and
-        // Chat/InFlightInputQueueTest contribute ZERO behavioural reds to all four
-        // rows, even though they are three fifths of the domain by file count --
-        // their asks are UNSTAMPED, and none of these four mutations touches an
-        // unstamped ask. The domain is what the rows were measured over; it is not
-        // the set of files that react. That silence is a fact about THIS site: the
-        // same mutations at the wrong site (below) red Chat/InFlightInputQueueTest
-        // six times and RendererTest not at all, which is the reverse shape.
-        //
-        // Every row ALSO reds
-        // testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods(), because
-        // each of these mutations edits the guard's TEXT and that test reads the four
-        // blocks back. By design, and the reason it is excluded from the column
-        // above rather than folded into it: it is a "you changed the guard, re-read
-        // this table" alarm, not evidence about the guard's reach. So raw = the
-        // column above plus exactly one, on every row -- stated as a rule, because
-        // the revision that stated it as "2 / 2 / 2 / 2" was already wrong on two.
-        //
-        // The variant that made the previous revision's error visible: discarding
-        // EVERY ask rather than only stamped ones (`if (true)`) reds every trio test
-        // that needs a prompt to appear at all, plus ChatTest 1 error, 11 failures,
-        // 6 warnings -- so the trio is NOT silent about it, and the rows above are
-        // not covering it either. It is the ONE figure in this comment kept as a
-        // count, because it is the mis-site tell described below and a tell needs a
-        // magnitude. Re-measured AT THIS COMMIT, over all FIVE files of the
-        // domain: 31 raw / 30 behavioural, composed of 7 in RendererTest, 17 in
-        // KeyHelpTest (including the pin), 4 KeyBindingDriftTest data sets, 1 in
-        // Chat/InFlightInputQueueTest and 2 in MouseModalGuardTest. The figure this
-        // replaces read "20 raw / 19 behavioural, composed of 5 / 12 / 3"; driven
-        // against `995eb257` with none of this round's files present it came out at
-        // 29 raw over the four files that then existed, so it had gone stale on its
-        // own before the fifth file was written -- exactly the growth its own caveat
-        // below predicts, recorded here as a re-measurement rather than as a delta.
-        // The EXCLUSION RULE that produces the
-        // second number, stated because the revision before last recorded a total no
-        // rule produced ("14 behavioural (16 raw)"): raw MINUS exactly one, the
-        // text-reading pin, testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods.
-        // Nothing else is excluded.
-        //
-        // That total MUST NOT be read as fixed -- it grows by one for every
-        // prompt-dependent test added to any of the FIVE files of the domain named
-        // two paragraphs up (it grew by two on this commit, both in
-        // MouseModalGuardTest). The sentence used to say "those three files", which
-        // named the historical trio while sitting under a paragraph that had just
-        // re-declared the domain as five. What is load-bearing is the rule and the
-        // fact that the figure is not zero.
-        //
-        // At the WRONG site (update()'s AssistantMsg arm) the same two mutations,
-        // ALL FOUR figures re-driven at this commit and each stated over BOTH
-        // domains, because the previous revision compared a re-measured right-site
-        // number against a wrong-site number taken over the smaller domain and
-        // flagged only that it carried someone else's date:
-        //
-        //   * 2nd-conjunct-dropped -> 2 raw / 1 behavioural over the five-file
-        //     domain (Chat/InFlightInputQueueTest::testTheDrainedPromptCarriesIts
-        //     OwnGenerationAndCancellationToken), which is 1 raw / 0 behavioural
-        //     when restricted to the historical trio; ChatTest 6 failures.
-        //   * `if (true)` -> 13 raw / 12 behavioural over the five-file domain,
-        //     composed of 5 in KeyHelpTest (including the pin), 6 in
-        //     Chat/InFlightInputQueueTest and 2 in MouseModalGuardTest; restricted
-        //     to the trio that is 5 raw / 4 behavioural. ChatTest 1 error, 37
-        //     failures, 6 warnings, over its 222 tests.
-        //
-        // The previous revision published "trio 3" for that last one. It is 4
-        // behavioural over the trio now, and the reason is the one its own sentence
-        // gave and then failed to apply: it tracks the real-gate group in
-        // KeyHelpTest, and that group became FOUR when testEachQueuedAskArmsAfresh
-        // was added to the CURRENT list above -- a correction made in one half of
-        // this comment and not in the half that cites it.
-        //
-        // The old tell -- "zero behavioural trio reds means you mutated the wrong
-        // place" -- is now HALF TRUE and is corrected rather than repeated: it holds
-        // for 2nd-conjunct-dropped and no longer for `if (true)`, because the
-        // KeyHelpTest tests built on promptRaisedByTheRealGate() drive a real
-        // AssistantMsg through update() and so react at BOTH sites. The tell that
-        // does not decay is the magnitude AND the population, both re-measured
-        // above over the SAME five-file domain: at the right site `if (true)` reds
-        // the whole prompt-dependent population (30 behavioural, led by RendererTest
-        // and KeyHelpTest), at the wrong site 12. The population tell is a RATIO,
-        // not a zero, and the previous revision wrote it as a zero fifty lines below
-        // its own enumeration, which had already said otherwise:
-        // Chat/InFlightInputQueueTest is 1 of the right site's 30 and 6 of the wrong
-        // site's 12 -- three percent against half. So the two sites are told apart
-        // by WHICH files answer as much as by how many: a mutation at the right site
-        // can make at most one queue test fail while one at the wrong site makes six,
-        // and one at the wrong site cannot make RendererTest or KeyBindingDriftTest
-        // fail at all.
-        // And the four-site text pin fires at either site, which is the cheapest
-        // signal that you edited SOMETHING and must re-read this table.
-        //
-        // Domains: "trio" is the historical name for tests/RendererTest.php +
-        // tests/Renderer/KeyHelpTest.php + tests/Commands/KeyBindingDriftTest.php,
-        // the three files that CONSTRUCTED a PermissionRequestMsg when the rows
-        // below were first measured; the set is FIVE today (see the paragraph after
-        // next) -- asserted, not narrated, and by a token scan for
-        // `new …PermissionRequestMsg` rather than by the
-        // `grep -rl PermissionRequestMsg tests/` this line used to cite, which also
-        // matches files that merely mention the class in a comment:
-        // KeyHelpTest::testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg(),
-        // whose docblock states what that instrument can and cannot see. PHP 8.3.6.
-        //
-        // A FOURTH file joined without costing a re-measurement: W2's
-        // tests/Chat/InFlightInputQueueTest.php raises an UNSTAMPED ask (to reach
-        // answerPermission()'s denial path, which is one of the four places a queued
-        // prompt is released), and no row of this table touches an unstamped ask --
-        // the same reason two of the original three contribute nothing.
-        //
-        // A FIFTH did cost one, and the rows above are the re-measurement.
-        // tests/MouseModalGuardTest.php hand-builds an unstamped ask for most of its
-        // states, but ONE of its tests raises a prompt through a real PreToolUse ask
-        // hook and so reaches a stamped, current one. That is the rule this comment
-        // already stated, applied: re-measuring is due when a file joins the set
-        // with a STAMPED ask.
-        //
-        // ChatTest is measured separately BECAUSE rows 3 and 4 show the domain's
-        // silence does not cover it. Rows 1 and 2 red inside KeyHelpTest alone; rows
-        // 3 and 4 red there AND in MouseModalGuardTest, which is what stopped
-        // "KeyHelpTest ALONE" being true. RendererTest, KeyBindingDriftTest and
-        // InFlightInputQueueTest build UNSTAMPED asks, which no row of this table
-        // touches.
-        //
-        // So this is not what makes the reference-over-prompt state
-        // unreachable, and the sentence claiming it was "the one way that state
-        // is reachable through the front door" was wrong: there is no producer
-        // for that door today. That unreachability is now asserted rather than
-        // stated -- driven from both ends through a real PreToolUse ask hook by
-        // KeyHelpTest::testThePromptAndTheReferenceCannotBothBeRaisedByRealInput().
-        // What actually protects the user there is the cue
-        // -- Renderer::KEY_HELP_OVER_PROMPT -- which is driven and does bite.
-        // The guard stays because the engine path is coming and an unstamped
-        // ASK is the legitimate case it must keep letting through; deleting a
-        // correct guard because today's producers cannot trip it is how the
-        // path arrives unprotected.
-        if ($msg->generation !== null && $msg->generation !== $this->generation) {
+        $armed = $this->permissionPrompt()->armAsk($msg, $this->generation, $this->history, $this->agentLive());
+        if ($armed === null) {
+            // Superseded ask: the guard and its measured mutation table live
+            // in PermissionPrompt::armAsk(); this is the byte-identical
+            // "return myself untouched" the guard always produced.
             return [$this, null];
         }
 
-        // P-E2: a delegated run's question says whose it is, at the top of
-        // the modal — the same question also shows inline in that run's
-        // Agent View (Renderer). The main turn's own questions are untouched.
-        $origin = $msg->pendingAsk === null
-            ? null
-            : \SugarCraft\Code\Permissions\AskOrigin::locate($msg->pendingAsk, $this->history, $this->agentLive());
-        if ($origin !== null) {
-            $label = \SugarCraft\Code\Permissions\AskOrigin::label($origin);
-            $msg = new PermissionRequestMsg(
-                $msg->assistantMessage,
-                $msg->toolCall,
-                $msg->prompt === '' ? $label : $label . "\n" . $msg->prompt,
-                $msg->generation,
-                $msg->pendingAsk,
-            );
-        }
-
-        $deferred = new Deferred();
-
         $next = $this->mutate([
-            'pendingPermission' => $msg,
+            'pendingPermission' => $armed->ask,
             // Armed AFRESH, and stated here because this method is the resume
             // path too: answerPermission() re-enters it for the next queued
             // ask, and mutate() would otherwise carry the stage the user left
             // the PREVIOUS question in - so a `/` typed at question one would
             // silently make question two unanswerable.
             'permissionStage' => PermissionPromptStage::Armed,
-            'permissionDeferred' => $deferred,
+            'permissionDeferred' => $armed->deferred,
             'inFlight' => true,
         ]);
-        $wait = Cmd::promise(static fn(): PromiseInterface => $deferred->promise());
-        // Roadmap 5.14a: the agent is now waiting on the user, which is the
-        // other moment the `notify` setting rings for.
-        $notify = $this->terminalNotification('candy-code: ' . Lang::t('chat.notify.awaiting_approval', [
-            'tool' => $msg->toolCall->name,
-            'origin' => $origin === null ? '' : Lang::t('chat.notify.awaiting_approval_origin', [
-                'agent' => $origin->name !== '' ? $origin->name : $origin->id,
-            ]),
-        ]));
+        $wait = Cmd::promise(static fn(): PromiseInterface => $armed->deferred->promise());
+        $notify = $this->terminalNotification($armed->notifyTitle);
 
         return [$next, $notify === null ? $wait : Cmd::batch($wait, $notify)];
     }
@@ -4731,7 +4390,7 @@ final class Chat implements Model
      */
     private function answerPermission(PermissionReply $reply, string $note = '', ?string $scope = null, bool $persist = false): array
     {
-        $request = $this->pendingPermission;
+        $request = $this->flow->pendingPermission;
         if ($request === null) {
             return [$this, null];
         }
@@ -4740,14 +4399,7 @@ final class Chat implements Model
         // one transcript row that says what was allowed, and where to undo it.
         $remembered = null;
         if ($reply === PermissionReply::Always) {
-            $remembered = $scope !== null
-                ? \SugarCraft\Code\Permissions\SessionPermissionMemo::scopeLabel(
-                    $scope,
-                    $request->pendingAsk?->tool ?? $request->toolCall->name,
-                    $request->pendingAsk?->arguments ?? $request->toolCall->arguments,
-                    $this->projectRoot(),
-                )
-                : $this->permissionAlwaysScope();
+            $remembered = $this->permissionPrompt()->rememberedLabel($request, $scope);
         }
         // `p` saves exactly what `a` would remember, so the write happens on
         // this answer's own patterns — read BEFORE the prompt comes down,
@@ -4759,7 +4411,7 @@ final class Chat implements Model
             'scope' => $remembered,
         ]))];
 
-        $jobs = $this->pendingPermissionJobs;
+        $jobs = $this->flow->jobs;
         $cleared = [
             'pendingPermission' => null,
             // Reset with the prompt rather than left behind: the stage is only
@@ -4775,7 +4427,7 @@ final class Chat implements Model
         // Settle the waiting Cmd before anything else: whatever happens next
         // returns its own Cmd, and a promise left pending here would keep the
         // Program waiting on a decision that has already been made.
-        $this->permissionDeferred?->resolve(null);
+        $this->flow->deferred?->resolve(null);
 
         // THE ENGINE PATH (roadmap 1.C-2) has no batch here to resume or end:
         // the call belongs to the forked turn child, which is blocked on this
@@ -4793,10 +4445,7 @@ final class Chat implements Model
             $ask = $request->pendingAsk;
             $remembers = $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) && !$ask->isSettled();
             if ($remembers) {
-                $memo = \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants);
-                $memo = ($scope === null ? null : $memo->withPattern($scope, $ask->tool, $ask->arguments, $this->projectRoot()))
-                    ?? $memo->withGrant($ask->tool, $ask->arguments, $this->projectRoot());
-                $cleared['permissionGrants'] = [...$this->permissionGrants, ...$memo->grants()];
+                $cleared['permissionGrants'] = $this->permissionPrompt()->enginePathGrants($this->permissionGrants, $ask, $scope);
             }
             $ask->reply($reply, $note === '' ? null : $note);
             if ($remembers) {
@@ -4816,13 +4465,7 @@ final class Chat implements Model
                 $cleared['history'] = [...($cleared['history'] ?? $this->history), Message::notice(Lang::t('chat.permission.subagent_answered', [
                     'agent' => $origin->name !== '' ? $origin->name : $origin->id,
                     'tool' => $ask->tool,
-                    'answer' => match (true) {
-                        $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) => Lang::t('chat.permission.answer.always'),
-                        $reply->permits() => Lang::t('chat.permission.answer.once'),
-                        default => $note === ''
-                            ? Lang::t('chat.permission.answer.refused')
-                            : Lang::t('chat.permission.answer.refused_note', ['note' => $note]),
-                    },
+                    'answer' => PermissionPrompt::answeredLabel($reply, $ask, $note),
                 ]))];
             }
 
@@ -4835,11 +4478,6 @@ final class Chat implements Model
         // of the likelier places for a queue to have accumulated. The permitting
         // path below keeps the turn running and deliberately does not drain.
         if (!$reply->permits()) {
-            // A rejection's feedback is the model's to read, on this path as
-            // on the engine one (1.C-2).
-            $refusal = \SugarCraft\Code\Permissions\ApprovalVerdict::rejectedByUser($note)
-                ->denialMessage("{$request->toolCall->name} was not run.");
-
             return self::releaseQueuedPrompts([$this->mutate([
                 ...$cleared,
                 'inFlight' => false,
@@ -4849,28 +4487,7 @@ final class Chat implements Model
                 // placeholders, and this batch never got that far), and a
                 // transcript that shows the refusal without showing what was
                 // refused is worse than showing neither.
-                'history' => [
-                    ...$this->history,
-                    $request->assistantMessage,
-                    // Deliberately AGENT-VISIBLE (audit 15b-03): EngineBackend's
-                    // toTypedMessages() flattens tool calls and results away,
-                    // so on that path this note is the model's only record
-                    // that the call it asked for was refused.
-                    Message::system('_' . DenialKind::Refused->reason($refusal) . '_'),
-                    // The refusal also has to exist as a RESULT, not only as
-                    // a system note (crush_feat.md §1 E7): the assistant
-                    // message above carries the tool call, so leaving it
-                    // unanswered puts a tool_use block on the next request's
-                    // wire with no matching tool_result. It doubles as the
-                    // producer for the struck-through denied row
-                    // {@see Renderer::renderToolResults()} draws.
-                    Message::assistant('')->withToolResults([ToolResult::denied(
-                        $request->toolCall->name,
-                        DenialKind::Refused,
-                        $refusal,
-                        $request->toolCall->id,
-                    )]),
-                ],
+                'history' => [...$this->history, $request->assistantMessage, ...PermissionPrompt::refusalPair($request, $note)],
             ]), null]);
         }
 
@@ -4884,13 +4501,7 @@ final class Chat implements Model
             // rememberNative() remembers nothing for an ask a hook other than
             // the gate raised (or a security finding), so "Always" there
             // settles as "Once": the question will be put again next call.
-            $answeredAsk = null;
-            foreach ($jobs as $job) {
-                if ($job[0] === $request->toolCall) {
-                    $answeredAsk = $job[3];
-                    break;
-                }
-            }
+            $answeredAsk = PermissionPrompt::askFor($jobs, $request->toolCall);
 
             if ($answeredAsk !== null) {
                 $grants = self::rememberNative($grants, $request->toolCall, $answeredAsk, $this->projectRoot(), $scope);
@@ -4909,22 +4520,7 @@ final class Chat implements Model
         // keeps its ASK, because consent for one call is not consent for
         // another.
         $root = $this->projectRoot();
-        $jobs = array_map(
-            static function (array $job) use ($request, $grants, $root): array {
-                if ($job[3] === null) {
-                    return $job;
-                }
-
-                $answered = $job[0] === $request->toolCall || self::grantCovers($grants, $job[0], $job[3], $root);
-
-                // Drop ONLY the ASK the user just answered; slot 4 (the pre-hook
-                // note) rides across the re-entry so a settled question's
-                // model-visible context reaches the result the same way an
-                // immediate permission's does.
-                return $answered ? [$job[0], $job[1], $job[2], null, $job[4]] : $job;
-            },
-            $jobs,
-        );
+            $jobs = PermissionPrompt::releasedJobs($jobs, $request->toolCall, $grants, $root);
 
         foreach ($jobs as [$call, , , $ask]) {
             if ($ask !== null) {
@@ -4948,7 +4544,7 @@ final class Chat implements Model
      * ── THE ARM RULE, and the defect it closes ──
      *
      * This arm sits above the input box ({@see update()}, the
-     * `$this->pendingPermission !== null` check), so while a prompt is up EVERY
+     * `$this->flow->pendingPermission !== null` check), so while a prompt is up EVERY
      * `Char` key reaches here and nothing types. That alone made an ordinary
      * slash command an answer: `/agents` hit `a` on its second keystroke and
      * wrote a session-long grant, `/init` hit `n` on its third and denied the
@@ -5059,7 +4655,7 @@ final class Chat implements Model
         // The note is typed into the draft box — the one text editor this
         // model has — so here every key edits it, and only Enter (refuse with
         // it) and Escape (back to the question, text kept) do anything else.
-        if ($this->permissionStage === PermissionPromptStage::WritingNote) {
+        if ($this->flow->stage === PermissionPromptStage::WritingNote) {
             if ($msg->type === KeyType::Escape) {
                 return [$this->mutate(['permissionStage' => PermissionPromptStage::Armed]), null];
             }
@@ -5071,7 +4667,7 @@ final class Chat implements Model
                 // Empty, it stays a decline; `PlanExit`'s note is feedback on
                 // a plan NOT approved, so it stays a refusal.
                 $answers = $note !== ''
-                    && $this->pendingPermission?->pendingAsk?->question() === \SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME;
+                    && $this->flow->pendingPermission?->pendingAsk?->question() === \SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME;
 
                 return $this->withInputBuf('')->answerPermission($answers ? PermissionReply::Once : PermissionReply::Reject, $note);
             }
@@ -5086,7 +4682,7 @@ final class Chat implements Model
         // grant and allows the call — or, when it is not a pattern that
         // covers this call, says why and stays open; Escape goes back to the
         // question.
-        if ($this->permissionStage === PermissionPromptStage::EditingScope) {
+        if ($this->flow->stage === PermissionPromptStage::EditingScope) {
             if ($msg->type === KeyType::Escape) {
                 return [$this->closingScopeEditor()->mutate(['permissionStage' => PermissionPromptStage::Armed]), null];
             }
@@ -5095,7 +4691,7 @@ final class Chat implements Model
                 $refusal = $this->permissionScopeRefusal($scope);
                 if ($refusal !== null) {
                     return [$this->mutate(['permissionScopeEdit' => [
-                        'draft' => $this->permissionScopeEdit['draft'] ?? '',
+                        'draft' => $this->flow->scopeEdit['draft'] ?? '',
                         'error' => $refusal,
                     ]]), null];
                 }
@@ -5129,7 +4725,7 @@ final class Chat implements Model
             return $this->answerPermission(PermissionReply::Reject);
         }
 
-        if ($this->permissionStage === PermissionPromptStage::Disarmed) {
+        if ($this->flow->stage === PermissionPromptStage::Disarmed) {
             return [$this, null];
         }
 
@@ -5139,9 +4735,9 @@ final class Chat implements Model
         // ({@see \SugarCraft\Code\Tools\BuiltIn\AskUserTool::answer()}) — and
         // `a` is not on offer, since there is no call to allow for the session:
         // it falls through to the arm rule below like any other non-answer.
-        $question = $this->pendingPermission?->pendingAsk?->question();
+        $question = $this->flow->pendingPermission?->pendingAsk?->question();
         if ($question !== null && $isChar && preg_match('/\A[1-9]\z/', $rune) === 1) {
-            $choices = $this->pendingPermission?->pendingAsk?->choices() ?? [];
+            $choices = $this->flow->pendingPermission?->pendingAsk?->choices() ?? [];
             if ((int) $rune <= \count($choices)) {
                 return $this->answerPermission(PermissionReply::Once, $rune);
             }
@@ -5204,7 +4800,7 @@ final class Chat implements Model
         // answer, so it must not fall through to the arm rule below where a
         // non-answer key silently disarms the prompt.
         if ($isChar && $rune === 'v') {
-            $pending = $this->pendingPermission;
+            $pending = $this->flow->pendingPermission;
             if ($pending !== null) {
                 return [$this->toggleToolOutput($pending->toolCall->id), null];
             }
@@ -5366,7 +4962,7 @@ final class Chat implements Model
      */
     public function pendingPermission(): ?PermissionRequestMsg
     {
-        return $this->pendingPermission;
+        return $this->flow->pendingPermission;
     }
 
     /**
@@ -5381,7 +4977,7 @@ final class Chat implements Model
      */
     public function permissionStage(): PermissionPromptStage
     {
-        return $this->permissionStage;
+        return $this->flow->stage;
     }
 
     /**
@@ -5400,277 +4996,69 @@ final class Chat implements Model
     }
 
     /**
-     * What `a` + `y` would remember for the question that is up, as the modal
-     * names it before the user commits: a pattern (`Bash(git status *)`),
-     * `this exact command` / `this exact call`, or null when this question
-     * cannot be remembered at all (a hook other than the gate asked it, so
-     * `always` settles as `once` — {@see answerPermission()}).
-     *
-     * Both tool paths remember a {@see \SugarCraft\Code\Permissions\SessionPermissionMemo}
-     * scope ({@see rememberNative()} on Chat's own: the exact call for a tool
-     * whose subject is unknown).
+     * The consult surface for the prompt this Chat shows: a fresh
+     * {@see PermissionPrompt} over the current flow and project root —
+     * Chat is immutable, so the snapshot is cheap and always truthful.
      */
+    private function permissionPrompt(): PermissionPrompt
+    {
+        return new PermissionPrompt($this->flow, $this->projectRoot(), $this->workspace);
+    }
+
+    /** Delegates to {@see PermissionPrompt::alwaysScope()} (W5-A); forensic prose lives there. */
     public function permissionAlwaysScope(): ?string
     {
-        $request = $this->pendingPermission;
-        if ($request === null) {
-            return null;
-        }
-
-        $ask = $request->pendingAsk;
-        if ($ask !== null) {
-            return $ask->offers(PermissionReply::Always)
-                ? \SugarCraft\Code\Permissions\SessionPermissionMemo::scopeOf($ask->tool, $ask->arguments, $this->projectRoot())
-                : null;
-        }
-
-        foreach ($this->pendingPermissionJobs as $job) {
-            if ($job[0] === $request->toolCall && $job[3] !== null) {
-                if (!$job[3]->isRememberable()) {
-                    return null;
-                }
-                $call = $request->toolCall;
-
-                return \SugarCraft\Code\Permissions\PermissionRule::subjectArgumentName($call->name) !== null
-                    ? \SugarCraft\Code\Permissions\SessionPermissionMemo::scopeOf($call->name, $call->arguments, $this->projectRoot())
-                    : \SugarCraft\Code\Permissions\SessionPermissionMemo::exactScopeOf($call->name, $call->arguments, $this->projectRoot());
-            }
-        }
-
-        return null;
+        return $this->permissionPrompt()->alwaysScope();
     }
 
-    /**
-     * The {@see \SugarCraft\Code\Permissions\PermissionRule} patterns `p`
-     * would save for the question that is up — the same scope `a` remembers,
-     * kept only where a CONFIGURED rule reproduces the grant. Two shapes do
-     * not survive that translation and are dropped here, which is what takes
-     * the `p` row off the modal:
-     *
-     *  - a PER-PART pipeline grant (`npm test | tail` → `Bash(npm test *)` +
-     *    `Bash(tail *)`): session rules cover such a line part by part
-     *    ({@see \SugarCraft\Code\Permissions\SessionPermissionMemo::coversBySegments()}),
-     *    but a configured `Allow` rule fires only when EVERY command of the
-     *    line matches IT, so saving the parts would write rules that never
-     *    answer the next launch's question about the same pipeline;
-     *  - an EXACT-call grant (a launcher, a destructive command, a
-     *    subject-less tool): there is no rule form for "this exact call", and
-     *    the tool as a whole is never granted ({@see rememberNative()}).
-     *
-     * The test is the configured path's own: the whole set is saved only
-     * when at least one of its rules matches the FULL call as written —
-     * true for a single command (whose bare `Tool(x)` rule matches, and whose
-     * `Tool(x *)` sibling then rides along to cover the prefixed calls the
-     * session grant covers), false for a pipeline's parts.
-     *
-     * @return list<string>
-     */
-    private function permissionPersistPatterns(): array
+    /** Delegates to {@see PermissionPrompt::persistPatterns()} (W5-A); forensic prose lives there. */
+    public function permissionPersistPatterns(): array
     {
-        $request = $this->pendingPermission;
-        if ($request === null) {
-            return [];
-        }
-        [$tool, $arguments] = $request->pendingAsk !== null
-            ? [$request->pendingAsk->tool, $request->pendingAsk->arguments]
-            : [$request->toolCall->name, $request->toolCall->arguments];
-        // Chat's own tool path remembers a subject-less tool as the EXACT
-        // call ({@see rememberNative()}), which no rule expresses — the
-        // engine path's whole-tool grant does translate, and stays.
-        if ($request->pendingAsk === null && \SugarCraft\Code\Permissions\PermissionRule::subjectArgumentName($tool) === null) {
-            return [];
-        }
-        $root = $this->projectRoot();
-
-        $patterns = \SugarCraft\Code\Permissions\SessionPermissionMemo::patternsFor($tool, $arguments, $root);
-        if ($patterns === []) {
-            return [];
-        }
-
-        $full = new ToolCall($tool, $arguments);
-        foreach ($patterns as $pattern) {
-            $rule = new \SugarCraft\Code\Permissions\PermissionRule($pattern, \SugarCraft\Code\Permissions\PermissionAction::Allow);
-            if ($rule->matches($full, true, $root)) {
-                return $patterns;
-            }
-        }
-
-        return [];
+        return $this->permissionPrompt()->persistPatterns();
     }
 
-    /**
-     * What `p` would save, as the modal names it — {@see permissionAlwaysScope()}
-     * when that scope is one a configured rule reproduces
-     * ({@see permissionPersistPatterns()}), null when `p` has nothing to offer
-     * (no `a` on this question, or its grant does not survive the rule
-     * translation).
-     */
+    /** Delegates to {@see PermissionPrompt::persistScope()} (W5-A); forensic prose lives there. */
     public function permissionPersistScope(): ?string
     {
-        $scope = $this->permissionAlwaysScope();
-
-        return $scope !== null && $this->permissionPersistPatterns() !== [] ? $scope : null;
+        return $this->permissionPrompt()->persistScope();
     }
 
-    /**
-     * Append $patterns to the user's `permissionRules` in `config.json`,
-     * through the workspace's {@see \SugarCraft\Code\Config\Settings\SettingsWriter}
-     * — the settings editor's own write door, so the schema's validation of
-     * the key (refusing a value the launch would not load whole) is this
-     * write's validation too. Existing entries ride in front of the new ones:
-     * rules are first-match-wins, so a `deny` the user wrote keeps refusing
-     * what `p` saves, and the grant only answers questions the mode would
-     * have asked anyway. An entry already there is not written twice.
-     *
-     * Returns the notice the transcript shows — where it landed, or why it
-     * did not. A failed save is REPORTED, never fatal, exactly as a model
-     * choice that cannot be persisted still switches for the session: the
-     * session grant `p` rides on has already been recorded.
-     *
-     * @param list<string> $patterns
-     */
+    /** Delegates to {@see PermissionPrompt::persistRules()} (W5-A); forensic prose lives there. */
     private function persistPermissionRules(array $patterns): string
     {
-        $scope = implode(', ', $patterns);
-        $writer = $this->workspace?->service(\SugarCraft\Code\Config\Settings\SettingsWriter::class);
-        if (!$writer instanceof \SugarCraft\Code\Config\Settings\SettingsWriter) {
-            return Lang::t('chat.permission.not_persisted', [
-                'scope' => $scope,
-                'error' => self::reportField('this session has no settings write door'),
-            ]);
-        }
-
-        try {
-            $config = $writer->current(\SugarCraft\Code\Config\Settings\SettingsTier::You);
-            $existing = $config['permissionRules'] ?? [];
-            $existing = \is_array($existing)
-                ? array_values(array_filter($existing, static fn (mixed $rule): bool => \is_array($rule)))
-                : [];
-            $have = [];
-            foreach ($existing as $rule) {
-                if (($rule['action'] ?? null) === 'allow' && \is_string($rule['pattern'] ?? null)) {
-                    $have[$rule['pattern']] = true;
-                }
-            }
-
-            $next = $existing;
-            foreach ($patterns as $pattern) {
-                if (!isset($have[$pattern])) {
-                    $next[] = ['pattern' => $pattern, 'action' => 'allow'];
-                }
-            }
-            $path = $next === $existing
-                ? (string) $writer->targetPath(\SugarCraft\Code\Config\Settings\SettingsTier::You)
-                : $writer->write(\SugarCraft\Code\Config\Settings\SettingsTier::You, ['permissionRules' => $next]);
-
-            return Lang::t('chat.permission.persisted', [
-                'scope' => $scope,
-                'path' => self::reportField($path),
-            ]);
-        } catch (\Throwable $e) {
-            return Lang::t('chat.permission.not_persisted', [
-                'scope' => $scope,
-                'error' => self::reportField($e->getMessage()),
-            ]);
-        }
+        return $this->permissionPrompt()->persistRules($patterns);
     }
 
-    /**
-     * What the modal's `e` editor starts from for the question that is up —
-     * the argument half of what `a` would remember (`sed * | sort * | uniq *`),
-     * or the command itself when `a` would remember the exact call — or null
-     * when there is nothing to edit (`a` is not offered, or the tool has no
-     * subject argument, so its only scope is the tool).
-     */
+    /** Delegates to {@see PermissionPrompt::editableScope()} (W5-A); forensic prose lives there. */
     public function permissionEditableScope(): ?string
     {
-        $request = $this->pendingPermission;
-        if ($request === null || $this->permissionAlwaysScope() === null) {
-            return null;
-        }
-        [$tool, $arguments] = $request->pendingAsk !== null
-            ? [$request->pendingAsk->tool, $request->pendingAsk->arguments]
-            : [$request->toolCall->name, $request->toolCall->arguments];
-
-        return \SugarCraft\Code\Permissions\SessionPermissionMemo::editableScopeOf($tool, $arguments, $this->projectRoot());
+        return $this->permissionPrompt()->editableScope();
     }
 
-    /**
-     * Why the scope being edited cannot be saved, shown on the modal, or null
-     * while it has not been refused.
-     */
+    /** Delegates to {@see PermissionPrompt::scopeError()} (W5-A); forensic prose lives there. */
     public function permissionScopeError(): ?string
     {
-        $error = $this->permissionScopeEdit['error'] ?? null;
-
-        return \is_string($error) ? $error : null;
+        return $this->permissionPrompt()->scopeError();
     }
 
-    /**
-     * Why $scope may not be saved as the grant for the question that is up,
-     * or null when it may: it must be a well-formed pattern for this tool
-     * that covers this very call ({@see \SugarCraft\Code\Permissions\SessionPermissionMemo::withPattern()}).
-     */
-    private function permissionScopeRefusal(string $scope): ?string
+    /** Delegates to {@see PermissionPrompt::scopeRefusal()} (W5-A); forensic prose lives there. */
+    public function permissionScopeRefusal(string $scope): ?string
     {
-        $request = $this->pendingPermission;
-        if ($request === null) {
-            return Lang::t('chat.permission.scope_invalid');
-        }
-        [$tool, $arguments] = $request->pendingAsk !== null
-            ? [$request->pendingAsk->tool, $request->pendingAsk->arguments]
-            : [$request->toolCall->name, $request->toolCall->arguments];
-        if (\SugarCraft\Code\Permissions\SessionPermissionMemo::patternFromScope($scope, $tool) === null
-            && \SugarCraft\Code\Permissions\SessionPermissionMemo::scopePatterns($scope, $tool) === null) {
-            return Lang::t('chat.permission.scope_invalid');
-        }
-
-        return \SugarCraft\Code\Permissions\SessionPermissionMemo::new()->withPattern($scope, $tool, $arguments, $this->projectRoot()) === null
-            ? Lang::t('chat.permission.scope_does_not_cover')
-            : null;
+        return $this->permissionPrompt()->scopeRefusal($scope);
     }
 
     /** This Chat with the scope editor closed and the draft it held back in the box. */
     private function closingScopeEditor(): self
     {
-        $draft = $this->permissionScopeEdit['draft'] ?? '';
+        $draft = $this->flow->scopeEdit['draft'] ?? '';
 
         return $this->mutate(['permissionScopeEdit' => null])->withInputBuf(\is_string($draft) ? $draft : '');
     }
 
-    /**
-     * Why the permission question that is up cannot be remembered — `asked
-     * by hook protect-files`, `flagged as external-endpoint, a security
-     * finding, which always asks` — so the modal says so plainly and offers
-     * no `a`; null when `a` would remember it ({@see permissionAlwaysScope()})
-     * or the question is the model's own (`AskUser`, `PlanExit`).
-     */
+    /** Delegates to {@see PermissionPrompt::alwaysAsks()} (W5-A); forensic prose lives there. */
     public function permissionAlwaysAsks(): ?string
     {
-        $request = $this->pendingPermission;
-        if ($request === null || $this->permissionAlwaysScope() !== null) {
-            return null;
-        }
-
-        $ask = $request->pendingAsk;
-        if ($ask !== null) {
-            if ($ask->question() !== null) {
-                return null;
-            }
-
-            return $ask->alwaysAsks !== '' ? $ask->alwaysAsks : Lang::t('chat.permission.always_asks.unattributed');
-        }
-
-        foreach ($this->pendingPermissionJobs as $job) {
-            if ($job[0] === $request->toolCall && $job[3] !== null) {
-                $reason = \SugarCraft\Code\Backend\PendingAsk::alwaysAsksReason($request->toolCall->name, $job[3]);
-
-                return $reason === '' ? null : $reason;
-            }
-        }
-
-        // A prompt raised with no attributed question behind it at all.
-        return Lang::t('chat.permission.always_asks.unattributed');
+        return $this->permissionPrompt()->alwaysAsks();
     }
 
     /**
@@ -6257,11 +5645,11 @@ final class Chat implements Model
             // Every settlement of the turn's questions is part of its durable
             // story (roadmap O-2f), whoever settled it.
             $this->turnRunner()->recordEvent($this->liveTurn($generation), $event);
-            $open = $this->pendingPermission?->pendingAsk;
+            $open = $this->flow->pendingPermission?->pendingAsk;
             if ($open === null || $open->askId !== $event->askId) {
                 return [$this, $more];
             }
-            $this->permissionDeferred?->resolve(null);
+            $this->flow->deferred?->resolve(null);
 
             return [$this->mutate([
                 'pendingPermission' => null,
@@ -6299,7 +5687,7 @@ final class Chat implements Model
             // One modal at a time: the question goes back to the head of the
             // inbox and the tool-event tick, which runs while a turn is in
             // flight, offers it again once the prompt that is up is answered.
-            if ($this->pendingPermission !== null) {
+            if ($this->flow->pendingPermission !== null) {
                 $this->liveToolEvents->exchangeArray([$entry, ...$this->liveToolEvents->getArrayCopy()]);
 
                 return [$this, null];
@@ -6928,45 +6316,17 @@ final class Chat implements Model
         return [$toolCall, null, $context, null, $hookResult->additionalContext];
     }
 
-    /**
-     * Whether a grant in $grants answers this ask on Chat's own tool path —
-     * the SAME memo, keys and scopes the engine path uses
-     * ({@see \SugarCraft\Code\Permissions\SessionPermissionMemo}), so `a`
-     * means the same thing whichever path a call took (this path kept an
-     * exact-call key of its own, so `a` on `git status` never covered
-     * `git status -s` here).
-     *
-     * NEVER FOR AN ASK NO GRANT MAY ANSWER ({@see \SugarCraft\Code\Hooks\HookResult::isRememberable()},
-     * stamped by the registry, which a hook cannot forge): a user hook's ASK
-     * is a question about this call's content — the reason the hook exists —
-     * and a security finding is asked every time (audit F-P9).
-     *
-     * @param array<string, bool> $grants
-     */
+    /** Delegates to {@see PermissionPrompt::grantCovers()} (W5-A); forensic prose lives there. */
     private static function grantCovers(
         array $grants,
         ToolCall $toolCall,
         \SugarCraft\Code\Hooks\HookResult $ask,
         ?string $projectRoot = null,
     ): bool {
-        return $ask->isRememberable()
-            && \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($grants)
-                ->allows($toolCall->name, $toolCall->arguments, $projectRoot);
+        return PermissionPrompt::grantCovers($grants, $toolCall, $ask, $projectRoot);
     }
 
-    /**
-     * $grants with "always" remembered for $toolCall on Chat's own tool path,
-     * or $grants unchanged when the ask may not be remembered. A tool whose
-     * subject argument is known ({@see \SugarCraft\Code\Permissions\PermissionRule::SUBJECT_ARGUMENTS})
-     * gets the engine path's scope (or the user's own, $scope, from the
-     * modal's `e`); any other tool is remembered as the exact call — an
-     * embedder's tool has no subject that can be read, and the memo would
-     * otherwise grant it whole.
-     *
-     * @param array<string, bool> $grants
-     *
-     * @return array<string, bool>
-     */
+    /** Delegates to {@see PermissionPrompt::rememberNative()} (W5-A); forensic prose lives there. */
     private static function rememberNative(
         array $grants,
         ToolCall $toolCall,
@@ -6974,18 +6334,7 @@ final class Chat implements Model
         ?string $projectRoot,
         ?string $scope = null,
     ): array {
-        if (!$ask->isRememberable()) {
-            return $grants;
-        }
-        $memo = \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($grants);
-        $memo = match (true) {
-            $scope !== null => $memo->withPattern($scope, $toolCall->name, $toolCall->arguments, $projectRoot) ?? $memo,
-            \SugarCraft\Code\Permissions\PermissionRule::subjectArgumentName($toolCall->name) !== null
-                => $memo->withGrant($toolCall->name, $toolCall->arguments, $projectRoot),
-            default => $memo->withExactGrant($toolCall->name, $toolCall->arguments, $projectRoot),
-        };
-
-        return [...$grants, ...$memo->grants()];
+        return PermissionPrompt::rememberNative($grants, $toolCall, $ask, $projectRoot, $scope);
     }
 
     /**
@@ -8922,7 +8271,7 @@ final class Chat implements Model
      */
     private function refuseMouseDispatch(string $zoneId): ?array
     {
-        if ($this->keyHelp !== null || $this->pendingPermission !== null) {
+        if ($this->keyHelp !== null || $this->flow->pendingPermission !== null) {
             return [$this, null];
         }
 
@@ -10962,11 +10311,7 @@ final class Chat implements Model
             'hooks' => $this->hooks,
             'currentSessionName' => $this->currentSessionName,
             'titleBackend' => $this->titleBackend,
-            'pendingPermission' => $this->pendingPermission,
-            'permissionStage' => $this->permissionStage,
-            'permissionDeferred' => $this->permissionDeferred,
-            'pendingPermissionJobs' => $this->pendingPermissionJobs,
-            'permissionScopeEdit' => $this->permissionScopeEdit,
+            'flow' => $this->flow,
             'permissionGrants' => $this->permissionGrants,
             'expanded' => $this->expanded,
             'paletteMru' => $this->paletteMru,
@@ -11128,6 +10473,14 @@ final class Chat implements Model
         // every one of those writes.
         if (array_key_exists('inputBuf', $changes) && !array_key_exists('input', $changes)) {
             unset($constructorProps['input']);
+        }
+
+        // Prompt-state changes name PermissionFlow slots, not Chat fields:
+        // settle them onto the flow and strip them from the spread, so
+        // `new self(...)` below never receives a named argument it lacks.
+        $constructorProps['flow'] = $this->flow->with($changes);
+        foreach (array_keys(PermissionFlow::OVERRIDE_KEYS) as $flowKey) {
+            unset($changes[$flowKey]);
         }
 
         return new self(...array_merge($constructorProps, $changes));
@@ -12383,7 +11736,7 @@ final class Chat implements Model
             && $draft !== ''
             && !str_starts_with($draft, '/')
             && $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -14641,7 +13994,7 @@ final class Chat implements Model
         // Category order is first-appearance order, the same rule
         // {@see \SugarCraft\Code\Tui\Components\MenuBar} groups its menus
         // by.
-        /** @var array<string, list<\SugarCraft\Code\Commands\CommandSpec>> $byCategory */
+    /** @var array<string, list<\SugarCraft\Code\Commands\CommandSpec>> $byCategory */
         $byCategory = [];
         foreach ($commands as $spec) {
             $byCategory[$spec->category][] = $spec;
@@ -16361,7 +15714,7 @@ final class Chat implements Model
             || $this->inputBuf !== ''
             || $this->queuedPrompts !== []
             || $this->keyHelp !== null
-            || $this->pendingPermission !== null
+            || $this->flow->pendingPermission !== null
             || $this->palette !== null
             || $this->sessionPicker !== null
             || $this->dirPicker !== null
@@ -18492,7 +17845,7 @@ final class Chat implements Model
     public function slashMenuOwnsTab(): bool
     {
         return $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -18583,7 +17936,7 @@ final class Chat implements Model
     public function mentionOwnsTab(): bool
     {
         return $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -18607,7 +17960,7 @@ final class Chat implements Model
     {
         return !$this->mentionMenuDismissed
             && $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -20502,7 +19855,7 @@ final class Chat implements Model
             && $this->inputBuf === ''
             && $this->queuedPrompts === []
             && $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null

@@ -505,7 +505,10 @@ final class StderrEmitterCensusTest extends TestCase
         // goal settled, waiting for approval) carry the app's name as the
         // OSC 9 / bell notification's title, written to the TERMINAL through
         // Tui\TerminalNotifier — a desktop notification, not a diagnostic.
-        'src/Chat.php' => 3,
+        // W5-A moved one of Chat's three literals (the awaiting-approval
+        // title) into Permissions/PermissionPrompt.php with armAsk(); the
+        // roster follows the code, the decision above is unchanged.
+        'src/Chat.php' => 2,
         // +2 each for the session-launch flags: ArgvParser's two refusals
         // (--continue with --resume, either with -p) and Bootstrap's two
         // --resume target errors. All four are pre-launch usage errors printed
@@ -583,6 +586,7 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
+        'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the
         // prefix's bytes without its space. Counted so the roster stays a
