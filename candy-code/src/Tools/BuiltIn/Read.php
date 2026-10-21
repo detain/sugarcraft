@@ -341,8 +341,9 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // which the untyped tool-call JSON can carry -- turned the very crash
         // the NUL guard exists to remove back into an uncaught throw out of
         // execute(), where it had previously been caught and reported as a tool
-        // error. ToolRegistry::execute() does not wrap its call site, so that
-        // is a crash the model never sees as a result.
+        // error. A throw that escapes execute() does reach the dispatcher's
+        // generic Throwable catch, but it lands there as a generic execution
+        // failure — never as this tool's curated, model-readable error result.
         if (!is_string($path)) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
