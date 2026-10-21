@@ -1,0 +1,113 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Cli;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Hooks\ClaudeSettingsHooks;
+
+/**
+ * v1:F-1, the RECORD half: an unknown event in a foreign Claude Code
+ * settings file is skipped by the parser
+ * ({@see \SugarCraft\Code\Tests\Hooks\ClaudeSettingsHooksTest}) and drained
+ * onto the launch-notice seam by
+ * {@see Bootstrap::reportSkippedClaudeSettingsEvents()} — the record that
+ * keeps "skip" from becoming the silent-gap failure R3 refused to allow.
+ *
+ * The three polarities the remediation is graded on:
+ *  - foreign file, unknown event → launch proceeds AND a row names it;
+ *  - candy-code's own native hooks.yaml dialect → hard refusal unchanged
+ *    (pinned where the parser hands off: HookConfig, see the hooks suite);
+ *  - foreign file, known event → loads (pinned by the flatten-equality test).
+ */
+final class ClaudeSettingsHooksSkipRecordTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        ClaudeSettingsHooks::resetSkippedEventsForTesting();
+        $this->resetNoticeStatics();
+    }
+
+    protected function tearDown(): void
+    {
+        ClaudeSettingsHooks::resetSkippedEventsForTesting();
+        $this->resetNoticeStatics();
+    }
+
+    public function testAnEmptyRecordDrainsNothing(): void
+    {
+        Bootstrap::reportSkippedClaudeSettingsEvents();
+
+        $this->assertSame([], Bootstrap::launchNotices(), 'no skip, no row — a launch that met no unknown events stays byte-unchanged');
+    }
+
+    public function testTheDrainNamesEverySkippedEventOnceInOneAggregateRow(): void
+    {
+        ClaudeSettingsHooks::parse(
+            '{"hooks":{"Notification":[{"hooks":[{"type":"command","command":"./a.sh"}]}],"StopFailure":[{"hooks":[{"type":"command","command":"./b.sh"}]}]}}',
+            '/home/user/.claude/settings.json',
+        );
+        // A second file skipping a THIRD event adds one more name to the
+        // SAME row and does not mint a second row.
+        ClaudeSettingsHooks::parse(
+            '{"hooks":{"PostToolUseFailure":[{"hooks":[{"type":"command","command":"./c.sh"}]}]}}',
+            '/proj/.claude/settings.local.json',
+        );
+
+        Bootstrap::reportSkippedClaudeSettingsEvents();
+
+        $notices = Bootstrap::launchNotices();
+        $this->assertCount(1, $notices);
+        $this->assertStringContainsString("'Notification', 'StopFailure', 'PostToolUseFailure'", $notices[0]);
+        $this->assertStringContainsString('3 hook group(s) across 2 file(s)', $notices[0]);
+        $this->assertStringContainsString('were skipped', $notices[0]);
+        $this->assertStringNotContainsString(
+            'is not a hook event',
+            $notices[0],
+            'the row is the record — the native validator never fired for these events',
+        );
+    }
+
+    public function testTheDrainRunsFromChatAndNothingElseNeedsToKnow(): void
+    {
+        // The drain point is chat()'s launch block, beside its siblings; a
+        // source slice pins that wiring without booting a session.
+        $lines = file(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        $method = new \ReflectionMethod(Bootstrap::class, 'chat');
+        $slice = implode('', \array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+
+        $this->assertSame(
+            1,
+            substr_count($slice, 'self::reportSkippedClaudeSettingsEvents();'),
+            'chat() must drain the skip record exactly once — every other launch mode builds through chat()',
+        );
+    }
+
+    public function testTheRepeatDrainAddsNothingBecauseTheRowIsStable(): void
+    {
+        ClaudeSettingsHooks::parse(
+            '{"hooks":{"Notification":[{"hooks":[{"type":"command","command":"./a.sh"}]}]}}',
+            '/home/user/.claude/settings.json',
+        );
+
+        Bootstrap::reportSkippedClaudeSettingsEvents();
+        Bootstrap::reportSkippedClaudeSettingsEvents();
+
+        $this->assertCount(1, Bootstrap::launchNotices(), 'the seam de-dupes by message identity, so a re-drain costs nothing');
+    }
+
+    private function resetNoticeStatics(): void
+    {
+        foreach ([
+            'launchNotices' => [],
+            'launchNoticesDropped' => [],
+            'reportedPermissionConfigWarnings' => [],
+        ] as $name => $value) {
+            $property = new \ReflectionProperty(Bootstrap::class, $name);
+            $property->setAccessible(true);
+            $property->setValue(null, $value);
+        }
+    }
+}

@@ -218,15 +218,18 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 44 is that sum — 43 after the PLG-1 bundles discovery seam joined the
-     * roster on top of the ISS-047 keybinding-collision drain — plus one row
+     * 47 is that sum — 46 after the v1:F-1 Claude-settings skip drain,
+     * the v1:m-1 home stand-in row and the v2:a11y-F3 terminal-guidance row
+     * joined the roster on top of the PLG-1
+     * bundles discovery seam and the ISS-047
+     * keybinding-collision drain — plus one row
      * of headroom. A launch that does hit
      * the cap loses nothing silently: the overflow is COUNTED and reported as
      * one trailing row — see {@see launchNotices()} — and stderr carries every
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 44;
+    public const LAUNCH_NOTICE_LIMIT = 47;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -308,6 +311,16 @@ final class Bootstrap
         'availableProviders' => 1,
         'checkPolicyFreshness' => 1,
         'reportKeybindingCollisions' => 1,
+        // v1:F-1: one aggregate row over every unknown event in every CC file
+        // the launch parsed — names, groups and files are counted INTO the row,
+        // never per entry.
+        'reportSkippedClaudeSettingsEvents' => 1,
+        // v1:m-1: one row, message-identity de-duped, whatever how many reads
+        // took the stand-in.
+        'reportHomeDirectoryStandIn' => 1,
+        // v2:a11y-F3: one row, gated on the dumb family AND a tty, so a
+        // scripted or piped launch contributes nothing.
+        'reportTerminalGuidance' => 1,
     ];
 
     /**
@@ -890,6 +903,42 @@ final class Bootstrap
      * other launch notice.
      */
     public const MAC_ALT_NOTICE_TEXT = 'Alt chords may be disabled on this Mac terminal: enable "Use Option as Meta key" (Terminal.app) or "Left Option: Esc+" (iTerm2), or run /keys reload after choosing Ctrl aliases — see docs/SETTINGS.md (a Kitty-speaking terminal needs neither)';
+
+    /**
+     * v1:F-1: one aggregate row draining
+     * {@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks::skippedEvents()} —
+     * events a foreign Claude Code settings file asked for that candy-code
+     * has no case for. NOT LISTED in the catalogue below, ON PURPOSE, the
+     * standing {@see STDERR_LINE_FORMAT} already has: the English constant IS
+     * the row, and a closeout may mint the locale key.
+     */
+    public const CLAUDE_SETTINGS_SKIPPED_EVENTS_NOTICE_FORMAT =
+        'Claude Code settings: no candy-code hook event matches %s, so %d hook group(s) across %d file(s) '
+        . 'contribute no guard and were skipped; everything else in those files loaded';
+
+    /**
+     * v1:m-1: one row for a launch running on the
+     * {@see \SugarCraft\Code\Support\HomeDirectory::path()} temp stand-in.
+     * Not in the catalogue below, ON PURPOSE (the {@see STDERR_LINE_FORMAT}
+     * standing); the English constant IS the row.
+     */
+    public const HOME_STAND_IN_NOTICE_TEXT =
+        'HOME could not be established for this process, so untrusted reads run from the world-writable '
+        . 'temp-directory stand-in — export HOME to silence this (owned-home paths such as the trusted '
+        . 'config and hooks refuse while it is unset)';
+
+    /**
+     * v2:a11y-F3: one row for a launch on a TTY whose terminal identifies
+     * itself as the dumb family (empty, `dumb…`, `unknown…` — the values
+     * that advertise no capability to query). Not in the catalogue below,
+     * ON PURPOSE (the {@see STDERR_LINE_FORMAT} standing); the row names
+     * the two fallbacks such a user actually HAS: the one-shot path and
+     * the mouse opt-outs.
+     */
+    public const TERMINAL_GUIDANCE_NOTICE_TEXT =
+        'This terminal reports a dumb-family TERM, so the interactive screen may not render correctly: '
+        . 'use the one-shot path with "candy-code -p <prompt>" instead, and if mouse input confuses the '
+        . 'terminal set CANDY_CODE_DISABLE_MOUSE=1 or "mouse": false in the config';
 
     /**
      * The catalogue key each launch-notice text above is translated through
@@ -1954,6 +2003,18 @@ final class Bootstrap
             }
         }
         self::reportIgnoredFrontmatter();
+
+        // v1:F-1: the CC-dialect skip record, drained where every other
+        // launch fact is — after workspace() read the hook files.
+        self::reportSkippedClaudeSettingsEvents();
+
+        // v1:m-1: a launch standing on the temp-directory home stand-in says
+        // so once, beside its siblings in this drain.
+        self::reportHomeDirectoryStandIn();
+
+        // v2:a11y-F3: a TTY whose terminal advertises no capabilities is
+        // pointed at the paths that work there, once, before the frame.
+        self::reportTerminalGuidance();
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
@@ -7720,10 +7781,16 @@ final class Bootstrap
      * @param bool $interactive true for the TUI launch, whose default mode is
      *   {@see INTERACTIVE_DEFAULT_PERMISSION_MODE}; every console path leaves it
      *   false
+     * @param bool $announceBypassMode false for READ-ONLY PROBES — `doctor`'s
+     *   permission-policy row resolves the gate to DIAGNOSE a config, never to
+     *   begin a session, and the bypass transcript row is a statement about the
+     *   session about to run ("every tool call runs without a prompt"). A
+     *   read-only diagnosis emitting it would advertise a launch that is not
+     *   happening; real launch paths leave the flag at its default
      *
      * @throws PermissionConfigException when a present permission input cannot be used
      */
-    public static function permissionGate(bool $interactive = false): PermissionGate
+    public static function permissionGate(bool $interactive = false, bool $announceBypassMode = true): PermissionGate
     {
         // The LAYERS rather than the merge, so the refusal below can name the
         // file the bad value actually came from — see
@@ -7792,7 +7859,7 @@ final class Bootstrap
         // (owner ruling: the default stands; the silence is what changes).
         // `warnPermissionConfigInTranscript` de-dups by message identity, so
         // the per-turn re-resolutions of this method cost one notice total.
-        if ($mode === PermissionMode::BypassPermissions) {
+        if ($announceBypassMode && $mode === PermissionMode::BypassPermissions) {
             self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.bypass_mode'));
         }
 
@@ -11895,6 +11962,110 @@ final class Bootstrap
         self::warnLaunchRows(
             KeyBindingsValidator::new()->collisionNotices(KeyBindingRegistry::overrides()),
         );
+    }
+
+    /**
+     * Drain the v1:F-1 skip-and-record accumulator: an event a foreign
+     * Claude Code settings file names that {@see \SugarCraft\Code\Hooks\HookEvent}
+     * has no case for is skipped at parse
+     * ({@see ClaudeSettingsHooks}) and announced HERE as ONE aggregate row
+     * whatever the count — the {@see reportSkillSkips()} contract. Reached
+     * from chat()'s drain block, which runs AFTER workspace() construction
+     * read every hook file, so one call sees every parse the launch made.
+     * Supersedes the old hard refusal for the CC dialect ONLY (R3's native
+     * `hooks.yaml` refusal is untouched — a foreign vendor's evolving event
+     * list must not brick every launch; that blast radius WAS the defect).
+     */
+    public static function reportSkippedClaudeSettingsEvents(): void
+    {
+        $skipped = ClaudeSettingsHooks::skippedEvents();
+        if ($skipped === []) {
+            return;
+        }
+
+        $names = [];
+        $groups = 0;
+        $files = [];
+        foreach ($skipped as $event => $seen) {
+            $names[] = $event;
+            $groups += $seen['groups'];
+            $files += $seen['files'];
+        }
+
+        self::warnLaunchRows([
+            \sprintf(
+                self::CLAUDE_SETTINGS_SKIPPED_EVENTS_NOTICE_FORMAT,
+                "'" . implode("', '", $names) . "'",
+                $groups,
+                \count($files),
+            ),
+        ]);
+    }
+
+    /**
+     * v1:m-1: say it out loud ONCE when this launch resolved `~` through the
+     * temp-directory stand-in
+     * ({@see \SugarCraft\Code\Support\HomeDirectory::standInUsed()}). The
+     * stand-in itself is unchanged — the loud paths that REFUSE on it
+     * (`cli.refuse.no_home`) stay exactly as they were; what was missing is
+     * that every NON-refusing reader kept working off `/tmp/.candy-code`
+     * with no signal that the home resolution had degraded. One row whatever
+     * the call count: the seam de-dupes by message identity.
+     */
+    public static function reportHomeDirectoryStandIn(): void
+    {
+        if (!HomeDirectory::standInUsed()) {
+            return;
+        }
+
+        self::warnLaunchRows([self::HOME_STAND_IN_NOTICE_TEXT]);
+    }
+
+    /**
+     * The dumb-family test, split out as a pure function so the gate is
+     * pinned by a table instead of a fake terminal. THE FAMILY: `''`
+     * (TERM unset — nothing was advertised), and any `dumb…`/`unknown…`
+     * prefix, case- and whitespace-insensitively. `xterm`, `screen`,
+     * `vt100` and friends get nothing — a normal launch stays
+     * byte-unchanged, which is the polarity the existing transcript pins
+     * keep asserting.
+     */
+    public static function terminalGuidanceNotice(string $term, bool $tty): ?string
+    {
+        if (!$tty) {
+            return null;
+        }
+
+        $family = strtolower(trim($term));
+
+        if ($family === '' || str_starts_with($family, 'dumb') || str_starts_with($family, 'unknown')) {
+            return self::TERMINAL_GUIDANCE_NOTICE_TEXT;
+        }
+
+        return null;
+    }
+
+    /**
+     * v2:a11y-F3: guide a launch on a TTY that can NOT speak TUI — before,
+     * `TERM=dumb` users met a wall of bytes with no pointer at the paths
+     * that work for them. Gated on the tty as well as the family: the
+     * -p/scripted shapes answer on pipes all day and need no advice.
+     * The `$tty` seam defaults to reading stdout for real (the sugar-readline
+     * q3 idleSleeper pattern — an injectable observation point so the
+     * positive half is pinned without minting a pty in the suite).
+     */
+    public static function reportTerminalGuidance(?bool $tty = null): void
+    {
+        $notice = self::terminalGuidanceNotice(
+            (string) (getenv('TERM') ?: ''),
+            $tty ?? \stream_isatty(STDOUT),
+        );
+
+        if ($notice === null) {
+            return;
+        }
+
+        self::warnLaunchRows([$notice]);
     }
 
     /**

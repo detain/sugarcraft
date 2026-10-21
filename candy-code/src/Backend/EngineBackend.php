@@ -3363,6 +3363,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * @param list<Tool>                                     $tools
      * @param \Closure(string $trigger, string $focus): ?string $preCompact
      * @param list<TypedMessage>                             $messages the turn's incoming rows
+     * @param bool                                           $unprompted the pruning mode's `compress: auto` — see above
      *
      * @return list<Tool>
      */

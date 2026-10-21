@@ -426,4 +426,92 @@ final class HomeDirectoryTest extends TestCase
         $this->assertSame($temp, HomeDirectory::path());
         $this->assertNull(HomeDirectory::owned(), 'and owned() is what refuses it');
     }
+
+    /**
+     * v1:m-1, the FALSE half in-process: a launch that establishes a home
+     * must not carry the stand-in record at all.
+     */
+    public function testAHomeThatResolvesLeavesTheStandInRecordQuiet(): void
+    {
+        HomeDirectory::resetStandInUsedForTesting();
+        $dir = $this->useHomeSandbox(sys_get_temp_dir() . '/home_directory_record_' . uniqid('', true));
+
+        $this->assertSame($dir, HomeDirectory::path());
+        $this->assertFalse(HomeDirectory::standInUsed(), 'path() answered from the environment, not the stand-in');
+
+        @rmdir($dir);
+    }
+
+    /**
+     * v1:m-1, the TRUE half from a CLEAN process: no `HOME`, no
+     * `USERPROFILE`, and the passwd probe disabled — exactly the shape
+     * `resolved()` documents as answering null. The stand-in stays the
+     * return value; what was missing was that the process KNEW it had
+     * taken it (the launch row this flag feeds is pinned in
+     * {@see \SugarCraft\Code\Tests\Cli\BootstrapHomeStandInNoticeTest}).
+     */
+    public function testAChildWithNoWayToEstablishAHomeRecordsTheStandIn(): void
+    {
+        $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $standIn = sys_get_temp_dir() . '/home_directory_stand_' . uniqid('', true);
+        $code = 'require ' . var_export($autoload, true) . ';'
+            . 'echo "PATH=" . \\SugarCraft\\Code\\Support\\HomeDirectory::path()'
+            . ' . " STANDBY=" . var_export(\\SugarCraft\\Code\\Support\\HomeDirectory::standInUsed(), true);';
+
+        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $process = proc_open(
+            [PHP_BINARY, '-d', 'disable_functions=posix_geteuid,posix_getpwuid', '-r', $code],
+            $descriptors,
+            $pipes,
+            \dirname(__DIR__, 2),
+            ['PATH' => '/usr/bin:/bin', 'TMPDIR' => $standIn],
+        );
+
+        $this->assertIsResource($process);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $status = proc_close($process);
+
+        $this->assertSame(0, $status, "child probe failed: {$stderr}");
+        $this->assertSame(
+            'PATH=' . $standIn . ' STANDBY=true',
+            $stdout,
+            'a child that falls back to the temp-directory stand-in must say so in its own process record',
+        );
+    }
+
+    /**
+     * v1:m-1 polarity pair: the SAME disabled-posix child, but with `HOME`
+     * in its environment, resolves and must not set the flag — the record
+     * tracks the stand-in, not the absence of passwd.
+     */
+    public function testAChildWithAHomeInTheEnvironmentDoesNotRecordTheStandIn(): void
+    {
+        $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $home = sys_get_temp_dir() . '/home_directory_envonly_' . uniqid('', true);
+        $code = 'require ' . var_export($autoload, true) . ';'
+            . 'echo "PATH=" . \\SugarCraft\\Code\\Support\\HomeDirectory::path()'
+            . ' . " STANDBY=" . var_export(\\SugarCraft\\Code\\Support\\HomeDirectory::standInUsed(), true);';
+
+        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $process = proc_open(
+            [PHP_BINARY, '-d', 'disable_functions=posix_geteuid,posix_getpwuid', '-r', $code],
+            $descriptors,
+            $pipes,
+            \dirname(__DIR__, 2),
+            ['PATH' => '/usr/bin:/bin', 'TMPDIR' => sys_get_temp_dir(), 'HOME' => $home],
+        );
+
+        $this->assertIsResource($process);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $status = proc_close($process);
+
+        $this->assertSame(0, $status, "child probe failed: {$stderr}");
+        $this->assertSame('PATH=' . $home . ' STANDBY=false', $stdout);
+    }
 }

@@ -268,6 +268,13 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'INSTRUCTION_DEFERRAL_NOTICE_FORMAT' => ['method' => 'reportPromptBudgetDeferrals', 'conversions' => 4],
         'SKILL_BUDGET_DEFERRAL_NOTICE_FORMAT' => ['method' => 'reportPromptBudgetDeferrals', 'conversions' => 5],
         'NONSENSE_LIMIT_NOTICE_FORMAT' => ['method' => 'reportNonsenseLimits', 'conversions' => 4],
+        // v1:F-1's Claude-settings skip aggregate, read back by
+        // ClaudeSettingsHooksSkipRecordTest. Quoted on no page, so no
+        // PAGE_QUOTES row — the PROMPT_ATTRIBUTION precedent above.
+        'CLAUDE_SETTINGS_SKIPPED_EVENTS_NOTICE_FORMAT' => [
+            'method' => 'reportSkippedClaudeSettingsEvents',
+            'conversions' => 3,
+        ],
         // The R16 follow-up's two fallback-log rows: a temp-dir log, and the
         // null device. Read back by BootstrapLaunchNoticeRoutingTest.
         'TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT' => ['method' => 'reportTuiErrorLogFallback', 'conversions' => 2],
@@ -537,6 +544,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // Audit R12: both sentences are named constants and both keys are, so
         // the body holds no literal at all.
         'reportNonsenseLimits' => [],
+        // v1:F-1: the only format is named; the rest are the two accumulator
+        // keys the foreach reads, and the quote pair that wraps the event-name
+        // list with its joiner.
+        'reportSkippedClaudeSettingsEvents' => ["'groups'", "'files'", "\"'\"", "\"', '\""],
         // The R16 follow-up: the path separator and the `~/` the home log is
         // spelled with; both sentences are named constants.
         'reportTuiErrorLogFallback' => ["'/'", "'~/'"],
@@ -867,7 +878,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            33,
+            34,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );
