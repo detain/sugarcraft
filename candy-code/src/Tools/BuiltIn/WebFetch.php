@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Permissions\PermissionDecision;
+use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\ParallelSafe;
 use SugarCraft\Code\Tools\Tool;
@@ -165,6 +170,13 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
     private \Closure $isBlockedAddress;
 
     /**
+     * The user's configured rules' veto on a REDIRECT target (SEC-3).
+     *
+     * @var \Closure(string): ?string
+     */
+    private \Closure $redirectRulePolicy;
+
+    /**
      * @param (callable(string): list<string>)|null $resolveAddresses
      * @param (callable(string): bool)|null         $isBlockedAddress
      * @param int                                   $maxOutputBytes   result cap, marker included; a
@@ -176,6 +188,10 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
      *                                                                which attaches the page to the user's turn
      * @param int                                   $timeoutSeconds   per-read socket timeout ({@see READ_TIMEOUT_SECONDS})
      * @param int                                   $maxWireBytes     the memory bound on a body ({@see MAX_WIRE_BYTES})
+     * @param (callable(string): ?string)|null      $redirectRulePolicy the veto consulted on every REDIRECT
+     *                                                               target (SEC-3): a refusal message, or null
+     *                                                               to follow the hop; defaults to
+     *                                                               {@see configuredRedirectRefusal()}
      */
     public function __construct(
         ?callable $resolveAddresses = null,
@@ -184,6 +200,7 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
         private bool $saveOverflow = true,
         private int $timeoutSeconds = self::READ_TIMEOUT_SECONDS,
         private int $maxWireBytes = self::MAX_WIRE_BYTES,
+        ?callable $redirectRulePolicy = null,
     ) {
         $this->resolveAddresses = $resolveAddresses === null
             ? static fn (string $host): array => self::resolveViaSystemDns($host)
@@ -191,6 +208,9 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
         $this->isBlockedAddress = $isBlockedAddress === null
             ? static fn (string $address): bool => self::addressIsBlocked($address)
             : \Closure::fromCallable($isBlockedAddress);
+        $this->redirectRulePolicy = $redirectRulePolicy === null
+            ? static fn (string $url): ?string => self::configuredRedirectRefusal($url)
+            : \Closure::fromCallable($redirectRulePolicy);
     }
 
     /**
@@ -228,6 +248,7 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
             saveOverflow: $this->saveOverflow,
             timeoutSeconds: $timeoutSeconds ?? $this->timeoutSeconds,
             maxWireBytes: $maxWireBytes ?? $this->maxWireBytes,
+            redirectRulePolicy: $this->redirectRulePolicy,
         );
     }
 
@@ -324,6 +345,22 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
                 return $this->refusal($toolCallId, $redirected
                     ? 'Error: redirect to localhost is not allowed'
                     : 'Error: fetching from localhost is not allowed');
+            }
+
+            if ($redirected) {
+                // SEC-3 (audit 2026-10-21): the user's rules must judge every
+                // hop, not only the URL the model typed. An
+                // `Allow WebFetch(domain:a.example)` used to be an Allow for
+                // whatever host a.example's 302 chose; only the SSRF address
+                // blocklist was re-checked. Deny stops the chain; Ask stops it
+                // too — a running fetch cannot answer a question the gate
+                // already answered for a DIFFERENT url at first-hop time — and
+                // the wording tells the model to re-issue if the final target
+                // is what was actually meant. No rules configured: unchanged.
+                $ruleRefusal = ($this->redirectRulePolicy)($finalUrl);
+                if ($ruleRefusal !== null) {
+                    return $this->refusal($toolCallId, $ruleRefusal);
+                }
             }
 
             [$refusalMessage, $dialAddress] = $this->guardedDialAddress($host, $redirected);
@@ -574,6 +611,47 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
         return $dial === null
             ? ["Error: could not resolve host: $host", null]
             : [null, $dial];
+    }
+
+    /**
+     * The user's own configured rules' veto on a redirect target (SEC-3),
+     * read live through the same launch-time config layers every other
+     * surface consults ({@see Bootstrap::readUserConfig()},
+     * {@see Bootstrap::permissionRules()}).
+     *
+     * Only rules answer here — mode, breakers and session grants stay the
+     * first hop's business, decided before this tool ran at all. A malformed
+     * entry is NOT re-reported: the launch already warned once per process.
+     * The rule list is rebuilt per hop on purpose — a hop chain is three
+     * decisions at most, and a mid-session `/permissions` edit must bind the
+     * next hop, not the snapshot this fetch started from.
+     */
+    private static function configuredRedirectRefusal(string $url): ?string
+    {
+        // 'permissionRules' is Bootstrap's settings key (its PERMISSION_RULES_-
+        // CONFIG_KEY is private; the literal is this file's single contact
+        // point with it) and deliberately NOT a UiSettings schema key — the
+        // value is a raw list, parsed by permissionRules(), not a typed cell.
+        $raw = Bootstrap::readUserConfig()['permissionRules'] ?? null;
+        if (!is_array($raw) || $raw === []) {
+            return null;
+        }
+
+        $rules = Bootstrap::permissionRules(['permissionRules' => $raw], static function (string $complaint): void {});
+        if ($rules === []) {
+            return null;
+        }
+
+        // ruleDecision() consults the rules ONLY — the mode given here never
+        // scores; it is the constructor's shape, not a policy choice.
+        $decision = (new PermissionGate(PermissionMode::AcceptEdits, $rules))
+            ->ruleDecision(new ToolCall('WebFetch', ['url' => $url]));
+
+        return match ($decision) {
+            PermissionDecision::Deny => 'Error: redirect blocked: a permission rule denies WebFetch for the redirect target',
+            PermissionDecision::Ask => 'Error: redirect blocked: the redirect target would need a permission question this running fetch cannot ask; re-issue the fetch with the final URL if it is intended',
+            default => null,
+        };
     }
 
     /**

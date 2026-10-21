@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Share;
 
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Memory\SecretRedactor;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Util\Exporter;
 
@@ -103,19 +104,29 @@ final class ShareSession
     }
 
     /**
-     * Serialize the session to the specified format.
+     * Serialize the session to the specified format — the PUBLISHED body.
      *
-     * @return string The serialized session content.
+     * SEC-4 (audit 2026-10-21): a share URL is a public artifact, but the
+     * transcript behind it carries whatever an API key-shaped string ever
+     * reached the chat, while the memory audit trail already redacts. The
+     * same {@see SecretRedactor} runs over the finished body here, at the
+     * single choke every format passes through, so publishing can no longer
+     * leak what refusing to share your own files already protects. Local
+     * export paths keep the raw body — this is the network-publish boundary.
+     *
+     * @return string The serialized, secret-redacted session content.
      */
     public function serialize(): string
     {
         // Use wire format (toWire()) for export - handles the concrete Message type
-        return match ($this->format) {
+        $body = match ($this->format) {
             self::FORMAT_JSON => Exporter::toJson($this->messages),
             self::FORMAT_HTML => Exporter::toHtml($this->messages),
             self::FORMAT_TEXT => Exporter::toText($this->messages),
             default => Exporter::toMarkdown($this->messages),
         };
+
+        return SecretRedactor::new()->redact($body);
     }
 
     /**

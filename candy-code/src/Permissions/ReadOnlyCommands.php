@@ -203,6 +203,29 @@ final class ReadOnlyCommands
     ];
 
     /**
+     * A word naming a process environment file under `/proc` — the classic
+     * `/proc/<pid>/environ` and every spelling that reaches it (empty
+     * segments, `..` hops, a brace or glob in the pid slot, a trailing
+     * component). SEC-1: the parent candy-code process carries the live
+     * provider keys (`ProviderFactory` reads them with `getenv`), a Bash
+     * child runs as the same uid, and {@see \SugarCraft\Code\Support\ProcessContainment}
+     * scrubs only the CHILD's environment — `/proc/<parent>/environ` is the
+     * door the scrub leaves unlocked. Reading a file the line names is
+     * ordinary visibility, but the harness's own credential containment is
+     * not part of the project a grant speaks for, so this is refused in
+     * plan's judgement as well as auto's — unlike the ISS-010 `env`/`printenv`
+     * rule, which withheld only the auto-allow.
+     *
+     * Deliberately narrow: `environ` must be a full path segment of a `proc`
+     * word, so `cat notes/proc/environments.md` (no segment `environ`) and a
+     * bare `cat environ` (no `proc/`) are ordinary reads. A `cd /proc/<pid>`
+     * chain that then names `environ` bare is not a word-level read of the
+     * environment path; {@see SafetyClassifier}'s live-credentials rows catch
+     * it wherever the classifier is consulted.
+     */
+    private const PROC_ENVIRON_PREG = '#(^|/)proc/(?:[^/]*/)*environ$|(^|/)proc/(?:[^/]*/)*environ/#';
+
+    /**
      * `find` primaries that delete, run a program or write a file. Matched
      * against quote-removed words, so `'-delete'` is caught too.
      */
@@ -465,6 +488,9 @@ final class ReadOnlyCommands
         if (!$parsed->complete || $parsed->hasSubstitution() || !self::expansionsArePlain($parsed)) {
             return false;
         }
+        if (self::namesProcessEnvironment($parsed)) {
+            return false;
+        }
 
         foreach ($parsed->redirections as $redirection) {
             if (!ShellWords::isInertRedirection($redirection)) {
@@ -490,6 +516,34 @@ final class ReadOnlyCommands
     }
 
     /**
+     * Does any word of this line — an operand of any simple command, or the
+     * target of any redirection — name a process environment file? See
+     * {@see PROC_ENVIRON_PREG}. A read redirection is "inert" to
+     * {@see ShellWords::isInertRedirection()} whatever it opens, and its
+     * target never reaches the argument checks, so `cat < /proc/1/environ`
+     * was silently auto-allowed in `default` until this scan existed;
+     * session-grant coverage consults it for the same reason.
+     */
+    private static function namesProcessEnvironment(ShellWords $parsed): bool
+    {
+        foreach ($parsed->commands as $words) {
+            foreach ($words as $word) {
+                if (preg_match(self::PROC_ENVIRON_PREG, $word) === 1) {
+                    return true;
+                }
+            }
+        }
+        foreach ($parsed->redirections as $redirection) {
+            $target = $redirection['target'] ?? '';
+            if (is_string($target) && preg_match(self::PROC_ENVIRON_PREG, $target) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * PER-PART COVERAGE of one compound item — a `for` / `while read` loop
      * or an `if` — for {@see SessionPermissionMemo::coversBySegments()}
      * (user decision 2026-10-11): the loop is ONE part, covered when its
@@ -509,6 +563,9 @@ final class ReadOnlyCommands
      */
     public static function compoundIsCovered(ShellWords $parsed, array $item, ?string $projectRoot, bool $readOnlyCovers, \Closure $covers): bool
     {
+        if (self::namesProcessEnvironment($parsed)) {
+            return false;
+        }
         $structural = ShellCompound::structuralIndices([$item]);
         $commands = array_column(ShellCompound::simpleCommands([$item]), 'index');
         foreach ($parsed->redirections as $redirection) {
@@ -1154,8 +1211,10 @@ final class ReadOnlyCommands
      * one write is `--output=FILE` (log/show/diff), and `git grep -O CMD` /
      * `--open-files-in-pager` runs a program. git accepts any unambiguous
      * long-option prefix (`--out=f`), so every `--o…` option is refused except
-     * the read-only ones a model actually types. Words after `--` are
-     * pathspecs.
+     * the read-only ones a model actually types. `--ext-diff` (and its
+     * unambiguous prefixes) runs the repo's `diff.external` program — a
+     * hostile repo's config, not a read (SEC-5); `--no-ext-diff` is the OFF
+     * switch and stays. Words after `--` are pathspecs.
      *
      * @param list<string> $args
      */
@@ -1168,6 +1227,16 @@ final class ReadOnlyCommands
             if (str_starts_with($arg, '--o')
                 && !in_array($arg, ['--oneline', '--only-matching', '--ours'], true)
             ) {
+                return false;
+            }
+            // SEC-5: `--ext-diff` hands the diff to the repository's
+            // `diff.external` driver — a hostile repo's config runs a program
+            // during what reads like an inspection. git accepts any
+            // unambiguous long-option prefix (`--ext-d`), so — mirroring
+            // {@see gitConfigIsReadOnly()} — every strict prefix of
+            // `--ext-diff` is refused, while `--no-ext-diff` (the OFF switch,
+            // starting `--n`) stays allowed.
+            if (strlen($arg) <= strlen('--ext-diff') && str_starts_with('--ext-diff', $arg)) {
                 return false;
             }
             if ($subcommand === 'grep' && preg_match('/^-[^-]*O/', $arg) === 1) {

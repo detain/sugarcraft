@@ -260,6 +260,11 @@ final class PermissionGateTest extends TestCase
         yield 'git global -c' => ['git -c core.pager=./x log'];
         yield 'git log --output' => ['git log --output=f'];
         yield 'git log abbreviated --output' => ['git log --out=f'];
+        // SEC-5: --ext-diff runs the repo's diff.external driver — hostile
+        // repo config, not a read. Unambiguous prefixes included.
+        yield 'git log --ext-diff runs an external driver' => ['git log --ext-diff'];
+        yield 'git log abbreviated --ext-d' => ['git log --ext-d'];
+        yield 'git diff --ext-diff' => ['git diff --ext-diff HEAD~1'];
         yield 'git grep opens a pager program' => ['git grep -O./x foo'];
         yield 'git branch creates' => ['git branch topic'];
         yield 'git branch deletes behind a defaulted filter' => ['git branch --contains -d topic'];
@@ -301,6 +306,8 @@ final class PermissionGateTest extends TestCase
     public static function planAllowedBashCommands(): iterable
     {
         yield 'git log' => ['git log --oneline'];
+        yield 'git log with the external driver disabled' => ['git log --no-ext-diff'];
+        yield 'git diff with the external driver disabled' => ['git diff --no-ext-diff HEAD~1'];
         yield 'git diff' => ['git diff HEAD~1'];
         yield 'git status' => ['git status --short'];
         yield 'git show with no-pager' => ['git --no-pager show HEAD'];
