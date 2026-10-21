@@ -113,6 +113,12 @@ final class ArgvParser
      * genuinely starts with a dash, because the `=` form takes its value from
      * the same token and so cannot be ambiguous.
      *
+     * More than one prompt VALUE in one command line keeps its long-standing
+     * last-wins precedence, and since 1021 INFO-4 the parser says so: one
+     * stderr line per parse, from {@see self::noticePromptOverride()} at the
+     * three assigning arms (`run` cannot reach a second assignment, its arm
+     * is gated on `!$promptRequested`).
+     *
      * @param array<int, string> $argv Command-line arguments, as received by
      *   a PHP CLI entry point ($argv[0] = script name is expected and
      *   skipped — parsing starts at $argv[1]).
@@ -128,6 +134,7 @@ final class ArgvParser
         $positional = [];
         $unknownFlags = [];
         $promptRequested = false;
+        $duplicateNoticed = false;
         $usageError = null;
         $usageHint = null;
         $configPath = null;
@@ -267,6 +274,7 @@ final class ArgvParser
                     ++$i;
                     continue;
                 }
+                $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed); // 1021 INFO-4
                 $prompt = $next;
                 $promptRequested = true;
                 $i += 2;
@@ -275,6 +283,7 @@ final class ArgvParser
 
             // --prompt=<value>  (no space)
             if (\str_starts_with($arg, '--prompt=')) {
+                $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed); // 1021 INFO-4
                 $prompt = \substr($arg, 9); // length of "--prompt="
                 $promptRequested = true;
                 ++$i;
@@ -293,6 +302,7 @@ final class ArgvParser
                     ++$i;
                     continue;
                 }
+                $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed); // 1021 INFO-4
                 $prompt = $next;
                 $promptRequested = true;
                 $i += 2;
@@ -1073,6 +1083,32 @@ final class ArgvParser
     private static function promptDashHint(): string
     {
         return Lang::t('cli.argv.hint.prompt_dash');
+    }
+
+    /**
+     * Say once per parse — 1021 INFO-4 — when a second one-shot prompt value
+     * overrides an earlier one (`-p a -p b`, `-p a --prompt=b`, and twins).
+     * LAST-WINS IS DELIBERATELY UNCHANGED: callers that lean on it stay
+     * working, and this parser's silence, not its order, was the defect.
+     *
+     * The line is stderr-alone (stdout is the answer/document on every
+     * format), and it carries the literal `candy-code: ` label the same way
+     * the rest of this file's thirty-four prefixed shapes do rather than
+     * reaching into NonInteractive's private ERROR_LABEL. It is a raw English
+     * literal, not a Lang key, on purpose: lang/en.php is outside this lane,
+     * and until `cli.argv.prompt.duplicate` lands, Lang::t would echo the
+     * dotted key itself at the operator. The DOC-ROW asks the closeout to
+     * adopt the key and re-spell this line through Lang::t.
+     */
+    private static function noticePromptOverride(?string $previous, bool $alreadyNoticed): bool
+    {
+        if ($previous === null || $alreadyNoticed) {
+            return $alreadyNoticed;
+        }
+
+        \fwrite(\STDERR, 'candy-code: more than one -p/--prompt given; using the last value.' . "\n");
+
+        return true;
     }
 
     /**

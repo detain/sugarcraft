@@ -246,7 +246,7 @@ final class NonInteractiveTest extends TestCase
         $this->assertIsArray($decoded);
         $this->assertNull($decoded['result']);
         $this->assertSame('usage', $decoded['error']['type']);
-        $this->assertSame('candy-code: --root /no/such/dir: no such directory', $decoded['error']['message']);
+        $this->assertSame('--root /no/such/dir: no such directory', $decoded['error']['message'], '1021 F-7: the document carries the raw sentence; the label belongs to stderr alone');
         // The hint is prose for whoever is at the terminal; a machine consumer
         // branches on error.type, so it stays out of the document.
         $this->assertStringNotContainsString('--help', $stdout);

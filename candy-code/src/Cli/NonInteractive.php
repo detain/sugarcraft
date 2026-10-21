@@ -19,6 +19,7 @@ use SugarCraft\Code\Permissions\DenialKind;
 use SugarCraft\Code\Permissions\ToolRefusal;
 use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
 use SugarCraft\Code\Tools\BuiltIn\PlanExitTool;
+use SugarCraft\Core\Util\Ansi;
 
 /**
  * The `-p "<prompt>"` / `run "<prompt>"` one-shot, non-interactive CLI path.
@@ -129,7 +130,11 @@ final class NonInteractive
      * has been retried at all: `grep -rn TransientFailure src/` reaches only
      * `Runtime`, `AgentManager` and the providers, so a delegating backend's
      * failure arrives here on its first attempt. For those runs a 1 still means
-     * "one attempt failed", exactly as it did before item 8.
+     * "one attempt failed", exactly as it did before item 8. And since 1021
+     * F-5 that sentence is finally true of the command tier's NONZERO EXITS
+     * too: when the shell-out answers with an error-marked message instead of
+     * throwing, `run()` maps `$message->error` to this code, where the same
+     * answer used to print and exit 0.
      */
     public const EXIT_FAILURE = 1;
 
@@ -233,7 +238,10 @@ final class NonInteractive
      * @return int Unix exit code: {@see self::EXIT_OK} on success,
      *   {@see self::EXIT_CONFIG} when no prompt was given or an explicitly
      *   selected provider is unusable, {@see self::EXIT_FAILURE} when the
-     *   backend threw or a turn hook denied the prompt (ISS-041) — extending the existing `candy-mail`/`candy-ssh-launcher`
+     *   backend threw, a turn hook denied the prompt (ISS-041), or the backend
+     *   answered with an error-marked message — a command-tier nonzero exit
+     *   (`CANDY_CODE_BACKEND_CMD`/`_STREAM`) now reaches the caller as exit 1
+     *   instead of a printed failure at exit 0 (1021 F-5) — extending the existing `candy-mail`/`candy-ssh-launcher`
      *   bins' 0/1 convention (crush_feat.md Recommendation 4) with
      *   `bin/candy-code`'s own 2-means-usage-error.
      */
@@ -241,7 +249,7 @@ final class NonInteractive
     {
         if ($args->prompt === null || \trim($args->prompt) === '') {
             return self::failUsage(
-                'candy-code: ' . Lang::t('cli.noninteractive.no_prompt'),
+                Lang::t('cli.noninteractive.no_prompt'),
                 $outputFormat,
             );
         }
@@ -266,7 +274,7 @@ final class NonInteractive
             // mislabeled provider failure.
             Bootstrap::maxTurns();
         } catch (PermissionConfigException $e) {
-            return self::failUsage('candy-code: ' . $e->getMessage(), $outputFormat);
+            return self::failUsage($e->getMessage(), $outputFormat);
         }
 
         // AUT-4: `--json-schema` is DECODED here, at the CLI boundary —
@@ -278,7 +286,7 @@ final class NonInteractive
         try {
             $jsonSchema = self::decodeJsonSchema($args->jsonSchema);
         } catch (\InvalidArgumentException $e) {
-            return self::failUsage('candy-code: ' . $e->getMessage(), $outputFormat);
+            return self::failUsage($e->getMessage(), $outputFormat);
         }
 
         // Step 3.D-2: only a run that built its own backend owns the session
@@ -329,7 +337,7 @@ final class NonInteractive
                     // prompt, so a picker request reaches here only from an
                     // in-process caller that registered the launch itself.
                     return self::failUsage(
-                        'candy-code: ' . Lang::t('cli.argv.resume_picker_with_prompt'),
+                        Lang::t('cli.argv.resume_picker_with_prompt'),
                         $outputFormat,
                         Lang::t('cli.argv.hint.resume_needs_target'),
                     );
@@ -573,8 +581,11 @@ final class NonInteractive
         try {
             $message = $backend->complete($history, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning);
         } catch (\Throwable $e) {
-            \fwrite(\STDERR, $e->getMessage() . "\n");
-            self::emitErrorDocument($outputFormat, 'backend', $e->getMessage(), null, $refusals);
+            // 1021 F-7: same choke as failUsage() — the emitter owns the
+            // stderr label, the document carries the raw sentence.
+            $raw = self::unlabel($e->getMessage());
+            \fwrite(\STDERR, self::ERROR_LABEL . $raw . "\n");
+            self::emitErrorDocument($outputFormat, 'backend', $raw, null, $refusals);
 
             return self::EXIT_FAILURE;
         }
@@ -659,7 +670,14 @@ final class NonInteractive
             );
         }
 
-        return self::EXIT_OK;
+        // 1021 F-5: the command-tier backends do not THROW on a nonzero exit —
+        // they answer with an error-marked message (CommandBackend::finish(),
+        // StreamingCommandBackend::finish()). Until here, run() printed that
+        // message as an ordinary answer and exited 0: a silently failing CI
+        // pipeline. The answer is still printed, the session still persisted,
+        // SessionEnd still fires; only the status code changes, to the one
+        // whose contract already promises "ran and failed".
+        return $message->error ? self::EXIT_FAILURE : self::EXIT_OK;
     }
 
     /**
@@ -817,7 +835,7 @@ final class NonInteractive
             self::emitErrorDocument(
                 $outputFormat,
                 'hook',
-                'candy-code: ' . Lang::t('cli.noninteractive.turn_hook_blocked', ['reason' => $blocked]),
+                Lang::t('cli.noninteractive.turn_hook_blocked', ['reason' => $blocked]),
                 null,
                 $refusals,
             );
@@ -858,7 +876,11 @@ final class NonInteractive
      * behind it.
      *
      * @param string $message One line, and also the JSON document's
-     *   `error.message`.
+     *   `error.message` — WITHOUT the app label. A leading {@see
+     *   self::ERROR_LABEL} is accepted and stripped here, so callers that
+     *   still bake it (external usage errors, the pre-F-7 spelling) neither
+     *   double it on stderr nor leak it into the document: 1021 F-7 made the
+     *   emitter the label's only owner.
      * @param string|null $hint An extra stderr-only line (e.g. "Try
      *   `candy-code --help`…"). Deliberately not part of the document: a
      *   machine consumer branches on `error.type`, and the hint is prose
@@ -866,10 +888,34 @@ final class NonInteractive
      */
     public static function failUsage(string $message, string $outputFormat, ?string $hint = null): int
     {
-        \fwrite(\STDERR, $message . "\n" . ($hint === null ? '' : $hint . "\n"));
-        self::emitErrorDocument($outputFormat, 'usage', $message, null);
+        $raw = self::unlabel($message);
+        \fwrite(\STDERR, self::ERROR_LABEL . $raw . "\n" . ($hint === null ? '' : $hint . "\n"));
+        self::emitErrorDocument($outputFormat, 'usage', $raw, null);
 
         return self::EXIT_CONFIG;
+    }
+
+    /**
+     * 1021 F-7: the single label every stderr emitter of this class prepends.
+     * JSON documents carry NO label — the choke points (failUsage,
+     * failJsonSchemaUnsupported, failUnusableProvider) apply it to stderr
+     * only, so `error.message` holds one sentence regardless of who composed
+     * it.
+     */
+    private const ERROR_LABEL = 'candy-code: ';
+
+    /**
+     * Remove a leading {@see self::ERROR_LABEL} if present; leave everything
+     * else byte-identical. Tolerates both caller spellings (labeled legacy
+     * strings from `bin` and Bootstrap, raw sentences from this file's
+     * post-F-7 callers) without double-labeling stderr or shipping the label
+     * inside a machine-consumed document.
+     */
+    private static function unlabel(string $message): string
+    {
+        return \str_starts_with($message, self::ERROR_LABEL)
+            ? \substr($message, \strlen(self::ERROR_LABEL))
+            : $message;
     }
 
     /**
@@ -940,13 +986,13 @@ final class NonInteractive
      */
     private static function failJsonSchemaUnsupported(?string $provider, string $outputFormat): int
     {
-        $message = 'candy-code: ' . Lang::t(
+        $message = Lang::t(
             $provider === null
                 ? 'cli.noninteractive.json_schema_no_backend'
                 : 'cli.noninteractive.json_schema_unsupported',
             ['name' => $provider ?? ''],
         );
-        \fwrite(\STDERR, $message . "\n");
+        \fwrite(\STDERR, self::ERROR_LABEL . $message . "\n");
         self::emitErrorDocument($outputFormat, 'json_schema_unsupported', $message, $provider);
 
         return self::EXIT_CONFIG;
@@ -992,16 +1038,23 @@ final class NonInteractive
             ? Lang::t('cli.noninteractive.provider_remedy_env')
             : Lang::t('cli.noninteractive.provider_remedy_config', ['path' => Bootstrap::userConfigPath()]);
 
+        // 1021 F-7: the document carries the TYPED provider_unusable sentence
+        // — the same text the operator sees — instead of the bare exception,
+        // which was the inverse of every other error surface (the exception
+        // message names the provider, but only the sentence says the run
+        // REFUSED because of it). Label stays on stderr alone.
+        $sentence = Lang::t('cli.noninteractive.provider_unusable', [
+            'provider' => $providerName,
+            'error' => $e->getMessage(),
+        ]);
+
         \fwrite(
             \STDERR,
-            'candy-code: ' . Lang::t('cli.noninteractive.provider_unusable', [
-                'provider' => $providerName,
-                'error' => $e->getMessage(),
-            ]) . "\n"
-            . 'candy-code: ' . Lang::t('cli.noninteractive.provider_refusing', ['remedy' => $remedy]) . "\n",
+            self::ERROR_LABEL . $sentence . "\n"
+            . self::ERROR_LABEL . Lang::t('cli.noninteractive.provider_refusing', ['remedy' => $remedy]) . "\n",
         );
 
-        self::emitErrorDocument($outputFormat, 'provider_configuration', $e->getMessage(), $providerName);
+        self::emitErrorDocument($outputFormat, 'provider_configuration', $sentence, $providerName);
 
         return self::EXIT_CONFIG;
     }
@@ -1759,7 +1812,25 @@ final class NonInteractive
             return self::encodeDocument($document);
         }
 
-        return $message->content;
+        // 1021 v1:F-2: the JSON arm is immune to control bytes because
+        // json_encode escapes them; this arm piped them through raw. A model
+        // (or a command backend's fenced stderr tail) that emits SGR/OSC
+        // sequences or stray C0 characters painted them straight onto the
+        // caller's terminal — the corruption a JSON consumer never sees.
+        return self::sanitizeTextAnswer($message->content);
+    }
+
+    /**
+     * Reduce an answer body to bytes that are safe to write to a text
+     * terminal: every escape sequence goes (CSI/OSC/DCS/SOS/PM/APC, two-byte
+     * Fe, stray 8-bit C1 and lone ESC — sugar-core's Ansi::strip owns that
+     * alphabet), then a sweep drops the C0/DEL leftovers strip keeps for
+     * other consumers while sparing the three layout bytes \t \n \r that a
+     * multi-line answer legitimately carries.
+     */
+    private static function sanitizeTextAnswer(string $content): string
+    {
+        return (string) preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', Ansi::strip($content));
     }
 
     /**
