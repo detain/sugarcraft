@@ -15,6 +15,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\ClaudeCodeMcpClient;
 use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Config\StatusLineCommand;
@@ -6023,9 +6024,9 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('mcpConfigDecision(', $changedText, 'the digest check no longer resolves through the shared decision path');
         self::assertStringNotContainsString('self::mcpClient(', $changedText, 'the changed-check now BUILDS a client — building starts servers, which no readout may do');
         $builderText = (string) substr($bootstrap, $builder['begin'], $builder['end'] - $builder['begin']);
-        self::assertStringContainsString('self::$mcpConfigDigests[$pid][$path] = $digest;', $builderText, 'the launch stopped storing its digest at the memo point — the panel line would compare against nothing');
+        self::assertStringContainsString('LaunchContext::rememberMcpConfigDigest($pid, $path, $digest);', $builderText, 'the launch stopped storing its digest at the memo point — the panel line would compare against nothing');
 
-        $prop = new \ReflectionProperty(Bootstrap::class, 'mcpConfigDigests');
+        $prop = new \ReflectionProperty(LaunchContext::class, 'mcpConfigDigests');
         self::assertTrue($prop->isPrivate() && $prop->isStatic(), 'the digest memo is process-global and private by design — the panel reads verdicts, not bytes');
         self::assertTrue(method_exists(Bootstrap::class, 'mcpConfigChangedSinceLaunch'));
     }

@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tests\Support\McpLaunchEnabledTrait;
@@ -50,7 +51,7 @@ final class BootstrapClaudeMcpGrantTest extends TestCase
         // armed AFTER the HOME sandbox per lane-cf law, never exported.
         $this->armMcpLaunchEnabled();
 
-        $memo = new \ReflectionProperty(Bootstrap::class, 'mcpClients');
+        $memo = new \ReflectionProperty(LaunchContext::class, 'mcpClients');
         $memo->setAccessible(true);
         /** @var array<int, array<string, McpClient>> $bucket */
         $bucket = $memo->getValue();
@@ -60,7 +61,7 @@ final class BootstrapClaudeMcpGrantTest extends TestCase
         // here leaves rows behind, so the digest bucket is snapshotted and
         // restored exactly like BootstrapMcpLivenessTest does — otherwise
         // this file pollutes the liveness suite's cold-process assertions.
-        $digests = new \ReflectionProperty(Bootstrap::class, 'mcpConfigDigests');
+        $digests = new \ReflectionProperty(LaunchContext::class, 'mcpConfigDigests');
         $digests->setAccessible(true);
         /** @var array<int, array<string, array{sha256: string, mtime: int}>> $dig */
         $dig = $digests->getValue();
@@ -69,11 +70,11 @@ final class BootstrapClaudeMcpGrantTest extends TestCase
 
     protected function tearDown(): void
     {
-        $memo = new \ReflectionProperty(Bootstrap::class, 'mcpClients');
+        $memo = new \ReflectionProperty(LaunchContext::class, 'mcpClients');
         $memo->setAccessible(true);
         $memo->setValue(null, $this->memoBefore);
 
-        $digests = new \ReflectionProperty(Bootstrap::class, 'mcpConfigDigests');
+        $digests = new \ReflectionProperty(LaunchContext::class, 'mcpConfigDigests');
         $digests->setAccessible(true);
         $digests->setValue(null, $this->digestsBefore);
 

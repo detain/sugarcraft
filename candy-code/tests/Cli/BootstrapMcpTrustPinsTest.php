@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\Subcommands;
 use SugarCraft\Code\MCP\McpClient;
@@ -251,7 +252,7 @@ final class BootstrapMcpTrustPinsTest extends TestCase
     /** @return array<mixed> */
     private static function memo(string $property): array
     {
-        $ref = new \ReflectionProperty(Bootstrap::class, $property);
+        $ref = new \ReflectionProperty(LaunchContext::class, $property);
 
         return (array) $ref->getValue();
     }
@@ -259,7 +260,7 @@ final class BootstrapMcpTrustPinsTest extends TestCase
     /** @param array<mixed> $value */
     private static function setMemo(string $property, array $value): void
     {
-        (new \ReflectionProperty(Bootstrap::class, $property))->setValue(null, $value);
+        (new \ReflectionProperty(LaunchContext::class, $property))->setValue(null, $value);
     }
 
     private static function rmrf(string $path): void

@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\Subcommands;
 use SugarCraft\Code\MCP\McpClient;
@@ -350,7 +351,7 @@ final class BootstrapMcpDisableEnvTest extends TestCase
     /** @return array<int, array<string, McpClient>> */
     private function readMemo(): array
     {
-        $ref = new \ReflectionProperty(Bootstrap::class, 'mcpClients');
+        $ref = new \ReflectionProperty(LaunchContext::class, 'mcpClients');
         $ref->setAccessible(true);
 
         /** @var array<int, array<string, McpClient>> $value */
@@ -362,7 +363,7 @@ final class BootstrapMcpDisableEnvTest extends TestCase
     /** @param array<int, array<string, McpClient>> $memo */
     private function writeMemo(array $memo): void
     {
-        $ref = new \ReflectionProperty(Bootstrap::class, 'mcpClients');
+        $ref = new \ReflectionProperty(LaunchContext::class, 'mcpClients');
         $ref->setAccessible(true);
         $ref->setValue(null, $memo);
     }
