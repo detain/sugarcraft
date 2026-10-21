@@ -41,6 +41,13 @@ final class AcpUpdateMapper
     public const PLAN = 'plan';
     public const CURRENT_MODE_UPDATE = 'current_mode_update';
 
+    /**
+     * The emitted spelling of {@see AcpToolCallStatus} (v4-F15). These
+     * four strings are ACP WIRE BYTES — frames serialized with them must
+     * not change one character (the prompt-stream and session-load pins
+     * assert the bytes) — and a lockstep pin in AcpPromptStreamTest keeps
+     * constants and enum cases one vocabulary.
+     */
     public const STATUS_PENDING = 'pending';
     public const STATUS_IN_PROGRESS = 'in_progress';
     public const STATUS_COMPLETED = 'completed';

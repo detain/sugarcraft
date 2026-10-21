@@ -37,6 +37,13 @@ use SugarCraft\Code\Events\SubAgentActivity;
  */
 final readonly class AgentLiveState
 {
+    /**
+     * The public string spelling of {@see AgentLiveStatus} (v4-F15): the
+     * enum's cases are the canonical vocabulary and a lockstep pin in
+     * AgentLiveRegistryTest asserts these constants stay exactly its
+     * backing values — the $status property below crosses into out-of-scope
+     * UI readers as a string, so its type stays.
+     */
     public const STATUS_QUEUED = 'queued';
     public const STATUS_RUNNING = 'running';
     public const STATUS_FINISHED = 'finished';
@@ -221,6 +228,16 @@ final readonly class AgentLiveState
     public function isFinished(): bool
     {
         return $this->status === self::STATUS_FINISHED;
+    }
+
+    /**
+     * This row's coarse overlay state as the parsed case (v4-F15). Throws
+     * on anything outside the three-value vocabulary — a foreign status
+     * reaching the live overlay is a bug, not a state to render.
+     */
+    public function statusCase(): AgentLiveStatus
+    {
+        return AgentLiveStatus::from($this->status);
     }
 
     /**

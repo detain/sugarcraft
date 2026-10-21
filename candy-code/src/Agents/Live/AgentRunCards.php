@@ -43,7 +43,13 @@ final class AgentRunCards
     /** The id the session's own agent goes by: its sub-agents' parent, and its mailbox's name. */
     public const MAIN = 'main';
 
-    /** A card's status while its run works; afterwards it is the run's outcome. */
+    /**
+     * A card's status while its run works; afterwards it is the run's
+     * outcome. These two constants are the public string spelling of
+     * {@see RunCardStatus} (v4-F15) — the card array crosses tool and wire
+     * readers as a string, so a lockstep pin in AgentLiveRegistryTest keeps
+     * constants and enum cases one vocabulary.
+     */
     public const STATUS_RUNNING = 'running';
 
     /** What a running card whose process is gone reads as. */

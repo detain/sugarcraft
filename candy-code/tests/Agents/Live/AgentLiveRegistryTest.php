@@ -8,6 +8,9 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Live\ActivityItem;
 use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Code\Agents\Live\AgentLiveState;
+use SugarCraft\Code\Agents\Live\AgentLiveStatus;
+use SugarCraft\Code\Agents\Live\AgentRunCards;
+use SugarCraft\Code\Agents\Live\RunCardStatus;
 use SugarCraft\Code\Events\SubAgentActivity;
 
 /**
@@ -194,6 +197,35 @@ final class AgentLiveRegistryTest extends TestCase
         }
 
         self::assertFalse(AgentLiveRegistry::staticSpinner());
+    }
+
+    /**
+     * v4-F15: the overlay state and the card status each have ONE
+     * vocabulary — the constants that cross into out-of-scope readers and
+     * the enum cases that name it canonically must move together or this
+     * reddens. statusCase() is the parsed entry point; a finished card's
+     * outcome passes through untouched.
+     */
+    public function testTheLiveAndCardStatusVocabulariesStayInLockstep(): void
+    {
+        self::assertSame(
+            [AgentLiveState::STATUS_QUEUED, AgentLiveState::STATUS_RUNNING, AgentLiveState::STATUS_FINISHED],
+            array_map(static fn (AgentLiveStatus $case): string => $case->value, AgentLiveStatus::cases()),
+            'queued/running/finished in both spellings',
+        );
+        self::assertSame(
+            [AgentRunCards::STATUS_RUNNING, AgentRunCards::STATUS_LOST],
+            array_map(static fn (RunCardStatus $case): string => $case->value, RunCardStatus::cases()),
+            'running/lost are the only statuses a card mints itself',
+        );
+
+        $registry = AgentLiveRegistry::new(static fn (): float => 50.0);
+        $registry->apply(self::frame('queued', 'run_lockstep', 1, 'tc_9'));
+        self::assertSame(AgentLiveStatus::Queued, $registry->get('run_lockstep')?->statusCase());
+        $registry->apply(self::frame('finished', 'run_lockstep', 2, 'tc_9'));
+        self::assertSame(AgentLiveStatus::Finished, $registry->get('run_lockstep')?->statusCase());
+
+        self::assertSame('complete', AgentRunCards::statusOf(['status' => 'complete']), 'an outcome passes through as the string tools read');
     }
 
     /**
