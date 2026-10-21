@@ -218,8 +218,9 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 46 is that sum — 45 after the v1:F-1 Claude-settings skip drain and
-     * the v1:m-1 home stand-in row joined the roster on top of the PLG-1
+     * 47 is that sum — 46 after the v1:F-1 Claude-settings skip drain,
+     * the v1:m-1 home stand-in row and the v2:a11y-F3 terminal-guidance row
+     * joined the roster on top of the PLG-1
      * bundles discovery seam and the ISS-047
      * keybinding-collision drain — plus one row
      * of headroom. A launch that does hit
@@ -228,7 +229,7 @@ final class Bootstrap
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 46;
+    public const LAUNCH_NOTICE_LIMIT = 47;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -317,6 +318,9 @@ final class Bootstrap
         // v1:m-1: one row, message-identity de-duped, whatever how many reads
         // took the stand-in.
         'reportHomeDirectoryStandIn' => 1,
+        // v2:a11y-F3: one row, gated on the dumb family AND a tty, so a
+        // scripted or piped launch contributes nothing.
+        'reportTerminalGuidance' => 1,
     ];
 
     /**
@@ -922,6 +926,19 @@ final class Bootstrap
         'HOME could not be established for this process, so untrusted reads run from the world-writable '
         . 'temp-directory stand-in — export HOME to silence this (owned-home paths such as the trusted '
         . 'config and hooks refuse while it is unset)';
+
+    /**
+     * v2:a11y-F3: one row for a launch on a TTY whose terminal identifies
+     * itself as the dumb family (empty, `dumb…`, `unknown…` — the values
+     * that advertise no capability to query). Not in the catalogue below,
+     * ON PURPOSE (the {@see STDERR_LINE_FORMAT} standing); the row names
+     * the two fallbacks such a user actually HAS: the one-shot path and
+     * the mouse opt-outs.
+     */
+    public const TERMINAL_GUIDANCE_NOTICE_TEXT =
+        'This terminal reports a dumb-family TERM, so the interactive screen may not render correctly: '
+        . 'use the one-shot path with "candy-code -p <prompt>" instead, and if mouse input confuses the '
+        . 'terminal set CANDY_CODE_DISABLE_MOUSE=1 or "mouse": false in the config';
 
     /**
      * The catalogue key each launch-notice text above is translated through
@@ -1994,6 +2011,10 @@ final class Bootstrap
         // v1:m-1: a launch standing on the temp-directory home stand-in says
         // so once, beside its siblings in this drain.
         self::reportHomeDirectoryStandIn();
+
+        // v2:a11y-F3: a TTY whose terminal advertises no capabilities is
+        // pointed at the paths that work there, once, before the frame.
+        self::reportTerminalGuidance();
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
@@ -11998,6 +12019,53 @@ final class Bootstrap
         }
 
         self::warnLaunchRows([self::HOME_STAND_IN_NOTICE_TEXT]);
+    }
+
+    /**
+     * The dumb-family test, split out as a pure function so the gate is
+     * pinned by a table instead of a fake terminal. THE FAMILY: `''`
+     * (TERM unset — nothing was advertised), and any `dumb…`/`unknown…`
+     * prefix, case- and whitespace-insensitively. `xterm`, `screen`,
+     * `vt100` and friends get nothing — a normal launch stays
+     * byte-unchanged, which is the polarity the existing transcript pins
+     * keep asserting.
+     */
+    public static function terminalGuidanceNotice(string $term, bool $tty): ?string
+    {
+        if (!$tty) {
+            return null;
+        }
+
+        $family = strtolower(trim($term));
+
+        if ($family === '' || str_starts_with($family, 'dumb') || str_starts_with($family, 'unknown')) {
+            return self::TERMINAL_GUIDANCE_NOTICE_TEXT;
+        }
+
+        return null;
+    }
+
+    /**
+     * v2:a11y-F3: guide a launch on a TTY that can NOT speak TUI — before,
+     * `TERM=dumb` users met a wall of bytes with no pointer at the paths
+     * that work for them. Gated on the tty as well as the family: the
+     * -p/scripted shapes answer on pipes all day and need no advice.
+     * The `$tty` seam defaults to reading stdout for real (the sugar-readline
+     * q3 idleSleeper pattern — an injectable observation point so the
+     * positive half is pinned without minting a pty in the suite).
+     */
+    public static function reportTerminalGuidance(?bool $tty = null): void
+    {
+        $notice = self::terminalGuidanceNotice(
+            (string) (getenv('TERM') ?: ''),
+            $tty ?? \stream_isatty(STDOUT),
+        );
+
+        if ($notice === null) {
+            return;
+        }
+
+        self::warnLaunchRows([$notice]);
     }
 
     /**
