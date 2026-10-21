@@ -11,6 +11,7 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\PermissionConfigException;
 use SugarCraft\Code\Hooks\BuiltIn\ConfirmRemoveHook;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
+use SugarCraft\Code\Hooks\ClaudeSettingsHooks;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookInterface;
 use SugarCraft\Code\Hooks\HookManager;
@@ -47,6 +48,10 @@ final class BootstrapHookFileTest extends TestCase
     {
         parent::setUp();
 
+        // v1:F-1: the skip record is process-scoped parser state; this class
+        // drives the parser through the live launch, so it owns its hygiene.
+        ClaudeSettingsHooks::resetSkippedEventsForTesting();
+
         $this->tempDir = sys_get_temp_dir() . '/bootstrap_hook_file_' . uniqid('', true);
         $this->home = $this->tempDir . '/home';
         $this->project = $this->tempDir . '/project';
@@ -66,6 +71,8 @@ final class BootstrapHookFileTest extends TestCase
 
     protected function tearDown(): void
     {
+        ClaudeSettingsHooks::resetSkippedEventsForTesting();
+
         if ($this->originalHome !== '') {
             putenv('HOME=' . $this->originalHome);
         } else {
@@ -748,10 +755,12 @@ YAML);
     }
 
     /**
-     * `Notification` is the one event recognised and NOT registered: the chain
-     * has no such event yet (plan ruling R3), so its entries are skipped while
-     * the launch stays otherwise normal and every other unknown event still
-     * refuses.
+     * `Notification` is an event this port does not have: under v1:F-1 it is
+     * SKIPPED AND RECORDED like any other unknown event in a foreign Claude
+     * Code file (it merely predates the general rule — plan ruling R3's
+     * refusal stands where it was always aimed, at candy-code's OWN native
+     * `hooks.yaml`, pinned by {@see testAnUnknownEventNameRefusesToStart()}
+     * below), so the launch stays normal and every known event still loads.
      */
     public function testTheNotificationEventIsSkippedWithoutRefusingTheLaunch(): void
     {
@@ -770,28 +779,44 @@ YAML);
 
         $this->assertContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
         $this->assertNotContains('cc:Notification:0', $this->namesOn($hooks, 'Notification'));
+        $this->assertArrayHasKey('Notification', ClaudeSettingsHooks::skippedEvents(), 'the skip is recorded, not silent');
     }
 
     /**
-     * An unknown event beside the deferred one is still loud: the skip-list is
-     * a named exception, not a blanket tolerance of anything unrecognised.
+     * THE v1:F-1 FLIP. The base refused the start for an unknown event in a
+     * FOREIGN `~/.claude/settings.json` — an upstream feature's new hook
+     * event bricked every launch mode with exit 2 and no override. The
+     * foreign dialect is now skip-and-record: the launch proceeds, the
+     * known neighbours load, and the parser's record names what was
+     * dropped (the drain row is pinned in
+     * {@see \SugarCraft\Code\Tests\Cli\ClaudeSettingsHooksSkipRecordTest}).
+     * The native-dialect refusal at {@see testAnUnknownEventNameRefusesToStart()}
+     * is the other half of the pair.
      */
-    public function testAnUnknownEventBesideNotificationStillRefusesTheStart(): void
+    public function testAnUnknownEventFromAForeignClaudeFileIsSkippedAndRecordedNotFatal(): void
     {
         $this->writeUserClaudeSettings((string) json_encode([
             'hooks' => [
                 'Bogus' => [
                     ['matcher' => 'Bash', 'hooks' => [['type' => 'command', 'command' => 'true']]],
                 ],
+                'StopFailure' => [
+                    ['hooks' => [['type' => 'command', 'command' => 'true']]],
+                ],
+                'PreToolUse' => [
+                    ['matcher' => 'Bash', 'hooks' => [['type' => 'command', 'command' => 'true']]],
+                ],
             ],
         ]));
 
-        try {
-            Bootstrap::backend($this->project);
-            $this->fail('an unrecognised event name is a typo or a version skew, and both are refusals');
-        } catch (PermissionConfigException $e) {
-            $this->assertStringContainsString('Bogus', $e->getMessage());
-        }
+        $hooks = $this->chainOf(Bootstrap::backend($this->project));
+
+        $this->assertContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'), 'unknown neighbours no longer veto known ones');
+
+        $record = ClaudeSettingsHooks::skippedEvents();
+        $this->assertSame(['Bogus', 'StopFailure'], array_keys($record));
+        $this->assertSame(1, $record['Bogus']['groups']);
+        $this->assertSame(1, $record['StopFailure']['groups']);
     }
 
     /**
