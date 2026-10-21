@@ -4674,7 +4674,7 @@ final class Renderer
         $isExpanded = ($expanded[$key] ?? false) === true;
         $faint = self::dim($theme);
 
-        $head = self::dim($theme)->italic()->render('💭 ' . Lang::t(self::THOUGHT_ROW_LABEL));
+        $head = self::toolRowStyle($theme, self::isFocusedToolRow($key, $frame))->italic()->render('💭 ' . Lang::t(self::THOUGHT_ROW_LABEL));
         $frame->recordToolRowHead($head);
         self::recordToolCallZone($key, $head, $frame);
 
@@ -4906,7 +4906,13 @@ final class Renderer
             $prefix = $skillName === null ? self::toolRowPrefix() : self::skillRowPrefix();
             $labelRoom = $width - Width::of($prefix) - Width::of($status) - 1;
             $name = Width::truncate(self::oneLine($skillName ?? $result->name), max(1, $labelRoom));
-            $head = self::dim($theme)->strikethrough($stopped)->render($prefix . $name);
+            // W7-B: the key is the cursor identity too, so it is read BEFORE
+            // the head is styled — the focused unit's rows wear the active
+            // style ({@see toolRowStyle()}), the same span, zero added cells.
+            $key = $result->id ?? $result->name;
+            $head = self::toolRowStyle($theme, self::isFocusedToolRow($key, $frame))
+                ->strikethrough($stopped)
+                ->render($prefix . $name);
             $label = $head . ' ' . $status;
             // Recorded for the LAYOUT question, before and regardless of
             // whether this row can also become a click zone: fitToPane() has to
@@ -4915,7 +4921,6 @@ final class Renderer
             $frame->recordToolRowHead($head);
             $row = $label . self::toolCallSuffix($result, $theme, $width, Width::of($label));
             $rawBody = $result->isError() ? ($result->error ?? '') : $result->result;
-            $key = $result->id ?? $result->name;
             $isExpanded = ($expanded[$key] ?? self::toolOutputExpandedByDefault()) === true;
             // §8 E5: the same key Ctrl+O toggles, so a click and the keystroke
             // drive one expansion mechanism rather than two.
@@ -5486,6 +5491,45 @@ final class Renderer
     }
 
     /**
+     * The head style of a transcript row (W7-B): the dim label style the row
+     * always wore, or the theme's ACTIVE vocabulary — shellPrimary + bold,
+     * the same one the menu-bar dropdown's selected item and the session
+     * picker's selected row wear — when the settled `Ctrl+F` cursor stands
+     * on this row's unit.
+     *
+     * The style rides the row's EXISTING span: no cell is added, no glyph
+     * prepended, so the width laws (fitToPane/hardFit/PaneWidthInvariant)
+     * and the zone `str_contains()` contract all see the same text they saw
+     * before — the click zone keeps pointing at the row it registered, and
+     * the ASCII profile needs no '>' marker because sugar-style's SGR writer
+     * drops colour per-colour while TEXT attributes survive: the highlight
+     * degrades to BOLD vs plain, distinguishable at zero cells of cost.
+     * (Under the NoTty profile every SGR is stripped and no styled row in
+     * the app is distinguishable — the highlight is no worse off than the
+     * menu bar's own selection.)
+     */
+    private static function toolRowStyle(Theme $theme, bool $focused): Style
+    {
+        if (!$focused) {
+            return self::dim($theme);
+        }
+
+        return Style::new()->foreground($theme->shellPrimary)->bold();
+    }
+
+    /**
+     * Whether the settled row cursor (W7-B) names this row-key. Identity, not
+     * position: the same contract {@see Chat::$expanded} is keyed by, so one
+     * gesture's target never disagrees with another's.
+     */
+    private static function isFocusedToolRow(string $key, RenderFrame $frame): bool
+    {
+        $keys = $frame->focusedToolRowKeys();
+
+        return $keys !== [] && in_array($key, $keys, true);
+    }
+
+    /**
      * The label a UI-only {@see Message::notice()} row opens with, in place of
      * the `system: ` an agent-visible system row carries - see {@see notice()}.
      */
@@ -5586,7 +5630,8 @@ final class Renderer
         $spinner = Style::new()->foreground($theme->assistantLabel)->render(
             $queued ? '◌' : \SugarCraft\Code\Agents\Live\AgentLiveRegistry::spinnerGlyph($agents?->spinnerFrame() ?? 0),
         );
-        $running = $spinner . ' ' . self::dim($theme)->render(Lang::t($queued ? 'tui.tool.queued' : 'tui.tool.running', ['call' => self::oneLine($msg->content)]));
+        $running = $spinner . ' ' . self::toolRowStyle($theme, self::isFocusedToolRow((string) $msg->pendingToolCallId, $frame))
+            ->render(Lang::t($queued ? 'tui.tool.queued' : 'tui.tool.running', ['call' => self::oneLine($msg->content)]));
         $running .= self::agentLines($runs, $theme, $width, $agents, $frame);
         $running .= self::previewLines((string) $msg->pendingToolCallId, $theme, $width, $images, $mosaic, $imageRows);
 
