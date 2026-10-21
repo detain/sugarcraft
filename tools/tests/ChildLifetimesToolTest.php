@@ -70,7 +70,8 @@ final class ChildLifetimesToolTest extends TestCase
         $this->assertSame(0, $code, "tool was red on its own repo:\n$out$err");
         $this->assertStringContainsString('0 problems', $out);
         $this->assertStringContainsString('9 findings', $out);
-        $this->assertStringContainsString('29 proc_open sites', $out);
+        // Frozen literal: counts every @proc_open site tree-wide — flip it in the SAME commit that adds a site.
+        $this->assertStringContainsString('31 proc_open sites', $out);
     }
 
     /**
