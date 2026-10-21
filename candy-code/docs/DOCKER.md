@@ -122,6 +122,38 @@ The build context is the `candy-code/` directory; the Dockerfile COPYs only
 the entrypoint script and pulls the rest from Packagist, so a dirty working
 tree cannot leak into an image built from this definition.
 
+## Launch notices in the log
+
+At startup the CLI prints advisory rows to stderr before anything else, so
+`docker logs` is where they surface. Each names its own remedy; in a container
+the cause is usually an environment detail worth fixing at the image or unit
+level:
+
+- **The `HOME` stand-in.** A row saying untrusted reads run from the
+  world-writable temp-directory stand-in means the process has no usable
+  home: the owned-home surfaces (the trusted config and hook files) refuse
+  while it stands. The image ships `HOME=/data` on the volume; re-exporting
+  `HOME` at a directory another uid owns — or one that is world-writable —
+  re-triggers the stand-in, because both shapes fail the same check.
+- **The dumb-family terminal.** A row saying the terminal reports a
+  dumb-family `TERM` appears when an interactive run attaches to a tty that
+  advertises no capability (empty, `dumb…`, `unknown…`) — typical of
+  `docker exec` without allocation. Containers want the one-shot path,
+  `candy-code -p "…"`; if the TUI must drive over such a tty, set
+  `CANDY_CODE_DISABLE_MOUSE=1` as the row itself says.
+- **The foreign Claude settings notice.** A row saying no candy-code hook
+  event matches some event names a hook groups were skipped means a Claude
+  Code `settings.json` rode along into the mounted home and asked for hook
+  events this program has no case for; every other part of those files
+  loaded. Nothing is broken — remove the foreign file to silence the row.
+- **The bypass banner.** The `⚠ Permission mode is bypass-permissions` row
+  prints on every launch that runs without an approver, TUI and `-p` alike,
+  naming the three ways to change the mode. `-p` and `/bg` runs start in
+  bypass precisely because nothing can answer a prompt; a server-spawned
+  run instead inherits the server's admitted mode. Pick the mode
+  explicitly with `--permission-mode` (see
+  [PERMISSIONS.md](PERMISSIONS.md)).
+
 ## Long-lived containers and `/tmp`
 
 Agent results, hook sidecars, and shell-out scratch live under the system
@@ -137,6 +169,26 @@ it. A long-lived container should therefore point `TMPDIR` at a persistent
 volume instead of the built-in `/tmp`; the startup environment reads it (a
 mid-process `putenv` does not move `sys_get_temp_dir()` — see
 [ENVIRONMENT.md](ENVIRONMENT.md) for the `TMPDIR` row).
+
+A systemd unit running the container image with `PrivateTmp=yes` is the same
+hazard in another shape: the service gets a private `/tmp` wiped when it
+stops, so anything a run still owns at shutdown is gone — and so is anything
+the next start expected to find. The persistent-`TMPDIR` answer covers this
+too.
+
+A home bind-mounted from a filesystem that cannot store POSIX ownership (NTFS,
+several NFS and SMB setups) is the sharper hazard. The owned-home check asks
+two things of the directory: it must not be world-writable, and it must belong
+to the process's effective uid — the image's user is uid 1000. Mount options
+that squash ownership to some other uid, or that give the tree world-writable
+bits, fail that check, and the launch degrades exactly as the stand-in notice
+describes. Named volumes carry their own ownership and are the safe default.
+
+The image sets no `TZ`, so timestamps in logs, session rows and exports read
+UTC. That is the stable choice for a shared server; pin `TZ` only when the
+people reading the transcripts prefer their own wall clock, and pin it at the
+image or unit level rather than changing it under a live container — a moved
+clock lands between rows already written.
 
 ## See also
 
