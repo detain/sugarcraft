@@ -218,8 +218,9 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 45 is that sum — 44 after the v1:F-1 Claude-settings skip drain joined
-     * the roster on top of the PLG-1 bundles discovery seam and the ISS-047
+     * 46 is that sum — 45 after the v1:F-1 Claude-settings skip drain and
+     * the v1:m-1 home stand-in row joined the roster on top of the PLG-1
+     * bundles discovery seam and the ISS-047
      * keybinding-collision drain — plus one row
      * of headroom. A launch that does hit
      * the cap loses nothing silently: the overflow is COUNTED and reported as
@@ -227,7 +228,7 @@ final class Bootstrap
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 45;
+    public const LAUNCH_NOTICE_LIMIT = 46;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -313,6 +314,9 @@ final class Bootstrap
         // the launch parsed — names, groups and files are counted INTO the row,
         // never per entry.
         'reportSkippedClaudeSettingsEvents' => 1,
+        // v1:m-1: one row, message-identity de-duped, whatever how many reads
+        // took the stand-in.
+        'reportHomeDirectoryStandIn' => 1,
     ];
 
     /**
@@ -907,6 +911,17 @@ final class Bootstrap
     public const CLAUDE_SETTINGS_SKIPPED_EVENTS_NOTICE_FORMAT =
         'Claude Code settings: no candy-code hook event matches %s, so %d hook group(s) across %d file(s) '
         . 'contribute no guard and were skipped; everything else in those files loaded';
+
+    /**
+     * v1:m-1: one row for a launch running on the
+     * {@see \SugarCraft\Code\Support\HomeDirectory::path()} temp stand-in.
+     * Not in the catalogue below, ON PURPOSE (the {@see STDERR_LINE_FORMAT}
+     * standing); the English constant IS the row.
+     */
+    public const HOME_STAND_IN_NOTICE_TEXT =
+        'HOME could not be established for this process, so untrusted reads run from the world-writable '
+        . 'temp-directory stand-in — export HOME to silence this (owned-home paths such as the trusted '
+        . 'config and hooks refuse while it is unset)';
 
     /**
      * The catalogue key each launch-notice text above is translated through
@@ -1975,6 +1990,10 @@ final class Bootstrap
         // v1:F-1: the CC-dialect skip record, drained where every other
         // launch fact is — after workspace() read the hook files.
         self::reportSkippedClaudeSettingsEvents();
+
+        // v1:m-1: a launch standing on the temp-directory home stand-in says
+        // so once, beside its siblings in this drain.
+        self::reportHomeDirectoryStandIn();
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
@@ -11960,6 +11979,25 @@ final class Bootstrap
                 \count($files),
             ),
         ]);
+    }
+
+    /**
+     * v1:m-1: say it out loud ONCE when this launch resolved `~` through the
+     * temp-directory stand-in
+     * ({@see \SugarCraft\Code\Support\HomeDirectory::standInUsed()}). The
+     * stand-in itself is unchanged — the loud paths that REFUSE on it
+     * (`cli.refuse.no_home`) stay exactly as they were; what was missing is
+     * that every NON-refusing reader kept working off `/tmp/.candy-code`
+     * with no signal that the home resolution had degraded. One row whatever
+     * the call count: the seam de-dupes by message identity.
+     */
+    public static function reportHomeDirectoryStandIn(): void
+    {
+        if (!HomeDirectory::standInUsed()) {
+            return;
+        }
+
+        self::warnLaunchRows([self::HOME_STAND_IN_NOTICE_TEXT]);
     }
 
     /**
