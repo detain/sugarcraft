@@ -409,4 +409,41 @@ final class ExporterTest extends TestCase
         $this->assertSame(2, $share->messageCount());
         $this->assertStringNotContainsString('HIDDEN-STEP-NARRATION', $share->serialize());
     }
+
+    /**
+     * SEC-4 (audit 2026-10-21): `/share` publishes the transcript behind a
+     * URL — the memory audit trail already redacts, so the published body
+     * must run the same SecretRedactor. The boundary is deliberate: a share
+     * is redacted in every format, a LOCAL export keeps the raw bytes (it
+     * never leaves the machine), pinned by the polarity pair below.
+     */
+    public function testAPublishedShareRedactsSecretsWhileALocalExportKeepsThem(): void
+    {
+        $key = 'sk-ant-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        $messages = [
+            \SugarCraft\Code\Message::user('WHAT IS MY KEY'),
+            \SugarCraft\Code\Message::assistant("Your key is {$key} — keep it safe."),
+        ];
+
+        foreach ([
+            \SugarCraft\Code\Share\ShareSession::FORMAT_MARKDOWN,
+            \SugarCraft\Code\Share\ShareSession::FORMAT_JSON,
+            \SugarCraft\Code\Share\ShareSession::FORMAT_TEXT,
+            \SugarCraft\Code\Share\ShareSession::FORMAT_HTML,
+        ] as $format) {
+            $body = (new \SugarCraft\Code\Share\ShareSession($messages, $format))->serialize();
+            $this->assertStringNotContainsString($key, $body, $format);
+            $this->assertStringContainsString(\SugarCraft\Code\Memory\SecretRedactor::MARKER, $body, $format);
+            $this->assertStringContainsString('WHAT IS MY KEY', $body, $format);
+        }
+
+        // The redactor changes nothing that is not secret-shaped.
+        $benign = (new \SugarCraft\Code\Share\ShareSession([
+            \SugarCraft\Code\Message::assistant('a plain honest sentence'),
+        ]))->serialize();
+        $this->assertStringNotContainsString(\SugarCraft\Code\Memory\SecretRedactor::MARKER, $benign);
+
+        // Polarity: the local exporter stays raw — this is the publish seam.
+        $this->assertStringContainsString($key, \SugarCraft\Code\Util\Exporter::toMarkdown($messages));
+    }
 }
