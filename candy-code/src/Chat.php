@@ -6316,7 +6316,7 @@ final class Chat implements Model
         return [$toolCall, null, $context, null, $hookResult->additionalContext];
     }
 
-        /** Delegates to {@see PermissionPrompt::grantCovers()} (W5-A); forensic prose lives there. */
+    /** Delegates to {@see PermissionPrompt::grantCovers()} (W5-A); forensic prose lives there. */
     private static function grantCovers(
         array $grants,
         ToolCall $toolCall,
@@ -6326,7 +6326,7 @@ final class Chat implements Model
         return PermissionPrompt::grantCovers($grants, $toolCall, $ask, $projectRoot);
     }
 
-        /** Delegates to {@see PermissionPrompt::rememberNative()} (W5-A); forensic prose lives there. */
+    /** Delegates to {@see PermissionPrompt::rememberNative()} (W5-A); forensic prose lives there. */
     private static function rememberNative(
         array $grants,
         ToolCall $toolCall,

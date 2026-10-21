@@ -242,7 +242,7 @@ final class PermissionPrompt
         return Lang::t('chat.permission.always_asks.unattributed');
     }
 
-/**
+    /**
      * Append $patterns to the user's `permissionRules` in `config.json`,
      * through the workspace's {@see SettingsWriter}
      * — the settings editor's own write door, so the schema's validation of
@@ -305,7 +305,7 @@ final class PermissionPrompt
         }
     }
 
-/**
+    /**
      * Whether a grant in $grants answers this ask on Chat's own tool path —
      * the SAME memo, keys and scopes the engine path uses
      * ({@see SessionPermissionMemo}), so `a`
@@ -331,7 +331,7 @@ final class PermissionPrompt
                 ->allows($toolCall->name, $toolCall->arguments, $projectRoot);
     }
 
-/**
+    /**
      * $grants with "always" remembered for $toolCall on Chat's own tool path,
      * or $grants unchanged when the ask may not be remembered. A tool whose
      * subject argument is known ({@see PermissionRule::SUBJECT_ARGUMENTS})
