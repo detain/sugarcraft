@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Agents\Live;
 
 use SugarCraft\Code\Events\SubAgentActivity;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Style\Style;
 
 /**
  * The parent's live view of every delegated run this session has heard
@@ -35,6 +37,15 @@ final class AgentLiveRegistry
     /** The spinner's frames, in order (the braille "dots" cycle). */
     public const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
+    /**
+     * a11y-F5: the same spinner for a terminal negotiated down to the ASCII
+     * colour profile — braille dots are not a glyph such a terminal is on-
+     * record to draw, so there the frame cycle is the classic four-stroke
+     * `|/-\`. Readers take the set through {@see spinnerGlyph()}, never by
+     * indexing {@see SPINNER} directly.
+     */
+    public const SPINNER_ASCII = ['|', '/', '-', '\\'];
+
     /** Milliseconds per spinner frame: about 12 frames a second at most. */
     public const SPINNER_FRAME_MS = 80;
 
@@ -43,8 +54,9 @@ final class AgentLiveRegistry
      * answers one static frame and the spinner glyph never advances, while
      * elapsed-seconds movement still repaints. Gated HERE rather than at the
      * readers because every surface that draws the spinner (the transcript
-     * renderer, the activity line) indexes {@see SPINNER} by
-     * {@see spinnerFrame()} — zeroing the index makes them all static at once.
+     * renderer, the activity line) takes its glyph from {@see spinnerGlyph()}
+     * over {@see spinnerFrame()} — zeroing the index makes them all static at
+     * once.
      *
      * THE LAUNCH WIRE-UP LANDED (rv1014 FX1): `Bootstrap::chat()` reads
      * `CANDY_CODE_REDUCED_MOTION` (values `1`, `true`, `yes`, like this app's
@@ -215,6 +227,38 @@ final class AgentLiveRegistry
     public function spinnerFrame(): int
     {
         return $this->spinnerFrame;
+    }
+
+    /**
+     * The frame set the ambient color profile can draw: the ASCII cycle under
+     * {@see ColorProfile::Ascii}, the braille dots otherwise (a11y-F5).
+     *
+     * This is NOT an environment sniff inside the registry — the profile is
+     * latched process-wide at launch by `Tui\Renderer::applyAmbientColorProfile()`
+     * and is null on pipes and in golden runs, so the default answer stays
+     * braille and existing capture pins are byte-identical. A test drives both
+     * profiles by calling `Style::setDefaultProfile()` directly, the same
+     * contract that keeps the reduced-motion env read out of this class.
+     *
+     * @return list<string>
+     */
+    public static function spinnerFrames(): array
+    {
+        return Style::getDefaultProfile() === ColorProfile::Ascii ? self::SPINNER_ASCII : self::SPINNER;
+    }
+
+    /**
+     * The glyph for spinner index $frame in the active frame set. The stored
+     * index is a mod over {@see SPINNER}; the ASCII set is shorter and wraps
+     * on its own count, so every reader must take the glyph through here
+     * rather than index a const directly.
+     */
+    public static function spinnerGlyph(int $frame): string
+    {
+        $frames = self::spinnerFrames();
+        $count = count($frames);
+
+        return $frames[((($frame % $count) + $count) % $count)];
     }
 
     /**

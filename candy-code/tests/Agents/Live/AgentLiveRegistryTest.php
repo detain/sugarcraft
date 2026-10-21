@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Agents\Live;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Style\Style;
 use SugarCraft\Code\Agents\Live\ActivityItem;
 use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Code\Agents\Live\AgentLiveState;
@@ -20,6 +22,49 @@ use SugarCraft\Code\Events\SubAgentActivity;
  */
 final class AgentLiveRegistryTest extends TestCase
 {
+    /**
+     * a11y-F5: under the ambient Ascii colour profile the spinner cycle is
+     * the four-stroke `|/-\`, and the stored (mod 10) frame index wraps on
+     * the ASCII set's own count. A null ambient (pipes, goldens) and any
+     * richer profile keep the braille dots byte-identically.
+     */
+    public function testTheAsciiProfileSpinsTheAsciiCycleAndTheOthersStayBraille(): void
+    {
+        $previous = Style::getDefaultProfile();
+
+        try {
+            Style::setDefaultProfile(ColorProfile::Ascii);
+            self::assertSame(AgentLiveRegistry::SPINNER_ASCII, AgentLiveRegistry::spinnerFrames());
+            self::assertSame(['|', '/', '-', '\\'], array_map(
+                static fn (int $f): string => AgentLiveRegistry::spinnerGlyph($f),
+                [0, 1, 2, 3],
+            ));
+            self::assertSame('|', AgentLiveRegistry::spinnerGlyph(4), 'the cycle wraps on the ASCII count');
+            self::assertSame('/', AgentLiveRegistry::spinnerGlyph(5), 'the mod-10 stored index maps down safely');
+
+            Style::setDefaultProfile(ColorProfile::Ansi256);
+            self::assertSame(AgentLiveRegistry::SPINNER, AgentLiveRegistry::spinnerFrames());
+            self::assertSame('⠋', AgentLiveRegistry::spinnerGlyph(0));
+
+            Style::setDefaultProfile(null);
+            self::assertSame('⠙', AgentLiveRegistry::spinnerGlyph(1), 'the default ambient is the braille cycle — goldens unchanged');
+        } finally {
+            Style::setDefaultProfile($previous);
+        }
+    }
+
+    /**
+     * The glyph route is the ONLY allowed reader shape (a11y-F5): indexing the
+     * const directly would skip the profile gate. Fail-closed census over the
+     * transcript renderer.
+     */
+    public function testTheTranscriptRendererNeverIndexesTheSpinnerConstDirectly(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__, 3) . '/src/Renderer.php');
+
+        self::assertSame(0, substr_count($source, 'AgentLiveRegistry::SPINNER['), 'every spinner reader must go through spinnerGlyph()');
+    }
+
     public function testFramesFoldIntoOneStatePerRunUnderItsTaskCall(): void
     {
         $registry = AgentLiveRegistry::new(static fn (): float => 50.0);
