@@ -593,8 +593,18 @@ if ($tuiErrorLog !== null) {
 // never entered. Headless paths (`--help`, `--version`, `-p`, every
 // subcommand) exit long before this line and stay byte-silent, as pinned.
 $terminalWasRun = false;
-register_shutdown_function(static function () use (&$terminalWasRun): void {
+// 1021 NEW-1: AgentWorkerPool fork children inherit this closure with the
+// by-ref flag already armed and exit() through it on every completed stage
+// (src/Agents/AgentWorkerPool.php's child tail), so without a pid check each
+// child shutdown fires the DEC-off bytes and a false "terminal restored" line
+// onto the parent's live tty mid-session. The guard belongs to the pid that
+// installed it; a forked child must stay byte-silent.
+$installPid = getmypid();
+register_shutdown_function(static function () use (&$terminalWasRun, $installPid): void {
     if (!$terminalWasRun) {
+        return;
+    }
+    if (getmypid() !== $installPid) {
         return;
     }
     // \r\n explicitly: a fatal mid-run leaves the terminal raw, where a bare
