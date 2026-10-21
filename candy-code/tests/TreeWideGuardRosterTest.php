@@ -597,6 +597,9 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/BootstrapTrustGateSelfGrantTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)', 'scandir($probe)'],
         // tearDown() unlinks and rmdir's the sys_get_temp_dir() poison catalogue setUp() made (E453 pin).
         'Cli/HelpTest.php' => ['glob($this->poisonDir.\'/*.php\')'],
+        // w1e: tearDown() empties the sys_get_temp_dir() fake HOME the test mkdir'd
+        // (0700, nih_be_exit_* prefix) before its own rmdir.
+        'Cli/NonInteractiveBackendErrorExitTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
         // purgeTempTree() in tearDown() empties the sys_get_temp_dir() scratch tree
         // setUp() made (session.db, repo, fake HOME and all) before the rmdir.
         'Cli/NonInteractiveSessionPersistenceTest.php' => ['scandir($path)'],
@@ -659,6 +662,9 @@ final class TreeWideGuardRosterTest extends TestCase
             'scandir($configDir)',
             'scandir($dir)',
         ],
+        // w1e (v1-m-2): the sidecar-retention asserts glob the rotated `$buffer.log*`
+        // files their own test wrote next to a tempnam() buffer — never the package.
+        'Sessions/BackgroundSessionRunnerTest.php' => ['glob($sidecar.\'*\')'],
         'Sessions/BackgroundSupervisorReapTest.php' => ['glob($this->tempDir.\'/*\')'],
         // the supervisor test tears down the temp root its fixtures live in.
         'Sessions/BackgroundSupervisorTest.php' => ['scandir($tempRoot)'],

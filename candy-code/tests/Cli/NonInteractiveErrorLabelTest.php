@@ -10,6 +10,7 @@ use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
@@ -31,22 +32,27 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 final class NonInteractiveErrorLabelTest extends TestCase
 {
     use HomeSandboxTrait;
+    use BackendSelectionEnvSandboxTrait;
 
     /**
-     * Everything that could make `CANDY_CODE_PROVIDER=openai` actually
-     * constructable: the command tiers that would answer for it, and the
-     * three env vars the OpenAI branch of ProviderFactory reads. The twin
-     * hammer in NonInteractiveProviderFailureTest unsets a wider roster
-     * through a const this guard would accuse if this file minted a second
-     * spelling, so this list is the minimal hermetic set for the one arm
-     * that needs it, written under a unique name.
+     * The three env vars the OpenAI branch of ProviderFactory reads, which is
+     * everything that could make `CANDY_CODE_PROVIDER=openai` actually
+     * constructable — an ambient key here would let the unusable-provider arm
+     * answer and silently un-pin the exit code it exists to hold.
+     *
+     * The backend-selection chain (`CANDY_CODE_PROVIDER`, `CANDY_CODE_MODEL`,
+     * the two `*_BACKEND_CMD*` tiers) is NOT listed here and must never be: it
+     * is sandboxed by {@see BackendSelectionEnvSandboxTrait}, whose whole
+     * purpose is that a tenth hand-written copy of that list is the same defect
+     * one variable later. Before the trait was used here, `CANDY_CODE_PROVIDER`
+     * sat OUTSIDE the hand-written roster while an arm still exported it, so
+     * every later spawn in the same process inherited `openai` — which is what
+     * made {@see SuiteChildStdinIsolationTest}'s control child exit 1/2 in
+     * whatever window order put the two classes next to each other.
      *
      * @var list<string>
      */
     private const LABEL_ENV_KEYS = [
-        'CANDY_CODE_BACKEND_CMD',
-        'CANDY_CODE_BACKEND_CMD_STREAM',
-        'CANDY_CODE_MODEL',
         'OPENAI_API_KEY',
         'OPENAI_ORG_ID',
         'OPENAI_BASE_URL',
@@ -67,6 +73,11 @@ final class NonInteractiveErrorLabelTest extends TestCase
 
         $this->useHomeSandbox($this->tempDir . '/home');
 
+        // The selection chain itself (PROVIDER first among it). Snapshot is
+        // idempotent inside one test, so the arm that exports
+        // `CANDY_CODE_PROVIDER=openai` gets a clean restore either way.
+        $this->clearBackendSelectionEnv();
+
         foreach (self::LABEL_ENV_KEYS as $key) {
             $this->savedLabelEnv[$key] = getenv($key);
             putenv($key);
@@ -83,6 +94,7 @@ final class NonInteractiveErrorLabelTest extends TestCase
             }
         }
         $this->savedLabelEnv = [];
+        $this->restoreBackendSelectionEnv();
         $this->restoreHomeSandbox();
 
         $this->removeTree($this->tempDir);
