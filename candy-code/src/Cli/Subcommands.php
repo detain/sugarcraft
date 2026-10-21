@@ -1181,7 +1181,8 @@ final class Subcommands
     /**
      * `session show <target>`: the session's row, then its transcript as
      * Markdown ({@see Exporter::toMarkdown()}, the
-     * `/export` formatter, so hidden rows stay hidden). Under
+     * markdown formatter behind both `/share` and `/export`, so hidden rows
+     * stay hidden). Under
      * `--output-format json` the document is `{"session": <row>, "messages":
      * <Exporter::toJson() rows>}`.
      */

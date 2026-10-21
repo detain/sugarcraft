@@ -104,7 +104,9 @@ Claude Code, OpenCode and OpenClaw.
 | [`docs/PROMPT_ENGINEERING.md`](docs/PROMPT_ENGINEERING.md) | How the system prompt and the turn-context row are assembled, and why |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | What runs where: the binary, the bootstrap, `Chat`, the engine, sessions |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Exit codes, missing skills/tools/hooks, provider problems, where diagnostics go |
-| [`docs/GLOSSARY.md`](docs/GLOSSARY.md) | Terminal acronyms and project vocabulary, glossed where they first appear |
+| [`docs/GLOSSARY.md`](docs/GLOSSARY.md) | Terminal acronyms and project vocabulary, glossed where they first appear, and the identifier labels you meet in code comments |
+| [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Working on this package: linked vs published vendor modes, the sharded suite, the drift guards, and the docs cadence |
+| [`docs/ADDING_A_PROVIDER.md`](docs/ADDING_A_PROVIDER.md) | The provider contract end to end: capabilities, the response fields the engine consumes, registration, and the behavior laws |
 | [`candy-code-web`](https://github.com/sugarcraft/candy-code-web) | The browser UI that `candy-code serve` hosts |
 
 ## Install
@@ -187,7 +189,7 @@ for real work down to the quickest test:
    `$CANDY_CODE_PROVIDER` plus that provider's own credential — with zero
    third-party involvement. Option 3 persists the same choice so you stop
    exporting it.
-2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in the package's own `.candy-code/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. `/model` opens the same picker and `/model dev-sglang` skips it; `/model dev-sglang <model id>` switches to that model on it as well. **Switch theme** works the same way for color themes.
+2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in the package's own `.candy-code/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. `/model` opens the same picker and `/model dev-sglang` skips it; `/model dev-sglang <model id>` switches to that model on it as well. **Switch theme** works the same way for colour themes.
 3. **Persisted across restarts:** either of the above choices — the palette's, or `/model`'s, which goes through the same code path — is written to `~/.candy-code/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/candy-code` (with no env vars set at all) uses it automatically. `$CANDY_CODE_PROVIDER`/`$CANDY_CODE_BACKEND_CMD`/`$CANDY_CODE_BACKEND_CMD_STREAM` still take priority over the persisted choice when set, for scripting/CI overrides. The **model** persists too, separately and per provider: `"models": {"dev-sglang": "<model id>"}` in `config.json` (or your `settings.json`) is the model that provider runs whenever it is selected — at launch and after a switch — unless `--model` or `$CANDY_CODE_MODEL` names one; keyed by provider because a model id means nothing to any other provider. `/model <provider> <model>` writes that entry for you (through the settings view's writer, carrying the other providers' entries along) and switches to it at once — a session started with `--model` or `$CANDY_CODE_MODEL` still runs the model you just picked, and keeps outranking the saved entry at the next launch. There is no top-level `model` key.
 
 For a zero-key look at a real model there is one shortcut: `CANDY_CODE_PROVIDER=dev-sglang ./bin/candy-code`
@@ -1865,6 +1867,14 @@ retries on `1` would otherwise retry it forever. It also covers a subcommand
 handed a missing or unknown operand (`candy-code session`, `candy-code mcp
 bogus`, `candy-code completion tcsh`).
 
+A stop by signal is a fourth outcome outside this table, and the TUI is the
+surface that reports it: when SIGINT, SIGTERM or SIGHUP ends the loop, the
+process exits `128+N` — `130`, `143` and `129` respectively — after the full
+teardown (terminal recovery, session persistence) that a cooperative quit
+runs, so the code tells a supervisor that *it* ended the run, not that the
+run failed. A loop the program stopped itself — `/exit`, `q`, a model-raised
+interrupt — remains a clean `0`.
+
 `--output-format json` applies to `doctor`, `models`, every `session` verb,
 `mcp list` and `mcp import`, producing the same `{"result": …}` envelope the
 one-shot path does, and
@@ -1930,7 +1940,9 @@ exits `1`, so the failure is visible to a script that never reads the text. A
 second `-p`/`--prompt` is no longer taken silently either: the last value still
 wins, and one line arrives on stderr naming what happened.
 
-Three keys are **conditional**: `refusals`, `session_id` and `usage`.
+Six keys are **conditional**: `refusals`, `session_id` and `usage`, and the
+stop trio `steps_truncated`, `length_stopped` and `loop_guard_stopped_by`
+named below.
 A turn that
 blocked a tool call — a permission ASK that nothing could answer, an explicit
 `n` at the prompt, a hook that denied the call outright — adds
@@ -1975,13 +1987,26 @@ one line per refusal, naming the tool and quoting the reason the model was
 given — which opens with `Hook denied:`, `Permission denied:` or `Permission
 required:` depending on whether a hook objected, you answered no, or nothing
 was attached to ask. The announcement happens on the one-shot path itself, so
-it appears on **both** formats: stdout under `text` stays the answer and
-nothing else, and under `json` it stays exactly one object, so a shell
+it appears on **both** formats: stdout under `text` stays the answer and never
+a refusal line (the stop trailer below is part of the answer itself), and
+under `json` it stays exactly one object, so a shell
 pipeline and `jq` are both unaffected. The interactive TUI has never had this
 gap — it draws a refused call struck through — but a **background session**
 still does: its runner calls the backend with a token callback and no event
 callback, so nothing downstream ever sees the refusal to announce it. That
 gap is known and recorded.
+
+**A turn the engine stopped early says so.** When the step ceiling, the
+provider's output limit, or the repeat-call loop guard ended the turn, a
+`--output-format text` run appends one plain, ANSI-free trailer line per stop
+condition after the answer, and a `json` run (or a stream-json run's final
+line) gains the matching conditional keys: `steps_truncated: true`,
+`length_stopped: true`, or `loop_guard_stopped_by: "<tool>"` — present only
+when that stop happened, absent rather than false, so `jq` consumers see the
+same presence discipline as the other optional keys. A clean turn still ends
+at the answer alone. The exit code never changes for a stopped-but-answered
+run: `0` still means an answer arrived, and these markers mean it is a
+partial one.
 
 Three of the seven are **not** `NonInteractive::emitErrorDocument()`'s, and
 that is the thing to know if you are reading the source to find where a type

@@ -54,7 +54,7 @@ The envelope itself is `{"schema":1,"result":...}` on success plus optional
 "error":{"type":...,"message":...}}` on failure — the same contract as `candy-code -p
 --output-format json` locally. A document without `"schema"` is schema 0.
 
-A turn the engine stopped early says so (D1-fix, 2026-10-21): under `--output-format
+A turn the engine stopped early says so: under `--output-format
 json` the document gains `steps_truncated: true`, `length_stopped: true`, or
 `loop_guard_stopped_by: "<tool>"` — each present only when it happened, absent (not
 false) otherwise — and a `--output-format text` run appends one plain, ANSI-free

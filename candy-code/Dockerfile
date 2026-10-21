@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# DST-2 — application image for `candy-code serve`.
+# Application image for `candy-code serve`.
 #
 # This image builds from the PUBLISHED package stream (composer's dev-master
 # resolution on Packagist), not from the monorepo working tree: the build never
@@ -90,7 +90,10 @@ EXPOSE 7420
 # /api/health is the ONE public probe (GET/HEAD, answers {ok, protocol} with
 # no token) — the same endpoint `serve url` itself answers against. It probes
 # the default port; if you re-port the server, redefine the HEALTHCHECK in a
-# derived image rather than trusting this one.
+# derived image rather than trusting this one. There is no PORT environment
+# knob — the port moves only via the `--port` argument you pass after the
+# image name, so re-porting means redefining both the CMD arguments and this
+# probe together.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD curl -fsS -o /dev/null http://127.0.0.1:7420/api/health || exit 1
 

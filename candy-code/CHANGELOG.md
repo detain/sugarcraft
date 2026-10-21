@@ -37,6 +37,44 @@ the plan demanded one.
 See `docs/TROUBLESHOOTING.md` ("Upgrading from sugar-crush") for user-facing <!-- @rename-keep -->
 symptoms, and `docs/ENVIRONMENT.md` ("Deprecated aliases") for the env fold.
 
+## Security and one-shot hardening (2026-10-21)
+
+A remediation wave across the permission layer, the network tools and the
+one-shot `-p` path. In user-visible terms:
+
+- **Refusals that reach too far.** The permission layer now denies reading
+  `/proc/*/environ` and git's `--ext-diff` execution path; a generic
+  `*_KEY`/`*_LICENSE` scrubber strips secret-shaped names from child
+  environments; `WebFetch` re-consults the user's rules on every redirect
+  hop, so a rule that asks on the first URL refuses on the tenth; the
+  `/share` body runs through the secret redactor before it is published;
+  and `WebSearch` ships no default endpoint — it fails loudly until you
+  configure one.
+- **`/export`.** A new command writes the session's raw bytes, unredacted —
+  markdown by default, other formats via the format argument, and `--path`
+  to write outside the project directory.
+- **One-shot hardening.** A delegated backend's failure now costs the caller
+  a real exit code instead of printing an error-shaped success; every stop
+  condition (step cap, output limit, loop guard) appends a trailer line in
+  text and typed keys in JSON without changing the exit code; a repeated
+  `-p` warns rather than silently re-taking the flag; every labelled stderr
+  line from the launcher composes its `candy-code` prefix exactly once, so
+  two never stack; `--output-format text` strips terminal control bytes so a
+  model's own text can no longer
+  restyle or scroll the caller's terminal; and a foreign `~/.claude`
+  settings file with hook events is skipped with a notice instead of
+  derailing the launch.
+- **Dock.** An untouched dock side now collapses continuously instead of
+  amputating the chat border.
+- **Signal exits.** A TUI stopped by `SIGINT`, `SIGTERM` or `SIGHUP` reports
+  the conventional 128+N code (130, 143, 129); a cooperative quit still
+  exits 0.
+- **Docs that count.** Tool, provider, keybinding and doctor-check counts
+  scattered across the docs were re-derived from the live registry and
+  corrected; the settings-help surface migrated all 172 of its strings into
+  the language catalog so they translate like the rest of the UI; and the
+  keybinding table was reconciled against the registry it documents.
+
 ## Fixed (2026-10-21 plan_comparison D1)
 
 The one-shot `-p` path discarded every stop condition the engine had folded
