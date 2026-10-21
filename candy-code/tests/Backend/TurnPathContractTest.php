@@ -33,9 +33,9 @@
  *                            ToolStarted/ToolFinished stories on the wire vs
  *                            the host inbox (tests 1–3).
  *  truncation flags ........ `lengthStopped`/`stepsTruncated` fold identically
- *                            (shared `runTurn`) — but see the headline
- *                            DIVERGENCE pinned by test 9: only the host
- *                            SURFACE announces them.
+ *                            (shared `runTurn`) and BOTH surfaces announce
+ *                            them — the host as transcript notices, `-p` via
+ *                            the D1-fix stop trailers (test 9).
  *  refusal mapping ......... one `ToolRefusal::fromEvent` choke feeds the `-p`
  *                            refusal rows; the host reads the same structural
  *                            stamp off the same event objects (test 6).
@@ -328,21 +328,21 @@ final class TurnPathContractTest extends TestCase
     // ── truncation-flag consumption ──────────────────────────────────────
 
     /**
-     * ⚠ HEADLINE DIVERGENCE PINNED AT CURRENT BEHAVIOUR (reported to the
-     * orchestrator as a finding for a fix lane — NOT fixed here, tests-only
-     * lane): the engine folds `stepsTruncated`/`lengthStopped` IDENTICALLY on
-     * both paths (shared runTurn), but only the TUI SURFACE announces them —
-     * `Chat` appends `stepsTruncatedNotice()`/`outputLengthStoppedNotice()`
-     * to the transcript, while `-p` exits 0 with an unmarked answer and no
-     * stderr line (its refusal rows cover budget + tool denials only). A
-     * step-capped unattended CI run therefore silently truncates.
-     *
-     * This test asserts exactly that world: flag parity at the engine level,
-     * plus the headless document's silence. If a fix lane adds the -p
-     * announcement, the silence arms flip red and force this contract to be
-     * re-blessed with the fix — which is the point of the pin.
+     * DIVERGENCE RESOLVED (D1-fix, plan_comparison audit 2026-10-21): the
+     * engine folds `stepsTruncated`/`lengthStopped` IDENTICALLY on both paths
+     * (shared runTurn), and now BOTH surfaces announce them — the TUI appends
+     * `stepsTruncatedNotice()`/`outputLengthStoppedNotice()` to the
+     * transcript, and `-p` carries the same facts as typed keys in its json
+     * document (`steps_truncated`/`length_stopped`/`loop_guard_stopped_by`,
+     * absent-until-set) and as plain-text trailer lines under `text`. When
+     * this suite first shipped, `-p` was silent: the pin below was written as
+     * a silence pin on purpose, and its own docblock predicted that a fix
+     * lane would arrive and force this contract to be re-blessed with the
+     * fix. D1-fix is that lane; this is that re-blessing, per the terms the
+     * dated docblock set. The exit status stays OK by ruling — a stopped but
+     * answered run is not a failure — the loudness is the fix, not the code.
      */
-    public function testAStepTruncatedTurnFoldsTheSameFlagButOnlyTheHostSurfaceAnnouncesIt(): void
+    public function testAStepTruncatedTurnFoldsTheSameFlagAndBothSurfacesAnnounceIt(): void
     {
         [$hostEngine] = $this->contractEngine('loop', maxSteps: 1);
         $hostMsg = $this->hostTurn($hostEngine)[0];
@@ -354,10 +354,11 @@ final class TurnPathContractTest extends TestCase
         $this->assertCount(2, $headlessProvider->requests, 'the step ceiling lets the looped step run, then the engine pays one closing call before stopping (the host recorder is fork-blind)');
 
         [$code, $doc] = $this->driveHeadlessJson($headlessEngine);
-        $this->assertSame(NonInteractive::EXIT_OK, $code, 'CURRENT behaviour: the truncated -p run still exits 0');
-        $this->assertFalse(isset($doc['refusals']), 'CURRENT behaviour: -p surfaces no stop-reason row for a step cap');
-        foreach (array_keys($doc) as $key) {
-            $this->assertFalse(str_contains(strtolower((string) $key), 'trunc'), 'no truncation key exists in the -p document');
+        $this->assertSame(NonInteractive::EXIT_OK, $code, 'a stopped-but-answered -p run is not a failure: the answer is complete, the STOP is the caveat');
+        $this->assertFalse(isset($doc['refusals']), 'a step cap is not a refusal — the refusals row stays for its own facts');
+        $this->assertSame(true, $doc['steps_truncated'] ?? null, 'LOUD contract (post D1-fix): the -p json document carries the folded stop fact');
+        foreach (['length_stopped', 'loop_guard_stopped_by'] as $untouched) {
+            $this->assertFalse(isset($doc[$untouched]), "only the flag the script earned lands: {$untouched} stays absent-until-set");
         }
     }
 
