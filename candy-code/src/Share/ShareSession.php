@@ -111,22 +111,38 @@ final class ShareSession
      * reached the chat, while the memory audit trail already redacts. The
      * same {@see SecretRedactor} runs over the finished body here, at the
      * single choke every format passes through, so publishing can no longer
-     * leak what refusing to share your own files already protects. Local
-     * export paths keep the raw body — this is the network-publish boundary.
+     * leak what refusing to share your own files already protects. This
+     * covers EVERY serialize() consumer, /share's local files included —
+     * `/export` ({@see \SugarCraft\Code\Commands\ExportCommand}) is the verb
+     * that keeps the raw body, reading {@see serializeRaw()} directly.
      *
      * @return string The serialized, secret-redacted session content.
      */
     public function serialize(): string
     {
+        return SecretRedactor::new()->redact($this->serializeRaw());
+    }
+
+    /**
+     * The serialized body WITHOUT secret redaction — the local-export half
+     * of the SEC-4 ruling ("local export keeps raw bytes").
+     *
+     * The row filter is the constructor's, the format render is
+     * {@see serialize()}'s; the only difference is the missing redactor pass.
+     * Callers must be a file the user owns, never a wire, because a raw body
+     * can carry whatever API key ever reached the chat.
+     *
+     * @return string The serialized session content, secrets intact.
+     */
+    public function serializeRaw(): string
+    {
         // Use wire format (toWire()) for export - handles the concrete Message type
-        $body = match ($this->format) {
+        return match ($this->format) {
             self::FORMAT_JSON => Exporter::toJson($this->messages),
             self::FORMAT_HTML => Exporter::toHtml($this->messages),
             self::FORMAT_TEXT => Exporter::toText($this->messages),
             default => Exporter::toMarkdown($this->messages),
         };
-
-        return SecretRedactor::new()->redact($body);
     }
 
     /**

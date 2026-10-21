@@ -81,6 +81,8 @@ enum PaletteAction: string
     case GrindStatus = 'grind_status';
     case HandOffSession = 'hand_off_session';
     case ShowRenderMode = 'show_render_mode';
+    // W4-B: the raw local export, `/export` — dispatched generically.
+    case ExportTranscript = 'export_transcript';
 
     /**
      * This action's registry row. Throws rather than returning null: an

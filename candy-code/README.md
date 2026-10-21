@@ -566,9 +566,9 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 <!-- commands:roster:begin -->
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/btw` `/budget` `/clear`
 `/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff` `/editor`
-`/effort` `/exit` (`/quit`) `/fork` `/generate` `/goal` `/grind` `/handoff`
-`/help` `/hooks` `/init` `/keys` `/layout` `/loop` `/mcp` `/memory` `/model`
-`/new` `/newrule` `/notices` `/pane` `/permissions` `/play` `/pruning`
+`/effort` `/exit` (`/quit`) `/export` `/fork` `/generate` `/goal` `/grind`
+`/handoff` `/help` `/hooks` `/init` `/keys` `/layout` `/loop` `/mcp` `/memory`
+`/model` `/new` `/newrule` `/notices` `/pane` `/permissions` `/play` `/pruning`
 `/recompress` `/redo` `/rename` `/rendermode` `/review` `/rewind` `/rules`
 `/schedules` (`/schedule`) `/security-review` `/sendto` `/sessions`
 `/settings` (`/config`) `/share` `/skills` `/status` `/sweep` `/theme` `/undo`
@@ -585,7 +585,7 @@ By task (every command, with its arguments, is in
 
 | Task | Commands |
 |---|---|
-| Sessions | `/new [dir]`, `/sessions [query]`, `/rename [name\|--auto]`, `/branch`, `/handoff [focus]`, `/fork <prompt>`, `/bg <task>`, `/share [md\|html\|json] [path]`, `/clear` |
+| Sessions | `/new [dir]`, `/sessions [query]`, `/rename [name\|--auto]`, `/branch`, `/handoff [focus]`, `/fork <prompt>`, `/bg <task>`, `/share [md\|html\|json] [path]`, `/export [md\|html\|json\|text] [path]`, `/clear` |
 | Checkpoints | `/undo`, `/redo`, `/rewind [n] [--chat\|--files\|--both]`, `/diff [n]` |
 | Context | `/context`, `/compact [--self] [focus]`, `/sweep [n]`, `/pruning [mode]`, `/compress [focus]`, `/decompress [bN]`, `/recompress [bN]` |
 | Working | `/goal <condition>`, `/grind <condition>`, `/btw <question>`, `/init [focus]`, `/editor [text]`, `/websearch <query>`, `/workflow …` |
