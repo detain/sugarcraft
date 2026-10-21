@@ -65,6 +65,7 @@ use SugarCraft\Code\Skills\SkillManager;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Support\ContainedPath;
+use SugarCraft\Code\Support\EnvBool;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\ProcessContainment;
@@ -1596,12 +1597,13 @@ final class Bootstrap
 
         // rv1014 FX1 (carries rv-a11y-4): the reduced-motion switch lands on the
         // same launch funnel, one line, before any frame can index the spinner.
-        // Truthy vocabulary `1`/`true`/`yes` case-insensitively, like the app's
-        // other truthy env reads; unset or any other word leaves the spinner
+        // Truthy vocabulary is the narrow house law ({@see EnvBool::isTrue()} —
+        // `1`/`true`/`yes`, case-insensitive), the same one the app's other
+        // opt-in env reads speak; unset or any other word leaves the spinner
         // animating. Gated inside AgentLiveRegistry so every drawing surface
         // goes static at once (see {@see \SugarCraft\Code\Agents\Live\AgentLiveRegistry::$staticSpinner}).
         \SugarCraft\Code\Agents\Live\AgentLiveRegistry::setStaticSpinner(
-            \in_array(strtolower((string) getenv('CANDY_CODE_REDUCED_MOTION')), ['1', 'true', 'yes'], true),
+            EnvBool::isTrue(getenv('CANDY_CODE_REDUCED_MOTION')),
         );
 
         // The session this window runs in, opened on the workspace's ONE store:
