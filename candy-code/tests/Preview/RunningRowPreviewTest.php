@@ -150,6 +150,6 @@ final class RunningRowPreviewTest extends TestCase
         $method->setAccessible(true);
 
         /** @var string */
-        return $method->invoke(null, $msg, Theme::default(), [], $width, null, $images, $mosaic, $imageRows);
+        return $method->invoke(null, $msg, Theme::default(), Renderer::publishedFrame(), [], $width, null, $images, $mosaic, $imageRows);
     }
 }

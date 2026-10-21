@@ -95,7 +95,7 @@ final class PaletteCaretHonoursHandoffTest extends TestCase
         }
 
         Renderer::setPaletteAbandoned($shellHoldsKeys);
-        $overlay = (new ReflectionMethod(Renderer::class, 'renderPalette'))->invoke(null, $chat, $chat->theme());
+        $overlay = (new ReflectionMethod(Renderer::class, 'renderPalette'))->invoke(null, $chat, $chat->theme(), Renderer::publishedFrame());
 
         self::assertIsString($overlay);
         self::assertNotSame('', $overlay, 'the fixture must reach the builder with an open palette');

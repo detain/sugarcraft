@@ -1626,7 +1626,8 @@ final class Renderer
         // are cleared with them but kept a SEPARATE registry - see
         // RenderFrame::$toolRowHeads for why the layout question and the click
         // question are answered from two registries rather than one.
-        self::publishedFrame()->resetRegistries($chat->latestThoughtKey());
+        $published = self::publishedFrame();
+        $published->resetRegistries($chat->latestThoughtKey());
         // One number, named once. Every producer that writes into $body below
         // is held to it, and fitToPane() is the backstop for the ones whose
         // own layout rules say otherwise (code blocks, tables, CJK runs).
@@ -1650,7 +1651,7 @@ final class Renderer
         // renderer, so tool rows expand, thoughts fold and diffs are gutted
         // exactly as in the parent's. The parent's in-flight extras below (its
         // live thought, its streaming reply) are the parent's, and stay out.
-        $openView = self::publishedFrame()->agentView();
+        $openView = $published->agentView();
         $body = self::renderHistory(
             $openView === null ? $chat->history : $openView['rows'],
             $theme,
@@ -1677,6 +1678,7 @@ final class Renderer
             // an Agent View's transcript belongs to the delegated run, not to
             // this launch, so it passes null and keeps the placeholder.
             $openView === null ? $chat : null,
+            $published,
         );
         if ($openView !== null) {
             if ($body === '' && $openView['attach'] === null) {
@@ -1720,7 +1722,7 @@ final class Renderer
             if (trim($liveThought) !== '') {
                 $thought = $chat->streamingText() === ''
                     ? self::renderLiveThinking($liveThought, $theme, $contentWidth, max(3, $chat->rows() - self::THINKING_LIVE_CHROME_ROWS))
-                    : self::renderThought($liveThought, $theme, $chat->expanded(), self::THOUGHT_LIVE_KEY);
+                    : self::renderThought($liveThought, $theme, $chat->expanded(), self::THOUGHT_LIVE_KEY, $published);
                 $body = $body === '' ? $thought : $body . "\n\n" . $thought;
             }
             // The reply so far, when the model has started writing one
@@ -1747,7 +1749,7 @@ final class Renderer
         }
         // Everything above wrote into $body; this is the single choke point
         // where the pane-width invariant is enforced over all of it.
-        $body = self::fitToPane($body, $contentWidth);
+        $body = self::fitToPane($body, $contentWidth, $published);
 
         $input = self::renderInput($chat, $theme);
         $rows = $chat->rows();
@@ -1767,8 +1769,8 @@ final class Renderer
         // standalone path stays consistent; SHELL_CHROME_COLS documents the
         // now-zero chrome every width derivation below still reads through.
         $shell = $body;
-        $shell = self::markToolCalls($shell);
-        $shell = self::markAgentLines($shell);
+        $shell = self::markToolCalls($shell, $published);
+        $shell = self::markAgentLines($shell, $published);
         // P-C2: a worker the view opened that keeps no transcript of its own
         // (a workflow stage, a background session) is its live output buffer,
         // in AgentOutputPane's Attach mode — the full-focus pane the dashboard
@@ -1807,7 +1809,7 @@ final class Renderer
         // The footer shows only when it is the frame's sole agent listing:
         // not while the live strip above the input paints one (pre-existing),
         // and — CL-2 FIX 2 — not while a docked Agents sidebar paints one.
-        $agentView = ($agentStrip === '' && !self::publishedFrame()->agentsPaneDocked())
+        $agentView = ($agentStrip === '' && !$published->agentsPaneDocked())
             ? self::renderAgentView($chat)
             : '';
 
@@ -1907,7 +1909,7 @@ final class Renderer
         $available = max(1, $rows - 1 - $headerRows);
         $contentLines = explode("\n", $content);
         $overflow = max(0, count($contentLines) - $available);
-        self::publishedFrame()->noteMaxScrollOffset($overflow);
+        $published->noteMaxScrollOffset($overflow);
         $sliceStart = 0;
         if ($overflow > 0) {
             $offset = max(0, min($chat->scrollOffset(), $overflow));
@@ -1981,11 +1983,11 @@ final class Renderer
         // driving it, which is what the ONE rule above forbids. This is the
         // PAINT side of the seam; the CLOSE side stays at E666's delivery
         // choke point, so the frame never fabricates an input event.
-        if ($overlay === '' && !self::publishedFrame()->paletteAbandoned()) {
-            $overlay = self::renderPalette($chat, $theme);
+        if ($overlay === '' && !$published->paletteAbandoned()) {
+            $overlay = self::renderPalette($chat, $theme, $published);
         }
         if ($overlay === '') {
-            $overlay = self::renderSessionPicker($chat, $theme);
+            $overlay = self::renderSessionPicker($chat, $theme, $published);
         }
         if ($overlay === '') {
             $overlay = self::renderDirectoryPicker($chat, $theme);
@@ -2042,8 +2044,8 @@ final class Renderer
             // an overlay earlier in the chain above takes the slot before
             // either is ever called, and the two registries are therefore
             // never both non-empty for one frame.
-            $frame = self::markPaletteItems($frame);
-            $frame = self::markSessionRows($frame);
+            $frame = self::markPaletteItems($frame, $published);
+            $frame = self::markSessionRows($frame, $published);
         }
 
         // N-P3: what a settings save did, as a toast in the top-right corner.
@@ -2084,9 +2086,9 @@ final class Renderer
             $selectable[0] += $headerRows;
             $selectable[1] += $headerRows;
         }
-        self::publishedFrame()->setSelectableRegion($selectable);
+        $published->setSelectableRegion($selectable);
         $lines = explode("\n", $frame);
-        self::publishedFrame()->setSelectableLines($lines);
+        $published->setSelectableLines($lines);
 
         $selection = Chat::textSelection();
         if ($selection !== null && ($selection->dragging || $selection->settled)) {
@@ -3580,7 +3582,7 @@ final class Renderer
      * share a single expanded-state entry, so only one of them could have
      * shown an independent result anyway.
      */
-    private static function recordToolCallZone(string $key, string $label): void
+    private static function recordToolCallZone(string $key, string $label, RenderFrame $frame): void
     {
         $zoneId = self::TOOL_CALL_ZONE_PREFIX . $key;
 
@@ -3593,7 +3595,7 @@ final class Renderer
             return;
         }
 
-        self::publishedFrame()->recordToolCallZone($key, $label);
+        $frame->recordToolCallZone($key, $label);
     }
 
     /**
@@ -3615,9 +3617,9 @@ final class Renderer
      * {@see markPaneHeader()} for what a multi-row zone does when
      * {@see render()} slices the frame to the terminal's height.
      */
-    private static function markToolCalls(string $shell): string
+    private static function markToolCalls(string $shell, RenderFrame $frame): string
     {
-        $zones = self::publishedFrame()->toolCallZones();
+        $zones = $frame->toolCallZones();
         if ($zones === []) {
             return $shell;
         }
@@ -3740,7 +3742,7 @@ final class Renderer
      * ({@see renderView()}), and the untrusted paths strip bare sentinels out
      * of model text before it ever reaches here.
      */
-    private static function fitToPane(string $block, int $width): string
+    private static function fitToPane(string $block, int $width, RenderFrame $frame): string
     {
         if ($width <= 0 || $block === '') {
             return $block;
@@ -3753,7 +3755,7 @@ final class Renderer
 
                 continue;
             }
-            if (self::isToolCallRow($row)) {
+            if (self::isToolCallRow($row, $frame)) {
                 $out[] = self::hardFit($row, $width);
 
                 continue;
@@ -3970,9 +3972,9 @@ final class Renderer
      * {@see markToolCalls()} matches, so where a zone IS recorded the row this
      * truncates and the row that gets marked are the same row.
      */
-    private static function isToolCallRow(string $row): bool
+    private static function isToolCallRow(string $row, RenderFrame $frame): bool
     {
-        foreach (self::publishedFrame()->toolRowHeads() as $head) {
+        foreach ($frame->toolRowHeads() as $head) {
             if (str_contains($row, $head)) {
                 return true;
             }
@@ -4167,7 +4169,7 @@ final class Renderer
      *                                       which no parent summary describes — keeps the
      *                                       plain empty-conversation placeholder
      */
-    private static function renderHistory(array $history, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents = null, ?\SugarCraft\Code\Context\Pruning\ContextLedger $ledger = null, ?Chat $chat = null): string
+    private static function renderHistory(array $history, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents, ?\SugarCraft\Code\Context\Pruning\ContextLedger $ledger, ?Chat $chat, RenderFrame $frame): string
     {
         // Roadmap 1.B-2: a row the model reads but the user does not - a
         // turn's step record ({@see Message::$userVisible}) - is not painted.
@@ -4264,12 +4266,12 @@ final class Renderer
             // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
             // stays raw because SugarMarkdown emits legitimate, already-processed SGR.
             if ($msg->toolResults !== []) {
-                $blocks[] = self::renderToolResults($msg, $theme, $width, $expanded, $images, $mosaic, $imageRows, $agents, $ledger);
+                $blocks[] = self::renderToolResults($msg, $theme, $width, $expanded, $images, $mosaic, $imageRows, $frame, $agents, $ledger);
 
                 continue;
             }
             if ($msg->pendingToolCallId !== null) {
-                $blocks[] = self::renderPendingToolCall($msg, $theme, $expanded, $width, $agents, $images, $mosaic, $imageRows);
+                $blocks[] = self::renderPendingToolCall($msg, $theme, $frame, $expanded, $width, $agents, $images, $mosaic, $imageRows);
 
                 continue;
             }
@@ -4280,8 +4282,8 @@ final class Renderer
                     // Flag-driven (withError at the producer), never text-sniffed:
                     // an assistant reply that merely discusses errors is not one.
                     $msg->error => self::renderErrorTurn($msg, $theme, $md, $width, $errorLabel, $expanded),
-                    $msg->uiOnly => self::renderAssistantTurn($msg, $theme, $md, $width, $localLabel, $expanded),
-                    default => self::renderAssistantTurn($msg, $theme, $md, $width, $condensed ? $condensedAssistantLabel : $assistantLabel, $expanded),
+                    $msg->uiOnly => self::renderAssistantTurn($msg, $theme, $md, $width, $localLabel, $expanded, $frame),
+                    default => self::renderAssistantTurn($msg, $theme, $md, $width, $condensed ? $condensedAssistantLabel : $assistantLabel, $expanded, $frame),
                 },
                 Role::System    => $msg->uiOnly
                     ? self::notice($theme)->render(Lang::t(self::NOTICE_ROW_LABEL) . ' ' . self::untrusted($msg->content))
@@ -4412,7 +4414,7 @@ final class Renderer
      * @param string              $label    the styled `assistant` label
      * @param array<string, bool> $expanded {@see Chat::expanded()}
      */
-    private static function renderAssistantTurn(Message $msg, Theme $theme, Markdown $md, int $width, string $label, array $expanded = []): string
+    private static function renderAssistantTurn(Message $msg, Theme $theme, Markdown $md, int $width, string $label, array $expanded, RenderFrame $frame): string
     {
         // Sentinels stripped BEFORE SugarMarkdown, not after: the rendered output
         // is legitimate SGR that untrusted() would destroy, but the model's
@@ -4423,7 +4425,7 @@ final class Renderer
             return $label . "\n" . $body;
         }
 
-        $thought = self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning));
+        $thought = self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning), $frame);
 
         return $label . "\n" . $thought . ($body === '' ? '' : "\n" . $body);
     }
@@ -4634,15 +4636,15 @@ final class Renderer
      *
      * @param array<string, bool> $expanded {@see Chat::expanded()}
      */
-    private static function renderThought(string $reasoning, Theme $theme, array $expanded, string $key): string
+    private static function renderThought(string $reasoning, Theme $theme, array $expanded, string $key, RenderFrame $frame): string
     {
         $lines = self::thoughtLines($reasoning);
         $isExpanded = ($expanded[$key] ?? false) === true;
         $faint = self::dim($theme);
 
         $head = self::dim($theme)->italic()->render('💭 ' . Lang::t(self::THOUGHT_ROW_LABEL));
-        self::publishedFrame()->recordToolRowHead($head);
-        self::recordToolCallZone($key, $head);
+        $frame->recordToolRowHead($head);
+        self::recordToolCallZone($key, $head, $frame);
 
         $count = count($lines);
         $size = Lang::t($count === 1 ? 'tui.chat.line_one' : 'tui.chat.lines', ['count' => $count]);
@@ -4650,7 +4652,7 @@ final class Renderer
         // only there: it reaches the newest thought alone, so promising it on
         // an older row would be a hint that does nothing.
         $clicks = Chat::mouseClicksEnabled();
-        $ctrlO = !$isExpanded && $key === self::publishedFrame()->ctrlOThoughtKey();
+        $ctrlO = !$isExpanded && $key === $frame->ctrlOThoughtKey();
         $hint = match (true) {
             $isExpanded => $clicks ? ' · ' . Lang::t('tui.chat.click_collapse') : '',
             $ctrlO      => ' · ' . Lang::t($clicks ? 'tui.chat.click_or_ctrl_o_expand' : 'tui.chat.ctrl_o_expand'),
@@ -4798,14 +4800,14 @@ final class Renderer
      *
      * @param array<string, bool> $expanded {@see Chat::expanded()}
      */
-    private static function renderToolResults(Message $msg, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents = null, ?\SugarCraft\Code\Context\Pruning\ContextLedger $ledger = null): string
+    private static function renderToolResults(Message $msg, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, RenderFrame $frame, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents = null, ?\SugarCraft\Code\Context\Pruning\ContextLedger $ledger = null): string
     {
         $lines = [];
         // The thought that led to this call (parked on its placeholder by
         // Chat::pumpLiveToolEvents()), as the same collapsible row a settled
         // turn gets - ABOVE the call, because the model thought and then acted.
         if ($msg->reasoning !== null && trim($msg->reasoning) !== '') {
-            $lines[] = self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning));
+            $lines[] = self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning), $frame);
         }
         foreach ($msg->toolResults as $result) {
             // The name is model-chosen, not ours: Chat::executeToolCall() copies
@@ -4878,7 +4880,7 @@ final class Renderer
             // whether this row can also become a click zone: fitToPane() has to
             // know a tool row when it sees one even with the mouse off, or the
             // row is wrapped into a lookalike second line. See RenderFrame::$toolRowHeads.
-            self::publishedFrame()->recordToolRowHead($head);
+            $frame->recordToolRowHead($head);
             $row = $label . self::toolCallSuffix($result, $theme, $width, Width::of($label));
             $rawBody = $result->isError() ? ($result->error ?? '') : $result->result;
             $key = $result->id ?? $result->name;
@@ -4895,7 +4897,7 @@ final class Renderer
             // verbatim PREFIX of the rendered row, which is what keeps
             // click-to-expand pointing at the right line, and rows are still
             // matched in emission order (see {@see markToolCalls()}).
-            self::recordToolCallZone($key, $head);
+            self::recordToolCallZone($key, $head, $frame);
 
             $hasImage = $result->hasImage();
 
@@ -4911,6 +4913,7 @@ final class Renderer
                     $theme,
                     $width,
                     $agents,
+                    $frame,
                     $result->durationMs === null ? null : $result->durationMs / 1000,
                     settled: true,
                 );
@@ -5541,7 +5544,7 @@ final class Renderer
      *
      * @param int $width the pane's usable columns; the live lines are fitted to it
      */
-    private static function renderPendingToolCall(Message $msg, Theme $theme, array $expanded = [], int $width = 0, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents = null, ?ImageLayer $images = null, ?Mosaic $mosaic = null, int $imageRows = 0): string
+    private static function renderPendingToolCall(Message $msg, Theme $theme, RenderFrame $frame, array $expanded = [], int $width = 0, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents = null, ?ImageLayer $images = null, ?Mosaic $mosaic = null, int $imageRows = 0): string
     {
         $runs = $agents === null ? [] : $agents->forCall((string) $msg->pendingToolCallId);
         $queued = $runs !== [] && array_filter($runs, static fn ($run): bool => !$run->isQueued()) === [];
@@ -5552,7 +5555,7 @@ final class Renderer
             $queued ? '◌' : \SugarCraft\Code\Agents\Live\AgentLiveRegistry::spinnerGlyph($agents?->spinnerFrame() ?? 0),
         );
         $running = $spinner . ' ' . self::dim($theme)->render(Lang::t($queued ? 'tui.tool.queued' : 'tui.tool.running', ['call' => self::oneLine($msg->content)]));
-        $running .= self::agentLines($runs, $theme, $width, $agents);
+        $running .= self::agentLines($runs, $theme, $width, $agents, $frame);
         $running .= self::previewLines((string) $msg->pendingToolCallId, $theme, $width, $images, $mosaic, $imageRows);
 
         if ($msg->reasoning === null || trim($msg->reasoning) === '') {
@@ -5561,7 +5564,7 @@ final class Renderer
 
         // Same key the finished row will compute (thoughtKey() reads the
         // text only), so a thought opened while the call runs stays open.
-        return self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning)) . "\n\n" . $running;
+        return self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning), $frame) . "\n\n" . $running;
     }
 
     /**
@@ -5632,7 +5635,7 @@ final class Renderer
      *        never reported its end (the turn was cancelled, or died) draws
      *        nothing, since a frozen spinner would claim it is still running
      */
-    private static function agentLines(array $runs, Theme $theme, int $width, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents, ?float $elapsedSeconds = null, bool $settled = false): string
+    private static function agentLines(array $runs, Theme $theme, int $width, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents, RenderFrame $frame, ?float $elapsedSeconds = null, bool $settled = false): string
     {
         if ($agents === null || $width <= 0) {
             return '';
@@ -5653,7 +5656,7 @@ final class Renderer
                 $run->isFinished() && count($runs) === 1 ? $elapsedSeconds : null,
             );
             // Roadmap P-C2: each line opens its run's Agent View on a click.
-            self::recordAgentLineZone($run->id, $line);
+            self::recordAgentLineZone($run->id, $line, $frame);
             $lines .= "\n" . $line;
             $running = $running || !$run->isFinished();
         }
@@ -5708,7 +5711,7 @@ final class Renderer
      * frame's `agentLineZones` registry — the {@see RenderFrame} tool-call
      * detour, for the same layout reason.
      */
-    private static function recordAgentLineZone(string $runId, string $line): void
+    private static function recordAgentLineZone(string $runId, string $line, RenderFrame $frame): void
     {
         $zoneId = self::AGENT_LINE_ZONE_PREFIX . $runId;
         $label = trim(\SugarCraft\Core\Util\Ansi::strip($line));
@@ -5717,7 +5720,7 @@ final class Renderer
             return;
         }
 
-        self::publishedFrame()->recordAgentLineZone(['id' => $runId, 'label' => $label]);
+        $frame->recordAgentLineZone(['id' => $runId, 'label' => $label]);
     }
 
     /**
@@ -5728,9 +5731,9 @@ final class Renderer
      * rows. A run drawn under two rows (never, today) keeps its first: a
      * duplicate zone id would cost the whole frame its zones.
      */
-    private static function markAgentLines(string $shell): string
+    private static function markAgentLines(string $shell, RenderFrame $frame): string
     {
-        $zones = self::publishedFrame()->agentLineZones();
+        $zones = $frame->agentLineZones();
         if ($zones === []) {
             return $shell;
         }
@@ -6290,7 +6293,7 @@ final class Renderer
      * whitelist re-derives, so a zone can only ever exist where a row was
      * painted.
      */
-    private static function renderSessionPicker(Chat $chat, Theme $theme): string
+    private static function renderSessionPicker(Chat $chat, Theme $theme, RenderFrame $frame): string
     {
         $picker = $chat->sessionPicker();
         if ($picker === null) {
@@ -6303,6 +6306,7 @@ final class Renderer
         self::recordSessionRowZones(
             $overlay,
             $picker->rowZoneLines($width, $height, $theme),
+            $frame,
             $picker->selectedIndex(),
             $picker->actionSegments($width, $theme),
         );
@@ -6357,7 +6361,7 @@ final class Renderer
      * per category (§4 E6/E7); a typed query stays a flat relevance-ranked
      * list, headers omitted, so the best match is always the first row.
      */
-    private static function renderPalette(Chat $chat, Theme $theme): string
+    private static function renderPalette(Chat $chat, Theme $theme, RenderFrame $frame): string
     {
         $palette = $chat->palette();
         if ($palette === null) {
@@ -6381,7 +6385,7 @@ final class Renderer
         // the draft's - same two-pass sanitise-then-measure, same cluster snap,
         // same byte-identity when the caret is at the end (which is every state
         // the pre-E3 keys could produce, so the older captures survive).
-        $caret = self::publishedFrame()->paletteAbandoned() ? '' : '█';
+        $caret = $frame->paletteAbandoned() ? '' : '█';
         $cleanQuery = self::untrusted($palette->query);
         $caretAt = self::snapToClusterStart(
             $cleanQuery,
@@ -6460,7 +6464,7 @@ final class Renderer
             ->width(50)
             ->render(implode("\n", $lines));
 
-        self::recordPaletteItemZones($box, $rows);
+        self::recordPaletteItemZones($box, $rows, $frame);
 
         return $box;
     }
@@ -6485,7 +6489,7 @@ final class Renderer
      *
      * @param array<int, string> $rows row index => the content line it produced
      */
-    private static function recordPaletteItemZones(string $box, array $rows): void
+    private static function recordPaletteItemZones(string $box, array $rows, RenderFrame $frame): void
     {
         if ($rows === [] || !Chat::mouseClicksEnabled()) {
             return;
@@ -6496,7 +6500,7 @@ final class Renderer
         foreach ($rows as $id => $row) {
             for ($i = $from, $n = count($lines); $i < $n; $i++) {
                 if (str_contains($lines[$i], $row)) {
-                    self::publishedFrame()->recordPaletteItemZone(['id' => (string) $id, 'line' => $lines[$i]]);
+                    $frame->recordPaletteItemZone(['id' => (string) $id, 'line' => $lines[$i]]);
                     $from                     = $i + 1;
 
                     break;
@@ -6517,14 +6521,14 @@ final class Renderer
      * because the terminal is narrower than the box) is simply left
      * unclickable; the arrow keys still reach it.
      */
-    private static function markPaletteItems(string $frame): string
+    private static function markPaletteItems(string $shell, RenderFrame $frame): string
     {
-        $zones = self::publishedFrame()->paletteItemZones();
+        $zones = $frame->paletteItemZones();
         if ($zones === []) {
-            return $frame;
+            return $shell;
         }
 
-        $lines = explode("\n", $frame);
+        $lines = explode("\n", $shell);
         $from  = 0;
         foreach ($zones as $zone) {
             for ($i = $from, $n = count($lines); $i < $n; $i++) {
@@ -6564,7 +6568,7 @@ final class Renderer
      * @param array<int, string>    $rows     row index => the content line it produced
      * @param array<string, string> $acts     the highlighted row's action glyphs, verb => styled glyph
      */
-    private static function recordSessionRowZones(string $overlay, array $rows, int $selected = -1, array $acts = []): void
+    private static function recordSessionRowZones(string $overlay, array $rows, RenderFrame $frame, int $selected = -1, array $acts = []): void
     {
         if ($rows === [] || !Chat::mouseClicksEnabled()) {
             return;
@@ -6575,7 +6579,7 @@ final class Renderer
         foreach ($rows as $id => $row) {
             for ($i = $from, $n = count($lines); $i < $n; $i++) {
                 if (str_contains($lines[$i], $row)) {
-                    self::publishedFrame()->recordSessionRowZone([
+                    $frame->recordSessionRowZone([
                         'id' => (string) $id,
                         'line' => $lines[$i],
                         'acts' => $id === $selected ? $acts : [],
@@ -6595,14 +6599,14 @@ final class Renderer
      * before the composite, and {@see markPaletteItems()} for the identical
      * cell-exactness and clipped-row rules.
      */
-    private static function markSessionRows(string $frame): string
+    private static function markSessionRows(string $shell, RenderFrame $frame): string
     {
-        $zones = self::publishedFrame()->sessionRowZones();
+        $zones = $frame->sessionRowZones();
         if ($zones === []) {
-            return $frame;
+            return $shell;
         }
 
-        $lines = explode("\n", $frame);
+        $lines = explode("\n", $shell);
         $from  = 0;
         foreach ($zones as $zone) {
             for ($i = $from, $n = count($lines); $i < $n; $i++) {

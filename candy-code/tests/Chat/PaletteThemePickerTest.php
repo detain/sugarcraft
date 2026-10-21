@@ -115,7 +115,7 @@ final class PaletteThemePickerTest extends TestCase
     private function paintThemes(Chat $chat): string
     {
         $overlay = (new ReflectionMethod(Renderer::class, 'renderPalette'))
-            ->invoke(null, $chat, $chat->theme());
+            ->invoke(null, $chat, $chat->theme(), Renderer::publishedFrame());
         self::assertIsString($overlay);
 
         $plain = preg_replace('/\x1b\[[0-9;]*[A-Za-z]/', '', $overlay) ?? $overlay;

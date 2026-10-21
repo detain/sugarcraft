@@ -359,7 +359,7 @@ final class PaletteQueryCaretTest extends TestCase
     private function paint(Chat $chat): string
     {
         $overlay = (new ReflectionMethod(Renderer::class, 'renderPalette'))
-            ->invoke(null, $chat, $chat->theme());
+            ->invoke(null, $chat, $chat->theme(), Renderer::publishedFrame());
         self::assertIsString($overlay);
         self::assertNotSame('', $overlay, 'the fixture must reach the builder with an open palette');
 

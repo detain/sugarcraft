@@ -871,7 +871,7 @@ final class PaneWidthInvariantTest extends TestCase
             self::assertSame($paneWidth, Width::of($row), 'the fixture is not on the boundary');
             self::assertSame(
                 $row,
-                $fit->invoke(null, $row, $paneWidth),
+                $fit->invoke(null, $row, $paneWidth, Renderer::publishedFrame()),
                 "a row exactly {$paneWidth} cells wide was rewritten instead of passed through",
             );
         }
@@ -1373,7 +1373,7 @@ final class PaneWidthInvariantTest extends TestCase
             );
             self::assertSame(
                 $row,
-                (string) $fit->invoke(null, $row, $width),
+                (string) $fit->invoke(null, $row, $width, Renderer::publishedFrame()),
                 "a row that already fits was rewritten instead of passed through ({$escape})",
             );
         }
@@ -1396,7 +1396,7 @@ final class PaneWidthInvariantTest extends TestCase
     public function testFitToPaneClosesTheStyleEveryRowItEmitsLeavesOpen(): void
     {
         $fit = new \ReflectionMethod(Renderer::class, 'fitToPane');
-        $rows = explode("\n", (string) $fit->invoke(null, "\x1b[1m" . str_repeat('word ', 40), 40));
+        $rows = explode("\n", (string) $fit->invoke(null, "\x1b[1m" . str_repeat('word ', 40), 40, Renderer::publishedFrame()));
 
         self::assertGreaterThan(1, count($rows), 'the input did not wrap, so it proves nothing');
         foreach ($rows as $index => $row) {
@@ -1616,6 +1616,7 @@ final class PaneWidthInvariantTest extends TestCase
             new ImageLayer(),
             null,
             0,
+            Renderer::publishedFrame(),
         );
 
         return [explode("\n", $block)[0], (string) (Renderer::publishedFrame()->toolRowHeads()[0] ?? '')];
