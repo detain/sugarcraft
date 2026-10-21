@@ -103,7 +103,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\SelfUpdate}, whose `$errorStream` test seam
  *     defaults to `\STDERR` for the headless verb's report and refusal lines.
  *     A grep for `fwrite(STDERR` cannot see any of these files at all.
- *  3. `error_log(…)` — TWENTY-SIX sites across thirteen files. MEASURED on this
+ *  3. `error_log(…)` — FOURTEEN sites across ten files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
  *     destination configured, this IS stderr. Three of them appear in the
@@ -465,16 +465,10 @@ final class StderrEmitterCensusTest extends TestCase
         // seam (E192). The one left is flagTruncationRiskInLatestToolResults(),
         // which PREDICTS a risk rather than reporting a failure — the routing
         // rule's answer, and that method's doc-block states it.
-        'src/Providers/SglangProvider.php' => 1,
-        // 11 and 7 until round 47 routed eight of the eighteen onto the
-        // transcript seam through RuntimeNoticeSink::warn(), which error_log()s
-        // for them. Channel 6 is where those eight are counted now; not one
-        // message was deleted.
-        'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 7,
-        // 3 until audit 15a A9: coerceValue()'s "declared <type> but the value
-        // does not parse as it" fallback. Stderr-only by the routing rule -
-        // the call still fires, with the raw text the model sent.
-        'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
+        // W7-C folded the Providers family (Sglang 1, Dsml 7, Minimax 4) behind
+        // Log::sub(); their messages still reach stderr with identical bytes
+        // through the facade, and the `candy-code: ` literals they carried
+        // inline now live in the facade's envelope constant.
         'src/Skills/SkillLoader.php' => 2,
         // W7-C: this row is the façade's own sink — as of this commit the
         // single call site that will ever be added here by design. The other
@@ -602,10 +596,7 @@ final class StderrEmitterCensusTest extends TestCase
         // prefix's bytes without its space. Counted so the roster stays a
         // census of the literal; nothing here reaches stderr.
         'src/Protocol/Schema/ProtocolSchema.php' => 1,
-        'src/Providers/SglangProvider.php' => 1,
-        'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 7,
         // 3 until audit 15a A9 - the same coerceValue() site as channel 3.
-        'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
         'src/Skills/SkillLoader.php' => 2,
     ];
 

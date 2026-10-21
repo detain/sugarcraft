@@ -8,6 +8,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\UserMessage;
@@ -3536,8 +3537,8 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
                 continue;
             }
 
-            error_log(sprintf(
-                'candy-code: SglangProvider: tool result "%s" contains the literal "%s" (%d occurrence(s)) - '
+            Log::sub(Log::SGLANG_PROVIDER, sprintf(
+                'tool result "%s" contains the literal "%s" (%d occurrence(s)) - '
                 . 'MiniMax-M2.x truncates tool-call arguments containing that substring, so any '
                 . 'follow-up call echoing this content (Edit/Write bodies, XML/HTML/PHP/.tape '
                 . 'content) is at elevated risk of silent truncation. This request is addressed '
