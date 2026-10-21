@@ -921,6 +921,42 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertArrayNotHasKey('call-1', $collapsed->expanded(), 'the same key must collapse it again');
                 $this->assertArrayNotHasKey($thought, $collapsed->expanded(), 'and the thought with it');
             },
+            // v2:a11y-F1: "Move ... one row older" is a MOVE, so the drift it
+            // must refuse is a toggle: the cursor lands on the older row and
+            // changes NOTHING expanded; the row only opens when `Ctrl+O`
+            // answers the settled cursor — both halves of that conversation
+            // are driven here because the label's whole promise is the
+            // cursor's next state, and a cursor that moved somewhere else
+            // would satisfy a toggle-only assertion.
+            'chat.tool-row' => function (array $k): void {
+                [$app] = $this->app()->withChat($this->chat([
+                    Message::assistant('a')->withToolResults([ToolResult::ok('grep', 'a', 'call_old')]),
+                    Message::assistant('b')->withToolResults([ToolResult::ok('grep', 'b', 'call_new')]),
+                ]))->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+                [$focused] = $app->update($k[0]);
+                $this->assertSame(
+                    'call_old',
+                    $focused->toolWalkState['key'] ?? null,
+                    'the chord must settle the cursor one row older',
+                );
+                $this->assertFalse(
+                    $focused->chat->isToolOutputExpanded('call_old'),
+                    'moving the cursor must not toggle the row it lands on',
+                );
+
+                [$opened] = $focused->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+                $this->assertTrue(
+                    $opened->chat->isToolOutputExpanded('call_old'),
+                    'and the focused row is what the expansion chord answers',
+                );
+
+                [$closed] = $opened->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+                $this->assertFalse(
+                    $closed->chat->isToolOutputExpanded('call_old'),
+                    'the same chord closes it again',
+                );
+            },
             // rv-a11y (2026-10-14): "Clear AND repaint" is two effects, so
             // both halves of the dispatched Cmd are opened — the erase+home
             // bytes, then the same-size WindowSizeMsg whose arrival at

@@ -169,7 +169,7 @@ final class App implements Model
     /** A second `s` in the Agents dashboard within this many seconds stops every run ({@see $agentsStopArmedAt}). */
     public const STOP_ALL_ARMED_SECONDS = 3.0;
 
-    /** Consecutive `Ctrl+O` presses within this many seconds walk up the transcript instead of retoggling the newest row ({@see $toolWalkState}). */
+    /** Consecutive `Ctrl+O` presses within this many seconds walk up the transcript instead of retoggling the newest row ({@see $toolWalkState}). A SETTLED cursor — placed by `Ctrl+F` or a row click — ignores this window entirely. */
     public const TOOL_WALK_WINDOW_SECONDS = 3.0;
 
     private function __construct(
@@ -491,12 +491,17 @@ final class App implements Model
          */
         public readonly ?float $agentsStopArmedAt = null,
         /**
-         * Which transcript row the last `Ctrl+O` toggled (rv-a11y M3c):
-         * index `0` is the newest unit (Chat's own route), and a press
-         * within {@see TOOL_WALK_WINDOW_SECONDS} walks one row older, the
-         * keyboard equivalent of clicking an older row.
+         * Where the keyboard's transcript-row cursor stands (rv-a11y M3c,
+         * v2:a11y-F1): index `0` is the newest unit (Chat's own route), a
+         * `Ctrl+O` press within {@see TOOL_WALK_WINDOW_SECONDS} of the last
+         * walks one row older and toggles as it moves, while `Ctrl+F` (or a
+         * row click) SETTLES the cursor — `settled` true plus the unit's
+         * identity `key` — and a `Ctrl+O` on a settled cursor toggles exactly
+         * the focused row without moving. The key, not the index, is the
+         * cursor's identity, so a newer row arriving above it does not make
+         * it point somewhere else.
          *
-         * @var array{at: float, index: int}|null
+         * @var array{at: float, index: int, settled?: bool, key?: string}|null
          */
         public readonly ?array $toolWalkState = null,
         /**
@@ -3428,7 +3433,10 @@ final class App implements Model
             }
 
             return match ($paneId) {
-                Pane::Tools->value => [$chat === null ? $this : $this->withChat($chat->toggleToolOutput($key)), null],
+                Pane::Tools->value => [
+                    $chat === null ? $this : $this->withChat($chat->toggleToolOutput($key))->withToolRowCursor($key),
+                    null,
+                ],
                 Pane::Agents->value => [$this->toggleAgentExpanded($key), null],
                 default => [$this, null],
             };
@@ -4338,13 +4346,21 @@ final class App implements Model
         // session picker or directory picker inside Chat, or a settings,
         // media-form, video-player or agent-view overlay above it — disarms
         // the walk, so that keystroke reaches the modal exactly as before.
-        if ($msg instanceof KeyMsg && self::isToolWalkChord($msg)
+        //
+        // v2:a11y-F1 (fix1021): `Ctrl+F` shares this gate — and its refusals —
+        // because it is the same conversation with the transcript: it moves
+        // the row cursor ONE ROW OLDER without toggling anything, the click-
+        // a-row equivalent the keyboard was missing; `Ctrl+O` on a settled
+        // cursor then toggles exactly THAT row instead of the newest.
+        if ($msg instanceof KeyMsg && (self::isToolWalkChord($msg) || self::isToolRowChord($msg))
             && $this->settingsEditor === null && $this->mediaForm === null
             && $this->videoPlayer === null && $this->agentViewTarget === null
             && $this->chat?->palette() === null && $this->chat?->sessionPicker() === null
             && $this->chat?->dirPicker() === null
         ) {
-            return $this->walkToolOutput($msg);
+            return self::isToolRowChord($msg)
+                ? $this->focusToolRow($msg)
+                : $this->walkToolOutput($msg);
         }
 
         [$next, $cmd] = $this->chat->update($msg);
@@ -4364,6 +4380,17 @@ final class App implements Model
     private static function isToolWalkChord(KeyMsg $msg): bool
     {
         return $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'o';
+    }
+
+    /**
+     * Is this keystroke exactly the `Ctrl+F` chord that moves the transcript
+     * row cursor? Shaped like {@see isToolWalkChord()} on purpose: the two
+     * chords share the gate and its modal refusals, so neither can steal the
+     * keystroke from a surface that answers it first.
+     */
+    private static function isToolRowChord(KeyMsg $msg): bool
+    {
+        return $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'f';
     }
 
     /**
@@ -4402,13 +4429,20 @@ final class App implements Model
     }
 
     /**
-     * The route behind `Ctrl+O` at the shell (rv-a11y M3c). The FIRST press
-     * of a burst is delegated to Chat untouched — the newest-unit behavior
-     * users already have, byte-identical. Each further press within
-     * {@see TOOL_WALK_WINDOW_SECONDS} toggles the next-older row unit
-     * ({@see toolWalkUnits()}) as one unit, following the unit's first key
-     * exactly like Chat's own batch toggle, and cycles once the transcript
-     * runs out. A burst that times out restarts at the newest row.
+     * The route behind `Ctrl+O` at the shell (rv-a11y M3c, v2:a11y-F1).
+     *
+     * With a SETTLED row cursor — a row `Ctrl+F` focused, or a click that
+     * named one — the press toggles exactly THAT row unit and nothing else:
+     * the older-row expand the mouse always had, now on the keyboard.
+     *
+     * Otherwise the FIRST press of a burst is delegated to Chat untouched —
+     * the newest-unit behavior users already have, byte-identical. Each
+     * further press within {@see TOOL_WALK_WINDOW_SECONDS} toggles the
+     * next-older row unit ({@see toolWalkUnits()}) as one unit, following the
+     * unit's first key exactly like Chat's own batch toggle, and cycles once
+     * the transcript runs out. A burst that times out restarts at the newest
+     * row; a cursor that outlives its row (the history was edited) falls back
+     * to that burst logic rather than silently retargeting.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -4421,6 +4455,27 @@ final class App implements Model
 
         $now = microtime(true);
         $state = $this->toolWalkState;
+        $focused = $this->focusedUnitIndex($units);
+
+        if ($focused !== null) {
+            $chat = $this->chat;
+            $expand = !$chat->isToolOutputExpanded($units[$focused][0]);
+            foreach ($units[$focused] as $id) {
+                if ($chat->isToolOutputExpanded($id) !== $expand) {
+                    $chat = $chat->toggleToolOutput($id);
+                }
+            }
+
+            $app = $chat === $this->chat ? $this : $this->withChat($chat)->autoEnablePanes();
+
+            return [$app->mutate(toolWalkState: [
+                'at' => $now,
+                'index' => $focused,
+                'settled' => true,
+                'key' => $units[$focused][0],
+            ]), null];
+        }
+
         $index = ($state !== null && $now - $state['at'] <= self::TOOL_WALK_WINDOW_SECONDS
             ? $state['index'] + 1
             : 0) % count($units);
@@ -4445,6 +4500,95 @@ final class App implements Model
         $app = $chat === $this->chat ? $this : $this->withChat($chat)->autoEnablePanes();
 
         return [$app->mutate(toolWalkState: ['at' => $now, 'index' => $index]), null];
+    }
+
+    /**
+     * The route behind `Ctrl+F` at the shell (v2:a11y-F1): move the transcript
+     * row cursor one unit older, cycling, WITHOUT touching any row's
+     * expansion — the gesture that makes "which row does `Ctrl+O` answer" a
+     * user choice instead of "whichever is newest". Seeding from a live burst
+     * ({@see TOOL_WALK_WINDOW_SECONDS}) continues where that burst stands,
+     * so the two chords compose; the first fresh press lands on the row one
+     * older than the newest, because `Ctrl+O` already owns the newest.
+     *
+     * A settled cursor is exempt from the burst window: it decays only when
+     * its row leaves the transcript ({@see focusedUnitIndex()}).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function focusToolRow(KeyMsg $msg): array
+    {
+        $units = $this->toolWalkUnits();
+        if ($units === []) {
+            return [$this, null];
+        }
+
+        $now = microtime(true);
+        $state = $this->toolWalkState;
+        $focused = $this->focusedUnitIndex($units);
+        $current = $focused ?? ($state !== null && $now - $state['at'] <= self::TOOL_WALK_WINDOW_SECONDS
+            ? $state['index']
+            : 0);
+        $index = ($current + 1) % count($units);
+
+        return [$this->mutate(toolWalkState: [
+            'at' => $now,
+            'index' => $index,
+            'settled' => true,
+            'key' => $units[$index][0],
+        ]), null];
+    }
+
+    /**
+     * Where the settled row cursor points in the CURRENT units, or null when
+     * there is no settled cursor. Identity is the stored key, not the index:
+     * a newer row arriving above the cursor shifts its index, and the cursor
+     * follows the ROW the user picked, not the number it happened to have.
+     *
+     * @param list<list<string>> $units
+     */
+    private function focusedUnitIndex(array $units): ?int
+    {
+        $state = $this->toolWalkState;
+        if ($state === null || ($state['settled'] ?? false) !== true) {
+            return null;
+        }
+
+        $key = $state['key'] ?? null;
+        if (!is_string($key)) {
+            return null;
+        }
+
+        foreach ($units as $index => $unit) {
+            if (in_array($key, $unit, true)) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Settle the row cursor on the unit that carries `$key` (v2:a11y-F1): a
+     * click names the exact row, and after it the keyboard's `Ctrl+O` answers
+     * that row — one conversation with the transcript, whichever hand steers.
+     * A key that no longer belongs to any unit (a stale zone click) moves
+     * nothing.
+     */
+    private function withToolRowCursor(string $key): self
+    {
+        foreach ($this->toolWalkUnits() as $index => $unit) {
+            if (in_array($key, $unit, true)) {
+                return $this->mutate(toolWalkState: [
+                    'at' => microtime(true),
+                    'index' => $index,
+                    'settled' => true,
+                    'key' => $unit[0],
+                ]);
+            }
+        }
+
+        return $this;
     }
 
     /**

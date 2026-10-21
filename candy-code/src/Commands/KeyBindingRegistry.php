@@ -768,15 +768,15 @@ final class KeyBindingRegistry
      * {@see chatCtrlRunesYieldedToShell()} only when it is TRUE. The two reads
      * are mutually exclusive. Swept exhaustively over 2 menu states × 10 panes ×
      * 95 printable runes × Ctrl on/off = 3800 keypresses: 1900 derive nothing,
-     * 1027 derive one set, 873 derive two, none derive three.
+     * 1025 derive one set, 875 derive two, none derive three.
      *
      * That sweep visits the panes at their DEFAULT sub-state, and a sub-state is
      * not neutral here: opening the skill picker in `Pane::Skills` flips
      * `KeyboardHandler::shellOwnsKeyboard()`, which is the very predicate
      * choosing which set derives (`ctrl+r` there goes `{Chat}` → `{Chat,
      * YIELDED}`). So the same rune × Ctrl sweep is run again over a CORPUS of 8
-     * keyboard-owning sub-states = 1520 more keypresses: 760 derive nothing, 688
-     * derive one, 72 derive two, none derive three. A corpus, not an
+     * keyboard-owning sub-states = 1520 more keypresses: 760 derive nothing, 680
+     * derive one, 80 derive two, none derive three. A corpus, not an
      * enumeration: it covers `AgentViewMode` exhaustively but the agent view's
      * selection index only at -1 and 0, two skill options, and the menu strip's
      * first menu — `KeyboardHandlerTest::keyboardOwningSubStates()` states that
@@ -905,6 +905,13 @@ final class KeyBindingRegistry
             KeyBinding::new('chat.page', 'PgUp / PgDn', Lang::t('keys.chat.page'), $c),
             KeyBinding::new('chat.palette', 'Ctrl+P', Lang::t('keys.chat.palette'), $c),
             KeyBinding::new('chat.tool-output', 'Ctrl+O', Lang::t('keys.chat.tool-output'), $c),
+            // v2:a11y-F1 (fix1021): the row cursor. `Ctrl+O` alone could only
+            // ever NAME the newest row; a click could name any. This chord
+            // moves a keyboard cursor over the transcript's collapsible rows
+            // without toggling, and `Ctrl+O` (or Enter semantics aside) then
+            // expands exactly the focused row. Routed by the App gate, not a
+            // Chat arm — the cursor is shell state, like the walk.
+            KeyBinding::new('chat.tool-row', 'Ctrl+F', Lang::t('keys.chat.tool-row'), $c),
             // rv-a11y (2026-10-14 review): the classic terminal refresh chord.
             // The diff renderer repaints only changed rows, so bytes a kernel
             // message or a child process smeared over the frame used to stick
