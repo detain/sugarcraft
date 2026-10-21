@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Permissions;
 
 use SugarCraft\Code\Backend\PendingAsk;
+use SugarCraft\Code\Chat;
+use SugarCraft\Code\Config\Settings\SettingsTier;
+use SugarCraft\Code\Config\Settings\SettingsWriter;
+use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\ToolCall;
 
@@ -26,6 +31,7 @@ final class PermissionPrompt
     public function __construct(
         private readonly PermissionFlow $flow,
         private readonly string $projectRoot,
+        private readonly ?WorkspaceContext $workspace = null,
     ) {
     }
 
@@ -231,4 +237,128 @@ final class PermissionPrompt
         // A prompt raised with no attributed question behind it at all.
         return Lang::t('chat.permission.always_asks.unattributed');
     }
+
+/**
+     * Append $patterns to the user's `permissionRules` in `config.json`,
+     * through the workspace's {@see SettingsWriter}
+     * — the settings editor's own write door, so the schema's validation of
+     * the key (refusing a value the launch would not load whole) is this
+     * write's validation too. Existing entries ride in front of the new ones:
+     * rules are first-match-wins, so a `deny` the user wrote keeps refusing
+     * what `p` saves, and the grant only answers questions the mode would
+     * have asked anyway. An entry already there is not written twice.
+     *
+     * Returns the notice the transcript shows — where it landed, or why it
+     * did not. A failed save is REPORTED, never fatal, exactly as a model
+     * choice that cannot be persisted still switches for the session: the
+     * session grant `p` rides on has already been recorded.
+     *
+     * @param list<string> $patterns
+     */
+    public function persistRules(array $patterns): string
+    {
+        $scope = implode(', ', $patterns);
+        $writer = $this->workspace?->service(SettingsWriter::class);
+        if (!$writer instanceof SettingsWriter) {
+            return Lang::t('chat.permission.not_persisted', [
+                'scope' => $scope,
+                'error' => Chat::reportField('this session has no settings write door'),
+            ]);
+        }
+
+        try {
+            $config = $writer->current(SettingsTier::You);
+            $existing = $config['permissionRules'] ?? [];
+            $existing = \is_array($existing)
+                ? array_values(array_filter($existing, static fn (mixed $rule): bool => \is_array($rule)))
+                : [];
+            $have = [];
+            foreach ($existing as $rule) {
+                if (($rule['action'] ?? null) === 'allow' && \is_string($rule['pattern'] ?? null)) {
+                    $have[$rule['pattern']] = true;
+                }
+            }
+
+            $next = $existing;
+            foreach ($patterns as $pattern) {
+                if (!isset($have[$pattern])) {
+                    $next[] = ['pattern' => $pattern, 'action' => 'allow'];
+                }
+            }
+            $path = $next === $existing
+                ? (string) $writer->targetPath(SettingsTier::You)
+                : $writer->write(SettingsTier::You, ['permissionRules' => $next]);
+
+            return Lang::t('chat.permission.persisted', [
+                'scope' => $scope,
+                'path' => Chat::reportField($path),
+            ]);
+        } catch (\Throwable $e) {
+            return Lang::t('chat.permission.not_persisted', [
+                'scope' => $scope,
+                'error' => Chat::reportField($e->getMessage()),
+            ]);
+        }
+    }
+
+/**
+     * Whether a grant in $grants answers this ask on Chat's own tool path —
+     * the SAME memo, keys and scopes the engine path uses
+     * ({@see SessionPermissionMemo}), so `a`
+     * means the same thing whichever path a call took (this path kept an
+     * exact-call key of its own, so `a` on `git status` never covered
+     * `git status -s` here).
+     *
+     * NEVER FOR AN ASK NO GRANT MAY ANSWER ({@see HookResult::isRememberable()},
+     * stamped by the registry, which a hook cannot forge): a user hook's ASK
+     * is a question about this call's content — the reason the hook exists —
+     * and a security finding is asked every time (audit F-P9).
+     *
+     * @param array<string, bool> $grants
+     */
+    public static function grantCovers(
+        array $grants,
+        ToolCall $toolCall,
+        HookResult $ask,
+        ?string $projectRoot = null,
+    ): bool {
+        return $ask->isRememberable()
+            && SessionPermissionMemo::fromGrants($grants)
+                ->allows($toolCall->name, $toolCall->arguments, $projectRoot);
+    }
+
+/**
+     * $grants with "always" remembered for $toolCall on Chat's own tool path,
+     * or $grants unchanged when the ask may not be remembered. A tool whose
+     * subject argument is known ({@see PermissionRule::SUBJECT_ARGUMENTS})
+     * gets the engine path's scope (or the user's own, $scope, from the
+     * modal's `e`); any other tool is remembered as the exact call — an
+     * embedder's tool has no subject that can be read, and the memo would
+     * otherwise grant it whole.
+     *
+     * @param array<string, bool> $grants
+     *
+     * @return array<string, bool>
+     */
+    public static function rememberNative(
+        array $grants,
+        ToolCall $toolCall,
+        HookResult $ask,
+        ?string $projectRoot,
+        ?string $scope = null,
+    ): array {
+        if (!$ask->isRememberable()) {
+            return $grants;
+        }
+        $memo = SessionPermissionMemo::fromGrants($grants);
+        $memo = match (true) {
+            $scope !== null => $memo->withPattern($scope, $toolCall->name, $toolCall->arguments, $projectRoot) ?? $memo,
+            PermissionRule::subjectArgumentName($toolCall->name) !== null
+                => $memo->withGrant($toolCall->name, $toolCall->arguments, $projectRoot),
+            default => $memo->withExactGrant($toolCall->name, $toolCall->arguments, $projectRoot),
+        };
+
+        return [...$grants, ...$memo->grants()];
+    }
+
 }

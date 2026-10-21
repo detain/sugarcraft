@@ -5367,7 +5367,7 @@ final class Chat implements Model
      */
     private function permissionPrompt(): PermissionPrompt
     {
-        return new PermissionPrompt($this->flow, $this->projectRoot());
+        return new PermissionPrompt($this->flow, $this->projectRoot(), $this->workspace);
     }
 
     /** Delegates to {@see PermissionPrompt::alwaysScope()} (W5-A); forensic prose lives there. */
@@ -5388,67 +5388,10 @@ final class Chat implements Model
         return $this->permissionPrompt()->persistScope();
     }
 
-    /**
-     * Append $patterns to the user's `permissionRules` in `config.json`,
-     * through the workspace's {@see \SugarCraft\Code\Config\Settings\SettingsWriter}
-     * — the settings editor's own write door, so the schema's validation of
-     * the key (refusing a value the launch would not load whole) is this
-     * write's validation too. Existing entries ride in front of the new ones:
-     * rules are first-match-wins, so a `deny` the user wrote keeps refusing
-     * what `p` saves, and the grant only answers questions the mode would
-     * have asked anyway. An entry already there is not written twice.
-     *
-     * Returns the notice the transcript shows — where it landed, or why it
-     * did not. A failed save is REPORTED, never fatal, exactly as a model
-     * choice that cannot be persisted still switches for the session: the
-     * session grant `p` rides on has already been recorded.
-     *
-     * @param list<string> $patterns
-     */
+    /** Delegates to {@see PermissionPrompt::persistRules()} (W5-A); forensic prose lives there. */
     private function persistPermissionRules(array $patterns): string
     {
-        $scope = implode(', ', $patterns);
-        $writer = $this->workspace?->service(\SugarCraft\Code\Config\Settings\SettingsWriter::class);
-        if (!$writer instanceof \SugarCraft\Code\Config\Settings\SettingsWriter) {
-            return Lang::t('chat.permission.not_persisted', [
-                'scope' => $scope,
-                'error' => self::reportField('this session has no settings write door'),
-            ]);
-        }
-
-        try {
-            $config = $writer->current(\SugarCraft\Code\Config\Settings\SettingsTier::You);
-            $existing = $config['permissionRules'] ?? [];
-            $existing = \is_array($existing)
-                ? array_values(array_filter($existing, static fn (mixed $rule): bool => \is_array($rule)))
-                : [];
-            $have = [];
-            foreach ($existing as $rule) {
-                if (($rule['action'] ?? null) === 'allow' && \is_string($rule['pattern'] ?? null)) {
-                    $have[$rule['pattern']] = true;
-                }
-            }
-
-            $next = $existing;
-            foreach ($patterns as $pattern) {
-                if (!isset($have[$pattern])) {
-                    $next[] = ['pattern' => $pattern, 'action' => 'allow'];
-                }
-            }
-            $path = $next === $existing
-                ? (string) $writer->targetPath(\SugarCraft\Code\Config\Settings\SettingsTier::You)
-                : $writer->write(\SugarCraft\Code\Config\Settings\SettingsTier::You, ['permissionRules' => $next]);
-
-            return Lang::t('chat.permission.persisted', [
-                'scope' => $scope,
-                'path' => self::reportField($path),
-            ]);
-        } catch (\Throwable $e) {
-            return Lang::t('chat.permission.not_persisted', [
-                'scope' => $scope,
-                'error' => self::reportField($e->getMessage()),
-            ]);
-        }
+        return $this->permissionPrompt()->persistRules($patterns);
     }
 
     /** Delegates to {@see PermissionPrompt::editableScope()} (W5-A); forensic prose lives there. */
@@ -6738,45 +6681,17 @@ final class Chat implements Model
         return [$toolCall, null, $context, null, $hookResult->additionalContext];
     }
 
-    /**
-     * Whether a grant in $grants answers this ask on Chat's own tool path —
-     * the SAME memo, keys and scopes the engine path uses
-     * ({@see \SugarCraft\Code\Permissions\SessionPermissionMemo}), so `a`
-     * means the same thing whichever path a call took (this path kept an
-     * exact-call key of its own, so `a` on `git status` never covered
-     * `git status -s` here).
-     *
-     * NEVER FOR AN ASK NO GRANT MAY ANSWER ({@see \SugarCraft\Code\Hooks\HookResult::isRememberable()},
-     * stamped by the registry, which a hook cannot forge): a user hook's ASK
-     * is a question about this call's content — the reason the hook exists —
-     * and a security finding is asked every time (audit F-P9).
-     *
-     * @param array<string, bool> $grants
-     */
+        /** Delegates to {@see PermissionPrompt::grantCovers()} (W5-A); forensic prose lives there. */
     private static function grantCovers(
         array $grants,
         ToolCall $toolCall,
         \SugarCraft\Code\Hooks\HookResult $ask,
         ?string $projectRoot = null,
     ): bool {
-        return $ask->isRememberable()
-            && \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($grants)
-                ->allows($toolCall->name, $toolCall->arguments, $projectRoot);
+        return PermissionPrompt::grantCovers($grants, $toolCall, $ask, $projectRoot);
     }
 
-    /**
-     * $grants with "always" remembered for $toolCall on Chat's own tool path,
-     * or $grants unchanged when the ask may not be remembered. A tool whose
-     * subject argument is known ({@see \SugarCraft\Code\Permissions\PermissionRule::SUBJECT_ARGUMENTS})
-     * gets the engine path's scope (or the user's own, $scope, from the
-     * modal's `e`); any other tool is remembered as the exact call — an
-     * embedder's tool has no subject that can be read, and the memo would
-     * otherwise grant it whole.
-     *
-     * @param array<string, bool> $grants
-     *
-     * @return array<string, bool>
-     */
+        /** Delegates to {@see PermissionPrompt::rememberNative()} (W5-A); forensic prose lives there. */
     private static function rememberNative(
         array $grants,
         ToolCall $toolCall,
@@ -6784,18 +6699,7 @@ final class Chat implements Model
         ?string $projectRoot,
         ?string $scope = null,
     ): array {
-        if (!$ask->isRememberable()) {
-            return $grants;
-        }
-        $memo = \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($grants);
-        $memo = match (true) {
-            $scope !== null => $memo->withPattern($scope, $toolCall->name, $toolCall->arguments, $projectRoot) ?? $memo,
-            \SugarCraft\Code\Permissions\PermissionRule::subjectArgumentName($toolCall->name) !== null
-                => $memo->withGrant($toolCall->name, $toolCall->arguments, $projectRoot),
-            default => $memo->withExactGrant($toolCall->name, $toolCall->arguments, $projectRoot),
-        };
-
-        return [...$grants, ...$memo->grants()];
+        return PermissionPrompt::rememberNative($grants, $toolCall, $ask, $projectRoot, $scope);
     }
 
     /**
