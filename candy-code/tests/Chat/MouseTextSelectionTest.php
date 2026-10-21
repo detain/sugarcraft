@@ -129,7 +129,7 @@ final class MouseTextSelectionTest extends TestCase
         self::assertNotNull($selection);
         self::assertTrue($selection->settled, 'the highlight stays up as the record of what was copied');
         self::assertSame(mb_strlen($expected), $selection->copiedChars);
-        self::assertStringContainsString('✓ copied ' . mb_strlen($expected) . ' chars', Ansi::strip($this->body($chat)));
+        self::assertStringContainsString('✓ Copied ' . mb_strlen($expected) . ' chars', Ansi::strip($this->body($chat)));
     }
 
     public function testAClickWithOneCellOfJitterCopiesNothing(): void

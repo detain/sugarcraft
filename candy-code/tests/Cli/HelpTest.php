@@ -601,6 +601,21 @@ final class HelpTest extends TestCase
         $this->assertStringContainsString('no prompt given, an', $screen);
     }
 
+    /**
+     * 1021 W3-B: the signal exits of the TUI loop (128+N) were documented
+     * only in the docs family; the screen itself has to say that a run
+     * stopped by Ctrl+C, SIGTERM or SIGHUP is not a silent failure, and
+     * that a cooperative quit still exits 0.
+     */
+    public function testScreenDocumentsSignalExitCodes(): void
+    {
+        $screen = Help::screen();
+
+        $this->assertStringContainsString('130/143/129', $screen);
+        $this->assertStringContainsString('a signal stopped the loop', $screen);
+        $this->assertStringContainsString('cooperative', $screen);
+    }
+
     public function testScreenPointsAtReadme(): void
     {
         $screen = Help::screen();

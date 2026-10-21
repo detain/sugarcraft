@@ -144,7 +144,7 @@ final class CliLangCatalogueTest extends TestCase
 
         $zsh = (string) (new \ReflectionMethod(Subcommands::class, 'zshCompletion'))->invoke(null);
         self::assertStringContainsString("'(-h --help)--help[Show the help screen]'", $zsh);
-        self::assertStringContainsString("'doctor:Report on this installation and exit'", $zsh);
+        self::assertStringContainsString("'doctor:Check this installation and exit'", $zsh);
     }
 
     /**

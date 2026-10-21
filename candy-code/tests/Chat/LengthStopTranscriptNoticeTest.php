@@ -29,7 +29,7 @@ final class LengthStopTranscriptNoticeTest extends TestCase
 {
     /** The exact sentence Chat writes — pinned whole because the transcript is the product. */
     private const NOTICE = 'The provider stopped this reply at its output limit, so the text above may end mid-thought. '
-        . 'Raise "maxOutputTokens" in ~/.candy-code/config.json for a longer single reply, '
+        . 'Raise `maxOutputTokens` in ~/.candy-code/config.json for a longer single reply, '
         . 'or ask for the remainder in your next message.';
 
     /**
@@ -38,20 +38,20 @@ final class LengthStopTranscriptNoticeTest extends TestCase
      * no-tools summary request, the reply above is that summary.
      */
     private const STEPS_NOTICE = 'This turn used all of its tool steps before the work was done, so the reply above describes where it '
-        . 'stopped — what is finished and what remains — not a finished answer. Say "continue" to pick it up '
+        . 'stopped — what is finished and what remains — not a finished answer. Say `continue` to pick it up '
         . 'from there, or raise the ceiling for longer agentic turns — a --max-turns flag at launch outranks '
-        . 'the "maxToolSteps" setting in ~/.candy-code/config.json, so raise whichever is in force.';
+        . 'the `maxToolSteps` setting in ~/.candy-code/config.json, so raise whichever is in force.';
 
     /** The loop guard's own sentence (the third harness stop), with the tool it ended. */
     private const LOOP_NOTICE = 'This turn was ended by the repeat-call loop guard: the model called %s 8 times with the same arguments '
         . 'and got the same result each time. The reply above describes where it stopped. Point it at a different '
-        . 'approach, or say "continue" once something has changed.';
+        . 'approach, or say `continue` once something has changed.';
 
     /** The billing wave's third sibling, spelled with the offending model name. */
-    private const UNPRICED_NOTICE = 'This app has no price on file for model "%s", so this turn billed $0.00 '
+    private const UNPRICED_NOTICE = 'This app has no price on file for model `%s`, so this turn billed $0.00 '
         . 'as a lower bound, not as a free call — spend totals and the spend cap are under-counted '
-        . 'until a rate exists. Declare one under "modelPrices" in ~/.candy-code/config.json '
-        . '(USD per 1M tokens, keys "input" and "output") to price it.';
+        . 'until a rate exists. Declare one under `modelPrices` in ~/.candy-code/config.json '
+        . '(USD per 1M tokens, keys `input` and `output`) to price it.';
 
     public function testASettledStepTruncatedTurnIsFollowedByOneSystemNotice(): void
     {

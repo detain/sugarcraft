@@ -97,7 +97,7 @@ final class VideoSectionTest extends TestCase
         $this->assertSame(121, $section->collect(MediaRequest::new())->toArray()['num_frames'], 'SEND SNAPPED');
 
         $note = $section->valueAt(2);
-        $this->assertStringContainsString('frames 100 is off the ladder - snapped up to 121 (+21)', $note);
+        $this->assertStringContainsString('frames 100 is off the ladder — snapped up to 121 (+21)', $note);
         $this->assertStringContainsString('121 frames @ 24 fps ≈ 5.0s', $note);
     }
 
@@ -120,7 +120,7 @@ final class VideoSectionTest extends TestCase
 
         $low = $section->withField($this->framesOf($section)->withValue(25));
         $this->assertSame(81, $low->collect(MediaRequest::new())->toArray()['num_frames']);
-        $this->assertStringContainsString('frames 25 is off the ladder - snapped up to 81 (+56)', $low->valueAt(2));
+        $this->assertStringContainsString('frames 25 is off the ladder — snapped up to 81 (+56)', $low->valueAt(2));
 
         $high = $section->withField($this->framesOf($section)->withValue(257));
         $this->assertSame(257, $high->collect(MediaRequest::new())->toArray()['num_frames']);

@@ -5264,9 +5264,10 @@ final class Renderer
      * {@see collapsedImageNotice()} established.
      *
      * One logical row, cut with the shared ellipsising clip so a narrow pane
-     * never sees a wrapped description. The literal `image:` / `render` words
-     * stay untranslated because this lane cannot edit `lang/en.php`; the
-     * closeout owns minting a `tui.tool.image_shown` key (DOC-ROW seam).
+     * never sees a wrapped description. The whole row is the catalogued
+     * `tui.tool.image_shown` template; `{file}` carries its own leading
+     * space when a path is known (empty when not), and `{details}` joins the
+     * dimensions and render-mode legs.
      */
     private static function imageAltLine(ToolResult $result, Theme $theme, int $width, Mosaic $mosaic): string
     {
@@ -5284,7 +5285,10 @@ final class Renderer
         $parts[] = 'render ' . $mode;
 
         return self::dim($theme)->render(self::clipWithEllipsis(
-            'image:' . ($file === '' ? '' : ' ' . $file) . ' (' . implode(', ', $parts) . ')',
+            Lang::t('tui.tool.image_shown', [
+                'file' => $file === '' ? '' : ' ' . $file,
+                'details' => implode(', ', $parts),
+            ]),
             max(1, $width),
         ));
     }

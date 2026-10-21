@@ -6178,7 +6178,7 @@ final class DocFigureProseDriftTest extends TestCase
             'servers' => [],
             'error' => null,
         ]);
-        self::assertStringContainsString('"mcpServers"', $out);
+        self::assertStringContainsString('`mcpServers`', $out);
         self::assertStringContainsString('docs/MCP.md', $out);
         self::assertStringContainsString($section, $out);
 

@@ -184,7 +184,7 @@ final class ServeArgsTest extends TestCase
             'allowed host flag' => [['serve', '--allowed-host', 'http://a.example'], [], [], 'is not a host name'],
             'allowed host port' => [['serve'], ['CANDY_CODE_SERVER_ALLOWED_HOSTS' => 'a.example:70000'], [], 'is not a host name'],
             'allowed host brackets' => [['serve', '--allowed-host', '[nothex]'], [], [], 'is not a host name'],
-            'allowed ip flag' => [['serve', '--allowed-ips', '1.2.3.4,example.com'], [], [], 'allowed IP "example.com" is not an IP address or CIDR range'],
+            'allowed ip flag' => [['serve', '--allowed-ips', '1.2.3.4,example.com'], [], [], 'allowed IP `example.com` is not an IP address or CIDR range'],
             'allowed ip prefix' => [['serve'], ['CANDY_CODE_SERVER_ALLOWED_IPS' => '10.0.0.0/40'], [], 'is not an IP address or CIDR range'],
             'allowed ip key type' => [['serve'], [], ['server.allowedIps' => [7]], 'list of strings'],
             'dir browse key type' => [['serve'], [], ['server.dirBrowse' => 'yes'], 'server.dirBrowse in the user config must be true or false'],
