@@ -19,6 +19,7 @@ use SugarCraft\Code\Permissions\DenialKind;
 use SugarCraft\Code\Permissions\ToolRefusal;
 use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
 use SugarCraft\Code\Tools\BuiltIn\PlanExitTool;
+use SugarCraft\Core\Util\Ansi;
 
 /**
  * The `-p "<prompt>"` / `run "<prompt>"` one-shot, non-interactive CLI path.
@@ -1773,7 +1774,25 @@ final class NonInteractive
             return self::encodeDocument($document);
         }
 
-        return $message->content;
+        // 1021 v1:F-2: the JSON arm is immune to control bytes because
+        // json_encode escapes them; this arm piped them through raw. A model
+        // (or a command backend's fenced stderr tail) that emits SGR/OSC
+        // sequences or stray C0 characters painted them straight onto the
+        // caller's terminal — the corruption a JSON consumer never sees.
+        return self::sanitizeTextAnswer($message->content);
+    }
+
+    /**
+     * Reduce an answer body to bytes that are safe to write to a text
+     * terminal: every escape sequence goes (CSI/OSC/DCS/SOS/PM/APC, two-byte
+     * Fe, stray 8-bit C1 and lone ESC — sugar-core's Ansi::strip owns that
+     * alphabet), then a sweep drops the C0/DEL leftovers strip keeps for
+     * other consumers while sparing the three layout bytes \t \n \r that a
+     * multi-line answer legitimately carries.
+     */
+    private static function sanitizeTextAnswer(string $content): string
+    {
+        return (string) preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', Ansi::strip($content));
     }
 
     /**
