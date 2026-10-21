@@ -7884,7 +7884,8 @@ final class Renderer
      *
      * @param list<string> $rows
      * @param string       $clean  the sanitized draft, pre-cursor-splice
-     * @param int          $at     byte offset of the caret into $clean
+     * @param int          $at     codepoint offset of the caret into $clean,
+     *                             snapped to a grapheme-cluster boundary
      * @param bool         $indented whether rows 0.. carry the prompt indent
      * @param int          $textWidth the draft column every row was wrapped at
      *

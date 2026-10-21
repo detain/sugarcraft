@@ -18182,8 +18182,8 @@ final class Chat implements Model
     }
 
     /**
-     * Where the cursor is in {@see $inputBuf}, as a character offset from
-     * the start of the whole draft (newlines counted as one character each).
+     * Where the cursor is in {@see $inputBuf}, as a codepoint offset from
+     * the start of the whole draft (newlines counted as one codepoint each).
      *
      * Flat rather than (row, column) because every caller — Ctrl+W's word
      * boundary, {@see Renderer::renderInput()}'s cursor glyph, the
