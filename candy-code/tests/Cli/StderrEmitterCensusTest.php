@@ -153,7 +153,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FORTY
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FORTY-ONE
  *     of them, in SEVENTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
@@ -666,13 +666,16 @@ final class StderrEmitterCensusTest extends TestCase
         // notes the model saved out of a summarisation that is about to drop
         // what it read them from, invisible from anywhere else.
         'src/Backend/EngineBackend.php' => 2,
-        // plan_comparison W4 (TUI-4a/TUI-5): the four notice-seam writes in
+        // plan_comparison W4 (TUI-4a/TUI-5): the five notice-seam writes in
         // Bootstrap — reload_unchanged, reloaded, the collision rows riding the
-        // same sink, and the macOS Option-as-Meta launch fallback. The routing
+        // same sink, the macOS Option-as-Meta launch fallback, and the TUI-5
+        // reload_refused row (a keybindings file that stopped parsing: the
+        // session keeps its live keymap, but the edit the user just made is
+        // dead, which nothing else on screen says). The routing
         // decision was made IN THE LANE: these ride the RuntimeNoticeSink
         // deliberately and never a second launch banner, so the keymap state a
         // live session is running on stays visible without a restart notice.
-        'src/Cli/Bootstrap.php' => 4,
+        'src/Cli/Bootstrap.php' => 5,
         // Audit R1's last residual (wave 11): a nested CLAUDE.md/AGENTS.md
         // that loadForPath() refused or deferred mid-session. The routing
         // decision: a file the user wrote and expects obeyed is NOT being
@@ -979,7 +982,7 @@ final class StderrEmitterCensusTest extends TestCase
         'twenty-nine' => 29, 'thirty' => 30, 'thirty-one' => 31, 'thirty-two' => 32,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35, 'thirty-six' => 36,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
-        'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
+        'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
     ];
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void

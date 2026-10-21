@@ -527,6 +527,10 @@ final class TreeWideGuardRosterTest extends TestCase
         'Skills/BuiltInSkillsTest.php' => 'skillFilesUnder() takes src/Skills/BuiltIn (and the monorepo skill tier) as a parameter and walks every <skill>/SKILL.md under it',
         // dotPathsIn(\dirname(__DIR__, 2) . '/src') at three call sites.
         'Cli/ProjectTierRefusalInventoryTest.php' => 'dotPathsIn() takes src/ as a parameter and walks it recursively',
+        // SES-1: the census walk derives every SQLite connect site under src/
+        // (and the bin/ entrypoints) from the package root to prove each one
+        // arms the busy timeout - a tree-wide guard by construction.
+        'Session/SqliteConnectCensusTest.php' => 'the census walk takes the package root and walks src/ and bin/ for connect spellings',
         // phpFilesUnder($root . '/src') where $root = \dirname(__DIR__).
         'DenialPrefixRosterTest.php' => 'phpFilesUnder() takes src/ as a parameter and walks it recursively',
     ];
@@ -576,6 +580,9 @@ final class TreeWideGuardRosterTest extends TestCase
         // W4.2: tearDown() lists the clipboard-paste PNGs the test itself landed
         // under its sandboxed awHomeDir to assert the paste persisted them.
         'App/MediaFormWiringTest.php' => ["glob(\$this->awHomeDir.'/home/.candy-code/media/clipboard/'.\\chr(42).'.png')"],
+        // INT-M1: entriesUnderRoot() lists the sandbox bundle dir under the
+        // test's fake HOME; every install lands inside it.
+        'Bundles/BundleInstallTest.php' => ['scandir($this->root)'],
         'ClaudeCodeMcpClientStdinWedgeTest.php' => ['glob($this->tempDir.\'/*\')'],
         'Cli/AgentManagerWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         // tearDown() removes the sys_get_temp_dir() tree setUp() made;
@@ -640,6 +647,8 @@ final class TreeWideGuardRosterTest extends TestCase
         'Server/ServeStatusStopTest.php' => ['scandir($path)'],
         // tearDown() sweeps the two crossed-project sandbox dirs setUp() made.
         'Session/ExplicitResumeCrossProjectTest.php' => ["glob(\$this->dir.'/'.chr(42))"],
+        // SES-1: tearDown() empties the sys_get_temp_dir() store dir setUp() made.
+        'Session/SessionStoreBusyContentionTest.php' => ["glob(\$this->dir.'/*')"],
         // tearDown() clears the sys_get_temp_dir() ledger sandbox setUp() made.
         'Session/UsageRecordsTest.php' => ['glob($this->tempDir.\'/*\')'],
         // Names the package root only to hand its posix-less `php -n` probe the
@@ -2110,8 +2119,10 @@ final class TreeWideGuardRosterTest extends TestCase
         // WALKS_A_DIRECTORY_THE_TEST_MADE doc-block), as this message demands.
         // Moved 3 -> 4 at w2 integration: BuiltInSkillsTest's census became a
         // scandir() walk over src/Skills/BuiltIn (audit 15d-21 follow-up).
+        // Moved 4 -> 5 at the audit-fix weld: Session/SqliteConnectCensusTest's
+        // SES-1 census walks src/ and bin/ from the package root.
         $this->assertCount(
-            4,
+            5,
             self::DECLARED_TREE_WIDE_GUARDS,
             'the declared-guard list has changed size. A row is a LICENCE, so adding one is a '
             . 'deliberate act that belongs in the same change-set as this count; removing one '

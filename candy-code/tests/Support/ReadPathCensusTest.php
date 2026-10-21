@@ -313,6 +313,11 @@ final class ReadPathCensusTest extends TestCase
                 . '(MCP-3): reached only when HomeDirectory::owned() established the home as this user\'s and '
                 . 'the file exists; the same three broken-shape reports as the project read, and the bytes '
                 . 'are listed and shadowed, never executed',
+            'OWNED_HOME — keybindingsReloadParseFailure() (TUI-5) reading the user `config.json` and the '
+                . 'user keybindings file (LayeredSettings::USER_FILE under userSettingsDirOrNull()) to '
+                . 'refuse a /keys reload whose source no longer parses; both paths resolve under a home '
+                . 'HomeDirectory::owned() established as this user\'s, and the bytes are only ever '
+                . 'json_decode\'d into a validation verdict',
         ],
         'Cli/Bootstrap.php|fopen' => [
             'SELF_LOCATED — acquireUserConfigLock(): the `.config.json.lock` sidecar beside the '
@@ -334,6 +339,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'file; an inline `{` document never reaches this sink, a miss is refused before '
                 . 'reading (is_file + is_readable), and the bytes are only ever json_decode\'d into '
                 . 'a responseSchema shape — never executed, never written back',
+        ],
+        'Cli/SelfUpdate.php|file_get_contents' => [
+            'SELF_LOCATED — verifySignature() (DST-3) reads back the temp phar this very process '
+                . 'downloaded to its own `phar.tmp-<pid>-<random>` name, for the detached-signature leg '
+                . 'against the pinned release key; the path is never externally chosen',
         ],
         'Cli/Serve.php|file_get_contents' => [
             'SELF_LOCATED — storedToken(): the owner-token file in the `serve` state dir '
