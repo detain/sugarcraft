@@ -371,10 +371,53 @@ final class PtyDriver
             return $buffer . $chunk;
         }
 
-        $dropped += \strlen($chunk) - $room;
-        $retained += $room;
+        // The cap is a BYTE budget, so the cut is a byte cut — but a raw
+        // substr($chunk, 0, $room) lands wherever $room falls, including the
+        // middle of a multi-byte sequence. Decoding the retained buffer then
+        // emits a lone continuation byte: one mojibake row in the transcript.
+        // Back the cut off to a codepoint boundary (the same UTF-8 tail scan
+        // sugar-core's InputReader::surfaceOversizePaste() uses); the few bytes
+        // we give up are counted as dropped, never smuggled through half-cut.
+        $cut = self::utf8SafeByteCut($chunk, $room);
+        $dropped += \strlen($chunk) - $cut;
+        $retained += $cut;
 
-        return $buffer . \substr($chunk, 0, $room);
+        return $buffer . substr($chunk, 0, $cut);
+    }
+
+    /**
+     * Largest cut length at or below $room bytes that does not split a UTF-8
+     * codepoint. $chunk is valid UTF-8 from its first byte, so the only place a
+     * sequence can be torn is the very tail: scan back up to three bytes for the
+     * lead, and if its declared length exceeds the bytes present, back the cut
+     * off to before that incomplete sequence. A whole sequence's lead sits four
+     * bytes back at most, so a three-step scan can never miss an incomplete one.
+     */
+    private static function utf8SafeByteCut(string $chunk, int $room): int
+    {
+        $size = \strlen($chunk);
+        $cut = min($room, $size);
+
+        for ($back = 1; $back <= 3 && $back <= $cut; $back++) {
+            $b = \ord($chunk[$cut - $back]);
+            if (($b & 0xc0) === 0x80) {
+                continue; // continuation byte — keep looking for its lead
+            }
+
+            $need = match (true) {
+                ($b & 0xe0) === 0xc0 => 2,
+                ($b & 0xf0) === 0xe0 => 3,
+                ($b & 0xf8) === 0xf0 => 4,
+                default              => 1, // ASCII — the run is complete
+            };
+            if ($need > $back) {
+                $cut -= $back; // a lead whose sequence is not yet complete
+            }
+
+            break;
+        }
+
+        return max(0, $cut);
     }
 
     /**
