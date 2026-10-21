@@ -2375,45 +2375,30 @@ final class Chat implements Model
     }
 
     /**
+     * Dispatch one message to the family that owns it (W7-S4 split).
+     *
+     * The handlers under `src/Chat/Handlers/` each answer with the
+     * `[Model, ?Cmd]` pair their arms returned inline before the split, or
+     * null to pass. The families own pairwise-disjoint sets of message
+     * classes — `RouteTraitParityTest` enumerates every `instanceof` arm
+     * across the four handler files and pins that no class is claimed
+     * twice, which is what makes the order of this chain inert. The Keys
+     * handler sits last on purpose: it is the one absorbing handler (its
+     * binding table carries `default => [$this, null]`), so every message
+     * the other three pass, key or not, resolves exactly where the old
+     * inline dispatch resolved it. The terminal null-coalesce is the old
+     * `!$msg instanceof KeyMsg` gate's answer for a class with no arm
+     * anywhere — byte-identical `[$this, null]`.
+     *
      * @return array{0: Model, 1: ?\Closure}
      */
     private function route(Msg $msg): array
     {
-        // W7-S4 family handler (src/Chat/Handlers/): class-disjoint arms,
-        // null means 'not my family' and the next link answers.
-        $handled = $this->handleKeysMessages($msg);
-
-        if ($handled !== null) {
-            return $handled;
-        }
-
-        // W7-S4 family handler (src/Chat/Handlers/): class-disjoint arms,
-        // null means 'not my family' and the next link answers.
-        $handled = $this->handleSessionSurfaceMessages($msg);
-
-        if ($handled !== null) {
-            return $handled;
-        }
-
-        // W7-S4 family handler (src/Chat/Handlers/): class-disjoint arms,
-        // null means 'not my family' and the next link answers.
-        $handled = $this->handleTurnCompletionMessages($msg);
-
-        if ($handled !== null) {
-            return $handled;
-        }
-
-        // W7-S4 family handler (src/Chat/Handlers/): class-disjoint arms,
-        // null means 'not my family' and the next link answers.
-        $handled = $this->handleRunControlMessages($msg);
-
-        if ($handled !== null) {
-            return $handled;
-        }
-
-        // W7-S4: every family handler passed. This is the old KeyMsg gate's
-        // answer for a message with no arm — byte-identical [$this, null].
-        return [$this, null];
+        return $this->handleTurnCompletionMessages($msg)
+            ?? $this->handleRunControlMessages($msg)
+            ?? $this->handleSessionSurfaceMessages($msg)
+            ?? $this->handleKeysMessages($msg)
+            ?? [$this, null];
     }
 
     /**

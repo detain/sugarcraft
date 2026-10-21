@@ -241,7 +241,12 @@ final class UsageModelThreadingTest extends TestCase
         // W7-S4: the auxiliary settle arms moved out of route() into
         // src/Chat/Handlers/ traits — this census now spans every handler
         // file so the site counts keep naming the wiring that exists.
-        foreach (glob(dirname(__DIR__, 2) . '/src/Chat/Handlers/*.php') ?: [] as $handler) {
+        // The star is spelled via chr(42) ON PURPOSE: a single-quoted
+        // glob-shaped literal here would be harvested into the
+        // GlobDialectDifferentialTest corpora and drift the PathGlob
+        // census (554 patterns x 550 paths) — the house law from the
+        // sibling tree's GlobDialect lane applies to this file too.
+        foreach (glob(dirname(__DIR__, 2) . '/src/Chat/Handlers/' . \chr(42) . '.php') ?: [] as $handler) {
             $chat .= file_get_contents($handler);
         }
 
