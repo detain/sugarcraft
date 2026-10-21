@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Support\Daemonize;
+use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Support\ToolIpcFiles;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
@@ -335,6 +337,153 @@ final class ToolIpcFilesTest extends TestCase
             $cmd === false ? putenv('CANDY_CODE_BACKEND_CMD') : putenv('CANDY_CODE_BACKEND_CMD=' . $cmd);
             $streamCmd === false ? putenv('CANDY_CODE_BACKEND_CMD_STREAM') : putenv('CANDY_CODE_BACKEND_CMD_STREAM=' . $streamCmd);
         }
+    }
+
+    // =========================================================================
+    // Pool directories (M-1) — the sc_pool_* reaper
+    // =========================================================================
+
+    /**
+     * A dead owner's ancient, properly-stamped directory is the whole shape
+     * the reaper exists for: name, uid, sentinel, age all agree, and the
+     * start time it carries proves the pid in the name is nobody living.
+     */
+    public function testStalePoolSweepRemovesADirectoryWhoseOwnerIsGone(): void
+    {
+        // 999999999 exceeds every Linux pid_max and any BSD pid bound; if a
+        // host ever recycles INTO it, the start-time check below is what
+        // saves this assertion's subject, which is exactly the point.
+        $path = $this->poolDirectory('999999999', '');
+
+        self::assertSame(1, ToolIpcFiles::sweepStalePoolDirs($this->dir));
+        self::assertDirectoryDoesNotExist($path, 'a stranded dead pool directory must not outlive the sweep');
+
+        $this->removeTree($path);
+    }
+
+    /**
+     * The lock that makes acting on age safe at all: a pool can idle for an
+     * hour WITH its owner alive, and its results in flight are not a
+     * stranger's garbage. The (pid, start) witness must refuse the prune no
+     * matter how ancient every mtime looks.
+     */
+    public function testStalePoolSweepSparesALiveOwnersDirectory(): void
+    {
+        $path = $this->poolDirectory((string) getmypid(), (string) Daemonize::startTime((int) getmypid()));
+
+        try {
+            self::assertSame(0, ToolIpcFiles::sweepStalePoolDirs($this->dir));
+            self::assertDirectoryExists($path, 'age alone must never strand a live pool mid-run');
+            self::assertFileExists($path . '/agent.result');
+        } finally {
+            $this->removeTree($path);
+        }
+    }
+
+    /**
+     * Pid recycling is precisely why the sentinel carries a start time: a
+     * directory named for THIS pid whose stamp was written by an ancestor
+     * process at a different start time reads dead, even though the number
+     * in the name is currently very much alive under a new identity.
+     */
+    public function testStalePoolSweepIsNotFooledByARecycledPid(): void
+    {
+        if (Daemonize::startTime((int) getmypid()) === null) {
+            $this->markTestSkipped('this witness needs procfs: signal 0 alone cannot tell a recycled pid from its owner.');
+        }
+
+        $path = $this->poolDirectory((string) getmypid(), '1');
+
+        self::assertSame(1, ToolIpcFiles::sweepStalePoolDirs($this->dir), 'start-time mismatch means the owner is gone');
+        self::assertDirectoryDoesNotExist($path);
+
+        $this->removeTree($path);
+    }
+
+    /**
+     * Every conservative edge at once: too young, never stamped (the
+     * disclosed-leak doctrine — suspicion is not authority), a name that
+     * only wears the prefix, and a directory carrying something that is not
+     * one of ours. None may move.
+     */
+    public function testStalePoolSweepSparesYoungUnstampedMalformedAndAlienEntries(): void
+    {
+        $ancient = time() - 86_400;
+
+        $young = $this->dir . '/sc_pool_999999999_aaaaaaaaaaaaaaaa';
+        mkdir($young, 0o700);
+        file_put_contents($young . '/' . SafeDelete::SENTINEL, '');
+        file_put_contents($young . '/agent.result', 'x');
+
+        $unstamped = $this->dir . '/sc_pool_999999999_bbbbbbbbbbbbbbbb';
+        mkdir($unstamped, 0o700);
+        file_put_contents($unstamped . '/agent.result', 'x');
+        touch($unstamped, time() - 86_400);
+        touch($unstamped . '/agent.result', time() - 86_400);
+
+        $malformed = $this->dir . '/sc_pool_notapid_cccc';
+        mkdir($malformed, 0o700);
+        file_put_contents($malformed . '/' . SafeDelete::SENTINEL, '');
+        touch($malformed, time() - 86_400);
+
+        $alien = $this->poolDirectory('999999999', '');
+        mkdir($alien . '/nested', 0o700);
+        // Making an entry refreshed the directory mtime — re-age it, or this
+        // case would test age immunity instead of the not-ours rule it names.
+        touch($alien . '/nested', $ancient);
+        touch($alien, $ancient);
+
+        try {
+            self::assertSame(0, ToolIpcFiles::sweepStalePoolDirs($this->dir));
+            foreach ([$young, $unstamped, $malformed, $alien] as $path) {
+                self::assertDirectoryExists($path);
+            }
+            self::assertFileExists($young . '/agent.result');
+        } finally {
+            foreach ([$young, $unstamped, $malformed, $alien] as $path) {
+                $this->removeTree($path);
+            }
+        }
+    }
+
+    /**
+     * The family is wired into the one sweep every real run takes, not just
+     * defined next to the other two.
+     */
+    public function testSweepOnceAlsoReapsStrandedPoolDirectories(): void
+    {
+        $payload = $this->stale(ToolIpcFiles::CHAT_PREFIX . 'pooled.json');
+        $poolDir = $this->poolDirectory('999999999', '');
+
+        $latch = new \ReflectionProperty(ToolIpcFiles::class, 'swept');
+        $wasSwept = $latch->getValue();
+
+        try {
+            $latch->setValue(null, false);
+
+            self::assertSame(2, ToolIpcFiles::sweepOnce($this->dir), 'one payload plus one pool directory');
+            self::assertFileDoesNotExist($payload);
+            self::assertDirectoryDoesNotExist($poolDir);
+        } finally {
+            $latch->setValue(null, $wasSwept);
+            @unlink($payload);
+            $this->removeTree($poolDir);
+        }
+    }
+
+    /** Mint an aged sc_pool_* directory carrying $sentinelContent (null = never stamped). */
+    private function poolDirectory(string $pid, string $sentinelContent): string
+    {
+        $path = $this->dir . '/sc_pool_' . $pid . '_' . bin2hex(random_bytes(8));
+        mkdir($path, 0o700);
+        file_put_contents($path . '/agent.result', 'orphaned by a killed pool');
+        file_put_contents($path . '/' . SafeDelete::SENTINEL, $sentinelContent);
+        $ancient = time() - 86_400;
+        touch($path . '/agent.result', $ancient);
+        touch($path . '/' . SafeDelete::SENTINEL, $ancient);
+        touch($path, $ancient);
+
+        return $path;
     }
 
     // =========================================================================
