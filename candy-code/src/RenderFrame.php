@@ -21,11 +21,12 @@ namespace SugarCraft\Code;
  * What stays on {@see Renderer} is deliberately NOT here: the content-keyed
  * render memos and the shared zone Scanner are genuinely process-scoped (their
  * own docblocks say why — a click arrives BETWEEN frames, and the image/markdown
- * caches exist to survive frames). The three compositor inputs below are
+ * caches exist to survive frames). The four compositor inputs below are
  * frame-scoped by their contract (each is "set around one paint and reset on
  * the way out", declared by the shell through
  * {@see Renderer::setPaletteAbandoned()} / {@see Renderer::setAgentsPaneDocked()} /
- * {@see Renderer::setAgentView()}); they ride a {@see beginNext()} swap
+ * {@see Renderer::setAgentView()} / {@see Renderer::setFocusedToolRowKeys()});
+ * they ride a {@see beginNext()} swap
  * because they are declared before the paint they belong to, not during it.
  *
  * The class is mutable by design — it accumulates during a serial paint — and
@@ -118,6 +119,18 @@ final class RenderFrame
     private bool $agentsPaneDocked = false;
 
     /**
+     * The row-unit keys the shell's SETTLED `Ctrl+F` cursor stands on
+     * (v2:a11y-F1, W7-B), or the empty list while no cursor is settled.
+     * The keys are the same ones {@see Chat::$expanded} is keyed by, so the
+     * highlight follows the ROWS the user picked — identity, not position —
+     * exactly like the `Ctrl+O` that answers them. Declared per paint by the
+     * shell; it is the shell's state, not the chat's.
+     *
+     * @var list<string>
+     */
+    private array $focusedToolRowKeys = [];
+
+    /**
      * The Agent View the shell has open for this frame (roadmap P-C2), as
      * {@see \SugarCraft\Code\App\App::agentViewFrame()} built it, or null for
      * the parent transcript. The view's state is the SHELL's, so it reaches
@@ -185,9 +198,10 @@ final class RenderFrame
     /**
      * The frame for the next paint, begun from this published one.
      *
-     * Only the three compositor INPUTS are carried: they describe the shell
+     * Only the four compositor INPUTS are carried: they describe the shell
      * state App::view arms around each paint (palette handoff, docked Agents
-     * pane, open Agent View) and reset after it, so the fresh frame must see
+     * pane, open Agent View, settled `Ctrl+F` row cursor) and reset after it,
+     * so the fresh frame must see
      * them to build the frame the user is looking at. Everything else —
      * registries, zone origin, selection, offsets — is reborn empty from the
      * chat state renderView walks; a leftover row from a previous frame would
@@ -200,6 +214,7 @@ final class RenderFrame
         $next->paletteAbandoned = $this->paletteAbandoned;
         $next->agentsPaneDocked = $this->agentsPaneDocked;
         $next->agentView = $this->agentView;
+        $next->focusedToolRowKeys = $this->focusedToolRowKeys;
 
         return $next;
     }
@@ -342,6 +357,20 @@ final class RenderFrame
     public function agentView(): ?array
     {
         return $this->agentView;
+    }
+
+    /**
+     * @param list<string> $keys row-unit keys the settled cursor stands on, empty when none
+     */
+    public function noteFocusedToolRowKeys(array $keys): void
+    {
+        $this->focusedToolRowKeys = $keys;
+    }
+
+    /** @return list<string> */
+    public function focusedToolRowKeys(): array
+    {
+        return $this->focusedToolRowKeys;
     }
 
     // ------------------------------------------------------------------

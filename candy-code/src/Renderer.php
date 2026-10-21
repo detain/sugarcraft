@@ -1130,6 +1130,25 @@ final class Renderer
     }
 
     /**
+     * Declare the row-unit keys the shell's SETTLED `Ctrl+F` cursor stands
+     * on for the frame being composited (v2:a11y-F1, W7-B), or the empty
+     * list when no cursor is settled.
+     *
+     * The cursor is the SHELL's state ({@see \SugarCraft\Code\App\App::$toolWalkState}),
+     * not the chat's, so it reaches this renderer the way the abandonment
+     * signal does: set around one paint by the shell compositor and reset on
+     * the way out, so a standalone Chat render (tests, exports) paints no
+     * highlight — the default empty list self-heals every non-hosted path.
+     * Storage: {@see RenderFrame} (its `focusedToolRowKeys()` read).
+     *
+     * @param list<string> $keys
+     */
+    public static function setFocusedToolRowKeys(array $keys): void
+    {
+        self::publishedFrame()->noteFocusedToolRowKeys($keys);
+    }
+
+    /**
      * Drop the click-zone registry and reset the origin and the abandonment
      * signal.
      *
@@ -1629,7 +1648,7 @@ final class Renderer
         // registered twice, which makes the zone scan throw). The layout heads
         // are reborn with them but kept a SEPARATE registry - see
         // RenderFrame::$toolRowHeads for why the layout question and the click
-        // question are answered from two registries rather than one. The three
+        // question are answered from two registries rather than one. The four
         // compositor inputs carry across (App::view armed them before this
         // paint); the Ctrl+O key is re-noted from the chat, the one registry
         // value that is chat state rather than frame geometry.
