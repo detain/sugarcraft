@@ -337,7 +337,7 @@ final class SettingsSchemaTest extends TestCase
     {
         self::assertSame('must be a bool', SettingDefinition::new('a', SettingType::Bool)->validate('yes'));
         self::assertSame('must be a string', SettingDefinition::new('a', SettingType::String)->validate(3));
-        self::assertSame('must be a object', SettingDefinition::new('a', SettingType::Map)->validate(['x']));
+        self::assertSame('must be an object', SettingDefinition::new('a', SettingType::Map)->validate(['x']));
         self::assertSame('must be a whole number', SettingDefinition::new('a', SettingType::Int)->validate('90'));
         self::assertSame('must be at least 1', SettingDefinition::new('a', SettingType::Int)->withRange(1)->validate(0));
         self::assertSame('must be a list', SettingDefinition::new('a', SettingType::StringList)->validate(['k' => 'v']));

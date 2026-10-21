@@ -343,7 +343,10 @@ final class SettingDefinition
                 default => true,
             };
             if (!$shape) {
-                return 'must be a ' . $this->type->label();
+                $label = $this->type->label();
+                $vowel = \in_array(\strtolower(\substr($label, 0, 1)), ['a', 'e', 'i', 'o', 'u'], true);
+
+                return 'must be ' . ($vowel ? 'an' : 'a') . ' ' . $label;
             }
         }
 

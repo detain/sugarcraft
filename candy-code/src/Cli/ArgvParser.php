@@ -1093,12 +1093,9 @@ final class ArgvParser
      *
      * The line is stderr-alone (stdout is the answer/document on every
      * format), and it carries the literal `candy-code: ` label the same way
-     * the rest of this file's thirty-four prefixed shapes do rather than
-     * reaching into NonInteractive's private ERROR_LABEL. It is a raw English
-     * literal, not a Lang key, on purpose: lang/en.php is outside this lane,
-     * and until `cli.argv.prompt.duplicate` lands, Lang::t would echo the
-     * dotted key itself at the operator. The DOC-ROW asks the closeout to
-     * adopt the key and re-spell this line through Lang::t.
+     * the rest of this file's prefixed shapes do rather than reaching into
+     * NonInteractive's private ERROR_LABEL. The sentence itself is
+     * catalogued as `cli.argv.prompt.duplicate`.
      */
     private static function noticePromptOverride(?string $previous, bool $alreadyNoticed): bool
     {
@@ -1106,7 +1103,7 @@ final class ArgvParser
             return $alreadyNoticed;
         }
 
-        \fwrite(\STDERR, 'candy-code: more than one -p/--prompt given; using the last value.' . "\n");
+        \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.argv.prompt.duplicate') . "\n");
 
         return true;
     }

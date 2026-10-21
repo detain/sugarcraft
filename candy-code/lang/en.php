@@ -104,6 +104,7 @@ return [
     'cli.argv.output_format.flag' => '--output-format expects a format, but the next argument is the option {option}',
     'cli.argv.output_format.missing' => '--output-format expects a format, but the argument list ended',
     'cli.argv.output_format.unsupported' => '--output-format {format}: unsupported output format',
+    'cli.argv.prompt.duplicate' => 'more than one -p/--prompt given; using the last value.',
     'cli.argv.prompt_is_flag' => '{option} expects a prompt, but the next argument is the option {value}',
     'cli.argv.resume.not_found' => '--resume: no stored session has the id or name `{target}`',
     'cli.argv.resume.store_unavailable' => '--resume: cannot open the session store: {error}',
@@ -672,6 +673,9 @@ Exit codes (one-shot mode and every subcommand):
                          A subcommand given a missing or unknown operand
                          (`session`, `mcp bogus`, `completion tcsh`) reports
                          here too.
+  130/143/129             TUI: a signal stopped the loop — 128+N for
+                         SIGINT (Ctrl+C), SIGTERM, SIGHUP; a cooperative
+                         quit (/exit, q) still exits 0.
 
 Examples:
   candy-code -p "Explain the difference between require and include"
@@ -973,6 +977,7 @@ TXT,
     'cli.session.unknown_action' => 'session {action}: unknown action',
     'cli.session.unnamed' => '(unnamed)',
     'cli.session.usage' => 'Usage: candy-code session list [--all|--archived|--children] [--limit N] | show <target> | rename <target> <title…> | delete <target> [--with-children] | pin|unpin|archive|unarchive <target> — <target> is an id, a name or a unique id prefix.',
+    'cli.settings.corrupt_file' => '{file} contributes no settings: {error}',
     'cli.settings.did_you_mean' => ' — did you mean `{key}`?',
     'cli.settings.rejected_value' => '{key} in {file} will fall back to its default: {error}',
     'cli.settings.unknown_key' => '{key} in {file} is not a setting candy-code reads{hint}',
@@ -2801,6 +2806,7 @@ TXT,
     'tui.tool.hidden_line' => '… {count} line hidden (ctrl+o)',
     'tui.tool.hidden_lines' => '… {count} lines hidden (ctrl+o)',
     'tui.tool.image_hidden' => 'image hidden (ctrl+o)',
+    'tui.tool.image_shown' => 'image:{file} ({details})',
     'tui.tool.image_unavailable' => 'image unavailable: {error}',
     'tui.tool.interrupted' => 'interrupted',
     'tui.tool.more_diff_line' => '… {count} more diff line',
