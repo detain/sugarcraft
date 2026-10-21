@@ -45,6 +45,38 @@ composer require sugarcraft/candy-top
 
 Add `:@dev` (`composer require sugarcraft/candy-top:@dev`) while your project's `minimum-stability` is `stable` and no tagged release exists. Composer installs the launcher as `vendor/bin/candy-top`. For a global tool, use `composer global require sugarcraft/candy-top` and put Composer's global `vendor/bin` on your `PATH`.
 
+### Phar release and self-update
+
+The release workflow attaches a single-file executable archive to each
+`candy-top/v*` tag: download `candy-top.phar` from
+[the releases page](https://github.com/detain/sugarcraft/releases), verify it
+against the `candy-top.phar.sha256` sidecar (`sha256sum -c
+candy-top.phar.sha256`), and run `php candy-top.phar`. A build made from a
+tagged release stamps its version into the archive, so `--version` prints the
+tag it was built from.
+
+An installed phar updates itself:
+
+```sh
+php candy-top.phar self-update --check    # report only: exit 0 current, 1 update available
+php candy-top.phar self-update            # swap to the latest stable candy-top/v* release
+php candy-top.phar self-update --rollback # undo the swap once (restores the kept .old copy)
+```
+
+The swap verifies the downloaded bytes against the sidecar digest before
+anything moves, keeps the previous phar at `<path>.old` for the one-shot
+rollback, and refuses downgrades. Signature policy mirrors candy-code: the
+release key is pinned in `SelfUpdate::PUBLIC_KEY_BASE64`, so a release whose
+`candy-top.phar.minisig` is missing or does not verify is refused;
+`--allow-unsigned` is the dev-only bypass (it skips the signature leg only —
+the sha256 sidecar still binds the bytes) and `--check` refuses to carry it.
+Composer installs are refused loudly rather than silently no-op'd — update
+them with `composer update sugarcraft/candy-top`. Transition truth: the
+release pipeline signs with the repo's `SUGARCRAFT_SIGNING_KEY` secret when
+one exists; if the workflow notice says a build shipped unsigned, check the
+release's assets for `candy-top.phar.minisig` before trusting the keyless
+state, and prefer re-tagging a fresh release over widening anyone's bypass.
+
 ## Run
 
 ```sh

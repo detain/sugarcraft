@@ -1,0 +1,226 @@
+# Build the candy-top PHAR and publish it on a release.
+#
+# Mirrors .github/workflows/release-phar.yml (candy-code's DST-1 pipeline —
+# the reference; read-only to this program). Triggered by pushing a tag
+# spelled `candy-top/v*` (per-lib tagging on the shared repo stream), or
+# manually with a tag input.
+#
+# REPRODUCIBILITY CAVEAT (inherited, disclosed, not solved here): the build
+# runs `composer install` with the lock deliberately absent — house rule
+# forbids committing per-lib composer.lock — and the `sugarcraft/*` siblings
+# resolve from Packagist at their `dev-master` moving target. Two builds of
+# the same tag can therefore differ byte-wise; the .sha256 published
+# alongside each release names the bytes that job produced, not a rebuild
+# guarantee. The build script REFUSES symlinked sibling vendors, dirty
+# source trees, and detached HEADs, so a linked-mode working tree can never
+# freeze uncommitted sibling code into a public artifact; the checkout below
+# attaches HEAD to a named branch because the preflight demands exactly that
+# attribution.
+#
+# `phar.readonly=0` is passed with `-d` to the BUILD command only. It is
+# never a runtime requirement: the produced archive executes under a normal
+# `php candy-top.phar` with the default readonly=On.
+#
+# The signing step reads the sugarcraft-WIDE secret SUGARCRAFT_SIGNING_KEY
+# (owner ruling 2026-10-21: one keypair signs every app's phar; each app
+# pins the public half in its own source — candy-top pins it at
+# SelfUpdate::PUBLIC_KEY_BASE64). Absent the secret, the build ships
+# UNSIGNED exactly as candy-code's did before 2026-10-20; nothing else
+# changes.
+name: Release candy-top PHAR
+
+on:
+  push:
+    tags:
+      - 'candy-top/v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing candy-top/v* tag to build and publish'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Attach HEAD to the tag
+        # The build's integrity preflight refuses detached HEADs (a tag
+        # checkout IS detached); re-attaching the same commit to a branch
+        # name keeps the artifact attributable without weakening the door.
+        run: |
+          set -euo pipefail
+          git checkout -B phar-build '${{ steps.tag.outputs.tag }}'
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.3'
+          coverage: none
+          # The full ci.yml extension list, not candy-code's slimmer set: the
+          # heavy arm below boots candy-top's WHOLE suite to filter, and
+          # candy-top's CI legs resolve against this exact environment.
+          extensions: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, pdo_mysql, pdo_pgsql, ssh2, gd, curl, openssl, ffi
+
+      - name: Install production dependencies
+        run: |
+          set -euo pipefail
+          cd candy-top
+          # A linked-mode local checkout can carry a path-repo lock; CI starts
+          # from git, and the build REFUSES symlinked vendors as the second
+          # line of defence against frozen sibling WIP.
+          rm -f composer.lock
+          composer install --no-dev --prefer-dist --no-interaction --no-progress
+
+      - name: Build the archive
+        run: |
+          set -euo pipefail
+          # SOURCE_DATE_EPOCH pins metadata['built_at'] to the tagged commit's
+          # date so rebuilds of one tag agree on the stamp (DST-1
+          # reproducibility note); the byte-level guarantee still stops at the
+          # moving dev-master dependency window disclosed in this header.
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT '${{ steps.tag.outputs.tag }}')"
+          php -d phar.readonly=0 candy-top/tools/build-phar.php \
+            --out=dist/candy-top.phar \
+            --version='${{ steps.tag.outputs.tag }}'
+
+      - name: Sign the archive (pinned-key mode)
+        # OPTIONAL step by design: without the SUGARCRAFT_SIGNING_KEY secret it
+        # skips green and the release ships unsigned. When the owner has the
+        # secret populated AND SelfUpdate::PUBLIC_KEY_BASE64 carries the
+        # matching public half (both true as of the sugarcraft-wide key
+        # pinning), this emits candy-top.phar.minisig — the base64 detached
+        # signature `self-update` then REQUIRES, verified against the key
+        # pinned in source rather than against anything the release channel
+        # controls. Same keypair as candy-code; same law.
+        run: |
+          set -euo pipefail
+          if [ -z "${SUGARCRAFT_SIGNING_KEY:-}" ]; then
+            echo "::notice::SUGARCRAFT_SIGNING_KEY secret not set — shipping unsigned (keyless state)"
+            exit 0
+          fi
+          php -r '
+            $key = base64_decode(getenv("SUGARCRAFT_SIGNING_KEY"), true);
+            if ($key === false || strlen($key) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
+              fwrite(STDERR, "SUGARCRAFT_SIGNING_KEY must be the base64 of the 64-byte sodium secret key\n");
+              exit(1);
+            }
+            $sig = sodium_crypto_sign_detached(file_get_contents("dist/candy-top.phar"), $key);
+            file_put_contents("dist/candy-top.phar.minisig", base64_encode($sig) . "\n");
+          '
+          cat dist/candy-top.phar.minisig
+        env:
+          SUGARCRAFT_SIGNING_KEY: ${{ secrets.SUGARCRAFT_SIGNING_KEY }}
+
+      - name: Checksum
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum candy-top.phar > candy-top.phar.sha256)
+          if [ -f dist/candy-top.phar.minisig ]; then
+            (cd dist && sha256sum candy-top.phar.minisig > candy-top.phar.minisig.sha256)
+          fi
+          cat dist/candy-top.phar.sha256
+
+      - name: Smoke — version
+        # DST-1's release-shape proof: this must print the TAGGED version,
+        # read back from the archive's stamped metadata — never the frozen
+        # vendor/'s dev-master.
+        run: php dist/candy-top.phar --version
+
+      - name: Smoke — help surface on a virgin HOME
+        # The candy-code pipeline's headless-echo arm is app-specific (a chat
+        # turn); candy-top is a TUI with no one-shot prompt. Its non-TTY
+        # contract is the help page, which must render with no config, no
+        # themes dir, and no controlling terminal — and now carries the
+        # self-update verb line this release stream depends on.
+        run: |
+          set -euo pipefail
+          fake_home="$(mktemp -d)"
+          HOME="$fake_home" php dist/candy-top.phar --help | grep -q 'self-update'
+
+      - name: Smoke — archive scanners are alive under phar://
+        # The archive is addressed as a phar:// URI, never as a bare
+        # '/x.phar/entry' path: measured on PHP 8.3.6 in candy-code's run
+        # 39355949075, bare paths fail is_file()/require for every caller —
+        # bin/candy-top's autoload guard and PharCompatTest's stub pins
+        # document the same measurement, and the phar:// URI is the only form
+        # the extension honours. Double quotes only in the php body below: it
+        # is embedded in a shell single-quoted argument.
+        run: |
+          set -euo pipefail
+          php -r '
+            $phar = getenv("PHAR_PATH");
+            require "phar://" . $phar . "/vendor/autoload.php";
+            $themes = \SugarCraft\Top\Theme\ThemeRegistry::new()->names();
+            $index  = is_file(\SugarCraft\Top\View\Logo::DIR . "/logos.jsonl");
+            if (count($themes) === 0 || !$index) {
+              fwrite(STDERR, "phar scanner census empty: themes=" . count($themes) . " logo_index=" . ($index ? "yes" : "no") . "\n");
+              exit(1);
+            }
+            echo "phar scanners alive: " . count($themes) . " themes, logo index present\n";
+          '
+        env:
+          PHAR_PATH: ${{ github.workspace }}/dist/candy-top.phar
+
+      # Deliberately NO `apt-get install ripgrep` step (candy-code's cure for
+      # GrepEngineDifferentialTest's empty-data-set suite-load ERROR): no
+      # candy-top provider depends on rg, so the failure class cannot occur
+      # in the heavy arm below.
+
+      - name: PharCompatTest heavy arm
+        # The archive is real; run the suite's CANDY_TOP_PHAR-gated stage 4
+        # against it (PharCompatTest's docblock promises this workflow "builds
+        # an archive, exports CANDY_TOP_PHAR, and runs this file" — this step
+        # makes that sentence true). Dev dependencies are installed only now:
+        # the artifact above was built from the --no-dev vendor, and
+        # re-running install does not touch dist/.
+        run: |
+          set -euo pipefail
+          cd candy-top
+          composer install --prefer-dist --no-interaction --no-progress
+          CANDY_TOP_PHAR="${GITHUB_WORKSPACE}/dist/candy-top.phar" vendor/bin/phpunit --no-coverage --filter PharCompatTest
+
+      # Deliberately NO upload-artifact step: nothing consumes a run artifact
+      # (single job, no needs:, and the Publish step below ships
+      # dist/candy-top.phar and its .sha256 directly as release assets), and
+      # deriving an artifact name from the tag carries the namespace '/' that
+      # upload-artifact refuses — candy-code's run 39379594999 died on exactly
+      # that. If a future job ever needs the archive, add a sanitized name
+      # here (steps.tag output stripped of the `candy-top/` prefix), never the
+      # raw tag.
+      - name: Publish GitHub release
+        run: |
+          set -euo pipefail
+          tag='${{ steps.tag.outputs.tag }}'
+          assets=(dist/candy-top.phar dist/candy-top.phar.sha256)
+          if [ -f dist/candy-top.phar.minisig ]; then
+            assets+=(dist/candy-top.phar.minisig dist/candy-top.phar.minisig.sha256)
+          fi
+          notes="Self-contained candy-top PHAR built by .github/workflows/release-candy-top-phar.yml at commit ${GITHUB_SHA}.\n\nVerify: sha256sum -c candy-top.phar.sha256\n\nRun: php candy-top.phar --version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --title "candy-top ${tag#candy-top/}" --verify-tag --notes "$(printf '%b' "$notes")"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
