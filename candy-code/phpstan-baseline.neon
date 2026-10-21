@@ -631,12 +631,6 @@ parameters:
 			path: src/Chat.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>arguments" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: src/Chat.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 2
@@ -646,12 +640,6 @@ parameters:
 			message: '#^Using nullsafe property access "\?\-\>notices" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 4
-			path: src/Chat.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>tool" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
 			path: src/Chat.php
 
 		-
@@ -1319,6 +1307,18 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: src/Observability/OtelSink.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>arguments" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Permissions/PermissionPrompt.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>tool" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Permissions/PermissionPrompt.php
 
 		-
 			message: '#^Offset int on string on left side of \?\? always exists and is not nullable\.$#'
