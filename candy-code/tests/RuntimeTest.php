@@ -8239,9 +8239,10 @@ DOC;
             'NonInteractive.php spells its writes `\fwrite(...)`; a scanner that reads T_STRING only sees none of them',
         );
         $this->assertSame(
-            ['file_put_contents', 'fwrite', 'unlink'],
+            ['file_put_contents', 'fopen', 'ftruncate', 'fwrite', 'unlink'],
             array_keys(self::writePrimitivesCalledIn($src . '/Sessions/BackgroundSessionRunner.php')),
-            'BackgroundSessionRunner.php spells its writes `@\file_put_contents(...)` / `@\unlink(...)`',
+            'BackgroundSessionRunner.php spells its writes `@\file_put_contents(...)` / `@\unlink(...)` and, '
+                . 'since the sidecar-log rotation of eb07cb95b, `@\fopen(...)` / `@\ftruncate(...)` too',
         );
         $this->assertSame(
             ['fopen', 'mkdir'],
