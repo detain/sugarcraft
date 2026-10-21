@@ -320,4 +320,35 @@ final class AnimatedWebpDecoderTest extends TestCase
     {
         self::assertFalse((new AnimatedWebpDecoder())->reopensInPlace());
     }
+
+    public function testSourceAboveTheByteCeilingIsRefusedBeforeTheRead(): void
+    {
+        // fx61b sibling gate: a valid-shaped container padded one byte past
+        // MAX_SOURCE_BYTES must be refused by the stat leg — the file is
+        // never slurped whole. The capability mock isolates the gate from
+        // the host GD check that runs earlier in open().
+        $padded = $this->storyContainer() . str_repeat("\x00", AnimatedWebpDecoder::MAX_SOURCE_BYTES + 1 - strlen($this->storyContainer()));
+        self::assertSame(AnimatedWebpDecoder::MAX_SOURCE_BYTES + 1, strlen($padded));
+        $path = $this->file($padded, 'huge.webp');
+        AnimatedWebpDecoder::setWebpCapableForTesting(true);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('is ' . (AnimatedWebpDecoder::MAX_SOURCE_BYTES + 1) . ' bytes, above the ' . AnimatedWebpDecoder::MAX_SOURCE_BYTES . ' byte ceiling');
+        (new AnimatedWebpDecoder())->open($path, 8, 4, 10.0);
+    }
+
+    public function testSmallSourcesStillOpenThroughTheCappedReadPath(): void
+    {
+        // Accept-under edge of the same gate: the capped read must not
+        // truncate or refuse ordinary containers — the story plays whole.
+        // (The exactly-at-cap accept leg is not pinned: parseContainer
+        // walks every trailing byte, so a 64 MiB padded accept would scan
+        // ~8.4 million chunks per run for a semantics the `>` comparison
+        // in the code and this refusal pair already bound from one side.)
+        $d = new AnimatedWebpDecoder();
+        $d->open($this->file($this->storyContainer(), 'capped-normal.webp'), 8, 4, 10.0);
+
+        self::assertSame([100, 100, 100], $d->frameDelaysMs());
+        self::assertNotNull($d->next());
+    }
 }

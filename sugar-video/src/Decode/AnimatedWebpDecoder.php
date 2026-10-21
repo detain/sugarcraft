@@ -59,6 +59,16 @@ final class AnimatedWebpDecoder implements Decoder
     /** Ceiling on frames accepted from one container — a hostile/corrupt walk cannot balloon memory through the compositing loop. */
     public const MAX_FRAMES = 4096;
 
+    /**
+     * Byte ceiling for the pre-parse source read, mirroring the GifDecoder
+     * fx61b capture gate on the WebP side: files above the ceiling are
+     * refused BEFORE being slurped into memory (the stat leg), with a
+     * cap+1 over-read and a strlen refusal as the backstop for sources
+     * whose size stat cannot see. A file exactly AT the cap is accepted:
+     * the gate is `size > cap`, not `>=`.
+     */
+    public const MAX_SOURCE_BYTES = 67_108_864; // 64 MiB
+
     /** Ceiling on the canvas area in pixels (2048×2048) — GD canvases are 4 bytes per pixel before PHP object overhead. */
     public const MAX_CANVAS_PIXELS = 4_194_304;
 
@@ -216,9 +226,31 @@ final class AnimatedWebpDecoder implements Decoder
             throw new \RuntimeException("video source not found: {$source}");
         }
 
-        $bytes = @file_get_contents($source);
+        // fx61b sibling gate: refuse above-ceiling sources before the read.
+        // The stat leg is the pre-read refusal; when a wrapper hides the
+        // size (@stat false) the capped read + strlen leg below still fails
+        // closed, so the file is never fully slurped either way.
+        $size = @stat($source);
+        if (is_array($size) && (int) $size['size'] > self::MAX_SOURCE_BYTES) {
+            throw new \RuntimeException(sprintf(
+                'animated WebP source is %d bytes, above the %d byte ceiling: %s',
+                (int) $size['size'],
+                self::MAX_SOURCE_BYTES,
+                $source,
+            ));
+        }
+
+        $bytes = @file_get_contents($source, false, null, 0, self::MAX_SOURCE_BYTES + 1);
         if ($bytes === false) {
             throw new \RuntimeException("could not read animated WebP source: {$source}");
+        }
+        if (strlen($bytes) > self::MAX_SOURCE_BYTES) {
+            throw new \RuntimeException(sprintf(
+                'animated WebP source is %d bytes, above the %d byte ceiling: %s',
+                strlen($bytes),
+                self::MAX_SOURCE_BYTES,
+                $source,
+            ));
         }
 
         $frames = self::parseContainer($bytes, $canvasW, $canvasH, $this->loopCount);
