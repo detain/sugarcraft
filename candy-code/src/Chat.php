@@ -137,6 +137,7 @@ use SugarCraft\Code\App\AgentControlMsg;
 use SugarCraft\Code\App\ToolResultsMsg;
 use SugarCraft\Code\App\GoalJudgedMsg;
 use SugarCraft\Code\App\AssistantMsg;
+use SugarCraft\Code\Chat\Handlers\HandlesRunControl;
 
 /**
  * The chat shell, as a SugarCraft {@see Model}.
@@ -165,6 +166,9 @@ use SugarCraft\Code\App\AssistantMsg;
  */
 final class Chat implements Model
 {
+
+    use HandlesRunControl;
+
     /**
      * The key types {@see update()} hands straight to the draft editor when no
      * arm above has claimed them and no ctrl flag is set.
@@ -2363,60 +2367,14 @@ final class Chat implements Model
      */
     private function route(Msg $msg): array
     {
-        // Roadmap P-C2: the shell left the Agent View. The key that left it
-        // (Esc) never reached this chat, but an Esc pressed BEFORE the view
-        // opened may still be armed — so the first Esc after the view closes
-        // is a first press again, never the second half of a turn cancel.
-        if ($msg instanceof CloseAgentViewMsg) {
-            return [$this->lastEscapeAt === null ? $this : $this->mutate(['lastEscapeAt' => null]), null];
+        // W7-S4 family handler (src/Chat/Handlers/): class-disjoint arms,
+        // null means 'not my family' and the next link answers.
+        $handled = $this->handleRunControlMessages($msg);
+
+        if ($handled !== null) {
+            return $handled;
         }
 
-        // crush-media W3.1: the media form's collected Generate action, handed
-        // back by the shell. It runs through the SAME /generate tool pipeline
-        // the typed command uses — one dispatch path, and the form itself
-        // dials nothing (its Submit echo row is the bare command word).
-        if ($msg instanceof \SugarCraft\Code\Tui\MediaForm\GenerateFromMediaFormMsg) {
-            return $this->applyCommandResult(
-                (new \SugarCraft\Code\Host\Commands\GenerateHostCommand())->runRequest(
-                    $this->commandContext(),
-                    '/generate',
-                    $msg->request->toArray(),
-                ),
-            );
-        }
-
-        // Roadmap 5.7-1: `Alt+M`, or any other door, switching the mode.
-        if ($msg instanceof PermissionModeToggledMsg) {
-            return $this->togglePermissionMode($msg);
-        }
-
-        // Roadmap P-B3: `c` (or `x` on a running run) on the live agents
-        // strip. Only a call the turn on screen is still running is named,
-        // and only that call stops (1.C-4b) — the turn carries on.
-        if ($msg instanceof CancelAgentRunMsg) {
-            if ($this->inFlight && $msg->parentCallId !== '') {
-                foreach ($this->history as $message) {
-                    if ($message->pendingToolCallId === $msg->parentCallId) {
-                        $this->inFlightCancellation?->cancelTool($msg->parentCallId);
-
-                        break;
-                    }
-                }
-            }
-
-            return [$this, null];
-        }
-
-        // Roadmaps P-D2/P-D3: the shell's word for something the user asked
-        // of one or more delegated runs — the Agent View composer's Enter,
-        // its Ctrl+X chords, the dashboard's c/r/s, Ctrl+G's broadcast. The
-        // runs' mailboxes and the live registry the ids name are this
-        // chat's, so the shell only translates and this arm acts.
-        if ($msg instanceof AgentControlMsg) {
-            return $msg->verb === AgentControlMsg::MESSAGE
-                ? $this->submitToAgents($msg)
-                : $this->controlAgents($msg);
-        }
 
         if ($msg instanceof AssistantMsg) {
             // Account the turn FIRST - before the staleness guard, before the
@@ -2678,93 +2636,11 @@ final class Chat implements Model
 
             return [$this->mutate(['history' => [...$this->history, Message::notice($notice)]]), null];
         }
-        if ($msg instanceof ToolResultsMsg) {
-            return $this->finishToolCalls($msg);
-        }
-        if ($msg instanceof PermissionRequestMsg) {
-            return $this->requestPermission($msg);
-        }
-        if ($msg instanceof PermissionReplyMsg) {
-            return $this->answerPermission($msg->reply);
-        }
-        if ($msg instanceof TickRequest) {
-            // A paced replay hop ({@see foldHop()}) that reaches a driver
-            // with no loop to arm its timer — a synchronous chain unwinder,
-            // any model-only embedder — is answered HERE instead of stalling
-            // the queue: produce the hop now, skipping only the delay, never
-            // the event. The real host intercepts TickRequest in
-            // Program::dispatch() before update() ever sees one, so this arm
-            // exists for the headless shape alone.
-            $produced = ($msg->produce)();
-
-            return $produced === null ? [$this, null] : [$this, Cmd::send($produced)];
-        }
-        if ($msg instanceof BackendToolEventsMsg) {
-            return $this->applyBackendToolEvent($msg);
-        }
-        if ($msg instanceof ToolEventPumpMsg) {
-            // Roadmap P-B2: the live agent lines' clock moves on the pump's
-            // own tick (every 0.1 s while a turn runs), so the spinner turns
-            // and the elapsed figures count without view() reading a clock.
-            $this->agentLive()->advance();
-
-            return $this->pumpLiveToolEvents();
-        }
-        if ($msg instanceof RuntimeNoticePumpMsg) {
-            return $this->pumpRuntimeNotices();
-        }
-        if ($msg instanceof TranscriptFlushMsg) {
-            // The debounce tick (audit R2): write whatever is newest. $this is
-            // returned unchanged, so update() schedules nothing new.
-            $this->transcripts()->flush();
-
-            return [$this, null];
-        }
-        if ($msg instanceof SessionLockRetryMsg) {
-            return [$this->retakenSessionLock(), null];
-        }
-        if ($msg instanceof BangShellResultMsg) {
-            return $this->landBangShellResult($msg);
-        }
         if ($msg instanceof CancelledWorkflowReportMsg) {
             // The report of a run Esc Esc cancelled: appended, and NOTHING
             // else — the turn it occupied was released by the cancel, and
             // whatever turn is running now is not this report's to settle.
             return [$this->mutate(['history' => [...$this->history, $msg->message]]), null];
-        }
-        if ($msg instanceof InitialPromptMsg) {
-            return $this->submitInitialPrompt($msg->prompt);
-        }
-        if ($msg instanceof StatusLineTickMsg) {
-            // The `statusLine` command's launch site. Only the decision runs
-            // here on the update path — a TTL comparison and the in-flight
-            // check — while the command itself runs in a forked child, so a
-            // slow one no longer freezes the frame once per tick (ISS-095).
-            // Its text lands through the StatusLineResultMsg fold below.
-            //
-            // Returns $this unchanged: the runner holds the text in process
-            // state ({@see StatusLineCommand::line()}), not on the model, so
-            // there is nothing to fold into a new Chat. The repaint comes
-            // from Program re-rendering after the update, which it does for
-            // every Msg — this arm does not have to ask for one.
-            return [$this, StatusLineCommand::cmd()];
-        }
-        if ($msg instanceof StatusLineResultMsg) {
-            StatusLineCommand::settle($msg->line);
-
-            return [$this, null];
-        }
-        if ($msg instanceof TurnHooksResolvedMsg) {
-            return $this->resumeTurnHooks($msg);
-        }
-        if ($msg instanceof CustomCommandExpandedMsg) {
-            return $this->resumeCustomCommand($msg);
-        }
-        if ($msg instanceof McpLoginProgressMsg) {
-            return $this->handleMcpLoginProgress($msg);
-        }
-        if ($msg instanceof IdleCompactTickMsg) {
-            return $this->handleIdleCompactTick();
         }
         if ($msg instanceof HistoryCompactedMsg) {
             // Accounted BEFORE the latch check, and for the same reason the
