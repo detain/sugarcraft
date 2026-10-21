@@ -399,7 +399,7 @@ trait HttpClientDefaults
                             'Response headers did not arrive for ' . (string) $request->getUri()
                                 . ' within ' . self::streamHeaderTimeoutSeconds() . 's of the connection being established; '
                                 . 'the TCP connect itself succeeded. If this server queues work behind the HTTP layer, raise '
-                                . 'the `streamHeaderTimeoutSeconds` setting - `connectTimeoutSeconds` is no longer what caps this wait (ISS-024).',
+                                . 'the `streamHeaderTimeoutSeconds` setting - `connectTimeoutSeconds` is no longer what caps this wait.',
                             $request,
                             previous: $failure,
                         );
@@ -483,7 +483,7 @@ trait HttpClientDefaults
         if ($elapsed >= $budget * 0.9) {
             return new \GuzzleHttp\Promise\RejectedPromise(new \GuzzleHttp\Exception\ConnectException(
                 'Timed out after ' . round($elapsed, 1) . 's establishing the connection to ' . $target
-                    . '; raise `connectTimeoutSeconds` (or ' . self::CONNECT_TIMEOUT_ENV . ') if this route needs longer - this bound covers the TCP connect only, not the response (ISS-024).',
+                    . '; raise `connectTimeoutSeconds` (or ' . self::CONNECT_TIMEOUT_ENV . ') if this route needs longer - this bound covers the TCP connect only, not the response.',
                 $request,
             ));
         }
@@ -555,7 +555,7 @@ trait HttpClientDefaults
      * `%d` is the bound that fired, the `%s` the phase (response headers
      * before the first byte, a further body frame after).
      */
-    private const CURL_STALL_MESSAGE_FORMAT = 'Stream transfer stalled: no bytes for %ds while waiting for %s (cURL transport, per-operation bound - NOT a total deadline; see the streamHeaderTimeoutSeconds and streamReadIdleTimeoutSeconds settings, ISS-024).';
+    private const CURL_STALL_MESSAGE_FORMAT = 'Stream transfer stalled: no bytes for %ds while waiting for %s (cURL transport, per-operation bound - NOT a total deadline; see the streamHeaderTimeoutSeconds and streamReadIdleTimeoutSeconds settings).';
 
     /**
      * The watchdog itself, separated from {@see curlStreamArm()} so the

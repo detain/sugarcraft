@@ -526,7 +526,7 @@ one re-reads what it describes (`session.list`, `permission.pending`).
 | `bg.status` | server | live | A background session's status changed (running, stalled, …). |
 | `compaction.completed` | session | durable | The history was compacted before a turn. |
 | `message.created` | session | durable | A transcript row was added: the prompt, a notice, a summary. |
-| `permission.asked` | server | live | A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and, since ISS-004, a background session's relayed question, named by its background id and answered the same way. Since WEB-3b a third shape joins the arm: a project-trust prompt (kind "trust") discovered by a context.sources measurement, answered by `context.trust` and not by `permission.respond`. |
+| `permission.asked` | server | live | A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and a background session's relayed question, named by its background id and answered the same way. A third shape joins the arm: a project-trust prompt (kind "trust") discovered by a context.sources measurement, answered by `context.trust` and not by `permission.respond`. |
 | `permission.requested` | session | durable | A tool call is waiting for an answer (permission.respond). |
 | `permission.resolved` | session | durable | A question was answered or cancelled. |
 | `permission.settled` | server | live | A question was answered or cancelled (permission.resolved for every client) — a background session's relayed question included, cancelled when its session settled unanswered. |

@@ -2330,7 +2330,7 @@ final class AgentManager
                     throw new \RuntimeException(sprintf(
                         'Agent "%s" is granted the skill "%s", which this session\'s SkillRegistry does '
                         . 'not resolve. The whole batch is refused before dispatch: a member running with '
-                        . 'a prompt that advertises a skill it will never receive is the lie E643 exists to end.',
+                        . 'a prompt that advertises a skill it will never receive is the lie this refusal exists to end.',
                         $agent->agent->name,
                         $skillName,
                     ));
