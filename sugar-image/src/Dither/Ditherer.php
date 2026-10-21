@@ -31,6 +31,13 @@ use SugarCraft\Image\Renderer\OrderedTexture;
  * channels are independent and fed equal values, so channel 0 IS the
  * single-channel walk, and no second tap table exists to drift.
  *
+ * Boundary treatment carries one opt-in cure with two safety properties:
+ *   • {@see diffuseError()}'s $fold parameter defaults false, preserving the
+ *     exact drop semantics every byte-frozen digest was captured under;
+ *   • the walks arm it only through the opt-in $serpentineErrorFold flag ×
+ *     serpentine pair — a double gate, so the fold cannot move bytes on a
+ *     straight walk even if a caller arms the flag alone.
+ *
  * Trust boundary (parse-don't-validate): every construction site is a
  * renderer whose public constructor already refused NaN/negative intensity,
  * out-of-range alpha thresholds and colour budgets. This class takes those
@@ -65,6 +72,17 @@ final class Ditherer
      * @param int $grainHeight C-09: grain vertical size; the pair must
      *                         divide the canvas (checked in indexRows, the
      *                         only place geometry is known)
+     * @param bool $serpentineErrorFold C-06/rev-s4-1: fold an edge grain's
+     *                         out-of-canvas diffusion taps back onto the
+     *                         nearest visible column (error-conserving, the
+     *                         shape chafa's boundary call sites produce),
+     *                         instead of dropping them at the bounds test.
+     *                         DOUBLE-GATED: inert unless $serpentine is armed
+     *                         too, so the drop-vs-fold divergence can only
+     *                         move bytes on a serpentine cascade. Default
+     *                         false keeps every existing byte output frozen.
+     *                         {@see diffuseError()}'s $fold carries the full
+     *                         both-modes disclosure.
      */
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
@@ -75,6 +93,7 @@ final class Ditherer
         private readonly bool $serpentine = false,
         private readonly int $grainWidth = 1,
         private readonly int $grainHeight = 1,
+        private readonly bool $serpentineErrorFold = false,
     ) {
         if ($grainWidth < 1 || $grainHeight < 1) {
             throw new \InvalidArgumentException(
@@ -94,6 +113,21 @@ final class Ditherer
     public function grainHeight(): int
     {
         return $this->grainHeight;
+    }
+
+    /**
+     * C-06/rev-s4-1: true when the edge-grain tap fold is armed. It has no
+     * effect unless {@see serpentine()} is armed as well — the walk honours
+     * the pair, not the flag alone.
+     */
+    public function serpentineErrorFold(): bool
+    {
+        return $this->serpentineErrorFold;
+    }
+
+    public function serpentine(): bool
+    {
+        return $this->serpentine;
     }
 
     /**
@@ -261,20 +295,19 @@ final class Ditherer
         // error — Ordered's bias is position-taken and None quantises
         // cold, so both render byte-identically snaked or straight.
         $snake = $this->serpentine && $hasDiffusion;
+        // C-06/rev-s4-1: the fold-into-visible cure is DOUBLE-GATED — armed
+        // only when the caller opted into it AND the serpentine walk is on,
+        // so the byte-frozen default streams stay out of its reach.
+        $fold = $this->serpentineErrorFold && $snake;
 
         for ($y = 0; $y < $h; $y++) {
-            // Per chafa chafa-pixops.c:327-459 (fs_dither): even rows walk
-            // left→right, odd rows right→left, and the kernel mirrors with
-            // the direction so every tap still lands on an unprocessed
-            // pixel — that parity and mirroring is a faithful port. At the
-            // row ends chafa does NOT park error in padding: it FOLDS the
-            // boundary taps into the nearest visible cells
-            // (chafa-pixops.c:377-405 — the leftmost grain re-adds
-            // error_row[1]+1, the rightmost re-adds error_row[1]+x; the +2
-            // columns of its padded rows are memset-0 layout slack, not
-            // accumulators). SugarCraft drops out-of-bounds taps at the
-            // bounds test here — a real, disclosed divergence:
-            // conserved-vs-dropped error differs at the row ends.
+            // Even rows walk left→right, odd rows right→left, and the kernel
+            // mirrors with the direction so every tap still lands on an
+            // unprocessed pixel — that parity and mirroring is a faithful
+            // port of chafa fs_dither (chafa-pixops.c:327-459). What happens
+            // to a tap that reaches PAST the row end is the disclosed
+            // divergence, and both modes (fold-armed chafa-conserving,
+            // default drop) are documented on {@see diffuseError()}'s $fold.
             $reversed = $snake && (($y & 1) === 1);
             $row = array_fill(0, $w, 0);
             for ($i = 0; $i < $w; $i++) {
@@ -320,6 +353,7 @@ final class Ditherer
                         ($clampedB - (float) $pb) * $diffusionStrength,
                         $this->dither,
                         $reversed ? -1 : 1,
+                        $fold,
                     );
                 }
 
@@ -469,6 +503,9 @@ final class Ditherer
             $accum[$gy] = array_fill(0, $cols, [0.0, 0.0, 0.0]);
         }
         $snake = $this->serpentine && $hasDiffusion;
+        // C-06/rev-s4-1: same double gate as the pixel walk — the fold only
+        // rides a serpentine grain cascade (chafa fs_dither_grain boundary).
+        $fold = $this->serpentineErrorFold && $snake;
 
         for ($gy = 0; $gy < $rows; $gy++) {
             $base = [];
@@ -535,6 +572,7 @@ final class Ditherer
                         floor($overflow[2] / $count) + ((float) $meanB - (float) $pb) * $diffusionStrength,
                         $this->dither,
                         $reversed ? -1 : 1,
+                        $fold,
                     );
                 }
 
@@ -577,6 +615,12 @@ final class Ditherer
      * @param OrderedTexture|null $texture pre-built bias for Ordered/Noise
      * @param bool $serpentine C-08 snake walk; parity reads LOCAL $y, same
      *                         documented phase behaviour as indexRows()
+     * @param bool $fold C-06/rev-s4-1: fold edge grains' out-of-canvas taps
+     *                         onto the nearest visible column (chafa-
+     *                         conserving). DOUBLE-GATED the same way as the
+     *                         colour walks — it is dropped unless
+     *                         $serpentine is armed too. Default false keeps
+     *                         the historical drop semantics.
      * @return \Generator<int, list<int>>  row index → grid[row][col] index
      */
     public static function lumaIndexRows(
@@ -586,6 +630,7 @@ final class Ditherer
         float $intensity = 1.0,
         ?OrderedTexture $texture = null,
         bool $serpentine = false,
+        bool $fold = false,
     ): \Generator {
         $h = count($lumaRows);
         if ($h === 0) {
@@ -611,6 +656,9 @@ final class Ditherer
         // C-08: same rule as the colour path — the snake only means
         // anything when the walk carries error.
         $snake = $serpentine && $hasDiffusion;
+        // C-06/rev-s4-1: the fold is double-gated exactly as in indexRows()
+        // and indexGrainRows() — flag × serpentine parity.
+        $foldActive = $fold && $snake;
 
         for ($y = 0; $y < $h; $y++) {
             $reversed = $snake && (($y & 1) === 1);
@@ -630,6 +678,7 @@ final class Ditherer
                         $error, $error, $error,
                         $dither,
                         $reversed ? -1 : 1,
+                        $foldActive,
                     );
                 }
                 $row[$x] = $index;
@@ -676,6 +725,11 @@ final class Ditherer
      *  1/8  1/8  1/8
      *       1/8
      *
+     * Row-end boundary treatment is a disclosed divergence with an opt-in
+     * cure: chafa folds a boundary grain's out-of-canvas taps back into
+     * visible cells and so conserves the error, while this walk drops them at
+     * the bounds test. See {@see $fold} for both modes in full.
+     *
      * @param list<list<array{float,float,float}> $accum
      * @param int $dxSign C-08: +1 on a forward row, -1 on a serpentine
      *                    (reversed) row — the horizontal component of every
@@ -684,6 +738,30 @@ final class Ditherer
      *                    fs_dither walks right→left (chafa-pixops.c:327-459).
      *                    Default +1 keeps the historical forward kernel and
      *                    every existing caller byte-unchanged.
+     * @param bool $fold C-06/rev-s4-1 cure for the row-end divergence below.
+     *                   FALSE (default, the byte-frozen mode): any tap whose
+     *                   target leaves the accumulator is DROPPED at the bounds
+     *                   test, so error reaching a row end is lost — chafa does
+     *                   not lose it, which is the disclosed divergence.
+     *                   TRUE: a tap that leaves the canvas HORIZONTALLY from an
+     *                   EDGE GRAIN (x=0 or x=$w-1) is folded back onto the
+     *                   nearest visible column of its own target row instead of
+     *                   being dropped, conserving the kernel total. Interior
+     *                   overshoot (e.g. a dx=±2 Stucki arm fired from column 1)
+     *                   and taps past the BOTTOM edge still drop: chafa scopes
+     *                   its re-pointing to the boundary call sites only, and
+     *                   its padded rows are columns-only — error aimed below
+     *                   the last row lands in memory it frees unrendered
+     *                   (chafa-pixops.c:348-363, :376-405 forwards,
+     *                   :417-449 backwards). The exact cells chafa re-adds
+     *                   onto differ from a plain column clamp (it aliases the
+     *                   out-of-range neighbour ARGUMENT, e.g. the leftmost
+     *                   grain's 3/16 arm re-uses error_row[1]+1 — the mirror
+     *                   column, not column 0); the fold here conserves the
+     *                   TOTAL at the cost of one disclosed landing-site
+     *                   difference, and it is armed only through the
+     *                   serpentineErrorFold × serpentine double gate, so no
+     *                   byte-frozen digest is in its reach by default.
      */
     public static function diffuseError(
         array &$accum,
@@ -692,6 +770,7 @@ final class Ditherer
         float $eR, float $eG, float $eB,
         Dither $dither,
         int $dxSign = 1,
+        bool $fold = false,
     ): void {
         // Taps are (dx, dy, factor) RELATIVE to the diffusing pixel so the
         // reversed pass mirrors the whole kernel by negating dx.
@@ -733,6 +812,17 @@ final class Ditherer
         foreach ($neighbors as [$dx, $dy, $factor]) {
             $nx = $x + $dx * $dxSign;
             $ny = $y + $dy;
+            // Only the BOUNDARY grains re-point their out-of-canvas taps:
+            // chafa swaps the padding slot for the nearest visible neighbour
+            // argument at x=0 / x=width-1 (chafa-pixops.c:376-405, :417-449).
+            // An interior tap that flies past the edge (a dx=±2 Stucki arm
+            // from column 1) still lands in unprocessed slack and is dropped
+            // here, matching that scoping exactly.
+            if ($fold && $nx < 0 && $x === 0) {
+                $nx = 0; // fold the left-edge grain's out-of-canvas tap onto column 0
+            } elseif ($fold && $nx >= $w && $x === $w - 1) {
+                $nx = $w - 1; // fold the right-edge grain's out-of-canvas tap onto the last column
+            }
             if ($nx >= 0 && $nx < $w && $ny >= 0 && $ny < $h) {
                 $accum[$ny][$nx][0] += $eR * $factor;
                 $accum[$ny][$nx][1] += $eG * $factor;
