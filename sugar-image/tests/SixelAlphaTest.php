@@ -5,7 +5,9 @@
  * plus the PixelGrid threshold mirror. Pins, in order: the byte-frozen
  * default on a semi-transparent fixture (sha1 captured at base 53ecc09f1,
  * before the B-10 knob existed — the exact pre-B-10 output the hole test
- * `=== 127` produced), the lowered-threshold hole equivalence, the flatten
+ * `=== 127` produced), a literal-127 constant pin plus an alpha-126
+ * boundary pair (painted at the default, holed at threshold 126 — the
+ * l14 audit M9 cure against constant-vs-constant vacuity), the lowered-threshold hole equivalence, the flatten
  * equivalence against a hand-pre-composited fixture, the sample-census
  * ordering law pinned structurally, refusal of out-of-range thresholds,
  * and the wither/fingerprint carry discipline.
@@ -139,22 +141,78 @@ final class SixelAlphaTest extends TestCase
 
     public function testDefaultThresholdReproducesThePreB10Bytes(): void
     {
+        // B-10 semantics pinned as a LITERAL: the hole test is
+        // `alpha >= threshold` and GD alpha is 7-bit (0 opaque .. 127
+        // fully transparent), so the shipped default must sit on the top
+        // band 127 — only fully transparent pixels hole. The l14 mutation
+        // audit (M9) proved a constant-vs-constant comparison audits the
+        // default against itself and cannot catch a drift (127→126 left
+        // every byte identical); the literal expectation here plus the
+        // alpha-126 boundary legs below give such a drift a red face.
+        $this->assertSame(
+            127,
+            SixelRenderer::DEFAULT_ALPHA_THRESHOLD,
+            'the default must be the GD top band: only fully transparent pixels hole',
+        );
+
         $image = $this->b10SemiTransparentFixture();
 
         $default = $this->b10CellRenderer()->render($image, 12, 8);
         $explicit = $this->b10CellRenderer()
-            ->withAlphaThreshold(SixelRenderer::DEFAULT_ALPHA_THRESHOLD)
+            ->withAlphaThreshold(127)
             ->render($image, 12, 8);
 
         // The byte-frozen pin: captured against the base tree (no B-10 code
         // existed), so a mutated default (e.g. neutering the threshold to
         // 0/100) reddens here on top of the lib-wide digest pins.
         $this->assertSame(self::BASE_DEFAULT_SHA1, sha1($default));
-        $this->assertSame($default, $explicit, 'explicit 127 must equal the ctor default');
+        $this->assertSame($default, $explicit, 'explicit literal 127 must equal the ctor default');
         $this->assertSame(
             SixelRenderer::DEFAULT_ALPHA_THRESHOLD,
             $this->b10CellRenderer()->alphaThreshold(),
             'the shipped default is GD-fully-transparent',
+        );
+
+        // Boundary legs: the old fixture never exercised the 126-vs-127
+        // knife-edge, so the equivalence above stayed byte-true under a
+        // drift. A ring at GD alpha 126 sits directly at the cut-off —
+        // premise first: the boundary value must survive the PNG round trip.
+        [$rr, $rg, $rb] = self::RING_RGB;
+        $boundary = $this->b10Fixture($rr, $rg, $rb, 126);
+        $decoded = imagecreatefromstring($boundary->bytes);
+        $this->assertNotFalse($decoded);
+        $ringPixel = imagecolorsforindex($decoded, imagecolorat($decoded, 2, 3));
+        imagedestroy($decoded);
+        $this->assertSame(126, $ringPixel['alpha'], 'alpha-126 must round-trip exactly');
+
+        $atLiteral127 = $this->b10CellRenderer()->withAlphaThreshold(127)->render($boundary, 12, 8);
+        $atThreshold126 = $this->b10CellRenderer()->withAlphaThreshold(126)->render($boundary, 12, 8);
+        $boundaryDefault = $this->b10CellRenderer()->render($boundary, 12, 8);
+        $holedOracle = $this->b10CellRenderer()->render($this->b10HoledRingFixture(), 12, 8);
+
+        // Included at the default: 126 < 127 keeps the fringe painted, so
+        // default output equals the literal-127 output byte for byte. If
+        // the constant ever drifts to 126 the default holes the ring and
+        // this leg reddens — the cure for M9's vacuity.
+        $this->assertSame(
+            $atLiteral127,
+            $boundaryDefault,
+            'alpha-126 must be painted (opaque-side) at the 127 default',
+        );
+        // Excluded at threshold 126: the same fixture must encode byte-
+        // identical to a fully transparent ring — hole equivalence.
+        $this->assertSame(
+            $holedOracle,
+            $atThreshold126,
+            'threshold 126 must hole the alpha-126 ring exactly like full transparency',
+        );
+        // The boundary moves bytes: if the two sides ever agreed, no
+        // fixture pixel would exercise the cut-off and both legs above
+        // would be vacuous.
+        $this->assertNotSame(
+            $atThreshold126,
+            $boundaryDefault,
+            'the 126/127 threshold step must change the encoding',
         );
     }
 
