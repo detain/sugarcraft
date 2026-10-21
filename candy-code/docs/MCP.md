@@ -19,7 +19,7 @@ listing can never report a verdict the launch does not act on. The same rule
 holds entry by entry: an entry that is not a named server object is listed with
 the launch's own refusal sentence — the text arm says so on stderr and
 the JSON arm carries it under `skipped`, so a typo costs a line instead of
-vanishing (N-2). It returns one of five statuses:
+vanishing. It returns one of five statuses:
 
 | Status | Meaning | What happens |
 |---|---|---|

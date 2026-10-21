@@ -364,7 +364,7 @@ big-endian length plus a `serialize()`d array, decoded with
   reply. In the TUI the first Escape of a turn that reports steps is the soft
   cancel; the next Escape, or a second one inside the double-press window, is
   still the hard cancel that kills the whole tree.
-- **Tool cancel (1.C-4b).** The same first Escape also names every call that is
+- **Tool cancel.** The same first Escape also names every call that is
   running (`CancellationToken::cancelTool()`), and the parent's cancel poll
   writes one `cancel_tool{callId}` per call. In the child,
   `ChildChannel::takeToolCancels()` feeds `Support\ToolCancelRequests`, which
@@ -447,7 +447,7 @@ writes. The relay carries those beats instead:
 - Every relay is closed in `executeConcurrently()`'s `finally` block. No
   process is added, only file descriptors.
 
-**Permission ask relay (1.C-5).** The same grandchild cannot put a question up
+**Permission ask relay.** The same grandchild cannot put a question up
 the turn socket either. When the turn has an approver and a member's tool
 implements `Tools\RelaysPermissionAsks` (`TaskTool`), the turn child opens a
 unix stream pair (`Support\PermissionAskRelay`, the engine's length-prefixed
@@ -858,7 +858,7 @@ request is refused, never clamped. Admission is a separate honest door: an
 route, while a family with a recorded contract is dialed; a finished video
 lands beside a JSON sidecar of its request params and job ledger. Playback is
 `src/Tui/VideoPlayer/` — the `/play` command and the player screen render
-through sugar-video, and the audio door (decision C-4) leaves generated videos
+through sugar-video, and the audio door leaves generated videos
 silent. Live preview frames (`PreviewSlots`, `PreviewPaint`) ride
 display-only progress events: they replace in place, clear when the job
 settles, and are never written into the transcript or the session store. The

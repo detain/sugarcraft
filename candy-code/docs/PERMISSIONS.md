@@ -339,7 +339,7 @@ attached — while `rm ./src/Main.php` ran unprompted. Now:
   is granted, an absolute one asks.
 - **`ApplyPatch` runs without asking only when every path in the patch
   would** — each file it adds, updates, moves to or deletes, judged the same
-  way (roadmap 3.I-3). One path outside the root or under `.git`,
+  way. One path outside the root or under `.git`,
   `.candy-code` or `.mcp.json` asks for the whole call, and so does a patch
   that does not parse: it names no path that can be proven inside, and the
   tool would refuse it anyway.

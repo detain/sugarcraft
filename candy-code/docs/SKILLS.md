@@ -319,7 +319,7 @@ resolution are load-bearing, and all three are stated in its own doc-block:
   wins) — but unlike `disabledSkills` it is **never** taken from a project file,
   at any trust level: a name here makes a skill's body standing system-prompt
   text, which is the `instructions` argument, whereas a project disabling a
-  skill only ever removes one. (Until settings step N-DOC-2 this bullet said the
+  skill only ever removes one. (This bullet once said the
   key was `config.json`-only; that exception is gone.)
 - **A bad skill is a bounded notice, never a launch crash.** A non-list value, a
   non-string element, a disabled or unknown name, or a source file that vanished
