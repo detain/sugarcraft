@@ -97,12 +97,6 @@ parameters:
 			path: src/Agents/ProcessExecutor.php
 
 		-
-			message: '#^PHPDoc tag @param references unknown parameter\: \$schema$#'
-			identifier: parameter.notFound
-			count: 1
-			path: src/Agents/ProcessExecutor.php
-
-		-
 			message: '#^Parameter \#1 \$processDescriptor of method SugarCraft\\Code\\Agents\\ProcessExecutor\:\:closeProcess\(\) expects array, resource given\.$#'
 			identifier: argument.type
 			count: 2
@@ -556,12 +550,6 @@ parameters:
 			message: '#^Instanceof between SugarCraft\\Core\\Msg\\KeyMsg and SugarCraft\\Core\\Msg\\KeyMsg will always evaluate to true\.$#'
 			identifier: instanceof.alwaysTrue
 			count: 2
-			path: src/Chat.php
-
-		-
-			message: '#^Method SugarCraft\\Code\\Chat\:\:executeAgents\(\) has invalid return type SugarCraft\\Code\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 1
 			path: src/Chat.php
 
 		-
@@ -1091,18 +1079,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: src/Host/Commands/SendToHostCommand.php
-
-		-
-			message: '#^Access to property \$attempts on an unknown class SugarCraft\\Code\\Workflows\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Host/Commands/WorkflowCommand.php
-
-		-
-			message: '#^Parameter \#1 \$callback of function array_map expects \(callable\(SugarCraft\\Code\\Workflows\\AgentResult\)\: mixed\)\|null, Closure\(SugarCraft\\Code\\Agents\\AgentResult\)\: int given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Host/Commands/WorkflowCommand.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>root" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -2527,99 +2503,15 @@ parameters:
 			path: src/Tui/Settings/SettingsSources.php
 
 		-
-			message: '#^Parameter \$agents of method SugarCraft\\Code\\Workflows\\StageResult\:\:__construct\(\) has invalid type SugarCraft\\Code\\Workflows\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Workflows/StageResult.php
-
-		-
-			message: '#^Property SugarCraft\\Code\\Workflows\\StageResult\:\:\$agents has unknown class SugarCraft\\Code\\Workflows\\AgentResult as its type\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Workflows/StageResult.php
-
-		-
 			message: '#^Property SugarCraft\\Code\\Workflows\\WorkflowTask\:\:\$agentType \(string\) on left side of \?\? is not nullable\.$#'
 			identifier: nullCoalesce.property
 			count: 1
 			path: src/Workflows/WorkflowBuilder.php
 
 		-
-			message: '#^Access to property \$agentId on an unknown class SugarCraft\\Code\\Workflows\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Workflows/WorkflowEngine.php
-
-		-
-			message: '#^Access to property \$attempts on an unknown class SugarCraft\\Code\\Workflows\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Workflows/WorkflowEngine.php
-
-		-
-			message: '#^Access to property \$completedAt on an unknown class SugarCraft\\Code\\Workflows\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Workflows/WorkflowEngine.php
-
-		-
-			message: '#^Access to property \$costUsd on an unknown class SugarCraft\\Code\\Workflows\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 2
-			path: src/Workflows/WorkflowEngine.php
-
-		-
-			message: '#^Access to property \$error on an unknown class SugarCraft\\Code\\Workflows\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Workflows/WorkflowEngine.php
-
-		-
-			message: '#^Access to property \$output on an unknown class SugarCraft\\Code\\Workflows\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Workflows/WorkflowEngine.php
-
-		-
-			message: '#^Access to property \$startedAt on an unknown class SugarCraft\\Code\\Workflows\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Workflows/WorkflowEngine.php
-
-		-
-			message: '#^Access to property \$status on an unknown class SugarCraft\\Code\\Workflows\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 1
-			path: src/Workflows/WorkflowEngine.php
-
-		-
-			message: '#^Access to property \$tokensUsed on an unknown class SugarCraft\\Code\\Workflows\\AgentResult\.$#'
-			identifier: class.notFound
-			count: 2
-			path: src/Workflows/WorkflowEngine.php
-
-		-
 			message: '#^If condition is always false\.$#'
 			identifier: if.alwaysFalse
 			count: 2
-			path: src/Workflows/WorkflowEngine.php
-
-		-
-			message: '#^Parameter \#1 \$callback of function array_map expects \(callable\(SugarCraft\\Code\\Workflows\\AgentResult\)\: mixed\)\|null, Closure\(SugarCraft\\Code\\Agents\\AgentResult\)\: array\{agentId\: string, status\: ''completed''\|''failed''\|''pending''\|''queued''\|''running''\|''stopped''\|''streaming''\|''timed_out'', output\: string\|null, error\: string\|null, tokensUsed\: int, costUsd\: float, startedAt\: non\-falsy\-string\|null, completedAt\: non\-falsy\-string\|null, attempts\: int\} given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Workflows/WorkflowEngine.php
-
-		-
-			message: '#^Parameter \$agents of class SugarCraft\\Code\\Workflows\\StageResult constructor expects array\<SugarCraft\\Code\\Workflows\\AgentResult\>, array\<int, SugarCraft\\Code\\Agents\\AgentResult\> given\.$#'
-			identifier: argument.type
-			count: 3
-			path: src/Workflows/WorkflowEngine.php
-
-		-
-			message: '#^Parameter \$agents of class SugarCraft\\Code\\Workflows\\StageResult constructor expects array\<SugarCraft\\Code\\Workflows\\AgentResult\>, list\<SugarCraft\\Code\\Agents\\AgentResult\> given\.$#'
-			identifier: argument.type
-			count: 5
 			path: src/Workflows/WorkflowEngine.php
 
 		-
