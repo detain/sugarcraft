@@ -1424,11 +1424,12 @@ final class Renderer
      * @param string $frame The fully-composited root frame.
      * @param int    $width Viewport width; zone end columns clamp to it.
      */
-    public static function scanRoot(string $frame, int $width): string
+    public static function scanRoot(string $frame, int $width, ?RenderFrame $render = null): string
     {
         // Every recorded box below is relative to THIS frame; a host that
         // composes it elsewhere re-declares the offset after compositing.
-        self::publishedFrame()->resetZoneOrigin();
+        $render = $render ?? self::publishedFrame();
+        $render->resetZoneOrigin();
 
         if (!str_contains($frame, Sentinel::OPEN) && !str_contains($frame, Sentinel::CLOSE)) {
             self::scanner()->clear();
@@ -1751,7 +1752,7 @@ final class Renderer
         // where the pane-width invariant is enforced over all of it.
         $body = self::fitToPane($body, $contentWidth, $published);
 
-        $input = self::renderInput($chat, $theme);
+        $input = self::renderInput($chat, $theme, $published);
         $rows = $chat->rows();
         // ISS-046: the "/" popup used to paint every match — `filter('')` is
         // all 48 commands — and {@see render()}'s tail clip then slid the
@@ -1975,7 +1976,7 @@ final class Renderer
         // Chat::withKeyHelp() clamps against it. Not every frame the app paints
         // goes through here — $keyHelpMaxOffset's own docblock names the hosted
         // Pane::Agents exception and why it is harmless.
-        $overlay = self::renderKeyHelp($chat, $theme);
+        $overlay = self::renderKeyHelp($chat, $theme, $published);
         if ($overlay === '') {
             $overlay = self::renderPermissionPrompt($chat, $theme);
         }
@@ -2072,7 +2073,7 @@ final class Renderer
             $frame = self::clipFrameToCols($frame, $chat->cols());
         }
 
-        $frame = self::scanRoot($frame, $chat->cols());
+        $frame = self::scanRoot($frame, $chat->cols(), $published);
 
         // Mouse text selection (see {@see selectableRegion()}). Measured on
         // THIS frame, after the tail clip and the scroll window, because a
@@ -6711,11 +6712,11 @@ final class Renderer
      * {@see keyHelpGeometry()}, which is also what says when the box does not
      * fit at all and why neither of its two bounds has a floor.
      */
-    private static function renderKeyHelp(Chat $chat, Theme $theme): string
+    private static function renderKeyHelp(Chat $chat, Theme $theme, RenderFrame $frame): string
     {
         $offset = $chat->keyHelp();
         if ($offset === null) {
-            self::publishedFrame()->noteKeyHelpMaxOffset(0);
+            $frame->noteKeyHelpMaxOffset(0);
 
             return '';
         }
@@ -6730,7 +6731,7 @@ final class Renderer
             // renderStatusBar(), which asks this same method whether the box
             // fits: an open modal that is invisible AND silent is a stuck
             // terminal as far as the user can tell.
-            self::publishedFrame()->noteKeyHelpMaxOffset(0);
+            $frame->noteKeyHelpMaxOffset(0);
 
             return '';
         }
@@ -6795,7 +6796,7 @@ final class Renderer
         // hosted pane).
         $body = $viewport - ($showHint ? 1 : 0);
         $max = max(0, count($lines) - $body);
-        self::publishedFrame()->noteKeyHelpMaxOffset($max);
+        $frame->noteKeyHelpMaxOffset($max);
         $start = max(0, min($offset, $max));
         $visible = array_slice($lines, $start, $body);
 
@@ -7685,7 +7686,7 @@ final class Renderer
      * is every state the keys themselves can produce) the snap answers
      * unchanged.
      */
-    private static function renderInput(Chat $chat, Theme $theme): string
+    private static function renderInput(Chat $chat, Theme $theme, RenderFrame $frame): string
     {
         // The cursor is drawn in EVERY state, in-flight included, and that is the
         // second half of a user-reported bug rather than a cosmetic change. This
@@ -7773,7 +7774,7 @@ final class Renderer
         // composer (Enter sends to it, not to the main model), and an empty
         // box says so in place of the main chat's guess — which would only
         // tempt a message to the wrong recipient.
-        $composer = self::publishedFrame()->agentView();
+        $composer = $frame->agentView();
         if ($composer !== null && $chat->inputBuf === '') {
             // The clip is ellipsised, not a hard slice: since CL-2's pane
             // auto-dock (8013e0f20) the chat pane is a third of the window at

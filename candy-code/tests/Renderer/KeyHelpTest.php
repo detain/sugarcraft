@@ -1563,7 +1563,7 @@ final class KeyHelpTest extends TestCase
     private function overlay(Chat $chat): array
     {
         $rendered = (new \ReflectionMethod(Renderer::class, 'renderKeyHelp'))
-            ->invoke(null, $chat, $chat->theme());
+            ->invoke(null, $chat, $chat->theme(), Renderer::publishedFrame());
 
         return $rendered === '' ? [] : explode("\n", $rendered);
     }
