@@ -54,6 +54,15 @@ The envelope itself is `{"schema":1,"result":...}` on success plus optional
 "error":{"type":...,"message":...}}` on failure — the same contract as `candy-code -p
 --output-format json` locally. A document without `"schema"` is schema 0.
 
+A turn the engine stopped early says so (D1-fix, 2026-10-21): under `--output-format
+json` the document gains `steps_truncated: true`, `length_stopped: true`, or
+`loop_guard_stopped_by: "<tool>"` — each present only when it happened, absent (not
+false) otherwise — and a `--output-format text` run appends one plain, ANSI-free
+trailer line per stop condition after the answer. A turn that billed an unpriced
+model writes one `candy-code: ` notice to stderr. The exit code never changes for a
+stopped-but-answered run: `0` still means an answer arrived, and these fields mean
+it is a partial one.
+
 ### Credentials
 
 The action takes no secret inputs — that is a feature. Pass provider credentials as ordinary

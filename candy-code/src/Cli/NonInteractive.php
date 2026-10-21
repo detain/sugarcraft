@@ -607,6 +607,11 @@ final class NonInteractive
                 $refusals,
                 $opened['id'] ?? null,
                 \SugarCraft\Code\Usage::sum($sessionUsages)?->toArray(),
+                // D1-fix (plan_comparison audit 2026-10-21): the stop-condition
+                // flags the engine folded onto this settled Message ride the
+                // render call too — the trailer (text) and the typed keys
+                // (json) are decided from the SAME read of the Message.
+                self::stopFlags($message),
             );
         } catch (\JsonException $e) {
             \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.answer_not_json', ['error' => $e->getMessage()]) . "\n");
@@ -620,6 +625,14 @@ final class NonInteractive
         if ($message->attachmentNotice !== null) {
             self::noticeAttachment($message->attachmentNotice);
         }
+
+        // D1-fix (plan_comparison audit 2026-10-21), the fifth settled-message
+        // announcement, in the TUI settle arm's order: an unpriced model must
+        // not bill a CI run as free without saying so. One stderr line, the
+        // same channels discipline as every notice on this path; the exit
+        // status is deliberately unchanged — the answer is complete, the
+        // BOOKKEEPING is what carries the caveat.
+        self::noticeUnpricedModel($message);
 
         if ($emitter !== null) {
             $emitter->emitLine($rendered);
@@ -1407,6 +1420,95 @@ final class NonInteractive
     }
 
     /**
+     * D1-fix (plan_comparison audit 2026-10-21): the stop conditions the
+     * engine folded onto a settled {@see Message}, read the one time per run
+     * and carried to {@see self::format()} as an already-decided map.
+     *
+     * THE GAP THIS CLOSES: `candy-code -p` dropped every one of them. A turn
+     * capped by the step ceiling, stopped at the provider's output limit, or
+     * ended by the repeat-call loop guard printed its partial answer with no
+     * mark at all and exited 0 — the TUI announces the SAME facts through
+     * Chat.php's settle-arm system notices (`chat.turn.*`), and the one-shot
+     * path had no equivalent, which is exactly what an unattended CI run
+     * cannot tolerate: nobody is watching a transcript scroll by.
+     *
+     * WHY THE FLAGS ARE NOT RECOMPUTED HERE: EngineBackend folds all three
+     * onto the Message before returning
+     * ({@see \SugarCraft\Code\Backend\EngineBackend::complete()}); this method
+     * only READS the fold, so both output formats announce precisely what the
+     * engine decided and neither can invent a stop the other does not carry.
+     * `attachmentNotice` and the spend-cap refusal row keep their own pre-
+     * existing surfaces; nothing in this map duplicates them.
+     *
+     * @return array{steps_truncated?: bool, length_stopped?: bool, loop_guard_stopped_by?: string}
+     *   A true flag rides; a false or null one is absent (presence = happened).
+     */
+    private static function stopFlags(Message $message): array
+    {
+        $flags = [];
+        if ($message->stepsTruncated) {
+            $flags['steps_truncated'] = true;
+        }
+        if ($message->lengthStopped) {
+            $flags['length_stopped'] = true;
+        }
+        if ($message->loopGuardStoppedBy !== null && $message->loopGuardStoppedBy !== '') {
+            $flags['loop_guard_stopped_by'] = $message->loopGuardStoppedBy;
+        }
+
+        return $flags;
+    }
+
+    /**
+     * The plain-text lines {@see self::format()} appends after a stopped
+     * answer, in the TUI settle arm's order (length, steps, loop guard).
+     *
+     * The wording is new keys, `cli.truncate.*`, not a reuse of the TUI
+     * strings: `chat.turn.steps_exhausted` tells a terminal user to "say
+     * `continue`" and `chat.turn.output_limit` to "ask for the remainder in
+     * your next message" — instructions that mean nothing to a process, and a
+     * trailer a human still reads (piping to a pager) deserves a fix that
+     * does: raise the ceiling for the NEXT launch. The loop-guard line keeps
+     * the TUI's {tool}/{count} placeholders because its facts — which tool,
+     * how many repeats — are the whole notice.
+     */
+    private static function stopTrailers(array $stopFlags): array
+    {
+        $lines = [];
+        if (($stopFlags['length_stopped'] ?? false) === true) {
+            $lines[] = Lang::t('cli.truncate.length_stopped');
+        }
+        if (($stopFlags['steps_truncated'] ?? false) === true) {
+            $lines[] = Lang::t('cli.truncate.steps');
+        }
+        if (($stopFlags['loop_guard_stopped_by'] ?? '') !== '') {
+            $lines[] = Lang::t('cli.truncate.loop_guard', [
+                'tool' => self::sanitizeTextAnswer((string) $stopFlags['loop_guard_stopped_by']),
+                'count' => \SugarCraft\Code\Backend\ToolCallLoopGuard::END_TURN_AT,
+            ]);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The one stop-condition fact that gets NO stdout/document field: the
+     * model this run billed has no rate on file, so `usage` carries $0.00 as
+     * a lower bound (see `chat.turn.unpriced_model`, the TUI's notice, whose
+     * wording fits a process verbatim — it names a config file, not a reply).
+     * Stderr, ERROR_LABEL choke, once per run; the JSON contract on stdout
+     * stays exactly one document whatever this line does.
+     */
+    private static function noticeUnpricedModel(Message $message): void
+    {
+        $unpriced = $message->usage?->unpricedModel;
+        if ($unpriced === null || $unpriced === '') {
+            return;
+        }
+        \fwrite(\STDERR, self::ERROR_LABEL . Lang::t('chat.turn.unpriced_model', ['model' => $unpriced]) . "\n");
+    }
+
+    /**
      * The stream this class's `-p` console family reads when no caller names
      * one, and the seam a test process uses to keep the suite off its own
      * descriptor 0. Two readers: {@see readStdinIfPiped()} and
@@ -1733,7 +1835,7 @@ final class NonInteractive
      *
      * `text` (default): the assistant's raw content, matching the plain
      * stdout contract of every tool surveyed in crush_feat.md section 2.
-     * `json`: `{"schema": 1, "result": "<content>"}`, plus THREE conditional
+     * `json`: `{"schema": 1, "result": "<content>"}`, plus SIX conditional
      * keys. `refusals` appears when the turn blocked at least one tool call
      * — see {@see self::emitErrorDocument()} for why refusals is
      * conditional, and {@see self::refusalFrom()} for what counts as one and
@@ -1746,6 +1848,13 @@ final class NonInteractive
      * forgotten field. Inside `usage` the buckets are
      * {@see \SugarCraft\Code\Usage::toArray()}'s camelCase keys verbatim;
      * the top-level envelope keys stay snake_case like `session_id`.
+     * The stop-flag trio (D1-fix, plan_comparison audit 2026-10-21) is
+     * likewise ABSENT-until-set: `steps_truncated` and `length_stopped` appear
+     * as booleans only once the engine folds one true (a false row carries
+     * neither — the keys report what happened, not what did not), and
+     * `loop_guard_stopped_by` names the repeated tool exactly when the
+     * repeat-call guard ended the turn. They are the machine half of the same
+     * facts the `text` trailer spells for a human.
      *
      * `text` CARRIES NO REFUSALS ON STDOUT, AND THE REASON GIVEN FOR THAT HAS
      * BEEN WRONG TWICE.
@@ -1767,7 +1876,7 @@ final class NonInteractive
      * WHAT IS TRUE NOW: every refusal reaches the operator on stderr, from
      * {@see self::noticeRefusal()}, on both formats. THE DECISION HERE IS
      * UNCHANGED AND ITS ORIGINAL REASON IS THE ONE THAT SURVIVED: stdout under
-     * `text` is the answer and nothing else, and a second list there would
+     * `text` is the answer and no refusal list, and a second list there would
      * break the one contract this format has for the one caller — a shell
      * pipeline — that cannot tolerate it. That is why the line went to stderr
      * rather than here.
@@ -1775,6 +1884,15 @@ final class NonInteractive
      * pins both halves: the answer alone on stdout, the refusal alone on
      * stderr, asserted in one child process because splitting them would pass
      * with the two channels merged.
+     * ONE QUALIFIER, D1-fix (plan_comparison audit 2026-10-21): a clean turn
+     * still ends at the answer alone, but a turn the engine STOPPED EARLY —
+     * step ceiling, provider output limit, repeat-call guard — now carries
+     * plain-text trailer lines after the answer ({@see self::stopTrailers()}).
+     * That is not a second list: it is part of the honest answer, and the
+     * defect it cures was the one the audit named — an unattended run exiting
+     * 0 with an unmarked truncated reply. The TUI already announced all three
+     * stop conditions as system notices in its settle arm (Chat.php); this is
+     * the one-shot path's same-fact vocabulary.
      *
      * crush_feat.md Recommendation 3 sketched this envelope;
      * the first cut shipped `result` alone and left its `session_id`/`usage`
@@ -1795,7 +1913,7 @@ final class NonInteractive
      *   {@see self::run()} turns this into an `encoding`-typed document at
      *   {@see self::EXIT_FAILURE}; never into an empty stdout.
      */
-    public static function format(Message $message, string $outputFormat, array $refusals = [], ?string $sessionId = null, ?array $usage = null): string
+    public static function format(Message $message, string $outputFormat, array $refusals = [], ?string $sessionId = null, ?array $usage = null, array $stopFlags = []): string
     {
         if ($outputFormat === self::FORMAT_JSON) {
             $document = ['schema' => self::SCHEMA, 'result' => $message->content];
@@ -1808,6 +1926,21 @@ final class NonInteractive
             if ($usage !== null) {
                 $document['usage'] = $usage;
             }
+            // D1-fix: the machine half of the stop conditions — each key
+            // present only when its fact holds (a false flag stays absent,
+            // not asserted), the trio's values fixed by the fold, never by
+            // the renderer. json_encode escapes the tool name, so an
+            // exotic-name turn cannot smuggle control bytes into this
+            // document the way F-2 caught for the text arm.
+            if (($stopFlags['steps_truncated'] ?? false) === true) {
+                $document['steps_truncated'] = true;
+            }
+            if (($stopFlags['length_stopped'] ?? false) === true) {
+                $document['length_stopped'] = true;
+            }
+            if (($stopFlags['loop_guard_stopped_by'] ?? '') !== '') {
+                $document['loop_guard_stopped_by'] = (string) $stopFlags['loop_guard_stopped_by'];
+            }
 
             return self::encodeDocument($document);
         }
@@ -1817,7 +1950,12 @@ final class NonInteractive
         // (or a command backend's fenced stderr tail) that emits SGR/OSC
         // sequences or stray C0 characters painted them straight onto the
         // caller's terminal — the corruption a JSON consumer never sees.
-        return self::sanitizeTextAnswer($message->content);
+        // The D1 trailer joins this arm already sanitized by construction:
+        // every line of it is a lang string or the sanitised tool name.
+        $answer = self::sanitizeTextAnswer($message->content);
+        $trailers = self::stopTrailers($stopFlags);
+
+        return $trailers === [] ? $answer : $answer . "\n" . implode("\n", $trailers);
     }
 
     /**

@@ -37,6 +37,19 @@ the plan demanded one.
 See `docs/TROUBLESHOOTING.md` ("Upgrading from sugar-crush") for user-facing <!-- @rename-keep -->
 symptoms, and `docs/ENVIRONMENT.md` ("Deprecated aliases") for the env fold.
 
+## Fixed (2026-10-21 plan_comparison D1)
+
+The one-shot `-p` path discarded every stop condition the engine had folded
+onto the settled answer: a step-capped, output-limit-cut, or loop-guarded turn
+printed its partial reply unmarked and exited 0 — the TUI announced all of
+these through its Chat settle arm and headless CI had no equivalent. A
+`--output-format text` run now appends one plain ANSI-free trailer line per
+stop condition (`cli.truncate.*`), a `json` run (and a stream-json run's final
+line) gains the typed optional keys `steps_truncated` / `length_stopped` /
+`loop_guard_stopped_by` (present only when true), and a turn billed on an
+unpriced model writes its `chat.turn.unpriced_model` notice to stderr like the
+TUI's. Exit semantics are unchanged by design: 0 still means an answer arrived.
+
 ## Fixed (2026-10-14 review wave)
 
 A broad multi-persona review (covering documentation, code, terminal UX,
