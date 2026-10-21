@@ -98,9 +98,13 @@ Or run the single-file phar — no Composer, no `vendor/`: download
 `candy-code.phar` and its `candy-code.phar.sha256` sidecar from the
 `candy-code/v*` releases at <https://github.com/detain/sugarcraft/releases>,
 verify with `sha256sum -c candy-code.phar.sha256`, run with
-`php candy-code.phar` (a release whose source pins a signing key also
-carries `candy-code.phar.minisig`, verified by `candy-code self-update`
-before any swap). `self-update` keeps the phar current from then on.
+`php candy-code.phar`. Releases from `candy-code/v0.1.1` onward carry
+`candy-code.phar.minisig`, an Ed25519 signature that `candy-code self-update`
+verifies against the pinned key before any swap. Phars from `candy-code/v0.1.0`
+and earlier are unsigned and report an uncomparable `dev-master` version
+stamp, so an install from one cannot self-update — download
+`candy-code/v0.1.1` manually instead. `self-update` keeps the phar current
+from then on.
 
 Requirements: PHP 8.3+, `ext-sqlite3` (it backs the Team task list) and
 `pdo_sqlite` (the session store),
