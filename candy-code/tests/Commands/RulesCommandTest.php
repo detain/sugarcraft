@@ -455,7 +455,7 @@ final class RulesCommandTest extends TestCase
         $text = $this->reply($this->submit('/rules terse ' . "\033[31m" . 'stray' . "\033[0m", $state));
 
         self::assertSame(
-            "/rules takes one pack name; read it as \"terse stray\".\n  Nothing was toggled.",
+            "/rules takes one pack name; read it as `terse stray`.\n  Nothing was toggled.",
             $text,
         );
         self::assertStringNotContainsString("\033", $text, 'no raw escape byte may reach the transcript');

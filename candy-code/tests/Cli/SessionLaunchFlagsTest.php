@@ -324,7 +324,7 @@ final class SessionLaunchFlagsTest extends TestCase
         $store->createSession('bbbb3333', 'p', 'm');
 
         Bootstrap::useSessionLaunch(false, true, 'nope');
-        $this->assertStringContainsString('no stored session has the id or name "nope"', (string) Bootstrap::sessionLaunchError());
+        $this->assertStringContainsString('no stored session has the id or name `nope`', (string) Bootstrap::sessionLaunchError());
 
         // An ambiguous prefix is not a match either.
         Bootstrap::useSessionLaunch(false, true, 'bbbb');

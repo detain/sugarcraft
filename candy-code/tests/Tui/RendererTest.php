@@ -335,7 +335,7 @@ final class RendererTest extends TestCase
 
         $output = Renderer::render($app);
 
-        $this->assertStringContainsString('error:', $output);
+        $this->assertStringContainsString('Error:', $output);
         $this->assertStringContainsString('Something went wrong', $output);
     }
 
@@ -405,7 +405,7 @@ final class RendererTest extends TestCase
             . Style::new()->foreground($app->theme()->shellSuccess)->render('TestProvider')
             . ' | ' . Style::new()->foreground($app->theme()->shellWarning)->render('test-model')
             . ' | [Tab] Switch Pane | '
-            . Style::new()->foreground($app->theme()->shellError)->bold()->render('error: Boom');
+            . Style::new()->foreground($app->theme()->shellError)->bold()->render('Error: Boom');
 
         $this->assertSame($legacy, self::statusBar($app));
         $this->assertStringNotContainsString('ignored', self::statusBar($app));

@@ -542,14 +542,14 @@ final class ReasoningPaintTest extends TestCase
 
     /**
      * While the model is still THINKING - no reply text yet - the trace itself
-     * is painted, newlines kept, under a `💭 Thinking…` marker: the user reads
+     * is painted, newlines kept, under a `💭 assistant is thinking…` marker: the user reads
      * the thought as it is written instead of watching a one-line ticker.
      */
     public function testALiveThoughtIsPaintedInFullWhileTheModelIsStillThinking(): void
     {
         $frame = $this->paintedThought("FIRSTLINE weighing it up\nSECONDLINE and deciding");
 
-        $this->assertStringContainsString('💭 Thinking…', $this->plain($frame));
+        $this->assertStringContainsString('💭 assistant is thinking…', $this->plain($frame));
         $this->assertStringContainsString('FIRSTLINE', $frame);
         $this->assertStringContainsString('SECONDLINE', $frame);
         $rows = $this->rowsContaining($frame, ['FIRSTLINE', 'SECONDLINE']);
