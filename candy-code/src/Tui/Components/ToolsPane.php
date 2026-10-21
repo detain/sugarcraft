@@ -81,6 +81,8 @@ final class ToolsPane
         $entries = array_slice($entries, $offset);
         $expanded = $a->chat?->expanded() ?? [];
         $muted = Style::new()->foreground($theme->shellMuted);
+        // The shell's settled row cursor (W7-B) — empty while none is settled.
+        $focusKeys = $a->focusedToolRowKeys();
 
         $lines = [];
         $keys = [];
@@ -96,7 +98,16 @@ final class ToolsPane
                 if (count($lines) >= $budget) {
                     break;
                 }
-                $lines[] = Style::new()->foreground($color)->render(Width::truncate($label, $inner));
+                // W7-B: the settled Ctrl+F cursor paints its rows here too —
+                // same BOLD vocabulary as the transcript head (the pane's
+                // rows carry status colours already, so bold is the active
+                // delta that survives every colour profile), on the same
+                // span, zero added cells.
+                $entry = Style::new()->foreground($color);
+                if ($key !== null && in_array($key, $focusKeys, true)) {
+                    $entry = $entry->bold();
+                }
+                $lines[] = $entry->render(Width::truncate($label, $inner));
                 $keys[] = $key;
                 // `=== true`: under `expandToolOutput` a `false` entry is a
                 // call the user closed (Chat::isToolOutputExpanded()).

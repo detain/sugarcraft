@@ -416,8 +416,10 @@ final class PermissionPrompt
         // `$msg->generation !== null && $msg->generation !== $this->generation`
         // -- appears FOUR times across the turn-suspension
         // pair -- this one spelled against the armAsk() parameter, $generation,
-        // $this->generation at the Chat sites: THREE in Chat.php (update()'s
-        // AssistantMsg arm, finishToolCalls() and applyBackendToolEvent()) and
+        // $this->generation at the Chat sites: TWO left in Chat.php
+        // (finishToolCalls() and applyBackendToolEvent()) plus one now in
+        // Chat/Handlers/HandlesTurnCompletion.php (update()'s AssistantMsg
+        // arm, moved out of route() in W7-S4) and
         // THIS guard, lifted out of requestPermission() with its comment in W5-A.
         // TWO of the Chat copies are byte-identical apart from indentation;
         // applyBackendToolEvent()'s is not: its arm bills the
@@ -581,7 +583,8 @@ final class PermissionPrompt
         // re-declared the domain as five. What is load-bearing is the rule and the
         // fact that the figure is not zero.
         //
-        // At the WRONG site (update()'s AssistantMsg arm) the same two mutations,
+        // At the WRONG site (update()'s AssistantMsg arm — W7-S4: now inside
+        // Chat/Handlers/HandlesTurnCompletion.php::handleTurnCompletionMessages()) the same two mutations,
         // ALL FOUR figures re-driven at this commit and each stated over BOTH
         // domains, because the previous revision compared a re-measured right-site
         // number against a wrong-site number taken over the smaller domain and

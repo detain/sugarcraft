@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Diagnostics;
 
 use React\EventLoop\Loop;
+use SugarCraft\Code\Support\Log;
 
 /**
  * The MID-SESSION half of the transcript seam: a process-wide inbox any
@@ -409,7 +410,7 @@ final class RuntimeNoticeSink
     {
         $sink = self::current();
         if (!($sink->hasTransport() && TuiErrorLog::destinationIsStderr(ini_get('error_log')))) {
-            error_log($message);
+            Log::raw($message);
         }
         $sink->record($message);
     }

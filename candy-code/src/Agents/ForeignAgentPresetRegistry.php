@@ -9,6 +9,7 @@ use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\EnumSpelling;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Skills\SkillSource;
 
@@ -524,7 +525,7 @@ final class ForeignAgentPresetRegistry
                     // roster silently. Record it beside the error_log so the
                     // launch can say so; see {@see skippedFiles()}.
                     $this->skippedFiles[$file] = $e->getMessage();
-                    error_log("candy-code: ForeignAgentPresetRegistry: skipping {$file}: {$e->getMessage()}");
+                    Log::sub(Log::FOREIGN_AGENT_PRESET_REGISTRY, "skipping {$file}: {$e->getMessage()}");
                 }
             }
         }
@@ -811,7 +812,7 @@ final class ForeignAgentPresetRegistry
     private function warn(string $warning): void
     {
         $this->warnings[] = $warning;
-        error_log('candy-code: ForeignAgentPresetRegistry: ' . $warning);
+        Log::sub(Log::FOREIGN_AGENT_PRESET_REGISTRY, $warning);
     }
 
     /**

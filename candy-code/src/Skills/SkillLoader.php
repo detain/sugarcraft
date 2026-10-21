@@ -9,6 +9,7 @@ use SugarCraft\Code\Context\Utf8Scrub;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\ProjectRoot;
 
 /**
@@ -145,7 +146,7 @@ final class SkillLoader
 
         $report = $this->reportSkips ?? self::debugSkipsRequested();
         if ($report) {
-            error_log("candy-code: Failed to load skill from {$path}: {$reason}");
+            Log::channel(Log::APP, "Failed to load skill from {$path}: {$reason}");
         }
     }
 
@@ -162,7 +163,7 @@ final class SkillLoader
 
         $report = $this->reportSkips ?? self::debugSkipsRequested();
         if ($report) {
-            error_log("candy-code: Refused skills directory {$dir}: {$reason}");
+            Log::channel(Log::APP, "Refused skills directory {$dir}: {$reason}");
         }
     }
 

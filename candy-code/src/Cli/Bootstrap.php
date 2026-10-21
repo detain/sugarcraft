@@ -66,6 +66,7 @@ use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Support\TimedFileLock;
@@ -9114,7 +9115,7 @@ final class Bootstrap
             // The seam's {@see LAUNCH_NOTICE_MAX_CHARS} clip then bounds the
             // LENGTH, which matters here because `$e->getMessage()` interpolates
             // a `type` string the project's `.mcp.json` chose.
-            error_log(sprintf(
+            Log::raw(sprintf(
                 self::translated(self::MCP_PARTIAL_START_LOG_FORMAT),
                 $path,
                 $e::class,
