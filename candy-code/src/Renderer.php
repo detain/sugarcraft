@@ -2934,10 +2934,11 @@ final class Renderer
      * carries a real zone (`pane:menu`), so it is the worst row to admit a
      * forged one on.
      *
-     * {@see Width::truncate()} rather than {@see clipToWidth()}: it iterates
-     * grapheme CLUSTERS, so it cannot cut a base character away from its
-     * combining marks, whereas `clipToWidth()` cuts with `mb_substr()` on
-     * codepoints. The clip announces itself with an ellipsis, the same way
+     * {@see Width::truncate()} iterates grapheme
+     * CLUSTERS, so it cannot cut a base character away from its combining
+     * marks. `clipToWidth()` is now cluster-safe on that same primitive
+     * (tui-F-3), but it also applies an already-fits early return and its own
+     * column accounting, so this segment clips through {@see Width} directly. The clip announces itself with an ellipsis, the same way
      * {@see \SugarCraft\Code\Hooks\ScriptHook::clip()} does, so a status
      * line that is being truncated reads as truncated rather than as a command
      * that stopped talking mid-word.
@@ -6252,10 +6253,43 @@ final class Renderer
      * truncation rules.
      *
      * Plain text only: it measures with {@see Width::string()} and cuts with
-     * `mb_substr()`, neither of which can see an SGR escape, so every caller
-     * clips BEFORE it styles.
+     * {@see Width::truncate()}, neither of which can see an SGR escape, so
+     * every caller clips BEFORE it styles. The cut walks grapheme clusters, so
+     * it lands on a cluster boundary and never orphans a combining mark from
+     * its base.
      */
     private static function clipToWidth(string $text, int $cols): string
+    {
+        if ($cols <= 0) {
+            return '';
+        }
+        if (Width::string($text) <= $cols) {
+            return $text;
+        }
+
+        // Room for the ellipsis: Width::truncate() fits the kept text to
+        // $cols - 1 cells so the appended "…" lands the run on exactly $cols.
+        // The previous cut used mb_substr() per CODEPOINT — a base+mark pair
+        // read as two, so a slice between them emitted a floating combining
+        // mark (or dropped a base while its mark rode into the ellipsis).
+        return Width::truncate($text, $cols - 1) . '…';
+    }
+
+    /**
+     * Clip a SHORT, SCRIPT-FIXED banner row (the input-draft "↑ N lines
+     * above"/"↓ N lines below" scroll indicators) to $cols, ellipsis included.
+     *
+     * These labels keep the raw per-codepoint {@see mb_substr()} cut the shared
+     * {@see clipToWidth()} used to perform, for one reason: the row's only
+     * variable part is an integer count and its widest character is a single
+     * codepoint arrow (U+2191/U+2193), so there are no combining marks, ZWJ
+     * runs or wide sequences for a cluster-aware cut to re-order. Routing them
+     * through Width::truncate() would be a no-op on every real input while
+     * silently re-flowing the shipped goldens; this documents that the ASCII
+     * budget is intentional, not an oversight, and confines the codepoint cut
+     * to the one call site family where it is provably equivalent.
+     */
+    private static function clipAsciiBanner(string $text, int $cols): string
     {
         if ($cols <= 0) {
             return '';
@@ -7889,11 +7923,11 @@ final class Renderer
         if ($start > 0) {
             array_unshift(
                 $window,
-                ($indented ? '  ' : '') . $moreStyle->render(self::clipToWidth(Lang::t('tui.input.lines_above', ['count' => $start]), $textWidth)),
+                ($indented ? '  ' : '') . $moreStyle->render(self::clipAsciiBanner(Lang::t('tui.input.lines_above', ['count' => $start]), $textWidth)),
             );
         }
         if ($end < $count) {
-            $window[] = ($indented ? '  ' : '') . $moreStyle->render(self::clipToWidth(Lang::t('tui.input.lines_below', ['count' => $count - $end]), $textWidth));
+            $window[] = ($indented ? '  ' : '') . $moreStyle->render(self::clipAsciiBanner(Lang::t('tui.input.lines_below', ['count' => $count - $end]), $textWidth));
         }
 
         return $window;

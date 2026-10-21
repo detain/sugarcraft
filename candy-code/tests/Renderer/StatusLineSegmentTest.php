@@ -300,9 +300,9 @@ final class StatusLineSegmentTest extends TestCase
         self::assertLessThanOrEqual(90, Width::of($bar));
 
         // THE DISCRIMINATOR: the segment is a whole number of COMPLETE
-        // clusters. A codepoint-wise cut (`mb_substr()`, which
-        // {@see Renderer::clipToWidth()} uses) can stop between the `e` and its
-        // mark and leave a bare `e` at the end; a grapheme-wise cut cannot.
+        // clusters. A codepoint-wise cut (`mb_substr()`) can stop between the
+        // `e` and its mark and leave a bare `e` at the end; a grapheme-wise cut
+        // ({@see Renderer::clipToWidth()}, cluster-safe since tui-F-3) cannot.
         //
         // Measured on the SEGMENT, not on the bar: the bar's own prose
         // ("Enter", "send", "menu", "exit") contributes five bare `e`s, and the
