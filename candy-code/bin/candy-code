@@ -650,6 +650,23 @@ if ($relaunchDir !== null) {
     exit(SessionRelaunch::exec($relaunchDir, $argv, __FILE__));
 }
 
+// v2:MINOR-6: the shell's convention for a signal-terminated program is
+// exit 128+N, and a supervisor that `kill`s the TUI deserves to read that
+// on the wire. Until now a SIGTERM-stopped run unwound run()'s finally,
+// funnelled through the pop and the SessionEnd rows above, and then simply
+// fell off the end of this try with a clean 0 — indistinguishable from the
+// user quitting with their own key. stopSignal() answers null for every
+// stop the program asked for itself (QuitMsg, kill(), a model-raised
+// InterruptMsg from the raw-mode Ctrl+C), so those exits keep their
+// byte-exact 0 and every existing rc pin survives unchanged; only the
+// SIGINT/SIGTERM/SIGHUP arms of sugar-core's signal installation land on
+// 130/143/129 here. Nothing else moves: run() has already returned and all
+// teardown above has already run — the exit code is the only delta.
+$stoppedBySignal = $program->stopSignal();
+if ($stoppedBySignal !== null) {
+    exit(128 + $stoppedBySignal);
+}
+
 } catch (PermissionConfigException $e) {
     exit(NonInteractive::failUsage(
         'candy-code: ' . $e->getMessage(),
