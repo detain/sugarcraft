@@ -78,14 +78,14 @@ final class StatusLineSegmentTest extends TestCase
     }
 
     /**
-     * `Renderer::$maxScrollOffset` is normally set by `render()`. Set directly
-     * so a scroll readout can be produced without a whole frame, which is the
-     * only way to test the PRIORITY claim in isolation.
+     * `Renderer::$maxScrollOffset` now lives on the published
+     * {@see \SugarCraft\Code\RenderFrame}; normally `render()` sets it. Set
+     * directly so a scroll readout can be produced without a whole frame,
+     * which is the only way to test the PRIORITY claim in isolation.
      */
     private static function setMaxScrollOffset(int $max): void
     {
-        $property = new \ReflectionProperty(Renderer::class, 'maxScrollOffset');
-        $property->setValue(null, $max);
+        Renderer::publishedFrame()->noteMaxScrollOffset($max);
     }
 
     private static function install(string $command): void

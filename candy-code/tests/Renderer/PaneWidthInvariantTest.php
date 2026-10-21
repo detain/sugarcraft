@@ -1591,16 +1591,16 @@ final class PaneWidthInvariantTest extends TestCase
      * the label bound is observable at all: afterwards {@see Renderer::hardFit()}
      * has made the row fit whether the bound was right or wrong.
      *
-     * `$toolRowHeads` is cleared first (`renderView()` does it per frame, and
-     * this bypasses `renderView()`) so the head returned is this row's.
+     * The frame's `toolRowHeads` registry is cleared first (`renderView()`
+     * does it per frame, and this bypasses `renderView()`) so the head
+     * returned is this row's.
      *
      * @return array{0: string, 1: string} the row, and the click-zone head recorded for it
      */
     private static function toolRow(string $name, ?string $error, int $width): array
     {
         $render = new \ReflectionMethod(Renderer::class, 'renderToolResults');
-        $heads = new \ReflectionProperty(Renderer::class, 'toolRowHeads');
-        $heads->setValue(null, []);
+        Renderer::publishedFrame()->resetToolRowHeads();
 
         $block = (string) $render->invoke(
             null,
@@ -1618,7 +1618,7 @@ final class PaneWidthInvariantTest extends TestCase
             0,
         );
 
-        return [explode("\n", $block)[0], (string) (((array) $heads->getValue())[0] ?? '')];
+        return [explode("\n", $block)[0], (string) (Renderer::publishedFrame()->toolRowHeads()[0] ?? '')];
     }
 
     /**

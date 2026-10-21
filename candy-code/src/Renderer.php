@@ -995,6 +995,11 @@ final class Renderer
     private static ?Scanner $scanner = null;
 
     /**
+     * The frame this renderer currently owns — see {@see publishedFrame()}.
+     */
+    private static ?RenderFrame $frame = null;
+
+    /**
      * Zone registry produced by the most recent {@see scanRoot()} pass.
      * Hit-tested by {@see Chat::zoneAt()}.
      */
@@ -1004,40 +1009,39 @@ final class Renderer
     }
 
     /**
-     * Where the scanned frame's top-left cell sits on the TERMINAL, as
-     * `[col, row]` deltas (0-based; `[0, 0]` when this renderer's frame IS
-     * the root frame).
-     *
-     * {@see scanRoot()} records zones in the coordinate space of the string it
-     * scanned, and when a shell hosts this renderer that string is a SUB-frame:
-     * {@see \SugarCraft\Code\Tui\Components\ChatPane} draws it inside a box and
-     * {@see \SugarCraft\Code\Tui\Renderer} composes that box behind a menu bar
-     * and beside a sidebar. `MouseMsg` x/y stay terminal-absolute, so without
-     * this delta every hosted click hit-tests against the wrong cell — clicks on
-     * real targets do nothing and clicks on blank chrome fire actions the user
-     * never asked for.
-     *
-     * Applied at hit-test time ({@see Chat::zoneAt()}) rather than baked into
-     * the recorded boxes because the shell only knows the final delta AFTER it
-     * has composed the frame — the frame it composes from this renderer's
-     * output. That makes it every mouse consumer's job to rebase, not just the
-     * hit-test's: `Chat` also translates the event it hands
-     * {@see \SugarCraft\Mouse\ZoneClickTracker}, which pairs a release with its
-     * press by re-testing the recorded box against that event.
-     *
-     * @var array{0: int, 1: int}
+     * The frame this renderer currently owns: the last completed paint, and —
+     * while one is in flight — the one being built. All fourteen per-frame
+     * fields live on {@see RenderFrame} and are reached through this slot;
+     * the `RenderFrame` class docblock owns the serial-render story for why
+     * collecting them into one object matters.
      */
-    private static array $zoneOrigin = [0, 0];
-
-    /** @var array{0:int,1:int,2:int,3:int}|null @see selectableRegion() */
-    private static ?array $selectableRegion = null;
-
-    /** @var list<string> @see selectableLines() */
-    private static array $selectableLines = [];
+    public static function publishedFrame(): RenderFrame
+    {
+        return self::$frame ??= RenderFrame::new();
+    }
 
     /**
      * Declare where the frame {@see scanRoot()} just scanned ended up on the
      * terminal, in 0-based column/row deltas.
+     *
+     * The origin is where the scanned frame's top-left cell sits on the
+     * TERMINAL, as `[col, row]` deltas (0-based; `[0, 0]` when this renderer's
+     * frame IS the root frame). {@see scanRoot()} records zones in the
+     * coordinate space of the string it scanned, and when a shell hosts this
+     * renderer that string is a SUB-frame:
+     * {@see \SugarCraft\Code\Tui\Components\ChatPane} draws it inside a box and
+     * {@see \SugarCraft\Code\Tui\Renderer} composes that box behind a menu bar
+     * and beside a sidebar. `MouseMsg` x/y stay terminal-absolute, so without
+     * this delta every hosted click hit-tests against the wrong cell — clicks
+     * on real targets do nothing and clicks on blank chrome fire actions the
+     * user never asked for.
+     *
+     * Applied at hit-test time ({@see Chat::zoneAt()}) rather than baked into
+     * the recorded boxes because the shell only knows the final delta AFTER it
+     * has composed the frame. That makes it every mouse consumer's job to
+     * rebase, not just the hit-test's: `Chat` also translates the event it
+     * hands {@see \SugarCraft\Mouse\ZoneClickTracker}, which pairs a release
+     * with its press by re-testing the recorded box against that event.
      *
      * Called once per frame by the shell compositor, after the composite is
      * final. {@see scanRoot()} resets the origin to `[0, 0]` at the start of
@@ -1046,93 +1050,80 @@ final class Renderer
      */
     public static function setZoneOrigin(int $col, int $row): void
     {
-        self::$zoneOrigin = [$col, $row];
+        self::publishedFrame()->setZoneOrigin([$col, $row]);
     }
 
     /** @return array{0: int, 1: int} @see setZoneOrigin() */
     public static function zoneOrigin(): array
     {
-        return self::$zoneOrigin;
+        return self::publishedFrame()->zoneOrigin();
     }
 
     /**
-     * Whether the palette this renderer would paint is ABANDONED: open on the
-     * hosted `Chat` while a keyboard-owning shell view stands in front of it,
-     * so `Chat::update()` is not driving its next keystroke.
+     * Declare whether the hosted palette is abandoned for the frame being
+     * composited. Called by the shell compositor around its render, never by
+     * a standalone Chat render.
      *
-     * E682 (the E12-composite carry on E666): while this is true the overlay
-     * chain skips the palette link. The ONE rule opening that chain is that
-     * the overlay on screen must be the one `Chat::update()` routes the next
-     * keystroke to — a painted-but-undrivable palette behind the F10 menu or
-     * the skill picker is exactly the ghost that rule forbids. Suppressing
-     * the paint is the composite side of the seam only; closing the abandoned
-     * palette stays at the delivery choke point
+     * ABANDONED means: the palette is open on the hosted `Chat` while a
+     * keyboard-owning shell view stands in front of it, so `Chat::update()`
+     * is not driving its next keystroke. E682 (the E12-composite carry on
+     * E666): while this is true the overlay chain skips the palette link. The
+     * ONE rule opening that chain is that the overlay on screen must be the
+     * one `Chat::update()` routes the next keystroke to — a painted-but-
+     * undrivable palette behind the F10 menu or the skill picker is exactly
+     * the ghost that rule forbids. Suppressing the paint is the composite
+     * side of the seam only; closing the abandoned palette stays at the
+     * delivery choke point
      * ({@see \SugarCraft\Code\App\App::delegateToChat()}, E666).
      *
      * Like {@see setZoneOrigin()} this is computed once per frame by the shell
      * compositor ({@see \SugarCraft\Code\App\App::view()}) from
      * {@see \SugarCraft\Code\Tui\KeyboardHandler::paletteIsAbandoned()}, and
      * reset on the way out — a standalone `Chat` render never sets it, so the
-     * default `false` self-heals every non-hosted path.
-     */
-    private static bool $paletteAbandoned = false;
-
-    /**
-     * Declare whether the hosted palette is abandoned for the frame being
-     * composited. Called by the shell compositor around its render, never by
-     * a standalone Chat render — see {@see self::$paletteAbandoned}.
+     * default `false` self-heals every non-hosted path. Storage:
+     * {@see RenderFrame} (its `paletteAbandoned()` read).
      */
     public static function setPaletteAbandoned(bool $abandoned): void
     {
-        self::$paletteAbandoned = $abandoned;
+        self::publishedFrame()->notePaletteAbandoned($abandoned);
     }
-
-    /**
-     * Whether the Agents sidepane is docked in the frame being composited
-     * (CL-2 FIX 2). The docked sidebar already lists every run, so the
-     * under-input transcript footer would paint a SECOND agent listing in
-     * the same frame — the shell suppresses the footer for that frame.
-     *
-     * Same lineage as {@see self::$paletteAbandoned}: set around one paint by
-     * {@see \SugarCraft\Code\App\App::view()} and reset on the way out, so a
-     * standalone Chat render (tests, exports) keeps the footer as its sole
-     * listing — the default `false` self-heals every non-hosted path.
-     */
-    private static bool $agentsPaneDocked = false;
 
     /**
      * Declare whether the Agents sidepane is docked for the frame being
      * composited. Called by the shell compositor around its render, never by
-     * a standalone Chat render — see {@see self::$agentsPaneDocked}.
+     * a standalone Chat render.
+     *
+     * The docked sidebar already lists every run (CL-2 FIX 2), so the
+     * under-input transcript footer would paint a SECOND agent listing in
+     * the same frame — the shell suppresses the footer for that frame.
+     *
+     * Same lineage as {@see setPaletteAbandoned()}: set around one paint by
+     * {@see \SugarCraft\Code\App\App::view()} and reset on the way out, so a
+     * standalone Chat render (tests, exports) keeps the footer as its sole
+     * listing — the default `false` self-heals every non-hosted path.
+     * Storage: {@see RenderFrame} (its `agentsPaneDocked()` read).
      */
     public static function setAgentsPaneDocked(bool $docked): void
     {
-        self::$agentsPaneDocked = $docked;
+        self::publishedFrame()->noteAgentsPaneDocked($docked);
     }
 
     /**
-     * The Agent View the shell has open for the frame being
-     * composited (roadmap P-C2), as {@see \SugarCraft\Code\App\App::agentViewFrame()}
-     * built it, or null for the parent transcript.
+     * Declare the Agent View for the frame being composited (roadmap P-C2),
+     * as {@see \SugarCraft\Code\App\App::agentViewFrame()} built it, or null
+     * for the parent transcript.
      *
      * The view's state is the SHELL's ({@see \SugarCraft\Code\App\App::$agentViewTarget}),
      * not the chat's, so it reaches this renderer the way the abandonment
-     * signal above does: set around one paint by the shell compositor and
-     * reset on the way out, so a standalone Chat render never sees one.
-     *
-     * @var array{id: string, name: string, state: ?\SugarCraft\Code\Agents\Live\AgentLiveState, rows: list<Message>, composer: ?string, attach: ?\SugarCraft\Code\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null
-     */
-    private static ?array $agentView = null;
-
-    /**
-     * Declare the Agent View for the frame being composited — see
-     * {@see self::$agentView}.
+     * signal does: set around one paint by the shell compositor and reset on
+     * the way out, so a standalone Chat render never sees one. Storage:
+     * {@see RenderFrame} (its `agentView()` read).
      *
      * @param array{id: string, name: string, state: ?\SugarCraft\Code\Agents\Live\AgentLiveState, rows: list<Message>, composer: ?string, attach: ?\SugarCraft\Code\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null $view
      */
     public static function setAgentView(?array $view): void
     {
-        self::$agentView = $view;
+        self::publishedFrame()->noteAgentView($view);
     }
 
     /**
@@ -1154,111 +1145,25 @@ final class Renderer
     public static function clearZones(): void
     {
         self::scanner()->clear();
-        self::$selectableRegion = null;
-        self::$selectableLines = [];
-        self::$zoneOrigin = [0, 0];
-        self::$paletteAbandoned = false;
+        self::publishedFrame()->clearZoneState();
     }
-
-    /**
-     * Tool-call rows the current frame wants clickable, collected while the
-     * transcript is built and consumed once the shell around it is drawn.
-     *
-     * This detour exists because the markers are NOT free to the layout.
-     * `Style::render()` measures every line to size the shell's border and
-     * pad the short ones, and a sentinel pair is ~29 codepoints of
-     * Private-Use text it happily counts as content: marking the label
-     * in-place (the way {@see markSessionTab()} can, being outside any box)
-     * widens the whole box by the marker length and leaves the marked row's
-     * right border ~29 columns short of every other row. Marking the row
-     * AFTER it has been measured and padded costs nothing and is what
-     * bubblezone recommends for width-sensitive containers.
-     *
-     * @var array<array-key, array{id: string, label: string}> in document order, keyed by id
-     */
-    private static array $toolCallZones = [];
-
-    /**
-     * The styled HEAD of every tool row the current frame emitted, in document
-     * order — the classification {@see fitToPane()} keys its
-     * truncate-instead-of-wrap branch off.
-     *
-     * Deliberately a SECOND list rather than a read of {@see $toolCallZones},
-     * because that one is a CLICK registry and is legitimately empty in states
-     * where clicking is impossible: {@see recordToolCallZone()} bails when
-     * {@see Chat::mouseClicksEnabled()} is false and when the model-supplied
-     * id falls outside {@see ZONE_ID_CHARSET}. Keying the LAYOUT decision off
-     * the click registry made a tool row WRAP in exactly those states —
-     * measured at 20 columns with clicks off, the row `🔧 tool: B ⊘` was
-     * followed by a lookalike `interrupted` row, which is the outcome
-     * {@see fitToPane()}'s tool-row branch exists to prevent. Two questions,
-     * two lists; this one is recorded unconditionally.
-     *
-     * @var list<string> in document order
-     */
-    private static array $toolRowHeads = [];
-
-    /**
-     * The {@see Chat::latestThoughtKey()} of the frame being built - the one
-     * thought Ctrl+O reaches, and so the only collapsed row
-     * {@see renderThought()} may advertise the chord on. Per-frame, set at the
-     * top of {@see renderView()} like the registries above.
-     */
-    private static ?string $ctrlOThoughtKey = null;
-
-    /**
-     * Palette rows the current frame wants clickable, as the FULLY rendered
-     * box lines they became (border + padding + row), collected by
-     * {@see renderPalette()} and consumed by {@see markPaletteItems()} once
-     * the palette has been composited over the frame.
-     *
-     * The detour exists because the palette is an OVERLAY, and {@see Veil}
-     * measures it: `composite()` takes the widest foreground line as the
-     * box's width and centres by it, then clips each line to the room left
-     * on its row. A sentinel pair measures ~29 columns of Private-Use text,
-     * so a row marked before compositing makes Veil believe the box is 29
-     * columns wider than it is — the whole palette shifts ~15 columns left
-     * and every row is clipped short. Marking after the composite costs
-     * nothing and leaves the geometry Veil computed untouched.
-     *
-     * @var list<array{id: string, line: string}> in row order
-     */
-    private static array $paletteItemZones = [];
-
-    /**
-     * Session picker rows the current frame wants clickable (E744 WS4), as
-     * the FULLY rendered overlay lines they became — the same pre-composite
-     * detour {@see $paletteItemZones} documents for the palette, and for the
-     * identical reason: Veil measures the overlay it is centring, and marking
-     * before the composite would move it.
-     *
-     * `acts` carries the highlighted row's action glyphs (verb => styled
-     * glyph), wrapped as `session-act:` zones inside the row's own.
-     *
-     * @var list<array{id: string, line: string, acts: array<string, string>}> in row order
-     */
-    private static array $sessionRowZones = [];
-
-    /**
-     * How many content lines the most recent frame had to drop off the top
-     * to fit the terminal — i.e. the largest {@see Chat::scrollOffset()}
-     * that still shows a full screen of transcript.
-     *
-     * Static for the same reason {@see $scanner} is: a wheel event arrives
-     * *between* frames, so the only content height it can be clamped
-     * against is the one already painted. {@see Chat} is immutable and
-     * would discard a per-instance copy of it anyway.
-     */
-    private static int $maxScrollOffset = 0;
 
     /**
      * Upper clamp for {@see Chat::scrollOffset()}, measured on the last
      * rendered frame. 0 when the transcript fits the window (nothing to
      * scroll) or when nothing has been rendered yet.
+     *
+     * How many content lines the frame had to drop off the top to fit the
+     * terminal — i.e. the largest {@see Chat::scrollOffset()} that still shows
+     * a full screen of transcript. Carried between frames on
+     * {@see RenderFrame} for the same reason {@see $scanner} is: a wheel event
+     * arrives *between* frames, so the only content height it can be clamped
+     * against is the one already painted. {@see Chat} is immutable and would
+     * discard a per-instance copy of it anyway.
      */
     public static function maxScrollOffset(): int
     {
-        return self::$maxScrollOffset;
+        return self::publishedFrame()->maxScrollOffset();
     }
 
     /**
@@ -1386,49 +1291,50 @@ final class Renderer
     private const MODEL_SEGMENT_MIN_COLS = 6;
 
     /**
-     * How far the LAST rendered keybinding reference overflowed its box,
-     * in lines. Static for the same reason {@see $maxScrollOffset} is: the
-     * keystroke that scrolls arrives between frames, so the only content
-     * height it can be clamped against is the one already painted.
-     *
-     * Process-global and read by production code ({@see Chat::withKeyHelp()}
-     * clamps against it), which is the shape of the three statics this feature's
-     * review round had to add resets for — and it needs no reset seam, for a
-     * reason that is a property rather than a habit: {@see renderKeyHelp()} runs
-     * FIRST in {@see renderView()}'s overlay chain, so it runs on every frame
-     * THIS renderer paints, and its two early returns (reference closed, or box
-     * does not fit) both zero this before returning ''. One such frame therefore
-     * clears it, which is asserted rather than assumed, by
-     * `KeyHelpTest::testTheOverflowCeilingResetsItselfOnAFrameWithoutTheReference()`.
-     *
-     * "Every frame this renderer paints" is the honest bound, not "every frame":
-     * under the pane shell, `Pane::Agents` builds a bespoke frame that never
-     * enters this chain (`Tui\Renderer::renderAgentDashboard()`), so painted
-     * frames exist that leave the ceiling alone. The conclusion survives on a
-     * second guarantee rather than on this one — nothing in that pane can reach a
-     * `withKeyHelp()` call at all. Swept, rather than argued: over the 95
-     * printable runes x Ctrl on/off plus the nine named keys x Ctrl on/off,
-     * `KeyboardHandler::claims()` in `Pane::Agents` lets exactly SEVEN chords
-     * through to `Chat` — `Ctrl+A`, `Ctrl+C`, `Ctrl+O`, `Ctrl+P`, `Ctrl+V`,
-     * `Ctrl+W`, `Ctrl+Tab` — and none of the seven is a `withKeyHelp()` caller:
-     * they dispatch `/agents`, quit, toggle a tool's output, open the palette,
-     * attach the clipboard image, delete a word and cycle sessions. Both routes to the reference are claimed by the shell
-     * there: `?` (unmodified, so rule 2 takes it) and `Enter`, without which
-     * `submit()`'s `/keys` arm is unreachable too. And {@see renderKeyHelp()}
-     * re-clamps `$start` against a freshly measured ceiling regardless.
-     *
-     * A stale value can therefore only be READ between a frame that painted the
-     * reference and a `withKeyHelp()` call with no frame in between.
-     */
-    private static int $keyHelpMaxOffset = 0;
-
-    /**
      * Upper clamp for {@see Chat::keyHelp()}, measured on the last rendered
      * reference. 0 when the whole list fits, or when it has never been drawn.
+     *
+     * How far the LAST rendered keybinding reference overflowed its box, in
+     * lines. Carried between frames on {@see RenderFrame} for the same reason
+     * maxScrollOffset is: the keystroke that scrolls arrives between frames,
+     * so the only content height it can be clamped against is the one already
+     * painted.
+     *
+     * Process-global and read by production code ({@see Chat::withKeyHelp()}
+     * clamps against it), which is the shape of the three statics this
+     * feature's review round had to add resets for — and it needs no reset
+     * seam, for a reason that is a property rather than a habit:
+     * {@see renderKeyHelp()} runs FIRST in {@see renderView()}'s overlay
+     * chain, so it runs on every frame THIS renderer paints, and its two
+     * early returns (reference closed, or box does not fit) both zero this
+     * before returning ''. One such frame therefore clears it, which is
+     * asserted rather than assumed, by
+     * `KeyHelpTest::testTheOverflowCeilingResetsItselfOnAFrameWithoutTheReference()`.
+     *
+     * "Every frame this renderer paints" is the honest bound, not "every
+     * frame": under the pane shell, `Pane::Agents` builds a bespoke frame
+     * that never enters this chain (`Tui\Renderer::renderAgentDashboard()`),
+     * so painted frames exist that leave the ceiling alone. The conclusion
+     * survives on a second guarantee rather than on this one — nothing in
+     * that pane can reach a `withKeyHelp()` call at all. Swept, rather than
+     * argued: over the 95 printable runes x Ctrl on/off plus the nine named
+     * keys x Ctrl on/off, `KeyboardHandler::claims()` in `Pane::Agents` lets
+     * exactly SEVEN chords through to `Chat` — `Ctrl+A`, `Ctrl+C`, `Ctrl+O`,
+     * `Ctrl+P`, `Ctrl+V`, `Ctrl+W`, `Ctrl+Tab` — and none of the seven is a
+     * `withKeyHelp()` caller: they dispatch `/agents`, quit, toggle a tool's
+     * output, open the palette, attach the clipboard image, delete a word and
+     * cycle sessions. Both routes to the reference are claimed by the shell
+     * there: `?` (unmodified, so rule 2 takes it) and `Enter`, without which
+     * `submit()`'s `/keys` arm is unreachable too. And
+     * {@see renderKeyHelp()} re-clamps `$start` against a freshly measured
+     * ceiling regardless.
+     *
+     * A stale value can therefore only be READ between a frame that painted
+     * the reference and a `withKeyHelp()` call with no frame in between.
      */
     public static function keyHelpMaxOffset(): int
     {
-        return self::$keyHelpMaxOffset;
+        return self::publishedFrame()->keyHelpMaxOffset();
     }
 
     /**
@@ -1522,7 +1428,7 @@ final class Renderer
     {
         // Every recorded box below is relative to THIS frame; a host that
         // composes it elsewhere re-declares the offset after compositing.
-        self::$zoneOrigin = [0, 0];
+        self::publishedFrame()->resetZoneOrigin();
 
         if (!str_contains($frame, Sentinel::OPEN) && !str_contains($frame, Sentinel::CLOSE)) {
             self::scanner()->clear();
@@ -1716,16 +1622,11 @@ final class Renderer
         // Both per-frame registries are cleared before the transcript is walked:
         // their entries are positional to the frame being built, so a leftover
         // row from the previous frame would be marked at the wrong place (or
-        // registered twice, which makes the zone scan throw).
-        self::$toolCallZones = [];
-        self::$paletteItemZones = [];
-        self::$sessionRowZones = [];
-        // Same lifetime, same reason, but NOT the same list - see
-        // $toolRowHeads for why the layout question and the click question are
-        // answered from two registries rather than one.
-        self::$toolRowHeads = [];
-        self::$agentLineZones = [];
-        self::$ctrlOThoughtKey = $chat->latestThoughtKey();
+        // registered twice, which makes the zone scan throw). The layout heads
+        // are cleared with them but kept a SEPARATE registry - see
+        // RenderFrame::$toolRowHeads for why the layout question and the click
+        // question are answered from two registries rather than one.
+        self::publishedFrame()->resetRegistries($chat->latestThoughtKey());
         // One number, named once. Every producer that writes into $body below
         // is held to it, and fitToPane() is the backstop for the ones whose
         // own layout rules say otherwise (code blocks, tables, CJK runs).
@@ -1749,7 +1650,7 @@ final class Renderer
         // renderer, so tool rows expand, thoughts fold and diffs are gutted
         // exactly as in the parent's. The parent's in-flight extras below (its
         // live thought, its streaming reply) are the parent's, and stay out.
-        $openView = self::$agentView;
+        $openView = self::publishedFrame()->agentView();
         $body = self::renderHistory(
             $openView === null ? $chat->history : $openView['rows'],
             $theme,
@@ -1906,7 +1807,7 @@ final class Renderer
         // The footer shows only when it is the frame's sole agent listing:
         // not while the live strip above the input paints one (pre-existing),
         // and — CL-2 FIX 2 — not while a docked Agents sidebar paints one.
-        $agentView = ($agentStrip === '' && !self::$agentsPaneDocked)
+        $agentView = ($agentStrip === '' && !self::publishedFrame()->agentsPaneDocked())
             ? self::renderAgentView($chat)
             : '';
 
@@ -2006,7 +1907,7 @@ final class Renderer
         $available = max(1, $rows - 1 - $headerRows);
         $contentLines = explode("\n", $content);
         $overflow = max(0, count($contentLines) - $available);
-        self::$maxScrollOffset = $overflow;
+        self::publishedFrame()->noteMaxScrollOffset($overflow);
         $sliceStart = 0;
         if ($overflow > 0) {
             $offset = max(0, min($chat->scrollOffset(), $overflow));
@@ -2080,7 +1981,7 @@ final class Renderer
         // driving it, which is what the ONE rule above forbids. This is the
         // PAINT side of the seam; the CLOSE side stays at E666's delivery
         // choke point, so the frame never fabricates an input event.
-        if ($overlay === '' && !self::$paletteAbandoned) {
+        if ($overlay === '' && !self::publishedFrame()->paletteAbandoned()) {
             $overlay = self::renderPalette($chat, $theme);
         }
         if ($overlay === '') {
@@ -2176,19 +2077,21 @@ final class Renderer
         // selection is made against what is painted — and withheld while an
         // overlay owns the frame: a drag over the palette is not a request to
         // copy the transcript dimmed underneath it.
-        self::$selectableRegion = $overlay === ''
+        $selectable = $overlay === ''
             ? self::transcriptTextRegion($tabStrip, $shell, $sliceStart, $available)
             : null;
-        if (self::$selectableRegion !== null && $headerRows > 0) {
-            self::$selectableRegion[0] += $headerRows;
-            self::$selectableRegion[1] += $headerRows;
+        if ($selectable !== null && $headerRows > 0) {
+            $selectable[0] += $headerRows;
+            $selectable[1] += $headerRows;
         }
-        self::$selectableLines = explode("\n", $frame);
+        self::publishedFrame()->setSelectableRegion($selectable);
+        $lines = explode("\n", $frame);
+        self::publishedFrame()->setSelectableLines($lines);
 
         $selection = Chat::textSelection();
         if ($selection !== null && ($selection->dragging || $selection->settled)) {
             $frame = implode("\n", $selection->highlight(
-                self::$selectableLines,
+                $lines,
                 Style::new()->reverse(),
             ));
         }
@@ -2216,7 +2119,7 @@ final class Renderer
      */
     public static function selectableRegion(): ?array
     {
-        return self::$selectableRegion;
+        return self::publishedFrame()->selectableRegion();
     }
 
     /**
@@ -2228,7 +2131,7 @@ final class Renderer
      */
     public static function selectableLines(): array
     {
-        return self::$selectableLines;
+        return self::publishedFrame()->selectableLines();
     }
 
     /**
@@ -3690,13 +3593,7 @@ final class Renderer
             return;
         }
 
-        // Keyed by id so the first-wins check is a lookup. A scan here made
-        // the frame quadratic in the number of tool calls (audit 15b-10).
-        if (isset(self::$toolCallZones[$key])) {
-            return;
-        }
-
-        self::$toolCallZones[$key] = ['id' => $key, 'label' => $label];
+        self::publishedFrame()->recordToolCallZone($key, $label);
     }
 
     /**
@@ -3720,13 +3617,14 @@ final class Renderer
      */
     private static function markToolCalls(string $shell): string
     {
-        if (self::$toolCallZones === []) {
+        $zones = self::publishedFrame()->toolCallZones();
+        if ($zones === []) {
             return $shell;
         }
 
         $lines = explode("\n", $shell);
         $from  = 0;
-        foreach (self::$toolCallZones as $zone) {
+        foreach ($zones as $zone) {
             for ($i = $from, $n = count($lines); $i < $n; $i++) {
                 if (str_contains($lines[$i], $zone['label'])) {
                     $lines[$i] = Mark::zone(self::TOOL_CALL_ZONE_PREFIX . $zone['id'], $lines[$i]);
@@ -4059,8 +3957,8 @@ final class Renderer
     /**
      * Does $row carry the head of a tool row THIS frame emitted?
      *
-     * Keyed off {@see $toolRowHeads}, which is recorded unconditionally, and
-     * NOT off {@see $toolCallZones}. An earlier revision of this method read
+     * Keyed off the frame's `toolRowHeads` registry, recorded unconditionally,
+     * and NOT off the `toolCallZones` click registry. An earlier revision of this method read
      * the click registry and claimed the two "cannot disagree" — they can and
      * they did: {@see recordToolCallZone()} deliberately records nothing when
      * {@see Chat::mouseClicksEnabled()} is false or when the model-supplied id
@@ -4074,7 +3972,7 @@ final class Renderer
      */
     private static function isToolCallRow(string $row): bool
     {
-        foreach (self::$toolRowHeads as $head) {
+        foreach (self::publishedFrame()->toolRowHeads() as $head) {
             if (str_contains($row, $head)) {
                 return true;
             }
@@ -4727,7 +4625,7 @@ final class Renderer
      * The row is a click zone on the SAME registry and key space tool rows
      * use ({@see recordToolCallZone()}, {@see Chat::toggleToolOutput()}), so
      * no second expansion mechanism can disagree with the first. Its head is
-     * also recorded in {@see $toolRowHeads}, which makes {@see fitToPane()}
+     * also recorded in the frame's `toolRowHeads`, which makes {@see fitToPane()}
      * truncate the row rather than wrap it - a wrapped head would split the
      * one-line zone.
      *
@@ -4743,7 +4641,7 @@ final class Renderer
         $faint = self::dim($theme);
 
         $head = self::dim($theme)->italic()->render('💭 ' . Lang::t(self::THOUGHT_ROW_LABEL));
-        self::$toolRowHeads[] = $head;
+        self::publishedFrame()->recordToolRowHead($head);
         self::recordToolCallZone($key, $head);
 
         $count = count($lines);
@@ -4752,7 +4650,7 @@ final class Renderer
         // only there: it reaches the newest thought alone, so promising it on
         // an older row would be a hint that does nothing.
         $clicks = Chat::mouseClicksEnabled();
-        $ctrlO = !$isExpanded && $key === self::$ctrlOThoughtKey;
+        $ctrlO = !$isExpanded && $key === self::publishedFrame()->ctrlOThoughtKey();
         $hint = match (true) {
             $isExpanded => $clicks ? ' · ' . Lang::t('tui.chat.click_collapse') : '',
             $ctrlO      => ' · ' . Lang::t($clicks ? 'tui.chat.click_or_ctrl_o_expand' : 'tui.chat.ctrl_o_expand'),
@@ -4979,8 +4877,8 @@ final class Renderer
             // Recorded for the LAYOUT question, before and regardless of
             // whether this row can also become a click zone: fitToPane() has to
             // know a tool row when it sees one even with the mouse off, or the
-            // row is wrapped into a lookalike second line. See $toolRowHeads.
-            self::$toolRowHeads[] = $head;
+            // row is wrapped into a lookalike second line. See RenderFrame::$toolRowHeads.
+            self::publishedFrame()->recordToolRowHead($head);
             $row = $label . self::toolCallSuffix($result, $theme, $width, Width::of($label));
             $rawBody = $result->isError() ? ($result->error ?? '') : $result->result;
             $key = $result->id ?? $result->name;
@@ -5803,20 +5701,12 @@ final class Renderer
     }
 
     /**
-     * Live agent lines the current frame wants clickable (roadmap P-C2), as
-     * `['id' => runId, 'label' => the line's plain text]`, collected while the
-     * transcript is built and marked once the shell is drawn — the
-     * {@see $toolCallZones} detour, for the same layout reason.
-     *
-     * @var list<array{id: string, label: string}>
-     */
-    private static array $agentLineZones = [];
-
-    /**
      * Remember that the live line $line of run $runId should become an
      * `agent-line:<runId>` click zone. The id is the run's own
      * (`subagent_<pid>_<uniqid>`), never its agent-supplied name, and is
-     * held to {@see Mark}'s charset like every zone id.
+     * held to {@see Mark}'s charset like every zone id. Recorded on the
+     * frame's `agentLineZones` registry — the {@see RenderFrame} tool-call
+     * detour, for the same layout reason.
      */
     private static function recordAgentLineZone(string $runId, string $line): void
     {
@@ -5827,7 +5717,7 @@ final class Renderer
             return;
         }
 
-        self::$agentLineZones[] = ['id' => $runId, 'label' => $label];
+        self::publishedFrame()->recordAgentLineZone(['id' => $runId, 'label' => $label]);
     }
 
     /**
@@ -5840,14 +5730,15 @@ final class Renderer
      */
     private static function markAgentLines(string $shell): string
     {
-        if (self::$agentLineZones === []) {
+        $zones = self::publishedFrame()->agentLineZones();
+        if ($zones === []) {
             return $shell;
         }
 
         $lines = explode("\n", $shell);
         $from = 0;
         $marked = [];
-        foreach (self::$agentLineZones as $zone) {
+        foreach ($zones as $zone) {
             if (isset($marked[$zone['id']])) {
                 continue;
             }
@@ -6478,7 +6369,7 @@ final class Renderer
         $grouped = $palette->query === '' && !$palette->isPicker();
 
         // E3 (caret-paint half): the block caret is the palette's keyboard
-        // claim. Once the shell holds the keys - {@see self::$paletteAbandoned}
+        // claim. Once the shell holds the keys - the abandonment declared by setPaletteAbandoned()
         // - the builder must not forge that claim, so the query line paints
         // without its tail. The input box caret is renderInput()'s own cursor
         // and keeps drawing as usual. Wire-not-delete: the box still renders
@@ -6490,7 +6381,7 @@ final class Renderer
         // the draft's - same two-pass sanitise-then-measure, same cluster snap,
         // same byte-identity when the caret is at the end (which is every state
         // the pre-E3 keys could produce, so the older captures survive).
-        $caret = self::$paletteAbandoned ? '' : '█';
+        $caret = self::publishedFrame()->paletteAbandoned() ? '' : '█';
         $cleanQuery = self::untrusted($palette->query);
         $caretAt = self::snapToClusterStart(
             $cleanQuery,
@@ -6605,7 +6496,7 @@ final class Renderer
         foreach ($rows as $id => $row) {
             for ($i = $from, $n = count($lines); $i < $n; $i++) {
                 if (str_contains($lines[$i], $row)) {
-                    self::$paletteItemZones[] = ['id' => (string) $id, 'line' => $lines[$i]];
+                    self::publishedFrame()->recordPaletteItemZone(['id' => (string) $id, 'line' => $lines[$i]]);
                     $from                     = $i + 1;
 
                     break;
@@ -6617,7 +6508,7 @@ final class Renderer
     /**
      * Turn each palette box line recorded by {@see recordPaletteItemZones()}
      * into a `picker-item:<index>` click zone on the ALREADY-composited frame
-     * (crush_feat.md §8 E6) — see {@see $paletteItemZones} for why the mark
+     * (crush_feat.md §8 E6) — see RenderFrame::$paletteItemZones for why the mark
      * cannot happen before the composite.
      *
      * Only the box line's own cells are wrapped, not the frame row it landed
@@ -6628,13 +6519,14 @@ final class Renderer
      */
     private static function markPaletteItems(string $frame): string
     {
-        if (self::$paletteItemZones === []) {
+        $zones = self::publishedFrame()->paletteItemZones();
+        if ($zones === []) {
             return $frame;
         }
 
         $lines = explode("\n", $frame);
         $from  = 0;
-        foreach (self::$paletteItemZones as $zone) {
+        foreach ($zones as $zone) {
             for ($i = $from, $n = count($lines); $i < $n; $i++) {
                 $at = strpos($lines[$i], $zone['line']);
                 if ($at === false) {
@@ -6683,11 +6575,11 @@ final class Renderer
         foreach ($rows as $id => $row) {
             for ($i = $from, $n = count($lines); $i < $n; $i++) {
                 if (str_contains($lines[$i], $row)) {
-                    self::$sessionRowZones[] = [
+                    self::publishedFrame()->recordSessionRowZone([
                         'id' => (string) $id,
                         'line' => $lines[$i],
                         'acts' => $id === $selected ? $acts : [],
-                    ];
+                    ]);
                     $from                    = $i + 1;
 
                     break;
@@ -6699,19 +6591,20 @@ final class Renderer
     /**
      * Turn each picker overlay line recorded by {@see recordSessionRowZones()}
      * into a `session-row:<index>` click zone on the ALREADY-composited frame
-     * (E744 WS4) — see {@see $sessionRowZones} for why the mark cannot happen
+     * (E744 WS4) — see RenderFrame::$sessionRowZones for why the mark cannot happen
      * before the composite, and {@see markPaletteItems()} for the identical
      * cell-exactness and clipped-row rules.
      */
     private static function markSessionRows(string $frame): string
     {
-        if (self::$sessionRowZones === []) {
+        $zones = self::publishedFrame()->sessionRowZones();
+        if ($zones === []) {
             return $frame;
         }
 
         $lines = explode("\n", $frame);
         $from  = 0;
-        foreach (self::$sessionRowZones as $zone) {
+        foreach ($zones as $zone) {
             for ($i = $from, $n = count($lines); $i < $n; $i++) {
                 $at = strpos($lines[$i], $zone['line']);
                 if ($at === false) {
@@ -6818,7 +6711,7 @@ final class Renderer
     {
         $offset = $chat->keyHelp();
         if ($offset === null) {
-            self::$keyHelpMaxOffset = 0;
+            self::publishedFrame()->noteKeyHelpMaxOffset(0);
 
             return '';
         }
@@ -6833,7 +6726,7 @@ final class Renderer
             // renderStatusBar(), which asks this same method whether the box
             // fits: an open modal that is invisible AND silent is a stuck
             // terminal as far as the user can tell.
-            self::$keyHelpMaxOffset = 0;
+            self::publishedFrame()->noteKeyHelpMaxOffset(0);
 
             return '';
         }
@@ -6897,8 +6790,9 @@ final class Renderer
         // pressed, and this frame's geometry can differ (a resize, a narrower
         // hosted pane).
         $body = $viewport - ($showHint ? 1 : 0);
-        self::$keyHelpMaxOffset = max(0, count($lines) - $body);
-        $start = max(0, min($offset, self::$keyHelpMaxOffset));
+        $max = max(0, count($lines) - $body);
+        self::publishedFrame()->noteKeyHelpMaxOffset($max);
+        $start = max(0, min($offset, $max));
         $visible = array_slice($lines, $start, $body);
 
         if ($showHint) {
@@ -6931,7 +6825,7 @@ final class Renderer
                 // ORDER is what makes that acceptable — Esc first so it is the
                 // last thing standing, the scroll clause last so a narrow box
                 // spends it first.
-                self::$keyHelpMaxOffset > 0
+                $max > 0
                     ? Lang::t('tui.key_help.footer_scroll')
                     : Lang::t('tui.key_help.footer'),
                 $width,
@@ -7875,7 +7769,7 @@ final class Renderer
         // composer (Enter sends to it, not to the main model), and an empty
         // box says so in place of the main chat's guess — which would only
         // tempt a message to the wrong recipient.
-        $composer = self::$agentView;
+        $composer = self::publishedFrame()->agentView();
         if ($composer !== null && $chat->inputBuf === '') {
             // The clip is ellipsised, not a hard slice: since CL-2's pane
             // auto-dock (8013e0f20) the chat pane is a third of the window at
