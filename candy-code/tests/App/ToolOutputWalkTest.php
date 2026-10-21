@@ -331,4 +331,85 @@ final class ToolOutputWalkTest extends TestCase
         $this->assertSame(0, $next->toolWalkState['index'], 'the burst cursor froze — no older row opened through the modal');
         $this->assertFalse($next->chat->isToolOutputExpanded('call_old'), 'and the older transcript row is untouched');
     }
+
+    // =========================================================================
+    // W7-B: the paint seam's read of the cursor — which ROW KEYS the settled
+    // cursor names. Nothing is visible yet; this is the contract the renderer
+    // highlight will be fed.
+    // =========================================================================
+
+    public function testASettledCursorNamesItsRowsForThePaintSeam(): void
+    {
+        $app = $this->app([
+            Message::assistant('a')->withToolResults([ToolResult::ok('grep', 'a', 'call_old')]),
+            Message::assistant('b')->withToolResults([ToolResult::ok('grep', 'b', 'call_new')]),
+        ]);
+
+        $this->assertSame([], $app->focusedToolRowKeys(), 'no gesture yet, no rows named');
+
+        [$afterF] = $this->pressF($app);
+        $this->assertSame(['call_old'], $afterF->focusedToolRowKeys(), 'the cursor names the row it landed on');
+
+        [$cycled] = $this->pressF($afterF);
+        $this->assertSame(['call_new'], $cycled->focusedToolRowKeys(), 'and follows the cycle, unit for unit');
+    }
+
+    public function testABurstCursorNamesNoRowsUntilItSettles(): void
+    {
+        $app = $this->app([
+            Message::assistant('a')->withToolResults([ToolResult::ok('grep', 'a', 'call_old')]),
+            Message::assistant('b')->withToolResults([ToolResult::ok('grep', 'b', 'call_new')]),
+        ]);
+
+        [$walked] = $this->pressO($app);
+        $this->assertNotNull($walked->toolWalkState, 'a live burst carries an index');
+        $this->assertSame([], $walked->focusedToolRowKeys(), 'but nothing is FOCUSED — the paint seam stays dark');
+
+        [$second] = $this->pressO($walked);
+        $this->assertSame([], $second->focusedToolRowKeys(), 'the same one frame after walking older');
+    }
+
+    public function testAPaintSeamCursorGoesDarkWithItsRow(): void
+    {
+        $app = $this->app([
+            Message::assistant('a')->withToolResults([ToolResult::ok('grep', 'a', 'call_old')]),
+            Message::assistant('b')->withToolResults([ToolResult::ok('grep', 'b', 'call_new')]),
+        ]);
+
+        [$afterF] = $this->pressF($app);
+        $this->assertSame(['call_old'], $afterF->focusedToolRowKeys());
+
+        // The focused row leaves the transcript: the cursor decays (the
+        // identity is the key, so an index fallback would PAINT a row nobody
+        // picked) and the seam reads empty.
+        $survivor = $afterF->withChat(new Chat(
+            history: [Message::assistant('b')->withToolResults([ToolResult::ok('grep', 'b', 'call_new')])],
+            backend: new EchoBackend(),
+        ));
+        $this->assertNotNull($survivor->toolWalkState, 'the stale state rides along — same as before the paint seam existed');
+        $this->assertSame([], $survivor->focusedToolRowKeys(), 'a cursor whose row is gone names nothing');
+    }
+
+    public function testAUnitNamesEveryRowItsToggleAnswers(): void
+    {
+        // One message, one thought, two results: the unit is the TOGGLE unit,
+        // so the highlight must name all three rows — what the user sees lit
+        // and what Ctrl+O opens can never disagree.
+        $reasoning = 'weighing the options';
+        $app = $this->app([
+            Message::assistant('x')->withReasoning($reasoning)
+                ->withToolResults([
+                    ToolResult::ok('grep', 'a', 'call_b'),
+                    ToolResult::ok('grep', 'c', 'call_c'),
+                ]),
+            Message::assistant('y')->withToolResults([ToolResult::ok('grep', 'd', 'call_new')]),
+        ]);
+
+        [$afterF] = $this->pressF($app);
+        $this->assertSame(
+            [Renderer::thoughtKey($reasoning), 'call_b', 'call_c'],
+            $afterF->focusedToolRowKeys(),
+            'the settled unit is named whole, thought lead first',
+        );
+    }
 }

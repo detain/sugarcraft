@@ -4568,6 +4568,24 @@ final class App implements Model
     }
 
     /**
+     * The row-unit keys the SETTLED cursor stands on (W7-B), or the empty
+     * list while none is settled — the render seam's read of
+     * {@see focusedUnitIndex()}, in the identity the renderer keys rows by.
+     * The whole unit, not just its lead key: the highlight marks exactly the
+     * rows `Ctrl+O` will answer, so what the user sees and what the chord
+     * does never disagree.
+     *
+     * @return list<string>
+     */
+    public function focusedToolRowKeys(): array
+    {
+        $units = $this->toolWalkUnits();
+        $index = $this->focusedUnitIndex($units);
+
+        return $index === null ? [] : $units[$index];
+    }
+
+    /**
      * Settle the row cursor on the unit that carries `$key` (v2:a11y-F1): a
      * click names the exact row, and after it the keyboard's `Ctrl+O` answers
      * that row — one conversation with the transcript, whichever hand steers.
@@ -4622,12 +4640,17 @@ final class App implements Model
         // the same per-paint seam tells the transcript renderer to hold its
         // footer off so the frame never carries two listings.
         Renderer::setAgentsPaneDocked($this->isDocked(Pane::Agents));
+        // W7-B: the settled Ctrl+F row cursor rides the same per-paint seam —
+        // the transcript paints its unit's rows in the theme's active style,
+        // for this frame only.
+        Renderer::setFocusedToolRowKeys($this->focusedToolRowKeys());
         try {
             return TuiRenderer::renderView($this, $this->cols, $this->rows);
         } finally {
             Renderer::setPaletteAbandoned(false);
             Renderer::setAgentView(null);
             Renderer::setAgentsPaneDocked(false);
+            Renderer::setFocusedToolRowKeys([]);
         }
     }
 
