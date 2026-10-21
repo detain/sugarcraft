@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg\MouseMotionMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 use SugarCraft\Code\Session\SessionStore;
@@ -295,11 +296,11 @@ final class SessionTabClickTest extends TestCase
         return new Chat(
             sessionStore: $store,
             currentSessionId: $current,
-            openTabs: self::openTabsFor(
+            tabState: new SessionTabState(tabs: self::openTabsFor(
                 array_map('strval', array_keys($sessions)),
                 array_map('strval', $sessions),
                 activeId: $current,
-            ),
+            )),
         );
     }
 

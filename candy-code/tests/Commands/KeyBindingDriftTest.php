@@ -20,6 +20,7 @@ use SugarCraft\Code\App\SelectSkillMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\AssistantMsg;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookManager;
@@ -2426,7 +2427,7 @@ final class KeyBindingDriftTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $store,
             currentSessionId: $ids[0],
-            openTabs: self::tabsFromStore($store, activeId: $ids[0]),
+            tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: $ids[0])),
         ))->withSize(100, 30);
     }
 

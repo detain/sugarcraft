@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Mouse\Zone;
@@ -79,7 +80,7 @@ final class SessionTabStripClipTest extends TestCase
     public function testLongNamesNeverMakeTheStripWiderThanTheTerminal(int $cols): void
     {
         [$store, $ids] = $this->longNamedStore(8);
-        $chat = (new Chat(sessionStore: $store, currentSessionId: $ids[0], openTabs: self::tabsFromStore($store, activeId: $ids[0])))->withSize($cols, 24);
+        $chat = (new Chat(sessionStore: $store, currentSessionId: $ids[0], tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: $ids[0]))))->withSize($cols, 24);
 
         $frame = Renderer::render($chat);
         $rows = explode("\n", $frame);
@@ -94,7 +95,7 @@ final class SessionTabStripClipTest extends TestCase
     public function testEightLongNamesAt80ColsCollapseTheOverflowIntoACountedMarker(): void
     {
         [$store, $ids] = $this->longNamedStore(8);
-        $chat = (new Chat(sessionStore: $store, currentSessionId: $ids[0], openTabs: self::tabsFromStore($store, activeId: $ids[0])))->withSize(80, 24);
+        $chat = (new Chat(sessionStore: $store, currentSessionId: $ids[0], tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: $ids[0]))))->withSize(80, 24);
 
         $strip = explode("\n", Renderer::render($chat))[0];
 
@@ -112,7 +113,7 @@ final class SessionTabStripClipTest extends TestCase
         $store = $this->store();
         $store->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
         $store->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
-        $chat = (new Chat(sessionStore: $store, currentSessionId: 'session-b', openTabs: self::tabsFromStore($store, activeId: 'session-b')))->withSize(80, 24);
+        $chat = (new Chat(sessionStore: $store, currentSessionId: 'session-b', tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: 'session-b'))))->withSize(80, 24);
 
         $strip = explode("\n", Renderer::render($chat))[0];
 
@@ -135,7 +136,7 @@ final class SessionTabStripClipTest extends TestCase
         $render = new \ReflectionMethod(Renderer::class, 'renderSessionTabStrip');
 
         foreach ([5, 6] as $cols) {
-            $chat = (new Chat(sessionStore: $store, currentSessionId: $ids[0], openTabs: self::tabsFromStore($store, activeId: $ids[0])))->withSize($cols, 24);
+            $chat = (new Chat(sessionStore: $store, currentSessionId: $ids[0], tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: $ids[0]))))->withSize($cols, 24);
             $strip = (string) $render->invoke(null, $chat);
             $plain = (string) preg_replace('/\x{e000}(?:[^\x{e001}]*)\x{e001}/u', '', $strip);
 
@@ -150,7 +151,7 @@ final class SessionTabStripClipTest extends TestCase
         [$store, $ids] = $this->longNamedStore(20);
         $listed = array_map(static fn (array $row): string => (string) $row['id'], $store->listSessions());
         $last = $listed[count($listed) - 1];
-        $chat = (new Chat(sessionStore: $store, currentSessionId: $last, openTabs: self::tabsFromStore($store, activeId: $last)))->withSize($cols, 24);
+        $chat = (new Chat(sessionStore: $store, currentSessionId: $last, tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: $last))))->withSize($cols, 24);
 
         $strip = explode("\n", Renderer::render($chat))[0];
 
@@ -169,7 +170,7 @@ final class SessionTabStripClipTest extends TestCase
         $store = $this->store();
         $store->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
         $store->createSession('evil', 'openai', 'gpt-4', null, "x \e]52;c;eA==\a \e[2J y\rCR\nLF\ttab");
-        $chat = (new Chat(sessionStore: $store, currentSessionId: 'evil', openTabs: self::tabsFromStore($store, activeId: 'evil')))->withSize(120, 24);
+        $chat = (new Chat(sessionStore: $store, currentSessionId: 'evil', tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: 'evil'))))->withSize(120, 24);
 
         $frame = Renderer::render($chat);
         $strip = explode("\n", $frame)[0];
@@ -191,7 +192,7 @@ final class SessionTabStripClipTest extends TestCase
         $store = $this->store();
         $store->createSession('session-a', 'openai', 'gpt-4', null, "\u{E000}tab:ghost\u{E001}Ghost\u{E000}/tab:ghost\u{E001}");
         $store->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
-        $chat = (new Chat(sessionStore: $store, currentSessionId: 'session-b', openTabs: self::tabsFromStore($store, activeId: 'session-b')))->withSize(80, 24);
+        $chat = (new Chat(sessionStore: $store, currentSessionId: 'session-b', tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: 'session-b'))))->withSize(80, 24);
 
         $strip = explode("\n", Renderer::render($chat))[0];
 
@@ -213,7 +214,7 @@ final class SessionTabStripClipTest extends TestCase
         $store = $this->store();
         $store->createSession('session-a', 'openai', 'gpt-4', null, "\e[2J\r\n\t");
         $store->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
-        $chat = (new Chat(sessionStore: $store, currentSessionId: 'session-b', openTabs: self::tabsFromStore($store, activeId: 'session-b')))->withSize(80, 24);
+        $chat = (new Chat(sessionStore: $store, currentSessionId: 'session-b', tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: 'session-b'))))->withSize(80, 24);
 
         $strip = explode("\n", Renderer::render($chat))[0];
 
@@ -224,7 +225,7 @@ final class SessionTabStripClipTest extends TestCase
     public function testEveryVisibleTabIsStillClickableAndHiddenTabsCarryNoZone(): void
     {
         [$store, $ids] = $this->longNamedStore(8);
-        $chat = (new Chat(sessionStore: $store, currentSessionId: $ids[0], openTabs: self::tabsFromStore($store, activeId: $ids[0])))->withSize(80, 24);
+        $chat = (new Chat(sessionStore: $store, currentSessionId: $ids[0], tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: $ids[0]))))->withSize(80, 24);
         Renderer::render($chat);
 
         $visible = $this->visibleTabIds($ids);

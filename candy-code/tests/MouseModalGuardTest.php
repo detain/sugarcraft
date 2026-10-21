@@ -17,6 +17,7 @@ use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\AssistantMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookInterface;
@@ -971,7 +972,7 @@ final class MouseModalGuardTest extends TestCase
             inFlight: $inFlight,
             sessionStore: $store = $this->storeWithTwoSessions(),
             currentSessionId: 'session-b',
-            openTabs: self::tabsFromStore($store, activeId: 'session-b'),
+            tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: 'session-b')),
             agentManager: $manager,
             flow: new PermissionFlow(pendingPermission: $prompt),
         );
@@ -1021,7 +1022,7 @@ final class MouseModalGuardTest extends TestCase
             history: [Message::assistant('')->withToolResults([ToolResult::ok('grep', "alpha\nbeta", 'abc0')])],
             sessionStore: $store,
             currentSessionId: 'session-b',
-            openTabs: self::tabsFromStore($store, activeId: 'session-b'),
+            tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: 'session-b')),
         );
     }
 
@@ -1106,7 +1107,7 @@ final class MouseModalGuardTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $store = $this->storeWithTwoSessions(),
             currentSessionId: 'session-b',
-            openTabs: self::tabsFromStore($store, activeId: 'session-b'),
+            tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: 'session-b')),
         ))
             ->registerTool('bash', static fn(array $args): string => 'total 0')
             ->withHooks($hooks)

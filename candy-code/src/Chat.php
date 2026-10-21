@@ -31,11 +31,11 @@ use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Skills\SkillMentions;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Tui\ComposerVim;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\SessionPicker;
-use SugarCraft\Code\Tui\SessionTab;
 use SugarCraft\Code\Tui\SessionTabs;
 use SugarCraft\Code\Tui\TextSelection;
 use SugarCraft\Code\Tui\Components\PaneLabel;
@@ -325,14 +325,14 @@ final class Chat implements Model
     private ?string $currentSessionId = null;
 
     /**
-     * Tabs the user has OPENED this run (ISS-102). The session tab strip
-     * renders these — not the whole store listing — and every route that
-     * puts a session in front of the user (picker Enter, tab click,
+     * The tab strip's opened-tab model and its double-click memo (ISS-102),
+     * folded into {@see SessionTabState} by v4 split-plan S3. Every route
+     * that puts a session in front of the user (picker Enter, tab click,
      * Ctrl+Tab, palette New session, a background handoff landing) opens or
-     * focuses its tab here, so the active session is always exactly one
-     * active tab.
+     * focuses its tab through this state, so the active session is always
+     * exactly one active tab.
      */
-    private readonly SessionTabs $openTabs;
+    private readonly SessionTabState $tabState;
 
     /**
      * One-shot minter of THIS session's store row, or null when the row
@@ -689,11 +689,11 @@ final class Chat implements Model
         \SugarCraft\Code\Session\SessionStore|\SugarCraft\Code\Session\EnhancedSessionStore|null $sessionStore = null,
         ?string $currentSessionId = null,
     /**
-         * The tab model to start from (ISS-102); null seeds the single tab
-         * for $currentSessionId — or the library's default "main" tab when
-         * there is no session yet.
+         * The tab-surface state to start from (ISS-102); null seeds the one
+         * tab for $currentSessionId — or the library's default "main" tab
+         * when there is no session yet.
          */
-        ?SessionTabs $openTabs = null,
+        ?SessionTabState $tabState = null,
     /**
          * ISS-102 lazy row minter: a closure creating $currentSessionId's
          * store row, invoked once by the first {@see dispatchTurn()}.
@@ -1578,15 +1578,6 @@ final class Chat implements Model
          */
         private readonly ?\SugarCraft\Forms\TextInput\TextInput $titleEditor = null,
     /**
-         * The last click on a session tab — `[tab id, microtime]` — so a
-         * second click on the same tab within {@see TAB_DOUBLE_CLICK_SECONDS}
-         * reads as a double-click. Kept here because sugar-mouse's
-         * `ClickResult` carries a zone and a button, never a click count.
-         *
-         * @var array{0: string, 1: float}|null
-         */
-        private readonly ?array $lastTabClick = null,
-    /**
          * Settings keys a save changed while a turn was running whose apply
          * rebuilds the engine (roadmap N-P3, Appendix N §4.8) — parked here
          * and applied by {@see update()} once no turn is in flight, so the
@@ -1770,24 +1761,8 @@ final class Chat implements Model
         $this->memoryStore = $memoryStore;
         $this->sessionStore = $sessionStore;
         $this->currentSessionId = $currentSessionId;
-        $this->openTabs = $openTabs ?? self::tabsForLaunch($currentSessionId, $currentSessionName);
+        $this->tabState = $tabState ?? SessionTabState::forLaunch($currentSessionId, $currentSessionName);
         $this->sessionMint = $sessionMint;
-    }
-
-    /**
-     * The one-tab launch state (ISS-102): a fresh run has exactly the tab it
-     * opened, not a tab per store row. With no session at all, the library
-     * default stands.
-     */
-    private static function tabsForLaunch(?string $sessionId, ?string $name): SessionTabs
-    {
-        if ($sessionId === null) {
-            return new SessionTabs();
-        }
-
-        $tab = new SessionTab(id: $sessionId, sessionName: $name ?? '', isActive: true);
-
-        return new SessionTabs([$tab->id => $tab], [$tab->id]);
     }
 
     /**
@@ -4016,12 +3991,12 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        $cycled = $this->openTabs->handleKey(
+        $cycled = $this->tabState->tabs->handleKey(
             $direction > 0 ? SessionTabs::CTRL_TAB : SessionTabs::CTRL_SHIFT_TAB,
         );
         // handleKey answers null for keys it does not own and returns the
         // same instance when there is nothing to cycle to; both are no-ops.
-        if ($cycled === null || $cycled === $this->openTabs) {
+        if ($cycled === null || $cycled === $this->tabState->tabs) {
             return [$this, null];
         }
 
@@ -8763,7 +8738,7 @@ final class Chat implements Model
         // the session the tab names. Under an open palette or picker the pair
         // is not a rename — those overlays own the screen.
         $now = microtime(true);
-        $previous = $this->lastTabClick;
+        $previous = $this->tabState->lastClick;
         $isDoubleClick = $previous !== null
             && $previous[0] === $id
             && $now - $previous[1] <= self::TAB_DOUBLE_CLICK_SECONDS;
@@ -8795,7 +8770,7 @@ final class Chat implements Model
         // A lazily opened session whose row the first prompt has not minted
         // yet is a real tab a click must be able to come back to;
         // switchToSession() treats its absent transcript as empty.
-        if (!in_array($id, array_column($this->openTabs->tabs(), 'id'), true)) {
+        if (!in_array($id, array_column($this->tabState->tabs->tabs(), 'id'), true)) {
             return [$this, null];
         }
 
@@ -9601,11 +9576,12 @@ final class Chat implements Model
     /**
      * The tabs opened this run (ISS-102): the model {@see Renderer}'s
      * session tab strip renders and {@see cycleSessionTab()} switches
-     * through.
+     * through. Thin delegate onto the {@see SessionTabState} fold (v4 S3) —
+     * the renderer keeps reading this entry point.
      */
     public function openTabs(): SessionTabs
     {
-        return $this->openTabs;
+        return $this->tabState->tabs;
     }
 
     /**
@@ -9663,13 +9639,13 @@ final class Chat implements Model
      */
     private function tabsOpening(string $sessionId, ?string $name): SessionTabs
     {
-        foreach ($this->openTabs->tabs() as $tab) {
+        foreach ($this->tabState->tabs->tabs() as $tab) {
             if ($tab->id === $sessionId) {
-                return $this->openTabs->setActiveTab($sessionId);
+                return $this->tabState->tabs->setActiveTab($sessionId);
             }
         }
 
-        return $this->openTabs->openTab($sessionId, $name ?? '');
+        return $this->tabState->tabs->openTab($sessionId, $name ?? '');
     }
 
     /**
@@ -10420,11 +10396,12 @@ final class Chat implements Model
             'liveStepGeneration' => $this->liveStepGeneration,
             'currentSessionTitleSource' => $this->currentSessionTitleSource,
             'titleEditor' => $this->titleEditor,
-            'lastTabClick' => $this->lastTabClick,
             // ISS-102: the tab strip's model and the pending row minter ride
             // every clone by identity — a keystroke before the launch prompt
             // must not silently drop either (same rule as 'tokenTracker').
-            'openTabs' => $this->openTabs,
+            // The tab surface's own fields moved into SessionTabState
+            // (v4 split-plan S3); this row carries the whole state object.
+            'tabState' => $this->tabState,
             'sessionMint' => $this->sessionMint,
             'pendingSettingsApply' => $this->pendingSettingsApply,
             'settingsToast' => $this->settingsToast,
@@ -10473,6 +10450,14 @@ final class Chat implements Model
         // every one of those writes.
         if (array_key_exists('inputBuf', $changes) && !array_key_exists('input', $changes)) {
             unset($constructorProps['input']);
+        }
+
+        // Tab-surface changes name SessionTabState slots, not Chat fields:
+        // settle them onto the state object and strip them from the spread,
+        // so `new self(...)` below never receives a named argument it lacks.
+        $constructorProps['tabState'] = $this->tabState->with($changes);
+        foreach (array_keys(SessionTabState::OVERRIDE_KEYS) as $tabKey) {
+            unset($changes[$tabKey]);
         }
 
         // Prompt-state changes name PermissionFlow slots, not Chat fields:
@@ -16602,7 +16587,7 @@ final class Chat implements Model
                     // last tab cannot be closed, so whatever the store said,
                     // the strip never empties. This arm therefore bypasses
                     // $keep, which owns only the picker key.
-                    $tabs = $this->openTabs;
+                    $tabs = $this->tabState->tabs;
                     foreach ($deleted as $gone) {
                         $tabs = $tabs->closeTab((string) $gone);
                     }
