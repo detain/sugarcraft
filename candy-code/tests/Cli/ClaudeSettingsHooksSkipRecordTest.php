@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Hooks\ClaudeSettingsHooks;
+use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
  * v1:F-1, the RECORD half: an unknown event in a foreign Claude Code
@@ -25,6 +26,8 @@ use SugarCraft\Code\Hooks\ClaudeSettingsHooks;
  */
 final class ClaudeSettingsHooksSkipRecordTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     protected function setUp(): void
     {
         ClaudeSettingsHooks::resetSkippedEventsForTesting();
@@ -73,11 +76,21 @@ final class ClaudeSettingsHooksSkipRecordTest extends TestCase
 
     public function testTheDrainRunsFromChatAndNothingElseNeedsToKnow(): void
     {
-        // The drain point is chat()'s launch block, beside its siblings; a
-        // source slice pins that wiring without booting a session.
-        $lines = file(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        $bootstrapFile = \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php';
+        $lines = file($bootstrapFile);
         $method = new \ReflectionMethod(Bootstrap::class, 'chat');
-        $slice = implode('', \array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+        // E325 direction one (plan_comparison W4 weld): reflection's line
+        // numbers address the file the method is DECLARED in while the scrape
+        // reads one named path. True by construction today; asserted so a
+        // future extraction of chat() into a trait cannot silently scrape
+        // unrelated lines — the defect the reader census exists to catch.
+        $this->assertSame(
+            $bootstrapFile,
+            $method->getFileName(),
+            'chat() is no longer declared in ' . $bootstrapFile . '; read the body from'
+                . ' $method->getFileName() or keep the drain where it is.',
+        );
+        $slice = self::declaredSlice($lines, 'chat', $method->getStartLine(), $method->getEndLine());
 
         $this->assertSame(
             1,

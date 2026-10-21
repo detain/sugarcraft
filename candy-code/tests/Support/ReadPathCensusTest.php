@@ -419,6 +419,16 @@ final class ReadPathCensusTest extends TestCase
                 . 'Bootstrap::userSettingsDirOrNull() — trustedConfigDirPath(), the home-OWNED '
                 . '~/.candy-code, deliberately NOT dirname(userConfigPath()) and so not '
                 . 'relocatable by --config',
+            // w1e (v1 F-4, spine commit 9c157d64e): the second sink is the
+            // corrupt-file diagnosis re-read, same caller-holds-the-boundary
+            // shape — keyAuditRows() hands it only the paths projectFiles()
+            // and the audit's own $configDir built, and the doc-block there
+            // argues the trust point: reading for a report is not applying.
+            'CALLER_SUPPLIED — unusableSettingsFileReason() re-reads the exact path the audit '
+                . 'walk just assembled (the caller passes no external name), purely to tell a '
+                . 'valid-but-empty `{}` from a corrupt one; the bytes are decoded and '
+                . 'summarised into a launch/doctor row, never merged into settings — whether '
+                . 'the file CONtributes stays with the trust grant above',
         ],
         'Config/PolicySnapshot.php|file_get_contents' => [
             'CALLER_SUPPLIED — read() resolves the snapshot path through the caller\'s '
@@ -795,6 +805,18 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — the same token file, re-read per connection to gate '
                 . 'HEARTBEAT/RESUME/STOP (audit M5)',
         ],
+        'Sessions/BackgroundSessionRunner.php|fopen' => [
+            // w1e (v1-m-2, spine commit eb07cb95b): both opens are the same
+            // sidecar rotation on the path `$this->bufferPath . '.log'` — a
+            // file this daemon process creates beside the buffer file it
+            // minted for its own session.
+            'SELF_LOCATED — trimSidecarLog()\'s read of its own sidecar log, '
+                . 'fseek-ed to the tail window and copied out to the `.1` '
+                . 'generation before the truncate',
+            'SELF_LOCATED — trimSidecarLog()\'s `r+b` re-open of the same '
+                . 'path, truncated in place so the O_APPEND writer\'s open '
+                . 'file description keeps feeding the fresh log',
+        ],
         'Sessions/BackgroundShellRegistry.php|file_get_contents' => [
             'PROCESS_DERIVED — groupMemberAlive() (SHL-1) reads /proc/<pid>/stat for the numeric '
                 . 'entries the scandir below enumerated, to reject zombies from the liveness answer; '
@@ -986,8 +1008,32 @@ final class ReadPathCensusTest extends TestCase
                 . 'the parent that created it',
             'SELF_LOCATED — entries()\' read of that same group ledger',
         ],
+        'Support/ToolIpcFiles.php|file_get_contents' => [
+            // w1e (v1-M-1, spine commit b71cc5384): the only content read in
+            // the stranded-result-dir sweep is the creator's own sentinel.
+            'SELF_LOCATED — sweepStalePoolDirs() reads the SafeDelete sentinel '
+                . 'marker THIS tool\'s creator stamped into its own result dir; '
+                . 'the bytes are a pid+start-time, consumed only as a liveness '
+                . 'verdict, never parsed as data',
+        ],
         'Support/ToolIpcFiles.php|glob' => [
             'SELF_LOCATED — sweeps this package\'s own IPC prefixes, uid-checked per entry',
+            // w1e (v1-M-1, same commit): second glob, the stranded sc_pool_*
+            // result directories; every entry must pass the name shape, the
+            // uid, the directory type, AND the creator sentinel before the
+            // later scandir below is ever pointed at it.
+            'SELF_LOCATED — sweepStalePoolDirs() lists only this package\'s '
+                . 'own AgentWorkerPool::RESULT_DIR_PREFIX names under the base '
+                . 'SafeDelete::baseIsSane() vouched for',
+        ],
+        'Support/ToolIpcFiles.php|scandir' => [
+            // w1e (v1-M-1, same commit): names only — each feeds an lstat
+            // (regular-file + mtime) and an unlink; the gate on any content
+            // is the later marker read above, and a non-regular entry voids
+            // the whole directory rather than touching it.
+            'NAMES_ONLY — enumerates the vetted result directory for '
+                . 'regular-file mtimes and unlink targets; nothing is read '
+                . 'through this listing',
         ],
         'Tools/BuiltIn/ApplyPatch.php|file_get_contents' => [
             'PATH_JAIL — every Update/Delete path is resolved through PathJail (or the worktree jail) before the read',

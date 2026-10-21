@@ -517,9 +517,11 @@ final class TreeWideGuardRosterTest extends TestCase
      * @var array<string, string>
      */
     private const DECLARED_TREE_WIDE_GUARDS = [
-        // markdownPagesUnder(\dirname(__DIR__, 2)) - walks README.md plus the
-        // whole of docs/ recursively; the root is the function's parameter.
-        'Cli/BootstrapLaunchFormatConstantsTest.php' => 'markdownPagesUnder() takes the package root as a parameter and walks docs/ under it',
+        // weld-4 retired the 'Cli/BootstrapLaunchFormatConstantsTest.php' row:
+        // the derivation's channel B now resolves its markdownPagesUnder()
+        // walks (scandir($root) + RecursiveDirectoryIterator($root.'/docs',
+        // SKIP_DOTS)) on its own, so the row added no member and only bought
+        // silence — the warranted-arm's own rule demands the deletion.
         // skillFilesUnder($this->builtInSkillsPath) and
         // skillFilesUnder(self::monorepoSkillsPath()) - a scandir() walk (not
         // a glob, so GlobDialectDifferentialTest's corpus stays put; audit
@@ -2127,8 +2129,12 @@ final class TreeWideGuardRosterTest extends TestCase
         // scandir() walk over src/Skills/BuiltIn (audit 15d-21 follow-up).
         // Moved 4 -> 5 at the audit-fix weld: Session/SqliteConnectCensusTest's
         // SES-1 census walks src/ and bin/ from the package root.
+        // Moved 5 -> 4 at weld-4: the `BootstrapLaunchFormatConstantsTest.php`
+        // row's walk came into channel B of the derivation (its own
+        // warranted-arm message named this deletion), retired in the same
+        // change-set as the prose above the constant.
         $this->assertCount(
-            5,
+            4,
             self::DECLARED_TREE_WIDE_GUARDS,
             'the declared-guard list has changed size. A row is a LICENCE, so adding one is a '
             . 'deliberate act that belongs in the same change-set as this count; removing one '

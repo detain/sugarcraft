@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
  * v1:m-1, the NOTICE half: a launch standing on the temp-directory home
@@ -19,6 +20,8 @@ use SugarCraft\Code\Support\HomeDirectory;
  */
 final class BootstrapHomeStandInNoticeTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     protected function setUp(): void
     {
         HomeDirectory::resetStandInUsedForTesting();
@@ -63,9 +66,21 @@ final class BootstrapHomeStandInNoticeTest extends TestCase
 
     public function testTheDrainRunsFromChatAndNothingElseNeedsToKnow(): void
     {
-        $lines = file(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        $bootstrapFile = \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php';
+        $lines = file($bootstrapFile);
         $method = new \ReflectionMethod(Bootstrap::class, 'chat');
-        $slice = implode('', \array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+        // E325 direction one (plan_comparison W4 weld): reflection's line
+        // numbers address the file the method is DECLARED in while the scrape
+        // reads one named path. True by construction today; asserted so a
+        // future extraction of chat() into a trait cannot silently scrape
+        // unrelated lines — the defect the reader census exists to catch.
+        $this->assertSame(
+            $bootstrapFile,
+            $method->getFileName(),
+            'chat() is no longer declared in ' . $bootstrapFile . '; read the body from'
+                . ' $method->getFileName() or keep the drain where it is.',
+        );
+        $slice = self::declaredSlice($lines, 'chat', $method->getStartLine(), $method->getEndLine());
 
         $this->assertSame(
             1,
