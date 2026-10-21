@@ -229,7 +229,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'AGENT_PRESET_SHADOW_NOTICE_FORMAT' => ['method' => 'agentPresets', 'conversions' => 3],
         'FOREIGN_PRESET_SKIP_NOTICE_FORMAT' => ['method' => 'foreignAgentPresets', 'conversions' => 3],
         'FOREIGN_PRESET_CHANGE_NOTICE_FORMAT' => ['method' => 'foreignAgentPresets', 'conversions' => 3],
-        'LAUNCH_NOTICE_OVERFLOW_FORMAT' => ['method' => 'launchNotices', 'conversions' => 2],
+        'LAUNCH_NOTICE_OVERFLOW_FORMAT' => ['method' => 'rows', 'conversions' => 2],
         'SESSION_RETENTION_SUMMARY_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 3],
         'SESSION_RETENTION_DETAIL_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 4],
         // ISS-026's cross-project resume notice. Quoted on no page (stderr
@@ -261,8 +261,8 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // the tail mirrors the launch-overflow line's contract. Neither is
         // quoted on a page, so no PAGE_QUOTES row — the PROMPT_ATTRIBUTION
         // precedent above covers exactly that shape.
-        'NARROWED_GRANT_NOTICE_FORMAT' => ['method' => 'narrowedGrantNoticeRows', 'conversions' => 3],
-        'NARROWED_GRANT_OVERFLOW_FORMAT' => ['method' => 'narrowedGrantNoticeRows', 'conversions' => 2],
+        'NARROWED_GRANT_NOTICE_FORMAT' => ['method' => 'grantRows', 'conversions' => 3],
+        'NARROWED_GRANT_OVERFLOW_FORMAT' => ['method' => 'grantRows', 'conversions' => 2],
         // Audit R1's two prompt-budget rows and audit R12's nonsense-ceiling
         // row, read back by BootstrapLaunchNoticeRoutingTest; quoted on no page.
         'INSTRUCTION_DEFERRAL_NOTICE_FORMAT' => ['method' => 'reportPromptBudgetDeferrals', 'conversions' => 4],
@@ -517,7 +517,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // The loader's sentences arrive pre-rendered, so the body's only
         // format is the named constant.
         'reportCommandOverrides' => ["''", "'s'", "'; '"],
-        'launchNotices' => ["''", "'s'"],
+        'rows' => ["''", "'s'"],
         // Both halves of the retention report are named, so what is left here
         // is the plural pair and the four `$row` keys the detail line reads.
         'reportPrunedSessions' => ["'session'", "'sessions'", "'id'", "'updated_at'", "'messages'", "'message'"],
@@ -558,7 +558,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // The E653 packer: singular/plural markers, the was/were pick, the two
         // join separators and the encoding argument. Both sentences it emits
         // are named constants, so nothing in the body is a format.
-        'narrowedGrantNoticeRows' => ["''", "'s'", "'was'", "'were'", "': '", "'; '", "'UTF-8'"],
+        'grantRows' => ["''", "'s'", "'was'", "'were'", "': '", "'; '", "'UTF-8'"],
         // Audit AG-2's skipped-preset row, in body order: the `path: ` prefix
         // the registry's reason opens with (stripped so the path prints once
         // per row), the two pieces of the interpolated `path (reason)` row,
@@ -2120,9 +2120,23 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         return $out;
     }
 
+    /**
+     * The scanned window: Bootstrap plus the collaborators extracted from it.
+     *
+     * The launch-notice shelf lives in src/Cli/LaunchNotices.php now; the
+     * formats it renders and the methods that render them still owe this
+     * census answers, so the scrape reads the concatenated text — a sprintf()
+     * that moved out of Bootstrap moves INTO this window, and the totals
+     * below stay a statement about the launch-warning pipeline, not about one
+     * file's geography.
+     */
     private static function bootstrapSource(): string
     {
-        return (string) file_get_contents((string) (new \ReflectionClass(Bootstrap::class))->getFileName());
+        $root = dirname(__DIR__, 2) . '/src/Cli/';
+
+        return (string) file_get_contents((string) (new \ReflectionClass(Bootstrap::class))->getFileName())
+            . (string) file_get_contents($root . 'LaunchNotices.php')
+            . (string) file_get_contents($root . 'McpDecision.php');
     }
 
     /**

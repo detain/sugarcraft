@@ -294,6 +294,23 @@ final class ReadPathCensusTest extends TestCase
                 . 'side (15d-15), under writeUserConfig()\'s lock; a symlinked config is followed only '
                 . 'to a regular file requirePrivatePolicyFile() accepts (userConfigWriteTarget())',
             'OWNED_HOME — the permission policy file, additionally ownership-checked before it is read',
+            'OWNED_HOME — keybindingsReloadParseFailure() (TUI-5) reading the user `config.json` and the '
+                . 'user keybindings file (LayeredSettings::USER_FILE under userSettingsDirOrNull()) to '
+                . 'refuse a /keys reload whose source no longer parses; both paths resolve under a home '
+                . 'HomeDirectory::owned() established as this user\'s, and the bytes are only ever '
+                . 'json_decode\'d into a validation verdict',
+        ],
+        'Cli/Bootstrap.php|fopen' => [
+            'SELF_LOCATED — acquireUserConfigLock(): the `.config.json.lock` sidecar beside the '
+                . 'config, created by this process under umask 077 and opened `c` only for the '
+                . 'timed LOCK_EX; no byte of it is read',
+        ],
+        'Cli/LegacyMigration.php|fopen' => [
+            'OWNED_HOME — serverRunning(): the pre-rename `server.lock` under a home '
+                . 'HomeDirectory::owned() established as this user\'s, opened `c` only to attempt '
+                . 'the non-blocking flock probe; absent file short-circuits on lstat and no byte is read',
+        ],
+        'Cli/McpDecision.php|file_get_contents' => [
             'CONTAINED — mcpServerInventory() reading the project `.mcp.json` for `candy-code mcp list`. '
                 . 'Same ContainedPath::within() compare and same trust gate mcpClient() applies, because both '
                 . 'come through mcpConfigDecision(); this arm is reached only on the TRUSTED verdict',
@@ -313,21 +330,6 @@ final class ReadPathCensusTest extends TestCase
                 . '(MCP-3): reached only when HomeDirectory::owned() established the home as this user\'s and '
                 . 'the file exists; the same three broken-shape reports as the project read, and the bytes '
                 . 'are listed and shadowed, never executed',
-            'OWNED_HOME — keybindingsReloadParseFailure() (TUI-5) reading the user `config.json` and the '
-                . 'user keybindings file (LayeredSettings::USER_FILE under userSettingsDirOrNull()) to '
-                . 'refuse a /keys reload whose source no longer parses; both paths resolve under a home '
-                . 'HomeDirectory::owned() established as this user\'s, and the bytes are only ever '
-                . 'json_decode\'d into a validation verdict',
-        ],
-        'Cli/Bootstrap.php|fopen' => [
-            'SELF_LOCATED — acquireUserConfigLock(): the `.config.json.lock` sidecar beside the '
-                . 'config, created by this process under umask 077 and opened `c` only for the '
-                . 'timed LOCK_EX; no byte of it is read',
-        ],
-        'Cli/LegacyMigration.php|fopen' => [
-            'OWNED_HOME — serverRunning(): the pre-rename `server.lock` under a home '
-                . 'HomeDirectory::owned() established as this user\'s, opened `c` only to attempt '
-                . 'the non-blocking flock probe; absent file short-circuits on lstat and no byte is read',
         ],
         'Cli/Attach.php|file_get_contents' => [
             'SELF_LOCATED — token(): the owner-token file in the `serve` state dir '
@@ -619,12 +621,13 @@ final class ReadPathCensusTest extends TestCase
                 . 'outside the workspace (step 3.E)',
         ],
         'MCP/McpClient.php|file_get_contents' => [
-            'CONTAINED_UPSTREAM:Cli/Bootstrap.php — `$root/.mcp.json`, bounded against the root '
+            'CONTAINED_UPSTREAM:Cli/McpDecision.php — `$root/.mcp.json`, bounded against the root '
                 . 'that named it before this class is constructed. Still a constructor argument, so an '
                 . 'EMBEDDER building one directly owns its own boundary; the launch path has one',
         ],
         'MCP/McpTrustPins.php|file_get_contents' => [
-            'CALLER_SUPPLIED — the trust record path (audit MCP-5); both callers in Cli/Bootstrap.php name '
+            'CALLER_SUPPLIED — the trust record path (audit MCP-5); both call sites — '
+                . 'Bootstrap::claudeMcpGrant() and McpDecision::trustProjectMcp() — name '
                 . '`~/.candy-code/mcp-trust.json` through trustedConfigDirPath(). Hashes and summaries only, '
                 . 'never executed',
         ],

@@ -114,7 +114,7 @@ namespace SugarCraft\Code\Support;
  *     `autoload.psr-4` source root; the first two arrived a round after the
  *     third, when the walk turned out to be ungated while the values were
  *     gated). The ELEVENTH to arrive was
- *     {@see \SugarCraft\Code\Cli\Bootstrap} (1 — `$root/.mcp.json`, the MCP
+ *     {@see \SugarCraft\Code\Cli\McpDecision} (1 — `$root/.mcp.json`, the MCP
  *     server config, against the root that named it), and it is the first entry
  *     here that arrived WITH its read rather than after it: nothing in `src/`
  *     constructed an {@see \SugarCraft\Code\MCP\McpClient} at all, so the
@@ -285,7 +285,7 @@ namespace SugarCraft\Code\Support;
  * `git clone` produces one." For every caller that reads CLONED content that is
  * true and decisive — a clone cannot deliver a hard link, so containment there
  * has no such adversary. It was WRONG to let {@see
- * \SugarCraft\Code\Cli\Bootstrap::mcpConfigDecision()}'s `.mcp.json` caller
+ * \SugarCraft\Code\Cli\McpDecision::mcpConfigDecision()}'s `.mcp.json` caller
  * inherit it: that file's writer set is not just a clone but any co-resident
  * process and any prior session's `Write`/`Bash`, and those CAN `ln(1)` one into
  * place, yielding a repo-local config whose bytes live outside the repo and whose
