@@ -3112,9 +3112,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // DELIBERATELY a plain exit() and not ForkedChild::exitNow():
             // this branch only ever runs in the process that installed the
             // handler, which is the live TUI/CLI process itself. Its
-            // shutdown sequence is load-bearing here — the PID-aware
-            // sugar-core terminal restore and Bootstrap's MCP-server stop
-            // hook both hang off it. See installInterruptHandlers()'s
+            // shutdown sequence is load-bearing here — what hangs off it,
+            // named exactly (v2 F-1(a)): sugar-core's PID-aware
+            // PosixBackend::restore() puts termios back into cooked mode via
+            // the destructor chain, and Bootstrap's MCP-server stop hook runs
+            // as a register_shutdown_function callback. The DEC private-mode
+            // releases (kitty keyboard pop, mouse off, alt-screen leave,
+            // cursor show) are NOT sugar-core's — they are written by
+            // bin/candy-code's own $terminalWasRun shutdown guard, which is
+            // the layer that owns them. See installInterruptHandlers()'s
             // doc-block.
             exit($signo === \SIGINT ? 130 : 143);
         };

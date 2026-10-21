@@ -987,6 +987,48 @@ final class MemoryBlockTest extends TestCase
     }
 
     /**
+     * v4-F19: the per-directory memo is bounded, and its eviction arm keeps
+     * the newer half (Renderer's MARKDOWN_MEMO_MAX shape). The full memo is
+     * fabricated through the property rather than walked with four thousand
+     * git spawns — the seam {@see MemoryBlock::resetTrackedNoteMemoForTesting()}
+     * exists precisely because the memo used to be a function-local static no
+     * test could reach.
+     */
+    public function testTheTrackedNotesMemoIsBoundedAndEvictsTheOlderHalf(): void
+    {
+        $memo = new \ReflectionProperty(MemoryBlock::class, 'trackedNoteMemo');
+        self::assertTrue($memo->isPrivate(), 'the memo stays a private implementation detail; the reset seam is public');
+
+        MemoryBlock::resetTrackedNoteMemoForTesting();
+
+        $full = [];
+        for ($i = 0; $i < 4096; $i++) {
+            $full['/crush_f19_absent/' . $i] = $i % 2 === 0 ? ['note' . $i => true] : null;
+        }
+        $memo->setValue(null, $full);
+
+        // A never-created directory answers null at the is_dir guard BEFORE
+        // any memo insert; had it memoised, the cap would already have fired
+        // and the count below would read the post-eviction figure.
+        self::assertNull(MemoryBlock::trackedNoteIds($this->dir . '/f19-never-created'));
+        self::assertCount(4096, $memo->getValue(), 'the guard short-circuits ahead of the memo, which it must not poison');
+
+        $fresh = $this->dir . '/f19-plain-dir';
+        mkdir($fresh, 0o700);
+        self::assertNull(MemoryBlock::trackedNoteIds($fresh), 'a plain directory is no repository: null is the honest answer, and it is still memoised');
+
+        $after = $memo->getValue();
+        self::assertCount(2049, $after, 'eviction keeps the newer half, then admits the insert');
+        self::assertArrayNotHasKey('/crush_f19_absent/0', $after, 'the oldest entries are the ones spent');
+        self::assertArrayHasKey('/crush_f19_absent/2048', $after, 'the surviving half starts at the cap midpoint');
+        self::assertArrayHasKey('/crush_f19_absent/4095', $after);
+        self::assertArrayHasKey($fresh, $after, 'the newest entry always survives its own insert');
+
+        MemoryBlock::resetTrackedNoteMemoForTesting();
+        self::assertSame([], $memo->getValue(), 'the reset seam clears the memo — the shape this moved out of a function-local static to gain');
+    }
+
+    /**
      * The index with each line's `id: ` stripped, so assertions about budget,
      * order and provenance read the note text (5.1-1 added the ids; their
      * shape is pinned in MemoryIndexInjectionTest).

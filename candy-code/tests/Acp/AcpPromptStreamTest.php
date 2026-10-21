@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Acp;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Acp\AcpToolCallStatus;
 use SugarCraft\Code\Acp\AcpUpdateMapper;
 use SugarCraft\Code\Acp\StopReasonMap;
 use SugarCraft\Code\Events\ToolFinished;
@@ -192,5 +193,24 @@ final class AcpPromptStreamTest extends TestCase
             }
         }
         self::fail('no ' . $kind . ' update was sent');
+    }
+
+    /**
+     * v4-F15: AcpToolCallStatus is the canonical naming of these four WIRE
+     * strings and the mapper constants are the emitted spelling — one of
+     * them moving alone would change ACP frames, so this pin (with the byte
+     * asserts earlier in this file) catches it red.
+     */
+    public function testTheToolCallStatusVocabularyStaysInLockstepWithTheWireEnum(): void
+    {
+        self::assertSame(
+            [
+                AcpUpdateMapper::STATUS_PENDING,
+                AcpUpdateMapper::STATUS_IN_PROGRESS,
+                AcpUpdateMapper::STATUS_COMPLETED,
+                AcpUpdateMapper::STATUS_FAILED,
+            ],
+            array_map(static fn (AcpToolCallStatus $case): string => $case->value, AcpToolCallStatus::cases()),
+        );
     }
 }

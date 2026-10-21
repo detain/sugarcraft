@@ -150,6 +150,19 @@ final class BackgroundSessionRunner
      */
     public const HEARTBEAT_INTERVAL_SECS = 5;
 
+    /**
+     * Size the sidecar log ({@see trimSidecarLog()}) may reach before the
+     * daemon trims it. The writer side never rotates: proc_open handed the
+     * daemon fd1/fd2 as plain O_APPEND descriptors and every stray warning,
+     * provider retry trace, or hook complaint lands there until dispose().
+     * The bound mirrors TuiErrorLog's 5 MiB ceiling — same "bounded local
+     * file, newest data wins" doctrine.
+     */
+    private const LOG_SIDECAR_MAX_BYTES = 5 * 1024 * 1024;
+
+    /** Newest bytes preserved into the one-generation `.1` copy on a trim. */
+    private const LOG_SIDECAR_TAIL_BYTES = 1024 * 1024;
+
     /** Seconds a single accept() may block before the worker is re-checked. */
     private const ACCEPT_TIMEOUT_SECS = 0.5;
 
@@ -1230,6 +1243,58 @@ final class BackgroundSessionRunner
     }
 
     /**
+     * Bound the sidecar log the daemon's stdout/stderr ride (v1-m-2).
+     *
+     * The sidecar is `$bufferPath . '.log'`: {@see BackgroundSupervisor::spawnSession()}
+     * opens the daemon with fd1 AND fd2 aimed at it (`['file', $logPath, 'a']`),
+     * so every inherited-FD write accumulates there for the session's whole
+     * life. Nothing rotated it: a chatty provider on a long-lived session grew
+     * the file until dispose(), with no ceiling.
+     *
+     * WHY TRUNCATE IN PLACE AND NOT RENAME. A rename rotates the NAME while
+     * the daemon's open file description follows the INODE: the writer would
+     * keep pouring into the detached old file forever and the fresh `.log`
+     * would look idle. Truncating the same inode is the only rotation an
+     * O_APPEND writer cannot escape — the append offset is re-derived at
+     * write time, so the next record lands at byte 0. The preserved tail is
+     * copied OUT by path to `.1` before the truncate, and every trim
+     * REPLACES that copy: retention is one generation, so total on-disk cost
+     * stays bounded at LOG_SIDECAR_MAX_BYTES + LOG_SIDECAR_TAIL_BYTES
+     * instead of growing per rotation.
+     *
+     * Best-effort by design, like the rest of the sidecar's lifecycle: a
+     * stat/read/truncate that fails is a logging problem, not a session
+     * problem — it stays silent and the next heartbeat tries again. A file
+     * whose tail cannot be read is still truncated once it is over the
+     * ceiling; the ceiling is the point, the copy is the courtesy.
+     */
+    private function trimSidecarLog(): void
+    {
+        $log = $this->bufferPath . '.log';
+        $stat = @\stat($log);
+        if (!\is_array($stat) || (int) $stat['size'] <= self::LOG_SIDECAR_MAX_BYTES) {
+            return;
+        }
+
+        $read = @\fopen($log, 'rb');
+        if ($read !== false) {
+            \fseek($read, (int) $stat['size'] - self::LOG_SIDECAR_TAIL_BYTES);
+            $tail = \stream_get_contents($read);
+            \fclose($read);
+            if ($tail !== false) {
+                @\file_put_contents($log . '.1', $tail);
+            }
+        }
+
+        $write = @\fopen($log, 'r+b');
+        if ($write === false) {
+            return;
+        }
+        @\ftruncate($write, 0);
+        \fclose($write);
+    }
+
+    /**
      * Serve supervisor commands until the worker settles, then exit.
      *
      * Exiting on completion is what tells the supervisor the session is
@@ -1293,6 +1358,7 @@ final class BackgroundSessionRunner
 
             if (\time() - $lastHeartbeat >= self::HEARTBEAT_INTERVAL_SECS) {
                 $this->log('[session:heartbeat] pid=' . \getmypid());
+                $this->trimSidecarLog();
                 $lastHeartbeat = \time();
             }
         }

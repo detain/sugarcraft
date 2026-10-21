@@ -7,6 +7,8 @@ namespace SugarCraft\Code\Agents;
 use React\EventLoop\Loop;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\ProcessTree;
+use SugarCraft\Code\Support\SafeDelete;
 
 /**
  * Worker pool for parallel agent execution.
@@ -135,6 +137,16 @@ final class AgentWorkerPool
 
     /** True when cancelAll() was called; cleared at the start of each executeAll(). */
     private bool $wasCancelledByUser = false;
+
+    /**
+     * The single naming authority for a pool's private IPC directory under
+     * `sys_get_temp_dir()`: {@see makeResultDirPath()} mints it, and
+     * {@see \SugarCraft\Code\Support\ToolIpcFiles::sweepStalePoolDirs()}
+     * reaps directories carrying it. The prefix lives here (not there) so the
+     * creator cannot drift from the reaper's pattern silently — a rename on
+     * either side reddens the reaper's name-shape pin.
+     */
+    public const RESULT_DIR_PREFIX = 'sc_pool_';
 
     /** Poll backoff for waitForCompletion() when nothing has completed yet (microseconds). */
     private const WAIT_POLL_INTERVAL_USEC = 5_000;
@@ -475,6 +487,16 @@ final class AgentWorkerPool
         }
         foreach (glob($this->resultDir . '/*.progress') ?: [] as $leftover) {
             @unlink($leftover);
+        }
+        // (M-1) The creator stamp exists to license the reaper AFTER we are
+        // gone; when we reach our own teardown we are demonstrably not gone,
+        // so release it here — otherwise it would block the rmdir below and
+        // leak a sentinel-bearing directory per pool. Only a plain file at the
+        // marker name is ours to unlink (a planted link proves nothing), the
+        // same rule {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::releaseSentinelIfOwn()} follows.
+        $marker = rtrim($this->resultDir, '/') . '/' . SafeDelete::SENTINEL;
+        if (is_file($marker) && !is_link($marker)) {
+            @unlink($marker);
         }
         @rmdir($this->resultDir);
     }
@@ -2257,7 +2279,7 @@ final class AgentWorkerPool
             $suffix = str_replace('.', '', uniqid('', true));
         }
 
-        return sys_get_temp_dir() . '/sc_pool_' . getmypid() . '_' . $suffix;
+        return sys_get_temp_dir() . '/' . self::RESULT_DIR_PREFIX . getmypid() . '_' . $suffix;
     }
 
     /**
@@ -2282,6 +2304,42 @@ final class AgentWorkerPool
                 'AgentWorkerPool: could not create the IPC directory ' . $this->resultDir
             );
         }
+
+        $this->stampResultDirSentinel();
+    }
+
+    /**
+     * (M-1) License the startup reaper over this pool's IPC directory.
+     *
+     * A killed daemon (SIGKILL, a fatal under the destructor) never runs the
+     * teardown below, and the `sc_pool_*` directories were consequently in NO
+     * sweep — the flat-file sweep in
+     * {@see \SugarCraft\Code\Support\ToolIpcFiles} only knows payload FILES,
+     * and its directory sibling only knew `bg_*` daemons. The creator stamp is
+     * the same authority the bg reaper demands: a forged name/uid/age cannot
+     * make a foreign directory pruneable, only this write can.
+     *
+     * The CONTENT is the owner's kernel start time (`/proc` field 22, empty
+     * when procfs cannot answer), not a bare touch: the pid baked into the
+     * directory name is recyclable, so the reaper needs (pid, startTicks)
+     * identity — the {@see \SugarCraft\Code\Support\Daemonize::isSameProcess()}
+     * idiom — to refuse a live owner's idle directory. Racing forked children
+     * all hold the same inherited {@see $resultDirOwnerPid}, so a re-stamp
+     * writes the same bytes; idempotence is by construction.
+     *
+     * Best-effort by design: a directory that cannot be stamped still works
+     * for its owner (whose destructor cleans it); it only forfeits the
+     * courtesy of the posthumous reap, which is exactly the pre-fix state.
+     */
+    private function stampResultDirSentinel(): void
+    {
+        $marker = rtrim($this->resultDir, '/') . '/' . SafeDelete::SENTINEL;
+        if (is_file($marker)) {
+            return;
+        }
+
+        $startTicks = ProcessTree::stat($this->resultDirOwnerPid)['startTicks'] ?? null;
+        @file_put_contents($marker, (string) ($startTicks ?? ''));
     }
 
     /**

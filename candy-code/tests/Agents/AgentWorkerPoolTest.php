@@ -12,7 +12,9 @@ use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Support\Daemonize;
 use SugarCraft\Code\Support\ForkedChild;
+use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
@@ -1098,6 +1100,53 @@ final class AgentWorkerPoolTest extends TestCase
                 "Expected the round-tripped costUsd for {$agentId} to be sanitized to a finite value.",
             );
         }
+    }
+
+    /**
+     * (M-1) The first result write stamps the IPC directory with the creator
+     * marker the startup reaper acts on:
+     * {@see \SugarCraft\Code\Support\ToolIpcFiles::sweepStalePoolDirs()}
+     * requires the sentinel for authority and reads the owner's kernel start
+     * time out of it for identity (a pid is recyclable; a (pid, start) pair
+     * is not). Pinned from the creator side alongside it: the exact name
+     * shape the reaper's pattern consumes — drift there blinds the reaper
+     * silently — and the destructor's release, without which the stamp would
+     * block its own `@rmdir` and turn a fixed leak into a fresh one, one
+     * directory per pool.
+     */
+    public function testTheCreatorStampsTheIpcDirectoryAndReleasesItOnTeardown(): void
+    {
+        $pool = new AgentWorkerPool();
+        $resultDir = (string) $this->readPrivate($pool, 'resultDir');
+
+        $storeResult = new \ReflectionMethod(AgentWorkerPool::class, 'storeResult');
+        $storeResult->setAccessible(true);
+        $storeResult->invoke($pool, 'stamp-check', new AgentResult(
+            agentId: 'stamp-check',
+            status: AgentStatus::Completed,
+            output: 'ok',
+        ));
+
+        self::assertSame(
+            1,
+            preg_match(
+                '/^sc_pool_' . preg_quote((string) getmypid(), '/') . '_[0-9a-f]+$/',
+                basename($resultDir),
+            ),
+            'the reaper recognises pool directories by name shape; a prefix or suffix drift here blinds it',
+        );
+
+        $marker = $resultDir . '/' . SafeDelete::SENTINEL;
+        self::assertTrue(is_file($marker) && !is_link($marker), 'the creator stamp must exist as a plain file');
+        self::assertSame(
+            (string) (Daemonize::startTime((int) getmypid()) ?? ''),
+            (string) @file_get_contents($marker),
+            'the stamp must carry the owner start time - a procfs-less host records the empty string',
+        );
+
+        unset($pool);
+        clearstatcache();
+        self::assertDirectoryDoesNotExist($resultDir, 'the released stamp must not block the destructor rmdir');
     }
 
     /**

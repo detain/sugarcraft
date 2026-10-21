@@ -267,6 +267,154 @@ final class McpForeignTranslateTest extends TestCase
         self::assertNotNull($caught->getPrevious(), 'the cause chain from normalizeEntry must survive the re-wrap');
     }
 
+    /**
+     * v4-F20 follow-through (with 00b8fec9f): three wrap-and-widen rethrows
+     * under src/MCP dropped their transport cause; the fix passes the caught
+     * exception as $previous. This pins the SHAPE, not just the three sites —
+     * before this guard nothing went red if the next rethrow lost its cause
+     * again, which is exactly how the tree sat at three sites for its whole
+     * pre-history. A throw whose message interpolates `->getMessage()` must
+     * end on a variable argument (the `$previous` slot). The scan is
+     * token-level, so parentheses and semicolons inside messages cannot
+     * confuse it, like the other token censuses in this suite.
+     */
+    public function testEveryWideningRethrowUnderSrcMcpCarriesItsCause(): void
+    {
+        $violations = [];
+        foreach (\glob(\dirname(__DIR__, 2) . '/src/MCP/*.php') ?: [] as $file) {
+            foreach ($this->wideningRethrowsMissingCause((string) \file_get_contents($file)) as $line) {
+                $violations[] = \basename($file) . ':' . $line;
+            }
+        }
+
+        self::assertSame([], $violations, 'wrap-and-widen rethrows must pass the caught exception as $previous');
+    }
+
+    /**
+     * Positive control: without a planted violation, a blind scan reads green
+     * exactly like a clean tree (the zero-fixture law this suite follows).
+     */
+    public function testTheWideningRethrowGuardSeesAPlantedViolation(): void
+    {
+        $bare = <<<'PHP'
+            <?php
+            final class P
+            {
+                public function p(): void
+                {
+                    try {
+                    } catch (\Throwable $e) {
+                        throw new \RuntimeException("start failed: {$e->getMessage()}");
+                    }
+                }
+            }
+            PHP;
+
+        $accepted = [
+            'positional' => \str_replace('getMessage()}");', 'getMessage()}", 0, $e);', $bare),
+            'trailing comma (multi-line chains in this tree use it)' => \str_replace('getMessage()}");', 'getMessage()}", 0, $e,);', $bare),
+            'named (the McpForeignTranslate spelling)' => \str_replace('getMessage()}");', 'getMessage()}", previous: $e);', $bare),
+        ];
+
+        self::assertSame([8], $this->wideningRethrowsMissingCause($bare), 'the bare rethrow on line 8 must be named');
+        foreach ($accepted as $spelling => $source) {
+            self::assertSame([], $this->wideningRethrowsMissingCause($source), "the {$spelling} twin must pass");
+            // TOKEN_PARSE keeps a broken fixture substitution from masquerading
+            // as a scan bug: an unbalanced quote would tokenize silently into a
+            // giant string and the walk would flag line 8 for the wrong reason.
+            \PhpToken::tokenize($source, \TOKEN_PARSE);
+        }
+        \PhpToken::tokenize($bare, \TOKEN_PARSE);
+    }
+
+    /**
+     * @return list<int> source lines of throw statements that widen a caught
+     *                   message without a cause in the $previous slot
+     */
+    private function wideningRethrowsMissingCause(string $source): array
+    {
+        $tokens = \PhpToken::tokenize($source);
+        $count = \count($tokens);
+        $violations = [];
+
+        for ($i = 0; $i < $count; ++$i) {
+            if ($tokens[$i]->id !== \T_THROW) {
+                continue;
+            }
+
+            $depth = 0;
+            $argOpen = -1;
+            $callEnd = -1;
+            $widening = false;
+            $commas = [];
+            $end = $count;
+            $throwLine = $tokens[$i]->line;
+
+            for ($j = $i + 1; $j < $count; ++$j) {
+                $text = $tokens[$j]->text;
+
+                if ($text === '(') {
+                    ++$depth;
+                    if ($argOpen === -1) {
+                        $argOpen = $j;
+                    }
+                } elseif ($text === ')') {
+                    --$depth;
+                    if ($depth === 0 && $callEnd === -1) {
+                        $callEnd = $j;
+                    }
+                } elseif ($text === ',' && $depth === 1) {
+                    $commas[] = $j;
+                } elseif ($text === ';' && $depth === 0) {
+                    $end = $j;
+                    break;
+                }
+
+                if ($tokens[$j]->id === \T_OBJECT_OPERATOR && ($tokens[$j + 1]->id ?? null) === \T_STRING && ($tokens[$j + 1]->text ?? '') === 'getMessage') {
+                    $widening = true;
+                }
+            }
+
+            $i = $end;
+
+            if (!$widening) {
+                continue;
+            }
+
+            // The $previous slot is the call's last NON-EMPTY top-level
+            // argument — non-empty matters because PHP allows a trailing
+            // comma, and multi-line chains in this tree use it. Accept a
+            // variable (positional `0, $e`) or the `previous:` label
+            // (named-argument spelling); anything else means the cause
+            // never rode the rethrow.
+            $bounds = array_merge([$argOpen + 1], array_map(static fn (int $comma): int => $comma + 1, $commas));
+            $ends = array_merge($commas, [$callEnd]);
+            $firstSignificant = null;
+
+            for ($s = \count($bounds) - 1; $s >= 0; --$s) {
+                for ($k = $bounds[$s]; $k < $ends[$s]; ++$k) {
+                    $id = $tokens[$k]->id;
+                    if ($id === \T_WHITESPACE || $id === \T_COMMENT || $id === \T_DOC_COMMENT) {
+                        continue;
+                    }
+
+                    $firstSignificant = match (true) {
+                        $id === \T_VARIABLE => 'positional',
+                        $id === \T_STRING && $tokens[$k]->text === 'previous' => 'named',
+                        default => 'other',
+                    };
+                    break 2;
+                }
+            }
+
+            if ($firstSignificant !== 'positional' && $firstSignificant !== 'named') {
+                $violations[] = $throwLine;
+            }
+        }
+
+        return $violations;
+    }
+
     public function testTheMcpClientConsultsThisTableNotACopyOfIt(): void
     {
         // Census-adjacent truth for the REUSE LAW: McpClient holds no

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Support;
 
+use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Sessions\BackgroundSupervisor;
 
 /**
@@ -104,6 +105,20 @@ final class ToolIpcFiles
     private const STAT_TYPE_MASK = 0o170000;
 
     private const STAT_REGULAR_FILE = 0o100000;
+
+    /**
+     * (M-1) How long an `sc_pool_*` directory must have been untouched before
+     * the liveness gate is even consulted. Mirrors
+     * {@see BackgroundSupervisor::STALE_IPC_DIR_SECONDS}'s reasoning — age is
+     * a courtesy filter for a shared `/tmp`, the authority is (pid, start)
+     * identity — and mirrors {@see STALE_AFTER_SECONDS}'s one-hour figure so
+     * the two temp sweeps an operator reasons about agree on what "ancient"
+     * means.
+     */
+    private const STALE_POOL_DIR_SECONDS = 3600;
+
+    /** S_IFDIR, spelled out for the same reason as {@see STAT_TYPE_MASK}. */
+    private const STAT_DIRECTORY = 0o40000;
 
     /**
      * {@see sweepOnce()}'s latch. Per-process, and a forked child gets a fresh
@@ -314,8 +329,13 @@ final class ToolIpcFiles
         // spawned them) may have exited before they finished, leaving nobody
         // to clean up. Kept out of sweep()'s prefix list because those are
         // DIRECTORIES with a liveness rule of their own, and sweep() never
-        // touches a directory.
-        return self::sweep($dir) + BackgroundSupervisor::sweepStaleIpcDirs($dir);
+        // touches a directory. M-1 adds the pool directories for the same
+        // three reasons: also directories, also with a liveness rule of their
+        // own (theirs is (pid, start) identity; age alone could strand a live
+        // idle pool's results), also invisible to every other reaper until now.
+        return self::sweep($dir)
+            + BackgroundSupervisor::sweepStaleIpcDirs($dir)
+            + self::sweepStalePoolDirs($dir);
     }
 
     /**
@@ -379,6 +399,112 @@ final class ToolIpcFiles
                 if (@unlink($path)) {
                     $removed++;
                 }
+            }
+        }
+
+        return $removed;
+    }
+
+    /**
+     * (M-1) Startup reaper for `sc_pool_*` IPC directories whose owning pool
+     * process is gone, returning how many directories were removed.
+     *
+     * An {@see \SugarCraft\Code\Agents\AgentWorkerPool} builds these to hand
+     * agent results between parent and forked children, and its destructor
+     * empties them — but a SIGKILLed or fatally interrupted host process runs
+     * no destructor, and until now no sweep covered the prefix: {@see sweep()}
+     * only unlinks flat FILES, and
+     * {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::sweepStaleIpcDirs()}
+     * only knew the `bg_*` daemons' directories. Killed daemons of THIS kind
+     * stranded their IPC directories forever, one per process, in /tmp.
+     *
+     * Conservative in every way {@see sweepStaleIpcDirs()} is — real directory
+     * by `lstat`, exact name shape, effective-uid ownership, sentinel
+     * authority, all-regular entries, future-mtime immunity — plus the one
+     * fact the bg walk does not need and the pool shape makes load-bearing:
+     * the directory NAME carries a pid, and pids are recycled. The sentinel's
+     * content is the owner's kernel start time, so liveness is judged by
+     * {@see Daemonize::isSameProcess()} — the same (pid, startTicks) identity
+     * idiom the daemon watchdog uses — which cannot be fooled by a stranger
+     * process inheriting the dead owner's number. A live owner's directory is
+     * left whole no matter how idle its mtimes look.
+     *
+     * @param string|null $dir The temp directory to scan; production passes
+     *        nothing. Tests pass a throwaway directory, as with {@see sweep()}.
+     */
+    public static function sweepStalePoolDirs(?string $dir = null, ?int $olderThanSeconds = null): int
+    {
+        $dir ??= sys_get_temp_dir();
+        if (!SafeDelete::baseIsSane($dir)) {
+            return 0;
+        }
+        $cutoff = $olderThanSeconds ?? self::STALE_POOL_DIR_SECONDS;
+        $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+        $now = time();
+        $nameShape = '/^' . preg_quote(AgentWorkerPool::RESULT_DIR_PREFIX, '/') . '(\d+)_([0-9a-f]+)$/';
+
+        $removed = 0;
+        foreach (glob($dir . '/' . AgentWorkerPool::RESULT_DIR_PREFIX . '*', GLOB_NOSORT) ?: [] as $path) {
+            if (preg_match($nameShape, basename($path), $name) !== 1) {
+                continue;
+            }
+
+            clearstatcache(true, $path);
+            $stat = @lstat($path);
+            if ($stat === false
+                || ($stat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_DIRECTORY
+                || ($uid !== null && $stat['uid'] !== $uid)
+            ) {
+                continue;
+            }
+
+            // Only the creator's stamp authorises emptying the directory; a
+            // pre-stamp directory (an older binary's, or a refused stamp) is
+            // the disclosed leak it always was, never a prune on suspicion.
+            if (!SafeDelete::carriesSentinel($path)) {
+                continue;
+            }
+
+            $newest = (int) $stat['mtime'];
+            $entries = [];
+            $ours = true;
+            foreach (@scandir($path) ?: [] as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+                $entryStat = @lstat($path . '/' . $entry);
+                if ($entryStat === false
+                    || ($entryStat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_FILE
+                ) {
+                    $ours = false;
+                    break;
+                }
+                $newest = max($newest, (int) $entryStat['mtime']);
+                $entries[] = $path . '/' . $entry;
+            }
+
+            if (!$ours || $now - $newest < $cutoff) {
+                continue;
+            }
+
+            // The age gate earned nothing on its own here: an interactive
+            // pool can idle past an hour WITH its owner alive, and results in
+            // flight are not a stranger's garbage. Liveness is the lock that
+            // makes the age gate safe to act on.
+            $marker = rtrim($path, '/') . '/' . SafeDelete::SENTINEL;
+            $recordedStart = trim((string) @file_get_contents($marker));
+            if (Daemonize::isSameProcess(
+                (int) $name[1],
+                $recordedStart === '' ? null : (int) $recordedStart,
+            )) {
+                continue;
+            }
+
+            foreach ($entries as $entry) {
+                @unlink($entry);
+            }
+            if (@rmdir($path)) {
+                $removed++;
             }
         }
 
