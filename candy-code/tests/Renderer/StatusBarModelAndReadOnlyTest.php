@@ -142,12 +142,13 @@ final class StatusBarModelAndReadOnlyTest extends TestCase
         $raw = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(
             null,
             $this->chat(200, EngineBackend::new($this->servedProvider($hostile), 'static')),
+            Renderer::publishedFrame(),
         );
 
         $this->assertStringNotContainsString("\e", $raw);
         $this->assertStringNotContainsString("\x07", $raw);
         $this->assertStringNotContainsString("\n", $raw);
-        $baseline = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $this->chat(200, new EchoBackend()));
+        $baseline = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $this->chat(200, new EchoBackend()), Renderer::publishedFrame());
         $this->assertSame(
             substr_count($baseline, "\u{E000}"),
             substr_count($raw, "\u{E000}"),
@@ -249,7 +250,7 @@ final class StatusBarModelAndReadOnlyTest extends TestCase
     /** The bar as painted, zone sentinels off. */
     private function bar(Chat $chat): string
     {
-        $bar = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat);
+        $bar = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat, Renderer::publishedFrame());
 
         return (string) (new \ReflectionMethod(Renderer::class, 'stripZoneMarkers'))->invoke(null, $bar);
     }

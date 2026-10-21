@@ -50,7 +50,7 @@ final class StatusLineSegmentTest extends TestCase
     /** The bar as it is painted, sentinels off — the columns it actually occupies. */
     private function bar(Chat $chat): string
     {
-        $bar = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat);
+        $bar = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat, Renderer::publishedFrame());
 
         return (string) (new \ReflectionMethod(Renderer::class, 'stripZoneMarkers'))->invoke(null, $bar);
     }
@@ -66,7 +66,7 @@ final class StatusLineSegmentTest extends TestCase
      */
     private function barAt(Chat $chat, int $now): string
     {
-        $bar = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat, $now);
+        $bar = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat, Renderer::publishedFrame(), $now);
 
         return (string) (new \ReflectionMethod(Renderer::class, 'stripZoneMarkers'))->invoke(null, $bar);
     }
@@ -74,7 +74,7 @@ final class StatusLineSegmentTest extends TestCase
     /** The raw bar, sentinels INTACT — for asserting on what reaches the scanner. */
     private function rawBar(Chat $chat): string
     {
-        return (string) (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat);
+        return (string) (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat, Renderer::publishedFrame());
     }
 
     /**

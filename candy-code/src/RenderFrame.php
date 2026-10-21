@@ -182,6 +182,28 @@ final class RenderFrame
         return new self();
     }
 
+    /**
+     * The frame for the next paint, begun from this published one.
+     *
+     * Only the three compositor INPUTS are carried: they describe the shell
+     * state App::view arms around each paint (palette handoff, docked Agents
+     * pane, open Agent View) and reset after it, so the fresh frame must see
+     * them to build the frame the user is looking at. Everything else —
+     * registries, zone origin, selection, offsets — is reborn empty from the
+     * chat state renderView walks; a leftover row from a previous frame would
+     * be marked at the wrong place (or registered twice, which makes the zone
+     * scan throw).
+     */
+    public function beginNext(): self
+    {
+        $next = new self();
+        $next->paletteAbandoned = $this->paletteAbandoned;
+        $next->agentsPaneDocked = $this->agentsPaneDocked;
+        $next->agentView = $this->agentView;
+
+        return $next;
+    }
+
     // ------------------------------------------------------------------
     // Click/layout registries (built during the walk, consumed after it)
     // ------------------------------------------------------------------
@@ -224,25 +246,6 @@ final class RenderFrame
     public function resetToolRowHeads(): void
     {
         $this->toolRowHeads = [];
-    }
-
-    /**
-     * Clear every positional registry before a new transcript walk and note
-     * the one thought Ctrl+O reaches this frame. Entries in all five lists
-     * are POSITIONAL to the frame being built — recorded while the transcript
-     * is walked and consumed once the shell around it is drawn — so a
-     * leftover row from the previous frame would be marked at the wrong place
-     * (or, for the keyed click registry, collide with a re-recorded id, which
-     * makes the zone scan throw and costs the whole frame its zones).
-     */
-    public function resetRegistries(?string $ctrlOThoughtKey): void
-    {
-        $this->toolCallZones = [];
-        $this->paletteItemZones = [];
-        $this->sessionRowZones = [];
-        $this->toolRowHeads = [];
-        $this->agentLineZones = [];
-        $this->ctrlOThoughtKey = $ctrlOThoughtKey;
     }
 
     public function noteCtrlOThoughtKey(?string $key): void

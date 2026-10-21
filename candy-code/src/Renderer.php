@@ -1009,11 +1009,13 @@ final class Renderer
     }
 
     /**
-     * The frame this renderer currently owns: the last completed paint, and —
-     * while one is in flight — the one being built. All fourteen per-frame
-     * fields live on {@see RenderFrame} and are reached through this slot;
-     * the `RenderFrame` class docblock owns the serial-render story for why
-     * collecting them into one object matters.
+     * The frame this renderer currently owns: the last COMPLETED paint.
+     * A render in flight builds its own next frame (renderView's `$drawing`)
+     * and swaps it into this slot only when the frame is whole, so between
+     * and after paints this accessor answers the same frame today's statics
+     * did. All fourteen per-frame fields live on {@see RenderFrame} and are
+     * reached through this slot; the `RenderFrame` class docblock owns the
+     * serial-render story for why collecting them into one object matters.
      */
     public static function publishedFrame(): RenderFrame
     {
@@ -1620,15 +1622,18 @@ final class Renderer
     {
         $theme = $chat->theme();
         $images = new ImageLayer();
-        // Both per-frame registries are cleared before the transcript is walked:
+        // Both per-frame registries start empty on a fresh frame:
         // their entries are positional to the frame being built, so a leftover
         // row from the previous frame would be marked at the wrong place (or
         // registered twice, which makes the zone scan throw). The layout heads
-        // are cleared with them but kept a SEPARATE registry - see
+        // are reborn with them but kept a SEPARATE registry - see
         // RenderFrame::$toolRowHeads for why the layout question and the click
-        // question are answered from two registries rather than one.
-        $published = self::publishedFrame();
-        $published->resetRegistries($chat->latestThoughtKey());
+        // question are answered from two registries rather than one. The three
+        // compositor inputs carry across (App::view armed them before this
+        // paint); the Ctrl+O key is re-noted from the chat, the one registry
+        // value that is chat state rather than frame geometry.
+        $drawing = self::publishedFrame()->beginNext();
+        $drawing->noteCtrlOThoughtKey($chat->latestThoughtKey());
         // One number, named once. Every producer that writes into $body below
         // is held to it, and fitToPane() is the backstop for the ones whose
         // own layout rules say otherwise (code blocks, tables, CJK runs).
@@ -1652,7 +1657,7 @@ final class Renderer
         // renderer, so tool rows expand, thoughts fold and diffs are gutted
         // exactly as in the parent's. The parent's in-flight extras below (its
         // live thought, its streaming reply) are the parent's, and stay out.
-        $openView = $published->agentView();
+        $openView = $drawing->agentView();
         $body = self::renderHistory(
             $openView === null ? $chat->history : $openView['rows'],
             $theme,
@@ -1679,7 +1684,7 @@ final class Renderer
             // an Agent View's transcript belongs to the delegated run, not to
             // this launch, so it passes null and keeps the placeholder.
             $openView === null ? $chat : null,
-            $published,
+            $drawing,
         );
         if ($openView !== null) {
             if ($body === '' && $openView['attach'] === null) {
@@ -1723,7 +1728,7 @@ final class Renderer
             if (trim($liveThought) !== '') {
                 $thought = $chat->streamingText() === ''
                     ? self::renderLiveThinking($liveThought, $theme, $contentWidth, max(3, $chat->rows() - self::THINKING_LIVE_CHROME_ROWS))
-                    : self::renderThought($liveThought, $theme, $chat->expanded(), self::THOUGHT_LIVE_KEY, $published);
+                    : self::renderThought($liveThought, $theme, $chat->expanded(), self::THOUGHT_LIVE_KEY, $drawing);
                 $body = $body === '' ? $thought : $body . "\n\n" . $thought;
             }
             // The reply so far, when the model has started writing one
@@ -1750,9 +1755,9 @@ final class Renderer
         }
         // Everything above wrote into $body; this is the single choke point
         // where the pane-width invariant is enforced over all of it.
-        $body = self::fitToPane($body, $contentWidth, $published);
+        $body = self::fitToPane($body, $contentWidth, $drawing);
 
-        $input = self::renderInput($chat, $theme, $published);
+        $input = self::renderInput($chat, $theme, $drawing);
         $rows = $chat->rows();
         // ISS-046: the "/" popup used to paint every match — `filter('')` is
         // all 48 commands — and {@see render()}'s tail clip then slid the
@@ -1770,8 +1775,8 @@ final class Renderer
         // standalone path stays consistent; SHELL_CHROME_COLS documents the
         // now-zero chrome every width derivation below still reads through.
         $shell = $body;
-        $shell = self::markToolCalls($shell, $published);
-        $shell = self::markAgentLines($shell, $published);
+        $shell = self::markToolCalls($shell, $drawing);
+        $shell = self::markAgentLines($shell, $drawing);
         // P-C2: a worker the view opened that keeps no transcript of its own
         // (a workflow stage, a background session) is its live output buffer,
         // in AgentOutputPane's Attach mode — the full-focus pane the dashboard
@@ -1810,7 +1815,7 @@ final class Renderer
         // The footer shows only when it is the frame's sole agent listing:
         // not while the live strip above the input paints one (pre-existing),
         // and — CL-2 FIX 2 — not while a docked Agents sidebar paints one.
-        $agentView = ($agentStrip === '' && !$published->agentsPaneDocked())
+        $agentView = ($agentStrip === '' && !$drawing->agentsPaneDocked())
             ? self::renderAgentView($chat)
             : '';
 
@@ -1910,7 +1915,7 @@ final class Renderer
         $available = max(1, $rows - 1 - $headerRows);
         $contentLines = explode("\n", $content);
         $overflow = max(0, count($contentLines) - $available);
-        $published->noteMaxScrollOffset($overflow);
+        $drawing->noteMaxScrollOffset($overflow);
         $sliceStart = 0;
         if ($overflow > 0) {
             $offset = max(0, min($chat->scrollOffset(), $overflow));
@@ -1923,7 +1928,7 @@ final class Renderer
         }
 
         $frame = ($agentHeader === '' ? '' : $agentHeader . "\n")
-            . implode("\n", $contentLines) . "\n" . self::renderStatusBar($chat);
+            . implode("\n", $contentLines) . "\n" . self::renderStatusBar($chat, $drawing);
 
         // ONE rule orders this chain: the overlay on screen must be the one
         // Chat::update() routes the next keystroke to, because an overlay the
@@ -1976,7 +1981,7 @@ final class Renderer
         // Chat::withKeyHelp() clamps against it. Not every frame the app paints
         // goes through here — $keyHelpMaxOffset's own docblock names the hosted
         // Pane::Agents exception and why it is harmless.
-        $overlay = self::renderKeyHelp($chat, $theme, $published);
+        $overlay = self::renderKeyHelp($chat, $theme, $drawing);
         if ($overlay === '') {
             $overlay = self::renderPermissionPrompt($chat, $theme);
         }
@@ -1984,11 +1989,11 @@ final class Renderer
         // driving it, which is what the ONE rule above forbids. This is the
         // PAINT side of the seam; the CLOSE side stays at E666's delivery
         // choke point, so the frame never fabricates an input event.
-        if ($overlay === '' && !$published->paletteAbandoned()) {
-            $overlay = self::renderPalette($chat, $theme, $published);
+        if ($overlay === '' && !$drawing->paletteAbandoned()) {
+            $overlay = self::renderPalette($chat, $theme, $drawing);
         }
         if ($overlay === '') {
-            $overlay = self::renderSessionPicker($chat, $theme, $published);
+            $overlay = self::renderSessionPicker($chat, $theme, $drawing);
         }
         if ($overlay === '') {
             $overlay = self::renderDirectoryPicker($chat, $theme);
@@ -2045,8 +2050,8 @@ final class Renderer
             // an overlay earlier in the chain above takes the slot before
             // either is ever called, and the two registries are therefore
             // never both non-empty for one frame.
-            $frame = self::markPaletteItems($frame, $published);
-            $frame = self::markSessionRows($frame, $published);
+            $frame = self::markPaletteItems($frame, $drawing);
+            $frame = self::markSessionRows($frame, $drawing);
         }
 
         // N-P3: what a settings save did, as a toast in the top-right corner.
@@ -2073,7 +2078,7 @@ final class Renderer
             $frame = self::clipFrameToCols($frame, $chat->cols());
         }
 
-        $frame = self::scanRoot($frame, $chat->cols(), $published);
+        $frame = self::scanRoot($frame, $chat->cols(), $drawing);
 
         // Mouse text selection (see {@see selectableRegion()}). Measured on
         // THIS frame, after the tail clip and the scroll window, because a
@@ -2087,9 +2092,9 @@ final class Renderer
             $selectable[0] += $headerRows;
             $selectable[1] += $headerRows;
         }
-        $published->setSelectableRegion($selectable);
+        $drawing->setSelectableRegion($selectable);
         $lines = explode("\n", $frame);
-        $published->setSelectableLines($lines);
+        $drawing->setSelectableLines($lines);
 
         $selection = Chat::textSelection();
         if ($selection !== null && ($selection->dragging || $selection->settled)) {
@@ -2098,6 +2103,12 @@ final class Renderer
                 Style::new()->reverse(),
             ));
         }
+
+        // The frame is complete: it becomes the published one in one swap.
+        // A render that threw midway never publishes its half-filled frame -
+        // readers keep seeing the last COMPLETED one (today's statics would
+        // have half-reset; see the lane report).
+        self::$frame = $drawing;
 
         return new View($frame, images: $images->placements());
     }
@@ -2211,7 +2222,7 @@ final class Renderer
      *        readout that reads the wall clock cannot be pinned byte-for-byte
      *        otherwise.
      */
-    private static function renderStatusBar(Chat $chat, ?float $now = null): string
+    private static function renderStatusBar(Chat $chat, RenderFrame $frame, ?float $now = null): string
     {
         // The two keybinding-reference cues REPLACE the bar. They used to be
         // held narrower than the narrowest bar they could replace (33 and 35
@@ -2367,7 +2378,7 @@ final class Renderer
         // them and below the `statusLine` command too: it is fitted last, at
         // the end of this method.
         $separator = ' · ';
-        $indicators = self::scrollIndicators($chat);
+        $indicators = self::scrollIndicators($chat, $frame);
         $scrollReserve = $indicators === [] ? 0 : Width::of($indicators[0]);
         $room = $cols
             - Width::of(self::stripZoneMarkers($processing))
@@ -3238,9 +3249,9 @@ final class Renderer
      *
      * @return list<string>
      */
-    private static function scrollIndicators(Chat $chat): array
+    private static function scrollIndicators(Chat $chat, RenderFrame $frame): array
     {
-        $max = self::maxScrollOffset();
+        $max = $frame->maxScrollOffset();
         $offset = max(0, min($chat->scrollOffset(), $max));
         if ($offset === 0) {
             return [];
