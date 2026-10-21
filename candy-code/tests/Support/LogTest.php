@@ -184,23 +184,21 @@ final class LogTest extends TestCase
         // census rosters the tree; this arm stops the degenerate case it
         // could not see — a method that grew its own call while the roster
         // entry for Log.php still said one.
-        $file = (string) (new ReflectionMethod(Log::class, 'sink'))->getFileName();
-
-        foreach (['sink', 'channel', 'sub', 'raw'] as $method) {
-            $body = self::bodyOf($file, new ReflectionMethod(Log::class, $method));
-            $expected = $method === 'sink' ? 1 : 0;
+        foreach (['sink', 'channel', 'sub', 'raw'] as $name) {
+            $body = self::bodyOf(new ReflectionMethod(Log::class, $name));
+            $expected = $name === 'sink' ? 1 : 0;
             self::assertSame(
-                \substr_count($body, 'error_log('),
                 $expected,
-                $method === 'sink'
+                \substr_count($body, 'error_log('),
+                $name === 'sink'
                     ? 'the sink must call error_log() exactly once — the ini-target mechanism (TuiErrorLog, the capture helpers) depends on it'
-                    : "{$method} must reach the log only through sink(); a direct call bypasses the quiet gate",
+                    : "{$name} must reach the log only through sink(); a direct call bypasses the quiet gate",
             );
         }
 
-        foreach (['channel', 'sub', 'raw'] as $method) {
-            $body = self::bodyOf($file, new ReflectionMethod(Log::class, $method));
-            self::assertStringContainsString('self::sink(', $body, "{$method} must delegate to sink()");
+        foreach (['channel', 'sub', 'raw'] as $name) {
+            $body = self::bodyOf(new ReflectionMethod(Log::class, $name));
+            self::assertStringContainsString('self::sink(', $body, "{$name} must delegate to sink()");
         }
     }
 
@@ -224,10 +222,10 @@ final class LogTest extends TestCase
         return $out;
     }
 
-    /** The declared body of a method, by reflection line range. */
-    private static function bodyOf(string $file, ReflectionMethod $method): string
+    /** The declared body of a method, sliced from the file reflection names. */
+    private static function bodyOf(ReflectionMethod $method): string
     {
-        $lines = \file($file);
+        $lines = \file((string) $method->getFileName());
         self::assertIsArray($lines);
         $start = (int) $method->getStartLine();
         $end = (int) $method->getEndLine();

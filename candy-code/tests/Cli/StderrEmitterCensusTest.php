@@ -103,49 +103,34 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\SelfUpdate}, whose `$errorStream` test seam
  *     defaults to `\STDERR` for the headless verb's report and refusal lines.
  *     A grep for `fwrite(STDERR` cannot see any of these files at all.
- *  3. `error_log(…)` — EIGHT sites across seven files. MEASURED on this
+ *  3. `error_log(…)` — ONE site, in one file. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
- *     destination configured, this IS stderr. Three of them appear in the
- *     baseline capture of a full suite run. It is by a wide margin the largest
- *     stderr channel in the application and it was not in the census at all.
- *     THIS COUNTS CALL SITES, NOT MESSAGES, and the two moved apart in round
- *     46: funnelling `CommandLoader`'s five `error_log()` calls through one
- *     private `report()` took its roster entry from 5 to 1 and this figure from
- *     thirty-eight to thirty-four while removing no message whatever — that
- *     loader still has five distinct refusals to report and `docs/ENVIRONMENT.md`
- *     documents all five behind one flag. A fall here is a fall in EMITTERS;
- *     read it as a fall in diagnostics and you will go hunting for four that
- *     were never deleted.
- *     IT FELL TWICE MORE, BY EIGHT AND THEN BY SIX, AND AGAIN NO MESSAGE WAS
- *     DELETED. Round 48 (E192) routed `WorktreeManager`'s four and two of
- *     `SglangProvider`'s three onto the same seam, which is why this channel
- *     no longer names `src/Agents/WorktreeManager.php` at all. Read the
- *     absence of a whole file here as six emitters moving, not as six
- *     diagnostics disappearing: every one of them still reaches stderr,
- *     because `RuntimeNoticeSink::warn()` calls `error_log()` for them, and
- *     channel 6 is where they are counted now. Round 47's move, which said the
- *     same thing one round earlier:
- *     Eight of the two tool-call parsers' diagnostics were routed through
+ *     destination configured, this IS stderr. As of W7-C the one file is
+ *     `src/Support/Log.php`: the twenty-five emitters this roster counted at
+ *     its height (and the thirty-eight its earlier revisions named) now fold
+ *     behind the facade's channel methods, byte-identical on the wire. The
+ *     roster is the CHOKE-POINT PIN: a raw `error_log()` written anywhere
+ *     else in `src/` reds here, and the honest answer is to name a channel,
+ *     not to touch a number. THE COUNT IS STILL DELIBERATE FRICTION — it just
+ *     moved one floor up: a second call inside the sink itself would split
+ *     the quiet gate's coverage, and that is the moment this roster is for.
+ *     The falls it recorded before the fold, kept for the reader who meets a
+ *     stale comment about any of them: round 46 funneled `CommandLoader`'s
+ *     five calls to one (emitters, not messages — thirty-eight to
+ *     thirty-four); rounds 47 and 48 (E192) routed eighteen of the parsers'
+ *     and `WorktreeManager`'s diagnostics onto
  *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()}, which
- *     calls `error_log()` itself and then ALSO puts the row on the mid-session
- *     transcript seam — so eight call sites became one, plus a new file on this
- *     roster, and every one of the eight lines still reaches stderr. That is
- *     the shape channel 5 was invented for, one round later, which is why
- *     channel 6 below exists: without it, eight user-visible stderr writes
- *     would have become invisible to every scanner in this file.
- *     A NAIVE `grep -c 'error_log('` OVER `src/` DISAGREES WITH THAT NUMBER by
- *     more than twenty, and the census is the one that is right: the surplus is
- *     entirely this application's own doc-blocks discussing `error_log()`,
- *     which it does more often than it calls it.
+ *     still writes the line — channel 6 counts those emitters; E154 moved no
+ *     site and grew the `candy-code: ` literals on channel 4 by nine files,
+ *     whose inline credit W7-C then folded into the facade's envelope (the
+ *     E154 paragraphs in both rosters below describe the day they landed,
+ *     and predate that last move). A NAIVE `grep -c 'error_log('` OVER `src/`
+ *     DISAGREES with the roster by more than twenty, and the census is the
+ *     one that is right: the surplus is this application's own doc-blocks
+ *     discussing `error_log()`, which it does more often than it calls it.
  *     {@see testTheNaiveGrepCountReconcilesWithTheTokenScan()} asserts the
  *     identity per file rather than restating either figure.
- *     E154 MOVED NO SITE HERE, WHICH IS WHY NOTHING IN THIS ROSTER MOVED WHEN
- *     IT LANDED: twenty-one retained sites in nine files now EMIT their message
- *     carrying the `candy-code: ` literal, so the prefixed census line reaches
- *     fd 2 with the call-site count untouched — the rows RETAIN because this
- *     channel counts calls and not prefixes (MEASURED: the scan is unchanged
- *     for all nine files), and channel 4 is where the new literals are credited.
  *  4. Literal message SHAPES that themselves carry the `candy-code: ` prefix.
  *     A LITERAL-BORNE PREFIX AND NOT "THE ROSTER A USER READS", which is what
  *     this line said when it was written, and the difference is the whole of
@@ -417,65 +402,15 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const ERROR_LOG_SITES = [
-        // WorktreeManager HAD FOUR AND HAS NONE, which is the largest single
-        // move this roster has recorded, and it is the reason to read a fall
-        // here as a fall in EMITTERS rather than in diagnostics: all four of
-        // its round-48 messages still reach stderr, through
-        // RuntimeNoticeSink::warn()'s own error_log(), and all four now reach
-        // the transcript too — plus a fifth transcript message placed there by
-        // E259 that never had an error_log() of its own to lose. The file is
-        // absent rather than zero because
-        // census() omits files with no sites; testEveryFileTheRostersNameExists()
-        // is what keeps that from hiding a deletion.
-        // THE TWO ROWS THIS ROSTER'S EARLIER REVISION NAMED AS PENDING PREFIX
-        // MOVES ARE CLOSED WITHOUT MOVING EITHER ROW, and one of the two was
-        // mis-named at the time it was written (re-measured by lane dh, round
-        // 67, before any roster edit was attempted): channel 3 counts CALLS,
-        // and the literal credit lives on MESSAGE_SHAPES. Bootstrap.php's site
-        // NEVER lacked a prefix — its message has carried `candy-code: ` since
-        // the call was first written, through MCP_PARTIAL_START_LOG_FORMAT, and
-        // that literal is already one of the four the file is credited for on
-        // MESSAGE_SHAPES above; a comment claiming the row unprefixed had
-        // contradicted this test's own roster for three weeks.
-        'src/Cli/Bootstrap.php' => 1,
-        'src/Commands/CommandLoader.php' => 1,
-        // The three-tier rules surface's refusal funnel, added P6.S2: the
-        // same shape as the CommandLoader row above — ONE `error_log()` inside
-        // a single private report() so call sites cannot drift on the gate,
-        // emitted only when CANDY_CODE_DEBUG_RULES_REFUSALS is set (rostered
-        // by EnvRosterDriftTest), and default-off, so the alternate screen
-        // never sees it unless the operator asked. DECISION per this
-        // doc-block's own menu: stderr alone — a refused rule directory is
-        // diagnostic for the session, not something the session can no
-        // longer DO, so it is not transcript-seam material.
-        'src/Context/RuleLoader.php' => 1,
-        'src/Diagnostics/RuntimeNoticeSink.php' => 1,
-        // The onToken-detach log, moved out of Chat.php with the rest of the
-        // turn by O-2f (Chat::scheduleBackendCompletion() → TurnRunner::start()):
-        // lane de's E154c/E175 gated it behind CANDY_CODE_DEBUG_STREAM (Chat
-        // still reads the flag and hands the runner the decision) and kept its
-        // self-label `Chat: ` — a programmer-facing diagnostic, not a launch
-        // notice — so it earns no `candy-code: ` literal and no MESSAGE_SHAPES
-        // row by design, exactly like the default-off RuleLoader funnel above.
-        'src/Host/TurnRunner.php' => 1,
-        // 3 until round 48 routed the two argument-decode refusals onto the
-        // seam (E192). The one left is flagTruncationRiskInLatestToolResults(),
-        // which PREDICTS a risk rather than reporting a failure — the routing
-        // rule's answer, and that method's doc-block states it.
-        // W7-C folded the Providers family (Sglang 1, Dsml 7, Minimax 4) behind
-        // Log::sub(); their messages still reach stderr with identical bytes
-        // through the facade, and the `candy-code: ` literals they carried
-        // inline now live in the facade's envelope constant.
-        'src/Skills/SkillLoader.php' => 2,
-        // W7-C: this row is the façade's own sink — as of this commit the
-        // single call site that will ever be added here by design. The other
-        // rows are being folded behind Log channel by channel; when the last
-        // one lands, this roster states the choke point and a raw call
-        // anywhere else in src/ reds.
-        'src/Support/Log.php' => 1,        // W7-C C3 folded the Agents/Memory family (AgentWorkerPool 3,
-        // ForeignAgentPresetRegistry 2, ForeignMemoryImporter 1) behind
-        // Log::sub(); identical bytes, literals now in the facade envelope.
-
+        // W7-C folded every remaining site behind the facade; this single row
+        // IS the choke point. Producers name a channel
+        // (Log::channel/sub/raw) and the sink in that file is where PHP's
+        // error log() is written — keeping the ini-target mechanism
+        // (TuiErrorLog's redirect, the capture helpers) exactly as the audit
+        // C2a chain built it. A new raw call anywhere else in src/ reds on the
+        // roster assertion, which is the friction this channel has always
+        // sold.
+        'src/Support/Log.php' => 1,
     ];
 
     /**
@@ -492,6 +427,14 @@ final class StderrEmitterCensusTest extends TestCase
      */
     private const MESSAGE_SHAPES = [
         'bin/candy-code' => 7,
+        // W7-C NOTE, reads forward: the nine E154 files whose in-code
+        // `candy-code: ` literals sat only on error_log lines (AgentWorkerPool,
+        // ForeignAgentPresetRegistry, CommandLoader, RuleLoader,
+        // ForeignMemoryImporter, SglangProvider, DsmlToolCallParser,
+        // MinimaxXmlFallbackToolCallParser, SkillLoader) folded those literals
+        // into the facade's envelope and left this roster; Bootstrap's eight
+        // and the sink-translated line ride raw(), so their literals stayed
+        // where they were. The paragraph below describes E154's landing day.
         // The nine files below are E154's: each `error_log()` message they
         // retained now carries the prefix in its own literal instead of
         // arriving at fd 2 anonymous. Counts are per LITERAL (the shape arm
@@ -585,8 +528,6 @@ final class StderrEmitterCensusTest extends TestCase
         // before any session exists, so there is no transcript to name.
         'src/Cli/SelfUpdate.php' => 2,
         'src/Cli/Subcommands.php' => 37,
-        'src/Commands/CommandLoader.php' => 1,
-        'src/Context/RuleLoader.php' => 1,
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the
@@ -594,7 +535,7 @@ final class StderrEmitterCensusTest extends TestCase
         // census of the literal; nothing here reaches stderr.
         'src/Protocol/Schema/ProtocolSchema.php' => 1,
         // 3 until audit 15a A9 - the same coerceValue() site as channel 3.
-        'src/Skills/SkillLoader.php' => 2,
+
     ];
 
     /**
@@ -1156,11 +1097,13 @@ final class StderrEmitterCensusTest extends TestCase
             self::message('static warn-family funnel declaration', self::EMITTER_SIDE_FUNNELS, $funnels),
         );
 
-        // The sink itself is the one place the two channels legitimately meet:
-        // it holds channel 3's single site for the whole family, and none of
-        // channel 6's.
+        // The sink is where the two channels legitimately meet, and since
+        // W7-C the meeting is a DELEGATION: its stderr copy is the facade's
+        // one Log::raw() call, the raw error_log() living only in
+        // src/Support/Log.php's sink (which channel 3's roster pins).
         $sink = self::censusSource(\dirname(__DIR__, 2) . '/src/Diagnostics/RuntimeNoticeSink.php');
-        self::assertSame(1, self::scan('error_log', $sink), 'the sink stopped writing stderr, or writes twice');
+        self::assertSame(0, self::scan('error_log', $sink), 'the sink grew a raw error_log() again; channel 3 belongs to the facade — warn()s copy must route through Log::raw()');
+        self::assertSame(1, self::methodCallSites('raw', $sink), 'the sink stopped writing stderr, or writes it twice — warn()s Log::raw() copy is the family channel for every channel-6 file above');
         self::assertSame(0, self::scan('runtime_notice', $sink), 'the sink calls its own warn()');
 
         // AND ASKED IN AN ALPHABET THAT CAN ACTUALLY EXPRESS THE ANSWER. The
@@ -1176,7 +1119,7 @@ final class StderrEmitterCensusTest extends TestCase
             0,
             self::methodCallSites('warn', $sink),
             'the sink calls warn() from inside itself, in some spelling; channel 6 credits the funnel '
-                . 'with one error_log() and would now be counting a write twice',
+                . 'with one Log::raw() copy and would now be counting a write twice',
         );
 
         // KNOWN-POSITIVE for that scanner too, in the same test: five calls a
@@ -2037,8 +1980,9 @@ final class StderrEmitterCensusTest extends TestCase
     }
 
     /**
-     * The depth walk answers for every `error_log()` call site in `src/` today,
-     * and at least one of them exercises the array-token openers.
+     * The depth walk answers for every `error_log()` call site in `src/` today
+     * — since W7-C that is the facade's single sink, and the array-token
+     * opener shape is carried by the scannerCases() fixtures instead.
      *
      * WHY THE SECOND HALF IS THE LOAD-BEARING ONE. The first half is an
      * absence assertion — "nothing throws" — and round 44 proved what an
@@ -2083,12 +2027,22 @@ final class StderrEmitterCensusTest extends TestCase
         }
 
         self::assertGreaterThan(0, $sites, 'the walk found no error_log() call at all; the scan is dead');
-        self::assertGreaterThan(
+        // W7-C made the opener-carrying shape GENUINELY latent in the live
+        // tree, exactly the case this test's own prescription named: every
+        // call site now folds behind the facade, so PHP's error log() is
+        // written once, from Log::sink(), with a bare variable. Interpolated
+        // and array-opener arguments are now composed one level up, at the
+        // named-channel call sites, which this walk no longer governs — and a
+        // raw call reintroduced with such an argument would red the channel-3
+        // roster first. The shape is still exercised, by the scannerCases()
+        // fixtures below rather than by derivation: the fixtures stay, the
+        // live floor moves to the side that can actually be true.
+        self::assertSame(
             0,
             $withArrayTokenOpener,
-            "no error_log() site in src/ carries an interpolation or an attribute any more ({$sites} sites "
-                . 'scanned). E161 called that shape latent and it was not; if it has genuinely become '
-                . 'latent, rewrite argumentCount()\'s doc-block to say so — the fixtures stay either way.',
+            "an error_log() site with an array-token opener reappeared in the live tree ({$sites} sites "
+                . 'scanned) — if it is a raw call, the roster should have reddened first; if the facade '
+                . 'grew a second sink, fix the facade and this walk re-derives either way.',
         );
     }
 
@@ -3003,12 +2957,12 @@ final class StderrEmitterCensusTest extends TestCase
                 'what' => "channel 4's credit for HeadlessPermissionPrompt",
             ],
             [
-                'anchor' => '/`error_log\(…\)` — ([A-Z-]+) sites across/',
+                'anchor' => '/`error_log\(…\)` — ([A-Z-]+) site, in/',
                 'expected' => array_sum(self::ERROR_LOG_SITES),
                 'what' => 'channel 3, the error_log() total',
             ],
             [
-                'anchor' => '/sites across ([a-z]+) files\. MEASURED/',
+                'anchor' => '/site, in ([a-z]+) file\. MEASURED/',
                 'expected' => \count(self::ERROR_LOG_SITES),
                 'what' => 'channel 3, the number of files it spans',
             ],

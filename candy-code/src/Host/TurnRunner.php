@@ -35,6 +35,7 @@ use SugarCraft\Code\Permissions\SessionPermissionMemo;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Background\ActiveSubagentsBlock;
 use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Todo\TodoList;
 use SugarCraft\Code\Todo\TodoReminder;
 use SugarCraft\Code\Tools\BuiltIn\Todo;
@@ -390,7 +391,7 @@ final class TurnRunner
             } catch (\Throwable $e) {
                 $userSink = null;
                 if ($reportObserverFailure !== null && $reportObserverFailure()) {
-                    error_log('Chat: onToken observer threw, detaching it for this turn: ' . $e->getMessage());
+                    Log::channel(Log::CHAT, 'onToken observer threw, detaching it for this turn: ' . $e->getMessage());
                 }
             }
         };
