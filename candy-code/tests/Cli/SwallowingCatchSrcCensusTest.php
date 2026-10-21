@@ -359,7 +359,9 @@ final class SwallowingCatchSrcCensusTest extends TestCase
             $close = null;
             for (; $j < $count; $j++) {
                 $text = $tokens[$j]->text;
-                if ($text === '{') {
+                // String-interpolation openers are array tokens; `${` never
+                // equals the bare `{`, and both close with a bare `}`.
+                if ($text === '{' || $tokens[$j]->is([T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES])) {
                     $depth++;
                 } elseif ($text === '}') {
                     $depth--;

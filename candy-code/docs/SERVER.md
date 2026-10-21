@@ -1306,7 +1306,7 @@ this machine, an address added after start — is refused with `421` until it is
 allowed:
 
 ```
-{"error":{"kind":"host_refused","message":"this server does not answer to host \"dev.example.com\"; start it with --allowed-host dev.example.com or add it to server.allowedHosts"}}
+{"error":{"kind":"host_refused","message":"this server does not answer to host `dev.example.com`; start it with --allowed-host dev.example.com or add it to server.allowedHosts"}}
 ```
 
 The server log names the refused host the same way. `--allowed-host` (or

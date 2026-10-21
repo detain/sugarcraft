@@ -170,7 +170,10 @@ final class MutateCarryCensusTest extends TestCase
             for ($j = $i + 1; $j < $to; $j++) {
                 $candidate = $tokens[$j];
                 $text = $candidate->text;
-                if (in_array($text, ['[', '(', '{'], true)) {
+                // Interpolation openers are ARRAY tokens whose text is `{`
+                // (T_CURLY_OPEN) or `${` (T_DOLLAR_OPEN_CURLY_BRACES); the
+                // bare-string leg only catches the first, by accident.
+                if (in_array($text, ['[', '(', '{'], true) || $candidate->is([T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES])) {
                     $depth++;
                 } elseif (in_array($text, [']', ')', '}'], true)) {
                     $depth--;
@@ -188,7 +191,7 @@ final class MutateCarryCensusTest extends TestCase
             $depth = 0;
             for (; $i < $to; $i++) {
                 $text = $tokens[$i]->text;
-                if (in_array($text, ['[', '(', '{'], true)) {
+                if (in_array($text, ['[', '(', '{'], true) || $tokens[$i]->is([T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES])) {
                     $depth++;
                 } elseif (in_array($text, [']', ')', '}'], true)) {
                     $depth--;
@@ -216,7 +219,7 @@ final class MutateCarryCensusTest extends TestCase
         $depth = 0;
         for ($i = $to + 1; $i < count($tokens); $i++) {
             $text = $tokens[$i]->text;
-            if ($text === '{') {
+            if ($text === '{' || $tokens[$i]->is([T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES])) {
                 $depth++;
             } elseif ($text === '}') {
                 if ($depth === 0) {
@@ -306,7 +309,7 @@ final class MutateCarryCensusTest extends TestCase
         $close = null;
         for ($k = $open; $k < $count; $k++) {
             $text = $tokens[$k]->text;
-            if ($text === '[' || $text === '(' || $text === '{') {
+            if ($text === '[' || $text === '(' || $text === '{' || $tokens[$k]->is([T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES])) {
                 $depth++;
             } elseif ($text === ']' || $text === ')' || $text === '}') {
                 $depth--;
