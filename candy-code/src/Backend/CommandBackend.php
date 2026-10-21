@@ -36,8 +36,12 @@ use SugarCraft\Code\Support\ProcessContainment;
  *
  * `proc_open` is used so stdin/stdout are wired cleanly and the
  * process exit code is captured. A non-zero exit returns an
- * "[error: …]" assistant message rather than throwing; backend
- * failures shouldn't crash the chat shell.
+ * error-marked "[error: …]" assistant message rather than throwing:
+ * backend failures must not crash the chat shell, which renders the
+ * message as a UI-only bubble. The mark is load-bearing for the
+ * one-shot path — {@see \SugarCraft\Code\Cli\NonInteractive::run()} maps an
+ * error-marked answer to its failure exit code, so a failing pipeline
+ * no longer exits 0 (1021 F-5).
  *
  * STDOUT IS RETURNED WITH EXACTLY ONE TRANSFORMATION APPLIED: `trim()`, at the
  * two ends. Everything INSIDE survives — every newline, every blank line,
@@ -493,8 +497,10 @@ final class CommandBackend implements Backend
      * message. Shared, so a non-zero exit reads identically whether the caller
      * awaited a promise or blocked.
      *
-     * A non-zero exit returns an "[error: …]" assistant message rather than
-     * throwing; backend failures shouldn't crash the chat shell.
+     * A non-zero exit returns an error-marked "[error: …]" message rather than
+     * throwing — the chat shell must survive showing it, and {@see
+     * \SugarCraft\Code\Cli\NonInteractive::run()} carries the same failure to
+     * headless callers through the exit code, not through an exception (1021 F-5).
      */
     private static function finish(int $exit, string $stdout, string $stderr): Message
     {

@@ -129,7 +129,11 @@ final class NonInteractive
      * has been retried at all: `grep -rn TransientFailure src/` reaches only
      * `Runtime`, `AgentManager` and the providers, so a delegating backend's
      * failure arrives here on its first attempt. For those runs a 1 still means
-     * "one attempt failed", exactly as it did before item 8.
+     * "one attempt failed", exactly as it did before item 8. And since 1021
+     * F-5 that sentence is finally true of the command tier's NONZERO EXITS
+     * too: when the shell-out answers with an error-marked message instead of
+     * throwing, `run()` maps `$message->error` to this code, where the same
+     * answer used to print and exit 0.
      */
     public const EXIT_FAILURE = 1;
 
@@ -233,7 +237,10 @@ final class NonInteractive
      * @return int Unix exit code: {@see self::EXIT_OK} on success,
      *   {@see self::EXIT_CONFIG} when no prompt was given or an explicitly
      *   selected provider is unusable, {@see self::EXIT_FAILURE} when the
-     *   backend threw or a turn hook denied the prompt (ISS-041) — extending the existing `candy-mail`/`candy-ssh-launcher`
+     *   backend threw, a turn hook denied the prompt (ISS-041), or the backend
+     *   answered with an error-marked message — a command-tier nonzero exit
+     *   (`CANDY_CODE_BACKEND_CMD`/`_STREAM`) now reaches the caller as exit 1
+     *   instead of a printed failure at exit 0 (1021 F-5) — extending the existing `candy-mail`/`candy-ssh-launcher`
      *   bins' 0/1 convention (crush_feat.md Recommendation 4) with
      *   `bin/candy-code`'s own 2-means-usage-error.
      */
@@ -659,7 +666,14 @@ final class NonInteractive
             );
         }
 
-        return self::EXIT_OK;
+        // 1021 F-5: the command-tier backends do not THROW on a nonzero exit —
+        // they answer with an error-marked message (CommandBackend::finish(),
+        // StreamingCommandBackend::finish()). Until here, run() printed that
+        // message as an ordinary answer and exited 0: a silently failing CI
+        // pipeline. The answer is still printed, the session still persisted,
+        // SessionEnd still fires; only the status code changes, to the one
+        // whose contract already promises "ran and failed".
+        return $message->error ? self::EXIT_FAILURE : self::EXIT_OK;
     }
 
     /**
