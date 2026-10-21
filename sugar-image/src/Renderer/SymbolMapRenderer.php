@@ -857,21 +857,6 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     }
 
     /**
-     * chafa work_cell_get_mean_colors_for_symbol(): group the cell's
-     * pixels by the (possibly inverted) coverage bytes; each group's
-     * average is that pen. Chafa divides by the symbol's static fg/bg
-     * weights — over a full 64-pixel opaque cell the actual per-group
-     * counts equal those weights, so dividing by the live counts keeps
-     * byte-identical means upstream and keeps partial-transparency cells
-     * from bleeding black (they divide out the absent pixels instead).
-     * A single-pixel group skips the division (weight-<=1 fast path).
-     *
-     * @param list<array{int,int,int,?int}> $pixels 64 cell pixels
-     * @param list<int> $cov 64 binary coverage bytes
-     *
-     * @return array{0:array{int,int,int}, 1:array{int,int,int}} bg, fg
-     */
-    /**
      * meanPens() through the canvas mode's snap: under a fixed palette
      * the pens that SCORE a candidate are the pens that would paint it
      * (PC-14 quantize-before-scoring). TrueColor passes through.
@@ -891,6 +876,21 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
         return $pens;
     }
 
+    /**
+     * chafa work_cell_get_mean_colors_for_symbol(): group the cell's
+     * pixels by the (possibly inverted) coverage bytes; each group's
+     * average is that pen. Chafa divides by the symbol's static fg/bg
+     * weights — over a full 64-pixel opaque cell the actual per-group
+     * counts equal those weights, so dividing by the live counts keeps
+     * byte-identical means upstream and keeps partial-transparency cells
+     * from bleeding black (they divide out the absent pixels instead).
+     * A single-pixel group skips the division (weight-<=1 fast path).
+     *
+     * @param list<array{int,int,int,?int}> $pixels 64 cell pixels
+     * @param list<int> $cov 64 binary coverage bytes
+     *
+     * @return array{0:array{int,int,int}, 1:array{int,int,int}} bg, fg
+     */
     private function meanPens(array $pixels, array $cov): array
     {
         $accums = [[0, 0, 0], [0, 0, 0]];

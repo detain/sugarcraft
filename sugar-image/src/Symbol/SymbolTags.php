@@ -6,11 +6,12 @@ namespace SugarCraft\Image\Symbol;
 
 /**
  * Coverage-class symbol tags, bit-for-bit mirrors of chafa's
- * ChafaSymbolTag enum. Tags classify a glyph's visual family; the
- * selection engine itself never filters on them (v1 parity — chafa
- * filters at the CONFIG level, see the auto-ladder seam), they ride
- * the SymbolDef for callers that want to restrict a pick to, say,
- * BRAILLE or STIPPLE families.
+ * ChafaSymbolTag enum. Tags classify a glyph's visual family; defs ride
+ * their table declarations and SymbolMap::withSelectors() filters on the
+ * effective tags exactly as chafa's char_is_selected() does (F-17 — the
+ * old "selection never filters" v1 note predates the selector grammar),
+ * also serving callers that want to restrict a pick to, say, BRAILLE or
+ * STIPPLE families.
  *
  * Mirrors chafa.ChafaSymbolTag (chafa/chafa-symbol-map.h:33-68).
  */

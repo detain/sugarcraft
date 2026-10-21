@@ -1368,7 +1368,10 @@ final class SymbolMap
         return $cov;
     }
 
-    /** find_unicode_octant_map_data: binary search; miss yields -(insertion point). */    private static function findOctantData(int $bits): int
+    /**
+     * find_unicode_octant_map_data: binary search; miss yields -(insertion point).
+     */
+    private static function findOctantData(int $bits): int
     {
         $map = self::OCTANT_MAP;
         $first = 0;
@@ -1423,9 +1426,10 @@ final class SymbolMap
     }
 
     /**
-     * Informational tags for the basic table (v1 does not filter on tags);
-     * transcribed from chafa's own per-glyph tag lists in
-     * chafa/internal/chafa-symbols-block.h (v1 does not filter on tags).
+     * Declared tags of the block table, transcribed from chafa's own
+     * per-glyph tag lists in chafa/internal/chafa-symbols-block.h; the
+     * selection consults them through the def_to_symbol effective-tag
+     * fold of {@see self::effectiveTags()}.
      */
     private static function basicTags(int $cp): int
     {
