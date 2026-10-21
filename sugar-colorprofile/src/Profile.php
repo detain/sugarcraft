@@ -16,4 +16,4 @@ namespace SugarCraft\ColorProfile;
  *
  * @see https://github.com/charmbracelet/colorprofile
  */
-\class_alias(ColorProfile::class, Profile::class);
+class_alias(ColorProfile::class, Profile::class);
