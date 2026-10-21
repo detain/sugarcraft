@@ -551,6 +551,7 @@ candy-code/tests/App/SidePaneRowClickTest.php	0.185	8
 candy-code/tests/Chat/CompactModelSummaryTest.php	0.184	38
 candy-code/tests/Tui/MenuBarCompactStripTest.php	0.184	6
 candy-code/tests/Hooks/ClaudeSettingsHooksTest.php	0.183	28
+candy-code/tests/Host/SessionTabsExtractionParityTest.php	0.182	22
 candy-code/tests/Chat/PermissionRejectNoteAndStopTest.php	0.180	7
 candy-code/tests/Tools/BashToolProgressTest.php	0.180	4
 candy-code/tests/Chat/HostCompactionMemoryFlushTest.php	0.178	3
