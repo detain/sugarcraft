@@ -1271,7 +1271,7 @@ final class ProcessExecutor implements ExecutorInterface
             }
 
             $tools[] = new class ($name, $description, $inputSchema) implements Tool {
-                /** @param array<mixed> $schema */
+                /** @param array<mixed> $wireSchema */
                 public function __construct(
                     private readonly string $wireName,
                     private readonly string $wireDescription,
