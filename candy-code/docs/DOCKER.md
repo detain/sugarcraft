@@ -10,18 +10,18 @@ publishes on every push to `master` that touches `candy-code/**` — it tags
 docker pull ghcr.io/detain/sugarcraft-candy-code:latest
 ```
 
-> **Registry status.** Every workflow run before the build fix failed at
-> `composer create-project`: `php:8.3-cli` ships neither ext-zip nor an
-> archive binary (the first error, masking the rest), and once extraction
-> works, `sugar-image`/`candy-mosaic` hard-require `ext-gd`, which the base
-> image lacked too. The Dockerfile now installs `unzip` and builds `gd`;
-> the registry package still 404s until the first green workflow run with
-> these fixes lands on `master`. The build has been proved end-to-end
-> locally (container `--version` and `/api/health` included), and PRs
-> touching the image now proof-build before merge, so a broken Dockerfile
-> cannot silently ride `master` again. Until that first green run, build
-> locally (see [Building locally](#building-locally) below) or pin to no
-> image.
+> **Registry status.** The image is **live**: the first green
+> `candy-code serve image` run (39525070215, master `63272f9ad`,
+> 2026-10-20) published `:latest` plus the bare-sha tag, and anonymous
+> manifest probes answer 200 for both. The road here: every workflow run
+> before the build fix failed at `composer create-project` — `php:8.3-cli`
+> ships neither ext-zip nor an archive binary (the first error, masking the
+> rest), and once extraction works, `sugar-image`/`candy-mosaic`
+> hard-require `ext-gd`, which the base image lacked too. The Dockerfile
+> fix installs `unzip` and builds `gd`. PRs touching the image now
+> proof-build before merge, so a broken Dockerfile cannot silently ride
+> `master` again. To build without the registry, see
+> [Building locally](#building-locally) below.
 
 The image resolves the app from the **published** package stream (Composer
 `dev-master`), never from a monorepo working tree, so its contents track the
