@@ -22,9 +22,13 @@ use SugarCraft\Image\Dither\Ditherer;
  * divergence documented on {@see Ditherer::diffuseError()}'s $fold.
  *
  * The cure is opt-in and DOUBLE-GATED ($serpentineErrorFold × $serpentine):
- *  1. fold-ON conserves everything chafa-conservable at the row ends (pinned
- *     against an INDEPENDENTLY DERIVED spread — the tap tables below are
- *     spelled out here, never read back from the implementation);
+ *  1. fold-ON recovers the strictly-positive row-end error the clamp can
+ *     actually land; the trailing-edge dy=0 horizontal arms (FS 7/16, Stucki
+ *     12/42, Atkinson 2/8) are dead on arrival — they fold onto the grain
+ *     being diffused, whose accumulator is consumed before the write lands —
+ *     and drop in both modes. Every recovered tap is pinned against an
+ *     INDEPENDENTLY DERIVED spread (the tap tables below are spelled out
+ *     here, never read back from the implementation);
  *  2. fold-OFF keeps the historical drop, pinned at every position so the two
  *     modes can never silently swap;
  *  3. every pre-cure byte stream is frozen. The `f0` digests (and the honest

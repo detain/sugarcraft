@@ -65,11 +65,11 @@ final class Quantizer
     /** PnnBin.mtm sentinel for an absorbed (dead) bin — chafa's G_MAXUINT16. */
     private const DEAD = PHP_INT_MAX;
 
-    /** Merge-weight split between plain RGB error and the transform errors (chafa-palette.c:401 RATIO). */
+    /** Merge-weight split between plain RGB error and the transform errors (chafa-palette.c:402 RATIO). */
     private const RATIO = 0.5;
 
     /**
-     * BT.601 rows used by find_nearest's error (chafa-palette.c:403-408
+     * BT.601 rows used by find_nearest's error (chafa-palette.c:404-409
      * `pnn_coeffs`): Y, Cb, Cr. The Y row doubles as the default RGB weight
      * vector, which is why the weights below read like it.
      */
@@ -79,7 +79,7 @@ final class Quantizer
         [0.615, -0.51499, -0.10001],
     ];
 
-    /** chafa-palette.c:398-400 RED/GREEN/BLUE_WEIGHT_32f. */
+    /** chafa-palette.c:399-401 RED/GREEN/BLUE_WEIGHT_32f. */
     private const RGB_WEIGHTS = [0.299, 0.587, 0.114];
 
     private function __construct()

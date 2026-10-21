@@ -42,8 +42,12 @@ interface Renderer
      *
      * A-12 (chafa campaign): ADVISORY — capability reporting, not mode
      * selection. No logic consumer exists tree-wide (the tmux/screen
-     * passthrough decorators only forward it; chafa by contrast drives
-     * its own ladder from equivalent flags). The flag answers "can
+     * passthrough decorators only forward it; chafa by contrast picks its
+     * rung from terminal capability — the CLI default consults
+     * chafa_term_info_get_best_canvas_mode() (chafa-term-info.c:983-1000,
+     * applied at chicle-options.c:1728) and on a 16-colour terminal lands on
+     * INDEXED_16, where alpha is never composited either: transparent cells
+     * omit the foreground and the terminal default shows through). The flag answers "can
      * SEMI-transparent pixels composite?", not "are transparent pixels
      * mishandled?": the text renderers honour FULLY transparent pixels
      * by omitting the pen so the terminal default shows through — see

@@ -74,8 +74,8 @@ final class Ditherer
      *                         only place geometry is known)
      * @param bool $serpentineErrorFold C-06/rev-s4-1: fold an edge grain's
      *                         out-of-canvas diffusion taps back onto the
-     *                         nearest visible column (error-conserving, the
-     *                         shape chafa's boundary call sites produce),
+     *                         nearest visible column (error-recovering onto
+     *                         the shape chafa's boundary call sites produce),
      *                         instead of dropping them at the bounds test.
      *                         DOUBLE-GATED: inert unless $serpentine is armed
      *                         too, so the drop-vs-fold divergence can only
@@ -306,7 +306,7 @@ final class Ditherer
             // unprocessed pixel — that parity and mirroring is a faithful
             // port of chafa fs_dither (chafa-pixops.c:327-459). What happens
             // to a tap that reaches PAST the row end is the disclosed
-            // divergence, and both modes (fold-armed chafa-conserving,
+            // divergence, and both modes (fold-armed error-recovering,
             // default drop) are documented on {@see diffuseError()}'s $fold.
             $reversed = $snake && (($y & 1) === 1);
             $row = array_fill(0, $w, 0);
@@ -616,8 +616,9 @@ final class Ditherer
      * @param bool $serpentine C-08 snake walk; parity reads LOCAL $y, same
      *                         documented phase behaviour as indexRows()
      * @param bool $fold C-06/rev-s4-1: fold edge grains' out-of-canvas taps
-     *                         onto the nearest visible column (chafa-
-     *                         conserving). DOUBLE-GATED the same way as the
+     *                         onto the nearest visible column (error-
+     *                         recovering; see diffuseError's $fold for the
+     *                         exact arm-by-arm shape). DOUBLE-GATED the same way as the
      *                         colour walks — it is dropped unless
      *                         $serpentine is armed too. Default false keeps
      *                         the historical drop semantics.
@@ -746,7 +747,8 @@ final class Ditherer
      *                   TRUE: a tap that leaves the canvas HORIZONTALLY from an
      *                   EDGE GRAIN (x=0 or x=$w-1) is folded back onto the
      *                   nearest visible column of its own target row instead of
-     *                   being dropped, conserving the kernel total. Interior
+     *                   being dropped, recovering that tap's share of the
+     *                   kernel total. Interior
      *                   overshoot (e.g. a dx=±2 Stucki arm fired from column 1)
      *                   and taps past the BOTTOM edge still drop: chafa scopes
      *                   its re-pointing to the boundary call sites only, and
@@ -757,9 +759,14 @@ final class Ditherer
      *                   onto differ from a plain column clamp (it aliases the
      *                   out-of-range neighbour ARGUMENT, e.g. the leftmost
      *                   grain's 3/16 arm re-uses error_row[1]+1 — the mirror
-     *                   column, not column 0); the fold here conserves the
-     *                   TOTAL at the cost of one disclosed landing-site
-     *                   difference, and it is armed only through the
+     *                   column, not column 0); the fold recovers every
+     *                   re-pointable tap EXCEPT one dead-on-arrival arm —
+     *                   the trailing-edge dy=0 horizontal taps (FS 7/16,
+     *                   Stucki 12/42, Atkinson 2/8) clamp back onto the
+     *                   grain being diffused, whose accumulator is consumed
+     *                   before the fold lands, so they recover nothing and
+     *                   drop in both modes — plus one disclosed
+     *                   landing-site difference, and it is armed only through the
      *                   serpentineErrorFold × serpentine double gate, so no
      *                   byte-frozen digest is in its reach by default.
      */
