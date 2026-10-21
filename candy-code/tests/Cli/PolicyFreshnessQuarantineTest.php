@@ -229,19 +229,20 @@ final class PolicyFreshnessQuarantineTest extends TestCase
      */
     private function resetFreshnessStatics(): void
     {
+        // The freshness memo stayed on Bootstrap when S1a split the class;
+        // only the notice store moved to LaunchNotices.
         foreach ([
             'policyFreshnessChecked' => false,
             'policyChanged' => false,
             'policyPreviousProjectHooks' => [],
             'policyPreviousTrustedRoots' => [],
             'hookFileEntries' => [],
-            'launchNotices' => [],
-            'launchNoticesDropped' => [],
         ] as $name => $value) {
-            $property = new \ReflectionProperty(LaunchNotices::class, $name);
+            $property = new \ReflectionProperty(Bootstrap::class, $name);
             $property->setAccessible(true);
             $property->setValue(null, $value);
         }
+        LaunchNotices::reset();
     }
 
     private function writeUserConfig(array $config): void
