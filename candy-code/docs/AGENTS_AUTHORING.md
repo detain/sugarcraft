@@ -80,7 +80,7 @@ from. So the exposure is a foreign *name you do not otherwise define* — and th
 is exactly the case to check before running a strange repository.
 
 Note that the **native** tiers no longer diverge from skills either: since
-ISS-031, native agent presets and native skills both give the USER tier
+native agent presets and native skills both give the USER tier
 precedence over the project tier — a cloned repository can add preset names but
 cannot displace the operator's own, and a displaced file is named by path in a
 launch notice (`Bootstrap::AGENT_PRESET_SHADOW_NOTICE_FORMAT`). The remaining
@@ -194,7 +194,7 @@ of the preset's mode and the session's
 `bypass-permissions` on a preset never lifts a `default` session's questions.
 
 `source` rides along now, so an imported row carries its provenance in state;
-since ISS-031 `/agent <name>` renders it, and renders `sourcePath` beside it —
+`/agent <name>` renders it, and renders `sourcePath` beside it —
 the exact file a preset was read from, with the built-ins (no file) simply
 omitting the row.
 
@@ -482,7 +482,7 @@ one":
 - **`/bg` and `/fork`** run a task in a background session
   (`src/Sessions/BackgroundSessionRunner.php`) as the roster's `default`
   agent, else its first NATIVE entry — a foreign import never takes the slot
-  a position-zero fallback lands on (ISS-087) — else the built-in `coder`,
+  a position-zero fallback lands on — else the built-in `coder`,
   consulting nothing else of the preset but its provider, model and
   `isolation:` (a worktree session, see
   [Teams and worktrees](#teams-and-worktrees)). An agent that inherits the

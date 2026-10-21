@@ -44,7 +44,7 @@ reports it, and the listing simply has fewer names in it.
 
 `load()`'s validation covers YAML only, and the gap is not fixable there. A
 user-tier `.php` workflow is reached by `require`, which re-executes the file's
-top-level code on every call. Before the process-wide memo landed (ISS-045),
+top-level code on every call. Before the process-wide memo landed,
 running the same workflow twice in one session re-declared its file-scope
 functions or classes and died with a `Cannot redeclare` **compile fatal** — the
 one failure mode `Chat`'s `catch (\Throwable)` around `/workflow run` cannot
@@ -261,9 +261,9 @@ dispatched, and `/workflow run` prints it as an error.
 /workflow status <id>
 ```
 
-**2026-09-10 (E652 → E663, the E649 seam fully closed): what `/workflow run`
+**2026-09-10 (the seam fully closed): what `/workflow run`
 reports for a sub-agent changed under you, and the change is on purpose.**
-As of E663 the engine's worker pool is fed the same launch-derived provider
+As of that fix the engine's worker pool is fed the same launch-derived provider
 spec the chat sub-agent path gets (`Bootstrap::workflowEngine()` builds the
 pool through `agentPoolConfig()`); the "engine still fails" gap that stood for
 hours between the two is gone.
@@ -276,9 +276,9 @@ the sub-agent surfaces as **FAILED** naming the absence — a run that used to
 quietly "finish" now stops with a reason. A configured launch is unaffected
 except that its sub-agents now genuinely consult the model in the child.
 *WHY EARNS PLACE:* `/workflow status` is an operator's audit trail; "Completed"
-has to mean "a model saw this prompt", and pre-E652 it provably could not.
+has to mean "a model saw this prompt", and before that fix it provably could not.
 
-**2026-09-28: a stage now does the agents' work.** *WHAT SAID:* the E663 worker
+**2026-09-28: a stage now does the agents' work.** *WHAT SAID:* the worker
 above consults the model in the child — ONCE. It advertises the stage's tools
 and executes none of them, so a stage whose first move was a tool call (for any
 real task, every stage) finished with empty output. *WHAT TRUE NOW:* on a launch
@@ -289,7 +289,7 @@ each tool call as it is made, the stage's `tools:` is its tool list (`Task`
 withheld), and the step cap is 200 (an agent's own `maxTurns` overrides it). Sequential, pipeline and verification stages
 fork too now (`AgentWorkerPool::executeOne()` takes the forking path whenever a
 forked executor is configured), so no stage type blocks the TUI for its
-duration. *WHY THE E663 RULE STILL HOLDS:* a launch with no provider keeps the
+duration. *WHY THE RULE STILL HOLDS:* a launch with no provider keeps the
 refusing worker, and an engine on the offline echo fallback is refused by the
 executor — "Completed" still means a model did the work.
 

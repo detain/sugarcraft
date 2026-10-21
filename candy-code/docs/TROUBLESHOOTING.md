@@ -108,7 +108,7 @@ In a git checkout of the repo, `Help::versionString()` prefers a bounded
 files are modified (vendor paths are refused) — so the line reports your HEAD,
 not a frozen reference. Composer's install metadata
 (`InstalledVersions::getReference()`) is the fallback for non-checkout installs,
-where it remains the reference recorded at `composer install` time (ISS-082).
+where it remains the reference recorded at `composer install` time.
 
 Measured in this checkout: `git rev-parse --short HEAD` said `7d873a15` while
 `candy-code --version` said `dev-master (a4be826)`, and `a4be8263` is a real but
@@ -314,7 +314,7 @@ without asking. With `autoReview` on, the reviewer can also answer *ask*. See
   `ParseError` that `Chat`'s `catch (\Throwable)` does survive — one transcript
   line, like a YAML error. What used to kill the session was the *second*
   compile of the same path (`Cannot redeclare`), an uncatchable fatal; since
-  ISS-045 `WorkflowRegistry` compiles each user PHP workflow once per process,
+  `WorkflowRegistry` compiles each user PHP workflow once per process,
   so it cannot recur (see [`docs/WORKFLOWS.md`](WORKFLOWS.md)).
 - **A stage ran the wrong prompt.** `agent:` is a label, not a preset reference;
   `WorkflowEngine` never reads `AgentPreset`. See

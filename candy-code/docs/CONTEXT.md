@@ -56,8 +56,7 @@ calibrated against it. The three tiers below judge against that calibrated
 figure **plus the tool-call arguments** riding beside the message text
 (`Host\CompactionService::tierTokenCount()`) — an attachment, an inlined
 `@file`, or a fat Write payload counts toward the tier exactly as it counts
-toward the status bar, which is what lets the bar and the tiers agree
-(sugar_issues.md ISS-015).
+toward the status bar, which is what lets the bar and the tiers agree.
 
 ## Compaction tiers (between prompts)
 

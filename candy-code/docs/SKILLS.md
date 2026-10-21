@@ -41,7 +41,7 @@ They used to ship under `src/Skills/BuiltIn/`, which listed them in every
 project's system prompt: a user in an unrelated repository who said "open a
 PR" matched `worktree-workflow`, whose body then told the model to run
 `git checkout -- . && git clean -fd` on a dirty tree — discarding uncommitted
-work — and to self-merge the PR (audit 15d-21). That instruction is gone too:
+work — and to self-merge the PR. That instruction is gone too:
 a tree that is not clean now means stop and report.
 
 The **foreign** trees are other tools' conventions, imported read-only and
@@ -67,7 +67,7 @@ last-write-wins registry. So cloning a repository that ships
 `deploy` or `db-query` you already had — in `~/.candy-code/skills`,
 `~/.agents/skills`, `~/.claude/skills` or `~/.config/opencode/skills` alike. A repository may
 still *add* a skill, and may replace a built-in (the tier below it); it may
-not re-point one you wrote. Until audit 15d-03(b) the native order was
+not re-point one you wrote. The native order once was
 built-in < user < project, so a repository's `.candy-code/skills/deploy`
 silently replaced yours, and "native always wins" let it replace your
 `~/.claude/skills` copy too.
@@ -113,7 +113,7 @@ it, plus the foreign format when there is one:
 
 The listing itself is fenced `<available-skills>`, under a preamble that says
 the list is assembled by the harness but every name and description is its
-skill author's text, and explains the badge (audit 15d-02). Directly beneath
+skill author's text, and explains the badge. Directly beneath
 the preamble rides a one-line proactive-use mandate — when a listed skill's
 description covers the task, the model must load and follow it through the
 `Skill` tool before starting — balanced by the preamble's statement that the
@@ -125,17 +125,17 @@ description, the shape synced bundles produce) collapse to the stronger-tier
 entry, so the model sees one line per distinct offer. The lines are grouped by
 tier — built-in, then project, then user, the reading order
 `SkillOrigin::precedence()` states — newest source file first within a tier,
-and alphabetical by display name among equal or unreadable mtimes (ISS-022:
+and alphabetical by display name among equal or unreadable mtimes —
 once the aggregate budget below can drop lines, the order decides which
 survive; a skill with no readable file — a manifest registration or a vanished
-path — carries the floor timestamp and sorts last inside its tier). A skill registered
+path — carries the floor timestamp and sorts last inside its tier. A skill registered
 by some other route, with no tier stated, is badged `project` — the least
 trusted tier, so an unknown origin is never presented as the operator's or
 the harness's. The path nudge's lines (`SkillPathNudge`) carry no badge; its
 `<system-reminder>` header does not explain one.
 
 Beyond the per-line clip, the whole listing carries an **aggregate** byte
-budget (ISS-022): lines are kept from the top while `skills.listingMaxBytes`
+budget: lines are kept from the top while `skills.listingMaxBytes`
 (default 8192, `SkillMatcher::DEFAULT_LISTING_MAX_BYTES`) can still seat the
 next line *and* the collapse line; everything past it is replaced by one
 `- N more skills; call Skill to list them` line, and the drop is announced
@@ -199,7 +199,7 @@ skill's default name is its parent directory's name, not a `name:` field.
 
 A `SKILL.md` in a legacy encoding is not skipped: every reader scrubs it to valid
 UTF-8 first, replacing each invalid byte sequence with `?`, and the body gains a
-trailing `[encoding: …]` line saying so (audit 15d-08).
+trailing `[encoding: …]` line saying so.
 
 **A mistyped field skips the skill, never the launch.** Both readers — the
 Stage-1 `SkillLoader::loadSkillManifest()` and the eager `Skill::parse()` — type
@@ -258,10 +258,10 @@ os: [linux, darwin]       # the platform must be listed
 
 | Key | Default | Read by | Effect today |
 |---|---|---|---|
-| `description` | `Skill: <name>` | `SkillMatcher::listForPrompt()` | Live. This one line is what the model sees at session start; it is the whole basis on which the model decides to invoke the skill. It is repository text, so `SkillPromptLine` renders it — and the skill's display name, the last `/`-separated segment of the registry key — collapsed to one line, `PromptFence::escape()`d and clipped to `SkillPromptLine::LISTING_MAX_BYTES` (audit 15d-02): a multi-line description cannot start a line of its own, and a fence tag in it arrives as inert `&lt;` text. The line sits inside the `<available-skills>` fence behind its tier badge — see [The listing badges every skill with its tier](#the-listing-badges-every-skill-with-its-tier). |
+| `description` | `Skill: <name>` | `SkillMatcher::listForPrompt()` | Live. This one line is what the model sees at session start; it is the whole basis on which the model decides to invoke the skill. It is repository text, so `SkillPromptLine` renders it — and the skill's display name, the last `/`-separated segment of the registry key — collapsed to one line, `PromptFence::escape()`d and clipped to `SkillPromptLine::LISTING_MAX_BYTES`: a multi-line description cannot start a line of its own, and a fence tag in it arrives as inert `&lt;` text. The line sits inside the `<available-skills>` fence behind its tier badge — see [The listing badges every skill with its tier](#the-listing-badges-every-skill-with-its-tier). |
 | `user-invocable` | `true` | `SkillRegistry::isUserInvocable()` → `App::userInvocableSkills()` | Live on the App shell's skill picker. `false` hides the skill from the picker while leaving it model-invocable. |
 | `disable-model-invocation` | `false` | `SkillRegistry::isAutoInvocable()` | Live. `true` keeps the skill out of the prompt listing **and** makes `SkillTool` refuse it by name — the check is re-done in the tool so a skill added to a registry by some other route still cannot be reached. |
-| `paths` | `[]` | `SkillRegistry::getForPaths()`, `SkillPathNudge` | Live. Glob patterns (see [What a `paths:` glob matches](#what-a-paths-glob-matches) for the semantics — they are not `FNM_PATHNAME`); touching a matching file nudges the skill into view once per session. Read from the Stage-1 manifest, so it costs no body read. The nudge is bounded (E66): at most 8 entries, each at most 300 bytes, and where it is spent depends on the tool: `Grep` and `Glob` subtract it from their own `maxOutputBytes`, so it is spent INSIDE the cap; `Read` takes an eighth BESIDE its cap (hence its stated 1.375x `maxBytes` total, a ceiling: the page `Read` returns is itself at most `maxBytes`, and 50 KiB by default, while the eighth is still figured from `maxBytes`); `Edit` and `Write` have no output cap at all, so the class ceiling of 2,636 bytes is the whole bound there. A `description` too long for an entry is clipped and marked, and a skill held back is announced by a later call rather than dropped. Only model-invocable skills are ever nudged — a `disable-model-invocation: true` skill is filtered out of the nudge (E72), because telling the model to open a skill it may not invoke is a dead instruction. |
+| `paths` | `[]` | `SkillRegistry::getForPaths()`, `SkillPathNudge` | Live. Glob patterns (see [What a `paths:` glob matches](#what-a-paths-glob-matches) for the semantics — they are not `FNM_PATHNAME`); touching a matching file nudges the skill into view once per session. Read from the Stage-1 manifest, so it costs no body read. The nudge is bounded: at most 8 entries, each at most 300 bytes, and where it is spent depends on the tool: `Grep` and `Glob` subtract it from their own `maxOutputBytes`, so it is spent INSIDE the cap; `Read` takes an eighth BESIDE its cap (hence its stated 1.375x `maxBytes` total, a ceiling: the page `Read` returns is itself at most `maxBytes`, and 50 KiB by default, while the eighth is still figured from `maxBytes`); `Edit` and `Write` have no output cap at all, so the class ceiling of 2,636 bytes is the whole bound there. A `description` too long for an entry is clipped and marked, and a skill held back is announced by a later call rather than dropped. Only model-invocable skills are ever nudged — a `disable-model-invocation: true` skill is filtered out of the nudge, because telling the model to open a skill it may not invoke is a dead instruction. |
 | `allowed-tools` | `null` | nothing | **Inert.** Parsed, carried on the `Skill` object, copied by `ForeignSkillDiscovery`, and read by no tool-scoping code in `src/`. Writing it does not restrict anything. |
 | `disallowed-tools` | `null` | nothing | **Inert**, same as above. |
 | `model` | `null` | `App::dispatchSkill()` only | **Inert.** Not reachable on any live path: `App::dispatchSkill()` reads it (`$skill->model ?? $this->model`) and that method has no production caller; `ForeignSkillDiscovery` merely copies the value onto the imported object. See [`context: fork`](#the-context-field-today). |
@@ -371,7 +371,7 @@ survive a restart. What it appends to `App::$enabledSkills` is still the
 **registry** object — a stage-1 manifest row with empty content — but that is
 no longer the end of the story: at every prompt build, `Skill::withBodyResolved()`
 grafts the body from the row's own `sourcePath`, so the spliced section carries
-the picked instructions rather than a bare `## Skill:` heading (ISS-035; the
+the picked instructions rather than a bare `## Skill:` heading (the
 first picker fix shipped the empty row and the model saw nothing). A row whose
 source file has vanished also stays in the `<available-skills>` listing — an
 enabled skill is never invisible through both channels. Resolution happens at
@@ -511,7 +511,7 @@ provenance tag rides on a `Skill` object and the manifest arrays have nowhere to
 carry it. An imported skill's body is therefore read at launch even if it is
 never used.
 
-**Every read is bounded** (`SkillFileReader`, audit 15d-27). A `SKILL.md` or an
+**Every read is bounded** (`SkillFileReader`). A `SKILL.md` or an
 asset over **1 MiB** (`SkillFileReader::MAX_FILE_BYTES`) is refused from a
 `stat()`, before any of it is read, and the read itself stops one byte past the
 ceiling in case the file grows in between. The manifest stage reads only the
@@ -579,7 +579,7 @@ prompt, the Ctrl+S picker enables a skill for the session, and the model loads
 one on demand with the `Skill` tool. Typing the slash spelling —
 `/security-audit the auth module` — sends the same request: `submit()` rewrites
 a slash draft whose name the registry answers into this mention channel before
-the unknown-command refusal is consulted (VIS-5), so one gate, one
+the unknown-command refusal is consulted, so one gate, one
 `$ARGUMENTS` rule, and one `✨ Loaded skill:` row serve both spellings. A
 built-in or command-file name of the same word wins first: the rewrite only
 sees names no command claimed.

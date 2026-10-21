@@ -98,7 +98,7 @@ resolves against `~/.candy-code/` — the file's own directory — not the repo 
 open; so does a bare `hooks/...` spelling, but only when a real file exists
 under `~/.candy-code/` (the existence gate means a cloned repo cannot plant the
 script and take over the guard, and a command naming nothing keeps running
-exactly as typed). Project-tier files keep repo-relative commands (ISS-039).
+exactly as typed). Project-tier files keep repo-relative commands.
 
 `name` matters because `HookRegistry` keys hooks by name: without it, two
 entries sharing a command on one event silently collapse into a single
@@ -106,10 +106,10 @@ registration.
 
 `unattendedAsk: true` is the entry's opt-in to the exit-3 promise below:
 `bypass-permissions` will not auto-answer this hook's ASK — a headless run
-fails closed to a refusal (the refusals row carries the E375 unattended
+fails closed to a refusal (the refusals row carries the unattended
 qualifier) and a run at a terminal is put the real question. A non-bool value
 is refused like `disabled`'s, and the key is inert on a `disabled: true`
-entry: an entry that never joins the chain never asks (ISS-040).
+entry: an entry that never joins the chain never asks.
 
 ### Absence is silent; everything else is loud
 
@@ -163,7 +163,7 @@ name does exactly that. `HookRegistry::matcherMatches()` reads that as
 unevaluable guard as satisfied is the one failure mode a guard must not have.
 The pattern and the PCRE error are kept on `HookRegistry::matcherFailures()`,
 and the first failure of each pattern is announced once through the same
-per-turn notice drain `/notices` reads (ISS-090(c)) — announced, never printed
+per-turn notice drain `/notices` reads — announced, never printed
 raw, because the match happens mid-frame where the renderer owns the screen.
 
 ### A loaded hook may only add to the chain
@@ -253,7 +253,7 @@ the action has already happened:
   PreToolUse note is kept, because it was written before the output existed.
   Every verdict that does not permit counts: exit 1 or 2, any other non-zero
   exit, a timeout, an exit-3 ask (there is nobody to ask after the call ran).
-  A hook that *throws* counts too (audit R6): it has vetted nothing, and the
+  A hook that *throws* counts too: it has vetted nothing, and the
   hooks queued behind it never run, so its reason reads
   `hook failed: <exception class>: <message>`. Only `PostToolUse` contains a
   throw this way; a `PreToolUse` hook that throws still ends the turn before
@@ -564,7 +564,7 @@ Notes that matter in practice:
   of every hook that returned an ask on the settled ASK (`HookResult::$askedBy`),
   overwriting anything a hook's own result carried, and the gate's name is
   reserved. A question your hook asks is about this call's content, so no
-  earlier approval answers it (audit F-P7, F-P9). Under `bypass-permissions` there is a per-hook opt-in: a hook whose name is rostered via `HeadlessPermissionPrompt::requireUnattendedAnswer()` keeps that promise even in bypass mode — with no terminal it fails closed to a refusal (the row carries the E375 unattended qualifier), at a terminal the real question is put; un-rostered ASKs are answered allow by the operator's standing bypass consent (ISS-040, owner ruling 2026-10-06).
+  earlier approval answers it. Under `bypass-permissions` there is a per-hook opt-in: a hook whose name is rostered via `HeadlessPermissionPrompt::requireUnattendedAnswer()` keeps that promise even in bypass mode — with no terminal it fails closed to a refusal (the row carries the unattended qualifier), at a terminal the real question is put; un-rostered ASKs are answered allow by the operator's standing bypass consent.
 - **Exit 4 whose stdout is not a JSON object is downgraded to a DENY**, never to
   an allow: a hook that meant to rewrite dangerous arguments and failed must not
   have the *original* arguments run in its place. A JSON list or scalar is
@@ -642,7 +642,7 @@ CRUSH_TOOL_INPUT_FILE  CRUSH_TOOL_OUTPUT_FILE
 
 The child also receives the Claude-Code-shaped JSON payload on **stdin**:
 `{"session_id", "cwd", "hook_event_name", "tool_name", "tool_input",
-"tool_response"}` (ISS-038). The `CRUSH_*` environment stays as above, and a
+"tool_response"}`. The `CRUSH_*` environment stays as above, and a
 child that never reads stdin still verdicts on its exit code.
 
 `CRUSH_TOOL_INPUT` (and the file behind `CRUSH_TOOL_INPUT_FILE`) is the tool's
@@ -752,7 +752,7 @@ Your launch environment reaches the hook — `PATH`, `HOME`, `LANG`,
 `VIRTUAL_ENV`, the `CANDY_CODE_*` variables that configured the launch — with
 three changes, made by `ProcessContainment::scrubbedEnv()`:
 
-1. **Credentials are removed** (audit F-E1, extended by ISS-010). A variable
+1. **Credentials are removed**. A variable
    whose name matches `*_API_KEY`, `*_TOKEN`, `*_SECRET`, `AWS_*`,
    `*_PASSWORD`, `*_PASS`, `*_PWD`, `*_DSN` or `*_CREDENTIALS` —
    case-insensitive — is dropped, as are the exact names `DATABASE_URL` and
@@ -964,7 +964,7 @@ reading. The dormant Chat path (`Chat::applyPostToolUse()`) does the same.
 anything from a file and ahead of the permission gate. Registration order is
 the order a chain runs in, with one exception: `AuditHook` always runs **after
 every other `PostToolUse` hook**, whatever order they were registered in
-(`HookRegistry::findMatches()`, audit R7). It records what a call produced, so
+(`HookRegistry::findMatches()`). It records what a call produced, so
 it runs only once the rest of the chain has permitted that output — see
 [below](#what-the-audit-log-records).
 
@@ -1062,7 +1062,7 @@ Quoting is **not** among those evasions for `ConfirmRemoveHook` any more: each
 pattern runs against the raw command *and* its quote-removed words (the same
 `Permissions\ShellWords` tokeniser the permission gate's step-0 breaker uses),
 so `rm '-rf' x`, `rm "-rf" x`, `find . '-delete'` and `dd 'of=/dev/sda'` are
-denied like their unquoted spellings. Before audit F-P1 the first three passed
+denied like their unquoted spellings. Earlier cuts let the first three pass
 the whole built-in chain under `bypass-permissions`, then the default mode on
 every path (it still is for `-p` and background sessions; the TUI now starts in
 `default`).
@@ -1321,13 +1321,13 @@ one it is:
   token: `hook`, `refused` or `unanswered`. A refused call never reaches
   `PostToolUse`, so the engine writes this line itself, through the registered
   `audit` hook, from the gate's refusal arm. Both the sequential path and the
-  concurrent path gate there. Before audit F-H2, none of these left a record.
+  concurrent path gate there. None of these left a record until this check existed.
 - `=! WITHHELD "<hook>":` is a call that ran but whose output a `PostToolUse`
   hook refused, or a hook in that chain threw (see the block rules above). The
   line keeps the hook's name and reason; it reads `=! WITHHELD:` when no single
   hook owns the refusal. It is the call's **only** record: the audit hook runs
   last in the chain, and a refusal returns before reaching it, so no `=>` line
-  holds an excerpt of the output that was withheld. Before audit R7 the audit
+  holds an excerpt of the output that was withheld. Earlier, the audit
   hook ran first — `registerBuiltIns()` is called ahead of every hook file — and
   wrote 200 bytes of the very output a secret scanner then refused.
 
@@ -1342,7 +1342,7 @@ field.
 
 The input is capped at 4 KiB (`AuditHook::INPUT_CAP_BYTES`). Anything longer
 ends in ` [truncated: <n> bytes]`, so a `Write` no longer copies the whole file
-it wrote into the log. The log itself is size-capped (ISS-059): past
+it wrote into the log. The log itself is size-capped: past
 `AuditHook::ROTATE_AT_BYTES` the hook-owned default rolls to `.1`, one
 generation deep, before the next append — a caller-supplied path is never
 touched, because its retention belongs to the caller. And before any field is
@@ -1352,7 +1352,7 @@ rather than leaking its first characters.
 
 ### What `protect-files` covers
 
-Before audit F-J2 the matcher was `^(Bash|Edit|Write|Read)$` and the `.env`
+The matcher was once `^(Bash|Edit|Write|Read)$` and the `.env`
 pattern wanted whitespace on both sides of the name, so `cat .env;true`,
 `cat ".env"`, `.env.local` and — the easiest route — `Grep pattern="=" path="."
 include_ignored=true` all read the secret under `bypass-permissions`, then
@@ -1378,7 +1378,7 @@ skill, agent and command trees); `Bash`, the write tools and MCP tools get the f
 where `Read` of either file is not. The asked rows are a hook's `ask()`, put to
 you in every permission mode; a deny-class match in the same call wins.
 
-`.git/hooks/` and `.git/info/` are on that list since audit F-J4: a file
+`.git/hooks/` and `.git/info/` are on that list: a file
 written to `.git/hooks/pre-commit` runs on the user's next `git commit`,
 outside any candy-code session, and `cp ./payload.sh ./.git/hooks/pre-commit`
 was allowed under `bypass-permissions` and auto-run under `accept-edits`. The

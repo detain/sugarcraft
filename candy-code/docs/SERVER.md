@@ -44,7 +44,7 @@ Open the sign-in URL in a browser on the same machine. The code rides in the URL
 response body also carries `loginSecret`, a 64-hex per-login secret the client
 must echo in the header `X-Candy-Code-Auth` on every ticket mint and every
 cookie-authenticated `/api/*` POST; a request without the matching secret is
-refused `401` and burns a lockout strike (ISS-007).
+refused `401` and burns a lockout strike.
 
 | Flag | Default | Meaning |
 |---|---|---|
@@ -259,7 +259,7 @@ fingerprint. A signed-in browser session that goes
 unused for the cookie lifetime (7 d sliding, stamped on each authenticated
 request) has its open sockets swept shut with close code `4001` — "your sign-in
 expired"; logging out revokes instantly and closes every WebSocket bound to the
-session the same way (ISS-009).
+session the same way.
 
 **Scripts and tools** authenticate directly:
 
@@ -278,9 +278,9 @@ owner. A non-upgrade `GET /ws` is answered `426` before auth and never counts.
 Failed ticket presentations count only on a real WebSocket upgrade with a
 matching `Origin` — cross-site probes (`<img src=…/ws?ticket=bogus>`) get
 their `401`/`426` for free; junk cookie attempts always count. The strike that
-trips a lockout is logged once (ISS-008).
+trips a lockout is logged once.
 
-**Ingress hardening (ISS-055).** `ClientAddressGuard` (`--allowed-ips` /
+**Ingress hardening.** `ClientAddressGuard` (`--allowed-ips` /
 `--require-token`) and the `Host` check run immediately after header parsing,
 before any body is buffered. Every request gets a 10 s header/body read
 deadline — a stalled body is answered `408` with `Connection: close` and the
@@ -296,7 +296,7 @@ single address may hold at most 16 simultaneous connections; more are refused
 | `POST /api/login` | none (rate limited) | `{"code"}` or `{"token"}` → `{"ok": true, "loginSecret": "<64-hex>"}` + the session cookie; wrong → `401` |
 | `POST /api/ticket` | session cookie + `X-Candy-Code-Auth` secret | `{"ticket", "expiresInSeconds": 30}`; a bearer client gets `400` (it needs no ticket) |
 | `POST /api/logout` | any | revokes the session, closes every WebSocket bound to it with close code `4001`, and clears the cookie |
-| `POST /api/hooks/{name}` | the `webhooks` user-config secret in the `x-candy-code-hook` header (constant-time; wrong ones lock out per hook and address) | AUT-6: the body (≤ 64 KiB) is fence-escaped as untrusted input and spliced into the hook's configured prompt at `{{payload}}` — or appended below a plain label — and admitted through the same background door `bg.spawn` uses; `{"ok": true, "bgId": …}` on admission, `429` over the configured per-minute rate, `503` if the turn cannot start. Mounted only when `webhooks` names the hook: unconfigured, the path 404s like any unknown endpoint. Bypass-class permission modes are refused for hooks at launch — a webhook has no one to answer an ask. |
+| `POST /api/hooks/{name}` | the `webhooks` user-config secret in the `x-candy-code-hook` header (constant-time; wrong ones lock out per hook and address) | the body (≤ 64 KiB) is fence-escaped as untrusted input and spliced into the hook's configured prompt at `{{payload}}` — or appended below a plain label — and admitted through the same background door `bg.spawn` uses; `{"ok": true, "bgId": …}` on admission, `429` over the configured per-minute rate, `503` if the turn cannot start. Mounted only when `webhooks` names the hook: unconfigured, the path 404s like any unknown endpoint. Bypass-class permission modes are refused for hooks at launch — a webhook has no one to answer an ask. |
 | `GET /ws` | ticket, bearer or token subprotocol — never the cookie alone, which a browser attaches by itself | the WebSocket upgrade; `Origin` is checked, and a ticket only opens the socket for the login secret that minted it |
 | anything else | none | the web UI's files (`GET`/`HEAD` only) |
 
@@ -305,7 +305,7 @@ Refusals are JSON: `{"error": {"kind": "…", "message": "…"}}`. Clients branc
 `subprotocol_required`, `not_found`, `hook_unavailable`, …), never on the
 message.
 
-AUT-6 covers **inbound** delivery only; there is no outbound webhook (the
+Webhook delivery covers **inbound** only; there is no outbound webhook (the
 server posting events to external URLs) in this build — deferred by design, so
 the first webhook surface is the one an operator explicitly opens.
 
@@ -476,7 +476,7 @@ it and the two tables below are generated from the code
 | `session.rename` | write | yes | `sessionId`, `name` | Rename a session. |
 | `session.send` | write | yes | `sessionId`, `text` | Send a prompt: start a turn, or queue / steer / interrupt the running one. |
 | `session.setMode` | write | yes | `sessionId`, `permissionMode` | The permission mode the session's next turns run in. |
-| `session.share` | write | yes | `sessionId` | Publish an HTML snapshot of a session as a self-hosted share page at /s/{token} (SES-3). |
+| `session.share` | write | yes | `sessionId` | Publish an HTML snapshot of a session as a self-hosted share page at /s/{token}. |
 | `session.subscribe` | read |  | `sessionId` | Follow a session's events from a cursor (replay) or from a snapshot; snapshotLimit pages the reset snapshot. |
 | `session.unshare` | write | yes | `token` | Revoke a share page by token; it 404s from its next request. |
 | `session.unsubscribe` | read |  | `sessionId` | Stop following a session. |
@@ -574,8 +574,7 @@ Idle, a prompt starts a turn (`admitted: "started"`, with its `turnId`), or is
 parked behind a hook or command file that runs in a child
 (`admitted: "pending"`). A prompt that resolves to a handled command — a
 slash command or a `!bang` run — answers `admitted: "handled"`: the command
-never becomes a model turn, so the answer is an admission, not `-32009`
-(ISS-056); every row it saves arrives as `message.created`, and a `!bang`
+never becomes a model turn, so the answer is an admission, not `-32009`; every row it saves arrives as `message.created`, and a `!bang`
 additionally brackets its run with `session.status` busy → idle. A prompt the
 session refuses — the spend cap, an empty command expansion — is `-32009`
 `refused` with the reason. `server.maxConcurrentTurns` (4) caps the turns running at
@@ -989,7 +988,7 @@ What runs where:
 - **Quitting detaches.** A turn still running goes on, its events in the
   session's log for whoever subscribes next.
 
-A dropped socket is not the end of the attachment (ISS-114). The window redials
+A dropped socket is not the end of the attachment. The window redials
 with exponential backoff — first after 0.25 s, each wait doubling up to 4 s,
 twelve attempts in all — and re-says `server.hello` with
 `resume: {sessionId: cursor}`; the server re-subscribes it and replays whatever

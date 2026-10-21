@@ -17,7 +17,7 @@ happens at launch, before any tool call and in every permission mode.
 `mcpServerInventory()` and `candy-code mcp list` all come through it, so the
 listing can never report a verdict the launch does not act on. The same rule
 holds entry by entry: an entry that is not a named server object is listed with
-the launch's own refusal sentence (ISS-091) — the text arm says so on stderr and
+the launch's own refusal sentence — the text arm says so on stderr and
 the JSON arm carries it under `skipped`, so a typo costs a line instead of
 vanishing (N-2). It returns one of five statuses:
 
@@ -58,7 +58,7 @@ can, once arbitrary shell has run as you. The property is narrower and is the
 one the gate needs: the decision is yours, and it is made before the untrusted
 content is running.
 
-### Trust covers the servers, not the path (audit MCP-5)
+### Trust covers the servers, not the path
 
 A root in `trustedProjectMcp` used to be the whole decision: whatever
 `.mcp.json` said at the next launch was started. So a `git pull`, a branch
@@ -93,7 +93,7 @@ call, with no new consent. The grant now binds to each server:
   `trustedProjectMcp` when it is missing, and records the file as it is now.
   It starts nothing; `--output-format json` returns the same report.
 
-### Two tiers, one precedence (MCP-3)
+### Two tiers, one precedence
 
 There are two files, and this section is the day the old sentence calling the
 second one's absence "a decision" was rewritten — your own
@@ -130,7 +130,7 @@ answered here:
   `loadConfig()` off disk. What refuses changed bytes is the launch-digest
   drift gate in front of that pair: if either file moved since the launch
   digest, the gate prints its verdict and the pair never runs, so new bytes
-  are never honoured — the E703-α freeze rests on the gate, not on a
+  are never honoured — the freeze rule rests on the gate, not on a
   never-re-read mechanism. The `CANDY_CODE_MCP_DISABLE`
   switch answers for both tiers at once.
 
@@ -218,7 +218,7 @@ census, table first:
 The `sse` row has an interesting history: this transport is why
 `startServer()`'s guard is as wide as it is — before the widening, one
 unrecognized `sse` entry disabled every server listed after it in the same
-file, with no report at all (MCP-4 later built the transport the spec named).
+file, with no report at all — the transport the spec named arrived later.
 An `http` entry whose URL happens to end in `/sse` is unaffected — the
 transport is the `type`, never the URL. Note also that the `GET` opens its own
 socket and does not consult `HTTP_PROXY`/`HTTPS_PROXY` (unlike the Guzzle POST
@@ -272,7 +272,7 @@ connection stays usable and the late reply, if any, is discarded. Only a
 positive JSON number overrides the default: a string, `0` or a negative takes
 it rather than setting a zero bound. Like `startTimeout` it is left out of the
 trust
-fingerprint, so tuning it re-prompts nothing. Since ISS-042 it is read for
+fingerprint, so tuning it re-prompts nothing. It is read for
 `http` entries too: an http `tools/call` now carries the entry's `toolTimeout`
 (default `120.0`, the same number as stdio's) instead of the shared client's
 fixed 30 s, every http leg additionally gets a 10 s connect bound, and a call
@@ -284,8 +284,8 @@ server's `initialize` and start-time `tools/list` each wait the same fixed
 `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS` budget, and nothing in the
 entry or the operator tier changes it.
 
-Launch holds are additive and each is bounded — this is the accepted shape of
-ISS-093(f), not an oversight: `McpClient::startServers()` walks the entries
+Launch holds are additive and each is bounded — this is the accepted shape of the rule,
+not an oversight: `McpClient::startServers()` walks the entries
 serially, so a cold `npx` server costs its `startTimeout` before the next
 entry is tried, and several slow entries can hold the first frame for that
 many bounds stacked. An `http` entry pays the same walk with its handshake cut
@@ -305,8 +305,7 @@ the exception carries the server's error code and message plus its stderr
 tail. In `/mcp` such a server shows ` · not up`, never ` · up 0 tools`.
 
 When the start-time `tools/list` is paginated, the `stdio`, `http` and `sse`
-transports all follow the cursor chain to the end before caching the roster
-(ISS-093(b)): every
+transports all follow the cursor chain to the end before caching the roster: every
 `nextCursor` is walked page by page, and a cursor that repeats or a roster
 still being cut at the thirty-two page ceiling is a start failure. A mid-walk
 error is treated exactly like a front one — a partial roster never masquerades
@@ -329,7 +328,7 @@ transport the rest of the way:
   `MCP servers refused this launch for credentials: <name> (HTTP 401): run
   \`candy-code mcp auth login <url>\`, then restart`, naming the URL the
   credential store keys on; in `/mcp` the server keeps its declared row with
-  an `auth-required 401` marker instead of vanishing (ISS-042). A static
+  an `auth-required 401` marker instead of vanishing. A static
   `Authorization` header that earns the 401 reads the same way — the remedy
   there is the header, and the notice's login command is simply the wrong
   door, which is still louder than silence.
@@ -396,7 +395,7 @@ map of an `http` or `sse` server. It is *not* applied to `command`, `args`, `url
 
 One quoted pattern (`/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/`) walks the
 value as a **substring**, so `"Bearer ${TOKEN}"` interpolates in place —
-ISS-093(e) replaced the whole-value form that passed such a header through
+The whole-value form that passed such a header through was replaced
 literally. A reference whose name leaves that shell alphabet (`${BAD NAME}`)
 and bare `$` prose stay literal, unparsed.
 
@@ -579,7 +578,7 @@ the same pipes (or, for `http`, the same `Mcp-Session-Id`). That is deliberate:
 re-spawning per process would relaunch an `npx` server on every turn and throw
 away whatever state the server keeps (a browser session, a memory store).
 
-Sharing is made safe in the transport (audit B1/AG-1):
+Sharing is made safe in the transport:
 
 - **Request ids are unique across processes.** The process that started the
   server sends `0, 1, 2, …`; any forked process sends `<pid>-<nonce>-<n>`, so a
@@ -669,7 +668,7 @@ first builds the MCP client, so a change applies on restart:
 
 ---
 
-## Deferred schemas: `mcp_list` and `mcp_call` (MCP-7)
+## Deferred schemas: `mcp_list` and `mcp_call`
 
 A server's full `tools/list` schema is priced in tokens — name, description and
 `inputSchema`, in the same shape every other tool is costed. When one server's
@@ -709,7 +708,7 @@ floor; a small one is not taxed for a noisy neighbour.
 **The roster is frozen at launch, like everything else MCP.** The split is
 computed once, on the first MCP tool build of the session, and memoised —
 mid-session edits to `mcp.json` change the *next* launch, not this one (the
-E703-alpha law, applied to the dispatcher). `mcp_call` refuses any name not
+the same freeze law, applied to the dispatcher). `mcp_call` refuses any name not
 on the frozen list, even a server added minutes ago, and points at `mcp_list`
 to discover the real names.
 

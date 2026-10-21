@@ -947,7 +947,7 @@ them on this tree:
 | `custom` | `CustomProvider` |
 
 Two rows are easy to get wrong, so they are worth stating flatly.
-`anthropic` does **not** go through `ClaudeCodeProvider`, and since ISS-023 it
+`anthropic` does **not** go through `ClaudeCodeProvider`, and it
 no longer goes through `CustomProvider` either:
 `ProviderFactory::createAnthropic()` returns the dedicated `AnthropicProvider`,
 whose client carries `x-api-key` + `anthropic-version` — the Messages API

