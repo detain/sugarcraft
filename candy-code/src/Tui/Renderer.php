@@ -18,6 +18,7 @@ use SugarCraft\Code\App\App;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Providers\ReportsServedModel;
 use SugarCraft\Code\Renderer as LiveRenderer;
+use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\Components\ChatPane;
 use SugarCraft\Code\Tui\Components\InputPane;
 use SugarCraft\Code\Tui\Components\SkillsPane;
@@ -722,7 +723,7 @@ final class Renderer
         // taking part in the layout above, so opening a menu cannot reflow the
         // panes underneath it. Applied after the clips so it is never the thing
         // that gets trimmed away.
-        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($a->theme()), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
+        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($a->theme()), MenuBar::activeMenuColumn(), self::lineCount($menuBar), $a->theme());
 
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
@@ -951,7 +952,7 @@ final class Renderer
 
         $joined = implode("\n", $parts);
         $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
-        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($theme), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
+        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($theme), MenuBar::activeMenuColumn(), self::lineCount($menuBar), $theme);
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
@@ -1062,7 +1063,7 @@ final class Renderer
 
         $joined = implode("\n", $parts);
         $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
-        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($theme), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
+        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($theme), MenuBar::activeMenuColumn(), self::lineCount($menuBar), $theme);
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
@@ -2125,24 +2126,62 @@ final class Renderer
      * geometry the layout gave them and the zone origin computed after this
      * stays correct.
      *
+     * When the panel is taller than the rows left below its anchor the
+     * last available row carries a faint `…` continuation instead of the
+     * panel vanishing mid-list into the frame's bottom edge — silent
+     * truncation made a clipped menu indistinguishable from a short one.
+     *
      * @param list<string> $panel
      */
-    private static function overlayDropdown(string $frame, array $panel, int $col, int $topRow): string
+    private static function overlayDropdown(string $frame, array $panel, int $col, int $topRow, Theme $theme): string
     {
         if ($panel === []) {
             return $frame;
         }
 
         $lines = explode("\n", $frame);
-        foreach ($panel as $i => $panelLine) {
-            $row = $topRow + $i;
-            if (!isset($lines[$row])) {
-                break;
-            }
-            $lines[$row] = self::spliceInto($lines[$row], $panelLine, $col);
+        $budget = count($lines) - $topRow;
+
+        if ($budget <= 0) {
+            return $frame;
+        }
+
+        $clipped = count($panel) > $budget;
+        $painted = $clipped ? $budget - 1 : count($panel);
+
+        for ($i = 0; $i < $painted; ++$i) {
+            $lines[$topRow + $i] = self::spliceInto($lines[$topRow + $i], $panel[$i], $col);
+        }
+
+        if ($clipped) {
+            $lines[$topRow + $painted] = self::spliceInto(
+                $lines[$topRow + $painted],
+                self::dropdownOverflowLine($panel, $theme),
+                $col
+            );
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * The faint `…` continuation row closing a dropdown clipped by the
+     * frame's bottom edge: a content row of the panel's own box width —
+     * `│ …` + padding + `│` — painted in the border colour, so it reads as
+     * "this list continues below the screen", the difference between a
+     * clipped menu and a broken one.
+     */
+    private static function dropdownOverflowLine(array $panel, Theme $theme): string
+    {
+        // Every panel line shares the box width (dropdownLines pads them);
+        // Width::string is ANSI-aware, so the styled top border measures
+        // the true cell count. The row keeps the box's 4 chrome cells
+        // ('│ ' … ' │') and spends the inner width on the ellipsis.
+        $inner = Width::string($panel[0]) - 4;
+
+        return Style::new()->foreground($theme->border)->render(
+            '│ …' . str_repeat(' ', max(0, $inner - 1)) . ' │'
+        );
     }
 
     /**

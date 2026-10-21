@@ -8,10 +8,16 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Tui\Components\MenuBar;
+use SugarCraft\Code\Tui\Renderer as TuiRenderer;
+use SugarCraft\Core\Util\Ansi;
 
 final class MenuDropdownTest extends TestCase
 {
-    protected function tearDown(): void { MenuBar::closeMenu(); }
+    protected function tearDown(): void
+    {
+        MenuBar::closeMenu();
+        TuiRenderer::setSize(200, 60); // leave the process-global size cache as found (round-61 flake law)
+    }
 
     public function testDropdownAppearsInTheShellFrameWhenOpen(): void
     {
@@ -107,5 +113,82 @@ final class MenuDropdownTest extends TestCase
             preg_replace('/[^\e\[0-9;m]/', '', $rows[3]),
             'non-cursor rows must all be painted the same way',
         );
+    }
+
+    /**
+     * A dropdown taller than the frame used to vanish into the bottom edge
+     * silently: the rows past the last line were simply never painted, so a
+     * clipped menu was indistinguishable from a short one. Now the list
+     * paints down to the row above the frame's last, and the last row
+     * carries a faint '…' continuation inside the panel's own box — while
+     * the frame keeps its exact height, because the overlay floats over the
+     * frame and never reflows it.
+     */
+    public function testADropdownTallerThanTheFrameAnnouncesItsOwnClipping(): void
+    {
+        $panel = $this->openChatMenuPanel();
+        $rows = count($panel) - 2; // budget below the anchor is short by three items
+
+        TuiRenderer::setSize(100, $rows);
+        $body = Ansi::strip(TuiRenderer::renderView($this->menuApp(), 100, $rows)->body);
+        $lines = explode("\n", $body);
+
+        $this->assertCount($rows, $lines, 'the dropdown must overlay the frame, never change its row count');
+
+        $last = (string) end($lines);
+        $this->assertMatchesRegularExpression('/│ …/u', $last, "the clipped panel must announce the cut on the frame's last row: <{$last}>");
+
+        // It paints from the top: the first item survives, the tail does not.
+        $first = $this->dropdownLabel($panel[1]);
+        $final = $this->dropdownLabel($panel[count($panel) - 2]);
+        $this->assertStringContainsString($first, $body, 'the panel must still paint from its head');
+        $this->assertStringNotContainsString($final, $body, "the clipped tail ({$final}) must not be painted past the frame");
+    }
+
+    /**
+     * The other half of the pair: when the whole panel fits, no ellipsis is
+     * invented and every item is visible — the indicator is a clipping
+     * announcement, not panel furniture.
+     */
+    public function testADropdownThatFitsCarriesNoOverflowIndicator(): void
+    {
+        $panel = $this->openChatMenuPanel();
+        $rows = count($panel) + 6; // the same panel, comfortably hostable
+
+        TuiRenderer::setSize(100, $rows);
+        $body = Ansi::strip(TuiRenderer::renderView($this->menuApp(), 100, $rows)->body);
+
+        $this->assertDoesNotMatchRegularExpression('/│ …/u', $body, 'a panel that fits must not announce a cut');
+        $this->assertStringContainsString($this->dropdownLabel($panel[count($panel) - 2]), $body, 'every item of a fitting panel must be painted');
+    }
+
+    private function menuApp(): App
+    {
+        $p = $this->createMock(ProviderInterface::class);
+        $p->method('name')->willReturn('stub');
+
+        return App::new($p, 'm')->withChat(new Chat(history: [Message::user('hi')]));
+    }
+
+    /**
+     * @return list<string> the open menu's styled panel lines, top border to bottom border
+     */
+    private function openChatMenuPanel(): array
+    {
+        MenuBar::closeMenu();
+        MenuBar::openMenu(1);
+        $panel = MenuBar::renderDropdown($this->menuApp()->theme());
+        $this->assertGreaterThanOrEqual(6, count($panel), 'the menu under test needs enough items to overflow a short frame');
+
+        return $panel;
+    }
+
+    /** The plain label carried by one styled panel item row ('│ label …pad │'). */
+    private function dropdownLabel(string $row): string
+    {
+        $plain = Ansi::strip($row);
+        $inner = preg_replace(['/^\x{2502} /u', '/\x{2502}$/u'], '', $plain);
+
+        return rtrim((string) $inner);
     }
 }
