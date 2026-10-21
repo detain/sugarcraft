@@ -1046,7 +1046,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      * `hook_event_name`, `tool_name`, `tool_input`, `tool_response`. Hook
      * scripts in the wild are written against these six keys — this class
      * already speaks Claude Code's exit-code dialect (0/1/2, plus ASK/MODIFY),
-     * and a script pointed at sugar-crush that found its stdin a closed pipe
+     * and a script pointed at sugar-crush that found its stdin a closed pipe // @rename-keep
      * and an empty object in `$CRUSH_TOOL_INPUT_FILE` had ONE honest reading:
      * the guard saw nothing. The `CRUSH_*` environment variables all stay —
      * this adds the portable channel, it does not subtract the native one.
