@@ -285,6 +285,7 @@ candy-code/tests/Cli/SwallowingCatchSrcCensusTest.php	0.968	3
 candy-code/tests/Cli/CliLangCatalogueTest.php	0.966	8
 candy-code/tests/Cli/SessionLaunchFlagsTest.php	0.961	27
 candy-code/tests/Cli/ProjectTierRefusalInventoryTest.php	0.960	15
+candy-code/tests/Cli/ArgvParserDuplicatePromptTest.php	0.940	5
 candy-code/tests/Tools/TaskToolResumeFinishedRunTest.php	0.937	6
 candy-code/tests/Sessions/BackgroundSupervisorAskChannelTest.php	0.934	9
 candy-code/tests/Tools/SpillCapAccountingTest.php	0.929	4
@@ -318,6 +319,7 @@ candy-code/tests/Providers/CodexProviderTest.php	0.792	14
 candy-code/tests/Server/FsSearchTest.php	0.789	7
 candy-code/tests/RendererImageTest.php	0.778	17
 candy-code/tests/Backend/CommandBackendTest.php	0.776	15
+candy-code/tests/Cli/NonInteractiveBackendErrorExitTest.php	0.770	3
 candy-code/tests/Cli/NonInteractiveStopTrailersTest.php	0.762	8
 candy-code/tests/Integration/ForeignSkillWiringTest.php	0.748	10
 candy-code/tests/Backend/AwaitPromiseDiagnosticArmTest.php	0.744	11
@@ -328,6 +330,7 @@ candy-code/tests/App/DockDragBytePathTest.php	0.732	14
 candy-code/tests/Tools/BuiltIn/UnifiedDiffBoundedMemoryTest.php	0.729	5
 candy-code/tests/Chat/McpLoginForkTest.php	0.728	8
 candy-code/tests/Backend/TurnInboxDrainTest.php	0.727	8
+candy-code/tests/Cli/DoctorBypassNoticeProbeTest.php	0.726	4
 candy-code/tests/Session/SessionForkTest.php	0.724	10
 candy-code/tests/Hooks/BuiltIn/PostEditLintHookTest.php	0.722	17
 candy-code/tests/Chat/AutomaticCompactionModelSummaryTest.php	0.713	37
@@ -371,6 +374,7 @@ candy-code/tests/Tools/PtyShimAutoloadResolutionTest.php	0.550	8
 candy-code/tests/Cli/BootstrapPermissionGateTest.php	0.547	65
 candy-code/tests/Host/ModelHostPersistenceTest.php	0.546	6
 candy-code/tests/Tools/BuiltIn/GrepEngineDifferentialTest.php	0.537	25
+candy-code/tests/Cli/NonInteractiveErrorLabelTest.php	0.534	5
 candy-code/tests/Runtime/ParallelGrandchildAskRelayTest.php	0.531	10
 candy-code/tests/Tools/TaskToolPromoteToBackgroundTest.php	0.529	3
 candy-code/tests/Agents/TeamTest.php	0.528	28
@@ -474,10 +478,15 @@ candy-code/tests/Commands/McpAuthCommandDiscoveryTest.php	0.306	6
 candy-code/tests/Commands/UsageCommandTest.php	0.306	11
 candy-code/tests/Renderer/ClipToWidthCellDisciplineTest.php	0.304	7
 candy-code/tests/Cli/BootstrapTrustGateSelfGrantTest.php	0.303	8
+candy-code/tests/Cli/BootstrapTerminalGuidanceNoticeTest.php	0.302	15
 candy-code/tests/Agents/ForeignAgentPresetRegistryTest.php	0.300	45
+candy-code/tests/Cli/NonInteractiveTextSanitizationTest.php	0.300	4
+candy-code/tests/Cli/ClaudeSettingsHooksSkipRecordTest.php	0.299	4
 candy-code/tests/MCP/OAuthClientRegistrationTest.php	0.298	48
 candy-code/tests/Tools/IgnoreRulesBacktrackingTest.php	0.297	112
+candy-code/tests/Cli/BinTerminalGuardPidTest.php	0.296	3
 candy-code/tests/Support/PtyDriverRetainTest.php	0.294	11
+candy-code/tests/Cli/BootstrapHomeStandInNoticeTest.php	0.293	4
 candy-code/tests/Tools/TaskToolOutputFenceTest.php	0.288	6
 candy-code/tests/Renderer/SlashMenuSourceBadgeTest.php	0.287	5
 candy-code/tests/Backend/ChildChannelVerdictTest.php	0.286	2
@@ -1282,7 +1291,6 @@ candy-code/tests/Server/ClientAddressGuardTest.php	0.002	10
 candy-code/tests/Sessions/BackgroundSessionTest.php	0.002	14
 candy-code/tests/Support/SiblingSpendLedgerTest.php	0.002	6
 candy-code/tests/Todo/TodoReminderTest.php	0.002	10
-candy-code/tests/ToolRegistryTest.php	0.002	17
 candy-code/tests/Tools/BuiltIn/PruneToolTest.php	0.002	8
 candy-code/tests/Tools/BuiltIn/RecallToolTest.php	0.002	10
 candy-code/tests/Tools/BuiltIn/SkillToolTest.php	0.002	11
