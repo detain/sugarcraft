@@ -2097,7 +2097,7 @@ final class KeyHelpTest extends TestCase
      * `ChatInputCursorTest` for a reason that is about measurement, not tidiness:
      * this file is one of the three that {@see
      * testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg()} pins
-     * as the domain `Chat::requestPermission()`'s mutation table was measured
+     * as the domain `PermissionPrompt::armAsk()`'s mutation table was measured
      * over. Adding a fourth constructing file would silently widen that domain
      * and stale every figure in that table; adding one prompt-dependent test to
      * a file already inside it is exactly the growth that table's own caveat
@@ -3015,7 +3015,7 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * `Chat::requestPermission()`'s generation guard, driven.
+     * `PermissionPrompt::armAsk()`'s generation guard, driven.
      *
      * Domain — and it is narrower than this test used to claim: a HAND-BUILT
      * `PermissionRequestMsg`. It has to be. Measured, both internal producers
@@ -3048,7 +3048,7 @@ final class KeyHelpTest extends TestCase
      * reason the trio counts three paragraphs up are: it was correct when written,
      * fed by a file this round is not measuring, and correct-but-fragile is the
      * shape every figure in this neighbourhood has failed in. What those tests
-     * cannot do is make the comparison true. See `Chat::requestPermission()`'s own
+     * cannot do is make the comparison true. See `PermissionPrompt::armAsk()`'s own
      * comment for the four-mutation table. So what this pins is the guard's LOGIC,
      * not a live path.
      *
@@ -3084,7 +3084,7 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * The DOMAIN `Chat::requestPermission()`'s mutation table is measured over,
+     * The DOMAIN `PermissionPrompt::armAsk()`'s mutation table is measured over,
      * asserted instead of narrated — the third thing in that table's neighbourhood
      * to be moved out of prose, after the site count and the owning methods.
      *
@@ -3174,7 +3174,7 @@ final class KeyHelpTest extends TestCase
                 'RendererTest.php',
             ],
             $found,
-            "the set column in Chat::requestPermission()'s mutation table is exactly these files; a sixth "
+            "the set column in PermissionPrompt::armAsk()'s mutation table is exactly these files; a sixth "
             . 'one CONSTRUCTING a PermissionRequestMsg widens the universe every row of that table was '
             . 'measured over. Merely naming the class in a comment does not, which is the half the grep '
             . 'this replaces got wrong',
@@ -3432,99 +3432,124 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * The reason `Chat::requestPermission()`'s mutation table names a SITE and not
-     * just a predicate, asserted instead of narrated.
+     * The reason `PermissionPrompt::armAsk()`'s mutation table names a SITE
+     * and not just a predicate, asserted instead of narrated.
      *
      * That predicate —
-     * `$msg->generation !== null && $msg->generation !== $this->generation` —
-     * appears four times in `Chat.php`. A replace-first `sed` therefore lands in
-     * `update()`'s `AssistantMsg` arm, not in `requestPermission()`, and one
-     * review round published the wrong site's mutation figures as a refutation of
-     * the right site's: at the `AssistantMsg` arm the "drop the second conjunct"
-     * mutation leaves the trio GREEN, which reads as "the trio does not cover
-     * this" when it means "you mutated the wrong line".
+     * `$msg->generation !== null && $msg->generation !== $this->generation`
+     * (`$generation` at the armAsk() site) — appears four times across the
+     * turn-suspension pair: THREE in `Chat.php` (`update()`'s `AssistantMsg`
+     * arm, `finishToolCalls()`, `applyBackendToolEvent()`) and the fourth in
+     * `Permissions/PermissionPrompt.php::armAsk()`, lifted there from
+     * `requestPermission()` in W5-A. The scan therefore reads BOTH files —
+     * which sites own which file is asserted below, because a scan that
+     * quietly kept reading only Chat.php would stop seeing a guard that moves,
+     * the exact rot this pin exists to catch.
      *
-     * THREE of the four bodies are byte-identical apart from indentation, not all
-     * four. `applyBackendToolEvent()`'s is now distinguishable, because its arm
-     * has to bill the superseded turn's usage before it drops the events: a tool
-     * turn superseded mid-queue never reaches `update()`'s accounting arm at all,
-     * since this guard breaks the re-dispatch chain and no `AssistantMsg` is ever
-     * synthesised. So the hazard is narrower than it was — a `sed` can no longer
-     * hit that one by accident — and the count that matters for the table is the
-     * three that remain ambiguous.
+     * Why sites are named at all: a replace-first `sed` over Chat.php lands
+     * in `update()`'s `AssistantMsg` arm, not at the guard's live home, and
+     * one review round published the wrong site's mutation figures as a
+     * refutation of the right site's: at the `AssistantMsg` arm the "drop the
+     * second conjunct" mutation leaves the trio GREEN, which reads as "the
+     * trio does not cover this" when it means "you mutated the wrong line".
+     *
+     * Only TWO of the four bodies are byte-identical apart from indentation:
+     * the `AssistantMsg` arm and `finishToolCalls()` (`return [$this, null];`).
+     * `armAsk()` returns bare `null` — Chat turns that into the same
+     * `[$this, null]` — and `applyBackendToolEvent()`'s is distinguishable
+     * because its arm has to bill the superseded turn's usage before it drops
+     * the events: a tool turn superseded mid-queue never reaches `update()`'s
+     * accounting arm at all, since this guard breaks the re-dispatch chain and
+     * no `AssistantMsg` is ever synthesised. The count that matters for the
+     * table is the two that remain ambiguous.
      *
      * So this pins the hazard itself: how many copies there are, which method
-     * owns each, and which of them are still mutually indistinguishable. A fifth
-     * copy, a copy moving to another method, or one of the three growing a body
-     * of its own changes what "the guard" means in that table and must force it
-     * to be re-read.
+     * owns each, in which file, and which of them are still mutually
+     * indistinguishable. A fifth copy, a copy moving to another method or
+     * file, or one of the two growing a body of its own changes what "the
+     * guard" means in that table and must force it to be re-read.
      */
     public function testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods(): void
     {
-        $file = \dirname(__DIR__, 2) . '/src/Chat.php';
-        $lines = explode("\n", (string) file_get_contents($file));
-        // The whole statement, and comment lines skipped: the method's own comment
-        // quotes the predicate twice (once as the warning, once as a reproducing
-        // grep), so a substring match over every line counts prose as code.
-        $needle = 'if ($msg->generation !== null && $msg->generation !== $this->generation) {';
+        $chatLines = explode("\n", (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Chat.php'));
+        $promptLines = explode("\n", (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Permissions/PermissionPrompt.php'));
+        // Both spellings of the guard share this prefix, and comment lines are
+        // skipped: the armAsk() comment quotes the predicate twice (once as
+        // the warning, once as a reproducing grep), so a substring match over
+        // every line counts prose as code.
+        $prefix = 'if ($msg->generation !== null && $msg->generation !== $';
 
-        /** @var array<string, list<int>> $byMethod */
-        $byMethod = [];
-        foreach ($lines as $i => $line) {
-            $trimmed = ltrim($line);
-            if (!str_starts_with($trimmed, $needle) || str_starts_with($trimmed, '//')) {
-                continue;
-            }
-            $method = null;
-            for ($j = $i; $j >= 0 && $method === null; $j--) {
-                if (preg_match('/function\s+(\w+)\s*\(/', $lines[$j], $m) === 1) {
-                    $method = $m[1];
+        /** @var array<string, array{0: string, 1: int}> $site method => (file, line index) */
+        $site = [];
+        foreach (['Chat' => $chatLines, 'Prompt' => $promptLines] as $label => $lines) {
+            foreach ($lines as $i => $line) {
+                $trimmed = ltrim($line);
+                if (!str_starts_with($trimmed, $prefix) || str_starts_with($trimmed, '//')) {
+                    continue;
                 }
+                $method = null;
+                for ($j = $i; $j >= 0 && $method === null; $j--) {
+                    if (preg_match('/function\s+(\w+)\s*\(/', $lines[$j], $m) === 1) {
+                        $method = $m[1];
+                    }
+                }
+                $this->assertSame(null, $site[$method] ?? null, "one copy per method ({$method} has a second copy)");
+                $site[$method] = [$label, $i];
             }
-            $byMethod[(string) $method][] = $i + 1;
         }
 
-        // SORTED, for the same reason `ksort($disagreesOnSubmit)` one method away
-        // is: `$byMethod` is keyed by file-scan order, so asserting the raw
+        // SORTED, for the same reason `ksort($disagreesOnSubmit)` one method
+        // away is: keyed by file-scan order, so asserting the raw
         // array_keys() asserted an ORDERED list while the message called it a
         // SET. Measured on the unsorted version: swapping the whole texts of
         // finishToolCalls() and applyBackendToolEvent() in Chat.php — a pure
         // relocation, zero behaviour change, the guard's own text untouched —
-        // reddened this line while RendererTest + ChatTest + Commands/KeyBindingDriftTest
-        // stayed green. That is the third order artifact found in this file, and it
-        // mattered more than tidiness: the mutation table in
-        // Chat::requestPermission() rests on "raw = the behavioural column plus
-        // exactly one, and that one is THIS test, because you edited the guard's
-        // text". A test that also fires when you edited nothing about the guard
-        // breaks that rule.
-        ksort($byMethod, SORT_STRING);
+        // reddened this line while RendererTest + ChatTest +
+        // Commands/KeyBindingDriftTest stayed green. That is the third order
+        // artifact found in this file, and it mattered more than tidiness: the
+        // mutation table in PermissionPrompt::armAsk() rests on "raw = the
+        // behavioural column plus exactly one, and that one is THIS test,
+        // because you edited the guard's text". A test that also fires when
+        // you edited nothing about the guard breaks that rule.
+        ksort($site, SORT_STRING);
         $this->assertSame(
-            ['applyBackendToolEvent', 'finishToolCalls', 'requestPermission', 'route'],
-            array_keys($byMethod),
+            ['applyBackendToolEvent', 'armAsk', 'finishToolCalls', 'route'],
+            array_keys($site),
             'the generation guard is spelled out per-site; if the SET of sites changed, '
-            . "Chat::requestPermission()'s mutation table names one of them and must be re-measured. "
+            . "PermissionPrompt::armAsk()'s mutation table names one of them and must be re-measured. "
             . 'Byte-sorted, so MOVING a method cannot flip it',
         );
-        foreach ($byMethod as $method => $at) {
-            $this->assertCount(1, $at, "one copy per method ({$method} has " . \count($at) . ')');
+        $this->assertSame(
+            'Prompt',
+            $site['armAsk'][0],
+            'the armAsk() copy of the guard lives in Permissions/PermissionPrompt.php — moved, not duplicated',
+        );
+        foreach (['applyBackendToolEvent', 'finishToolCalls', 'route'] as $owned) {
+            $this->assertSame('Chat', $site[$owned][0], "{$owned}()'s guard still lives in Chat.php");
         }
 
         // And WHICH of the copies are indistinguishable by text, which is the
-        // actual hazard: a table that named only the predicate would be ambiguous
-        // between exactly those.
-        $bare = $needle . '|return [$this, null];|}';
+        // actual hazard: a table that named only the predicate would be
+        // ambiguous between exactly those.
+        $bare = 'if ($msg->generation !== null && $msg->generation !== $this->generation) {|return [$this, null];|}';
         $bodies = [];
-        foreach ($byMethod as $method => $at) {
-            $bodies[$method] = implode('|', array_map('trim', array_slice($lines, $at[0] - 1, 3)));
+        foreach ($site as $method => [$label, $i]) {
+            $src = $label === 'Chat' ? $chatLines : $promptLines;
+            $bodies[$method] = implode('|', array_map('trim', array_slice($src, $i, 3)));
         }
-
         $ambiguous = array_keys(array_filter($bodies, static fn(string $body): bool => $body === $bare));
         $this->assertSame(
-            ['finishToolCalls', 'requestPermission', 'route'],
+            ['finishToolCalls', 'route'],
             $ambiguous,
             'these are the guard sites a mutation cannot tell apart by text, so a mutation aimed at one of '
             . 'them must be anchored by line number. If this set changed, re-read the table in '
-            . 'Chat::requestPermission()',
+            . 'PermissionPrompt::armAsk()',
+        );
+        $this->assertSame(
+            'if ($msg->generation !== null && $msg->generation !== $generation) {|return null;|}',
+            $bodies['armAsk'],
+            "armAsk() compares the stamp to its \$generation parameter and returns a bare null — Chat::requestPermission()"
+            . ' turns exactly that into the [$this, null] the guard always returned',
         );
         $this->assertNotSame(
             $bare,
@@ -3535,7 +3560,7 @@ final class KeyHelpTest extends TestCase
         );
         $this->assertStringContainsString(
             'accountUsage($msg->message->usage)',
-            implode("\n", array_slice($lines, $byMethod['applyBackendToolEvent'][0] - 1, 12)),
+            implode("\n", array_slice($chatLines, $site['applyBackendToolEvent'][1], 12)),
             'and it must be the accounting that makes it different, not incidental drift',
         );
     }

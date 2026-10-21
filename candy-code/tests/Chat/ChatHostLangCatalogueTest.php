@@ -11,7 +11,8 @@ use SugarCraft\Code\Lang;
 /**
  * The `chat.` / `host.` catalogue (audit 15b-14, step 15b-14-4a) agrees with
  * its call sites in `src/Chat.php`, `src/Host/**`, the grant scopes
- * `src/Permissions/SessionPermissionMemo.php` names for Chat's modal, and —
+ * `src/Permissions/SessionPermissionMemo.php` names for Chat's modal, the prompt
+ * titles `src/Permissions/PermissionPrompt.php` builds for it (W5-A), and —
  * since ISS-070 — `src/Backend/EngineBackend.php`, which records one
  * catalogue row of its own onto the notice seam the host drains, joined for
  * VIS-6 by `src/Runtime.php`, whose recall row rides that same seam.
@@ -84,7 +85,7 @@ final class ChatHostLangCatalogueTest extends TestCase
         }
 
         $unused = array_values(array_diff(array_keys($this->catalogue()), array_keys($asked)));
-        self::assertSame([], $unused, 'chat./host. entries nothing in src/Chat.php, src/Host, SessionPermissionMemo, PendingAsk, EngineBackend or GoalLoop asks for');
+        self::assertSame([], $unused, 'chat./host. entries nothing in src/Chat.php, src/Host, SessionPermissionMemo, PermissionPrompt, PendingAsk, EngineBackend or GoalLoop asks for');
     }
 
     public function testTheEnglishRenderingIsTheTextTheLiteralsUsedToSpell(): void
@@ -130,7 +131,7 @@ final class ChatHostLangCatalogueTest extends TestCase
         // VIS-6: its recall row rides that same sink from the priming door.
         // GoalLoop joins for W7a-3: both hosts' goal decision table emits its
         // own chat.goal.* sentences from the one shared file.
-        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Backend/PendingAsk.php', self::SRC . '/Backend/EngineBackend.php', self::SRC . '/Runtime.php', self::SRC . '/Goal/GoalLoop.php'];
+        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Permissions/PermissionPrompt.php', self::SRC . '/Backend/PendingAsk.php', self::SRC . '/Backend/EngineBackend.php', self::SRC . '/Runtime.php', self::SRC . '/Goal/GoalLoop.php'];
         $walk = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator(self::SRC . '/Host', \FilesystemIterator::SKIP_DOTS),
         );

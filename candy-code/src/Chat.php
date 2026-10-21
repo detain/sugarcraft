@@ -4330,337 +4330,35 @@ final class Chat implements Model
      * pattern {@see waitForToolChildrenAsync()} already uses for tool
      * children.
      *
+     * W5-A: the generation guard, the origin label and the title build moved
+     * to {@see PermissionPrompt::armAsk()}; the suspend-and-arm sequence here
+     * is unchanged, value for value.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function requestPermission(PermissionRequestMsg $msg): array
     {
-        // An ASK for a turn that was abandoned (double-Escape) or otherwise
-        // superseded can still land: the PreToolUse chain that raised it ran
-        // against the generation that was current when the batch was gated.
-        // Putting its prompt up would suspend a turn nobody is waiting on, and
-        // would force inFlight true behind an overlay that OUTRANKS the prompt
-        // (see Renderer::renderView()'s chain). The message carries a
-        // generation for exactly this comparison; the AssistantMsg arm in
-        // update() is the pattern, and $generation being null still means
-        // "unstamped, apply it" there and here alike.
-        //
-        // DORMANT DEFENCE, stated as such rather than as a live path closed --
-        // the same honest form shellOwnsKeyboard()'s unobservable conjunct is
-        // documented in. Measured: the two Chat-native callers build the ASK
-        // with $this->generation on the very object they then call
-        // (beginToolCalls() and answerPermission(), and mutate() touches no
-        // 'generation' at either site), so the comparison below is
-        // tautologically FALSE at both. The THIRD constructor in `src/`, the
-        // engine path wired by roadmap 1.C-2 (pumpLiveToolEvents()), stamps
-        // the inbox entry's generation only after comparing it equal to
-        // $this->generation and answering a stale question itself -- so it
-        // cannot make the comparison true either.
-        //
-        // What that bounds is which tests can watch this guard FIRE. It does
-        // NOT bound which tests reach a STAMPED ask, and the first version of
-        // this comment claimed the second: ChatTest's whole permission suite
-        // reaches one, through exactly the two producers above. They cannot
-        // make the comparison true, which is the property -- not that they
-        // never get here. No count is given for that suite either; the
-        // previous revision said "14 ChatTest tests" and it was correct when
-        // written, which is the exact shape every stale figure in this comment
-        // has had. Rows 3 and 4 below measure it when a reader mutates.
-        //
-        // FIND THE RIGHT SITE BEFORE MUTATING. This exact predicate --
-        // `$msg->generation !== null && $msg->generation !== $this->generation`
-        // -- appears FOUR times in this file: update()'s AssistantMsg arm, this
-        // method, finishToolCalls() and applyBackendToolEvent(). THREE of the
-        // four bodies are byte-identical apart from indentation -- the first
-        // three named. applyBackendToolEvent()'s is not: its arm bills the
-        // superseded turn's usage before dropping its events, because the chain
-        // it breaks means no AssistantMsg is ever synthesised for that turn and
-        // update()'s accounting arm is never reached. So a replace-first sed
-        // lands on the AssistantMsg arm, not here; the previous revision of this
-        // table did exactly that and then recorded the wrong site's numbers as a
-        // refutation of the right ones. The table below is therefore anchored by
-        // SITE, and the mis-site's figures are kept beside it as the tell.
-        // Reproduce with
-        // `grep -nF 'generation !== null && $msg->generation !== $this->generation' src/Chat.php`.
-        //
-        // The four sites, which method owns each, and WHICH THREE are mutually
-        // indistinguishable are asserted rather than narrated, by
-        // KeyHelpTest::testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods().
-        //
-        // Mutations of the guard belonging to THIS method -- the block
-        // immediately below this comment, inside requestPermission() -- each judged
-        // by the targeted files going red. NO LINE NUMBER is given, deliberately:
-        // the previous two revisions carried one ("1175", corrected to "1220"), it
-        // was wrong both times because editing this comment moves the guard under
-        // it, and the grep above plus the four-site test already name the site
-        // exactly. A figure that cannot survive its own paragraph does not belong
-        // in the paragraph.
-        //
-        // The TRIO column carries NAMES, not counts, for the same reason. The
-        // revision before last recorded "1 failure / 1 error / 1 error / 1
-        // failure" and "raw trio totals 2 / 2 / 2 / 2"; rows 3 and 4 were 3 raw /
-        // 2 behavioural even as it was written, because the test added in that
-        // very commit (testThePromptAndTheReferenceCannotBothBeRaisedByRealInput)
-        // reaches a stamped-and-current ask and so trips them. A trio count is
-        // fed by the files being measured; a class name (STALE / CURRENT) is not.
-        //
-        // The CHATTEST column carries counts, and the round that replaced them
-        // with a name made the column worse rather than better -- see below the
-        // table. A name is only an improvement when it identifies the population;
-        // "the permission suite" identified neither of the two it was applied to.
-        //
-        //   | mutation                     | trio (behavioural)   | ChatTest        |
-        //   |------------------------------|----------------------|-----------------|
-        //   | guard deleted                | STALE only           | green           |
-        //   | throw when the guard FIRES   | STALE only           | green           |
-        //   | throw on ANY stamped ask     | STALE + CURRENT      | 14 errors       |
-        //   | 2nd conjunct dropped, so     | STALE + CURRENT      | 1 error,        |
-        //   | every stamped ask is dropped |                      | 11 failures,    |
-        //   |                              |                      | 6 warnings      |
-        //
-        // The ChatTest figures are counts again, with their domain, because the
-        // revision that replaced them with the NAME "the permission suite" named
-        // a population that does not exist: the two rows report 14 and 12
-        // problems, and ChatTest has no 14-test and no 12-test suite to be. What
-        // the two rows share is the population, and THAT is the durable label:
-        // both reds land on the SAME ELEVEN ChatTest methods, measured by name --
-        // testApprovingAnAskDispatchesTheRewrittenCallTheUserWasShown,
-        // testASessionGrantCannotSilentlyDispatchAnAsksOwnRewrite,
-        // testAskHookSuspendsTheTurnInsteadOfRunningOrDenyingTheCall,
-        // testTheSuspendingCmdStaysPendingUntilTheUserAnswers,
-        // testOnceReplyRunsTheToolAndGatesItExactlyOnce,
-        // testAlwaysReplyGrantsTheToolForTheRestOfTheSession,
-        // testRejectReplyRefusesTheCallAndEndsTheTurn,
-        // testPermissionKeysDecideThePrompt, testUnmappedKeyLeavesThePermissionPromptUp,
-        // testAnsweringOneAskDoesNotReleaseTheOtherCallsInTheBatch and
-        // testAlwaysForOneToolDoesNotReleaseAnAskForAnother. The counts differ
-        // only because testPermissionKeysDecideThePrompt is a data-provider test:
-        // row 3 reds all four of its data sets (y / a / n / escape), row 4 only
-        // the two approving ones -- and the reason is worth recording, because it
-        // is this round's own rule seen from the other side. Under row 4 the ask
-        // is dropped, so the turn is left NOT in flight; the refusing sets assert
-        // exactly `!inFlight`, so they pass VACUOUSLY on a prompt that never
-        // appeared. Measured: the "y" set fails on `!$answered->inFlight` in
-        // `ChatTest::testPermissionKeysDecideThePrompt()`. Domain of both
-        // figures: tests/ChatTest.php alone at 215 tests, mutated at
-        // requestPermission()'s guard (the site this comment sits above) in a
-        // sandbox copy of this lib, PHP 8.3.6. Counts go stale; the eleven names
-        // and the data-provider explanation are what survive a test being added.
-        //
-        // where the two trio classes are, and this is the RULE that keeps the table
-        // true as tests are added:
-        //
-        //   STALE   -- a test that hands this method a stamped ask from a SUPERSEDED
-        //              turn. Exactly one exists and only one can exist per distinct
-        //              way of building one:
-        //              KeyHelpTest::testASupersededAskNeverPutsUpAPrompt().
-        //   CURRENT -- every test that reaches a stamped ask AT ALL, whoever built
-        //              it. Open-ended by construction, and RE-ENUMERATED by running
-        //              row 3 and reading the reds back rather than by reasoning about
-        //              who ought to be in it, because the previous revision's list of
-        //              "the three KeyHelpTest tests" was short by one BEFORE this
-        //              round touched anything (testEachQueuedAskArmsAfresh reaches a
-        //              stamped ask through answerPermission()'s resume path and was
-        //              not listed). Re-measured at THIS commit, row 3 reds these SIX:
-        //              KeyHelpTest::testWithAPromptUpNeitherKeyReachesItsOverlay(),
-        //              KeyHelpTest::testAKeyThePromptActsOnReachesItAndYApprovesRatherThanRefuses(),
-        //              KeyHelpTest::testAPromptOutlivesItsTurnAndTheReferenceIsStillRefused(),
-        //              KeyHelpTest::testEachQueuedAskArmsAfresh(),
-        //              MouseModalGuardTest::testAClickUnderALivePromptIsRefusedExactlyAsTheKeyIs() and
-        //              MouseModalGuardTest::testAPromptRaisedOverAnOpenOverlayOutranksItOnBothDevices(),
-        //              the last two being the members from outside KeyHelpTest -- both
-        //              drive a real PreToolUse ask hook to put a modal up, one for the
-        //              click path to be refused by and one to establish that a prompt
-        //              over an open overlay is a state real input can build at all.
-        //              Row 3's raw total is 8: these six, the STALE member, and the
-        //              text pin.
-        //              testThePromptAndTheReferenceCannotBothBeRaisedByRealInput() is
-        //              NOT a member: it was split into the first two above and now
-        //              stops at the in-flight half.
-        //
-        // Rows 1 and 2 are bounded, rows 3 and 4 are not, and that difference is the
-        // whole content of the table. Row 2 is the honest bound on OBSERVABILITY:
-        // exactly one test anywhere can watch this branch being taken. Row 3 is what
-        // refutes the wording that claimed no other test can even REACH a stamped
-        // ask. Row 4 changes BEHAVIOUR as well as observability, which is why its
-        // ChatTest column is the loud one: the stamped-and-current path is what
-        // ChatTest exercises.
-        //
-        // Measured with this comment: RendererTest, Commands/KeyBindingDriftTest and
-        // Chat/InFlightInputQueueTest contribute ZERO behavioural reds to all four
-        // rows, even though they are three fifths of the domain by file count --
-        // their asks are UNSTAMPED, and none of these four mutations touches an
-        // unstamped ask. The domain is what the rows were measured over; it is not
-        // the set of files that react. That silence is a fact about THIS site: the
-        // same mutations at the wrong site (below) red Chat/InFlightInputQueueTest
-        // six times and RendererTest not at all, which is the reverse shape.
-        //
-        // Every row ALSO reds
-        // testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods(), because
-        // each of these mutations edits the guard's TEXT and that test reads the four
-        // blocks back. By design, and the reason it is excluded from the column
-        // above rather than folded into it: it is a "you changed the guard, re-read
-        // this table" alarm, not evidence about the guard's reach. So raw = the
-        // column above plus exactly one, on every row -- stated as a rule, because
-        // the revision that stated it as "2 / 2 / 2 / 2" was already wrong on two.
-        //
-        // The variant that made the previous revision's error visible: discarding
-        // EVERY ask rather than only stamped ones (`if (true)`) reds every trio test
-        // that needs a prompt to appear at all, plus ChatTest 1 error, 11 failures,
-        // 6 warnings -- so the trio is NOT silent about it, and the rows above are
-        // not covering it either. It is the ONE figure in this comment kept as a
-        // count, because it is the mis-site tell described below and a tell needs a
-        // magnitude. Re-measured AT THIS COMMIT, over all FIVE files of the
-        // domain: 31 raw / 30 behavioural, composed of 7 in RendererTest, 17 in
-        // KeyHelpTest (including the pin), 4 KeyBindingDriftTest data sets, 1 in
-        // Chat/InFlightInputQueueTest and 2 in MouseModalGuardTest. The figure this
-        // replaces read "20 raw / 19 behavioural, composed of 5 / 12 / 3"; driven
-        // against `995eb257` with none of this round's files present it came out at
-        // 29 raw over the four files that then existed, so it had gone stale on its
-        // own before the fifth file was written -- exactly the growth its own caveat
-        // below predicts, recorded here as a re-measurement rather than as a delta.
-        // The EXCLUSION RULE that produces the
-        // second number, stated because the revision before last recorded a total no
-        // rule produced ("14 behavioural (16 raw)"): raw MINUS exactly one, the
-        // text-reading pin, testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods.
-        // Nothing else is excluded.
-        //
-        // That total MUST NOT be read as fixed -- it grows by one for every
-        // prompt-dependent test added to any of the FIVE files of the domain named
-        // two paragraphs up (it grew by two on this commit, both in
-        // MouseModalGuardTest). The sentence used to say "those three files", which
-        // named the historical trio while sitting under a paragraph that had just
-        // re-declared the domain as five. What is load-bearing is the rule and the
-        // fact that the figure is not zero.
-        //
-        // At the WRONG site (update()'s AssistantMsg arm) the same two mutations,
-        // ALL FOUR figures re-driven at this commit and each stated over BOTH
-        // domains, because the previous revision compared a re-measured right-site
-        // number against a wrong-site number taken over the smaller domain and
-        // flagged only that it carried someone else's date:
-        //
-        //   * 2nd-conjunct-dropped -> 2 raw / 1 behavioural over the five-file
-        //     domain (Chat/InFlightInputQueueTest::testTheDrainedPromptCarriesIts
-        //     OwnGenerationAndCancellationToken), which is 1 raw / 0 behavioural
-        //     when restricted to the historical trio; ChatTest 6 failures.
-        //   * `if (true)` -> 13 raw / 12 behavioural over the five-file domain,
-        //     composed of 5 in KeyHelpTest (including the pin), 6 in
-        //     Chat/InFlightInputQueueTest and 2 in MouseModalGuardTest; restricted
-        //     to the trio that is 5 raw / 4 behavioural. ChatTest 1 error, 37
-        //     failures, 6 warnings, over its 222 tests.
-        //
-        // The previous revision published "trio 3" for that last one. It is 4
-        // behavioural over the trio now, and the reason is the one its own sentence
-        // gave and then failed to apply: it tracks the real-gate group in
-        // KeyHelpTest, and that group became FOUR when testEachQueuedAskArmsAfresh
-        // was added to the CURRENT list above -- a correction made in one half of
-        // this comment and not in the half that cites it.
-        //
-        // The old tell -- "zero behavioural trio reds means you mutated the wrong
-        // place" -- is now HALF TRUE and is corrected rather than repeated: it holds
-        // for 2nd-conjunct-dropped and no longer for `if (true)`, because the
-        // KeyHelpTest tests built on promptRaisedByTheRealGate() drive a real
-        // AssistantMsg through update() and so react at BOTH sites. The tell that
-        // does not decay is the magnitude AND the population, both re-measured
-        // above over the SAME five-file domain: at the right site `if (true)` reds
-        // the whole prompt-dependent population (30 behavioural, led by RendererTest
-        // and KeyHelpTest), at the wrong site 12. The population tell is a RATIO,
-        // not a zero, and the previous revision wrote it as a zero fifty lines below
-        // its own enumeration, which had already said otherwise:
-        // Chat/InFlightInputQueueTest is 1 of the right site's 30 and 6 of the wrong
-        // site's 12 -- three percent against half. So the two sites are told apart
-        // by WHICH files answer as much as by how many: a mutation at the right site
-        // can make at most one queue test fail while one at the wrong site makes six,
-        // and one at the wrong site cannot make RendererTest or KeyBindingDriftTest
-        // fail at all.
-        // And the four-site text pin fires at either site, which is the cheapest
-        // signal that you edited SOMETHING and must re-read this table.
-        //
-        // Domains: "trio" is the historical name for tests/RendererTest.php +
-        // tests/Renderer/KeyHelpTest.php + tests/Commands/KeyBindingDriftTest.php,
-        // the three files that CONSTRUCTED a PermissionRequestMsg when the rows
-        // below were first measured; the set is FIVE today (see the paragraph after
-        // next) -- asserted, not narrated, and by a token scan for
-        // `new …PermissionRequestMsg` rather than by the
-        // `grep -rl PermissionRequestMsg tests/` this line used to cite, which also
-        // matches files that merely mention the class in a comment:
-        // KeyHelpTest::testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg(),
-        // whose docblock states what that instrument can and cannot see. PHP 8.3.6.
-        //
-        // A FOURTH file joined without costing a re-measurement: W2's
-        // tests/Chat/InFlightInputQueueTest.php raises an UNSTAMPED ask (to reach
-        // answerPermission()'s denial path, which is one of the four places a queued
-        // prompt is released), and no row of this table touches an unstamped ask --
-        // the same reason two of the original three contribute nothing.
-        //
-        // A FIFTH did cost one, and the rows above are the re-measurement.
-        // tests/MouseModalGuardTest.php hand-builds an unstamped ask for most of its
-        // states, but ONE of its tests raises a prompt through a real PreToolUse ask
-        // hook and so reaches a stamped, current one. That is the rule this comment
-        // already stated, applied: re-measuring is due when a file joins the set
-        // with a STAMPED ask.
-        //
-        // ChatTest is measured separately BECAUSE rows 3 and 4 show the domain's
-        // silence does not cover it. Rows 1 and 2 red inside KeyHelpTest alone; rows
-        // 3 and 4 red there AND in MouseModalGuardTest, which is what stopped
-        // "KeyHelpTest ALONE" being true. RendererTest, KeyBindingDriftTest and
-        // InFlightInputQueueTest build UNSTAMPED asks, which no row of this table
-        // touches.
-        //
-        // So this is not what makes the reference-over-prompt state
-        // unreachable, and the sentence claiming it was "the one way that state
-        // is reachable through the front door" was wrong: there is no producer
-        // for that door today. That unreachability is now asserted rather than
-        // stated -- driven from both ends through a real PreToolUse ask hook by
-        // KeyHelpTest::testThePromptAndTheReferenceCannotBothBeRaisedByRealInput().
-        // What actually protects the user there is the cue
-        // -- Renderer::KEY_HELP_OVER_PROMPT -- which is driven and does bite.
-        // The guard stays because the engine path is coming and an unstamped
-        // ASK is the legitimate case it must keep letting through; deleting a
-        // correct guard because today's producers cannot trip it is how the
-        // path arrives unprotected.
-        if ($msg->generation !== null && $msg->generation !== $this->generation) {
+        $armed = $this->permissionPrompt()->armAsk($msg, $this->generation, $this->history, $this->agentLive());
+        if ($armed === null) {
+            // Superseded ask: the guard and its measured mutation table live
+            // in PermissionPrompt::armAsk(); this is the byte-identical
+            // "return myself untouched" the guard always produced.
             return [$this, null];
         }
 
-        // P-E2: a delegated run's question says whose it is, at the top of
-        // the modal — the same question also shows inline in that run's
-        // Agent View (Renderer). The main turn's own questions are untouched.
-        $origin = $msg->pendingAsk === null
-            ? null
-            : \SugarCraft\Code\Permissions\AskOrigin::locate($msg->pendingAsk, $this->history, $this->agentLive());
-        if ($origin !== null) {
-            $label = \SugarCraft\Code\Permissions\AskOrigin::label($origin);
-            $msg = new PermissionRequestMsg(
-                $msg->assistantMessage,
-                $msg->toolCall,
-                $msg->prompt === '' ? $label : $label . "\n" . $msg->prompt,
-                $msg->generation,
-                $msg->pendingAsk,
-            );
-        }
-
-        $deferred = new Deferred();
-
         $next = $this->mutate([
-            'pendingPermission' => $msg,
+            'pendingPermission' => $armed->ask,
             // Armed AFRESH, and stated here because this method is the resume
             // path too: answerPermission() re-enters it for the next queued
             // ask, and mutate() would otherwise carry the stage the user left
             // the PREVIOUS question in - so a `/` typed at question one would
             // silently make question two unanswerable.
             'permissionStage' => PermissionPromptStage::Armed,
-            'permissionDeferred' => $deferred,
+            'permissionDeferred' => $armed->deferred,
             'inFlight' => true,
         ]);
-        $wait = Cmd::promise(static fn(): PromiseInterface => $deferred->promise());
-        // Roadmap 5.14a: the agent is now waiting on the user, which is the
-        // other moment the `notify` setting rings for.
-        $notify = $this->terminalNotification('candy-code: ' . Lang::t('chat.notify.awaiting_approval', [
-            'tool' => $msg->toolCall->name,
-            'origin' => $origin === null ? '' : Lang::t('chat.notify.awaiting_approval_origin', [
-                'agent' => $origin->name !== '' ? $origin->name : $origin->id,
-            ]),
-        ]));
+        $wait = Cmd::promise(static fn(): PromiseInterface => $armed->deferred->promise());
+        $notify = $this->terminalNotification($armed->notifyTitle);
 
         return [$next, $notify === null ? $wait : Cmd::batch($wait, $notify)];
     }
