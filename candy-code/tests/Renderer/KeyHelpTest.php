@@ -3438,16 +3438,18 @@ final class KeyHelpTest extends TestCase
      * That predicate —
      * `$msg->generation !== null && $msg->generation !== $this->generation`
      * (`$generation` at the armAsk() site) — appears four times across the
-     * turn-suspension pair: THREE in `Chat.php` (`update()`'s `AssistantMsg`
-     * arm, `finishToolCalls()`, `applyBackendToolEvent()`) and the fourth in
+     * turn-suspension pair: TWO in `Chat.php` (`finishToolCalls()`,
+     * `applyBackendToolEvent()`), one in `Chat/Handlers/HandlesTurnCompletion.php`
+     * (the `AssistantMsg` arm, moved out of `route()` in W7-S4), and the fourth in
      * `Permissions/PermissionPrompt.php::armAsk()`, lifted there from
      * `requestPermission()` in W5-A. The scan therefore reads BOTH files —
      * which sites own which file is asserted below, because a scan that
      * quietly kept reading only Chat.php would stop seeing a guard that moves,
      * the exact rot this pin exists to catch.
      *
-     * Why sites are named at all: a replace-first `sed` over Chat.php lands
-     * in `update()`'s `AssistantMsg` arm, not at the guard's live home, and
+     * Why sites are named at all: a replace-first `sed` over Chat.php used to
+     * land in `update()`'s `AssistantMsg` arm (pre W7-S4), not at the guard's
+     * live home, and
      * one review round published the wrong site's mutation figures as a
      * refutation of the right site's: at the `AssistantMsg` arm the "drop the
      * second conjunct" mutation leaves the trio GREEN, which reads as "the
@@ -3473,6 +3475,11 @@ final class KeyHelpTest extends TestCase
     {
         $chatLines = explode("\n", (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Chat.php'));
         $promptLines = explode("\n", (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Permissions/PermissionPrompt.php'));
+        // W7-S4: the AssistantMsg arm (and its guard copy) moved out of
+        // route() into the turn-completion family handler. A scan that kept
+        // reading only Chat.php would stop seeing the guard — the exact rot
+        // this pin exists to catch, now across THREE files.
+        $handlersLines = explode("\n", (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Chat/Handlers/HandlesTurnCompletion.php'));
         // Both spellings of the guard share this prefix, and comment lines are
         // skipped: the armAsk() comment quotes the predicate twice (once as
         // the warning, once as a reproducing grep), so a substring match over
@@ -3481,7 +3488,7 @@ final class KeyHelpTest extends TestCase
 
         /** @var array<string, array{0: string, 1: int}> $site method => (file, line index) */
         $site = [];
-        foreach (['Chat' => $chatLines, 'Prompt' => $promptLines] as $label => $lines) {
+        foreach (['Chat' => $chatLines, 'Handlers' => $handlersLines, 'Prompt' => $promptLines] as $label => $lines) {
             foreach ($lines as $i => $line) {
                 $trimmed = ltrim($line);
                 if (!str_starts_with($trimmed, $prefix) || str_starts_with($trimmed, '//')) {
@@ -3513,7 +3520,7 @@ final class KeyHelpTest extends TestCase
         // you edited nothing about the guard breaks that rule.
         ksort($site, SORT_STRING);
         $this->assertSame(
-            ['applyBackendToolEvent', 'armAsk', 'finishToolCalls', 'route'],
+            ['applyBackendToolEvent', 'armAsk', 'finishToolCalls', 'handleTurnCompletionMessages'],
             array_keys($site),
             'the generation guard is spelled out per-site; if the SET of sites changed, '
             . "PermissionPrompt::armAsk()'s mutation table names one of them and must be re-measured. "
@@ -3524,22 +3531,28 @@ final class KeyHelpTest extends TestCase
             $site['armAsk'][0],
             'the armAsk() copy of the guard lives in Permissions/PermissionPrompt.php — moved, not duplicated',
         );
-        foreach (['applyBackendToolEvent', 'finishToolCalls', 'route'] as $owned) {
+        foreach (['applyBackendToolEvent', 'finishToolCalls'] as $owned) {
             $this->assertSame('Chat', $site[$owned][0], "{$owned}()'s guard still lives in Chat.php");
         }
+        $this->assertSame(
+            'Handlers',
+            $site['handleTurnCompletionMessages'][0],
+            "the Assistant arm's guard copy lives in Chat/Handlers/HandlesTurnCompletion.php — moved, not duplicated (W7-S4)",
+        );
 
         // And WHICH of the copies are indistinguishable by text, which is the
         // actual hazard: a table that named only the predicate would be
         // ambiguous between exactly those.
         $bare = 'if ($msg->generation !== null && $msg->generation !== $this->generation) {|return [$this, null];|}';
         $bodies = [];
+        $linesByLabel = ['Chat' => $chatLines, 'Handlers' => $handlersLines, 'Prompt' => $promptLines];
         foreach ($site as $method => [$label, $i]) {
-            $src = $label === 'Chat' ? $chatLines : $promptLines;
+            $src = $linesByLabel[$label];
             $bodies[$method] = implode('|', array_map('trim', array_slice($src, $i, 3)));
         }
         $ambiguous = array_keys(array_filter($bodies, static fn(string $body): bool => $body === $bare));
         $this->assertSame(
-            ['finishToolCalls', 'route'],
+            ['finishToolCalls', 'handleTurnCompletionMessages'],
             $ambiguous,
             'these are the guard sites a mutation cannot tell apart by text, so a mutation aimed at one of '
             . 'them must be anchored by line number. If this set changed, re-read the table in '

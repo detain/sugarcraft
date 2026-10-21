@@ -29,9 +29,10 @@ namespace SugarCraft\Code\Tests\Config\Support;
  *   through whichever twin a trait-and-class file happened to carry first
  *   rather than through the one PHP would run. Its parameter #k is read out
  *   of the signature, and that parameter must itself
- *   reach `getenv()` in `m`'s body. `Chat::envFlag()`,
- *   `Bootstrap::backendCommandEnv()` and `Bootstrap::toollessBackend()` are all
- *   found this way, none of them by name.
+ *   reach `getenv()` in `m`'s body. `Bootstrap::backendCommandEnv()` and
+ *   `Bootstrap::toollessBackend()` are both found this way, none of them by
+ *   name. (The W7 EnvBool unify retired the former third example,
+ *   `Chat::envFlag()`; the S3 shape itself stays.)
  * - **S4 foreach** — the literal is an element of an array literal in a
  *   `foreach ([…] as $v)` header whose `$v` reaches `getenv()` in the same
  *   function. This is how the two deprecated-alias pairs are read.

@@ -232,7 +232,7 @@ final class CacheBreakpoints
 
     /**
      * Is the P10.S3 kill switch set? Presence-flag semantics, verbatim from the
-     * repo's other flags ({@see \SugarCraft\Code\Chat::envFlag()},
+     * repo's other flags ({@see \SugarCraft\Code\Support\EnvBool::isSet()},
      * {@see \SugarCraft\Code\Backend\EngineBackend::parallelToolCallsEnabled()}):
      * unset, empty and the literal `0` read as false; any other text reads as
      * true. Static and side-effect-free so a consumer can consult it once at

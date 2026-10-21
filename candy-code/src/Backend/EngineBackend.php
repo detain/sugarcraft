@@ -50,6 +50,7 @@ use SugarCraft\Code\Providers\RebindsModel;
 use SugarCraft\Code\Providers\ReportsServedModel;
 use SugarCraft\Code\Runtime;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Support\EnvBool;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\SiblingSpendLedger;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
@@ -3427,7 +3428,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private static function parallelToolCallsEnabled(?array $config = null): bool
     {
         $flag = getenv(self::PARALLEL_TOOL_CALLS_DISABLE_ENV);
-        if ($flag !== false && $flag !== '' && $flag !== '0') {
+        if (EnvBool::isSet($flag)) {
             return false;
         }
 

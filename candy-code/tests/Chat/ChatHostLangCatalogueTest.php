@@ -131,7 +131,15 @@ final class ChatHostLangCatalogueTest extends TestCase
         // VIS-6: its recall row rides that same sink from the priming door.
         // GoalLoop joins for W7a-3: both hosts' goal decision table emits its
         // own chat.goal.* sentences from the one shared file.
+        // W7-S4: route()'s family arms live in src/Chat/Handlers/ traits —
+        // the census now spans both files, so the whole directory is walked
+        // (unlisted files strand their keys as unused here).
         $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Permissions/PermissionPrompt.php', self::SRC . '/Backend/PendingAsk.php', self::SRC . '/Backend/EngineBackend.php', self::SRC . '/Runtime.php', self::SRC . '/Goal/GoalLoop.php'];
+        foreach (new \RecursiveDirectoryIterator(self::SRC . '/Chat/Handlers', \FilesystemIterator::SKIP_DOTS) as $handlerFile) {
+            if ($handlerFile->isFile() && $handlerFile->getExtension() === 'php') {
+                $files[] = $handlerFile->getPathname();
+            }
+        }
         $walk = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator(self::SRC . '/Host', \FilesystemIterator::SKIP_DOTS),
         );
