@@ -667,7 +667,13 @@ final class Renderer
         // right one is usually absent, so on a 120-column terminal it handed
         // the pane 40 columns out of an available 86 and then truncated
         // everything wider than 40 to fit.
-        $paneCols = max(24, $bandCols - self::blockWidth($leftPane) - self::blockWidth($rightPane));
+        // The chat's floor is the dock's own centre minimum — the same
+        // vocabulary hostableLegacySide() sizes the sides against, so the
+        // band arithmetic (`side + chrome + centre <= band`) closes at
+        // every width. At the seeded 24 this is the floor it has always
+        // been; only a withMinimums() re-floor could move it, and then the
+        // renderer should move with it.
+        $paneCols = max(self::dockMinimums($a)[0], $bandCols - self::blockWidth($leftPane) - self::blockWidth($rightPane));
 
         // Publish the band the pointer maths resolve against (see
         // {@see $lastDockFrame}): exactly these widths, this frame, whether
@@ -1570,10 +1576,13 @@ final class Renderer
      * regimes:
      *
      *  - Untouched {@see App::defaultDock()} → the legacy
-     *    `max(20, floor(bandCols/4))`, to the cell. This covers stacked
-     *    DEFAULT frames too (a transient focus on Tools stacks two boxes at
-     *    the same legacy width), so no frame anyone has never docked into
-     *    shifts a pixel.
+     *    `max(side minimum, floor(bandCols/4))`, to the cell — until the
+     *    band can no longer HOST it, where {@see hostableLegacySide()}
+     *    shrinks it one-for-one toward zero instead of overflowing. This
+     *    covers stacked DEFAULT frames too (a transient focus on Tools
+     *    stacks two boxes at the same legacy width), so no frame anyone
+     *    has never docked into shifts a pixel at any band width the band
+     *    can host.
      *  - Any other dock → the side's width from
      *    {@see DockLayout::resolve()} output: {@see App::seedSharesFromFrame()}
      *    planted the legacy measurement into the column shares at the first
@@ -1591,10 +1600,8 @@ final class Renderer
      */
     private static function sideWidth(App $a, Pane $firstPane, int $cols, int $rows): int
     {
-        $legacy = max(20, (int) floor($cols / 4));
-
         if (App::isUntouchedDefaultDock($a->dock())) {
-            return $legacy;
+            return self::hostableLegacySide($a, $cols);
         }
 
         $region = $a->dock()->resolve(new Region(0, 0, $cols, $rows))->regionFor($firstPane->value);
@@ -1603,7 +1610,58 @@ final class Renderer
             return $region->width;
         }
 
-        return $a->isDocked($firstPane) ? 0 : $legacy;
+        if ($a->isDocked($firstPane)) {
+            return 0;
+        }
+
+        return self::hostableLegacySide($a, $cols);
+    }
+
+    /**
+     * The legacy side measure, sized so the band can actually host it.
+     *
+     * `max(side minimum, quarter)` is a REQUEST, not a promise: the side's
+     * box paints {@see AgentSplitColumn::PANE_CHROME} columns beyond what
+     * it was asked for (rounded border + horizontal padding), and the chat
+     * never drops below the dock's centre minimum — so the narrowest band
+     * that hosts the full legacy side is `side + chrome + centre`, 48
+     * columns at the seeded values. Handing the band a wider request than
+     * that is how the untouched default frame lost the chat's right border
+     * on every box row at 40..47: the overflow rode off the right edge
+     * under {@see clipWidth()} silently.
+     *
+     * Below the hostable band the side now gives up exactly one column per
+     * column the band loses, reaching zero where only the chrome would
+     * remain — the graceful answer the mutated dock's degradation ladder
+     * already gives (ISS-099), mirrored into the bypass path as a slope
+     * instead of a snap. At or above it the legacy measure is untouched:
+     * every shipped default frame stays byte-identical.
+     *
+     * The numbers come from the dock's own `minimums` vocabulary — the same
+     * centre/side floors {@see DockLayout::resolve()} consumes on the
+     * mutated path — so a layout re-minimummed with `withMinimums()` moves
+     * this gate too, and the renderer carries no parallel set of constants
+     * to drift.
+     */
+    private static function hostableLegacySide(App $a, int $bandCols): int
+    {
+        [$centerMin, $sideMin] = self::dockMinimums($a);
+        $legacy = max($sideMin, (int) floor($bandCols / 4));
+
+        return max(0, min($legacy, $bandCols - $centerMin - AgentSplitColumn::PANE_CHROME));
+    }
+
+    /**
+     * The dock's own [centre, side] minimum columns — the vocabulary
+     * {@see DockLayout::resolve()} consumes. Read through the manifest
+     * because {@see DockLayout} keeps them private and exposes them only
+     * there; the default dock is created at 24/20.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private static function dockMinimums(App $a): array
+    {
+        return $a->dock()->toArray()['minimums'];
     }
 
     /**
