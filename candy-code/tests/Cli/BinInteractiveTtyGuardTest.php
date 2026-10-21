@@ -28,6 +28,16 @@ use PHPUnit\Framework\TestCase;
  * a mutation breaks. The behavioral half of the pair is the negative one:
  * headless launches stay byte-silent, which the piped child runs below assert
  * on every path that does exit (guard, `--version`).
+ *
+ * v2:MAJOR-3 (this wave) grew the third shape the entrypoint depends on:
+ * launching with ONE side redirected — `echo hi | candy-code`, the case the
+ * guard above deliberately lets through — used to hand the interactive
+ * Program the pipe itself as its input, so the first EOF dropped the read
+ * watcher and the keyboard died for the rest of the session while the
+ * program kept painting. `Chat::programOptions()` now sets `openTty`, and the
+ * arms below pin the flag, the re-anchored behavior under a real pty, and
+ * the one path that must NOT absorb it: `-p`, which reads descriptor 0 on
+ * purpose.
  */
 final class BinInteractiveTtyGuardTest extends TestCase
 {
@@ -54,6 +64,88 @@ final class BinInteractiveTtyGuardTest extends TestCase
         $this->assertStringContainsString('serve', $stderr);
         $this->assertSame('', $stdout, 'a refused interactive launch may paint nothing on stdout');
         $this->assertStringNotContainsString("\x1b", $stderr . $stdout, 'the refusal is a usage line, not ANSI');
+    }
+
+    // =========================================================================
+    // v2:MAJOR-3 — a piped STDIN must never become the keyboard
+    // =========================================================================
+
+    /**
+     * THE OPTION, in-process: `bin/candy-code` hands {@see
+     * \SugarCraft\Code\Chat::programOptions()} to the Program, and the flag
+     * that keeps a piped launch's keyboard alive is `openTty`.
+     *
+     * WHY THIS ARM IS NOT ENOUGH ALONE: sugar-core has honored the flag since
+     * the option existed, and honoring it silently stands down when no real
+     * terminal is available (the headless child measures exactly that, which
+     * is why the flag is safe everywhere). The behavior claim — keys survive
+     * the pipe's first EOF — is the pty arm after this one; this one only
+     * pins that the launch asks.
+     */
+    public function testTheLaunchOptionsAskForTheControllingTerminal(): void
+    {
+        $this->assertTrue(
+            \SugarCraft\Code\Chat::programOptions()->openTty,
+            'v2:MAJOR-3 regressed: `echo hi | candy-code` again hands the Program a pipe '
+                . 'for input, and the first EOF drops the read watcher — no keyboard left',
+        );
+    }
+
+    /**
+     * THE BEHAVIOR, in a child: STDIN is a pipe, a terminal is real, and the
+     * Program built over the launch options must read keys from the terminal,
+     * never from the pipe that is about to EOF.
+     *
+     * `script -qec` gives the child a pty of its own (its `/dev/tty`), and the
+     * inner `printf … | php …` puts a real pipe on descriptor 0 — the exact
+     * `echo hi | candy-code` shape. The fixture constructs `new Program($model,
+     * Chat::programOptions())` (never runs it) and reports what its input
+     * handle turned out to be. Pre-fix the answer was `KEYBOARD-TTY=no`,
+     * `TTY-DESCRIPTOR-IS-STDIN=yes`: the doomed pipe.
+     */
+    public function testAPipedStdinUnderARealTerminalKeepsItsKeyboardOnTheTty(): void
+    {
+        $probe = \dirname(__DIR__, 2) . '/tests/fixtures/interactive-keyboard-probe.php';
+        $inner = 'printf hi | ' . \escapeshellarg(\PHP_BINARY) . ' ' . \escapeshellarg($probe);
+        $report = $this->runUnderPty($inner);
+
+        $this->assertStringContainsString(
+            'STDIN-TTY=no',
+            $report,
+            'the harness lost the plot: the child was supposed to start with a piped stdin, got: ' . $report,
+        );
+        $this->assertStringContainsString(
+            'KEYBOARD-TTY=yes',
+            $report,
+            'v2:MAJOR-3 regressed: with a piped stdin the Program read keys from the pipe, '
+                . 'and its first EOF killed the keyboard for the session. Child said: ' . $report,
+        );
+        $this->assertStringContainsString('TTY-DESCRIPTOR-IS-STDIN=no', $report);
+        $this->assertStringContainsString('PAINTER-TTY=yes', $report);
+    }
+
+    /**
+     * THE NON-REGRESSION: `-p` one-shot runs still consume piped stdin as
+     * prompt context. `openTty` re-anchors only the interactive Program's own
+     * handles — the one-shot path reads descriptor 0 directly through
+     * `NonInteractive::readStdinIfPiped()` and must keep doing so.
+     */
+    public function testPipedStdinStillReachesTheOneShotPrintMode(): void
+    {
+        $marker = 'piped-context-' . \uniqid('', true);
+        [$stdout, $stderr, $exitCode] = $this->runBin(
+            ['-p', 'answer it'],
+            ['CANDY_CODE_BACKEND_CMD' => 'cat'],
+            stdinBytes: $marker,
+        );
+
+        $this->assertSame(0, $exitCode, 'a piped -p run stays legal headless work; rc/err: ' . $exitCode . ' ' . $stderr);
+        $this->assertStringContainsString(
+            $marker,
+            $stdout,
+            'v2:MAJOR-3 overreached: piped stdin no longer reaches the -p prompt context '
+                . '(it must ride the history JSON to the shell-out backend)',
+        );
     }
 
     /**
@@ -146,9 +238,11 @@ final class BinInteractiveTtyGuardTest extends TestCase
      *
      * @param list<string> $args
      * @param array<string, string> $env
+     * @param string $stdinBytes bytes written to the child's stdin before it
+     *   is closed (the `echo … | candy-code -p` shape)
      * @return array{0: string, 1: string, 2: int}
      */
-    private function runBin(array $args, array $env, bool $keepStdinOpen = false): array
+    private function runBin(array $args, array $env, bool $keepStdinOpen = false, string $stdinBytes = ''): array
     {
         $root = \dirname(__DIR__, 2);
         $command = 'exec ' . \escapeshellarg(\PHP_BINARY) . ' ' . \escapeshellarg($root . '/bin/candy-code');
@@ -173,6 +267,9 @@ final class BinInteractiveTtyGuardTest extends TestCase
         // child. `keepStdinOpen` is exactly that probe: rv-qa-1's shape is
         // `cat | candy-code`, stdin a live pipe that never EOFs, and the
         // guard must fire BEFORE the process would ever touch it.
+        if ($stdinBytes !== '') {
+            \fwrite($pipes[0], $stdinBytes);
+        }
         if (!$keepStdinOpen) {
             \fclose($pipes[0]);
             unset($pipes[0]);
@@ -219,6 +316,65 @@ final class BinInteractiveTtyGuardTest extends TestCase
         $exitCode = \proc_close($process);
 
         return [$stdout, $stderr, $exitCode];
+    }
+
+    /**
+     * Run a command under its own pty via `script -qec`, so the child has a
+     * controlling terminal (`/dev/tty`) no matter what the runner's process
+     * owns, and return everything it wrote with the pty's CR stripping done.
+     *
+     * The command itself still runs headless-safe: util-linux's `script` is a
+     * plain executable on the Linux legs that run this suite, and its absence
+     * fails LOUD here rather than skipping — a silent skip would let the
+     * v2:MAJOR-3 pty pin rot unnoticed on any runner that grows or loses it.
+     */
+    private function runUnderPty(string $innerCommand): string
+    {
+        $command = 'exec script -qec ' . \escapeshellarg($innerCommand) . ' /dev/null';
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $process = \proc_open($command, $descriptors, $pipes, \dirname(__DIR__, 2), $this->minimalEnv([]));
+        $this->assertIsResource($process, 'failed to spawn script(1) — is util-linux installed?');
+        \fclose($pipes[0]);
+        unset($pipes[0]);
+
+        $output = '';
+        $deadline = \microtime(true) + self::TIMEOUT_SECONDS;
+
+        while (true) {
+            $output .= (string) \stream_get_contents($pipes[1]);
+            $output .= (string) \stream_get_contents($pipes[2]);
+
+            if (\microtime(true) > $deadline) {
+                foreach ([1, 2] as $fd) {
+                    if (\get_resource_type($pipes[$fd]) !== 'Unknown') {
+                        @\fclose($pipes[$fd]);
+                    }
+                }
+                $this->fail('the pty child did not exit within ' . self::TIMEOUT_SECONDS . 's: ' . $output);
+            }
+
+            if (\proc_get_status($process)['running'] === false) {
+                break;
+            }
+
+            \usleep(20000);
+        }
+
+        $output .= (string) \stream_get_contents($pipes[1]);
+        $output .= (string) \stream_get_contents($pipes[2]);
+        foreach ([1, 2] as $fd) {
+            if (\get_resource_type($pipes[$fd]) !== 'Unknown') {
+                @\fclose($pipes[$fd]);
+            }
+        }
+        \proc_close($process);
+
+        return \str_replace("\r\n", "\n", $output);
     }
 
     /**

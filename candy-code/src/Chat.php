@@ -9658,6 +9658,17 @@ final class Chat implements Model
      * Runtime options `bin/candy-code` starts the chat Program with. Exists
      * so the mouse-mode decision above is made once, next to the state it
      * governs, instead of being duplicated in the entrypoint script.
+     *
+     * `openTty: true` (v2:MAJOR-3) re-anchors BOTH input and output on
+     * `/dev/tty` whenever the caller started us with piped descriptors —
+     * `echo hi | candy-code` used to hand the keyboard a pipe, whose first
+     * EOF made `Program` drop the read watcher and the TUI lost every
+     * keystroke for the rest of the session. The entrypoint's own guard
+     * already refuses a fully redirected invocation (both ends piped), so a
+     * real terminal is open either way; the tty is simply what the keyboard
+     * should have been listening to all along. When both descriptors were
+     * passed explicitly (tests driving the Program over in-memory streams)
+     * sugar-core's `openTty` arm stands down and honours them untouched.
      */
     public static function programOptions(): ProgramOptions
     {
@@ -9672,6 +9683,8 @@ final class Chat implements Model
             useAltScreen: true,
             mouseMode: self::mouseMode(),
             bracketedPaste: true,
+            openTty: true,
+
         );
     }
 
