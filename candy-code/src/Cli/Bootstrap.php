@@ -218,15 +218,16 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 44 is that sum — 43 after the PLG-1 bundles discovery seam joined the
-     * roster on top of the ISS-047 keybinding-collision drain — plus one row
+     * 45 is that sum — 44 after the v1:F-1 Claude-settings skip drain joined
+     * the roster on top of the PLG-1 bundles discovery seam and the ISS-047
+     * keybinding-collision drain — plus one row
      * of headroom. A launch that does hit
      * the cap loses nothing silently: the overflow is COUNTED and reported as
      * one trailing row — see {@see launchNotices()} — and stderr carries every
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 44;
+    public const LAUNCH_NOTICE_LIMIT = 45;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -308,6 +309,10 @@ final class Bootstrap
         'availableProviders' => 1,
         'checkPolicyFreshness' => 1,
         'reportKeybindingCollisions' => 1,
+        // v1:F-1: one aggregate row over every unknown event in every CC file
+        // the launch parsed — names, groups and files are counted INTO the row,
+        // never per entry.
+        'reportSkippedClaudeSettingsEvents' => 1,
     ];
 
     /**
@@ -890,6 +895,18 @@ final class Bootstrap
      * other launch notice.
      */
     public const MAC_ALT_NOTICE_TEXT = 'Alt chords may be disabled on this Mac terminal: enable "Use Option as Meta key" (Terminal.app) or "Left Option: Esc+" (iTerm2), or run /keys reload after choosing Ctrl aliases — see docs/SETTINGS.md (a Kitty-speaking terminal needs neither)';
+
+    /**
+     * v1:F-1: one aggregate row draining
+     * {@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks::skippedEvents()} —
+     * events a foreign Claude Code settings file asked for that candy-code
+     * has no case for. NOT LISTED in the catalogue below, ON PURPOSE, the
+     * standing {@see STDERR_LINE_FORMAT} already has: the English constant IS
+     * the row, and a closeout may mint the locale key.
+     */
+    public const CLAUDE_SETTINGS_SKIPPED_EVENTS_NOTICE_FORMAT =
+        'Claude Code settings: no candy-code hook event matches %s, so %d hook group(s) across %d file(s) '
+        . 'contribute no guard and were skipped; everything else in those files loaded';
 
     /**
      * The catalogue key each launch-notice text above is translated through
@@ -1954,6 +1971,10 @@ final class Bootstrap
             }
         }
         self::reportIgnoredFrontmatter();
+
+        // v1:F-1: the CC-dialect skip record, drained where every other
+        // launch fact is — after workspace() read the hook files.
+        self::reportSkippedClaudeSettingsEvents();
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
@@ -11901,6 +11922,44 @@ final class Bootstrap
         self::warnLaunchRows(
             KeyBindingsValidator::new()->collisionNotices(KeyBindingRegistry::overrides()),
         );
+    }
+
+    /**
+     * Drain the v1:F-1 skip-and-record accumulator: an event a foreign
+     * Claude Code settings file names that {@see \SugarCraft\Code\Hooks\HookEvent}
+     * has no case for is skipped at parse
+     * ({@see ClaudeSettingsHooks}) and announced HERE as ONE aggregate row
+     * whatever the count — the {@see reportSkillSkips()} contract. Reached
+     * from chat()'s drain block, which runs AFTER workspace() construction
+     * read every hook file, so one call sees every parse the launch made.
+     * Supersedes the old hard refusal for the CC dialect ONLY (R3's native
+     * `hooks.yaml` refusal is untouched — a foreign vendor's evolving event
+     * list must not brick every launch; that blast radius WAS the defect).
+     */
+    public static function reportSkippedClaudeSettingsEvents(): void
+    {
+        $skipped = ClaudeSettingsHooks::skippedEvents();
+        if ($skipped === []) {
+            return;
+        }
+
+        $names = [];
+        $groups = 0;
+        $files = [];
+        foreach ($skipped as $event => $seen) {
+            $names[] = $event;
+            $groups += $seen['groups'];
+            $files += $seen['files'];
+        }
+
+        self::warnLaunchRows([
+            \sprintf(
+                self::CLAUDE_SETTINGS_SKIPPED_EVENTS_NOTICE_FORMAT,
+                "'" . implode("', '", $names) . "'",
+                $groups,
+                \count($files),
+            ),
+        ]);
     }
 
     /**
