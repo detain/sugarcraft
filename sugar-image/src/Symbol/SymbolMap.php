@@ -334,12 +334,19 @@ final class SymbolMap
      * the default. Appending last keeps candidate tie order stable and
      * leaves the default corpus — and every byte-frozen render digest —
      * untouched. Idempotent: a map that already carries the tier returns
-     * itself.
+     * itself, and on a map whose SELECTION already holds the tier's
+     * codepoints (chafa's `all` reaches latin through the tag grammar) the
+     * append adds only the still-missing ones, so composing it after
+     * withSelectors() can never duplicate a codepoint. This mirrors
+     * chafa's rebuild_symbols() hash keyed by codepoint — the same
+     * uniqueness law {@see self::fullCorpus()} enforces for the U+00B7
+     * cross-table collision — and the in-place walk of
+     * {@see self::withAsciiIbm()}: an already-carried slot keeps its
+     * selected spelling; the tier never re-spells it.
      *
-     * Seam (W10 weld): the flag is carried by withLatin()-built maps only;
-     * a withSelectors() result resets it, so composing
-     * withLatin() after a relative withSelectors() on a latin map would
-     * re-append the tier. Not exercised by any consumer.
+     * Flag law (F-17, unchanged): withSelectors() results reset the
+     * latin flag; the flag records withLatin()-built provenance, while
+     * codepoint presence — not the flag — is what makes an append a no-op.
      */
     public function withLatin(): self
     {
@@ -347,8 +354,12 @@ final class SymbolMap
             return $this;
         }
 
+        $present = self::codepointKeys($this->defs);
         $extra = [];
         foreach (SymbolSetLatin::OUTLINES as $cp => $outline) {
+            if (isset($present[$cp])) {
+                continue;
+            }
             $extra[] = self::outlineDef($cp, $outline, SymbolTags::LATIN);
         }
 
@@ -421,7 +432,11 @@ final class SymbolMap
      * n_symbols2 == 0), which is the byte-freeze door for every existing
      * digest. Idempotent; like {@see withLatin()} the flag is carried by
      * withKana()-built maps only and a withSelectors() result rebuilds the
-     * wide selection from the tag grammar instead.
+     * wide selection from the tag grammar instead. Also like withLatin(),
+     * the append filters codepoints the wide selection already carries
+     * (chafa's rebuild_symbols codepoint-hash uniqueness), so composing
+     * it after a wide-carrying selection — `all` includes WIDE — adds
+     * nothing and can never duplicate a glyph.
      */
     public function withKana(): self
     {
@@ -429,7 +444,16 @@ final class SymbolMap
             return $this;
         }
 
-        return new self($this->defs, $this->latin, $this->asciiIbm, [...$this->wideDefs, ...self::fullWideCorpus()], true);
+        $present = self::codepointKeys($this->wideDefs);
+        $extra = [];
+        foreach (self::fullWideCorpus() as $def) {
+            if (isset($present[mb_ord($def->char)])) {
+                continue;
+            }
+            $extra[] = $def;
+        }
+
+        return new self($this->defs, $this->latin, $this->asciiIbm, [...$this->wideDefs, ...$extra], true);
     }
 
     /** Whether the opt-in KANA wide tier is appended (see {@see withKana()}). */
@@ -619,6 +643,25 @@ final class SymbolMap
             self::coverageToBitmap(self::outlineToCoverage($outline)),
             $tags,
         );
+    }
+
+    /**
+     * The codepoint set of a def list as presence keys — chafa's
+     * rebuild_symbols() hash shape, so tier appends (withLatin/withKana)
+     * can test membership without re-spelling an already-carried slot.
+     *
+     * @param list<SymbolDef|WideSymbolDef> $defs
+     *
+     * @return array<int, true>
+     */
+    private static function codepointKeys(array $defs): array
+    {
+        $keys = [];
+        foreach ($defs as $def) {
+            $keys[mb_ord($def->char)] = true;
+        }
+
+        return $keys;
     }
 
     /**

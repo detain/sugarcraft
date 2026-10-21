@@ -159,8 +159,9 @@ final class SymbolSetLatinTest extends TestCase
         // withSelectors() returns a plain corpus pick (SymbolMap.php
         // ctor resets the flag), so the tier stays reachable via the
         // `latin` class at its build-order position instead of riding
-        // the appended tail twice. A later withLatin() re-appends it —
-        // the documented seam, now pinned against silent regressions.
+        // the appended tail twice. A later withLatin() is a no-op append —
+        // its rebuild_symbols-style codepoint filter (W11-5, rev-w11-1 m2)
+        // adds only still-missing glyphs, so the seam never duplicates.
         $latin = SymbolMap::new()->withLatin();
         $selected = $latin->withSelectors('+stipple');
 
@@ -178,6 +179,48 @@ final class SymbolSetLatinTest extends TestCase
             $chars($selected),
             'same glyph set — the selection re-emits it in full-corpus build order'
         );
+    }
+
+    /**
+     * SYMBOL-LATIN: withLatin() after withSelectors() cannot duplicate the
+     * tier (W11-5, rev-w11-1 m2). Mirrored chafa semantics: rebuild_symbols()
+     * keys a hash by codepoint, so a codepoint can never appear twice in the
+     * symbol array — the append filters codepoints the selection already
+     * carries, and an already-carried slot keeps its selected spelling (the
+     * same uniqueness law fullCorpus() applies to the U+00B7 cross-table
+     * collision, and the same set posture as the withAsciiIbm() in-place
+     * walk). `all` selects 1,251 narrow glyphs including every latin tier
+     * codepoint; composing withLatin() on it adds nothing.
+     */
+    public function testAppendingTheLatinTierToALatinCarryingSelectionAddsNoDuplicates(): void
+    {
+        $all = SymbolMap::new()->withSelectors('all');
+        $composed = $all->withLatin();
+
+        $this->assertTrue($composed->hasLatin());
+        $this->assertCount(1251, $composed->defs(), 'the selection already carries every latin codepoint: the append adds nothing');
+
+        $seen = [];
+        foreach ($composed->defs() as $def) {
+            $cp = mb_ord($def->char);
+            $this->assertArrayNotHasKey($cp, $seen, 'no codepoint may appear twice');
+            $seen[$cp] = true;
+        }
+
+        // Byte-identical to the selection it started from: order, glyphs,
+        // bitmaps and tags of the carried slots are untouched.
+        $this->assertEquals($all->defs(), $composed->defs());
+
+        // The documented W10 seam shape: a relative withSelectors() resets
+        // the flag (F-17), yet re-composing withLatin() on the surviving
+        // tier is a no-op append, not the 365-fold duplicate it was.
+        $rel = SymbolMap::new()->withLatin()->withSelectors('+stipple');
+        $again = $rel->withLatin();
+
+        $this->assertFalse($rel->hasLatin(), 'withSelectors resets the tier flag (F-17, unchanged)');
+        $this->assertCount(676 + 365, $again->defs());
+        $this->assertTrue($again->hasLatin());
+        $this->assertEquals($rel->defs(), $again->defs());
     }
 
     public function testALatinGlyphWinsItsOwnBitmapOnlyInTheLatinTier(): void

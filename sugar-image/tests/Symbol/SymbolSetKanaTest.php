@@ -208,6 +208,35 @@ final class SymbolSetKanaTest extends TestCase
         $this->assertFalse($twice->hasSymbol(0x3042));
     }
 
+    /**
+     * SYMBOL-LATIN: the wide twin of the latin append filter (W11-5) —
+     * withKana() after a selection that already carries the wide tier
+     * (`all` and `wide` both include WIDE) adds nothing, because chafa's
+     * rebuild_symbols() codepoint-hash uniqueness lets a symbols2 glyph
+     * appear at most once. The withKana flag still records withKana()-
+     * built provenance only (latin precedent, unchanged).
+     */
+    public function testAppendingTheKanaTierToAWideCarryingSelectionAddsNoDuplicates(): void
+    {
+        foreach (['all', 'wide'] as $selector) {
+            $selected = SymbolMap::new()->withSelectors($selector);
+            $composed = $selected->withKana();
+
+            $this->assertTrue($composed->hasKana());
+            $this->assertCount(181, $composed->wideDefs(), "`{$selector}` already carries the kana tier: the append adds nothing");
+
+            $seen = [];
+            foreach ($composed->wideDefs() as $def) {
+                $cp = mb_ord($def->char);
+                $this->assertArrayNotHasKey($cp, $seen, 'no wide codepoint may appear twice');
+                $seen[$cp] = true;
+            }
+
+            $this->assertEquals($selected->wideDefs(), $composed->wideDefs());
+            $this->assertSame($selected->defs(), $composed->defs(), 'the narrow selection is untouched by the wide append');
+        }
+    }
+
     public function testWideDefsPackTheTwoHalvesIndependently(): void
     {
         // One X down the left column (half 0, pixel (0,y)) and one down the
