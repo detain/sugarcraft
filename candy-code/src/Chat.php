@@ -11146,7 +11146,12 @@ final class Chat implements Model
     }
 
     /**
-     * Register a tool/function that the AI can call.
+     * Register a tool callback the AI can call on this Chat: the name joins the
+     * Chat's own tool map, which invokeTool() consults and runs at dispatch.
+     * The shipped CLI registers nothing here — its tools reach the model as
+     * catalogued tool classes wired onto the backend — so this seam is filled
+     * only by embedders. Registration is immutable: a new Chat carrying the
+     * merged map is returned.
      *
      * @param string $name The tool name (must be unique)
      * @param callable(array $arguments): mixed $callback The function to call
