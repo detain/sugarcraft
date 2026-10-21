@@ -7,7 +7,7 @@ trust this page.
 Start here:
 
 ```sh
-candy-code doctor                       # fourteen checks; exits 1 if any FAILs
+candy-code doctor                       # fifteen checks; exits 1 if any FAILs
 candy-code doctor --output-format json  # the same, machine-readable
 ```
 
