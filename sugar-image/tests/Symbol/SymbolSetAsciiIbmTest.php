@@ -54,7 +54,7 @@ final class SymbolSetAsciiIbmTest extends TestCase
     public function testTheWholeTableIsDigestPinnedAgainstTheChafaHeader(): void
     {
         // Authoring oracle: the table was transcribed mechanically from
-        // chafa/internal/chafa-symbols-ascii-ibm.h:55-1288 @ 413b76e4d. This
+        // chafa/internal/chafa-symbols-ascii-ibm.h:55-1289 @ 413b76e4d. This
         // digest freezes every pixel and every declared tag of the
         // transcription so a hand-edit or partial re-transcription reddens
         // here; the fix is always to re-generate from the header, never to
@@ -133,8 +133,8 @@ final class SymbolSetAsciiIbmTest extends TestCase
         $this->assertSame(94, $differing, 'only the blank space may agree across faces');
 
         // Spot-read straight off the C headers: '!' is a two-pixel-wide IBM
-        // cross (chafa-symbols-ascii-ibm.h:71-78) against ascii.h's single
-        // vertical stroke (chafa-symbols-ascii.h:45-54).
+        // cross (chafa-symbols-ascii-ibm.h:72-79) against ascii.h's single
+        // vertical stroke (chafa-symbols-ascii.h:46, outline rows :51-58).
         $this->assertSame(
             '   XX   |  XXXX  |  XXXX  |   XX   |   XX   |        |   XX   |        ',
             $ibm[0x21][0],

@@ -206,7 +206,7 @@ final class E11UpscaleFidelityTest extends TestCase
         $grid = new \ReflectionMethod($decoder, 'graphicsDecodeGrid');
 
         // 500×500 = 250,000 cells > MAX_CELLS: the old rule fit the BOX aspect
-        // (800×480 → 408×245, a non-uniform 500→408/500→245 squint); the new
+        // (800×480 → 408×244, a non-uniform 500→408/500→244 squint); the new
         // rule fits the cap through the SOURCE aspect — floor(500·sqrt(100000/250000)) = 316.
         $big = $this->createCheckerboardGif(500, 500);
         $bigGrid = $grid->invoke($decoder, (string) file_get_contents($big), 800, 480);
@@ -218,7 +218,7 @@ final class E11UpscaleFidelityTest extends TestCase
         $this->assertSame([self::SRC_W, self::SRC_H], $grid->invoke($decoder, (string) file_get_contents($small), 800, 480));
 
         // Unknown screen descriptor: legacy box fallback, cap-clamped (the box
-        // itself, 800×480, exceeds the cap → the sqrt fit 408×245).
+        // itself, 800×480, exceeds the cap → the sqrt fit 408×244).
         $this->assertSame([408, 244], $grid->invoke($decoder, str_repeat('x', 20), 800, 480));
     }
 

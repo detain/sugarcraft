@@ -150,7 +150,7 @@ final class SymbolSetTables
      * parse_symbol_tag correspondence. KANA-tier precedent: §4.15(11).
      *
      * Transcribed VERBATIM from /home/sites/chafa @ 413b76e4d,
-     * chafa/internal/chafa-symbols-ascii-ibm.h:55-1288 — 95 entries,
+     * chafa/internal/chafa-symbols-ascii-ibm.h:55-1289 — 95 entries,
      * declared tags only, outline rows joined by '|', 'X' = set.
      * Digest-pinned by SymbolSetAsciiIbmTest.
      */

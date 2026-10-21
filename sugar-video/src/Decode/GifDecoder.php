@@ -461,11 +461,16 @@ final class GifDecoder implements Decoder
      *
      * Filter semantics mirror chafa's DEFAULT canvas scaler: chafa sizes the
      * composited RGBA canvas at print time through smolscale, which picks its
-     * filter from the scale factor (weighted averaging when minifying,
-     * bilinear when magnifying); GD's `imagecopyresampled` is the PHP analog
-     * of exactly those semantics, so that is the mirror. Nearest exists in
-     * chafa only as an explicit option, never as the default — and the player
-     * inherits it here as an absence, honestly disclosed.
+     * filter per-axis from the scale ratio — box (weighted averaging) once
+     * src:dest reaches SMOL_BILIN_BOX_CUTOFF=14, bilinear below it
+     * (smolscale.c:26-27,972-979). GD's `imagecopyresampled` carries ONE
+     * resampling kernel and does NOT switch at a ratio: the match is exact
+     * for gentle minifications/magnifications (bilinear territory) and for
+     * ratios past the cutoff GD's box-ish averaging approximates chafa's box
+     * without reproducing it — an approximation, not an identity, and that is
+     * the honest mirror. Nearest exists in chafa only as an explicit option,
+     * never as the default — and the player inherits it here as an absence,
+     * honestly disclosed.
      */
     private function upscaleToTarget(string $bytes, int $w, int $h): ?RgbFrame
     {
