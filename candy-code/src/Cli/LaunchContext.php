@@ -25,6 +25,10 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Support\ToolIpcFiles;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\Tui\Pane;
+use SugarCraft\Code\App\PaneAutoShow;
+use SugarCraft\Constraints\Dock\DockLayout;
 use SugarCraft\Code\Context\RulePathNudge;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Support\ProcessContainment;
@@ -2137,4 +2141,256 @@ final class LaunchContext
     public static function configRoot(?string $root): ?string
     {
         return $root === null ? null : ProjectRoot::resolve($root);
-    }}
+    }
+
+    // ------------------------------------------------------------------
+    // THE COMPOSITION ROOTS: the interactive shell builder family
+    // (S1b W7-E C5; doors of the same names stay on Bootstrap, private
+    // where they were private, for the reflection pins.)
+    // ------------------------------------------------------------------
+
+    /**
+     * Build the pane shell the CLI binary runs interactively: an {@see App}
+     * hosting the very {@see chat()} model this class already builds
+     * (crush_feat.md §5 E7, the MERGE branch).
+     *
+     * §5 E7 gave two ways out of candy-code's two-parallel-UI-systems drift
+     * risk — delete the `App`/`Pane` layer, or move the app onto it — and
+     * conditioned the delete on there being no plan to switch. There is one,
+     * and this method is the last link in it: until now nothing in `src/` or
+     * `bin/` ever constructed an `App` with a hosted `Chat`, so the shell
+     * (menu bar, pane focus, {@see \SugarCraft\Code\Tui\KeyboardHandler}'s
+     * agent-view keys, session tabs) was unreachable from a real run in
+     * exactly the "built but never wired" way §5D describes.
+     *
+     * The `Chat` is taken WHOLE from {@see chat()} rather than rebuilt: it
+     * already carries the seeded session row, the title backend, the memory
+     * store and the guard chain, and seeding it twice would create a second
+     * session row per launch. The App is the frame around it and copies no
+     * state out of it — {@see App::withSessionId()} is the one exception, and
+     * it is read back off the hosted chat rather than re-derived, so the two
+     * can never disagree.
+     *
+     * The shell's own panes are populated here for the same reason the whole
+     * step exists: an empty Tools/Skills sidebar in a freshly-wired shell is
+     * the failure mode being fixed, not a neutral default. These are the
+     * shell's DISPLAY copies — the engine's authoritative tool list and skill
+     * registry live inside the hosted chat's backend, which builds its own;
+     * handing both the same instances would mean reshaping {@see backend()}'s
+     * internals, which this step does not touch.
+     */
+    public static function app(?string $root = null, ?string $tuiErrorLog = null, ?string $initialPrompt = null): App
+    {
+        $root ??= getcwd() ?: null;
+
+        // Where `bin/candy-code`'s TuiErrorLog::install() sent error_log() —
+        // registered before chat() so its launch report can say when that is
+        // not the home log ({@see reportTuiErrorLogFallback()}). Passed here
+        // rather than registered by the binary, whose guard keeps every
+        // Bootstrap call out of the span between the redirect and Program.
+        Bootstrap::useTuiErrorLog($tuiErrorLog);
+
+        // Every entry point that resolves a root names it as THE project for
+        // the settings layers, before anything below reads a config — see
+        // {@see useProjectRootForSettings()}. Set on all four rather than in
+        // one shared helper because there is no single funnel: `app()` does
+        // not call `chat()`'s resolution, and `NonInteractive` enters at
+        // `backend()`.
+        Bootstrap::useProjectRootForSettings(self::configRoot($root));
+
+        // The words left on the command line (audit CLI-2(b)) ride this call
+        // rather than a Bootstrap call of their own in `bin/candy-code`, whose
+        // guard keeps every Bootstrap call out of the span between the TUI log
+        // redirect and Program. Chat submits them from init().
+        $chat = Bootstrap::chat($root)->withInitialPrompt($initialPrompt);
+        [$provider, $model] = self::provider();
+
+        // ONE registry for the shell's Skills pane and the Skill tool in its
+        // displayed tool list: scanning twice would show the user a roster
+        // that the tool could disagree with.
+        $skills = Bootstrap::skillRegistry($root);
+
+        // RAISED AFTER chat() HAS ALREADY READ THE LIST, which is why the
+        // length is taken here. {@see chat()} seeds the transcript on its way
+        // out (see its last statement), so anything the second scan below
+        // records into {@see LaunchNotices::$launchNotices} would land in a static that
+        // nothing reads again — a migration onto the transcript seam that looks
+        // like a fix and is a no-op. This is the interactive path, so it is the
+        // one where that matters most.
+        $noticesBeforeSecondScan = \count(Bootstrap::launchNotices());
+
+        // This is a SECOND scan — chat() above already reported what its own
+        // scan skipped — and it can find skills that one did not, because it
+        // runs after it and reads the same trees. reportSkillSkips() only
+        // prints what has not been printed yet, so the common case is silence
+        // and the case this adds is a skill file that would otherwise have been
+        // collected into skillSkips() and never mentioned to anybody.
+        Bootstrap::reportSkillSkips();
+        // Same argument for the second scan's directory refusals.
+        Bootstrap::reportProjectTierRefusals();
+
+        // HOISTED out of the `withTools()` argument below rather than inlined:
+        // tools() reaches filterToolSet(), which is itself a transcript source,
+        // so its notices have to be in hand before the delta is taken.
+        //
+        // The two capability booleans are this class's only reads of the host
+        // PATH, and DetectsCapabilities memoizes each answer for the process, so
+        // a launch that reaches all three `tools()` sites still pays for one stat
+        // walk per binary — and no subprocess, which is the failure that would
+        // trip phpunit's failOnWarning gate on a container without `rg`.
+        $tools = self::tools(
+            $root,
+            null,
+            $skills,
+            // Step 3.F: the launch's language servers, started once here
+            // and shared by every forked turn (LspConnection is fork-safe).
+            lsp: Bootstrap::lspClient($root),
+            rgAvailable: Bootstrap::capabilityPresent('rg'),
+            fdAvailable: Bootstrap::capabilityPresent('fd'),
+            // E675: the SAME manager the Chat runs on (accessor, not a fresh
+            // build — see chat()'s hoist note); the pool is a sibling built
+            // from the Chat's own config because Chat keeps its pool local.
+            taskManager: $chat->agentManager(),
+            taskPool: ($chatConfig = $chat->agentPoolConfig()) !== null ? self::taskWorkerPool($chatConfig) : null,
+        );
+
+        // THE DELTA, never the whole list. {@see Chat::withLaunchNotices()}
+        // APPENDS, and $chat already carries everything chat() had recorded —
+        // passing the full list again would put every launch warning in the
+        // transcript twice. {@see LaunchNotices::$launchNotices} is append-only within a
+        // launch, so a slice from the old length is exactly what these three
+        // calls added, in the order they added it.
+        //
+        // ONE KNOWN UNDERSTATEMENT, named rather than engineered around: if the
+        // launch had ALREADY overflowed {@see LAUNCH_NOTICE_LIMIT} before this
+        // point, $chat carries an "and N more" row whose N does not grow to
+        // cover what the second scan then dropped. That needs a launch with 36+
+        // distinct warnings before the shell is built, and the row still says
+        // the full list is on stderr, where it is.
+        $chat = $chat->withLaunchNotices(array_slice(Bootstrap::launchNotices(), $noticesBeforeSecondScan));
+
+        return App::new($provider, $model)
+            ->withChat($chat)
+            ->withSessionId($chat->currentSessionId())
+            ->withTools($tools)
+            ->withAvailableSkills($skills)
+            // Same string the tools/skill scan above used, so the shell's
+            // Settings pane, the environment block the model reads and every
+            // hook context all name one directory.
+            ->withRoot($root)
+            // Pane-docking phase 2: the `layout` setting loads onto the
+            // model, and every model-level dock mutation writes the manifest
+            // straight back — the same injected-persistence shape
+            // `chat()` uses for `onConfigChange` above, its own key because
+            // the value is the versioned DockLayout manifest, not a string.
+            ->withDock(self::dockFromUserConfig())
+            // ISS-049: the same blob carries the panes the user toggled by
+            // hand, so yesterday's manual close outlives the process — the
+            // auto-show consults this roster and never re-docks its entries.
+            ->withPaneAutoShow(self::paneAutoShowFromUserConfig())
+            ->withOnLayoutChange(
+                static fn(array $blob) => Bootstrap::writeUserConfig(['layout' => $blob]),
+            )
+            // N-P1: the settings view explains THIS launch's layers — its
+            // project-trust answer, its environment and its flags — rather
+            // than SettingsSources::bestEffort()'s guess, which cannot know
+            // the trust answer and so hides a trusted project's values. A
+            // closure because the view resolves when it is opened, not here.
+            ->withSettingsSources(static fn (): \SugarCraft\Code\Tui\Settings\SettingsSources => \SugarCraft\Code\Tui\Settings\SettingsSources::fromLaunch(
+                $root,
+                $root === null ? null : Bootstrap::projectSettingsTrusted($root),
+                Bootstrap::userSettingsDirOrNull(),
+                Bootstrap::userConfigPath(),
+                array_filter(getenv(), 'is_string'),
+                LaunchContext::permissionModeOverride() === null ? [] : ['--permission-mode' => LaunchContext::permissionModeOverride()],
+                // The editor's provider choices: the same list the Ctrl+P
+                // "Switch model" palette offers.
+                \SugarCraft\Code\Config\Settings\OptionsProvider::new()->withList(
+                    \SugarCraft\Code\Config\Settings\OptionsSource::Providers,
+                    array_keys(Bootstrap::availableProviders()),
+                ),
+            ))
+            // N-P2: the settings editor's own write door, NOT `onConfigChange`
+            // (whose census stays `provider` + `theme`). Its "You" tier goes
+            // through writeUserConfig() — the one writer config.json has — and
+            // its project tier only to a trusted project's settings.local.json.
+            //
+            // The workspace's writer — the one `/model` saves through — so a
+            // launch has one SettingsWriter, built by settingsWriter().
+            ->withSettingsWriter(
+                ($writer = $chat->workspace()?->service(\SugarCraft\Code\Config\Settings\SettingsWriter::class)) instanceof \SugarCraft\Code\Config\Settings\SettingsWriter
+                    ? $writer
+                    : self::settingsWriter($root),
+            );
+    }
+
+    /**
+     * The launch's settings write door (N-P2): its "You" tier goes through
+     * writeUserConfig() — the one writer config.json has — and its project
+     * tier only to a trusted project's settings.local.json. Built once per
+     * launch by {@see workspace()}, which registers it for Chat's `/model`
+     * (N-P3b); {@see app()} reuses that instance for the settings editor.
+     */
+    public static function settingsWriter(?string $root): \SugarCraft\Code\Config\Settings\SettingsWriter
+    {
+        return \SugarCraft\Code\Config\Settings\SettingsWriter::new(
+            Bootstrap::userConfigPath(),
+            static fn (array $set, array $unset) => Bootstrap::writeUserConfig($set, $unset),
+        )->withProject($root, $root !== null && Bootstrap::projectSettingsTrusted($root));
+    }
+
+    /**
+     * The docked-pane layout the `layout` setting names, or null — which
+     * {@see \SugarCraft\Code\App\App::dock()} resolves to the launch
+     * default — when the key is absent, malformed, or left over from a build
+     * whose manifest this one cannot read. Failing soft here is the whole
+     * point: a bad geometry blob is a stale file, not a reason to refuse to
+     * start.
+     */
+    public static function dockFromUserConfig(): ?DockLayout
+    {
+        $raw = Bootstrap::readUserConfig()['layout'] ?? null;
+
+        if (!is_array($raw)) {
+            return null;
+        }
+
+        try {
+            return DockLayout::fromArray($raw);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * The auto-show memory the `layout` blob's `userToggled` list names
+     * (ISS-049) — pane values the previous session's user touched by hand,
+     * so a closed pane does not ride back in on the next activity. Same
+     * fail-soft as {@see dockFromUserConfig()}: the list is an annotation on
+     * the layout key, and a malformed row is dropped, never fatal — its
+     * worst outcome is re-enabling one auto-dock the user meant to silence.
+     * Rows naming a non-dockable pane are dropped too: they can never be
+     * consulted, and storing them would launder a hand-edited config into
+     * shell state.
+     */
+    public static function paneAutoShowFromUserConfig(): PaneAutoShow
+    {
+        $raw = Bootstrap::readUserConfig()['layout'] ?? null;
+        $rows = is_array($raw) && is_array($raw['userToggled'] ?? null)
+            ? $raw['userToggled']
+            : [];
+
+        $toggled = [];
+        foreach ($rows as $row) {
+            if (!is_string($row)) {
+                continue;
+            }
+            $pane = Pane::tryFrom($row);
+            if ($pane !== null && $pane->dockable() && !in_array($row, $toggled, true)) {
+                $toggled[] = $row;
+            }
+        }
+
+        return new PaneAutoShow([], $toggled);
+    }
+}
