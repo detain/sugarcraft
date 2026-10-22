@@ -3199,17 +3199,21 @@ final class Bootstrap
 
     /**
      * Delegates to {@see LaunchContext::dockFromUserConfig()} — body moved in
-     * W7-E C5; private door kept for DockPersistenceRoundTripTest's reflection.
+     * W7-E C5. PUBLIC since the same commit: the moved app() body reaches this
+     * door, and src/App/App.php's citation names it as the launch's loader,
+     * while DockPersistenceRoundTripTest keeps reflecting it here.
      */
-    private static function dockFromUserConfig(): ?DockLayout {
+    public static function dockFromUserConfig(): ?DockLayout {
         return LaunchContext::dockFromUserConfig();
     }
 
     /**
      * Delegates to {@see LaunchContext::paneAutoShowFromUserConfig()} — body
-     * moved in W7-E C5; private door kept for the same reflection pins.
+     * moved in W7-E C5. PUBLIC since the same commit: the moved app() body
+     * reaches this door, and DockPersistenceRoundTripTest keeps reflecting it
+     * here.
      */
-    private static function paneAutoShowFromUserConfig(): PaneAutoShow {
+    public static function paneAutoShowFromUserConfig(): PaneAutoShow {
         return LaunchContext::paneAutoShowFromUserConfig();
     }
 

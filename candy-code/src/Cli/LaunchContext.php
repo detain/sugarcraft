@@ -25,6 +25,8 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Support\ToolIpcFiles;
+use SugarCraft\Code\Memory\MemoryStore;
+use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\App\PaneAutoShow;
@@ -2283,11 +2285,11 @@ final class LaunchContext
             // straight back — the same injected-persistence shape
             // `chat()` uses for `onConfigChange` above, its own key because
             // the value is the versioned DockLayout manifest, not a string.
-            ->withDock(self::dockFromUserConfig())
+            ->withDock(Bootstrap::dockFromUserConfig())
             // ISS-049: the same blob carries the panes the user toggled by
             // hand, so yesterday's manual close outlives the process — the
             // auto-show consults this roster and never re-docks its entries.
-            ->withPaneAutoShow(self::paneAutoShowFromUserConfig())
+            ->withPaneAutoShow(Bootstrap::paneAutoShowFromUserConfig())
             ->withOnLayoutChange(
                 static fn(array $blob) => Bootstrap::writeUserConfig(['layout' => $blob]),
             )

@@ -237,8 +237,10 @@ final class LaunchContextDelegatesTest extends TestCase
         yield 'withConsolePermissionPrompt' => ['withConsolePermissionPrompt', false];
         yield 'app' => ['app', true];
         yield 'settingsWriter' => ['settingsWriter', false];
-        yield 'dockFromUserConfig' => ['dockFromUserConfig', false];
-        yield 'paneAutoShowFromUserConfig' => ['paneAutoShowFromUserConfig', false];
+        // Widened doors (C5 cure): the moved app() body reaches them, and
+        // src/App/App.php cites the dock loader by its Bootstrap name.
+        yield 'dockFromUserConfig' => ['dockFromUserConfig', true];
+        yield 'paneAutoShowFromUserConfig' => ['paneAutoShowFromUserConfig', true];
     }
 
     /**
