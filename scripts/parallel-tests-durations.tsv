@@ -1002,6 +1002,7 @@ candy-code/tests/Tools/McpToolBridgeTest.php	0.011	62
 candy-code/tests/Tui/TerminalBackgroundSprinklesAgreementTest.php	0.011	16
 candy-code/tests/Agents/AgentPresetDirContainmentTest.php	0.010	11
 candy-code/tests/Backend/CommandBackendInvalidUtf8HistoryTest.php	0.010	4
+candy-code/tests/Cli/LaunchContextDelegatesTest.php	0.010	60
 candy-code/tests/ClickDragGuardTest.php	0.010	6
 candy-code/tests/Cli/ServeArgsTest.php	0.010	38
 candy-code/tests/Commands/CommandSpecScrubbedEnvTest.php	0.010	4
