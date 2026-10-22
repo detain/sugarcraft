@@ -469,6 +469,54 @@ parameters:
 			path: src/Backend/RemoteBackend.php
 
 		-
+			message: '#^Call to function is_array\(\) with array\{command\: string, pid\: int, running\: bool, signaled\: bool, stopped\: bool, exitcode\: int, termsig\: int, stopsig\: int\} will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Background/BackgroundShellRegistry.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Background/BackgroundShellRegistry.php
+
+		-
+			message: '#^PHPDoc tag @param for parameter \$sleeper with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
+			identifier: parameter.phpDocType
+			count: 1
+			path: src/Background/BackgroundShellRegistry.php
+
+		-
+			message: '#^PHPDoc type for property SugarCraft\\Code\\Background\\BackgroundShellRegistry\:\:\$sleeper with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: src/Background/BackgroundShellRegistry.php
+
+		-
+			message: '#^Variable \$handle on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: src/Background/BackgroundShellRegistry.php
+
+		-
+			message: '#^Negated boolean expression is always false\.$#'
+			identifier: booleanNot.alwaysFalse
+			count: 1
+			path: src/Background/BackgroundSupervisor.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: src/Background/BackgroundSupervisor.php
+
+		-
+			message: '#^Anonymous function never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: src/Background/ScheduleSpawner.php
+
+		-
 			message: '#^Constant SugarCraft\\Code\\Chat\:\:BLOCKED_TURN_PREFIX is unused\.$#'
 			identifier: classConstant.unused
 			count: 1
@@ -547,12 +595,6 @@ parameters:
 			path: src/Chat.php
 
 		-
-			message: '#^Instanceof between SugarCraft\\Core\\Msg\\KeyMsg and SugarCraft\\Core\\Msg\\KeyMsg will always evaluate to true\.$#'
-			identifier: instanceof.alwaysTrue
-			count: 2
-			path: src/Chat.php
-
-		-
 			message: '#^Method SugarCraft\\Code\\Chat\:\:openMediaFormView\(\) should return array\{SugarCraft\\Code\\Chat, SugarCraft\\Core\\Cmd\|null\} but returns array\{\$this\(SugarCraft\\Code\\Chat\), Closure\}\.$#'
 			identifier: return.type
 			count: 1
@@ -607,12 +649,6 @@ parameters:
 			path: src/Chat.php
 
 		-
-			message: '#^Strict comparison using \=\=\= between null and null will always evaluate to true\.$#'
-			identifier: identical.alwaysTrue
-			count: 2
-			path: src/Chat.php
-
-		-
 			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
 			identifier: identical.alwaysFalse
 			count: 1
@@ -647,6 +683,18 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 3
 			path: src/Chat.php
+
+		-
+			message: '#^Instanceof between SugarCraft\\Core\\Msg\\KeyMsg and SugarCraft\\Core\\Msg\\KeyMsg will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 2
+			path: src/Chat/Handlers/HandlesKeys.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between null and null will always evaluate to true\.$#'
+			identifier: identical.alwaysTrue
+			count: 2
+			path: src/Chat/Handlers/HandlesKeys.php
 
 		-
 			message: '#^Call to function strpos\(\) with arguments string, "\\n" and int\<0, max\> will always evaluate to false\.$#'
@@ -1835,54 +1883,6 @@ parameters:
 			identifier: identical.alwaysFalse
 			count: 1
 			path: src/Session/EnhancedSessionStore.php
-
-		-
-			message: '#^Call to function is_array\(\) with array\{command\: string, pid\: int, running\: bool, signaled\: bool, stopped\: bool, exitcode\: int, termsig\: int, stopsig\: int\} will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: src/Background/BackgroundShellRegistry.php
-
-		-
-			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: src/Background/BackgroundShellRegistry.php
-
-		-
-			message: '#^PHPDoc tag @param for parameter \$sleeper with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
-			identifier: parameter.phpDocType
-			count: 1
-			path: src/Background/BackgroundShellRegistry.php
-
-		-
-			message: '#^PHPDoc type for property SugarCraft\\Code\\Background\\BackgroundShellRegistry\:\:\$sleeper with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: src/Background/BackgroundShellRegistry.php
-
-		-
-			message: '#^Variable \$handle on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.variable
-			count: 1
-			path: src/Background/BackgroundShellRegistry.php
-
-		-
-			message: '#^Negated boolean expression is always false\.$#'
-			identifier: booleanNot.alwaysFalse
-			count: 1
-			path: src/Background/BackgroundSupervisor.php
-
-		-
-			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
-			identifier: identical.alwaysFalse
-			count: 1
-			path: src/Background/BackgroundSupervisor.php
-
-		-
-			message: '#^Anonymous function never returns null so it can be removed from the return type\.$#'
-			identifier: return.unusedType
-			count: 1
-			path: src/Background/ScheduleSpawner.php
 
 		-
 			message: '#^Parameter \#1 \$skills of method SugarCraft\\Code\\Skills\\SkillRegistry\:\:register\(\) expects array\<string, SugarCraft\\Code\\Skills\\Skill\>, array\<int, SugarCraft\\Code\\Skills\\Skill\> given\.$#'
