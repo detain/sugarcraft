@@ -74,6 +74,37 @@ one-shot `-p` path. In user-visible terms:
   corrected; the settings-help surface migrated all 172 of its strings into
   the language catalog so they translate like the rest of the UI; and the
   keybinding table was reconciled against the registry it documents.
+- **A keyboard that survives a pipe.** Launching the interactive TUI with
+  piped stdin (`echo hi | candy-code`) kept the terminal but lost the
+  keyboard: the pipe's first EOF dropped the one read watcher. The
+  interactive program now re-anchors its input on the real tty, while `-p`
+  keeps reading the pipe exactly as before.
+- **Guidance on dumb terminals.** A `TERM` of `dumb`, `unknown` or unset on
+  an interactive stdout now earns a launch notice naming the paths such a
+  terminal can actually use: the `-p` one-shot path and the mouse opt-outs
+  (`CANDY_CODE_DISABLE_MOUSE`, or the `mouse: false` setting).
+- **Focus you can see.** The `Ctrl+F` transcript row cursor paints: the
+  focused tool unit is drawn with the theme's active style instead of
+  selecting invisibly, and the documented keybinding row says so.
+- **Static analysis.** PHPStan level 5 ships with a committed baseline and
+  a composer script (`composer analyse`).
+- **Layout normalized.** The thirty-five root-level TEA message classes
+  moved under `src/App/`, and `src/Sessions/` became `src/Background/` to
+  match the background-process classes that live there. Behavior untouched.
+- **The codebase got thinner.** `Chat.php` shed about 2,200 lines and
+  `Cli/Bootstrap.php` about 1,300 in behavior-exact extractions: the
+  message router split into per-handler-family traits, the launch-time
+  stores moved into a dedicated `LaunchContext`, and the permission state
+  machine and session-tab bookkeeping each became their own class. Each
+  extraction carries a parity test pinning both behavior and shape.
+- **One log side-channel.** Scattered `error_log()` diagnostics now all
+  flow through a single logging facade with named channels, and the new
+  `CANDY_CODE_QUIET_LOGS` (`1`, `true` or `yes`) silences the whole
+  side-channel for CI captures; the per-family debug flags keep their own
+  meanings either way.
+- **New docs pages.** A `GLOSSARY.md` carrying the identifier-convention
+  legend for the whole codebase, a `CONTRIBUTING.md`, and an
+  `ADDING_A_PROVIDER.md` walkthrough, all indexed in the docs README.
 
 ## Fixed (2026-10-21 plan_comparison D1)
 
