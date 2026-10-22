@@ -891,4 +891,226 @@ final class LaunchContext
         }
     }
 
+
+
+    // ---------------------------------------------------------------
+    // Family C — skip/override/frontmatter report stores (v4 S1b split,
+    // W7-D C4). The collectors and reporters stay in {@see Bootstrap}
+    // (their prose sits inside the transcript-seam and launch-warning
+    // censuses); only these process-wide memo stores and their drains
+    // live here, so the "same skips must not print twice" ledger has
+    // one named home. Accessors read; the extend/mark pair is the only
+    // way in, mirroring exactly what the moved call sites did inline.
+    // ---------------------------------------------------------------
+
+    /**
+     * Every SKILL.md the launch's skill scan gave up on, keyed by path — the
+     * diagnostic {@see \SugarCraft\Code\Skills\SkillLoader::recordSkip()}
+     * keeps instead of writing to stderr, hoisted here so it survives past the
+     * manager that produced it. See {@see skillSkips()}.
+     *
+     * @var array<string, string>
+     */
+    private static array $skillSkips = [];
+    /**
+     * The subset of {@see $skillSkips} already put in front of the user — see
+     * {@see reportSkillSkips()}.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedSkillSkips = [];
+    /**
+     * Memory note files already put in front of the user as unreadable, keyed
+     * by path — see {@see reportMemorySkips()}. Process-wide for the reason
+     * {@see $reportedSkillSkips} is.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedMemorySkips = [];
+    /**
+     * Every `*.md` command file this process's command walks could not read,
+     * keyed by path (E172) — the `Bootstrap`-side twin of {@see $skillSkips},
+     * fed by {@see chat()} from {@see \SugarCraft\Code\Commands\CommandLoader::skippedFiles()}
+     * and surfaced by {@see reportCommandSkips()} as ONE aggregate row.
+     *
+     * HOISTED off the loader instance for the same reason {@see $skillSkips}
+     * is hoisted off the skill manager: the object that produced the
+     * diagnostic does not outlive the construction that ran it, and a
+     * diagnostic nothing can reach after the fact is the same as no
+     * diagnostic. PATH-KEYED, which is what makes
+     * {@see reportCommandSkips()}'s once-per-path reporting work across a
+     * process that builds more than one Chat.
+     *
+     * NOT a ninth feeder of {@see $projectTierRefusals}, deliberately: that
+     * collector's readers print one line per entry, and the whole point of
+     * this map is that command skips need a COUNT row instead (the per-entry
+     * flood argument runs on {@see LAUNCH_NOTICE_LIMIT}).
+     *
+     * @var array<string, string> sourcePath => why it was skipped
+     */
+    private static array $commandSkips = [];
+    /**
+     * The subset of {@see $commandSkips} already put in front of the user —
+     * process-scoped noise control, same contract as
+     * {@see $reportedSkillSkips}.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedCommandSkips = [];
+    /**
+     * Which built-ins this process's command walks replaced, keyed by command
+     * name (ISS-036) — the `Bootstrap`-side twin of {@see $commandSkips}, fed
+     * by {@see chat()} from {@see \SugarCraft\Code\Commands\CommandLoader::overrides()}
+     * and surfaced by {@see reportCommandOverrides()} as ONE aggregate row.
+     *
+     * The values are the loader's own per-override sentences — name, tier and
+     * winning path, already localized — so the aggregate carries the facts
+     * without a second render pass.
+     *
+     * @var array<string, string> commandName => announcement sentence
+     */
+    private static array $commandOverrides = [];
+    /**
+     * The subset of {@see $commandOverrides} already put in front of the user —
+     * process-scoped noise control, same contract as
+     * {@see $reportedCommandSkips}.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedCommandOverrides = [];
+    /**
+     * Frontmatter keys the launch's files declare and nothing acts on, per
+     * format ({@see \SugarCraft\Code\Support\FrontmatterKeyAudit::AGENT} …),
+     * keyed by an identity that includes where the file came from =>
+     * [display name, labels].
+     *
+     * Hoisted for {@see $commandSkips}'s reason — the registries and loaders
+     * that found them do not outlive the construction — and keyed per file so
+     * {@see reportIgnoredFrontmatter()} reports each one once per process.
+     * Fed by {@see agentPresets()}, {@see skillRegistry()} and {@see chat()}'s
+     * command and rule drain (X-37a).
+     *
+     * @var array<string, array<string, array{0: string, 1: list<string>}>>
+     */
+    private static array $ignoredFrontmatter = [];
+    /**
+     * The subset of {@see $ignoredFrontmatter} already reported, same keys.
+     *
+     * @var array<string, array<string, true>>
+     */
+    private static array $reportedIgnoredFrontmatter = [];
+
+    /** The current skill-skip list, in scan order. */
+    public static function skillSkips(): array
+    {
+        return self::$skillSkips;
+    }
+
+    /** Merge a later scan's findings without erasing an earlier one's. */
+    public static function extendSkillSkips(array $found): void
+    {
+        self::$skillSkips = [...self::$skillSkips, ...$found];
+    }
+
+    /** The path-keyed reported ledger {@see Bootstrap::reportSkillSkips()} diffs against. */
+    public static function reportedSkillSkips(): array
+    {
+        return self::$reportedSkillSkips;
+    }
+
+    /** Record one skill skip as put in front of the user. */
+    public static function markSkillSkipReported(int|string $path): void
+    {
+        self::$reportedSkillSkips[$path] = true;
+    }
+
+    /** The path-keyed ledger {@see Bootstrap::reportMemorySkips()} diffs against. */
+    public static function reportedMemorySkips(): array
+    {
+        return self::$reportedMemorySkips;
+    }
+
+    /** Record one memory file as put in front of the user. */
+    public static function markMemorySkipReported(int|string $path): void
+    {
+        self::$reportedMemorySkips[$path] = true;
+    }
+
+    /** The current command-skip list, in scan order. */
+    public static function commandSkips(): array
+    {
+        return self::$commandSkips;
+    }
+
+    /** Merge a later walk's skips without erasing an earlier one's. */
+    public static function extendCommandSkips(array $found): void
+    {
+        self::$commandSkips = [...self::$commandSkips, ...$found];
+    }
+
+    /** The path-keyed ledger {@see Bootstrap::reportCommandSkips()} diffs against. */
+    public static function reportedCommandSkips(): array
+    {
+        return self::$reportedCommandSkips;
+    }
+
+    /** Record one command skip as put in front of the user. */
+    public static function markCommandSkipReported(int|string $path): void
+    {
+        self::$reportedCommandSkips[$path] = true;
+    }
+
+    /** The current built-in-shadow announcement list. */
+    public static function commandOverrides(): array
+    {
+        return self::$commandOverrides;
+    }
+
+    /** Merge a later walk's overrides without erasing an earlier one's. */
+    public static function extendCommandOverrides(array $found): void
+    {
+        self::$commandOverrides = [...self::$commandOverrides, ...$found];
+    }
+
+    /** The name-keyed ledger {@see Bootstrap::reportCommandOverrides()} diffs against. */
+    public static function reportedCommandOverrides(): array
+    {
+        return self::$reportedCommandOverrides;
+    }
+
+    /** Record one override announcement as already made. */
+    public static function markCommandOverrideReported(int|string $name): void
+    {
+        self::$reportedCommandOverrides[$name] = true;
+    }
+
+    /** The format-keyed frontmatter findings, whole, for the reporter's walk. */
+    public static function ignoredFrontmatter(): array
+    {
+        return self::$ignoredFrontmatter;
+    }
+
+    /** File one finding under its format and identity. */
+    public static function putIgnoredFrontmatter(int|string $format, string $identity, array $row): void
+    {
+        self::$ignoredFrontmatter[$format][$identity] = $row;
+    }
+
+    /** Whether this format+identity pair was already collected this process. */
+    public static function hasIgnoredFrontmatter(int|string $format, string $identity): bool
+    {
+        return isset(self::$ignoredFrontmatter[$format][$identity]);
+    }
+
+    /** The per-format reported slice {@see Bootstrap::reportIgnoredFrontmatter()} diffs against. */
+    public static function reportedIgnoredFrontmatterFor(int|string $format): array
+    {
+        return self::$reportedIgnoredFrontmatter[$format] ?? [];
+    }
+
+    /** Record one frontmatter finding as put in front of the user. */
+    public static function markIgnoredFrontmatterReported(int|string $format, string $identity): void
+    {
+        self::$reportedIgnoredFrontmatter[$format][$identity] = true;
+    }
 }

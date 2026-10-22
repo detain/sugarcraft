@@ -1073,110 +1073,14 @@ final class Bootstrap
      */
     private static array $hookFileEntries = [];
 
-    /**
-     * Every SKILL.md the launch's skill scan gave up on, keyed by path — the
-     * diagnostic {@see \SugarCraft\Code\Skills\SkillLoader::recordSkip()}
-     * keeps instead of writing to stderr, hoisted here so it survives past the
-     * manager that produced it. See {@see skillSkips()}.
-     *
-     * @var array<string, string>
-     */
-    private static array $skillSkips = [];
 
-    /**
-     * The subset of {@see $skillSkips} already put in front of the user — see
-     * {@see reportSkillSkips()}.
-     *
-     * @var array<string, true>
-     */
-    private static array $reportedSkillSkips = [];
 
-    /**
-     * Memory note files already put in front of the user as unreadable, keyed
-     * by path — see {@see reportMemorySkips()}. Process-wide for the reason
-     * {@see $reportedSkillSkips} is.
-     *
-     * @var array<string, true>
-     */
-    private static array $reportedMemorySkips = [];
 
-    /**
-     * Every `*.md` command file this process's command walks could not read,
-     * keyed by path (E172) — the `Bootstrap`-side twin of {@see $skillSkips},
-     * fed by {@see chat()} from {@see \SugarCraft\Code\Commands\CommandLoader::skippedFiles()}
-     * and surfaced by {@see reportCommandSkips()} as ONE aggregate row.
-     *
-     * HOISTED off the loader instance for the same reason {@see $skillSkips}
-     * is hoisted off the skill manager: the object that produced the
-     * diagnostic does not outlive the construction that ran it, and a
-     * diagnostic nothing can reach after the fact is the same as no
-     * diagnostic. PATH-KEYED, which is what makes
-     * {@see reportCommandSkips()}'s once-per-path reporting work across a
-     * process that builds more than one Chat.
-     *
-     * NOT a ninth feeder of {@see $projectTierRefusals}, deliberately: that
-     * collector's readers print one line per entry, and the whole point of
-     * this map is that command skips need a COUNT row instead (the per-entry
-     * flood argument runs on {@see LAUNCH_NOTICE_LIMIT}).
-     *
-     * @var array<string, string> sourcePath => why it was skipped
-     */
-    private static array $commandSkips = [];
 
-    /**
-     * The subset of {@see $commandSkips} already put in front of the user —
-     * process-scoped noise control, same contract as
-     * {@see $reportedSkillSkips}.
-     *
-     * @var array<string, true>
-     */
-    private static array $reportedCommandSkips = [];
 
-    /**
-     * Which built-ins this process's command walks replaced, keyed by command
-     * name (ISS-036) — the `Bootstrap`-side twin of {@see $commandSkips}, fed
-     * by {@see chat()} from {@see \SugarCraft\Code\Commands\CommandLoader::overrides()}
-     * and surfaced by {@see reportCommandOverrides()} as ONE aggregate row.
-     *
-     * The values are the loader's own per-override sentences — name, tier and
-     * winning path, already localized — so the aggregate carries the facts
-     * without a second render pass.
-     *
-     * @var array<string, string> commandName => announcement sentence
-     */
-    private static array $commandOverrides = [];
 
-    /**
-     * The subset of {@see $commandOverrides} already put in front of the user —
-     * process-scoped noise control, same contract as
-     * {@see $reportedCommandSkips}.
-     *
-     * @var array<string, true>
-     */
-    private static array $reportedCommandOverrides = [];
 
-    /**
-     * Frontmatter keys the launch's files declare and nothing acts on, per
-     * format ({@see \SugarCraft\Code\Support\FrontmatterKeyAudit::AGENT} …),
-     * keyed by an identity that includes where the file came from =>
-     * [display name, labels].
-     *
-     * Hoisted for {@see $commandSkips}'s reason — the registries and loaders
-     * that found them do not outlive the construction — and keyed per file so
-     * {@see reportIgnoredFrontmatter()} reports each one once per process.
-     * Fed by {@see agentPresets()}, {@see skillRegistry()} and {@see chat()}'s
-     * command and rule drain (X-37a).
-     *
-     * @var array<string, array<string, array{0: string, 1: list<string>}>>
-     */
-    private static array $ignoredFrontmatter = [];
 
-    /**
-     * The subset of {@see $ignoredFrontmatter} already reported, same keys.
-     *
-     * @var array<string, array<string, true>>
-     */
-    private static array $reportedIgnoredFrontmatter = [];
 
     /**
      * Every directory this launch refused to read, keyed by the path as
@@ -1650,13 +1554,10 @@ final class Bootstrap
         // unparseable `*.md` — which are NOT spread above (E172): that
         // collector prints one row per entry, and a directory of twenty
         // malformed files would evict the capability warnings the seam exists
-        // to carry. They hoist onto {@see $commandSkips} instead and surface
+        // to carry. They hoist onto {@see LaunchContext::commandSkips()} instead and surface
         // as ONE aggregate row below, the shape
         // {@see reportSkillSkips()} already established for skills.
-        self::$commandSkips = [
-            ...self::$commandSkips,
-            ...$commandLoader->skippedFiles(),
-        ];
+        LaunchContext::extendCommandSkips($commandLoader->skippedFiles());
 
         // And the accepted-override announcements (ISS-036): which built-ins
         // this launch's surviving file rows replaced. Hoisted off the loader
@@ -1665,10 +1566,7 @@ final class Bootstrap
         // surface below as ONE aggregate row, because a root that ships a
         // dozen shadows should read as "twelve built-ins moved", not as a
         // dozen transcript rows competing with the capability warnings.
-        self::$commandOverrides = [
-            ...self::$commandOverrides,
-            ...$commandLoader->overrides(),
-        ];
+        LaunchContext::extendCommandOverrides($commandLoader->overrides());
 
         // AFTER the construction above, not beside reportSkillSkips() further
         // up: the workflow registry that decides whether this project's
@@ -1681,14 +1579,14 @@ final class Bootstrap
 
         // The command-file skips, immediately after the directory refusals
         // and for the identical reasons: construction time, deduplicated
-        // per-path against {@see $reportedCommandSkips}, and ONE row whatever
+        // per-path against {@see LaunchContext::reportedCommandSkips()}, and ONE row whatever
         // the count (E172 — the drain half of the finding whose feeder half
         // landed in round 46 and stood dormant behind a pin that pointed here).
         self::reportCommandSkips();
 
         // The accepted-override aggregate, immediately after its skip sibling
         // and for its identical reasons: construction time, deduplicated
-        // per-name against {@see $reportedCommandOverrides}, ONE row whatever
+        // per-name against {@see LaunchContext::reportedCommandOverrides()}, ONE row whatever
         // the count. This is the drain that makes the ISS-036 claim
         // "every override is reported" true on the transcript as well as on
         // stderr.
@@ -1702,8 +1600,8 @@ final class Bootstrap
         $audit = \SugarCraft\Code\Support\FrontmatterKeyAudit::class;
         foreach ($chat->customCommands() as $name => $spec) {
             if ($spec->ignoredFrontmatter !== []) {
-                self::$ignoredFrontmatter[$audit::COMMAND][(string) json_encode([$root, $spec->tier, $name])]
-                    = ['/' . $name, $spec->ignoredFrontmatter];
+                LaunchContext::putIgnoredFrontmatter($audit::COMMAND, (string) json_encode([$root, $spec->tier, $name]),
+                    ['/' . $name, $spec->ignoredFrontmatter]);
             }
         }
         if ($root !== null) {
@@ -1713,7 +1611,7 @@ final class Bootstrap
                 $rules = new RuleLoader($root, reportRefusals: false);
                 $rules->load();
                 foreach ($rules->ignoredFrontmatter() as $key => $labels) {
-                    self::$ignoredFrontmatter[$audit::RULE][(string) json_encode([$root, $key])] = [$key, $labels];
+                    LaunchContext::putIgnoredFrontmatter($audit::RULE, (string) json_encode([$root, $key]), [$key, $labels]);
                 }
             } catch (\Throwable) {
                 // Deliberately silent here (rv-php m): this is the pre-paint
@@ -3194,7 +3092,7 @@ final class Bootstrap
             // reported once with the other formats by reportIgnoredFrontmatter().
             foreach ($registry->ignoredFrontmatter() as $name => $labels) {
                 $format = \SugarCraft\Code\Support\FrontmatterKeyAudit::AGENT;
-                self::$ignoredFrontmatter[$format][(string) json_encode([$root, $name])] = [$name, $labels];
+                LaunchContext::putIgnoredFrontmatter($format, (string) json_encode([$root, $name]), [$name, $labels]);
             }
 
             // The skipped preset files, NAMED: a launch has a handful of
@@ -5598,7 +5496,7 @@ public static function useMaxCost(?string $maxCost): void
         // scans more than once (chat(), app(), and every Ctrl+P provider
         // switch), and a later scan finding nothing wrong must not erase what
         // an earlier one found.
-        self::$skillSkips = [...self::$skillSkips, ...$manager->skipped()];
+        LaunchContext::extendSkillSkips($manager->skipped());
 
         // X-37a: the skills that loaded and declare keys nothing acts on
         // (`allowed-tools`, `context: fork`, a typo). The registry keeps typed
@@ -5609,7 +5507,7 @@ public static function useMaxCost(?string $maxCost): void
         foreach ($registry->all() as $skill) {
             $identity = $skill->sourcePath;
             if ($skill->origin === \SugarCraft\Code\Skills\SkillOrigin::BuiltIn
-                || isset(self::$ignoredFrontmatter[$audit::SKILL][$identity])
+                || LaunchContext::hasIgnoredFrontmatter($audit::SKILL, $identity)
             ) {
                 continue;
             }
@@ -5620,10 +5518,10 @@ public static function useMaxCost(?string $maxCost): void
                 continue;
             }
 
-            self::$ignoredFrontmatter[$audit::SKILL][$identity] = [
+            LaunchContext::putIgnoredFrontmatter($audit::SKILL, $identity, [
                 $skill->name,
                 $audit::inspect($audit::SKILL, $audit::metaOf($head)),
-            ];
+            ]);
         }
 
         // The skills half of the project-tier refusal — a repository that
@@ -5777,7 +5675,7 @@ public static function useMaxCost(?string $maxCost): void
      */
     public static function skillSkips(): array
     {
-        return self::$skillSkips;
+        return LaunchContext::skillSkips();
     }
 
     /**
@@ -5806,13 +5704,13 @@ public static function useMaxCost(?string $maxCost): void
         // {@see $reportedUntrustedHookFiles} is: a process that builds more
         // than one Chat (a test suite, an embedder) must not re-print the
         // same skips, and a second scan that found something NEW still says so.
-        $new = array_diff_key(self::$skillSkips, self::$reportedSkillSkips);
+        $new = array_diff_key(LaunchContext::skillSkips(), LaunchContext::reportedSkillSkips());
         if ($new === []) {
             return;
         }
 
         foreach (array_keys($new) as $path) {
-            self::$reportedSkillSkips[$path] = true;
+            LaunchContext::markSkillSkipReported($path);
         }
 
         $count = \count($new);
@@ -5894,9 +5792,9 @@ public static function useMaxCost(?string $maxCost): void
             }
         }
 
-        $new = array_diff_key($unreadable, self::$reportedMemorySkips);
+        $new = array_diff_key($unreadable, LaunchContext::reportedMemorySkips());
         foreach (array_keys($new) as $path) {
-            self::$reportedMemorySkips[$path] = true;
+            LaunchContext::markMemorySkipReported($path);
         }
         if ($new !== []) {
             // BOTH CHANNELS, ONE ROW whatever the count — the skill-skip row's
@@ -6266,7 +6164,7 @@ public static function useMaxCost(?string $maxCost): void
      */
     public static function commandSkips(): array
     {
-        return self::$commandSkips;
+        return LaunchContext::commandSkips();
     }
 
     /**
@@ -6277,7 +6175,7 @@ public static function useMaxCost(?string $maxCost): void
      * it inherits that method's whole argument for existing: a `*.md` the
      * loader could not read is a `/command` the user typed and did not get,
      * ONE row regardless of how many — the per-entry flood the
-     * {@see $commandSkips} property names is exactly why this map was never
+     * {@see LaunchContext::commandSkips()} property names is exactly why this map was never
      * spread into {@see $projectTierRefusals}`'s one-line-per-entry reader —
      * and construction time only, before Program takes the terminal.
      *
@@ -6293,13 +6191,13 @@ public static function useMaxCost(?string $maxCost): void
         // {@see reportSkillSkips()} keys its own guard: a process that builds
         // more than one Chat must not re-print, and a second walk that found
         // something NEW still says so.
-        $new = array_diff_key(self::$commandSkips, self::$reportedCommandSkips);
+        $new = array_diff_key(LaunchContext::commandSkips(), LaunchContext::reportedCommandSkips());
         if ($new === []) {
             return;
         }
 
         foreach (array_keys($new) as $path) {
-            self::$reportedCommandSkips[$path] = true;
+            LaunchContext::markCommandSkipReported($path);
         }
 
         $count = \count($new);
@@ -6342,13 +6240,13 @@ public static function useMaxCost(?string $maxCost): void
         // {@see reportCommandSkips()}'s guard shape: a process that builds a
         // second Chat must not re-print the first's shadows, and a walk that
         // replaced something NEW still says so.
-        $new = array_diff_key(self::$commandOverrides, self::$reportedCommandOverrides);
+        $new = array_diff_key(LaunchContext::commandOverrides(), LaunchContext::reportedCommandOverrides());
         if ($new === []) {
             return;
         }
 
         foreach (array_keys($new) as $name) {
-            self::$reportedCommandOverrides[$name] = true;
+            LaunchContext::markCommandOverrideReported($name);
         }
 
         $count = \count($new);
@@ -6376,10 +6274,10 @@ public static function useMaxCost(?string $maxCost): void
     private static function reportIgnoredFrontmatter(): void
     {
         $rows = [];
-        foreach (self::$ignoredFrontmatter as $format => $files) {
-            $new = array_diff_key($files, self::$reportedIgnoredFrontmatter[$format] ?? []);
+        foreach (LaunchContext::ignoredFrontmatter() as $format => $files) {
+            $new = array_diff_key($files, LaunchContext::reportedIgnoredFrontmatterFor($format));
             foreach (array_keys($new) as $identity) {
-                self::$reportedIgnoredFrontmatter[$format][$identity] = true;
+                LaunchContext::markIgnoredFrontmatterReported($format, $identity);
             }
 
             $findings = [];
