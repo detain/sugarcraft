@@ -471,7 +471,10 @@ final class RulePathScopingWiringTest extends TestCase
             1,
             // Audit 15d-20: the tracker now re-runs this loader on every consult
             // instead of holding one boot-time walk, so the pin reads the closure.
-            preg_match('/RulePathNudge::fromLoader\(\s*static fn \(\): array => \(new RuleLoader\(\$root\)\)->load\(\),\s*\$rulesState,?\s*\)/', $source),
+            // Re-armed W7-E C2 (2026-10-21): unfilteredTools()'s body moved to
+            // LaunchContext (Bootstrap keeps the delegate door), so the tracker
+            // build is read from the builder file, not from $source.
+            preg_match('/RulePathNudge::fromLoader\(\s*static fn \(\): array => \(new RuleLoader\(\$root\)\)->load\(\),\s*\$rulesState,?\s*\)/', (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/LaunchContext.php')),
             'the tracker itself must be built with the set — the rule list stays unfiltered so a pack switched back on mid-session is deliverable again',
         );
     }

@@ -17,6 +17,9 @@ use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulesState;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Context\RuleLoader;
+use SugarCraft\Code\Context\RulePathNudge;
+use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
@@ -1497,7 +1500,7 @@ final class LaunchContext
         // `mcpTools()`'s appended bridges, which is what makes
         // `disabledTools: ["mcp__git__*"]` mean anything.
         Bootstrap::installSecretEnvAllowlist();
-        $tools = Bootstrap::filterToolSet(Bootstrap::unfilteredTools(
+        $tools = Bootstrap::filterToolSet(self::unfilteredTools(
             $root,
             $loader,
             $skills,
@@ -1560,6 +1563,151 @@ final class LaunchContext
                 ->withWorktreeManager(\SugarCraft\Code\Agents\WorktreeManager::new($taskRoot));
         }
 
+        return $tools;
+    }
+
+    /**
+     * The exact array {@see tools()} builds, BEFORE `filterToolSet()` applies
+     * the session's `allowedTools`/`disabledTools` — the ceiling itself rather
+     * than one session's slice of it.
+     *
+     * WHY THIS IS PUBLIC. `AgentManager::resolveGrantedTools()` has to tell
+     * "the operator disabled this tool" from "the preset misspelled it", and
+     * that distinction needs BOTH halves: the filtered set as the grant's
+     * ceiling and this unfiltered set as the universe the narrowing happened
+     * against. Handing it only `tools()` turned `disabledTools: ["Bash"]` —
+     * documented as intentional — into a crash for five of the six built-in
+     * presets (E639's measured trap); passing only THIS would let sub-agent
+     * rosters ignore `disabledTools`, a widening. The two-set shape is the
+     * decided remedy, argued in that method's doc-block.
+     *
+     * Same construction cost as tools() minus one filter pass — nothing here
+     * spawns what backend()/app() are not already spawning on the same launch.
+     *
+     * @return list<Tool>
+     *
+     * @see tools() for the argument documentation, which is about THIS build —
+     *      tools() is one line of delegation over every parameter below.
+     */
+    public static function unfilteredTools(
+        ?string $root = null,
+        ?InstructionFileLoader $loader = null,
+        ?SkillRegistry $skills = null,
+        ?LspClient $lsp = null,
+        bool $rgAvailable = false,
+        bool $fdAvailable = false,
+        ?RulesState $rulesState = null,
+    ): array {
+        $root = Bootstrap::requireRoot($root);
+        $loader ??= Bootstrap::instructionLoader($root);
+        $skills ??= Bootstrap::skillRegistry($root);
+
+        // ONE tracker across every tool that resolves a path — Read, Edit,
+        // Glob, Grep and Write: the "announce a path-scoped skill the first
+        // time we touch a file it covers" rule is only correct if all of them
+        // share the announced-set. Five trackers would re-announce the same
+        // skill once per tool (crush_feat.md section 7 E4).
+        //
+        // This comment said THREE and named Read/Edit/Glob. It was already
+        // stale — `Write` below has taken the same pair since it was wired —
+        // and `Grep` has now joined them, which is the arithmetic this project
+        // keeps getting wrong. The count and the names are both asserted, not
+        // just written here: `BinCandyCodeWiringTest` now DERIVES the roster
+        // from the tools that declare an `instructionLoader` property instead
+        // of restating a hand-kept list, so the next tool to take the pair
+        // fails that test until it is acknowledged there.
+        $nudge = SkillPathNudge::new($skills);
+
+        // P6.S5b: the second transient channel carries `paths:`-scoped RULES, and
+        // it is a separate tracker from the skills one on purpose — one subject
+        // per class, so retuning a skill budget never moves a rule budget. The
+        // rules come from the same entry point the prompt splice uses, and are
+        // RE-WALKED on every consult rather than once here (audit 15d-20): the
+        // splice re-walks per build and skips every path-scoped rule as "delivered
+        // at tool time", so a tracker frozen at boot left a rule written
+        // mid-session in neither channel, kept announcing an edited rule's launch
+        // text, and still nudged a rule whose `paths:` had been removed. The cost
+        // is one `load()` per path-resolving tool call — see
+        // {@see RulePathNudge::fromLoader()}.
+        //
+        // THE TOGGLE REACHES THIS CHANNEL TOO. The set handed below is the SAME
+        // instance `chat()` gave the backend and `Chat`, so a pack silenced in
+        // `disabledRules` is absent from the first turn and one silenced later with
+        // `/rules` goes quiet on the next tool call — the tracker consults it per
+        // rule rather than baking the launch answer into a candidate list, and the
+        // loader below is built WITHOUT the set so that per-rule consult stays the
+        // one place this channel applies the toggle. Passing a
+        // pre-filtered rule list instead would freeze boot-time intent and leave the
+        // toggle half of the goal unmet; passing a SECOND `RulesState` built from the
+        // same config key would be the two-copies disagreement the note above the
+        // `chat()` construction names. Null — every caller that does not thread a
+        // set, including the shell's display copies in `app()`, whose tracker no tool
+        // call ever reaches — is the pre-fix behaviour, stated rather than assumed.
+        $ruleNudge = RulePathNudge::fromLoader(
+            static fn (): array => (new RuleLoader($root))->load(),
+            $rulesState,
+        );
+
+        // THE BUILT-IN HALF COMES FROM THE CATALOG (DH-TOOLS): every class
+        // under `src/Tools/BuiltIn/` declares its wire name, permission class
+        // and wire position (`#[BuiltInTool]`) and builds itself from this one
+        // shared context, so a new tool is a new file rather than an edit
+        // here. One loader and one pair of nudge trackers for every
+        // path-resolving tool, for the announced-set reason above.
+        //
+        // MCP bridges are APPENDED, so the built-ins keep the wire order the
+        // model has learned and an MCP config can only ever ADD names. Empty
+        // unless this project ships a `.mcp.json` AND the user trusted this
+        // root — see {@see mcpTools()} and {@see mcpClient()}. MCP-7's
+        // dispatcher pair is the exception to APPENDED: `mcp_list`/`mcp_call`
+        // are ordinary positioned built-ins BUILT BY THE CATALOG from the
+        // frozen shape, and only when something was actually deferred.
+        // `Task` is not in this set: `tools()` appends it after the filter,
+        // only when an AgentManager is bound.
+        $tools = [
+            ...\SugarCraft\Code\Tools\Catalog\ToolCatalog::build(new \SugarCraft\Code\Tools\Catalog\ToolBuildContext(
+                root: $root,
+                loader: $loader,
+                skills: $skills,
+                skillNudge: $nudge,
+                ruleNudge: $ruleNudge,
+                lsp: $lsp,
+                rgAvailable: $rgAvailable,
+                fdAvailable: $fdAvailable,
+                // Lazy: the home store is opened on the Memory tool's first
+                // call, so building the tool set creates nothing on disk.
+                memory: \SugarCraft\Code\Memory\MemoryWriter::new(
+                    static fn (): ?MemoryStore => Bootstrap::memoryStoreOrNull($root),
+                    $root,
+                ),
+                // Roadmap 3.I-2: ONE read ledger for this launch and root —
+                // Read records into it, Edit/Write/ApplyPatch refuse a stale
+                // file against it, and the post-edit format hook records its
+                // rewrites through the very same instance
+                // ({@see readLedger()}) — owned by the launch, for the
+                // loader's reason above.
+                readLedger: Bootstrap::readLedger($root),
+                // SHL-1: ONE background-shell table per launch and root —
+                // Bash's `run_in_background` records into it, ShellOutput and
+                // ShellStop read it, and the shutdown hook
+                // ({@see registerBackgroundShellShutdown()}) tears down what
+                // this pid's copies hold.
+                backgroundShells: Bootstrap::backgroundShells($root),
+                // MCP-7: the pair is BUILT here, from the frozen shape, like
+                // every other conditional tool — null shape or an all-eager
+                // config yields null from fromCatalog() and neither name
+                // reaches the wire at all.
+                mcpShape: Bootstrap::mcpToolShape($root),
+            )),
+            ...Bootstrap::mcpTools($root),
+        ];
+
+        // THE CEILING, not the session's slice of it. Every caller that renders
+        // tools to a model wants tools() — which filters this array with the
+        // operator's allowedTools/disabledTools in ONE place; the argument for
+        // filtering there rather than at the call sites lives on that method.
+        // Only a caller that must distinguish narrowing from absence (the
+        // sub-agent grant, E639) asks for this one directly.
         return $tools;
     }
 }

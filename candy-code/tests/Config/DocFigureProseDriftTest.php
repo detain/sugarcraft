@@ -5081,16 +5081,20 @@ final class DocFigureProseDriftTest extends TestCase
         // threading excerpt (with the literal it uses to reach unfilteredTools) now lives
         // with the body.
         $threaderBody = self::bodyExcerpt(self::sourceOf('Cli/LaunchContext.php'), $thread[1], 6000);
-        self::assertStringContainsString('Bootstrap::unfilteredTools(', $threaderBody, sprintf('%s() no longer delegates to unfilteredTools() — the authority the wiring moved under needs re-reading', $thread[1]));
+        self::assertStringContainsString('self::unfilteredTools(', $threaderBody, sprintf('%s() no longer delegates to unfilteredTools() — the authority the wiring moved under needs re-reading', $thread[1]));
 
+        // Re-armed again W7-E C2 (2026-10-21): unfilteredTools()'s body moved to
+        // LaunchContext too (Bootstrap keeps the door AgentManager names), so the
+        // loader-threading span is read from the body's file.
+        $ctxSource = self::sourceOf('Cli/LaunchContext.php');
         $span = null;
-        foreach (self::functionSpans($bootstrap) as $candidate) {
+        foreach (self::functionSpans($ctxSource) as $candidate) {
             if ($candidate['name'] === 'unfilteredTools') {
                 $span = $candidate;
             }
         }
-        self::assertNotNull($span, 'Bootstrap::unfilteredTools() no longer exists — this arm and the delegation above both lost their authority');
-        $spanText = (string) substr($bootstrap, $span['begin'], $span['end'] - $span['begin']);
+        self::assertNotNull($span, 'LaunchContext::unfilteredTools() no longer exists — this arm and the delegation above both lost their authority');
+        $spanText = (string) substr($ctxSource, $span['begin'], $span['end'] - $span['begin']);
         // DH-TOOLS: unfilteredTools() puts ONE loader into the catalog's shared
         // build context, and each built-in's factory forwards it — so the
         // threaded set is the catalog tools (in wire order) whose factory
@@ -6549,7 +6553,11 @@ final class DocFigureProseDriftTest extends TestCase
         );
 
         $bootstrap = self::codeOnly(self::sourceOf('Cli/Bootstrap.php'));
-        self::assertMatchesRegularExpression('/\$ruleNudge = RulePathNudge::(?:fromLoader|new)\(/', $bootstrap, 'Bootstrap no longer builds the RulePathNudge the pages say it wires');
+        // Re-armed W7-E C2 (2026-10-21): the tool builder's body moved to
+        // LaunchContext (Bootstrap keeps the delegate doors the pages name),
+        // so the wiring claims read across both builder files.
+        $bootstrap .= "\n" . self::codeOnly(self::sourceOf('Cli/LaunchContext.php'));
+        self::assertMatchesRegularExpression('/\$ruleNudge = RulePathNudge::(?:fromLoader|new)\(/', $bootstrap, 'the tools builder no longer builds the RulePathNudge the pages say it wires');
         // DH-TOOLS: Bootstrap hands the tracker to the catalog's shared build
         // context once, and each built-in's own factory passes it on — so the
         // nudged set is the catalog tools whose factory forwards it.
