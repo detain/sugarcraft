@@ -255,7 +255,7 @@ final class BootstrapClaudeMcpGrantTest extends TestCase
             json_encode($values, JSON_THROW_ON_ERROR),
         );
 
-        $roots = new \ReflectionProperty(Bootstrap::class, 'trustedSettingsRoots');
+        $roots = new \ReflectionProperty(LaunchContext::class, 'trustedSettingsRoots');
         $roots->setAccessible(true);
         $roots->setValue(null, []);
     }

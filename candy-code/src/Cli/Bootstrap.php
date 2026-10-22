@@ -972,106 +972,19 @@ final class Bootstrap
      */
     public const TRANSCRIPT_SEAM_CALL_SITES = 31;
 
-    /**
-     * Project hook files this process has already reported as skipped, keyed
-     * by path — see the notice in {@see hookFiles()} for why it may only fire
-     * once per launch. Static because the duplication comes from ONE launch
-     * building two hook chains, which is a property of the process rather than
-     * of any instance.
-     *
-     * @var array<string, true>
-     */
-    private static array $reportedUntrustedHookFiles = [];
 
 
-    /**
-     * The trusted project roots this process resolved, keyed by the
-     * `config.json` they came out of — see {@see trustedRootsForThisProcess()}
-     * for why the answer may not be recomputed mid-session.
-     *
-     * @var array<string, list<string>>
-     */
-    private static array $trustedRoots = [];
 
-    // rv-sec-3 policy-freshness guard state — see ensurePolicyFreshnessChecked().
-    private static bool $policyFreshnessChecked = false;
 
-    private static bool $policyChanged = false;
 
     /** @var array<string, list<string>> canonical root => hook entry identities the LAST launch loaded */
-    private static array $policyPreviousProjectHooks = [];
 
     /** @var list<string> roots the LAST launch had under trustedProjectHooks */
-    private static array $policyPreviousTrustedRoots = [];
 
-    /**
-     * The same, for {@see TRUSTED_PROJECT_MCP_CONFIG_KEY} — a SEPARATE map
-     * because it holds a separate key's answer, frozen for the same reason
-     * {@see trustedRootsForThisProcess()} gives: a session that prompt-injects a
-     * line into the user's config must not be able to make that line take effect
-     * in the session that wrote it.
-     *
-     * @var array<string, list<string>>
-     */
-    private static array $trustedMcpRoots = [];
 
-    /**
-     * The same again, for {@see TRUSTED_PROJECT_COMMANDS_CONFIG_KEY}, frozen for
-     * the reason {@see trustedRootsForThisProcess()} gives: a session that gets
-     * a line appended to the user's config must not be able to make that line
-     * take effect in the session that wrote it.
-     *
-     * @var array<string, list<string>>
-     */
-    private static array $trustedCommandRoots = [];
 
-    /**
-     * The same again, for {@see LayeredSettings::PROJECT_SETTINGS_TRUST_KEY},
-     * frozen for {@see trustedRootsForThisProcess()}'s reason and for that
-     * reason ALONE. The freeze is per resolved config PATH, so a test that
-     * repoints `--config` gets a fresh answer.
-     *
-     * NO EXTRA THREAT OVER ITS THREE SIBLINGS, stated because the first cut of
-     * this doc-block claimed one: that "a project's own `settings.local.json`
-     * is writable by anything running in the checkout, so without the freeze a
-     * turn could append a trust line and have its own later reads honour it".
-     * That is not reachable, and the review that caught it measured why. This
-     * key is not in {@see LayeredSettings::LAYERED_KEYS}, so
-     * `LayeredSettings::only()` drops it from every settings file at every
-     * tier — a project's, and the user's own `settings.json` too — and the list
-     * itself is read from `config.json` through {@see permissionConfig()},
-     * which the layering does not touch. A write to a settings file therefore
-     * cannot add a trust entry at all, frozen or not. What the freeze actually
-     * buys here is what it buys for hooks, MCP and commands: one answer per
-     * process, so a mid-session edit to the user's OWN `config.json` cannot
-     * widen the grant a launch already decided.
-     *
-     * AND SINCE E74b THAT HOLDS FOR THE REFUSED ANSWER TOO. The one door this
-     * freeze used to leave open was the throw: an unusable `config.json` cached
-     * nothing, so a later call re-read the file and a config repaired
-     * mid-process started contributing the layer its own unparseability had
-     * just cost. A refusal now caches the empty list under the path it
-     * resolved; only a home this process cannot name — no key to answer under —
-     * still reaches the parser twice, and both attempts fail closed.
-     *
-     * @var array<string, list<string>>
-     */
-    private static array $trustedSettingsRoots = [];
 
-    /**
-     * The project root {@see readUserConfig()}'s project layer is read from, or
-     * null for "no project named yet" — see
-     * {@see useProjectRootForSettings()}.
-     */
-    private static ?string $projectRootForSettings = null;
 
-    /**
-     * The hook entries this process read, keyed by file path — see
-     * {@see hookFileEntries()} for why the file is read once per launch.
-     *
-     * @var array<string, array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool}>>
-     */
-    private static array $hookFileEntries = [];
 
 
 
@@ -4758,7 +4671,7 @@ public static function useMaxCost(?string $maxCost): void
      */
     private static function mergedConfig(bool $withProjectTier): array
     {
-        $root = self::$projectRootForSettings;
+        $root = LaunchContext::projectRootForSettings();
         $userSettingsDir = self::userSettingsDirOrNull();
 
         return array_merge(
@@ -4881,7 +4794,7 @@ public static function useMaxCost(?string $maxCost): void
      */
     public static function useProjectRootForSettings(?string $root): void
     {
-        self::$projectRootForSettings = $root === null || trim($root) === '' ? null : $root;
+        LaunchContext::rememberProjectRootForSettings($root === null || trim($root) === '' ? null : $root);
         self::ensurePolicyFreshnessChecked();
     }
 
@@ -4891,10 +4804,10 @@ public static function useMaxCost(?string $maxCost): void
      */
     private static function ensurePolicyFreshnessChecked(): void
     {
-        if (self::$policyFreshnessChecked) {
+        if (LaunchContext::policyFreshnessChecked()) {
             return;
         }
-        self::$policyFreshnessChecked = true;
+        LaunchContext::markPolicyFreshnessChecked();
 
         try {
             self::checkPolicyFreshness();
@@ -4905,7 +4818,7 @@ public static function useMaxCost(?string $maxCost): void
             // same launch (requirePrivatePolicyFile, the hook-chain refusal).
             // A guard that can brick a launch on its own bookkeeping failure
             // is a second bug, not a safety property.
-            self::$policyChanged = false;
+            LaunchContext::rememberPolicyChanged(false);
         }
     }
 
@@ -4980,11 +4893,11 @@ public static function useMaxCost(?string $maxCost): void
 
         $changed = $userChanged || $projectHooksChanged;
 
-        self::$policyChanged = $changed;
-        self::$policyPreviousProjectHooks = $changed ? ($previous['projectHooks'] ?? []) : [];
-        self::$policyPreviousTrustedRoots = $changed && is_array($previous['trustedRoots'] ?? null)
+        LaunchContext::rememberPolicyChanged($changed);
+        LaunchContext::rememberPolicyPreviousProjectHooks($changed ? ($previous['projectHooks'] ?? []) : []);
+        LaunchContext::rememberPolicyPreviousTrustedRoots($changed && is_array($previous['trustedRoots'] ?? null)
             ? $previous['trustedRoots']
-            : [];
+            : []);
 
         PolicySnapshot::write($configDir, [
             'version' => PolicySnapshot::VERSION,
@@ -5017,7 +4930,7 @@ public static function useMaxCost(?string $maxCost): void
     {
         self::ensurePolicyFreshnessChecked();
 
-        return self::$policyChanged;
+        return LaunchContext::policyChanged();
     }
 
     /**
@@ -5063,12 +4976,12 @@ public static function useMaxCost(?string $maxCost): void
         try {
             $path = self::trustedConfigDirPath() . '/config.json';
 
-            if (!\array_key_exists($path, self::$trustedSettingsRoots)) {
-                self::$trustedSettingsRoots[$path] = self::trustedProjectRoots(
+            if (!LaunchContext::hasTrustedSettingsRootsFor($path)) {
+                LaunchContext::rememberTrustedSettingsRoots($path, self::trustedProjectRoots(
                     self::permissionConfig(),
                     LayeredSettings::PROJECT_SETTINGS_TRUST_KEY,
                     Lang::t('cli.warn.untrusted_settings'),
-                );
+                ));
             }
         } catch (\Throwable) {
             // THE REFUSED ANSWER FREEZES TOO (E74b). It used to be the ONE
@@ -5091,13 +5004,13 @@ public static function useMaxCost(?string $maxCost): void
             // before `$path` could be computed: with no key there is nothing to
             // freeze, and the next call fails closed the same way.
             if ($path !== null) {
-                self::$trustedSettingsRoots[$path] ??= [];
+                LaunchContext::freezeTrustedSettingsRootsWithoutTrust($path);
             }
 
             return false;
         }
 
-        return in_array($canonical, self::$trustedSettingsRoots[$path], true);
+        return in_array($canonical, LaunchContext::trustedSettingsRootsFor($path), true);
     }
 
     /**
@@ -5701,7 +5614,7 @@ public static function useMaxCost(?string $maxCost): void
     public static function reportSkillSkips(): void
     {
         // Only what has not been reported yet, keyed the same way
-        // {@see $reportedUntrustedHookFiles} is: a process that builds more
+        // {@see LaunchContext::$reportedUntrustedHookFiles} is: a process that builds more
         // than one Chat (a test suite, an embedder) must not re-print the
         // same skips, and a second scan that found something NEW still says so.
         $new = array_diff_key(LaunchContext::skillSkips(), LaunchContext::reportedSkillSkips());
@@ -6549,7 +6462,7 @@ public static function useMaxCost(?string $maxCost): void
      */
     private static function hookFileEntries(string $path): array
     {
-        if (!\array_key_exists($path, self::$hookFileEntries)) {
+        if (!LaunchContext::hasHookFileEntriesFor($path)) {
             // Only the USER's files. The project's are gated by
             // `trustedProjectHooks` and live in a checkout whose permissions
             // are the user's business; the user's files are the ones loaded
@@ -6561,12 +6474,12 @@ public static function useMaxCost(?string $maxCost): void
                 self::requirePrivatePolicyFile($path);
             }
 
-            self::$hookFileEntries[$path] = ClaudeSettingsHooks::isClaudeSettingsPath($path)
+            LaunchContext::rememberHookFileEntries($path, ClaudeSettingsHooks::isClaudeSettingsPath($path)
                 ? ClaudeSettingsHooks::fromFile($path)
-                : HookConfig::loadFromFile($path);
+                : HookConfig::loadFromFile($path));
         }
 
-        return self::$hookFileEntries[$path];
+        return LaunchContext::hookFileEntriesFor($path);
     }
 
     /**
@@ -6596,7 +6509,7 @@ public static function useMaxCost(?string $maxCost): void
             return $entries;
         }
 
-        $seenBefore = self::$policyPreviousProjectHooks[\dirname(\dirname($path))] ?? [];
+        $seenBefore = LaunchContext::policyPreviousProjectHooks()[\dirname(\dirname($path))] ?? [];
 
         return array_values(array_filter(
             $entries,
@@ -6825,8 +6738,8 @@ public static function useMaxCost(?string $maxCost): void
                     // repository I cd into". {@see trustedProjectHookRoots()}
                     // refuses such an entry now; this makes sure the tool never
                     // suggests one.
-                    if (!isset(self::$reportedUntrustedHookFiles[$projectFile])) {
-                        self::$reportedUntrustedHookFiles[$projectFile] = true;
+                    if (!LaunchContext::hasReportedUntrustedHookFile($projectFile)) {
+                        LaunchContext::markUntrustedHookFileReported($projectFile);
 
                         self::warnPermissionConfigInTranscript(Lang::t('cli.warn.hook_file_untrusted', [
                             'file' => $projectFile,
@@ -6951,7 +6864,7 @@ public static function useMaxCost(?string $maxCost): void
     {
         $path = self::trustedConfigDirPath() . '/config.json';
 
-        if (!\array_key_exists($path, self::$trustedRoots)) {
+        if (!LaunchContext::hasTrustedRootsFor($path)) {
             $roots = self::trustedProjectHookRoots(self::permissionConfig());
 
             // rv-sec-3: during a quarantine launch, a root that only APPEARED
@@ -6959,17 +6872,17 @@ public static function useMaxCost(?string $maxCost): void
             // yet either — adding a line to the user's config naming a fresh
             // clone is the same "first sight of a repository" event as the
             // clone shipping its own hooks.yaml. The launch after, honoured.
-            if (self::policyQuarantineActive() && self::$policyPreviousTrustedRoots !== []) {
+            if (self::policyQuarantineActive() && LaunchContext::policyPreviousTrustedRoots() !== []) {
                 $roots = array_values(array_filter(
                     $roots,
-                    static fn (string $root): bool => \in_array($root, self::$policyPreviousTrustedRoots, true),
+                    static fn (string $root): bool => \in_array($root, LaunchContext::policyPreviousTrustedRoots(), true),
                 ));
             }
 
-            self::$trustedRoots[$path] = $roots;
+            LaunchContext::rememberTrustedRoots($path, $roots);
         }
 
-        return self::$trustedRoots[$path];
+        return LaunchContext::trustedRootsFor($path);
     }
 
     /**
@@ -7025,15 +6938,15 @@ public static function useMaxCost(?string $maxCost): void
 
         $path = self::trustedConfigDirPath() . '/config.json';
 
-        if (!\array_key_exists($path, self::$trustedMcpRoots)) {
-            self::$trustedMcpRoots[$path] = self::trustedProjectRoots(
+        if (!LaunchContext::hasTrustedMcpRootsFor($path)) {
+            LaunchContext::rememberTrustedMcpRoots($path, self::trustedProjectRoots(
                 self::permissionConfig(),
                 self::TRUSTED_PROJECT_MCP_CONFIG_KEY,
                 Lang::t('cli.warn.untrusted_mcp'),
-            );
+            ));
         }
 
-        return in_array($canonical, self::$trustedMcpRoots[$path], true);
+        return in_array($canonical, LaunchContext::trustedMcpRootsFor($path), true);
     }
 
     /**
@@ -7062,15 +6975,15 @@ public static function useMaxCost(?string $maxCost): void
 
         $path = self::trustedConfigDirPath() . '/config.json';
 
-        if (!\array_key_exists($path, self::$trustedCommandRoots)) {
-            self::$trustedCommandRoots[$path] = self::trustedProjectRoots(
+        if (!LaunchContext::hasTrustedCommandRootsFor($path)) {
+            LaunchContext::rememberTrustedCommandRoots($path, self::trustedProjectRoots(
                 self::permissionConfig(),
                 self::TRUSTED_PROJECT_COMMANDS_CONFIG_KEY,
                 Lang::t('cli.warn.untrusted_commands'),
-            );
+            ));
         }
 
-        return in_array($canonical, self::$trustedCommandRoots[$path], true);
+        return in_array($canonical, LaunchContext::trustedCommandRootsFor($path), true);
     }
 
     /**
@@ -8018,7 +7931,7 @@ public static function useMaxCost(?string $maxCost): void
      * malformed entry reported twice is what the user experiences as noise,
      * whichever line printed it — and because the message already carries the
      * entry's index, so two genuinely different bad entries still both get
-     * said. Static for the reason {@see $reportedUntrustedHookFiles} is: the
+     * said. Static for the reason {@see LaunchContext::$reportedUntrustedHookFiles} is: the
      * duplication is a property of the launch, not of any instance.
      */
     private static function warnPermissionConfigOnce(string $message): void
@@ -9649,7 +9562,7 @@ public static function useMaxCost(?string $maxCost): void
      */
     private static function reportProjectTierToolRemovals(array $tools, array $kept): void
     {
-        $root = self::$projectRootForSettings;
+        $root = LaunchContext::projectRootForSettings();
         if ($root === null) {
             return;
         }

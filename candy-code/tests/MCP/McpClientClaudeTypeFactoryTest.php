@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\MCP;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\MCP\ClaudeCodeMcpServer;
 use SugarCraft\Code\MCP\GitMcpServer;
 use SugarCraft\Code\MCP\HttpMcpServer;
@@ -184,9 +185,9 @@ final class McpClientClaudeTypeFactoryTest extends TestCase
             json_encode(['claudeMcpBinary' => $binary], JSON_THROW_ON_ERROR),
         );
         // The reader rides permissionConfig(); no process-global memo feeds it,
-        // but the settings ROOT cache does exist in Bootstrap — reset it so a
+        // but the settings ROOT cache does exist on LaunchContext — reset it so a
         // previous test's refused read cannot ride into this grant.
-        $roots = new \ReflectionProperty(Bootstrap::class, 'trustedSettingsRoots');
+        $roots = new \ReflectionProperty(LaunchContext::class, 'trustedSettingsRoots');
         $roots->setAccessible(true);
         $roots->setValue(null, []);
     }

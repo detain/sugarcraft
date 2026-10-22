@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\AgentPreset;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\MCP\ClaudeCodeMcpServer;
@@ -803,7 +804,7 @@ final class McpToolWiringTest extends TestCase
         // the measured repo itself before its launch, one call later.
         $this->trustTheRepo($seedRepo);
 
-        $frozen = new \ReflectionProperty(Bootstrap::class, 'trustedMcpRoots');
+        $frozen = new \ReflectionProperty(LaunchContext::class, 'trustedMcpRoots');
         $snapshot = (array) $frozen->getValue();
 
         Bootstrap::mcpClient($seedRepo);

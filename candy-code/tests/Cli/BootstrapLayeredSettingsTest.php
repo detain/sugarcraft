@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Context\RulesState;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
@@ -291,7 +292,7 @@ final class BootstrapLayeredSettingsTest extends TestCase
     {
         self::assertNotFalse(realpath(''), 'the measurement this guard exists for no longer holds');
 
-        $stored = new \ReflectionProperty(Bootstrap::class, 'projectRootForSettings');
+        $stored = new \ReflectionProperty(LaunchContext::class, 'projectRootForSettings');
 
         foreach (['   ', '', null] as $blank) {
             Bootstrap::useProjectRootForSettings($blank);

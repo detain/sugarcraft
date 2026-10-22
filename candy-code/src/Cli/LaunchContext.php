@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Cli;
 
 use SugarCraft\Code\Background\BackgroundShellRegistry;
+use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Bundles\Bundle;
 use SugarCraft\Code\LSP\LspClient;
 use SugarCraft\Code\MCP\McpClient;
@@ -1112,5 +1113,268 @@ final class LaunchContext
     public static function markIgnoredFrontmatterReported(int|string $format, string $identity): void
     {
         self::$reportedIgnoredFrontmatter[$format][$identity] = true;
+    }
+
+    // -----------------------------------------------------------------
+    // Family D — trust/policy stores (v4 S1b)
+    //
+    // The freeze ledgers behind the once-per-process trust answers. The
+    // methods that DECIDE — Bootstrap::trustedRootsForThisProcess(),
+    // projectMcpIsTrusted(), projectCommandShellIsTrusted(),
+    // projectSettingsTrusted(), hookFileEntries(), checkPolicyFreshness(),
+    // quarantineNewHookEntries(), and the untrusted-hook notice inside
+    // hookFiles() — stay in Bootstrap, census-pinned to the launch-warning
+    // pipeline. What lives here is the frozen state itself: the same
+    // ledgers under one named home, same clear-what-you-set test contract
+    // as every other family on this shelf.
+    // -----------------------------------------------------------------
+
+    /**
+     * Project hook files this process has already reported as skipped, keyed
+     * by path — see the notice in {@see Bootstrap::hookFiles()} for why it may only fire
+     * once per launch. Static because the duplication comes from ONE launch
+     * building two hook chains, which is a property of the process rather than
+     * of any instance.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedUntrustedHookFiles = [];
+
+    /**
+     * The trusted project roots this process resolved, keyed by the
+     * `config.json` they came out of — see {@see Bootstrap::trustedRootsForThisProcess()}
+     * for why the answer may not be recomputed mid-session.
+     *
+     * @var array<string, list<string>>
+     */
+    private static array $trustedRoots = [];
+
+    // rv-sec-3 policy-freshness guard state — see Bootstrap::ensurePolicyFreshnessChecked().
+    private static bool $policyFreshnessChecked = false;
+
+    private static bool $policyChanged = false;
+
+    private static array $policyPreviousProjectHooks = [];
+
+    private static array $policyPreviousTrustedRoots = [];
+
+    /**
+     * The same, for {@see Bootstrap::TRUSTED_PROJECT_MCP_CONFIG_KEY} — a SEPARATE map
+     * because it holds a separate key's answer, frozen for the same reason
+     * {@see Bootstrap::trustedRootsForThisProcess()} gives: a session that prompt-injects a
+     * line into the user's config must not be able to make that line take effect
+     * in the session that wrote it.
+     *
+     * @var array<string, list<string>>
+     */
+    private static array $trustedMcpRoots = [];
+
+    /**
+     * The same again, for {@see Bootstrap::TRUSTED_PROJECT_COMMANDS_CONFIG_KEY}, frozen for
+     * the reason {@see Bootstrap::trustedRootsForThisProcess()} gives: a session that gets
+     * a line appended to the user's config must not be able to make that line
+     * take effect in the session that wrote it.
+     *
+     * @var array<string, list<string>>
+     */
+    private static array $trustedCommandRoots = [];
+
+    /**
+     * The same again, for {@see LayeredSettings::PROJECT_SETTINGS_TRUST_KEY},
+     * frozen for {@see Bootstrap::trustedRootsForThisProcess()}'s reason and for that
+     * reason ALONE. The freeze is per resolved config PATH, so a test that
+     * repoints `--config` gets a fresh answer.
+     *
+     * NO EXTRA THREAT OVER ITS THREE SIBLINGS, stated because the first cut of
+     * this doc-block claimed one: that "a project's own `settings.local.json`
+     * is writable by anything running in the checkout, so without the freeze a
+     * turn could append a trust line and have its own later reads honour it".
+     * That is not reachable, and the review that caught it measured why. This
+     * key is not in {@see LayeredSettings::LAYERED_KEYS}, so
+     * `LayeredSettings::only()` drops it from every settings file at every
+     * tier — a project's, and the user's own `settings.json` too — and the list
+     * itself is read from `config.json` through {@see Bootstrap::permissionConfig()},
+     * which the layering does not touch. A write to a settings file therefore
+     * cannot add a trust entry at all, frozen or not. What the freeze actually
+     * buys here is what it buys for hooks, MCP and commands: one answer per
+     * process, so a mid-session edit to the user's OWN `config.json` cannot
+     * widen the grant a launch already decided.
+     *
+     * AND SINCE E74b THAT HOLDS FOR THE REFUSED ANSWER TOO. The one door this
+     * freeze used to leave open was the throw: an unusable `config.json` cached
+     * nothing, so a later call re-read the file and a config repaired
+     * mid-process started contributing the layer its own unparseability had
+     * just cost. A refusal now caches the empty list under the path it
+     * resolved; only a home this process cannot name — no key to answer under —
+     * still reaches the parser twice, and both attempts fail closed.
+     *
+     * @var array<string, list<string>>
+     */
+    private static array $trustedSettingsRoots = [];
+
+    /**
+     * The project root {@see Bootstrap::readUserConfig()}'s project layer is read from, or
+     * null for "no project named yet" — see
+     * {@see Bootstrap::useProjectRootForSettings()}.
+     */
+    private static ?string $projectRootForSettings = null;
+
+    /**
+     * The hook entries this process read, keyed by file path — see
+     * {@see Bootstrap::hookFileEntries()} for why the file is read once per launch.
+     *
+     * @var array<string, array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool}>>
+     */
+    private static array $hookFileEntries = [];
+
+
+    /** The memoised trusted roots for $path, or an unset sentinel via hasTrustedRootsFor(). */
+    public static function trustedRootsFor(string $path): array
+    {
+        return self::$trustedRoots[$path];
+    }
+
+    public static function hasTrustedRootsFor(string $path): bool
+    {
+        return \array_key_exists($path, self::$trustedRoots);
+    }
+
+    public static function rememberTrustedRoots(string $path, array $roots): void
+    {
+        self::$trustedRoots[$path] = $roots;
+    }
+
+    public static function trustedMcpRootsFor(string $path): array
+    {
+        return self::$trustedMcpRoots[$path];
+    }
+
+    public static function hasTrustedMcpRootsFor(string $path): bool
+    {
+        return \array_key_exists($path, self::$trustedMcpRoots);
+    }
+
+    public static function rememberTrustedMcpRoots(string $path, array $roots): void
+    {
+        self::$trustedMcpRoots[$path] = $roots;
+    }
+
+    public static function trustedCommandRootsFor(string $path): array
+    {
+        return self::$trustedCommandRoots[$path];
+    }
+
+    public static function hasTrustedCommandRootsFor(string $path): bool
+    {
+        return \array_key_exists($path, self::$trustedCommandRoots);
+    }
+
+    public static function rememberTrustedCommandRoots(string $path, array $roots): void
+    {
+        self::$trustedCommandRoots[$path] = $roots;
+    }
+
+    public static function trustedSettingsRootsFor(string $path): array
+    {
+        return self::$trustedSettingsRoots[$path];
+    }
+
+    public static function hasTrustedSettingsRootsFor(string $path): bool
+    {
+        return \array_key_exists($path, self::$trustedSettingsRoots);
+    }
+
+    public static function rememberTrustedSettingsRoots(string $path, array $roots): void
+    {
+        self::$trustedSettingsRoots[$path] = $roots;
+    }
+
+    /**
+     * The E74b freeze: a refusal caches the empty list under the path it
+     * resolved — mirrors `??= []`, so an already-cached answer (positive
+     * included) is never overwritten.
+     */
+    public static function freezeTrustedSettingsRootsWithoutTrust(string $path): void
+    {
+        self::$trustedSettingsRoots[$path] ??= [];
+    }
+
+    public static function projectRootForSettings(): ?string
+    {
+        return self::$projectRootForSettings;
+    }
+
+    public static function rememberProjectRootForSettings(?string $root): void
+    {
+        self::$projectRootForSettings = $root;
+    }
+
+    public static function policyFreshnessChecked(): bool
+    {
+        return self::$policyFreshnessChecked;
+    }
+
+    public static function markPolicyFreshnessChecked(): void
+    {
+        self::$policyFreshnessChecked = true;
+    }
+
+    public static function policyChanged(): bool
+    {
+        return self::$policyChanged;
+    }
+
+    public static function rememberPolicyChanged(bool $changed): void
+    {
+        self::$policyChanged = $changed;
+    }
+
+    /** @return array<string, list<string>> */
+    public static function policyPreviousProjectHooks(): array
+    {
+        return self::$policyPreviousProjectHooks;
+    }
+
+    /** @param array<string, list<string>> $entries */
+    public static function rememberPolicyPreviousProjectHooks(array $entries): void
+    {
+        self::$policyPreviousProjectHooks = $entries;
+    }
+
+    /** @return list<string> */
+    public static function policyPreviousTrustedRoots(): array
+    {
+        return self::$policyPreviousTrustedRoots;
+    }
+
+    /** @param list<string> $roots */
+    public static function rememberPolicyPreviousTrustedRoots(array $roots): void
+    {
+        self::$policyPreviousTrustedRoots = $roots;
+    }
+
+    public static function hookFileEntriesFor(string $path): array
+    {
+        return self::$hookFileEntries[$path];
+    }
+
+    public static function hasHookFileEntriesFor(string $path): bool
+    {
+        return \array_key_exists($path, self::$hookFileEntries);
+    }
+
+    public static function rememberHookFileEntries(string $path, array $entries): void
+    {
+        self::$hookFileEntries[$path] = $entries;
+    }
+
+    public static function hasReportedUntrustedHookFile(string $file): bool
+    {
+        return isset(self::$reportedUntrustedHookFiles[$file]);
+    }
+
+    public static function markUntrustedHookFileReported(string $file): void
+    {
+        self::$reportedUntrustedHookFiles[$file] = true;
     }
 }
