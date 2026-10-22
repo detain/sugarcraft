@@ -179,11 +179,15 @@ final class SettingsSchemaTest extends TestCase
         }
     }
 
-    /** D7: literal English now, the i18n key kept for later. */
+    /** D7: label and help both resolve through `lang/en.php` (W3-B). */
     public function testEveryDefinitionCarriesAnEnglishLabelHelpAndI18nKeys(): void
     {
+        $english = require __DIR__ . '/../../../lang/en.php';
+
         foreach (SettingsSchema::all() as $definition) {
             self::assertNotSame('', trim($definition->help), "{$definition->key} has no help text");
+            self::assertArrayHasKey($definition->helpKey, $english, "{$definition->key} help is not catalogued in lang/en.php");
+            self::assertSame($english[$definition->helpKey], $definition->help, "{$definition->key} help does not equal its lang/en.php entry");
             self::assertNotSame($definition->key, $definition->label, "{$definition->key} has no label of its own");
             self::assertSame('settings.' . $definition->key . '.label', $definition->labelKey);
             self::assertSame('settings.' . $definition->key . '.help', $definition->helpKey);
@@ -337,7 +341,7 @@ final class SettingsSchemaTest extends TestCase
     {
         self::assertSame('must be a bool', SettingDefinition::new('a', SettingType::Bool)->validate('yes'));
         self::assertSame('must be a string', SettingDefinition::new('a', SettingType::String)->validate(3));
-        self::assertSame('must be a object', SettingDefinition::new('a', SettingType::Map)->validate(['x']));
+        self::assertSame('must be an object', SettingDefinition::new('a', SettingType::Map)->validate(['x']));
         self::assertSame('must be a whole number', SettingDefinition::new('a', SettingType::Int)->validate('90'));
         self::assertSame('must be at least 1', SettingDefinition::new('a', SettingType::Int)->withRange(1)->validate(0));
         self::assertSame('must be a list', SettingDefinition::new('a', SettingType::StringList)->validate(['k' => 'v']));

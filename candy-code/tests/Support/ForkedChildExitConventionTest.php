@@ -164,7 +164,7 @@ final class ForkedChildExitConventionTest extends TestCase
                 . 'history.',
         ],
 
-        'src/Sessions/BackgroundSessionRunner.php::run' => [
+        'src/Background/BackgroundSessionRunner.php::run' => [
             'count' => 1,
             'reason' =>
                 'DELIBERATE, E291 bringing src/ into the census. The child branch ends in '

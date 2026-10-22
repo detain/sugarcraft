@@ -8,6 +8,13 @@ use SugarCraft\Code\Permissions\PermissionGate;
 
 final class SubAgent
 {
+    /**
+     * The public string spelling of {@see SubAgentStatus} (v4-F15): the
+     * enum's cases are the canonical vocabulary and a lockstep pin in
+     * SubAgentTest asserts these constants stay exactly its backing
+     * values, because $status below is read and written as a string by
+     * consumer files outside this refactor's reach.
+     */
     public const STATUS_PENDING = 'pending';
     public const STATUS_RUNNING = 'running';
     public const STATUS_STREAMING = 'streaming';
@@ -141,6 +148,18 @@ final class SubAgent
     {
         return $this->status === self::STATUS_RUNNING
             || $this->status === self::STATUS_STREAMING;
+    }
+
+    /**
+     * This run's status as the parsed case (v4-F15): the enum entry point
+     * for code that wants typed state instead of the wire string. Throws
+     * on an unknown value on purpose — a status outside the vocabulary is
+     * a bug worth a loud one, and every production writer uses one of the
+     * six constants {@see SubAgentStatus} mirrors.
+     */
+    public function statusCase(): SubAgentStatus
+    {
+        return SubAgentStatus::from($this->status);
     }
 
     public function isComplete(): bool

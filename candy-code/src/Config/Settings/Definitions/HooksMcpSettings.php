@@ -41,7 +41,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
                 ->withLabel(Lang::t('settings.lintCommands.label'))
-                ->withHelp('Post-edit lint command per file extension ({"php": "…", "js": false}); `php -l` is built in.')
+                ->withHelp(Lang::t('settings.lintCommands.help'))
                 ->withReaderSymbol(Bootstrap::class . '::hooks')
                 ->withReadBy('`Bootstrap::hooks()` → `LintRunner::withCommands()`'),
             // EDT-1: extension => post-edit format command for the format hook.
@@ -55,7 +55,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
                 ->withLabel(Lang::t('settings.formatCommands.label'))
-                ->withHelp('Post-edit format command per file extension ({"php": "vendor/bin/php-cs-fixer fix {file}"}); runs before the post-edit lint and rewrites the file. Off by default.')
+                ->withHelp(Lang::t('settings.formatCommands.help'))
                 ->withReaderSymbol(Bootstrap::class . '::hooks')
                 ->withReadBy('`Bootstrap::hooks()` → `FormatRunner::withCommands()`'),
             // The bound a hook entry with no `timeout:` gets. config.json only:
@@ -67,7 +67,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withRange(1.0, 3600.0)
                 ->withLabel(Lang::t('settings.hooksDefaultTimeoutSeconds.label'))
-                ->withHelp('Seconds a hook entry with no `timeout:` may run before it is killed and counted as a refusal.')
+                ->withHelp(Lang::t('settings.hooksDefaultTimeoutSeconds.help'))
                 ->withReaderSymbol(\SugarCraft\Code\Hooks\ScriptHook::class . '::defaultTimeoutSeconds')
                 ->withReadBy('`HookConfig::parse()` → `ScriptHook::defaultTimeoutSeconds()`, as each hook file loads'),
             // E696. Narrowing, so a trusted project may set it like
@@ -81,7 +81,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withUi(UiEditability::List)
                 ->withLabel(Lang::t('settings.disabledMcpServers.label'))
-                ->withHelp('`.mcp.json` server names or globs (`untrusted_*`) that are never started, listed or called, for the main agent and every sub-agent.')
+                ->withHelp(Lang::t('settings.disabledMcpServers.help'))
                 ->withReaderSymbol(Bootstrap::class . '::mcpClient')
                 ->withReadBy('`Bootstrap::mcpClient()` → `McpClient::setDenyPatterns()`, at the first MCP launch'),
             // Roadmap N-P4g: the persistent CANDY_CODE_MCP_DISABLE. User tier
@@ -94,7 +94,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withEnvVar(Bootstrap::MCP_DISABLE_ENV)
                 ->withLabel(Lang::t('settings.mcp.enabled.label'))
-                ->withHelp('Start the MCP servers a trusted project\'s .mcp.json names; off starts none and the surfaces report the launch as disabled.')
+                ->withHelp(Lang::t('settings.mcp.enabled.help'))
                 ->withReaderSymbol(Bootstrap::class . '::mcpDisabled')
                 ->withReadBy('`Bootstrap::mcpConfigDecision()` (so `mcpClient()` and `mcp list`) → `mcpDisabled()`'),
             // MCP-7: the per-server schema-token floor above which a server's
@@ -109,7 +109,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withRange(0)
                 ->withLabel(Lang::t('settings.mcp.lazySchemaTokens.label'))
-                ->withHelp('Schema tokens one MCP server may advertise before its tools defer to mcp_list/mcp_call; 0 never defers.')
+                ->withHelp(Lang::t('settings.mcp.lazySchemaTokens.help'))
                 ->withReaderSymbol(Bootstrap::class . '::mcpToolShape')
                 ->withReadBy('`Bootstrap::mcpToolShape()` → `McpToolShape::derive()`, at the first MCP tool build of the launch'),
             SettingDefinition::new('claudeMcpBinary', SettingType::Path)
@@ -118,7 +118,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Frozen)
                 ->withValidators(ExecutableValidator::new())
                 ->withLabel(Lang::t('settings.claudeMcpBinary.label'))
-                ->withHelp('Absolute path of the `claude` binary the claude-mcp transport may spawn.')
+                ->withHelp(Lang::t('settings.claudeMcpBinary.help'))
                 ->withReaderSymbol(Bootstrap::class . '::claudeMcpGrant'),
             SettingDefinition::new('claudeMcpArgs', SettingType::StringList)
                 ->withCategory(SettingCategory::HooksMcp)
@@ -126,7 +126,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Frozen)
                 ->withUi(UiEditability::List)
                 ->withLabel(Lang::t('settings.claudeMcpArgs.label'))
-                ->withHelp('Arguments for that binary; unset uses the transport default.')
+                ->withHelp(Lang::t('settings.claudeMcpArgs.help'))
                 ->withReaderSymbol(Bootstrap::class . '::claudeMcpGrant'),
             SettingDefinition::new('claudeMcpEnv', SettingType::Map)
                 ->withCategory(SettingCategory::HooksMcp)
@@ -134,7 +134,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Frozen)
                 ->withUi(UiEditability::Complex)
                 ->withLabel(Lang::t('settings.claudeMcpEnv.label'))
-                ->withHelp('Literal environment variables handed to that binary.')
+                ->withHelp(Lang::t('settings.claudeMcpEnv.help'))
                 ->withReaderSymbol(Bootstrap::class . '::claudeMcpGrant'),
         ];
     }

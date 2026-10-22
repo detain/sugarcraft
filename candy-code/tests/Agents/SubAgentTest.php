@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\Isolation;
 use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Agents\SubAgentStatus;
 
 /**
  * Tests for SubAgent value object - represents a sub-agent task instance.
@@ -26,6 +27,39 @@ final class SubAgentTest extends TestCase
         $this->assertSame('complete', SubAgent::STATUS_COMPLETE);
         $this->assertSame('stopped', SubAgent::STATUS_STOPPED);
         $this->assertSame('failed', SubAgent::STATUS_FAILED);
+    }
+
+    /**
+     * v4-F15: the SubAgentStatus enum and the STATUS_* constants are ONE
+     * vocabulary — the same six values in the same order, so editing either
+     * side alone reddens this pin.
+     */
+    public function testTheStatusConstantsAndEnumStayInLockstep(): void
+    {
+        $constants = [
+            SubAgent::STATUS_PENDING,
+            SubAgent::STATUS_RUNNING,
+            SubAgent::STATUS_STREAMING,
+            SubAgent::STATUS_COMPLETE,
+            SubAgent::STATUS_STOPPED,
+            SubAgent::STATUS_FAILED,
+        ];
+        $values = array_map(static fn (SubAgentStatus $case): string => $case->value, SubAgentStatus::cases());
+
+        $this->assertSame($constants, $values, 'one vocabulary, declared case-after-constant');
+    }
+
+    public function testTheStatusCaseAccessorParsesKnownStatusesAndRefusesUnknown(): void
+    {
+        $subAgent = new SubAgent(id: 'lockstep_1', agent: $this->createAgent(), task: 't', createdAt: new \DateTimeImmutable('2024-01-15T10:00:00Z'));
+        self::assertSame(SubAgentStatus::Pending, $subAgent->statusCase());
+
+        $subAgent->status = SubAgent::STATUS_STREAMING;
+        self::assertSame(SubAgentStatus::Streaming, $subAgent->statusCase());
+
+        $subAgent->status = 'levitating';
+        $this->expectException(\ValueError::class);
+        $subAgent->statusCase();
     }
 
     // -------------------------------------------------------------------------

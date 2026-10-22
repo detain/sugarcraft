@@ -81,6 +81,7 @@ final class ReadOnlyAutoAllowTest extends TestCase
         return [
             'the user\'s chain' => ['cd {root} && ls -d */ | head -80 && echo "---GIT---" && git log --oneline -3'],
             'status, then a diffstat through head' => ['git status && git diff --stat | head -50'],
+            'the external diff explicitly off' => ['git log --no-ext-diff --oneline'],
             'a lone listing' => ['ls -la'],
             'stderr to /dev/null' => ['ls missing 2>/dev/null; pwd'],
             'a mid-chain cd into the project' => ['git status && cd sub && ls'],
@@ -166,6 +167,23 @@ final class ReadOnlyAutoAllowTest extends TestCase
             'an absolute command path' => ['/bin/ls'],
             'an assignment in front' => ['FOO=1 ls'],
             'a here-doc' => ["cat <<EOF\nx\nEOF"],
+            // SEC-1: the parent's environment lives at /proc/<pid>/environ —
+            // same-uid readable, and the child-env scrub does not reach it.
+            // The redirection forms below were SILENTLY AUTO-ALLOWED before
+            // the word-level refusal: `< file` is an inert redirection and
+            // its target never entered the argument checks.
+            'the parent environment, spelled as an operand' => ['cat /proc/12345/environ'],
+            'the parent environment, spelled as an input redirection' => ['cat < /proc/12345/environ'],
+            'the parent environment through tr' => ['tr \\0 \\n < /proc/1/environ'],
+            'the parent environment through wc' => ['wc -c < /proc/self/environ'],
+            'the parent environment through sort' => ['sort < /proc/1/environ'],
+            'the parent environment with a hop' => ['head -200 /proc/1/../self/environ'],
+            'the parent environment with doubled slashes' => ['cat /proc//12345//environ'],
+            'the parent environment via brace expansion' => ['cat /proc/{1,2}/environ'],
+            // SEC-5: --ext-diff (and any unambiguous prefix of it) runs the
+            // repo's diff.external driver — a program, not a read.
+            'git log with an external diff driver' => ['git log --ext-diff'],
+            'git log abbreviated --ext-d' => ['git log --ext-d'],
         ];
     }
 
@@ -257,6 +275,46 @@ final class ReadOnlyAutoAllowTest extends TestCase
     {
         self::assertSame(PermissionDecision::Deny, $this->decide(new PermissionGate(PermissionMode::DontAsk), 'ls'));
         self::assertSame(PermissionDecision::Allow, $this->decide(new PermissionGate(PermissionMode::Auto, [], new \SugarCraft\Code\Permissions\SafetyClassifier()), 'ls | head'));
+    }
+
+    /**
+     * SEC-1: `/proc/<pid>/environ` is the PARENT's environment — same-uid
+     * readable, holding the live provider keys, beyond the reach of the
+     * child-env scrub. The read-only judgement refuses it in EVERY shape
+     * (operand, input redirection, `..` hop, doubled slashes, brace), so no
+     * mode that asks-first can run it quietly: `default` and `accept-edits`
+     * ask, `plan` and `dont-ask` deny, `auto` puts it in the always-ask
+     * security class, and under `bypass-permissions` the user's own `Deny`
+     * rule still binds (bypass is allow-ALL by design — the floor it keeps
+     * is rules, and this pins that floor holds).
+     */
+    public function testTheParentProcessEnvironmentIsNeverAReadOnlyRead(): void
+    {
+        $forms = [
+            'cat /proc/12345/environ',
+            'cat < /proc/12345/environ',
+            'tr \0 \n < /proc/1/environ',
+            'wc -c < /proc/self/environ',
+            'sort < /proc/1/environ',
+            'head -200 /proc/1/../self/environ',
+            'cat /proc//12345//environ',
+        ];
+
+        foreach ($forms as $command) {
+            self::assertFalse(ReadOnlyCommands::autoAllows($command, $this->root), $command);
+            self::assertFalse(ReadOnlyCommands::planAllows($command), $command);
+            self::assertSame(PermissionDecision::Deny, $this->decide($this->gate(PermissionMode::Plan), $command), $command);
+            self::assertSame(PermissionDecision::Deny, $this->decide($this->gate(PermissionMode::DontAsk), $command), $command);
+            self::assertSame(PermissionDecision::Ask, $this->decide($this->gate(PermissionMode::Auto), $command), $command);
+        }
+
+        self::assertSame(
+            PermissionDecision::Deny,
+            $this->decide($this->gate(PermissionMode::BypassPermissions, [
+                new PermissionRule('Bash(cat /proc/*)', PermissionAction::Deny),
+            ]), 'cat /proc/12345/environ'),
+            'a configured Deny binds under bypass exactly as it does everywhere else',
+        );
     }
 
     public function testTheSettingIsUserTierAndAProjectMayOnlySwitchItOff(): void

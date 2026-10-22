@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\AsyncCmd;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookEvent;
@@ -18,7 +18,7 @@ use SugarCraft\Code\Hooks\ScriptHook;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\ToolResult;
-use SugarCraft\Code\ToolResultsMsg;
+use SugarCraft\Code\App\ToolResultsMsg;
 
 /**
  * Audit F-H1, the dormant Chat tool path ({@see Chat::applyPostToolUse()}):

@@ -173,7 +173,7 @@ final class UndoRedoDiffCommandsTest extends TestCase
 
         foreach (['/undo', '/redo'] as $writer) {
             [$refused] = $this->chatAt($writer, [], true)->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Enter, ''));
-            self::assertStringStartsWith('"' . $writer . '" was not sent', self::reply($refused), $writer . ' writes, so a read-only window refuses it');
+            self::assertStringStartsWith('`' . $writer . '` was not sent', self::reply($refused), $writer . ' writes, so a read-only window refuses it');
         }
         self::assertSame("changed\n", $this->file('file.txt'));
     }

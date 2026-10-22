@@ -10,7 +10,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Attachment;
 use SugarCraft\Code\AttachmentType;
 use SugarCraft\Code\Chat;
-use SugarCraft\Code\TranscriptFlushMsg;
+use SugarCraft\Code\App\TranscriptFlushMsg;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;

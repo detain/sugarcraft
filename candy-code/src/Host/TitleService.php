@@ -9,12 +9,12 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\PromptSuggestionMsg;
+use SugarCraft\Code\App\PromptSuggestionMsg;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Session\TitleSource;
-use SugarCraft\Code\SessionTitledMsg;
+use SugarCraft\Code\App\SessionTitledMsg;
 
 /**
  * The two cheap side-calls a session makes on its tool-less title backend:
@@ -431,7 +431,7 @@ final class TitleService
      */
     public static function promptSuggestionsEnabled(): bool
     {
-        return !self::envFlag('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS')
+        return !\SugarCraft\Code\Support\EnvBool::isSet(\getenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS'))
             && \SugarCraft\Code\Config\Settings\UiSettings::bool(self::PROMPT_SUGGESTIONS_SETTING);
     }
 
@@ -444,14 +444,6 @@ final class TitleService
     public static function promptSuggestionHistory(): int
     {
         return \SugarCraft\Code\Config\Settings\UiSettings::int(self::PROMPT_SUGGESTION_HISTORY_SETTING);
-    }
-
-    /** Set to anything but empty or `0`. */
-    private static function envFlag(string $name): bool
-    {
-        $value = getenv($name);
-
-        return $value !== false && $value !== '' && $value !== '0';
     }
 
     /**

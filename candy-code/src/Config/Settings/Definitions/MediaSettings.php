@@ -84,7 +84,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withEnvVar('CANDY_CODE_SD_BASE_URL')
                 ->withDefaultText('unset: no default; media generation refuses until one is set')
                 ->withLabel(Lang::t('settings.sd.baseUrl.label'))
-                ->withHelp('HTTP base URL of an AUTOMATIC1111-compatible Stable Diffusion webui (`http://127.0.0.1:7860`); prompts, images and the API key all egress there.')
+                ->withHelp(Lang::t('settings.sd.baseUrl.help'))
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
                 ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline reads it per request'),
             SettingDefinition::new('sd.apiKey', SettingType::Secret)
@@ -93,7 +93,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withDefaultText('${VAR} honored: `${SD_API_KEY}` reads the env var, and an unset one resolves to empty (no key sent)')
                 ->withLabel(Lang::t('settings.sd.apiKey.label'))
-                ->withHelp('Bearer key sent to the Stable Diffusion server, if it demands one; prefer the `${VAR}` placeholder form over a literal.')
+                ->withHelp(Lang::t('settings.sd.apiKey.help'))
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
                 ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline sends it per request'),
             SettingDefinition::new('sd.timeoutSeconds', SettingType::Int, 300)
@@ -103,7 +103,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, 3600)
                 ->withLabel(Lang::t('settings.sd.timeoutSeconds.label'))
-                ->withHelp('Seconds one generation request may run before it is abandoned; diffusion on a weak GPU routinely takes minutes.')
+                ->withHelp(Lang::t('settings.sd.timeoutSeconds.help'))
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
                 ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline bounds each request with it'),
             SettingDefinition::new('sd.defaultModel', SettingType::String)
@@ -112,7 +112,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withDefaultText('unset: the model the server already has loaded answers')
                 ->withLabel(Lang::t('settings.sd.defaultModel.label'))
-                ->withHelp('Model id generation requests start with; the server keeps the pick to itself when unset.')
+                ->withHelp(Lang::t('settings.sd.defaultModel.help'))
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
                 ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media form preselects it'),
             // Cosmetic: the word picks how a finished image is PAINTED, never
@@ -124,7 +124,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withEnvVar('CANDY_CODE_MEDIA_RENDER_MODE')
                 ->withEnumValues(self::RENDER_MODES)
                 ->withLabel(Lang::t('settings.ui.imageRenderMode.label'))
-                ->withHelp('How generated images are painted in the terminal; `auto` picks the best protocol the terminal reports.')
+                ->withHelp(Lang::t('settings.ui.imageRenderMode.help'))
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
                 ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the painter picks the mode per frame'),
             SettingDefinition::new('sd.presets', SettingType::Map, [])
@@ -134,7 +134,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::Complex)
                 ->withDefaultText('{}: the media form offers only its built-in defaults')
                 ->withLabel(Lang::t('settings.sd.presets.label'))
-                ->withHelp('Named parameter bundles the media form offers; the shape is the media pipeline\'s own, opaque to the settings layer.')
+                ->withHelp(Lang::t('settings.sd.presets.help'))
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
                 ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the media pipeline names the presets'),
             SettingDefinition::new('ui.mediaDisplayOverrides', SettingType::Map, [])
@@ -144,7 +144,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::Complex)
                 ->withDefaultText('{}: every render mode displays at its built-in size')
                 ->withLabel(Lang::t('settings.ui.mediaDisplayOverrides.label'))
-                ->withHelp('Per-render-mode display tweaks (size caps, fallbacks); keys are the render-mode words, the values the display knobs.')
+                ->withHelp(Lang::t('settings.ui.mediaDisplayOverrides.help'))
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
                 ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the painter applies them'),
             SettingDefinition::new('sd.savePattern', SettingType::String, '[date]-[time]-[seed]-[number]')
@@ -152,7 +152,7 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Cosmetic)
                 ->withLayered()
                 ->withLabel(Lang::t('settings.sd.savePattern.label'))
-                ->withHelp('File name template for saved media; the `[date]`, `[time]`, `[seed]` and `[number]` tokens fill at save time.')
+                ->withHelp(Lang::t('settings.sd.savePattern.help'))
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
                 ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the save path names files with it'),
         ];

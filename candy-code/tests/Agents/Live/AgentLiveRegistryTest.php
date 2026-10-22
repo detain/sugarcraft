@@ -5,9 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Agents\Live;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Style\Style;
 use SugarCraft\Code\Agents\Live\ActivityItem;
 use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Code\Agents\Live\AgentLiveState;
+use SugarCraft\Code\Agents\Live\AgentLiveStatus;
+use SugarCraft\Code\Agents\Live\AgentRunCards;
+use SugarCraft\Code\Agents\Live\RunCardStatus;
 use SugarCraft\Code\Events\SubAgentActivity;
 
 /**
@@ -17,6 +22,49 @@ use SugarCraft\Code\Events\SubAgentActivity;
  */
 final class AgentLiveRegistryTest extends TestCase
 {
+    /**
+     * a11y-F5: under the ambient Ascii colour profile the spinner cycle is
+     * the four-stroke `|/-\`, and the stored (mod 10) frame index wraps on
+     * the ASCII set's own count. A null ambient (pipes, goldens) and any
+     * richer profile keep the braille dots byte-identically.
+     */
+    public function testTheAsciiProfileSpinsTheAsciiCycleAndTheOthersStayBraille(): void
+    {
+        $previous = Style::getDefaultProfile();
+
+        try {
+            Style::setDefaultProfile(ColorProfile::Ascii);
+            self::assertSame(AgentLiveRegistry::SPINNER_ASCII, AgentLiveRegistry::spinnerFrames());
+            self::assertSame(['|', '/', '-', '\\'], array_map(
+                static fn (int $f): string => AgentLiveRegistry::spinnerGlyph($f),
+                [0, 1, 2, 3],
+            ));
+            self::assertSame('|', AgentLiveRegistry::spinnerGlyph(4), 'the cycle wraps on the ASCII count');
+            self::assertSame('/', AgentLiveRegistry::spinnerGlyph(5), 'the mod-10 stored index maps down safely');
+
+            Style::setDefaultProfile(ColorProfile::Ansi256);
+            self::assertSame(AgentLiveRegistry::SPINNER, AgentLiveRegistry::spinnerFrames());
+            self::assertSame('⠋', AgentLiveRegistry::spinnerGlyph(0));
+
+            Style::setDefaultProfile(null);
+            self::assertSame('⠙', AgentLiveRegistry::spinnerGlyph(1), 'the default ambient is the braille cycle — goldens unchanged');
+        } finally {
+            Style::setDefaultProfile($previous);
+        }
+    }
+
+    /**
+     * The glyph route is the ONLY allowed reader shape (a11y-F5): indexing the
+     * const directly would skip the profile gate. Fail-closed census over the
+     * transcript renderer.
+     */
+    public function testTheTranscriptRendererNeverIndexesTheSpinnerConstDirectly(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__, 3) . '/src/Renderer.php');
+
+        self::assertSame(0, substr_count($source, 'AgentLiveRegistry::SPINNER['), 'every spinner reader must go through spinnerGlyph()');
+    }
+
     public function testFramesFoldIntoOneStatePerRunUnderItsTaskCall(): void
     {
         $registry = AgentLiveRegistry::new(static fn (): float => 50.0);
@@ -194,6 +242,35 @@ final class AgentLiveRegistryTest extends TestCase
         }
 
         self::assertFalse(AgentLiveRegistry::staticSpinner());
+    }
+
+    /**
+     * v4-F15: the overlay state and the card status each have ONE
+     * vocabulary — the constants that cross into out-of-scope readers and
+     * the enum cases that name it canonically must move together or this
+     * reddens. statusCase() is the parsed entry point; a finished card's
+     * outcome passes through untouched.
+     */
+    public function testTheLiveAndCardStatusVocabulariesStayInLockstep(): void
+    {
+        self::assertSame(
+            [AgentLiveState::STATUS_QUEUED, AgentLiveState::STATUS_RUNNING, AgentLiveState::STATUS_FINISHED],
+            array_map(static fn (AgentLiveStatus $case): string => $case->value, AgentLiveStatus::cases()),
+            'queued/running/finished in both spellings',
+        );
+        self::assertSame(
+            [AgentRunCards::STATUS_RUNNING, AgentRunCards::STATUS_LOST],
+            array_map(static fn (RunCardStatus $case): string => $case->value, RunCardStatus::cases()),
+            'running/lost are the only statuses a card mints itself',
+        );
+
+        $registry = AgentLiveRegistry::new(static fn (): float => 50.0);
+        $registry->apply(self::frame('queued', 'run_lockstep', 1, 'tc_9'));
+        self::assertSame(AgentLiveStatus::Queued, $registry->get('run_lockstep')?->statusCase());
+        $registry->apply(self::frame('finished', 'run_lockstep', 2, 'tc_9'));
+        self::assertSame(AgentLiveStatus::Finished, $registry->get('run_lockstep')?->statusCase());
+
+        self::assertSame('complete', AgentRunCards::statusOf(['status' => 'complete']), 'an outcome passes through as the string tools read');
     }
 
     /**

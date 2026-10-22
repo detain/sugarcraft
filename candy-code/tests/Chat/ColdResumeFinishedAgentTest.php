@@ -11,7 +11,7 @@ use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
-use SugarCraft\Code\AgentMessageSentMsg;
+use SugarCraft\Code\App\AgentMessageSentMsg;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Code\Agents\SuspendedDelegations;

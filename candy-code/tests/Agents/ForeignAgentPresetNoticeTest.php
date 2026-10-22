@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use SugarCraft\Code\Agents\ForeignAgentPresetRegistry;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchNotices;
 
 /**
  * ISS-088: the foreign importer's per-file verdicts — files it SKIPPED and
@@ -281,7 +282,7 @@ final class ForeignAgentPresetNoticeTest extends TestCase
      */
     private function currentLaunchNotices(): array
     {
-        $property = new ReflectionProperty(Bootstrap::class, 'launchNotices');
+        $property = new ReflectionProperty(LaunchNotices::class, 'launchNotices');
 
         /** @var list<string> $notices */
         $notices = $property->getValue();

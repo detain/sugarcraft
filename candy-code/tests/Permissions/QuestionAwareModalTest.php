@@ -15,7 +15,7 @@ use SugarCraft\Code\Events\PermissionResolved;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Permissions\ApprovalVerdict;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
 use SugarCraft\Code\Permissions\PermissionReply;

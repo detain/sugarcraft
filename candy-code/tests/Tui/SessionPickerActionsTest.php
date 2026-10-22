@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Session\EnhancedSessionStore;
@@ -240,7 +241,7 @@ final class SessionPickerActionsTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $this->store,
             currentSessionId: 's1',
-            openTabs: $tabs,
+            tabState: new SessionTabState(tabs: $tabs),
         ))->withSize(100, 30);
         $this->assertSame(['s1', 's2'], array_column($chat->openTabs()->tabs(), 'id'), 'fixture: two tabs open');
 
@@ -344,7 +345,7 @@ final class SessionPickerActionsTest extends TestCase
         // Roadmap P-C2: the shell opens the read-only Agent View on it.
         $this->assertInstanceOf(\Closure::class, $cmd);
         $msg = $cmd();
-        $this->assertInstanceOf(\SugarCraft\Code\OpenAgentViewMsg::class, $msg);
+        $this->assertInstanceOf(\SugarCraft\Code\App\OpenAgentViewMsg::class, $msg);
         $this->assertSame($sub, $msg->childSessionId);
         $this->assertSame('explore', $msg->name);
     }

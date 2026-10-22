@@ -11,8 +11,8 @@ use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Code\AgentControlMsg;
-use SugarCraft\Code\AgentMessageSentMsg;
+use SugarCraft\Code\App\AgentControlMsg;
+use SugarCraft\Code\App\AgentMessageSentMsg;
 use SugarCraft\Code\Agents\Live\AgentInbox;
 use SugarCraft\Code\Agents\Live\AgentMessage;
 use SugarCraft\Code\Agents\Live\SubAgentTranscriptLog;
@@ -125,7 +125,7 @@ final class AgentComposerTest extends TestCase
             'text' => 'also check the cookie',
             'step' => 3,
         ]);
-        [$ticked] = $recorded->update(new \SugarCraft\Code\OpenAgentViewMsg('run-2'));
+        [$ticked] = $recorded->update(new \SugarCraft\Code\App\OpenAgentViewMsg('run-2'));
         $frame = self::plain($ticked);
         $this->assertStringNotContainsString('⧗ queued', $frame, 'the queued row gives way to the run\'s own');
         $this->assertStringContainsString('also check the cookie', $frame, 'which shows where it was read');

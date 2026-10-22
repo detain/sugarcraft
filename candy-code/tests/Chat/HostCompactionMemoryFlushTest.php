@@ -21,7 +21,7 @@ use SugarCraft\Code\Context\Compaction\MemoryFlush;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Context\Pruning\ContextLedger;
-use SugarCraft\Code\HistoryCompactedMsg;
+use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\Host\CompactionService;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Memory\MemoryWriter;

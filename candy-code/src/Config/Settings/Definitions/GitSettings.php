@@ -36,7 +36,7 @@ final class GitSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withProjectSettable()
                 ->withLabel(Lang::t('settings.includeGitInstructions.label'))
-                ->withHelp('Whether the Bash tool\'s generic commit guidance rides the system prompt.')
+                ->withHelp(Lang::t('settings.includeGitInstructions.help'))
                 ->withReaderSymbol(Bootstrap::class . '::tools')
                 ->withReadBy('`Bootstrap::tools()` → `Bash::withGitGuidance()`'),
             SettingDefinition::new('attribution', SettingType::Map)
@@ -45,7 +45,7 @@ final class GitSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
                 ->withLabel(Lang::t('settings.attribution.label'))
-                ->withHelp('{"commit": "…", "pr": "…"}: the trailer and PR line the git guidance asks for.')
+                ->withHelp(Lang::t('settings.attribution.help'))
                 ->withReaderSymbol(Bootstrap::class . '::tools')
                 ->withReadBy('`Bootstrap::tools()` → `Bash::withGitGuidance()`'),
             // Step 3.F. Filed under "Git & Automation" with the other
@@ -58,7 +58,7 @@ final class GitSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
                 ->withLabel(Lang::t('settings.lsp.label'))
-                ->withHelp('{"php": {"command": "intelephense", "args": ["--stdio"]}}: servers for post-edit diagnostics, Read outlines and the Lsp tool.')
+                ->withHelp(Lang::t('settings.lsp.help'))
                 ->withReaderSymbol(Bootstrap::class . '::lspClient')
                 ->withReadBy('`Bootstrap::lspClient()` → `LspLauncher::fromConfig()`'),
             // EDT-2. Exec for its sibling's reason: detecting is reading, but
@@ -71,7 +71,7 @@ final class GitSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Exec)
                 ->withLayered()
                 ->withLabel(Lang::t('settings.lspAutoDetect.label'))
-                ->withHelp('Start the language server a project fingerprint names (composer.json → intelephense, package.json + tsconfig.json → typescript-language-server, pyproject.toml or setup.py → pyright-langserver, go.mod → gopls, Cargo.toml → rust-analyzer) when its binary is on PATH; manual `lsp` entries win per language.')
+                ->withHelp(Lang::t('settings.lspAutoDetect.help'))
                 ->withReaderSymbol(Bootstrap::class . '::lspClient')
                 ->withReadBy('`Bootstrap::lspClient()` → `LspLauncher::fromConfig()`'),
             // Step 3.G. Exec and never project-settable: a commit runs the
@@ -83,7 +83,7 @@ final class GitSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withEnumValues(AutoCommitter::MODES)
                 ->withLabel(Lang::t('settings.autoCommit.label'))
-                ->withHelp('off, turn (one commit per turn, message from the title model) or edit (one per Write/Edit); /undo reverts it.')
+                ->withHelp(Lang::t('settings.autoCommit.help'))
                 ->withReaderSymbol(Bootstrap::class . '::hooks')
                 ->withReadBy('`Bootstrap::hooks()` → `AutoCommitHook`; `Chat` (turn mode)'),
         ];

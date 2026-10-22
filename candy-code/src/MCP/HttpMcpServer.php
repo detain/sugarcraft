@@ -181,7 +181,9 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
             // forgotten locally. Ended the way stop() ends one — best-effort.
             $this->endSession();
 
-            throw new \RuntimeException("Failed to start MCP server {$this->name}: {$e->getMessage()}");
+            // THE CAUSE TRAVELS WITH THE WRAPPER (v4-F20 sweep: same shape as
+            // SseMcpServer's start arm), message byte-unchanged for the pins.
+            throw new \RuntimeException("Failed to start MCP server {$this->name}: {$e->getMessage()}", 0, $e);
         }
 
         // Mark initialized only after the full handshake succeeds, so a failed

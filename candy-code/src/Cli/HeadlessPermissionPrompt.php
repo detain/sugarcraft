@@ -16,7 +16,7 @@ use SugarCraft\Code\Tools\ToolCall;
  * them: the `-p "<prompt>"` / `run "<prompt>"` one-shot path in
  * {@see NonInteractive}, which owns stdin and is answered at a real terminal;
  * and the background-session daemon
- * ({@see \SugarCraft\Code\Sessions\BackgroundSessionRunner::backend()}),
+ * ({@see \SugarCraft\Code\Background\BackgroundSessionRunner::backend()}),
  * whose fd 0 is `/dev/null` from the spawn site, so it always takes the
  * refusal branch — attached there for the REFUSAL's text, not for a prompt
  * nobody would see.
@@ -98,7 +98,7 @@ use SugarCraft\Code\Tools\ToolCall;
  * assumed: {@see Bootstrap::backend()} and {@see Bootstrap::backendFor()} take
  * `$consolePermissionPrompt` defaulting to FALSE, exactly four callers in
  * `src/` pass `true`, and all four are in {@see NonInteractive} and
- * {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner} — neither of
+ * {@see \SugarCraft\Code\Background\BackgroundSessionRunner} — neither of
  * which takes the terminal. {@see Bootstrap::chat()}, the interactive path,
  * takes the default. {@see \SugarCraft\Code\Tests\Cli\HeadlessPermissionPromptAttachmentTest}
  * pins that roster, because it is the fact this whole paragraph rests on and

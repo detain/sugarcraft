@@ -17,7 +17,7 @@ use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\CompactorConfig;
-use SugarCraft\Code\HistoryCompactedMsg;
+use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Role;
@@ -391,6 +391,6 @@ final class CompactionHidesNotDeletesTest extends TestCase
     private function renderHistory(array $history, Theme $theme, int $width): string
     {
         return (new \ReflectionMethod(Renderer::class, 'renderHistory'))
-            ->invoke(null, $history, $theme, $width, [], new ImageLayer(), null, 10);
+            ->invoke(null, $history, $theme, $width, [], new ImageLayer(), null, 10, null, null, null, Renderer::publishedFrame());
     }
 }

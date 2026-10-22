@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Providers\ToolCallParser;
 
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Tools\ToolCall;
 
 /**
@@ -204,8 +205,8 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
 
         foreach ($envelopes as $envelope) {
             if (!$envelope['closed']) {
-                error_log(sprintf(
-                    'candy-code: MinimaxXmlFallbackToolCallParser: possible MiniMax XML-delimiter truncation - '
+                Log::sub(Log::MINIMAX_XML_FALLBACK_TOOL_CALL_PARSER, sprintf(
+                    'possible MiniMax XML-delimiter truncation - '
                     . 'a "%s>" envelope opened at byte %d is never closed; recovering whatever '
                     . '<invoke> it had already emitted.',
                     self::ENVELOPE_PREFILTER,
@@ -289,8 +290,8 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
             $name = $parameter['attributes']['name'] ?? null;
 
             if ($name === null || $name === '') {
-                error_log(sprintf(
-                    'candy-code: MinimaxXmlFallbackToolCallParser: a <parameter> element on tool "%s" has no '
+                Log::sub(Log::MINIMAX_XML_FALLBACK_TOOL_CALL_PARSER, sprintf(
+                    'a <parameter> element on tool "%s" has no '
                     . 'readable name="..." attribute, so its value cannot be assigned to an argument.',
                     $toolName,
                 ));
@@ -299,8 +300,8 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
             }
 
             if ($parameter['terminator'] !== 'close') {
-                error_log(sprintf(
-                    'candy-code: MinimaxXmlFallbackToolCallParser: possible MiniMax XML-delimiter truncation - '
+                Log::sub(Log::MINIMAX_XML_FALLBACK_TOOL_CALL_PARSER, sprintf(
+                    'possible MiniMax XML-delimiter truncation - '
                     . 'parameter "%s" on tool "%s" is never closed with "%s", so its value is '
                     . 'truncated by an unknown amount.',
                     $name,
@@ -419,8 +420,8 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
             return null;
         }
 
-        error_log(sprintf(
-            'candy-code: MinimaxXmlFallbackToolCallParser: parameter "%s" on tool "%s" is declared %s '
+        Log::sub(Log::MINIMAX_XML_FALLBACK_TOOL_CALL_PARSER, sprintf(
+            'parameter "%s" on tool "%s" is declared %s '
             . 'but its value does not parse as that type; passing the raw text through untyped.',
             $paramName,
             $toolName,

@@ -1368,7 +1368,7 @@ final class EnvRosterDriftTest extends TestCase
      */
     private const OS_ENV_ROSTER = [
         'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'LC_MESSAGES',
-        'PATH', 'VISUAL', 'EDITOR', 'TMUX', 'TERM_PROGRAM', 'COLORFGBG',
+        'PATH', 'VISUAL', 'EDITOR', 'TMUX', 'TERM_PROGRAM', 'TERM', 'COLORFGBG',
         'DISPLAY', 'WAYLAND_DISPLAY', 'CDPATH', 'TMPDIR',
     ];
 
@@ -1404,6 +1404,127 @@ final class EnvRosterDriftTest extends TestCase
             'pinned OS variables with no quoted literal anywhere in src/ — the reads moved, '
             . 'renamed, or died; the table rows are now promises nothing keeps',
         );
+    }
+
+    /**
+     * THE PROVIDER-FAMILY AMBIENT ROSTER, PINNED BOTH DIRECTIONS.
+     *
+     * The OS table above hand-pins its list because call-shape proof is
+     * exactly what that roster cannot supply for a `foreach`-read name. The
+     * provider family CAN be derived: {@see EnvReadScanner::ambientReads()}
+     * follows the same five call shapes over its second alphabet and records
+     * a name only when a `getenv()` — direct, forwarded, or `foreach`-fed,
+     * through a constant if that is how the file spells it — proves the read.
+     * So this oracle compares DERIVED against documented, three ways:
+     *
+     * - the allowlist in `EnvReadScanner::AMBIENT_NAMES` must equal what the
+     *   real scan actually places — an entry whose read is renamed or deleted
+     *   reddens HERE, before anyone wonders why the table lost its mirror;
+     * - every placed name must have a row in the page's provider-credential
+     *   or Claude Code tables (the read-but-undocumented defect);
+     * - every first-column name in those tables must be placed (the
+     *   documented-but-dead defect — a row telling a reader to export a
+     *   variable nothing reads).
+     *
+     * WHY AMBIENT NAMES DO NOT JOIN `reads()`: that map feeds the help-screen
+     * roster in `HelpTest`, whose entries live in the `cli.help.screen`
+     * catalogue — widening `reads()` would demand twelve-plus screen entries
+     * in one silent step, a product decision wearing a census costume. The
+     * separate channel keeps both censuses honest about their own scope. And
+     * `GOOGLE_APPLICATION_CREDENTIALS` is in NEITHER: this package's `src/`
+     * never reads it; the vendored Google SDK does, at its own layer, and a
+     * census documents what its own code touches.
+     *
+     * THE KNOWN POSITIVE is not decoration: round 44 measured that an empty
+     * derived set passes every set comparison, so the fixture below proves
+     * the channel places a `getenv()` argument AND refuses to place the same
+     * name in a non-read position, in one run.
+     */
+    public function testTheProviderAmbientRosterIsPinnedBothDirections(): void
+    {
+        $probe = new EnvReadScanner([
+            'fixture.php' => '<?php class F { public function e() { return getenv(\'OPENAI_API_KEY\'); }'
+                . ' public function h(): array { return [\'hint\' => \'OPENAI_BASE_URL\']; } }',
+        ]);
+        $this->assertSame(
+            ['OPENAI_API_KEY'],
+            array_keys($probe->ambientReads()),
+            'the ambient channel cannot place a direct getenv() argument, or placed a name that only '
+                . 'sat in an array — either way the derived roster below is measuring nothing',
+        );
+        $this->assertSame(
+            [],
+            $probe->unresolved(),
+            'an ambient mention in a non-read position was reported as an unplaced promise — the '
+                . 'fail-closed channel speaks the CANDY_CODE alphabet only',
+        );
+
+        $allowlist = explode('|', EnvReadScanner::AMBIENT_NAMES);
+        sort($allowlist);
+        $placed = array_keys($this->scanner()->ambientReads());
+        sort($placed);
+        $this->assertSame(
+            $allowlist,
+            $placed,
+            'the ambient allowlist and the scan disagree — a listed name whose read moved, died, or '
+                . 'was never shaped like a read; drop it from AMBIENT_NAMES, do not widen the table',
+        );
+
+        $documented = $this->ambientTableNames();
+        $this->assertSame(
+            [],
+            array_values(array_diff($placed, $documented)),
+            'src/ reads an ambient provider variable that docs/ENVIRONMENT.md does not tabulate',
+        );
+        $this->assertSame(
+            [],
+            array_values(array_diff($documented, $placed)),
+            'docs/ENVIRONMENT.md tabulates an ambient variable nothing reads any more — the row is '
+                . 'a promise the code stopped keeping',
+        );
+    }
+
+    /**
+     * First-column backticked upper-case names across the page's two
+     * provider-facing tables — "Provider credential variables" and "Claude
+     * Code variables" — each bounded to its own section exactly the way
+     * {@see osTableNames()} bounds the OS one, so a description cell naming
+     * another variable cannot vote in this census.
+     *
+     * @return list<string>
+     */
+    private function ambientTableNames(): array
+    {
+        $page = self::read(self::ENVIRONMENT_DOC);
+        $names = [];
+        foreach (["## Provider credential variables\n", "## Claude Code variables\n"] as $heading) {
+            $start = strpos($page, $heading);
+            $this->assertNotFalse($start, 'the section heading moved — this oracle is now blind');
+            $rest = substr($page, $start);
+            $end = strpos(substr($rest, 3), "\n## ");
+            $section = $end === false ? $rest : substr($rest, 0, $end + 3);
+            foreach (explode("\n", $section) as $line) {
+                if (preg_match('/^\|\s*(.+?)\s\|/', $line, $cell) !== 1) {
+                    continue;
+                }
+                if (preg_match_all('/`([A-Z][A-Z0-9_]*)`/', $cell[1], $found) >= 1) {
+                    foreach ($found[1] as $name) {
+                        $names[$name] = true;
+                    }
+                }
+            }
+        }
+
+        $list = array_keys($names);
+        sort($list);
+        $this->assertGreaterThan(
+            5,
+            \count($list),
+            'the ambient table scrape found almost nothing — table syntax changed and this oracle '
+                . 'compares against an empty-ish set',
+        );
+
+        return $list;
     }
 
     /**

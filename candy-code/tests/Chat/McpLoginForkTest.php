@@ -9,7 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
-use SugarCraft\Code\McpLoginProgressMsg;
+use SugarCraft\Code\App\McpLoginProgressMsg;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Support\McpLoginFork;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;

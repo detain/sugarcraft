@@ -406,15 +406,16 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Session.php|.config/candy-code' => self::USER,
         // SHL-1: the background-shell capture root, `~/.candy-code/shells`,
         // anchored at HomeDirectory::owned() — files THIS launch writes.
-        'Sessions/BackgroundShellRegistry.php|.candy-code/shells' => self::USER,
+        'Background/BackgroundShellRegistry.php|.candy-code/shells' => self::USER,
         // 5.4-3: the dream pass's skill drafts, `~/.candy-code/skills-proposed`,
         // and the user's live tree an accepted draft is copied into — both under
         // HomeDirectory::owned(), so a checkout cannot place either. The settings
         // row is `memory.dreamProposeSkills`' help sentence naming the drafts'
-        // directory.
+        // directory. The `memory.dreamProposeSkills` help row moved to
+        // `lang/en.php` with the W3-B i18n migration, so it no longer occurs in
+        // `src/`.
         'Skills/ProposedSkills.php|.candy-code/skills' => self::USER,
         'Skills/ProposedSkills.php|.candy-code/skills-proposed' => self::USER,
-        'Config/Settings/Definitions/MemoryRuleSettings.php|.candy-code/skills-proposed' => self::USER,
         'Skills/ForeignSkillDiscovery.php|.config/opencode' => self::USER,
         // crush-media W1.9: the artifact store, `~/.candy-code/media/<session>`,
         // under HomeDirectory::owned() — created 0700 and refused when loose or
@@ -446,7 +447,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Commands/ForeignCommandDiscovery.php|.config/opencode' => self::USER,
         // AUT-1 (lane w5c): the schedule store is a user home file (0600,
         // `~`), same basis as the shells and media rows.
-        'Sessions/ScheduleRegistry.php|.candy-code/schedules.json' => self::USER,
+        'Background/ScheduleRegistry.php|.candy-code/schedules.json' => self::USER,
 
         // Neither: not a tier this collector is about.
         'Agents/WorktreeConfig.php|.candy-code/worktrees' => self::NOT_A_TIER,
@@ -490,7 +491,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is SEVENTY-TWO occurrences — one per entry
+     * APPEARS IN. On this tree that is SEVENTY-ONE occurrences — one per entry
      * in {@see DOT_PATHS} — of FORTY-EIGHT distinct paths. TWENTY-NINE of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and

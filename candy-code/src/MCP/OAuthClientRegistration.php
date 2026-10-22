@@ -695,7 +695,9 @@ final class OAuthClientRegistration
 
             return $data;
         } catch (GuzzleException $e) {
-            throw new \RuntimeException("HTTP request to {$url} failed: {$e->getMessage()}");
+            // THE CAUSE TRAVELS WITH THE WRAPPER (v4-F20 sweep: last
+            // same-shape site found under src/MCP/), message byte-unchanged.
+            throw new \RuntimeException("HTTP request to {$url} failed: {$e->getMessage()}", 0, $e);
         }
     }
 

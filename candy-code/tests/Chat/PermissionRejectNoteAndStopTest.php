@@ -19,7 +19,7 @@ use SugarCraft\Code\Permissions\PermissionPromptStage;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Tests\Backend\Support\InteractiveTurnHarness;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 
 /**
  * The permission modal's two refusals beyond `n` (R-KEYBIND, beside 1.C-3):

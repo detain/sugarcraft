@@ -50,6 +50,7 @@ use SugarCraft\Code\Providers\RebindsModel;
 use SugarCraft\Code\Providers\ReportsServedModel;
 use SugarCraft\Code\Runtime;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Support\EnvBool;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\SiblingSpendLedger;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
@@ -392,7 +393,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * nothing else in this process sweeps: there is no SIGCHLD handler, and a
      * blanket `pcntl_waitpid(-1, ...)` would be actively harmful here because
      * {@see \SugarCraft\Code\Chat::executeToolsParallel()} and
-     * {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner} both wait on
+     * {@see \SugarCraft\Code\Background\BackgroundSessionRunner} both wait on
      * their OWN pids in this same process and check the returned pid - a
      * blind sweep would steal their exit statuses. So track ours and sweep
      * only those.
@@ -1113,7 +1114,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *    `$consolePermissionPrompt: true`, attaching
      *    {@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt}. So does the
      *    background-session daemon
-     *    ({@see \SugarCraft\Code\Sessions\BackgroundSessionRunner::backend()}),
+     *    ({@see \SugarCraft\Code\Background\BackgroundSessionRunner::backend()}),
      *    where the same tty probe resolves the other way — its fd 0 is
      *    `/dev/null` from the spawn site — and the ASK becomes an explicit
      *    refusal naming the tool, the mode and the remedies in the session's
@@ -3363,6 +3364,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * @param list<Tool>                                     $tools
      * @param \Closure(string $trigger, string $focus): ?string $preCompact
      * @param list<TypedMessage>                             $messages the turn's incoming rows
+     * @param bool                                           $unprompted the pruning mode's `compress: auto` — see above
      *
      * @return list<Tool>
      */
@@ -3426,7 +3428,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private static function parallelToolCallsEnabled(?array $config = null): bool
     {
         $flag = getenv(self::PARALLEL_TOOL_CALLS_DISABLE_ENV);
-        if ($flag !== false && $flag !== '' && $flag !== '0') {
+        if (EnvBool::isSet($flag)) {
             return false;
         }
 

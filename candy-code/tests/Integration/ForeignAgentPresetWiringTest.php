@@ -475,6 +475,19 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // session's own mode through SessionHost::permissionMode().
                 'Acp/AcpServer.php',
                 'Agents/Agent.php',
+                // ISS-004: NOT an Agent reader — the needle also matches the
+                // runner's OWN promoted `$permissionMode`, the spawn config's
+                // top-level session mode the server named (the delegation
+                // block's own key is read from the array, never off an Agent).
+                'Background/BackgroundSessionRunner.php',
+                // NOT Agent readers: the schedule row owns its OWN recorded
+                // `permissionMode` field (the AUT-1 permission floor — a cron
+                // never re-reads the live session's mode), and ScheduleSpawner
+                // passes that row value through. The needle is shape-matched,
+                // so both files land on the roster even though neither touches
+                // `Agent::$permissionMode`.
+                'Background/Schedule.php',
+                'Background/ScheduleSpawner.php',
                 // NOT an Agent reader: Chat applies a slash command's
                 // SetPermissionMode effect (`/permissions mode …`) through
                 // CommandEffect::permissionMode() — the mode the USER typed,
@@ -509,19 +522,6 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // SERVER's session mode off the gateway's spawn line (stdin),
                 // validated against PermissionMode, as `serve` itself does.
                 'Server/Workspace/WorkspaceHostProcess.php',
-                // ISS-004: NOT an Agent reader — the needle also matches the
-                // runner's OWN promoted `$permissionMode`, the spawn config's
-                // top-level session mode the server named (the delegation
-                // block's own key is read from the array, never off an Agent).
-                'Sessions/BackgroundSessionRunner.php',
-                // NOT Agent readers: the schedule row owns its OWN recorded
-                // `permissionMode` field (the AUT-1 permission floor — a cron
-                // never re-reads the live session's mode), and ScheduleSpawner
-                // passes that row value through. The needle is shape-matched,
-                // so both files land on the roster even though neither touches
-                // `Agent::$permissionMode`.
-                'Sessions/Schedule.php',
-                'Sessions/ScheduleSpawner.php',
                 // Roadmap 4.1-2: the gate was decided. TaskTool hands the mode
                 // to AgentManager::createSubAgent(), which narrows it to the
                 // session's (stricter-of, never wider), and fromPreset()

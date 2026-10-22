@@ -13,7 +13,7 @@ use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandLoader;
 use SugarCraft\Code\Commands\CommandSpec;
-use SugarCraft\Code\CustomCommandExpandedMsg;
+use SugarCraft\Code\App\CustomCommandExpandedMsg;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;

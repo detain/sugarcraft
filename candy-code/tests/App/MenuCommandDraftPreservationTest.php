@@ -167,7 +167,7 @@ final class MenuCommandDraftPreservationTest extends TestCase
         $this->assertNull($next->chat->palette(), 'the refusal closes the palette it ran under');
         $this->assertSame($history, array_slice($next->chat->history, 0, count($history)));
         $this->assertStringContainsString(
-            '"New session" does not run while a turn is in flight',
+            '`New session` does not run while a turn is in flight',
             $this->lastOf($next->chat)->content,
         );
     }

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Host\Commands;
 
 use SugarCraft\Code\Lang;
-use SugarCraft\Code\Sessions\Schedule;
-use SugarCraft\Code\Sessions\ScheduleRegistry;
+use SugarCraft\Code\Background\Schedule;
+use SugarCraft\Code\Background\ScheduleRegistry;
 
 /**
  * `/loop <interval> <prompt>` (AUT-1) — re-run a prompt in THIS session every

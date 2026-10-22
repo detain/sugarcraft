@@ -8,17 +8,17 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Agents\Agent;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend\EchoBackend;
-use SugarCraft\Code\BackgroundSessionStoppedMsg;
-use SugarCraft\Code\BackgroundTickMsg;
+use SugarCraft\Code\App\BackgroundSessionStoppedMsg;
+use SugarCraft\Code\App\BackgroundTickMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSessionStatus;
-use SugarCraft\Code\Sessions\BackgroundStopOutcome;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSessionStatus;
+use SugarCraft\Code\Background\BackgroundStopOutcome;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 
 /**
  * Roadmap 4.3-1: a settled `/bg` session's output comes back.

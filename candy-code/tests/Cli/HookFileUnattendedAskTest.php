@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
+use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Cli\HeadlessPermissionPrompt;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookResult;
@@ -149,18 +151,18 @@ final class HookFileUnattendedAskTest extends TestCase
     /** Fresh-process shape for the launch memo: entries cache and notice store. */
     private function clearLaunchStatics(): void
     {
+        // W7-D: the freshness memo and entries caches moved to LaunchContext.
         foreach ([
             'policyFreshnessChecked' => false,
             'policyChanged' => false,
             'policyPreviousProjectHooks' => [],
             'policyPreviousTrustedRoots' => [],
             'hookFileEntries' => [],
-            'launchNotices' => [],
-            'launchNoticesDropped' => [],
         ] as $name => $value) {
-            $property = new \ReflectionProperty(Bootstrap::class, $name);
+            $property = new \ReflectionProperty(LaunchContext::class, $name);
             $property->setAccessible(true);
             $property->setValue(null, $value);
         }
+        LaunchNotices::reset();
     }
 }

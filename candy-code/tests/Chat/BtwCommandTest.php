@@ -20,7 +20,7 @@ use SugarCraft\Code\Host\SubmitOptions;
 use SugarCraft\Code\Host\TurnController;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
-use SugarCraft\Code\SideQuestionAnsweredMsg;
+use SugarCraft\Code\App\SideQuestionAnsweredMsg;
 use SugarCraft\Code\ToolResult;
 use SugarCraft\Code\Usage;
 

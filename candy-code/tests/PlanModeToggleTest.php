@@ -17,7 +17,7 @@ use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
-use SugarCraft\Code\PermissionModeToggledMsg;
+use SugarCraft\Code\App\PermissionModeToggledMsg;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 

@@ -517,9 +517,11 @@ final class TreeWideGuardRosterTest extends TestCase
      * @var array<string, string>
      */
     private const DECLARED_TREE_WIDE_GUARDS = [
-        // markdownPagesUnder(\dirname(__DIR__, 2)) - walks README.md plus the
-        // whole of docs/ recursively; the root is the function's parameter.
-        'Cli/BootstrapLaunchFormatConstantsTest.php' => 'markdownPagesUnder() takes the package root as a parameter and walks docs/ under it',
+        // weld-4 retired the 'Cli/BootstrapLaunchFormatConstantsTest.php' row:
+        // the derivation's channel B now resolves its markdownPagesUnder()
+        // walks (scandir($root) + RecursiveDirectoryIterator($root.'/docs',
+        // SKIP_DOTS)) on its own, so the row added no member and only bought
+        // silence — the warranted-arm's own rule demands the deletion.
         // skillFilesUnder($this->builtInSkillsPath) and
         // skillFilesUnder(self::monorepoSkillsPath()) - a scandir() walk (not
         // a glob, so GlobDialectDifferentialTest's corpus stays put; audit
@@ -597,6 +599,9 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/BootstrapTrustGateSelfGrantTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)', 'scandir($probe)'],
         // tearDown() unlinks and rmdir's the sys_get_temp_dir() poison catalogue setUp() made (E453 pin).
         'Cli/HelpTest.php' => ['glob($this->poisonDir.\'/*.php\')'],
+        // w1e: tearDown() empties the sys_get_temp_dir() fake HOME the test mkdir'd
+        // (0700, nih_be_exit_* prefix) before its own rmdir.
+        'Cli/NonInteractiveBackendErrorExitTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
         // purgeTempTree() in tearDown() empties the sys_get_temp_dir() scratch tree
         // setUp() made (session.db, repo, fake HOME and all) before the rmdir.
         'Cli/NonInteractiveSessionPersistenceTest.php' => ['scandir($path)'],
@@ -618,7 +623,11 @@ final class TreeWideGuardRosterTest extends TestCase
         'Diagnostics/RuntimeNoticeSinkStderrTest.php' => ['glob($this->scratch.\'/*\')'],
         // tearDown() removes the sys_get_temp_dir() home setUp() made.
         'Diagnostics/TuiErrorLogTest.php' => ['scandir($path)'],
-        'Host/UsageModelThreadingTest.php' => ['glob($this->tempDir.\'/*\')'],
+        // W7-S4 (row retired, provenance): the auxiliary-engine model census now
+        // also walks src/Chat/Handlers/*.php from the package root, so the
+        // derivation promotes the file through channel B and settles membership
+        // BEFORE consulting the residue — the tempDir glob can never be read
+        // again, and rule 33 says the licence goes with the promotion.
         'Host/WebTwoHostCommandsTest.php' => ['glob($this->dir.\'/*\')'],
         'Integration/BinCandyCodeAutoloadGuardTest.php' => ['scandir($dir)'],
         'Integration/BinCandyCodeDispatchTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
@@ -659,6 +668,11 @@ final class TreeWideGuardRosterTest extends TestCase
             'scandir($configDir)',
             'scandir($dir)',
         ],
+        // w1e (v1-m-2): the sidecar-retention asserts glob the rotated `$buffer.log*`
+        // files their own test wrote next to a tempnam() buffer — never the package.
+        // W5-C (v4:F5): src/Sessions/ became src/Background/, but tests/Sessions/
+        // did NOT move, so these three keys stay tests-relative as written.
+        'Sessions/BackgroundSessionRunnerTest.php' => ['glob($sidecar.\'*\')'],
         'Sessions/BackgroundSupervisorReapTest.php' => ['glob($this->tempDir.\'/*\')'],
         // the supervisor test tears down the temp root its fixtures live in.
         'Sessions/BackgroundSupervisorTest.php' => ['scandir($tempRoot)'],
@@ -2121,8 +2135,12 @@ final class TreeWideGuardRosterTest extends TestCase
         // scandir() walk over src/Skills/BuiltIn (audit 15d-21 follow-up).
         // Moved 4 -> 5 at the audit-fix weld: Session/SqliteConnectCensusTest's
         // SES-1 census walks src/ and bin/ from the package root.
+        // Moved 5 -> 4 at weld-4: the `BootstrapLaunchFormatConstantsTest.php`
+        // row's walk came into channel B of the derivation (its own
+        // warranted-arm message named this deletion), retired in the same
+        // change-set as the prose above the constant.
         $this->assertCount(
-            5,
+            4,
             self::DECLARED_TREE_WIDE_GUARDS,
             'the declared-guard list has changed size. A row is a LICENCE, so adding one is a '
             . 'deliberate act that belongs in the same change-set as this count; removing one '

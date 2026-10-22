@@ -108,16 +108,16 @@ final class ContextSettings implements SettingDefinitionSet
             ->withReadBy($readBy);
 
         return [
-            $tier(CompactorConfig::SETTING_REMINDER_PERCENT, $defaults->reminderThreshold, Lang::t('settings.compaction.reminderPercent.label'), 'Window share at which the "consider compacting" reminder and the ahead-of-need background summary start; below the automatic tier.'),
-            $tier(CompactorConfig::SETTING_AUTO_PERCENT, $defaults->backgroundCompactionThreshold, Lang::t('settings.compaction.autoPercent.label'), 'Window share at which older exchanges are condensed automatically before the prompt is sent.'),
-            $tier(CompactorConfig::SETTING_BLOCK_PERCENT, $defaults->foregroundBlockingThreshold, Lang::t('settings.compaction.blockPercent.label'), 'Window share past which a prompt is refused until space is freed; the only tier that refuses.'),
-            $tuning(CompactorConfig::SETTING_KEEP_RECENT, $defaults->recentPreserveCount, Lang::t('settings.compaction.keepRecent.label'), 'Most recent user/assistant exchanges a compaction keeps in full.'),
-            $tuning(CompactorConfig::SETTING_SUMMARY_USER_CHARS, $defaults->summaryUserMaxChars, Lang::t('settings.compaction.summaryUserChars.label'), 'Characters of a user message the heuristic summary line keeps.'),
-            $tuning(CompactorConfig::SETTING_SUMMARY_ASSISTANT_CHARS, $defaults->summaryAssistantMaxChars, Lang::t('settings.compaction.summaryAssistantChars.label'), 'Assistant replies longer than this become "[exchanged information]" in a heuristic summary line.'),
-            $tuning(CompactorConfig::SETTING_TOOL_OUTPUT_CHARS, $defaults->toolOutputMaxChars, Lang::t('settings.compaction.toolOutputChars.label'), 'Characters of a condensed exchange\'s assistant half the summariser model is shown.'),
-            $cap(CompactorConfig::SETTING_REMINDER_TOKENS, $defaults->reminderTokens, Lang::t('settings.compaction.reminderTokens.label'), 'Absolute cap on the reminder tier: it fires at min(percentage, this). 0 turns the cap off.'),
-            $cap(CompactorConfig::SETTING_AUTO_TOKENS, $defaults->backgroundCompactionTokens, Lang::t('settings.compaction.autoTokens.label'), 'Absolute cap on the automatic tier and the in-turn step budget. 0 turns the cap off.'),
-            $cap(CompactorConfig::SETTING_BLOCK_TOKENS, $defaults->foregroundBlockingTokens, Lang::t('settings.compaction.blockTokens.label'), 'Absolute cap on the blocking tier; unset by default. Setting it lets a cap refuse prompts.')
+            $tier(CompactorConfig::SETTING_REMINDER_PERCENT, $defaults->reminderThreshold, Lang::t('settings.compaction.reminderPercent.label'), Lang::t('settings.compaction.reminderPercent.help')),
+            $tier(CompactorConfig::SETTING_AUTO_PERCENT, $defaults->backgroundCompactionThreshold, Lang::t('settings.compaction.autoPercent.label'), Lang::t('settings.compaction.autoPercent.help')),
+            $tier(CompactorConfig::SETTING_BLOCK_PERCENT, $defaults->foregroundBlockingThreshold, Lang::t('settings.compaction.blockPercent.label'), Lang::t('settings.compaction.blockPercent.help')),
+            $tuning(CompactorConfig::SETTING_KEEP_RECENT, $defaults->recentPreserveCount, Lang::t('settings.compaction.keepRecent.label'), Lang::t('settings.compaction.keepRecent.help')),
+            $tuning(CompactorConfig::SETTING_SUMMARY_USER_CHARS, $defaults->summaryUserMaxChars, Lang::t('settings.compaction.summaryUserChars.label'), Lang::t('settings.compaction.summaryUserChars.help')),
+            $tuning(CompactorConfig::SETTING_SUMMARY_ASSISTANT_CHARS, $defaults->summaryAssistantMaxChars, Lang::t('settings.compaction.summaryAssistantChars.label'), Lang::t('settings.compaction.summaryAssistantChars.help')),
+            $tuning(CompactorConfig::SETTING_TOOL_OUTPUT_CHARS, $defaults->toolOutputMaxChars, Lang::t('settings.compaction.toolOutputChars.label'), Lang::t('settings.compaction.toolOutputChars.help')),
+            $cap(CompactorConfig::SETTING_REMINDER_TOKENS, $defaults->reminderTokens, Lang::t('settings.compaction.reminderTokens.label'), Lang::t('settings.compaction.reminderTokens.help')),
+            $cap(CompactorConfig::SETTING_AUTO_TOKENS, $defaults->backgroundCompactionTokens, Lang::t('settings.compaction.autoTokens.label'), Lang::t('settings.compaction.autoTokens.help')),
+            $cap(CompactorConfig::SETTING_BLOCK_TOKENS, $defaults->foregroundBlockingTokens, Lang::t('settings.compaction.blockTokens.label'), Lang::t('settings.compaction.blockTokens.help'))
                 ->withDefaultText('unset (no cap)'),
             SettingDefinition::new(CompactorConfig::SETTING_MODEL_TOKEN_CAPS, SettingType::Map, [])
                 ->withCategory(SettingCategory::Context)
@@ -127,7 +127,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withUi(UiEditability::Complex)
                 ->withLabel(Lang::t('settings.compaction.modelTokenCaps.label'))
-                ->withHelp('{"<model>" or "<provider>/<model>": {"reminderTokens", "autoTokens", "blockTokens"}} overriding the three caps; 0 clears one.')
+                ->withHelp(Lang::t('settings.compaction.modelTokenCaps.help'))
                 ->withReaderSymbol(CompactorConfig::class . '::fromSettings')
                 ->withReadBy($readBy . ' → `forModel()`'),
             // Roadmap N-P4b remainder: the idle offer, the summary mode and
@@ -140,7 +140,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(0)
                 ->withLabel(Lang::t('settings.compaction.idleOfferSeconds.label'))
-                ->withHelp('A session past its whole context window that sat untouched this long is offered /compact instead of sending the prompt. 0 never offers.')
+                ->withHelp(Lang::t('settings.compaction.idleOfferSeconds.help'))
                 ->withReaderSymbol(IdleCompactionPolicy::class . '::shouldPrompt')
                 ->withReadBy($readBy . ' → `Chat::shouldPromptIdleCompaction()` → `IdleCompactionPolicy::shouldPrompt()`'),
             SettingDefinition::new(CompactorConfig::SETTING_MODE, SettingType::Enum, $defaults->mode)
@@ -151,7 +151,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnumValues(CompactorConfig::MODES)
                 ->withLabel(Lang::t('settings.compaction.mode.label'))
-                ->withHelp('llm: the summary model writes the summaries (the heuristic is its fallback); heuristic: local one-line summaries, never a model call; off: nothing compacts on its own, /compact still works and the blocking tier still refuses.')
+                ->withHelp(Lang::t('settings.compaction.mode.help'))
                 ->withReaderSymbol(CompactorConfig::class . '::summarisesWithModel')
                 ->withReadBy($readBy . ' → `autoCompacts()`, `summarisesWithModel()`'),
             SettingDefinition::new(CompactorConfig::SETTING_REFILL_LIMIT, SettingType::Int, $defaults->refillLimit)
@@ -161,7 +161,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1)
                 ->withLabel(Lang::t('settings.compaction.refillLimit.label'))
-                ->withHelp('Automatic compactions in a row that may come straight back over their tier, prompt unsent, before the next prompt is refused instead of compacted again.')
+                ->withHelp(Lang::t('settings.compaction.refillLimit.help'))
                 ->withReaderSymbol(IdleCompactionPolicy::class . '::thrashTripped')
                 ->withReadBy($readBy . ' → `IdleCompactionPolicy::thrashTripped()`'),
             // CTX-5: the opt-in that turns the idle window from an offer into a
@@ -175,17 +175,17 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::Live)
                 ->withLabel(Lang::t('settings.compaction.idleAuto.label'))
-                ->withHelp('Compact an idle over-tier session during the idle instead of waiting for the next prompt, using the automatic tier\'s machinery (spend cap and thrash breaker apply). Costs a background provider call; needs compaction.idleOfferSeconds above 0.')
+                ->withHelp(Lang::t('settings.compaction.idleAuto.help'))
                 ->withReaderSymbol(IdleCompactionPolicy::class . '::shouldAutoCompact')
                 ->withReadBy($readBy . ' → `IdleCompactionPolicy::shouldAutoCompact()`'),
             // Roadmap 3.B-4 / N-P4b: the model's context reminders. Read with
             // the compaction keys and handed to the engine's step loop through
             // `CompactorConfig::nudgePolicy()`; a min above the max is ignored
             // as a pair, so neither half of a typo moves alone.
-            $nudge(CompactorConfig::SETTING_NUDGE_MIN_TOKENS, $defaults->nudgeMinContextTokens, Lang::t('settings.contextPruning.minContextTokens.label'), 'Context size below which the model is never reminded to prune; must not exceed the hard-reminder size.'),
-            $nudge(CompactorConfig::SETTING_NUDGE_MAX_TOKENS, $defaults->nudgeMaxContextTokens, Lang::t('settings.contextPruning.maxContextTokens.label'), 'Context size above which the newest row carries the stronger "prune now" reminder.'),
-            $nudge(CompactorConfig::SETTING_NUDGE_FREQUENCY, $defaults->nudgeFrequency, Lang::t('settings.contextPruning.nudgeFrequency.label'), 'New rows a reminder waits for after the last one, so it does not repeat on every step.'),
-            $nudge(CompactorConfig::SETTING_NUDGE_ITERATIONS, $defaults->nudgeIterationThreshold, Lang::t('settings.contextPruning.iterationNudgeThreshold.label'), 'Tool results since the last prompt after which a long tool loop is reminded to prune.'),
+            $nudge(CompactorConfig::SETTING_NUDGE_MIN_TOKENS, $defaults->nudgeMinContextTokens, Lang::t('settings.contextPruning.minContextTokens.label'), Lang::t('settings.contextPruning.minContextTokens.help')),
+            $nudge(CompactorConfig::SETTING_NUDGE_MAX_TOKENS, $defaults->nudgeMaxContextTokens, Lang::t('settings.contextPruning.maxContextTokens.label'), Lang::t('settings.contextPruning.maxContextTokens.help')),
+            $nudge(CompactorConfig::SETTING_NUDGE_FREQUENCY, $defaults->nudgeFrequency, Lang::t('settings.contextPruning.nudgeFrequency.label'), Lang::t('settings.contextPruning.nudgeFrequency.help')),
+            $nudge(CompactorConfig::SETTING_NUDGE_ITERATIONS, $defaults->nudgeIterationThreshold, Lang::t('settings.contextPruning.iterationNudgeThreshold.label'), Lang::t('settings.contextPruning.iterationNudgeThreshold.help')),
             // Whether the model's Compress is offered unprompted. config.json
             // only, like contextPruning.mode: DCP #611 — under pressure a model
             // compresses content still needed — so only the person turns it on.
@@ -195,7 +195,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withEnumValues(CompactorConfig::COMPRESS_MODES)
                 ->withLabel(Lang::t('settings.contextPruning.compress.label'))
-                ->withHelp('manual offers Compress only on a turn you start with /compress, one call; auto offers it on every turn where the model may prune.')
+                ->withHelp(Lang::t('settings.contextPruning.compress.help'))
                 ->withReaderSymbol(CompactorConfig::class . '::offersCompressUnprompted')
                 ->withReadBy('`Chat::applySettings()`, `EngineBackend::gatedLedgerTools()` → `CompactorConfig::offersCompressUnprompted()`'),
             // Roadmap N-P4d: the persisted form of CANDY_CODE_DISABLE_SYMBOL_MAP.
@@ -207,7 +207,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withEnvVar(SymbolMapBlock::SYMBOL_MAP_OPT_OUT_ENV)
                 ->withLabel(Lang::t('settings.symbolMap.enabled.label'))
-                ->withHelp('Put the ranked symbol-level repo map in the system prompt, captured once per session.')
+                ->withHelp(Lang::t('settings.symbolMap.enabled.help'))
                 ->withReaderSymbol(SymbolMapBlock::class . '::disabledBySettings')
                 ->withReadBy('`SymbolMapBlock::capture()` → `disabledBySettings()`, at the session\'s first turn'),
             // Roadmap N-P4d: the repo map and the `<env>` git sections. Each is
@@ -223,7 +223,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withLabel(Lang::t('settings.repoMap.enabled.label'))
-                ->withHelp('Put the map of where code lives (packages and PSR-4 source directories) in the system prompt.')
+                ->withHelp(Lang::t('settings.repoMap.enabled.help'))
                 ->withReaderSymbol(RepoMapBlock::class . '::enabledBySettings')
                 ->withReadBy('`Runtime::repoMapSnapshot()` → `RepoMapBlock::enabledBySettings()`, per turn'),
             SettingDefinition::new(RepoMapBlock::SETTING_MAX_BYTES, SettingType::Int, RepoMapBlock::MAX_SECTION_BYTES)
@@ -233,7 +233,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(RepoMapBlock::MAX_ENTRY_BYTES)
                 ->withLabel(Lang::t('settings.repoMap.maxBytes.label'))
-                ->withHelp('Byte budget for each of the repo map\'s two sections; entries past it are counted, not listed.')
+                ->withHelp(Lang::t('settings.repoMap.maxBytes.help'))
                 ->withReaderSymbol(RepoMapBlock::class . '::withSettings')
                 ->withReadBy('`Runtime::repoMapSnapshot()` → `RepoMapBlock::withSettings()`, per turn'),
             SettingDefinition::new(EnvironmentBlock::SETTING_GIT_DIFF_AFTER_WRITES, SettingType::Bool, true)
@@ -243,7 +243,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withLabel(Lang::t('settings.env.gitDiffAfterWrites.label'))
-                ->withHelp('After a step that wrote files, show the staged and unstaged git diffs in the turn context.')
+                ->withHelp(Lang::t('settings.env.gitDiffAfterWrites.help'))
                 ->withReaderSymbol(EnvironmentBlock::class . '::withSettings')
                 ->withReadBy('`Runtime::environmentSnapshot()` → `EnvironmentBlock::withSettings()`, per turn'),
             SettingDefinition::new(EnvironmentBlock::SETTING_DIFF_MAX_BYTES, SettingType::Int, EnvironmentBlock::DIFF_MAX_BYTES)
@@ -253,7 +253,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(EnvironmentBlock::MIN_DIFF_MAX_BYTES)
                 ->withLabel(Lang::t('settings.env.diffMaxBytes.label'))
-                ->withHelp('Bytes each of the two git diff sections keeps before it is truncated with a note.')
+                ->withHelp(Lang::t('settings.env.diffMaxBytes.help'))
                 ->withReaderSymbol(EnvironmentBlock::class . '::withSettings')
                 ->withReadBy('`Runtime::environmentSnapshot()` → `EnvironmentBlock::withSettings()`, per turn'),
             // Roadmap N-P4d: the launch-notice shelf. config.json only, read
@@ -264,7 +264,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withRange(0)
                 ->withLabel(Lang::t('settings.notices.transcriptLimit.label'))
-                ->withHelp('Most launch warnings seated as transcript rows; the rest are counted in one "and N more" row, and stderr carries them all.')
+                ->withHelp(Lang::t('settings.notices.transcriptLimit.help'))
                 ->withReaderSymbol(Bootstrap::class . '::launchNoticeLimit')
                 ->withReadBy('`Bootstrap::warnPermissionConfigInTranscript()` → `launchNoticeLimit()`, at launch'),
             SettingDefinition::new('contextWindow', SettingType::Json)
@@ -272,7 +272,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Tuning)
                 ->withLayered()
                 ->withLabel(Lang::t('settings.contextWindow.label'))
-                ->withHelp('Token window override: a count for the provider\'s model, or {"<model>": tokens}.')
+                ->withHelp(Lang::t('settings.contextWindow.help'))
                 ->withReaderSymbol(ProviderFactory::class . '::createOpenAI')
                 ->withReadBy('`ProviderFactory::createOpenAI()`, `createAnthropic()`, `createBedrock()`, `createSglang()`, `createVertex()`, `createCustom()` → each provider\'s `contextWindow()`'),
             // Roadmap 3.B-2: the default for every session that has not set
@@ -285,7 +285,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withEnvVar(PruningMode::ENV)
                 ->withEnumValues(array_map(static fn (PruningMode $m): string => $m->value, PruningMode::cases()))
                 ->withLabel(Lang::t('settings.contextPruning.mode.label'))
-                ->withHelp('auto prunes superseded rows at each turn start; manual only on /sweep; off shows no ref tags. /pruning overrides it per session.')
+                ->withHelp(Lang::t('settings.contextPruning.mode.help'))
                 ->withReaderSymbol(PruningMode::class . '::configured')
                 ->withReadBy('`Host\\TurnRunner::start()` and `/pruning` → `PruningMode::configured()`'),
         ];

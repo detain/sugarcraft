@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Permissions\PermissionMode;
-use SugarCraft\Code\Sessions\Schedule;
+use SugarCraft\Code\Background\Schedule;
 
 /**
  * AUT-1 boundary rows: the parse that makes the rest of the schedule path

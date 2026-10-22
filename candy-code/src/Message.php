@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code;
 
 use SugarCraft\Code\Permissions\DenialKind;
+use SugarCraft\Code\App\ToolResultsMsg;
 
 /**
  * One turn in a chat conversation. Immutable, role-tagged,

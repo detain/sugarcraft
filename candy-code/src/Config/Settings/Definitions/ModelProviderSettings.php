@@ -40,7 +40,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withEnvVar('CANDY_CODE_PROVIDER')
                 ->withOptionsSource(OptionsSource::Providers)
                 ->withLabel(Lang::t('settings.provider.label'))
-                ->withHelp('Which LLM provider the session talks to; every prompt is sent to its host.')
+                ->withHelp(Lang::t('settings.provider.help'))
                 ->withReaderSymbol(Bootstrap::class . '::selectedProviderName')
                 ->withReadBy('`Bootstrap::selectedProviderName()`, `backend()`'),
             // D9: the model choice persists per provider, user tier only, so a
@@ -54,7 +54,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withEnvVar('CANDY_CODE_MODEL')
                 ->withCliFlag('--model')
                 ->withLabel(Lang::t('settings.models.label'))
-                ->withHelp('The model to run, per provider ({"<provider>": "<model id>"}); unset uses the provider default.')
+                ->withHelp(Lang::t('settings.models.help'))
                 ->withReaderSymbol(Bootstrap::class . '::selectedModelName')
                 ->withReadBy('`Bootstrap::selectedModelName()`, `backendFor()`, `selectedProviderLabel()`'),
             // rv-enduser-1: the endpoint lockout fix. A map of provider NAME
@@ -73,7 +73,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
                 ->withLabel(Lang::t('settings.providers.label'))
-                ->withHelp('Provider definitions per name ({"<name>": {"type": …, "baseUrl": …, "apiKey": …, "model": …}}); each entry layers over that type\'s defaults. User tier only: a project must never move where your credential is sent.')
+                ->withHelp(Lang::t('settings.providers.help'))
                 ->withReaderSymbol(Bootstrap::class . '::providerOverrides')
                 ->withReadBy('`Bootstrap::providerOverrides()`, `providerConfigFor()` → `provider()`, `backendFor()`, `workerProviderSpec()`, `toollessBackend()`, `selectedProviderLabel()`, `availableProviders()`'),
             SettingDefinition::new('titleModel', SettingType::String)
@@ -82,7 +82,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withEnvVar('CANDY_CODE_TITLE_MODEL')
                 ->withLabel(Lang::t('settings.titleModel.label'))
-                ->withHelp('Model that names sessions and writes prompt suggestions; unset uses the provider type\'s cheap auxiliary default before the block model.')
+                ->withHelp(Lang::t('settings.titleModel.help'))
                 ->withReaderSymbol(Bootstrap::class . '::titleBackend'),
             SettingDefinition::new('summaryModel', SettingType::String)
                 ->withCategory(SettingCategory::ModelProvider)
@@ -90,7 +90,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withEnvVar('CANDY_CODE_SUMMARY_MODEL')
                 ->withLabel(Lang::t('settings.summaryModel.label'))
-                ->withHelp('Model that writes compaction summaries; unset uses the conversation\'s own model, which reuses the prompt cache.')
+                ->withHelp(Lang::t('settings.summaryModel.help'))
                 ->withReaderSymbol(Bootstrap::class . '::summaryModel')
                 ->withReadBy('`Bootstrap::summaryModel()`, `summaryBackend()`'),
             SettingDefinition::new('maxOutputTokens', SettingType::Int)
@@ -100,7 +100,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1)
                 ->withLabel(Lang::t('settings.maxOutputTokens.label'))
-                ->withHelp('Per-request output ceiling; unset sends no override and the provider default applies.')
+                ->withHelp(Lang::t('settings.maxOutputTokens.help'))
                 ->withReaderSymbol(EngineBackend::class . '::complete'),
             SettingDefinition::new('modelPrices', SettingType::Map, [])
                 ->withCategory(SettingCategory::ModelProvider)
@@ -108,7 +108,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
                 ->withLabel(Lang::t('settings.modelPrices.label'))
-                ->withHelp('USD per 1M tokens per model ({"input": …, "output": …}), for the spend total and cap.')
+                ->withHelp(Lang::t('settings.modelPrices.help'))
                 ->withReaderSymbol(ProviderFactory::class . '::userTierModelPrices')
                 ->withReadBy('`ProviderFactory::createOpenAI()`, `createAnthropic()`, `createVertex()`, `createBedrock()`, `createCustom()` → `userTierModelPrices()`'),
             SettingDefinition::new('extraBody', SettingType::Map)
@@ -117,7 +117,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
                 ->withLabel(Lang::t('settings.extraBody.label'))
-                ->withHelp('Top-level request fields added to every `custom` provider request.')
+                ->withHelp(Lang::t('settings.extraBody.help'))
                 ->withReaderSymbol(ProviderFactory::class . '::createCustom')
                 ->withReadBy('`ProviderFactory::createCustom()` → `CustomProvider`'),
             SettingDefinition::new('thinkingBudget', SettingType::Int)
@@ -126,7 +126,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withRange(0)
                 ->withLabel(Lang::t('settings.thinkingBudget.label'))
-                ->withHelp('Thinking-token budget: Gemini `thinkingConfig` on the `vertex` provider; extended thinking on the `anthropic` provider, where the Messages API floor is 1024 (0 or unset means off on either arm). Thinking tokens bill as output.')
+                ->withHelp(Lang::t('settings.thinkingBudget.help'))
                 ->withReaderSymbol(ProviderFactory::class . '::createVertex')
                 ->withReadBy('`ProviderFactory::createVertex()` → `VertexProvider`, `createAnthropic()` → `AnthropicProvider`'),
             // PRV-2 (§6.5): the reasoning-effort tier, named in words instead
@@ -149,7 +149,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnumValues(array_map(static fn (\SugarCraft\Code\Agents\Effort $level): string => $level->value, \SugarCraft\Code\Agents\Effort::cases()))
                 ->withLabel(Lang::t('settings.reasoningEffort.label'))
-                ->withHelp('Thinking tier sent to providers that shape effort; unset or unrecognized asks nothing. `/effort` sets and clears it.')
+                ->withHelp(Lang::t('settings.reasoningEffort.help'))
                 ->withReaderSymbol(Bootstrap::class . '::resolvedReasoningEffort')
                 ->withReadBy('`Bootstrap::backend()`, `backendFor()`, `Chat::applySettings()` → `resolvedReasoningEffort()`'),
             SettingDefinition::new('promptCache', SettingType::Bool, true)
@@ -158,7 +158,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withEnvVar('CANDY_CODE_DISABLE_PROMPT_CACHE')
                 ->withLabel(Lang::t('settings.promptCache.label'))
-                ->withHelp('Whether the `vertex` and `bedrock` providers mark prompt-cache breakpoints.')
+                ->withHelp(Lang::t('settings.promptCache.help'))
                 ->withReaderSymbol(ProviderFactory::class . '::promptCacheEnabled')
                 ->withReadBy('`ProviderFactory::createVertex()`, `createBedrock()` → `promptCacheEnabled()`'),
         ];

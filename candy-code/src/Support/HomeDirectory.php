@@ -49,6 +49,12 @@ namespace SugarCraft\Code\Support;
 final class HomeDirectory
 {
     /**
+     * Set the first time {@see path()} answers with the stand-in (v1:m-1);
+     * read by {@see standInUsed()}.
+     */
+    private static bool $standInUsed = false;
+
+    /**
      * This user's home directory, or the least-surprising stand-in when
      * nothing can say.
      *
@@ -130,7 +136,33 @@ final class HomeDirectory
      */
     public static function path(): string
     {
-        return self::resolved() ?? sys_get_temp_dir();
+        $home = self::resolved();
+        if ($home === null) {
+            self::$standInUsed = true;
+
+            return sys_get_temp_dir();
+        }
+
+        return $home;
+    }
+
+    /**
+     * Whether {@see path()} has answered with the temp-directory stand-in in
+     * this process (v1:m-1). The stand-in itself stays — the ADEXED reader
+     * inventory above lists WHO reads it, not whether it is read; what was
+     * missing was that a launch running on it said NOTHING.
+     */
+    public static function standInUsed(): bool
+    {
+        return self::$standInUsed;
+    }
+
+    /**
+     * Test seam: the record is process-scoped launch state.
+     */
+    public static function resetStandInUsedForTesting(): void
+    {
+        self::$standInUsed = false;
     }
 
     /**

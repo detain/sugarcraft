@@ -15,7 +15,7 @@ use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
-use SugarCraft\Code\Sessions\BackgroundSessionRunner;
+use SugarCraft\Code\Background\BackgroundSessionRunner;
 
 /**
  * ISS-041, background half: a `/bg` daemon runs the same

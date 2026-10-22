@@ -12,7 +12,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\App\App;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
@@ -24,7 +24,7 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Role;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Tests\Backend\Support\BatchDouble;
 use SugarCraft\Code\Tools\ToolCall as EngineToolCall;
 use SugarCraft\Code\Tui\Components\ChatPane;
@@ -234,7 +234,7 @@ final class ReasoningPaintTest extends TestCase
      * was wrong, not the mutation.
      *
      * What the exclusion buys, concretely: a `ReasoningDelta` returned here
-     * lands in a {@see \SugarCraft\Code\BackendToolEventsMsg}, whose applier
+     * lands in a {@see \SugarCraft\Code\App\BackendToolEventsMsg}, whose applier
      * dispatches on `instanceof ToolStarted` and sends everything else to the
      * ToolFinished branch. A thought would arrive there as a TypeError and take
      * the whole turn down.
@@ -542,14 +542,14 @@ final class ReasoningPaintTest extends TestCase
 
     /**
      * While the model is still THINKING - no reply text yet - the trace itself
-     * is painted, newlines kept, under a `💭 Thinking…` marker: the user reads
+     * is painted, newlines kept, under a `💭 assistant is thinking…` marker: the user reads
      * the thought as it is written instead of watching a one-line ticker.
      */
     public function testALiveThoughtIsPaintedInFullWhileTheModelIsStillThinking(): void
     {
         $frame = $this->paintedThought("FIRSTLINE weighing it up\nSECONDLINE and deciding");
 
-        $this->assertStringContainsString('💭 Thinking…', $this->plain($frame));
+        $this->assertStringContainsString('💭 assistant is thinking…', $this->plain($frame));
         $this->assertStringContainsString('FIRSTLINE', $frame);
         $this->assertStringContainsString('SECONDLINE', $frame);
         $rows = $this->rowsContaining($frame, ['FIRSTLINE', 'SECONDLINE']);

@@ -17,7 +17,9 @@ use PHPUnit\Framework\TestCase;
  *    that is called from exactly four places: Chat's config-change closure
  *    (`chat()`), the shell's layout hook (`app()`), the launch's settings
  *    write door (`settingsWriter()`), and the project-MCP trust grant
- *    (`trustProjectMcp()`);
+ *    (`McpDecision::trustProjectMcp()` since the w4a launch split —
+ *    `Bootstrap::trustProjectMcp()` is a delegating shim and writes nothing
+ *    itself);
  *  - that `candy-code login` persists a typed provider key through the same
  *    door (`Subcommands::loginStoreKey()`, plan_comparison W4 PRV-4);
  *  - that {@see \SugarCraft\Code\Config\Settings\SettingsWriter} is built in
@@ -41,7 +43,7 @@ final class SettingsWriterCensusTest extends TestCase
         'Cli/Bootstrap.php::app' => 1,
         'Cli/Bootstrap.php::chat' => 1,
         'Cli/Bootstrap.php::settingsWriter' => 1,
-        'Cli/Bootstrap.php::trustProjectMcp' => 1,
+        'Cli/McpDecision.php::trustProjectMcp' => 1,
         'Cli/Subcommands.php::loginStoreKey' => 1,
     ];
 
@@ -133,13 +135,13 @@ final class SettingsWriterCensusTest extends TestCase
             // reasoningEffort key alone; a failed save rides the note, never
             // fatal.
             'Chat.php::persistEffort->write' => 2,
-            'Chat.php::persistPermissionRules->write' => 1,
             'Config/Settings/ModelChoice.php::persist->write' => 1,
             // crush-media W5.7: /rendermode writes the chosen render mode
             // through the sanctioned writer — the one command that mutates a
             // settings key, which is why it takes the host command's writer
             // rather than touching AtomicJsonFile itself.
             'Host/Commands/RenderModeHostCommand.php::run->write' => 1,
+            'Permissions/PermissionPrompt.php::persistRules->write' => 1,
             'Protocol/Methods/SettingsMethods.php::set->write' => 1,
             // N-P5: a settings PROFILE, not a settings file — its write is
             // AtomicJsonFile's, it names SettingsWriter only to ask which keys

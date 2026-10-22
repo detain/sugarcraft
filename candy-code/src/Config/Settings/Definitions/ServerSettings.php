@@ -44,7 +44,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withEnvVar('CANDY_CODE_SERVER_HOST')
                 ->withLabel(Lang::t('settings.server.host.label'))
-                ->withHelp('The address `serve` binds. Anything but loopback also needs --allow-remote at launch.')
+                ->withHelp(Lang::t('settings.server.host.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.port', SettingType::Int, ServerConfig::DEFAULT_PORT)
@@ -53,7 +53,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withEnvVar('CANDY_CODE_SERVER_PORT')
                 ->withRange(0, 65535)
                 ->withLabel(Lang::t('settings.server.port.label'))
-                ->withHelp('The port `serve` binds; 0 picks a free one.')
+                ->withHelp(Lang::t('settings.server.port.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.allowedOrigins', SettingType::StringList, [])
@@ -62,7 +62,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withEnvVar('CANDY_CODE_SERVER_ALLOWED_ORIGINS')
                 ->withUi(UiEditability::List)
                 ->withLabel(Lang::t('settings.server.allowedOrigins.label'))
-                ->withHelp('Extra browser origins (http(s)://host[:port]) the server accepts beside its own.')
+                ->withHelp(Lang::t('settings.server.allowedOrigins.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.allowedHosts', SettingType::StringList, [])
@@ -88,7 +88,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withUi(UiEditability::List)
                 ->withLabel(Lang::t('settings.server.trustedProxies.label'))
-                ->withHelp('IPs or CIDRs whose X-Forwarded-For / X-Forwarded-Proto the server believes.')
+                ->withHelp(Lang::t('settings.server.trustedProxies.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.maxOpenSessions', SettingType::Int, ServerConfig::DEFAULT_MAX_OPEN_SESSIONS)
@@ -96,7 +96,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withRange(1, null)
                 ->withLabel(Lang::t('settings.server.maxOpenSessions.label'))
-                ->withHelp('Sessions a server keeps open at once; past it the least recently used idle one is released.')
+                ->withHelp(Lang::t('settings.server.maxOpenSessions.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.maxConcurrentTurns', SettingType::Int, ServerConfig::DEFAULT_MAX_CONCURRENT_TURNS)
@@ -104,7 +104,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withRange(1, null)
                 ->withLabel(Lang::t('settings.server.maxConcurrentTurns.label'))
-                ->withHelp('Turns a server runs at once across its sessions; one more is refused busy (retryable).')
+                ->withHelp(Lang::t('settings.server.maxConcurrentTurns.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.askTimeoutSeconds', SettingType::Float, ServerConfig::DEFAULT_ASK_TIMEOUT_SECONDS)
@@ -112,7 +112,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withRange(0, null)
                 ->withLabel(Lang::t('settings.server.askTimeoutSeconds.label'))
-                ->withHelp('Seconds a permission question waits for a client before it is refused; 0 waits forever.')
+                ->withHelp(Lang::t('settings.server.askTimeoutSeconds.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.drainSeconds', SettingType::Float, ServerConfig::DEFAULT_DRAIN_SECONDS)
@@ -120,14 +120,14 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withRange(0, null)
                 ->withLabel(Lang::t('settings.server.drainSeconds.label'))
-                ->withHelp('Seconds a stopping server waits for running turns before cancelling them; 0 stops at once.')
+                ->withHelp(Lang::t('settings.server.drainSeconds.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.allowBypass', SettingType::Bool, false)
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)
                 ->withLabel(Lang::t('settings.server.allowBypass.label'))
-                ->withHelp('Whether server sessions may run in bypass-permissions or dont-ask (same as --allow-bypass).')
+                ->withHelp(Lang::t('settings.server.allowBypass.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.dirBrowse', SettingType::Bool, false)

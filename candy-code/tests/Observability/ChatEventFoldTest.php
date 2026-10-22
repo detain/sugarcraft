@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Tests\Observability;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
-use SugarCraft\Code\BackendToolEventsMsg;
+use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\Events\PermissionResolved;
 use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Events\TokenDelta;
@@ -17,7 +17,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Observability\EventSink;
 use SugarCraft\Code\Observability\NullEventSink;
 use SugarCraft\Code\Permissions\DenialKind;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**

@@ -41,7 +41,7 @@ use SugarCraft\Code\Support\HomeDirectory;
  * NEVER BLOCKS THE TUI. The first lookup in a process reads the cache as it
  * is — stale or absent included — and, when it is stale, starts the refresh
  * in a detached grandchild (`pcntl_fork()` twice, like
- * {@see \SugarCraft\Code\Sessions\BackgroundSupervisor}): the parent reaps
+ * {@see \SugarCraft\Code\Background\BackgroundSupervisor}): the parent reaps
  * the intermediate child at once and goes on with what it read, and the next
  * launch sees the new file. Without ext-pcntl the refresh runs inline, held to
  * {@see DISCOVERY_CONNECT_TIMEOUT_SECONDS} / {@see DISCOVERY_TIMEOUT_SECONDS}.

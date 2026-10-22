@@ -11,7 +11,7 @@ use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Connection;
 use SugarCraft\Code\Server\Ws\MessageHandler;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 
 /**

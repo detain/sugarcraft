@@ -227,7 +227,11 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
         } catch (\Exception $e) {
             $this->closeStream();
 
-            throw new \RuntimeException("Failed to start MCP server {$this->name}: {$e->getMessage()}");
+            // THE CAUSE TRAVELS WITH THE WRAPPER (v4-F20): the message keeps
+            // its shape for every existing pin, and the chain stays intact for
+            // whoever logs $previous — a bare rethrow here silently severed the
+            // stack that made the failure interesting.
+            throw new \RuntimeException("Failed to start MCP server {$this->name}: {$e->getMessage()}", 0, $e);
         }
 
         $this->initialized = true;

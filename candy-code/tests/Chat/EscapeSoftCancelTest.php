@@ -16,7 +16,7 @@ use SugarCraft\Code\Events\StepStarted;
 use SugarCraft\Code\Events\UsageUpdated;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Usage;
 
 /**

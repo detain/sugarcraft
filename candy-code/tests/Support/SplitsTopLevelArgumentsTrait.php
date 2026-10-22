@@ -33,7 +33,10 @@ namespace SugarCraft\Code\Tests\Support;
  * consolidation had to decide. MEASURED before the move (round 67 lane dc,
  * PHP 8.3.6, both scanners run over every `.php` under `tests/` and `src/`):
  * the only `#[` inside any parenthesised range in the tree is a constructor
- * PARAMETER attribute (`src/Registry/Tool.php`'s `#[\SensitiveParameter]`),
+ * PARAMETER attribute (the `#[\SensitiveParameter]` on a constructor
+ * parameter of `SugarCraft\Code\Registry\Tool` — a class that has since
+ * been retired along with the whole registry trio, so this census fact is
+ * historical),
  * no spawn call's argument range contains one, and re-running both full
  * censuses with the widened walk moved ZERO sites - stderr's 215 and
  * lifetime's 1706 answered line-for-line identically - so widening the two

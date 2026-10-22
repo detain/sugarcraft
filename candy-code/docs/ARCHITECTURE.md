@@ -152,7 +152,7 @@ It is the largest file in the package — well past ten thousand lines; run
 `wc -l src/Chat.php` rather than trusting a figure here, because the one this
 sentence used to carry ("10,381 lines, measured on this checkout") was stale by
 the time anyone read it — because it owns every interactive surface: the input widget, the transcript, the "/" popup, the Ctrl+P
-palette, session tabs, the permission prompt, and the dispatch arms for 56
+palette, session tabs, the permission prompt, and the dispatch arms for 57
 built-in slash commands.
 
 `Chat` is **standalone-runnable**. Every collaborator is optional and degrades to
@@ -364,7 +364,7 @@ big-endian length plus a `serialize()`d array, decoded with
   reply. In the TUI the first Escape of a turn that reports steps is the soft
   cancel; the next Escape, or a second one inside the double-press window, is
   still the hard cancel that kills the whole tree.
-- **Tool cancel (1.C-4b).** The same first Escape also names every call that is
+- **Tool cancel.** The same first Escape also names every call that is
   running (`CancellationToken::cancelTool()`), and the parent's cancel poll
   writes one `cancel_tool{callId}` per call. In the child,
   `ChildChannel::takeToolCancels()` feeds `Support\ToolCancelRequests`, which
@@ -447,7 +447,7 @@ writes. The relay carries those beats instead:
 - Every relay is closed in `executeConcurrently()`'s `finally` block. No
   process is added, only file descriptors.
 
-**Permission ask relay (1.C-5).** The same grandchild cannot put a question up
+**Permission ask relay.** The same grandchild cannot put a question up
 the turn socket either. When the turn has an approver and a member's tool
 implements `Tools\RelaysPermissionAsks` (`TaskTool`), the turn child opens a
 unix stream pair (`Support\PermissionAskRelay`, the engine's length-prefixed
@@ -858,7 +858,7 @@ request is refused, never clamped. Admission is a separate honest door: an
 route, while a family with a recorded contract is dialed; a finished video
 lands beside a JSON sidecar of its request params and job ledger. Playback is
 `src/Tui/VideoPlayer/` — the `/play` command and the player screen render
-through sugar-video, and the audio door (decision C-4) leaves generated videos
+through sugar-video, and the audio door leaves generated videos
 silent. Live preview frames (`PreviewSlots`, `PreviewPaint`) ride
 display-only progress events: they replace in place, clear when the job
 settles, and are never written into the transcript or the session store. The
@@ -947,7 +947,7 @@ them on this tree:
 | `custom` | `CustomProvider` |
 
 Two rows are easy to get wrong, so they are worth stating flatly.
-`anthropic` does **not** go through `ClaudeCodeProvider`, and since ISS-023 it
+`anthropic` does **not** go through `ClaudeCodeProvider`, and it
 no longer goes through `CustomProvider` either:
 `ProviderFactory::createAnthropic()` returns the dedicated `AnthropicProvider`,
 whose client carries `x-api-key` + `anthropic-version` — the Messages API
@@ -1014,7 +1014,7 @@ completion can legitimately run for tens of minutes.
 | `~/.candy-code/mailboxes/` | `Agents\Live\AgentInbox` | messages to a running delegated run, `<session>/<agent>/inbox.jsonl`, read at its step boundaries; a message from the user carries the launch key's HMAC; swept with its session, as `subagents/` is |
 | `<tmp>/sc_runtime_tool_<id>.board` | `Agents\Board\Board` | one parallel `Task` batch's shared board: the posts its members make with `BoardPost`, one JSON line each, in a 0600 file created before the batch forks (when two or more members can join) and removed when the batch is over; a file a killed process leaves goes with the batch's other `sc_runtime_tool_` files in the next launch's one-hour sweep |
 | `<workflowsPath>/.running/` | `Workflows\WorkflowEngine` | pause files |
-| `<tmp>/candy_code_bg_<uid>_index/` | `Sessions\BackgroundSupervisor` | one record per running background session (`/bg`, `/fork`, background `Task`), so a restart re-adopts its daemon and the host adopts one its turn child spawned |
+| `<tmp>/candy_code_bg_<uid>_index/` | `Background\BackgroundSupervisor` | one record per running background session (`/bg`, `/fork`, background `Task`), so a restart re-adopts its daemon and the host adopts one its turn child spawned |
 
 **Transcript rows have an identity.** `EnhancedSessionStore::saveTranscript()`
 writes transcript schema version 2: every row has an id, `m_<session>_<ref>`, and a
@@ -1122,7 +1122,7 @@ are never deleted. A shadow repository's unreachable objects are collected by
 `Workspace\ShadowGarbageCollector`: at most once a day per shadow, only past
 1,000 loose objects, in the foreground under a 10-second budget.
 
-`Sessions\Background*` runs a task in a detached session (`/bg`, `/fork`) with
+`Background\Background*` runs a task in a detached session (`/bg`, `/fork`) with
 its own runner and supervisor, and so does a background `Task`: the turn's
 forked child spawns the daemon, the index record names the host as its owner,
 and the host's supervisor adopts it on its next poll

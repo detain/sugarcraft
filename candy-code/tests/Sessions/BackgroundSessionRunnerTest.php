@@ -12,8 +12,8 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\DenialKind;
-use SugarCraft\Code\Sessions\BackgroundSessionRunner;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSessionRunner;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**
@@ -89,7 +89,7 @@ final class BackgroundSessionRunnerTest extends TestCase
      *
      * The consequence was not confined to the daemon. The supervisor's only
      * completion signal is a DEAD PID
-     * ({@see \SugarCraft\Code\Sessions\BackgroundSupervisor::reapFinishedDaemon()}),
+     * ({@see \SugarCraft\Code\Background\BackgroundSupervisor::reapFinishedDaemon()}),
      * so a `supervise()` parked in that wait means the session reports
      * "running" for the life of the process, the unix socket is never unlinked,
      * and both processes leak.
@@ -152,7 +152,7 @@ final class BackgroundSessionRunnerTest extends TestCase
             declare(strict_types=1);
             require {$this->export($autoload)};
 
-            \$runner = new SugarCraft\Code\Sessions\BackgroundSessionRunner(
+            \$runner = new SugarCraft\Code\Background\BackgroundSessionRunner(
                 sessionId: 'sess_stop_1',
                 socketPath: {$this->export($buffer . '.sock')},
                 bufferPath: {$this->export($buffer)},
@@ -420,7 +420,7 @@ final class BackgroundSessionRunnerTest extends TestCase
                 exit(0);
             }
 
-            \$runner = new SugarCraft\Code\Sessions\BackgroundSessionRunner(
+            \$runner = new SugarCraft\Code\Background\BackgroundSessionRunner(
                 sessionId: 'sess_e229',
                 socketPath: {$this->export($socket)},
                 bufferPath: {$this->export($buffer)},
@@ -644,7 +644,7 @@ final class BackgroundSessionRunnerTest extends TestCase
      * transcript, and this is why the record is collapsed to one line.
      *
      * The buffer is a line protocol:
-     * {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::restoreOutput()}
+     * {@see \SugarCraft\Code\Background\BackgroundSupervisor::restoreOutput()}
      * drops a line only when THAT LINE starts with `[session:`, so a two-line
      * record would have its first line dropped and its second restored as
      * model output — a hook author's error text quoted back to the user as if
@@ -710,7 +710,7 @@ final class BackgroundSessionRunnerTest extends TestCase
      * MEASURED (round 49, mutation M3): renaming the constant to
      * `[session:task:refused]` left the whole suite green, because every
      * assertion elsewhere is written against the constant and moves with it,
-     * and because {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner::executeTask()}
+     * and because {@see \SugarCraft\Code\Background\BackgroundSessionRunner::executeTask()}
      * writes its outcome line last, so the refusal never IS the last
      * `[session:task:` line today. So the danger is latent rather than live —
      * and it is exactly the kind that an ordering change makes live without
@@ -942,7 +942,7 @@ final class BackgroundSessionRunnerTest extends TestCase
     public function testHeartbeatIntervalStaysUnderTheSupervisorTimeout(): void
     {
         $this->assertLessThan(
-            \SugarCraft\Code\Sessions\BackgroundSupervisor::HEARTBEAT_TIMEOUT_SECS,
+            \SugarCraft\Code\Background\BackgroundSupervisor::HEARTBEAT_TIMEOUT_SECS,
             BackgroundSessionRunner::HEARTBEAT_INTERVAL_SECS,
         );
     }
@@ -1146,6 +1146,124 @@ final class BackgroundSessionRunnerTest extends TestCase
             $this->restoreEnv('CANDY_CODE_PERMISSION_MODE', $previousMode);
             $cleanup();
         }
+    }
+
+    // =========================================================================
+    // v1-m-2 sidecar retention. The daemon's fd1/fd2 ride `$bufferPath.'.log'`
+    // with no writer-side rotation, so the SUPERVISOR trims it on the heartbeat
+    // cadence — truncate IN PLACE (the inherited O_APPEND description follows
+    // the inode a rename would escape) with a one-generation `.1` tail copy.
+    // =========================================================================
+
+    private function trimSidecar(string $buffer): void
+    {
+        $method = new \ReflectionMethod(BackgroundSessionRunner::class, 'trimSidecarLog');
+        $method->invoke($this->runner($buffer));
+    }
+
+    /** @return array{int, int} the [ceiling, tail] private constants */
+    private function sidecarCeilings(): array
+    {
+        $class = new \ReflectionClass(BackgroundSessionRunner::class);
+
+        return [
+            (int) $class->getReflectionConstant('LOG_SIDECAR_MAX_BYTES')->getValue(),
+            (int) $class->getReflectionConstant('LOG_SIDECAR_TAIL_BYTES')->getValue(),
+        ];
+    }
+
+    public function testTheSidecarTrimLeavesFilesBelowTheCeilingUntouched(): void
+    {
+        $buffer = $this->bufferPath();
+        [$ceiling] = $this->sidecarCeilings();
+        $sidecar = $buffer . '.log';
+        $payload = str_repeat("warning: provider retried\n", intdiv($ceiling, 27));
+        file_put_contents($sidecar, $payload);
+        $this->paths[] = $sidecar;
+        $this->paths[] = $sidecar . '.1';
+
+        $this->trimSidecar($buffer);
+
+        self::assertSame($payload, (string) file_get_contents($sidecar));
+        self::assertFileDoesNotExist($sidecar . '.1');
+    }
+
+    public function testTheSidecarTrimKeepsTheNewestTailAndResetsTheLog(): void
+    {
+        $buffer = $this->bufferPath();
+        [$ceiling, $tailBytes] = $this->sidecarCeilings();
+        $sidecar = $buffer . '.log';
+        // Marked payloads: the exact preserved window is pin-able byte-for-byte,
+        // and the head marker proves nothing of the OLD half survives by path.
+        $payload = 'HEAD-MARKER ' . str_repeat('x', $ceiling - 12) . str_repeat('y', $tailBytes) . 'TAIL-MARKER';
+        file_put_contents($sidecar, $payload);
+        $this->paths[] = $sidecar;
+        $this->paths[] = $sidecar . '.1';
+
+        $this->trimSidecar($buffer);
+
+        self::assertSame('', (string) file_get_contents($sidecar), 'the same inode must be truncated, not replaced');
+        self::assertSame(
+            substr($payload, -$tailBytes),
+            (string) file_get_contents($sidecar . '.1'),
+            'the preserved copy must be exactly the newest tail window',
+        );
+    }
+
+    public function testTheSidecarTrimRetainsExactlyOneGenerationAcrossRepeatOverflows(): void
+    {
+        $buffer = $this->bufferPath();
+        [$ceiling, $tailBytes] = $this->sidecarCeilings();
+        $sidecar = $buffer . '.log';
+        $first = 'AAAAAAAA' . str_repeat('x', $ceiling + 64);
+        file_put_contents($sidecar, $first);
+        $this->trimSidecar($buffer);
+
+        $second = 'BBBBBBBB' . str_repeat('y', $ceiling + 64);
+        file_put_contents($sidecar, $second);
+        $this->trimSidecar($buffer);
+
+        // Bounded retention: two files, never one per rotation.
+        self::assertSame(
+            [$sidecar, $sidecar . '.1'],
+            glob($sidecar . '*'),
+            'a repeat overflow must REPLACE the one-generation copy, not accumulate',
+        );
+        self::assertSame(substr($second, -$tailBytes), (string) file_get_contents($sidecar . '.1'));
+        self::assertSame('', (string) file_get_contents($sidecar));
+    }
+
+    public function testTheSidecarTrimIsSilentWhenTheSidecarNeverOpened(): void
+    {
+        $buffer = $this->bufferPath();
+        $this->paths[] = $buffer . '.log';
+        $this->paths[] = $buffer . '.log.1';
+
+        $this->trimSidecar($buffer);
+
+        self::assertFileDoesNotExist($buffer . '.log');
+        self::assertFileDoesNotExist($buffer . '.log.1');
+    }
+
+    public function testTheHeartbeatArmTrimsTheSidecarOnItsCadence(): void
+    {
+        // The trim is load-bearing only if the live loop reaches it; supervise()
+        // cannot be driven in-process (it exits with the session), so this pins
+        // the call site structurally: the heartbeat arm must contain exactly one
+        // trimSidecarLog() between stamping the heartbeat record and re-arming
+        // the clock. A trim moved OFF the cadence (say, onto every accept)
+        // re-drives the disk for a reason the 5 s stamp already serves.
+        $source = (string) file_get_contents(
+            \dirname(__DIR__, 2) . '/src/Background/BackgroundSessionRunner.php',
+        );
+        self::assertSame(
+            1,
+            preg_match(
+                '/session:heartbeat.*?\$this->trimSidecarLog\(\);.*?\$lastHeartbeat = \\\\time\(\);/s',
+                $source,
+            ),
+            'the heartbeat arm must stamp, trim, and re-arm in that order',
+        );
     }
 
     /** A `custom` provider whose API key exists, under a private empty HOME. */

@@ -119,10 +119,18 @@ final class ProcessContainment
      * a `*_`-shaped glob to bite on: `fnmatch('*_PASSWORD', 'PGPASSWORD')` is
      * false. `SSH_AUTH_SOCK` stays: it is a socket path, not a secret, and
      * dropping it breaks every legitimate ssh-agent flow the operator runs.
+     *
+     * SEC-2 (audit 2026-10-21) adds the two generic suffixes services
+     * actually ship — `GITHUB_KEY`, `*_LICENSE` — closing the family where a
+     * vendor simply omitted the `_API` middle word. Collateral is the
+     * documented direction: key-PATH variables like `SSH_PRIVATE_KEY` now
+     * scrub too (they still name a secret), and the operator's
+     * `secretEnvAllowlist` releases exactly the ones a workflow needs.
      */
     public const SECRET_ENV_PATTERNS = [
         '*_API_KEY', '*_TOKEN', '*_SECRET', 'AWS_*',
         '*_PASSWORD', '*_PASS', '*_PWD', '*_DSN', '*_CREDENTIALS',
+        '*_KEY', '*_LICENSE',
         'DATABASE_URL', 'PGPASSWORD',
     ];
 

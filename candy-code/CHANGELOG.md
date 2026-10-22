@@ -37,6 +37,88 @@ the plan demanded one.
 See `docs/TROUBLESHOOTING.md` ("Upgrading from sugar-crush") for user-facing <!-- @rename-keep -->
 symptoms, and `docs/ENVIRONMENT.md` ("Deprecated aliases") for the env fold.
 
+## Security and one-shot hardening (2026-10-21)
+
+A remediation wave across the permission layer, the network tools and the
+one-shot `-p` path. In user-visible terms:
+
+- **Refusals that reach too far.** The permission layer now denies reading
+  `/proc/*/environ` and git's `--ext-diff` execution path; a generic
+  `*_KEY`/`*_LICENSE` scrubber strips secret-shaped names from child
+  environments; `WebFetch` re-consults the user's rules on every redirect
+  hop, so a rule that asks on the first URL refuses on the tenth; the
+  `/share` body runs through the secret redactor before it is published;
+  and `WebSearch` ships no default endpoint — it fails loudly until you
+  configure one.
+- **`/export`.** A new command writes the session's raw bytes, unredacted —
+  markdown by default, other formats via the format argument, and `--path`
+  to write outside the project directory.
+- **One-shot hardening.** A delegated backend's failure now costs the caller
+  a real exit code instead of printing an error-shaped success; every stop
+  condition (step cap, output limit, loop guard) appends a trailer line in
+  text and typed keys in JSON without changing the exit code; a repeated
+  `-p` warns rather than silently re-taking the flag; every labelled stderr
+  line from the launcher composes its `candy-code` prefix exactly once, so
+  two never stack; `--output-format text` strips terminal control bytes so a
+  model's own text can no longer
+  restyle or scroll the caller's terminal; and a foreign `~/.claude`
+  settings file with hook events is skipped with a notice instead of
+  derailing the launch.
+- **Dock.** An untouched dock side now collapses continuously instead of
+  amputating the chat border.
+- **Signal exits.** A TUI stopped by `SIGINT`, `SIGTERM` or `SIGHUP` reports
+  the conventional 128+N code (130, 143, 129); a cooperative quit still
+  exits 0.
+- **Docs that count.** Tool, provider, keybinding and doctor-check counts
+  scattered across the docs were re-derived from the live registry and
+  corrected; the settings-help surface migrated all 172 of its strings into
+  the language catalog so they translate like the rest of the UI; and the
+  keybinding table was reconciled against the registry it documents.
+- **A keyboard that survives a pipe.** Launching the interactive TUI with
+  piped stdin (`echo hi | candy-code`) kept the terminal but lost the
+  keyboard: the pipe's first EOF dropped the one read watcher. The
+  interactive program now re-anchors its input on the real tty, while `-p`
+  keeps reading the pipe exactly as before.
+- **Guidance on dumb terminals.** A `TERM` of `dumb`, `unknown` or unset on
+  an interactive stdout now earns a launch notice naming the paths such a
+  terminal can actually use: the `-p` one-shot path and the mouse opt-outs
+  (`CANDY_CODE_DISABLE_MOUSE`, or the `mouse: false` setting).
+- **Focus you can see.** The `Ctrl+F` transcript row cursor paints: the
+  focused tool unit is drawn with the theme's active style instead of
+  selecting invisibly, and the documented keybinding row says so.
+- **Static analysis.** PHPStan level 5 ships with a committed baseline and
+  a composer script (`composer analyse`).
+- **Layout normalized.** The thirty-five root-level TEA message classes
+  moved under `src/App/`, and `src/Sessions/` became `src/Background/` to
+  match the background-process classes that live there. Behavior untouched.
+- **The codebase got thinner.** `Chat.php` shed about 2,200 lines and
+  `Cli/Bootstrap.php` about 1,300 in behavior-exact extractions: the
+  message router split into per-handler-family traits, the launch-time
+  stores moved into a dedicated `LaunchContext`, and the permission state
+  machine and session-tab bookkeeping each became their own class. Each
+  extraction carries a parity test pinning both behavior and shape.
+- **One log side-channel.** Scattered `error_log()` diagnostics now all
+  flow through a single logging facade with named channels, and the new
+  `CANDY_CODE_QUIET_LOGS` (`1`, `true` or `yes`) silences the whole
+  side-channel for CI captures; the per-family debug flags keep their own
+  meanings either way.
+- **New docs pages.** A `GLOSSARY.md` carrying the identifier-convention
+  legend for the whole codebase, a `CONTRIBUTING.md`, and an
+  `ADDING_A_PROVIDER.md` walkthrough, all indexed in the docs README.
+
+## Fixed (2026-10-21 plan_comparison D1)
+
+The one-shot `-p` path discarded every stop condition the engine had folded
+onto the settled answer: a step-capped, output-limit-cut, or loop-guarded turn
+printed its partial reply unmarked and exited 0 — the TUI announced all of
+these through its Chat settle arm and headless CI had no equivalent. A
+`--output-format text` run now appends one plain ANSI-free trailer line per
+stop condition (`cli.truncate.*`), a `json` run (and a stream-json run's final
+line) gains the typed optional keys `steps_truncated` / `length_stopped` /
+`loop_guard_stopped_by` (present only when true), and a turn billed on an
+unpriced model writes its `chat.turn.unpriced_model` notice to stderr like the
+TUI's. Exit semantics are unchanged by design: 0 still means an answer arrived.
+
 ## Fixed (2026-10-14 review wave)
 
 A broad multi-persona review (covering documentation, code, terminal UX,

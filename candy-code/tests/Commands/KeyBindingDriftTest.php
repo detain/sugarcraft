@@ -18,14 +18,15 @@ use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\App\SelectSkillMsg;
 use SugarCraft\Code\Backend\EchoBackend;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\PermissionRequestMsg;
+use SugarCraft\Code\App\PermissionRequestMsg;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
@@ -789,7 +790,7 @@ final class KeyBindingDriftTest extends TestCase
             },
             'chat.accept-suggestion' => function (array $k): void {
                 $history = [Message::user('fix it'), Message::assistant('Fixed.')];
-                [$suggested] = $this->chat($history)->update(new \SugarCraft\Code\PromptSuggestionMsg('run the tests', 0, count($history), null));
+                [$suggested] = $this->chat($history)->update(new \SugarCraft\Code\App\PromptSuggestionMsg('run the tests', 0, count($history), null));
                 [$next] = $suggested->update($k[0]);
                 $this->assertSame('run the tests', $next->inputBuf);
             },
@@ -921,6 +922,42 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertArrayNotHasKey('call-1', $collapsed->expanded(), 'the same key must collapse it again');
                 $this->assertArrayNotHasKey($thought, $collapsed->expanded(), 'and the thought with it');
             },
+            // v2:a11y-F1: "Move ... one row older" is a MOVE, so the drift it
+            // must refuse is a toggle: the cursor lands on the older row and
+            // changes NOTHING expanded; the row only opens when `Ctrl+O`
+            // answers the settled cursor — both halves of that conversation
+            // are driven here because the label's whole promise is the
+            // cursor's next state, and a cursor that moved somewhere else
+            // would satisfy a toggle-only assertion.
+            'chat.tool-row' => function (array $k): void {
+                [$app] = $this->app()->withChat($this->chat([
+                    Message::assistant('a')->withToolResults([ToolResult::ok('grep', 'a', 'call_old')]),
+                    Message::assistant('b')->withToolResults([ToolResult::ok('grep', 'b', 'call_new')]),
+                ]))->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+                [$focused] = $app->update($k[0]);
+                $this->assertSame(
+                    'call_old',
+                    $focused->toolWalkState['key'] ?? null,
+                    'the chord must settle the cursor one row older',
+                );
+                $this->assertFalse(
+                    $focused->chat->isToolOutputExpanded('call_old'),
+                    'moving the cursor must not toggle the row it lands on',
+                );
+
+                [$opened] = $focused->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+                $this->assertTrue(
+                    $opened->chat->isToolOutputExpanded('call_old'),
+                    'and the focused row is what the expansion chord answers',
+                );
+
+                [$closed] = $opened->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+                $this->assertFalse(
+                    $closed->chat->isToolOutputExpanded('call_old'),
+                    'the same chord closes it again',
+                );
+            },
             // rv-a11y (2026-10-14): "Clear AND repaint" is two effects, so
             // both halves of the dispatched Cmd are opened — the erase+home
             // bytes, then the same-size WindowSizeMsg whose arrival at
@@ -955,7 +992,7 @@ final class KeyBindingDriftTest extends TestCase
                     [$next, $cmd] = $this->chat([], 'look at ')->update($k[0]);
                     $this->assertNotNull($cmd, 'the chord must read the clipboard');
                     $answer = $cmd();
-                    $this->assertInstanceOf(\SugarCraft\Code\ClipboardImagePastedMsg::class, $answer);
+                    $this->assertInstanceOf(\SugarCraft\Code\App\ClipboardImagePastedMsg::class, $answer);
                     [$pasted] = $next->update($answer);
 
                     $this->assertMatchesRegularExpression('~^look at @/\S+\.png $~', $pasted->inputBuf);
@@ -2390,7 +2427,7 @@ final class KeyBindingDriftTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $store,
             currentSessionId: $ids[0],
-            openTabs: self::tabsFromStore($store, activeId: $ids[0]),
+            tabState: new SessionTabState(tabs: self::tabsFromStore($store, activeId: $ids[0])),
         ))->withSize(100, 30);
     }
 
@@ -2953,7 +2990,7 @@ final class KeyBindingDriftTest extends TestCase
             $loop->cancelTimer($safety);
         }
 
-        $this->assertInstanceOf(\SugarCraft\Code\ToolResultsMsg::class, $resolved, 'the released batch did not complete');
+        $this->assertInstanceOf(\SugarCraft\Code\App\ToolResultsMsg::class, $resolved, 'the released batch did not complete');
     }
 
     /** A live, ARMED permission prompt on a `Bash` call. */

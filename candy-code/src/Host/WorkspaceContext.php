@@ -20,7 +20,7 @@ use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 

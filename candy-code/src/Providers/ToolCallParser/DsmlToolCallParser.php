@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Providers\ToolCallParser;
 
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Tools\ToolCall;
 
 /**
@@ -297,8 +298,8 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
 
         foreach ($envelopes as $envelope) {
             if (!$envelope['closed']) {
-                error_log(sprintf(
-                    'candy-code: DsmlToolCallParser: a "%s>" envelope opened at byte %d is never closed; '
+                Log::sub(Log::DSML_TOOL_CALL_PARSER, sprintf(
+                    'a "%s>" envelope opened at byte %d is never closed; '
                     . 'recovering whatever invoke(s) it had already emitted.',
                     self::ENVELOPE_PREFILTER,
                     $envelope['offset'],
@@ -381,8 +382,8 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
                 return null;
             }
 
-            error_log(sprintf(
-                'candy-code: DsmlToolCallParser: an invoke of "%s" is never closed with "</%s>" - the '
+            Log::sub(Log::DSML_TOOL_CALL_PARSER, sprintf(
+                'an invoke of "%s" is never closed with "</%s>" - the '
                 . 'generation looks truncated; recovering the %d parameter(s) it had already '
                 . 'emitted.',
                 $name,
@@ -415,8 +416,8 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
             $name = $parameter['attributes']['name'] ?? null;
 
             if ($name === null || $name === '') {
-                error_log(sprintf(
-                    'candy-code: DsmlToolCallParser: a "%s" element on tool "%s" has no readable name="..." '
+                Log::sub(Log::DSML_TOOL_CALL_PARSER, sprintf(
+                    'a "%s" element on tool "%s" has no readable name="..." '
                     . 'attribute, so its value cannot be assigned to an argument.',
                     self::PARAMETER_OPEN,
                     $toolName,
@@ -426,8 +427,8 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
             }
 
             if ($parameter['terminator'] !== 'close') {
-                error_log(sprintf(
-                    'candy-code: DsmlToolCallParser: parameter "%s" on tool "%s" is never closed with "%s", so '
+                Log::sub(Log::DSML_TOOL_CALL_PARSER, sprintf(
+                    'parameter "%s" on tool "%s" is never closed with "%s", so '
                     . 'its value is truncated by an unknown amount.',
                     $name,
                     $toolName,
@@ -446,8 +447,8 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
             // the rest of this class is built around: a repeated emission is
             // likelier a restart artefact than a correction.
             if (array_key_exists($name, $arguments)) {
-                error_log(sprintf(
-                    'candy-code: DsmlToolCallParser: duplicate parameter "%s" on tool "%s"; keeping the '
+                Log::sub(Log::DSML_TOOL_CALL_PARSER, sprintf(
+                    'duplicate parameter "%s" on tool "%s"; keeping the '
                     . 'first occurrence and discarding the later one.',
                     $name,
                     $toolName,
@@ -528,8 +529,8 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
             // payload the model sent, so a tool's own validation can report the
             // real problem. Dropping the parameter would instead hand the tool
             // a silently-missing argument.
-            error_log(sprintf(
-                'candy-code: DsmlToolCallParser: parameter "%s" on tool "%s" has string=%s, which is '
+            Log::sub(Log::DSML_TOOL_CALL_PARSER, sprintf(
+                'parameter "%s" on tool "%s" has string=%s, which is '
                 . 'neither "true" nor "false"; treating the value as a raw string.',
                 $paramName,
                 $toolName,
@@ -547,8 +548,8 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
             // information available, and losing the argument entirely is
             // strictly worse than passing it on in the wrong type with a log
             // line naming the tool and the parameter.
-            error_log(sprintf(
-                'candy-code: DsmlToolCallParser: parameter "%s" on tool "%s" declares string="false" but its '
+            Log::sub(Log::DSML_TOOL_CALL_PARSER, sprintf(
+                'parameter "%s" on tool "%s" declares string="false" but its '
                 . 'value is not valid JSON (%s); passing the raw text through untyped.',
                 $paramName,
                 $toolName,

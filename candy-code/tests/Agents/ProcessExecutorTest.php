@@ -15,7 +15,7 @@ use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\EchoProvider;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Code\Tools\Tool;
 

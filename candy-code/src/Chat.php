@@ -31,14 +31,16 @@ use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Skills\SkillMentions;
+use SugarCraft\Code\Host\SessionTabState;
+use SugarCraft\Code\Host\SessionSwitch;
 use SugarCraft\Code\Tui\ComposerVim;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\SessionPicker;
-use SugarCraft\Code\Tui\SessionTab;
 use SugarCraft\Code\Tui\SessionTabs;
 use SugarCraft\Code\Tui\TextSelection;
 use SugarCraft\Code\Tui\Components\PaneLabel;
+use SugarCraft\Code\Support\EnvBool;
 use SugarCraft\Code\Support\SystemClipboard;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Attachments\MentionIndex;
@@ -58,6 +60,8 @@ use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Permissions\DenialKind;
+use SugarCraft\Code\Permissions\PermissionFlow;
+use SugarCraft\Code\Permissions\PermissionPrompt;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
 use SugarCraft\Code\Permissions\PermissionReply;
@@ -99,6 +103,45 @@ use SugarCraft\Code\Session\SessionLock;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Util\TokenTracker;
 use SugarCraft\Code\Util\TokenEstimate;
+use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
+use SugarCraft\Code\App\BackgroundSessionStoppedMsg;
+use SugarCraft\Code\App\CancelledWorkflowReportMsg;
+use SugarCraft\Code\App\CustomCommandExpandedMsg;
+use SugarCraft\Code\App\PermissionModeToggledMsg;
+use SugarCraft\Code\App\ClipboardImagePastedMsg;
+use SugarCraft\Code\App\SideQuestionAnsweredMsg;
+use SugarCraft\Code\App\DreamPassCompletedMsg;
+use SugarCraft\Code\App\MemoryConsolidatedMsg;
+use SugarCraft\Code\App\BackendToolEventsMsg;
+use SugarCraft\Code\App\PermissionRequestMsg;
+use SugarCraft\Code\App\RuntimeNoticePumpMsg;
+use SugarCraft\Code\App\TurnHooksResolvedMsg;
+use SugarCraft\Code\App\AgentMessageSentMsg;
+use SugarCraft\Code\App\HistoryCompactedMsg;
+use SugarCraft\Code\App\McpLoginProgressMsg;
+use SugarCraft\Code\App\PromptSuggestionMsg;
+use SugarCraft\Code\App\SessionLockRetryMsg;
+use SugarCraft\Code\App\StatusLineResultMsg;
+use SugarCraft\Code\App\BangShellResultMsg;
+use SugarCraft\Code\App\IdleCompactTickMsg;
+use SugarCraft\Code\App\PermissionReplyMsg;
+use SugarCraft\Code\App\TranscriptFlushMsg;
+use SugarCraft\Code\App\BackgroundTickMsg;
+use SugarCraft\Code\App\CancelAgentRunMsg;
+use SugarCraft\Code\App\CloseAgentViewMsg;
+use SugarCraft\Code\App\StatusLineTickMsg;
+use SugarCraft\Code\App\InitialPromptMsg;
+use SugarCraft\Code\App\OpenAgentViewMsg;
+use SugarCraft\Code\App\SessionTitledMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
+use SugarCraft\Code\App\AgentControlMsg;
+use SugarCraft\Code\App\ToolResultsMsg;
+use SugarCraft\Code\App\GoalJudgedMsg;
+use SugarCraft\Code\App\AssistantMsg;
+use SugarCraft\Code\Chat\Handlers\HandlesRunControl;
+use SugarCraft\Code\Chat\Handlers\HandlesTurnCompletion;
+use SugarCraft\Code\Chat\Handlers\HandlesSessionSurface;
+use SugarCraft\Code\Chat\Handlers\HandlesKeys;
 
 /**
  * The chat shell, as a SugarCraft {@see Model}.
@@ -127,6 +170,18 @@ use SugarCraft\Code\Util\TokenEstimate;
  */
 final class Chat implements Model
 {
+
+    use HandlesKeys;
+
+
+    use HandlesSessionSurface;
+
+
+    use HandlesTurnCompletion;
+
+
+    use HandlesRunControl;
+
     /**
      * The key types {@see update()} hands straight to the draft editor when no
      * arm above has claimed them and no ctrl flag is set.
@@ -323,14 +378,14 @@ final class Chat implements Model
     private ?string $currentSessionId = null;
 
     /**
-     * Tabs the user has OPENED this run (ISS-102). The session tab strip
-     * renders these — not the whole store listing — and every route that
-     * puts a session in front of the user (picker Enter, tab click,
+     * The tab strip's opened-tab model and its double-click memo (ISS-102),
+     * folded into {@see SessionTabState} by v4 split-plan S3. Every route
+     * that puts a session in front of the user (picker Enter, tab click,
      * Ctrl+Tab, palette New session, a background handoff landing) opens or
-     * focuses its tab here, so the active session is always exactly one
-     * active tab.
+     * focuses its tab through this state, so the active session is always
+     * exactly one active tab.
      */
-    private readonly SessionTabs $openTabs;
+    private readonly SessionTabState $tabState;
 
     /**
      * One-shot minter of THIS session's store row, or null when the row
@@ -673,7 +728,7 @@ final class Chat implements Model
         private readonly ?\SugarCraft\Code\Agents\AgentWorkerPool $effectivePool = null,
         ?WorkflowEngineInterface $workflowEngine = null,
         ?AgentManager $agentManager = null,
-        /**
+    /**
          * Thresholds the context tiers use. Promoted to a property so
          * {@see mutate()} can carry it: it used to be a plain parameter that
          * only reached the constructor, and mutate() passed `null` in its
@@ -686,13 +741,13 @@ final class Chat implements Model
         ?MemoryStore $memoryStore = null,
         \SugarCraft\Code\Session\SessionStore|\SugarCraft\Code\Session\EnhancedSessionStore|null $sessionStore = null,
         ?string $currentSessionId = null,
-        /**
-         * The tab model to start from (ISS-102); null seeds the single tab
-         * for $currentSessionId — or the library's default "main" tab when
-         * there is no session yet.
+    /**
+         * The tab-surface state to start from (ISS-102); null seeds the one
+         * tab for $currentSessionId — or the library's default "main" tab
+         * when there is no session yet.
          */
-        ?SessionTabs $openTabs = null,
-        /**
+        ?SessionTabState $tabState = null,
+    /**
          * ISS-102 lazy row minter: a closure creating $currentSessionId's
          * store row, invoked once by the first {@see dispatchTurn()}.
          * Null when the row already exists (resumed session, `/branch`,
@@ -700,9 +755,9 @@ final class Chat implements Model
          */
         ?\Closure $sessionMint = null,
         private readonly ?\DateTimeImmutable $lastActivityAt = null,
-        /** Highlighted row in the "/" popup (see {@see slashMenuMatches()}). */
+    /** Highlighted row in the "/" popup (see {@see slashMenuMatches()}). */
         private readonly int $slashMenuIndex = 0,
-        /**
+    /**
          * TUI-1: highlighted row in the `@` mention popup (see
          * {@see mentionPopupRows()}). Like slashMenuIndex, reset whenever the
          * draft TEXT changes; a caret move between two mention tokens can land
@@ -710,16 +765,16 @@ final class Chat implements Model
          * clamps rather than trusting it.
          */
         private readonly int $mentionMenuIndex = 0,
-        /**
+    /**
          * TUI-1: Escape closes the mention popup; it stays closed until the
          * draft text changes again (reset with the index in the two funnels).
          */
         private readonly bool $mentionMenuDismissed = false,
-        /** Active {@see Theme} name (see {@see theme()}); resolved lazily, not stored as an object. */
+    /** Active {@see Theme} name (see {@see theme()}); resolved lazily, not stored as an object. */
         private readonly string $themeName = 'dark',
-        /** Ctrl+P command palette state; null when closed. */
+    /** Ctrl+P command palette state; null when closed. */
         private readonly ?PaletteState $palette = null,
-        /**
+    /**
          * Optional callable(string $key, string $value): void, fired by FOUR
          * DOORS: the Ctrl+P palette's Switch Model row, `/model <provider>`,
          * the palette's Switch Theme row, and `/theme <name>`.
@@ -752,7 +807,7 @@ final class Chat implements Model
          * that never call withOnConfigChange()/pass one to the constructor.
          */
         private readonly ?\Closure $onConfigChange = null,
-        /**
+    /**
          * Bumped by every submit()/beginToolCalls()/finishToolCalls() call that schedules a
          * backend Cmd; stamped onto that Cmd's eventual {@see AssistantMsg}
          * so a reply for a turn that was later aborted (see Escape-Escape
@@ -760,7 +815,7 @@ final class Chat implements Model
          * dropped in update() rather than appended after newer messages.
          */
         private readonly int $generation = 0,
-        /**
+    /**
          * Shared cancel flag for the turn currently in flight; null when
          * idle. See {@see \SugarCraft\Code\Backend\CancellationToken}'s
          * docblock for why this can't be a normal immutable value-object
@@ -768,13 +823,13 @@ final class Chat implements Model
          * already-scheduled Cmd captured.
          */
         private readonly ?CancellationToken $inFlightCancellation = null,
-        /**
+    /**
          * Wall-clock timestamp (microtime(true)) of the most recent
          * un-paired Escape press; null once consumed/expired. Drives the
          * double-Escape-to-abort window in update().
          */
         private readonly ?float $lastEscapeAt = null,
-        /**
+    /**
          * Real terminal dimensions, sourced from {@see WindowSizeMsg} - the
          * one size sugar-core's Program actually dispatches at startup AND
          * again on every SIGWINCH resize (see Program::installSignalHandlers()).
@@ -789,7 +844,7 @@ final class Chat implements Model
          */
         private readonly ?int $rows = null,
         private readonly ?int $cols = null,
-        /**
+    /**
          * The sugar-image probe-once capability instance (W1.G2/E2 - see
          * {@see ToolResult::mosaic()}'s docblock), exposed here per
          * crush_feat.md section 9's literal `new Chat(..., mosaic: $mosaic)`
@@ -801,7 +856,7 @@ final class Chat implements Model
          * test that never needs it.
          */
         private readonly ?\SugarCraft\Image\Mosaic $mosaic = null,
-        /**
+    /**
          * Hook chain gating this Chat's OWN ({@see registerTool()}) tool
          * calls, so `PreToolUse`/`PostToolUse` fire for a call no matter
          * which of the two pipelines crush_feat.md §1 D describes dispatched
@@ -817,7 +872,7 @@ final class Chat implements Model
          * hands the engine backend.
          */
         private readonly ?HookManager $hooks = null,
-        /**
+    /**
          * Name of the current session, once it has one — set by the user's
          * `/rename`, or by the background auto-title call (see
          * {@see scheduleTitleGeneration()}). Non-null is the "already
@@ -825,7 +880,7 @@ final class Chat implements Model
          * durable copy, this is the in-memory mirror the UI reads.
          */
         private readonly ?string $currentSessionName = null,
-        /**
+    /**
          * Dedicated cheap/small-model Backend for the one-shot session
          * title call. opencode's #20269 was a main-model parameter leaking
          * into the small-model title request through a shared request
@@ -838,56 +893,15 @@ final class Chat implements Model
          * this same backend and is likewise skipped when it is null.
          */
         private readonly ?Backend $titleBackend = null,
-        /**
-         * The permission prompt currently blocking this turn, or null when
-         * nothing is waiting on the user (crush_feat.md §1 E2). Set by
-         * {@see requestPermission()}, cleared by {@see answerPermission()};
-         * {@see Renderer} reads it through {@see pendingPermission()}.
+    /**
+         * The transient state of the permission prompt that may be blocking
+         * this turn (crush_feat.md §1 E2) — prompt, stage, settle-handle,
+         * parked batch, open scope editor — as the value object
+         * {@see PermissionFlow} describes. The durable `permissionGrants`
+         * map below is deliberately NOT part of it: different lifetime.
          */
-        private readonly ?PermissionRequestMsg $pendingPermission = null,
-        /**
-         * How far $pendingPermission is along at answering itself, and the
-         * reason an ordinary slash command typed at a live prompt no longer
-         * answers it — see {@see handlePermissionKey()} for the rule and the
-         * measured table, and {@see PermissionPromptStage} for the states.
-         *
-         * Meaningless while $pendingPermission is null; every raise sets it
-         * back to {@see PermissionPromptStage::Armed} ({@see requestPermission()}
-         * is the ONLY writer of a non-null $pendingPermission, so arming there
-         * covers a first ask and a queued one alike).
-         */
-        private readonly PermissionPromptStage $permissionStage = PermissionPromptStage::Armed,
-        /**
-         * The {@see Deferred} whose promise is the Cmd that keeps the turn
-         * suspended while $pendingPermission is showing. Answering resolves
-         * it, which is the whole "block on a UI decision" mechanism - the
-         * same Deferred object is shared by every `mutate()` clone in
-         * between, so the Chat instance that receives the reply settles the
-         * promise the Chat instance that raised the prompt handed out.
-         */
-        private readonly ?Deferred $permissionDeferred = null,
-        /**
-         * The gated batch parked while $pendingPermission is showing, in
-         * {@see gateToolCall()}'s return shape.
-         *
-         * Carried across the pause rather than re-gated on resume so the
-         * `PreToolUse` chain runs EXACTLY once per tool call: re-gating would
-         * fire every hook's side effects (AuditHook's log line, accumulated
-         * state) a second time, and would re-ask the question the user just
-         * answered.
-         *
-         * @var list<array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext, 3: ?\SugarCraft\Code\Hooks\HookResult, 4: string}>
-         */
-        private readonly array $pendingPermissionJobs = [],
-        /**
-         * The modal's scope editor (`e`) while it is open: the draft that was
-         * in the box when it opened (put back when it closes), and why the
-         * last Enter was refused. Null while the editor is closed.
-         *
-         * @var array{draft: string, error: ?string}|null
-         */
-        private readonly ?array $permissionScopeEdit = null,
-        /**
+        private readonly PermissionFlow $flow = new PermissionFlow(),
+    /**
          * The session's {@see PermissionReply::Always} answers, as the
          * grant map {@see \SugarCraft\Code\Permissions\SessionPermissionMemo}
          * reads (`rule:<pattern>` / `call:<exact call>` => true) — opencode's
@@ -898,7 +912,7 @@ final class Chat implements Model
          * @var array<string, bool>
          */
         private readonly array $permissionGrants = [],
-        /**
+    /**
          * Tool-call ids whose output the user has toggled AWAY from the
          * default, keyed by id ({@see ToolResult::$id}): `true` for a call
          * opened while calls start collapsed, `false` for one closed while
@@ -915,7 +929,7 @@ final class Chat implements Model
          * @var array<string, bool>
          */
         private readonly array $expanded = [],
-        /**
+    /**
          * Most-recently-used Ctrl+P palette rows, most recent FIRST, capped
          * at {@see PALETTE_MRU_LIMIT} (crush_feat.md §4 E7). Only consulted
          * by the empty-query root list ({@see paletteMatchResults()}), which
@@ -931,7 +945,7 @@ final class Chat implements Model
          * @var list<string>
          */
         private readonly array $paletteMru = [],
-        /**
+    /**
          * How many lines the transcript is scrolled back from the newest
          * one (crush_feat.md §8 E4). 0 pins the view to the bottom, which
          * is what every non-wheel path leaves it at.
@@ -949,7 +963,7 @@ final class Chat implements Model
          * actually building.
          */
         private readonly int $scrollOffset = 0,
-        /**
+    /**
          * ISS-051: payloads of pastes too big to type into a visible box,
          * collapsed to a one-line chip IN the draft instead of the verbatim
          * text a 300-line paste used to dump there. Keyed by the exact chip
@@ -967,9 +981,9 @@ final class Chat implements Model
          * @var array<string, string>
          */
         private readonly array $pasteChips = [],
-        /** Number of chips issued; exists only to make chip texts distinct. */
+    /** Number of chips issued; exists only to make chip texts distinct. */
         private readonly int $pasteCounter = 0,
-        /**
+    /**
          * Supervisor the `/bg` and `/fork` commands dispatch onto
          * (crush_feat.md section 5 E3). Before this, `BackgroundSupervisor`
          * had no caller anywhere in the codebase: the fork+daemonize,
@@ -981,8 +995,8 @@ final class Chat implements Model
          * makes `/bg` answer with the same "<thing> not configured" line the
          * other optional collaborators on this class use.
          */
-        private readonly ?\SugarCraft\Code\Sessions\BackgroundSupervisor $backgroundSupervisor = null,
-        /**
+        private readonly ?\SugarCraft\Code\Background\BackgroundSupervisor $backgroundSupervisor = null,
+    /**
          * Last status this Chat reported for each background session, keyed
          * by session id (crush_feat.md section 5 E4).
          *
@@ -997,7 +1011,7 @@ final class Chat implements Model
          * @var array<string, string> session id => BackgroundSessionStatus::value
          */
         private readonly array $backgroundStatuses = [],
-        /**
+    /**
          * The live session picker overlay, or null when it is closed
          * (crush_feat.md section 5 E8).
          *
@@ -1014,7 +1028,7 @@ final class Chat implements Model
          * a dispatch arm the other's routing block already claimed.
          */
         private readonly ?SessionPicker $sessionPicker = null,
-        /**
+    /**
          * The shared live tool-event inbox - see the {@see $liveToolEvents}
          * property docblock for why it is mutable and why every `mutate()`
          * clone must be handed the SAME instance. Defaulting to null (and
@@ -1024,7 +1038,7 @@ final class Chat implements Model
          * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|ToolProgress|SubAgentActivity|TokenDelta|ReasoningDelta}>|null
          */
         ?\ArrayObject $liveToolEvents = null,
-        /**
+    /**
          * The in-flight assistant reply as far as it has arrived — the
          * accumulation of this turn's {@see TokenDelta}s, drained off
          * {@see $liveToolEvents} by {@see pumpLiveToolEvents()}
@@ -1058,7 +1072,7 @@ final class Chat implements Model
          * deliberately out of scope here.
          */
         private readonly string $streamingText = '',
-        /**
+    /**
          * The model's THINKING so far this step — the accumulation of this
          * turn's {@see ReasoningDelta}s, drained off {@see $liveToolEvents} by
          * {@see pumpLiveToolEvents()} (E456/E494).
@@ -1079,7 +1093,7 @@ final class Chat implements Model
          * {@see Renderer} paints from the transcript instead.
          */
         private readonly string $reasoningText = '',
-        /**
+    /**
          * The project root this session was launched against — `--root`'s
          * value as {@see \SugarCraft\Code\Cli\Bootstrap::chat()} resolved
          * it, or null for a Chat built without one.
@@ -1094,7 +1108,7 @@ final class Chat implements Model
          * item 6).
          */
         private readonly ?string $projectRoot = null,
-        /**
+    /**
          * Scroll position of the in-app keybinding reference, in lines from
          * its first row; null while the reference is closed (crush_code.md
          * Phase 8 item 2). One nullable int rather than a bool plus an int
@@ -1109,7 +1123,7 @@ final class Chat implements Model
          * re-clamped in {@see Renderer::renderView()}.
          */
         private readonly ?int $keyHelp = null,
-        /**
+    /**
          * The draft's editing widget — `sugar-forms`' {@see TextArea}, which
          * owns the value AND the cursor (crush_code.md Phase 3 item 1).
          *
@@ -1120,7 +1134,7 @@ final class Chat implements Model
          * across a clone — see the reseed guard there.
          */
         ?TextArea $input = null,
-        /**
+    /**
          * The session's spend accumulator — see the {@see $tokenTracker}
          * property docblock for why the SAME instance has to reach every
          * clone. Null allocates a fresh one, which keeps every existing
@@ -1128,7 +1142,7 @@ final class Chat implements Model
          * offline run tracks a real (empty) total rather than none at all.
          */
         ?TokenTracker $tokenTracker = null,
-        /**
+    /**
          * Hard ceiling on this session's provider spend in US dollars, or null
          * for no cap (crush_code.md Phase 5 item 7). Set from
          * `$CANDY_CODE_MAX_COST` at launch and from `/budget <n>` at runtime.
@@ -1151,7 +1165,7 @@ final class Chat implements Model
          * {@see spendCapReached()} be one comparison.
          */
         private readonly ?float $maxCostUsd = null,
-        /**
+    /**
          * Dedicated tool-less Backend for `/compact`'s model-written exchange
          * summaries (crush_code.md Phase 5 item 6), built by
          * {@see \SugarCraft\Code\Cli\Bootstrap::summaryBackend()}.
@@ -1170,7 +1184,7 @@ final class Chat implements Model
          * used ({@see ContextCompactor::generateExchangeSummary()}).
          */
         private readonly ?Backend $summaryBackend = null,
-        /**
+    /**
          * Identifies the `/compact` summarization currently out at the model,
          * or null when none is (crush_code.md Phase 5 item 6).
          *
@@ -1198,7 +1212,7 @@ final class Chat implements Model
          * root is {@see handlePaletteNewSession()}.
          */
         private readonly ?string $pendingCompactionId = null,
-        /**
+    /**
          * The idle auto-fold's own latch (CTX-5): `{id, fingerprint,
          * sessionId}` for the summarisation request the idle watch put out, or
          * null when none is out. Its own latch rather than
@@ -1210,10 +1224,10 @@ final class Chat implements Model
          * drops the fold rather than rewriting under it — see
          * {@see applyIdleCompaction()}), and the session id rides along
          * because a switch can land between the tick and the reply even though
-         * {@see sessionChangeResets()} also releases this latch.
+         * {@see \SugarCraft\Code\Host\SessionSwitch::resets()} also releases this latch.
          */
         private readonly ?array $pendingIdleCompaction = null,
-        /**
+    /**
          * How many AUTOMATIC-tier compactions in a row have left the context back
          * at or over the tier that asked for them — the circuit breaker's counter
          * (prompt_expand.md §4.23, which records that Claude Code shipped the
@@ -1245,12 +1259,12 @@ final class Chat implements Model
          * rather than futility, and holds the run exactly as it stands
          * (ruling P8.S5-R6).
          * {@see handleClearCommand()} resets it beside the transcript, as does
-         * every session change ({@see sessionChangeResets()}), and a
+         * every session change ({@see \SugarCraft\Code\Host\SessionSwitch::resets()}), and a
          * manual `/compact` never reads or writes it at all: the user chose that
          * one, so the breaker guards only the tier that acts on its own.
          */
         private readonly int $consecutiveRefillCompactions = 0,
-        /**
+    /**
          * Prompts the user pressed Enter on WHILE a turn was in flight, oldest
          * first — the queue the user asked for ("new messages should be typable
          * and sendable (well really queued for processing if its mid processing
@@ -1284,7 +1298,7 @@ final class Chat implements Model
          * @var list<string>
          */
         private readonly array $queuedPrompts = [],
-        /**
+    /**
          * The submission whose turn-lifecycle hook chain is running in a forked
          * child right now (audit 15b-04), or null when none is.
          *
@@ -1304,7 +1318,7 @@ final class Chat implements Model
          * @var ?array{text: string, draft: string, cursor: int}
          */
         private readonly ?array $pendingTurnHooks = null,
-        /**
+    /**
          * The verdicts a forked turn-hook chain returned, set ONLY for the length
          * of the {@see submit()} re-entry {@see resumeTurnHooks()} runs, which
          * {@see dispatchTurnHooks()} consumes instead of running the hooks a
@@ -1314,7 +1328,7 @@ final class Chat implements Model
          * @var ?array{text: string, prompt: Hooks\HookResult, session: ?Hooks\HookResult, boxOccupied: bool}
          */
         private readonly ?array $resolvedTurnHooks = null,
-        /**
+    /**
          * The file-based command whose template is being expanded in a forked
          * child right now (audit 15b-20), or null when none is.
          *
@@ -1329,7 +1343,7 @@ final class Chat implements Model
          * @var ?array{text: string, draft: string, cursor: int}
          */
         private readonly ?array $pendingCustomCommand = null,
-        /**
+    /**
          * The expansion a forked child produced, consumed by
          * {@see expandCustomCommand()} in place of expanding the template again
          * — which would run every `` !`…` `` a second time. Matched on the typed
@@ -1346,7 +1360,7 @@ final class Chat implements Model
          * @var ?array{text: string, expanded: string}
          */
         private readonly ?array $resolvedCustomCommand = null,
-        /**
+    /**
          * Discovers `*.md` commands under `~/.candy-code/commands` and
          * `<root>/.candy-code/commands` (crush_code.md Phase 2 item 4). Null —
          * the default — means no file-based commands at all, which is what every
@@ -1361,7 +1375,7 @@ final class Chat implements Model
          * `error_log()`.
          */
         private readonly ?CommandLoader $commandLoader = null,
-        /**
+    /**
          * Pre-resolved {@see $customCommands}; null asks the constructor to load
          * from {@see $commandLoader}. Present so {@see mutate()} can carry the
          * cache across a clone — and so a test can inject a map without touching
@@ -1370,7 +1384,7 @@ final class Chat implements Model
          * @var array<string, CommandSpec>|null
          */
         ?array $customCommands = null,
-        /**
+    /**
          * Whether the operator has opted THIS project root in to running the
          * `` !`cmd` `` form of a PROJECT-tier command file
          * ({@see \SugarCraft\Code\Cli\Bootstrap::projectCommandShellIsTrusted()}
@@ -1390,7 +1404,7 @@ final class Chat implements Model
          * permission gate adds on top of it.
          */
         private readonly bool $projectCommandsTrusted = false,
-        /**
+    /**
          * Whether THIS Chat is the process's drain owner for
          * {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink} (E171).
          *
@@ -1424,7 +1438,7 @@ final class Chat implements Model
          * decision and are made in the same method.
          */
         private readonly bool $drainsRuntimeNotices = false,
-        /**
+    /**
          * The launch's rulebook toggle set, shared by reference with the backend
          * that builds each turn's App. Null — which is every caller except
          * {@see \SugarCraft\Code\Cli\Bootstrap::chat()} and a test that wants to
@@ -1435,7 +1449,7 @@ final class Chat implements Model
          *      two owners instead of a copy pushed to each.
          */
         ?RulesState $rulesState = null,
-        /**
+    /**
          * The {@see rawTokenProxy()} figure — PRE-calibration, deliberately:
          * pairing a real against a calibrated estimate would fold the prior
          * factor into the observation — for the history THIS Chat dispatched
@@ -1448,7 +1462,7 @@ final class Chat implements Model
          * with a dispatch estimate it did not pay for.
          */
         private readonly ?int $promptEstimateAtDispatch = null,
-        /**
+    /**
          * Empirical scale factor from the ESTIMATOR's unit (script-weighted
          * {@see TokenEstimate} + 10 per message, {@see rawTokenProxy()}) to the PROVIDER's
          * counted tokens, derived from the last
@@ -1463,7 +1477,7 @@ final class Chat implements Model
          * reader; see it for the unit caveat the clamp bounds exist to cap.
          */
         private readonly ?float $tokenEstimateCalibration = null,
-        /**
+    /**
          * The search tool `/websearch` runs on, so the command's success path
          * is reachable without a live SearXNG endpoint.
          *
@@ -1477,7 +1491,7 @@ final class Chat implements Model
          * a transcript regression.
          */
         private readonly ?WebSearch $webSearch = null,
-        /**
+    /**
          * The grayed "you might say next" suggestion the empty input box
          * shows (→ accepts it), with the conversation state it was written
          * for: the turn `generation`, the `history` length and the session.
@@ -1489,25 +1503,25 @@ final class Chat implements Model
          * @var array{text: string, generation: int, historyCount: int, sessionId: ?string}|null
          */
         private readonly ?array $promptSuggestion = null,
-        /**
+    /**
          * The cross-session prompt file ↑/↓ recall reads at launch and every
          * Enter appends to. Null — tests and embedders — keeps recall on the
          * transcript's user rows, exactly as before the file existed;
          * {@see \SugarCraft\Code\Cli\Bootstrap::chat()} wires the real one.
          */
         private readonly ?PromptHistory $promptHistory = null,
-        /** Pre-resolved {@see $inputHistory}; null reads {@see $promptHistory}. */
+    /** Pre-resolved {@see $inputHistory}; null reads {@see $promptHistory}. */
         ?array $inputHistory = null,
-        /**
+    /**
          * Index into {@see recallEntries()} of the entry ↑/↓ last put in the
          * box, or null when the user is not walking history. Walking stops by
          * itself the moment the draft stops matching that entry — see
          * {@see isWalkingHistory()} — so no edit path has to clear it.
          */
         private readonly ?int $inputHistoryCursor = null,
-        /** The draft the box held when the walk began; ↓ past the newest entry gives it back. */
+    /** The draft the box held when the walk began; ↓ past the newest entry gives it back. */
         private readonly string $inputHistoryDraft = '',
-        /**
+    /**
          * Whether the turn in flight is a `/workflow run` or `/workflow resume`
          * — a fiber {@see driveWorkflowFiber()} steps — rather than a model
          * turn (audit WF-4). Read only by {@see submit()}'s mid-turn gate,
@@ -1522,9 +1536,9 @@ final class Chat implements Model
          * command is refused while it runs — so the flag cannot outlive it.
          */
         private readonly bool $workflowTurnInFlight = false,
-        /** Shared transcript writer; null builds this lineage's own. See {@see $transcriptWriter}. */
+    /** Shared transcript writer; null builds this lineage's own. See {@see $transcriptWriter}. */
         ?DebouncedTranscriptWriter $transcriptWriter = null,
-        /**
+    /**
          * Whether this Chat takes the single-writer lock on the session it has
          * open (audit SES-3(b)). Off by default — tests and embedders that
          * build two Chats on one store keep working — and switched on by
@@ -1532,27 +1546,27 @@ final class Chat implements Model
          * calls on every real launch.
          */
         private readonly bool $sessionLocking = false,
-        /** The lock this Chat holds on {@see $currentSessionId}, when locking is on and it won it. */
+    /** The lock this Chat holds on {@see $currentSessionId}, when locking is on and it won it. */
         private readonly ?SessionLock $sessionLock = null,
-        /**
+    /**
          * True when another TUI holds the open session's lock: the transcript
          * is shown, but nothing that would write to the session or start a
          * turn runs, and nothing is saved. `/branch` forks the session into a
          * new one this window owns. See {@see readOnlyRefusal()}.
          */
         private readonly bool $readOnlySession = false,
-        /**
+    /**
          * The last draft a read-only window refused, held so the box is free
          * for `/branch` and put back once the fork succeeds — see
          * {@see refuseReadOnly()}.
          */
         private readonly ?string $readOnlyDraft = null,
-        /**
+    /**
          * The words left on the command line (`candy-code fix the bug`),
          * submitted as the first prompt from {@see init()} (audit CLI-2(b)).
          */
         private readonly ?string $initialPrompt = null,
-        /**
+    /**
          * `\Closure(string $provider): Backend` — how a provider switch
          * (Ctrl+P "Switch model", `/model <provider>`) builds the replacement
          * backend (N-P3a). {@see \SugarCraft\Code\Cli\Bootstrap::chat()}
@@ -1564,7 +1578,7 @@ final class Chat implements Model
          * this Chat holds; see {@see selectPaletteProvider()}.
          */
         private readonly ?\Closure $backendFactory = null,
-        /**
+    /**
          * The project-root collaborators this Chat's session runs in — the
          * non-UI half of {@see \SugarCraft\Code\Cli\Bootstrap::chat()}, built by
          * {@see \SugarCraft\Code\Cli\Bootstrap::workspace()} (roadmap O-2a).
@@ -1582,7 +1596,7 @@ final class Chat implements Model
          * which drain the workspace's own inbox.
          */
         private readonly ?\SugarCraft\Code\Host\WorkspaceContext $workspace = null,
-        /**
+    /**
          * Roadmap 1.C-4: the latest `step` frame of an engine turn — its step
          * number and the request's context pressure — read by the status
          * bar and by the Escape arm (a turn that reports steps can stop at a
@@ -1592,11 +1606,11 @@ final class Chat implements Model
          * {@see liveStep()}.
          */
         private readonly ?\SugarCraft\Code\Events\StepStarted $liveStep = null,
-        /** Roadmap 1.C-4: the latest `usage` frame of that turn — see {@see liveUsage()}. */
+    /** Roadmap 1.C-4: the latest `usage` frame of that turn — see {@see liveUsage()}. */
         private readonly ?\SugarCraft\Code\Events\UsageUpdated $liveUsage = null,
-        /** The generation {@see $liveStep} and {@see $liveUsage} belong to. */
+    /** The generation {@see $liveStep} and {@see $liveUsage} belong to. */
         private readonly int $liveStepGeneration = -1,
-        /**
+    /**
          * Who set {@see $currentSessionName} (roadmap P-A4): `User` for
          * `/rename` and the inline title editor, `Auto` for a latched
          * generated title, null when unknown — unnamed, or a name read back
@@ -1606,7 +1620,7 @@ final class Chat implements Model
          * {@see mutate()} whenever the session changes.
          */
         private readonly ?\SugarCraft\Code\Session\TitleSource $currentSessionTitleSource = null,
-        /**
+    /**
          * The inline session-title editor (roadmap P-A4), or null when closed.
          * Opened by a bare `/rename`, the palette's "Rename session…" and a
          * double-click on the current tab; while open it owns the keyboard
@@ -1616,16 +1630,7 @@ final class Chat implements Model
          * one session can never rename another.
          */
         private readonly ?\SugarCraft\Forms\TextInput\TextInput $titleEditor = null,
-        /**
-         * The last click on a session tab — `[tab id, microtime]` — so a
-         * second click on the same tab within {@see TAB_DOUBLE_CLICK_SECONDS}
-         * reads as a double-click. Kept here because sugar-mouse's
-         * `ClickResult` carries a zone and a button, never a click count.
-         *
-         * @var array{0: string, 1: float}|null
-         */
-        private readonly ?array $lastTabClick = null,
-        /**
+    /**
          * Settings keys a save changed while a turn was running whose apply
          * rebuilds the engine (roadmap N-P3, Appendix N §4.8) — parked here
          * and applied by {@see update()} once no turn is in flight, so the
@@ -1635,7 +1640,7 @@ final class Chat implements Model
          * @var list<string>
          */
         private readonly array $pendingSettingsApply = [],
-        /**
+    /**
          * What the last settings save did, as a sugar-toast alert painted
          * over the frame's top-right corner (N-P3), or null. Never a
          * transcript row: a "setting changed" row would be sent to the
@@ -1644,9 +1649,9 @@ final class Chat implements Model
          * tick delivers.
          */
         private readonly ?\SugarCraft\Toast\Toast $settingsToast = null,
-        /** Stamp of {@see $settingsToast}: an older toast's expiry tick must not clear a newer one. */
+    /** Stamp of {@see $settingsToast}: an older toast's expiry tick must not clear a newer one. */
         private readonly int $settingsToastGeneration = 0,
-        /**
+    /**
          * The AHEAD-OF-NEED compaction summary (roadmap 2.10), or null when
          * none is out or held.
          *
@@ -1671,19 +1676,19 @@ final class Chat implements Model
          * @var array{id: string, sessionId: ?string, fingerprint: Context\Compaction\HistoryFingerprint, summaries: ?array<string, string>}|null
          */
         private readonly ?array $backgroundSummary = null,
-        /**
+    /**
          * The `/new` folder picker ({@see handleNewCommand()}), while it is up:
          * it owns every key until it closes, like {@see $sessionPicker}.
          */
         private readonly ?\SugarCraft\Code\Tui\DirectoryPicker\DirectoryPicker $dirPicker = null,
-        /**
+    /**
          * The Ctrl+G history search ({@see buildHistorySearch()}), while it is
          * up: it owns every key until it closes, like {@see $sessionPicker},
          * and it restores the draft it was opened on when the user escapes out
          * of it (the seed it carries — plan_comparison TUI-2).
          */
         private readonly ?\SugarCraft\Code\Tui\HistorySearch $historySearch = null,
-        /**
+    /**
          * The directory `/new` chose to restart candy-code in — another
          * project root, which this process (one root per process, Bootstrap's
          * statics) cannot serve. Set together with `Cmd::quit()`; read by
@@ -1691,7 +1696,7 @@ final class Chat implements Model
          * ({@see pendingRelaunch()}, {@see \SugarCraft\Code\Support\SessionRelaunch}).
          */
         private readonly ?string $relaunchDir = null,
-        /**
+    /**
          * The AUT-1 clock's roster (plan_comparison.md §3): persisted
          * `schedules.json` rows plus this process's `/loop` rows. The TUI is a
          * cron HOST — `pumpBackgroundSessions()` evaluates the roster on the
@@ -1704,8 +1709,8 @@ final class Chat implements Model
          * clock state that `serve` and `/schedules` must see through whichever
          * clone is on screen.
          */
-        private readonly ?\SugarCraft\Code\Sessions\ScheduleRegistry $scheduleRegistry = null,
-        /**
+        private readonly ?\SugarCraft\Code\Background\ScheduleRegistry $scheduleRegistry = null,
+    /**
          * TUI-3A: the composer's vim OPERATOR state (pending `d`/`y` plus the
          * delete/yank register) — the app-side half of the mode, above the
          * sugar-forms Vim layer that owns the state machine itself. See
@@ -1715,7 +1720,7 @@ final class Chat implements Model
          * an evaporating register would make `y` unobservable.
          */
         public readonly ComposerVim $composerVim = new ComposerVim(),
-        /**
+    /**
          * Passive observer over the typed event DTOs (roadmap OBS-1). It
          * defaults to {@see NullEventSink} so an unconfigured session pays
          * one no-op call per folded event; Bootstrap installs the OTLP sink
@@ -1809,24 +1814,8 @@ final class Chat implements Model
         $this->memoryStore = $memoryStore;
         $this->sessionStore = $sessionStore;
         $this->currentSessionId = $currentSessionId;
-        $this->openTabs = $openTabs ?? self::tabsForLaunch($currentSessionId, $currentSessionName);
+        $this->tabState = $tabState ?? SessionTabState::forLaunch($currentSessionId, $currentSessionName);
         $this->sessionMint = $sessionMint;
-    }
-
-    /**
-     * The one-tab launch state (ISS-102): a fresh run has exactly the tab it
-     * opened, not a tab per store row. With no session at all, the library
-     * default stands.
-     */
-    private static function tabsForLaunch(?string $sessionId, ?string $name): SessionTabs
-    {
-        if ($sessionId === null) {
-            return new SessionTabs();
-        }
-
-        $tab = new SessionTab(id: $sessionId, sessionName: $name ?? '', isActive: true);
-
-        return new SessionTabs([$tab->id => $tab], [$tab->id]);
     }
 
     /**
@@ -2228,7 +2217,7 @@ final class Chat implements Model
      * would erase whatever the holder added, the very loss the lock exists to
      * prevent. The reload also closes the "loaded before locking" stale-load
      * residual for this path. The state tied to the transcript being replaced
-     * goes with it ({@see sessionChangeResets()}), and a draft a refusal
+     * goes with it ({@see \SugarCraft\Code\Host\SessionSwitch::resets()}), and a draft a refusal
      * stashed comes back into an empty box, as `/branch` puts it back.
      *
      * NOT WHILE A REQUEST IS IN FLIGHT: replacing the history under a running
@@ -2260,7 +2249,7 @@ final class Chat implements Model
         $draft = $this->readOnlyDraft;
 
         return $this->mutate([
-            ...$this->sessionChangeResets(),
+            ...SessionSwitch::resets(),
             'sessionLock' => $lock,
             'readOnlySession' => false,
             'readOnlyDraft' => null,
@@ -2361,7 +2350,7 @@ final class Chat implements Model
      * conversation over the resumed session's own.
      *
      * Everything tied to the transcript being replaced is released with it -
-     * see {@see sessionChangeResets()} for the list and the reason for each.
+     * see {@see \SugarCraft\Code\Host\SessionSwitch::resets()} for the list and the reason for each.
      */
     private function switchToSession(string $sessionId, ?string $name): self
     {
@@ -2371,86 +2360,7 @@ final class Chat implements Model
         $transcripts->flush();
         $history = $transcripts->load($sessionId);
 
-        return $this->mutate([
-            ...$this->sessionChangeResets(),
-            'currentSessionId' => $sessionId,
-            'currentSessionName' => $name,
-            // ISS-102: wherever a session comes to the front, its tab opens.
-            'openTabs' => $this->tabsOpening($sessionId, $name),
-            // ISS-102: leaving the launched session abandons its
-            // pending mint — an unspoken launch must never materialize.
-            'sessionMint' => null,
-            // P-A4: who named the resumed session, from its row — so an
-            // auto-titled name stays replaceable and a user's stays latched.
-            'currentSessionTitleSource' => $name === null ? null : $this->storedTitleSource($sessionId),
-            'history' => [...$history, Message::notice(
-                Lang::t('chat.session.resumed', ['session' => $name ?? $sessionId]),
-            )],
-        ]);
-    }
-
-    /**
-     * The state that belongs to the conversation being LEFT, reset whenever a
-     * different session is put in front of the user: {@see switchToSession()}
-     * (picker Enter, tab click, Ctrl+Tab) and the palette's New session
-     * ({@see handlePaletteNewSession()}). Shared so the two routes cannot drift
-     * apart again - the breaker reset was once present on `/clear` alone
-     * (audit 15b-06).
-     *
-     * - `pendingCompactionId`: a `/compact` issued against the old transcript
-     *   must not rewrite the new one when its summary lands.
-     * - `pendingIdleCompaction`: the same rule for the CTX-5 idle fold —
-     *   its summaries were written about the session being left behind.
-     * - `queuedPrompts`: typed for the old conversation, not this one.
-     * - `scrollOffset`: indexes into the transcript that went away.
-     * - `consecutiveRefillCompactions`: the thrash breaker counts refills of ONE
-     *   context - the same reason {@see handleClearCommand()} resets it. Carried
-     *   across, a tripped run in session A refused the first prompt of session B
-     *   through {@see thrashBreakerRefusal()} before B had compacted once.
-     * - `lastActivityAt`: when the user last prompted the OLD session. Read
-     *   against the new session's size it would judge B idle (or active) on A's
-     *   clock; null is "idleness unknown", which {@see IdleCompactionPolicy}
-     *   never prompts on - the same state a fresh launch or `--continue` starts
-     *   in. The next real prompt stamps it again.
-     *
-     * @return array<string, mixed>
-     */
-    private function sessionChangeResets(): array
-    {
-        return [
-            'pendingCompactionId' => null,
-            'pendingIdleCompaction' => null,
-            'queuedPrompts' => [],
-            'scrollOffset' => 0,
-            'consecutiveRefillCompactions' => 0,
-            'lastActivityAt' => null,
-        ];
-    }
-
-    /**
-     * Who set the name the store holds for $sessionId (its `title_source`),
-     * or null when the row records none.
-     */
-    private function storedTitleSource(string $sessionId): ?\SugarCraft\Code\Session\TitleSource
-    {
-        $row = $this->sessionStore?->getSession($sessionId);
-
-        return \is_array($row) ? \SugarCraft\Code\Session\TitleSource::fromStored($row['title_source'] ?? null) : null;
-    }
-
-    /**
-     * The name the store holds for $sessionId, or null when it has none.
-     */
-    private function storedSessionName(string $sessionId): ?string
-    {
-        if ($this->sessionStore === null) {
-            return null;
-        }
-
-        $row = $this->sessionStore->getSession($sessionId);
-        $stored = \is_array($row) ? (string) ($row['name'] ?? '') : '';
-
-        return $stored !== '' ? $stored : null;
+        return $this->mutate(SessionSwitch::resumed($history, $this->tabState, $this->sessionStore, $sessionId, $name));
     }
 
     /**
@@ -2466,1553 +2376,30 @@ final class Chat implements Model
     }
 
     /**
+     * Dispatch one message to the family that owns it (W7-S4 split).
+     *
+     * The handlers under `src/Chat/Handlers/` each answer with the
+     * `[Model, ?Cmd]` pair their arms returned inline before the split, or
+     * null to pass. The families own pairwise-disjoint sets of message
+     * classes — `RouteTraitParityTest` enumerates every `instanceof` arm
+     * across the four handler files and pins that no class is claimed
+     * twice, which is what makes the order of this chain inert. The Keys
+     * handler sits last on purpose: it is the one absorbing handler (its
+     * binding table carries `default => [$this, null]`), so every message
+     * the other three pass, key or not, resolves exactly where the old
+     * inline dispatch resolved it. The terminal null-coalesce is the old
+     * `!$msg instanceof KeyMsg` gate's answer for a class with no arm
+     * anywhere — byte-identical `[$this, null]`.
+     *
      * @return array{0: Model, 1: ?\Closure}
      */
     private function route(Msg $msg): array
     {
-        // Roadmap P-C2: the shell left the Agent View. The key that left it
-        // (Esc) never reached this chat, but an Esc pressed BEFORE the view
-        // opened may still be armed — so the first Esc after the view closes
-        // is a first press again, never the second half of a turn cancel.
-        if ($msg instanceof CloseAgentViewMsg) {
-            return [$this->lastEscapeAt === null ? $this : $this->mutate(['lastEscapeAt' => null]), null];
-        }
-
-        // crush-media W3.1: the media form's collected Generate action, handed
-        // back by the shell. It runs through the SAME /generate tool pipeline
-        // the typed command uses — one dispatch path, and the form itself
-        // dials nothing (its Submit echo row is the bare command word).
-        if ($msg instanceof \SugarCraft\Code\Tui\MediaForm\GenerateFromMediaFormMsg) {
-            return $this->applyCommandResult(
-                (new \SugarCraft\Code\Host\Commands\GenerateHostCommand())->runRequest(
-                    $this->commandContext(),
-                    '/generate',
-                    $msg->request->toArray(),
-                ),
-            );
-        }
-
-        // Roadmap 5.7-1: `Alt+M`, or any other door, switching the mode.
-        if ($msg instanceof PermissionModeToggledMsg) {
-            return $this->togglePermissionMode($msg);
-        }
-
-        // Roadmap P-B3: `c` (or `x` on a running run) on the live agents
-        // strip. Only a call the turn on screen is still running is named,
-        // and only that call stops (1.C-4b) — the turn carries on.
-        if ($msg instanceof CancelAgentRunMsg) {
-            if ($this->inFlight && $msg->parentCallId !== '') {
-                foreach ($this->history as $message) {
-                    if ($message->pendingToolCallId === $msg->parentCallId) {
-                        $this->inFlightCancellation?->cancelTool($msg->parentCallId);
-
-                        break;
-                    }
-                }
-            }
-
-            return [$this, null];
-        }
-
-        // Roadmaps P-D2/P-D3: the shell's word for something the user asked
-        // of one or more delegated runs — the Agent View composer's Enter,
-        // its Ctrl+X chords, the dashboard's c/r/s, Ctrl+G's broadcast. The
-        // runs' mailboxes and the live registry the ids name are this
-        // chat's, so the shell only translates and this arm acts.
-        if ($msg instanceof AgentControlMsg) {
-            return $msg->verb === AgentControlMsg::MESSAGE
-                ? $this->submitToAgents($msg)
-                : $this->controlAgents($msg);
-        }
-
-        if ($msg instanceof AssistantMsg) {
-            // Account the turn FIRST - before the staleness guard, before the
-            // tool-call routing, before anything that can return early. Three
-            // reasons, and each of them is a way the most expensive turns would
-            // have gone unbilled:
-            //
-            //  - The tool-call branch below returns through beginToolCalls(),
-            //    and a turn that called tools is a turn of several provider
-            //    calls, i.e. the expensive kind.
-            //  - A SUPERSEDED reply (the guard immediately below) was completed
-            //    and charged for whether or not the user still wanted it.
-            //    Dropping it from the transcript is right; forgetting the money
-            //    is not.
-            //  - This arm is reached exactly ONCE per settled turn WHOSE
-            //    GENERATION STILL MATCHES, including on the tool-event path,
-            //    which re-sends the same reply here after draining its queue
-            //    (see applyBackendToolEvent()) - so accounting here cannot
-            //    double-count. The domain matters: a tool turn superseded
-            //    MID-QUEUE never reaches this arm at all, because
-            //    applyBackendToolEvent()'s own staleness guard breaks the chain
-            //    before the queue drains and no AssistantMsg is ever
-            //    synthesised. Measured, that lost the whole turn's usage - "the
-            //    expensive kind" above, unbilled - so that guard accounts too,
-            //    and the two are mutually exclusive by construction: once it
-            //    fires it returns a null Cmd, so the chain stops there.
-            //
-            // A null $usage is the provider having reported nothing, which is the
-            // ordinary streamed-turn answer and must not become a zero-dollar
-            // call - see {@see Usage}. addTotalUsage(), not addUsage(): the figure
-            // crossing this seam is a TOTAL with no input/output split, and
-            // TokenTracker keeps those in their own bucket rather than pretending
-            // the whole turn was input.
-            $this->accountUsage($msg->message->usage);
-
-            // A reply for a turn that was aborted (double-Escape) or
-            // otherwise superseded arrives after inFlight/generation have
-            // already moved on - drop it rather than appending it after
-            // whatever the user has done since. See AssistantMsg's
-            // docblock and the Escape arm below.
-            if ($msg->generation !== null && $msg->generation !== $this->generation) {
-                return [$this, null];
-            }
-
-            // Roadmap 1.B-2: an engine turn comes back with the rows it added,
-            // step by step. Folded in here - the tool rows the live events drew
-            // stamped with their step, the model's own record of each step
-            // hidden beside them - so the next request replays the turn as
-            // calls and results instead of tool output read back as prose.
-            // Every other reply carries none and passes through untouched.
-            [$turnHistory, $message] = Message::settleTurnTranscript($this->history, $msg->message);
-
-            // The settled Message supersedes whatever was streamed: it is what
-            // the provider actually committed to, and on the failure path
-            // ({@see scheduleBackendCompletion()}'s rejection handler) it is
-            // the error notice, which must not be preceded by a half-sentence
-            // the user would read as a complete answer. Clearing here rather
-            // than in each branch keeps the two exits (plain reply, tool
-            // calls) from drifting apart.
-            // The thinking goes with it: the settled Message carries its own
-            // `reasoning`, which {@see Renderer::renderAssistantTurn()} paints
-            // from the transcript, so leaving the live accumulation up would
-            // show the same thought twice.
-            $settled = $this->mutate(array_merge(
-                // A user who opened the collapsed live thought keeps it open
-                // on the settled turn that now carries it.
-                ['streamingText' => '', 'reasoningText' => '', 'expanded' => $this->expandedAfterLiveThought($message->reasoning)],
-                // Whatever settled, it ends a workflow turn if one was running
-                // (driveWorkflowFiber() delivers the run's report here).
-                ['workflowTurnInFlight' => false],
-                // E17: fold this turn's estimate-vs-real observation into the
-                // calibration HERE — this mutate is the one point every exit
-                // of the arm passes through, the tool-call branch above it
-                // and the plain reply below, so the pairing is neither missed
-                // on multi-step turns nor done twice. Reading
-                // $msg->message->usage, not the tracker: the tracker holds the
-                // session SUM, and calibration needs THIS turn against the
-                // estimate THIS dispatch recorded.
-                $this->turnEstimateObservation($msg->message->usage),
-            ));
-
-            // Check if the message has tool calls to execute
-            if ($message->toolCalls !== [] && $this->tools !== []) {
-                return $settled->beginToolCalls($message);
-            }
-
-            // THE ordinary end of a turn, and so the drain point that matters:
-            // {@see finishToolCalls()} writes `'inFlight' => true`, which means a
-            // turn that called tools keeps running and settles at a LATER
-            // AssistantMsg — this one, once the model answers without asking for
-            // another call. Draining on ANY AssistantMsg would fire mid-turn,
-            // between two tool steps; the tool-call branch a few lines above
-            // returns before this point, which is what keeps it from happening.
-            //
-            // The null Cmd this used to return is where the drained turn's Cmd
-            // goes.
-            //
-            // E707 (round 81): a reply the provider stopped at its OUTPUT
-            // ceiling is otherwise indistinguishable from one the model chose
-            // to end - the text simply stops. One Role::System notice rides
-            // immediately after the turn it describes (the same shape every
-            // other post-prompt notice on this route takes), appended INSIDE
-            // the settle so it lands in persisted history exactly once per
-            // stopped turn and survives re-render.
-            [$done, $doneCmd] = self::releaseQueuedPrompts([$settled->mutate([
-                'history' => [
-                    ...$turnHistory,
-                    $message,
-                    ...($message->lengthStopped ? [$this->outputLengthStoppedNotice()] : []),
-                    // F2, same append shape as the two lines around it: a turn
-                    // the STEP ceiling ended mid-exchange gets one transcript
-                    // notice pointing at `maxToolSteps`, so an unfinished
-                    // agentic loop never reads as a completed answer.
-                    ...($message->stepsTruncated ? [$this->stepsTruncatedNotice()] : []),
-                    // The third harness stop, same append shape: a turn the
-                    // repeat-call loop guard ENDED says so here rather than
-                    // leaving it to the model's no-tools summary to mention.
-                    ...($message->loopGuardStoppedBy !== null
-                        ? [$this->loopGuardStoppedNotice($message->loopGuardStoppedBy)]
-                        : []),
-                    // Audit 15b-15, same append shape: an attachment the
-                    // provider could not carry (an image to a model without
-                    // vision) went as a text placeholder, and the user hears
-                    // it here rather than wondering why the model is blind.
-                    ...($message->attachmentNotice !== null
-                        ? [Message::notice($message->attachmentNotice)]
-                        : []),
-                    // Billing fix, same append shape as the E707 line above:
-                    // a turn the app could NOT price gets exactly one
-                    // transcript-visible notice naming the model, so a $0.00
-                    // in the budget readout is never silently read as "free".
-                    ...($message->usage?->unpricedModel !== null
-                        ? [$this->unpricedModelNotice($message->usage->unpricedModel)]
-                        : []),
-                ],
-                'inFlight' => false,
-                'inFlightCancellation' => null,
-            ]), null]);
-
-            // Step 3.D-3: a session with a live `/goal` is not done yet — the
-            // title model judges this turn (below, once the per-turn side
-            // calls are scheduled) and the agent goes back to work until the
-            // goal is met. Only when nothing queued took the turn's place: the
-            // user's own message carries the conversation on, and the turn it
-            // starts is judged when it settles.
-            $goal = $done->inFlight ? null : \SugarCraft\Code\Goal\GoalState::activeIn($done->history);
-
-            // The turn is over and nothing queued took its place: guess the
-            // user's next message in the background (→ accepts it). Batched
-            // beside, never before, whatever the drain scheduled. Not while a
-            // goal keeps the conversation going: the guess would be stale
-            // before the box is free to show it.
-            $suggest = $done->inFlight || $goal !== null ? null : $done->schedulePromptSuggestion();
-
-            // Roadmap 5.2, same seam and same rule: auto-memory consolidation
-            // on the tool-less summary backend, throttled on disk to one run
-            // per project per five minutes. Only the gating runs here; the
-            // request runs in the backend's fork and the notes are written in
-            // this process as its promise settles (MemoryConsolidatedMsg).
-            $consolidate = $done->inFlight || $done->memoryStore === null ? null
-                : \SugarCraft\Code\Memory\AutoMemoryConsolidator::new(
-                    \SugarCraft\Code\Memory\MemoryWriter::new($done->memoryStore, $done->projectRoot()),
-                )->call($done->summaryBackend, $done->history, $done->spendCapReached(), $done->currentSessionId);
-            // Step 3.G, same seam: `autoCommit: turn` commits what this turn
-            // changed, with a subject from the title model. Only when nothing
-            // queued took the turn's place — a queued prompt is the same
-            // conversation carrying on, and commits once it settles.
-            $autoCommit = $done->inFlight ? null : $done->scheduleAutoCommit();
-            // Roadmap 5.4-3, same seam: the dream pass folds the compaction
-            // journal into memory in a restricted-tool turn of the session's
-            // engine (read-only Memory + Read, via EngineBackend::withTools),
-            // throttled on disk to one pass per project per two hours. Only
-            // the gating runs here (a stat and a small state read); the turn
-            // runs in the engine's fork, and the notes are written in this
-            // process as it settles (DreamPassCompletedMsg).
-            $dream = $done->inFlight || $done->memoryStore === null ? null
-                : \SugarCraft\Code\Memory\DreamPass::new(
-                    \SugarCraft\Code\Memory\MemoryWriter::new($done->memoryStore, $done->projectRoot()),
-                )->call($done->backend, $done->spendCapReached(), $done->currentSessionId);
-            $judge = null;
-            if ($goal !== null) {
-                [$done, $judge] = $done->scheduleGoalJudge($goal);
-            }
-            // Roadmap 5.14a: the `notify` setting's bell or desktop
-            // notification, once the turn is really over — not while a queued
-            // prompt or a goal's judging carries it on.
-            $notify = $done->inFlight ? null : $done->terminalNotification('candy-code: ' . Lang::t('chat.notify.turn_finished'));
-            $cmds = array_values(array_filter([
-                $doneCmd,
-                $suggest,
-                $consolidate === null ? null : Cmd::promise($consolidate),
-                $autoCommit,
-                $dream === null ? null : Cmd::promise($dream),
-                $judge,
-                $notify,
-            ]));
-
-            return [$done, match (count($cmds)) {
-                0 => null,
-                1 => $cmds[0],
-                default => Cmd::batch(...$cmds),
-            }];
-        }
-        if ($msg instanceof GoalJudgedMsg) {
-            return $this->landGoalVerdict($msg);
-        }
-        if ($msg instanceof SideQuestionAnsweredMsg) {
-            // Roadmap 5.14b: accounted first (the call ran on the user's key),
-            // then one UI-only row — shown, never sent — unless the session
-            // it was asked in is no longer the one on screen.
-            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the btw call ran on the title engine
-            if ($msg->sessionId !== $this->currentSessionId) {
-                return [$this, null];
-            }
-
-            return [$this->mutate(['history' => [
-                ...$this->history,
-                Message::assistant(\SugarCraft\Code\Host\Commands\BtwHostCommand::answerRow($msg))->withUiOnly(),
-            ]]), null];
-        }
-        if ($msg instanceof \SugarCraft\Code\Host\Commands\HandoffSeededMsg) {
-            return $this->landHandoff($msg); // Roadmap 5.14c.
-        }
-        if ($msg instanceof DreamPassCompletedMsg) {
-            // Roadmap 5.4-3: the notes, the memory-history commit and the
-            // journal cursor are already written (in this process, as the
-            // turn settled). Accounted first — the pass ran on the user's
-            // key — then one display-only notice when a note was saved,
-            // changed or removed, or a skill draft was proposed (`/skills`
-            // reviews it); a pass that did neither says nothing.
-            $this->accountUsage($msg->usage);
-            $notice = \SugarCraft\Code\Memory\DreamPass::notice($msg);
-            if ($notice === null) {
-                return [$this, null];
-            }
-
-            return [$this->mutate(['history' => [...$this->history, Message::notice($notice)]]), null];
-        }
-        if ($msg instanceof \SugarCraft\Code\Workspace\AutoCommittedMsg) {
-            // Step 3.G: the commit is already made (or refused). Accounted
-            // first — the subject came from a model call on the user's key —
-            // then one display-only line saying what was committed, or why not.
-            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the subject came from the title engine
-
-            return [$this->mutate(['history' => [...$this->history, Message::notice($msg->notice())]]), null];
-        }
-        if ($msg instanceof MemoryConsolidatedMsg) {
-            // Roadmap 5.2: the notes are already written (in this process,
-            // as the call settled). Accounted first, on the rule every
-            // provider-call arm follows, then one display-only notice when a
-            // note was saved, changed or removed; a run that saved nothing
-            // says nothing. Shown even after a session switch: the notes are
-            // the project's, not the session's, and a write is never silent.
-            $this->accountUsage($msg->usage, self::modelOf($this->summaryBackend)); // OBS-3: consolidation ran on the summary engine
-            $notice = \SugarCraft\Code\Memory\AutoMemoryConsolidator::notice($msg);
-            if ($notice === null) {
-                return [$this, null];
-            }
-
-            return [$this->mutate(['history' => [...$this->history, Message::notice($notice)]]), null];
-        }
-        if ($msg instanceof ToolResultsMsg) {
-            return $this->finishToolCalls($msg);
-        }
-        if ($msg instanceof PermissionRequestMsg) {
-            return $this->requestPermission($msg);
-        }
-        if ($msg instanceof PermissionReplyMsg) {
-            return $this->answerPermission($msg->reply);
-        }
-        if ($msg instanceof TickRequest) {
-            // A paced replay hop ({@see foldHop()}) that reaches a driver
-            // with no loop to arm its timer — a synchronous chain unwinder,
-            // any model-only embedder — is answered HERE instead of stalling
-            // the queue: produce the hop now, skipping only the delay, never
-            // the event. The real host intercepts TickRequest in
-            // Program::dispatch() before update() ever sees one, so this arm
-            // exists for the headless shape alone.
-            $produced = ($msg->produce)();
-
-            return $produced === null ? [$this, null] : [$this, Cmd::send($produced)];
-        }
-        if ($msg instanceof BackendToolEventsMsg) {
-            return $this->applyBackendToolEvent($msg);
-        }
-        if ($msg instanceof ToolEventPumpMsg) {
-            // Roadmap P-B2: the live agent lines' clock moves on the pump's
-            // own tick (every 0.1 s while a turn runs), so the spinner turns
-            // and the elapsed figures count without view() reading a clock.
-            $this->agentLive()->advance();
-
-            return $this->pumpLiveToolEvents();
-        }
-        if ($msg instanceof RuntimeNoticePumpMsg) {
-            return $this->pumpRuntimeNotices();
-        }
-        if ($msg instanceof TranscriptFlushMsg) {
-            // The debounce tick (audit R2): write whatever is newest. $this is
-            // returned unchanged, so update() schedules nothing new.
-            $this->transcripts()->flush();
-
-            return [$this, null];
-        }
-        if ($msg instanceof SessionLockRetryMsg) {
-            return [$this->retakenSessionLock(), null];
-        }
-        if ($msg instanceof BangShellResultMsg) {
-            return $this->landBangShellResult($msg);
-        }
-        if ($msg instanceof CancelledWorkflowReportMsg) {
-            // The report of a run Esc Esc cancelled: appended, and NOTHING
-            // else — the turn it occupied was released by the cancel, and
-            // whatever turn is running now is not this report's to settle.
-            return [$this->mutate(['history' => [...$this->history, $msg->message]]), null];
-        }
-        if ($msg instanceof InitialPromptMsg) {
-            return $this->submitInitialPrompt($msg->prompt);
-        }
-        if ($msg instanceof StatusLineTickMsg) {
-            // The `statusLine` command's launch site. Only the decision runs
-            // here on the update path — a TTL comparison and the in-flight
-            // check — while the command itself runs in a forked child, so a
-            // slow one no longer freezes the frame once per tick (ISS-095).
-            // Its text lands through the StatusLineResultMsg fold below.
-            //
-            // Returns $this unchanged: the runner holds the text in process
-            // state ({@see StatusLineCommand::line()}), not on the model, so
-            // there is nothing to fold into a new Chat. The repaint comes
-            // from Program re-rendering after the update, which it does for
-            // every Msg — this arm does not have to ask for one.
-            return [$this, StatusLineCommand::cmd()];
-        }
-        if ($msg instanceof StatusLineResultMsg) {
-            StatusLineCommand::settle($msg->line);
-
-            return [$this, null];
-        }
-        if ($msg instanceof TurnHooksResolvedMsg) {
-            return $this->resumeTurnHooks($msg);
-        }
-        if ($msg instanceof CustomCommandExpandedMsg) {
-            return $this->resumeCustomCommand($msg);
-        }
-        if ($msg instanceof McpLoginProgressMsg) {
-            return $this->handleMcpLoginProgress($msg);
-        }
-        if ($msg instanceof IdleCompactTickMsg) {
-            return $this->handleIdleCompactTick();
-        }
-        if ($msg instanceof HistoryCompactedMsg) {
-            // Accounted BEFORE the latch check, and for the same reason the
-            // AssistantMsg arm accounts before its staleness guard: the
-            // summarization call went out on the user's key and was billed
-            // whether or not its answer is still wanted. Dropping the summaries
-            // is right; forgetting the money is not.
-            $this->accountUsage($msg->usage, self::modelOf($this->summaryBackend)); // OBS-3: the compaction summary ran on the summary engine
-
-            // Roadmap 2.10: an ahead-of-need summary condenses nothing when it
-            // lands - it is held for the 85% tier in submit(), under its own
-            // latch. One that is no longer the one out (superseded, or asked
-            // for in another session) is dropped like a stale /compact; one
-            // that came back unusable is held as `[]`, so this cycle does not
-            // ask again (see the property's docblock).
-            if ($msg->background) {
-                $held = $this->backgroundSummary;
-                if ($held === null || $held['id'] !== $msg->compactionId) {
-                    return [$this, null];
-                }
-                if ($held['sessionId'] !== $this->currentSessionId) {
-                    return [$this->mutate(['backgroundSummary' => null]), null];
-                }
-                // CTX-4: a HOLD verdict discards the summaries just as an error
-                // or a hook block does — a collapsed splice must never be
-                // offered to the 85% tier. The tier re-parks on its own and the
-                // fresh request's landing carries the advisory.
-                $usable = $msg->error === null && $msg->blockedBy === null && $msg->safeguardHold === null;
-
-                return [$this->mutate(['backgroundSummary' => [
-                    ...$held,
-                    'summaries' => $usable ? $msg->summaries : [],
-                ]]), null];
-            }
-
-            // CTX-5: the idle fold's landing. Same message shape as a
-            // `/compact` answer, its own latch, and a different ending — it
-            // rewrites the transcript where it stands and dispatches no turn
-            // (nobody sent anything). Checked before the supersede guard
-            // below for the same reason the background latch is checked
-            // first: this compactionId was never in pendingCompactionId, so
-            // the generic guard would silently eat it.
-            if ($this->pendingIdleCompaction !== null
-                && $msg->compactionId === $this->pendingIdleCompaction['id']
-            ) {
-                return $this->applyIdleCompaction($msg);
-            }
-
-            // Superseded: a second /compact was issued, or one of the FOUR
-            // release routes abandoned this one - /clear, /rewind, the palette's
-            // New session action, or the double-Escape cancel arm below (which
-            // became a release route once the 85% tier started parking turns
-            // behind a summarization). Dropped rather than applied - see
-            // HistoryCompactedMsg's $compactionId docblock for why this is its
-            // own latch and not the generation counter.
-            if ($msg->compactionId !== $this->pendingCompactionId) {
-                return [$this, null];
-            }
-
-            return $this->applyModelCompaction($msg);
-        }
-        if ($msg instanceof PromptSuggestionMsg) {
-            // Accounted first, on the rule every provider-call arm follows:
-            // the call was made on the user's key whatever becomes of it.
-            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the suggestion ran on the title engine
-
-            $text = self::sanitizePromptSuggestion($msg->suggestion);
-            $stale = $msg->generation !== $this->generation
-                || $msg->historyCount !== count($this->history)
-                || $msg->sessionId !== $this->currentSessionId;
-            if ($text === '' || $stale || $this->inFlight) {
-                return [$this, null];
-            }
-
-            return [$this->mutate(['promptSuggestion' => [
-                'text' => $text,
-                'generation' => $msg->generation,
-                'historyCount' => $msg->historyCount,
-                'sessionId' => $msg->sessionId,
-            ]]), null];
-        }
-        if ($msg instanceof SessionTitledMsg) {
-            // Accounted before either guard below, on the same rule the other
-            // three provider-call arms follow: the titler is a real call on the
-            // user's key, and a session that was switched away from or a title
-            // that came back unusable cost exactly as much as one that did not.
-            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the title ran on the title engine
-
-            // The title call is fire-and-forget: by the time it lands the
-            // user may have switched sessions, and a title belonging to a
-            // session we are no longer on must not overwrite this one's.
-            if ($msg->sessionId !== $this->currentSessionId) {
-                return [$this, null];
-            }
-            // The latch (audit B2, P-A4): a name the USER set is never
-            // replaced, and neither is any name latched since the request
-            // went out — `/rename` typed while it was in flight, or a name
-            // read back from the store whose source this window cannot vouch
-            // for. `/rename --auto` and a blank inline rename clear the name
-            // first, which is the one way a generated title lands again. The
-            // store refuses the write on the same rule; this guard keeps the
-            // UI from showing a title the store never took.
-            if (
-                $this->currentSessionTitleSource === \SugarCraft\Code\Session\TitleSource::User
-                || $this->currentSessionName !== null
-            ) {
-                return [$this, null];
-            }
-            $title = self::sanitizeSessionTitle($msg->title);
-            if ($title === '') {
-                return [$this, null];
-            }
-            return [$this->mutate([
-                'currentSessionName' => $title,
-                'currentSessionTitleSource' => \SugarCraft\Code\Session\TitleSource::Auto,
-            ]), null];
-        }
-        if ($msg instanceof BackgroundSessionSpawnedMsg) {
-            // Unlike the title call above this is NOT session-scoped: the
-            // user asked for it out loud with a slash command, so the answer
-            // belongs in whatever transcript is in front of them now.
-            $notice = \SugarCraft\Code\Host\Commands\BackgroundCommand::spawnedNotice($msg);
-
-            // ISS-097: the same verdict the headless driver's row carries,
-            // read through the same predicate — two drivers, one source.
-            return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)->withUiOnly()->withError(
-                \SugarCraft\Code\Host\Commands\BackgroundCommand::isSpawnFailure($msg),
-            )]]), null];
-        }
-        if ($msg instanceof BackgroundSessionStoppedMsg) {
-            // Record the settled status as already announced, so the next
-            // background poll does not repeat it as "is now stopped".
-            $statuses = $this->backgroundStatuses;
-            $settled = $this->backgroundSupervisor?->getSession($msg->sessionId);
-            if ($settled !== null) {
-                $statuses[$msg->sessionId] = $settled->status->value;
-            }
-
-            return [$this->mutate([
-                'history' => [...$this->history, Message::assistant(self::backgroundStopNotice($msg))->withUiOnly()->withError(
-                    \SugarCraft\Code\Host\Commands\BackgroundCommand::isStopFailure($msg),
-                )],
-                'backgroundStatuses' => $statuses,
-            ]), null];
-        }
-        if ($msg instanceof BackgroundTickMsg) {
-            return $this->pumpBackgroundSessions();
-        }
-        if ($msg instanceof WindowSizeMsg) {
-            // The one authoritative size - see the constructor docblock on
-            // $rows/$cols for why Renderer must read these instead of
-            // querying terminal size itself.
-            // A reflow moves every cell, so a highlight measured on the old
-            // frame would sit over text it never selected.
-            self::$textSelection = null;
-
-            return [$this->mutate(['rows' => $msg->rows, 'cols' => $msg->cols]), null];
-        }
-        if ($msg instanceof MouseMsg) {
-            return $this->handleMouse($msg);
-        }
-        if ($msg instanceof PasteMsg) {
-            // E704. The whole bracketed payload — `InputReader` collects the
-            // bytes between `CSI 200~` and `CSI 201~` (only ever emitted once
-            // {@see programOptions()} asks for mode 2004) into ONE message, so
-            // a multi-line paste is one atomic edit rather than the byte-burst
-            // that used to dispatch one submit per line. Inserted AT the caret
-            // through TextArea's string seam; the cursor lands at the END of
-            // the pasted text, which is the law every other single edit of
-            // this box follows. It does not submit and it does not answer a
-            // permission prompt: the Enter that follows a paste is the user's
-            // own keystroke and submits the WHOLE draft once, through
-            // {@see submit()}'s existing trim — content is inserted verbatim,
-            // with no pre-trim, because the boundary sanitize upstream
-            // (ProgramOptions::$sanitizePaste, default ON) is the one place
-            // untrusted bytes get stripped. The companion PasteEndMsg carries
-            // no payload and stays dropped below, with every other non-KeyMsg.
-            //
-            // E744 WS3 routes this through the widget's OWN paste arm so the
-            // frame stops owning a private copy of the draft-edit law: the
-            // widget replaces a live selection before inserting (E736 5.13),
-            // and on an empty selection `deleteSelection()` returns the
-            // editor unchanged — making the focused no-selection outcome
-            // byte-identical to the insertString call this arm used to make.
-            // A dropped/unfocused editor answers its paste with the SAME
-            // instance, and the fallback below keeps this box's pre-E744
-            // contract for that state verbatim: paste lands regardless.
-            //
-            // Audit 15b-15: a paste that is nothing but the path of an image
-            // file - what dropping a screenshot onto most terminals types -
-            // becomes an `@` mention of it instead, so the image is attached
-            // when the prompt is sent rather than its path sent as prose.
-            // The `/new` folder picker takes a pasted path into its path box.
-            if ($this->dirPicker !== null) {
-                return [$this->mutate(['dirPicker' => $this->dirPicker->withPaste($msg->content)]), null];
-            }
-            // The history search takes a paste into its query for the same
-            // reason (TUI-2): the overlay owns typing, and the draft behind
-            // it must survive the search untouched.
-            if ($this->historySearch !== null) {
-                return [$this->mutate(['historySearch' => $this->historySearch->withPaste($msg->content)]), null];
-            }
-            $imagePath = self::pastedImagePath($msg->content);
-            if ($imagePath !== null) {
-                return [$this->withInput($this->input->insertString($this->mentionFor($imagePath) . ' ')), null];
-            }
-
-            // ISS-051: pastes that would bury the box go under a chip. The
-            // check sits after the folder picker (a pasted PATH stays a path)
-            // and after the image-mention arm (a screenshot path is one
-            // short line anyway); everything else that is big gets collapsed.
-            if (self::pasteNeedsCollapse($msg->content)) {
-                return [$this->withCollapsedPaste($msg->content), null];
-            }
-
-            [$pasted] = $this->input->update($msg);
-            \assert($pasted instanceof TextArea);
-            if ($pasted === $this->input) {
-                return [$this->withInput($this->input->insertString($msg->content)), null];
-            }
-
-            return [$this->withInput($pasted), null];
-        }
-        if ($msg instanceof ClipboardImagePastedMsg) {
-            // Ctrl+V's answer (audit 15b-15): the saved image goes into the
-            // draft as an `@` mention at the caret, exactly as a typed or
-            // dropped one would, so it is attached on send and visible - and
-            // removable - until then.
-            if ($msg->path === null) {
-                return [$this->mutate(['history' => [...$this->history, Message::notice(Lang::t('chat.clipboard.no_image'))]]), null];
-            }
-
-            return [$this->withInput($this->input->insertString($this->mentionFor($msg->path) . ' ')), null];
-        }
-
-        // E744 WS5: the session picker's load-more edge. The ONLY production
-        // source of this Msg in crush is sugar-forms ItemList's
-        // arrival-on-last-row rule (a keyboard step, wheel notch, or click
-        // that moves the cursor onto the last row of the loaded page while
-        // more may exist upstream), raised as Cmd::send and relayed back
-        // through the frame by the E744 WS1 wrapper. Consumed while the
-        // picker is up; with no picker the signal has no owner and joins
-        // every other unhandled Msg below.
-        if ($msg instanceof LoadMoreMsg) {
-            return $this->handleSessionLoadMore();
-        }
-
-        if (!$msg instanceof KeyMsg) {
-            return [$this, null];
-        }
-        // A key dismisses a mouse selection's lingering highlight. Ctrl+C
-        // over one is the "copy" reflex every terminal user has, and the text
-        // is ALREADY on the clipboard (the release copied it), so that press
-        // only dismisses — quitting out from under a fresh copy would be the
-        // most surprising answer the chord could give.
-        $selection = self::$textSelection;
-        if ($selection !== null) {
-            self::$textSelection = null;
-            if ($selection->settled && $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'c') {
-                return [$this, null];
-            }
-        }
-        // BOTH encodings of Ctrl+C. sugar-core's InputReader normalizes every
-        // control byte 0x01-0x1a into (Char, chr(0x60 + code), ctrl: true), so
-        // the real terminal delivers ^C as rune 'c' WITH the ctrl flag and
-        // never as the raw "\x03" this used to test for alone — which meant
-        // Ctrl+C could not quit the app on the live path at all. The raw rune
-        // is still accepted for callers that synthesize a KeyMsg directly.
-        //
-        // E744 WS2 precedence (the key-routing decision in the acceptance):
-        // with a selection up, the flagged pair is the EDITOR'S copy chord —
-        // the draft is the focused surface and its widget already answers
-        // ctrl+c exactly this way (TextArea's own table); delegating reuses
-        // that answer instead of reimplementing selection extraction here,
-        // and the Cmd it raises rides the E744 WS1 relay. Quitting stays the
-        // outcome for every no-selection press, and for the raw synthetic
-        // "\x03" in ANY state — that encoding is a programmatic escape hatch,
-        // not the terminal's copy gesture, and a caller that sends it means
-        // the signal, not the chord.
-        if ($msg->type === KeyType::Char
-            && ($msg->rune === "\x03" || ($msg->ctrl && $msg->rune === 'c'))) {
-            if ($msg->ctrl && $msg->rune === 'c' && $this->input->hasSelection()) {
-                return $this->delegateToInput($msg);
-            }
-
-            return [$this, Cmd::quit()];
-        }
-
-        // The keybinding reference owns the keyboard while it is up, and is
-        // checked this high for the same reason the permission prompt is: it
-        // is a full modal the user cannot see past, so a key that reached the
-        // transcript scroll or the input box below would act on something
-        // hidden. Ctrl+C stays above it — quitting must never need the modal
-        // dismissed first.
-        //
-        // It outranks the permission prompt, a pair NO producer that exists
-        // today can put up. WHICH lock forbids it is the part two revisions of
-        // this comment got wrong, so it is stated as measured rather than as
-        // reasoned:
-        //
-        //   * the reference only opens from an idle turn — the "?" arm and
-        //     submit()'s /keys branch both sit below the inFlight swallow at
-        //     the foot of this method;
-        //   * a prompt does NOT "only exist mid-turn". That sentence was here,
-        //     and it is refuted by one update() call: this method's AssistantMsg
-        //     arm writes 'inFlight' => false and does not clear
-        //     $pendingPermission, and mutate() carries it forward, so
-        //     prompt-up-and-idle is a state update() itself produces. The
-        //     public constructor reaches it too — parameters are not
-        //     visibility-scoped, so `new Chat(pendingPermission: $ask)` builds
-        //     it with no exception. No WIRED producer sends a second
-        //     AssistantMsg while a prompt is up (beginToolCalls() parks the
-        //     WHOLE gated batch on the first ask and dispatches nothing, so the
-        //     only Cmd outstanding across a live prompt is the permission
-        //     Deferred, which is not a Msg source) — measured by walking every
-        //     'inFlight' => false site in this file. So this is an API-surface
-        //     hole today and a live one the moment the engine path lands;
-        //   * and in that separated state the pair is STILL refused, by the
-        //     $pendingPermission arm ALONE — driven: "?" leaves keyHelp null and
-        //     Ctrl+P leaves palette null with inFlight already false. The arm
-        //     above, not the swallow below, is what closes this door;
-        //   * requestPermission()'s generation guard closes no door here at
-        //     all: measured, both internal producers stamp the generation that
-        //     is current on the object they call. It is dormant defence for the
-        //     unwired engine path; its docblock carries the measurement. An
-        //     UNSTAMPED ask still applies, by design, since that is what every
-        //     internal caller and any future pipeline (PermissionRequestMsg's
-        //     own docblock names the engine path) may legitimately send.
-        //
-        // So the pair is ordered rather than assumed away, and
-        // Renderer::renderStatusBar() announces the buried prompt instead of
-        // leaving it invisible and silent — that cue is the half of this which
-        // is reachable, driven, and does bite. Both halves are pinned in
-        // KeyHelpTest: testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()
-        // for the live-turn state and
-        // testAPromptOutlivesItsTurnAndTheReferenceIsStillRefused() for the
-        // separated one.
-        if ($this->keyHelp !== null) {
-            return $this->handleKeyHelpKey($msg);
-        }
-
-        // Page Up/Down scroll the transcript a screenful at a time -- the
-        // keyboard equivalent of the wheel, which was the only way to move
-        // through history. A page is the visible rows less two so a couple of
-        // lines of context carry over between screens, the same overlap the
-        // three-line wheel notch keeps.
-        if ($msg->type === KeyType::PageUp || $msg->type === KeyType::PageDown) {
-            $page = max(1, $this->rows - 2);
-
-            return $this->scrollBy($msg->type === KeyType::PageUp ? $page : -$page);
-        }
-        // A blocking permission prompt owns the keyboard while it is up, and
-        // is checked ahead of BOTH the Escape arm and the inFlight
-        // blanket-swallow below: the turn is inFlight by definition while
-        // waiting on this answer, so without this arm every reply keystroke
-        // would be discarded and the prompt could never be answered, and
-        // Escape would abort the whole turn rather than refuse this one call.
-        if ($this->pendingPermission !== null) {
-            return $this->handlePermissionKey($msg);
-        }
-        // P-A4: the inline session-title editor owns the keyboard while it is
-        // open — ahead of the Escape arm, so Escape closes the editor instead
-        // of arming a turn cancel, and ahead of the mid-turn refusals, because
-        // naming a session starts no turn and rewrites no history.
-        if ($this->titleEditor !== null) {
-            return $this->handleTitleEditorKey($msg);
-        }
-        // Escape is checked before the inFlight blanket-swallow below (like
-        // Ctrl+C above) because its whole point while a request is running
-        // is to let the user cancel it. A single Escape never quits the app
-        // any more (see this arm's history - it used to, and Alt+Backspace's
-        // terminal-decoding bug made Escape fire on its own by accident,
-        // quitting unexpectedly). Two Escapes within
-        // DOUBLE_ESCAPE_WINDOW_SECONDS while inFlight abort the in-progress
-        // turn instead. Excluded while the palette is open so Escape keeps
-        // its existing, more specific meaning there - see
-        // handlePaletteKey()'s own Escape arm, reached below once this `if`
-        // doesn't match.
-        // The session picker is excluded for the same reason the palette is:
-        // Escape closes the overlay there (see handleSessionPickerKey()),
-        // which is more specific than "cancel the in-flight turn".
-        // TUI-1 adds the same more-specific exclusion for the `@` mention
-        // popup, one arm EARLIER than that `if` rather than a sixth conjunct:
-        // while the popup is up, Escape is the popup's close, and it must not
-        // arm the two-beat stop binding at all (plan: Esc closes BEFORE the
-        // stop-binding arms). mentionPopupOpen()'s own modal guards make the
-        // palette/picker exclusions moot here.
-        if ($msg->type === KeyType::Escape && $this->mentionPopupOpen()) {
-            return [$this->mutate(['mentionMenuDismissed' => true]), null];
-        }
-
-        // ── TUI-3A: vim-mode composer, wiring half 1 of 2 ─────────────────
-        // (a) The SETTING is the truth and the widget carries the arm flag;
-        // the keystroke that FINDS them disagreeing is spent re-arming,
-        // because replaying a key through a widget built for the other mode
-        // is how stray characters get typed. UiSettings is memoized (the
-        // save that flips it calls forget()), so with the setting off — the
-        // DEFAULT, and every wire-dormant run — this comparison is
-        // `false !== false` per keystroke and the whole region below is
-        // inert. Toggling mid-session therefore applies on the NEXT
-        // keystroke, not the frame: no reload, no restart, one spent key.
-        $vimEnabled = self::vimModeEnabled();
-        if ($msg instanceof KeyMsg && $vimEnabled !== $this->input->vimMode) {
-            return [$this->mutate([
-                'input' => $this->input->withVimMode($vimEnabled),
-                'composerVim' => ComposerVim::empty(),
-            ]), null];
-        }
-
-        // (b) A pending operator (`d`/`y` waiting for its motion) resolves
-        // HERE, ahead of the double-Escape arm below, because its Escape
-        // means "cancel the operator" and must not arm the two-beat stop
-        // binding. Every keyboard owner above the composer gates it out the
-        // same way the Escape arm is gated: while a modal or the `@`/`$`
-        // popup is open that surface keeps its keys and the pending simply
-        // waits. Enter is the one overlap with an owner BELOW — the slash
-        // menu and the mention accept bind it first, so under a popup the
-        // operator dies and the menu gets its Enter, exactly as it would
-        // with vim off. A key that is no operator material at all (Tab, an
-        // arrow, a chord) clears the pending and re-routes through
-        // update() — the recursion is one step deep, since the cleaned
-        // clone's pending is null. That is the queue-owns-Tab / palette-owns-
-        // arrows guarantee: a forgotten `d` can never hold the keyboard
-        // hostage for one extra keystroke.
-        if (
-            $this->composerVim->pending !== null
-            && $msg instanceof KeyMsg
-            && $this->titleEditor === null
-            && $this->palette === null
-            && $this->sessionPicker === null
-            && $this->dirPicker === null
-            && $this->historySearch === null
-            && !$this->mentionPopupOpen()
-        ) {
-            if ($msg->type === KeyType::Enter && $this->slashMenuShouldIntercept()) {
-                return $this->mutate(['composerVim' => $this->composerVim->pendingCleared()])->update($msg);
-            }
-
-            [$vimInput, $vimState, $vimHandled] = ComposerVim::resolve($msg, $this->input, $this->composerVim);
-            if ($vimHandled) {
-                return [$this->mutate(['input' => $vimInput, 'composerVim' => $vimState]), null];
-            }
-
-            return $this->mutate(['composerVim' => $vimState])->update($msg);
-        }
-
-        // (c) While vim is armed and the widget sits in INSERT or VISUAL,
-        // Escape is that state's exit key and belongs to the widget: the
-        // two-beat stop arm below unconditionally claims every otherwise
-        // unowned Escape (the pre-vim behaviour), which would trap a user in
-        // Insert. NORMAL-state Escape therefore keeps its byte-identical
-        // turn-cancel meaning; a modal or the `@` popup above keeps its own
-        // Escape owner untouched, and with the setting off `vimMode` is false
-        // so this arm is inert.
-        if (
-            $msg->type === KeyType::Escape
-            && $this->input->vimMode
-            && $this->input->vimState !== VimState::Normal
-            && $this->titleEditor === null
-            && $this->palette === null
-            && $this->sessionPicker === null
-            && $this->dirPicker === null
-            && $this->historySearch === null
-            && !$this->mentionPopupOpen()
-        ) {
-            return $this->delegateToInput($msg);
-        }
-
-        if ($msg->type === KeyType::Escape && $this->palette === null && $this->sessionPicker === null && $this->dirPicker === null && $this->historySearch === null) {
-            if (!$this->inFlight) {
-                return [$this->mutate(['lastEscapeAt' => null]), null];
-            }
-
-            $now = microtime(true);
-            // Roadmap 1.C-4: a turn already asked to stop softly is cancelled
-            // HARD by the next Escape, however long after the first it comes
-            // — the status bar says so ("Esc to cancel now") for as long as
-            // the turn takes to reach its boundary.
-            $isSecondPress = ($this->lastEscapeAt !== null
-                && ($now - $this->lastEscapeAt) <= self::doubleEscapeWindowSeconds())
-                || $this->stopRequested();
-
-            if (!$isSecondPress) {
-                // The first Escape is a SOFT cancel when the turn can take one:
-                // an engine turn that reports its steps lets the step's tools
-                // finish and makes no further provider call (`cancel_soft`).
-                // Anything else — a command backend, a workflow, the window
-                // before a turn's first step — keeps the old rule: only a
-                // second Escape inside the window does anything.
-                if ($this->liveStep() !== null) {
-                    $this->inFlightCancellation?->cancelSoft();
-                    // 1.C-4b: and the call running right now stops too
-                    // (`cancel_tool{callId}`), rather than holding the turn
-                    // until it finishes — it settles as cancelled, and the
-                    // turn ends at the boundary with every result in place.
-                    foreach ($this->history as $message) {
-                        if ($message->pendingToolCallId !== null) {
-                            $this->inFlightCancellation?->cancelTool($message->pendingToolCallId);
-                        }
-                    }
-                }
-
-                return [$this->mutate(['lastEscapeAt' => $now]), null];
-            }
-
-            $this->inFlightCancellation?->cancel();
-            $parkedDraft = $this->pendingTurnHooks['draft'] ?? $this->pendingCustomCommand['draft'] ?? null;
-
-            return [$this->mutate([
-                // A submission parked behind a forked turn-hook chain (audit
-                // 15b-04) is released with the turn it stood in for: the cancel
-                // above makes the chain's poll kill the child, the generation bump
-                // below strands any verdict already on its way, and the prompt —
-                // never echoed, so it would otherwise be gone — goes back into the
-                // box when the box is still empty.
-                //
-                // A command line parked behind a forked template expansion (audit
-                // 15b-20) is released the same way, and so is any expansion kept
-                // for a turn-hook re-entry that will now never happen.
-                ...($parkedDraft !== null && trim($this->inputBuf) === ''
-                    ? ['inputBuf' => $parkedDraft]
-                    : []),
-                'pendingTurnHooks' => null,
-                'pendingCustomCommand' => null,
-                'resolvedCustomCommand' => null,
-                'inFlight' => false,
-                'inFlightCancellation' => null,
-                'lastEscapeAt' => null,
-                'workflowTurnInFlight' => false,
-                'generation' => $this->generation + 1,
-                // Every "running" placeholder of the aborted turn is healed into
-                // the "interrupted" row first (audit 15b-02): the generation
-                // bump below strands the ToolFinished that would have resolved
-                // it, so left alone it spun for the rest of the session - and a
-                // later turn reusing the call id (DSML's `dsml_call_0`) had its
-                // result written onto this dead row instead of its own.
-                // A workflow turn says what the cancel is doing, since its
-                // report is still to come (driveWorkflowFiber()).
-                'history' => [...$this->historyWithInterruptedPlaceholders(), Message::notice(
-                    Lang::t($this->workflowTurnInFlight ? 'chat.workflow.cancelled' : 'chat.request.cancelled'),
-                )],
-                // Half a sentence left under the cancellation notice would
-                // read as an answer the user is still waiting on. The
-                // generation bump also strands any delta still in the inbox,
-                // so nothing can type into the void after this.
-                'streamingText' => '',
-                'reasoningText' => '',
-                'expanded' => $this->expandedAfterLiveThought(null),
-                // The generation bump does NOT cover a summarization: the latch
-                // is $pendingCompactionId, deliberately not the generation
-                // counter (see that property's docblock). Releasing it here is
-                // load-bearing since crush_code.md Phase 5 item 6 wired the 85%
-                // tier, because a PARKED submission
-                // ({@see scheduleParkedCompaction()}) holds `inFlight` true with
-                // no turn running, which is what makes this arm reachable during
-                // the parked window at all - measured, it and Ctrl+C are the only
-                // two keys the swallow below leaves live there. Without this the
-                // latch still matched when the summary landed and
-                // {@see applyModelCompaction()} dispatched the very turn the user
-                // had just cancelled.
-                //
-                // Released UNCONDITIONALLY rather than only for a parked turn:
-                // this arm cannot tell a parked submission from a `/compact`
-                // running alongside a real turn without new state on Chat, and of
-                // the two possible errors, abandoning a compaction the user can
-                // simply re-run is strictly cheaper than sending a cancelled
-                // prompt to the provider. The prompt or the `/compact` line is
-                // still in the transcript either way - both routes echo before
-                // the request leaves. Whether the CALL is still paid for depends
-                // on the backend: the parked summarization carries its own token
-                // ({@see scheduleParkedCompaction()}, backlog §E32), so a provider
-                // that honours the best-effort {@see Backend} contract stops
-                // spending here, while one that ignores it is billed as before,
-                // because update() accounts usage ahead of the latch check. A
-                // `/compact` summarization is always in the second group - it is
-                // scheduled with no token, on purpose, and that method's own
-                // docblock says why the two triggers differ.
-                'pendingCompactionId' => null,
-                // CTX-5: same release for an idle fold in flight. Escape is the
-                // user being HERE; a fold landing under a session they just
-                // interrupted rewrites the transcript they were reading.
-                'pendingIdleCompaction' => null,
-                // `queuedPrompts` is deliberately ABSENT, which is a decision and
-                // not an omission. This arm clears `inFlight`, so it is the one
-                // turn-ending site that does NOT call
-                // {@see releaseQueuedPrompts()}: the user just asked to stop the
-                // RUNNING turn, which says nothing about a message they typed
-                // deliberately while it ran, and dispatching it here would send
-                // the one thing they may have been trying to stop. Nor is it
-                // dropped — that would silently destroy the user's text. It stays
-                // queued and stays visible ({@see Renderer::renderStatusBar()}
-                // counts it), and goes out when the next turn settles.
-            ]), null];
-        }
-        // MID-TURN KEY POLICY. This used to be
-        //
-        //     if ($this->inFlight) {
-        //         // Ignore keystrokes while waiting for the backend
-        //         // (avoids the user racing ahead and queuing another
-        //         // turn into a half-formed history).
-        //         return [$this, null];
-        //     }
-        //
-        // a blanket swallow, and it was the whole of a user-reported bug: for the
-        // length of a turn the input box, the Ctrl+P palette, the session picker,
-        // Up-recall and Ctrl+O were all dead, because every one of them is
-        // lexically BELOW this point. It was NOT an async defect — the completion
-        // already runs in a forked child ({@see Backend\EngineBackend::completeAsync()})
-        // and the loop was delivering the keystrokes; they arrived here and were
-        // dropped on purpose.
-        //
-        // The swallow's stated reason is real, so it is SPLIT rather than deleted.
-        // The hazard was never "a key reached the input box"; it was "a key
-        // STARTED A TURN, or rewrote the history a running turn is about to append
-        // to". So the policy now lives at the three places that can actually do
-        // that, and everything else runs mid-turn exactly as it does when idle:
-        //
-        //   * {@see submit()} — Enter ENQUEUES ({@see enqueuePrompt()}) instead of
-        //     dispatching, and a draft that starts with `/` is refused
-        //     ({@see refuseInFlightCommand()}) rather than queued;
-        //   * {@see handlePaletteKey()} — the palette opens and browses, but Enter
-        //     on an action other than Exit is refused;
-        //   * {@see handleSessionPickerKey()} — the picker opens and browses, but
-        //     `resume` is refused.
-        //
-        // Plus the three keys below, which reach a turn-starting or
-        // history-replacing arm without passing any of those three.
-        if ($this->inFlight) {
-            $refused = $this->refuseWhileInFlight($msg);
-            if ($refused !== null) {
-                return $refused;
-            }
-        }
-
-        // While the Ctrl+P command palette is open, every keystroke feeds
-        // its own query/navigation/dispatch handling instead of inputBuf/the
-        // "/" popup - see handlePaletteKey()'s docblock.
-        if ($this->palette !== null) {
-            return $this->handlePaletteKey($msg);
-        }
-
-        // Same rule for the session picker overlay (crush_feat.md section 5
-        // E8): while it is up every keystroke browses/resumes rather than
-        // reaching inputBuf. Checked after the palette so the two modals
-        // have a fixed, documented precedence even though they cannot both
-        // be open.
-        if ($this->sessionPicker !== null) {
-            return $this->handleSessionPickerKey($msg);
-        }
-
-        // And for the `/new` folder picker: every key browses or chooses.
-        if ($this->dirPicker !== null) {
-            return $this->handleDirPickerKey($msg);
-        }
-
-        // Same rule for the Ctrl+G history search (plan_comparison TUI-2):
-        // while it is up every keystroke searches/cycles/accepts rather than
-        // reaching inputBuf. Checked last among the modals, so the palette,
-        // the session picker and the folder picker keep a fixed precedence
-        // even though only one of them can be open at a time.
-        if ($this->historySearch !== null) {
-            return $this->handleHistorySearchKey($msg);
-        }
-
-        return match (true) {
-            // Alt/Shift/Ctrl+Enter insert a newline instead of submitting.
-            // E705: App::init() now pushes the Kitty DISAMBIGUATE flag, so on
-            // Kitty-capable terminals Shift+Enter (`CSI 13;2u`) and
-            // Ctrl+Enter (`CSI 13;5u`) arrive as Enter KeyMsgs carrying their
-            // modifier flags and land here. Alt+Enter stays the reliable one
-            // everywhere (ESC+CR, decoded by sugar-core's Alt-prefixed-key
-            // fix); on legacy terminals the modified chords are physically
-            // indistinguishable from plain Enter — the terminal sends the same
-            // CR byte — so they submit, which is the honest degradation.
-            //
-            // Inserted AT the cursor rather than appended, which is the whole
-            // point of the widget: before this arm went through
-            // {@see TextArea::insertRune()} it appended to the end of the
-            // draft, so splitting an existing line in two was impossible.
-            $msg->type === KeyType::Enter && ($msg->alt || $msg->shift || $msg->ctrl)
-                => [$this->withInput($this->input->insertRune("\n")), null],
-            $msg->type === KeyType::Enter && $this->slashMenuShouldIntercept()
-                => $this->completeSlashMenuSelection(),
-            // TUI-1: Enter accepts the highlighted `@` file while the popup
-            // is up — the draft is still being composed, so this must not
-            // submit. completeMention() takes the selected row when the
-            // popup is open and falls back to the prefix path otherwise.
-            $msg->type === KeyType::Enter && $this->mentionPopupOpen()
-                => $this->completeMention(),
-            $msg->type === KeyType::Enter
-                => $this->recordInputHistory()->submit(),
-            // Walking prompt history (↑ on an empty box started it, see the
-            // recall arm below) outranks the "/" popup: a recalled `/sessions`
-            // opens the popup, and without this ↑ would start browsing it
-            // instead of stepping on to the prompt before.
-            !$msg->ctrl && !$msg->alt && $msg->type === KeyType::Up && $this->isWalkingHistory()
-                => [$this->walkHistory(-1), null],
-            !$msg->ctrl && !$msg->alt && $msg->type === KeyType::Down && $this->isWalkingHistory()
-                => [$this->walkHistory(1), null],
-            // Up/Down navigate the "/" popup while it's showing (see
-            // slashMenuMatches()); otherwise fall through to the default
-            // no-op arm below, unchanged from before this popup existed.
-            $msg->type === KeyType::Up && $this->slashMenuMatches() !== []
-                => [$this->moveSlashMenuSelection(-1), null],
-            $msg->type === KeyType::Down && $this->slashMenuMatches() !== []
-                => [$this->moveSlashMenuSelection(1), null],
-            // TUI-1: the `@` popup browses with the same two keys. The two
-            // popups cannot be open at once (a `/` prefix dies at the first
-            // space; a mention token needs `@`), so arm order here is
-            // precedence-free — the slash arms stay first for byte-identical
-            // existing behaviour.
-            $msg->type === KeyType::Up && $this->mentionPopupOpen()
-                => [$this->moveMentionSelection(-1), null],
-            $msg->type === KeyType::Down && $this->mentionPopupOpen()
-                => [$this->moveMentionSelection(1), null],
-            // Bare Tab completes the HIGHLIGHTED "/" popup row into the draft
-            // (the row slashMenuIndex() points at, which Up/Down above move —
-            // not "the first match"), and does nothing else: it never submits.
-            //
-            // Reaching this arm at all is half a fix. Tab is the pane-cycling
-            // key of the shell that HOSTS this model, and
-            // Tui\KeyboardHandler::claims() used to take it unconditionally,
-            // so no keystroke ever arrived here — which is precisely the bug
-            // reported ("it switches your active other window"). That claim is
-            // now conditional on the same `slashMenuMatches() !== []` test
-            // this arm makes, and the two conditions have to stay identical:
-            // if the shell yields on a broader condition than this arm answers,
-            // Tab becomes a dead key instead of a completion.
-            //
-            // Two deliberate differences from the Enter path
-            // (completeSlashMenuSelection() via slashMenuShouldIntercept()):
-            //   - ONE match is not special-cased, and neither is an already-
-            //     exact name. Enter needs that exception because Enter's other
-            //     job is submitting, and "/agents" + Enter must run the command
-            //     rather than re-fill the same text. Tab has no other job here,
-            //     so "/compact" + Tab simply re-completes to "/compact " — a
-            //     visible no-op, and the alternative (falling through to cycle
-            //     panes on an exact name only) would make Tab's meaning depend
-            //     on a distinction the popup does not draw on screen.
-            //   - The trailing space IS appended, same as Enter's completion,
-            //     because several commands take arguments (/rename <name>) and
-            //     the space is what closes the popup: slashMenuPrefix() returns
-            //     null once inputBuf holds a space, so the very next Tab is a
-            //     pane cycle again.
-            $msg->type === KeyType::Tab
-                && !$msg->ctrl && !$msg->alt && !$msg->shift
-                && $this->slashMenuOwnsTab()
-                => $this->completeSlashMenuSelection(),
-            // Audit 15b-15: Tab completes an `@file` mention the caret ends,
-            // like a shell completes a path. Same reachability contract as
-            // the arm above - the shell yields Tab on mentionOwnsTab(), the
-            // one predicate both sides read.
-            $msg->type === KeyType::Tab
-                && !$msg->ctrl && !$msg->alt && !$msg->shift
-                && $this->mentionOwnsTab()
-                => $this->completeMention(),
-            // Roadmap 1.C-3 (`chat.queue`): mid-turn, Tab holds the draft for
-            // after the turn while Enter steers it in. Same contract again —
-            // the shell yields Tab on queueOwnsTab().
-            $msg->type === KeyType::Tab
-                && !$msg->ctrl && !$msg->alt && !$msg->shift
-                && $this->queueOwnsTab()
-                => $this->recordInputHistory()->queueDraft(),
-            // Shell-history-style recall: Up on an empty input box (and no
-            // "/" popup showing - the arm above already claimed that case)
-            // fills inputBuf with the last prompt the user sent - from this
-            // session or, on a fresh launch, the previous one - and starts a
-            // walk that further ↑/↓ presses continue (the arms above Enter's
-            // neighbours).
-            $msg->type === KeyType::Up && $this->inputBuf === ''
-                => [$this->walkHistory(-1), null],
-            // → on an empty box takes the grayed suggestion as the draft,
-            // cursor at its end, ready to edit or send. With no suggestion
-            // showing it falls through to the editor, where it is the
-            // no-op cursor move it always was.
-            $msg->type === KeyType::Right && !$msg->alt && !$msg->ctrl && !$msg->shift
-                && $this->inputBuf === '' && $this->promptSuggestion() !== null
-                => [$this->withInputBuf((string) $this->promptSuggestion()), null],
-            // Ctrl+P opens the command palette. Checked before the generic
-            // Char arm below, or the literal "p" would be typed into the
-            // input buffer instead - same reasoning as Ctrl+A just below.
-            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'p'
-                => [$this->mutate(['palette' => PaletteState::root()]), null],
-            // Ctrl+O expands/collapses the most recent tool call's output
-            // (crush_feat.md §1 E5) and the most recent thought - successful
-            // tool bodies and settled thoughts are hidden by default, and with
-            // clicks off this is the only way to see one. Checked before
-            // the generic Char arm below, or the literal "o" would be typed
-            // into the input buffer instead - same reasoning as Ctrl+P above.
-            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'o'
-                => $this->toggleLatestToolOutput(),
-            // Ctrl+D opens the image-generation form (crush-media W3.10). The
-            // rune is free of every claim set - not a shell chord, not in
-            // chatCtrlRunes(), and the session picker's own `ctrl+d` delete is
-            // unreachable from here because handleSessionPickerKey() routes
-            // above this match while the picker is up. Checked before the
-            // generic Char arm for the same reason as Ctrl+P above; the form
-            // is screen-only until its generate row fires, so this paints, it
-            // never spends.
-            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'd'
-                => $this->openMediaFormView(),
-            // Ctrl+V attaches the clipboard's IMAGE (audit 15b-15). A terminal
-            // pastes text only - Ctrl+Shift+V / Cmd+V already arrive as one
-            // bracketed PasteMsg - so the one thing this chord can add is the
-            // pixels a screenshot tool left on the clipboard, read through the
-            // platform tool off the update path ({@see ClipboardImage}) and
-            // answered by {@see ClipboardImagePastedMsg}. Checked before the
-            // generic Char arm for the same reason as Ctrl+P above.
-            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'v'
-                => [$this, static fn (): Msg => new ClipboardImagePastedMsg(ClipboardImage::save())],
-            // Ctrl+R opens the live session picker (crush_feat.md section 5
-            // E8). NOT the Ctrl+O that section suggests: §1 E5 already bound
-            // Ctrl+O to tool-output expansion above, and that is the only
-            // way to read a hidden tool body. `r` is a chord
-            // Commands\KeyBindingRegistry gives to Chat (chatCtrlRunes()) and
-            // to no shell row, so the pane shell falls it straight through to
-            // here from any ordinary pane -- the exception being the three
-            // states KeyboardHandler::shellOwnsKeyboard() covers, where the
-            // registry yields the chord back rather than let this arm open a
-            // picker underneath a view that claims up/down/enter. It mirrors
-            // Claude Code's `--resume` picker mnemonic.
-            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'r'
-                => [$this->mutate(['sessionPicker' => $this->buildSessionPicker()]), null],
-            // Ctrl+G opens the reverse history search (plan_comparison TUI-2,
-            // owner ruling R10). The chord is shared with the shell's
-            // `shell.group-input` Broadcast row and YIELDS to it while one of
-            // the shell's keyboard-owning views is up — see
-            // KeyBindingRegistry::chatCtrlRunesYieldedToShell() for the
-            // declared dual claim; in every ordinary pane it reaches here.
-            // While the overlay is already open this arm is unreachable (the
-            // route above feeds the widget, whose own ctrl+g cycles matches).
-            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'g'
-                => [$this->mutate(['historySearch' => $this->buildHistorySearch()]), null],
-            // R20: Ctrl+A re-runs the exact same /agents dispatch submit()
-            // already uses for typed input (handleAgentsCommand()), giving
-            // KeyboardHandler's Ctrl+A shortcut (Pane::Agents in the
-            // disconnected App/Tui system) a real, reachable equivalent on
-            // this, the live, Chat path. Must be checked before the generic
-            // Char arm below, or the literal "a" would be typed into the
-            // input buffer instead.
-            //
-            // Through runCommand(), not `withInputBuf('/agents')->submit()`
-            // (audit 15b-34): the chord is a shortcut, not something the
-            // user typed, so it must leave their draft alone — the old arm
-            // replaced whatever was in the box with `/agents` and submitted
-            // it, silently discarding the draft.
-            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'a'
-                => $this->runCommand('/agents'),
-            // Ctrl+L clears the screen and repaints the frame (rv-a11y,
-            // 2026-10-14 review). The line-diff renderer only writes changed
-            // rows, so foreign bytes (kernel messages, child-process noise)
-            // that smear the frame used to stick until a resize. clearScreen()
-            // writes erase+home verbatim; the SAME-SIZE WindowSizeMsg then
-            // rides Program::dispatch()'s resize path, whose renderer reset is
-            // unconditional outside inline mode (crush runs the alt screen),
-            // so the next frame repaints every row. Checked before the generic
-            // ctrl-Char arm below — that arm used to type the letter here, and
-            // the flip is disclosed in Renderer/KeyHelpTest's byte map and
-            // ChatInputCursorTest's chord roster.
-            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'l'
-                => [$this, Cmd::batch(
-                    Cmd::clearScreen(),
-                    fn (): Msg => new WindowSizeMsg($this->cols(), $this->rows()),
-                )],
-            // "?" opens the keybinding reference, but ONLY on a BLANK input
-            // line. It is a plain printable character with no modifier, so an
-            // unconditional bind would make a question impossible to type -
-            // the input box has no other way to receive it.
-            //
-            // trim(), not === '', and that is a deliberate correction rather
-            // than tidying. submit() below tests trim($this->inputBuf) before
-            // matching "/keys", so while this arm tested the RAW buffer the two
-            // routes to the same reference disagreed on exactly one class of
-            // draft: trimmed-empty but not empty. Driven one keystroke at a
-            // time on the raw form, a single Space press put the box in a state
-            // where typing "/keys" onto the draft and pressing Enter opened the
-            // reference while "?" typed " ?" instead - so "/keys" WAS an escape
-            // hatch there, which is the one thing the docs for it say it is not.
-            // Every blank-but-not-empty draft disagreed -- six of them in today's
-            // corpus (" ", "  ", "\0", "\n", "\t", " \t "), four when this was
-            // written -- and the remaining members agreed, as did all six of the
-            // non-draft states in KeyHelpTest::openRouteStates(). No count is load-
-            // bearing here: the class is "trim()-empty but not ===''", and the
-            // corpus grows into it whenever a further member of that class is found
-            // reachable, which is exactly what happened to "\0" and "\n".
-            // Pinned in both directions by
-            // KeyHelpTest::testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft().
-            //
-            // Four of those six -- "\t", " \t ", plus "\r" and "\x0B", which the
-            // corpus does not carry -- cannot be TYPED, and the verb is the whole
-            // correction: the previous revision called them "SYNTHETIC drafts: no
-            // keystroke produces them", which is wrong. Measured at sugar-core's
-            // decoder, InputReader::parse("\t") yields KeyType::Tab, not
-            // KeyType::Char "\t", and the Tab arm below leaves the buffer alone, so
-            // no rune puts "\t" or " \t " in the box. Space and "\0" (Ctrl+Space)
-            // are the only two of trim()'s six bytes a keystroke lands, and that
-            // whole map is asserted byte by byte in the test named above.
-            //
-            // Untypeable is not unreachable. The Up arm above copies a
-            // recallEntries() row in VERBATIM - on a Chat with no prompt file
-            // wired those are the transcript's user rows - and
-            // Chat::reviveCheckpointMessage() turns a checkpoint row whose role is
-            // neither 'assistant' nor 'system' -- a 'tool' row, whose output is full
-            // of tabs -- into a user message with its content unchanged. ('system'
-            // used to land here too; that was a bug, fixed in E33's review round,
-            // and this route never depended on it.) Driven end to end in that
-            // test: a revived tool row plus one Up puts "\t/keys" (or "\t", or
-            // " \t ") in the box. These are drafts a user can hold; they are just
-            // not drafts a user can type. Same for "\u{000C}", which is in the
-            // NON-blank set: parse("\x0C") decodes to Ctrl+L, the repaint
-            // chord, which types nothing, so a form feed is recalled-only too.
-            // And since E704 there is a paste route in too: bracketed paste
-            // decodes to one PasteMsg and update() inserts its payload at the
-            // caret VERBATIM, so "\t" (sanitize keeps tabs) reaches the box by
-            // a route that is neither a keystroke nor the Up arm. Pre-E704 this
-            // paragraph claimed the opposite -- that update() returned the
-            // IDENTICAL object handed a PasteMsg -- and cited `grep -rn
-            // PasteMsg src/`, an instrument that had been self-refuting since
-            // the day it was written; the driven ingest pins now live in
-            // PasteIngestTest, with the old drop-pin flipped in KeyHelpTest.
-            //
-            // Space is driven twice in that corpus, as KeyType::Space and as
-            // KeyType::Char " ". Measured, InputReader::parse(" ") yields only the
-            // former, so the second form is the corpus being stricter than the
-            // decoder rather than a second thing the decoder does - which is a
-            // narrower claim than the "either" an earlier revision made here.
-            //
-            // The cost is one press, not one character: this arm does NOT clear
-            // the buffer, so on a " " draft the space survives behind the
-            // overlay, and typing a literal "?" after leading whitespace now
-            // needs "??" exactly as it already did on an empty line - measured,
-            // " ??" leaves " ?". Widening the guard therefore removes the
-            // disagreement without taking anything from the draft.
-            //
-            // The Up arm above keeps === '' and must: it OVERWRITES the buffer
-            // with the recalled message, so a trim() there would silently eat a
-            // whitespace draft. Same-looking guard, opposite conclusion, because
-            // one arm destroys the buffer and this one does not.
-            //
-            // The blank-line guard still costs one keystroke on the message
-            // that STARTS with "?": typed left to right on an empty line,
-            // "?why" used to leave inputBuf empty and the reference open. The
-            // escape hatch is the second "?" - see handleKeyHelpKey(), where
-            // "?" both closes the reference and lands the literal character, so
-            // "??why" types "?why" and the footer hint on screen says so.
-            // /keys is NOT that hatch: it opens the same reference, which is
-            // not what a user COMPOSING a "?" question wants.
-            //
-            // A previous revision of this comment called that cost "total"
-            // on the grounds that "this input box has no cursor movement at
-            // all (no KeyType::Left or KeyType::Right arm anywhere in this
-            // file) ... so column 0 is only ever reached by typing the first
-            // character". Both halves of that were true when written and the
-            // first half is now FALSE: crush_code.md Phase 3 item 1 delegated
-            // the draft to sugar-forms' TextArea, and Left/Right/Home/End
-            // reach it from the arms at the foot of this match. So there is now
-            // a SECOND hatch, and it is the ordinary one a user would reach
-            // for: type "why", press Home, type "?" - the guard does not fire
-            // (trim("why") is not empty), the Char goes to the widget, and the
-            // draft becomes "?why". Driven in
-            // ChatInputCursorTest::testHomeThenAQuestionMarkComposesALeadingQuestionMark().
-            // The "??" hatch stays, unchanged and still the only one on a
-            // genuinely empty line, where there is no other character for the
-            // cursor to sit in front of.
-            $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt
-                && $msg->rune === '?' && trim($this->inputBuf) === ''
-                => [$this->withKeyHelp(0), null],
-            // Word-delete: Ctrl+W (the usual terminal-wide convention) or a
-            // correctly alt-flagged Backspace (see sugar-core's
-            // Alt-prefixed-key fix - before it, Alt+Backspace mis-decoded
-            // as a bare Escape and quit the app instead of reaching here at
-            // all). Must be checked before the plain Backspace arm below.
-            //
-            // Ctrl+Backspace is in this arm and is an UPGRADE, not a
-            // bug-for-bug restoration: at HEAD it reached the plain-Backspace
-            // arm and deleted one character. It shares the boundary helper
-            // with Ctrl+W deliberately, because word motion (Alt/Ctrl+←/→)
-            // now exists, so a keyboard where the modifier means "by word" on
-            // the arrows and "by character" on Backspace would be
-            // inconsistent with itself. Real bytes: `CSI 127;5u`, the Kitty
-            // spelling, decodes to KeyMsg(Backspace, ctrl).
-            ($msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'w')
-                || ($msg->type === KeyType::Backspace && ($msg->alt || $msg->ctrl))
-                => [$this->deleteInputWordBefore(), null],
-            // The forward mirror of the arm above, through the forward
-            // boundary helper. A pure ADDITION: `CSI 3;5~` was a no-op at
-            // HEAD (nothing claimed a ctrl-flagged Delete, and there was no
-            // Delete arm at all), so there is no previous behaviour to keep.
-            $msg->type === KeyType::Delete && $msg->ctrl
-                => [$this->deleteInputWordAfter(), null],
-            // Word motion. Checked ahead of the plain Left/Right delegation
-            // below, and ahead of nothing else - no arm above claims an
-            // arrowed modifier. See {@see wordLeftOffset()} for why Chat owns
-            // the boundary instead of the widget.
-            //
-            // Both modifiers, and which BYTES reach this arm is measured at
-            // sugar-core's decoder rather than assumed:
-            // InputReader::parse("\x1b[1;5D") yields KeyMsg(Left, ctrl) - the
-            // xterm-family spelling - and parse("\x1b[1;3D") yields
-            // KeyMsg(Left, alt), the spelling terminals that report modifiers
-            // in CSI parameters use for Alt. Home/End arrive as both
-            // `CSI H`/`CSI F` and `CSI 1~`/`CSI 4~`, and Delete as `CSI 3~`;
-            // all five were driven through the decoder.
-            //
-            // Two encodings a terminal may send for the same INTENT, and both
-            // reach word motion now:
-            //
-            //   * the CSI spellings the arms below match directly -
-            //     `CSI 1;3D`/`CSI 1;5D` decode to KeyMsg(Left, alt/ctrl), the
-            //     xterm-family and modifier-in-parameter spellings;
-            //   * `ESC b`/`ESC f`, readline's Alt+B/Alt+F word motion, decodes
-            //     as KeyMsg(Char 'b'|'f', alt) on terminals that send Alt as a
-            //     bare ESC prefix. Those two runes had an arm of their own
-            //     (E2) since before this comment only promised them; they
-            //     route to the SAME offset helpers as the arrows, which is the
-            //     whole point - one boundary rule, two byte spellings.
-            //
-            // One encoding still does NOT reach here, and it is not a
-            // regression - it behaves exactly as it did before this arm
-            // existed:
-            //
-            //   * `ESC ESC[D`, the ESC-prefixed Alt+Left some terminals emit,
-            //     decodes as TWO messages (Escape, then a bare Left), so the
-            //     Escape is consumed by the Escape arm above and the Left
-            //     moves one character rather than one word.
-            ($msg->type === KeyType::Left && ($msg->alt || $msg->ctrl))
-                => [$this->withInputCursor($this->wordLeftOffset()), null],
-            ($msg->type === KeyType::Right && ($msg->alt || $msg->ctrl))
-                => [$this->withInputCursor($this->wordRightOffset()), null],
-            // The ESC-prefix spelling of the two arms above (E2). Checked with
-            // `!$msg->ctrl` so a ctrl-flagged rune keeps falling through to
-            // the ctrl-Char arm below — since ISS-047 that arm DROPS `ctrl:
-            // true, rune: 'b'` instead of typing it, but either way the
-            // word-motion pair stays the alt form's alone.
-            $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && $msg->rune === 'b'
-                => [$this->withInputCursor($this->wordLeftOffset()), null],
-            $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && $msg->rune === 'f'
-                => [$this->withInputCursor($this->wordRightOffset()), null],
-            // Roadmap 5.7-1 (decision D8): `Alt+M` toggles plan mode.
-            // Shift+Tab stays the shell's backward pane cycle.
-            $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && strtolower($msg->rune) === 'm'
-                => $this->togglePermissionMode(new PermissionModeToggledMsg()),
-            // R20: Ctrl+Tab / Ctrl+Shift+Tab cycle the active session
-            // through the OPEN TABS — see cycleSessionTab()'s docblock for
-            // the decode/routing chain a real keypress takes and how this
-            // relates to Tui\SessionTabs.
-            $msg->type === KeyType::Tab && $msg->ctrl
-                => $this->cycleSessionTab($msg->shift ? -1 : 1),
-            // ISS-047: a ctrl-flagged Char is either one of the draft widget's
-            // own line edits or it is DROPPED — it never types its letter.
-            // Before this, every unclaimed chord inserted the bare rune, so a
-            // readline user's `abc` plus Ctrl+U typed `abcu` where it should
-            // have cleared the line (the failure scenario, reproduced byte for
-            // byte by the issue's verification round). Ctrl+K and Ctrl+X
-            // normally never come down this path in the live TUI — the shell's
-            // keymap binds Ctrl+K as the palette's second spelling — so what
-            // this arm really owns is Ctrl+E and Ctrl+U plus every direct
-            // driver of Chat (test harnesses, embedders) for all four runes.
-            $msg->type === KeyType::Char && $msg->ctrl && \in_array($msg->rune, self::CTRL_DRAFT_RUNES, true)
-                => $this->delegateToInput($msg),
-            $msg->type === KeyType::Char && $msg->ctrl
-                => [$this, null],
-            // Ctrl+Space types a space, which is exactly what HEAD did with
-            // it: `CSI 32;5u` decodes to KeyMsg(Space, ctrl), and HEAD's
-            // Space arm did not inspect modifiers. It needs its own arm here
-            // because TextArea::update() answers a ctrl-flagged key from its
-            // OWN ctrl table and drops everything else, so a ctrl-flagged
-            // Space handed to the widget would be swallowed. Different route
-            // from the ctrl-flagged Char above by decision, not accident: the
-            // space's ctrl form has never meant anything but typing a space
-            // (HEAD did not inspect modifiers on Space at all), while a
-            // letter's ctrl form means editing or nothing — ISS-047 chose
-            // nothing.
-            $msg->type === KeyType::Space && $msg->ctrl
-                => [$this->withInput($this->input->insertRune(' ')), null],
-            // Vertical motion, but only on a draft that HAS a second line.
-            // Single-line drafts keep today's behaviour exactly: the Up arms
-            // above (slash popup, recall-on-empty) and then the no-op default
-            // below, all of which are pinned. On a multi-line draft the no-op
-            // was the bug - the newline was insertable and then unreachable.
-            !$msg->ctrl && ($msg->type === KeyType::Up || $msg->type === KeyType::Down)
-                && str_contains($this->inputBuf, "\n")
-                => $this->delegateToInput($msg),
-            // Everything left that edits or moves within the draft is the
-            // widget's: character/space insertion and Backspace (which used
-            // to be this file's hand-rolled append/dropLast pair), plus
-            // Left/Right/Home/End/Delete, none of which had an arm here at
-            // all before - this input box had no cursor movement whatsoever.
-            //
-            // Below the modal arms above by construction: a live permission
-            // prompt, the keybinding reference, the palette and the session
-            // picker each return before this match is reached, so typing
-            // stays inert while any of them owns the keyboard.
-            //
-            // ── the `!$msg->ctrl` guard is load-bearing ──────────────────
-            //
-            // TextArea::update() opens with `if ($msg->ctrl)` and answers from
-            // its own seven-entry rune table, dropping every other
-            // ctrl-flagged key REGARDLESS of type. So a ctrl-flagged member of the list
-            // below reaches the widget and dies there. That is how Ctrl+Space
-            // and Ctrl+Backspace became dead keys when this delegation
-            // replaced HEAD's hand-rolled Space/Backspace arms; both now have
-            // an explicit arm above, as does Ctrl+Delete.
-            //
-            // The guard is TOTAL rather than per-key on purpose: a KeyType
-            // added to this list in future cannot silently inherit the
-            // widget's ctrl-swallowing, it simply keeps whatever this file
-            // decided for its ctrl form.
-            //
-            // Ctrl+Home / Ctrl+End are the two ctrl forms left as no-ops, and
-            // that is a deliberate omission for a later round rather than an
-            // oversight: they were no-ops at HEAD too, so nothing regresses.
-            // What they SHOULD mean is start / end of the whole draft, since
-            // plain Home/End are line-scoped here (TextArea::update() answers
-            // them with moveCursor($row, …), and this box can have rows) — and
-            // deciding that is a keymap addition, not part of the ctrl filter.
-            // TUI-3A: vim-mode composer, wiring half 2 of 2 — the letters
-            // the sugar-forms Vim layer does NOT bind and a host must: `d`/`y`
-            // arm an operator, `D Y o O e p P` act at once. NORMAL state
-            // only (Insert is the lib's verbatim passthrough — typing must
-            // reach the draft), no pending operator (that resolved above the
-            // modals), no visible `/` or `@`/`$` popup (a popup owns the
-            // letters that filter it — claiming `d` mid-`/do` or mid-`@src/`
-            // would eat the user's own typing), and it sits LAST among the claim arms on purpose: the
-            // `?` key-help, the alt word chords, the ctrl family and every
-            // modal keep their pinned precedence. What this arm can claim is
-            // only what would otherwise reach the widget and be swallowed —
-            // with vim off, `$this->input->vimMode` is false and the arm is
-            // inert, byte-for-byte the delegation below.
-            $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt
-                && $this->composerVim->pending === null
-                && $this->input->vimMode
-                && $this->input->vimState === VimState::Normal
-                && $this->slashMenuMatches() === []
-                && !$this->mentionPopupOpen()
-                && ComposerVim::claims($msg->rune)
-                => $this->applyComposerVim($msg),
-            !$msg->ctrl && \in_array($msg->type, self::DRAFT_KEYS, true)
-                => $this->delegateToInput($msg),
-            default => [$this, null],
-        };
+        return $this->handleTurnCompletionMessages($msg)
+            ?? $this->handleRunControlMessages($msg)
+            ?? $this->handleSessionSurfaceMessages($msg)
+            ?? $this->handleKeysMessages($msg)
+            ?? [$this, null];
     }
 
     /**
@@ -4055,21 +2442,17 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        $cycled = $this->openTabs->handleKey(
-            $direction > 0 ? SessionTabs::CTRL_TAB : SessionTabs::CTRL_SHIFT_TAB,
-        );
-        // handleKey answers null for keys it does not own and returns the
-        // same instance when there is nothing to cycle to; both are no-ops.
-        if ($cycled === null || $cycled === $this->openTabs) {
+        $cycled = $this->tabState->cycled($direction);
+        if ($cycled === null) {
             return [$this, null];
         }
 
-        $target = $cycled->activeTab();
+        $target = $cycled->tabs->activeTab();
         if ($target === null || $target->id === $this->currentSessionId) {
             return [$this, null];
         }
 
-        return [$this->switchToSession($target->id, $this->storedSessionName($target->id)), null];
+        return [$this->switchToSession($target->id, SessionSwitch::storedName($this->sessionStore, $target->id)), null];
     }
 
     /**
@@ -4369,337 +2752,35 @@ final class Chat implements Model
      * pattern {@see waitForToolChildrenAsync()} already uses for tool
      * children.
      *
+     * W5-A: the generation guard, the origin label and the title build moved
+     * to {@see PermissionPrompt::armAsk()}; the suspend-and-arm sequence here
+     * is unchanged, value for value.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function requestPermission(PermissionRequestMsg $msg): array
     {
-        // An ASK for a turn that was abandoned (double-Escape) or otherwise
-        // superseded can still land: the PreToolUse chain that raised it ran
-        // against the generation that was current when the batch was gated.
-        // Putting its prompt up would suspend a turn nobody is waiting on, and
-        // would force inFlight true behind an overlay that OUTRANKS the prompt
-        // (see Renderer::renderView()'s chain). The message carries a
-        // generation for exactly this comparison; the AssistantMsg arm in
-        // update() is the pattern, and $generation being null still means
-        // "unstamped, apply it" there and here alike.
-        //
-        // DORMANT DEFENCE, stated as such rather than as a live path closed --
-        // the same honest form shellOwnsKeyboard()'s unobservable conjunct is
-        // documented in. Measured: the two Chat-native callers build the ASK
-        // with $this->generation on the very object they then call
-        // (beginToolCalls() and answerPermission(), and mutate() touches no
-        // 'generation' at either site), so the comparison below is
-        // tautologically FALSE at both. The THIRD constructor in `src/`, the
-        // engine path wired by roadmap 1.C-2 (pumpLiveToolEvents()), stamps
-        // the inbox entry's generation only after comparing it equal to
-        // $this->generation and answering a stale question itself -- so it
-        // cannot make the comparison true either.
-        //
-        // What that bounds is which tests can watch this guard FIRE. It does
-        // NOT bound which tests reach a STAMPED ask, and the first version of
-        // this comment claimed the second: ChatTest's whole permission suite
-        // reaches one, through exactly the two producers above. They cannot
-        // make the comparison true, which is the property -- not that they
-        // never get here. No count is given for that suite either; the
-        // previous revision said "14 ChatTest tests" and it was correct when
-        // written, which is the exact shape every stale figure in this comment
-        // has had. Rows 3 and 4 below measure it when a reader mutates.
-        //
-        // FIND THE RIGHT SITE BEFORE MUTATING. This exact predicate --
-        // `$msg->generation !== null && $msg->generation !== $this->generation`
-        // -- appears FOUR times in this file: update()'s AssistantMsg arm, this
-        // method, finishToolCalls() and applyBackendToolEvent(). THREE of the
-        // four bodies are byte-identical apart from indentation -- the first
-        // three named. applyBackendToolEvent()'s is not: its arm bills the
-        // superseded turn's usage before dropping its events, because the chain
-        // it breaks means no AssistantMsg is ever synthesised for that turn and
-        // update()'s accounting arm is never reached. So a replace-first sed
-        // lands on the AssistantMsg arm, not here; the previous revision of this
-        // table did exactly that and then recorded the wrong site's numbers as a
-        // refutation of the right ones. The table below is therefore anchored by
-        // SITE, and the mis-site's figures are kept beside it as the tell.
-        // Reproduce with
-        // `grep -nF 'generation !== null && $msg->generation !== $this->generation' src/Chat.php`.
-        //
-        // The four sites, which method owns each, and WHICH THREE are mutually
-        // indistinguishable are asserted rather than narrated, by
-        // KeyHelpTest::testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods().
-        //
-        // Mutations of the guard belonging to THIS method -- the block
-        // immediately below this comment, inside requestPermission() -- each judged
-        // by the targeted files going red. NO LINE NUMBER is given, deliberately:
-        // the previous two revisions carried one ("1175", corrected to "1220"), it
-        // was wrong both times because editing this comment moves the guard under
-        // it, and the grep above plus the four-site test already name the site
-        // exactly. A figure that cannot survive its own paragraph does not belong
-        // in the paragraph.
-        //
-        // The TRIO column carries NAMES, not counts, for the same reason. The
-        // revision before last recorded "1 failure / 1 error / 1 error / 1
-        // failure" and "raw trio totals 2 / 2 / 2 / 2"; rows 3 and 4 were 3 raw /
-        // 2 behavioural even as it was written, because the test added in that
-        // very commit (testThePromptAndTheReferenceCannotBothBeRaisedByRealInput)
-        // reaches a stamped-and-current ask and so trips them. A trio count is
-        // fed by the files being measured; a class name (STALE / CURRENT) is not.
-        //
-        // The CHATTEST column carries counts, and the round that replaced them
-        // with a name made the column worse rather than better -- see below the
-        // table. A name is only an improvement when it identifies the population;
-        // "the permission suite" identified neither of the two it was applied to.
-        //
-        //   | mutation                     | trio (behavioural)   | ChatTest        |
-        //   |------------------------------|----------------------|-----------------|
-        //   | guard deleted                | STALE only           | green           |
-        //   | throw when the guard FIRES   | STALE only           | green           |
-        //   | throw on ANY stamped ask     | STALE + CURRENT      | 14 errors       |
-        //   | 2nd conjunct dropped, so     | STALE + CURRENT      | 1 error,        |
-        //   | every stamped ask is dropped |                      | 11 failures,    |
-        //   |                              |                      | 6 warnings      |
-        //
-        // The ChatTest figures are counts again, with their domain, because the
-        // revision that replaced them with the NAME "the permission suite" named
-        // a population that does not exist: the two rows report 14 and 12
-        // problems, and ChatTest has no 14-test and no 12-test suite to be. What
-        // the two rows share is the population, and THAT is the durable label:
-        // both reds land on the SAME ELEVEN ChatTest methods, measured by name --
-        // testApprovingAnAskDispatchesTheRewrittenCallTheUserWasShown,
-        // testASessionGrantCannotSilentlyDispatchAnAsksOwnRewrite,
-        // testAskHookSuspendsTheTurnInsteadOfRunningOrDenyingTheCall,
-        // testTheSuspendingCmdStaysPendingUntilTheUserAnswers,
-        // testOnceReplyRunsTheToolAndGatesItExactlyOnce,
-        // testAlwaysReplyGrantsTheToolForTheRestOfTheSession,
-        // testRejectReplyRefusesTheCallAndEndsTheTurn,
-        // testPermissionKeysDecideThePrompt, testUnmappedKeyLeavesThePermissionPromptUp,
-        // testAnsweringOneAskDoesNotReleaseTheOtherCallsInTheBatch and
-        // testAlwaysForOneToolDoesNotReleaseAnAskForAnother. The counts differ
-        // only because testPermissionKeysDecideThePrompt is a data-provider test:
-        // row 3 reds all four of its data sets (y / a / n / escape), row 4 only
-        // the two approving ones -- and the reason is worth recording, because it
-        // is this round's own rule seen from the other side. Under row 4 the ask
-        // is dropped, so the turn is left NOT in flight; the refusing sets assert
-        // exactly `!inFlight`, so they pass VACUOUSLY on a prompt that never
-        // appeared. Measured: the "y" set fails on `!$answered->inFlight` in
-        // `ChatTest::testPermissionKeysDecideThePrompt()`. Domain of both
-        // figures: tests/ChatTest.php alone at 215 tests, mutated at
-        // requestPermission()'s guard (the site this comment sits above) in a
-        // sandbox copy of this lib, PHP 8.3.6. Counts go stale; the eleven names
-        // and the data-provider explanation are what survive a test being added.
-        //
-        // where the two trio classes are, and this is the RULE that keeps the table
-        // true as tests are added:
-        //
-        //   STALE   -- a test that hands this method a stamped ask from a SUPERSEDED
-        //              turn. Exactly one exists and only one can exist per distinct
-        //              way of building one:
-        //              KeyHelpTest::testASupersededAskNeverPutsUpAPrompt().
-        //   CURRENT -- every test that reaches a stamped ask AT ALL, whoever built
-        //              it. Open-ended by construction, and RE-ENUMERATED by running
-        //              row 3 and reading the reds back rather than by reasoning about
-        //              who ought to be in it, because the previous revision's list of
-        //              "the three KeyHelpTest tests" was short by one BEFORE this
-        //              round touched anything (testEachQueuedAskArmsAfresh reaches a
-        //              stamped ask through answerPermission()'s resume path and was
-        //              not listed). Re-measured at THIS commit, row 3 reds these SIX:
-        //              KeyHelpTest::testWithAPromptUpNeitherKeyReachesItsOverlay(),
-        //              KeyHelpTest::testAKeyThePromptActsOnReachesItAndYApprovesRatherThanRefuses(),
-        //              KeyHelpTest::testAPromptOutlivesItsTurnAndTheReferenceIsStillRefused(),
-        //              KeyHelpTest::testEachQueuedAskArmsAfresh(),
-        //              MouseModalGuardTest::testAClickUnderALivePromptIsRefusedExactlyAsTheKeyIs() and
-        //              MouseModalGuardTest::testAPromptRaisedOverAnOpenOverlayOutranksItOnBothDevices(),
-        //              the last two being the members from outside KeyHelpTest -- both
-        //              drive a real PreToolUse ask hook to put a modal up, one for the
-        //              click path to be refused by and one to establish that a prompt
-        //              over an open overlay is a state real input can build at all.
-        //              Row 3's raw total is 8: these six, the STALE member, and the
-        //              text pin.
-        //              testThePromptAndTheReferenceCannotBothBeRaisedByRealInput() is
-        //              NOT a member: it was split into the first two above and now
-        //              stops at the in-flight half.
-        //
-        // Rows 1 and 2 are bounded, rows 3 and 4 are not, and that difference is the
-        // whole content of the table. Row 2 is the honest bound on OBSERVABILITY:
-        // exactly one test anywhere can watch this branch being taken. Row 3 is what
-        // refutes the wording that claimed no other test can even REACH a stamped
-        // ask. Row 4 changes BEHAVIOUR as well as observability, which is why its
-        // ChatTest column is the loud one: the stamped-and-current path is what
-        // ChatTest exercises.
-        //
-        // Measured with this comment: RendererTest, Commands/KeyBindingDriftTest and
-        // Chat/InFlightInputQueueTest contribute ZERO behavioural reds to all four
-        // rows, even though they are three fifths of the domain by file count --
-        // their asks are UNSTAMPED, and none of these four mutations touches an
-        // unstamped ask. The domain is what the rows were measured over; it is not
-        // the set of files that react. That silence is a fact about THIS site: the
-        // same mutations at the wrong site (below) red Chat/InFlightInputQueueTest
-        // six times and RendererTest not at all, which is the reverse shape.
-        //
-        // Every row ALSO reds
-        // testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods(), because
-        // each of these mutations edits the guard's TEXT and that test reads the four
-        // blocks back. By design, and the reason it is excluded from the column
-        // above rather than folded into it: it is a "you changed the guard, re-read
-        // this table" alarm, not evidence about the guard's reach. So raw = the
-        // column above plus exactly one, on every row -- stated as a rule, because
-        // the revision that stated it as "2 / 2 / 2 / 2" was already wrong on two.
-        //
-        // The variant that made the previous revision's error visible: discarding
-        // EVERY ask rather than only stamped ones (`if (true)`) reds every trio test
-        // that needs a prompt to appear at all, plus ChatTest 1 error, 11 failures,
-        // 6 warnings -- so the trio is NOT silent about it, and the rows above are
-        // not covering it either. It is the ONE figure in this comment kept as a
-        // count, because it is the mis-site tell described below and a tell needs a
-        // magnitude. Re-measured AT THIS COMMIT, over all FIVE files of the
-        // domain: 31 raw / 30 behavioural, composed of 7 in RendererTest, 17 in
-        // KeyHelpTest (including the pin), 4 KeyBindingDriftTest data sets, 1 in
-        // Chat/InFlightInputQueueTest and 2 in MouseModalGuardTest. The figure this
-        // replaces read "20 raw / 19 behavioural, composed of 5 / 12 / 3"; driven
-        // against `995eb257` with none of this round's files present it came out at
-        // 29 raw over the four files that then existed, so it had gone stale on its
-        // own before the fifth file was written -- exactly the growth its own caveat
-        // below predicts, recorded here as a re-measurement rather than as a delta.
-        // The EXCLUSION RULE that produces the
-        // second number, stated because the revision before last recorded a total no
-        // rule produced ("14 behavioural (16 raw)"): raw MINUS exactly one, the
-        // text-reading pin, testTheGenerationGuardPredicateAppearsInExactlyFourNamedMethods.
-        // Nothing else is excluded.
-        //
-        // That total MUST NOT be read as fixed -- it grows by one for every
-        // prompt-dependent test added to any of the FIVE files of the domain named
-        // two paragraphs up (it grew by two on this commit, both in
-        // MouseModalGuardTest). The sentence used to say "those three files", which
-        // named the historical trio while sitting under a paragraph that had just
-        // re-declared the domain as five. What is load-bearing is the rule and the
-        // fact that the figure is not zero.
-        //
-        // At the WRONG site (update()'s AssistantMsg arm) the same two mutations,
-        // ALL FOUR figures re-driven at this commit and each stated over BOTH
-        // domains, because the previous revision compared a re-measured right-site
-        // number against a wrong-site number taken over the smaller domain and
-        // flagged only that it carried someone else's date:
-        //
-        //   * 2nd-conjunct-dropped -> 2 raw / 1 behavioural over the five-file
-        //     domain (Chat/InFlightInputQueueTest::testTheDrainedPromptCarriesIts
-        //     OwnGenerationAndCancellationToken), which is 1 raw / 0 behavioural
-        //     when restricted to the historical trio; ChatTest 6 failures.
-        //   * `if (true)` -> 13 raw / 12 behavioural over the five-file domain,
-        //     composed of 5 in KeyHelpTest (including the pin), 6 in
-        //     Chat/InFlightInputQueueTest and 2 in MouseModalGuardTest; restricted
-        //     to the trio that is 5 raw / 4 behavioural. ChatTest 1 error, 37
-        //     failures, 6 warnings, over its 222 tests.
-        //
-        // The previous revision published "trio 3" for that last one. It is 4
-        // behavioural over the trio now, and the reason is the one its own sentence
-        // gave and then failed to apply: it tracks the real-gate group in
-        // KeyHelpTest, and that group became FOUR when testEachQueuedAskArmsAfresh
-        // was added to the CURRENT list above -- a correction made in one half of
-        // this comment and not in the half that cites it.
-        //
-        // The old tell -- "zero behavioural trio reds means you mutated the wrong
-        // place" -- is now HALF TRUE and is corrected rather than repeated: it holds
-        // for 2nd-conjunct-dropped and no longer for `if (true)`, because the
-        // KeyHelpTest tests built on promptRaisedByTheRealGate() drive a real
-        // AssistantMsg through update() and so react at BOTH sites. The tell that
-        // does not decay is the magnitude AND the population, both re-measured
-        // above over the SAME five-file domain: at the right site `if (true)` reds
-        // the whole prompt-dependent population (30 behavioural, led by RendererTest
-        // and KeyHelpTest), at the wrong site 12. The population tell is a RATIO,
-        // not a zero, and the previous revision wrote it as a zero fifty lines below
-        // its own enumeration, which had already said otherwise:
-        // Chat/InFlightInputQueueTest is 1 of the right site's 30 and 6 of the wrong
-        // site's 12 -- three percent against half. So the two sites are told apart
-        // by WHICH files answer as much as by how many: a mutation at the right site
-        // can make at most one queue test fail while one at the wrong site makes six,
-        // and one at the wrong site cannot make RendererTest or KeyBindingDriftTest
-        // fail at all.
-        // And the four-site text pin fires at either site, which is the cheapest
-        // signal that you edited SOMETHING and must re-read this table.
-        //
-        // Domains: "trio" is the historical name for tests/RendererTest.php +
-        // tests/Renderer/KeyHelpTest.php + tests/Commands/KeyBindingDriftTest.php,
-        // the three files that CONSTRUCTED a PermissionRequestMsg when the rows
-        // below were first measured; the set is FIVE today (see the paragraph after
-        // next) -- asserted, not narrated, and by a token scan for
-        // `new …PermissionRequestMsg` rather than by the
-        // `grep -rl PermissionRequestMsg tests/` this line used to cite, which also
-        // matches files that merely mention the class in a comment:
-        // KeyHelpTest::testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg(),
-        // whose docblock states what that instrument can and cannot see. PHP 8.3.6.
-        //
-        // A FOURTH file joined without costing a re-measurement: W2's
-        // tests/Chat/InFlightInputQueueTest.php raises an UNSTAMPED ask (to reach
-        // answerPermission()'s denial path, which is one of the four places a queued
-        // prompt is released), and no row of this table touches an unstamped ask --
-        // the same reason two of the original three contribute nothing.
-        //
-        // A FIFTH did cost one, and the rows above are the re-measurement.
-        // tests/MouseModalGuardTest.php hand-builds an unstamped ask for most of its
-        // states, but ONE of its tests raises a prompt through a real PreToolUse ask
-        // hook and so reaches a stamped, current one. That is the rule this comment
-        // already stated, applied: re-measuring is due when a file joins the set
-        // with a STAMPED ask.
-        //
-        // ChatTest is measured separately BECAUSE rows 3 and 4 show the domain's
-        // silence does not cover it. Rows 1 and 2 red inside KeyHelpTest alone; rows
-        // 3 and 4 red there AND in MouseModalGuardTest, which is what stopped
-        // "KeyHelpTest ALONE" being true. RendererTest, KeyBindingDriftTest and
-        // InFlightInputQueueTest build UNSTAMPED asks, which no row of this table
-        // touches.
-        //
-        // So this is not what makes the reference-over-prompt state
-        // unreachable, and the sentence claiming it was "the one way that state
-        // is reachable through the front door" was wrong: there is no producer
-        // for that door today. That unreachability is now asserted rather than
-        // stated -- driven from both ends through a real PreToolUse ask hook by
-        // KeyHelpTest::testThePromptAndTheReferenceCannotBothBeRaisedByRealInput().
-        // What actually protects the user there is the cue
-        // -- Renderer::KEY_HELP_OVER_PROMPT -- which is driven and does bite.
-        // The guard stays because the engine path is coming and an unstamped
-        // ASK is the legitimate case it must keep letting through; deleting a
-        // correct guard because today's producers cannot trip it is how the
-        // path arrives unprotected.
-        if ($msg->generation !== null && $msg->generation !== $this->generation) {
+        $armed = $this->permissionPrompt()->armAsk($msg, $this->generation, $this->history, $this->agentLive());
+        if ($armed === null) {
+            // Superseded ask: the guard and its measured mutation table live
+            // in PermissionPrompt::armAsk(); this is the byte-identical
+            // "return myself untouched" the guard always produced.
             return [$this, null];
         }
 
-        // P-E2: a delegated run's question says whose it is, at the top of
-        // the modal — the same question also shows inline in that run's
-        // Agent View (Renderer). The main turn's own questions are untouched.
-        $origin = $msg->pendingAsk === null
-            ? null
-            : \SugarCraft\Code\Permissions\AskOrigin::locate($msg->pendingAsk, $this->history, $this->agentLive());
-        if ($origin !== null) {
-            $label = \SugarCraft\Code\Permissions\AskOrigin::label($origin);
-            $msg = new PermissionRequestMsg(
-                $msg->assistantMessage,
-                $msg->toolCall,
-                $msg->prompt === '' ? $label : $label . "\n" . $msg->prompt,
-                $msg->generation,
-                $msg->pendingAsk,
-            );
-        }
-
-        $deferred = new Deferred();
-
         $next = $this->mutate([
-            'pendingPermission' => $msg,
+            'pendingPermission' => $armed->ask,
             // Armed AFRESH, and stated here because this method is the resume
             // path too: answerPermission() re-enters it for the next queued
             // ask, and mutate() would otherwise carry the stage the user left
             // the PREVIOUS question in - so a `/` typed at question one would
             // silently make question two unanswerable.
             'permissionStage' => PermissionPromptStage::Armed,
-            'permissionDeferred' => $deferred,
+            'permissionDeferred' => $armed->deferred,
             'inFlight' => true,
         ]);
-        $wait = Cmd::promise(static fn(): PromiseInterface => $deferred->promise());
-        // Roadmap 5.14a: the agent is now waiting on the user, which is the
-        // other moment the `notify` setting rings for.
-        $notify = $this->terminalNotification('candy-code: ' . Lang::t('chat.notify.awaiting_approval', [
-            'tool' => $msg->toolCall->name,
-            'origin' => $origin === null ? '' : Lang::t('chat.notify.awaiting_approval_origin', [
-                'agent' => $origin->name !== '' ? $origin->name : $origin->id,
-            ]),
-        ]));
+        $wait = Cmd::promise(static fn(): PromiseInterface => $armed->deferred->promise());
+        $notify = $this->terminalNotification($armed->notifyTitle);
 
         return [$next, $notify === null ? $wait : Cmd::batch($wait, $notify)];
     }
@@ -4731,7 +2812,7 @@ final class Chat implements Model
      */
     private function answerPermission(PermissionReply $reply, string $note = '', ?string $scope = null, bool $persist = false): array
     {
-        $request = $this->pendingPermission;
+        $request = $this->flow->pendingPermission;
         if ($request === null) {
             return [$this, null];
         }
@@ -4740,14 +2821,7 @@ final class Chat implements Model
         // one transcript row that says what was allowed, and where to undo it.
         $remembered = null;
         if ($reply === PermissionReply::Always) {
-            $remembered = $scope !== null
-                ? \SugarCraft\Code\Permissions\SessionPermissionMemo::scopeLabel(
-                    $scope,
-                    $request->pendingAsk?->tool ?? $request->toolCall->name,
-                    $request->pendingAsk?->arguments ?? $request->toolCall->arguments,
-                    $this->projectRoot(),
-                )
-                : $this->permissionAlwaysScope();
+            $remembered = $this->permissionPrompt()->rememberedLabel($request, $scope);
         }
         // `p` saves exactly what `a` would remember, so the write happens on
         // this answer's own patterns — read BEFORE the prompt comes down,
@@ -4759,7 +2833,7 @@ final class Chat implements Model
             'scope' => $remembered,
         ]))];
 
-        $jobs = $this->pendingPermissionJobs;
+        $jobs = $this->flow->jobs;
         $cleared = [
             'pendingPermission' => null,
             // Reset with the prompt rather than left behind: the stage is only
@@ -4775,7 +2849,7 @@ final class Chat implements Model
         // Settle the waiting Cmd before anything else: whatever happens next
         // returns its own Cmd, and a promise left pending here would keep the
         // Program waiting on a decision that has already been made.
-        $this->permissionDeferred?->resolve(null);
+        $this->flow->deferred?->resolve(null);
 
         // THE ENGINE PATH (roadmap 1.C-2) has no batch here to resume or end:
         // the call belongs to the forked turn child, which is blocked on this
@@ -4793,10 +2867,7 @@ final class Chat implements Model
             $ask = $request->pendingAsk;
             $remembers = $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) && !$ask->isSettled();
             if ($remembers) {
-                $memo = \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants);
-                $memo = ($scope === null ? null : $memo->withPattern($scope, $ask->tool, $ask->arguments, $this->projectRoot()))
-                    ?? $memo->withGrant($ask->tool, $ask->arguments, $this->projectRoot());
-                $cleared['permissionGrants'] = [...$this->permissionGrants, ...$memo->grants()];
+                $cleared['permissionGrants'] = $this->permissionPrompt()->enginePathGrants($this->permissionGrants, $ask, $scope);
             }
             $ask->reply($reply, $note === '' ? null : $note);
             if ($remembers) {
@@ -4816,13 +2887,7 @@ final class Chat implements Model
                 $cleared['history'] = [...($cleared['history'] ?? $this->history), Message::notice(Lang::t('chat.permission.subagent_answered', [
                     'agent' => $origin->name !== '' ? $origin->name : $origin->id,
                     'tool' => $ask->tool,
-                    'answer' => match (true) {
-                        $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) => Lang::t('chat.permission.answer.always'),
-                        $reply->permits() => Lang::t('chat.permission.answer.once'),
-                        default => $note === ''
-                            ? Lang::t('chat.permission.answer.refused')
-                            : Lang::t('chat.permission.answer.refused_note', ['note' => $note]),
-                    },
+                    'answer' => PermissionPrompt::answeredLabel($reply, $ask, $note),
                 ]))];
             }
 
@@ -4835,11 +2900,6 @@ final class Chat implements Model
         // of the likelier places for a queue to have accumulated. The permitting
         // path below keeps the turn running and deliberately does not drain.
         if (!$reply->permits()) {
-            // A rejection's feedback is the model's to read, on this path as
-            // on the engine one (1.C-2).
-            $refusal = \SugarCraft\Code\Permissions\ApprovalVerdict::rejectedByUser($note)
-                ->denialMessage("{$request->toolCall->name} was not run.");
-
             return self::releaseQueuedPrompts([$this->mutate([
                 ...$cleared,
                 'inFlight' => false,
@@ -4849,28 +2909,7 @@ final class Chat implements Model
                 // placeholders, and this batch never got that far), and a
                 // transcript that shows the refusal without showing what was
                 // refused is worse than showing neither.
-                'history' => [
-                    ...$this->history,
-                    $request->assistantMessage,
-                    // Deliberately AGENT-VISIBLE (audit 15b-03): EngineBackend's
-                    // toTypedMessages() flattens tool calls and results away,
-                    // so on that path this note is the model's only record
-                    // that the call it asked for was refused.
-                    Message::system('_' . DenialKind::Refused->reason($refusal) . '_'),
-                    // The refusal also has to exist as a RESULT, not only as
-                    // a system note (crush_feat.md §1 E7): the assistant
-                    // message above carries the tool call, so leaving it
-                    // unanswered puts a tool_use block on the next request's
-                    // wire with no matching tool_result. It doubles as the
-                    // producer for the struck-through denied row
-                    // {@see Renderer::renderToolResults()} draws.
-                    Message::assistant('')->withToolResults([ToolResult::denied(
-                        $request->toolCall->name,
-                        DenialKind::Refused,
-                        $refusal,
-                        $request->toolCall->id,
-                    )]),
-                ],
+                'history' => [...$this->history, $request->assistantMessage, ...PermissionPrompt::refusalPair($request, $note)],
             ]), null]);
         }
 
@@ -4884,13 +2923,7 @@ final class Chat implements Model
             // rememberNative() remembers nothing for an ask a hook other than
             // the gate raised (or a security finding), so "Always" there
             // settles as "Once": the question will be put again next call.
-            $answeredAsk = null;
-            foreach ($jobs as $job) {
-                if ($job[0] === $request->toolCall) {
-                    $answeredAsk = $job[3];
-                    break;
-                }
-            }
+            $answeredAsk = PermissionPrompt::askFor($jobs, $request->toolCall);
 
             if ($answeredAsk !== null) {
                 $grants = self::rememberNative($grants, $request->toolCall, $answeredAsk, $this->projectRoot(), $scope);
@@ -4909,22 +2942,7 @@ final class Chat implements Model
         // keeps its ASK, because consent for one call is not consent for
         // another.
         $root = $this->projectRoot();
-        $jobs = array_map(
-            static function (array $job) use ($request, $grants, $root): array {
-                if ($job[3] === null) {
-                    return $job;
-                }
-
-                $answered = $job[0] === $request->toolCall || self::grantCovers($grants, $job[0], $job[3], $root);
-
-                // Drop ONLY the ASK the user just answered; slot 4 (the pre-hook
-                // note) rides across the re-entry so a settled question's
-                // model-visible context reaches the result the same way an
-                // immediate permission's does.
-                return $answered ? [$job[0], $job[1], $job[2], null, $job[4]] : $job;
-            },
-            $jobs,
-        );
+            $jobs = PermissionPrompt::releasedJobs($jobs, $request->toolCall, $grants, $root);
 
         foreach ($jobs as [$call, , , $ask]) {
             if ($ask !== null) {
@@ -4948,7 +2966,7 @@ final class Chat implements Model
      * ── THE ARM RULE, and the defect it closes ──
      *
      * This arm sits above the input box ({@see update()}, the
-     * `$this->pendingPermission !== null` check), so while a prompt is up EVERY
+     * `$this->flow->pendingPermission !== null` check), so while a prompt is up EVERY
      * `Char` key reaches here and nothing types. That alone made an ordinary
      * slash command an answer: `/agents` hit `a` on its second keystroke and
      * wrote a session-long grant, `/init` hit `n` on its third and denied the
@@ -5059,7 +3077,7 @@ final class Chat implements Model
         // The note is typed into the draft box — the one text editor this
         // model has — so here every key edits it, and only Enter (refuse with
         // it) and Escape (back to the question, text kept) do anything else.
-        if ($this->permissionStage === PermissionPromptStage::WritingNote) {
+        if ($this->flow->stage === PermissionPromptStage::WritingNote) {
             if ($msg->type === KeyType::Escape) {
                 return [$this->mutate(['permissionStage' => PermissionPromptStage::Armed]), null];
             }
@@ -5071,7 +3089,7 @@ final class Chat implements Model
                 // Empty, it stays a decline; `PlanExit`'s note is feedback on
                 // a plan NOT approved, so it stays a refusal.
                 $answers = $note !== ''
-                    && $this->pendingPermission?->pendingAsk?->question() === \SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME;
+                    && $this->flow->pendingPermission?->pendingAsk?->question() === \SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME;
 
                 return $this->withInputBuf('')->answerPermission($answers ? PermissionReply::Once : PermissionReply::Reject, $note);
             }
@@ -5086,7 +3104,7 @@ final class Chat implements Model
         // grant and allows the call — or, when it is not a pattern that
         // covers this call, says why and stays open; Escape goes back to the
         // question.
-        if ($this->permissionStage === PermissionPromptStage::EditingScope) {
+        if ($this->flow->stage === PermissionPromptStage::EditingScope) {
             if ($msg->type === KeyType::Escape) {
                 return [$this->closingScopeEditor()->mutate(['permissionStage' => PermissionPromptStage::Armed]), null];
             }
@@ -5095,7 +3113,7 @@ final class Chat implements Model
                 $refusal = $this->permissionScopeRefusal($scope);
                 if ($refusal !== null) {
                     return [$this->mutate(['permissionScopeEdit' => [
-                        'draft' => $this->permissionScopeEdit['draft'] ?? '',
+                        'draft' => $this->flow->scopeEdit['draft'] ?? '',
                         'error' => $refusal,
                     ]]), null];
                 }
@@ -5129,7 +3147,7 @@ final class Chat implements Model
             return $this->answerPermission(PermissionReply::Reject);
         }
 
-        if ($this->permissionStage === PermissionPromptStage::Disarmed) {
+        if ($this->flow->stage === PermissionPromptStage::Disarmed) {
             return [$this, null];
         }
 
@@ -5139,9 +3157,9 @@ final class Chat implements Model
         // ({@see \SugarCraft\Code\Tools\BuiltIn\AskUserTool::answer()}) — and
         // `a` is not on offer, since there is no call to allow for the session:
         // it falls through to the arm rule below like any other non-answer.
-        $question = $this->pendingPermission?->pendingAsk?->question();
+        $question = $this->flow->pendingPermission?->pendingAsk?->question();
         if ($question !== null && $isChar && preg_match('/\A[1-9]\z/', $rune) === 1) {
-            $choices = $this->pendingPermission?->pendingAsk?->choices() ?? [];
+            $choices = $this->flow->pendingPermission?->pendingAsk?->choices() ?? [];
             if ((int) $rune <= \count($choices)) {
                 return $this->answerPermission(PermissionReply::Once, $rune);
             }
@@ -5204,7 +3222,7 @@ final class Chat implements Model
         // answer, so it must not fall through to the arm rule below where a
         // non-answer key silently disarms the prompt.
         if ($isChar && $rune === 'v') {
-            $pending = $this->pendingPermission;
+            $pending = $this->flow->pendingPermission;
             if ($pending !== null) {
                 return [$this->toggleToolOutput($pending->toolCall->id), null];
             }
@@ -5366,7 +3384,7 @@ final class Chat implements Model
      */
     public function pendingPermission(): ?PermissionRequestMsg
     {
-        return $this->pendingPermission;
+        return $this->flow->pendingPermission;
     }
 
     /**
@@ -5381,7 +3399,7 @@ final class Chat implements Model
      */
     public function permissionStage(): PermissionPromptStage
     {
-        return $this->permissionStage;
+        return $this->flow->stage;
     }
 
     /**
@@ -5400,277 +3418,69 @@ final class Chat implements Model
     }
 
     /**
-     * What `a` + `y` would remember for the question that is up, as the modal
-     * names it before the user commits: a pattern (`Bash(git status *)`),
-     * `this exact command` / `this exact call`, or null when this question
-     * cannot be remembered at all (a hook other than the gate asked it, so
-     * `always` settles as `once` — {@see answerPermission()}).
-     *
-     * Both tool paths remember a {@see \SugarCraft\Code\Permissions\SessionPermissionMemo}
-     * scope ({@see rememberNative()} on Chat's own: the exact call for a tool
-     * whose subject is unknown).
+     * The consult surface for the prompt this Chat shows: a fresh
+     * {@see PermissionPrompt} over the current flow and project root —
+     * Chat is immutable, so the snapshot is cheap and always truthful.
      */
+    private function permissionPrompt(): PermissionPrompt
+    {
+        return new PermissionPrompt($this->flow, $this->projectRoot(), $this->workspace);
+    }
+
+    /** Delegates to {@see PermissionPrompt::alwaysScope()} (W5-A); forensic prose lives there. */
     public function permissionAlwaysScope(): ?string
     {
-        $request = $this->pendingPermission;
-        if ($request === null) {
-            return null;
-        }
-
-        $ask = $request->pendingAsk;
-        if ($ask !== null) {
-            return $ask->offers(PermissionReply::Always)
-                ? \SugarCraft\Code\Permissions\SessionPermissionMemo::scopeOf($ask->tool, $ask->arguments, $this->projectRoot())
-                : null;
-        }
-
-        foreach ($this->pendingPermissionJobs as $job) {
-            if ($job[0] === $request->toolCall && $job[3] !== null) {
-                if (!$job[3]->isRememberable()) {
-                    return null;
-                }
-                $call = $request->toolCall;
-
-                return \SugarCraft\Code\Permissions\PermissionRule::subjectArgumentName($call->name) !== null
-                    ? \SugarCraft\Code\Permissions\SessionPermissionMemo::scopeOf($call->name, $call->arguments, $this->projectRoot())
-                    : \SugarCraft\Code\Permissions\SessionPermissionMemo::exactScopeOf($call->name, $call->arguments, $this->projectRoot());
-            }
-        }
-
-        return null;
+        return $this->permissionPrompt()->alwaysScope();
     }
 
-    /**
-     * The {@see \SugarCraft\Code\Permissions\PermissionRule} patterns `p`
-     * would save for the question that is up — the same scope `a` remembers,
-     * kept only where a CONFIGURED rule reproduces the grant. Two shapes do
-     * not survive that translation and are dropped here, which is what takes
-     * the `p` row off the modal:
-     *
-     *  - a PER-PART pipeline grant (`npm test | tail` → `Bash(npm test *)` +
-     *    `Bash(tail *)`): session rules cover such a line part by part
-     *    ({@see \SugarCraft\Code\Permissions\SessionPermissionMemo::coversBySegments()}),
-     *    but a configured `Allow` rule fires only when EVERY command of the
-     *    line matches IT, so saving the parts would write rules that never
-     *    answer the next launch's question about the same pipeline;
-     *  - an EXACT-call grant (a launcher, a destructive command, a
-     *    subject-less tool): there is no rule form for "this exact call", and
-     *    the tool as a whole is never granted ({@see rememberNative()}).
-     *
-     * The test is the configured path's own: the whole set is saved only
-     * when at least one of its rules matches the FULL call as written —
-     * true for a single command (whose bare `Tool(x)` rule matches, and whose
-     * `Tool(x *)` sibling then rides along to cover the prefixed calls the
-     * session grant covers), false for a pipeline's parts.
-     *
-     * @return list<string>
-     */
-    private function permissionPersistPatterns(): array
+    /** Delegates to {@see PermissionPrompt::persistPatterns()} (W5-A); forensic prose lives there. */
+    public function permissionPersistPatterns(): array
     {
-        $request = $this->pendingPermission;
-        if ($request === null) {
-            return [];
-        }
-        [$tool, $arguments] = $request->pendingAsk !== null
-            ? [$request->pendingAsk->tool, $request->pendingAsk->arguments]
-            : [$request->toolCall->name, $request->toolCall->arguments];
-        // Chat's own tool path remembers a subject-less tool as the EXACT
-        // call ({@see rememberNative()}), which no rule expresses — the
-        // engine path's whole-tool grant does translate, and stays.
-        if ($request->pendingAsk === null && \SugarCraft\Code\Permissions\PermissionRule::subjectArgumentName($tool) === null) {
-            return [];
-        }
-        $root = $this->projectRoot();
-
-        $patterns = \SugarCraft\Code\Permissions\SessionPermissionMemo::patternsFor($tool, $arguments, $root);
-        if ($patterns === []) {
-            return [];
-        }
-
-        $full = new ToolCall($tool, $arguments);
-        foreach ($patterns as $pattern) {
-            $rule = new \SugarCraft\Code\Permissions\PermissionRule($pattern, \SugarCraft\Code\Permissions\PermissionAction::Allow);
-            if ($rule->matches($full, true, $root)) {
-                return $patterns;
-            }
-        }
-
-        return [];
+        return $this->permissionPrompt()->persistPatterns();
     }
 
-    /**
-     * What `p` would save, as the modal names it — {@see permissionAlwaysScope()}
-     * when that scope is one a configured rule reproduces
-     * ({@see permissionPersistPatterns()}), null when `p` has nothing to offer
-     * (no `a` on this question, or its grant does not survive the rule
-     * translation).
-     */
+    /** Delegates to {@see PermissionPrompt::persistScope()} (W5-A); forensic prose lives there. */
     public function permissionPersistScope(): ?string
     {
-        $scope = $this->permissionAlwaysScope();
-
-        return $scope !== null && $this->permissionPersistPatterns() !== [] ? $scope : null;
+        return $this->permissionPrompt()->persistScope();
     }
 
-    /**
-     * Append $patterns to the user's `permissionRules` in `config.json`,
-     * through the workspace's {@see \SugarCraft\Code\Config\Settings\SettingsWriter}
-     * — the settings editor's own write door, so the schema's validation of
-     * the key (refusing a value the launch would not load whole) is this
-     * write's validation too. Existing entries ride in front of the new ones:
-     * rules are first-match-wins, so a `deny` the user wrote keeps refusing
-     * what `p` saves, and the grant only answers questions the mode would
-     * have asked anyway. An entry already there is not written twice.
-     *
-     * Returns the notice the transcript shows — where it landed, or why it
-     * did not. A failed save is REPORTED, never fatal, exactly as a model
-     * choice that cannot be persisted still switches for the session: the
-     * session grant `p` rides on has already been recorded.
-     *
-     * @param list<string> $patterns
-     */
+    /** Delegates to {@see PermissionPrompt::persistRules()} (W5-A); forensic prose lives there. */
     private function persistPermissionRules(array $patterns): string
     {
-        $scope = implode(', ', $patterns);
-        $writer = $this->workspace?->service(\SugarCraft\Code\Config\Settings\SettingsWriter::class);
-        if (!$writer instanceof \SugarCraft\Code\Config\Settings\SettingsWriter) {
-            return Lang::t('chat.permission.not_persisted', [
-                'scope' => $scope,
-                'error' => self::reportField('this session has no settings write door'),
-            ]);
-        }
-
-        try {
-            $config = $writer->current(\SugarCraft\Code\Config\Settings\SettingsTier::You);
-            $existing = $config['permissionRules'] ?? [];
-            $existing = \is_array($existing)
-                ? array_values(array_filter($existing, static fn (mixed $rule): bool => \is_array($rule)))
-                : [];
-            $have = [];
-            foreach ($existing as $rule) {
-                if (($rule['action'] ?? null) === 'allow' && \is_string($rule['pattern'] ?? null)) {
-                    $have[$rule['pattern']] = true;
-                }
-            }
-
-            $next = $existing;
-            foreach ($patterns as $pattern) {
-                if (!isset($have[$pattern])) {
-                    $next[] = ['pattern' => $pattern, 'action' => 'allow'];
-                }
-            }
-            $path = $next === $existing
-                ? (string) $writer->targetPath(\SugarCraft\Code\Config\Settings\SettingsTier::You)
-                : $writer->write(\SugarCraft\Code\Config\Settings\SettingsTier::You, ['permissionRules' => $next]);
-
-            return Lang::t('chat.permission.persisted', [
-                'scope' => $scope,
-                'path' => self::reportField($path),
-            ]);
-        } catch (\Throwable $e) {
-            return Lang::t('chat.permission.not_persisted', [
-                'scope' => $scope,
-                'error' => self::reportField($e->getMessage()),
-            ]);
-        }
+        return $this->permissionPrompt()->persistRules($patterns);
     }
 
-    /**
-     * What the modal's `e` editor starts from for the question that is up —
-     * the argument half of what `a` would remember (`sed * | sort * | uniq *`),
-     * or the command itself when `a` would remember the exact call — or null
-     * when there is nothing to edit (`a` is not offered, or the tool has no
-     * subject argument, so its only scope is the tool).
-     */
+    /** Delegates to {@see PermissionPrompt::editableScope()} (W5-A); forensic prose lives there. */
     public function permissionEditableScope(): ?string
     {
-        $request = $this->pendingPermission;
-        if ($request === null || $this->permissionAlwaysScope() === null) {
-            return null;
-        }
-        [$tool, $arguments] = $request->pendingAsk !== null
-            ? [$request->pendingAsk->tool, $request->pendingAsk->arguments]
-            : [$request->toolCall->name, $request->toolCall->arguments];
-
-        return \SugarCraft\Code\Permissions\SessionPermissionMemo::editableScopeOf($tool, $arguments, $this->projectRoot());
+        return $this->permissionPrompt()->editableScope();
     }
 
-    /**
-     * Why the scope being edited cannot be saved, shown on the modal, or null
-     * while it has not been refused.
-     */
+    /** Delegates to {@see PermissionPrompt::scopeError()} (W5-A); forensic prose lives there. */
     public function permissionScopeError(): ?string
     {
-        $error = $this->permissionScopeEdit['error'] ?? null;
-
-        return \is_string($error) ? $error : null;
+        return $this->permissionPrompt()->scopeError();
     }
 
-    /**
-     * Why $scope may not be saved as the grant for the question that is up,
-     * or null when it may: it must be a well-formed pattern for this tool
-     * that covers this very call ({@see \SugarCraft\Code\Permissions\SessionPermissionMemo::withPattern()}).
-     */
-    private function permissionScopeRefusal(string $scope): ?string
+    /** Delegates to {@see PermissionPrompt::scopeRefusal()} (W5-A); forensic prose lives there. */
+    public function permissionScopeRefusal(string $scope): ?string
     {
-        $request = $this->pendingPermission;
-        if ($request === null) {
-            return Lang::t('chat.permission.scope_invalid');
-        }
-        [$tool, $arguments] = $request->pendingAsk !== null
-            ? [$request->pendingAsk->tool, $request->pendingAsk->arguments]
-            : [$request->toolCall->name, $request->toolCall->arguments];
-        if (\SugarCraft\Code\Permissions\SessionPermissionMemo::patternFromScope($scope, $tool) === null
-            && \SugarCraft\Code\Permissions\SessionPermissionMemo::scopePatterns($scope, $tool) === null) {
-            return Lang::t('chat.permission.scope_invalid');
-        }
-
-        return \SugarCraft\Code\Permissions\SessionPermissionMemo::new()->withPattern($scope, $tool, $arguments, $this->projectRoot()) === null
-            ? Lang::t('chat.permission.scope_does_not_cover')
-            : null;
+        return $this->permissionPrompt()->scopeRefusal($scope);
     }
 
     /** This Chat with the scope editor closed and the draft it held back in the box. */
     private function closingScopeEditor(): self
     {
-        $draft = $this->permissionScopeEdit['draft'] ?? '';
+        $draft = $this->flow->scopeEdit['draft'] ?? '';
 
         return $this->mutate(['permissionScopeEdit' => null])->withInputBuf(\is_string($draft) ? $draft : '');
     }
 
-    /**
-     * Why the permission question that is up cannot be remembered — `asked
-     * by hook protect-files`, `flagged as external-endpoint, a security
-     * finding, which always asks` — so the modal says so plainly and offers
-     * no `a`; null when `a` would remember it ({@see permissionAlwaysScope()})
-     * or the question is the model's own (`AskUser`, `PlanExit`).
-     */
+    /** Delegates to {@see PermissionPrompt::alwaysAsks()} (W5-A); forensic prose lives there. */
     public function permissionAlwaysAsks(): ?string
     {
-        $request = $this->pendingPermission;
-        if ($request === null || $this->permissionAlwaysScope() !== null) {
-            return null;
-        }
-
-        $ask = $request->pendingAsk;
-        if ($ask !== null) {
-            if ($ask->question() !== null) {
-                return null;
-            }
-
-            return $ask->alwaysAsks !== '' ? $ask->alwaysAsks : Lang::t('chat.permission.always_asks.unattributed');
-        }
-
-        foreach ($this->pendingPermissionJobs as $job) {
-            if ($job[0] === $request->toolCall && $job[3] !== null) {
-                $reason = \SugarCraft\Code\Backend\PendingAsk::alwaysAsksReason($request->toolCall->name, $job[3]);
-
-                return $reason === '' ? null : $reason;
-            }
-        }
-
-        // A prompt raised with no attributed question behind it at all.
-        return Lang::t('chat.permission.always_asks.unattributed');
+        return $this->permissionPrompt()->alwaysAsks();
     }
 
     /**
@@ -6257,11 +4067,11 @@ final class Chat implements Model
             // Every settlement of the turn's questions is part of its durable
             // story (roadmap O-2f), whoever settled it.
             $this->turnRunner()->recordEvent($this->liveTurn($generation), $event);
-            $open = $this->pendingPermission?->pendingAsk;
+            $open = $this->flow->pendingPermission?->pendingAsk;
             if ($open === null || $open->askId !== $event->askId) {
                 return [$this, $more];
             }
-            $this->permissionDeferred?->resolve(null);
+            $this->flow->deferred?->resolve(null);
 
             return [$this->mutate([
                 'pendingPermission' => null,
@@ -6299,7 +4109,7 @@ final class Chat implements Model
             // One modal at a time: the question goes back to the head of the
             // inbox and the tool-event tick, which runs while a turn is in
             // flight, offers it again once the prompt that is up is answered.
-            if ($this->pendingPermission !== null) {
+            if ($this->flow->pendingPermission !== null) {
                 $this->liveToolEvents->exchangeArray([$entry, ...$this->liveToolEvents->getArrayCopy()]);
 
                 return [$this, null];
@@ -6928,45 +4738,17 @@ final class Chat implements Model
         return [$toolCall, null, $context, null, $hookResult->additionalContext];
     }
 
-    /**
-     * Whether a grant in $grants answers this ask on Chat's own tool path —
-     * the SAME memo, keys and scopes the engine path uses
-     * ({@see \SugarCraft\Code\Permissions\SessionPermissionMemo}), so `a`
-     * means the same thing whichever path a call took (this path kept an
-     * exact-call key of its own, so `a` on `git status` never covered
-     * `git status -s` here).
-     *
-     * NEVER FOR AN ASK NO GRANT MAY ANSWER ({@see \SugarCraft\Code\Hooks\HookResult::isRememberable()},
-     * stamped by the registry, which a hook cannot forge): a user hook's ASK
-     * is a question about this call's content — the reason the hook exists —
-     * and a security finding is asked every time (audit F-P9).
-     *
-     * @param array<string, bool> $grants
-     */
+    /** Delegates to {@see PermissionPrompt::grantCovers()} (W5-A); forensic prose lives there. */
     private static function grantCovers(
         array $grants,
         ToolCall $toolCall,
         \SugarCraft\Code\Hooks\HookResult $ask,
         ?string $projectRoot = null,
     ): bool {
-        return $ask->isRememberable()
-            && \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($grants)
-                ->allows($toolCall->name, $toolCall->arguments, $projectRoot);
+        return PermissionPrompt::grantCovers($grants, $toolCall, $ask, $projectRoot);
     }
 
-    /**
-     * $grants with "always" remembered for $toolCall on Chat's own tool path,
-     * or $grants unchanged when the ask may not be remembered. A tool whose
-     * subject argument is known ({@see \SugarCraft\Code\Permissions\PermissionRule::SUBJECT_ARGUMENTS})
-     * gets the engine path's scope (or the user's own, $scope, from the
-     * modal's `e`); any other tool is remembered as the exact call — an
-     * embedder's tool has no subject that can be read, and the memo would
-     * otherwise grant it whole.
-     *
-     * @param array<string, bool> $grants
-     *
-     * @return array<string, bool>
-     */
+    /** Delegates to {@see PermissionPrompt::rememberNative()} (W5-A); forensic prose lives there. */
     private static function rememberNative(
         array $grants,
         ToolCall $toolCall,
@@ -6974,18 +4756,7 @@ final class Chat implements Model
         ?string $projectRoot,
         ?string $scope = null,
     ): array {
-        if (!$ask->isRememberable()) {
-            return $grants;
-        }
-        $memo = \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($grants);
-        $memo = match (true) {
-            $scope !== null => $memo->withPattern($scope, $toolCall->name, $toolCall->arguments, $projectRoot) ?? $memo,
-            \SugarCraft\Code\Permissions\PermissionRule::subjectArgumentName($toolCall->name) !== null
-                => $memo->withGrant($toolCall->name, $toolCall->arguments, $projectRoot),
-            default => $memo->withExactGrant($toolCall->name, $toolCall->arguments, $projectRoot),
-        };
-
-        return [...$grants, ...$memo->grants()];
+        return PermissionPrompt::rememberNative($grants, $toolCall, $ask, $projectRoot, $scope);
     }
 
     /**
@@ -8282,7 +6053,7 @@ final class Chat implements Model
      */
     public static function mouseMode(): MouseMode
     {
-        $off = self::envFlag('CANDY_CODE_DISABLE_MOUSE')
+        $off = EnvBool::isSet(\getenv('CANDY_CODE_DISABLE_MOUSE'))
             || !\SugarCraft\Code\Config\Settings\UiSettings::bool('mouse');
 
         return $off ? MouseMode::Off : MouseMode::CellMotion;
@@ -8297,7 +6068,7 @@ final class Chat implements Model
     public static function mouseClicksEnabled(): bool
     {
         return self::mouseMode() !== MouseMode::Off
-            && !self::envFlag('CANDY_CODE_DISABLE_MOUSE_CLICKS')
+            && !EnvBool::isSet(\getenv('CANDY_CODE_DISABLE_MOUSE_CLICKS'))
             && \SugarCraft\Code\Config\Settings\UiSettings::bool('mouseClicks');
     }
 
@@ -8922,7 +6693,7 @@ final class Chat implements Model
      */
     private function refuseMouseDispatch(string $zoneId): ?array
     {
-        if ($this->keyHelp !== null || $this->pendingPermission !== null) {
+        if ($this->keyHelp !== null || $this->flow->pendingPermission !== null) {
             return [$this, null];
         }
 
@@ -9414,10 +7185,7 @@ final class Chat implements Model
         // the session the tab names. Under an open palette or picker the pair
         // is not a rename — those overlays own the screen.
         $now = microtime(true);
-        $previous = $this->lastTabClick;
-        $isDoubleClick = $previous !== null
-            && $previous[0] === $id
-            && $now - $previous[1] <= self::TAB_DOUBLE_CLICK_SECONDS;
+        $isDoubleClick = $this->tabState->isDoubleClick($id, $now, self::TAB_DOUBLE_CLICK_SECONDS);
         if ($isDoubleClick && $id === $this->currentSessionId && $this->palette === null && $this->sessionPicker === null) {
             $clicked = $this->mutate(['lastTabClick' => null]);
 
@@ -9446,7 +7214,7 @@ final class Chat implements Model
         // A lazily opened session whose row the first prompt has not minted
         // yet is a real tab a click must be able to come back to;
         // switchToSession() treats its absent transcript as empty.
-        if (!in_array($id, array_column($this->openTabs->tabs(), 'id'), true)) {
+        if (!$this->tabState->hasTab($id)) {
             return [$this, null];
         }
 
@@ -9484,7 +7252,7 @@ final class Chat implements Model
             return $this->refuseInFlightAction(Lang::t('chat.action.switch_session'));
         }
 
-        return [$this->switchToSession($id, $this->storedSessionName($id)), null];
+        return [$this->switchToSession($id, SessionSwitch::storedName($this->sessionStore, $id)), null];
     }
 
     /**
@@ -9658,6 +7426,17 @@ final class Chat implements Model
      * Runtime options `bin/candy-code` starts the chat Program with. Exists
      * so the mouse-mode decision above is made once, next to the state it
      * governs, instead of being duplicated in the entrypoint script.
+     *
+     * `openTty: true` (v2:MAJOR-3) re-anchors BOTH input and output on
+     * `/dev/tty` whenever the caller started us with piped descriptors —
+     * `echo hi | candy-code` used to hand the keyboard a pipe, whose first
+     * EOF made `Program` drop the read watcher and the TUI lost every
+     * keystroke for the rest of the session. The entrypoint's own guard
+     * already refuses a fully redirected invocation (both ends piped), so a
+     * real terminal is open either way; the tty is simply what the keyboard
+     * should have been listening to all along. When both descriptors were
+     * passed explicitly (tests driving the Program over in-memory streams)
+     * sugar-core's `openTty` arm stands down and honours them untouched.
      */
     public static function programOptions(): ProgramOptions
     {
@@ -9672,19 +7451,9 @@ final class Chat implements Model
             useAltScreen: true,
             mouseMode: self::mouseMode(),
             bracketedPaste: true,
+            openTty: true,
+
         );
-    }
-
-    /**
-     * Treats an unset, empty, or literal `0` value as "not set" so
-     * `CANDY_CODE_DISABLE_MOUSE=0` reads as "leave the mouse on" rather than
-     * as any-value-means-true.
-     */
-    private static function envFlag(string $name): bool
-    {
-        $value = getenv($name);
-
-        return $value !== false && $value !== '' && $value !== '0';
     }
 
     public function backend(): Backend
@@ -10140,7 +7909,7 @@ final class Chat implements Model
     /**
      * The background-session supervisor `/bg` and `/fork` dispatch onto, if set.
      */
-    public function backgroundSupervisor(): ?\SugarCraft\Code\Sessions\BackgroundSupervisor
+    public function backgroundSupervisor(): ?\SugarCraft\Code\Background\BackgroundSupervisor
     {
         return $this->backgroundSupervisor;
     }
@@ -10154,7 +7923,7 @@ final class Chat implements Model
      * clone spawned become unreachable (the same reasoning as
      * {@see \SugarCraft\Code\Backend\CancellationToken}).
      */
-    public function withBackgroundSupervisor(?\SugarCraft\Code\Sessions\BackgroundSupervisor $supervisor): self
+    public function withBackgroundSupervisor(?\SugarCraft\Code\Background\BackgroundSupervisor $supervisor): self
     {
         return $this->mutate(['backgroundSupervisor' => $supervisor]);
     }
@@ -10164,13 +7933,13 @@ final class Chat implements Model
      * like the supervisor — a wither clone must keep pointing at the same
      * clock, or the /schedules surface and the pump diverge).
      */
-    public function withScheduleRegistry(?\SugarCraft\Code\Sessions\ScheduleRegistry $registry): self
+    public function withScheduleRegistry(?\SugarCraft\Code\Background\ScheduleRegistry $registry): self
     {
         return $this->mutate(['scheduleRegistry' => $registry]);
     }
 
     /** The AUT-1 roster this session fires from, if any. */
-    public function scheduleRegistry(): ?\SugarCraft\Code\Sessions\ScheduleRegistry
+    public function scheduleRegistry(): ?\SugarCraft\Code\Background\ScheduleRegistry
     {
         return $this->scheduleRegistry;
     }
@@ -10239,11 +8008,12 @@ final class Chat implements Model
     /**
      * The tabs opened this run (ISS-102): the model {@see Renderer}'s
      * session tab strip renders and {@see cycleSessionTab()} switches
-     * through.
+     * through. Thin delegate onto the {@see SessionTabState} fold (v4 S3) —
+     * the renderer keeps reading this entry point.
      */
     public function openTabs(): SessionTabs
     {
-        return $this->openTabs;
+        return $this->tabState->tabs;
     }
 
     /**
@@ -10267,7 +8037,7 @@ final class Chat implements Model
         return $this->mutate([
             'currentSessionId' => $currentSessionId,
             // ISS-102: a session put in front of the user is a tab opened.
-            'openTabs' => $this->tabsOpening($currentSessionId, $this->currentSessionName),
+            'openTabs' => $this->tabState->opening($currentSessionId, $this->currentSessionName),
             'sessionMint' => null,
         ]);
     }
@@ -10289,25 +8059,6 @@ final class Chat implements Model
         ($this->sessionMint)();
 
         return $this->mutate(['sessionMint' => null]);
-    }
-
-    /**
-     * {@see openTabs()} with $sessionId's tab focused: the already-open tab
-     * when one exists, a fresh one otherwise (ISS-102).
-     *
-     * The id-existence guard is load-bearing — {@see SessionTabs::openTab()}
-     * appends unconditionally, and a second openTab for the same session
-     * would duplicate its id in the tab order.
-     */
-    private function tabsOpening(string $sessionId, ?string $name): SessionTabs
-    {
-        foreach ($this->openTabs->tabs() as $tab) {
-            if ($tab->id === $sessionId) {
-                return $this->openTabs->setActiveTab($sessionId);
-            }
-        }
-
-        return $this->openTabs->openTab($sessionId, $name ?? '');
     }
 
     /**
@@ -10403,7 +8154,7 @@ final class Chat implements Model
      * and its agents run exactly as given.
      *
      * @param \SugarCraft\Code\Agents\SubAgent[] $agents
-     * @return \Generator<AgentResult>
+     * @return \Generator<\SugarCraft\Code\Agents\AgentResult>
      * @throws \RuntimeException When no pool or config is available
      */
     public function executeAgents(array $agents, \SugarCraft\Code\Providers\CompleteRequest $request): \Generator
@@ -10949,11 +8700,7 @@ final class Chat implements Model
             'hooks' => $this->hooks,
             'currentSessionName' => $this->currentSessionName,
             'titleBackend' => $this->titleBackend,
-            'pendingPermission' => $this->pendingPermission,
-            'permissionStage' => $this->permissionStage,
-            'permissionDeferred' => $this->permissionDeferred,
-            'pendingPermissionJobs' => $this->pendingPermissionJobs,
-            'permissionScopeEdit' => $this->permissionScopeEdit,
+            'flow' => $this->flow,
             'permissionGrants' => $this->permissionGrants,
             'expanded' => $this->expanded,
             'paletteMru' => $this->paletteMru,
@@ -11062,11 +8809,12 @@ final class Chat implements Model
             'liveStepGeneration' => $this->liveStepGeneration,
             'currentSessionTitleSource' => $this->currentSessionTitleSource,
             'titleEditor' => $this->titleEditor,
-            'lastTabClick' => $this->lastTabClick,
             // ISS-102: the tab strip's model and the pending row minter ride
             // every clone by identity — a keystroke before the launch prompt
             // must not silently drop either (same rule as 'tokenTracker').
-            'openTabs' => $this->openTabs,
+            // The tab surface's own fields moved into SessionTabState
+            // (v4 split-plan S3); this row carries the whole state object.
+            'tabState' => $this->tabState,
             'sessionMint' => $this->sessionMint,
             'pendingSettingsApply' => $this->pendingSettingsApply,
             'settingsToast' => $this->settingsToast,
@@ -11117,6 +8865,22 @@ final class Chat implements Model
             unset($constructorProps['input']);
         }
 
+        // Tab-surface changes name SessionTabState slots, not Chat fields:
+        // settle them onto the state object and strip them from the spread,
+        // so `new self(...)` below never receives a named argument it lacks.
+        $constructorProps['tabState'] = $this->tabState->with($changes);
+        foreach (array_keys(SessionTabState::OVERRIDE_KEYS) as $tabKey) {
+            unset($changes[$tabKey]);
+        }
+
+        // Prompt-state changes name PermissionFlow slots, not Chat fields:
+        // settle them onto the flow and strip them from the spread, so
+        // `new self(...)` below never receives a named argument it lacks.
+        $constructorProps['flow'] = $this->flow->with($changes);
+        foreach (array_keys(PermissionFlow::OVERRIDE_KEYS) as $flowKey) {
+            unset($changes[$flowKey]);
+        }
+
         return new self(...array_merge($constructorProps, $changes));
     }
 
@@ -11133,7 +8897,12 @@ final class Chat implements Model
     }
 
     /**
-     * Register a tool/function that the AI can call.
+     * Register a tool callback the AI can call on this Chat: the name joins the
+     * Chat's own tool map, which invokeTool() consults and runs at dispatch.
+     * The shipped CLI registers nothing here — its tools reach the model as
+     * catalogued tool classes wired onto the backend — so this seam is filled
+     * only by embedders. Registration is immutable: a new Chat carrying the
+     * merged map is returned.
      *
      * @param string $name The tool name (must be unique)
      * @param callable(array $arguments): mixed $callback The function to call
@@ -11775,7 +9544,7 @@ final class Chat implements Model
         // daemon's answer verbatim, and an `@path` in that answer is the
         // model's text, not the user asking for a file.
         $mentionsAreTheUsers = $expanded === null
-            && !\SugarCraft\Code\Sessions\BackgroundSession::isAnnouncement($text);
+            && !\SugarCraft\Code\Background\BackgroundSession::isAnnouncement($text);
         if ($expanded !== null) {
             // AN EXPANSION THAT PRODUCED NOTHING IS REFUSED, not sent. The
             // empty-draft guard at the top of this method runs against the
@@ -12365,7 +10134,7 @@ final class Chat implements Model
             && $draft !== ''
             && !str_starts_with($draft, '/')
             && $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -12486,7 +10255,7 @@ final class Chat implements Model
      * image artifacts is not a read.
      */
     private const READ_ONLY_COMMANDS = [
-        'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
+        'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share', 'export',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
         'context', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status', 'usage',
@@ -13825,9 +11594,9 @@ final class Chat implements Model
                     $changes['currentSessionId'] = $effect->sessionId();
                     // ISS-102: `/branch` moves this window onto its copy —
                     // the session coming to the front opens its tab.
-                    $changes['openTabs'] = $this->tabsOpening(
+                    $changes['openTabs'] = $this->tabState->opening(
                         $effect->sessionId(),
-                        $this->storedSessionName($effect->sessionId()),
+                        SessionSwitch::storedName($this->sessionStore, $effect->sessionId()),
                     );
                     $changes['sessionMint'] = null;
                     // Out of a read-only window, the draft it refused comes
@@ -14623,7 +12392,7 @@ final class Chat implements Model
         // Category order is first-appearance order, the same rule
         // {@see \SugarCraft\Code\Tui\Components\MenuBar} groups its menus
         // by.
-        /** @var array<string, list<\SugarCraft\Code\Commands\CommandSpec>> $byCategory */
+    /** @var array<string, list<\SugarCraft\Code\Commands\CommandSpec>> $byCategory */
         $byCategory = [];
         foreach ($commands as $spec) {
             $byCategory[$spec->category][] = $spec;
@@ -15039,6 +12808,19 @@ final class Chat implements Model
     private function handleShareCommand(string $inputBuf): array
     {
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\ShareHostCommand(), $inputBuf);
+    }
+
+    /**
+     * Handle /export — {@see \SugarCraft\Code\Host\Commands\ExportHostCommand},
+     * the raw local copy path: same rows and formats as `/share`, minus the
+     * SEC-4 redactor, because a file on the user's own machine is their own
+     * record (plan W4-B, audit 2026-10-21).
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleExportCommand(string $inputBuf): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\ExportHostCommand(), $inputBuf);
     }
 
     /**
@@ -16330,7 +14112,7 @@ final class Chat implements Model
             || $this->inputBuf !== ''
             || $this->queuedPrompts !== []
             || $this->keyHelp !== null
-            || $this->pendingPermission !== null
+            || $this->flow->pendingPermission !== null
             || $this->palette !== null
             || $this->sessionPicker !== null
             || $this->dirPicker !== null
@@ -17218,7 +15000,7 @@ final class Chat implements Model
                     // last tab cannot be closed, so whatever the store said,
                     // the strip never empties. This arm therefore bypasses
                     // $keep, which owns only the picker key.
-                    $tabs = $this->openTabs;
+                    $tabs = $this->tabState->tabs;
                     foreach ($deleted as $gone) {
                         $tabs = $tabs->closeTab((string) $gone);
                     }
@@ -17274,7 +15056,7 @@ final class Chat implements Model
                     $this->transcripts()->flush();
                     $forkId = $store->forkSession($id);
 
-                    return [$this->mutate(['sessionPicker' => null])->switchToSession($forkId, $this->storedSessionName($forkId)), null];
+                    return [$this->mutate(['sessionPicker' => null])->switchToSession($forkId, SessionSwitch::storedName($this->sessionStore, $forkId)), null];
             }
         } catch (\Throwable $e) {
             return $keep($picker->withNotice(Lang::t('chat.picker.error', ['error' => self::sanitizeSessionField($e->getMessage())])));
@@ -17360,7 +15142,7 @@ final class Chat implements Model
 
         $sessionId = $selected['sessionId'];
 
-        return [$this->mutate(['sessionPicker' => null])->switchToSession($sessionId, $this->storedSessionName($sessionId)), null];
+        return [$this->mutate(['sessionPicker' => null])->switchToSession($sessionId, SessionSwitch::storedName($this->sessionStore, $sessionId)), null];
     }
 
     /**
@@ -17409,7 +15191,7 @@ final class Chat implements Model
 
     /**
      * Handle /bg (alias /background) — {@see \SugarCraft\Code\Host\Commands\BackgroundCommand}: dispatch
-     * a task onto the {@see \SugarCraft\Code\Sessions\BackgroundSupervisor}
+     * a task onto the {@see \SugarCraft\Code\Background\BackgroundSupervisor}
      * off-turn and hand the prompt straight back, or `/bg stop <id>`. The
      * answer lands later as a {@see BackgroundSessionSpawnedMsg} or
      * {@see BackgroundSessionStoppedMsg}.
@@ -18182,8 +15964,8 @@ final class Chat implements Model
     }
 
     /**
-     * Where the cursor is in {@see $inputBuf}, as a character offset from
-     * the start of the whole draft (newlines counted as one character each).
+     * Where the cursor is in {@see $inputBuf}, as a codepoint offset from
+     * the start of the whole draft (newlines counted as one codepoint each).
      *
      * Flat rather than (row, column) because every caller — Ctrl+W's word
      * boundary, {@see Renderer::renderInput()}'s cursor glyph, the
@@ -18461,7 +16243,7 @@ final class Chat implements Model
     public function slashMenuOwnsTab(): bool
     {
         return $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -18552,7 +16334,7 @@ final class Chat implements Model
     public function mentionOwnsTab(): bool
     {
         return $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -18576,7 +16358,7 @@ final class Chat implements Model
     {
         return !$this->mentionMenuDismissed
             && $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -19893,7 +17675,7 @@ final class Chat implements Model
         return [$this->mutate([
             // The pending `/compact`, queued prompts, scroll position, thrash
             // breaker and activity stamp all belong to the session being left.
-            ...$this->sessionChangeResets(),
+            ...SessionSwitch::resets(),
             // A new session starts from an empty transcript. Carrying the old
             // one across would send it to the model under the new id and, now
             // that transcripts are saved on change, store it there as well.
@@ -19903,7 +17685,7 @@ final class Chat implements Model
             'currentSessionId' => $sessionId,
             'currentSessionName' => null,
             // ISS-102: New session opens a tab.
-            'openTabs' => $this->tabsOpening($sessionId, null),
+            'openTabs' => $this->tabState->opening($sessionId, null),
             'sessionMint' => null,
         ]), null];
     }
@@ -20081,17 +17863,17 @@ final class Chat implements Model
         $transcripts = $this->transcripts();
         $transcripts->flush();
         $seeded = $transcripts->load($msg->sessionId);
-        $name = $this->storedSessionName($msg->sessionId);
+        $name = SessionSwitch::storedName($this->sessionStore, $msg->sessionId);
 
         return [$this->mutate([
-            ...$this->sessionChangeResets(),
+            ...SessionSwitch::resets(),
             'currentSessionId' => $msg->sessionId,
             'currentSessionName' => $name,
             // ISS-102: a landed handoff is a session in front of the user —
             // its tab opens like every other route's.
-            'openTabs' => $this->tabsOpening($msg->sessionId, $name),
+            'openTabs' => $this->tabState->opening($msg->sessionId, $name),
             'sessionMint' => null,
-            'currentSessionTitleSource' => $name === null ? null : $this->storedTitleSource($msg->sessionId),
+            'currentSessionTitleSource' => $name === null ? null : SessionSwitch::storedTitleSource($this->sessionStore, $msg->sessionId),
             // A store that keeps no transcripts (a bare SessionStore) still
             // gets the seed: it is what the next turn must read.
             'history' => [
@@ -20289,7 +18071,7 @@ final class Chat implements Model
      * the first two; the other two document themselves at their `if`.
      *
      *   - waking up often enough to run
-     *     {@see \SugarCraft\Code\Sessions\BackgroundSupervisor::tick()},
+     *     {@see \SugarCraft\Code\Background\BackgroundSupervisor::tick()},
      *     which is what flips a session whose heartbeats have stopped to
      *     `Stalled` and back again. Before this returned anything, that
      *     method had no caller on the live path at all.
@@ -20471,7 +18253,7 @@ final class Chat implements Model
             && $this->inputBuf === ''
             && $this->queuedPrompts === []
             && $this->keyHelp === null
-            && $this->pendingPermission === null
+            && $this->flow->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
@@ -20547,7 +18329,7 @@ final class Chat implements Model
     }
 
     /**
-     * Run one poll of {@see \SugarCraft\Code\Sessions\BackgroundSupervisor}
+     * Run one poll of {@see \SugarCraft\Code\Background\BackgroundSupervisor}
      * and announce whatever changed since the previous poll.
      *
      * Terminal sessions drop out of `getActiveSessions()`, so a session that
@@ -20558,7 +18340,7 @@ final class Chat implements Model
      * THE RESULT COMES BACK (roadmap 4.3-1). A session that settles —
      * completed, failed, stopped or timed out — is reported twice: the status
      * notice every transition gets, and its
-     * {@see \SugarCraft\Code\Sessions\BackgroundSession::announcement()} as
+     * {@see \SugarCraft\Code\Background\BackgroundSession::announcement()} as
      * a USER-ROLE turn, so the model that started the work reads the answer and
      * its stats rather than the user copying it across. Before this the daemon
      * buffered the output, the supervisor restored it onto the session, and
@@ -20635,7 +18417,7 @@ final class Chat implements Model
             // A session re-adopted at launch (roadmap 4.3-3) was not started
             // by this run: "is now running" read as if it had just begun.
             $notices[] = Message::notice(Lang::t(
-                $previous === \SugarCraft\Code\Sessions\BackgroundSupervisor::ADOPTED_STATUS
+                $previous === \SugarCraft\Code\Background\BackgroundSupervisor::ADOPTED_STATUS
                     ? 'chat.background.readopted'
                     : 'chat.background.status',
                 ['id' => $id, 'name' => $name, 'status' => $status],
@@ -20722,7 +18504,7 @@ final class Chat implements Model
         $notices = [];
         $supervisor = $this->backgroundSupervisor;
         if ($supervisor !== null) {
-            foreach ($registry->fireDue($now, \SugarCraft\Code\Sessions\ScheduleSpawner::closure(
+            foreach ($registry->fireDue($now, \SugarCraft\Code\Background\ScheduleSpawner::closure(
                 $supervisor,
                 $this->agentManager,
                 $this->projectRoot,

@@ -544,7 +544,7 @@ final class AppModelTest extends TestCase
 
         // The shell's placeholder input box and provider/model bar stand down
         // while the content model draws its own.
-        $this->assertStringNotContainsString('Type your message...', $frame);
+        $this->assertStringNotContainsString('Type your message…', $frame);
         $this->assertStringNotContainsString('Switch Pane', $frame);
         $this->assertStringContainsString('Ctrl+P', $frame);
     }

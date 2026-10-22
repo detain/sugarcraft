@@ -8,6 +8,7 @@ namespace SugarCraft\Code\Commands;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Skills\SkillSource;
 
@@ -756,7 +757,7 @@ final class CommandLoader
     private function report(string $message): void
     {
         if ($this->reportRefusals ?? self::debugRefusalsRequested()) {
-            error_log('candy-code: ' . $message);
+            Log::channel(Log::APP, $message);
         }
     }
 

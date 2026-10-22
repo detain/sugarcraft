@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Tests\Chat;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
@@ -590,7 +590,7 @@ final class BudgetCommandTest extends TestCase
         $paid = Message::assistant('done')->withUsage(Usage::new(2000, 1.5));
 
         [$direct] = $this->chat()->update(new AssistantMsg($paid, generation: 99));
-        [$viaEvents, $cmd] = $this->chat()->update(new \SugarCraft\Code\BackendToolEventsMsg(
+        [$viaEvents, $cmd] = $this->chat()->update(new \SugarCraft\Code\App\BackendToolEventsMsg(
             [new \SugarCraft\Code\Events\ToolStarted('Bash', 'id1')],
             $paid,
             generation: 99,
@@ -616,7 +616,7 @@ final class BudgetCommandTest extends TestCase
         );
         $paid = Message::assistant('done')->withUsage(Usage::new(2000, 1.5));
 
-        $msg = new \SugarCraft\Code\BackendToolEventsMsg(
+        $msg = new \SugarCraft\Code\App\BackendToolEventsMsg(
             [new \SugarCraft\Code\Events\ToolStarted('Bash', 'id1')],
             $paid,
             generation: null,
@@ -721,7 +721,7 @@ final class BudgetCommandTest extends TestCase
     public function testTheSessionTitlerCallIsBilledWhateverBecomesOfTheTitle(string $title): void
     {
         $chat = $this->chat();
-        [$next] = $chat->update(new \SugarCraft\Code\SessionTitledMsg(
+        [$next] = $chat->update(new \SugarCraft\Code\App\SessionTitledMsg(
             'some-other-session',
             $title,
             Usage::new(40, 0.0004),

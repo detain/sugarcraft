@@ -338,7 +338,7 @@ final class ComponentTest extends TestCase
         $output = InputPane::render($app, 100);
 
         // Should show placeholder text
-        $this->assertStringContainsString('Type your message...', $output);
+        $this->assertStringContainsString('Type your message…', $output);
     }
 
     // =========================================================================

@@ -10,7 +10,7 @@ use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\SideQuestionAnsweredMsg;
+use SugarCraft\Code\App\SideQuestionAnsweredMsg;
 use SugarCraft\Code\Support\TranscriptDigest;
 
 /**

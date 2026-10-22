@@ -83,7 +83,7 @@ final class MethodSchemas
                     'client' => Schema::object(['name' => Schema::string(), 'version' => Schema::string(), 'instanceId' => Schema::string()]),
                     'caps' => Schema::arrayOf(Schema::string(), 64),
                     'resume' => Schema::map(Schema::integer(0))->describe('sessionId => the last seq the client holds'),
-                    'snapshotLimit' => Schema::integer(1, SessionSnapshot::MAX_PAGE_ROWS)->describe('Page a resumed session\'s reset snapshot to this many newest rows (ISS-058).'),
+                    'snapshotLimit' => Schema::integer(1, SessionSnapshot::MAX_PAGE_ROWS)->describe('Page a resumed session\'s reset snapshot to this many newest rows.'),
                 ]),
                 Schema::object([
                     'protocol' => Schema::integer(1),

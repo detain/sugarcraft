@@ -13,7 +13,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\PendingAsk;
@@ -26,7 +26,7 @@ use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\PermissionReplyMsg;
+use SugarCraft\Code\App\PermissionReplyMsg;
 use SugarCraft\Code\Permissions\AskOrigin;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
@@ -37,8 +37,8 @@ use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\ToolCall;
-use SugarCraft\Code\ToolEventPumpMsg;
-use SugarCraft\Code\ToolResultsMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolResultsMsg;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall as EngineToolCall;
 use SugarCraft\Code\Tools\ToolResult;
@@ -210,6 +210,21 @@ final class BashPermissionPromptTest extends TestCase
         foreach ([30, 20] as $cols) {
             [$tiny] = $this->asking(self::bash('git status', 'Status'), null, $cols);
             self::assertFitsWidth(self::plain($tiny), $cols);
+        }
+
+        // W2-D ellipsis policy: at 20 columns even the short form is cut, and
+        // the cut must announce itself — a `mode:` row ending in `…` exists
+        // (under the raw Width::truncate the 14th cell was the space before
+        // `/permissions`, so no such row exists). The prompt's wrapped tail
+        // also starts `mode: default)`; the ellipsis filter separates them.
+        [$tiny] = $this->asking(self::bash('git status', 'Status'), null, 20);
+        $hintCuts = array_values(array_filter(
+            explode("\n", self::plain($tiny)),
+            static fn (string $row): bool => (bool) preg_match('/(?:mode:[^│]*)…/u', $row),
+        ));
+        self::assertNotSame([], $hintCuts, 'the 20-column mode-hint row must end in the marker');
+        foreach ($hintCuts as $hint) {
+            self::assertLessThanOrEqual(20, Width::string($hint));
         }
     }
 

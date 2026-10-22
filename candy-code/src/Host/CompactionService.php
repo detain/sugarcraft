@@ -15,7 +15,7 @@ use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
 use SugarCraft\Code\Context\PromptFence;
-use SugarCraft\Code\HistoryCompactedMsg;
+use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Lang;

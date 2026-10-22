@@ -15,7 +15,7 @@ use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandSpec;
-use SugarCraft\Code\CustomCommandExpandedMsg;
+use SugarCraft\Code\App\CustomCommandExpandedMsg;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookManager;
@@ -28,7 +28,7 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\SafetyClassifier;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\ToolCall;
-use SugarCraft\Code\TurnHooksResolvedMsg;
+use SugarCraft\Code\App\TurnHooksResolvedMsg;
 
 use function React\Promise\resolve;
 

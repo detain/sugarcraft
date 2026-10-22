@@ -7,6 +7,9 @@ namespace SugarCraft\Code\Agents;
 use React\EventLoop\Loop;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\ProcessTree;
+use SugarCraft\Code\Support\SafeDelete;
+use SugarCraft\Code\Support\Log;
 
 /**
  * Worker pool for parallel agent execution.
@@ -135,6 +138,16 @@ final class AgentWorkerPool
 
     /** True when cancelAll() was called; cleared at the start of each executeAll(). */
     private bool $wasCancelledByUser = false;
+
+    /**
+     * The single naming authority for a pool's private IPC directory under
+     * `sys_get_temp_dir()`: {@see makeResultDirPath()} mints it, and
+     * {@see \SugarCraft\Code\Support\ToolIpcFiles::sweepStalePoolDirs()}
+     * reaps directories carrying it. The prefix lives here (not there) so the
+     * creator cannot drift from the reaper's pattern silently — a rename on
+     * either side reddens the reaper's name-shape pin.
+     */
+    public const RESULT_DIR_PREFIX = 'sc_pool_';
 
     /** Poll backoff for waitForCompletion() when nothing has completed yet (microseconds). */
     private const WAIT_POLL_INTERVAL_USEC = 5_000;
@@ -459,8 +472,8 @@ final class AgentWorkerPool
         // lines stay pairwise-tellable-apart, same doctrine that pins the
         // two dispatch arms against each other.
         if ($this->forkFailureCount > 0) {
-            error_log(sprintf(
-                'candy-code: AgentWorkerPool: teardown — this pool lost %d pcntl_fork() failure(s) over its '
+            Log::sub(Log::AGENT_WORKER_POOL, sprintf(
+                'teardown — this pool lost %d pcntl_fork() failure(s) over its '
                 . 'life; the first was logged at dispatch, later ones were only counted.',
                 $this->forkFailureCount,
             ));
@@ -475,6 +488,16 @@ final class AgentWorkerPool
         }
         foreach (glob($this->resultDir . '/*.progress') ?: [] as $leftover) {
             @unlink($leftover);
+        }
+        // (M-1) The creator stamp exists to license the reaper AFTER we are
+        // gone; when we reach our own teardown we are demonstrably not gone,
+        // so release it here — otherwise it would block the rmdir below and
+        // leak a sentinel-bearing directory per pool. Only a plain file at the
+        // marker name is ours to unlink (a planted link proves nothing), the
+        // same rule {@see \SugarCraft\Code\Background\BackgroundSupervisor::releaseSentinelIfOwn()} follows.
+        $marker = rtrim($this->resultDir, '/') . '/' . SafeDelete::SENTINEL;
+        if (is_file($marker) && !is_link($marker)) {
+            @unlink($marker);
         }
         @rmdir($this->resultDir);
     }
@@ -2257,7 +2280,7 @@ final class AgentWorkerPool
             $suffix = str_replace('.', '', uniqid('', true));
         }
 
-        return sys_get_temp_dir() . '/sc_pool_' . getmypid() . '_' . $suffix;
+        return sys_get_temp_dir() . '/' . self::RESULT_DIR_PREFIX . getmypid() . '_' . $suffix;
     }
 
     /**
@@ -2282,6 +2305,42 @@ final class AgentWorkerPool
                 'AgentWorkerPool: could not create the IPC directory ' . $this->resultDir
             );
         }
+
+        $this->stampResultDirSentinel();
+    }
+
+    /**
+     * (M-1) License the startup reaper over this pool's IPC directory.
+     *
+     * A killed daemon (SIGKILL, a fatal under the destructor) never runs the
+     * teardown below, and the `sc_pool_*` directories were consequently in NO
+     * sweep — the flat-file sweep in
+     * {@see \SugarCraft\Code\Support\ToolIpcFiles} only knows payload FILES,
+     * and its directory sibling only knew `bg_*` daemons. The creator stamp is
+     * the same authority the bg reaper demands: a forged name/uid/age cannot
+     * make a foreign directory pruneable, only this write can.
+     *
+     * The CONTENT is the owner's kernel start time (`/proc` field 22, empty
+     * when procfs cannot answer), not a bare touch: the pid baked into the
+     * directory name is recyclable, so the reaper needs (pid, startTicks)
+     * identity — the {@see \SugarCraft\Code\Support\Daemonize::isSameProcess()}
+     * idiom — to refuse a live owner's idle directory. Racing forked children
+     * all hold the same inherited {@see $resultDirOwnerPid}, so a re-stamp
+     * writes the same bytes; idempotence is by construction.
+     *
+     * Best-effort by design: a directory that cannot be stamped still works
+     * for its owner (whose destructor cleans it); it only forfeits the
+     * courtesy of the posthumous reap, which is exactly the pre-fix state.
+     */
+    private function stampResultDirSentinel(): void
+    {
+        $marker = rtrim($this->resultDir, '/') . '/' . SafeDelete::SENTINEL;
+        if (is_file($marker)) {
+            return;
+        }
+
+        $startTicks = ProcessTree::stat($this->resultDirOwnerPid)['startTicks'] ?? null;
+        @file_put_contents($marker, (string) ($startTicks ?? ''));
     }
 
     /**
@@ -2394,8 +2453,8 @@ final class AgentWorkerPool
         // this line must not say.
         $errno = \function_exists('pcntl_get_last_error') ? pcntl_get_last_error() : 0;
 
-        error_log(sprintf(
-            'candy-code: AgentWorkerPool: pcntl_fork() FAILED (%s) — this agent, and any later one that '
+        Log::sub(Log::AGENT_WORKER_POOL, sprintf(
+            'pcntl_fork() FAILED (%s) — this agent, and any later one that '
             . 'hits the same failure, runs sequentially in the parent instead of concurrently. '
             . 'Unlike a build without pcntl this is a runtime resource limit and may clear on '
             . 'its own; if it does not, raise the process limit (RLIMIT_NPROC) or lower '
@@ -2453,8 +2512,8 @@ final class AgentWorkerPool
         }
 
         $this->sequentialFallbackWarned = true;
-        error_log(
-            'candy-code: AgentWorkerPool: pcntl_fork() is unavailable — falling back to '
+        Log::sub(Log::AGENT_WORKER_POOL,
+            'pcntl_fork() is unavailable — falling back to '
             . 'sequential (non-parallel) agent execution. Install/enable the '
             . 'pcntl extension to restore concurrent agent execution.'
         );

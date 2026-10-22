@@ -6,6 +6,9 @@ namespace SugarCraft\Code\Tests\Permissions;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Config\Settings\SessionSettings;
+use SugarCraft\Code\Config\Settings\UiSettings;
 use SugarCraft\Code\Permissions\FetchTarget;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionDecision;
@@ -13,7 +16,9 @@ use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Permissions\SafetyClassifier;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\ToolCall;
+use SugarCraft\Code\Tools\BuiltIn\WebFetch;
 
 /**
  * `WebFetch` is no longer a read (audit F-P6), and `WebFetch(domain:…)` rules
@@ -27,6 +32,8 @@ use SugarCraft\Code\ToolCall;
  */
 final class WebFetchPermissionTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private const EXFIL = 'https://attacker.example/?d=c2VjcmV0';
 
     private static function fetch(string $url): ToolCall
@@ -191,5 +198,151 @@ final class WebFetchPermissionTest extends TestCase
         self::assertSame($host, $target->host);
         self::assertSame($query, $target->carriesQuery);
         self::assertSame($userInfo, $target->carriesUserInfo);
+    }
+
+    // =========================================================================
+    // SEC-3 (audit 2026-10-21): redirects must re-consult the user's rules.
+    // `Allow WebFetch(domain:x)` used to cover whatever host x's 302 chose;
+    // only the SSRF address blocklist was re-checked per hop. The production
+    // policy — the constructor default the catalog tool carries, not an
+    // injected seam — is driven here through a sandboxed
+    // ~/.candy-code/config.json exactly as the running app reads it.
+    // =========================================================================
+
+    public function testAConfiguredDenyRuleRefusesItsOwnRedirectTarget(): void
+    {
+        $refusal = $this->productionRedirectRefusal(
+            [['pattern' => 'WebFetch(domain:evil.w1c.test)', 'action' => 'deny']],
+            'https://evil.w1c.test/leak',
+        );
+
+        self::assertIsString($refusal);
+        self::assertStringContainsString('redirect blocked', $refusal);
+        self::assertStringContainsString('denies', $refusal);
+    }
+
+    public function testAConfiguredAskRuleAlsoStopsTheRedirectItCannotReAsk(): void
+    {
+        $refusal = $this->productionRedirectRefusal(
+            [['pattern' => 'WebFetch(domain:maybe.w1c.test)', 'action' => 'ask']],
+            'https://maybe.w1c.test/page',
+        );
+
+        self::assertIsString($refusal);
+        self::assertStringContainsString('cannot ask', $refusal);
+    }
+
+    public function testAHostTheRulesNeverMentionStillFlows(): void
+    {
+        self::assertNull($this->productionRedirectRefusal(
+            [['pattern' => 'WebFetch(domain:evil.w1c.test)', 'action' => 'deny']],
+            'https://other.w1c.test/page',
+        ));
+    }
+
+    public function testWithNoConfiguredRulesTheChainIsByteUnchanged(): void
+    {
+        self::assertNull($this->productionRedirectRefusal([], 'https://anything.w1c.test/'));
+    }
+
+    public function testFetchLimitsRebuildCarriesTheRedirectPolicyUnchanged(): void
+    {
+        $seen = [];
+        $policy = static function (string $url) use (&$seen): ?string {
+            $seen[] = $url;
+
+            return null;
+        };
+
+        $rebuilt = (new WebFetch(redirectRulePolicy: $policy))->withFetchLimits(timeoutSeconds: 7);
+        $carried = (new \ReflectionProperty(WebFetch::class, 'redirectRulePolicy'))->getValue($rebuilt);
+
+        self::assertIsCallable($carried);
+        self::assertNull($carried('https://anywhere.test/'));
+        self::assertSame(['https://anywhere.test/'], $seen);
+    }
+
+    /**
+     * The consult must happen inside the redirected branch of the hop loop —
+     * before the dial, once, and never on the first hop (the gate already
+     * judged that URL before this tool ran; consulting it again would ask the
+     * user the same question twice on one call).
+     */
+    public function testThePolicyIsConsultedOncePerRedirectAndBeforeEveryDial(): void
+    {
+        $source = (string) file_get_contents((string) (new \ReflectionClass(WebFetch::class))->getFileName());
+        $start = strpos($source, 'public function execute(');
+        $end = strpos($source, 'private function statusResult(', (int) $start);
+        self::assertNotFalse($start);
+        self::assertNotFalse($end);
+        $body = substr($source, $start, $end - $start);
+
+        $consult = '$ruleRefusal = ($this->redirectRulePolicy)($finalUrl);';
+        self::assertSame(1, substr_count($source, $consult));
+        self::assertSame(1, substr_count($body, $consult));
+
+        $guard = strpos($body, 'if ($redirected) {');
+        $dial = strpos($body, '$this->transferPinned(');
+        self::assertNotFalse($guard);
+        self::assertNotFalse($dial);
+        $at = strpos($body, $consult);
+        self::assertLessThan((int) $dial, (int) $at);
+        self::assertGreaterThanOrEqual($guard, $at);
+        // The consult lives in the guarded branch: no '}' between them except
+        // inside the refusal-message strings, so slice on braces is unneeded —
+        // the guard opening is the LAST brace-opener before the consult.
+        self::assertStringNotContainsString("\n            }\n", substr($body, $guard, $at - $guard));
+    }
+
+    /**
+     * @param list<array{pattern: string, action: string}> $rules
+     */
+    private function productionRedirectRefusal(array $rules, string $url): ?string
+    {
+        $base = (string) realpath(sys_get_temp_dir()) . '/wf3-' . bin2hex(random_bytes(4));
+        mkdir($base . '/home/.candy-code', 0o700, true);
+        mkdir($base . '/project', 0o700, true);
+
+        $this->useHomeSandbox($base . '/home');
+        Bootstrap::useProjectRootForSettings($base . '/project');
+
+        try {
+            if ($rules !== []) {
+                file_put_contents(
+                    $base . '/home/.candy-code/config.json',
+                    (string) json_encode(['permissionRules' => $rules], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT),
+                );
+            }
+            SessionSettings::reset();
+            UiSettings::forget();
+
+            $policy = (new \ReflectionProperty(WebFetch::class, 'redirectRulePolicy'))->getValue(new WebFetch());
+            self::assertIsCallable($policy);
+
+            return $policy($url);
+        } finally {
+            Bootstrap::useProjectRootForSettings(null);
+            SessionSettings::reset();
+            UiSettings::forget();
+            $this->restoreHomeSandbox();
+            $this->removeSandboxTree($base);
+        }
+    }
+
+    private function removeSandboxTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($items as $item) {
+            /** @var \SplFileInfo $item */
+            $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+        }
+        @rmdir($dir);
     }
 }

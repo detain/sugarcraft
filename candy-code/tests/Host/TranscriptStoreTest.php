@@ -15,7 +15,7 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\ToolResult;
-use SugarCraft\Code\TranscriptFlushMsg;
+use SugarCraft\Code\App\TranscriptFlushMsg;
 
 /**
  * Roadmap O-2b: transcript persistence moved out of Chat into

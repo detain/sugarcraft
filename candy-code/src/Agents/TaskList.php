@@ -7,7 +7,7 @@ namespace SugarCraft\Code\Agents;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookDispatcher;
 use SugarCraft\Code\Hooks\HookDispatchResult;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ProcessTree;
 use SugarCraft\Code\Support\TimedFileLock;
 

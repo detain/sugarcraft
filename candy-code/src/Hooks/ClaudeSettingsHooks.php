@@ -51,17 +51,21 @@ use Symfony\Component\Yaml\Yaml;
  * would not be the hook the author wrote — an unknown type refuses the
  * launch by name.
  *
- * THE ONE DOCUMENTED SKIP: CC's `Notification` event is recognised and
- * skipped, not refused (plan ruling R3, v1). {@see HookEvent} has no
- * `Notification` case, and adding one widens every event-property match and
- * both HOOKS.md tables — an owner ruling this parser does not take. Until
- * that ruling lands, a `Notification` group contributes no rows; every
- * OTHER unknown event still walks into HookConfig's refusal. This paragraph
- * is the record: a user whose notification hook never fires finds the
- * deferral here rather than in a silent gap. That hard refusal for every
- * other unknown event is itself the deliberate v1 ruling, not an oversight —
- * skip-and-record would need its own ruling per future event, and a guard
- * that cannot be mapped must never run silently.
+ * SKIP-AND-RECORD FOR UNKNOWN EVENTS (v1:F-1, remediation round): CC's
+ * `Notification` event has no {@see HookEvent} case, and neither do the
+ * newer events CC keeps shipping (plan ruling R3 for the native dialect
+ * stands untouched). A FOREIGN file is not candy-code's to enforce against:
+ * refusing the launch over one unmappable event name gave one vendor's
+ * settings file the blast radius of a hard outage in EVERY launch mode.
+ * So an event with no case contributes no rows and is RECORDED — event name
+ * and source file — for {@see \SugarCraft\Code\Cli\Bootstrap} to drain as
+ * one launch-notice aggregate; a guard that cannot be mapped still never
+ * runs silently. Everything ELSE about a foreign `hooks` block keeps the
+ * loud law: malformed JSON, bad group keys, non-`command` types and
+ * HookConfig's own verdicts refuse the launch by name, because those files
+ * DID ask for a guard and candy-code cannot honestly run half of one.
+ * The native `hooks.yaml` keeps the hard event refusal unchanged — that
+ * file is candy-code's own dialect, and R3's reasoning was always about it.
  *
  * Relative commands are NOT anchored to the settings file's directory, and
  * that is CC's own semantics rather than an omission: Claude Code runs hook
@@ -78,10 +82,14 @@ final class ClaudeSettingsHooks
     public const FILENAMES = ['settings.json', 'settings.local.json'];
 
     /**
-     * Events CC defines that {@see HookEvent} has no case for — skipped and
-     * recorded, see the class docblock (ruling R3).
+     * Events seen in a CC file that {@see HookEvent} has no case for, keyed
+     * by event name: how many groups carried them, and which files did.
+     * The record behind the launch-notice aggregate
+     * ({@see \SugarCraft\Code\Cli\Bootstrap::reportSkippedClaudeSettingsEvents()}).
+     *
+     * @var array<string, array{groups: int, files: array<string, true>}>
      */
-    private const DEFERRED_EVENTS = ['Notification'];
+    private static array $skippedEvents = [];
 
     /** Keys a CC hook group may carry. */
     private const GROUP_KEYS = ['matcher', 'hooks'];
@@ -182,7 +190,15 @@ final class ClaudeSettingsHooks
                 );
             }
 
-            if (\in_array($event, self::DEFERRED_EVENTS, true)) {
+            if (HookEvent::tryFrom($event) === null) {
+                // Skip-and-record (v1:F-1): see the class docblock. The count
+                // is best-effort over whatever shape the groups list has —
+                // an unmappable event's payload is never executed, so only
+                // the NAME is owed to the user with any precision.
+                $groupsCount = is_array($groups) && array_is_list($groups) ? count($groups) : 0;
+                self::$skippedEvents[$event]['groups'] =
+                    (self::$skippedEvents[$event]['groups'] ?? 0) + $groupsCount;
+                self::$skippedEvents[$event]['files'][$source] = true;
                 continue;
             }
 
@@ -283,5 +299,24 @@ final class ClaudeSettingsHooks
         // Symfony's dumper quotes anything whose bare form would re-parse as
         // a different type, so a command literally named `60` stays a string.
         return HookConfig::parse(Yaml::dump($normalized, 8), $source);
+    }
+
+    /**
+     * The unknown events this process's CC parses have skipped so far.
+     *
+     * @return array<string, array{groups: int, files: array<string, true>}>
+     */
+    public static function skippedEvents(): array
+    {
+        return self::$skippedEvents;
+    }
+
+    /**
+     * Test seam: the record is process-scoped launch state, and suites that
+     * mint their own CC files need their own view of it.
+     */
+    public static function resetSkippedEventsForTesting(): void
+    {
+        self::$skippedEvents = [];
     }
 }

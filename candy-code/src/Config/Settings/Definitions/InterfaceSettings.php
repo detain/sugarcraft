@@ -62,7 +62,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withEnumValues(Theme::names())
                 ->withOptionsSource(OptionsSource::Themes)
                 ->withLabel(Lang::t('settings.theme.label'))
-                ->withHelp('Colour theme; /theme and the palette change it live.')
+                ->withHelp(Lang::t('settings.theme.help'))
                 ->withReaderSymbol(Bootstrap::class . '::chat'),
             SettingDefinition::new('statusLine', SettingType::Map)
                 ->withCategory(SettingCategory::Interface)
@@ -72,7 +72,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withUi(UiEditability::Complex)
                 ->withLabel(Lang::t('settings.statusLine.label'))
-                ->withHelp('{"type": "command", "command": "…", "refreshSeconds": 2}: a shell command whose output paints the status bar, re-run every refreshSeconds (2 to 3600, default 2).')
+                ->withHelp(Lang::t('settings.statusLine.help'))
                 ->withReaderSymbol(StatusLineCommand::class . '::fromSettings')
                 ->withReadBy('`Bootstrap::chat()`, `Chat::applySettings()` → `StatusLineCommand::fromSettings()`'),
             SettingDefinition::new('layout', SettingType::Json)
@@ -82,7 +82,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withUi(UiEditability::ReadOnly)
                 ->withLabel(Lang::t('settings.layout.label'))
-                ->withHelp('The docked-pane manifest; written by the shell when panes move.')
+                ->withHelp(Lang::t('settings.layout.help'))
                 ->withReaderSymbol(Bootstrap::class . '::app')
                 ->withReadBy('`Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()`'),
             // Roadmap 5.14a. Cosmetic and project-settable like `theme`: it
@@ -94,7 +94,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withEnumValues(TerminalNotifier::MODES)
                 ->withLabel(Lang::t('settings.notify.label'))
-                ->withHelp('off, bell (BEL) or osc9 (a desktop notification): sent when a turn ends and when the agent waits for an approval.')
+                ->withHelp(Lang::t('settings.notify.help'))
                 ->withReaderSymbol(TerminalNotifier::class . '::fromConfig')
                 ->withReadBy('`Chat` (turn end, permission prompt) → `TerminalNotifier::fromConfig()`'),
             // Roadmap 5.14i. USER-only: it makes comments in the repository's
@@ -104,7 +104,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Prompt)
                 ->withLayered()
                 ->withLabel(Lang::t('settings.watchFiles.label'))
-                ->withHelp('Send a prompt when a saved file holds a comment ending in AI! (make a change) or AI? (answer a question); plain AI comments ride along as context. Polled while the chat is idle; only comments saved after launch fire, each once. Terminal sessions only: the watcher runs in the terminal process, so a session hosted by `candy-code serve` does not watch files.')
+                ->withHelp(Lang::t('settings.watchFiles.help'))
                 ->withReaderSymbol(AiCommentWatcher::class . '::enabled')
                 ->withReadBy('`Chat::subscriptions()` → `AiCommentWatcher::enabled()`'),
             SettingDefinition::new('queueMode', SettingType::Enum, QueueMode::Steer->value)
@@ -115,7 +115,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnumValues(array_map(static fn (QueueMode $m): string => $m->value, QueueMode::cases()))
                 ->withLabel(Lang::t('settings.queueMode.label'))
-                ->withHelp('steer (the agent reads it at its next step), followup (sent after the turn) or interrupt (stop the turn at its next step, then send). Tab always queues.')
+                ->withHelp(Lang::t('settings.queueMode.help'))
                 ->withReaderSymbol(QueueMode::class . '::onEnter')
                 ->withReadBy('`Chat::submit()`, `SubmitOptions::effectiveDelivery()` → `QueueMode::onEnter()`'),
             // Cosmetic and project-settable like `theme`: it only says what
@@ -129,7 +129,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withEnvVar(TerminalBackground::ENV_OVERRIDE)
                 ->withEnumValues(TerminalBackground::SETTING_VALUES)
                 ->withLabel(Lang::t('settings.terminalBackground.label'))
-                ->withHelp('What the adaptive theme assumes behind the text: auto asks the terminal (OSC 11, then COLORFGBG); light or dark says so outright.')
+                ->withHelp(Lang::t('settings.terminalBackground.help'))
                 ->withReaderSymbol(TerminalBackground::class . '::setting')
                 ->withReadBy('`Theme::adaptive()`, the shell chrome → `TerminalBackground::isDark()`, `color()` → `setting()`'),
             SettingDefinition::new('mouse', SettingType::Bool, true)
@@ -140,7 +140,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnvVar('CANDY_CODE_DISABLE_MOUSE')
                 ->withLabel(Lang::t('settings.mouse.label'))
-                ->withHelp('Report the mouse to candy-code (clicks, wheel, selection); off gives the terminal its own copy-on-select back.')
+                ->withHelp(Lang::t('settings.mouse.help'))
                 ->withReaderSymbol(Chat::class . '::mouseMode')
                 ->withReadBy('`Chat::programOptions()` at launch, `Chat::applySettings()` on a save → `Chat::mouseMode()`'),
             SettingDefinition::new('mouseClicks', SettingType::Bool, true)
@@ -151,7 +151,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnvVar('CANDY_CODE_DISABLE_MOUSE_CLICKS')
                 ->withLabel(Lang::t('settings.mouseClicks.label'))
-                ->withHelp('Clicks and drags act on what they hit; off keeps the wheel and ignores clicks.')
+                ->withHelp(Lang::t('settings.mouseClicks.help'))
                 ->withReaderSymbol(Chat::class . '::mouseClicksEnabled'),
             SettingDefinition::new('scrollWheelLines', SettingType::Int, Chat::SCROLL_WHEEL_LINES)
                 ->withCategory(SettingCategory::Interface)
@@ -161,7 +161,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1, 20)
                 ->withLabel(Lang::t('settings.scrollWheelLines.label'))
-                ->withHelp('Transcript lines one wheel tick scrolls.')
+                ->withHelp(Lang::t('settings.scrollWheelLines.help'))
                 ->withReaderSymbol(Chat::class . '::scrollWheelLines'),
             SettingDefinition::new('doubleEscSeconds', SettingType::Float, Chat::DOUBLE_ESCAPE_WINDOW_SECONDS)
                 ->withCategory(SettingCategory::Interface)
@@ -171,7 +171,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(0.2, 3.0)
                 ->withLabel(Lang::t('settings.doubleEscSeconds.label'))
-                ->withHelp('How quickly the second Esc must follow the first to cancel a running turn.')
+                ->withHelp(Lang::t('settings.doubleEscSeconds.help'))
                 ->withReaderSymbol(Chat::class . '::doubleEscapeWindowSeconds'),
             SettingDefinition::new('paletteMru', SettingType::Int, Chat::PALETTE_MRU_LIMIT)
                 ->withCategory(SettingCategory::Interface)
@@ -181,7 +181,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(0, 50)
                 ->withLabel(Lang::t('settings.paletteMru.label'))
-                ->withHelp('How many recently used palette rows are remembered and ranked first; 0 remembers none.')
+                ->withHelp(Lang::t('settings.paletteMru.help'))
                 ->withReaderSymbol(Chat::class . '::paletteMruLimit'),
             SettingDefinition::new('diffPreviewRows', SettingType::Int, Renderer::DIFF_MAX_ROWS)
                 ->withCategory(SettingCategory::Interface)
@@ -191,7 +191,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(4, 1000)
                 ->withLabel(Lang::t('settings.diffPreviewRows.label'))
-                ->withHelp('Rows of an Edit or Write diff shown in the transcript before the rest is summarised.')
+                ->withHelp(Lang::t('settings.diffPreviewRows.help'))
                 ->withReaderSymbol(Renderer::class . '::diffPreviewRows'),
             SettingDefinition::new('toolOutputPreviewLines', SettingType::Int, Renderer::TOOL_OUTPUT_MAX_LINES)
                 ->withCategory(SettingCategory::Interface)
@@ -201,7 +201,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1, 200)
                 ->withLabel(Lang::t('settings.toolOutputPreviewLines.label'))
-                ->withHelp('Lines of a collapsed tool result shown in the transcript; Ctrl+O expands the rest.')
+                ->withHelp(Lang::t('settings.toolOutputPreviewLines.help'))
                 ->withReaderSymbol(Renderer::class . '::toolOutputPreviewLines'),
             // Retention DELETES conversations, so it is the operator's own
             // switch: a checkout must not be able to prune their history.
@@ -213,7 +213,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withEnvVar('CANDY_CODE_SESSION_RETENTION_DAYS')
                 ->withRange(0, SessionStore::MAX_RETENTION_DAYS)
                 ->withLabel(Lang::t('settings.sessionRetentionDays.label'))
-                ->withHelp('Each launch deletes unnamed, unpinned sessions untouched for this many days and says which; 0 (the default) keeps everything.')
+                ->withHelp(Lang::t('settings.sessionRetentionDays.help'))
                 ->withReaderSymbol(Bootstrap::class . '::sessionRetentionDays')
                 ->withReadBy('`Bootstrap::sessionStore()` at launch → `sessionRetentionDays()`'),
             // The title model's two side-calls (roadmap N-P4g). Switching
@@ -227,7 +227,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
                 ->withLabel(Lang::t('settings.sessions.autoTitle.label'))
-                ->withHelp('Name each new session from its first turn with one call on the title model; off leaves it unnamed until /rename.')
+                ->withHelp(Lang::t('settings.sessions.autoTitle.help'))
                 ->withReaderSymbol(TitleService::class . '::autoTitleEnabled')
                 ->withReadBy('`Chat` turn dispatch → `TitleService::titleCall()` → `autoTitleEnabled()`'),
             SettingDefinition::new(TitleService::PROMPT_SUGGESTIONS_SETTING, SettingType::Bool, true)
@@ -238,7 +238,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnvVar('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS')
                 ->withLabel(Lang::t('settings.promptSuggestions.label'))
-                ->withHelp('After each turn, ask the title model for the message you are likely to send next and show it greyed in the empty input box (→ accepts it).')
+                ->withHelp(Lang::t('settings.promptSuggestions.help'))
                 ->withReaderSymbol(TitleService::class . '::promptSuggestionsEnabled')
                 ->withReadBy('`Chat` turn settle → `TitleService::suggestionCall()` → `promptSuggestionsEnabled()`'),
             SettingDefinition::new(TitleService::PROMPT_SUGGESTION_HISTORY_SETTING, SettingType::Int, TitleService::PROMPT_SUGGESTION_HISTORY)
@@ -248,7 +248,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1, 100)
                 ->withLabel(Lang::t('settings.promptSuggestionHistory.label'))
-                ->withHelp('Recent messages (each clipped to 2000 characters) the prompt-suggestion call is shown.')
+                ->withHelp(Lang::t('settings.promptSuggestionHistory.help'))
                 ->withReaderSymbol(TitleService::class . '::promptSuggestionHistory')
                 ->withReadBy('`TitleService::suggestionCall()` → `promptSuggestionHistory()`'),
             SettingDefinition::new('expandToolOutput', SettingType::Bool, false)
@@ -258,7 +258,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
                 ->withLabel(Lang::t('settings.expandToolOutput.label'))
-                ->withHelp('Show each finished tool call\'s output in full in the transcript; Ctrl+O or a click still collapses one.')
+                ->withHelp(Lang::t('settings.expandToolOutput.help'))
                 ->withReaderSymbol(Renderer::class . '::toolOutputExpandedByDefault')
                 ->withReadBy('`Renderer::renderToolResults()`, `Chat::isToolOutputExpanded()` → `Renderer::toolOutputExpandedByDefault()`'),
             SettingDefinition::new('maxCheckpoints', SettingType::Int, EnhancedSessionStore::MAX_CHECKPOINTS_PER_SESSION)
@@ -268,7 +268,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1, 10000)
                 ->withLabel(Lang::t('settings.maxCheckpoints.label'))
-                ->withHelp('Turn checkpoints /rewind can return to, per session; the oldest are pruned past this.')
+                ->withHelp(Lang::t('settings.maxCheckpoints.help'))
                 ->withReaderSymbol(EnhancedSessionStore::class . '::maxCheckpoints')
                 ->withReadBy('`EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()`'),
             // ISS-047: the key map as a setting. USER tier only (the default —
@@ -286,7 +286,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::Complex)
                 ->withValidators(KeyBindingsValidator::new())
                 ->withLabel(Lang::t('settings.keybindings.label'))
-                ->withHelp('{"shell.palette": "Ctrl+B"}: bind an EXTRA chord to a binding id (the /keys reference names them) — Ctrl+<key>, Alt+<key>, Shift+<key>, or a lone function key; the shipped chord keeps working. Present-but-unusable refuses the launch; remove the key for the shipped bindings.')
+                ->withHelp(Lang::t('settings.keybindings.help'))
                 ->withReaderSymbol(KeyBindingRegistry::class . '::chordFor')
                 ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()` — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a)'),
             // TUI-3A: the composer's vim MODE (plan_comparison.md §3). USER
@@ -302,7 +302,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::Live)
                 ->withLabel(Lang::t('settings.vimMode.label'))
-                ->withHelp('NORMAL/INSERT editing in the draft box (i a I A o O Esc, h j k l w b e 0 $ x, dd D yy y p P v V): motions and deletion in NORMAL, verbatim typing in INSERT. A mode, not bindings — it never appears in /keys. Applies on the next keystroke after saving.')
+                ->withHelp(Lang::t('settings.vimMode.help'))
                 ->withReaderSymbol(Chat::class . '::vimModeEnabled')
                 ->withReadBy('`Chat::update()` key dispatch (arm re-sync + operator resolution, TUI-3A) → `ComposerVim` over the sugar-forms `TextArea` Vim layer (w5f)'),
         ];

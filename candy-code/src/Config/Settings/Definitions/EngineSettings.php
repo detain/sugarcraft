@@ -67,7 +67,7 @@ final class EngineSettings implements SettingDefinitionSet
                 // child and must end before the watchdog kills the turn.
                 ->withValidators(ThresholdOrderValidator::new(['parallelToolDeadlineSeconds', 'turnIdleTimeoutSeconds']))
                 ->withLabel(Lang::t('settings.turnIdleTimeoutSeconds.label'))
-                ->withHelp('Seconds a running turn may go without any progress before it is stopped as hung; idle time, never a total.')
+                ->withHelp(Lang::t('settings.turnIdleTimeoutSeconds.help'))
                 ->withReaderSymbol(EngineBackend::class . '::turnIdleTimeoutSeconds')
                 ->withReadBy('`EngineBackend::completeAsync()`, `summariseAsync()` → `turnIdleTimeoutSeconds()`, before the fork'),
             SettingDefinition::new('connectTimeoutSeconds', SettingType::Float, 15.0)
@@ -79,7 +79,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withEnvVar('CANDY_CODE_CONNECT_TIMEOUT')
                 ->withRange(0.001)
                 ->withLabel(Lang::t('settings.connectTimeoutSeconds.label'))
-                ->withHelp('Bound on reaching a provider host (DNS, TCP, TLS); not a request timeout.')
+                ->withHelp(Lang::t('settings.connectTimeoutSeconds.help'))
                 ->withReaderSymbol(CustomProvider::class . '::connectTimeoutSeconds')
                 ->withReadBy('`HttpClientDefaults::connectTimeoutSeconds()`, when a provider client is built'),
             SettingDefinition::new('streamIdleTimeoutSeconds', SettingType::Int, 3600)
@@ -88,7 +88,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(30)
                 ->withLabel(Lang::t('settings.streamIdleTimeoutSeconds.label'))
-                ->withHelp('Seconds one read of a streaming reply may wait for bytes before the connection is called dead; per read, never a total.')
+                ->withHelp(Lang::t('settings.streamIdleTimeoutSeconds.help'))
                 ->withReaderSymbol(CustomProvider::class . '::streamReadIdleTimeoutSeconds')
                 ->withReadBy('`HttpClientDefaults::streamReadIdleTimeoutSeconds()`, per streaming request'),
             SettingDefinition::new('streamHeaderTimeoutSeconds', SettingType::Float, 120.0)
@@ -99,7 +99,7 @@ final class EngineSettings implements SettingDefinitionSet
                 // ISS-024: the head-wait budget, decoupled from the connect
                 // bound that used to double as it at 15s.
                 ->withLabel(Lang::t('settings.streamHeaderTimeoutSeconds.label'))
-                ->withHelp('Seconds a connected streaming server may take to send its response headers; never a total request timeout.')
+                ->withHelp(Lang::t('settings.streamHeaderTimeoutSeconds.help'))
                 ->withReaderSymbol(CustomProvider::class . '::streamHeaderTimeoutSeconds')
                 ->withReadBy('`HttpClientDefaults::streamHeaderTimeoutSeconds()`, per streaming request; `BedrockProvider::completeStream()`, per-operation on ConverseStream'),
             SettingDefinition::new('providerRetryAttempts', SettingType::Int, TransientFailure::MAX_ATTEMPTS)
@@ -110,7 +110,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, TransientFailure::MAX_RETRY_ATTEMPTS_SETTING)
                 ->withLabel(Lang::t('settings.providerRetryAttempts.label'))
-                ->withHelp('Calls per provider request when it fails transiently (network, 5xx, 408, 429), the first included; 1 never retries.')
+                ->withHelp(Lang::t('settings.providerRetryAttempts.help'))
                 ->withReaderSymbol(TransientFailure::class . '::maxAttempts')
                 ->withReadBy('`Runtime::runStreaming()`, `runBatch()`, `AgentManager::executeSubAgent()` → `TransientFailure::maxAttempts()`'),
             SettingDefinition::new('providerRetryBaseBackoffMs', SettingType::Int, intdiv(TransientFailure::BASE_BACKOFF_MICROSECONDS, 1000))
@@ -121,7 +121,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(0, TransientFailure::MAX_BASE_BACKOFF_MS_SETTING)
                 ->withLabel(Lang::t('settings.providerRetryBaseBackoffMs.label'))
-                ->withHelp('Wait before the first retry of a failed provider call; each later wait doubles.')
+                ->withHelp(Lang::t('settings.providerRetryBaseBackoffMs.help'))
                 ->withReaderSymbol(TransientFailure::class . '::baseBackoffMicroseconds')
                 ->withReadBy('`TransientFailure::backoff()` → `baseBackoffMicroseconds()`'),
             SettingDefinition::new('temperature', SettingType::Float)
@@ -131,7 +131,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withRange(0.0, CustomProvider::MAX_TEMPERATURE)
                 ->withDefaultText('unset (`' . CustomProvider::DEFAULT_TEMPERATURE . '`)')
                 ->withLabel(Lang::t('settings.temperature.label'))
-                ->withHelp('Sampling temperature the `custom` provider sends when a request names none.')
+                ->withHelp(Lang::t('settings.temperature.help'))
                 ->withReaderSymbol(CustomProvider::class . '::temperature')
                 ->withReadBy('`CustomProvider::complete()`, `completeStream()` → `temperature()`'),
             // Roadmap N-P4g: the `debug.*` flags, the persistent spelling of
@@ -145,7 +145,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withEnvVar(SkillLoader::DEBUG_SKIPS_ENV)
                 ->withLabel(Lang::t('settings.debug.skills.label'))
-                ->withHelp('Put each skipped skill file and refused skills directory on stderr, not only the launch\'s one-line count.')
+                ->withHelp(Lang::t('settings.debug.skills.help'))
                 ->withReaderSymbol(SkillLoader::class . '::debugSkipsRequested')
                 ->withReadBy('`SkillLoader` (each skip, at launch) → `debugSkipsRequested()` → `DebugFlags::requested()`'),
             SettingDefinition::new(DebugFlags::COMMANDS, SettingType::Bool, false)
@@ -155,7 +155,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withEnvVar(CommandLoader::DEBUG_REFUSALS_ENV)
                 ->withLabel(Lang::t('settings.debug.commands.label'))
-                ->withHelp('Put each refused custom-command directory or file on stderr, not only the launch\'s one-line count.')
+                ->withHelp(Lang::t('settings.debug.commands.help'))
                 ->withReaderSymbol(CommandLoader::class . '::debugRefusalsRequested')
                 ->withReadBy('`CommandLoader::report()` → `debugRefusalsRequested()` → `DebugFlags::requested()`'),
             SettingDefinition::new(DebugFlags::RULES, SettingType::Bool, false)
@@ -165,7 +165,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withEnvVar(RuleLoader::DEBUG_RULES_REFUSALS_ENV)
                 ->withLabel(Lang::t('settings.debug.rules.label'))
-                ->withHelp('Put each refused rules directory or file on stderr.')
+                ->withHelp(Lang::t('settings.debug.rules.help'))
                 ->withReaderSymbol(RuleLoader::class . '::debugRefusalsRequested')
                 ->withReadBy('`RuleLoader::report()` → `debugRefusalsRequested()` → `DebugFlags::requested()`'),
             SettingDefinition::new(DebugFlags::STREAM, SettingType::Bool, false)
@@ -175,7 +175,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withEnvVar(Chat::DEBUG_STREAM_ENV)
                 ->withLabel(Lang::t('settings.debug.stream.label'))
-                ->withHelp('Put the "onToken observer threw, detaching it" line on stderr when an embedder\'s streaming sink fails mid-turn.')
+                ->withHelp(Lang::t('settings.debug.stream.help'))
                 ->withReaderSymbol(Chat::class . '::debugStreamRequested')
                 ->withReadBy('`Chat` (a throwing `onToken` sink) → `debugStreamRequested()` → `DebugFlags::requested()`'),
         ];

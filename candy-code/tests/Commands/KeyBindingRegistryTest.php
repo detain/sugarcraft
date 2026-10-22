@@ -125,7 +125,7 @@ final class KeyBindingRegistryTest extends TestCase
         $runes = KeyBindingRegistry::chatCtrlRunes();
         sort($runes);
 
-        $this->assertSame(['a', 'c', 'g', 'l', 'o', 'p', 'r', 'v', 'w'], $runes);
+        $this->assertSame(['a', 'c', 'f', 'g', 'l', 'o', 'p', 'r', 'v', 'w'], $runes);
     }
 
     /**
@@ -176,12 +176,12 @@ final class KeyBindingRegistryTest extends TestCase
         // In DECLARED row order, which is the order the accessors build in —
         // the sorted spellings live in the two tests above.
         $this->assertSame(['r', 'g'], KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'cold call');
-        $this->assertSame(['w', 'p', 'o', 'l', 'v', 'r', 'g', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'cold call');
+        $this->assertSame(['w', 'p', 'o', 'f', 'l', 'v', 'r', 'g', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'cold call');
         $this->assertSame(['n', 'k', 's', ',', 'g'], KeyBindingRegistry::shellCtrlRunes(), 'cold call');
 
         // Warm: the same answer, and now out of the memo rather than rebuilt.
         $this->assertSame(['r', 'g'], KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'warm call');
-        $this->assertSame(['w', 'p', 'o', 'l', 'v', 'r', 'g', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'warm call');
+        $this->assertSame(['w', 'p', 'o', 'f', 'l', 'v', 'r', 'g', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'warm call');
         $this->assertSame(['n', 'k', 's', ',', 'g'], KeyBindingRegistry::shellCtrlRunes(), 'warm call');
 
         $byContext = (new \ReflectionProperty(KeyBindingRegistry::class, 'ctrlRuneMemo'))->getValue();
@@ -363,11 +363,15 @@ final class KeyBindingRegistryTest extends TestCase
      * 145 -> 146 live (146 all), 14 groups, with the Ctrl+G history search
      * (plan_comparison TUI-2): `chat.history-search`, the first row of the
      * declared-live rebind polity in `chatCtrlRunesYieldedToShell()`.
+     *
+     * 146 -> 147 live (147 all), 14 groups, with the v2:a11y-F1 chat
+     * `Ctrl+F` row-cursor row: `chat.tool-row`, the keyboard half of the
+     * click-a-row affordance, claimed exactly like `chat.tool-output`.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(146, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(146, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(147, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(147, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(14, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

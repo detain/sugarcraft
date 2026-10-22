@@ -12,10 +12,10 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Host\TitleService;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
-use SugarCraft\Code\PromptSuggestionMsg;
+use SugarCraft\Code\App\PromptSuggestionMsg;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Session\TitleSource;
-use SugarCraft\Code\SessionTitledMsg;
+use SugarCraft\Code\App\SessionTitledMsg;
 use SugarCraft\Code\Usage;
 
 /**

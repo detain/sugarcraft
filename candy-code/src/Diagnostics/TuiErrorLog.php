@@ -41,7 +41,9 @@ namespace SugarCraft\Code\Diagnostics;
  * rather than giving up. WHAT THIS USED TO SAY: each "returns null with the
  * ini untouched", whose cost was the pre-fix behaviour — and that cost was
  * not confined to {@see RuntimeNoticeSink::warn()}, which has its own guard:
- * the DSML, MiniMax and SGLang parsers call `error_log()` directly, and with
+ * the DSML, MiniMax and SGLang parsers reached `error_log()` directly (W7-C
+ * moved them behind `Support\Log`'s channels; the destination answer below is
+ * unchanged), and with
  * the ini still on stderr their lines were painted over the frame. The chain
  * is now:
  *

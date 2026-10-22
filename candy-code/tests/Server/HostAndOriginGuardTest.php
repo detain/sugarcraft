@@ -116,7 +116,7 @@ final class HostAndOriginGuardTest extends TestCase
         $body = \json_decode((string) $response->getBody(), true);
         self::assertSame('host_refused', $body['error']['kind'] ?? null, 'the kind clients key on is unchanged');
         self::assertSame(
-            'this server does not answer to host "dev.example.com"; start it with --allowed-host dev.example.com or add it to server.allowedHosts',
+            'this server does not answer to host `dev.example.com`; start it with --allowed-host dev.example.com or add it to server.allowedHosts',
             $body['error']['message'] ?? null,
         );
         self::assertSame(['refused host "dev.example.com": start it with --allowed-host dev.example.com or add it to server.allowedHosts'], $logged);

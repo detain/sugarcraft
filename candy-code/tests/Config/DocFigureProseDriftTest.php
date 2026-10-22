@@ -15,6 +15,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\ClaudeCodeMcpClient;
 use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Config\StatusLineCommand;
@@ -2861,7 +2862,7 @@ final class DocFigureProseDriftTest extends TestCase
         // Wildcard split deliberately: a glued `*` literal here would be
         // harvested as glob-shaped and drift the PathGlob corpus figure
         // (E686 tranche-7's M7 lesson).
-        $tableEnd = strpos($arch, '`Sessions\\Background' . '*' . '`');
+        $tableEnd = strpos($arch, '`Background\Background' . '*' . '`');
         self::assertIsInt($tableStart);
         self::assertIsInt($tableEnd);
         $segment = substr($arch, $tableStart, $tableEnd - $tableStart);
@@ -2910,7 +2911,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame('.running', (new \ReflectionClassConstant('SugarCraft\Code\Workflows\WorkflowEngine', 'PAUSE_DIR'))->getValue(), 'the pause directory constant no longer spells .running — table cell drifted');
         self::assertSame(
             'candy_code_bg_<uid>_index',
-            \SugarCraft\Code\Sessions\BackgroundSupervisor::IPC_DIR_PREFIX . '<uid>' . \SugarCraft\Code\Sessions\BackgroundSupervisor::INDEX_DIR_SUFFIX,
+            \SugarCraft\Code\Background\BackgroundSupervisor::IPC_DIR_PREFIX . '<uid>' . \SugarCraft\Code\Background\BackgroundSupervisor::INDEX_DIR_SUFFIX,
             'the session index directory no longer spells candy_code_bg_<uid>_index — table cell drifted',
         );
 
@@ -3643,17 +3644,33 @@ final class DocFigureProseDriftTest extends TestCase
         preg_match_all('/^\| `([a-z-]+)` \|/m', $rows, $table);
         self::assertSame($statuses, array_combine(array_keys($statuses), $table[1]), 'the status table rows drifted from the constants in value or order');
 
-        $inventory = null;
-        foreach (self::functionSpans(self::sourceOf('Cli/Bootstrap.php')) as $span) {
+        // The public surface is `Bootstrap::mcpServerInventory()`; its body is
+        // `Cli/McpDecision.php`'s. Both halves are pinned: the entry point must
+        // still route through the shared decision path, and NEITHER slice may
+        // hold an exec sink — the delegate would gain a sink by accreting logic,
+        // the real body by losing its containment.
+        $bootstrapSource = self::sourceOf('Cli/Bootstrap.php');
+        $decisionSource = self::sourceOf('Cli/McpDecision.php');
+        $delegate = null;
+        $body = null;
+        foreach (self::functionSpans($bootstrapSource) as $span) {
             if ('mcpServerInventory' === $span['name']) {
-                $inventory = $span;
+                $delegate = $span;
             }
         }
-        self::assertIsArray($inventory, 'Bootstrap::mcpServerInventory() vanished — the no-proc_open claim lost its referent');
-        $slice = (string) substr(self::sourceOf('Cli/Bootstrap.php'), $inventory['begin'], $inventory['end'] - $inventory['begin']);
-        self::assertStringContainsString('mcpConfigDecision(', $slice, 'the slice no longer routes through the shared decision path — the zero-exec needles below would prove nothing without this anchor');
+        foreach (self::functionSpans($decisionSource) as $span) {
+            if ('mcpServerInventory' === $span['name']) {
+                $body = $span;
+            }
+        }
+        self::assertIsArray($delegate, 'Bootstrap::mcpServerInventory() vanished — the no-proc_open claim lost its entry point');
+        self::assertIsArray($body, 'McpDecision::mcpServerInventory() vanished — the no-proc_open claim lost its body');
+        $slice = (string) substr($bootstrapSource, $delegate['begin'], $delegate['end'] - $delegate['begin']);
+        self::assertStringContainsString('mcpConfigDecision(', $slice, 'the entry point no longer routes through the shared decision path — the zero-exec needles below would prove nothing without this anchor');
+        $bodySlice = (string) substr($decisionSource, $body['begin'], $body['end'] - $body['begin']);
         foreach (['proc_open(', 'popen(', 'shell_exec(', 'passthru(', 'system(', 'exec('] as $sink) {
-            self::assertSame(0, substr_count($slice, $sink), "mcpServerInventory() now calls {$sink} — the page claims the listing contains NO proc_open and starts nothing");
+            self::assertSame(0, substr_count($slice, $sink), "Bootstrap::mcpServerInventory() now calls {$sink} — the page claims the listing contains NO proc_open and starts nothing");
+            self::assertSame(0, substr_count($bodySlice, $sink), "McpDecision::mcpServerInventory() now calls {$sink} — the page claims the listing contains NO proc_open and starts nothing");
         }
         self::assertStringContainsString(
             'contains ' . \chr(42) . \chr(42) . 'no `proc_open()`' . \chr(42) . \chr(42),
@@ -5132,7 +5149,7 @@ final class DocFigureProseDriftTest extends TestCase
         $seenExemptions = [];
 
         $pages = array_values(array_filter(scandir($root . '/docs') ?: [], static fn(string $f): bool => str_ends_with($f, '.md')));
-        self::assertCount(22, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
+        self::assertCount(24, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
 
         $patterns = [
             '/[A-Za-z0-9_\/\\\\.\-]+\.php:[0-9]+(?:-[0-9]+)?/',
@@ -6007,9 +6024,9 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('mcpConfigDecision(', $changedText, 'the digest check no longer resolves through the shared decision path');
         self::assertStringNotContainsString('self::mcpClient(', $changedText, 'the changed-check now BUILDS a client — building starts servers, which no readout may do');
         $builderText = (string) substr($bootstrap, $builder['begin'], $builder['end'] - $builder['begin']);
-        self::assertStringContainsString('self::$mcpConfigDigests[$pid][$path] = $digest;', $builderText, 'the launch stopped storing its digest at the memo point — the panel line would compare against nothing');
+        self::assertStringContainsString('LaunchContext::rememberMcpConfigDigest($pid, $path, $digest);', $builderText, 'the launch stopped storing its digest at the memo point — the panel line would compare against nothing');
 
-        $prop = new \ReflectionProperty(Bootstrap::class, 'mcpConfigDigests');
+        $prop = new \ReflectionProperty(LaunchContext::class, 'mcpConfigDigests');
         self::assertTrue($prop->isPrivate() && $prop->isStatic(), 'the digest memo is process-global and private by design — the panel reads verdicts, not bytes');
         self::assertTrue(method_exists(Bootstrap::class, 'mcpConfigChangedSinceLaunch'));
     }
@@ -6094,7 +6111,7 @@ final class DocFigureProseDriftTest extends TestCase
      * gate in `src/` are one claim told twice. Every figure the paragraph
      * states derives live: the entry-refusal trio from the adapter's
      * `REPOSITORY_MUST_NOT_NAME`, the default argv from `DEFAULT_ARGS`, the
-     * fixed inventory label from Bootstrap's detail arm, the three config
+     * fixed inventory label from the inventory's detail arm, the three config
      * keys from the grant reader's own literals, and the absolute-path law
      * from the `str_starts_with` guard the refusal text rests on. A widening
      * of the gate that forgets the page — or a page edit that outpresents
@@ -6105,7 +6122,10 @@ final class DocFigureProseDriftTest extends TestCase
         $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
         $prose = self::markdownProse($raw);
         $adapter = self::sourceOf('MCP/ClaudeCodeMcpServer.php');
-        $bootstrap = self::sourceOf('Cli/Bootstrap.php');
+        // The grant reader and the inventory's detail arm live in
+        // Cli/McpDecision.php since the S1 split; the launch surface and every
+        // other consulted literal stay in Bootstrap. One window, both files.
+        $bootstrap = self::sourceOf('Cli/Bootstrap.php') . self::sourceOf('Cli/McpDecision.php');
 
         $reflected = new \ReflectionClass(\SugarCraft\Code\MCP\ClaudeCodeMcpServer::class);
         $mustNotName = array_keys($reflected->getConstant('REPOSITORY_MUST_NOT_NAME'));
@@ -6178,7 +6198,7 @@ final class DocFigureProseDriftTest extends TestCase
             'servers' => [],
             'error' => null,
         ]);
-        self::assertStringContainsString('"mcpServers"', $out);
+        self::assertStringContainsString('`mcpServers`', $out);
         self::assertStringContainsString('docs/MCP.md', $out);
         self::assertStringContainsString($section, $out);
 

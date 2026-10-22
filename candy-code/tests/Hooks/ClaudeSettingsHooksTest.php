@@ -30,10 +30,12 @@ final class ClaudeSettingsHooksTest extends TestCase
     {
         $this->dir = sys_get_temp_dir() . '/cc_settings_hooks_' . uniqid((string) getmypid(), true);
         mkdir($this->dir . '/.claude', 0o700, true);
+        ClaudeSettingsHooks::resetSkippedEventsForTesting();
     }
 
     protected function tearDown(): void
     {
+        ClaudeSettingsHooks::resetSkippedEventsForTesting();
         foreach ([$this->dir . '/.claude/settings.json', $this->dir . '/.claude', $this->dir] as $path) {
             @chmod($path, 0o700);
             @unlink($path);
@@ -307,10 +309,10 @@ YAML;
     }
 
     /**
-     * The one recognised exception: `Notification` has no case in
-     * {@see \SugarCraft\Code\Hooks\HookEvent} yet (plan ruling R3 — an
-     * enum-case addition is its own owner ruling), so its entries are skipped
-     * while every OTHER unknown event still refuses through HookConfig.
+     * v1:F-1 (supersedes the R3 skip-list): every event this parser meets
+     * without a {@see \SugarCraft\Code\Hooks\HookEvent} case is skipped AND
+     * RECORDED — `Notification` is merely the member of that family that
+     * forced the ruling. Known neighbours still load.
      */
     public function testTheNotificationEventIsSkippedWhileItsNeighboursLoad(): void
     {
@@ -322,14 +324,57 @@ YAML;
         ]));
 
         $this->assertSame(['cc:Stop:0'], array_column($rows, 'name'));
+        $this->assertSame(['Notification'], array_keys(ClaudeSettingsHooks::skippedEvents()));
+        $this->assertSame(1, ClaudeSettingsHooks::skippedEvents()['Notification']['groups']);
     }
 
-    public function testAnyOtherUnknownEventRefusesThroughTheNativeValidator(): void
+    public function testAnUnknownEventFromAForeignFileIsSkippedAndRecordedNotFatal(): void
     {
+        $path = $this->dir . '/.claude/settings.json';
+        file_put_contents($path, (string) json_encode([
+            'hooks' => [
+                'StopFailure' => [['hooks' => [['type' => 'command', 'command' => './fail.sh']]]],
+                'PreToolUse' => [['matcher' => 'Bash', 'hooks' => [['type' => 'command', 'command' => './guard.sh']]]],
+            ],
+        ]));
+
+        // THE POLARITY v1:F-1 EXISTS FOR: a foreign file naming an event
+        // candy-code has never heard of must not brick the launch.
+        $rows = ClaudeSettingsHooks::fromFile($path);
+
+        $this->assertSame(['cc:PreToolUse:0'], array_column($rows, 'name'));
+        $skipped = ClaudeSettingsHooks::skippedEvents();
+        $this->assertSame(['StopFailure'], array_keys($skipped));
+        $this->assertArrayHasKey($path, $skipped['StopFailure']['files']);
+    }
+
+    public function testLowercaseEventSpellingsAreUnknownAndJoinTheRecord(): void
+    {
+        $rows = ClaudeSettingsHooks::parse(
+            '{"hooks":{"preToolUse":[{"hooks":[{"type":"command","command":"./x.sh"}]}]}}',
+            'vintage CC file',
+        );
+
+        // Case-sensitive like HookEvent::tryFrom: `preToolUse` is NOT the
+        // PreToolUse event, it is an unmappable name — skipped, recorded,
+        // never silently refused-to-launch and never silently run.
+        $this->assertSame([], $rows);
+        $skipped = ClaudeSettingsHooks::skippedEvents();
+        $this->assertSame(['preToolUse'], array_keys($skipped));
+        $this->assertArrayHasKey('vintage CC file', $skipped['preToolUse']['files']);
+    }
+
+    public function testTheNativeDialectKeepsItsHardEventRefusal(): void
+    {
+        // R3's BLAST RADIUS was the defect, not its REFUSE-UNKNOWN law — so
+        // the law stands where it was written to stand: candy-code's OWN
+        // hooks.yaml dialect, read by HookConfig directly, never reached by
+        // the CC skip-and-record above. This is the refusal the class
+        // doc-block promises.
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/is not a hook event/');
 
-        ClaudeSettingsHooks::parse('{"hooks":{"preToolUse":[{"hooks":[{"type":"command","command":"./x.sh"}]}]}}');
+        HookConfig::parse("hooks:\n  preToolUse:\n    - name: g\n      command: ./x.sh\n", 'own hooks.yaml');
     }
 
     // =========================================================================

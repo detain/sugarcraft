@@ -25,7 +25,7 @@ use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Permissions\SessionPermissionMemo;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
-use SugarCraft\Code\ToolEventPumpMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
@@ -148,7 +148,7 @@ final class EngineAskModalTest extends TestCase
         [$pressed] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
         self::assertFalse($hookAsk->isSettled(), '`a` is not offered on a hook\'s question');
         self::assertSame($grants, $pressed->permissionGrants());
-        [$answered] = $asking->update(new \SugarCraft\Code\PermissionReplyMsg(PermissionReply::Always));
+        [$answered] = $asking->update(new \SugarCraft\Code\App\PermissionReplyMsg(PermissionReply::Always));
         self::assertSame(PermissionReply::Once, $hookAsk->resolution()?->reply);
         self::assertSame($grants, $answered->permissionGrants());
     }

@@ -163,7 +163,7 @@ final class SettingsEditorPolishTest extends TestCase
     {
         $plain = self::plain(SettingsEditor::open(self::sources(), 'zzzz-no-such-setting'), 160, 30);
 
-        self::assertStringContainsString('No setting matches "zzzz-no-such-setting"', $plain);
+        self::assertStringContainsString('No setting matches `zzzz-no-such-setting`', $plain);
         self::assertStringContainsString('Esc clears it', $plain);
         self::assertStringContainsString('Esc clear search', $plain, 'and so does the footer');
         self::assertStringNotContainsString('←→ category', $plain, 'the arrows do not switch category under a search');

@@ -210,7 +210,7 @@ final class ReadPathCensusTest extends TestCase
                 . 'proc_open() just created for it, so no party outside this process can '
                 . 'name it; the child refuses a value that is not is_file(). Same verdict '
                 . 'AND, since round 60, the same MECHANISM as '
-                . 'Sessions/BackgroundSupervisor.php|require: '
+                . 'Background/BackgroundSupervisor.php|require: '
                 . 'ProcessExecutor::autoloadPath() delegates to '
                 . 'BackgroundSupervisor::autoloadPath(), which asks the live Composer '
                 . 'ClassLoader first. It used to do its own two-climb arithmetic, which '
@@ -294,6 +294,23 @@ final class ReadPathCensusTest extends TestCase
                 . 'side (15d-15), under writeUserConfig()\'s lock; a symlinked config is followed only '
                 . 'to a regular file requirePrivatePolicyFile() accepts (userConfigWriteTarget())',
             'OWNED_HOME — the permission policy file, additionally ownership-checked before it is read',
+            'OWNED_HOME — keybindingsReloadParseFailure() (TUI-5) reading the user `config.json` and the '
+                . 'user keybindings file (LayeredSettings::USER_FILE under userSettingsDirOrNull()) to '
+                . 'refuse a /keys reload whose source no longer parses; both paths resolve under a home '
+                . 'HomeDirectory::owned() established as this user\'s, and the bytes are only ever '
+                . 'json_decode\'d into a validation verdict',
+        ],
+        'Cli/Bootstrap.php|fopen' => [
+            'SELF_LOCATED — acquireUserConfigLock(): the `.config.json.lock` sidecar beside the '
+                . 'config, created by this process under umask 077 and opened `c` only for the '
+                . 'timed LOCK_EX; no byte of it is read',
+        ],
+        'Cli/LegacyMigration.php|fopen' => [
+            'OWNED_HOME — serverRunning(): the pre-rename `server.lock` under a home '
+                . 'HomeDirectory::owned() established as this user\'s, opened `c` only to attempt '
+                . 'the non-blocking flock probe; absent file short-circuits on lstat and no byte is read',
+        ],
+        'Cli/McpDecision.php|file_get_contents' => [
             'CONTAINED — mcpServerInventory() reading the project `.mcp.json` for `candy-code mcp list`. '
                 . 'Same ContainedPath::within() compare and same trust gate mcpClient() applies, because both '
                 . 'come through mcpConfigDecision(); this arm is reached only on the TRUSTED verdict',
@@ -313,21 +330,6 @@ final class ReadPathCensusTest extends TestCase
                 . '(MCP-3): reached only when HomeDirectory::owned() established the home as this user\'s and '
                 . 'the file exists; the same three broken-shape reports as the project read, and the bytes '
                 . 'are listed and shadowed, never executed',
-            'OWNED_HOME — keybindingsReloadParseFailure() (TUI-5) reading the user `config.json` and the '
-                . 'user keybindings file (LayeredSettings::USER_FILE under userSettingsDirOrNull()) to '
-                . 'refuse a /keys reload whose source no longer parses; both paths resolve under a home '
-                . 'HomeDirectory::owned() established as this user\'s, and the bytes are only ever '
-                . 'json_decode\'d into a validation verdict',
-        ],
-        'Cli/Bootstrap.php|fopen' => [
-            'SELF_LOCATED — acquireUserConfigLock(): the `.config.json.lock` sidecar beside the '
-                . 'config, created by this process under umask 077 and opened `c` only for the '
-                . 'timed LOCK_EX; no byte of it is read',
-        ],
-        'Cli/LegacyMigration.php|fopen' => [
-            'OWNED_HOME — serverRunning(): the pre-rename `server.lock` under a home '
-                . 'HomeDirectory::owned() established as this user\'s, opened `c` only to attempt '
-                . 'the non-blocking flock probe; absent file short-circuits on lstat and no byte is read',
         ],
         'Cli/Attach.php|file_get_contents' => [
             'SELF_LOCATED — token(): the owner-token file in the `serve` state dir '
@@ -417,6 +419,16 @@ final class ReadPathCensusTest extends TestCase
                 . 'Bootstrap::userSettingsDirOrNull() — trustedConfigDirPath(), the home-OWNED '
                 . '~/.candy-code, deliberately NOT dirname(userConfigPath()) and so not '
                 . 'relocatable by --config',
+            // w1e (v1 F-4, spine commit 9c157d64e): the second sink is the
+            // corrupt-file diagnosis re-read, same caller-holds-the-boundary
+            // shape — keyAuditRows() hands it only the paths projectFiles()
+            // and the audit's own $configDir built, and the doc-block there
+            // argues the trust point: reading for a report is not applying.
+            'CALLER_SUPPLIED — unusableSettingsFileReason() re-reads the exact path the audit '
+                . 'walk just assembled (the caller passes no external name), purely to tell a '
+                . 'valid-but-empty `{}` from a corrupt one; the bytes are decoded and '
+                . 'summarised into a launch/doctor row, never merged into settings — whether '
+                . 'the file CONtributes stays with the trust grant above',
         ],
         'Config/PolicySnapshot.php|file_get_contents' => [
             'CALLER_SUPPLIED — read() resolves the snapshot path through the caller\'s '
@@ -619,12 +631,13 @@ final class ReadPathCensusTest extends TestCase
                 . 'outside the workspace (step 3.E)',
         ],
         'MCP/McpClient.php|file_get_contents' => [
-            'CONTAINED_UPSTREAM:Cli/Bootstrap.php — `$root/.mcp.json`, bounded against the root '
+            'CONTAINED_UPSTREAM:Cli/McpDecision.php — `$root/.mcp.json`, bounded against the root '
                 . 'that named it before this class is constructed. Still a constructor argument, so an '
                 . 'EMBEDDER building one directly owns its own boundary; the launch path has one',
         ],
         'MCP/McpTrustPins.php|file_get_contents' => [
-            'CALLER_SUPPLIED — the trust record path (audit MCP-5); both callers in Cli/Bootstrap.php name '
+            'CALLER_SUPPLIED — the trust record path (audit MCP-5); both call sites — '
+                . 'Bootstrap::claudeMcpGrant() and McpDecision::trustProjectMcp() — name '
                 . '`~/.candy-code/mcp-trust.json` through trustedConfigDirPath(). Hashes and summaries only, '
                 . 'never executed',
         ],
@@ -786,33 +799,45 @@ final class ReadPathCensusTest extends TestCase
             'CALLER_SUPPLIED — gitBranchAt(): that gitdir\'s HEAD, the same file `git branch --show-current` '
                 . 'reads; 4 KB, and only a `ref: refs/heads/<name>` line is kept, as the session\'s branch',
         ],
-        'Sessions/BackgroundSessionRunner.php|file_get_contents' => [
+        'Background/BackgroundSessionRunner.php|file_get_contents' => [
             'SELF_LOCATED — the per-spawn token file the supervisor minted in its 0700 '
                 . 'IPC dir, read to authenticate the daemon\'s handshake (audit M5)',
             'SELF_LOCATED — the same token file, re-read per connection to gate '
                 . 'HEARTBEAT/RESUME/STOP (audit M5)',
         ],
-        'Sessions/BackgroundShellRegistry.php|file_get_contents' => [
+        'Background/BackgroundSessionRunner.php|fopen' => [
+            // w1e (v1-m-2, spine commit eb07cb95b): both opens are the same
+            // sidecar rotation on the path `$this->bufferPath . '.log'` — a
+            // file this daemon process creates beside the buffer file it
+            // minted for its own session.
+            'SELF_LOCATED — trimSidecarLog()\'s read of its own sidecar log, '
+                . 'fseek-ed to the tail window and copied out to the `.1` '
+                . 'generation before the truncate',
+            'SELF_LOCATED — trimSidecarLog()\'s `r+b` re-open of the same '
+                . 'path, truncated in place so the O_APPEND writer\'s open '
+                . 'file description keeps feeding the fresh log',
+        ],
+        'Background/BackgroundShellRegistry.php|file_get_contents' => [
             'PROCESS_DERIVED — groupMemberAlive() (SHL-1) reads /proc/<pid>/stat for the numeric '
                 . 'entries the scandir below enumerated, to reject zombies from the liveness answer; '
                 . 'no config, project or $HOME path reaches the name',
             'SELF_LOCATED — readExitFile() reads back the exit-code file the wrapper child wrote '
                 . 'into this registry\'s own 0700 directory; a non-numeric body answers null',
         ],
-        'Sessions/BackgroundShellRegistry.php|fopen' => [
+        'Background/BackgroundShellRegistry.php|fopen' => [
             'SELF_LOCATED — sinkFiles() creates the stdout/stderr/exit sinks with `xb` in the '
                 . 'registry\'s own directory before the fork, settled to 0600',
             'SELF_LOCATED — sliceFrom() opens a capture file this registry created to tail from '
                 . 'the caller\'s cursor; the size guard answers before the open ever happens',
         ],
-        'Sessions/BackgroundShellRegistry.php|scandir' => [
+        'Background/BackgroundShellRegistry.php|scandir' => [
             'NAMES_ONLY — groupMemberAlive() enumerates /proc; the numeric names feed only the '
                 . 'stat reads above and nothing is admitted or refused on the listing itself',
             'NAMES_ONLY — sweepCorpseFiles() (SHL-1) lists this registry\'s own 0700 directory '
                 . 'for `sh-<hex>.(out|err|exit)` names no row still owns; the names feed only an '
                 . 'mtime check and an unlink, and no content read follows the listing',
         ],
-        'Sessions/BackgroundSupervisor.php|file_get_contents' => [
+        'Background/BackgroundSupervisor.php|file_get_contents' => [
             'SELF_LOCATED — the IPC buffer this supervisor named for its own child (or one '
                 . 'reconnect() adopted from the index after vetting its directory)',
             'SELF_LOCATED — the per-spawn token file this supervisor minted, read to '
@@ -829,13 +854,13 @@ final class ReadPathCensusTest extends TestCase
                 . 'pair — inside the same 0700 IPC directory; only rows whose askId is the '
                 . 'content-hash shape and whose reply is a known word are read at all',
         ],
-        'Sessions/BackgroundPermissionRelay.php|file_get_contents' => [
+        'Background/BackgroundPermissionRelay.php|file_get_contents' => [
             'SELF_LOCATED — the SERVER-MINTED answer file this relay was handed at spawn (F1): '
                 . 'a path this daemon could not derive, inside the supervisor-minted 0700 IPC '
                 . 'directory; only lines whose askId AND askToken both match the question being '
                 . 'awaited and whose reply is a valid word settle it (ISS-004, F2)',
         ],
-        'Sessions/BackgroundSupervisor.php|glob' => [
+        'Background/BackgroundSupervisor.php|glob' => [
             'NAMES_ONLY — the startup sweep (audit BG-2) lists `candy_code_bg_<uid>_*` names in the '
                 . 'temp dir; each candidate is then lstat-checked as a real directory of this uid '
                 . 'in the exact minted shape, and no content is read',
@@ -848,23 +873,23 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — ownedActiveSummaries() (roadmap 4.3-2) lists the same index directory; '
                 . 'the record is read by the file_get_contents above',
         ],
-        'Sessions/BackgroundSupervisor.php|fopen' => [
+        'Background/BackgroundSupervisor.php|fopen' => [
             'SELF_LOCATED — one index record a supervisor of this uid wrote 0600 into its own 0700 '
                 . 'index directory, lstat-checked as a regular file of this uid, opened r+ and '
                 . 'flock()ed to claim it; every path it names is re-vetted before use (recordIpc())',
         ],
-        'Sessions/BackgroundSupervisor.php|require' => [
+        'Background/BackgroundSupervisor.php|require' => [
             'PROCESS_DERIVED — inside the GENERATED child script: the composer autoload of the '
                 . 'installation already executing this code, found via the live ClassLoader\'s own '
                 . 'file. A hostile autoloader there is one this process has already loaded',
         ],
-        'Sessions/BackgroundSupervisor.php|scandir' => [
+        'Background/BackgroundSupervisor.php|scandir' => [
             'NAMES_ONLY — the same sweep lists one vetted IPC directory\'s entries to stat their '
                 . 'type and age; nothing is read, and a directory holding anything but regular '
                 . 'files and sockets is left whole',
         ],
         // AUT-1 (plan_comparison §3): per-row fire-claim locks.
-        'Sessions/ScheduleRegistry.php|fopen' => [
+        'Background/ScheduleRegistry.php|fopen' => [
             'SELF_LOCATED — claimLock() creates one schedule\'s fire-claim lock file with `c` '
                 . 'inside the 0700 `schedules/` directory beside this registry\'s own config path, '
                 . 'settles it to 0600 before any payload, and flock()s it non-blocking (the '
@@ -983,8 +1008,32 @@ final class ReadPathCensusTest extends TestCase
                 . 'the parent that created it',
             'SELF_LOCATED — entries()\' read of that same group ledger',
         ],
+        'Support/ToolIpcFiles.php|file_get_contents' => [
+            // w1e (v1-M-1, spine commit b71cc5384): the only content read in
+            // the stranded-result-dir sweep is the creator's own sentinel.
+            'SELF_LOCATED — sweepStalePoolDirs() reads the SafeDelete sentinel '
+                . 'marker THIS tool\'s creator stamped into its own result dir; '
+                . 'the bytes are a pid+start-time, consumed only as a liveness '
+                . 'verdict, never parsed as data',
+        ],
         'Support/ToolIpcFiles.php|glob' => [
             'SELF_LOCATED — sweeps this package\'s own IPC prefixes, uid-checked per entry',
+            // w1e (v1-M-1, same commit): second glob, the stranded sc_pool_*
+            // result directories; every entry must pass the name shape, the
+            // uid, the directory type, AND the creator sentinel before the
+            // later scandir below is ever pointed at it.
+            'SELF_LOCATED — sweepStalePoolDirs() lists only this package\'s '
+                . 'own AgentWorkerPool::RESULT_DIR_PREFIX names under the base '
+                . 'SafeDelete::baseIsSane() vouched for',
+        ],
+        'Support/ToolIpcFiles.php|scandir' => [
+            // w1e (v1-M-1, same commit): names only — each feeds an lstat
+            // (regular-file + mtime) and an unlink; the gate on any content
+            // is the later marker read above, and a non-regular entry voids
+            // the whole directory rather than touching it.
+            'NAMES_ONLY — enumerates the vetted result directory for '
+                . 'regular-file mtimes and unlink targets; nothing is read '
+                . 'through this listing',
         ],
         'Tools/BuiltIn/ApplyPatch.php|file_get_contents' => [
             'PATH_JAIL — every Update/Delete path is resolved through PathJail (or the worktree jail) before the read',
@@ -1242,7 +1291,7 @@ final class ReadPathCensusTest extends TestCase
             [
                 'Agents/ProcessExecutor.php|require',
                 'Commands/Specs/BuiltInCommands.php|require',
-                'Sessions/BackgroundSupervisor.php|require',
+                'Background/BackgroundSupervisor.php|require',
                 'Workflows/WorkflowRegistry.php|require',
             ],
             array_keys($execute),
@@ -1277,7 +1326,7 @@ final class ReadPathCensusTest extends TestCase
             // ContainedPath inventory came to list a file that never called it.
             'a mention in a doc-comment' => ["<?php /** calls glob() over src/ */\n\$x = 1;", 0],
             'a declaration of a same-named method' => ['<?php class C { public function file($p) {} }', 0],
-            // GENERATED CODE. src/Sessions/BackgroundSupervisor.php builds its
+            // GENERATED CODE. src/Background/BackgroundSupervisor.php builds its
             // forked child's source as a string and `require`s the autoloader
             // inside it; a token scan of the outer file cannot see that, so string
             // literals are re-tokenised. This is a real execute path, not a
@@ -1301,7 +1350,7 @@ final class ReadPathCensusTest extends TestCase
     public function testTheGeneratedChildScriptsRequireIsSeenInTheRealFile(): void
     {
         $sinks = $this->sinksIn(
-            (string) file_get_contents($this->srcDir . '/Sessions/BackgroundSupervisor.php'),
+            (string) file_get_contents($this->srcDir . '/Background/BackgroundSupervisor.php'),
         );
 
         $this->assertContains('require', $sinks, 'the forked child\'s autoload require');
@@ -1355,7 +1404,7 @@ final class ReadPathCensusTest extends TestCase
     /**
      * Every sink spelling in $code, as it should be named in the ledger.
      *
-     * STRING LITERALS ARE RE-TOKENISED, not skipped: `src/Sessions/BackgroundSupervisor.php`
+     * STRING LITERALS ARE RE-TOKENISED, not skipped: `src/Background/BackgroundSupervisor.php`
      * builds its forked child's whole source as a string and `require`s inside it,
      * which is an execute path an executable-token scan cannot see. Only the
      * `require`/`include` family is looked for in there — a sink NAME inside an

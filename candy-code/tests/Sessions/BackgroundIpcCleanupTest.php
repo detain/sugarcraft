@@ -6,9 +6,9 @@ namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSessionStatus;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSessionStatus;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Support\ToolIpcFiles;
 

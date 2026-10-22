@@ -6,10 +6,10 @@ namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundSessionRunner;
-use SugarCraft\Code\Sessions\BackgroundSessionStatus;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundSessionRunner;
+use SugarCraft\Code\Background\BackgroundSessionStatus;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
 use SugarCraft\Code\Tests\Sessions\StoppableDaemonFixtureTrait;
@@ -347,7 +347,7 @@ final class BgPermissionAskRelayTest extends TestCase
         self::assertSame('permissionAskTimeout', $window->getName());
         self::assertSame(-1.0, $window->getDefaultValue(), 'no config key means no relay: the pre-ISS-004 approver stays');
 
-        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Sessions/BackgroundSessionRunner.php');
+        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Background/BackgroundSessionRunner.php');
         self::assertSame(1, preg_match('/permissionAskTimeout[^\n]*is_numeric/s', $source), 'fromConfig parses the window before trusting it');
         // Split-concat, not a glued literal: the corpus census harvests every
         // glob-shaped string tree-wide, and only the pre-existing bare '*'
@@ -355,7 +355,7 @@ final class BgPermissionAskRelayTest extends TestCase
         // pinned pair-count).
         self::assertSame(1, preg_match('/permissionAnswerPath[^\n]' . '*' . 'is_string/s', $source), 'fromConfig parses the mint before trusting it');
         self::assertSame(1, preg_match('/isMintedAnswerPath\(/s', $source), 'the mint door is the only way an argv path is honoured');
-        self::assertSame(1, preg_match('/withPermissionApprover\(\s*\(new BackgroundPermissionRelay\(/s', (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Sessions/BackgroundSessionRunner.php')));
+        self::assertSame(1, preg_match('/withPermissionApprover\(\s*\(new BackgroundPermissionRelay\(/s', (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Background/BackgroundSessionRunner.php')));
 
         $methods = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Protocol/Methods/BgMethods.php');
         self::assertSame(1, preg_match('/permissionAskTimeout:\s*\$call->server->config\(\)->askTimeoutSeconds/', $methods), 'bg.spawn hands every spawned daemon the server ask window');

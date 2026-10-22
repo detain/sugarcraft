@@ -15,8 +15,8 @@ use SugarCraft\Code\Protocol\Params;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Server\ServerConfig;
-use SugarCraft\Code\Sessions\BackgroundSession;
-use SugarCraft\Code\Sessions\BackgroundStopOutcome;
+use SugarCraft\Code\Background\BackgroundSession;
+use SugarCraft\Code\Background\BackgroundStopOutcome;
 
 /**
  * `bg.*` (Appendix O §6.3): the workspace's background (`/bg`) sessions —

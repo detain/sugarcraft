@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\App\App;
-use SugarCraft\Code\ClipboardImagePastedMsg;
+use SugarCraft\Code\App\ClipboardImagePastedMsg;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Lang;

@@ -7,14 +7,14 @@ namespace SugarCraft\Code\Host;
 use React\EventLoop\Loop;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\InteractiveTurn;
 use SugarCraft\Code\Backend\PendingAsk;
-use SugarCraft\Code\BackendToolEventsMsg;
-use SugarCraft\Code\BangShellResultMsg;
+use SugarCraft\Code\App\BackendToolEventsMsg;
+use SugarCraft\Code\App\BangShellResultMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\CommandParser;
 use SugarCraft\Code\Commands\BangShell;
@@ -32,10 +32,10 @@ use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Goal\GoalJudge;
 use SugarCraft\Code\Goal\GoalLoop;
 use SugarCraft\Code\Goal\GoalState;
-use SugarCraft\Code\GoalJudgedMsg;
+use SugarCraft\Code\App\GoalJudgedMsg;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookResult;
-use SugarCraft\Code\HistoryCompactedMsg;
+use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\Host\Commands\CommandContext;
 use SugarCraft\Code\Host\Commands\CommandEffect;
 use SugarCraft\Code\Host\Commands\CommandEffectKind;
@@ -1644,7 +1644,7 @@ final class SessionHost
             contextTokens: $this->estimate($this->history),
             workspace: $this->workspace,
             grants: $this->grants,
-            scheduleRegistry: $this->workspace->service(\SugarCraft\Code\Sessions\ScheduleRegistry::class),
+            scheduleRegistry: $this->workspace->service(\SugarCraft\Code\Background\ScheduleRegistry::class),
         );
     }
 

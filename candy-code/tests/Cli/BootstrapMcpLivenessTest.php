@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\MCP\GitMcpServer;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
@@ -463,7 +464,7 @@ final class BootstrapMcpLivenessTest extends TestCase
     /** @return array<int, array<string, McpClient>> */
     private function readMemo(): array
     {
-        $ref = new \ReflectionProperty(Bootstrap::class, 'mcpClients');
+        $ref = new \ReflectionProperty(LaunchContext::class, 'mcpClients');
         $ref->setAccessible(true);
 
         /** @var array<int, array<string, McpClient>> $value */
@@ -475,7 +476,7 @@ final class BootstrapMcpLivenessTest extends TestCase
     /** @param array<int, array<string, McpClient>> $memo */
     private function writeMemo(array $memo): void
     {
-        $ref = new \ReflectionProperty(Bootstrap::class, 'mcpClients');
+        $ref = new \ReflectionProperty(LaunchContext::class, 'mcpClients');
         $ref->setAccessible(true);
         $ref->setValue(null, $memo);
     }
@@ -483,7 +484,7 @@ final class BootstrapMcpLivenessTest extends TestCase
     /** @return array<int, array<string, array{sha256: string, mtime: int}>> */
     private function readDigests(): array
     {
-        $ref = new \ReflectionProperty(Bootstrap::class, 'mcpConfigDigests');
+        $ref = new \ReflectionProperty(LaunchContext::class, 'mcpConfigDigests');
         $ref->setAccessible(true);
 
         /** @var array<int, array<string, array{sha256: string, mtime: int}>> $value */
@@ -495,7 +496,7 @@ final class BootstrapMcpLivenessTest extends TestCase
     /** @param array<int, array<string, array{sha256: string, mtime: int}>> $digests */
     private function writeDigests(array $digests): void
     {
-        $ref = new \ReflectionProperty(Bootstrap::class, 'mcpConfigDigests');
+        $ref = new \ReflectionProperty(LaunchContext::class, 'mcpConfigDigests');
         $ref->setAccessible(true);
         $ref->setValue(null, $digests);
     }

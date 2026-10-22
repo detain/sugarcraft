@@ -14,7 +14,7 @@ use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\SubAgent;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Workflows\Tasks;

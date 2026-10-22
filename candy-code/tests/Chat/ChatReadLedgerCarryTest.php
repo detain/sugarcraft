@@ -6,13 +6,13 @@ namespace SugarCraft\Code\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\AsyncCmd;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\ToolResult;
-use SugarCraft\Code\ToolResultsMsg;
+use SugarCraft\Code\App\ToolResultsMsg;
 use SugarCraft\Code\Tools\BuiltIn\Edit;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 use SugarCraft\Code\Tools\ReadLedger;

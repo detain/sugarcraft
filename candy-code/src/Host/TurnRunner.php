@@ -7,13 +7,13 @@ namespace SugarCraft\Code\Host;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Msg;
 use SugarCraft\Code\Agents\AgentManager;
-use SugarCraft\Code\AssistantMsg;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\InteractiveTurn;
 use SugarCraft\Code\Backend\ObservesReasoning;
-use SugarCraft\Code\BackendToolEventsMsg;
+use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\Pruning\ContextLedger;
 use SugarCraft\Code\Context\Pruning\PruningMode;
@@ -33,8 +33,9 @@ use SugarCraft\Code\Events\UsageUpdated;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\SessionPermissionMemo;
 use SugarCraft\Code\Role;
-use SugarCraft\Code\Sessions\ActiveSubagentsBlock;
-use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Background\ActiveSubagentsBlock;
+use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Todo\TodoList;
 use SugarCraft\Code\Todo\TodoReminder;
 use SugarCraft\Code\Tools\BuiltIn\Todo;
@@ -390,7 +391,7 @@ final class TurnRunner
             } catch (\Throwable $e) {
                 $userSink = null;
                 if ($reportObserverFailure !== null && $reportObserverFailure()) {
-                    error_log('Chat: onToken observer threw, detaching it for this turn: ' . $e->getMessage());
+                    Log::channel(Log::CHAT, 'onToken observer threw, detaching it for this turn: ' . $e->getMessage());
                 }
             }
         };
@@ -786,7 +787,7 @@ final class TurnRunner
      *
      * @param list<Message> $history
      */
-    public static function approvedPlanExit(array $history): ?\SugarCraft\Code\PermissionModeToggledMsg
+    public static function approvedPlanExit(array $history): ?\SugarCraft\Code\App\PermissionModeToggledMsg
     {
         for ($i = \count($history) - 1; $i >= 0; $i--) {
             $row = $history[$i];

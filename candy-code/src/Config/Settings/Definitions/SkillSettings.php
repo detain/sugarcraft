@@ -40,7 +40,7 @@ final class SkillSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::List)
                 ->withOptionsSource(OptionsSource::Skills)
                 ->withLabel(Lang::t('settings.disabledSkills.label'))
-                ->withHelp('Skills removed from discovery; also wins over enabledSkills.')
+                ->withHelp(Lang::t('settings.disabledSkills.help'))
                 ->withReaderSymbol(Bootstrap::class . '::skillRegistry')
                 ->withReadBy('`Bootstrap::chat()` → `skillRegistry()`'),
             SettingDefinition::new('enabledSkills', SettingType::StringList, [])
@@ -50,7 +50,7 @@ final class SkillSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::List)
                 ->withOptionsSource(OptionsSource::Skills)
                 ->withLabel(Lang::t('settings.enabledSkills.label'))
-                ->withHelp('Skills whose full bodies ride the system prompt every turn.')
+                ->withHelp(Lang::t('settings.enabledSkills.help'))
                 ->withReaderSymbol(Bootstrap::class . '::promptEnabledSkills')
                 ->withReadBy('`Bootstrap::backend()`, `backendFor()` → `promptEnabledSkills()`'),
             SettingDefinition::new(BundleDiscovery::SETTING_KEY, SettingType::StringList, [])
@@ -59,7 +59,7 @@ final class SkillSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::List)
                 ->withLabel(Lang::t('settings.pluginPaths.label'))
-                ->withHelp('Extra directories scanned for Claude-format plugin bundles, beside the two installed roots; a value may name a bundle itself or a container of bundles. User-tier only — a checkout cannot enroll its own plugins.')
+                ->withHelp(Lang::t('settings.pluginPaths.help'))
                 ->withReaderSymbol(BundleDiscovery::class . '::discover')
                 ->withReadBy('`BundleDiscovery::discover()` — fed by `Bootstrap::bundles()` at launch'),
             SettingDefinition::new(SkillMatcher::SETTING_LISTING_MAX_BYTES, SettingType::Int, SkillMatcher::DEFAULT_LISTING_MAX_BYTES)
@@ -68,7 +68,7 @@ final class SkillSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1)
                 ->withLabel(Lang::t('settings.skills.listingMaxBytes.label'))
-                ->withHelp('Byte budget for the whole skill listing in the system prompt; skills past it collapse into one "N more skills" line.')
+                ->withHelp(Lang::t('settings.skills.listingMaxBytes.help'))
                 ->withReaderSymbol(SkillMatcher::class . '::listForPrompt')
                 ->withReadBy('`Runtime::systemPromptSections()` → `SkillMatcher::listForPrompt()`, per prompt build'),
         ];

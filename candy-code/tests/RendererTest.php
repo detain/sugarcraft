@@ -13,6 +13,7 @@ use SugarCraft\Style\Style;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
@@ -167,7 +168,7 @@ final class RendererTest extends TestCase
             $chat = new Chat(
                 sessionStore: $store,
                 currentSessionId: 'session-b',
-                openTabs: self::openTabsFor(['session-a', 'session-b'], ['session-a' => 'Alpha', 'session-b' => 'Beta']),
+                tabState: new SessionTabState(tabs: self::openTabsFor(['session-a', 'session-b'], ['session-a' => 'Alpha', 'session-b' => 'Beta'])),
             );
 
             $out = Renderer::render($chat);
@@ -388,7 +389,7 @@ final class RendererTest extends TestCase
     {
         $history = [Message::user('fix it', 0), Message::assistant('Fixed.', 0)];
         [$chat] = (new Chat(history: $history))->withSize($cols, 30)
-            ->update(new \SugarCraft\Code\PromptSuggestionMsg($suggestion, 0, 2, null));
+            ->update(new \SugarCraft\Code\App\PromptSuggestionMsg($suggestion, 0, 2, null));
 
         return $chat;
     }
@@ -624,6 +625,47 @@ final class RendererTest extends TestCase
         $this->assertTrue($collapsed['overflow']);
     }
 
+    /**
+     * ux-m1: the fold budget is DISPLAY CELLS, so the same 8-cell allowance
+     * yields the same visible length regardless of script. Under the old
+     * per-codepoint count, ten grinning faces (20 cells, 10 codepoints) folded
+     * at 8 EMOJI = 16 cells — double the width an ASCII body would occupy.
+     */
+    public function testCollapseToolOutputBudgetsCellsNotCodepointsForEmoji(): void
+    {
+        $emoji = "\u{1F600}";
+        $collapsed = Renderer::collapseToolOutput(str_repeat($emoji, 10), 10, 8);
+
+        $this->assertSame(str_repeat($emoji, 4), $collapsed['output']);
+        $this->assertSame(8, Width::of($collapsed['output']));
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    public function testCollapseToolOutputFoldPointIsScriptStableForCjk(): void
+    {
+        $han = "\u{4F60}"; // 你, 2 cells
+        $collapsed = Renderer::collapseToolOutput(str_repeat($han, 10), 10, 8);
+
+        $this->assertSame(str_repeat($han, 4), $collapsed['output'], 'a 8-cell budget must fit four wide glyphs, not eight');
+        $this->assertSame(8, Width::of($collapsed['output']));
+    }
+
+    /**
+     * Escape bytes are not display width: the budget is spent on visible
+     * cells, and the inline SGR (plus its trailing reset) survive the cut.
+     * The old codepoint count charged the escape itself, folding the visible
+     * body short of the allowance and potentially mid-sequence.
+     */
+    public function testCollapseToolOutputDoesNotChargeEscapeBytesAgainstTheCellBudget(): void
+    {
+        $body = "\x1b[31m" . str_repeat('x', 30) . "\x1b[0m";
+        $collapsed = Renderer::collapseToolOutput($body, 10, 10);
+
+        $this->assertSame(10, Width::of($collapsed['output']), 'the visible budget was under-filled');
+        $this->assertStringContainsString("\x1b[31m", $collapsed['output'], 'the inline colour was dropped');
+        $this->assertStringContainsString("\x1b[0m", $collapsed['output'], 'the trailing reset was lost');
+    }
+
     public function testCollapseToolOutputHandlesEmptyAndDegenerateLimits(): void
     {
         $this->assertSame(['output' => '', 'overflow' => false], Renderer::collapseToolOutput('', 10, 100));
@@ -801,7 +843,7 @@ final class RendererTest extends TestCase
         // (`/theme`: `/rewind` was this example until it gained its `[n]`
         // hint, audit 15b-25, and `/sessions` until it gained `[<query>]`.)
         $bare = (string) preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($this->chat(buf: '/the')));
-        $this->assertStringContainsString('/theme — Switch the color theme', $bare);
+        $this->assertStringContainsString('/theme — Switch the colour theme', $bare);
     }
 
     /**
@@ -1738,7 +1780,7 @@ final class RendererTest extends TestCase
         ?\SugarCraft\Code\Backend\PendingAsk $pendingAsk = null,
     ): Chat {
         [$blocked] = $this->sizedChat([Message::user('clean up')], $cols, $rows)->update(
-            new \SugarCraft\Code\PermissionRequestMsg(
+            new \SugarCraft\Code\App\PermissionRequestMsg(
                 Message::assistant(''),
                 new \SugarCraft\Code\ToolCall($toolName, $arguments, 'call_1'),
                 $prompt,
@@ -1833,7 +1875,7 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('always allow Bash(git status *) (save to config)', $out);
         // Wrapped across two rows at this width; read as one line.
         $flat = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', Ansi::strip($out)));
-        $this->assertStringContainsString('(this session) p always allow Bash(git status *) (save to config) e edit what "always" allows', $flat, '`p` saves what `a` remembers, `e` edits it first');
+        $this->assertStringContainsString('(this session) p always allow Bash(git status *) (save to config) e edit what `always` allows', $flat, '`p` saves what `a` remembers, `e` edits it first');
         $this->assertStringContainsString('reject', $out);
         $this->assertStringContainsString('n / Esc', $out);
 
@@ -1917,7 +1959,7 @@ final class RendererTest extends TestCase
         [$opened] = $this->sizedChat([])->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
         $this->assertStringContainsString('New session', Renderer::render($opened));
 
-        [$blocked] = $opened->update(new \SugarCraft\Code\PermissionRequestMsg(
+        [$blocked] = $opened->update(new \SugarCraft\Code\App\PermissionRequestMsg(
             Message::assistant(''),
             new \SugarCraft\Code\ToolCall('Bash', [], 'call_1'),
             'Really?',
@@ -1974,7 +2016,7 @@ final class RendererTest extends TestCase
     public function testModalShrinksToNarrowTerminals(): void
     {
         [$blocked] = $this->sizedChat([Message::user('hi')], cols: 40)->update(
-            new \SugarCraft\Code\PermissionRequestMsg(
+            new \SugarCraft\Code\App\PermissionRequestMsg(
                 Message::assistant(''),
                 new \SugarCraft\Code\ToolCall('Bash', ['description' => 'Delete the build directory'], 'call_1'),
                 'Run it?',

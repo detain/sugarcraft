@@ -9,7 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Util\Sanitize;
-use SugarCraft\Code\StatusLineResultMsg;
+use SugarCraft\Code\App\StatusLineResultMsg;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
@@ -53,7 +53,7 @@ use SugarCraft\Code\Support\ToolIpcFiles;
  *
  *  - {@see cmd()} is the tick's entry point, driven by
  *    {@see \SugarCraft\Code\Chat::subscriptions()}'s tick and settled by the
- *    {@see \SugarCraft\Code\StatusLineResultMsg} its forked child resolves
+ *    {@see \SugarCraft\Code\App\StatusLineResultMsg} its forked child resolves
  *    (ISS-095); {@see refresh()} is the same run-if-due decision executed
  *    synchronously for callers that need the value now;
  *  - {@see line()} is a pure read for the renderer;

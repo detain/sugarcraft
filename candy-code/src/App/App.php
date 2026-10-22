@@ -96,7 +96,6 @@ use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
 use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Config\LayeredSettings;
-use SugarCraft\Code\ClipboardImagePastedMsg;
 use SugarCraft\Code\Media\ImageIngress;
 use SugarCraft\Code\Support\ClipboardImage;
 use SugarCraft\Code\Support\HomeDirectory;
@@ -169,7 +168,7 @@ final class App implements Model
     /** A second `s` in the Agents dashboard within this many seconds stops every run ({@see $agentsStopArmedAt}). */
     public const STOP_ALL_ARMED_SECONDS = 3.0;
 
-    /** Consecutive `Ctrl+O` presses within this many seconds walk up the transcript instead of retoggling the newest row ({@see $toolWalkState}). */
+    /** Consecutive `Ctrl+O` presses within this many seconds walk up the transcript instead of retoggling the newest row ({@see $toolWalkState}). A SETTLED cursor — placed by `Ctrl+F` or a row click — ignores this window entirely. */
     public const TOOL_WALK_WINDOW_SECONDS = 3.0;
 
     private function __construct(
@@ -455,13 +454,13 @@ final class App implements Model
         /**
          * What became of the messages the user sent delegated runs from the
          * Agent View composer (roadmap P-D2), newest last and capped at
-         * {@see AGENT_MESSAGES_KEPT} — one {@see \SugarCraft\Code\AgentMessageSentMsg}
+         * {@see AGENT_MESSAGES_KEPT} — one {@see \SugarCraft\Code\App\AgentMessageSentMsg}
          * per run and message, a follow-up's later state replacing its
          * earlier one. The view draws each as a `you → <agent> · …` row
          * until the run's own log shows it delivered
          * ({@see agentViewSentRows()}).
          *
-         * @var list<\SugarCraft\Code\AgentMessageSentMsg>
+         * @var list<\SugarCraft\Code\App\AgentMessageSentMsg>
          */
         public readonly array $agentMessages = [],
         /**
@@ -491,12 +490,17 @@ final class App implements Model
          */
         public readonly ?float $agentsStopArmedAt = null,
         /**
-         * Which transcript row the last `Ctrl+O` toggled (rv-a11y M3c):
-         * index `0` is the newest unit (Chat's own route), and a press
-         * within {@see TOOL_WALK_WINDOW_SECONDS} walks one row older, the
-         * keyboard equivalent of clicking an older row.
+         * Where the keyboard's transcript-row cursor stands (rv-a11y M3c,
+         * v2:a11y-F1): index `0` is the newest unit (Chat's own route), a
+         * `Ctrl+O` press within {@see TOOL_WALK_WINDOW_SECONDS} of the last
+         * walks one row older and toggles as it moves, while `Ctrl+F` (or a
+         * row click) SETTLES the cursor — `settled` true plus the unit's
+         * identity `key` — and a `Ctrl+O` on a settled cursor toggles exactly
+         * the focused row without moving. The key, not the index, is the
+         * cursor's identity, so a newer row arriving above it does not make
+         * it point somewhere else.
          *
-         * @var array{at: float, index: int}|null
+         * @var array{at: float, index: int, settled?: bool, key?: string}|null
          */
         public readonly ?array $toolWalkState = null,
         /**
@@ -701,7 +705,7 @@ final class App implements Model
      *     buffer by {@see \SugarCraft\Code\Tui\AgentOutputPane}'s Attach mode.
      *
      * Opening the run that is already open is the view's refresh — see
-     * {@see \SugarCraft\Code\OpenAgentViewMsg}.
+     * {@see \SugarCraft\Code\App\OpenAgentViewMsg}.
      */
     public function openAgentView(string $id, ?string $childSessionId = null, ?string $name = null): self
     {
@@ -961,14 +965,14 @@ final class App implements Model
      *
      * @return array{0: self, 1: ?\Closure}
      */
-    public function deliverAgentControl(\SugarCraft\Code\AgentControlMsg $control): array
+    public function deliverAgentControl(\SugarCraft\Code\App\AgentControlMsg $control): array
     {
         if ($control->agentIds === []) {
             return [$this->withStatus(match ($control->verb) {
-                \SugarCraft\Code\AgentControlMsg::RESUME => Lang::t('tui.app.no_agent.resume'),
-                \SugarCraft\Code\AgentControlMsg::PAUSE => Lang::t('tui.app.no_agent.pause'),
-                \SugarCraft\Code\AgentControlMsg::OPEN_SESSION => Lang::t('tui.app.no_agent.open'),
-                \SugarCraft\Code\AgentControlMsg::MESSAGE => Lang::t('tui.app.no_agent.message'),
+                \SugarCraft\Code\App\AgentControlMsg::RESUME => Lang::t('tui.app.no_agent.resume'),
+                \SugarCraft\Code\App\AgentControlMsg::PAUSE => Lang::t('tui.app.no_agent.pause'),
+                \SugarCraft\Code\App\AgentControlMsg::OPEN_SESSION => Lang::t('tui.app.no_agent.open'),
+                \SugarCraft\Code\App\AgentControlMsg::MESSAGE => Lang::t('tui.app.no_agent.message'),
                 default => Lang::t('tui.app.no_agent.stop'),
             }), null];
         }
@@ -977,25 +981,25 @@ final class App implements Model
         $names = $this->agentNames($control->agentIds);
         $now = microtime(true);
         switch ($control->verb) {
-            case \SugarCraft\Code\AgentControlMsg::CANCEL:
+            case \SugarCraft\Code\App\AgentControlMsg::CANCEL:
                 $armed = $this->agentCancelArmed;
                 if ($armed !== null && $armed['ids'] === $control->agentIds && $now - $armed['at'] <= self::AGENT_HARD_CANCEL_SECONDS) {
-                    $control = new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::STOP, $control->agentIds);
+                    $control = new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::STOP, $control->agentIds);
                     $app = $app->withStatus(Lang::t('tui.app.agent_stopping', ['names' => $names]));
                 } else {
                     $app = $app->mutate(agentCancelArmed: ['ids' => $control->agentIds, 'at' => $now])
                         ->withStatus(Lang::t('tui.app.agent_cancel_armed', ['names' => $names]));
                 }
                 break;
-            case \SugarCraft\Code\AgentControlMsg::PAUSE:
+            case \SugarCraft\Code\App\AgentControlMsg::PAUSE:
                 $app = $app->mutate(agentPaused: array_values(array_unique([...$this->agentPaused, ...$control->agentIds])))
                     ->withStatus(Lang::t('tui.app.agent_pausing', ['names' => ucfirst($names)]));
                 break;
-            case \SugarCraft\Code\AgentControlMsg::RESUME:
+            case \SugarCraft\Code\App\AgentControlMsg::RESUME:
                 $app = $app->mutate(agentPaused: array_values(array_diff($this->agentPaused, $control->agentIds)))
                     ->withStatus(Lang::t('tui.app.agent_resumed', ['names' => ucfirst($names)]));
                 break;
-            case \SugarCraft\Code\AgentControlMsg::OPEN_SESSION:
+            case \SugarCraft\Code\App\AgentControlMsg::OPEN_SESSION:
                 $app = $app->closeAgentView();
                 break;
         }
@@ -1043,13 +1047,13 @@ final class App implements Model
      * state of the same message — a follow-up that replied or failed —
      * replaces the earlier one, so each message keeps one row.
      */
-    public function recordAgentMessage(\SugarCraft\Code\AgentMessageSentMsg $sent): self
+    public function recordAgentMessage(\SugarCraft\Code\App\AgentMessageSentMsg $sent): self
     {
         $kept = $this->agentMessages;
-        if ($sent->status === \SugarCraft\Code\AgentMessageSentMsg::REPLIED || $sent->status === \SugarCraft\Code\AgentMessageSentMsg::FAILED) {
+        if ($sent->status === \SugarCraft\Code\App\AgentMessageSentMsg::REPLIED || $sent->status === \SugarCraft\Code\App\AgentMessageSentMsg::FAILED) {
             for ($i = \count($kept) - 1; $i >= 0; $i--) {
                 if ($kept[$i]->agentId === $sent->agentId && $kept[$i]->text === $sent->text
-                    && $kept[$i]->status === \SugarCraft\Code\AgentMessageSentMsg::RESUMING) {
+                    && $kept[$i]->status === \SugarCraft\Code\App\AgentMessageSentMsg::RESUMING) {
                     array_splice($kept, $i, 1);
                     break;
                 }
@@ -2737,10 +2741,10 @@ final class App implements Model
             $msg instanceof SelectSkillMsg => self::withoutEngineCmd($this->dispatch($msg)),
             // A click on an `agent:` zone in the chat (P-B3), the picker's
             // sub-agent row, and the open view's own tail tick (P-C2).
-            $msg instanceof \SugarCraft\Code\OpenAgentViewMsg => [$this->openAgentView($msg->agentId, $msg->childSessionId, $msg->name), null],
-            $msg instanceof \SugarCraft\Code\CloseAgentViewMsg => $this->closeAgentView()->delegateToChat($msg),
+            $msg instanceof \SugarCraft\Code\App\OpenAgentViewMsg => [$this->openAgentView($msg->agentId, $msg->childSessionId, $msg->name), null],
+            $msg instanceof \SugarCraft\Code\App\CloseAgentViewMsg => $this->closeAgentView()->delegateToChat($msg),
             // P-D2: the chat's answer to the Agent View composer's send.
-            $msg instanceof \SugarCraft\Code\AgentMessageSentMsg => [$this->recordAgentMessage($msg), null],
+            $msg instanceof \SugarCraft\Code\App\AgentMessageSentMsg => [$this->recordAgentMessage($msg), null],
             $msg instanceof KeyMsg => $this->handleKey($msg),
             $msg instanceof MouseMsg => $this->handleShellMouse($msg),
             $msg instanceof BackgroundColorMsg => $this->observeBackground($msg),
@@ -3428,7 +3432,10 @@ final class App implements Model
             }
 
             return match ($paneId) {
-                Pane::Tools->value => [$chat === null ? $this : $this->withChat($chat->toggleToolOutput($key)), null],
+                Pane::Tools->value => [
+                    $chat === null ? $this : $this->withChat($chat->toggleToolOutput($key))->withToolRowCursor($key),
+                    null,
+                ],
                 Pane::Agents->value => [$this->toggleAgentExpanded($key), null],
                 default => [$this, null],
             };
@@ -3915,7 +3922,7 @@ final class App implements Model
      * anything to translate into: {@see \SugarCraft\Code\Tui\Commands\CancelAgentCmd},
      * {@see \SugarCraft\Code\Tui\Commands\ResumeAgentCmd} and
      * {@see \SugarCraft\Code\Tui\Commands\StopAllAgentsCmd} now become an
-     * {@see \SugarCraft\Code\AgentControlMsg} for the runs they name —
+     * {@see \SugarCraft\Code\App\AgentControlMsg} for the runs they name —
      * delivered through each run's mailbox, which reaches a run wherever it
      * runs, so the shell needs no worker pool of its own — and
      * {@see \SugarCraft\Code\Tui\Commands\GroupInputCmd} turns the Agent
@@ -3938,31 +3945,31 @@ final class App implements Model
             $cmd instanceof CancelCmd => $this->feedChat([new KeyMsg(KeyType::Escape)]),
             // The live agents strip's stop (P-B3): the turn's own cancel_tool
             // for that run's Task call, which the chat owns.
-            $cmd instanceof \SugarCraft\Code\CancelAgentRunMsg => $this->delegateToChat($cmd),
+            $cmd instanceof \SugarCraft\Code\App\CancelAgentRunMsg => $this->delegateToChat($cmd),
             // The Agent View composer (P-D2): the runs' mailboxes are the
             // chat's, so the shell names the runs and the chat sends.
-            $cmd instanceof \SugarCraft\Code\AgentControlMsg => $this->deliverAgentControl($cmd),
+            $cmd instanceof \SugarCraft\Code\App\AgentControlMsg => $this->deliverAgentControl($cmd),
             // P-D3: the four commands that used to be inert. The dashboard's
             // c/r name its selected row's run; s stops every running run;
             // Ctrl+G turns the composer's broadcast on or off.
             $cmd instanceof \SugarCraft\Code\Tui\Commands\CancelAgentCmd => $this->deliverAgentControl(
-                new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::CANCEL, $this->dashboardRunIds($cmd->agentIndex)),
+                new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::CANCEL, $this->dashboardRunIds($cmd->agentIndex)),
             ),
             $cmd instanceof \SugarCraft\Code\Tui\Commands\ResumeAgentCmd => $this->deliverAgentControl(
-                new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::RESUME, $this->dashboardRunIds($cmd->agentIndex)),
+                new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::RESUME, $this->dashboardRunIds($cmd->agentIndex)),
             ),
             $cmd instanceof \SugarCraft\Code\Tui\Commands\StopAllAgentsCmd => $this->deliverAgentControl(
-                new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::CANCEL, $this->runningAgentIds()),
+                new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::CANCEL, $this->runningAgentIds()),
             ),
             $cmd instanceof \SugarCraft\Code\Tui\Commands\GroupInputCmd => [$this->toggleAgentBroadcast(), null],
             // The Agent View (P-C2): the dashboard's Peek → Attach `Enter`
             // opens it, and `Esc`/`Alt+↑` in it, or the dashboard's `q`,
             // leave it — the chat hears the close, to disarm its `Esc` `Esc`.
-            $cmd instanceof \SugarCraft\Code\OpenAgentViewMsg => [$this->openAgentView($cmd->agentId, $cmd->childSessionId, $cmd->name), null],
-            $cmd instanceof \SugarCraft\Code\CloseAgentViewMsg,
+            $cmd instanceof \SugarCraft\Code\App\OpenAgentViewMsg => [$this->openAgentView($cmd->agentId, $cmd->childSessionId, $cmd->name), null],
+            $cmd instanceof \SugarCraft\Code\App\CloseAgentViewMsg,
             $cmd instanceof \SugarCraft\Code\Tui\Commands\QuitAgentViewCmd => $this->agentViewTarget === null
                 ? [$this->closeAgentView(), null]
-                : $this->closeAgentView()->delegateToChat(new \SugarCraft\Code\CloseAgentViewMsg()),
+                : $this->closeAgentView()->delegateToChat(new \SugarCraft\Code\App\CloseAgentViewMsg()),
             default => [$this, null],
         };
     }
@@ -4338,13 +4345,21 @@ final class App implements Model
         // session picker or directory picker inside Chat, or a settings,
         // media-form, video-player or agent-view overlay above it — disarms
         // the walk, so that keystroke reaches the modal exactly as before.
-        if ($msg instanceof KeyMsg && self::isToolWalkChord($msg)
+        //
+        // v2:a11y-F1 (fix1021): `Ctrl+F` shares this gate — and its refusals —
+        // because it is the same conversation with the transcript: it moves
+        // the row cursor ONE ROW OLDER without toggling anything, the click-
+        // a-row equivalent the keyboard was missing; `Ctrl+O` on a settled
+        // cursor then toggles exactly THAT row instead of the newest.
+        if ($msg instanceof KeyMsg && (self::isToolWalkChord($msg) || self::isToolRowChord($msg))
             && $this->settingsEditor === null && $this->mediaForm === null
             && $this->videoPlayer === null && $this->agentViewTarget === null
             && $this->chat?->palette() === null && $this->chat?->sessionPicker() === null
             && $this->chat?->dirPicker() === null
         ) {
-            return $this->walkToolOutput($msg);
+            return self::isToolRowChord($msg)
+                ? $this->focusToolRow($msg)
+                : $this->walkToolOutput($msg);
         }
 
         [$next, $cmd] = $this->chat->update($msg);
@@ -4364,6 +4379,17 @@ final class App implements Model
     private static function isToolWalkChord(KeyMsg $msg): bool
     {
         return $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'o';
+    }
+
+    /**
+     * Is this keystroke exactly the `Ctrl+F` chord that moves the transcript
+     * row cursor? Shaped like {@see isToolWalkChord()} on purpose: the two
+     * chords share the gate and its modal refusals, so neither can steal the
+     * keystroke from a surface that answers it first.
+     */
+    private static function isToolRowChord(KeyMsg $msg): bool
+    {
+        return $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'f';
     }
 
     /**
@@ -4402,13 +4428,20 @@ final class App implements Model
     }
 
     /**
-     * The route behind `Ctrl+O` at the shell (rv-a11y M3c). The FIRST press
-     * of a burst is delegated to Chat untouched — the newest-unit behavior
-     * users already have, byte-identical. Each further press within
-     * {@see TOOL_WALK_WINDOW_SECONDS} toggles the next-older row unit
-     * ({@see toolWalkUnits()}) as one unit, following the unit's first key
-     * exactly like Chat's own batch toggle, and cycles once the transcript
-     * runs out. A burst that times out restarts at the newest row.
+     * The route behind `Ctrl+O` at the shell (rv-a11y M3c, v2:a11y-F1).
+     *
+     * With a SETTLED row cursor — a row `Ctrl+F` focused, or a click that
+     * named one — the press toggles exactly THAT row unit and nothing else:
+     * the older-row expand the mouse always had, now on the keyboard.
+     *
+     * Otherwise the FIRST press of a burst is delegated to Chat untouched —
+     * the newest-unit behavior users already have, byte-identical. Each
+     * further press within {@see TOOL_WALK_WINDOW_SECONDS} toggles the
+     * next-older row unit ({@see toolWalkUnits()}) as one unit, following the
+     * unit's first key exactly like Chat's own batch toggle, and cycles once
+     * the transcript runs out. A burst that times out restarts at the newest
+     * row; a cursor that outlives its row (the history was edited) falls back
+     * to that burst logic rather than silently retargeting.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -4421,6 +4454,27 @@ final class App implements Model
 
         $now = microtime(true);
         $state = $this->toolWalkState;
+        $focused = $this->focusedUnitIndex($units);
+
+        if ($focused !== null) {
+            $chat = $this->chat;
+            $expand = !$chat->isToolOutputExpanded($units[$focused][0]);
+            foreach ($units[$focused] as $id) {
+                if ($chat->isToolOutputExpanded($id) !== $expand) {
+                    $chat = $chat->toggleToolOutput($id);
+                }
+            }
+
+            $app = $chat === $this->chat ? $this : $this->withChat($chat)->autoEnablePanes();
+
+            return [$app->mutate(toolWalkState: [
+                'at' => $now,
+                'index' => $focused,
+                'settled' => true,
+                'key' => $units[$focused][0],
+            ]), null];
+        }
+
         $index = ($state !== null && $now - $state['at'] <= self::TOOL_WALK_WINDOW_SECONDS
             ? $state['index'] + 1
             : 0) % count($units);
@@ -4445,6 +4499,113 @@ final class App implements Model
         $app = $chat === $this->chat ? $this : $this->withChat($chat)->autoEnablePanes();
 
         return [$app->mutate(toolWalkState: ['at' => $now, 'index' => $index]), null];
+    }
+
+    /**
+     * The route behind `Ctrl+F` at the shell (v2:a11y-F1): move the transcript
+     * row cursor one unit older, cycling, WITHOUT touching any row's
+     * expansion — the gesture that makes "which row does `Ctrl+O` answer" a
+     * user choice instead of "whichever is newest". Seeding from a live burst
+     * ({@see TOOL_WALK_WINDOW_SECONDS}) continues where that burst stands,
+     * so the two chords compose; the first fresh press lands on the row one
+     * older than the newest, because `Ctrl+O` already owns the newest.
+     *
+     * A settled cursor is exempt from the burst window: it decays only when
+     * its row leaves the transcript ({@see focusedUnitIndex()}).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function focusToolRow(KeyMsg $msg): array
+    {
+        $units = $this->toolWalkUnits();
+        if ($units === []) {
+            return [$this, null];
+        }
+
+        $now = microtime(true);
+        $state = $this->toolWalkState;
+        $focused = $this->focusedUnitIndex($units);
+        $current = $focused ?? ($state !== null && $now - $state['at'] <= self::TOOL_WALK_WINDOW_SECONDS
+            ? $state['index']
+            : 0);
+        $index = ($current + 1) % count($units);
+
+        return [$this->mutate(toolWalkState: [
+            'at' => $now,
+            'index' => $index,
+            'settled' => true,
+            'key' => $units[$index][0],
+        ]), null];
+    }
+
+    /**
+     * Where the settled row cursor points in the CURRENT units, or null when
+     * there is no settled cursor. Identity is the stored key, not the index:
+     * a newer row arriving above the cursor shifts its index, and the cursor
+     * follows the ROW the user picked, not the number it happened to have.
+     *
+     * @param list<list<string>> $units
+     */
+    private function focusedUnitIndex(array $units): ?int
+    {
+        $state = $this->toolWalkState;
+        if ($state === null || ($state['settled'] ?? false) !== true) {
+            return null;
+        }
+
+        $key = $state['key'] ?? null;
+        if (!is_string($key)) {
+            return null;
+        }
+
+        foreach ($units as $index => $unit) {
+            if (in_array($key, $unit, true)) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The row-unit keys the SETTLED cursor stands on (W7-B), or the empty
+     * list while none is settled — the render seam's read of
+     * {@see focusedUnitIndex()}, in the identity the renderer keys rows by.
+     * The whole unit, not just its lead key: the highlight marks exactly the
+     * rows `Ctrl+O` will answer, so what the user sees and what the chord
+     * does never disagree.
+     *
+     * @return list<string>
+     */
+    public function focusedToolRowKeys(): array
+    {
+        $units = $this->toolWalkUnits();
+        $index = $this->focusedUnitIndex($units);
+
+        return $index === null ? [] : $units[$index];
+    }
+
+    /**
+     * Settle the row cursor on the unit that carries `$key` (v2:a11y-F1): a
+     * click names the exact row, and after it the keyboard's `Ctrl+O` answers
+     * that row — one conversation with the transcript, whichever hand steers.
+     * A key that no longer belongs to any unit (a stale zone click) moves
+     * nothing.
+     */
+    private function withToolRowCursor(string $key): self
+    {
+        foreach ($this->toolWalkUnits() as $index => $unit) {
+            if (in_array($key, $unit, true)) {
+                return $this->mutate(toolWalkState: [
+                    'at' => microtime(true),
+                    'index' => $index,
+                    'settled' => true,
+                    'key' => $unit[0],
+                ]);
+            }
+        }
+
+        return $this;
     }
 
     /**
@@ -4479,12 +4640,17 @@ final class App implements Model
         // the same per-paint seam tells the transcript renderer to hold its
         // footer off so the frame never carries two listings.
         Renderer::setAgentsPaneDocked($this->isDocked(Pane::Agents));
+        // W7-B: the settled Ctrl+F row cursor rides the same per-paint seam —
+        // the transcript paints its unit's rows in the theme's active style,
+        // for this frame only.
+        Renderer::setFocusedToolRowKeys($this->focusedToolRowKeys());
         try {
             return TuiRenderer::renderView($this, $this->cols, $this->rows);
         } finally {
             Renderer::setPaletteAbandoned(false);
             Renderer::setAgentView(null);
             Renderer::setAgentsPaneDocked(false);
+            Renderer::setFocusedToolRowKeys([]);
         }
     }
 
@@ -4508,7 +4674,7 @@ final class App implements Model
             $subscriptions = ($subscriptions ?? new Subscriptions())->withTick(
                 self::AGENT_VIEW_SUBSCRIPTION . $id,
                 self::AGENT_VIEW_TICK_SECONDS,
-                static fn (): CoreMsg => new \SugarCraft\Code\OpenAgentViewMsg($id),
+                static fn (): CoreMsg => new \SugarCraft\Code\App\OpenAgentViewMsg($id),
             );
         }
 
@@ -4526,7 +4692,7 @@ final class App implements Model
             $subscriptions = ($subscriptions ?? new Subscriptions())->withTick(
                 self::IDLE_COMPACT_SUBSCRIPTION,
                 self::IDLE_COMPACT_TICK_SECONDS,
-                static fn (): CoreMsg => new \SugarCraft\Code\IdleCompactTickMsg(),
+                static fn (): CoreMsg => new \SugarCraft\Code\App\IdleCompactTickMsg(),
             );
         }
 

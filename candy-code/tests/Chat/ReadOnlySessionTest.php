@@ -8,13 +8,14 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionLock;
-use SugarCraft\Code\SessionLockRetryMsg;
-use SugarCraft\Code\TranscriptFlushMsg;
+use SugarCraft\Code\App\SessionLockRetryMsg;
+use SugarCraft\Code\App\TranscriptFlushMsg;
 use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 
 /**
@@ -438,7 +439,7 @@ final class ReadOnlySessionTest extends TestCase
             sessionStore: $this->store,
             currentSessionId: 'shared',
             // ISS-102: Ctrl+Tab cycles OPEN TABS; the fixture's other row is opened too.
-            openTabs: self::tabsFromStore($this->store, activeId: 'shared'),
+            tabState: new SessionTabState(tabs: self::tabsFromStore($this->store, activeId: 'shared')),
             currentSessionName: 'Shared work',
         ))->withSessionLocking();
     }

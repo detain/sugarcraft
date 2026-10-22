@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Context\Compaction;
 
 /**
  * What the safeguard audit (plan_comparison.md CTX-4) made of a model-written
- * compaction summary. Carried on {@see \SugarCraft\Code\HistoryCompactedMsg::$safeguardHold}
+ * compaction summary. Carried on {@see \SugarCraft\Code\App\HistoryCompactedMsg::$safeguardHold}
  * as a detail string when — and only when — it is HOLD, and read at the three
  * landing sites that consume a model summary: {@see \SugarCraft\Code\Chat::landModelCompaction()}
  * refuses the typed route and degrades the parked one to the heuristic fold, the

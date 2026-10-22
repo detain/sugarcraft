@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Context;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\FrontmatterKeyAudit;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\ProjectRoot;
 
 /**
@@ -1122,7 +1123,7 @@ final class RuleLoader
     private function report(string $message): void
     {
         if ($this->reportRefusals ?? self::debugRefusalsRequested()) {
-            error_log('candy-code: ' . $message);
+            Log::channel(Log::APP, $message);
         }
     }
 
