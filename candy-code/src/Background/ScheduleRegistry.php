@@ -107,8 +107,8 @@ final class ScheduleRegistry
     /** Names this registry refused to load, already formatted for a human row. */
     private array $loadErrors = [];
 
-    /** mtime/size/ino stamp of the last read (or write), so stat() can stay rare. */
-    private ?array $latch = null;
+    /** content digest of the last read (or write), so a reload only follows real bytes. */
+    private ?string $latch = null;
 
     /** The file lock this process holds right now, or null; persist() re-uses it rather than re-entering flock. */
     private ?array $fileLock = null;
@@ -337,13 +337,22 @@ final class ScheduleRegistry
         }
         AtomicJsonFile::new($this->path)->withPermissions(0o600)->write($envelope);
         $this->lastPayload = $payload;
-        $this->latch = $this->statLatch();
+        $this->latch = $this->contentDigest();
     }
 
     /**
-     * Read the file if its stat stamp moved since the last touch. A host that
-     * edited schedules.json by hand (or another host's persist) lands here
-     * within one tick, without this process holding a watcher.
+     * Read the file if its content digest moved since the last touch. A host
+     * that edited schedules.json by hand (or another host's persist) lands
+     * here within one tick, without this process holding a watcher.
+     *
+     * The stamp is deliberately NOT a `stat()` tuple: PHP exposes only the
+     * one-second `mtime` here (no sub-second mtime, no ctime), so a peer that
+     * wrote and released inside the same second would leave a stat latch
+     * unchanged — and a stale claim answering "not changed" is a second fire
+     * of the peer's work, which is exactly the race the claim reload exists to
+     * close. A content digest cannot miss a byte that changed, whatever the
+     * clock's resolution; a rename that rewrote identical bytes correctly
+     * counts as no change.
      *
      * @return bool whether the roster was reloaded
      */
@@ -352,8 +361,8 @@ final class ScheduleRegistry
         if ($this->path === null) {
             return false;
         }
-        $stat = $this->statLatch();
-        if ($stat === $this->latch) {
+        $digest = $this->contentDigest();
+        if ($digest === $this->latch) {
             return false;
         }
         $this->load();
@@ -521,7 +530,7 @@ final class ScheduleRegistry
         if ($this->path === null) {
             return;
         }
-        $this->latch = $this->statLatch();
+        $this->latch = $this->contentDigest();
         $file = AtomicJsonFile::new($this->path);
         try {
             $document = $file->read();
@@ -660,18 +669,15 @@ final class ScheduleRegistry
         @fclose($lock['handle']);
     }
 
-    /** @return array{0: int|false, 1: int|false, 2: int|false}|null mtime/size/ino stamp, null when stat itself fails */
-    private function statLatch(): ?array
+    /** digest of the file's bytes, or null when there is nothing to digest */
+    private function contentDigest(): ?string
     {
         if ($this->path === null) {
             return null;
         }
-        clearstatcache(true, $this->path);
-        $stat = @stat($this->path);
-        if ($stat === false) {
-            return null;
-        }
+        \clearstatcache(true, $this->path);
+        $sum = @md5_file($this->path);
 
-        return [$stat['mtime'], $stat['size'], $stat['ino']];
+        return $sum === false ? null : $sum;
     }
 }
