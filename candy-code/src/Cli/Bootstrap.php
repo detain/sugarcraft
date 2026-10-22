@@ -972,29 +972,6 @@ final class Bootstrap
      */
     public const TRANSCRIPT_SEAM_CALL_SITES = 31;
 
-
-
-
-
-
-    /** @var array<string, list<string>> canonical root => hook entry identities the LAST launch loaded */
-
-    /** @var list<string> roots the LAST launch had under trustedProjectHooks */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     /**
      * Every directory this launch refused to read, keyed by the path as
      * configured — see {@see reportProjectTierRefusals()}.
