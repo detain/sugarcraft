@@ -3426,40 +3426,12 @@ final class Bootstrap
     }
 
     /**
-     * The run's selected provider and model as real objects, for the two
-     * consumers that need a {@see ProviderInterface} rather than the
-     * {@see Backend} the hosted chat runs on: {@see App} (which uses it as a
-     * label source for the status bar's provider name and never calls it) and
-     * {@see agentManager()} (which genuinely drives it, for sub-agent
-     * completions).
-     *
-     * Built from the same selection {@see selectedProviderLabel()} reports, and
-     * falls back to the offline {@see EchoProvider} whenever this run has no
-     * provider or the provider cannot be constructed: {@see backend()} has
-     * already warned on stderr AND seeded the transcript in that case (see
-     * {@see warnPermissionConfigInTranscript()}), and refusing to launch the TUI
-     * over an unusable label would be a worse outcome than showing "echo".
-     *
-     * @return array{0: ProviderInterface, 1: string}
+     * Delegates to {@see LaunchContext::provider()} — the body moved in the S1b
+     * composition split (W7-E C3); this keeps the door (and its visibility)
+     * every caller and the settings-schema reader citations name.
      */
-    public static function provider(): array
-    {
-        [$name, $model] = self::selectedProviderLabel();
-        $providerName = self::selectedProviderName();
-
-        if ($providerName !== null) {
-            try {
-                $factory = new ProviderFactory();
-                $config = self::providerConfigFor($providerName, $factory);
-                $config['model'] = $model;
-
-                return [$factory->create($config), $model];
-            } catch (\Throwable) {
-                // fall through to Echo, same degradation backend() applies
-            }
-        }
-
-        return [new EchoProvider(), $name === 'command' ? $model : 'echo'];
+    public static function provider(): array {
+        return LaunchContext::provider();
     }
 
     /**
@@ -4173,32 +4145,12 @@ public static function useMaxTurns(?string $maxTurns): void
     }
 
     /**
-     * The config array one provider NAME resolves to on this launch: the
-     * settings-layer override when {@see providerOverrides()} carries the
-     * name — layered over the defaults for its declared `type` so
-     * credentials, base URLs and models the entry omits still come from the
-     * built-in arm — or {@see ProviderFactory::defaultConfig()} unchanged.
-     *
-     * Every site that turns a selected provider name into a config array
-     * MUST call this instead of `defaultConfig()` directly, or the map is
-     * honoured in the palette and ignored on the wire — the exact split this
-     * review item (endpoint lockout) was about. An entry naming an unknown
-     * `type` lets the factory's own listing-plus-nearest-match error
-     * ({@see ProviderFactory::unknownTypeError()}) surface from the base
-     * lookup; this funnel adds no opinion about it.
-     *
-     * @return array<string, mixed>
+     * Delegates to {@see LaunchContext::providerConfigFor()} — the body moved in the S1b
+     * composition split (W7-E C3); this keeps the door (and its visibility)
+     * every caller and the settings-schema reader citations name.
      */
-    public static function providerConfigFor(string $name, ProviderFactory $factory): array
-    {
-        $entry = self::providerOverrides()[$name] ?? null;
-        if ($entry === null) {
-            return $factory->defaultConfig($name);
-        }
-
-        $type = (string) $entry['type'];
-
-        return array_merge($factory->defaultConfig($type), $entry);
+    public static function providerConfigFor(string $name, ProviderFactory $factory): array {
+        return LaunchContext::providerConfigFor($name, $factory);
     }
 
     /**
@@ -4545,44 +4497,12 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
-     * The model name this run should use on `$providerName`, or null to let the
-     * caller fall back to the provider's own default.
-     *
-     * Precedence, highest first: `--model` ({@see useModel()}), then
-     * `$CANDY_CODE_MODEL`, then the model PERSISTED FOR THIS PROVIDER — the
-     * `models` setting, `{"<provider>": "<model id>"}` (decision D9), which the
-     * settings editor writes — then null. Keyed by provider rather than one
-     * top-level `model`, because a model id means nothing to any other
-     * provider: a single key would send the last provider's model to the next
-     * one the moment `/model` switched. The flag and the variable stay
-     * provider-blind, as they always were — they name the model for whatever
-     * this launch runs.
-     *
-     * ONE resolver rather than several `??` chains, because there are three
-     * readers — {@see backendFor()}, which builds the backend that actually
-     * runs, {@see selectedProviderLabel()}, which produces the status-bar
-     * caption, and {@see workerProviderSpec()}, which hands forked sub-agent
-     * workers their provider. If only the first honoured a tier, the status bar
-     * would name a different model than the one answering, which is precisely
-     * the "a value true of one path displayed as a property of another" defect.
+     * Delegates to {@see LaunchContext::selectedModelName()} — the body moved in the S1b
+     * composition split (W7-E C3); this keeps the door (and its visibility)
+     * every caller and the settings-schema reader citations name.
      */
-    private static function selectedModelName(string $providerName): ?string
-    {
-        if (LaunchContext::modelOverride() !== null) {
-            return LaunchContext::modelOverride();
-        }
-
-        $env = getenv('CANDY_CODE_MODEL');
-        if ($env !== false && $env !== '') {
-            return $env;
-        }
-
-        // The layered read, so `models` in `~/.candy-code/settings.json` counts
-        // too; it is user-tier only, so no project file can choose it.
-        $persisted = self::readUserConfig()['models'] ?? null;
-        $model = \is_array($persisted) ? ($persisted[$providerName] ?? null) : null;
-
-        return \is_string($model) && trim($model) !== '' ? $model : null;
+    private static function selectedModelName(string $providerName): ?string {
+        return LaunchContext::selectedModelName($providerName);
     }
 
     /**
@@ -9773,86 +9693,21 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
-     * The provider/model pair to stamp on a session row this process
-     * creates, mirroring {@see backend()}'s own selection order.
-     *
-     * These are labels, not a second backend selection: they record what
-     * the run *asked* for. If a requested provider turns out to be
-     * unconstructable, {@see backend()} warns on stderr and degrades to
-     * Echo while this row still names the requested provider — recording
-     * the request is more useful than recording the fallback, and the
-     * store has no column for both. Both shell-out paths
-     * (`$CANDY_CODE_BACKEND_CMD`, `$CANDY_CODE_BACKEND_CMD_STREAM`) and the
-     * default path have no provider name at all, so they are labelled
-     * honestly as such rather than given an invented one.
-     *
-     * Public because {@see NonInteractive::run()} needs to distinguish "this
-     * run is on the offline Echo default" from "this run is on
-     * `$CANDY_CODE_BACKEND_CMD`" before it decides whether to warn that the
-     * answer did not come from a model — re-reading the same two env vars
-     * there would be a second copy of this precedence chain that could drift
-     * from {@see backend()}'s.
-     *
-     * @return array{0: string, 1: string}
+     * Delegates to {@see LaunchContext::selectedProviderLabel()} — the body moved in the S1b
+     * composition split (W7-E C3); this keeps the door (and its visibility)
+     * every caller and the settings-schema reader citations name.
      */
-    public static function selectedProviderLabel(): array
-    {
-        $name = self::selectedProviderName();
-        if ($name === null) {
-            // ONE label for both shell-out tiers. The label answers "did a
-            // model behind a provider produce this?", and the answer is no for
-            // either variable; a third label would also have to be taught to
-            // {@see provider()}, whose `$name === 'command'` arm is what keeps
-            // a shell-out run from being captioned "echo" in the status bar.
-            return self::backendCommandTierIsSelected() ? ['command', 'unknown'] : ['echo', 'echo'];
-        }
-
-        // Same resolver backendFor() builds the real backend from, so the
-        // caption cannot name a different model than the one answering.
-        $model = self::selectedModelName($name);
-        if ($model === null) {
-            try {
-                $configured = self::providerConfigFor($name, new ProviderFactory())['model'] ?? null;
-            } catch (\Throwable) {
-                $configured = null;
-            }
-            $model = is_string($configured) && $configured !== '' ? $configured : 'unknown';
-        }
-
-        return [$name, $model];
+    public static function selectedProviderLabel(): array {
+        return LaunchContext::selectedProviderLabel();
     }
 
     /**
-     * The provider name this run selected, or null when the run is not on
-     * a provider at all (either shell-out tier — see
-     * {@see backendCommandTierIsSelected()} — or the offline Echo default). Same precedence {@see backend()} applies:
-     * `$CANDY_CODE_PROVIDER`, then the name persisted by a previous Ctrl+P
-     * "Switch model".
-     *
-     * Public because this is the exact question the one-shot path has to ask
-     * before choosing between {@see backend()}'s lenient fallback and {@see
-     * backendFor()}'s throw-don't-degrade contract (crush_code.md Phase 0
-     * item 10): a non-null answer means *this run asked for a specific
-     * provider*, and silently answering it from Echo is the bug. Exposing the
-     * existing helper rather than re-deriving the precedence in {@see
-     * NonInteractive} keeps ONE definition of "which provider did this run
-     * select", so the backend, the session row's recorded provider and the
-     * one-shot hard-fail can never disagree about it.
+     * Delegates to {@see LaunchContext::selectedProviderName()} — the body moved in the S1b
+     * composition split (W7-E C3); this keeps the door (and its visibility)
+     * every caller and the settings-schema reader citations name.
      */
-    public static function selectedProviderName(): ?string
-    {
-        $env = getenv('CANDY_CODE_PROVIDER');
-        if ($env !== false && $env !== '') {
-            return $env;
-        }
-
-        if (self::backendCommandTierIsSelected()) {
-            return null;
-        }
-
-        $persisted = self::readUserConfig()['provider'] ?? null;
-
-        return is_string($persisted) && $persisted !== '' ? $persisted : null;
+    public static function selectedProviderName(): ?string {
+        return LaunchContext::selectedProviderName();
     }
 
     /**
@@ -9869,7 +9724,7 @@ public static function useMaxCost(?string $maxCost): void
      * variable was added, reading only the first of the two here is precisely
      * how those two answers would have drifted apart.
      */
-    private static function backendCommandTierIsSelected(): bool
+    public static function backendCommandTierIsSelected(): bool
     {
         foreach (['CANDY_CODE_BACKEND_CMD', 'CANDY_CODE_BACKEND_CMD_STREAM'] as $var) {
             if (self::backendCommandEnv($var) !== null) {
@@ -9987,20 +9842,12 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
-     * The model summaries go to when the user named one, or null for the
-     * conversation's own (roadmap 2.4-2): `$CANDY_CODE_SUMMARY_MODEL`, else
-     * the `summaryModel` key. Read at launch and carried on the engine
-     * ({@see EngineBackend::withSummaryModel()}), never re-read per turn.
+     * Delegates to {@see LaunchContext::summaryModel()} — the body moved in the S1b
+     * composition split (W7-E C3); this keeps the door (and its visibility)
+     * every caller and the settings-schema reader citations name.
      */
-    public static function summaryModel(): ?string
-    {
-        $env = \SugarCraft\Code\Context\Compaction\StepSummarizer::modelOverride();
-        if ($env !== null) {
-            return $env;
-        }
-        $configured = self::readUserConfig()['summaryModel'] ?? null;
-
-        return is_string($configured) && trim($configured) !== '' ? trim($configured) : null;
+    public static function summaryModel(): ?string {
+        return LaunchContext::summaryModel();
     }
 
     /**

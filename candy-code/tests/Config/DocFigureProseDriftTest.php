@@ -5349,8 +5349,10 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('**`echo` is not one of the nine.**', $segment, 'the echo exclusion sentence moved — echo is a degradation path, never a selectable name');
         self::assertNotContains('echo', $liveTypes, 'echo joined availableTypes() — the exclusion this paragraph stakes out is no longer true');
         self::assertStringContainsString('Unknown provider type:', $factory, 'the factory no longer throws the named rejection the echo paragraph quotes');
-        $provider = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), 'provider', 6000);
-        self::assertStringContainsString('new EchoProvider()', $provider, 'Bootstrap::provider() no longer hands out EchoProvider on the degradation path the paragraph describes');
+        // W7-E C3 (v4:S1b, 2026-10-21): provider()'s body moved to
+        // LaunchContext; the arm follows the construction it polices.
+        $provider = self::bodyExcerpt(self::sourceOf('Cli/LaunchContext.php'), 'provider', 6000);
+        self::assertStringContainsString('new EchoProvider()', $provider, 'LaunchContext::provider() no longer hands out EchoProvider on the degradation path the paragraph describes');
     }
 
     /**
