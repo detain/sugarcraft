@@ -417,7 +417,9 @@ final class WorktreeRemovalReportingTest extends TestCase
 
     /**
      * EXACTLY THREE PLACES IN `src/` OR `bin/` BUILD A `WorktreeManager`, BY
-     * ANY SHAPE (roadmap 4.9): `Bootstrap::tools()`, for `Task`'s isolated
+     * ANY SHAPE (roadmap 4.9): `LaunchContext::tools()` (the body moved out of
+     * `Bootstrap::tools()` at v4:S1b W7-E C1, 2026-10-21; the door delegates),
+     * for `Task`'s isolated
      * runs, `BackgroundCommand::spawnThunk()`, for a `/bg` session run as an
      * `isolation: worktree` agent, and `BackgroundSessionRunner`'s delegation
      * arm, for a background `Task` of such a preset (over the same root the
@@ -449,7 +451,9 @@ final class WorktreeRemovalReportingTest extends TestCase
             // ascending order lands src/Background/ ahead of src/Cli/.
             [
                 'src/Background/BackgroundSessionRunner.php: new',
-                'src/Cli/Bootstrap.php: new',
+                // W7-E C1 (v4:S1b, 2026-10-21): tools() construction moved with
+                // the body onto Cli/LaunchContext.php — same builder, new file.
+                'src/Cli/LaunchContext.php: new',
                 'src/Host/Commands/BackgroundCommand.php: new',
             ],
             self::sitesIn($files, $root),
