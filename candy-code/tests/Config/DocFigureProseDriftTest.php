@@ -2895,7 +2895,10 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString("'~/.candy-code/teams'", self::sourceOf('Agents/TeamManager.php'), 'TeamManager no longer defaults to ~/.candy-code/teams — table cell drifted');
         self::assertStringContainsString("string \$basePath = '.candy-code/worktrees/'", self::sourceOf('Agents/WorktreeConfig.php'), 'WorktreeConfig no longer defaults to .candy-code/worktrees/ — table cell drifted');
         self::assertStringContainsString("\$path = rtrim(\$this->repoRoot, '/') . '/' . \$path;", self::sourceOf('Agents/WorktreeManager.php'), 'WorktreeManager no longer anchors a relative base at the project root — the table\'s <root> drifted');
-        self::assertStringContainsString('WorktreeManager::new($taskRoot)', self::sourceOf('Cli/Bootstrap.php'), 'Bootstrap no longer builds the launch\'s worktree manager on the tools\' root — table row drifted');
+        // Re-armed W7-E 2026-10-21 (S1b composition split): the tools() body
+        // moved to LaunchContext (Bootstrap keeps the public delegate), so the
+        // worktree-manager build it does now lives with the body.
+        self::assertStringContainsString('WorktreeManager::new($taskRoot)', self::sourceOf('Cli/LaunchContext.php'), 'the tools builder no longer builds the launch\'s worktree manager on the tools\' root — table row drifted');
         self::assertSame('subagents', \SugarCraft\Code\Agents\Live\SubAgentTranscriptLog::DIR_NAME, 'the transcript log directory no longer spells subagents — table cell drifted');
         self::assertStringContainsString("'/.candy-code/' . self::DIR_NAME", self::sourceOf('Agents/Live/SubAgentTranscriptLog.php'), 'SubAgentTranscriptLog no longer roots its logs under ~/.candy-code — table cell drifted');
         self::assertSame('mailboxes', \SugarCraft\Code\Agents\Live\AgentInbox::DIR_NAME, 'the agent mailbox directory no longer spells mailboxes — table cell drifted');
@@ -5073,8 +5076,12 @@ final class DocFigureProseDriftTest extends TestCase
         $bootstrap = self::sourceOf('Cli/Bootstrap.php');
         self::assertTrue(method_exists(Bootstrap::class, $thread[1]), sprintf('Bootstrap::%s() no longer exists — the sentence naming it as the threader is stale', $thread[1]));
 
-        $threaderBody = self::bodyExcerpt($bootstrap, $thread[1], 6000);
-        self::assertStringContainsString('self::unfilteredTools(', $threaderBody, sprintf('%s() no longer delegates to unfilteredTools() — the authority the wiring moved under needs re-reading', $thread[1]));
+        // Re-armed W7-E (2026-10-21, S1b composition split): tools()'s body moved to
+        // LaunchContext — the method_exists above still finds the delegate door, and the
+        // threading excerpt (with the literal it uses to reach unfilteredTools) now lives
+        // with the body.
+        $threaderBody = self::bodyExcerpt(self::sourceOf('Cli/LaunchContext.php'), $thread[1], 6000);
+        self::assertStringContainsString('Bootstrap::unfilteredTools(', $threaderBody, sprintf('%s() no longer delegates to unfilteredTools() — the authority the wiring moved under needs re-reading', $thread[1]));
 
         $span = null;
         foreach (self::functionSpans($bootstrap) as $candidate) {
@@ -5102,6 +5109,11 @@ final class DocFigureProseDriftTest extends TestCase
             0,
             substr_count($bootstrap, 'instructionLoader: $loader'),
             'a site in Bootstrap started threading the loader into a tool directly instead of through the catalog context — the single-thread claim this arm pins needs re-reading',
+        );
+        self::assertSame(
+            0,
+            substr_count(self::sourceOf('Cli/LaunchContext.php'), 'instructionLoader: $loader'),
+            'a site in the tools builder started threading the loader into a tool directly instead of through the catalog context — same claim, other side of the W7-E split',
         );
 
         self::assertSame(

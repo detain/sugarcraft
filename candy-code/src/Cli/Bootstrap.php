@@ -8953,76 +8953,11 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
-     * Build the built-in coding tools, with a shared InstructionFileLoader
-     * wired into every tool that surfaces nested CLAUDE.md/AGENTS.md content
-     * (Read/Edit/Glob/Write) so those files are actually reachable when a user
-     * runs the real CLI binary.
-     *
-     * THIS ARRAY IS THE WHOLE MODEL-FACING TOOL SET. Its BUILT-IN half is
-     * TWELVE entries as of this writing — it was ten until {@see LspTool} was
-     * added and eleven until {@see TaskTool} was — and THAT count, not this
-     * array's length, is the domain for every "N built-in tools" figure in
-     * `README.md`. `src/Tools/BuiltIn/` holds
-     * exactly those twelve concrete `Tool` classes.
-     *
-     * TWELVE IS THE COUNT OF WIRED TOOLS, NOT OF USABLE ONES, and the two differ
-     * on a launch with no `lsp` setting: `LspTool` is reachable and answers every
-     * call with a "no language server configured" error until the user lists a
-     * server ({@see lspClient()}). A figure that said "twelve working tools"
-     * would be the wrong claim about this array.
-     *
-     * The array is longer than twelve only when the project ships a `.mcp.json` AND
-     * the user has listed this root under `trustedProjectMcp` — both conditions,
-     * see {@see mcpClient()} for why the second one exists. Then one
-     * {@see McpToolBridge} per tool the configured MCP servers advertise is
-     * appended at the end (see {@see mcpTools()}). That is a per-PROJECT number
-     * nothing in `src/` can know, which is why every count stated here and every
-     * scanned assertion about this method is about the built-in half. The one
-     * concrete `Tool` implementor under `src/` that is NOT in the literal below is
-     * `McpToolBridge`, for exactly that reason —
-     * {@see \SugarCraft\Code\Tests\Tools\BuiltInToolCorpus::DYNAMIC_TOOL_CLASSES}
-     * is where that exemption is recorded and asserted.
-     *
-     * NOT "BY CONSTRUCTION", which is what this doc-block used to say. Nothing
-     * derives this array from that directory or that directory from this array;
-     * they are two hand-maintained halves, and the reason they agree is a TEST
-     * that scans the directory —
-     * `BinCandyCodeWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`,
-     * whose expected set comes from `glob()` over `src/Tools/BuiltIn/` rather than
-     * a literal. Measured with the old literal assertions in place: an eleventh
-     * implementor added to that directory and not listed here left the whole
-     * Integration tier at `OK (467 tests, 2681 assertions)`, which is exactly how
-     * {@see Write} came to be written, tested, named in the README and unreachable
-     * from any real run. If you add a tool class, add it here — the mechanism that
-     * tells you is a red test, not the type system.
-     *
-     * @param InstructionFileLoader|null $loader Pass the caller's loader to
-     *        keep the engine's root-instruction reads and the tools' on-touch
-     *        reads on ONE instance (its dedup map is per-instance).
-     * @param SkillRegistry|null $skills The registry the model-facing {@see
-     *        SkillTool} resolves names against. Pass the caller's registry so
-     *        the tool, {@see EngineBackend::withSkillRegistry()} and the shell
-     *        pane all read ONE instance — two independently scanned
-     *        registries would let a skill disabled on one still be invocable
-     *        through the other. Defaults to a fresh scan of $root.
-     * @param LspClient|null $lsp Language servers for {@see LspTool} and the
-     *        Read outline, threaded through the catalog. The launch's callers
-     *        pass {@see lspClient()}; null — no `lsp` setting — leaves the tool
-     *        reachable but refusing.
-     * @param bool $rgAvailable Host has `rg`; threaded to {@see Grep} only.
-     *        {@see \SugarCraft\Code\Tools\Concerns\DetectsCapabilities} is the
-     *        probe and the boot call sites below are the only readers of it, so
-     *        this factory stays a pure function of its arguments and every test
-     *        that calls it without the flag renders the absent description.
-     * @param bool $fdAvailable Host has `fd`; same rule, threaded to {@see Glob}.
-     * @param RulesState|null $rulesState The session's rulebook toggle set, threaded
-     *        to the {@see RulePathNudge} and nothing else — the skills channel has
-     *        its own disable mechanism (`SkillRegistry::disableMultiple()`) and the
-     *        two trackers deliberately share no state. Trailing and defaulted for the
-     *        reason {@see \SugarCraft\Code\Providers\CustomProvider}'s
-     *        `$sessionAffinityId` is: the callers that hold no set (the `-p` path, a
-     *        background child, every test that boots the tool array for its shape)
-     *        keep calling with exactly the arguments they pass today.
+     * Build the built-in coding tools, filtered for the session — the whole
+     * model-facing tool array. The body moved to
+     * {@see LaunchContext::tools()} in the S1b composition split (W7-E);
+     * this stays the public door every caller and census reaches, and
+     * forwards every argument untouched.
      *
      * @return list<Tool>
      */
@@ -9037,23 +8972,7 @@ public static function useMaxCost(?string $maxCost): void
         ?AgentManager $taskManager = null,
         ?\SugarCraft\Code\Agents\AgentWorkerPool $taskPool = null,
     ): array {
-        // FILTERED HERE, NOT AT THE CALL SITES, and that is the load-bearing
-        // part rather than tidiness: `withTools(self::tools(...))` appears
-        // THREE times in this class — in `app()`, `backend()` and
-        // `backendFor()` — and a filter applied at two of them is a config key
-        // that works until the user switches provider. (The plan for this item
-        // named two sites; there are three. An earlier version of this comment
-        // named `chat()` as one of them, which is wrong in the way this project
-        // keeps being wrong: `chat()` reaches tools only transitively through
-        // `backend()` and holds no `self::tools(` call of its own. Measured with
-        // `grep -n 'self::tools(' src/Cli/Bootstrap.php`; deliberately no line
-        // numbers, since a comment quoting them decays on the next insertion
-        // above.) Everything
-        // downstream of this return receives an already-filtered set, including
-        // `mcpTools()`'s appended bridges, which is what makes
-        // `disabledTools: ["mcp__git__*"]` mean anything.
-        self::installSecretEnvAllowlist();
-        $tools = self::filterToolSet(self::unfilteredTools(
+        return LaunchContext::tools(
             $root,
             $loader,
             $skills,
@@ -9061,62 +8980,9 @@ public static function useMaxCost(?string $maxCost): void
             $rgAvailable,
             $fdAvailable,
             $rulesState,
-        ));
-
-        // GIT GUIDANCE SETTINGS (step 0.3), applied HERE for the reason the
-        // filter is: this is the one return all three `withTools()` call
-        // sites share. `includeGitInstructions` must be a bool and
-        // `attribution` an object of strings; anything else is ignored as if
-        // unset (the block on, no trailer), the tolerant direction every
-        // other `readUserConfig()` reader takes for a malformed preference.
-        // `attribution` can only arrive from the user tier
-        // (LayeredSettings::PROJECT_TIER_KEYS does not list it): it is text
-        // the model is told to stamp on every commit.
-        $gitConfig = self::readUserConfig();
-        $includeGit = $gitConfig['includeGitInstructions'] ?? true;
-        $attribution = $gitConfig['attribution'] ?? [];
-        $attribution = is_array($attribution) ? $attribution : [];
-        $commitTrailer = is_string($attribution['commit'] ?? null) ? $attribution['commit'] : '';
-        $prTrailer = is_string($attribution['pr'] ?? null) ? $attribution['pr'] : '';
-        $tools = array_map(
-            static fn (Tool $tool): Tool => $tool instanceof Bash
-                ? $tool->withGitGuidance(is_bool($includeGit) ? $includeGit : true, $commitTrailer, $prTrailer)
-                : $tool,
-            $tools,
+            $taskManager,
+            $taskPool,
         );
-
-        // THE TASK FEED (E675). Appended AFTER the filter, on purpose: the
-        // gate on this tool is not a config key but the CALLER holding an
-        // AgentManager at all — a feed built without one (a bare unit-test
-        // harness, an embedder with no agents configured) ships no Task, and
-        // fail-closed is the wrong shape for a tool that cannot function.
-        // The instance gets the SAME manager the Chat runs on (threaded in
-        // from `chat()`), never a fresh one: two managers would mean two
-        // sub-agent rosters and two sets of grants, the split-state bug this
-        // seam exists to prevent. What the sub-agent may then do is bounded
-        // by the preset's grants inside `executeAll`, not by this list.
-        //
-        // Roadmap 4.3-2: and able to run a delegation in the background. The
-        // supervisor is built HERE, in the launching process, so the sessions
-        // it spawns from a forked turn child are recorded as this process's
-        // and adopted by the host's own supervisor on its next poll
-        // (BackgroundSupervisor::adoptHandedOff()) — whichever instance that
-        // is. The session works in the same tree the tools are jailed to.
-        //
-        // Roadmap 4.9: and able to isolate a run. An agent whose preset says
-        // `isolation: worktree` gets a git worktree of this launch's root,
-        // under `<root>/.candy-code/worktrees/` (or CANDY_CODE_WORKTREES_DIR),
-        // through ONE manager per launch — the registry it keeps is shared
-        // on disk, so the forked turn children that create trees and the
-        // parent that sweeps them agree on which exist.
-        if ($taskManager !== null) {
-            $taskRoot = $root ?? (getcwd() ?: '.');
-            $tools[] = (new TaskTool($taskManager, $taskPool))
-                ->withBackgroundSupervisor(new BackgroundSupervisor(), $taskRoot)
-                ->withWorktreeManager(\SugarCraft\Code\Agents\WorktreeManager::new($taskRoot));
-        }
-
-        return $tools;
     }
 
     /**
@@ -9145,7 +9011,7 @@ public static function useMaxCost(?string $maxCost): void
      * @param ?array<string, mixed> $config the already-read merged config;
      *                                      null reads it
      */
-    private static function installSecretEnvAllowlist(?array $config = null): void
+    public static function installSecretEnvAllowlist(?array $config = null): void
     {
         $raw = ($config ?? self::readUserConfig())[self::SECRET_ENV_ALLOWLIST_CONFIG_KEY] ?? null;
 
@@ -9389,7 +9255,7 @@ public static function useMaxCost(?string $maxCost): void
      * @param list<Tool> $tools
      * @return list<Tool>
      */
-    private static function filterToolSet(array $tools): array
+    public static function filterToolSet(array $tools): array
     {
         $kept = self::toolSetUnder($tools, self::readUserConfig());
 
