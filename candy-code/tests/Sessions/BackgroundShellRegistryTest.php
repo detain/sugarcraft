@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Support\ProcessContainment;
 
@@ -507,8 +508,8 @@ final class BackgroundShellRegistryTest extends TestCase
         putenv('HOME=' . $home);
         $_SERVER['HOME'] = $home; // twin spelling (OneSidedHomeSandbox doctrine)
 
-        $buckets = new \ReflectionProperty(Bootstrap::class, 'shellRegistries');
-        $armed = new \ReflectionProperty(Bootstrap::class, 'shellsShutdownRegistered');
+        $buckets = new \ReflectionProperty(LaunchContext::class, 'shellRegistries');
+        $armed = new \ReflectionProperty(LaunchContext::class, 'shellsShutdownRegistered');
         $buckets->setAccessible(true);
         $armed->setAccessible(true);
         $priorBuckets = $buckets->getValue(null);

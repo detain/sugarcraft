@@ -11,6 +11,7 @@ use ReflectionProperty;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Commands\Specs\BuiltInCommands;
@@ -406,7 +407,7 @@ final class KeysReloadTest extends TestCase
 
     private static function readDigest(): ?string
     {
-        $property = new ReflectionProperty(Bootstrap::class, 'keybindingsAppliedDigest');
+        $property = new ReflectionProperty(LaunchContext::class, 'keybindingsAppliedDigest');
         $property->setAccessible(true);
 
         /** @var ?string $value */
@@ -417,7 +418,7 @@ final class KeysReloadTest extends TestCase
 
     private static function writeDigest(?string $value): void
     {
-        $property = new ReflectionProperty(Bootstrap::class, 'keybindingsAppliedDigest');
+        $property = new ReflectionProperty(LaunchContext::class, 'keybindingsAppliedDigest');
         $property->setAccessible(true);
         $property->setValue(null, $value);
     }

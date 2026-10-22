@@ -93,7 +93,10 @@ final class ExplicitResumeCrossProjectTest extends TestCase
         self::assertSame(
             1,
             preg_match(
-                '/self::findSession\(\$store, self::\$sessionLaunchTarget\);.*?crossProjectRowCwd\(.*?SESSION_RESUME_CROSS_PROJECT_PICKED_FORMAT/s',
+                // W7-D: the target read is `LaunchContext::sessionLaunchTarget()` since the
+                // v4 S1b store move — the arm, the predicate and the format all still sit in
+                // Bootstrap.php exactly where this pin put them, which is the invariant here.
+                '/self::findSession\(\$store, LaunchContext::sessionLaunchTarget\(\)\);.*?crossProjectRowCwd\(.*?SESSION_RESUME_CROSS_PROJECT_PICKED_FORMAT/s',
                 $source,
             ),
             'the explicit --resume arm no longer consults the crossed predicate and its format',

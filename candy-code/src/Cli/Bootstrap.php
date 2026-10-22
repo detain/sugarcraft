@@ -972,259 +972,28 @@ final class Bootstrap
      */
     public const TRANSCRIPT_SEAM_CALL_SITES = 31;
 
-    /**
-     * Project hook files this process has already reported as skipped, keyed
-     * by path — see the notice in {@see hookFiles()} for why it may only fire
-     * once per launch. Static because the duplication comes from ONE launch
-     * building two hook chains, which is a property of the process rather than
-     * of any instance.
-     *
-     * @var array<string, true>
-     */
-    private static array $reportedUntrustedHookFiles = [];
 
 
 
-    /**
-     * The config FILE `--config` named, or null to discover
-     * `~/.candy-code/config.json` — see {@see useConfigPath()}.
-     */
-    private static ?string $configPathOverride = null;
 
-    /**
-     * The model `--model` named, or null to fall back to `$CANDY_CODE_MODEL`
-     * and then the provider default — see {@see useModel()}.
-     */
-    private static ?string $modelOverride = null;
-
-    /**
-     * Where `bin/candy-code`'s `TuiErrorLog::install()` sent `error_log()` for
-     * this TUI run, or null when it left the operator's own destination in
-     * place — see {@see useTuiErrorLog()}.
-     */
-    private static ?string $tuiErrorLog = null;
-
-    /**
-     * Which session a TUI launch opens — see {@see useSessionLaunch()}.
-     * 'new' (the default), 'continue', or 'resume'.
-     */
-    private static string $sessionLaunchMode = 'new';
-
-    /** The id or name `--resume` named; null with 'resume' opens the picker. */
-    private static ?string $sessionLaunchTarget = null;
-
-    /**
-     * Where the ↑/↓ prompt history lives, when something other than
-     * `~/.candy-code/prompt_history.jsonl` — see {@see pinPromptHistoryPath()}.
-     */
-    private static ?string $promptHistoryPath = null;
-
-    /**
-     * The RAW, UNVALIDATED string `--permission-mode` named, or null when the
-     * flag was absent — see {@see usePermissionMode()} for why it is stored
-     * unvalidated.
-     */
-    private static ?string $permissionModeOverride = null;
-
-    /**
-     * The RAW, UNVALIDATED string `--max-cost` named, or null when the flag
-     * was absent — see {@see useMaxCost()} for why it is stored unvalidated.
-     */
-    private static ?string $maxCostOverride = null;
-
-    /**
-     * The trusted project roots this process resolved, keyed by the
-     * `config.json` they came out of — see {@see trustedRootsForThisProcess()}
-     * for why the answer may not be recomputed mid-session.
-     *
-     * @var array<string, list<string>>
-     */
-    private static array $trustedRoots = [];
-
-    // rv-sec-3 policy-freshness guard state — see ensurePolicyFreshnessChecked().
-    private static bool $policyFreshnessChecked = false;
-
-    private static bool $policyChanged = false;
 
     /** @var array<string, list<string>> canonical root => hook entry identities the LAST launch loaded */
-    private static array $policyPreviousProjectHooks = [];
 
     /** @var list<string> roots the LAST launch had under trustedProjectHooks */
-    private static array $policyPreviousTrustedRoots = [];
 
-    /**
-     * The same, for {@see TRUSTED_PROJECT_MCP_CONFIG_KEY} — a SEPARATE map
-     * because it holds a separate key's answer, frozen for the same reason
-     * {@see trustedRootsForThisProcess()} gives: a session that prompt-injects a
-     * line into the user's config must not be able to make that line take effect
-     * in the session that wrote it.
-     *
-     * @var array<string, list<string>>
-     */
-    private static array $trustedMcpRoots = [];
 
-    /**
-     * The same again, for {@see TRUSTED_PROJECT_COMMANDS_CONFIG_KEY}, frozen for
-     * the reason {@see trustedRootsForThisProcess()} gives: a session that gets
-     * a line appended to the user's config must not be able to make that line
-     * take effect in the session that wrote it.
-     *
-     * @var array<string, list<string>>
-     */
-    private static array $trustedCommandRoots = [];
 
-    /**
-     * The same again, for {@see LayeredSettings::PROJECT_SETTINGS_TRUST_KEY},
-     * frozen for {@see trustedRootsForThisProcess()}'s reason and for that
-     * reason ALONE. The freeze is per resolved config PATH, so a test that
-     * repoints `--config` gets a fresh answer.
-     *
-     * NO EXTRA THREAT OVER ITS THREE SIBLINGS, stated because the first cut of
-     * this doc-block claimed one: that "a project's own `settings.local.json`
-     * is writable by anything running in the checkout, so without the freeze a
-     * turn could append a trust line and have its own later reads honour it".
-     * That is not reachable, and the review that caught it measured why. This
-     * key is not in {@see LayeredSettings::LAYERED_KEYS}, so
-     * `LayeredSettings::only()` drops it from every settings file at every
-     * tier — a project's, and the user's own `settings.json` too — and the list
-     * itself is read from `config.json` through {@see permissionConfig()},
-     * which the layering does not touch. A write to a settings file therefore
-     * cannot add a trust entry at all, frozen or not. What the freeze actually
-     * buys here is what it buys for hooks, MCP and commands: one answer per
-     * process, so a mid-session edit to the user's OWN `config.json` cannot
-     * widen the grant a launch already decided.
-     *
-     * AND SINCE E74b THAT HOLDS FOR THE REFUSED ANSWER TOO. The one door this
-     * freeze used to leave open was the throw: an unusable `config.json` cached
-     * nothing, so a later call re-read the file and a config repaired
-     * mid-process started contributing the layer its own unparseability had
-     * just cost. A refusal now caches the empty list under the path it
-     * resolved; only a home this process cannot name — no key to answer under —
-     * still reaches the parser twice, and both attempts fail closed.
-     *
-     * @var array<string, list<string>>
-     */
-    private static array $trustedSettingsRoots = [];
 
-    /**
-     * The project root {@see readUserConfig()}'s project layer is read from, or
-     * null for "no project named yet" — see
-     * {@see useProjectRootForSettings()}.
-     */
-    private static ?string $projectRootForSettings = null;
 
-    /**
-     * The hook entries this process read, keyed by file path — see
-     * {@see hookFileEntries()} for why the file is read once per launch.
-     *
-     * @var array<string, array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool}>>
-     */
-    private static array $hookFileEntries = [];
 
-    /**
-     * Every SKILL.md the launch's skill scan gave up on, keyed by path — the
-     * diagnostic {@see \SugarCraft\Code\Skills\SkillLoader::recordSkip()}
-     * keeps instead of writing to stderr, hoisted here so it survives past the
-     * manager that produced it. See {@see skillSkips()}.
-     *
-     * @var array<string, string>
-     */
-    private static array $skillSkips = [];
 
-    /**
-     * The subset of {@see $skillSkips} already put in front of the user — see
-     * {@see reportSkillSkips()}.
-     *
-     * @var array<string, true>
-     */
-    private static array $reportedSkillSkips = [];
 
-    /**
-     * Memory note files already put in front of the user as unreadable, keyed
-     * by path — see {@see reportMemorySkips()}. Process-wide for the reason
-     * {@see $reportedSkillSkips} is.
-     *
-     * @var array<string, true>
-     */
-    private static array $reportedMemorySkips = [];
 
-    /**
-     * Every `*.md` command file this process's command walks could not read,
-     * keyed by path (E172) — the `Bootstrap`-side twin of {@see $skillSkips},
-     * fed by {@see chat()} from {@see \SugarCraft\Code\Commands\CommandLoader::skippedFiles()}
-     * and surfaced by {@see reportCommandSkips()} as ONE aggregate row.
-     *
-     * HOISTED off the loader instance for the same reason {@see $skillSkips}
-     * is hoisted off the skill manager: the object that produced the
-     * diagnostic does not outlive the construction that ran it, and a
-     * diagnostic nothing can reach after the fact is the same as no
-     * diagnostic. PATH-KEYED, which is what makes
-     * {@see reportCommandSkips()}'s once-per-path reporting work across a
-     * process that builds more than one Chat.
-     *
-     * NOT a ninth feeder of {@see $projectTierRefusals}, deliberately: that
-     * collector's readers print one line per entry, and the whole point of
-     * this map is that command skips need a COUNT row instead (the per-entry
-     * flood argument runs on {@see LAUNCH_NOTICE_LIMIT}).
-     *
-     * @var array<string, string> sourcePath => why it was skipped
-     */
-    private static array $commandSkips = [];
 
-    /**
-     * The subset of {@see $commandSkips} already put in front of the user —
-     * process-scoped noise control, same contract as
-     * {@see $reportedSkillSkips}.
-     *
-     * @var array<string, true>
-     */
-    private static array $reportedCommandSkips = [];
 
-    /**
-     * Which built-ins this process's command walks replaced, keyed by command
-     * name (ISS-036) — the `Bootstrap`-side twin of {@see $commandSkips}, fed
-     * by {@see chat()} from {@see \SugarCraft\Code\Commands\CommandLoader::overrides()}
-     * and surfaced by {@see reportCommandOverrides()} as ONE aggregate row.
-     *
-     * The values are the loader's own per-override sentences — name, tier and
-     * winning path, already localized — so the aggregate carries the facts
-     * without a second render pass.
-     *
-     * @var array<string, string> commandName => announcement sentence
-     */
-    private static array $commandOverrides = [];
 
-    /**
-     * The subset of {@see $commandOverrides} already put in front of the user —
-     * process-scoped noise control, same contract as
-     * {@see $reportedCommandSkips}.
-     *
-     * @var array<string, true>
-     */
-    private static array $reportedCommandOverrides = [];
 
-    /**
-     * Frontmatter keys the launch's files declare and nothing acts on, per
-     * format ({@see \SugarCraft\Code\Support\FrontmatterKeyAudit::AGENT} …),
-     * keyed by an identity that includes where the file came from =>
-     * [display name, labels].
-     *
-     * Hoisted for {@see $commandSkips}'s reason — the registries and loaders
-     * that found them do not outlive the construction — and keyed per file so
-     * {@see reportIgnoredFrontmatter()} reports each one once per process.
-     * Fed by {@see agentPresets()}, {@see skillRegistry()} and {@see chat()}'s
-     * command and rule drain (X-37a).
-     *
-     * @var array<string, array<string, array{0: string, 1: list<string>}>>
-     */
-    private static array $ignoredFrontmatter = [];
 
-    /**
-     * The subset of {@see $ignoredFrontmatter} already reported, same keys.
-     *
-     * @var array<string, array<string, true>>
-     */
-    private static array $reportedIgnoredFrontmatter = [];
 
     /**
      * Every directory this launch refused to read, keyed by the path as
@@ -1368,119 +1137,6 @@ final class Bootstrap
      * @var array<string, true>
      */
     private static array $reportedProjectTierRefusals = [];
-
-    /**
-     * The MCP clients whose servers are running, keyed FIRST by the pid that
-     * started them and then by the {@see mcpConfigMemoKey()} of the decision
-     * that built them — the `.mcp.json` path, and since MCP-3 the user tier's
-     * path joined ahead of it when a user file is live.
-     *
-     * MEMOIZED BECAUSE STARTING IS A SIDE EFFECT. One launch calls
-     * {@see tools()} at least twice — {@see app()} once for the shell's tool
-     * list and once more through {@see chat()} -> {@see backend()} — and a
-     * Ctrl+P provider switch calls {@see backendFor()} again. Building a fresh
-     * client each time would `proc_open()` every configured stdio server once
-     * per call, so a session would accumulate duplicate third-party processes
-     * for as long as it ran, and {@see stopMcpServers()} would only ever reach
-     * the last set.
-     *
-     * KEYED BY PATH rather than a single slot: `chat($repoA)` followed by
-     * `chat($repoB)` in one process is a supported shape (the tests do it), and
-     * a single slot would hand repo B repo A's servers. The path is the
-     * CANONICAL one — see {@see mcpClient()}, where four spellings of one root
-     * used to make four clients and eight server processes.
-     *
-     * KEYED BY PID FIRST, because a `pcntl_fork()`ed child inherits this whole
-     * map along with the rest of the parent's memory while the PROCESSES in it
-     * remain the PARENT's. Two failures came out of a single flat map:
-     *
-     *  - a child exiting through PHP's normal shutdown ran the inherited hook and
-     *    stopped the LIVE session's servers;
-     *  - a child that started servers of its OWN — which
-     *    {@see \SugarCraft\Code\Background\BackgroundSessionRunner::executeTask()}
-     *    does, via `chdir()` -> {@see backend()} -> {@see tools()} — had them in
-     *    a map the parent's {@see stopMcpServers()} never iterates, so they
-     *    outlived the worker with nothing left to stop them.
-     *
-     * Both are the same bug: ownership was recorded once for the process that
-     * happened to register first, not per client. The pid key IS the ownership
-     * record, and {@see stopMcpServers()} stops exactly this pid's bucket.
-     *
-     * A SIDE EFFECT WORTH NAMING: a child that asks for the root its PARENT
-     * already has a client for gets a MISS and starts its own servers. That is
-     * correct rather than wasteful — the inherited client's pipes and process
-     * handles are the parent's, and two processes taking turns reading one pipe is
-     * a corrupted protocol stream, not a shared connection.
-     *
-     * @var array<int, array<string, McpClient>>
-     */
-    private static array $mcpClients = [];
-
-    /**
-     * MCP-7: the frozen bridge/dispatch split per launch config, keyed by pid
-     * then by the same {@see mcpConfigMemoKey()} the client memo uses — one
-     * shape per client, because a shape's dispatched roster must belong to
-     * the client whose `callTool()` runs it. NEVER re-derived mid-session:
-     * servers or tools that appear after the first read are adopted next
-     * session, the E703-α rule for the model-facing roster made structural.
-     * Absence is not memoised (no client yet must not freeze the decision),
-     * so a shape appears exactly once per key and every later reader gets
-     * that same object.
-     *
-     * @var array<int, array<string, McpToolShape>>
-     */
-    private static array $mcpToolShapes = [];
-
-    /**
-     * E703-α: the bytes each memoised client's config file had AT LAUNCH,
-     * keyed by pid, then by the FILE path itself — since MCP-3 one entry per
-     * tier, for exactly the tiers that launch was trusted to read. (The client
-     * memo keys by the composite decision; these compare per file, because a
-     * drift verdict is about a file.)
-     *
-     * WHY A DIGEST AND NOT A RELOAD: the trusted-roots list is read once per
-     * process and frozen (see {@see trustedRootsForThisProcess()} and
-     * `docs/MCP.md`), and that freeze is the security property, not an
-     * inconvenience — reloading config in-session under a still-valid root
-     * grant would let prompt-injected edits to `.mcp.json` reach
-     * `proc_open()` with no fresh operator decision. So nothing re-applies the
-     * change; this only lets the `/mcp` panel SAY the file has moved since the
-     * launch that froze it, instead of the operator discovering it by diffing.
-     *
-     * Stored at the same instant the client is memoised, so "at launch" means
-     * the same bytes the memo key was decided on. A read failure at that
-     * instant stores NOTHING — the panel's line is then suppressed, which is
-     * silence about the drift, never a claim about it.
-     *
-     * @var array<int, array<string, array{sha256: string, mtime: int}>>
-     */
-    private static array $mcpConfigDigests = [];
-
-    /**
-     * The canonical hash of the keybinding map the LIVE registry holds
-     * (plan_comparison TUI-4a) — the applied-state twin of
-     * {@see self::$mcpConfigDigests}. Null means "nothing noted", and the
-     * first reload after that applies rather than claiming unchanged.
-     */
-    private static ?string $keybindingsAppliedDigest = null;
-
-    /**
-     * Whether this process IMAGE has registered the shutdown hook that stops the
-     * servers in {@see $mcpClients}.
-     *
-     * A PLAIN BOOLEAN IS ENOUGH, and it is worth saying why, because it used to be
-     * paired with a `$mcpOwnerPid` guard that made the hook a NO-OP in any forked
-     * child — which is what left a worker's own servers with nothing to stop them.
-     * The hook is inherited across `pcntl_fork()` along with the rest of memory,
-     * and {@see stopMcpServers()} acts on `getmypid()`'s bucket of
-     * {@see $mcpClients} and no other. So the inherited hook does exactly the
-     * right thing in a child — stops what the CHILD started, cannot touch the
-     * parent's — and the pid discrimination belongs on the map key, where the
-     * ownership actually is, not on the registration.
-     *
-     * @see registerMcpShutdown() for why there is no other seam.
-     */
-    private static bool $mcpShutdownRegistered = false;
 
     /**
      * Resolve the launch's image render mode and hand it to
@@ -1811,13 +1467,10 @@ final class Bootstrap
         // unparseable `*.md` — which are NOT spread above (E172): that
         // collector prints one row per entry, and a directory of twenty
         // malformed files would evict the capability warnings the seam exists
-        // to carry. They hoist onto {@see $commandSkips} instead and surface
+        // to carry. They hoist onto {@see LaunchContext::commandSkips()} instead and surface
         // as ONE aggregate row below, the shape
         // {@see reportSkillSkips()} already established for skills.
-        self::$commandSkips = [
-            ...self::$commandSkips,
-            ...$commandLoader->skippedFiles(),
-        ];
+        LaunchContext::extendCommandSkips($commandLoader->skippedFiles());
 
         // And the accepted-override announcements (ISS-036): which built-ins
         // this launch's surviving file rows replaced. Hoisted off the loader
@@ -1826,10 +1479,7 @@ final class Bootstrap
         // surface below as ONE aggregate row, because a root that ships a
         // dozen shadows should read as "twelve built-ins moved", not as a
         // dozen transcript rows competing with the capability warnings.
-        self::$commandOverrides = [
-            ...self::$commandOverrides,
-            ...$commandLoader->overrides(),
-        ];
+        LaunchContext::extendCommandOverrides($commandLoader->overrides());
 
         // AFTER the construction above, not beside reportSkillSkips() further
         // up: the workflow registry that decides whether this project's
@@ -1842,14 +1492,14 @@ final class Bootstrap
 
         // The command-file skips, immediately after the directory refusals
         // and for the identical reasons: construction time, deduplicated
-        // per-path against {@see $reportedCommandSkips}, and ONE row whatever
+        // per-path against {@see LaunchContext::reportedCommandSkips()}, and ONE row whatever
         // the count (E172 — the drain half of the finding whose feeder half
         // landed in round 46 and stood dormant behind a pin that pointed here).
         self::reportCommandSkips();
 
         // The accepted-override aggregate, immediately after its skip sibling
         // and for its identical reasons: construction time, deduplicated
-        // per-name against {@see $reportedCommandOverrides}, ONE row whatever
+        // per-name against {@see LaunchContext::reportedCommandOverrides()}, ONE row whatever
         // the count. This is the drain that makes the ISS-036 claim
         // "every override is reported" true on the transcript as well as on
         // stderr.
@@ -1863,8 +1513,8 @@ final class Bootstrap
         $audit = \SugarCraft\Code\Support\FrontmatterKeyAudit::class;
         foreach ($chat->customCommands() as $name => $spec) {
             if ($spec->ignoredFrontmatter !== []) {
-                self::$ignoredFrontmatter[$audit::COMMAND][(string) json_encode([$root, $spec->tier, $name])]
-                    = ['/' . $name, $spec->ignoredFrontmatter];
+                LaunchContext::putIgnoredFrontmatter($audit::COMMAND, (string) json_encode([$root, $spec->tier, $name]),
+                    ['/' . $name, $spec->ignoredFrontmatter]);
             }
         }
         if ($root !== null) {
@@ -1874,7 +1524,7 @@ final class Bootstrap
                 $rules = new RuleLoader($root, reportRefusals: false);
                 $rules->load();
                 foreach ($rules->ignoredFrontmatter() as $key => $labels) {
-                    self::$ignoredFrontmatter[$audit::RULE][(string) json_encode([$root, $key])] = [$key, $labels];
+                    LaunchContext::putIgnoredFrontmatter($audit::RULE, (string) json_encode([$root, $key]), [$key, $labels]);
                 }
             } catch (\Throwable) {
                 // Deliberately silent here (rv-php m): this is the pre-paint
@@ -2598,9 +2248,6 @@ final class Bootstrap
         }
     }
 
-    /** @var array<string, list<Bundle>> the memoized scans, keyed by root|pluginPaths */
-    private static array $bundlesCache = [];
-
     /**
      * The installed plugin bundles this launch reads, keyed by the exact
      * (root, pluginPaths) pair it was last asked about.
@@ -2647,8 +2294,8 @@ final class Bootstrap
 
         $key = ($root ?? '') . '|' . implode('|', $paths);
 
-        if (isset(self::$bundlesCache[$key])) {
-            return self::$bundlesCache[$key];
+        if (LaunchContext::hasBundlesMemo($key)) {
+            return LaunchContext::bundlesMemo($key);
         }
 
         $discovery = new BundleDiscovery($root ?? '', $paths);
@@ -2690,7 +2337,7 @@ final class Bootstrap
             ]));
         }
 
-        return self::$bundlesCache[$key] = $bundles;
+        return LaunchContext::rememberBundlesMemo($key, $bundles);
     }
 
     /**
@@ -3358,7 +3005,7 @@ final class Bootstrap
             // reported once with the other formats by reportIgnoredFrontmatter().
             foreach ($registry->ignoredFrontmatter() as $name => $labels) {
                 $format = \SugarCraft\Code\Support\FrontmatterKeyAudit::AGENT;
-                self::$ignoredFrontmatter[$format][(string) json_encode([$root, $name])] = [$name, $labels];
+                LaunchContext::putIgnoredFrontmatter($format, (string) json_encode([$root, $name]), [$name, $labels]);
             }
 
             // The skipped preset files, NAMED: a launch has a handful of
@@ -3686,7 +3333,7 @@ final class Bootstrap
                 self::userSettingsDirOrNull(),
                 self::userConfigPath(),
                 array_filter(getenv(), 'is_string'),
-                self::$permissionModeOverride === null ? [] : ['--permission-mode' => self::$permissionModeOverride],
+                LaunchContext::permissionModeOverride() === null ? [] : ['--permission-mode' => LaunchContext::permissionModeOverride()],
                 // The editor's provider choices: the same list the Ctrl+P
                 // "Switch model" palette offers.
                 \SugarCraft\Code\Config\Settings\OptionsProvider::new()->withList(
@@ -4262,26 +3909,13 @@ final class Bootstrap
     private const MAX_TOOL_STEPS_CONFIG_KEY = 'maxToolSteps';
 
     /**
-     * The RAW string `--max-turns` named, or null. Declared and read inside
-     * this resolver region — the flag exists only to speak into
-     * {@see resolvedMaxToolSteps()}. {@see useMaxTurns()} for why it is
-     * stored RAW; {@see maxTurns()} for the judgment.
+     * Delegates to {@see LaunchContext::useMaxTurns()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    private static ?string $maxTurnsOverride = null;
-
-    /**
-     * Register `--max-turns <n>` for this process. See {@see useMaxCost()}
-     * for why this is a static storing the RAW value: the number is judged
-     * by {@see maxTurns()}, which throws {@see PermissionConfigException}
-     * where the dispatch can catch it — one-shot runs in
-     * {@see NonInteractive::run()}'s own pre-flight try, the TUI through the
-     * backend construction `bin/candy-code` wraps — so a ceiling that is
-     * present and unusable refuses the launch with exit 2 rather than
-     * silently running uncapped, exactly as a bad `--max-cost` does.
-     */
-    public static function useMaxTurns(?string $maxTurns): void
+public static function useMaxTurns(?string $maxTurns): void
     {
-        self::$maxTurnsOverride = ($maxTurns === null || $maxTurns === '') ? null : $maxTurns;
+        LaunchContext::useMaxTurns($maxTurns);
     }
 
     /**
@@ -4302,7 +3936,7 @@ final class Bootstrap
      */
     public static function maxTurns(): ?int
     {
-        $raw = self::$maxTurnsOverride;
+        $raw = LaunchContext::maxTurnsOverride();
         if ($raw === null) {
             return null;
         }
@@ -4657,70 +4291,43 @@ final class Bootstrap
     public static function userConfigPath(): string
     {
         // `--config <path>` wins over discovery — see {@see useConfigPath()}.
-        return self::$configPathOverride ?? self::configDirPath() . '/config.json';
+        return LaunchContext::configPathOverride() ?? self::configDirPath() . '/config.json';
     }
 
     /**
-     * Point every reader of the per-user `config.json` at $path instead of the
-     * discovered `~/.candy-code/config.json` — what `--config <path>` does.
-     *
-     * PROCESS-WIDE STATIC, not a parameter, because this class is a static
-     * facade whose config readers sit five and six calls below the two entry
-     * points `bin/candy-code` calls ({@see app()} and, through
-     * {@see NonInteractive::run()}, {@see backend()}): threading a path
-     * through every one of them would touch far more of this file than the
-     * flag is worth, and would still leave {@see readUserConfig()}'s other
-     * callers — `EngineBackend`'s per-turn dispatch settings among them —
-     * reading the discovered file while the rest of the process read the
-     * chosen one. `bin/candy-code` sets it once, after
-     * {@see ArgvParser::configError()} has established the file is readable
-     * and before either dispatch. Tests must reset it with null.
-     *
-     * WHAT IT DOES NOT MOVE, stated exactly: this names one FILE. The agents/,
-     * skills/, workflows/ and hooks trees, the session store and the memory
-     * store all still resolve off `~/.candy-code`. Nor does it relax the home
-     * -ownership gate — {@see permissionConfig()} still calls
-     * {@see trustedConfigDirPath()} for its throw before honouring the
-     * override, so a process that cannot establish whose home it is refuses to
-     * start whether or not a config file was named on the command line.
+     * Delegates to {@see LaunchContext::useConfigPath()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function useConfigPath(?string $path): void
+public static function useConfigPath(?string $path): void
     {
-        self::$configPathOverride = $path;
+        LaunchContext::useConfigPath($path);
     }
 
     /**
-     * Register the session `-c`/`--continue` or `--resume` asked for, for this
-     * process — the same process-wide seam as {@see useModel()}, and under the
-     * same clear-what-you-set test contract documented there.
-     *
-     * With neither flag a launch opens a NEW session: two terminals must never
-     * land on the same conversation now that each saves its transcript as it
-     * changes, and "start fresh, continue on request" is what every comparable
-     * agent CLI does. ↑ still reaches the previous session's prompts, because
-     * recall reads the cross-session {@see PromptHistory}, not the transcript.
+     * Delegates to {@see LaunchContext::useSessionLaunch()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function useSessionLaunch(bool $continue, bool $resume = false, ?string $target = null): void
+public static function useSessionLaunch(bool $continue, bool $resume = false, ?string $target = null): void
     {
-        self::$sessionLaunchMode = $resume ? 'resume' : ($continue ? 'continue' : 'new');
-        self::$sessionLaunchTarget = $resume && $target !== null && $target !== '' ? $target : null;
+        LaunchContext::useSessionLaunch($continue, $resume, $target);
     }
 
     /**
-     * Point the prompt history at $path instead of `~/.candy-code`, or back at
-     * the default with null. For the test suite, which pins it into its sandbox
-     * so a test that presses Enter on a {@see chat()}-built Chat can never add
-     * its prompt to the developer's own ↑ history.
+     * Delegates to {@see LaunchContext::pinPromptHistoryPath()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function pinPromptHistoryPath(?string $path): void
+public static function pinPromptHistoryPath(?string $path): void
     {
-        self::$promptHistoryPath = $path;
+        LaunchContext::pinPromptHistoryPath($path);
     }
 
     /** The cross-session prompt file ↑/↓ recall reads and Enter appends to. */
     public static function promptHistory(): PromptHistory
     {
-        return new PromptHistory(self::$promptHistoryPath ?? self::configDir() . '/prompt_history.jsonl');
+        return new PromptHistory(LaunchContext::promptHistoryPath() ?? self::configDir() . '/prompt_history.jsonl');
     }
 
     /**
@@ -4731,18 +4338,18 @@ final class Bootstrap
      */
     public static function sessionLaunchError(): ?string
     {
-        if (self::$sessionLaunchMode !== 'resume' || self::$sessionLaunchTarget === null) {
+        if (LaunchContext::sessionLaunchMode() !== 'resume' || LaunchContext::sessionLaunchTarget() === null) {
             return null;
         }
 
         try {
-            $found = self::findSession(self::sessionStore(false), self::$sessionLaunchTarget);
+            $found = self::findSession(self::sessionStore(false), LaunchContext::sessionLaunchTarget());
         } catch (\Throwable $e) {
             return 'candy-code: ' . Lang::t('cli.argv.resume.store_unavailable', ['error' => $e->getMessage()]);
         }
 
         return $found === null
-            ? 'candy-code: ' . Lang::t('cli.argv.resume.not_found', ['target' => self::$sessionLaunchTarget])
+            ? 'candy-code: ' . Lang::t('cli.argv.resume.not_found', ['target' => LaunchContext::sessionLaunchTarget()])
             : null;
     }
 
@@ -4798,7 +4405,7 @@ final class Bootstrap
             return ['id' => (string) $attached->sessionId(), 'name' => $attached->sessionName(), 'history' => $attached->history(), 'picker' => false];
         }
 
-        if (self::$sessionLaunchMode === 'continue') {
+        if (LaunchContext::sessionLaunchMode() === 'continue') {
             // The newest session WITH a conversation, not the newest row — and,
             // in this order, the newest one recorded under this cwd before any
             // other project's (ISS-026). A launch quit without typing is newer
@@ -4827,8 +4434,8 @@ final class Bootstrap
             return ['id' => $id, 'name' => $name, 'history' => Chat::loadTranscript($store, $id), 'picker' => false];
         }
 
-        if (self::$sessionLaunchMode === 'resume' && self::$sessionLaunchTarget !== null) {
-            $row = self::findSession($store, self::$sessionLaunchTarget);
+        if (LaunchContext::sessionLaunchMode() === 'resume' && LaunchContext::sessionLaunchTarget() !== null) {
+            $row = self::findSession($store, LaunchContext::sessionLaunchTarget());
             if ($row !== null) {
                 $id = (string) $row['id'];
                 $name = \is_string($row['name'] ?? null) && $row['name'] !== '' ? $row['name'] : null;
@@ -4875,7 +4482,7 @@ final class Bootstrap
             }
         }
 
-        return ['id' => $id, 'name' => null, 'history' => [], 'picker' => self::$sessionLaunchMode === 'resume', 'mint' => $mint];
+        return ['id' => $id, 'name' => null, 'history' => [], 'picker' => LaunchContext::sessionLaunchMode() === 'resume', 'mint' => $mint];
     }
 
     /**
@@ -4898,114 +4505,43 @@ final class Bootstrap
     }
 
     /**
-     * Register `--model <name>` for this process.
-     *
-     * A PROCESS-WIDE STATIC for the same reason {@see useConfigPath()} is one,
-     * and deliberately following that precedent rather than inventing a third
-     * mechanism: `bin/candy-code` has THREE dispatch paths — `Subcommands`,
-     * `NonInteractive::run()` and `Program`/{@see app()} — and only the last
-     * goes through {@see chat()}. A flag threaded as a parameter into `chat()`
-     * would silently do nothing for `candy-code -p "..."`, which enters at
-     * {@see backend()}/{@see backendFor()} instead. One static registered
-     * before either dispatch is read identically by all three.
-     *
-     * WHAT `--model` MEANS, because the surrounding code disagrees with itself
-     * about the word: it names a MODEL, the same domain as `$CANDY_CODE_MODEL`
-     * ("Model name (overrides provider default)" on the help screen), and it is
-     * resolved by {@see selectedModelName()}. It is NOT a provider. The Ctrl+P
-     * palette's entry labelled "Switch model" calls
-     * {@see backendFor()}, whose first parameter is a PROVIDER name, and that
-     * label is the reason this needed settling in writing: the two are
-     * independent axes and this flag is the model one.
-     *
-     * No top-level `model` key backs it. The persisted choice is the per-provider
-     * `models` map in {@see \SugarCraft\Code\Config\LayeredSettings::LAYERED_KEYS}
-     * (decision D9), which this flag OUTRANKS for every provider — see
-     * {@see selectedModelName()}, where the flag, `$CANDY_CODE_MODEL` and that
-     * map are resolved in one place.
-     *
-     * ## TEST ISOLATION — read this before calling either setter from a test
-     *
-     * This static and {@see usePermissionMode()}'s LIVE FOR THE WHOLE PROCESS
-     * and are NOT reset between test cases or between test classes. A class
-     * that sets one and does not clear it decides the launch of every test that
-     * runs after it, in any file, for the rest of the suite.
-     *
-     * There is deliberately no automatic reset. That matches
-     * {@see useConfigPath()}, which has behaved this way since it was written
-     * and which `BootstrapConfigPathOverrideTest` and
-     * `BootstrapLayeredSettingsTest` each clear in their own `tearDown()`.
-     * Generalising the reset was considered and declined: it would mean a
-     * shared trait or a suite-wide hook that, to be coherent, would have to
-     * take over `useConfigPath()` too — a new mechanism for three statics whose
-     * existing convention already works and is followed everywhere it applies.
-     *
-     * **So the convention is the contract: clear what you set.**
-     * `Tests\Cli\LaunchFlagsTest` clears both in `setUp()` AND `tearDown()`,
-     * which is the pattern to copy — the `setUp()` half also makes that class
-     * immune to a leak from somewhere else.
+     * Delegates to {@see LaunchContext::useModel()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function useModel(?string $model): void
+public static function useModel(?string $model): void
     {
-        self::$modelOverride = ($model === null || $model === '') ? null : $model;
+        LaunchContext::useModel($model);
     }
 
     /**
-     * Register where the TUI's `error_log` redirect landed — {@see app()}
-     * passes on `TuiErrorLog::install()`'s answer from `bin/candy-code`.
-     *
-     * A REGISTRATION RATHER THAN A NOTICE RAISED IN THE BINARY because the
-     * launch-notice list is the LAUNCH's: {@see chat()} starts it empty, so a
-     * row seeded before the Chat was built would be wiped before anyone read
-     * it. {@see reportTuiErrorLogFallback()} reads this at construction time,
-     * beside the other launch reports. Null clears it, the
-     * clear-what-you-set convention {@see useModel()} documents.
+     * Delegates to {@see LaunchContext::useTuiErrorLog()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function useTuiErrorLog(?string $destination): void
+public static function useTuiErrorLog(?string $destination): void
     {
-        self::$tuiErrorLog = ($destination === null || $destination === '') ? null : $destination;
+        LaunchContext::useTuiErrorLog($destination);
     }
 
     /**
-     * Register `--permission-mode <mode>` for this process. See
-     * {@see useModel()} for why this is a static rather than a parameter.
-     *
-     * STORED RAW AND VALIDATED LATER, on purpose. {@see permissionModeFrom()}
-     * THROWS {@see PermissionConfigException} for a value that is not a mode,
-     * and `bin/candy-code` catches that exception around its dispatch block —
-     * but registration happens BEFORE that `try`, so validating here would let
-     * the exception escape as an uncaught fatal instead of the exit-2 usage
-     * error (with the JSON error document under `--output-format json`) that
-     * every other bad permission value produces. Deferring the check to
-     * {@see permissionGate()} puts it inside the `try` and reuses the one
-     * error message shape, which then names `--permission-mode` as its source
-     * exactly as it names `$CANDY_CODE_PERMISSION_MODE` or the config file.
-     *
-     * DOCUMENTED CONSEQUENCE: a subcommand that never builds a gate (`completion`,
-     * `--help`, `--version`) does not validate the value, so
-     * `candy-code --permission-mode nonsense completion bash` succeeds. The flag
-     * is inert on those paths anyway; failing them would cost a second, eager
-     * validation site that could drift from this one.
+     * Delegates to {@see LaunchContext::usePermissionMode()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function usePermissionMode(?string $mode): void
+public static function usePermissionMode(?string $mode): void
     {
-        self::$permissionModeOverride = ($mode === null || $mode === '') ? null : $mode;
+        LaunchContext::usePermissionMode($mode);
     }
 
     /**
-     * Register `--max-cost <usd>` for this process. See {@see useModel()} for
-     * why this is a static rather than a parameter, and
-     * {@see usePermissionMode()} for why it is stored RAW: the number is
-     * judged by {@see maxCostUsd()}, which throws
-     * {@see PermissionConfigException} inside `bin/candy-code`'s dispatch
-     * `try` — where it becomes the same exit-2 usage error (with the JSON
-     * error document under `--output-format json`) that an unusable
-     * `$CANDY_CODE_MAX_COST` or `maxCostUsd` setting already produces —
-     * rather than as an uncaught fatal at registration time.
+     * Delegates to {@see LaunchContext::useMaxCost()} — the store and its full
+     * doc-block moved to the launch-context shelf in the v4 S1b split; the
+     * seam stays here so every caller reaches its registration there.
      */
-    public static function useMaxCost(?string $maxCost): void
+public static function useMaxCost(?string $maxCost): void
     {
-        self::$maxCostOverride = ($maxCost === null || $maxCost === '') ? null : $maxCost;
+        LaunchContext::useMaxCost($maxCost);
     }
 
     /**
@@ -5032,8 +4568,8 @@ final class Bootstrap
      */
     private static function selectedModelName(string $providerName): ?string
     {
-        if (self::$modelOverride !== null) {
-            return self::$modelOverride;
+        if (LaunchContext::modelOverride() !== null) {
+            return LaunchContext::modelOverride();
         }
 
         $env = getenv('CANDY_CODE_MODEL');
@@ -5135,7 +4671,7 @@ final class Bootstrap
      */
     private static function mergedConfig(bool $withProjectTier): array
     {
-        $root = self::$projectRootForSettings;
+        $root = LaunchContext::projectRootForSettings();
         $userSettingsDir = self::userSettingsDirOrNull();
 
         return array_merge(
@@ -5258,7 +4794,7 @@ final class Bootstrap
      */
     public static function useProjectRootForSettings(?string $root): void
     {
-        self::$projectRootForSettings = $root === null || trim($root) === '' ? null : $root;
+        LaunchContext::rememberProjectRootForSettings($root === null || trim($root) === '' ? null : $root);
         self::ensurePolicyFreshnessChecked();
     }
 
@@ -5268,10 +4804,10 @@ final class Bootstrap
      */
     private static function ensurePolicyFreshnessChecked(): void
     {
-        if (self::$policyFreshnessChecked) {
+        if (LaunchContext::policyFreshnessChecked()) {
             return;
         }
-        self::$policyFreshnessChecked = true;
+        LaunchContext::markPolicyFreshnessChecked();
 
         try {
             self::checkPolicyFreshness();
@@ -5282,7 +4818,7 @@ final class Bootstrap
             // same launch (requirePrivatePolicyFile, the hook-chain refusal).
             // A guard that can brick a launch on its own bookkeeping failure
             // is a second bug, not a safety property.
-            self::$policyChanged = false;
+            LaunchContext::rememberPolicyChanged(false);
         }
     }
 
@@ -5357,11 +4893,11 @@ final class Bootstrap
 
         $changed = $userChanged || $projectHooksChanged;
 
-        self::$policyChanged = $changed;
-        self::$policyPreviousProjectHooks = $changed ? ($previous['projectHooks'] ?? []) : [];
-        self::$policyPreviousTrustedRoots = $changed && is_array($previous['trustedRoots'] ?? null)
+        LaunchContext::rememberPolicyChanged($changed);
+        LaunchContext::rememberPolicyPreviousProjectHooks($changed ? ($previous['projectHooks'] ?? []) : []);
+        LaunchContext::rememberPolicyPreviousTrustedRoots($changed && is_array($previous['trustedRoots'] ?? null)
             ? $previous['trustedRoots']
-            : [];
+            : []);
 
         PolicySnapshot::write($configDir, [
             'version' => PolicySnapshot::VERSION,
@@ -5394,7 +4930,7 @@ final class Bootstrap
     {
         self::ensurePolicyFreshnessChecked();
 
-        return self::$policyChanged;
+        return LaunchContext::policyChanged();
     }
 
     /**
@@ -5440,12 +4976,12 @@ final class Bootstrap
         try {
             $path = self::trustedConfigDirPath() . '/config.json';
 
-            if (!\array_key_exists($path, self::$trustedSettingsRoots)) {
-                self::$trustedSettingsRoots[$path] = self::trustedProjectRoots(
+            if (!LaunchContext::hasTrustedSettingsRootsFor($path)) {
+                LaunchContext::rememberTrustedSettingsRoots($path, self::trustedProjectRoots(
                     self::permissionConfig(),
                     LayeredSettings::PROJECT_SETTINGS_TRUST_KEY,
                     Lang::t('cli.warn.untrusted_settings'),
-                );
+                ));
             }
         } catch (\Throwable) {
             // THE REFUSED ANSWER FREEZES TOO (E74b). It used to be the ONE
@@ -5468,13 +5004,13 @@ final class Bootstrap
             // before `$path` could be computed: with no key there is nothing to
             // freeze, and the next call fails closed the same way.
             if ($path !== null) {
-                self::$trustedSettingsRoots[$path] ??= [];
+                LaunchContext::freezeTrustedSettingsRootsWithoutTrust($path);
             }
 
             return false;
         }
 
-        return in_array($canonical, self::$trustedSettingsRoots[$path], true);
+        return in_array($canonical, LaunchContext::trustedSettingsRootsFor($path), true);
     }
 
     /**
@@ -5873,7 +5409,7 @@ final class Bootstrap
         // scans more than once (chat(), app(), and every Ctrl+P provider
         // switch), and a later scan finding nothing wrong must not erase what
         // an earlier one found.
-        self::$skillSkips = [...self::$skillSkips, ...$manager->skipped()];
+        LaunchContext::extendSkillSkips($manager->skipped());
 
         // X-37a: the skills that loaded and declare keys nothing acts on
         // (`allowed-tools`, `context: fork`, a typo). The registry keeps typed
@@ -5884,7 +5420,7 @@ final class Bootstrap
         foreach ($registry->all() as $skill) {
             $identity = $skill->sourcePath;
             if ($skill->origin === \SugarCraft\Code\Skills\SkillOrigin::BuiltIn
-                || isset(self::$ignoredFrontmatter[$audit::SKILL][$identity])
+                || LaunchContext::hasIgnoredFrontmatter($audit::SKILL, $identity)
             ) {
                 continue;
             }
@@ -5895,10 +5431,10 @@ final class Bootstrap
                 continue;
             }
 
-            self::$ignoredFrontmatter[$audit::SKILL][$identity] = [
+            LaunchContext::putIgnoredFrontmatter($audit::SKILL, $identity, [
                 $skill->name,
                 $audit::inspect($audit::SKILL, $audit::metaOf($head)),
-            ];
+            ]);
         }
 
         // The skills half of the project-tier refusal — a repository that
@@ -6052,7 +5588,7 @@ final class Bootstrap
      */
     public static function skillSkips(): array
     {
-        return self::$skillSkips;
+        return LaunchContext::skillSkips();
     }
 
     /**
@@ -6078,16 +5614,16 @@ final class Bootstrap
     public static function reportSkillSkips(): void
     {
         // Only what has not been reported yet, keyed the same way
-        // {@see $reportedUntrustedHookFiles} is: a process that builds more
+        // {@see LaunchContext::$reportedUntrustedHookFiles} is: a process that builds more
         // than one Chat (a test suite, an embedder) must not re-print the
         // same skips, and a second scan that found something NEW still says so.
-        $new = array_diff_key(self::$skillSkips, self::$reportedSkillSkips);
+        $new = array_diff_key(LaunchContext::skillSkips(), LaunchContext::reportedSkillSkips());
         if ($new === []) {
             return;
         }
 
         foreach (array_keys($new) as $path) {
-            self::$reportedSkillSkips[$path] = true;
+            LaunchContext::markSkillSkipReported($path);
         }
 
         $count = \count($new);
@@ -6169,9 +5705,9 @@ final class Bootstrap
             }
         }
 
-        $new = array_diff_key($unreadable, self::$reportedMemorySkips);
+        $new = array_diff_key($unreadable, LaunchContext::reportedMemorySkips());
         foreach (array_keys($new) as $path) {
-            self::$reportedMemorySkips[$path] = true;
+            LaunchContext::markMemorySkipReported($path);
         }
         if ($new !== []) {
             // BOTH CHANNELS, ONE ROW whatever the count — the skill-skip row's
@@ -6438,18 +5974,18 @@ final class Bootstrap
      */
     public static function reportTuiErrorLogFallback(): void
     {
-        if (self::$tuiErrorLog === null) {
+        if (LaunchContext::tuiErrorLog() === null) {
             return;
         }
 
         $home = HomeDirectory::owned();
-        if ($home !== null && self::$tuiErrorLog === rtrim($home, '/') . '/' . TuiErrorLog::RELATIVE_PATH) {
+        if ($home !== null && LaunchContext::tuiErrorLog() === rtrim($home, '/') . '/' . TuiErrorLog::RELATIVE_PATH) {
             return;
         }
 
-        self::warnLaunchRows([self::discardsWhatIsWritten(self::$tuiErrorLog)
+        self::warnLaunchRows([self::discardsWhatIsWritten(LaunchContext::tuiErrorLog())
             ? sprintf(self::translated(self::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT), '~/' . TuiErrorLog::RELATIVE_PATH)
-            : sprintf(self::translated(self::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT), '~/' . TuiErrorLog::RELATIVE_PATH, self::$tuiErrorLog)]);
+            : sprintf(self::translated(self::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT), '~/' . TuiErrorLog::RELATIVE_PATH, LaunchContext::tuiErrorLog())]);
     }
 
     /**
@@ -6541,7 +6077,7 @@ final class Bootstrap
      */
     public static function commandSkips(): array
     {
-        return self::$commandSkips;
+        return LaunchContext::commandSkips();
     }
 
     /**
@@ -6552,7 +6088,7 @@ final class Bootstrap
      * it inherits that method's whole argument for existing: a `*.md` the
      * loader could not read is a `/command` the user typed and did not get,
      * ONE row regardless of how many — the per-entry flood the
-     * {@see $commandSkips} property names is exactly why this map was never
+     * {@see LaunchContext::commandSkips()} property names is exactly why this map was never
      * spread into {@see $projectTierRefusals}`'s one-line-per-entry reader —
      * and construction time only, before Program takes the terminal.
      *
@@ -6568,13 +6104,13 @@ final class Bootstrap
         // {@see reportSkillSkips()} keys its own guard: a process that builds
         // more than one Chat must not re-print, and a second walk that found
         // something NEW still says so.
-        $new = array_diff_key(self::$commandSkips, self::$reportedCommandSkips);
+        $new = array_diff_key(LaunchContext::commandSkips(), LaunchContext::reportedCommandSkips());
         if ($new === []) {
             return;
         }
 
         foreach (array_keys($new) as $path) {
-            self::$reportedCommandSkips[$path] = true;
+            LaunchContext::markCommandSkipReported($path);
         }
 
         $count = \count($new);
@@ -6617,13 +6153,13 @@ final class Bootstrap
         // {@see reportCommandSkips()}'s guard shape: a process that builds a
         // second Chat must not re-print the first's shadows, and a walk that
         // replaced something NEW still says so.
-        $new = array_diff_key(self::$commandOverrides, self::$reportedCommandOverrides);
+        $new = array_diff_key(LaunchContext::commandOverrides(), LaunchContext::reportedCommandOverrides());
         if ($new === []) {
             return;
         }
 
         foreach (array_keys($new) as $name) {
-            self::$reportedCommandOverrides[$name] = true;
+            LaunchContext::markCommandOverrideReported($name);
         }
 
         $count = \count($new);
@@ -6651,10 +6187,10 @@ final class Bootstrap
     private static function reportIgnoredFrontmatter(): void
     {
         $rows = [];
-        foreach (self::$ignoredFrontmatter as $format => $files) {
-            $new = array_diff_key($files, self::$reportedIgnoredFrontmatter[$format] ?? []);
+        foreach (LaunchContext::ignoredFrontmatter() as $format => $files) {
+            $new = array_diff_key($files, LaunchContext::reportedIgnoredFrontmatterFor($format));
             foreach (array_keys($new) as $identity) {
-                self::$reportedIgnoredFrontmatter[$format][$identity] = true;
+                LaunchContext::markIgnoredFrontmatterReported($format, $identity);
             }
 
             $findings = [];
@@ -6926,7 +6462,7 @@ final class Bootstrap
      */
     private static function hookFileEntries(string $path): array
     {
-        if (!\array_key_exists($path, self::$hookFileEntries)) {
+        if (!LaunchContext::hasHookFileEntriesFor($path)) {
             // Only the USER's files. The project's are gated by
             // `trustedProjectHooks` and live in a checkout whose permissions
             // are the user's business; the user's files are the ones loaded
@@ -6938,12 +6474,12 @@ final class Bootstrap
                 self::requirePrivatePolicyFile($path);
             }
 
-            self::$hookFileEntries[$path] = ClaudeSettingsHooks::isClaudeSettingsPath($path)
+            LaunchContext::rememberHookFileEntries($path, ClaudeSettingsHooks::isClaudeSettingsPath($path)
                 ? ClaudeSettingsHooks::fromFile($path)
-                : HookConfig::loadFromFile($path);
+                : HookConfig::loadFromFile($path));
         }
 
-        return self::$hookFileEntries[$path];
+        return LaunchContext::hookFileEntriesFor($path);
     }
 
     /**
@@ -6973,7 +6509,7 @@ final class Bootstrap
             return $entries;
         }
 
-        $seenBefore = self::$policyPreviousProjectHooks[\dirname(\dirname($path))] ?? [];
+        $seenBefore = LaunchContext::policyPreviousProjectHooks()[\dirname(\dirname($path))] ?? [];
 
         return array_values(array_filter(
             $entries,
@@ -7202,8 +6738,8 @@ final class Bootstrap
                     // repository I cd into". {@see trustedProjectHookRoots()}
                     // refuses such an entry now; this makes sure the tool never
                     // suggests one.
-                    if (!isset(self::$reportedUntrustedHookFiles[$projectFile])) {
-                        self::$reportedUntrustedHookFiles[$projectFile] = true;
+                    if (!LaunchContext::hasReportedUntrustedHookFile($projectFile)) {
+                        LaunchContext::markUntrustedHookFileReported($projectFile);
 
                         self::warnPermissionConfigInTranscript(Lang::t('cli.warn.hook_file_untrusted', [
                             'file' => $projectFile,
@@ -7328,7 +6864,7 @@ final class Bootstrap
     {
         $path = self::trustedConfigDirPath() . '/config.json';
 
-        if (!\array_key_exists($path, self::$trustedRoots)) {
+        if (!LaunchContext::hasTrustedRootsFor($path)) {
             $roots = self::trustedProjectHookRoots(self::permissionConfig());
 
             // rv-sec-3: during a quarantine launch, a root that only APPEARED
@@ -7336,17 +6872,17 @@ final class Bootstrap
             // yet either — adding a line to the user's config naming a fresh
             // clone is the same "first sight of a repository" event as the
             // clone shipping its own hooks.yaml. The launch after, honoured.
-            if (self::policyQuarantineActive() && self::$policyPreviousTrustedRoots !== []) {
+            if (self::policyQuarantineActive() && LaunchContext::policyPreviousTrustedRoots() !== []) {
                 $roots = array_values(array_filter(
                     $roots,
-                    static fn (string $root): bool => \in_array($root, self::$policyPreviousTrustedRoots, true),
+                    static fn (string $root): bool => \in_array($root, LaunchContext::policyPreviousTrustedRoots(), true),
                 ));
             }
 
-            self::$trustedRoots[$path] = $roots;
+            LaunchContext::rememberTrustedRoots($path, $roots);
         }
 
-        return self::$trustedRoots[$path];
+        return LaunchContext::trustedRootsFor($path);
     }
 
     /**
@@ -7402,15 +6938,15 @@ final class Bootstrap
 
         $path = self::trustedConfigDirPath() . '/config.json';
 
-        if (!\array_key_exists($path, self::$trustedMcpRoots)) {
-            self::$trustedMcpRoots[$path] = self::trustedProjectRoots(
+        if (!LaunchContext::hasTrustedMcpRootsFor($path)) {
+            LaunchContext::rememberTrustedMcpRoots($path, self::trustedProjectRoots(
                 self::permissionConfig(),
                 self::TRUSTED_PROJECT_MCP_CONFIG_KEY,
                 Lang::t('cli.warn.untrusted_mcp'),
-            );
+            ));
         }
 
-        return in_array($canonical, self::$trustedMcpRoots[$path], true);
+        return in_array($canonical, LaunchContext::trustedMcpRootsFor($path), true);
     }
 
     /**
@@ -7439,15 +6975,15 @@ final class Bootstrap
 
         $path = self::trustedConfigDirPath() . '/config.json';
 
-        if (!\array_key_exists($path, self::$trustedCommandRoots)) {
-            self::$trustedCommandRoots[$path] = self::trustedProjectRoots(
+        if (!LaunchContext::hasTrustedCommandRootsFor($path)) {
+            LaunchContext::rememberTrustedCommandRoots($path, self::trustedProjectRoots(
                 self::permissionConfig(),
                 self::TRUSTED_PROJECT_COMMANDS_CONFIG_KEY,
                 Lang::t('cli.warn.untrusted_commands'),
-            );
+            ));
         }
 
-        return in_array($canonical, self::$trustedCommandRoots[$path], true);
+        return in_array($canonical, LaunchContext::trustedCommandRootsFor($path), true);
     }
 
     /**
@@ -7713,7 +7249,7 @@ final class Bootstrap
         // `??` short-circuits, so a later source's BAD value is still never
         // validated (and so never throws) once an earlier source has answered.
         $candidates = [
-            '--permission-mode' => self::$permissionModeOverride,
+            '--permission-mode' => LaunchContext::permissionModeOverride(),
             '$' . self::PERMISSION_MODE_ENV => $envRaw,
             self::PERMISSION_MODE_CONFIG_KEY . ' in '
                 . self::permissionKeySource($layers, self::PERMISSION_MODE_CONFIG_KEY) => $configRaw,
@@ -7875,7 +7411,7 @@ final class Bootstrap
     {
         $configDir = self::trustedConfigDirPath();
         $discovered = $configDir . '/config.json';
-        $path = self::$configPathOverride ?? $discovered;
+        $path = LaunchContext::configPathOverride() ?? $discovered;
         $settingsPath = rtrim($configDir, '/') . '/' . LayeredSettings::USER_FILE;
 
         return self::withoutEmptyPermissionOverrides([
@@ -8395,7 +7931,7 @@ final class Bootstrap
      * malformed entry reported twice is what the user experiences as noise,
      * whichever line printed it — and because the message already carries the
      * entry's index, so two genuinely different bad entries still both get
-     * said. Static for the reason {@see $reportedUntrustedHookFiles} is: the
+     * said. Static for the reason {@see LaunchContext::$reportedUntrustedHookFiles} is: the
      * duplication is a property of the launch, not of any instance.
      */
     private static function warnPermissionConfigOnce(string $message): void
@@ -8694,7 +8230,7 @@ final class Bootstrap
     {
         return McpDecision::mcpLivenessSnapshot(
             self::mcpConfigDecision($root),
-            static fn(string $key): ?McpClient => self::$mcpClients[getmypid() ?: 0][$key] ?? null,
+            static fn(string $key): ?McpClient => LaunchContext::mcpClientFor(getmypid() ?: 0, $key),
         );
     }
 
@@ -8715,7 +8251,7 @@ final class Bootstrap
     {
         return McpDecision::mcpConfigChangedSinceLaunch(
             self::mcpConfigDecision($root),
-            static fn(string $tierPath): ?array => self::$mcpConfigDigests[getmypid() ?: 0][$tierPath] ?? null,
+            static fn(string $tierPath): ?array => LaunchContext::mcpConfigDigestFor(getmypid() ?: 0, $tierPath),
         );
     }
 
@@ -8851,8 +8387,8 @@ final class Bootstrap
         $memoKey = self::mcpConfigMemoKey($decision);
 
         $pid = getmypid() ?: 0;
-        if (array_key_exists($memoKey, self::$mcpClients[$pid] ?? [])) {
-            return self::$mcpClients[$pid][$memoKey];
+        if (LaunchContext::hasMcpClient($pid, $memoKey)) {
+            return LaunchContext::mcpClientFor($pid, $memoKey);
         }
 
         // The memo is consulted BEFORE this gate, deliberately: a client whose
@@ -8981,7 +8517,7 @@ final class Bootstrap
         // each server to the client as it comes up, so a client that throws
         // part-way through still owns live processes that stopMcpServers() has to
         // reach.
-        self::$mcpClients[$pid][$memoKey] = $client;
+        LaunchContext::rememberMcpClient($pid, $memoKey, $client);
         // E703-α: digest the SAME bytes this memo was keyed on, at the instant
         // the memo is stored. Unreadable stores nothing — a missing digest is
         // silence in the panel, never a claim that the file did or did not
@@ -8991,12 +8527,12 @@ final class Bootstrap
         // to drift from.
         $digest = self::mcpConfigDigest($path);
         if ($digest !== null && $decision['status'] === self::MCP_TRUSTED) {
-            self::$mcpConfigDigests[$pid][$path] = $digest;
+            LaunchContext::rememberMcpConfigDigest($pid, $path, $digest);
         }
         if ($decision['userStatus'] === self::MCP_TRUSTED && $userPath !== '') {
             $userDigest = self::mcpConfigDigest($userPath);
             if ($userDigest !== null) {
-                self::$mcpConfigDigests[$pid][$userPath] = $userDigest;
+                LaunchContext::rememberMcpConfigDigest($pid, $userPath, $userDigest);
             }
         }
         self::registerMcpShutdown();
@@ -9101,7 +8637,7 @@ final class Bootstrap
             // it is STORED immediately above this `try`, which is the placement
             // that actually matters and carries its own note there. And the memo
             // is not the whole bound: {@see stopMcpServers()} clears this pid's
-            // bucket outright (`unset(self::$mcpClients[$pid])`), so an
+            // bucket outright (`LaunchContext::takeMcpClientsBucket($pid)`), so an
             // `mcpClient()` for the same path AFTER a stop builds a new client
             // and re-enters this `catch`.
             //
@@ -9218,8 +8754,8 @@ final class Bootstrap
         $pid = getmypid() ?: 0;
         $memoKey = self::mcpConfigMemoKey($decision);
 
-        if (array_key_exists($memoKey, self::$mcpToolShapes[$pid] ?? [])) {
-            return self::$mcpToolShapes[$pid][$memoKey];
+        if (LaunchContext::hasMcpToolShape($pid, $memoKey)) {
+            return LaunchContext::mcpToolShapeFor($pid, $memoKey);
         }
 
         $client = self::mcpClient($root);
@@ -9233,117 +8769,28 @@ final class Bootstrap
             $client->configEntries(),
             \SugarCraft\Code\Config\Settings\UiSettings::int(self::MCP_LAZY_SETTING),
         );
-        self::$mcpToolShapes[$pid][$memoKey] = $shape;
+        LaunchContext::rememberMcpToolShape($pid, $memoKey, $shape);
 
         return $shape;
     }
 
     /**
-     * Stop every MCP server THIS PID started.
-     *
-     * PUBLIC because it is BOTH the shutdown hook's callback and the only way a
-     * caller that owns a process lifetime (a test, an embedder) can hand the
-     * servers back before exit. Idempotent: the client empties its own map, and
-     * this empties this pid's bucket of ours.
-     *
-     * THIS PID'S BUCKET AND NO OTHER — see {@see $mcpClients}. A
-     * `pcntl_fork()`ed child inherits the parent's whole map, so anything wider
-     * than one bucket means a worker's ordinary exit SIGTERMs the live session's
-     * servers. Other pids' buckets are left in place rather than dropped: the
-     * child's copy of them is a copy, and dropping it in the child would say
-     * something untrue about the parent's.
+     * Delegates to {@see LaunchContext::stopMcpServers()} — the shutdown shelf moved to the
+     * launch-context in the v4 S1b split; this seam keeps the public contract.
      */
     public static function stopMcpServers(): void
     {
-        $pid = getmypid() ?: 0;
-        $clients = self::$mcpClients[$pid] ?? [];
-        unset(self::$mcpClients[$pid]);
-        // Same bucket, same lifetime (E703-α): once this pid owns no client, a
-        // launch digest for it describes no live memo, and the panel must not
-        // compare against a fact whose subject is gone. A later mcpClient()
-        // stores a fresh digest beside a fresh memo.
-        unset(self::$mcpConfigDigests[$pid]);
-
-        foreach ($clients as $client) {
-            // Bounded by StdioMcpServer::stop()'s SIGTERM-then-9 escalation.
-            // Wrapped anyway: this runs during shutdown, and a throw from the
-            // first server would leave the rest running.
-            try {
-                $client->stopServers();
-            } catch (\Throwable) {
-                // Nothing to report to — stderr may already be gone at shutdown,
-                // and there is no remedy left to offer.
-            }
-        }
+        LaunchContext::stopMcpServers();
     }
 
     /**
-     * THE SHUTDOWN SEAM, and it had to be created: `bin/candy-code` runs
-     * `Program::run()` (or {@see NonInteractive::run()}) and then falls off the
-     * end of the script, and a `grep` for `register_shutdown_function` across
-     * `src/` and `bin/` found nothing at all. A `stopServers()` that is never
-     * called leaves an orphaned third-party process per configured server after
-     * every session, which is worse than never starting them.
-     *
-     * REGISTERED HERE rather than in `bin/candy-code` on purpose: this is the one
-     * function that STARTS the servers, so start and stop cannot be wired apart.
-     * Every entry point — the TUI, `-p` one-shot, an embedder calling
-     * {@see tools()} directly, a test — gets the stop for free, and nothing can
-     * acquire the servers without it.
-     *
-     * ONCE PER PROCESS IMAGE, and a `pcntl_fork()`ed child needs no registration
-     * of its own: it inherits this one, and the inherited hook is CORRECT in the
-     * child because {@see stopMcpServers()} acts only on `getmypid()`'s bucket of
-     * {@see $mcpClients}. So a child that starts servers of its own —
-     * {@see \SugarCraft\Code\Background\BackgroundSessionRunner::executeTask()}
-     * reaches {@see tools()} after a `chdir()` — has them stopped when it exits,
-     * while the live session's servers are untouched. Both halves of that are
-     * measured in
-     * {@see \SugarCraft\Code\Tests\Integration\McpToolWiringTest::testAForkedWorkerStopsItsOwnServersAndLeavesTheParentsAlone()}.
-     *
-     * WHAT IT COVERS: a normal return, any `exit()`, and an uncaught exception.
-     * WHAT IT DOES NOT: `SIGKILL`, and any signal for which no PHP handler is
-     * installed — a bare `SIGINT`/`SIGTERM` at the shell terminates the process
-     * without running shutdown functions. That residue is not closed here because
-     * closing it means installing signal handlers on the CLI's main path, which
-     * is a decision about the TUI's own Ctrl+C handling and not about MCP. Nor
-     * does it cover {@see \SugarCraft\Code\Support\ForkedChild::exitNow()},
-     * which deliberately bypasses PHP's shutdown sequence — a child that took
-     * that route and had started its own servers leaks them, and that is the
-     * fork helper's contract rather than something this seam can override.
+     * Delegates to {@see LaunchContext::registerMcpShutdown()} — the shutdown shelf moved to the
+     * launch-context in the v4 S1b split; this seam keeps the public contract.
      */
     private static function registerMcpShutdown(): void
     {
-        if (self::$mcpShutdownRegistered) {
-            return;
-        }
-
-        self::$mcpShutdownRegistered = true;
-
-        register_shutdown_function(static function (): void {
-            self::stopMcpServers();
-        });
+        LaunchContext::registerMcpShutdown();
     }
-
-    /**
-     * The launch's language servers, per process and per root — see
-     * {@see lspClient()}. A null entry is a root with none configured (or none
-     * that started), memoised so the config is read once.
-     *
-     * @var array<int, array<string, ?LspClient>>
-     */
-    private static array $lspClients = [];
-
-    /** Whether {@see stopLspServers()} is already registered to run at exit. */
-    private static bool $lspShutdownRegistered = false;
-
-    /**
-     * The launch's read ledgers, per process and per root — see
-     * {@see readLedger()}.
-     *
-     * @var array<int, array<string, ReadLedger>>
-     */
-    private static array $readLedgers = [];
 
     /**
      * The launch's ONE read ledger for $root (roadmap 3.I-2, EDT-1): the
@@ -9366,7 +8813,7 @@ final class Bootstrap
         $root = self::requireRoot($root);
         $pid = getmypid() ?: 0;
 
-        return self::$readLedgers[$pid][$root] ??= new ReadLedger();
+        return LaunchContext::readLedgerFor($pid, $root, static fn(): ReadLedger => new ReadLedger());
     }
 
     /**
@@ -9393,66 +8840,29 @@ final class Bootstrap
         $pid = getmypid() ?: 0;
         self::registerBackgroundShellShutdown();
 
-        return self::$shellRegistries[$pid][$root]
-            ??= BackgroundShellRegistry::forSession('main');
+        return LaunchContext::backgroundShellRegistryFor(
+            $pid,
+            $root,
+            static fn(): BackgroundShellRegistry => BackgroundShellRegistry::forSession('main'),
+        );
     }
 
-    /** Whether {@see stopBackgroundShells()} is already registered to run at exit. */
-    private static bool $shellsShutdownRegistered = false;
-
     /**
-     * @var array<int, array<string, BackgroundShellRegistry>>
-     */
-    private static array $shellRegistries = [];
-
-    /**
-     * THE SHUTDOWN SEAM for background shells — same shape and same once-
-     * per-process-image reasoning as {@see registerMcpShutdown()}: a forked
-     * child inherits the hook, and {@see stopBackgroundShells()} acts only on
-     * THIS pid's bucket, so a tool child's exit tears down the shells that
-     * child itself spawned (none, in the ordinary case — the registry it
-     * hands home is rows without handles) and never touches the parent's
-     * live shells.
+     * Delegates to {@see LaunchContext::registerBackgroundShellShutdown()} — the shutdown shelf moved to the
+     * launch-context in the v4 S1b split; this seam keeps the public contract.
      */
     private static function registerBackgroundShellShutdown(): void
     {
-        if (self::$shellsShutdownRegistered) {
-            return;
-        }
-
-        self::$shellsShutdownRegistered = true;
-
-        register_shutdown_function(static function (): void {
-            self::stopBackgroundShells();
-        });
+        LaunchContext::registerBackgroundShellShutdown();
     }
 
     /**
-     * Stop every background shell THIS pid holds a handle to, and release
-     * the per-pid bucket. PUBLIC for the shutdown-hook reason
-     * {@see stopMcpServers()} states, and idempotent the same way: teardown
-     * kills by recorded group, and the handle map empties with the bucket.
-     *
-     * THIS PID'S BUCKET AND NO OTHER — a child's inherited copy of the
-     * parent's registries holds no handles (the parent spawned those
-     * children), and {@see BackgroundShellRegistry::teardown()} only
-     * re-signals rows it could observe as live, so the live session's shells
-     * survive a worker's exit.
+     * Delegates to {@see LaunchContext::stopBackgroundShells()} — the shutdown shelf moved to the
+     * launch-context in the v4 S1b split; this seam keeps the public contract.
      */
     public static function stopBackgroundShells(): void
     {
-        $pid = getmypid() ?: 0;
-        $registries = self::$shellRegistries[$pid] ?? [];
-        unset(self::$shellRegistries[$pid]);
-
-        foreach ($registries as $registry) {
-            try {
-                $registry->teardown();
-            } catch (\Throwable) {
-                // Nothing to report to — stderr may already be gone at
-                // shutdown, and there is no remedy left to offer.
-            }
-        }
+        LaunchContext::stopBackgroundShells();
     }
 
     /**
@@ -9479,8 +8889,8 @@ final class Bootstrap
     {
         $root = self::requireRoot($root);
         $pid = getmypid() ?: 0;
-        if (array_key_exists($root, self::$lspClients[$pid] ?? [])) {
-            return self::$lspClients[$pid][$root];
+        if (LaunchContext::hasLspClient($pid, $root)) {
+            return LaunchContext::lspClientFor($pid, $root);
         }
 
         $config = self::readUserConfig();
@@ -9494,7 +8904,7 @@ final class Bootstrap
             self::registerLspShutdown();
             [$client, $launcher] = $launcher->launch();
         }
-        self::$lspClients[$pid][$root] = $client;
+        LaunchContext::rememberLspClient($pid, $root, $client);
 
         foreach ($launcher->problems() as $problem) {
             self::warnPermissionConfigInTranscript($problem);
@@ -9504,38 +8914,21 @@ final class Bootstrap
     }
 
     /**
-     * Stop the language servers THIS process started — the shutdown hook's
-     * callback, and the way a caller owning a process lifetime (a test, an
-     * embedder) hands them back early. This pid's bucket only, for the reason
-     * {@see stopMcpServers()} gives. Idempotent.
+     * Delegates to {@see LaunchContext::stopLspServers()} — the shutdown shelf moved to the
+     * launch-context in the v4 S1b split; this seam keeps the public contract.
      */
     public static function stopLspServers(): void
     {
-        $pid = getmypid() ?: 0;
-        $clients = self::$lspClients[$pid] ?? [];
-        unset(self::$lspClients[$pid]);
-
-        foreach ($clients as $client) {
-            $client?->disconnectAll();
-        }
+        LaunchContext::stopLspServers();
     }
 
     /**
-     * Register {@see stopLspServers()} to run at exit, once per process image,
-     * BEFORE the first server starts — so nothing can acquire a server without
-     * the stop. Same coverage and the same gaps as {@see registerMcpShutdown()}.
+     * Delegates to {@see LaunchContext::registerLspShutdown()} — the shutdown shelf moved to the
+     * launch-context in the v4 S1b split; this seam keeps the public contract.
      */
     private static function registerLspShutdown(): void
     {
-        if (self::$lspShutdownRegistered) {
-            return;
-        }
-
-        self::$lspShutdownRegistered = true;
-
-        register_shutdown_function(static function (): void {
-            self::stopLspServers();
-        });
+        LaunchContext::registerLspShutdown();
     }
 
     /**
@@ -10169,7 +9562,7 @@ final class Bootstrap
      */
     private static function reportProjectTierToolRemovals(array $tools, array $kept): void
     {
-        $root = self::$projectRootForSettings;
+        $root = LaunchContext::projectRootForSettings();
         if ($root === null) {
             return;
         }
@@ -10958,8 +10351,8 @@ final class Bootstrap
      */
     public static function maxCostUsd(): ?float
     {
-        if (self::$maxCostOverride !== null) {
-            return self::parseSpendCap(self::$maxCostOverride, 'cli.refuse.max_cost_flag');
+        if (LaunchContext::maxCostOverride() !== null) {
+            return self::parseSpendCap(LaunchContext::maxCostOverride(), 'cli.refuse.max_cost_flag');
         }
 
         $raw = getenv('CANDY_CODE_MAX_COST');
@@ -11232,10 +10625,10 @@ final class Bootstrap
      */
     private static function noteKeybindingsApplied(): void
     {
-        self::$keybindingsAppliedDigest = self::keybindingsDigest(
+        LaunchContext::rememberKeybindingsAppliedDigest(self::keybindingsDigest(
             KeyBindingRegistry::overrides(),
             KeyBindingRegistry::suppressed(),
-        );
+        ));
     }
 
     /**
@@ -11346,14 +10739,14 @@ final class Bootstrap
         }
 
         $digest = self::keybindingsDigest($overrides, $suppressed);
-        if ($digest === self::$keybindingsAppliedDigest) {
+        if ($digest === LaunchContext::keybindingsAppliedDigest()) {
             \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(Lang::t('cli.keys.reload_unchanged'));
 
             return;
         }
 
         KeyBindingRegistry::useOverrides($map);
-        self::$keybindingsAppliedDigest = $digest;
+        LaunchContext::rememberKeybindingsAppliedDigest($digest);
         \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(
             Lang::t('cli.keys.reloaded', ['count' => \count($map)]),
         );

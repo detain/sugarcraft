@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Config\PolicySnapshot;
 use SugarCraft\Code\Hooks\HookManager;
@@ -229,8 +230,7 @@ final class PolicyFreshnessQuarantineTest extends TestCase
      */
     private function resetFreshnessStatics(): void
     {
-        // The freshness memo stayed on Bootstrap when S1a split the class;
-        // only the notice store moved to LaunchNotices.
+        // W7-D: the freshness memo and entries caches moved to LaunchContext.
         foreach ([
             'policyFreshnessChecked' => false,
             'policyChanged' => false,
@@ -238,7 +238,7 @@ final class PolicyFreshnessQuarantineTest extends TestCase
             'policyPreviousTrustedRoots' => [],
             'hookFileEntries' => [],
         ] as $name => $value) {
-            $property = new \ReflectionProperty(Bootstrap::class, $name);
+            $property = new \ReflectionProperty(LaunchContext::class, $name);
             $property->setAccessible(true);
             $property->setValue(null, $value);
         }
