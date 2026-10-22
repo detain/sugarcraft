@@ -105,6 +105,10 @@ one-shot `-p` path. In user-visible terms:
 - **New docs pages.** A `GLOSSARY.md` carrying the identifier-convention
   legend for the whole codebase, a `CONTRIBUTING.md`, and an
   `ADDING_A_PROVIDER.md` walkthrough, all indexed in the docs README.
+- **Program close.** Waves 5-7 closed: permission FSM, session-tabs,
+  RenderFrame, route-trait decomposition, composition roots, Log facade,
+  `/export`, settings-help i18n, docs wash complete
+  (live 25,412 tests / 606,569 assertions).
 
 ## Fixed (2026-10-21 plan_comparison D1)
 
