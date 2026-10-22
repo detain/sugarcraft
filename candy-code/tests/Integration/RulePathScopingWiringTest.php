@@ -463,15 +463,23 @@ final class RulePathScopingWiringTest extends TestCase
 
         self::assertSame(
             2,
-            preg_match_all('/self::tools\((?:[^;]*?)rulesState: \$rulesState/s', $source),
-            'backend() and backendFor() each build their tools with the set; the third self::tools( call is app()\'s display copies, which no tool call reaches',
+            // Re-armed W7-E C4 (2026-10-21): backendFor()'s tools build moved
+            // with its body to LaunchContext, so the family's two rulesState
+            // handoffs are read from the concatenation of both files; the
+            // count and its meaning are unchanged (app()'s display copies
+            // still pass no set).
+            preg_match_all('/self::tools\((?:[^;]*?)rulesState: \$rulesState/s', $source . (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/LaunchContext.php')),
+            'backend() and LaunchContext::backendFor() each build their tools with the set; the third self::tools( call is app()\'s display copies, which no tool call reaches',
         );
 
         self::assertSame(
             1,
             // Audit 15d-20: the tracker now re-runs this loader on every consult
             // instead of holding one boot-time walk, so the pin reads the closure.
-            preg_match('/RulePathNudge::fromLoader\(\s*static fn \(\): array => \(new RuleLoader\(\$root\)\)->load\(\),\s*\$rulesState,?\s*\)/', $source),
+            // Re-armed W7-E C2 (2026-10-21): unfilteredTools()'s body moved to
+            // LaunchContext (Bootstrap keeps the delegate door), so the tracker
+            // build is read from the builder file, not from $source.
+            preg_match('/RulePathNudge::fromLoader\(\s*static fn \(\): array => \(new RuleLoader\(\$root\)\)->load\(\),\s*\$rulesState,?\s*\)/', (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/LaunchContext.php')),
             'the tracker itself must be built with the set — the rule list stays unfiltered so a pack switched back on mid-session is deliverable again',
         );
     }

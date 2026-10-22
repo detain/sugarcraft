@@ -212,4 +212,136 @@ final class LaunchContextDelegatesTest extends TestCase
                 . 'the freeze moved without moving its guards');
         }
     }
+
+    /**
+     * The builder families the composition-root wave moved (S1b W7-E C1-C5):
+     * name => whether the Bootstrap door was public before the move.
+     *
+     * @return array<string, array{0: string, 1: bool}>
+     */
+    public static function migratedBuilders(): iterable
+    {
+        yield 'tools' => ['tools', true];
+        yield 'unfilteredTools' => ['unfilteredTools', true];
+        yield 'provider' => ['provider', true];
+        yield 'selectedProviderLabel' => ['selectedProviderLabel', true];
+        yield 'selectedProviderName' => ['selectedProviderName', true];
+        yield 'selectedModelName' => ['selectedModelName', false];
+        yield 'providerConfigFor' => ['providerConfigFor', true];
+        yield 'summaryModel' => ['summaryModel', true];
+        yield 'backendFor' => ['backendFor', true];
+        yield 'taskWorkerPool' => ['taskWorkerPool', false];
+        yield 'configRoot' => ['configRoot', false];
+        yield 'withResolvedMaxToolSteps' => ['withResolvedMaxToolSteps', false];
+        yield 'withResolvedReasoningEffort' => ['withResolvedReasoningEffort', false];
+        yield 'withConsolePermissionPrompt' => ['withConsolePermissionPrompt', false];
+        yield 'app' => ['app', true];
+        yield 'settingsWriter' => ['settingsWriter', false];
+        // Widened doors (C5 cure): the moved app() body reaches them, and
+        // src/App/App.php cites the dock loader by its Bootstrap name.
+        yield 'dockFromUserConfig' => ['dockFromUserConfig', true];
+        yield 'paneAutoShowFromUserConfig' => ['paneAutoShowFromUserConfig', true];
+    }
+
+    /**
+     * @dataProvider migratedBuilders
+     */
+    public function testEachMigratedBuilderKeepsAThinnestBootstrapDoorOverALaunchContextBody(
+        string $name,
+        bool $doorWasPublic,
+    ): void {
+        $door = new ReflectionMethod(Bootstrap::class, $name);
+        $body = new ReflectionMethod(LaunchContext::class, $name);
+
+        self::assertSame($doorWasPublic, $door->isPublic(),
+            "Bootstrap::{$name}() changed visibility with the move — the settings-schema reader citations "
+            . 'and the reflection pins reach it by that name');
+        self::assertTrue($body->isPublic(),
+            "LaunchContext::{$name}() must be public — private doors forward to it from another class");
+        self::assertFalse($door->isStatic() !== $body->isStatic(), 'staticness must agree across the door');
+        self::assertSame($door->getNumberOfParameters(), $body->getNumberOfParameters(),
+            "Bootstrap::{$name}() no longer forwards every argument the body takes");
+        self::assertSame((string) $door->getReturnType(), (string) $body->getReturnType(),
+            "the door's return type drifted from the moved body's");
+
+        // THINNEST: the door body is one `return LaunchContext::name(...)` and
+        // nothing else — a second truth living behind the door is exactly the
+        // drift this file exists to refuse.
+        $source = self::methodSource($door);
+        $open = \strpos($source, '{');
+        $close = \strrpos($source, '}');
+        self::assertIsInt($open);
+        self::assertIsInt($close);
+        $text = \substr($source, $open + 1, $close - $open - 1);
+        // Comments annotate the door; the executable part must still be ONE
+        // forwarding return and nothing else.
+        $code = \implode("\n", \array_filter(
+            \explode("\n", $text),
+            static fn (string $line): bool => !str_starts_with(ltrim($line), '//'),
+        ));
+        self::assertMatchesRegularExpression(
+            '/^\s*return LaunchContext::' . preg_quote($name, '/') . '\([^;]*\);\s*$/',
+            $code,
+            "Bootstrap::{$name}() is no longer a single forwarding return — logic crept back behind the door",
+        );
+    }
+
+    /**
+     * The residents that must NEVER become delegates (S1c hand-off boundary,
+     * pinned structurally): the transcript-seam census counts 31
+     * `self::warnPermissionConfigInTranscript(` literals in Bootstrap.php's
+     * text, so every method carrying one stays; `chat()` and `workspace()`
+     * stay while the project-tier refusal ledger is inventory-frozen to this
+     * file; `openSession()` keeps its two sprints inside the launch-format
+     * window. If a future wave moves one, it must move its guards first and
+     * re-key this roster in the same commit.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function permanentResidents(): iterable
+    {
+        foreach (['backend', 'chat', 'workspace', 'hooks', 'permissionGate', 'lspClient',
+            'mcpClient', 'promptEnabledSkills', 'filterToolSet', 'installSecretEnvAllowlist',
+            'openSession',] as $name) {
+            yield $name => [$name];
+        }
+    }
+
+    /**
+     * @dataProvider permanentResidents
+     */
+    public function testAPermanentResidentStillBuildsItsOwnBodyInsideBootstrap(string $name): void
+    {
+        $stay = new ReflectionMethod(Bootstrap::class, $name);
+        $bootFile = (new ReflectionMethod(Bootstrap::class, 'chat'))->getFileName();
+
+        self::assertSame($bootFile, $stay->getFileName(),
+            "Bootstrap::{$name}() was moved without re-keying its census guards — see the method's doc-block "
+            . 'and this roster in the same commit');
+        self::assertStringNotContainsString(
+            'return LaunchContext::' . $name . '(',
+            self::methodSource($stay),
+            "Bootstrap::{$name}() became a forwarding delegate while still named a permanent resident here",
+        );
+    }
+
+    /**
+     * The declared source text of one method, from its own file, lines taken
+     * from reflection (start line = the `function` line in this house style,
+     * so the signature is included — every caller here needs only the body
+     * shape and tolerates it).
+     */
+    private static function methodSource(ReflectionMethod $method): string
+    {
+        /** @var array<string, list<string>> $cache */
+        static $cache = [];
+        $file = (string) $method->getFileName();
+        $lines = $cache[$file] ??= \file($file);
+
+        return implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+    }
 }

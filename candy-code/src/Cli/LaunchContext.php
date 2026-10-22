@@ -12,6 +12,31 @@ use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\MCP\McpToolShape;
 use SugarCraft\Code\Tools\ReadLedger;
 use SugarCraft\Code\Session\PromptHistory;
+use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Context\InstructionFileLoader;
+use SugarCraft\Code\Context\RulesState;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Context\RuleLoader;
+use SugarCraft\Code\Providers\EchoProvider;
+use SugarCraft\Code\Providers\ProviderFactory;
+use SugarCraft\Code\Backend;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\Support\ProjectRoot;
+use SugarCraft\Code\Support\ToolIpcFiles;
+use SugarCraft\Code\Memory\MemoryStore;
+use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\Tui\Pane;
+use SugarCraft\Code\App\PaneAutoShow;
+use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Code\Context\RulePathNudge;
+use SugarCraft\Code\Skills\SkillPathNudge;
+use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Tools\BuiltIn\Bash;
+use SugarCraft\Code\Tools\BuiltIn\TaskTool;
+use SugarCraft\Code\Tools\Tool;
 
 /**
  * The launch-context shelf: the process-wide stores that the launch wiring
@@ -1376,5 +1401,998 @@ final class LaunchContext
     public static function markUntrustedHookFileReported(string $file): void
     {
         self::$reportedUntrustedHookFiles[$file] = true;
+    }
+
+    // =========================================================================
+    // THE COMPOSITION ROOTS.  S1b slice W7-E moves the launch *builders* — the
+    // methods that read the shelf above plus settings and trust, and hand the
+    // engine its objects — out of {@see Bootstrap} and onto this class, where
+    // the values they read already live. Bootstrap keeps same-named public
+    // delegates for every door, so callers, `bin/candy-code`, and the
+    // Bootstrap-keyed censuses keep reaching the builders there.
+    // =========================================================================
+
+    /**
+     * Build the built-in coding tools, with a shared InstructionFileLoader
+     * wired into every tool that surfaces nested CLAUDE.md/AGENTS.md content
+     * (Read/Edit/Glob/Write) so those files are actually reachable when a user
+     * runs the real CLI binary.
+     *
+     * THIS ARRAY IS THE WHOLE MODEL-FACING TOOL SET. Its BUILT-IN half is
+     * TWELVE entries as of this writing — it was ten until {@see LspTool} was
+     * added and eleven until {@see TaskTool} was — and THAT count, not this
+     * array's length, is the domain for every "N built-in tools" figure in
+     * `README.md`. `src/Tools/BuiltIn/` holds
+     * exactly those twelve concrete `Tool` classes.
+     *
+     * TWELVE IS THE COUNT OF WIRED TOOLS, NOT OF USABLE ONES, and the two differ
+     * on a launch with no `lsp` setting: `LspTool` is reachable and answers every
+     * call with a "no language server configured" error until the user lists a
+     * server ({@see Bootstrap::lspClient()}). A figure that said "twelve working tools"
+     * would be the wrong claim about this array.
+     *
+     * The array is longer than twelve only when the project ships a `.mcp.json` AND
+     * the user has listed this root under `trustedProjectMcp` — both conditions,
+     * see {@see mcpClient()} for why the second one exists. Then one
+     * {@see McpToolBridge} per tool the configured MCP servers advertise is
+     * appended at the end (see {@see mcpTools()}). That is a per-PROJECT number
+     * nothing in `src/` can know, which is why every count stated here and every
+     * scanned assertion about this method is about the built-in half. The one
+     * concrete `Tool` implementor under `src/` that is NOT in the literal below is
+     * `McpToolBridge`, for exactly that reason —
+     * {@see \SugarCraft\Code\Tests\Tools\BuiltInToolCorpus::DYNAMIC_TOOL_CLASSES}
+     * is where that exemption is recorded and asserted.
+     *
+     * NOT "BY CONSTRUCTION", which is what this doc-block used to say. Nothing
+     * derives this array from that directory or that directory from this array;
+     * they are two hand-maintained halves, and the reason they agree is a TEST
+     * that scans the directory —
+     * `BinCandyCodeWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`,
+     * whose expected set comes from `glob()` over `src/Tools/BuiltIn/` rather than
+     * a literal. Measured with the old literal assertions in place: an eleventh
+     * implementor added to that directory and not listed here left the whole
+     * Integration tier at `OK (467 tests, 2681 assertions)`, which is exactly how
+     * {@see Write} came to be written, tested, named in the README and unreachable
+     * from any real run. If you add a tool class, add it here — the mechanism that
+     * tells you is a red test, not the type system.
+     *
+     * @param InstructionFileLoader|null $loader Pass the caller's loader to
+     *        keep the engine's root-instruction reads and the tools' on-touch
+     *        reads on ONE instance (its dedup map is per-instance).
+     * @param SkillRegistry|null $skills The registry the model-facing {@see
+     *        SkillTool} resolves names against. Pass the caller's registry so
+     *        the tool, {@see EngineBackend::withSkillRegistry()} and the shell
+     *        pane all read ONE instance — two independently scanned
+     *        registries would let a skill disabled on one still be invocable
+     *        through the other. Defaults to a fresh scan of $root.
+     * @param LspClient|null $lsp Language servers for {@see LspTool} and the
+     *        Read outline, threaded through the catalog. The launch's callers
+     *        pass {@see Bootstrap::lspClient()}; null — no `lsp` setting — leaves the tool
+     *        reachable but refusing.
+     * @param bool $rgAvailable Host has `rg`; threaded to {@see Grep} only.
+     *        {@see \SugarCraft\Code\Tools\Concerns\DetectsCapabilities} is the
+     *        probe and the boot call sites below are the only readers of it, so
+     *        this factory stays a pure function of its arguments and every test
+     *        that calls it without the flag renders the absent description.
+     * @param bool $fdAvailable Host has `fd`; same rule, threaded to {@see Glob}.
+     * @param RulesState|null $rulesState The session's rulebook toggle set, threaded
+     *        to the {@see RulePathNudge} and nothing else — the skills channel has
+     *        its own disable mechanism (`SkillRegistry::disableMultiple()`) and the
+     *        two trackers deliberately share no state. Trailing and defaulted for the
+     *        reason {@see \SugarCraft\Code\Providers\CustomProvider}'s
+     *        `$sessionAffinityId` is: the callers that hold no set (the `-p` path, a
+     *        background child, every test that boots the tool array for its shape)
+     *        keep calling with exactly the arguments they pass today.
+     *
+     * @return list<Tool>
+     */
+    public static function tools(
+        ?string $root = null,
+        ?InstructionFileLoader $loader = null,
+        ?SkillRegistry $skills = null,
+        ?LspClient $lsp = null,
+        bool $rgAvailable = false,
+        bool $fdAvailable = false,
+        ?RulesState $rulesState = null,
+        ?AgentManager $taskManager = null,
+        ?\SugarCraft\Code\Agents\AgentWorkerPool $taskPool = null,
+    ): array {
+        // FILTERED HERE, NOT AT THE CALL SITES, and that is the load-bearing
+        // part rather than tidiness: `withTools(self::tools(...))` appears
+        // THREE times in `Bootstrap` — in `app()`, `backend()` and
+        // `backendFor()` — and a filter applied at two of them is a config key
+        // that works until the user switches provider. (The plan for this item
+        // named two sites; there are three. An earlier version of this comment
+        // named `chat()` as one of them, which is wrong in the way this project
+        // keeps being wrong: `chat()` reaches tools only transitively through
+        // `backend()` and holds no `self::tools(` call of its own. Measured with
+        // `grep -n 'self::tools(' src/Cli/Bootstrap.php`; deliberately no line
+        // numbers, since a comment quoting them decays on the next insertion
+        // above.) Everything
+        // downstream of this return receives an already-filtered set, including
+        // `mcpTools()`'s appended bridges, which is what makes
+        // `disabledTools: ["mcp__git__*"]` mean anything.
+        Bootstrap::installSecretEnvAllowlist();
+        $tools = Bootstrap::filterToolSet(self::unfilteredTools(
+            $root,
+            $loader,
+            $skills,
+            $lsp,
+            $rgAvailable,
+            $fdAvailable,
+            $rulesState,
+        ));
+
+        // GIT GUIDANCE SETTINGS (step 0.3), applied HERE for the reason the
+        // filter is: this is the one return all three `withTools()` call
+        // sites share. `includeGitInstructions` must be a bool and
+        // `attribution` an object of strings; anything else is ignored as if
+        // unset (the block on, no trailer), the tolerant direction every
+        // other `readUserConfig()` reader takes for a malformed preference.
+        // `attribution` can only arrive from the user tier
+        // (LayeredSettings::PROJECT_TIER_KEYS does not list it): it is text
+        // the model is told to stamp on every commit.
+        $gitConfig = Bootstrap::readUserConfig();
+        $includeGit = $gitConfig['includeGitInstructions'] ?? true;
+        $attribution = $gitConfig['attribution'] ?? [];
+        $attribution = is_array($attribution) ? $attribution : [];
+        $commitTrailer = is_string($attribution['commit'] ?? null) ? $attribution['commit'] : '';
+        $prTrailer = is_string($attribution['pr'] ?? null) ? $attribution['pr'] : '';
+        $tools = array_map(
+            static fn (Tool $tool): Tool => $tool instanceof Bash
+                ? $tool->withGitGuidance(is_bool($includeGit) ? $includeGit : true, $commitTrailer, $prTrailer)
+                : $tool,
+            $tools,
+        );
+
+        // THE TASK FEED (E675). Appended AFTER the filter, on purpose: the
+        // gate on this tool is not a config key but the CALLER holding an
+        // AgentManager at all — a feed built without one (a bare unit-test
+        // harness, an embedder with no agents configured) ships no Task, and
+        // fail-closed is the wrong shape for a tool that cannot function.
+        // The instance gets the SAME manager the Chat runs on (threaded in
+        // from `chat()`), never a fresh one: two managers would mean two
+        // sub-agent rosters and two sets of grants, the split-state bug this
+        // seam exists to prevent. What the sub-agent may then do is bounded
+        // by the preset's grants inside `executeAll`, not by this list.
+        //
+        // Roadmap 4.3-2: and able to run a delegation in the background. The
+        // supervisor is built HERE, in the launching process, so the sessions
+        // it spawns from a forked turn child are recorded as this process's
+        // and adopted by the host's own supervisor on its next poll
+        // (BackgroundSupervisor::adoptHandedOff()) — whichever instance that
+        // is. The session works in the same tree the tools are jailed to.
+        //
+        // Roadmap 4.9: and able to isolate a run. An agent whose preset says
+        // `isolation: worktree` gets a git worktree of this launch's root,
+        // under `<root>/.candy-code/worktrees/` (or CANDY_CODE_WORKTREES_DIR),
+        // through ONE manager per launch — the registry it keeps is shared
+        // on disk, so the forked turn children that create trees and the
+        // parent that sweeps them agree on which exist.
+        if ($taskManager !== null) {
+            $taskRoot = $root ?? (getcwd() ?: '.');
+            $tools[] = (new TaskTool($taskManager, $taskPool))
+                ->withBackgroundSupervisor(new BackgroundSupervisor(), $taskRoot)
+                ->withWorktreeManager(\SugarCraft\Code\Agents\WorktreeManager::new($taskRoot));
+        }
+
+        return $tools;
+    }
+
+    /**
+     * The exact array {@see tools()} builds, BEFORE `filterToolSet()` applies
+     * the session's `allowedTools`/`disabledTools` — the ceiling itself rather
+     * than one session's slice of it.
+     *
+     * WHY THIS IS PUBLIC. `AgentManager::resolveGrantedTools()` has to tell
+     * "the operator disabled this tool" from "the preset misspelled it", and
+     * that distinction needs BOTH halves: the filtered set as the grant's
+     * ceiling and this unfiltered set as the universe the narrowing happened
+     * against. Handing it only `tools()` turned `disabledTools: ["Bash"]` —
+     * documented as intentional — into a crash for five of the six built-in
+     * presets (E639's measured trap); passing only THIS would let sub-agent
+     * rosters ignore `disabledTools`, a widening. The two-set shape is the
+     * decided remedy, argued in that method's doc-block.
+     *
+     * Same construction cost as tools() minus one filter pass — nothing here
+     * spawns what backend()/app() are not already spawning on the same launch.
+     *
+     * @return list<Tool>
+     *
+     * @see tools() for the argument documentation, which is about THIS build —
+     *      tools() is one line of delegation over every parameter below.
+     */
+    public static function unfilteredTools(
+        ?string $root = null,
+        ?InstructionFileLoader $loader = null,
+        ?SkillRegistry $skills = null,
+        ?LspClient $lsp = null,
+        bool $rgAvailable = false,
+        bool $fdAvailable = false,
+        ?RulesState $rulesState = null,
+    ): array {
+        $root = Bootstrap::requireRoot($root);
+        $loader ??= Bootstrap::instructionLoader($root);
+        $skills ??= Bootstrap::skillRegistry($root);
+
+        // ONE tracker across every tool that resolves a path — Read, Edit,
+        // Glob, Grep and Write: the "announce a path-scoped skill the first
+        // time we touch a file it covers" rule is only correct if all of them
+        // share the announced-set. Five trackers would re-announce the same
+        // skill once per tool (crush_feat.md section 7 E4).
+        //
+        // This comment said THREE and named Read/Edit/Glob. It was already
+        // stale — `Write` below has taken the same pair since it was wired —
+        // and `Grep` has now joined them, which is the arithmetic this project
+        // keeps getting wrong. The count and the names are both asserted, not
+        // just written here: `BinCandyCodeWiringTest` now DERIVES the roster
+        // from the tools that declare an `instructionLoader` property instead
+        // of restating a hand-kept list, so the next tool to take the pair
+        // fails that test until it is acknowledged there.
+        $nudge = SkillPathNudge::new($skills);
+
+        // P6.S5b: the second transient channel carries `paths:`-scoped RULES, and
+        // it is a separate tracker from the skills one on purpose — one subject
+        // per class, so retuning a skill budget never moves a rule budget. The
+        // rules come from the same entry point the prompt splice uses, and are
+        // RE-WALKED on every consult rather than once here (audit 15d-20): the
+        // splice re-walks per build and skips every path-scoped rule as "delivered
+        // at tool time", so a tracker frozen at boot left a rule written
+        // mid-session in neither channel, kept announcing an edited rule's launch
+        // text, and still nudged a rule whose `paths:` had been removed. The cost
+        // is one `load()` per path-resolving tool call — see
+        // {@see RulePathNudge::fromLoader()}.
+        //
+        // THE TOGGLE REACHES THIS CHANNEL TOO. The set handed below is the SAME
+        // instance `chat()` gave the backend and `Chat`, so a pack silenced in
+        // `disabledRules` is absent from the first turn and one silenced later with
+        // `/rules` goes quiet on the next tool call — the tracker consults it per
+        // rule rather than baking the launch answer into a candidate list, and the
+        // loader below is built WITHOUT the set so that per-rule consult stays the
+        // one place this channel applies the toggle. Passing a
+        // pre-filtered rule list instead would freeze boot-time intent and leave the
+        // toggle half of the goal unmet; passing a SECOND `RulesState` built from the
+        // same config key would be the two-copies disagreement the note above the
+        // `chat()` construction names. Null — every caller that does not thread a
+        // set, including the shell's display copies in `app()`, whose tracker no tool
+        // call ever reaches — is the pre-fix behaviour, stated rather than assumed.
+        $ruleNudge = RulePathNudge::fromLoader(
+            static fn (): array => (new RuleLoader($root))->load(),
+            $rulesState,
+        );
+
+        // THE BUILT-IN HALF COMES FROM THE CATALOG (DH-TOOLS): every class
+        // under `src/Tools/BuiltIn/` declares its wire name, permission class
+        // and wire position (`#[BuiltInTool]`) and builds itself from this one
+        // shared context, so a new tool is a new file rather than an edit
+        // here. One loader and one pair of nudge trackers for every
+        // path-resolving tool, for the announced-set reason above.
+        //
+        // MCP bridges are APPENDED, so the built-ins keep the wire order the
+        // model has learned and an MCP config can only ever ADD names. Empty
+        // unless this project ships a `.mcp.json` AND the user trusted this
+        // root — see {@see mcpTools()} and {@see mcpClient()}. MCP-7's
+        // dispatcher pair is the exception to APPENDED: `mcp_list`/`mcp_call`
+        // are ordinary positioned built-ins BUILT BY THE CATALOG from the
+        // frozen shape, and only when something was actually deferred.
+        // `Task` is not in this set: `tools()` appends it after the filter,
+        // only when an AgentManager is bound.
+        $tools = [
+            ...\SugarCraft\Code\Tools\Catalog\ToolCatalog::build(new \SugarCraft\Code\Tools\Catalog\ToolBuildContext(
+                root: $root,
+                loader: $loader,
+                skills: $skills,
+                skillNudge: $nudge,
+                ruleNudge: $ruleNudge,
+                lsp: $lsp,
+                rgAvailable: $rgAvailable,
+                fdAvailable: $fdAvailable,
+                // Lazy: the home store is opened on the Memory tool's first
+                // call, so building the tool set creates nothing on disk.
+                memory: \SugarCraft\Code\Memory\MemoryWriter::new(
+                    static fn (): ?MemoryStore => Bootstrap::memoryStoreOrNull($root),
+                    $root,
+                ),
+                // Roadmap 3.I-2: ONE read ledger for this launch and root —
+                // Read records into it, Edit/Write/ApplyPatch refuse a stale
+                // file against it, and the post-edit format hook records its
+                // rewrites through the very same instance
+                // ({@see readLedger()}) — owned by the launch, for the
+                // loader's reason above.
+                readLedger: Bootstrap::readLedger($root),
+                // SHL-1: ONE background-shell table per launch and root —
+                // Bash's `run_in_background` records into it, ShellOutput and
+                // ShellStop read it, and the shutdown hook
+                // ({@see registerBackgroundShellShutdown()}) tears down what
+                // this pid's copies hold.
+                backgroundShells: Bootstrap::backgroundShells($root),
+                // MCP-7: the pair is BUILT here, from the frozen shape, like
+                // every other conditional tool — null shape or an all-eager
+                // config yields null from fromCatalog() and neither name
+                // reaches the wire at all.
+                mcpShape: Bootstrap::mcpToolShape($root),
+            )),
+            ...Bootstrap::mcpTools($root),
+        ];
+
+        // THE CEILING, not the session's slice of it. Every caller that renders
+        // tools to a model wants tools() — which filters this array with the
+        // operator's allowedTools/disabledTools in ONE place; the argument for
+        // filtering there rather than at the call sites lives on that method.
+        // Only a caller that must distinguish narrowing from absence (the
+        // sub-agent grant, E639) asks for this one directly.
+        return $tools;
+    }
+
+    /**
+     * The run's selected provider and model as real objects, for the two
+     * consumers that need a {@see ProviderInterface} rather than the
+     * {@see Backend} the hosted chat runs on: {@see App} (which uses it as a
+     * label source for the status bar's provider name and never calls it) and
+     * {@see Bootstrap::agentManager()} (which genuinely drives it, for sub-agent
+     * completions).
+     *
+     * Built from the same selection {@see selectedProviderLabel()} reports, and
+     * falls back to the offline {@see EchoProvider} whenever this run has no
+     * provider or the provider cannot be constructed: {@see Bootstrap::backend()} has
+     * already warned on stderr AND seeded the transcript in that case (see
+     * {@see Bootstrap::warnPermissionConfigInTranscript()}), and refusing to launch the TUI
+     * over an unusable label would be a worse outcome than showing "echo".
+     *
+     * @return array{0: ProviderInterface, 1: string}
+     */
+    public static function provider(): array
+    {
+        [$name, $model] = self::selectedProviderLabel();
+        $providerName = self::selectedProviderName();
+
+        if ($providerName !== null) {
+            try {
+                $factory = new ProviderFactory();
+                $config = self::providerConfigFor($providerName, $factory);
+                $config['model'] = $model;
+
+                return [$factory->create($config), $model];
+            } catch (\Throwable) {
+                // fall through to Echo, same degradation backend() applies
+            }
+        }
+
+        return [new EchoProvider(), $name === 'command' ? $model : 'echo'];
+    }
+    /**
+     * The provider/model pair to stamp on a session row this process
+     * creates, mirroring {@see Bootstrap::backend()}'s own selection order.
+     *
+     * These are labels, not a second backend selection: they record what
+     * the run *asked* for. If a requested provider turns out to be
+     * unconstructable, {@see Bootstrap::backend()} warns on stderr and degrades to
+     * Echo while this row still names the requested provider — recording
+     * the request is more useful than recording the fallback, and the
+     * store has no column for both. Both shell-out paths
+     * (`$CANDY_CODE_BACKEND_CMD`, `$CANDY_CODE_BACKEND_CMD_STREAM`) and the
+     * default path have no provider name at all, so they are labelled
+     * honestly as such rather than given an invented one.
+     *
+     * Public because {@see NonInteractive::run()} needs to distinguish "this
+     * run is on the offline Echo default" from "this run is on
+     * `$CANDY_CODE_BACKEND_CMD`" before it decides whether to warn that the
+     * answer did not come from a model — re-reading the same two env vars
+     * there would be a second copy of this precedence chain that could drift
+     * from {@see Bootstrap::backend()}'s.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public static function selectedProviderLabel(): array
+    {
+        $name = self::selectedProviderName();
+        if ($name === null) {
+            // ONE label for both shell-out tiers. The label answers "did a
+            // model behind a provider produce this?", and the answer is no for
+            // either variable; a third label would also have to be taught to
+            // {@see provider()}, whose `$name === 'command'` arm is what keeps
+            // a shell-out run from being captioned "echo" in the status bar.
+            return Bootstrap::backendCommandTierIsSelected() ? ['command', 'unknown'] : ['echo', 'echo'];
+        }
+
+        // Same resolver backendFor() builds the real backend from, so the
+        // caption cannot name a different model than the one answering.
+        $model = self::selectedModelName($name);
+        if ($model === null) {
+            try {
+                $configured = self::providerConfigFor($name, new ProviderFactory())['model'] ?? null;
+            } catch (\Throwable) {
+                $configured = null;
+            }
+            $model = is_string($configured) && $configured !== '' ? $configured : 'unknown';
+        }
+
+        return [$name, $model];
+    }
+    /**
+     * The provider name this run selected, or null when the run is not on
+     * a provider at all (either shell-out tier — see
+     * {@see Bootstrap::backendCommandTierIsSelected()} — or the offline Echo default). Same precedence {@see Bootstrap::backend()} applies:
+     * `$CANDY_CODE_PROVIDER`, then the name persisted by a previous Ctrl+P
+     * "Switch model".
+     *
+     * Public because this is the exact question the one-shot path has to ask
+     * before choosing between {@see Bootstrap::backend()}'s lenient fallback and {@see
+     * backendFor()}'s throw-don't-degrade contract (crush_code.md Phase 0
+     * item 10): a non-null answer means *this run asked for a specific
+     * provider*, and silently answering it from Echo is the bug. Exposing the
+     * existing helper rather than re-deriving the precedence in {@see
+     * NonInteractive} keeps ONE definition of "which provider did this run
+     * select", so the backend, the session row's recorded provider and the
+     * one-shot hard-fail can never disagree about it.
+     */
+    public static function selectedProviderName(): ?string
+    {
+        $env = getenv('CANDY_CODE_PROVIDER');
+        if ($env !== false && $env !== '') {
+            return $env;
+        }
+
+        if (Bootstrap::backendCommandTierIsSelected()) {
+            return null;
+        }
+
+        $persisted = Bootstrap::readUserConfig()['provider'] ?? null;
+
+        return is_string($persisted) && $persisted !== '' ? $persisted : null;
+    }
+    /**
+     * The model name this run should use on `$providerName`, or null to let the
+     * caller fall back to the provider's own default.
+     *
+     * Precedence, highest first: `--model` ({@see Bootstrap::useModel()}), then
+     * `$CANDY_CODE_MODEL`, then the model PERSISTED FOR THIS PROVIDER — the
+     * `models` setting, `{"<provider>": "<model id>"}` (decision D9), which the
+     * settings editor writes — then null. Keyed by provider rather than one
+     * top-level `model`, because a model id means nothing to any other
+     * provider: a single key would send the last provider's model to the next
+     * one the moment `/model` switched. The flag and the variable stay
+     * provider-blind, as they always were — they name the model for whatever
+     * this launch runs.
+     *
+     * ONE resolver rather than several `??` chains, because there are three
+     * readers — {@see Bootstrap::backendFor()}, which builds the backend that actually
+     * runs, {@see selectedProviderLabel()}, which produces the status-bar
+     * caption, and {@see Bootstrap::workerProviderSpec()}, which hands forked sub-agent
+     * workers their provider. If only the first honoured a tier, the status bar
+     * would name a different model than the one answering, which is precisely
+     * the "a value true of one path displayed as a property of another" defect.
+     */
+    public static function selectedModelName(string $providerName): ?string
+    {
+        if (LaunchContext::modelOverride() !== null) {
+            return LaunchContext::modelOverride();
+        }
+
+        $env = getenv('CANDY_CODE_MODEL');
+        if ($env !== false && $env !== '') {
+            return $env;
+        }
+
+        // The layered read, so `models` in `~/.candy-code/settings.json` counts
+        // too; it is user-tier only, so no project file can choose it.
+        $persisted = Bootstrap::readUserConfig()['models'] ?? null;
+        $model = \is_array($persisted) ? ($persisted[$providerName] ?? null) : null;
+
+        return \is_string($model) && trim($model) !== '' ? $model : null;
+    }
+    /**
+     * The config array one provider NAME resolves to on this launch: the
+     * settings-layer override when {@see Bootstrap::providerOverrides()} carries the
+     * name — layered over the defaults for its declared `type` so
+     * credentials, base URLs and models the entry omits still come from the
+     * built-in arm — or {@see ProviderFactory::defaultConfig()} unchanged.
+     *
+     * Every site that turns a selected provider name into a config array
+     * MUST call this instead of `defaultConfig()` directly, or the map is
+     * honoured in the palette and ignored on the wire — the exact split this
+     * review item (endpoint lockout) was about. An entry naming an unknown
+     * `type` lets the factory's own listing-plus-nearest-match error
+     * ({@see ProviderFactory::unknownTypeError()}) surface from the base
+     * lookup; this funnel adds no opinion about it.
+     *
+     * @return array<string, mixed>
+     */
+    public static function providerConfigFor(string $name, ProviderFactory $factory): array
+    {
+        $entry = Bootstrap::providerOverrides()[$name] ?? null;
+        if ($entry === null) {
+            return $factory->defaultConfig($name);
+        }
+
+        $type = (string) $entry['type'];
+
+        return array_merge($factory->defaultConfig($type), $entry);
+    }
+    /**
+     * The model summaries go to when the user named one, or null for the
+     * conversation's own (roadmap 2.4-2): `$CANDY_CODE_SUMMARY_MODEL`, else
+     * the `summaryModel` key. Read at launch and carried on the engine
+     * ({@see EngineBackend::withSummaryModel()}), never re-read per turn.
+     */
+    public static function summaryModel(): ?string
+    {
+        $env = \SugarCraft\Code\Context\Compaction\StepSummarizer::modelOverride();
+        if ($env !== null) {
+            return $env;
+        }
+        $configured = Bootstrap::readUserConfig()['summaryModel'] ?? null;
+
+        return is_string($configured) && trim($configured) !== '' ? trim($configured) : null;
+    }
+
+    // ── THE COMPOSITION ROOTS: the backend builder family ────────────
+
+    /**
+     * Build a Backend for an explicit, already-known provider name - the
+     * same construction backend() does for $CANDY_CODE_PROVIDER, extracted
+     * so a caller (the Ctrl+P palette's Switch Model action) can request a
+     * specific provider directly rather than only via an env var read once
+     * at process start.
+     *
+     * Unlike backend()'s env-var path, which catches failures and falls
+     * back to Echo with a warning, this throws on an invalid/unreachable
+     * $providerName - a caller here asked for this provider explicitly and
+     * should see the real error rather than silently getting something else.
+     *
+     * @param SkillRegistry|null $skills See {@see Bootstrap::backend()}.
+     * @param PermissionGate|null $gate See {@see Bootstrap::backend()}.
+     * @param bool $consolePermissionPrompt See {@see Bootstrap::backend()} — same opt-in,
+     *        same reason it is not on by default here either: this method is
+     *        also what Chat's Ctrl+P provider switch calls, mid-TUI.
+     * @param RulesState|null $rulesState See {@see Bootstrap::backend()}. It matters here more
+     *        than the phrase "see backend()" suggests: a real launch with
+     *        $CANDY_CODE_PROVIDER set, or with a provider persisted by an earlier
+     *        Ctrl+P, gets its tools from THIS method, so a set threaded into
+     *        {@see Bootstrap::backend()} and not forwarded past here would leave the nudge
+     *        unfiltered on exactly the common path. A provider switch reaches here
+     *        through the factory {@see Bootstrap::workspace()} builds (N-P3a, O-2a), which
+     *        forwards the session's set, so the set survives the switch.
+     * @param AgentManager|null $taskManager The manager `Task` delegates to; null
+     *        ships no `Task`. Given without `$taskPool`, the pool is built here
+     *        for `$providerName`, so no path hands `Task` a manager and no pool.
+     *
+     * @throws \Throwable
+     */
+    public static function backendFor(string $providerName, ?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null, bool $consolePermissionPrompt = false, ?RulesState $rulesState = null, ?AgentManager $taskManager = null, ?\SugarCraft\Code\Agents\AgentWorkerPool $taskPool = null): Backend
+    {
+        // See backend(): whichever of the two a run enters through, the sweep
+        // happens once, and the config directory is named before any store or
+        // skill scan can resolve it out of a `/tmp` stand-in. sweepOnce()
+        // latches, so backend() delegating here does not sweep twice.
+        Bootstrap::trustedConfigDirPath();
+        ToolIpcFiles::sweepOnce();
+
+        $root ??= getcwd() ?: null;
+
+        // Every entry point that resolves a root names it as THE project for
+        // the settings layers, before anything below reads a config — see
+        // {@see Bootstrap::useProjectRootForSettings()}. Set on all four rather than in
+        // one shared helper because there is no single funnel: `app()` does
+        // not call `chat()`'s resolution, and `NonInteractive` enters at
+        // `backend()`.
+        Bootstrap::useProjectRootForSettings(self::configRoot($root));
+        $factory = new ProviderFactory();
+        $config = self::providerConfigFor($providerName, $factory);
+        // --model wins over $CANDY_CODE_MODEL wins over the model persisted for
+        // THIS provider (D9, `models`) wins over the provider default.
+        $model = self::selectedModelName($providerName) ?? ($config['model'] ?? 'gpt-4o');
+        // THE PROVIDER IS BUILT ON THE SAME MODEL THE ENGINE SENDS, as
+        // {@see provider()} and {@see Bootstrap::toollessBackend()} already build theirs.
+        // Built from the bare default config instead, a `sglang` provider
+        // believed it was configured with `SglangProvider::DEFAULT_MODEL`, so
+        // it adopted the server's served model and stayed silent about a
+        // family mismatch: `--model` naming a DeepSeek-V4 id against a server
+        // serving Qwen3.8 drew no notice, while the per-family parser and the
+        // fallback window followed the default id rather than the named one.
+        $config['model'] = $model;
+        $provider = $factory->create($config);
+
+        $loader = Bootstrap::instructionLoader($root);
+        $skills ??= Bootstrap::skillRegistry($root);
+
+        // O-2a: A MANAGER WITHOUT A POOL GETS THE POOL FOR THIS PROVIDER, so
+        // every path that hands `Task` a manager hands it a governed pool too —
+        // the launch, the workspace's switch factory, and an embedder's
+        // WorkspaceContext::backendFor() / Chat fallback alike. Built for
+        // $providerName rather than shared: the pool's `workerProvider` spec is
+        // the provider a forked worker constructs, and a caller that names a
+        // provider here is switching to it.
+        if ($taskManager !== null && $taskPool === null) {
+            $taskPool = self::taskWorkerPool(Bootstrap::agentPoolConfig($providerName));
+        }
+
+        $engine = (new EngineBackend($provider, (string) $model))
+            // Boot-once capabilities — see the note at app()'s `tools()` call.
+            ->withTools(self::tools(
+                $root,
+                $loader,
+                $skills,
+                // Step 3.F: the same memoised servers as app()'s tool set.
+                lsp: Bootstrap::lspClient($root),
+                rgAvailable: Bootstrap::capabilityPresent('rg'),
+                fdAvailable: Bootstrap::capabilityPresent('fd'),
+                rulesState: $rulesState,
+                taskManager: $taskManager,
+                taskPool: $taskPool,
+            ))
+            ->withHooks(Bootstrap::hooks(null, $root))
+            // See backend(): `??=` in place, so the approver below can read the
+            // mode off the gate that was installed without re-reading the
+            // config or reordering the failures.
+            ->withPermissionGate($gate ??= Bootstrap::permissionGate())
+            ->withSkillRegistry($skills)
+            // See backend(): both composition sites of an EngineBackend that
+            // carries a registry must carry the enabled bodies too, or a
+            // provider switch mid-session would silently drop them from the
+            // prompt on the next turn.
+            ->withSkills(Bootstrap::promptEnabledSkills($skills))
+            ->withInstructionLoader($loader)
+            ->withRoot($root)
+            // Without this the Phase 5 item 9 memory block is unreachable from a
+            // real run: the store would exist, /memory would still write to it,
+            // and nothing the user recorded would ever reach the model.
+            ->withMemoryStore(Bootstrap::memoryStoreOrNull($root))
+            // Step 0.16: a parallel group runs at most the pool's width of
+            // delegated Tasks at once, from the same config the Chat's
+            // workflow lanes get; the rest queue for a slot.
+            ->withMaxConcurrentDelegations(Bootstrap::agentPoolConfig()->maxConcurrent)
+            // Roadmap 2.4-2: the model the in-turn step summary and the
+            // cache-reusing compaction go to, resolved once here at launch.
+            ->withSummaryModel(self::summaryModel());
+
+        // F2: the settings ceiling lands before the approver, after every
+        // with*() that ships in this chain — and `toollessBackend()`s engines
+        // are deliberately NOT wrapped: title/summary turns never loop on
+        // tools, so the orchestration ceiling is not their axis.
+        $engine = self::withResolvedMaxToolSteps($engine);
+        // PRV-2 (§6.5): the effort tier rides the same launch tail as the step
+        // ceiling, for the same reason — one door, both engine settings.
+        $engine = self::withResolvedReasoningEffort($engine);
+
+        return self::withConsolePermissionPrompt($engine, $gate, $consolePermissionPrompt);
+    }
+    /**
+     * Raise or keep the step ceiling on a freshly built engine - one place
+     * so {@see Bootstrap::backend()}'s echo path and {@see Bootstrap::backendFor()}'s real path
+     * cannot drift on it.
+     */
+    public static function withResolvedMaxToolSteps(EngineBackend $engine): EngineBackend
+    {
+        $steps = Bootstrap::resolvedMaxToolSteps();
+
+        return $steps === null ? $engine : $engine->withMaxSteps($steps);
+    }
+    /**
+     * Attach the configured effort tier, or hand the engine back untouched —
+     * the {@see withResolvedMaxToolSteps()} shape, so the two engine settings
+     * can never drift on whether an unset key rewrites what launch built.
+     */
+    public static function withResolvedReasoningEffort(EngineBackend $engine): EngineBackend
+    {
+        $effort = Bootstrap::resolvedReasoningEffort();
+
+        return $effort === null ? $engine : $engine->withReasoningEffort($effort);
+    }
+    /**
+     * Attach the console approver, or hand the engine back untouched.
+     *
+     * One place rather than two so {@see Bootstrap::backend()} and {@see Bootstrap::backendFor()}
+     * cannot drift on the thing that decides whether an ASK is answerable.
+     * The mode comes off the gate the engine actually got — not from a second
+     * {@see Bootstrap::permissionGate()} call, which would re-read both policy files and
+     * re-print any per-rule warnings they produce.
+     */
+    public static function withConsolePermissionPrompt(EngineBackend $engine, PermissionGate $gate, bool $enabled): EngineBackend
+    {
+        if (!$enabled) {
+            return $engine;
+        }
+
+        return $engine->withPermissionApprover(
+            (new HeadlessPermissionPrompt($gate->mode()))->approver(),
+        );
+    }
+    /**
+     * The governed worker pool for the Task feed (E675), built from the same
+     * {@see agentPoolConfig()} the Chat hands its workflow lanes so a `Task`
+     * dispatch honours the session's `maxConcurrent` / `stopOnFirstFailure` /
+     * worker-provider knobs.
+     *
+     * WHY THIS MIRRORS `Chat::executeAgents()` RATHER THAN REUSING IT: Chat
+     * owns that wiring and constructs the pool inline per fan-out; Bootstrap
+     * has no accessor to a live pool (Chat's is a local), so the feed builds
+     * a sibling from the same config. The duplication is deliberate and its
+     * drift risk is E675's documented seam — if Chat's inline shape changes
+     * (executor ctor args, clamp order), this method must follow in-step.
+     *
+     * ONE DELIBERATE DIFFERENCE: Chat's pool now carries an
+     * {@see \SugarCraft\Code\Agents\EngineExecutor} when the chat runs on a
+     * real engine, and this one does not. This pool only ever runs on TaskTool's
+     * UNBOUND fallback — a bound TaskTool runs its sub-agent through the calling
+     * turn's engine and never reaches a pool — so there is no engine to hand it.
+     *
+     * @param \SugarCraft\Code\Agents\AgentPoolConfig $config the session's pool config
+     *
+     * @return \SugarCraft\Code\Agents\AgentWorkerPool the governed, stop-on-first-failure pool
+     */
+    public static function taskWorkerPool(\SugarCraft\Code\Agents\AgentPoolConfig $config): \SugarCraft\Code\Agents\AgentWorkerPool
+    {
+        $executor = new \SugarCraft\Code\Agents\ProcessExecutor(
+            timeoutSeconds: $config->defaultTimeoutSeconds,
+            workerProvider: $config->workerProvider,
+        );
+
+        return (new \SugarCraft\Code\Agents\AgentWorkerPool(
+            maxConcurrent: $config->maxConcurrent,
+            executor: $executor,
+            workerProvider: $config->workerProvider,
+        ))->withStopOnFirstFailure($config->stopOnFirstFailure)->withMaxRetries($config->maxRetries);
+    }
+    /**
+     * The root a launch's `.candy-code/*` lookups resolve against — the
+     * repository, on a launch from one of its subdirectories (audit 15d-13
+     * (b)); null stays null. The WORKING directory is never this: tools,
+     * hooks and spawned sessions keep `$root`. See {@see ProjectRoot}.
+     */
+    public static function configRoot(?string $root): ?string
+    {
+        return $root === null ? null : ProjectRoot::resolve($root);
+    }
+
+    // ------------------------------------------------------------------
+    // THE COMPOSITION ROOTS: the interactive shell builder family
+    // (S1b W7-E C5; doors of the same names stay on Bootstrap, private
+    // where they were private, for the reflection pins.)
+    // ------------------------------------------------------------------
+
+    /**
+     * Build the pane shell the CLI binary runs interactively: an {@see App}
+     * hosting the very {@see chat()} model this class already builds
+     * (crush_feat.md §5 E7, the MERGE branch).
+     *
+     * §5 E7 gave two ways out of candy-code's two-parallel-UI-systems drift
+     * risk — delete the `App`/`Pane` layer, or move the app onto it — and
+     * conditioned the delete on there being no plan to switch. There is one,
+     * and this method is the last link in it: until now nothing in `src/` or
+     * `bin/` ever constructed an `App` with a hosted `Chat`, so the shell
+     * (menu bar, pane focus, {@see \SugarCraft\Code\Tui\KeyboardHandler}'s
+     * agent-view keys, session tabs) was unreachable from a real run in
+     * exactly the "built but never wired" way §5D describes.
+     *
+     * The `Chat` is taken WHOLE from {@see chat()} rather than rebuilt: it
+     * already carries the seeded session row, the title backend, the memory
+     * store and the guard chain, and seeding it twice would create a second
+     * session row per launch. The App is the frame around it and copies no
+     * state out of it — {@see App::withSessionId()} is the one exception, and
+     * it is read back off the hosted chat rather than re-derived, so the two
+     * can never disagree.
+     *
+     * The shell's own panes are populated here for the same reason the whole
+     * step exists: an empty Tools/Skills sidebar in a freshly-wired shell is
+     * the failure mode being fixed, not a neutral default. These are the
+     * shell's DISPLAY copies — the engine's authoritative tool list and skill
+     * registry live inside the hosted chat's backend, which builds its own;
+     * handing both the same instances would mean reshaping {@see backend()}'s
+     * internals, which this step does not touch.
+     */
+    public static function app(?string $root = null, ?string $tuiErrorLog = null, ?string $initialPrompt = null): App
+    {
+        $root ??= getcwd() ?: null;
+
+        // Where `bin/candy-code`'s TuiErrorLog::install() sent error_log() —
+        // registered before chat() so its launch report can say when that is
+        // not the home log ({@see reportTuiErrorLogFallback()}). Passed here
+        // rather than registered by the binary, whose guard keeps every
+        // Bootstrap call out of the span between the redirect and Program.
+        Bootstrap::useTuiErrorLog($tuiErrorLog);
+
+        // Every entry point that resolves a root names it as THE project for
+        // the settings layers, before anything below reads a config — see
+        // {@see useProjectRootForSettings()}. Set on all four rather than in
+        // one shared helper because there is no single funnel: `app()` does
+        // not call `chat()`'s resolution, and `NonInteractive` enters at
+        // `backend()`.
+        Bootstrap::useProjectRootForSettings(self::configRoot($root));
+
+        // The words left on the command line (audit CLI-2(b)) ride this call
+        // rather than a Bootstrap call of their own in `bin/candy-code`, whose
+        // guard keeps every Bootstrap call out of the span between the TUI log
+        // redirect and Program. Chat submits them from init().
+        $chat = Bootstrap::chat($root)->withInitialPrompt($initialPrompt);
+        [$provider, $model] = self::provider();
+
+        // ONE registry for the shell's Skills pane and the Skill tool in its
+        // displayed tool list: scanning twice would show the user a roster
+        // that the tool could disagree with.
+        $skills = Bootstrap::skillRegistry($root);
+
+        // RAISED AFTER chat() HAS ALREADY READ THE LIST, which is why the
+        // length is taken here. {@see chat()} seeds the transcript on its way
+        // out (see its last statement), so anything the second scan below
+        // records into {@see LaunchNotices::$launchNotices} would land in a static that
+        // nothing reads again — a migration onto the transcript seam that looks
+        // like a fix and is a no-op. This is the interactive path, so it is the
+        // one where that matters most.
+        $noticesBeforeSecondScan = \count(Bootstrap::launchNotices());
+
+        // This is a SECOND scan — chat() above already reported what its own
+        // scan skipped — and it can find skills that one did not, because it
+        // runs after it and reads the same trees. reportSkillSkips() only
+        // prints what has not been printed yet, so the common case is silence
+        // and the case this adds is a skill file that would otherwise have been
+        // collected into skillSkips() and never mentioned to anybody.
+        Bootstrap::reportSkillSkips();
+        // Same argument for the second scan's directory refusals.
+        Bootstrap::reportProjectTierRefusals();
+
+        // HOISTED out of the `withTools()` argument below rather than inlined:
+        // tools() reaches filterToolSet(), which is itself a transcript source,
+        // so its notices have to be in hand before the delta is taken.
+        //
+        // The two capability booleans are this class's only reads of the host
+        // PATH, and DetectsCapabilities memoizes each answer for the process, so
+        // a launch that reaches all three `tools()` sites still pays for one stat
+        // walk per binary — and no subprocess, which is the failure that would
+        // trip phpunit's failOnWarning gate on a container without `rg`.
+        $tools = self::tools(
+            $root,
+            null,
+            $skills,
+            // Step 3.F: the launch's language servers, started once here
+            // and shared by every forked turn (LspConnection is fork-safe).
+            lsp: Bootstrap::lspClient($root),
+            rgAvailable: Bootstrap::capabilityPresent('rg'),
+            fdAvailable: Bootstrap::capabilityPresent('fd'),
+            // E675: the SAME manager the Chat runs on (accessor, not a fresh
+            // build — see chat()'s hoist note); the pool is a sibling built
+            // from the Chat's own config because Chat keeps its pool local.
+            taskManager: $chat->agentManager(),
+            taskPool: ($chatConfig = $chat->agentPoolConfig()) !== null ? self::taskWorkerPool($chatConfig) : null,
+        );
+
+        // THE DELTA, never the whole list. {@see Chat::withLaunchNotices()}
+        // APPENDS, and $chat already carries everything chat() had recorded —
+        // passing the full list again would put every launch warning in the
+        // transcript twice. {@see LaunchNotices::$launchNotices} is append-only within a
+        // launch, so a slice from the old length is exactly what these three
+        // calls added, in the order they added it.
+        //
+        // ONE KNOWN UNDERSTATEMENT, named rather than engineered around: if the
+        // launch had ALREADY overflowed {@see LAUNCH_NOTICE_LIMIT} before this
+        // point, $chat carries an "and N more" row whose N does not grow to
+        // cover what the second scan then dropped. That needs a launch with 36+
+        // distinct warnings before the shell is built, and the row still says
+        // the full list is on stderr, where it is.
+        $chat = $chat->withLaunchNotices(array_slice(Bootstrap::launchNotices(), $noticesBeforeSecondScan));
+
+        return App::new($provider, $model)
+            ->withChat($chat)
+            ->withSessionId($chat->currentSessionId())
+            ->withTools($tools)
+            ->withAvailableSkills($skills)
+            // Same string the tools/skill scan above used, so the shell's
+            // Settings pane, the environment block the model reads and every
+            // hook context all name one directory.
+            ->withRoot($root)
+            // Pane-docking phase 2: the `layout` setting loads onto the
+            // model, and every model-level dock mutation writes the manifest
+            // straight back — the same injected-persistence shape
+            // `chat()` uses for `onConfigChange` above, its own key because
+            // the value is the versioned DockLayout manifest, not a string.
+            ->withDock(Bootstrap::dockFromUserConfig())
+            // ISS-049: the same blob carries the panes the user toggled by
+            // hand, so yesterday's manual close outlives the process — the
+            // auto-show consults this roster and never re-docks its entries.
+            ->withPaneAutoShow(Bootstrap::paneAutoShowFromUserConfig())
+            ->withOnLayoutChange(
+                static fn(array $blob) => Bootstrap::writeUserConfig(['layout' => $blob]),
+            )
+            // N-P1: the settings view explains THIS launch's layers — its
+            // project-trust answer, its environment and its flags — rather
+            // than SettingsSources::bestEffort()'s guess, which cannot know
+            // the trust answer and so hides a trusted project's values. A
+            // closure because the view resolves when it is opened, not here.
+            ->withSettingsSources(static fn (): \SugarCraft\Code\Tui\Settings\SettingsSources => \SugarCraft\Code\Tui\Settings\SettingsSources::fromLaunch(
+                $root,
+                $root === null ? null : Bootstrap::projectSettingsTrusted($root),
+                Bootstrap::userSettingsDirOrNull(),
+                Bootstrap::userConfigPath(),
+                array_filter(getenv(), 'is_string'),
+                LaunchContext::permissionModeOverride() === null ? [] : ['--permission-mode' => LaunchContext::permissionModeOverride()],
+                // The editor's provider choices: the same list the Ctrl+P
+                // "Switch model" palette offers.
+                \SugarCraft\Code\Config\Settings\OptionsProvider::new()->withList(
+                    \SugarCraft\Code\Config\Settings\OptionsSource::Providers,
+                    array_keys(Bootstrap::availableProviders()),
+                ),
+            ))
+            // N-P2: the settings editor's own write door, NOT `onConfigChange`
+            // (whose census stays `provider` + `theme`). Its "You" tier goes
+            // through writeUserConfig() — the one writer config.json has — and
+            // its project tier only to a trusted project's settings.local.json.
+            //
+            // The workspace's writer — the one `/model` saves through — so a
+            // launch has one SettingsWriter, built by settingsWriter().
+            ->withSettingsWriter(
+                ($writer = $chat->workspace()?->service(\SugarCraft\Code\Config\Settings\SettingsWriter::class)) instanceof \SugarCraft\Code\Config\Settings\SettingsWriter
+                    ? $writer
+                    : self::settingsWriter($root),
+            );
+    }
+
+    /**
+     * The launch's settings write door (N-P2): its "You" tier goes through
+     * writeUserConfig() — the one writer config.json has — and its project
+     * tier only to a trusted project's settings.local.json. Built once per
+     * launch by {@see workspace()}, which registers it for Chat's `/model`
+     * (N-P3b); {@see app()} reuses that instance for the settings editor.
+     */
+    public static function settingsWriter(?string $root): \SugarCraft\Code\Config\Settings\SettingsWriter
+    {
+        return \SugarCraft\Code\Config\Settings\SettingsWriter::new(
+            Bootstrap::userConfigPath(),
+            static fn (array $set, array $unset) => Bootstrap::writeUserConfig($set, $unset),
+        )->withProject($root, $root !== null && Bootstrap::projectSettingsTrusted($root));
+    }
+
+    /**
+     * The docked-pane layout the `layout` setting names, or null — which
+     * {@see \SugarCraft\Code\App\App::dock()} resolves to the launch
+     * default — when the key is absent, malformed, or left over from a build
+     * whose manifest this one cannot read. Failing soft here is the whole
+     * point: a bad geometry blob is a stale file, not a reason to refuse to
+     * start.
+     */
+    public static function dockFromUserConfig(): ?DockLayout
+    {
+        $raw = Bootstrap::readUserConfig()['layout'] ?? null;
+
+        if (!is_array($raw)) {
+            return null;
+        }
+
+        try {
+            return DockLayout::fromArray($raw);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * The auto-show memory the `layout` blob's `userToggled` list names
+     * (ISS-049) — pane values the previous session's user touched by hand,
+     * so a closed pane does not ride back in on the next activity. Same
+     * fail-soft as {@see dockFromUserConfig()}: the list is an annotation on
+     * the layout key, and a malformed row is dropped, never fatal — its
+     * worst outcome is re-enabling one auto-dock the user meant to silence.
+     * Rows naming a non-dockable pane are dropped too: they can never be
+     * consulted, and storing them would launder a hand-edited config into
+     * shell state.
+     */
+    public static function paneAutoShowFromUserConfig(): PaneAutoShow
+    {
+        $raw = Bootstrap::readUserConfig()['layout'] ?? null;
+        $rows = is_array($raw) && is_array($raw['userToggled'] ?? null)
+            ? $raw['userToggled']
+            : [];
+
+        $toggled = [];
+        foreach ($rows as $row) {
+            if (!is_string($row)) {
+                continue;
+            }
+            $pane = Pane::tryFrom($row);
+            if ($pane !== null && $pane->dockable() && !in_array($row, $toggled, true)) {
+                $toggled[] = $row;
+            }
+        }
+
+        return new PaneAutoShow([], $toggled);
     }
 }

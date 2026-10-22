@@ -805,7 +805,11 @@ final class BootstrapLayeredSettingsTest extends TestCase
         // The two composition sites of a tool-bearing EngineBackend must both
         // wrap — a drift here would make `backend()` honour the ceiling and
         // `backendFor()` silently ignore it on every real-provider session.
-        $src = (string) file_get_contents((new \ReflectionClass(Bootstrap::class))->getFileName());
+        // Re-armed W7-E C4 (v4:S1b, 2026-10-21): backendFor()'s wrap moved with
+        // its body to LaunchContext, so the pair is counted over both files;
+        // the expected figure is unchanged at two.
+        $src = (string) file_get_contents((new \ReflectionClass(Bootstrap::class))->getFileName())
+            . (string) file_get_contents((new \ReflectionClass(\SugarCraft\Code\Cli\LaunchContext::class))->getFileName());
 
         self::assertSame(
             2,

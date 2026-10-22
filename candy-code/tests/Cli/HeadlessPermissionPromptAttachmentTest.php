@@ -82,7 +82,11 @@ final class HeadlessPermissionPromptAttachmentTest extends TestCase
      * @var array<string, int>
      */
     private const FORWARDING_SITES = [
-        'src/Cli/Bootstrap.php' => 2,
+        // W7-E C4 (v4:S1b, 2026-10-21): 2 → 3. backendFor()'s body moved to
+        // LaunchContext and Bootstrap's thin door forwards the flag variable —
+        // the same logical handoff, now one extra site of text. The attach
+        // census (literal-true sites) is untouched.
+        'src/Cli/Bootstrap.php' => 3,
     ];
 
     public function testOnlyTheHeadlessPathsAttachTheConsolePrompt(): void

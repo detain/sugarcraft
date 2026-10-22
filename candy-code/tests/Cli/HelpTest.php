@@ -415,9 +415,11 @@ final class HelpTest extends TestCase
      */
     public static function backendSelectionVariables(): array
     {
-        $bootstrapFile = \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php';
-        $lines = file($bootstrapFile);
-        self::assertIsArray($lines, 'cannot read ' . $bootstrapFile . ' - the scrape would be about nothing');
+        // W7-E C4 (2026-10-21): the scrape no longer indexes one hard-coded
+        // file; each reflection reads its body from its own declaring file
+        // (see the loop), which keeps the door in Bootstrap and the resolver
+        // wherever it lives. Unreadable files surface as the declaredSlice
+        // assert below, not as a silent empty scrape.
 
         $vars = [];
         // Reflection gives the BODY's line span, which excludes the docblock —
@@ -461,27 +463,34 @@ final class HelpTest extends TestCase
             // concern with its own blast radius.
         ] as $method) {
             $reflected = new \ReflectionMethod(Bootstrap::class, $method);
-            // E325 direction one: the line numbers below index $lines, which
-            // was read from ONE named path, and reflection's numbers address
-            // the file the method is DECLARED in. For a method that arrives
-            // through a trait those are different files, and the slice would
-            // silently scrape whichever text sits at the trait's offsets -
-            // the defect {@see \SugarCraft\Code\Tests\Support\ReflectionLineSliceReaderCensusTest}
-            // exists to catch. True by construction today; asserted so it
-            // stays true when someone extracts a trait.
-            self::assertSame(
-                $bootstrapFile,
-                $reflected->getFileName(),
-                $method . '() is not declared in ' . $bootstrapFile . ', so its reflection line'
-                . ' numbers do not address the lines scraped here. Read the body from'
-                . ' $reflected->getFileName(), or keep the method where the scrape expects it.',
-            );
+            // E325 direction one, taken as written: reflection's line numbers
+            // address the file the method is DECLARED in, so the scrape reads
+            // the body from $reflected->getFileName() — the cure its own
+            // warning prescribed. Re-armed W7-E C4 (v4:S1b, 2026-10-21, late
+            // follow to C3 — disclosed in the lane REPORT): the selection
+            // resolver bodies now live on LaunchContext behind Bootstrap's
+            // thin doors, and the scrape follows the resolver, not the door.
+            $declaringFile = (string) $reflected->getFileName();
             $body = self::declaredSlice(
-                $lines,
+                (array) file($declaringFile),
                 $method,
                 $reflected->getStartLine(),
                 $reflected->getEndLine(),
             );
+            // W7-E C4 (2026-10-21, late follow to C3): the selection resolvers
+            // moved to LaunchContext behind Bootstrap's thin doors at v4:S1b,
+            // so a door body that forwards is followed one hop and the
+            // resolver's real reads are included — the scrape measures what
+            // selection READS, wherever its body lives.
+            if (\str_contains($body, 'LaunchContext::' . $method . '(')) {
+                $resolver = new \ReflectionMethod(\SugarCraft\Code\Cli\LaunchContext::class, $method);
+                $body .= self::declaredSlice(
+                    (array) file((string) $resolver->getFileName()),
+                    $method,
+                    $resolver->getStartLine(),
+                    $resolver->getEndLine(),
+                );
+            }
 
             \preg_match_all("/'(CANDY_CODE_[A-Z0-9_]+)'/", $body, $found);
             foreach ($found[1] as $var) {
