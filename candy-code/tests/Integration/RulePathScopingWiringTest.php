@@ -463,8 +463,13 @@ final class RulePathScopingWiringTest extends TestCase
 
         self::assertSame(
             2,
-            preg_match_all('/self::tools\((?:[^;]*?)rulesState: \$rulesState/s', $source),
-            'backend() and backendFor() each build their tools with the set; the third self::tools( call is app()\'s display copies, which no tool call reaches',
+            // Re-armed W7-E C4 (2026-10-21): backendFor()'s tools build moved
+            // with its body to LaunchContext, so the family's two rulesState
+            // handoffs are read from the concatenation of both files; the
+            // count and its meaning are unchanged (app()'s display copies
+            // still pass no set).
+            preg_match_all('/self::tools\((?:[^;]*?)rulesState: \$rulesState/s', $source . (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/LaunchContext.php')),
+            'backend() and LaunchContext::backendFor() each build their tools with the set; the third self::tools( call is app()\'s display copies, which no tool call reaches',
         );
 
         self::assertSame(

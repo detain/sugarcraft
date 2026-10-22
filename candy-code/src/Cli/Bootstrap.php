@@ -3445,7 +3445,7 @@ final class Bootstrap
      * @param ?string $providerName The provider a mid-session switch moved to
      *        (N-P3a); null keeps the launch's own selection.
      */
-    private static function agentPoolConfig(?string $providerName = null): \SugarCraft\Code\Agents\AgentPoolConfig
+    public static function agentPoolConfig(?string $providerName = null): \SugarCraft\Code\Agents\AgentPoolConfig
     {
         return (new \SugarCraft\Code\Agents\AgentPoolConfig(
             workerProvider: self::workerProviderSpec($providerName),
@@ -3744,134 +3744,12 @@ final class Bootstrap
         return self::withConsolePermissionPrompt($engine, $gate, $consolePermissionPrompt);
     }
 
-    /**
-     * Build a Backend for an explicit, already-known provider name - the
-     * same construction backend() does for $CANDY_CODE_PROVIDER, extracted
-     * so a caller (the Ctrl+P palette's Switch Model action) can request a
-     * specific provider directly rather than only via an env var read once
-     * at process start.
-     *
-     * Unlike backend()'s env-var path, which catches failures and falls
-     * back to Echo with a warning, this throws on an invalid/unreachable
-     * $providerName - a caller here asked for this provider explicitly and
-     * should see the real error rather than silently getting something else.
-     *
-     * @param SkillRegistry|null $skills See {@see backend()}.
-     * @param PermissionGate|null $gate See {@see backend()}.
-     * @param bool $consolePermissionPrompt See {@see backend()} — same opt-in,
-     *        same reason it is not on by default here either: this method is
-     *        also what Chat's Ctrl+P provider switch calls, mid-TUI.
-     * @param RulesState|null $rulesState See {@see backend()}. It matters here more
-     *        than the phrase "see backend()" suggests: a real launch with
-     *        $CANDY_CODE_PROVIDER set, or with a provider persisted by an earlier
-     *        Ctrl+P, gets its tools from THIS method, so a set threaded into
-     *        {@see backend()} and not forwarded past here would leave the nudge
-     *        unfiltered on exactly the common path. A provider switch reaches here
-     *        through the factory {@see workspace()} builds (N-P3a, O-2a), which
-     *        forwards the session's set, so the set survives the switch.
-     * @param AgentManager|null $taskManager The manager `Task` delegates to; null
-     *        ships no `Task`. Given without `$taskPool`, the pool is built here
-     *        for `$providerName`, so no path hands `Task` a manager and no pool.
-     *
-     * @throws \Throwable
-     */
     public static function backendFor(string $providerName, ?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null, bool $consolePermissionPrompt = false, ?RulesState $rulesState = null, ?AgentManager $taskManager = null, ?\SugarCraft\Code\Agents\AgentWorkerPool $taskPool = null): Backend
     {
-        // See backend(): whichever of the two a run enters through, the sweep
-        // happens once, and the config directory is named before any store or
-        // skill scan can resolve it out of a `/tmp` stand-in. sweepOnce()
-        // latches, so backend() delegating here does not sweep twice.
-        self::trustedConfigDirPath();
-        ToolIpcFiles::sweepOnce();
-
-        $root ??= getcwd() ?: null;
-
-        // Every entry point that resolves a root names it as THE project for
-        // the settings layers, before anything below reads a config — see
-        // {@see useProjectRootForSettings()}. Set on all four rather than in
-        // one shared helper because there is no single funnel: `app()` does
-        // not call `chat()`'s resolution, and `NonInteractive` enters at
-        // `backend()`.
-        self::useProjectRootForSettings(self::configRoot($root));
-        $factory = new ProviderFactory();
-        $config = self::providerConfigFor($providerName, $factory);
-        // --model wins over $CANDY_CODE_MODEL wins over the model persisted for
-        // THIS provider (D9, `models`) wins over the provider default.
-        $model = self::selectedModelName($providerName) ?? ($config['model'] ?? 'gpt-4o');
-        // THE PROVIDER IS BUILT ON THE SAME MODEL THE ENGINE SENDS, as
-        // {@see provider()} and {@see toollessBackend()} already build theirs.
-        // Built from the bare default config instead, a `sglang` provider
-        // believed it was configured with `SglangProvider::DEFAULT_MODEL`, so
-        // it adopted the server's served model and stayed silent about a
-        // family mismatch: `--model` naming a DeepSeek-V4 id against a server
-        // serving Qwen3.8 drew no notice, while the per-family parser and the
-        // fallback window followed the default id rather than the named one.
-        $config['model'] = $model;
-        $provider = $factory->create($config);
-
-        $loader = self::instructionLoader($root);
-        $skills ??= self::skillRegistry($root);
-
-        // O-2a: A MANAGER WITHOUT A POOL GETS THE POOL FOR THIS PROVIDER, so
-        // every path that hands `Task` a manager hands it a governed pool too —
-        // the launch, the workspace's switch factory, and an embedder's
-        // WorkspaceContext::backendFor() / Chat fallback alike. Built for
-        // $providerName rather than shared: the pool's `workerProvider` spec is
-        // the provider a forked worker constructs, and a caller that names a
-        // provider here is switching to it.
-        if ($taskManager !== null && $taskPool === null) {
-            $taskPool = self::taskWorkerPool(self::agentPoolConfig($providerName));
-        }
-
-        $engine = (new EngineBackend($provider, (string) $model))
-            // Boot-once capabilities — see the note at app()'s `tools()` call.
-            ->withTools(self::tools(
-                $root,
-                $loader,
-                $skills,
-                // Step 3.F: the same memoised servers as app()'s tool set.
-                lsp: self::lspClient($root),
-                rgAvailable: self::capabilityPresent('rg'),
-                fdAvailable: self::capabilityPresent('fd'),
-                rulesState: $rulesState,
-                taskManager: $taskManager,
-                taskPool: $taskPool,
-            ))
-            ->withHooks(self::hooks(null, $root))
-            // See backend(): `??=` in place, so the approver below can read the
-            // mode off the gate that was installed without re-reading the
-            // config or reordering the failures.
-            ->withPermissionGate($gate ??= self::permissionGate())
-            ->withSkillRegistry($skills)
-            // See backend(): both composition sites of an EngineBackend that
-            // carries a registry must carry the enabled bodies too, or a
-            // provider switch mid-session would silently drop them from the
-            // prompt on the next turn.
-            ->withSkills(self::promptEnabledSkills($skills))
-            ->withInstructionLoader($loader)
-            ->withRoot($root)
-            // Without this the Phase 5 item 9 memory block is unreachable from a
-            // real run: the store would exist, /memory would still write to it,
-            // and nothing the user recorded would ever reach the model.
-            ->withMemoryStore(self::memoryStoreOrNull($root))
-            // Step 0.16: a parallel group runs at most the pool's width of
-            // delegated Tasks at once, from the same config the Chat's
-            // workflow lanes get; the rest queue for a slot.
-            ->withMaxConcurrentDelegations(self::agentPoolConfig()->maxConcurrent)
-            // Roadmap 2.4-2: the model the in-turn step summary and the
-            // cache-reusing compaction go to, resolved once here at launch.
-            ->withSummaryModel(self::summaryModel());
-
-        // F2: the settings ceiling lands before the approver, after every
-        // with*() that ships in this chain — and `toollessBackend()`s engines
-        // are deliberately NOT wrapped: title/summary turns never loop on
-        // tools, so the orchestration ceiling is not their axis.
-        $engine = self::withResolvedMaxToolSteps($engine);
-        // PRV-2 (§6.5): the effort tier rides the same launch tail as the step
-        // ceiling, for the same reason — one door, both engine settings.
-        $engine = self::withResolvedReasoningEffort($engine);
-
-        return self::withConsolePermissionPrompt($engine, $gate, $consolePermissionPrompt);
+        // Delegates to {@see LaunchContext::backendFor()} — the body moved in the
+        // S1b composition-roots split (2026-10-21); the door, its visibility and
+        // its parameter contract are untouched.
+        return LaunchContext::backendFor($providerName, $root, $skills, $gate, $consolePermissionPrompt, $rulesState, $taskManager, $taskPool);
     }
 
     /**
@@ -4027,16 +3905,11 @@ public static function useMaxTurns(?string $maxTurns): void
         return $raw >= 1 ? (int) $raw : null;
     }
 
-    /**
-     * Raise or keep the step ceiling on a freshly built engine - one place
-     * so {@see backend()}'s echo path and {@see backendFor()}'s real path
-     * cannot drift on it.
-     */
     private static function withResolvedMaxToolSteps(EngineBackend $engine): EngineBackend
     {
-        $steps = self::resolvedMaxToolSteps();
-
-        return $steps === null ? $engine : $engine->withMaxSteps($steps);
+        // Delegates to {@see LaunchContext::withResolvedMaxToolSteps()}; the door
+        // stays private for the reflection that pins it (v4:S1b, 2026-10-21).
+        return LaunchContext::withResolvedMaxToolSteps($engine);
     }
 
     /**
@@ -4062,36 +3935,18 @@ public static function useMaxTurns(?string $maxTurns): void
         return Effort::tryFrom(strtolower(trim($raw)))?->value;
     }
 
-    /**
-     * Attach the configured effort tier, or hand the engine back untouched —
-     * the {@see withResolvedMaxToolSteps()} shape, so the two engine settings
-     * can never drift on whether an unset key rewrites what launch built.
-     */
     private static function withResolvedReasoningEffort(EngineBackend $engine): EngineBackend
     {
-        $effort = self::resolvedReasoningEffort();
-
-        return $effort === null ? $engine : $engine->withReasoningEffort($effort);
+        // Delegates to {@see LaunchContext::withResolvedReasoningEffort()}; the
+        // door stays private (v4:S1b, 2026-10-21).
+        return LaunchContext::withResolvedReasoningEffort($engine);
     }
 
-    /**
-     * Attach the console approver, or hand the engine back untouched.
-     *
-     * One place rather than two so {@see backend()} and {@see backendFor()}
-     * cannot drift on the thing that decides whether an ASK is answerable.
-     * The mode comes off the gate the engine actually got — not from a second
-     * {@see permissionGate()} call, which would re-read both policy files and
-     * re-print any per-rule warnings they produce.
-     */
     private static function withConsolePermissionPrompt(EngineBackend $engine, PermissionGate $gate, bool $enabled): EngineBackend
     {
-        if (!$enabled) {
-            return $engine;
-        }
-
-        return $engine->withPermissionApprover(
-            (new HeadlessPermissionPrompt($gate->mode()))->approver(),
-        );
+        // Delegates to {@see LaunchContext::withConsolePermissionPrompt()}; the
+        // door stays private (v4:S1b, 2026-10-21).
+        return LaunchContext::withConsolePermissionPrompt($engine, $gate, $enabled);
     }
 
     /**
@@ -5420,7 +5275,7 @@ public static function useMaxCost(?string $maxCost): void
      *
      * @return list<Skill>
      */
-    private static function promptEnabledSkills(SkillRegistry $registry): array
+    public static function promptEnabledSkills(SkillRegistry $registry): array
     {
         $config = self::readUserConfig();
         if (!\array_key_exists('enabledSkills', $config)) {
@@ -8938,41 +8793,11 @@ public static function useMaxCost(?string $maxCost): void
         ProcessContainment::useSecretEnvAllowlist(is_array($raw) && array_is_list($raw) ? $raw : []);
     }
 
-    /**
-     * The governed worker pool for the Task feed (E675), built from the same
-     * {@see agentPoolConfig()} the Chat hands its workflow lanes so a `Task`
-     * dispatch honours the session's `maxConcurrent` / `stopOnFirstFailure` /
-     * worker-provider knobs.
-     *
-     * WHY THIS MIRRORS `Chat::executeAgents()` RATHER THAN REUSING IT: Chat
-     * owns that wiring and constructs the pool inline per fan-out; Bootstrap
-     * has no accessor to a live pool (Chat's is a local), so the feed builds
-     * a sibling from the same config. The duplication is deliberate and its
-     * drift risk is E675's documented seam — if Chat's inline shape changes
-     * (executor ctor args, clamp order), this method must follow in-step.
-     *
-     * ONE DELIBERATE DIFFERENCE: Chat's pool now carries an
-     * {@see \SugarCraft\Code\Agents\EngineExecutor} when the chat runs on a
-     * real engine, and this one does not. This pool only ever runs on TaskTool's
-     * UNBOUND fallback — a bound TaskTool runs its sub-agent through the calling
-     * turn's engine and never reaches a pool — so there is no engine to hand it.
-     *
-     * @param \SugarCraft\Code\Agents\AgentPoolConfig $config the session's pool config
-     *
-     * @return \SugarCraft\Code\Agents\AgentWorkerPool the governed, stop-on-first-failure pool
-     */
     private static function taskWorkerPool(\SugarCraft\Code\Agents\AgentPoolConfig $config): \SugarCraft\Code\Agents\AgentWorkerPool
     {
-        $executor = new \SugarCraft\Code\Agents\ProcessExecutor(
-            timeoutSeconds: $config->defaultTimeoutSeconds,
-            workerProvider: $config->workerProvider,
-        );
-
-        return (new \SugarCraft\Code\Agents\AgentWorkerPool(
-            maxConcurrent: $config->maxConcurrent,
-            executor: $executor,
-            workerProvider: $config->workerProvider,
-        ))->withStopOnFirstFailure($config->stopOnFirstFailure)->withMaxRetries($config->maxRetries);
+        // Delegates to {@see LaunchContext::taskWorkerPool()}; the door stays
+        // private (v4:S1b, 2026-10-21).
+        return LaunchContext::taskWorkerPool($config);
     }
 
     /**
@@ -9301,15 +9126,11 @@ public static function useMaxCost(?string $maxCost): void
         );
     }
 
-    /**
-     * The root a launch's `.candy-code/*` lookups resolve against — the
-     * repository, on a launch from one of its subdirectories (audit 15d-13
-     * (b)); null stays null. The WORKING directory is never this: tools,
-     * hooks and spawned sessions keep `$root`. See {@see ProjectRoot}.
-     */
     private static function configRoot(?string $root): ?string
     {
-        return $root === null ? null : ProjectRoot::resolve($root);
+        // Delegates to {@see LaunchContext::configRoot()}; the door stays private
+        // (v4:S1b, 2026-10-21).
+        return LaunchContext::configRoot($root);
     }
 
     /**
@@ -10585,7 +10406,7 @@ public static function useMaxCost(?string $maxCost): void
      * @throws PermissionConfigException when this user's home cannot be determined
      *         or cannot be established as this user's
      */
-    private static function trustedConfigDirPath(): string
+    public static function trustedConfigDirPath(): string
     {
         $home = self::resolvedHomePath();
         if ($home === null) {

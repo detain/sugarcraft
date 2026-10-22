@@ -57,6 +57,7 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Events\ToolFinished;
@@ -310,12 +311,18 @@ final class TurnPathContractTest extends TestCase
      */
     public function testBothBackendDoorsReconcileMaxToolStepsThroughTheOneResolver(): void
     {
-        foreach (['backend', 'backendFor'] as $door) {
-            $body = $this->methodBody(Bootstrap::class, $door);
+        // W7-E C4 (v4:S1b, 2026-10-21): backendFor()'s body moved onto
+        // LaunchContext; the funnel pin follows the builder, so the pair now
+        // reads the resident door and the migrated builder, not two doors.
+        foreach ([
+            [Bootstrap::class, 'backend'],
+            [LaunchContext::class, 'backendFor'],
+        ] as [$owner, $door]) {
+            $body = $this->methodBody($owner, $door);
             $this->assertSame(
                 1,
                 substr_count($body, 'withResolvedMaxToolSteps('),
-                'Bootstrap::' . $door . '() must resolve max-steps exactly once through the shared reconciler'
+                $owner . '::' . $door . '() must resolve max-steps exactly once through the shared reconciler'
             );
         }
 
