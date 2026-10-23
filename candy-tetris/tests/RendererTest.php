@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Tetris\Tests;
 
 use SugarCraft\Tetris\Bag;
+use SugarCraft\Tetris\Board;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\Renderer;
 use SugarCraft\Tetris\Tetromino;
@@ -179,5 +180,50 @@ final class RendererTest extends TestCase
 
         $placeholder = $method->invoke(null);
         $this->assertSame("     \n     ", $placeholder, 'placeholder must be 5 spaces on 2 lines');
+    }
+
+    public function testEveryVisibleCellRendersExactlyOneRune(): void
+    {
+        $out = Renderer::render($this->deterministicGame());
+        // The playfield loop visits every visible cell once and writes one
+        // of the three runes: locked/live block, ghost, or empty dot.
+        $runes = substr_count($out, '█') + substr_count($out, '▒') + substr_count($out, '·');
+        $this->assertSame(
+            Board::COLS * Board::VISIBLE_ROWS,
+            $runes,
+            'the visible playfield must be fully covered by block/ghost/dot runes',
+        );
+    }
+
+    public function testRenderMarksEmptyCellsAsDots(): void
+    {
+        $game = $this->deterministicGame();
+        $out = Renderer::render($game);
+
+        // Covered cells = live piece ∪ its drop-position ghost; the
+        // renderer dedupes by key, so the union is exactly what is NOT a dot.
+        $covered = [];
+        foreach ($game->piece->cells() as [$x, $y]) {
+            $covered["$x,$y"] = true;
+        }
+        foreach ($game->board->dropPiece($game->piece)->cells() as [$x, $y]) {
+            $covered["$x,$y"] = true;
+        }
+        $visibleCovered = 0;
+        foreach (array_keys($covered) as $key) {
+            [$x, $y] = array_map('intval', explode(',', $key));
+            if ($x >= 0 && $x < Board::COLS
+                && $y >= Board::HIDDEN_ROWS
+                && $y < Board::HIDDEN_ROWS + Board::VISIBLE_ROWS
+            ) {
+                $visibleCovered++;
+            }
+        }
+
+        $this->assertSame(
+            Board::COLS * Board::VISIBLE_ROWS - $visibleCovered,
+            substr_count($out, '·'),
+            'every uncovered visible cell renders the · empty-cell rune',
+        );
     }
 }

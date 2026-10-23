@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-tetris)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-tetris)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-tetris?label=packagist)](https://packagist.org/packages/sugarcraft/candy-tetris)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -22,7 +22,12 @@ composer install
 ./bin/candy-tetris         # Single player mode
 ./bin/candy-tetris -v      # VS Computer mode
 ./bin/candy-tetris --vs    # VS Computer mode (long form)
+./bin/candy-tetris -h      # Usage screen (also --help)
 ```
+
+Needs a colour-capable TTY of at least ~40 columns by 22 rows; empty cells
+render as `·` so the grid stays readable even without colour. Any flag other
+than the ones above is refused with a usage note on stderr and exit code 1.
 
 ## VS Computer Mode
 
@@ -39,10 +44,16 @@ Compete against an AI opponent in split-screen mode. When you clear lines, garba
 | z         | Rotate counter-cw |
 | ↓         | Soft drop         |
 | Space     | Hard drop         |
+| c         | Hold piece        |
 | p         | Pause / resume    |
 | q         | Quit              |
 
-The computer opponent uses weighted heuristics (board height, holes, gaps, lines) to make optimal moves.
+Hold works on your field, but the VS sidebar does not paint a hold card — the
+swap only becomes visible when the piece enters play.
+
+The computer opponent uses weighted heuristics (board height, holes, gaps,
+lines) to make optimal moves. If both boards top out on the same tick, the
+computer wins: the player's field is checked first.
 
 ## Controls
 
@@ -55,7 +66,14 @@ The computer opponent uses weighted heuristics (board height, holes, gaps, lines
 | Space     | Hard drop         |
 | c         | Hold piece        |
 | p         | Pause / resume    |
+| r         | New game (after game over only) |
 | q         | Quit              |
+
+### Game over
+
+Top-out ends the game and paints a banner with the final score. Press **r** to
+start a completely new game — the score does not carry over (it embeds the
+level, so a restarted board falls at level-0 gravity again). **q** quits.
 
 ### Hold
 
@@ -102,7 +120,10 @@ count as filled), it scores as a **T-Spin**:
 | T-Spin   | 400 × (level + 1) |
 | T-Spin Mini | 100 × (level + 1) |
 
-T-Spin Mini is detected when exactly two front corners are filled (the side the piece entered from).
+T-Spin Mini is detected when exactly two corners are filled and they are the
+**front pair** — the top pair at rotation 0, the bottom pair at rotation 2. At
+the side-facing rotations (R/L) the front pair is undefined, so a two-corner
+spin there always scores as a full T-Spin.
 
 **Last-input rule:** A T-Spin is active when the piece's last successful action
 before locking was a rotation (`Game::$lastActionWasRotation`, set by rotate,
@@ -129,6 +150,21 @@ Consecutive line clears (regardless of type) build a **combo counter** — each 
 
 When all lines are cleared at once and the board becomes completely empty, an additional **+5000 × (level + 1)** bonus is awarded.
 
+## Where the seams are
+
+- **Bag / RNG**: `Bag` takes an injectable pick closure; `Game::start(?Bag)`
+  and `Game::startWithLockDelay(?Bag)` thread it through, so tests (and any
+  deterministic replay tool) pin the sequence.
+- **Kick table**: `src/Rotation/SrsKickTable.php` transcribes the published
+  SRS offsets verbatim (spec `+y` = up); the only sign conversion to
+  board coordinates lives at `Piece::rotationsWithKicks`.
+- **Scoring**: `src/Scoring/TSpin.php` and `src/Scoring/Score.php` are pure
+  value logic, independent of the renderer.
+- **Modes**: VS is a second Model (`VsGame`) wrapping two `Game` instances —
+  copy that pattern for a third mode rather than branching inside `Game`.
+- **Renderer**: `Renderer::render()` is a pure static view function (state →
+  ANSI string); it never mutates the game.
+
 ## Shared foundations
 
-The single-player playfield is painted into a canonical [sugar-cellbuffer](https://github.com/detain/sugarcraft/tree/master/sugar-cellbuffer) `Buffer` cell grid (10×20 visible); per-tetromino background style and ghost-piece foreground style are applied per-cell. The hold/next/score sidebar and the VS split-screen panels are SugarStyle cards joined with SugarConstraints (`Layout::joinVertical` / `Layout::joinHorizontal`), composited alongside the buffered playfield. Snapshot tests via [sugar-testing](https://github.com/detain/sugarcraft/tree/master/sugar-testing) pin canonical game states (starting board, T-spin completion, pause overlay).
+The single-player playfield is painted into a canonical [sugar-cellbuffer](https://github.com/detain/sugarcraft/tree/master/sugar-cellbuffer) `Buffer` cell grid (10×20 visible); per-tetromino background style and ghost-piece foreground style are applied per-cell. The hold/next/score sidebar and the VS split-screen panels are [sugar-style](https://github.com/detain/sugarcraft/tree/master/sugar-style) cards joined with its `Layout` (`Layout::joinVertical` / `Layout::joinHorizontal`), composited alongside the buffered playfield. Snapshot tests via [sugar-testing](https://github.com/detain/sugarcraft/tree/master/sugar-testing) pin canonical game states (starting board, T-spin completion, pause overlay).

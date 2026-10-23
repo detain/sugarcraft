@@ -17,7 +17,7 @@ use SugarCraft\Style\Style as SugarStyle;
  * Pure view function for {@see Game}. Returns the rendered frame
  * string ready to hand to the SugarCraft Renderer.
  *
- * Decomposes the screen into three side-by-side blocks:
+ * Decomposes the screen into two side-by-side blocks:
  *
  *   ┌─────────────┐  ┌────────────┐
  *   │  playfield  │  │ next       │
@@ -35,26 +35,15 @@ use SugarCraft\Style\Style as SugarStyle;
  * Rendering uses a {@see Buffer} for the playfield interior:
  * each cell carries a per-tetromino style (background colour) for
  * crisp Buffer-backed ANSI output. The sidebar is built from
- * Sprinkles-styled cards stacked with Layout::joinVertical(), then
+ * sugar-style cards stacked with Layout::joinVertical(), then
  * composited beside the framed playfield with Layout::joinHorizontal().
  *
  * Mirrors Broderick-Westrope/tetrigo board/sidebar layout intent —
- * playfield through sugar-cellbuffer, chrome through sugar-style and
- * sugar-constraints joins.
+ * playfield through sugar-cellbuffer, chrome and layout joins through
+ * sugar-style (its Style/Layout/Border are the only chrome imports).
  */
 final class Renderer
 {
-    // ANSI 256-color → 0xRRGGBB for the 7 tetromino colours.
-    private const COLOR_MAP = [
-        51  => 0x00d4ff,  // I  — cyan
-        226 => 0xffd400,  // O  — yellow
-        129 => 0xbd7dff,  // T  — purple
-        46  => 0x00ff5e,  // S  — green
-        196 => 0xff0030,  // Z  — red
-        21  => 0x0070ff,  // J  — blue
-        208 => 0xff8c00,  // L  — orange
-    ];
-
     public static function render(Game $game): string
     {
         $playfield = self::renderBoard($game);
@@ -65,7 +54,7 @@ final class Renderer
             $banner = SugarStyle::new()
                 ->border(Border::rounded())
                 ->padding(1, 3)
-                ->render("GAME OVER\nfinal score: {$game->score->points}\npress q to quit");
+                ->render("GAME OVER\nfinal score: {$game->score->points}\npress r to restart — press q to quit");
             return $body . "\n\n" . $banner;
         }
         if ($game->paused === true) {
@@ -82,7 +71,7 @@ final class Renderer
         $pieceCells = self::cellMap($piece->cells());
         $ghostCells = self::cellMap($ghost->cells());
 
-        // Build a Buffer-backed interior, then frame it with Sprinkles border.
+        // Build a Buffer-backed interior, then frame it with the sugar-style border.
         $boardBuf = Buffer::new(Board::COLS, Board::VISIBLE_ROWS);
 
         for ($dy = 0; $dy < Board::VISIBLE_ROWS; $dy++) {
@@ -90,7 +79,9 @@ final class Renderer
             for ($dx = 0; $dx < Board::COLS; $dx++) {
                 $key = "$dx,$y";
                 $cellKind = $rows[$y][$dx] ?? null;
-                $rune = ' ';
+                // '·' (matching the VS board's empty-cell vocabulary) keeps
+                // the playfield readable on terminals without colour.
+                $rune = '·';
                 $style = null;
 
                 if ($cellKind !== null) {
@@ -108,7 +99,7 @@ final class Renderer
             }
         }
 
-        // Frame the Buffer interior with Sprinkles border.
+        // Frame the Buffer interior with the sugar-style border.
         $interior = $boardBuf->toAnsi();
         return SugarStyle::new()
             ->border(Border::rounded())
@@ -198,9 +189,7 @@ final class Renderer
      */
     private static function blockStyle(Tetromino $kind): Style
     {
-        $rgb = self::COLOR_MAP[$kind->color()] ?? 0xffffff;
-
-        return Style::new(null, (int) $rgb);
+        return Style::new(null, $kind->rgbColor());
     }
 
     /**
@@ -208,8 +197,6 @@ final class Renderer
      */
     private static function ghostStyle(Tetromino $kind): Style
     {
-        $rgb = self::COLOR_MAP[$kind->color()] ?? 0x888888;
-
-        return Style::new((int) $rgb, null, Style::ATTR_FAINT);
+        return Style::new($kind->rgbColor(), null, Style::ATTR_FAINT);
     }
 }

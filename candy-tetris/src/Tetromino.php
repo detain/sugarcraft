@@ -100,4 +100,23 @@ enum Tetromino: string
             self::L => 208,   // orange
         };
     }
+
+    /**
+     * True-color companion to {@see self::color()}: the same palette in
+     * 0xRRGGBB form so renderers keep ONE palette source of truth
+     * (the Renderer's private ansi→RGB lookup table used to drift-prone
+     * duplicate it).
+     */
+    public function rgbColor(): int
+    {
+        return match ($this) {
+            self::I => 0x00d4ff,   // cyan
+            self::O => 0xffd400,   // yellow
+            self::T => 0xbd7dff,   // purple
+            self::S => 0x00ff5e,   // green
+            self::Z => 0xff0030,   // red
+            self::J => 0x0070ff,   // blue
+            self::L => 0xff8c00,   // orange
+        };
+    }
 }

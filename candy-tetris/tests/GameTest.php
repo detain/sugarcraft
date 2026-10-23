@@ -160,7 +160,7 @@ final class GameTest extends TestCase
         $this->assertFalse($resumed->paused);
     }
 
-    public function testGameOverOnlyHonorsQuit(): void
+    public function testGameOverIgnoresMovementKeys(): void
     {
         $g = $this->deterministicGame();
         $over = $g->mutate(['over' => true]);
@@ -168,6 +168,48 @@ final class GameTest extends TestCase
         $this->assertSame($over->piece, $samePiece1->piece);
         [, $cmd] = $over->update($this->key('q'));
         $this->assertInstanceOf(\Closure::class, $cmd);
+    }
+
+    public function testRestartKeyStartsAFreshGameAtGameOver(): void
+    {
+        $g = $this->deterministicGame();
+        $over = $g->mutate([
+            'over'   => true,
+            'score'  => new Score(points: 1234, lines: 7, level: 2),
+        ]);
+        [$fresh, $cmd] = $over->update($this->key('r'));
+        $this->assertFalse($fresh->over);
+        $this->assertSame(0, $fresh->score->points, 'restart must not carry the score');
+        $this->assertSame(0, $fresh->score->lines);
+        $this->assertSame(0, $fresh->score->level);
+        $this->assertTrue($fresh->gravityPending, 'restart must re-claim the gravity slot');
+        $this->assertInstanceOf(\Closure::class, $cmd, 'restart must re-arm the gravity chain');
+        foreach ($fresh->board->rows() as $row) {
+            foreach ($row as $cell) {
+                $this->assertNull($cell, 'restart must start on an empty board');
+            }
+        }
+    }
+
+    public function testRestartKeepsTheLockDelayWindow(): void
+    {
+        $g = Game::startWithLockDelay();
+        // Carry a visible score into the game-over state so a dead 'r'
+        // arm (which would return $this untouched) cannot pass by accident.
+        $over = $g->mutate(['over' => true, 'score' => new Score(999, 3, 1)]);
+        [$fresh] = $over->update($this->key('r'));
+        $this->assertFalse($fresh->over);
+        $this->assertSame(0, $fresh->score->points);
+        $this->assertSame(Game::DEFAULT_LOCK_DELAY_MS, $fresh->lockDelayMs);
+    }
+
+    public function testRestartKeyIsInertWhileGameRuns(): void
+    {
+        $g = $this->deterministicGame();
+        [$same, $cmd] = $g->update($this->key('r'));
+        $this->assertSame($g->piece, $same->piece);
+        $this->assertSame($g->board, $same->board);
+        $this->assertNull($cmd);
     }
 
     public function testComboStartsAtZero(): void

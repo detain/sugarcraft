@@ -195,6 +195,18 @@ final class Game implements Model
             if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
                 return [$this, Cmd::quit()];
             }
+            if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'r') {
+                // 'r' starts a completely fresh game. The score does NOT
+                // carry over: Score embeds the level, so keeping it would
+                // spawn the new board under the old gravity. The fresh state
+                // arrives with gravityPending already true and its gravity
+                // chain is armed right here — init() ran once at boot and
+                // will not re-run.
+                $fresh = $this->lockDelayMs > 0
+                    ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs)
+                    : self::start();
+                return [$fresh, self::scheduleGravity($fresh->score)];
+            }
             return [$this, null];
         }
 

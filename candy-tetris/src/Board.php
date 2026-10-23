@@ -9,11 +9,11 @@ namespace SugarCraft\Tetris;
  * buffer above it where new pieces spawn before they cross into
  * the visible area.
  *
- * Cells are stored as a row-major flat array of nullable
- * {@see Tetromino} values. `null` = empty; a Tetromino value =
- * locked-in cell painted that piece's colour. This shape is
- * deliberately small and mutation-free: every `place()` /
- * `clearLines()` returns a brand-new Board.
+ * Cells are stored as a list of rows, each row a list of nullable
+ * {@see Tetromino} values indexed by column. `null` = empty; a
+ * Tetromino value = locked-in cell painted that piece's colour.
+ * This shape is deliberately small and mutation-free: every
+ * `place()` / `clearLines()` returns a brand-new Board.
  */
 final class Board
 {

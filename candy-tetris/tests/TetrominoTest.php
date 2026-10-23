@@ -78,4 +78,41 @@ final class TetrominoTest extends TestCase
         $colors = array_map(static fn(Tetromino $t) => $t->color(), Tetromino::cases());
         $this->assertSame(count($colors), count(array_unique($colors)));
     }
+
+    public function testRgbColorMatchesThePublishedPalette(): void
+    {
+        $expected = [
+            'I' => 0x00d4ff,
+            'O' => 0xffd400,
+            'T' => 0xbd7dff,
+            'S' => 0x00ff5e,
+            'Z' => 0xff0030,
+            'J' => 0x0070ff,
+            'L' => 0xff8c00,
+        ];
+        foreach (Tetromino::cases() as $piece) {
+            $this->assertSame($expected[$piece->name], $piece->rgbColor(), $piece->name);
+        }
+    }
+
+    public function testRgbColorIsUniqueAndPairedWithTheAnsiCode(): void
+    {
+        $rgb = array_map(static fn(Tetromino $t) => $t->rgbColor(), Tetromino::cases());
+        $this->assertSame(count($rgb), count(array_unique($rgb)));
+
+        // The two palettes must describe the SAME seven colours in the
+        // same declaration order — the renderer switched to rgbColor()
+        // and must not have picked up a different mapping.
+        $ansi = array_map(static fn(Tetromino $t) => $t->color(), Tetromino::cases());
+        $this->assertSame(
+            [51, 226, 129, 46, 196, 21, 208],
+            $ansi,
+            'ansi256 palette drifted; re-derive the rgb pairing below',
+        );
+        $this->assertSame(
+            [0x00d4ff, 0xffd400, 0xbd7dff, 0x00ff5e, 0xff0030, 0x0070ff, 0xff8c00],
+            $rgb,
+            'rgb palette drifted against the ansi palette',
+        );
+    }
 }

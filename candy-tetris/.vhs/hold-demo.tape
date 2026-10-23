@@ -1,4 +1,4 @@
-# VHS tape — Tetris gameplay demo
+# VHS tape — Tetris hold-slot demo
 # Render with: `vhs candy-tetris/.vhs/hold-demo.tape`
 Output .vhs/hold-demo.gif
 
@@ -13,6 +13,11 @@ Enter
 Sleep 2s
 
 Space Sleep 800ms
+c Sleep 800ms
+Space Sleep 800ms
+c Sleep 800ms
 Space Sleep 800ms
 
 Sleep 2000ms
+q
+Enter

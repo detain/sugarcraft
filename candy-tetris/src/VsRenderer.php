@@ -32,8 +32,8 @@ final class VsRenderer
         $playerBoard = self::renderBoard($game->player, false);
         $computerBoard = self::renderBoard($game->computer, true);
 
-        $playerSidebar = self::renderSidebar($game->player, 'PLAYER', false);
-        $computerSidebar = self::renderSidebar($game->computer, 'COMPUTER', true);
+        $playerSidebar = self::renderSidebar($game->player, false);
+        $computerSidebar = self::renderSidebar($game->computer, true);
 
         $playerPanel = Layout::joinVertical(0.0, $playerBoard, $playerSidebar);
         $computerPanel = Layout::joinVertical(0.0, $computerBoard, $computerSidebar);
@@ -107,7 +107,7 @@ final class VsRenderer
         );
     }
 
-    private static function renderSidebar(Game $game, string $label, bool $isComputer): string
+    private static function renderSidebar(Game $game, bool $isComputer): string
     {
         $score = sprintf(
             "score:  %d\nlines:  %d\nlevel:  %d",
