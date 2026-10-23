@@ -22,12 +22,13 @@ use SugarCraft\Pty\Posix\PosixPtySystem;
  * when a caller invokes `$system->open()`.
  *
  * Backend selection is controlled by `SUGARCRAFT_PTY_BACKEND`:
- * `posix-ffi` (default on POSIX), `sidecar` / `pecl` (deferred to
- * phase 12, throw now), `auto` (same as unset / default behaviour).
+ * `posix-ffi` (default on POSIX), `sidecar` / `pecl` (declared but
+ * not implemented in v1 — selecting either throws
+ * {@see UnsupportedPlatformException}), `auto` (same as unset / default
+ * behaviour).
  *
  * Mirrors charmbracelet/x/xpty.Open()'s platform-resolution layer.
- *
- * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P4.1)
+
  */
 final class PtySystemFactory
 {

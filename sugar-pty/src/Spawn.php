@@ -44,7 +44,10 @@ final class Spawn
      *           {@see \SugarCraft\Pty\Pty::spawn()}. Not removal-scheduled.
      *
      * @param list<string>              $cmd
-     * @param array<string,string>|null $env  null inherits parent env
+     * @param array<string,string>|null $env  null inherits the parent
+     *     env wholesale; a non-null array REPLACES it entirely
+     *     (proc_open 5th-arg semantics) — merge with getenv() when the
+     *     child still needs PATH/HOME/LANG.
      * @param bool                      $controllingTerminal  see class
      *                                  doc; opt-in because shim startup
      *                                  costs ~5-50ms and only interactive

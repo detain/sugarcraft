@@ -180,9 +180,9 @@ final class SizeIoctl
      *
      * ## WHY THE CHILD GETS AN ALIAS AND NEVER THE RAW FD
      *
-     * `PosixPtySystem::openPtyMaster()` marks the pty master
+     * `PosixPtySystem::open()` marks the pty master
      * `FD_CLOEXEC` unconditionally on BOTH platforms
-     * (`Posix/PosixPtySystem.php:70` — it must not survive
+     * (the `fcntl(F_SETFD, FD_CLOEXEC)` site — it must not survive
      * `proc_open`), and an `FD_CLOEXEC` fd is gone from the child's
      * descriptor table across `exec()`. A child asked to open
      * `/dev/fd/<raw fd>` therefore finds nothing; `dup(2)` returns a
@@ -223,12 +223,12 @@ final class SizeIoctl
      * Uses `stty -f /dev/fd/<alias> rows <rows> cols <cols>` per the
      * macOS convention (note `-f`, not Linux's `-F`). The descriptor is
      * the `dup()` alias, NOT the raw fd: the master is FD_CLOEXEC'd
-     * (`Posix/PosixPtySystem.php:70`), so before the alias existed this
+     * (`PosixPtySystem::open()`), so before the alias existed this
      * fallback was silently dead for exactly the resize path it was
      * built for — the exec'd stty could not open the name it was
      * handed and exited non-zero on every call. The open-time resize
-     * hides that failure (best-effort `try { resize } catch
-     * (PtyException)` in `PosixPtySystem.php:126`), so only LATER
+     * hides that failure (the best-effort `try { resize } catch
+     * (PtyException)` in `PosixPtySystem::open()`), so only LATER
      * explicit resizes surfaced it, as a plain dead no-op rather than
      * an error. See {@see withDupAlias()} for the full WHY.
      *

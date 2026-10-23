@@ -18,6 +18,10 @@ Rust processes on either side instead of a modem and a DEC VT220.
 The kernel allocates a write buffer between them; bytes the parent
 writes on one end show up as input on the other and vice versa.
 
+(A *file descriptor* — "fd" throughout — is the small integer a process
+uses to name one of its open kernel objects; 0, 1 and 2 are
+conventionally stdin, stdout and stderr.)
+
 ```
 +------------+        +-----------------------+        +-------------+
 |   parent   |  fd N  |  kernel ringbuffer    |  fd 0  |   child     |
@@ -37,9 +41,12 @@ and off, and react to job-control signals. A pipe is just bytes;
 a PTY is bytes plus the [termios](#cooked-vs-raw-mode-termios)
 attributes that make all of the above work.
 
-sugar-pty wraps the four libc syscalls (`posix_openpt` / `grantpt` /
-`unlockpt` / `ptsname_r`) that allocate a fresh PTY pair on Linux and
-macOS, plus the ioctls that drive it.
+On Linux, sugar-pty wraps the four libc calls that allocate a fresh PTY
+pair (`posix_openpt` / `grantpt` / `unlockpt` / `ptsname_r`) plus the
+ioctls that drive it. macOS is a different story: `PosixPtySystem`'s
+`openPtyMaster()` tries the single `openpty()` call first and only falls
+back to the quartet when it returns -1 — see the README's "openpty vs
+quartet" section.
 
 ## Master vs slave
 
@@ -91,7 +98,8 @@ cooked while it's prompting for `:` commands.
 sugar-pty exposes the contract:
 
 ```php
-$termios = TermiosFactory::open(STDIN_FILENO);   // FFI or stty
+$termios = TermiosFactory::open(0);   // fd 0 = stdin. (STDIN_FILENO as a
+// constant needs ext-posix, which this lib does not require — use 0.)
 $saved   = $termios->current();
 $raw     = $termios->makeRaw();                  // immutable copy
 $raw->apply();
@@ -191,8 +199,10 @@ Inside, a single `stream_select()` loop watches:
 
 - host STDIN → master (forward keystrokes to the child),
 - master → host STDOUT (forward output to the user),
-- a timeout that triggers optional `keepalive` and `onSigwinch`
-  callbacks (`PumpOptions`),
+- a timeout that fires the optional `onIdle` callback
+  (`PumpOptions`; `keepalive` is its legacy alias). `onSigwinch` is
+  *not* timeout-driven — it fires when terminal dimensions change; see
+  the README "Pump callbacks" table,
 - the child's `exited()` probe.
 
 Termination semantics:
@@ -223,7 +233,8 @@ $child->pid();         // OS pid
 $child->exited();      // non-blocking probe via proc_get_status()
 $child->wait();        // 10ms-poll loop, blocks until exit
 $child->exitCode();    // null until exit, cached after
-$child->kill($sig);    // posix_kill, no-throw
+$child->kill($sig);    // Libc::kill(): posix_kill() when ext-posix
+                       // is loaded, FFI kill(2) otherwise. No-throw.
 ```
 
 Gotchas the trait hides:
@@ -280,9 +291,17 @@ PHP-stream-wrapping or `php://fd/N` quirks. `Pump` and `Termios` are
 contracts for the same reason: a `MockPump` in tests, an
 `InMemoryTermios` in unit tests, no FFI required.
 
-The deprecated facades `Pty`, `Spawn`, `Child` (top-level `src/`)
-implement the new contracts as adapters, so consumers on the old
-shape keep working while migrating. They will go away at v2.0.
+Only two top-level `src/` classes are deprecated: the `Pty` facade
+(a `MasterPty` adapter over the same `PosixPtySystem` path) and the
+`Child` class (a backward-compatible alias for `PosixChild`). Both will
+go away at v2.0, and consumers on the old shape keep working until
+then. The alias removal has one dependency to unwind first: `PosixChild`
+currently *extends* `Child` to inherit its promoted constructor (which
+is where the public `$pid` property lives) and the `ChildPollTrait`
+plumbing — the v2.0 plan folds that plumbing into `PosixChild` itself
+before deleting the alias, and `final` already prevents the debt from
+growing. `Spawn` is **not** a deprecated facade: it is `@internal`,
+load-bearing for every spawn path, and not removal-scheduled.
 
 ## Backend selection via `SUGARCRAFT_PTY_BACKEND`
 
@@ -300,7 +319,7 @@ when those backends are wired in.
 
 ## Further reading
 
-- `bin/pty-shim.php` — the ctty trampoline, ~50 lines of PHP.
+- `bin/pty-shim.php` — the ctty trampoline, 175 lines of PHP.
 - `src/PumpOptions.php` — every knob that tunes pump behaviour.
 - `src/Posix/PosixPump.php` — the canonical `stream_select` loop.
 - `CALIBER_LEARNINGS.md` — postmortems and rules-of-thumb.

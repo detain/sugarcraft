@@ -15,7 +15,7 @@ use SugarCraft\Pty\PtyException;
  * stdio is bound to a slave PTY; this one wraps a child whose stdio
  * is `/dev/null`-stdin plus inherited-or-piped stdout/stderr. It is
  * the runtime backbone that {@see \SugarCraft\ScriptUi\Process\RealProcess}
- * will migrate to in plan step P3.3.
+ * will migrate to.
  *
  * stdin is deliberately bound to `/dev/null` — if it were inherited
  * from the parent, a candy-scriptui process running inside a sugar-ssh-server

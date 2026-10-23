@@ -157,7 +157,7 @@ final class PtySystemFactoryTest extends TestCase
             PtySystemFactory::new();
             $this->fail('Expected UnsupportedPlatformException not thrown');
         } catch (UnsupportedPlatformException $e) {
-            $this->assertStringContainsString('phase 12', $e->getMessage());
+            $this->assertStringContainsString('reserved for a future release', $e->getMessage());
             $this->assertStringContainsString('sidecar', $e->getMessage());
         } finally {
             \putenv('SUGARCRAFT_PTY_BACKEND');
@@ -171,7 +171,7 @@ final class PtySystemFactoryTest extends TestCase
             PtySystemFactory::new();
             $this->fail('Expected UnsupportedPlatformException not thrown');
         } catch (UnsupportedPlatformException $e) {
-            $this->assertStringContainsString('phase 12', $e->getMessage());
+            $this->assertStringContainsString('reserved for a future release', $e->getMessage());
             $this->assertStringContainsString('pecl', $e->getMessage());
         } finally {
             \putenv('SUGARCRAFT_PTY_BACKEND');

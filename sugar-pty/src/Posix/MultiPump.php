@@ -25,8 +25,7 @@ use SugarCraft\Pty\PumpOptions;
  * @see \SugarCraft\Pty\Posix\MultiPump    — the multiplexer
  * @see examples/multi-pump.php            — live demo (two shells, tee'd to stdout)
  *
- * Wired in plan step P6.3 ("MultiPump multiplexer"). Designed so a
- * stalled child never starves the others — the selector wakes for any
+ * Designed so a stalled child never starves the others — the selector wakes for any
  * ready master and `tick()` only drains the ready set.
  */
 final class MultiPump

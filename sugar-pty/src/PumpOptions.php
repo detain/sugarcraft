@@ -135,8 +135,8 @@ final class PumpOptions
      * check so the pump loop is byte-identical to the pre-recorder
      * path when this is unset.
      *
-     * Wired in plan step P6.1 ("PosixPump Recorder tap") and feeds
-     * P6.5's `candy-vcr record` CLI.
+     * `PosixPump` tees stdin and master-output bytes through it; the
+     * `candy-vcr record` CLI consumes the cassettes it writes.
      *
      * @see \SugarCraft\Core\Recorder  the interface contract.
      */
@@ -359,7 +359,7 @@ final class PumpOptions
      * Attach (or detach) a tee target for stdin / output / resize events.
      * Returns a new {@see PumpOptions} — never mutates `$this`.
      *
-     * Wired in plan step P6.1; consumers chain like:
+     * Consumers chain it like:
      * `new PumpOptions()->withRecorder(\SugarCraft\Vcr\Recorder::open(...))`.
      */
     public function withRecorder(?\SugarCraft\Core\Recorder $v): self

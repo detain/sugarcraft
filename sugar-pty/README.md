@@ -27,53 +27,71 @@ libc `kill(2)` over FFI otherwise.
 
 ## Quickstart
 
-```php
-use SugarCraft\Pty\Pty;
-
-$pty   = Pty::open();
-$child = $pty->spawn(
-    ['/bin/bash', '-c', 'echo $TERM; uname -s; date'],
-    ['TERM' => 'xterm-256color'],
-    100, 30,                              // cols × rows
-);
-
-$pty->setBlocking(false);
-$out = '';
-while (!$child->exited()) {
-    $chunk = $pty->read(4096, 0.05);     // 50 ms timeout
-    if ($chunk === null || $chunk === '') continue;
-    $out .= $chunk;
-}
-$exit = $child->wait();
-$pty->close();
-
-echo $out;
-```
-
-### DI-friendly (preferred for libraries)
-
-For consumers that want to stay decoupled from the POSIX backend
-(useful in tests + when a Windows ConPTY sidecar lands in v2), resolve
-the `PtySystem` through the factory:
+Contract-first — resolve the backend through the factory so tests can
+inject a stub `PtySystem` without touching libc (and so a Windows
+ConPTY sidecar can land in v2 without call-site changes):
 
 ```php
 use SugarCraft\Pty\PtySystemFactory;
 
-$system = PtySystemFactory::new();   // throws UnsupportedPlatformException on Windows
-$pair   = $system->open(100, 30);
+$system = PtySystemFactory::new();       // throws UnsupportedPlatformException on Windows
+$pair   = $system->open(100, 30);        // cols × rows — winsize applied at open
 $master = $pair->master();
-$child  = $pair->slave()->spawn(['/bin/bash', '-l'], null, 100, 30, controllingTerminal: true);
+
+// Environment warning: a non-null $env REPLACES the entire parent
+// environment (proc_open 5th-arg semantics). Passing ['TERM' => …]
+// alone leaves the child with no PATH, HOME or LANG. Spread the parent
+// env and override what you mean to. (env: null inherits the parent
+// env wholesale — including any secrets in it; see Security.)
+$env   = [...(array) getenv(), 'TERM' => 'xterm-256color'];
+$child = $pair->slave()->spawn(
+    ['/bin/bash', '-c', 'echo $TERM; uname -s; date'],
+    $env,
+    100, 30,                              // cols × rows
+    controllingTerminal: true,            // Ctrl+C / job control for interactive children
+);
+
+$out = '';
+// Drain until read() returns '' (EOF) — NOT until exited() first flips.
+// A child that has just exited can still have bytes sitting in the
+// master's kernel buffer; stopping at exited() intermittently truncates
+// the tail. EOF arrives when every slave fd has closed and the buffer
+// is drained.
+while (true) {
+    $chunk = $master->read(4096, 0.05);   // 50 ms timeout
+    if ($chunk === null) {
+        continue;                         // timeout — child may still be producing
+    }
+    if ($chunk === '') {
+        break;                            // EOF
+    }
+    $out .= $chunk;
+}
+$exit = $child->wait();
+$master->close();
+
+echo $out;
 ```
 
-Tests can swap in a stub `PtySystem` without touching libc.
+If a child might hold the slave open forever (never producing EOF),
+bound the drain with a deadline and break on `$child->exited()` with
+one final tail read — that is the shape
+[`examples/spawn-bash.php`](examples/spawn-bash.php) demonstrates.
+
+### Legacy facade (deprecated)
+
+`SugarCraft\Pty\Pty` and the `Child` class its `spawn()` returns are
+`@deprecated` shims kept for consumers predating the contract split —
+`Pty::open()` delegates to the same `PosixPtySystem` path, and both
+go away at v2.0. New code should use `PtySystemFactory` as above.
 
 ## API at a glance
 
 | Call | What it does |
 |---|---|
-| `Pty::open(int $cols=80, int $rows=24): Pty` | Delegates to `PosixPtySystem::open()`, so the facade shares the canonical path exactly: on Darwin `openpty()` first (single call), falling back to the quartet on -1; on Linux `posix_openpt + grantpt + unlockpt + ptsname_r`. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open. Returns a Pty exposing `master` (readonly fd + slavePath). |
-| `$pty->spawn(array $cmd, ?array $env, int $cols=80, int $rows=24, bool $controllingTerminal=false): Child` | `proc_open` with slave-path descriptors. TIOCSWINSZ is applied before the spawn (throws, no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
-| `$pair->slave()->spawn(array $cmd, ?array $env, ?int $cols=null, ?int $rows=null, bool $controllingTerminal=false): Child` | Window size is a property of the pty, not of the controlling-terminal relationship, so an explicit `$cols`/`$rows` is applied on every spawn (before it, throwing with no child on failure, then re-asserted best-effort after it for macOS) — like `creack/pty.StartWithSize()`. Omit both to keep the size the pair was opened or last resized with (`creack/pty.Start()`, portable-pty `spawn_command()`); pass one to keep the other half. The parent's slave handle is opened `O_CLOEXEC`, so the child holds the slave only at fds 0-2. |
+| `$system->open(int $cols=80, int $rows=24): PtyPair` (`PtySystemFactory::new()`) | The canonical path: on Darwin `openpty()` first (single call), falling back to the quartet on -1; on Linux `posix_openpt + grantpt + unlockpt + ptsname_r`. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open. Returns a `PtyPair` exposing `master()` (readonly fd + slavePath) and `slave()`. The deprecated `Pty::open($cols, $rows)` facade delegates here, so both paths share exactly this implementation. |
+| `$pty->spawn(array $cmd, ?array $env, int $cols=80, int $rows=24, bool $controllingTerminal=false): Child` | `proc_open` with slave-path descriptors. `$env` follows proc_open semantics: `null` inherits the full parent environment, a non-null array REPLACES it entirely (merge explicitly — see Quickstart). TIOCSWINSZ is applied before the spawn (throws, no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
+| `$pair->slave()->spawn(array $cmd, ?array $env, ?int $cols=null, ?int $rows=null, bool $controllingTerminal=false): Child` | Same `$env` replace-vs-null semantics. Window size is a property of the pty, not of the controlling-terminal relationship, so an explicit `$cols`/`$rows` is applied on every spawn (before it, throwing with no child on failure, then re-asserted best-effort after it for macOS) — like `creack/pty.StartWithSize()`. Omit both to keep the size the pair was opened or last resized with (`creack/pty.Start()`, portable-pty `spawn_command()`); pass one to keep the other half. The parent's slave handle is opened `O_CLOEXEC`, so the child holds the slave only at fds 0-2. |
 | `$pty->read(int $len=8192, ?float $timeout=null): ?string` | `null` on timeout, `''` on EOF, bytes otherwise. EINTR-safe. |
 | `$pty->write(string $bytes): int` | Returns bytes written. |
 | `$pty->setBlocking(bool $blocking): void` | Toggles non-blocking mode on the master fd. |
@@ -81,10 +99,13 @@ Tests can swap in a stub `PtySystem` without touching libc.
 | `$pty->size(): array{cols,rows,xpix,ypix}` | TIOCGWINSZ readback. |
 | `$pty->stream(): resource` | Cached `php://fd/` wrapper around the master fd for direct PHP-stream use. |
 | `$pty->close(): void` | Idempotent. `fclose`s the `stream()` wrapper if one was materialised, then always `close(2)`s the original master fd via FFI. Throws `PtyException` if that `close(2)` fails (on either path) or if the `fclose` failed — in the latter case only after the master fd itself was released. |
-| `$child->pid: int` | OS process id. |
+| `$child->pid(): int` | OS process id. Contract-typed children (`Contract\Child`) declare the *method* only. The `public readonly int $pid` *property* exists on the concrete `PosixChild`/`Child` classes (inherited from the `Child` alias's promoted constructor), but do not rely on it behind a contract type — calling `$child->pid` on a `Contract\Child` fatals. |
 | `$child->wait(): int` | Waits via `waitpid` FFI (sub-ms) first, falls back to 10ms `proc_get_status` poll. Returns exit code (signal death = 128+signal). Idempotent. |
 | `$child->exited(): bool` | Non-blocking probe. |
 | `ControllingTerminal::claim(int $fd): void` | Calls `setsid()` + `ioctl(TIOCSCTTY)` to claim `$fd` as the session's controlling terminal. Used internally by the `controllingTerminal: true` shim path; callable directly from FFI-heavy contexts that want the same effect without the PHP shim. Throws `PtyException` on failure. |
+
+> The winsize and cloexec cells above are deliberate mini-essays —
+> design rationale for each lives in [`docs/CONCEPTS.md`](docs/CONCEPTS.md).
 
 ## Non-PTY processes
 
@@ -143,9 +164,92 @@ Both methods default to `pcntl_async_signals(true)` so handlers
 fire between PHP opcodes; pass `async: false` if your event loop
 already polls `pcntl_signal_dispatch()` itself.
 
+Caveats for the raw-fd form: the example's `open(2)` fd is **not**
+`O_CLOEXEC`, so it leaks into any child the process later spawns
+(including the `stty` helpers the Darwin resize fallback runs) and
+nothing in the lib ever closes it — `Libc::lib()->close($ttyFd)`
+yourself when you detach. Signal handlers are process-global: a
+second `attachSigwinchToFd()`/`attachSigwinch()` silently replaces
+the first, so attach once per process.
+
+## Session automation and pools
+
+### `Expect` — scripted automation over a master
+
+Immutable expect-style helper wrapping a `MasterPty`. `Expect::on($master, $readChunk = 4096, ?Recorder)`
+binds an instance; `send()` / `sendLine($line, $eol = "\n")` write to
+the master immediately (side effect — the returned instance carries no
+extra state). The matchers block (default timeout 5 s) until the byte
+stream yields them, returning a new instance that exposes the matched
+`$lastMatch` and the `$before` text:
+
+| Call | Waits for |
+|---|---|
+| `expect(string $needle, float $timeoutSec = 5.0)` | literal substring |
+| `expectAny(array $needles, float $timeoutSec = 5.0)` | first of the needles |
+| `expectPattern(string $regex, float $timeoutSec = 5.0)` | PCRE match |
+| `expectEof(float $timeoutSec = 5.0)` | master EOF |
+
+Timeouts raise `ExpectTimeoutException`; EOF before a content match
+raises `ExpectEofException`. `withMaxBuffer(?int)` /
+`withSearchWindow(?int)` bound retained input on chatty long-running
+sessions (buffer growth and needle window respectively). A send whose
+bytes the master refuses to accept for the whole `SEND_STALL_BUDGET_SEC`
+(0.1 s no-progress window — every accepted byte restarts it) raises
+`RuntimeException` instead of spinning.
+
+### `PtyPool` — a concurrency ceiling, not a handle cache
+
+`new(?PtySystem = null, int $maxSize = 50)`; `acquire($cols = 80, $rows = 24): PtyPair`
+opens a *fresh* pair (PTY pairs are 1:1 with their slave path and
+cannot be reused once a child has been spawned against the slave —
+and `open()` measures 0.05 ms anyway), throwing
+`PoolExhaustedException` past the cap; `release(PtyPair)` closes the
+master and frees the slot; `inFlight()` / `available()` /
+`totalAcquired()` report; `drain()` closes every outstanding pair.
+
+### `PtyInputDecoder` — key/mouse events straight off the master
+
+Feeds master reads through sugar-input's `EscapeDecoder`:
+`new(MasterPty $master, EscapeDecoder $decoder = new, int $readChunk = 8192)`,
+`readEvents(float $timeout = 0.05): list<Event>` returns after one
+packet or one timeout (partial escape sequences buffer across calls),
+`readEventsBlocking(?float $timeout = null)` keeps reading until it
+has events — a **null timeout blocks indefinitely**; pass a budget in
+request paths. `remainder()` exposes un-decoded trailing bytes,
+`reset()` drops the partial-sequence buffer.
+
+### `AnsiOutputParser` + `SgrHandler` — inspect output without eating it
+
+`AnsiOutputParser::forMaster($master)` reads chunks **verbatim**
+(return value is still safe to forward to a real terminal) while a
+sugar-ansi-parser `Parser` tracks the SGR state those bytes imply.
+`readChunk(float $timeout = 0.05): string` gives the bytes;
+`readChunkWithTransitions()` additionally returns the
+`[from, to]` `SgrState` pairs crossed; `state()` exposes the current
+`SgrState` (`COLOR_BLACK`–`COLOR_WHITE` = 0–7, `COLOR_BRIGHT_*` = 8–15,
+`COLOR_DEFAULT` = −4, `COLOR_256` = −1, `COLOR_RGB` = −2); `reset()`
+clears parser, state and transition log. The underlying `SgrHandler`
+caps its undrained transition ring at `MAX_EVENTS` = 1024 and drops
+the OLDEST transition when full — slow consumers lose history head,
+never the tail.
+
+### `SignalForwarder::attachSigchld` — push-style reaping (opt-in)
+
+`attachSigchld(callable $reaper, bool $async = true): bool` routes
+`SIGCHLD` to your reaper callback (returns `false` without
+`ext-pcntl`; the handler never propagates throws). Note the pumps in
+this lib deliberately do **not** use it — they poll `exited()` —
+because signal dispositions are process-global and `ext-pcntl` is
+optional. Use it when you own the process's signal handling and want
+exit notifications without a poll timer.
+
 ## Recording sessions (Recorder tap)
 
 `PumpOptions` accepts an optional `SugarCraft\Core\Recorder` —
+(`SugarCraft\Vcr\Recorder` itself lives in **sugarcraft/candy-vcr**,
+a *dev-only* dependency of this package: apps copying the example
+below must `composer require sugarcraft/candy-vcr` first.)
 when set, `PosixPump` tees stdin bytes (`recordInputBytes`) as they
 are delivered to the master — bytes parked behind a full master are
 recorded when they land, not when they were read — and master-read
@@ -192,7 +296,7 @@ foreach ([0, 1] as $idx) {
 
     $child = $pair->slave()->spawn(
         ['/bin/bash', '-i'],
-        ['TERM' => 'xterm-256color'],
+        [...(array) getenv(), 'TERM' => 'xterm-256color'],  // merge — non-null env replaces
         80, 24,
         controllingTerminal: true,
     );
@@ -236,7 +340,7 @@ use SugarCraft\Pty\PtySystemFactory;
 use SugarCraft\Pty\PumpOptions;
 
 $pair  = PtySystemFactory::new()->open(80, 24);
-$child = $pair->slave()->spawn(['/usr/bin/top'], ['TERM' => 'xterm-256color'], 80, 24);
+$child = $pair->slave()->spawn(['/usr/bin/top'], [...(array) getenv(), 'TERM' => 'xterm-256color'], 80, 24);
 
 $pump = new ReactPump();                     // Loop::get() by default; injectable
 $pump->start(
@@ -292,7 +396,7 @@ behaviour:
 | Callback | Fires when | Use for |
 |---|---|---|
 | `keepalive` | idle tick (stream_select → 0) | Legacy heartbeat alias; prefer `onIdle` |
-| `onIdle` (step 01.03) | idle tick — every `stream_select` timeout | Keepalive pings, polling housekeeping, any periodic task |
+| `onIdle` | idle tick — every `stream_select` timeout | Keepalive pings, polling housekeeping, any periodic task |
 | `onSigwinch` | terminal dimensions change | Forward host resize into child's TIOCSWINSZ |
 | `onChildExit` | child process exits | Resource cleanup, notification |
 
@@ -311,7 +415,7 @@ $opts = PumpOptions::sshDefault()->withOnIdle(fn () => error_log('alive'));
 fires only when `MasterPty::size()` differs from the last known size
 — driven by the consumer's `SignalForwarder` callback. Do not conflate
 them: if you were passing `onSigwinch(0, 0)` as a fake idle tick,
-migrate to `onIdle` (step 01.03).
+migrate to `onIdle`.
 
 ```php
 use SugarCraft\Pty\Posix\PosixPump;
@@ -449,7 +553,7 @@ it as a fallback specifically for this symbol. Most Linux systems have
 both, so the Darwin-first path is not normally exercised on Linux.
 
 This behaviour is internal to `PosixPtySystem` and requires no consumer
-action — `Pty::open()` abstracts it away completely.
+action — `$system->open()` abstracts it away completely.
 
 ### Library layout
 
@@ -487,6 +591,28 @@ sugar-pty builds on two sibling libraries for input/output escape-sequence handl
 - **[sugar-input](https://github.com/detain/sugarcraft/tree/master/sugar-input)** — `EscapeDecoder` consumes raw bytes from the PTY master and emits keyboard/mouse/osc events. The pty-read loop feeds `Pty::read()` chunks directly into `EscapeDecoder`; no private arrow-key or Ctrl-key buffering.
 - **[sugar-ansi-parser](https://github.com/detain/sugarcraft/tree/master/sugar-ansi-parser)** — `Parser` handles ANSI escape sequences in PTY output when inspection is needed (cursor-position reports, SGR state, OSC strings). PTY output that only needs pass-through to the terminal skips this layer entirely.
 
+## Security and trust boundaries
+
+- **`SUGARCRAFT_LIBC` is a code-execution surface.** Naming the C
+  library to bind replaces which machine code your process calls. `Libc`
+  refuses anything that is not an absolute, regular file with a
+  libc-family basename (validation is fail-closed at load — see the
+  SECURITY block in `src/Libc.php`), but treat the variable as
+  operator-only: never accept it from untrusted config or child input.
+- **Spawns take argv arrays** (proc_open list form) — no shell is
+  invoked, so there is no shell-injection surface; the controlling-
+  terminal shim `pcntl_exec()`s the argv verbatim.
+- **`env: null` hands the child your entire environment** — API keys,
+  tokens and paths included. The replace-semantics footgun documented
+  in the Quickstart has this mirror image: build an explicit allowlist
+  when a child should not see the parent's secrets.
+- **PTY bytes are untrusted input.** Child output can carry escape
+  sequences targeting whatever terminal displays it. The lib is a
+  pass-through by design and does not sanitize; when output goes
+  anywhere besides a terminal you control, decode with
+  `AnsiOutputParser`/`SgrHandler` (inspection without consumption) or
+  route through sugar-core's `Sanitize` before rendering.
+
 ## Known limitations
 
 - **Linux + macOS only.** Windows ConPTY is not yet supported.
@@ -494,9 +620,26 @@ sugar-pty builds on two sibling libraries for input/output escape-sequence handl
   because `FFI::cdef()` must resolve symbols at script startup. Many Linux
   distributions ship PHP with `ffi.enable=0` in `php.ini` (a security hardening
   measure) which causes sugar-pty to throw `PtyException: Failed to load libc`.
-  To fix: edit your `php.ini` and set `ffi.enable=1` (or `ffi.enable=peer` for
-  stricter CSP), then restart your web server or PHP-FPM process. In CLI context
-  you can also set it inline: `php -d ffi.enable=1 your-script.php`.
+  To fix: set `ffi.enable=1` in `php.ini` and restart the web server or
+  PHP-FPM pool, or inline at process start: `php -d ffi.enable=1
+  your-script.php`. `ffi.enable` is `PHP_INI_SYSTEM` — `ini_set()` at runtime
+  has no effect. Two traps worth naming: PHP 8.3 accepts only `0`, `1` and
+  `preload` (8.4 adds `lazy`), and an unrecognised string such as `peer`
+  casts to `0` — silently disabling FFI and reproducing the exact failure
+  this bullet fixes. And `preload` is not "a safer `1`": it is designed for
+  FFI against libraries baked into a custom PHP build via the
+  `ffi.preload` / `ffi.preload_user` directives, and how it treats a runtime
+  `dlopen` of an arbitrary path like `libc.so.6` varies with the build (it
+  happened to be accepted on the distro build this was tested on; that is
+  incidental, not documented behavior). sugar-pty binds libc with a runtime
+  `FFI::cdef()`, so its
+  supported setting is `ffi.enable=1` — not `preload`, whose behavior sugar-pty
+  does not rely on. Verify what your PHP actually answered:
+
+  ```sh
+  php -r 'try { FFI::cdef("int getpid(void);"); echo "FFI cdef OK\n"; }
+           catch (Throwable $e) { echo "FFI unavailable: ", $e->getMessage(), "\n"; }'
+  ```
 - **`/dev/ptmx` access is required.** Every `PosixPtySystem::open()` asks the
   kernel for a new PTY master via `posix_openpt()`, which needs a readable and
   writable `/dev/ptmx` with a mounted `devpts` behind it. Minimal or locked-down
@@ -510,15 +653,26 @@ sugar-pty builds on two sibling libraries for input/output escape-sequence handl
   permissions (`chmod 666 /dev/ptmx` — the standard mode on Linux), or as a
   last resort run the container privileged. The test suite skips PTY tests
   automatically on such hosts rather than failing.
-- **Darwin arm64 resizes shell out to `stty`.** On macOS arm64 the real libc
-  `ioctl` is variadic — varargs go on the stack while our fixed-arg FFI cdef
-  puts the winsize pointer in a register — so `ioctl(TIOCSWINSZ)` fails and
-  `SizeIoctl` falls back to spawning `stty -f /dev/fd/<fd> rows R cols C` per
-  resize. The fallback is correct but costs a subprocess per size change;
-  identical resizes within a 20 ms window are rate-limited (skipped) so
-  SIGWINCH bursts don't fork a process each. Expect resize on Darwin arm64 to
-  be milliseconds, not microseconds — reads via `ioctl(TIOCGWINSZ)` are
-  unaffected. This goes away once macOS ships POSIX 2024 `tcsetwinsize`.
+- **Darwin arm64 sizes shell out to `stty` in BOTH directions.** On macOS
+  arm64 the real libc `ioctl` is variadic — varargs go on the stack while a
+  fixed-arg FFI cdef puts the winsize pointer in a register — so
+  `ioctl(TIOCSWINSZ)` fails there, and `ioctl(TIOCGWINSZ)` fails too (the
+  read-side breakage was measured in CI: `rc=-1` on a fd that
+  `posix_isatty()` had just accepted). `SizeIoctl` therefore keeps an
+  `stty(1)` fallback for each direction: SET runs
+  `stty -f /dev/fd/<fd> rows R cols C`; GET runs `stty -f /dev/fd/<fd> -a`
+  and parses the **BSD** word order (`43 rows` / `137 columns` — a
+  GNU-ordered answer must not parse, and a pinned test proves it doesn't).
+  Three consequences worth knowing: the fd the child opens is a `dup()`
+  alias, because the master itself is `FD_CLOEXEC` and a raw fd name would
+  resolve to nothing inside `stty(1)`; reads are **never cached** — every
+  `size()` re-queries, so a read-after-resize is ground truth (pixel
+  fields report 0 via the fallback — ioctl carries them, `stty -a` output
+  is rows/cols only); and identical resizes within a 20 ms window are
+  rate-limited so SIGWINCH bursts don't fork a process each. Expect resize
+  and size reads on Darwin arm64 to cost milliseconds, not microseconds.
+  Both fallbacks retire once macOS ships POSIX 2024 `tcsetwinsize` /
+  `tcgetwinsize` (macOS 15's libSystem exports neither).
 
 ## License
 

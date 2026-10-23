@@ -26,10 +26,10 @@ use SugarCraft\Pty\Posix\PosixPtySystem;
  * a child has been spawned against the slave). `release()` returns the
  * slot and closes the master, so the next `acquire()` is free to open.
  *
- * Wired in plan step P6.2; profile of `PosixPtySystem::open()` measured
- * 0.05 ms per call with the libc handle cached, well under the plan's
- * 5 ms threshold for a handle-reuse pool — this class therefore focuses
- * on session bookkeeping rather than syscall caching.
+ * A profile of `PosixPtySystem::open()` measured 0.05 ms per call with
+ * the libc handle cached — cheap enough that handle reuse is not worth
+ * the complexity. This class is therefore a back-pressure ceiling and
+ * session bookkeeper, not a syscall cache.
  */
 final class PtyPool
 {

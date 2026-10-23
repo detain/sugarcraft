@@ -20,8 +20,7 @@ declare(strict_types=1);
  * Usage:
  *   php examples/spawn-bash.php
  *   php examples/spawn-bash.php 'echo $TERM; uname -s; date'
- *
- * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P4.6)
+
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';

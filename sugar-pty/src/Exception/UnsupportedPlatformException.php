@@ -38,7 +38,7 @@ final class UnsupportedPlatformException extends PtyException
     {
         return new self(\sprintf(
             'SUGARCRAFT_PTY_BACKEND=%s is not implemented in v1; '
-            . 'this backend is deferred to phase 12. '
+            . 'this backend is reserved for a future release. '
             . 'Use SUGARCRAFT_PTY_BACKEND=posix-ffi (default) for now.',
             $backend,
         ));

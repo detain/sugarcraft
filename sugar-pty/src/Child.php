@@ -10,8 +10,11 @@ use SugarCraft\Pty\Posix\ChildPollTrait;
  * Handle to a child process spawned through {@see Pty::spawn()}.
  *
  * @deprecated since v0.x; use SugarCraft\Pty\Posix\PosixChild directly.
- *             Will be removed in v2.0. This class is a backward-
- *             compatible alias for PosixChild.
+ *             Will be removed in v2.0. Not a pure alias: PosixChild
+ *             extends this class for the shared constructor (the
+ *             promoted $pid property) and ChildPollTrait plumbing, so
+ *             the v2.0 plan folds that plumbing into PosixChild first
+ *             and deletes this class last.
  *
  * Mirrors charmbracelet/x/xpty.Cmd's lifecycle hooks (`Wait`,
  * `ProcessState.Exited`).

@@ -363,7 +363,7 @@ final class PosixPump implements PumpContract
             $written += $n;
         }
 
-        // P6.1 Recorder tap: tee stdin bytes into the recorder after
+        // Recorder tap: tee stdin bytes into the recorder after
         // they've been written to master so a write failure leaves the
         // cassette consistent with what the child actually saw. Zero
         // overhead when recorder is null (single null-check per chunk).
@@ -386,7 +386,7 @@ final class PosixPump implements PumpContract
         if ($bytes === null || $bytes === '') {
             return true;
         }
-        // P6.1 Recorder tap: record output BEFORE the fwrite to stdout
+        // Recorder tap: record output BEFORE the fwrite to stdout
         // so a partial-write at exit doesn't leave the cassette ahead
         // of what the terminal actually saw — better to over-record
         // than to under-record (a torn frame still replays as bytes;

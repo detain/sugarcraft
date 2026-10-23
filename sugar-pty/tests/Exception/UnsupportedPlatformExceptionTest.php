@@ -54,7 +54,7 @@ final class UnsupportedPlatformExceptionTest extends TestCase
         $e = UnsupportedPlatformException::forDeferredBackend('conpty');
         $this->assertStringContainsString('conpty', $e->getMessage());
         $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $e->getMessage());
-        $this->assertStringContainsString('phase 12', $e->getMessage());
+        $this->assertStringContainsString('reserved for a future release', $e->getMessage());
         $this->assertStringContainsString('posix-ffi', $e->getMessage());
     }
 

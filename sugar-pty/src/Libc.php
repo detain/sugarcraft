@@ -44,8 +44,8 @@ final class Libc
     /**
      * Return the cached FFI handle, loading the libc cdef on first call.
      *
-     * The cdef block is intentionally minimal — only the symbols PR1
-     * needs (open round-trip + close). Later PRs extend the surface.
+     * The cdef block is intentionally minimal — it starts with only the
+     * symbols needed for an open/close round-trip and grows per feature.
      *
      * @throws PtyException if the platform is unsupported or the
      *                      library cannot be loaded
