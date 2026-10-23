@@ -15,9 +15,25 @@ use SugarCraft\Metrics\Backend\MultiBackend;
 use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 use SugarCraft\Metrics\Middleware\SessionMetrics;
 use SugarCraft\Metrics\Registry;
+use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware;
 use SugarCraft\SshServer\Middleware\Logger;
 use SugarCraft\SshServer\Server;
 use SugarCraft\SshServer\Session;
+
+/**
+ * Terminal middleware of the chain: greet the user, then stop. The
+ * signature mirrors {@see \SugarCraft\Metrics\Middleware\SessionMetrics}
+ * — the {@see Middleware} contract is handle(Context, Session, callable).
+ */
+final class HelloMetrics implements Middleware
+{
+    public function handle(Context $ctx, Session $session, callable $next): void
+    {
+        echo "Hello, {$session->user}!\n";
+        $next($ctx, $session);
+    }
+}
 
 $tally = new InMemoryBackend();
 $registry = new Registry(new MultiBackend(
@@ -28,13 +44,7 @@ $registry = new Registry(new MultiBackend(
 Server::new()
     ->use(new Logger())
     ->use(new SessionMetrics($registry))
-    ->use(new class implements \SugarCraft\SshServer\Middleware {
-        public function handle(Session $s, callable $next): void
-        {
-            echo "Hello, {$s->user}!\n";
-            $next($s);
-        }
-    })
+    ->use(new HelloMetrics())
     ->serve();
 
 fwrite(STDERR, "\n--- session totals ---\n");

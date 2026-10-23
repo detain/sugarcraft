@@ -54,5 +54,5 @@ foreach ($tally->histograms() as $key => $samples) {
     echo sprintf("  %-44s  count=%d  sum=%.6f  avg=%.6f\n", $key, $count, $sum, $avg);
 }
 
-echo "\nBackends ship: InMemoryBackend, JsonBackend, StatsdBackend,\n";
+echo "\nBackends ship: InMemoryBackend, JsonStreamBackend, StatsdBackend,\n";
 echo "PrometheusFileBackend, MultiBackend (fan-out).\n";
