@@ -162,6 +162,17 @@ bytes, which the fallback parser also reads). Export refuses keys that
 would collide with the reserved metadata shapes (`_ttl`, `_binary`,
 `skate_ttl_…`, `skate_binary_…`) instead of emitting unreadable files.
 
+### CLI surface vs library surface
+
+The CLI covers `set`, `get`, `list`, `delete`, `list-dbs`, `import` and
+`export`. Everything else is library-only: `Store::count()`, `entry()`,
+`getRaw()`, `setWithTtl()`, `transaction()`, `fuzzyFilter()` and
+`deleteDatabase()` have no CLI verbs by design — the binary stays a thin
+front for the everyday loop. Key-bearing commands route to a named database
+through the `key@dbname` suffix; `list` alone always scans the default
+database (patterns cannot select a db), while `export <format> [db]` takes
+an explicit database name argument.
+
 ## Public API
 
 ### Store
