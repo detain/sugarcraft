@@ -51,8 +51,12 @@ final class JsonFormatter implements Formatter
             $record['prefix'] = $prefix;
         }
 
+        // Context keys are namespaced away from the envelope (see RecordKeys):
+        // a forged `{"level": ...}` context entry may never overwrite the real
+        // one — it lands as `ctx_level` instead.
+        $used = [];
         foreach ($context as $k => $v) {
-            $record[$k] = $this->coerceValue($v);
+            $record[RecordKeys::claim((string) $k, $used)] = $this->coerceValue($v);
         }
 
         $result = \json_encode($record, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);

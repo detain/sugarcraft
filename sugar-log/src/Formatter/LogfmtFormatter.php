@@ -51,8 +51,12 @@ final class LogfmtFormatter implements Formatter
             $parts[] = 'caller=' . $this->escape($caller);
         }
 
+        // Context keys are namespaced away from the envelope (see RecordKeys):
+        // a forged `level=...` context entry may never overwrite the real one.
+        $used = [];
         foreach ($context as $k => $v) {
-            $parts[] = $this->escape((string) $k) . '=' . $this->escape($this->formatValue($v));
+            $key = RecordKeys::claim((string) $k, $used);
+            $parts[] = $this->escape($key) . '=' . $this->escape($this->formatValue($v));
         }
 
         return \implode(' ', $parts) . "\n";
@@ -62,15 +66,21 @@ final class LogfmtFormatter implements Formatter
     {
         // Neutralize log-injection / terminal-control bytes before emitting a
         // single-line logfmt record. Sanitize::untrusted() strips ESC-based
-        // ANSI sequences and lone C0/C1 controls; the strtr then backslash-
-        // escapes the newline/tab bytes it preserves, so a value containing
-        // "\n" cannot split the record across two physical lines (which would
-        // otherwise let an attacker forge a second, fake logfmt entry).
+        // ANSI sequences and lone C0/C1 controls. Data backslashes and quotes
+        // are escaped FIRST (they are payload bytes), then the surviving
+        // newline/CR/tab characters become backslash sequences (syntax, added
+        // last so the escaping pass never double-dips on them). A value that
+        // contains ANY space, '=', '"', or '\' is therefore always emitted in
+        // quoted form — an attacker cannot close a quoted value early with a
+        // bare backslash-quote and forge a trailing `key=value` field, and a
+        // `"\n"` payload cannot split the record across two physical lines
+        // (which would otherwise let an attacker mint a second, fake entry).
         $s = Sanitize::untrusted($s);
+        $s = \str_replace(['\\', '"'], ['\\\\', '\\"'], $s);
         $s = \strtr($s, ["\n" => '\\n', "\r" => '\\r', "\t" => '\\t']);
 
-        if (\preg_match('/[\s="]/', $s)) {
-            return '"' . \str_replace('"', '\\"', $s) . '"';
+        if (\preg_match('/[\s="\\\\]/', $s)) {
+            return '"' . $s . '"';
         }
         return $s;
     }
