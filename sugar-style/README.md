@@ -123,8 +123,8 @@ Available constraints:
 | `Constraint::ratio($num, $denom)` | Proportional size as `$num/$denom` of the area |
 | `Constraint::fill($weight)` | Fills all remaining space; weight controls distribution |
 
-Each wrapper exposes its payload through typed accessors — `n` on
-`length`/`min`/`max`/`percentage`, `numerator`/`denominator` on `ratio`,
+Each wrapper exposes its payload through dynamic property reads
+(`ReadsConstraintPayload`) — `n` on `length`/`min`/`max`/`percentage`,
 `weight` on `fill` — e.g. `Constraint::length(20)->n`. Internally the value
 lives in a private constraints-library object and a shared dynamic-read arm
 (trait `Layout\ReadsConstraintPayload`, reached through `__get`) forwards the

@@ -54,7 +54,7 @@ return [
     'renderer.gd_encode_failed' => 'GD failed to re-encode the image as PNG',
     'renderer.gd_unavailable'   => 'ext-gd is unavailable and no raw RGBA buffer was supplied',
 
-    // Codecs (F-13 GD-free encoders)
+    // Codecs (GD-free encoders)
     'codec.raw_rgba_bad_dimensions' => 'Raw RGBA dimensions must be positive, got {width}x{height}',
     'codec.raw_rgba_size_mismatch'  => 'Raw RGBA payload is {actual} bytes; expected {expected} for a {width}x{height} grid',
     'codec.tiff_too_large'          => 'Uncompressed TIFF strip of {bytes} bytes crosses the 32-bit TIFF offset ceiling',
@@ -73,7 +73,7 @@ return [
     'sixel.alpha_threshold_out_of_range' => 'alphaThreshold must be 0-127 (GD alpha scale), got {alphaThreshold}',
     'sixel.canvas_too_large'        => 'Sixel canvas {width}×{height} px for a {cols}×{rows}-cell box exceeds the {max}-pixel ceiling',
 
-    // Paced async rendering (D-05)
+    // Paced async rendering
     'paced.slice_ms'       => 'sliceMs must be >= 1, got {ms}',
     'paced.rows_per_slice' => 'rowsPerSlice must be >= 1, got {rows}',
 
@@ -83,7 +83,7 @@ return [
     // tmux passthrough
     'tmux.stream_not_sixel' => 'Band streaming is only available for the Sixel renderer, not {name}',
 
-    // screen passthrough (F-12)
+    // screen passthrough
     'screen.stream_not_sixel' => 'Band streaming is only available for the Sixel renderer, not {name}',
 
     // Animation

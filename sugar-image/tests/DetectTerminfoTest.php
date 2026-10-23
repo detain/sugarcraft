@@ -40,7 +40,7 @@ use SugarCraft\Image\Detect;
  * / `runCommand`), so the REAL capability-name matcher runs against canned
  * `infocmp -1` text — including the `desc=...sixel...` decoy that the old
  * word-boundary regex used to swallow. The end-to-end pair covers both
- * directions of the sugar-colorprofile security fix (a456d538e): a PATH-
+ * directions of the PATH-hijack fix in sugar-colorprofile: a PATH-
  * planted `infocmp` must NEVER be exec-ed (fail-loud, zero skips — the
  * marker witness proves it on every machine), while the promoted live
  * chain runs against a committed fixture terminfo DB through the REAL
@@ -306,7 +306,7 @@ final class DetectTerminfoTest extends TestCase
         if ($expectPromote) {
             $this->assertNull(Detect::lastDa1Reply(), 'a promoted entry must skip the DA1 read entirely');
             // The exec must carry the SAME absolute path the availability
-            // gate resolved (sugar-colorprofile a456d538e): a bare relative
+            // gate resolved (the PATH-hijack fix in sugar-colorprofile): a bare
             // `infocmp` would re-resolve through PATH at exec time and let a
             // planted entry answer a question the gate said it could not.
             // Deriving from InfocmpBinary::path() keeps the pin machine-

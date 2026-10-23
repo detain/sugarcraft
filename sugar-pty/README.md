@@ -246,11 +246,11 @@ exit notifications without a poll timer.
 
 ## Recording sessions (Recorder tap)
 
-`PumpOptions` accepts an optional `SugarCraft\Core\Recorder` —
+`PumpOptions` accepts an optional `SugarCraft\Core\Recorder`.
 (`SugarCraft\Vcr\Recorder` itself lives in **sugarcraft/candy-vcr**,
 a *dev-only* dependency of this package: apps copying the example
 below must `composer require sugarcraft/candy-vcr` first.)
-when set, `PosixPump` tees stdin bytes (`recordInputBytes`) as they
+When set, `PosixPump` tees stdin bytes (`recordInputBytes`) as they
 are delivered to the master — bytes parked behind a full master are
 recorded when they land, not when they were read — and master-read
 chunks (`recordOutput`) on the iteration that reads them. Null = zero

@@ -682,7 +682,7 @@ final class ImageSource
      * or endless special file) after the check cannot make this reader block or
      * slurp past the ceiling — the descriptor still refers to the original inode.
      *
-     * ACCEPTED RESIDUAL (round-4 MED): a target that is a regular file at `stat()` but
+     * ACCEPTED RESIDUAL (medium severity): a target that is a regular file at `stat()` but
      * is swapped to a FIFO in the nanoseconds before `fopen()` still blocks the open —
      * POSIX offers no non-blocking `fopen()`/`O_NONBLOCK` path through PHP's stream
      * layer, and any later re-open of `$path` would re-expose the same window. This is
@@ -860,7 +860,7 @@ final class ImageSource
         // Hand flip the bytes we already validated and bounded: the
         // sibling decoder has no path to re-open, so a post-read swap of the
         // original path cannot be re-followed — the single-descriptor ingress
-        // above is the only open of `$path` this route performs, and the round-4
+        // above is the only open of `$path` this route performs, and the earlier
         // temp-copy staging this call replaces was only ever a mitigation of
         // flip's missing bytes-ingress, not a property of the format.
         $flipFrames = self::decodeGifFramesFromBytes($bytes, $w, $h);
