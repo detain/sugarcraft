@@ -7,7 +7,9 @@ namespace SugarCraft\ScriptUi\Command;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\ScriptUi\Model\ChooseModel;
+use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -19,6 +21,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Pick a single item from an interactive list. Prints the chosen text on
  * stdout; exits 1 when the user aborts.
  */
+#[Example('candy-scriptui choose --limit 2 Pizza Burger Salad', 'Pick up to two items.')]
 #[AsCommand(name: 'choose', description: 'Pick one option from a list.')]
 final class ChooseCommand extends Command
 {
@@ -93,6 +96,12 @@ final class ChooseCommand extends Command
         // timeout exit code and print nothing.
         if ($guard->fired()) {
             return TimeoutGuard::EXIT_TIMEOUT;
+        }
+        // Ctrl-C / SIGTERM -> the conventional 128+signum exit (130/143),
+        // distinguishable from an Esc abort and from the 124 deadline.
+        $signalExit = SignalExit::code($program->stopSignal());
+        if ($signalExit !== null) {
+            return $signalExit;
         }
 
         $noSelected = $input->getOption('no-selected');

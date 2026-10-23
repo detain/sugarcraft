@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi;
 
 use SugarCraft\ScriptUi\Completion\BashCompletion;
+use SugarCraft\ScriptUi\Completion\CompletionEscaper;
 use SugarCraft\ScriptUi\Completion\FishCompletion;
 use SugarCraft\ScriptUi\Completion\ZshCompletion;
+use SugarCraft\ScriptUi\Lang;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -22,6 +24,16 @@ use Symfony\Component\Console\Output\OutputInterface;
 )]
 final class CompletionCommand extends Command
 {
+    /**
+     * The shells this command can emit scripts for. Note this is broader
+     * than any single generator's {@see BashCompletion::validShells()} —
+     * that accessor names the shell ONE generator targets, not the
+     * command-wide accepted set.
+     *
+     * @var list<string>
+     */
+    public const SUPPORTED_SHELLS = ['bash', 'zsh', 'fish'];
+
     protected function configure(): void
     {
         $this
@@ -38,6 +50,18 @@ final class CompletionCommand extends Command
         /** @var string */
         $shell = $input->getOption('shell') ?? 'bash';
 
+        if (!in_array($shell, self::SUPPORTED_SHELLS, true)) {
+            // The output of this command is meant to be eval'd by the shell.
+            // An unsupported --shell value must NEVER be interpolated into
+            // it verbatim: the name is echoed through the shipped escaper,
+            // which admits only [A-Za-z0-9_-], so a crafted value carrying
+            // newlines or script text cannot forge extra output lines.
+            $safeName = CompletionEscaper::safeName($shell);
+            $shown    = $safeName ?? 'invalid-shell-name';
+            $output->writeln('<error>' . Lang::t('completion.unknown_shell', ['shell' => $shown]) . '</error>');
+            return Command::FAILURE;
+        }
+
         $application = $this->getApplication();
         if ($application === null) {
             $output->writeln('# No application available');
@@ -48,16 +72,9 @@ final class CompletionCommand extends Command
             'bash' => (new BashCompletion())->generate($application),
             'zsh' => (new ZshCompletion())->generate($application),
             'fish' => (new FishCompletion())->generate($application),
-            default => $this->unsupportedShell($shell),
         };
 
         $output->writeln($completion);
         return Command::SUCCESS;
-    }
-
-    private function unsupportedShell(string $shell): string
-    {
-        $valid = implode(', ', BashCompletion::validShells());
-        return "# Unsupported shell: {$shell}. Supported: {$valid}.";
     }
 }

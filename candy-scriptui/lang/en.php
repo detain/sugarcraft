@@ -40,4 +40,9 @@ return [
 
     // IO errors
     'io.read_failed'         => 'could not read file: {path}',
+    'io.write_failed' => 'could not write to file: {path}',
+    'log.unknown_formatter' => 'unknown --formatter: {name}',
+    'completion.unknown_shell' => 'unsupported shell: {shell}',
+    'confirm.unknown_default' => 'unknown --default value: {value}',
+    'cursor_mode.unknown' => 'unknown --cursor-mode: {mode}',
 ];

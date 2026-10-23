@@ -28,4 +28,6 @@ foreach (\SugarCraft\Core\Util\LegacyEnv::import([
     fwrite(STDERR, sprintf("candy-scriptui: %s is deprecated; set CANDY_SCRIPTUI_%s instead.\n", $legacyVar, substr($legacyVar, strlen('CANDYSHELL_')))); // @rename-keep
 }
 
-(new Application())->run();
+// Application::run() returns the process exit code; forwarding it is the
+// package's raison d'être — shell scripts gate on `candy-scriptui confirm`.
+exit((new Application())->run());

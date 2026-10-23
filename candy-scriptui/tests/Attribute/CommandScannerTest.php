@@ -112,4 +112,44 @@ final class CommandScannerTest extends TestCase
         $cmd = $this->app->find('required-string-command');
         $this->assertInstanceOf(Command::class, $cmd);
     }
+
+
+    /**
+     * docs-fix-1023 NIT: a #[Command] class the scanner cannot construct used
+     * to be dropped in total silence — the tool would just be missing a
+     * subcommand nobody could explain. scan() now records it in skipped()
+     * (and warns on STDERR; the constant stream cannot be captured in-process,
+     * so the roster is the tested contract, pinned structurally for the warn).
+     */
+    public function testScannerReportsUnconstructibleCommandsInsteadOfVanishingThem(): void
+    {
+        require_once __DIR__ . '/../Fixtures/Command/NeedsDependencyCommand.php';
+
+        $scanner = new \SugarCraft\ScriptUi\Discovery\CommandScanner();
+        $discovered = $scanner->scan(
+            \SugarCraft\ScriptUi\Tests\Fixtures\Command::class,
+            $this->app,
+        );
+
+        $this->assertNotContains(
+            \SugarCraft\ScriptUi\Tests\Fixtures\Command\NeedsDependencyCommand::class,
+            $discovered,
+        );
+        $this->assertContains(
+            \SugarCraft\ScriptUi\Tests\Fixtures\Command\NeedsDependencyCommand::class,
+            $scanner->skipped(),
+            'an un-constructible command must surface in skipped()',
+        );
+
+        $src = (string) file_get_contents(
+            __DIR__ . '/../../src/Discovery/CommandScanner.php'
+        );
+        $this->assertStringContainsString('candy-scriptui: skipping command', $src,
+            'the skip roster must stay paired with its loud STDERR warning');
+
+        // scan() resets the roster between runs (no ghost entries).
+        $scanner2 = new \SugarCraft\ScriptUi\Discovery\CommandScanner();
+        $scanner2->scan('SugarCraft\\ScriptUi\\Tests\\FixtureNone\\', $this->app);
+        $this->assertSame([], $scanner2->skipped());
+    }
 }

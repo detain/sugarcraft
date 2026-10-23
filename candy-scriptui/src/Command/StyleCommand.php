@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\ScriptUi\Style\StyleBuilder;
+use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -18,6 +19,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  *
  * Non-interactive — no Program loop required.
  */
+#[Example('candy-scriptui style --bold --foreground 213 hi', 'Bold pink text.')]
 #[AsCommand(name: 'style', description: 'Apply Sprinkles styling to text and print it.')]
 final class StyleCommand extends Command
 {
@@ -85,6 +87,11 @@ final class StyleCommand extends Command
 
     private static function readStdin(): string
     {
+        // From a real terminal with no piped data this would block forever;
+        // an empty stdin is the honest answer (same guard as pager/log/table).
+        if (!defined('STDIN') || !is_resource(STDIN) || @stream_isatty(STDIN)) {
+            return '';
+        }
         $data = '';
         while (!feof(STDIN)) {
             $chunk = fread(STDIN, 4096);

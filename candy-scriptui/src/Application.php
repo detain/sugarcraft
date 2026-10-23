@@ -17,7 +17,10 @@ use SugarCraft\ScriptUi\Command\SpinCommand;
 use SugarCraft\ScriptUi\Command\StyleCommand;
 use SugarCraft\ScriptUi\Command\TableCommand;
 use SugarCraft\ScriptUi\Command\WriteCommand;
+use SugarCraft\ScriptUi\Attribute\Alias;
+use SugarCraft\ScriptUi\Attribute\Example;
 use SugarCraft\ScriptUi\Discovery\CommandScanner;
+use SugarCraft\ScriptUi\Help\HelpFormatter;
 use SugarCraft\ScriptUi\Help\TypoSuggester;
 use Symfony\Component\Console\Application as SymfonyApplication;
 use Symfony\Component\Console\Command\Command;
@@ -45,6 +48,14 @@ final class Application extends SymfonyApplication
      * property, and the reflection below degrades gracefully instead of fataling.
      */
     private const ARGV_TOKENS_PROPERTY = 'tokens';
+
+    /**
+     * The PRIVATE property on {@see \Symfony\Component\Console\Input\ArrayInput}
+     * holding its parameter map — reflected by {@see addHelpToken()} to turn
+     * `--show-help` into `--help` for programmatically-built inputs. Same
+     * pin-or-perish contract as {@see ARGV_TOKENS_PROPERTY}.
+     */
+    private const ARRAY_PARAMETERS_PROPERTY = 'parameters';
 
     public function __construct()
     {
@@ -91,7 +102,15 @@ final class Application extends SymfonyApplication
         while ($dir !== dirname($dir)) {
             $composerPath = $dir . '/composer.json';
             if (file_exists($composerPath)) {
-                $json = json_decode(file_get_contents($composerPath), true);
+                // Unreadable-but-existing files are skipped, not fatal: the
+                // version lookup is best-effort and 0.0.0 is the honest
+                // answer when the metadata cannot be read.
+                $contents = @file_get_contents($composerPath);
+                if ($contents === false) {
+                    $dir = dirname($dir);
+                    continue;
+                }
+                $json = json_decode($contents, true);
                 if (is_array($json) && ($json['version'] ?? '') !== '') {
                     return $json;
                 }
@@ -109,8 +128,14 @@ final class Application extends SymfonyApplication
 
     public function doRun(InputInterface $input, OutputInterface $output): int
     {
-        $command = $this->find($input->getFirstArgument() ?? '');
-        if ($command instanceof Command) {
+        // Symfony handles the no-command-name shapes itself: `--version`,
+        // bare `--help`, and the default `list` command. Reaching find()
+        // with a null name would ask for the command '' and die with an
+        // "ambiguous" error instead — so only resolve a command when the
+        // input actually names one.
+        $name = $input->getFirstArgument();
+        if ($name !== null) {
+            $command = $this->find($name);
             try {
                 $input->bind($command->getDefinition());
             } catch (\Symfony\Component\Console\Exception\RuntimeException) {
@@ -118,8 +143,74 @@ final class Application extends SymfonyApplication
                 // with env-var fallback which applies values best-effort.
             }
             $this->applyEnvVarFallbackToInput($input, $command);
+
+            // --show-help is a gum-compat alias for --help. Rewrite it into
+            // the real token so Symfony's own help path renders the command.
+            if ($input->hasParameterOption('--show-help', true)) {
+                $this->addHelpToken($input);
+            }
+
+            // HelpFormatter reads the class-level #[Alias]/#[Example]
+            // attributes Symfony knows nothing about; when help is requested
+            // for such a command, print that block ahead of Symfony's help.
+            if ($input->hasParameterOption(['--help', '-h'], true)) {
+                $this->writeAttributeHelp($command, $output);
+            }
         }
         return parent::doRun($input, $output);
+    }
+
+    /**
+     * Inject a `--help` token into the raw input so the parent help path
+     * fires. The parsed-options bag cannot be used instead: Command::run()
+     * re-binds (and thereby resets) it from the token stream — the exact
+     * hazard the {@see applyEnvVarFallbackToInput()} token injection exists
+     * for. When the underlying property is missing (a Symfony major bump),
+     * the alias degrades to a no-op; ApplicationShowHelpTest pins the
+     * property names so CI fails loudly before the degradation ships.
+     */
+    private function addHelpToken(InputInterface $input): void
+    {
+        if ($input instanceof \Symfony\Component\Console\Input\ArgvInput) {
+            if (!property_exists($input, self::ARGV_TOKENS_PROPERTY)) {
+                return;
+            }
+            $reflector = new \ReflectionProperty($input, self::ARGV_TOKENS_PROPERTY);
+            $reflector->setAccessible(true);
+            $reflector->setValue($input, array_merge(
+                ['--help'],
+                $reflector->getValue($input),
+            ));
+            return;
+        }
+
+        if ($input instanceof \Symfony\Component\Console\Input\ArrayInput) {
+            if (!property_exists($input, self::ARRAY_PARAMETERS_PROPERTY)) {
+                return;
+            }
+            $reflector = new \ReflectionProperty($input, self::ARRAY_PARAMETERS_PROPERTY);
+            $reflector->setAccessible(true);
+            $parameters = $reflector->getValue($input);
+            $parameters['--help'] = true;
+            $reflector->setValue($input, $parameters);
+        }
+    }
+
+    /**
+     * Render the #[Alias]/#[Example]/#[Command] header via HelpFormatter
+     * for commands that actually carry those attributes. Commands without
+     * them get Symfony's stock help verbatim (no duplicate banner).
+     */
+    private function writeAttributeHelp(Command $command, OutputInterface $output): void
+    {
+        $reflection = new \ReflectionClass($command);
+        if (
+            $reflection->getAttributes(Example::class) === []
+            && $reflection->getAttributes(Alias::class) === []
+        ) {
+            return;
+        }
+        (new HelpFormatter())->write($output, $command);
     }
 
     private function applyEnvVarFallbackToInput(InputInterface $input, Command $command): void
@@ -201,7 +292,7 @@ final class Application extends SymfonyApplication
      * Scan a namespace for classes bearing the #[Command] attribute
      * and register them into this application.
      *
-     * @param class-string $namespace Fully-qualified namespace prefix to scan.
+     * @param string $namespace Namespace prefix to scan (not a class name).
      * @return list<class-string> Names of the discovered command classes.
      */
     public function scan(string $namespace): array
@@ -220,13 +311,20 @@ final class Application extends SymfonyApplication
             $suggestion = $suggester->suggest($name);
 
             if ($suggestion !== null) {
+                // The message already names the single suggestion. Passing
+                // every registered command as "alternatives" violated the
+                // CommandNotFoundException contract (string[]) and would
+                // have made Symfony render its own Did-you-mean list on
+                // top of ours — keep alternatives empty. Do NOT chain the
+                // parent exception either: Symfony 7.4's renderer prints
+                // every previous exception, which stacked a second
+                // "Did you mean" block on top of this one (measured).
                 throw new CommandNotFoundException(
                     sprintf(
-                        'Command "%s" not found. Did you mean <info>%s</info>?',
+                        'Command "%s" not found. Did you mean %s?',
                         $name,
                         $suggestion
-                    ),
-                    array_values($this->all())
+                    )
                 );
             }
 

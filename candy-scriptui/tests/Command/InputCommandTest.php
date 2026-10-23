@@ -6,6 +6,7 @@ namespace SugarCraft\ScriptUi\Tests\Command;
 
 use SugarCraft\ScriptUi\Application;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * Tests for InputCommand flag-plumbing that does not require a live TTY.
@@ -77,5 +78,21 @@ final class InputCommandTest extends TestCase
         $passwordOption = $definition->getOption('password');
         $this->assertNotNull($passwordOption);
         $this->assertFalse($passwordOption->acceptValue());
+    }
+
+
+    public function testUnknownCursorModeIsRefused(): void
+    {
+        $previous = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('en');
+        try {
+            $tester = new CommandTester(new \SugarCraft\ScriptUi\Command\InputCommand());
+            $status = $tester->execute(['--cursor-mode' => 'invisible'], ['decorated' => false]);
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($previous);
+        }
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('unknown --cursor-mode: invisible', $tester->getDisplay());
     }
 }

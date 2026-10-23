@@ -20,6 +20,21 @@ use Symfony\Component\Console\Input\InputOption;
  */
 final class CommandScanner
 {
+    /** @var list<class-string> Classes bearing #[Command] that scan() could not construct. */
+    private array $skipped = [];
+
+    /**
+     * Commands that were discovered but could NOT be registered (their
+     * constructors require a dependency the scanner cannot inject). Call it
+     * right after {@see scan()}; scan() resets it on each run.
+     *
+     * @return list<class-string>
+     */
+    public function skipped(): array
+    {
+        return $this->skipped;
+    }
+
     /**
      * @param class-string $namespace Fully-qualified namespace prefix to scan.
      * @return list<class-string> Discovered command class names.
@@ -27,6 +42,7 @@ final class CommandScanner
     public function scan(string $namespace, Application $application): array
     {
         $discovered = [];
+        $this->skipped = [];
 
         foreach ($this->findClassesInNamespace($namespace) as $class) {
             $ref = new ReflectionClass($class);
@@ -68,6 +84,14 @@ final class CommandScanner
 
                 $application->add($instance);
                 $discovered[] = $class;
+            } else {
+                // Fail loud: a #[Command] class we silently dropped is the
+                // difference between a working tool and a confusing one.
+                $this->skipped[] = $class;
+                fwrite(STDERR, sprintf(
+                    "candy-scriptui: skipping command %s: not constructible as a Symfony Command (constructor dependency the scanner cannot inject, or missing Command base class).\n",
+                    $class
+                ));
             }
         }
 

@@ -6,6 +6,7 @@ namespace SugarCraft\ScriptUi\Tests\Command;
 
 use SugarCraft\ScriptUi\Application;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * Tests for PagerCommand flag-plumbing that does not require a live TTY.
@@ -88,5 +89,27 @@ final class PagerCommandTest extends TestCase
         $option = $definition->getOption('soft-wrap');
         $this->assertNotNull($option);
         $this->assertFalse($option->acceptValue());
+    }
+
+
+    public function testMissingFileFailsWithLocalizedMessageNotFatal(): void
+    {
+        $previous = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('en');
+        try {
+            $tester = new CommandTester(new \SugarCraft\ScriptUi\Command\PagerCommand());
+            $status = $tester->execute(
+                ['--file' => '/definitely/not/here.phpunit-' . getmypid()],
+                ['decorated' => false],
+            );
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($previous);
+        }
+
+        $display = $tester->getDisplay();
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('could not read file:', $display);
+        // Before the Lang import fix this path fataled: "Class ... not found".
+        $this->assertStringNotContainsString('Class "', $display);
     }
 }

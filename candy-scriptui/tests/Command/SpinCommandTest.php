@@ -292,4 +292,15 @@ final class SpinCommandTest extends TestCase
             },
         );
     }
+
+
+    /** README spells it `mini-dot`; the internal style name is `minidot`. Both resolve. */
+    public function testMiniDotSpellingAliasResolves(): void
+    {
+        // pickStyle() builds a fresh style object; compare by identity-of-data
+        // (SpinStyle::miniDot() is not memoised, so assertEquals is honest).
+        $this->assertEquals(SpinStyle::miniDot(), SpinCommand::pickStyle('mini-dot'));
+        $this->assertEquals(SpinStyle::miniDot(), SpinCommand::pickStyle('MINI-DOT'));
+        $this->assertEquals(SpinStyle::miniDot(), SpinCommand::pickStyle('minidot'));
+    }
 }

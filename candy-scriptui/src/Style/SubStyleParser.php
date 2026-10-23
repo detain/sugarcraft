@@ -11,8 +11,7 @@ use SugarCraft\Style\Style;
  * Parses gum-style per-element style sub-flags into a map of
  * element name → {@see Style}.
  *
- * Sub-flags are passed via the repeating `--style` option in
- * `<element>.<prop>=<value>` form:
+ * Sub-flags are passed in `<element>.<prop>=<value>` form:
  *
  *   --style cursor.foreground=#ff5fd2
  *   --style cursor.bold=true
@@ -24,8 +23,12 @@ use SugarCraft\Style\Style;
  * props raise an `InvalidArgumentException`.
  *
  * Element names are arbitrary; the consuming command picks which
- * keys to look up (e.g. ChooseCommand checks `cursor`, `header`,
- * `selected`, `unselected`).
+ * keys to look up. NOTE: none of the shipped built-in commands
+ * consume this parser today — it is an exported building block for
+ * extension commands (and the language keys style.bad_entry /
+ * style.unknown_prop exist for that use). The built-in `choose`
+ * command's `--cursor`/`--header` flags are plain strings, not
+ * sub-style entries.
  *
  * The element-name `*` (or no namespace) applies to a default base
  * style — useful for `--style bold=true` shorthand.

@@ -6,8 +6,11 @@ namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\ConfirmModel;
+use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -19,6 +22,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Confirmation prompt. Exit code reflects the answer: 0 for yes, 1 for
  * no, 2 for abort (Esc / Ctrl-C).
  */
+#[Example('candy-scriptui confirm --default=yes "Deploy?"', 'Ask with Yes pre-selected.')]
 #[AsCommand(name: 'confirm', description: 'Prompt for a yes/no answer; exit code reflects the choice.')]
 final class ConfirmCommand extends Command
 {
@@ -43,6 +47,12 @@ final class ConfirmCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $defaultRaw = strtolower((string) $input->getOption('default'));
+        if ($defaultRaw !== '' && !in_array($defaultRaw, ['yes', 'y', 'no', 'n'], true)) {
+            // A typo'd default must not silently flip to "no" — refusing is
+            // the only honest reading of an unknown answer word.
+            $output->writeln('<error>' . Lang::t('confirm.unknown_default', ['value' => $defaultRaw]) . '</error>');
+            return Command::FAILURE;
+        }
         $defaultYes = (bool) $input->getOption('default-yes')
             || $defaultRaw === 'yes' || $defaultRaw === 'y';
 
@@ -76,6 +86,12 @@ final class ConfirmCommand extends Command
         // rather than a yes/no/abort verdict.
         if ($guard->fired()) {
             return TimeoutGuard::EXIT_TIMEOUT;
+        }
+        // Ctrl-C / SIGTERM -> the conventional 128+signum exit (130/143),
+        // distinguishable from an Esc abort and from the 124 deadline.
+        $signalExit = SignalExit::code($program->stopSignal());
+        if ($signalExit !== null) {
+            return $signalExit;
         }
 
         if ($final->isAborted()) {

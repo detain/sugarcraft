@@ -9,13 +9,18 @@ use Attribute;
 /**
  * Declarative CLI option for a command.
  *
- * Apply to a command class to declare options that the
+ * Apply to a command CLASS to declare options that the
  * {@see \SugarCraft\ScriptUi\Discovery\CommandScanner} will
- * translate into Symfony Console input options.
+ * translate into Symfony Console input options. The scanner reads
+ * class attributes only — a `#[Flag]` on a method registers nothing.
  *
  * Usage:
  *   #[Flag(name: 'verbose', short: 'v')]
  *   #[Flag(name: 'format', short: 'f', enum: FormatType::class)]
+ *
+ * The `enum:` part documents the allowed set; the scanner does not
+ * enforce it at runtime (see {@see ValueEnum} for the shipped,
+ * call-it-yourself validator).
  */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::IS_REPEATABLE)]
 final class Flag

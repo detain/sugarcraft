@@ -7,7 +7,11 @@ namespace SugarCraft\ScriptUi\Command;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\ScriptUi\Model\InputModel;
+use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\CursorMode;
+use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -18,6 +22,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Read a single line from the user. Prints the entered value on stdout;
  * exits 1 when aborted.
  */
+#[Example('candy-scriptui input --password', 'Read a secret without echoing it.')]
 #[AsCommand(name: 'input', description: 'Prompt for a single line of input.')]
 final class InputCommand extends Command
 {
@@ -39,6 +44,12 @@ final class InputCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $cursorMode = strtolower((string) $input->getOption('cursor-mode'));
+        if (!CursorMode::isKnown($cursorMode)) {
+            $output->writeln('<error>' . Lang::t('cursor_mode.unknown', ['mode' => $cursorMode]) . '</error>');
+            return Command::FAILURE;
+        }
+
         $model   = InputModel::newPrompt(
             placeholder: (string) $input->getOption('placeholder'),
             password:    (bool)   $input->getOption('password'),
@@ -51,7 +62,7 @@ final class InputCommand extends Command
         $loop    = \React\EventLoop\Loop::get();
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    false,
-            hideCursor:      false,
+            hideCursor:      CursorMode::hidesCursor($cursorMode),
             catchInterrupts: true,
             loop:            $loop,
         ));
@@ -63,6 +74,12 @@ final class InputCommand extends Command
         // Deadline elapsed before submit — discard input, exit timeout.
         if ($guard->fired()) {
             return TimeoutGuard::EXIT_TIMEOUT;
+        }
+        // Ctrl-C / SIGTERM -> the conventional 128+signum exit (130/143),
+        // distinguishable from an Esc abort and from the 124 deadline.
+        $signalExit = SignalExit::code($program->stopSignal());
+        if ($signalExit !== null) {
+            return $signalExit;
         }
 
         if ($final->isAborted() || !$final->isSubmitted()) {

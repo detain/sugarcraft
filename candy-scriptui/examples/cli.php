@@ -23,4 +23,5 @@ final class StatusCommand extends Command
 
 $app = new Application();
 $app->add(new StatusCommand());
-$app->run();
+// Forward the exit code — scripts gate on it (same rule the bin applies).
+exit($app->run());

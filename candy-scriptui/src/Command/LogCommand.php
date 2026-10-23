@@ -67,6 +67,12 @@ final class LogCommand extends Command
         $formatter = $input->getOption('structured')
             ? 'logfmt'
             : strtolower((string) $input->getOption('formatter'));
+        if (!in_array($formatter, ['text', 'json', 'logfmt'], true)) {
+            // formatLine() would silently fall through to the text shape for
+            // any unknown name; a typo'd --formatter must be refused loudly.
+            $output->writeln('<error>' . Lang::t('log.unknown_formatter', ['name' => $formatter]) . '</error>');
+            return Command::FAILURE;
+        }
 
         try {
             $line = self::formatLine($level, $text, $prefix, $time, $formatter);
@@ -77,7 +83,12 @@ final class LogCommand extends Command
 
         $file = (string) $input->getOption('file');
         if ($file !== '') {
-            @file_put_contents($file, $line . "\n", FILE_APPEND);
+            // A failed append must not exit 0 pretending the line landed:
+            // the whole point of --file is durability.
+            if (@file_put_contents($file, $line . "\n", FILE_APPEND) === false) {
+                $output->writeln('<error>' . Lang::t('io.write_failed', ['path' => $file]) . '</error>');
+                return Command::FAILURE;
+            }
         } else {
             $output->writeln($line);
         }

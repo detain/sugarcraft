@@ -7,6 +7,7 @@ namespace SugarCraft\ScriptUi\Tests\Command;
 use SugarCraft\ScriptUi\Command\LogCommand;
 use Symfony\Component\Console\Command\Command;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * Coverage for {@see LogCommand::resolveTimeFormat()} — Go-style
@@ -104,5 +105,43 @@ final class LogCommandTest extends TestCase
         $tester = new \Symfony\Component\Console\Tester\CommandTester($cmd);
         $tester->execute($args);
         return $tester;
+    }
+
+
+    public function testUnknownFormatterIsRefused(): void
+    {
+        $previous = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('en');
+        try {
+            $tester = new CommandTester(new \SugarCraft\ScriptUi\Command\LogCommand());
+            $status = $tester->execute(
+                ['message' => ['hello'], '--formatter' => 'xml'],
+                ['decorated' => false],
+            );
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($previous);
+        }
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('unknown --formatter: xml', $tester->getDisplay());
+    }
+
+    public function testFileWriteFailureIsLoudNotSilentZero(): void
+    {
+        $previous = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('en');
+        try {
+            $target = '/proc/candy-scriptui-no-such-dir/probe.log';
+            $tester = new CommandTester(new \SugarCraft\ScriptUi\Command\LogCommand());
+            $status = $tester->execute(
+                ['message' => ['hello'], '--file' => $target],
+                ['decorated' => false],
+            );
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($previous);
+        }
+
+        $this->assertSame(1, $status, 'a failed --file append must not exit 0');
+        $this->assertStringContainsString('could not write to file: ' . $target, $tester->getDisplay());
     }
 }

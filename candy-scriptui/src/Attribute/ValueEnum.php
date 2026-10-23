@@ -19,8 +19,12 @@ use Attribute;
  *       case Toml  = 'toml';
  *   }
  *
- * The scanner validates the provided value against the enum
- * and throws a clear error for invalid values.
+ * NOTE: the scanner currently registers `enum:` as documentation only —
+ * it does NOT validate provided values at runtime (validating there is
+ * impossible: the scanner builds the option definition before any input
+ * is parsed). Commands that want enforcement call
+ * {@see ValueEnum::validate()} in their own execute() with the parsed
+ * value; this class ships that check.
  */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD)]
 final class ValueEnum

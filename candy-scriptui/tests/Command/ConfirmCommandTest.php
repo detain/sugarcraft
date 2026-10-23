@@ -85,4 +85,20 @@ final class ConfirmCommandTest extends TestCase
         // Default accepts string values
         $this->assertTrue($defaultOption->acceptValue());
     }
+
+
+    public function testUnknownDefaultIsRefusedNotSilentlyNo(): void
+    {
+        $previous = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('en');
+        try {
+            $tester = new CommandTester(new \SugarCraft\ScriptUi\Command\ConfirmCommand());
+            $status = $tester->execute(['--default' => 'maybe'], ['decorated' => false]);
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($previous);
+        }
+
+        $this->assertSame(1, $status);
+        $this->assertStringContainsString('unknown --default value: maybe', $tester->getDisplay());
+    }
 }

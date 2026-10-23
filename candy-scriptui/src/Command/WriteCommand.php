@@ -7,6 +7,9 @@ namespace SugarCraft\ScriptUi\Command;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\ScriptUi\Model\WriteModel;
+use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\CursorMode;
+use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -42,6 +45,12 @@ final class WriteCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $cursorMode = strtolower((string) $input->getOption('cursor-mode'));
+        if (!CursorMode::isKnown($cursorMode)) {
+            $output->writeln('<error>' . Lang::t('cursor_mode.unknown', ['mode' => $cursorMode]) . '</error>');
+            return Command::FAILURE;
+        }
+
         $model   = WriteModel::newPrompt(
             placeholder:     (string) $input->getOption('placeholder'),
             width:           (int)    $input->getOption('width'),
@@ -56,7 +65,7 @@ final class WriteCommand extends Command
         $loop    = \React\EventLoop\Loop::get();
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    true,
-            hideCursor:      false,
+            hideCursor:      CursorMode::hidesCursor($cursorMode),
             catchInterrupts: true,
             loop:            $loop,
         ));
@@ -68,6 +77,12 @@ final class WriteCommand extends Command
         // Deadline elapsed before submit — discard the buffer, exit timeout.
         if ($guard->fired()) {
             return TimeoutGuard::EXIT_TIMEOUT;
+        }
+        // Ctrl-C / SIGTERM -> the conventional 128+signum exit (130/143),
+        // distinguishable from an Esc abort and from the 124 deadline.
+        $signalExit = SignalExit::code($program->stopSignal());
+        if ($signalExit !== null) {
+            return $signalExit;
         }
 
         if ($final->isAborted() || !$final->isSubmitted()) {

@@ -14,6 +14,9 @@ use Symfony\Component\Console\Command\Command;
  */
 final class ZshCompletion
 {
+    /** Documented fallback app name used when Application::getName() is not shell-safe. */
+    public const DEFAULT_APP_NAME = 'candy-scriptui';
+
     public static function isSupportedShell(string $shell): bool
     {
         return $shell === 'zsh';
@@ -30,7 +33,10 @@ final class ZshCompletion
     public function generate(Application $application): string
     {
         $appNameRaw = $application->getName();
-        $appName = CompletionEscaper::safeName($appNameRaw) ?? '';
+        // An unsafe application name cannot be echoed into a script meant
+// to be eval'd — fall back to the shipped default instead of
+// silently emitting a malformed/empty completion function name.
+        $appName = CompletionEscaper::safeName($appNameRaw) ?? self::DEFAULT_APP_NAME;
         $commands = $application->all();
 
         $commandNames = [];

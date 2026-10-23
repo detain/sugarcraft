@@ -11,6 +11,7 @@ declare(strict_types=1);
 return [
     'style.empty_color'       => 'colore vuoto',
     'style.unrecognised_color' => 'colore non riconosciuto: {value}',
+    'style.hex_digit_count' => "il colore esadecimale deve avere 3 o 6 cifre esadecimali (ad es. '#f80' o '#ff8800'); ottenuto '{value}'",
     'style.padding_token_int' => "il token padding/margin deve essere un intero; ottenuto: '{token}'",
     'style.padding_count'     => 'padding/margin richiede 1, 2 o 4 interi; ottenuto: {count}',
     'style.bad_entry'         => "--style le voci devono essere 'chiave=valore' o 'elemento.prop=valore'; ottenuto: '{raw}'",
@@ -18,7 +19,15 @@ return [
     'process.spawn_failed'    => 'avvio del processo figlio fallito',
     'border.unknown'          => 'stile bordo sconosciuto: {name}',
     'log.unknown_level'       => 'livello log sconosciuto: {name}',
+    'log.encode_failed' => 'codifica della voce di log in json non riuscita',
+    'log.bad_format' => 'stringa --format non valida: {format}',
     'spinner.unknown_style'   => 'stile spinner sconosciuto: {name}',
     'format.unknown_type'     => '--type sconosciuto: {type}',
     'format.unknown_theme'    => 'tema sconosciuto: {name}',
+    'io.read_failed' => 'impossibile leggere il file: {path}',
+    'io.write_failed' => 'impossibile scrivere sul file: {path}',
+    'log.unknown_formatter' => '--formatter sconosciuto: {name}',
+    'completion.unknown_shell' => 'shell non supportata: {shell}',
+    'confirm.unknown_default' => 'valore --default sconosciuto: {value}',
+    'cursor_mode.unknown' => 'modalità cursore sconosciuta: {mode}',
 ];

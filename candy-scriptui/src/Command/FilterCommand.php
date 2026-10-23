@@ -7,6 +7,7 @@ namespace SugarCraft\ScriptUi\Command;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\ScriptUi\Model\FilterModel;
+use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -93,6 +94,12 @@ final class FilterCommand extends Command
         // Deadline elapsed before submit — emit nothing, exit timeout.
         if ($guard->fired()) {
             return TimeoutGuard::EXIT_TIMEOUT;
+        }
+        // Ctrl-C / SIGTERM -> the conventional 128+signum exit (130/143),
+        // distinguishable from an Esc abort and from the 124 deadline.
+        $signalExit = SignalExit::code($program->stopSignal());
+        if ($signalExit !== null) {
+            return $signalExit;
         }
 
         return self::renderResult(

@@ -14,6 +14,7 @@ use SugarCraft\ScriptUi\Model\SpinModel;
 use SugarCraft\ScriptUi\Process\Process;
 use SugarCraft\ScriptUi\Process\RealProcess;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -28,9 +29,11 @@ use Symfony\Component\Console\Output\OutputInterface;
  *
  * The child inherits the parent's stdout/stderr so its output overlays
  * the spinner naturally. Use shell redirection if you want silent
- * execution. Esc / Ctrl-C terminate the child and exit with -1; the
- * normal exit code is forwarded as the candy-scriptui exit code.
+ * execution. Esc / Ctrl-C terminate the child and exit with 130 (the
+ * conventional 128+SIGINT code); the normal exit code is forwarded as
+ * the candy-scriptui exit code.
  */
+#[Example('candy-scriptui spin -- npm ci', 'Run a build behind a spinner.')]
 #[AsCommand(name: 'spin', description: 'Run a command while showing a spinner.')]
 final class SpinCommand extends Command
 {
@@ -166,7 +169,9 @@ final class SpinCommand extends Command
         return match (strtolower($name)) {
             'line'      => SpinStyle::line(),
             'dot'       => SpinStyle::dot(),
-            'minidot'   => SpinStyle::miniDot(),
+            // 'mini-dot' is the spelling the README and gum docs use;
+            // 'minidot' is the internal style name. Both are accepted.
+            'minidot', 'mini-dot' => SpinStyle::miniDot(),
             'points'    => SpinStyle::points(),
             'pulse'     => SpinStyle::pulse(),
             'globe'     => SpinStyle::globe(),

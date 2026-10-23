@@ -6,7 +6,9 @@ namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\PagerModel;
+use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -77,6 +79,12 @@ final class PagerCommand extends Command
         // Deadline elapsed — the pager auto-exits with the timeout code.
         if ($guard->fired()) {
             return TimeoutGuard::EXIT_TIMEOUT;
+        }
+        // Ctrl-C / SIGTERM: report the conventional 128+signal exit rather
+        // than pretending the page was read to the end.
+        $signalExit = SignalExit::code($program->stopSignal());
+        if ($signalExit !== null) {
+            return $signalExit;
         }
         return Command::SUCCESS;
     }
