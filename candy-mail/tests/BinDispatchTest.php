@@ -50,6 +50,14 @@ final class BinDispatchTest extends TestCase
                 $childEnv[$name] = $env[$name];
             }
         }
+        // Locale selection is deliberately controllable per test (the bin
+        // reads LANG/LC_ALL/LC_MESSAGES via T::detect()); everything else in
+        // the parent env stays invisible to the child.
+        foreach (['LANG', 'LC_ALL', 'LC_MESSAGES'] as $localeVar) {
+            if (isset($env[$localeVar])) {
+                $childEnv[$localeVar] = $env[$localeVar];
+            }
+        }
         $childEnv['PATH'] = (string) (\getenv('PATH') ?: '/usr/bin:/bin');
 
         $descriptors = [
@@ -158,5 +166,43 @@ final class BinDispatchTest extends TestCase
 
         $this->assertSame(1, $result['status']);
         $this->assertStringContainsString('port', $result['err']);
+    }
+
+    public function testDispatchArmsTheUserLocaleBeforeAnythingCanFail(): void
+    {
+        $src = (string) \file_get_contents((string) \realpath(__DIR__ . '/../bin/candy-mail'));
+
+        // Structural order-pin: setLocale(T::detect()) must run before the
+        // first parseArgs() throw path, or the first error would be English
+        // whatever the user's locale is.
+        $armed   = \strpos($src, 'T::setLocale(');
+        $parseAt = \strpos($src, 'parseArgs($argv)');
+        $this->assertNotFalse($armed);
+        $this->assertNotFalse($parseAt);
+        $this->assertLessThan($parseAt, $armed);
+    }
+
+    public function testUnknownOptionMessageFollowsTheUserLocale(): void
+    {
+        $de = require __DIR__ . '/../lang/de.php';
+        $expected = \str_replace(
+            '{message}',
+            \str_replace('{option}', '--nope', $de['cli.unknown_option']),
+            $de['cli.error'],
+        );
+
+        $result = $this->runCli(['--nope'], '', ['LANG' => 'de_DE.UTF-8']);
+
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString($expected, $result['err']);
+        $this->assertStringNotContainsString('Unknown option', $result['err']);
+    }
+
+    public function testMessagesStayEnglishWithoutALocaleEnv(): void
+    {
+        $result = $this->runCli(['--nope']);
+
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('Unknown option: --nope', $result['err']);
     }
 }

@@ -26,6 +26,12 @@ use SugarCraft\Mail\{Email, Lang, Mailer, ResendTransport, SmtpTransport};
 
 // Guard: only run dispatch when called as CLI script (not when required by tests)
 if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
+    // Error MESSAGES follow the user's locale (Lang catalog, 16 locales);
+    // the CLI's own usage/help text stays English by design, like every
+    // SugarCraft bin. T::detect() reads LC_ALL/LC_MESSAGES/LANG, falling
+    // back to 'en'.
+    \SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
+
     // Pre-rename env compatibility (plan_rename.md R4.5): POP_* was this // @rename-keep
     // app's option env prefix before the 2026-10 rename to candy-mail (the // @rename-keep
     // old bin was named pop). These vars hold SMTP credentials — keep them // @rename-keep
@@ -356,7 +362,8 @@ Usage:
   {$bin} --from <addr> --to <addr> --render        (print MIME, send nothing)
 
   Flags accept --name value and --name=value. Body is read from STDIN if no
-  --body flag is given. Unknown options are rejected, not ignored.
+  --body flag is given. Unknown options are rejected, not ignored. Error
+  messages follow the LANG/LC_ALL locale (16 locales); this help is English.
 
 Options:
   --from <addr>        Sender email address
