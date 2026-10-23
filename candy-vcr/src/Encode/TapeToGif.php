@@ -467,12 +467,47 @@ final class TapeToGif
      *   encoder?: 'ffmpeg'|'php',
      * } $options
      */
+    /**
+     * Fail loud at the backend-resolution choke when the PHP extension a
+     * rasterizer backend needs is not loaded. Without this door a gd-less
+     * install reaches `new GdRasterizer(...)` and dies later inside the
+     * first imagecreate() with a plain "Call to undefined function" fatal
+     * that names neither the extension nor the remedy; the imagick leg
+     * would fatal as a class-not-found on {@see ImagickRasterizer}'s
+     * ext-imagick types. Unknown backends fall through to the gd leg, so
+     * they are probed as gd (matching the match() arm they will take).
+     *
+     * @param callable(string):bool|null $extensionLoaded seam for tests to
+     *                                                     simulate a
+     *                                                     backend-less
+     *                                                     install
+     *
+     * @throws \RuntimeException when the backend's extension is unavailable
+     */
+    public static function assertBackendAvailable(string $backend, ?callable $extensionLoaded = null): void
+    {
+        $extensionLoaded ??= static fn (string $name): bool => extension_loaded($name);
+        $extension = $backend === 'imagick' ? 'imagick' : 'gd';
+        $alternative = $extension === 'gd' ? 'imagick' : 'gd';
+
+        if ($extensionLoaded($extension)) {
+            return;
+        }
+
+        throw new \RuntimeException(
+            "candy-vcr: the '{$backend}' rasterizer backend requires the {$extension} PHP extension, "
+            . "which is not loaded. Install/enable ext-{$extension}, or pick --backend={$alternative}.",
+        );
+    }
+
     public static function create(array $options = []): self
     {
         $backend = $options['backend'] ?? 'gd';
         $encoderType = $options['encoder'] ?? 'ffmpeg';
         $fontSize = (int) ($options['fontSize'] ?? 14);
         $fontFamily = $options['fontFamily'] ?? 'JetBrainsMono';
+
+        self::assertBackendAvailable($backend);
 
         $encoder = match ($encoderType) {
             'php' => new PhpGifEncoder(),

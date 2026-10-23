@@ -139,6 +139,12 @@ final class Recorder implements RecorderInterface
      * factory — fills in a sensible CassetteHeader (cols=80, rows=24,
      * current UTC time, candy-vcr runtime tag) when omitted; an initial
      * `recordResize` event will overwrite the placeholder dimensions.
+     *
+     * The file is created and immediately tightened to 0600 (owner-only).
+     * Cassettes embed captured terminal output and — under `--env-all` —
+     * the full environment in plaintext, so a default-umask world-readable
+     * cassette is a secret leak waiting for a shared CI runner. A failed
+     * chmod is fatal: half-permissioned output is worse than none.
      */
     public static function open(
         string $path,
@@ -147,6 +153,10 @@ final class Recorder implements RecorderInterface
         $fh = @fopen($path, 'wb');
         if ($fh === false) {
             throw new \RuntimeException("candy-vcr: cannot open recorder file {$path}");
+        }
+        if (@chmod($path, 0600) === false) {
+            fclose($fh);
+            throw new \RuntimeException("candy-vcr: cannot set owner-only permissions on cassette file {$path}");
         }
         return new self($fh, $header ?? self::defaultHeader());
     }

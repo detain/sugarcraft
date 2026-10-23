@@ -45,6 +45,8 @@
         "symfony/yaml": "^6.4 || ^7.0"
     },
     "suggest": {
+        "ext-gd": "Required by the default gd rasterizer backend (render-tape / render-batch GIF output); TapeToGif::create() fails loud when it is absent.",
+        "ext-imagick": "Enables --backend=imagick for the ImageMagick rasterizer path in place of gd.",
         "sugarcraft/sugar-vterm": "Enables ScreenAssertion for cell-grid frame comparison; ByteAssertion is used otherwise.",
         "symfony/yaml": "Enables YamlFormat for human-readable cassettes (test fixtures, hand-written replays); JsonlFormat is the primary format."
     },

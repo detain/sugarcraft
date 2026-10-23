@@ -68,18 +68,18 @@ final class Player
      */
     public const INSTANT_YIELD_SECONDS = 0.005;
 
-    public function __construct(
-        public readonly Cassette $cassette,
-        private readonly ?float $idleTrimSeconds = null,
-    ) {
-    }
-
     /**
      * DEC mouse reporting modes observed in recorded output during the
      * current {@see play()} — tells the raw-input path which encoding
      * produced a mouse byte sequence instead of assuming SGR.
      */
     private MouseModeTracker $mouseModes;
+
+    public function __construct(
+        public readonly Cassette $cassette,
+        private readonly ?float $idleTrimSeconds = null,
+    ) {
+    }
 
     public static function open(string $path): self
     {

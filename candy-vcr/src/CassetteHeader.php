@@ -27,7 +27,7 @@ final readonly class CassetteHeader
      *   the recorder was started without `--env` — `record` is opt-in for
      *   env capture to avoid leaking the caller's full shell environment.
      *   `RecordCommand::SECRET_KEY_REGEX` strips any key matching the
-     *   conservative secret regex (`/(SECRET|TOKEN|KEY|PASSWORD|API)/i`)
+     *   conservative secret regex (`/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i`)
      *   before the env reaches the cassette.
      * @param float|null $typingSpeed Milliseconds between keystrokes for Type directives.
      *   Defaults to null (not set) for backward compatibility with older cassettes.

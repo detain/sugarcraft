@@ -8,7 +8,6 @@ use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\CassetteLoader;
 use SugarCraft\Vcr\Player;
-use SugarCraft\Vcr\Render\FrameDedup;
 use SugarCraft\Vcr\Render\Renderer;
 use SugarCraft\Vcr\Support\Scalars;
 use SugarCraft\Vterm\Snapshot;
@@ -16,7 +15,7 @@ use SugarCraft\Vterm\Terminal;
 use SugarCraft\Vterm\Theme;
 
 /**
- * `candy-vcr inspect <cassette|.tape> [--since=<seconds>] [--until=<seconds>] [--frames] [--fps=<n>]`
+ * `candy-vcr inspect <cassette|.tape> [--since=<seconds>] [--until=<seconds>] [--frames] [--fps=<n>|--fps <n>]`
  *
  * Pretty-prints the events in a cassette: timestamp, kind, and a one-line
  * summary of the payload. Accepts either a JSONL/Relative/Yaml/asciinema
@@ -45,17 +44,30 @@ final class InspectCommand implements Command
         $since = null;
         $until = null;
         $frames = false;
-        $fps = 30.0;
-        foreach ($args as $arg) {
+        $fpsRaw = null;
+        $fpsMissingValue = false;
+        $count = count($args);
+        for ($i = 0; $i < $count; $i++) {
+            $arg = $args[$i];
             if (str_starts_with($arg, '--since=')) {
                 $since = (float) substr($arg, 8);
             } elseif (str_starts_with($arg, '--until=')) {
                 $until = (float) substr($arg, 8);
+            } elseif ($arg === '--fps') {
+                // Space form, matching `render-tape --fps <n>` and the kv
+                // ArgParser family. A following token starting with `--` is
+                // another option, not this one's value.
+                if ($i + 1 >= $count || str_starts_with($args[$i + 1], '--')) {
+                    $fpsMissingValue = true;
+                } else {
+                    $fpsRaw = $args[++$i];
+                }
             } elseif (str_starts_with($arg, '--fps=')) {
-                $fps = (float) substr($arg, 6);
-                if ($fps <= 0.0) {
-                    fwrite($stderr, "candy-vcr inspect: --fps must be > 0\n");
-                    return 2;
+                $raw = substr($arg, 6);
+                if ($raw === '') {
+                    $fpsMissingValue = true;
+                } else {
+                    $fpsRaw = $raw;
                 }
             } elseif ($arg === '--frames') {
                 $frames = true;
@@ -67,8 +79,23 @@ final class InspectCommand implements Command
             }
         }
 
+        if ($fpsMissingValue) {
+            fwrite($stderr, "candy-vcr inspect: --fps requires a value\n");
+            return 2;
+        }
+        try {
+            // Single validation door shared with render-tape (FpsOption):
+            // non-numeric, zero, negative and non-finite all fail here with
+            // the same message, whatever spelling of the option was used.
+            $parsedFps = $fpsRaw === null ? null : FpsOption::parse($fpsRaw);
+        } catch (\InvalidArgumentException $e) {
+            fwrite($stderr, "candy-vcr inspect: {$e->getMessage()}\n");
+            return 2;
+        }
+        $fps = $parsedFps ?? 30.0;
+
         if ($path === null) {
-            fwrite($stderr, "usage: candy-vcr inspect <cassette|.tape> [--since=<seconds>] [--until=<seconds>] [--frames] [--fps=<n>]\n");
+            fwrite($stderr, "usage: candy-vcr inspect <cassette|.tape> [--since=<seconds>] [--until=<seconds>] [--frames] [--fps=<n>|--fps <n>]\n");
             return 2;
         }
 
@@ -102,8 +129,11 @@ final class InspectCommand implements Command
 
     /**
      * Walk the cassette through a Renderer + Terminal at `$fps` and print
-     * one line per snapshot. Closes with a `frames: <total> unique: <dedup>`
-     * footer so the dedup ratio is visible at a glance.
+     * one line per snapshot. Closes with a `frames: <total> unique: <dedup>
+     * deduped: <count>` footer — uniqueness is measured by consecutive
+     * {@see Snapshot::equals()} comparison in the stream (the same rule
+     * {@see \SugarCraft\Vcr\Render\FrameDedup} applies), so the dedup ratio
+     * is visible at a glance.
      *
      * @param resource $stdout
      */

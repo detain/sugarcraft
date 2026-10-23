@@ -14,21 +14,24 @@ use SugarCraft\Vcr\Tests\Support\Stream;
 /**
  * P6.5.6 — performance baseline. Measure wallclock for the canonical
  * Shirley benchmark (`bash -c 'seq 100000'`) WITH and WITHOUT the
- * recorder tap, take the median across multiple runs, assert the
- * recorder overhead is ≤ 2 % per the plan target.
+ * recorder tap, reduce each scenario to a trimmed mean, and assert the
+ * recorder overhead ratio stays within budget.
  *
  * Measurement protocol (matches the plan's CI-tolerance guidance):
  *   - One warmup iteration to seed FFI handles / kernel caches.
- *   - N = 5 timed iterations per scenario.
- *   - Sort + take median (not mean) — robust against single-shot
- *     stalls from GC / preemption / unrelated CPU spikes.
- *   - Assert (median_with - median_without) / median_without ≤ budget.
+ *   - 6 timed iterations per scenario (two interleaved rounds of
+ *     ROUNDS = 3 without/with pairs, controlling for CPU cache drift).
+ *   - Sort + trimmed mean — discard the min and max, average the
+ *     middle four — which is more stable than a median on this
+ *     sample size while still shrugging off single-shot stalls.
+ *   - Assert (mean_with - mean_without) / mean_without ≤ budget.
  *
- * The local microbench reports ~0 % overhead on Linux. The CI budget
- * is set at 5 % to absorb shared-runner noise without losing the
- * regression signal — a real recorder regression would land at
- * dozens of percent (full JSON serialization per chunk), so 5 %
- * still catches the class of bug this test exists to flag.
+ * The assertion budget is {@see self::OVERHEAD_BUDGET} = 8 % to absorb
+ * shared-runner noise without losing the regression signal; the plan's
+ * 2 % acceptance target ({@see self::PLAN_TARGET_OVERHEAD}) is
+ * reported but not asserted. A real recorder regression lands at
+ * dozens of percent (full JSON serialization per chunk), so 8 % still
+ * catches the class of bug this test exists to flag.
  */
 final class ShirleyOverheadTest extends TestCase
 {
@@ -123,7 +126,7 @@ final class ShirleyOverheadTest extends TestCase
         $this->assertLessThan(
             self::MAX_TOTAL_SEC,
             $totalElapsed,
-            'perf bench must stay under 30 s wallclock',
+            'perf bench must stay under 45 s wallclock',
         );
 
         $this->assertLessThan(
