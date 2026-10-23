@@ -8,31 +8,30 @@ use SugarCraft\Core\Concerns\Mutable;
 
 /**
  * Immutable email message value object.
- *
- * @property list<string>       $from      Sender addresses (usually one).
- * @property list<string>       $to        Primary recipients.
- * @property list<string>       $cc        Carbon-copy recipients.
- * @property list<string>       $bcc       Blind carbon-copy recipients.
- * @property string|null        $subject   Email subject line.
- * @property string|null        $body      Plain-text body.
- * @property string|null        $htmlBody  HTML body (alternative to plain body).
- * @property string|null        $replyTo   Reply-to address.
- * @property list<Attachment>   $attachments File attachments.
- * @property string|null        $signature Signature appended to body.
  */
 final class Email
 {
     use Mutable;
 
+    /** @var list<string> Sender addresses (usually one). */
     public readonly array $from;
+    /** @var list<string> Primary recipients. */
     public readonly array $to;
+    /** @var list<string> Carbon-copy recipients. */
     public readonly array $cc;
+    /** @var list<string> Blind carbon-copy recipients. */
     public readonly array $bcc;
+    /** @var string|null Email subject line. */
     public readonly ?string $subject;
+    /** @var string|null Plain-text body. */
     public readonly ?string $body;
+    /** @var string|null HTML body (alternative to plain body). */
     public readonly ?string $htmlBody;
+    /** @var string|null Reply-to address. */
     public readonly ?string $replyTo;
+    /** @var list<Attachment> File attachments. */
     public readonly array $attachments;
+    /** @var string|null Signature appended to body. */
     public readonly ?string $signature;
 
     /**
@@ -72,6 +71,38 @@ final class Email
      * @param list<string> $addrs
      * @return list<string>
      */
+    /**
+     * Merge an existing list with incoming addresses, dropping duplicates.
+     *
+     * RFC 5321 treats the domain part as case-insensitive while the local part
+     * is (technically) case-sensitive, so the dedupe key lowercases only the
+     * domain — and the FIRST occurrence keeps its exact casing. Returns a
+     * proper list (array_merge of two lists already does; re-indexing is
+     * asserted, not assumed).
+     *
+     * @param list<string> $existing
+     * @param array<array-key, string> $incoming
+     * @return list<string>
+     */
+    private static function mergeAddressList(array $existing, array $incoming): array
+    {
+        $seen   = [];
+        $merged = [];
+        foreach ([...$existing, ...$incoming] as $addr) {
+            $at  = \strrpos($addr, '@');
+            $key = $at === false
+                ? \strtolower($addr)
+                : \substr($addr, 0, $at) . '@' . \strtolower(\substr($addr, $at + 1));
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $merged[]   = $addr;
+        }
+        \assert(\array_is_list($merged));
+        return $merged;
+    }
+
     private function sanitizeAddressList(array $addrs): array
     {
         // Empty arrays are allowed; filter out empty strings first
@@ -160,7 +191,7 @@ final class Email
 
     public function withTo(string ...$to): self
     {
-        return $this->mutate(['to' => \array_unique(\array_merge($this->to, $to))]);
+        return $this->mutate(['to' => self::mergeAddressList($this->to, $to)]);
     }
 
     public function withSubject(string $subject): self
@@ -180,12 +211,12 @@ final class Email
 
     public function withCc(string ...$cc): self
     {
-        return $this->mutate(['cc' => \array_unique(\array_merge($this->cc, $cc))]);
+        return $this->mutate(['cc' => self::mergeAddressList($this->cc, $cc)]);
     }
 
     public function withBcc(string ...$bcc): self
     {
-        return $this->mutate(['bcc' => \array_unique(\array_merge($this->bcc, $bcc))]);
+        return $this->mutate(['bcc' => self::mergeAddressList($this->bcc, $bcc)]);
     }
 
     public function withReplyTo(string $replyTo): self

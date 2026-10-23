@@ -170,4 +170,27 @@ final class SmtpTransportErrorTest extends TestCase
         $ref->setAccessible(true);
         return $ref->invokeArgs($obj, $args);
     }
+
+    public function testSendRefusesAnEmptySenderBeforeDialling(): void
+    {
+        $transport = new SmtpTransport('smtp.invalid.example', 587);
+
+        // Validation, not connectivity: an InvalidArgumentException (empty
+        // envelope) must win over the RuntimeException the doomed dial would
+        // raise, proving the guard runs before connect().
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('from address');
+
+        $transport->send(new Email(from: [], to: ['a@x.com']));
+    }
+
+    public function testSendRefusesAnEmptyRecipientListBeforeDialling(): void
+    {
+        $transport = new SmtpTransport('smtp.invalid.example', 587);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('recipient');
+
+        $transport->send(new Email(from: ['a@x.com'], to: []));
+    }
 }

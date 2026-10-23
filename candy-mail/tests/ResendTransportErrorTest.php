@@ -105,4 +105,24 @@ final class ResendTransportErrorTest extends TestCase
 
         return $method->invoke($transport, $addrs);
     }
+
+    public function testSendRefusesAnEmptySenderBeforeAnyHttp(): void
+    {
+        $transport = new ResendTransport('test_key');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('from address');
+
+        $transport->send(new Email(from: [], to: ['recipient@example.com']));
+    }
+
+    public function testSendRefusesAnEmptyRecipientListBeforeAnyHttp(): void
+    {
+        $transport = new ResendTransport('test_key');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('recipient');
+
+        $transport->send(new Email(from: ['sender@example.com'], to: []));
+    }
 }

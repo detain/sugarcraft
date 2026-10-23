@@ -13,7 +13,13 @@ interface Transport
 {
     /**
      * Send the email.
-     * Throws \RuntimeException on failure.
+     *
+     * Implementations throw \RuntimeException on any transport failure
+     * (connection, protocol, or provider error) and \InvalidArgumentException
+     * when the message itself is unusable at this seam (e.g. no sender to
+     * MAIL FROM). Envelope-shape validation of recipients lives in
+     * {@see Mailer::send()}, which guards before dispatch; a transport used
+     * directly must not silently accept an empty envelope either.
      *
      * @param Email $email
      * @param CancellationToken|null $token Optional cancellation token to abort the send

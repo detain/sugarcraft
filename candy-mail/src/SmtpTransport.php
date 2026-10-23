@@ -6,7 +6,6 @@ namespace SugarCraft\Mail;
 
 use SugarCraft\Async\AsyncOps;
 use SugarCraft\Async\CancellationToken;
-use SugarCraft\Mail\Lang;
 
 /**
  * Sends email via direct SMTP (TCP/TLS).
@@ -161,9 +160,10 @@ final class SmtpTransport implements Transport
      *
      * @note AsyncOps::withTimeout() cannot be used here without a full async rewrite
      *       of the transport layer (replacing the blocking stream_socket_client/fwrite/fgets
-     *       above with ReactPHP streams). CancellationToken::isCancelled() pre-check and
-     *       onCancel() callback provide best-effort cancellation within the current
-     *       synchronous scope.
+     *       above with ReactPHP streams). Cancellation is an ENTRY pre-check only:
+     *       once the blocking conversation starts, no callback can fire mid-call,
+     *       because this method never returns to the event loop (CALIBER_LEARNINGS:
+     *       onCancel() on a synchronous call is a silent no-op).
      */
     public function send(Email $email, ?CancellationToken $token = null): void
     {
@@ -172,11 +172,21 @@ final class SmtpTransport implements Transport
             throw new \RuntimeException(Lang::t('smtp.send_cancelled'));
         }
 
+        // Envelope shape is checked BEFORE the dial: a transport used directly
+        // (not via Mailer) must refuse an empty envelope rather than pay a
+        // connection for it or fall back to a fabricated sender.
+        if ($email->from === []) {
+            throw new \InvalidArgumentException(Lang::t('mailer.no_from'));
+        }
+        if ($email->allRecipients() === []) {
+            throw new \InvalidArgumentException(Lang::t('mailer.no_recipient'));
+        }
+
         try {
             $this->connect();
             $this->startTlsIfNeeded();
             $this->authenticateIfNeeded();
-            $this->sendMailFrom($email->from[0] ?? 'unknown@localhost');
+            $this->sendMailFrom($email->from[0]);
             foreach ($email->allRecipients() as $rcpt) {
                 $this->sendRcptTo($rcpt);
             }

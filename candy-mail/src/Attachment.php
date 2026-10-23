@@ -6,21 +6,20 @@ namespace SugarCraft\Mail;
 
 /**
  * Represents a file attachment on an email.
- *
- * @property string      $filename   Display name of the attachment.
- * @property string      $path       Path to the file (if from disk).
- * @property string|null $content    Raw content bytes (if from memory).
- * @property string      $mimeType   Detected or specified MIME type.
- * @property string      $encoding   Content-transfer encoding (base64 default).
- * @property string|null $cid        Content-ID for inline (embed) attachments.
  */
 final class Attachment
 {
+    /** @var string Display name of the attachment. */
     public readonly string $filename;
+    /** @var string|null Path to the file (if from disk). */
     public readonly ?string $path;
+    /** @var string|null Raw content bytes (if from memory). */
     public readonly ?string $content;
+    /** @var string Detected or specified MIME type. */
     public readonly string $mimeType;
+    /** @var string Content-transfer encoding (base64 default). */
     public readonly string $encoding;
+    /** @var string|null Content-ID for inline (embed) attachments. */
     public readonly ?string $cid;
 
     /**

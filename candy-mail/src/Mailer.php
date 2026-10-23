@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Mail;
 
 use SugarCraft\Async\CancellationToken;
-use SugarCraft\Mail\Lang;
 
 /**
  * High-level email sender wrapping a Transport.
@@ -22,7 +21,12 @@ final class Mailer
     /**
      * Send an email via the configured transport.
      *
-     * @throws \RuntimeException if the transport fails.
+     * The shape is validated here, BEFORE the transport is asked to dial:
+     * "does this message exist" fails fast and loud at this seam, so no
+     * transport ever pays a connection for an empty envelope.
+     *
+     * @throws \InvalidArgumentException if the message has no recipients or no sender.
+     * @throws \RuntimeException         if the transport fails (or the token was already cancelled).
      */
     public function send(Email $email, ?CancellationToken $token = null): void
     {

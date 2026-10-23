@@ -187,4 +187,33 @@ final class EmailTest extends TestCase
             to:   ['you@example.com'],
         );
     }
+
+    public function testWithToDedupesTheDomainPartCaseInsensitively(): void
+    {
+        $email = (new Email(from: ['me@example.com'], to: ['user@Gmail.com']))
+            ->withTo('user@gmail.com', 'other@gmail.com');
+
+        // RFC 5321: the domain is case-insensitive, so these are the same
+        // address; the first spelling survives and no duplicate rides the wire.
+        $this->assertSame(['user@Gmail.com', 'other@gmail.com'], $email->to);
+    }
+
+    public function testWithToKeepsDistinctLocalPartsRegardlessOfDomainCase(): void
+    {
+        $email = (new Email(from: ['me@example.com'], to: ['Alice@Example.com']))
+            ->withTo('alice@example.com');
+
+        // The local part is case-sensitive, so these stay two distinct mailboxes.
+        $this->assertSame(['Alice@Example.com', 'alice@example.com'], $email->to);
+    }
+
+    public function testWithCcAndBccDedupeCaseInsensitively(): void
+    {
+        $email = (new Email(from: ['me@example.com'], to: ['t@example.com'], cc: ['Cc@X.com'], bcc: ['Bcc@Y.com']))
+            ->withCc('Cc@x.com')
+            ->withBcc('Bcc@y.com');
+
+        $this->assertSame(['Cc@X.com'], $email->cc);
+        $this->assertSame(['Bcc@Y.com'], $email->bcc);
+    }
 }

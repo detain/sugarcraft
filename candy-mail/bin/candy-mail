@@ -22,22 +22,24 @@ namespace SugarCraft\Mail;
 
 require __DIR__ . '/../vendor/autoload.php';
 
-// Pre-rename env compatibility (plan_rename.md R4.5): POP_* was this app's // @rename-keep
-// option env prefix before the 2026-10 rename to candy-mail (the old bin was // @rename-keep
-// named pop). These vars hold SMTP credentials — keep them working silently // @rename-keep
-// for one release, loud about it on stderr.
-// Import any old-prefix exports under the new CANDY_MAIL_* name (new name
-// always wins), then warn once per var — users hold SMTP credentials in these.
-foreach (\SugarCraft\Core\Util\LegacyEnv::import([
-    'POP_' => 'CANDY_MAIL_', // @rename-keep
-]) as $legacyVar) {
-    fwrite(STDERR, sprintf("candy-mail: %s is deprecated; set CANDY_MAIL_%s instead.\n", $legacyVar, substr($legacyVar, strlen('POP_')))); // @rename-keep
-}
-
 use SugarCraft\Mail\{Email, Lang, Mailer, ResendTransport, SmtpTransport};
 
 // Guard: only run dispatch when called as CLI script (not when required by tests)
 if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
+    // Pre-rename env compatibility (plan_rename.md R4.5): POP_* was this // @rename-keep
+    // app's option env prefix before the 2026-10 rename to candy-mail (the // @rename-keep
+    // old bin was named pop). These vars hold SMTP credentials — keep them // @rename-keep
+    // working for one release, loud about it on stderr. The deprecation
+    // notice is plain English by design (help() too): error MESSAGES are
+    // translated via Lang; the CLI's own usage text is not locale-routed.
+    // Import any old-prefix exports under the new CANDY_MAIL_* name (new
+    // name always wins), then warn once per var.
+    foreach (\SugarCraft\Core\Util\LegacyEnv::import([
+        'POP_' => 'CANDY_MAIL_', // @rename-keep
+    ]) as $legacyVar) {
+        fwrite(STDERR, sprintf("candy-mail: %s is deprecated; set CANDY_MAIL_%s instead.\n", $legacyVar, substr($legacyVar, strlen('POP_')))); // @rename-keep
+    }
+
     try {
         $args = parseArgs($argv);
     } catch (\Throwable $e) {

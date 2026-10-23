@@ -32,6 +32,16 @@ final class ResendTransport implements Transport
             throw new \RuntimeException(Lang::t('resend.send_cancelled'));
         }
 
+        // Envelope shape is checked BEFORE any HTTP work: a transport used
+        // directly (not via Mailer) must refuse an empty envelope rather than
+        // pay an authenticated API call for it.
+        if ($email->from === []) {
+            throw new \InvalidArgumentException(Lang::t('mailer.no_from'));
+        }
+        if ($email->allRecipients() === []) {
+            throw new \InvalidArgumentException(Lang::t('mailer.no_recipient'));
+        }
+
         if (!\function_exists('curl_init')) {
             // Fail loud with a named remedy instead of an undefined-function
             // Error mid-send (ext-curl is a suggested, not required, extension).
