@@ -36,7 +36,11 @@ final class Shell
 
     /**
      * Pop the top item and return a new Shell (immutable).
-     * No-op when stack depth is 0 or 1 (root).
+     *
+     * No-op only when the stack is already empty. Popping a depth-1 stack
+     * DOES empty it — the single item is removed, matching
+     * {@see NavStack::pop()}. Callers that must keep the root crumb alive
+     * guard with {@see NavStack::canPop()} first.
      *
      * Mirrors bubbleo Shell.withPop.
      */

@@ -21,8 +21,8 @@ $nav-&gt;depth();              // 2</code></pre>
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>NavStack</strong><span>Push / pop navigation stack (mutable, chainable push) with depth, parent and truncation helpers.</span></div>
-            <div class="feature"><strong>Shell integration</strong><span>Detect directory changes and auto-push.</span></div>
-            <div class="feature"><strong>Filter</strong><span>Type-ahead filtering within the breadcrumb bar.</span></div>
+            <div class="feature"><strong>Shell integration</strong><span>Explicit directory stacks — your host detects a cwd change and calls pushDirectory(); nothing auto-pushes.</span></div>
+            <div class="feature"><strong>Filter</strong><span>Case-insensitive substring filtering over titles and payload data (arrays matched by value, at any depth).</span></div>
             
     </div>
 
@@ -45,7 +45,8 @@ $nav-&gt;depth();              // 2</code></pre>
 <tr><td>NavStack</td><td>view(string $separator = ' &gt; ') / viewHtml()</td><td>Render breadcrumbs</td></tr>
 <tr><td>NavStack</td><td>filter(query)</td><td>Filter breadcrumbs</td></tr>
 <tr><td>NavigationItem</td><td>__construct(string $title, mixed $data = null) / title()</td><td>One stack entry</td></tr>
-<tr><td>Breadcrumb</td><td>withZoneManager(?Manager)</td><td>Attach Manager for mouse-click zone tracking (sugar-mouse integration)</td></tr>
+<tr><td>Breadcrumb</td><td>withScanner(?Scanner)</td><td>Attach mouse-click zones per crumb (sugar-mouse Scanner; copied in, never aliased — read it back via scanner()). Zone ids carry the STACK index, so click routing survives truncation.</td></tr>
+<tr><td>Breadcrumb</td><td>scan(string) / hit(col, row)</td><td>Feed the rendered string to the owned scanner, then resolve which crumb zone a cell falls in</td></tr>
 <tr><td>Breadcrumb</td><td>setSeparator(string)</td><td>Set separator between crumbs</td></tr>
 <tr><td>Breadcrumb</td><td>setMaxWidth(int)</td><td>Truncate if total width exceeds limit</td></tr>
 <tr><td>Breadcrumb</td><td>render(NavStack)</td><td>Render NavStack as breadcrumb string</td></tr>

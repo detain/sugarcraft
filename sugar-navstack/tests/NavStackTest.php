@@ -276,22 +276,38 @@ final class NavStackTest extends TestCase
 
     public function testFilterWithArrayDataDoesNotFatal(): void
     {
-        // The example pattern stores an array as item data. filter() casts data
-        // to string for matching; a raw (string) cast on an array warns (fatal
-        // under failOnWarning) — non-stringifiable data must be skipped, not cast.
+        // The example pattern stores an array as item data. filter() walks
+        // array payloads by VALUE, so no whole-array (string) cast ever
+        // happens (that would warn/fatal under strict types + failOnWarning).
         $s = new NavStack();
         $s->push('Dashboard', ['route' => '/dash', 'id' => 7]); // array data
         $s->push('Reports', '/reports');                        // scalar data
 
-        // 'dash' matches the 'Dashboard' title; iterating the array-data item
-        // must not trigger an Array-to-string conversion.
+        // 'dash' matches the 'Dashboard' title (and its 'route' value).
         $filtered = $s->filter('dash');
         $this->assertSame(1, $filtered->depth());
         $this->assertSame('Dashboard', $filtered->items()[0]->title);
 
         // A term that only appears in scalar data still matches (regression:
-        // the guard must not disable scalar-data matching).
+        // the walk must not disable scalar-data matching).
         $this->assertSame(1, $s->filter('reports')->depth());
+    }
+
+    public function testFilterMatchesNestedScalarValuesInsideArrayData(): void
+    {
+        // Documented contract: "title or data matching" covers the example
+        // pattern of per-level payload arrays at ANY depth.
+        $s = new NavStack();
+        $s->push('Home', ['section' => ['term' => 'zzz']]);
+        $s->push('Else', ['section' => 'other']);
+        $s->push('Numeric', ['id' => 42]);
+
+        $this->assertSame(1, $s->filter('zzz')->depth());
+        $this->assertSame('Home', $s->filter('zzz')->items()[0]->title);
+        // Ints are stringified for the scan.
+        $this->assertSame(1, $s->filter('42')->depth());
+        // Nothing matches: no fatal, empty result.
+        $this->assertSame(0, $s->filter('nothing-here')->depth());
     }
 
     public function testFilterMatchesStringableData(): void
@@ -338,7 +354,7 @@ final class NavStackTest extends TestCase
         $this->assertSame('/home', $shell->stack->items()[0]->data);
     }
 
-    // ─── Step 5: ::new() factory ───────────────────────────────────────────────
+    // ─── ::new() factory ───────────────────────────────────────────────────────
 
     public function testNewFactory(): void
     {
@@ -348,7 +364,7 @@ final class NavStackTest extends TestCase
         $this->assertFalse($s->isEmpty());
     }
 
-    // ─── Step 7: canPop / popTo ───────────────────────────────────────────────
+    // ─── canPop / popTo ────────────────────────────────────────────────────────
 
     public function testCanPop(): void
     {
@@ -402,7 +418,7 @@ final class NavStackTest extends TestCase
         $this->assertSame(0, $popped->stack->depth());
     }
 
-    // ─── Step 8: Shell default breadcrumb construction ─────────────────────────
+    // ─── Shell default breadcrumb construction ─────────────────────────────────
 
     public function testShellNewWithoutBreadcrumbUsesDefault(): void
     {

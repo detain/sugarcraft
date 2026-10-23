@@ -27,7 +27,8 @@ use SugarCraft\Mouse\Scanner;
  * instances, but the `set*` setters mutate in place. Callers must not
  * assume copy-on-write for the `set*` family.
  *
- * Port of KevM/bubbleo Breadcrumb.
+ * Design antecedent: KevM/bubbleo Breadcrumb (Go); implemented as a
+ * native PHP component.
  *
  * @see https://github.com/KevM/bubbleo
  */
@@ -45,13 +46,19 @@ final class Breadcrumb
     private string $truncator  = '… ';
     private int    $maxWidth   = 0;  // 0 = no limit
 
-    /** @var \Closure(NavigationItem, int): ?string|null */
+    /** @var \Closure(NavigationItem, int): ?string */
     private ?\Closure $itemRenderer = null;
 
-    /** Self-contained scanner for mouse-click hit-testing, or null if disabled. */
+    /**
+     * Private scanner for mouse-click hit-testing (copied in at
+     * {@see withScanner()}), or null if disabled.
+     */
     private ?Scanner $scanner = null;
 
-    /** Zone marker helper (lazy init on first use) */
+    /**
+     * Zone marker helper (lazy init on first use). Stateless beyond its
+     * readonly `enabled` flag, so sharing it across clones is harmless.
+     */
     private ?Mark $marker = null;
 
     public function setSeparator(string $s): self
@@ -92,7 +99,13 @@ final class Breadcrumb
     }
 
     /**
-     * Attach a self-contained {@see Scanner} for mouse-click hit-testing.
+     * Attach a {@see Scanner} for mouse-click hit-testing.
+     *
+     * The scanner is COPIED, never aliased: this breadcrumb and any clones
+     * derived from it keep registering zones into the copy, so two
+     * breadcrumbs seeded from the same instance can never overwrite each
+     * other's `crumb-N` zones. Read the owned scanner back via
+     * {@see scanner()} if you need to enumerate zones yourself.
      *
      * When a scanner is attached, each crumb item is wrapped in a named
      * zone marker during render. After rendering, call scan($output) on
@@ -102,8 +115,17 @@ final class Breadcrumb
     public function withScanner(?Scanner $scanner): self
     {
         $clone = clone $this;
-        $clone->scanner = $scanner;
+        $clone->scanner = $scanner === null ? null : clone $scanner;
         return $clone;
+    }
+
+    /**
+     * The scanner owned by this breadcrumb (as copied in by
+     * {@see withScanner()}), or null when click tracking is disabled.
+     */
+    public function scanner(): ?Scanner
+    {
+        return $this->scanner;
     }
 
     /**
@@ -148,7 +170,7 @@ final class Breadcrumb
                 ? ($this->itemRenderer)($item, $i)
                 : null;
 
-            if ($title !== null && \is_string($title) === FALSE) {
+            if ($title !== null && \is_string($title) === false) {
                 throw new \InvalidArgumentException('itemRenderer must return string|null');
             }
 
@@ -169,7 +191,9 @@ final class Breadcrumb
      */
     public function renderTitles(array $titles): string
     {
-        if ($titles === []) return '';
+        if ($titles === []) {
+            return '';
+        }
         return $this->doRender($titles);
     }
 
@@ -186,11 +210,16 @@ final class Breadcrumb
         // ESC/newline both desyncs the render and skews width accounting.
         $titles = \array_map([self::class, 'sanitizeTitle'], $titles);
 
+        $prefix       = '';
+        $visibleFrom  = 0;   // stack index of the first surviving crumb
+        $all          = $titles;
+
         // Truncate from the left if too wide
         if ($this->maxWidth > 0 && $this->effectiveWidth(\implode($this->separator, $titles)) > $this->maxWidth) {
             [$titles, $elided] = $this->truncate($titles);
-            $prefix = $elided === true ? $this->truncator : '';
-            $result = $prefix . \implode($this->separator, $titles);
+            $prefix      = $elided === true ? $this->truncator : '';
+            $visibleFrom = \count($all) - \count($titles);
+            $result      = $prefix . \implode($this->separator, $titles);
 
             // Left-dropping bottoms out at the single most-recent crumb; if even
             // that lone crumb overflows, ellipsis-truncate it so setMaxWidth() is
@@ -203,9 +232,13 @@ final class Breadcrumb
             $result = \implode($this->separator, $titles);
         }
 
-        // Wrap each crumb in a zone marker when a scanner is attached.
+        // Wrap each crumb in a zone marker when a scanner is attached. The
+        // truncator prefix rides OUTSIDE the zone wrapping (it is not a
+        // clickable crumb) and the zones carry stack indices, so a
+        // "crumb-N" hit always dispatches to stack position N even after
+        // left-elision renumbers what is visible.
         if ($this->scanner !== null) {
-            $result = $this->wrapAllCrumbs($titles);
+            $result = $prefix . $this->wrapAllCrumbs($titles, $visibleFrom);
         }
 
         return $result;
@@ -276,21 +309,26 @@ final class Breadcrumb
      * Wrap each crumb item in a named zone marker.
      *
      * Each item is individually wrapped so click coordinates map back
-     * to the correct crumb. Used after the final item list is known
-     * (post-truncation).
+     * to the correct crumb. Zone names carry the crumb's position in the
+     * FULL stack (`crumb-$stackOffset`, incremented per visible crumb),
+     * not its position among the survivors — after setMaxWidth() elides
+     * the oldest crumbs, a hit on the leftmost visible crumb still
+     * reports its true stack index, so the caller's popTo($index)
+     * dispatch cannot silently misroute.
      *
      * Uses sugar-mouse Mark::wrap() internally — no external Manager needed.
      *
-     * @param list<string> $titles  Items in display order (oldest→newest)
+     * @param list<string> $titles      Visible items in display order (oldest→newest)
+     * @param int          $stackOffset Index of the first visible item in the full stack
      */
-    private function wrapAllCrumbs(array $titles): string
+    private function wrapAllCrumbs(array $titles, int $stackOffset = 0): string
     {
         if ($this->marker === null) {
             $this->marker = new Mark();
         }
         $wrapped = [];
         foreach ($titles as $i => $title) {
-            $wrapped[] = $this->marker->wrap("crumb-{$i}", $title);
+            $wrapped[] = $this->marker->wrap("crumb-" . ($stackOffset + $i), $title);
         }
         return \implode($this->separator, $wrapped);
     }

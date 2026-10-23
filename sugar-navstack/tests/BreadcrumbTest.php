@@ -143,7 +143,7 @@ final class BreadcrumbTest extends TestCase
         $this->assertStringNotContainsString("\u{E000}", $rendered);
     }
 
-    // ─── Step 2: setSeparator validation ─────────────────────────────────────
+    // ─── setSeparator() validation ─────────────────────────────────────────────
 
     public function testSetSeparatorRejectsEmpty(): void
     {
@@ -159,7 +159,7 @@ final class BreadcrumbTest extends TestCase
         $bc->setSeparator("Home \n Settings");
     }
 
-    // ─── Step 3: itemRenderer return-type enforcement ─────────────────────────
+    // ─── itemRenderer return-type enforcement ─────────────────────────────────
 
     public function testItemRendererReturningNullFallsBackToTitle(): void
     {
@@ -189,7 +189,7 @@ final class BreadcrumbTest extends TestCase
         $bc->render($s);
     }
 
-    // ─── Step 5: ::new() factory ───────────────────────────────────────────────
+    // ─── Breadcrumb ::new() factory ───────────────────────────────────────────
 
     public function testNewFactory(): void
     {
@@ -202,7 +202,7 @@ final class BreadcrumbTest extends TestCase
         );
     }
 
-    // ─── Step 8: Additional coverage tests ─────────────────────────────────────
+    // ─── Truncator, zones, and mixed-title edge cases ─────────────────────────
 
     public function testBreadcrumbCustomTruncatorViaSetTruncator(): void
     {
@@ -235,12 +235,14 @@ final class BreadcrumbTest extends TestCase
         $bc->scan($rendered);
 
         // Two visible crumbs → exactly two zones (crumb-0, crumb-1), NOT three
-        // despite the separator inside 'A › B'.
-        $zones = $scanner->prefixed('crumb-');
+        // despite the separator inside 'A › B'. The caller's scanner stays
+        // empty — withScanner() copies it — so zones are read via scanner().
+        $zones = $bc->scanner()->prefixed('crumb-');
         $this->assertCount(2, $zones);
-        $this->assertNotNull($scanner->get('crumb-0'));
-        $this->assertNotNull($scanner->get('crumb-1'));
-        $this->assertNull($scanner->get('crumb-2'));
+        $this->assertNotNull($bc->scanner()->get('crumb-0'));
+        $this->assertNotNull($bc->scanner()->get('crumb-1'));
+        $this->assertNull($bc->scanner()->get('crumb-2'));
+        $this->assertCount(0, $scanner->prefixed('crumb-'));
     }
 
     public function testTruncationWithScannerZoneCountShrinksToVisibleAfterTruncation(): void
@@ -256,9 +258,14 @@ final class BreadcrumbTest extends TestCase
         $rendered = $bc->render($s);
         $bc->scan($rendered);
 
-        $this->assertCount(1, $scanner->prefixed('crumb-'));
-        $this->assertNotNull($scanner->get('crumb-0'));
-        $this->assertNull($scanner->get('crumb-1'));
+        $owned = $bc->scanner();
+        \assert($owned !== null);
+        $this->assertCount(1, $owned->prefixed('crumb-'));
+        // Zone ids carry the STACK index, not a renumbered visible index:
+        // 'C' is stack item 1, so its zone is crumb-1 even though it renders
+        // first (and only) after left-elision.
+        $this->assertNotNull($owned->get('crumb-1'));
+        $this->assertNull($owned->get('crumb-0'));
     }
 
     // ─── SEC: control-sequence injection ────────────────────────────────────
@@ -346,5 +353,117 @@ final class BreadcrumbTest extends TestCase
         // ellipsisWidth (1) >= budget (1) → hard-cut to budget at line 241
         $result = $method->invoke($bc, 'Hello', 1);
         $this->assertLessThanOrEqual(1, Width::string($result));
+    }
+
+    // ─── Elision prefix survives scanner zone-wrapping ───────────────────────
+
+    public function testTruncatorPrefixShownWithoutScanner(): void
+    {
+        // Polarity 1 of the pair: the plain path builds '… ' + survivors.
+        $s = new NavStack();
+        $s->push('Alpha')->push('Beta')->push('Gamma');
+
+        $rendered = (new Breadcrumb())->setMaxWidth(12)->render($s);
+
+        $this->assertStringStartsWith('… ', $rendered);
+        $this->assertStringContainsString('Gamma', $rendered);
+    }
+
+    public function testTruncatorPrefixSurvivesWithScannerAttached(): void
+    {
+        // Polarity 2 of the pair: the zone-wrapping branch used to REPLACE the
+        // prefixed result, silently dropping '… '. It must survive, outside
+        // the first zone marker (the ellipsis is not a clickable crumb).
+        $s = new NavStack();
+        $s->push('Alpha')->push('Beta')->push('Gamma');
+
+        $bc = (new Breadcrumb())->withScanner(Scanner::new())->setMaxWidth(12);
+        $rendered = $bc->render($s);
+
+        $this->assertStringStartsWith('… ', $rendered);
+        // Strip zone sentinels — the visible text still carries the marker.
+        $stripped = \preg_replace('/\x{E000}[^\x{E001}]*\x{E001}/u', '', $rendered);
+        $this->assertStringContainsString('… ', (string) $stripped);
+        $this->assertStringContainsString('Gamma', (string) $stripped);
+    }
+
+    // ─── Zone ids carry the stack index across truncation ────────────────────
+
+    public function testZoneIdsCarryStackIndexAndDispatchLandsOnTheClickedCrumb(): void
+    {
+        // 'Home › Settings › Display' needs 25 cells; at 12 only Display
+        // survives, eliding stack items 0 and 1. Its zone must be crumb-2
+        // (its stack index), NOT a renumbered crumb-0 — otherwise the
+        // README click recipe (popTo($index)) misroutes silently.
+        $s = new NavStack();
+        $s->push('Home')->push('Settings')->push('Display');
+
+        $bc = (new Breadcrumb())->withScanner(Scanner::new())->setMaxWidth(12);
+        $rendered = $bc->render($s);
+        $bc->scan($rendered);
+
+        $owned = $bc->scanner();
+        \assert($owned !== null);
+        $this->assertCount(1, $owned->prefixed('crumb-'));
+        $this->assertNotNull($owned->get('crumb-2'));
+        $this->assertNull($owned->get('crumb-0'));
+
+        // The '… ' prefix is 2 cells; Display spans the cells after it.
+        $zone = $bc->hit(5, 1);
+        $this->assertNotNull($zone);
+        $this->assertSame('crumb-2', $zone->id);
+
+        // Dispatch exactly as the README recipe documents.
+        $this->assertMatchesRegularExpression('/crumb-(\d+)/', $zone->id);
+        \preg_match('/crumb-(\d+)/', $zone->id, $m);
+        $s->popTo((int) $m[1]);
+        $this->assertSame('Display', $s->current()->title);
+    }
+
+    // ─── withScanner() copies; the caller's scanner is never aliased ─────────
+
+    public function testWithScannerDoesNotAliasTheCallersScanner(): void
+    {
+        $caller = Scanner::new();
+        $s = new NavStack();
+        $s->push('Home')->push('Settings');
+
+        $bc = (new Breadcrumb())->withScanner($caller);
+        $rendered = $bc->render($s);
+        $bc->scan($rendered);
+
+        // Zones land in the breadcrumb's OWN copy, never the caller's instance.
+        $this->assertCount(0, $caller->prefixed('crumb-'));
+        $owned = $bc->scanner();
+        \assert($owned !== null);
+        $this->assertNotSame($caller, $owned);
+        $this->assertCount(2, $owned->prefixed('crumb-'));
+    }
+
+    public function testTwoBreadcrumbsFromOneScannerKeepIndependentZones(): void
+    {
+        $shared = Scanner::new();
+        $s = new NavStack();
+        $s->push('Home')->push('Settings')->push('Display');
+
+        $wide  = (new Breadcrumb())->withScanner($shared);                    // no truncation → 3 zones
+        $tight = (new Breadcrumb())->withScanner($shared)->setMaxWidth(12);   // only Display  → 1 zone
+
+        $wideOut  = $wide->render($s);
+        $tightOut = $tight->render($s);
+        $wide->scan($wideOut);
+        $tight->scan($tightOut);
+
+        $this->assertNotSame($wide->scanner(), $tight->scanner());
+        $this->assertCount(3, $wide->scanner()->prefixed('crumb-'));
+        $this->assertCount(1, $tight->scanner()->prefixed('crumb-'));
+        $this->assertNull($tight->scanner()->get('crumb-0'));
+        $this->assertNotNull($tight->scanner()->get('crumb-2'));
+    }
+
+    public function testScannerAccessorIsNullWhenDetached(): void
+    {
+        $this->assertNull((new Breadcrumb())->scanner());
+        $this->assertNull((new Breadcrumb())->withScanner(Scanner::new())->withScanner(null)->scanner());
     }
 }

@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-navstack",
-    "description": "PHP port of KevM/bubbleo \u2014 NavStack and Breadcrumb components. Push/pop navigation stack with hierarchical breadcrumb rendering for terminal UIs.",
+    "description": "Navigation breadcrumbs for terminal UIs — a push/pop navigation stack with width-aware breadcrumb rendering, directory-driven stacks, and mouse-click crumb zones. Design antecedent: KevM/bubbleo.",
     "type": "library",
     "license": "MIT",
     "keywords": [

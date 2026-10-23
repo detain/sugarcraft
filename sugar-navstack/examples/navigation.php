@@ -46,7 +46,7 @@ $nav2 = (new NavStack())
 echo "Filter 'dis': " . $nav2->filter('dis')->view() . "\n";
 echo "Total items: " . $nav2->depth() . ", Filtered: " . $nav2->filter('dis')->depth() . "\n\n";
 
-echo "--- Shell integration (auto-detect directory changes) ---\n";
+echo "--- Shell integration (explicit pushDirectory — nothing auto-detects; watching for directory changes is the host app's job) ---\n";
 $shell = \SugarCraft\NavStack\Shell::new();
 $shell = $shell->pushDirectory('/home/user/projects/sugarcraft/src');
 echo "Shell crumb: " . $shell->renderBreadcrumb() . "\n";

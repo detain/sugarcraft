@@ -23,9 +23,12 @@ use SugarCraft\Core\Util\Sanitize;
  *
  * When a mouse click resolves to a crumb zone (e.g. `crumb-0`, `crumb-1`)
  * via the {@see Breadcrumb} scanner, the parent component should dispatch
- * to this stack's navigation methods accordingly.
+ * to this stack's navigation methods accordingly. Zone ids carry the
+ * crumb's position in the FULL stack — even after {@see Breadcrumb::setMaxWidth()}
+ * elides older crumbs, `crumb-N` always means "stack item N".
  *
- * Port of KevM/bubbleo NavStack.
+ * Design antecedent: KevM/bubbleo NavStack (Go); implemented as a
+ * native PHP component.
  *
  * @see https://github.com/KevM/bubbleo
  */
@@ -180,7 +183,7 @@ final class NavStack
      * Render the navigation stack as a breadcrumb string.
      * e.g. "Home > Settings > Display"
      */
-    public function view(string $separator = ' > '): string
+    public function view(string $separator = self::SEPARATOR): string
     {
         if ($this->items === []) {
             return '';
@@ -211,9 +214,9 @@ final class NavStack
      * Render the stack as semantic HTML.
      * Last item gets aria-current="page" for accessibility.
      *
-     * Example output:
+     * Example output (the separator is HTML-escaped, so ' > ' becomes ' &gt; '):
      * <nav class="breadcrumb" aria-label="Breadcrumb">
-     *   <span>Home</span> > <span>Settings</span> > <span aria-current="page">Display</span>
+     *   <span>Home</span> &gt; <span>Settings</span> &gt; <span aria-current="page">Display</span>
      * </nav>
      */
     public function viewHtml(): string
@@ -242,7 +245,10 @@ final class NavStack
     }
 
     /**
-     * Filter items by title or data matching $term.
+     * Filter items by title or data matching $term (case-insensitive
+     * substring). Data is matched when it is scalar or Stringable, or —
+     * for array data such as `['route' => '/dash']` — when ANY
+     * scalar/Stringable value inside the array matches, at any depth.
      * Returns a new NavStack with only matching items.
      */
     public function filter(string $term): self
@@ -250,18 +256,37 @@ final class NavStack
         $filtered = \array_filter(
             $this->items,
             static function(NavigationItem $item) use ($term): bool {
-                $titleMatch = \stripos($item->title, $term) !== false;
-                // Only stringify data that is actually stringifiable: array or
-                // plain-object data (the example pattern stores arrays) would
-                // otherwise fatal / warn on the (string) cast under strict types.
-                $dataMatch = $item->data !== null
-                    && (\is_scalar($item->data) || $item->data instanceof \Stringable)
-                    && \stripos((string) $item->data, $term) !== false;
-                return $titleMatch || $dataMatch;
+                if (\stripos($item->title, $term) !== false) {
+                    return true;
+                }
+                return self::dataMatches($item->data, $term);
             }
         );
         $new = new self();
         $new->items = \array_values($filtered);
         return $new;
+    }
+
+    /**
+     * Does $data match $term? Scalars and Stringables are cast and scanned;
+     * arrays are walked recursively so the example pattern of carrying a
+     * payload array per level ('route' => '/dash') is searchable. Anything
+     * else (null, non-Stringable objects) is skipped — never cast, which
+     * would warn or fatal under strict types.
+     */
+    private static function dataMatches(mixed $data, string $term): bool
+    {
+        if (\is_array($data)) {
+            foreach ($data as $value) {
+                if (self::dataMatches($value, $term)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if ($data === null || !(\is_scalar($data) || $data instanceof \Stringable)) {
+            return false;
+        }
+        return \stripos((string) $data, $term) !== false;
     }
 }

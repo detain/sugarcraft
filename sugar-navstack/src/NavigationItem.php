@@ -10,8 +10,10 @@ namespace SugarCraft\NavStack;
  * Holds the title (used in breadcrumbs) and optional arbitrary data
  * that each navigation level wants to carry (e.g. filter state, selected ID, etc.)
  *
- * Implements {@see Closable} so subclasses or decorated items can respond
- * to enter/leave lifecycle events.
+ * Implements {@see Closable}; see that interface for who dispatches the
+ * lifecycle hooks (the CONSUMING component does — this library never calls
+ * onEnter/onLeave on items it renders). This class is `final`, so the
+ * extension point is your own Closable implementation, not subclassing.
  */
 final class NavigationItem implements Closable
 {
@@ -21,8 +23,10 @@ final class NavigationItem implements Closable
     ) {}
 
     /**
-     * Called when this item becomes the current/active item.
-     * No-op by default; override in a subclass or decorator to run side-effects.
+     * Contract default from {@see Closable}: a no-op. Nothing in this
+     * library dispatches it — a consumer that wires enter/leave events
+     * calls it, and subclasses are impossible (final); implement
+     * {@see Closable} on your own type instead.
      */
     public function onEnter(): void
     {
@@ -30,8 +34,8 @@ final class NavigationItem implements Closable
     }
 
     /**
-     * Called when this item is no longer the current item.
-     * No-op by default; override in a subclass or decorator to run side-effects.
+     * Contract default from {@see Closable}: a no-op. See
+     * {@see onEnter()} for who dispatches.
      */
     public function onLeave(): void
     {
