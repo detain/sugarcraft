@@ -10,5 +10,4 @@ declare(strict_types=1);
 
 return [
     'database.no_file' => 'candy-sql: soubor SQLite nenalezen: {path}',
-    'cli.usage'        => 'Použití: candy-sql <sqlite-soubor>',
 ];

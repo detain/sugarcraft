@@ -10,5 +10,4 @@ declare(strict_types=1);
 
 return [
     'database.no_file' => 'candy-sql: SQLite dosyası bulunamadı: {path}',
-    'cli.usage'        => 'Kullanım: candy-sql <sqlite-dosyası>',
 ];
