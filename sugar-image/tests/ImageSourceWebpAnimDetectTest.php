@@ -9,7 +9,7 @@ use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\UnsupportedFormatException;
 
 /**
- * E-06: exotic containers (AVIF/HEIF-family `ftyp` brands, the JXL
+ * Exotic containers (AVIF/HEIF-family `ftyp` brands, the JXL
  * codestream magic, TIFF) are refused BY NAME at the same detect stage —
  * pre-E-06 they collapsed into the generic 'GD failed to load image'
  * corruption accusation (or GD's own unsupported-codec NULL), which tells a
@@ -18,7 +18,7 @@ use SugarCraft\Image\UnsupportedFormatException;
  * video keeps today's GD-rejects-it posture rather than a claim this list
  * cannot honour.
  *
- * E-05: animated WebP must be refused on its container STRUCTURE, before any
+ * Animated WebP must be refused on its container STRUCTURE, before any
  * decoder sees it — on hosts whose libwebp demuxes animation to a first frame,
  * GD used to hand back a happy one-frame still from an animated file (and on
  * every host the alternative was a generic "GD failed to load image"
@@ -112,7 +112,7 @@ final class ImageSourceWebpAnimDetectTest extends TestCase
 
     public function testTheRedBeforeStateThisClassCures(): void
     {
-        // E-05 pin of the DEFECT SHAPE, host-independent: with the walk neutered
+        // Pin of the DEFECT SHAPE, host-independent: with the walk neutered
         // (base f90a7d739 behavior) the two-frame ANMF file was either silently
         // decoded to one still or refused as generic corruption — never named.
         // Today it must carry the honest class AND the honest sentence.
@@ -121,7 +121,7 @@ final class ImageSourceWebpAnimDetectTest extends TestCase
             ImageSource::fromString($bytes);
             self::fail('animated WebP reached an accept path at all');
         } catch (UnsupportedFormatException $e) {
-            self::assertStringContainsString('needs chafa or ffmpeg', $e->getMessage());
+            self::assertStringContainsString('needs chafa', $e->getMessage());
         }
         // The refined class stays inside the "bad input" family callers already
         // catch, so no caller's catch block needs editing to keep working:
@@ -131,7 +131,7 @@ final class ImageSourceWebpAnimDetectTest extends TestCase
     public function testTwoFrameAnimatedWebpIsRefusedBeforeDecode(): void
     {
         $this->expectException(UnsupportedFormatException::class);
-        $this->expectExceptionMessage('needs chafa or ffmpeg');
+        $this->expectExceptionMessage('needs chafa');
         ImageSource::fromString(self::twoFrameAnimatedWebp());
     }
 
