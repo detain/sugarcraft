@@ -189,4 +189,37 @@ final class TableRendererTest extends TestCase
         // Verify rows are sorted (Alice should be first with ▲).
         $this->assertStringContainsString('Alice', $output);
     }
+
+    /**
+     * Adversarial delta pin (docs-fix-1023 M9): two frames identical except
+     * the cursor style's COLOR (38;2;255;0;0 vs 38;2;0;0;255 — the ONLY
+     * differing parameters are the RGB components; a pair like 38;5 vs 38;2
+     * would leak a difference through the stray 5/2 attribute codes).
+     * The old sgrToStyle dropped all color codes to null, so both frames
+     * carried the same Style and the delta was EMPTY — a color-only change
+     * never reached the screen. Now colors parse into the Style and the diff
+     * sees them.
+     */
+    public function testColorOnlyCursorChangeIsVisibleInTheDelta(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Alice'])
+            ->addRow(['Bob'])
+            ->setCursor(0)
+            ->withCursorStyle('38;2;255;0;0');
+
+        $renderer = new TableRenderer();
+        $renderer->render($t); // frame 1 primes the previous buffer
+
+        $frame2 = $renderer->render($t->withCursorStyle('38;2;0;0;255'));
+
+        $this->assertNotSame('', trim($frame2), 'a color-only change must emit ops');
+        $this->assertStringContainsString("\x1b[", $frame2, 'the delta must carry SGR output');
+
+        // And a same-style re-render stays a (near-)empty delta — the pin is
+        // about seeing the change, not emitting everything always.
+        $frame3 = $renderer->render($t->withCursorStyle('38;2;0;0;255'));
+        $this->assertSame('', trim($frame3), 'an unchanged frame must stay silent');
+    }
 }

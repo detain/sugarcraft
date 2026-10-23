@@ -740,4 +740,45 @@ final class FlexboxTest extends TestCase
 
         $this->assertNotSame($vp, $vp2, 'setContent should return a new instance');
     }
+
+    /**
+     * Sum contract (docs-fix-1023 M2/M4): N equal-ratio items in W cells must
+     * use ALL W cells. The old (int)round allocation gave 3×ratio(1) at width
+     * 10 only 9 displayed cells ('A  B  C  ').
+     */
+    public function testRowRatiosConsumeTheWholeWidth(): void
+    {
+        $box = FlexBox::row(
+            FlexItem::new('A')->withRatio(1),
+            FlexItem::new('B')->withRatio(1),
+            FlexItem::new('C')->withRatio(1),
+        );
+
+        $lines = \explode("\n", $box->render(10, 2));
+        $this->assertNotEmpty($lines);
+        foreach ($lines as $line) {
+            $this->assertSame(10, \SugarCraft\Core\Util\Width::string($line), 'every row line must fill the width exactly');
+        }
+    }
+
+    /**
+     * Column-mode padding is display-cell based (docs-fix-1023 M3): the old
+     * str_pad counted BYTES, so a line holding '東' (3 bytes, 2 cells) was
+     * padded to 10 bytes = 9 cells — every following glyph sat one column off.
+     * Align::Start keeps the lines short on entry to the final pad (Stretch
+     * lets alignCell fill them first).
+     */
+    public function testColumnLinesPadToExactCellWidthWithWideGlyphs(): void
+    {
+        $box = FlexBox::column(
+            FlexItem::new('東')->withRatio(1),
+            FlexItem::new('x')->withRatio(1),
+        )->withAlign(\SugarCraft\Flexbox\Flex\Align::Start);
+
+        $lines = \explode("\n", $box->render(10, 4));
+        $this->assertCount(4, $lines);
+        foreach ($lines as $line) {
+            $this->assertSame(10, \SugarCraft\Core\Util\Width::string($line), 'wide-glyph lines must pad by cells, not bytes');
+        }
+    }
 }

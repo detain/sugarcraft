@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-flexbox",
-    "description": "PHP port of 76creates/stickers \u2014 Lipgloss utility components. FlexBox (CSS flexbox-like responsive grid layout) and Table (sortable, filterable data table with column definitions).",
+    "description": "Terminal-cell layout utilities: FlexBox (CSS-flexbox-like responsive row/column layout), Table (sortable, filterable data table with column definitions) and a scrolling Viewport.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -34,9 +34,7 @@
     },
     "autoload": {
         "psr-4": {
-            "SugarCraft\\Flexbox\\": "src/",
-            "SugarCraft\\Flexbox\\Flex\\": "src/Flex/",
-            "SugarCraft\\Flexbox\\Table\\": "src/Table/"
+            "SugarCraft\\Flexbox\\": "src/"
         }
     },
     "autoload-dev": {

@@ -101,9 +101,17 @@ final class ViewportDelegatorTest extends TestCase
         $this->assertNotSame($vp, $vp2);
     }
 
-    // Note: withVerticalScrollbar requires access to the inner BitsScrollbar which
-    // is not exposed publicly. This method is tested via the ScrollbarTest and
-    // StickyViewportTest which use the public view() API.
+    /**
+     * The unwrap contract that makes {@see Viewport::withVerticalScrollbar()}
+     * type-checkable (docs-fix-1023: the signature used to silently demand the
+     * widgets scrollbar despite naming the lib's own class).
+     */
+    public function testScrollbarWrapsAndUnwrapsTheCanonicalWidget(): void
+    {
+        $sb = \SugarCraft\Flexbox\Scrollbar::vertical();
+        $this->assertInstanceOf(\SugarCraft\Widgets\Scrollbar\Scrollbar::class, $sb->widgetScrollbar());
+        $this->assertSame($sb->widgetScrollbar(), $sb->widgetScrollbar());
+    }
 
     // ---- Dimension delegators ---------------------------------------------
 

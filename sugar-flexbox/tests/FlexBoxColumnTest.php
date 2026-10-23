@@ -62,9 +62,11 @@ final class FlexBoxColumnTest extends TestCase
 
     public function testColumnWithBasisTakesFixedSpace(): void
     {
-        // "fixed" takes its basis (3 lines). Remaining 5 lines are split by
-        // ratio (1:1), giving flexible round(5 * 1/2) = 3 lines.
-        // Total: 3 (fixed, incl padding) + 3 (flexible, incl padding) = 6 lines.
+        // "fixed" takes its basis (3 lines). The remaining 5 free lines go to
+        // the only ratio item in full — the sum contract (docs-fix-1023):
+        // basis items are excluded from the flex ratio pool, so nothing is
+        // silently dropped. Old round-based math lost 2 of 8 lines here.
+        // Total: 3 (fixed, incl padding) + 5 (flexible, incl padding) = 8 lines.
         $box = FlexBox::column(
             FlexItem::new('fixed')->withBasis(3),
             FlexItem::new('flexible')->withRatio(1),
@@ -73,7 +75,7 @@ final class FlexBoxColumnTest extends TestCase
         $output = $box->render(20, 8);
         $lines = \explode("\n", $output);
 
-        $this->assertCount(6, $lines);
+        $this->assertCount(8, $lines);
         $this->assertStringContainsString('fixed', $output);
     }
 
@@ -210,5 +212,22 @@ final class FlexBoxColumnTest extends TestCase
 
         $row = $box->withDirection(Direction::Row);
         $this->assertSame(Direction::Row, $row->direction);
+    }
+
+    /**
+     * Sum contract (docs-fix-1023 M2/M4) on the main axis vertical: equal
+     * ratios must fill the requested height exactly — the old round-based
+     * split of 10 cells across 3 ratio items rendered only 9 lines.
+     */
+    public function testColumnRatiosConsumeTheWholeHeight(): void
+    {
+        $box = FlexBox::column(
+            FlexItem::new('A')->withRatio(1),
+            FlexItem::new('B')->withRatio(1),
+            FlexItem::new('C')->withRatio(1),
+        );
+
+        $lines = \explode("\n", $box->render(10, 10));
+        $this->assertCount(10, $lines, 'largest-remainder carry must use every row');
     }
 }

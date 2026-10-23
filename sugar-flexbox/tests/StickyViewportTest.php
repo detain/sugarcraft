@@ -257,4 +257,24 @@ final class StickyViewportTest extends TestCase
         $lines = explode("\n", $view);
         $this->assertCount(6, $lines);
     }
+
+    /**
+     * Sticky + scrollbar geometry (docs-fix-1023 M8): the content was padded
+     * to the FULL width and paintScrollbar then appended its column — every
+     * sticky row overflowed by one cell (21 wide at a request of 20), pushing
+     * the terminal's last column into wrap. The scrollbar column must be
+     * reserved BEFORE padding.
+     */
+    public function testStickyWithScrollbarNeverExceedsRequestedWidth(): void
+    {
+        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 6)
+            ->withStickyHeader(1)
+            ->withVerticalScrollbar(\SugarCraft\Flexbox\Scrollbar::vertical());
+
+        $lines = \explode("\n", $vp->view());
+        $this->assertCount(6, $lines);
+        foreach ($lines as $line) {
+            $this->assertSame(20, \SugarCraft\Core\Util\Width::string($line), 'sticky+scrollbar rows must be exactly the requested width');
+        }
+    }
 }

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Widgets\Scrollbar\Scrollbar as BitsScrollbar;
 use SugarCraft\Widgets\Timer\TickMsg;
 use SugarCraft\Flexbox\Viewport;
 
@@ -186,9 +185,32 @@ final class ViewportQueryTest extends TestCase
     public function testWithVerticalScrollbarReturnsNewInstance(): void
     {
         $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
-        $scrollbar = BitsScrollbar::vertical();
+        // The parameter is THIS lib's Scrollbar (docs-fix-1023: the shadowed
+        // widgets import made the signature silently accept only the foreign
+        // type). Unwraps to the widgets scrollbar the inner viewport stores.
+        $scrollbar = \SugarCraft\Flexbox\Scrollbar::vertical();
         $vp2 = $vp->withVerticalScrollbar($scrollbar);
         $this->assertNotSame($vp, $vp2);
+        // The scrollbar actually lands: content + one gutter column, height
+        // rows exactly (M8: rows must never exceed the requested width).
+        $rows = \explode("\n", $vp2->view());
+        $this->assertCount(10, $rows);
+        foreach ($rows as $row) {
+            $this->assertLessThanOrEqual(20, \SugarCraft\Core\Util\Width::string($row));
+        }
+    }
+
+    /**
+     * Type polarity (docs-fix-1023 M7): the shadowed widgets import made the
+     * signature accept the FOREIGN scrollbar and reject the lib's own. The
+     * trap is now inverted — passing the widgets type directly is a TypeError;
+     * wrap it in SugarCraft\Flexbox\Scrollbar instead.
+     */
+    public function testWithVerticalScrollbarRefusesTheForeignScrollbarType(): void
+    {
+        $vp = Viewport::withContent("a\nb\nc", 20, 3);
+        $this->expectException(\TypeError::class);
+        $vp->withVerticalScrollbar(\SugarCraft\Widgets\Scrollbar\Scrollbar::vertical());
     }
 
     // ---- Model contract: init/update ------------------------------------

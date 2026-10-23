@@ -105,34 +105,7 @@ final class FlexBox
             'basis'  => $item->basis,
         ], $items);
 
-        $totalRatio    = \array_sum(\array_column($measured, 'ratio'));
-        $itemsWithBasis = \array_filter($measured, fn($m) => $m['item']->basis > 0);
-        $totalBasis    = \array_sum(\array_column($itemsWithBasis, 'basis'));
-        $freeSpace     = $totalWidth - $totalBasis - ($gap * (\count($items) - 1));
-
-        if ($totalRatio > 0 && $freeSpace > 0) {
-            foreach ($measured as $i => $m) {
-                $measured[$i]['allocated'] = $m['item']->basis > 0
-                    ? $m['item']->basis
-                    : (int) \round($freeSpace * $m['item']->ratio / $totalRatio);
-            }
-        } else {
-            foreach ($measured as $i => $m) {
-                $measured[$i]['allocated'] = $m['item']->basis > 0 ? $m['item']->basis : 1;
-            }
-        }
-
-        $totalAllocated = \array_sum(\array_column($measured, 'allocated'));
-        $excess = $totalWidth - $totalAllocated - ($gap * (\count($items) - 1));
-        if ($excess > 0 && $totalRatio > 0) {
-            // Distribute excess to items with ratio
-            foreach ($measured as $i => $m) {
-                if ($m['item']->ratio > 0) {
-                    $extra = (int) \round($excess * $m['item']->ratio / $totalRatio);
-                    $measured[$i]['allocated'] += $extra;
-                }
-            }
-        }
+        $measured = $this->allocateMainAxis($measured, $totalWidth, $gap);
 
         $resultLines = [];
         $heights = \array_column($measured, 'height');
@@ -186,16 +159,7 @@ final class FlexBox
             'basis'  => $item->basis,
         ], $items);
 
-        $totalRatio   = \array_sum(\array_column($measured, 'ratio'));
-        $itemsWithBasis = \array_filter($measured, fn($m) => $m['item']->basis > 0);
-        $totalBasis   = \array_sum(\array_column($itemsWithBasis, 'basis'));
-        $freeHeight   = $totalHeight - $totalBasis - ($gap * (\count($items) - 1));
-
-        foreach ($measured as $i => $m) {
-            $measured[$i]['allocated'] = $m['item']->basis > 0
-                ? $m['item']->basis
-                : ($totalRatio > 0 ? (int) \round($freeHeight * $m['item']->ratio / $totalRatio) : 1);
-        }
+        $measured = $this->allocateMainAxis($measured, $totalHeight, $gap);
 
         $resultLines = [];
         for ($i = 0; $i < \count($measured); $i++) {
@@ -209,7 +173,9 @@ final class FlexBox
                 if ($m['item']->style !== '') {
                     $lineStr = $this->applyStyle($lineStr, $m['item']->style);
                 }
-                $resultLines[] = \str_pad($lineStr, $totalWidth);
+                // Cell-based padding: a byte-based str_pad under-padded lines
+                // carrying wide (CJK/emoji) glyphs (docs-fix-1023).
+                $resultLines[] = \SugarCraft\Core\Util\Width::padRight($lineStr, $totalWidth);
             }
 
             // Pad to allocated height
@@ -232,6 +198,73 @@ final class FlexBox
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * Main-axis allocation shared by row and column modes — sum contract
+     * (docs-fix-1023).
+     *
+     * Items with a basis take exactly their basis and are excluded from the
+     * flex pool. The remaining flex items (basis == 0, ratio > 0) split the
+     * usable free space by largest-remainder of their ratios: a floor base,
+     * then one extra cell each in item order until the leftover runs out.
+     * The floor remainder is below one cell per flex item by construction,
+     * so a single in-order pass always closes the budget: allocated widths
+     * sum to EXACTLY `mainSize - gap*(n-1) - fixedSum`. The previous
+     * round()-then-excess-pass shape lost a whole cell in the common
+     * even-thirds case (3 items with ratio 1 at width 10 rendered 9).
+     *
+     * When there is no flex item, or no free space to share, every
+     * basis-less item falls back to one cell and the renderer's final
+     * truncate/clamp contains the overflow — unchanged legacy behavior.
+     *
+     * @param array<int, array{item: FlexItem, width: int, height: int, ratio: int, basis: int}> $measured
+     * @return array<int, array{item: FlexItem, width: int, height: int, ratio: int, basis: int, allocated: int}>
+     */
+    private function allocateMainAxis(array $measured, int $mainSize, int $gap): array
+    {
+        $usable = $mainSize - $gap * max(0, \count($measured) - 1);
+
+        $flexIndices = [];
+        $fixedSum    = 0;
+        foreach ($measured as $i => $m) {
+            if ($m['item']->basis > 0) {
+                $measured[$i]['allocated'] = $m['item']->basis;
+                $fixedSum                 += $m['item']->basis;
+            } elseif ($m['item']->ratio > 0) {
+                $flexIndices[] = $i;
+            }
+        }
+
+        $flexFree = $usable - $fixedSum;
+        if ($flexIndices === [] || $flexFree <= 0) {
+            foreach ($measured as $i => $m) {
+                if ($m['item']->basis <= 0) {
+                    $measured[$i]['allocated'] = 1;
+                }
+            }
+            return $measured;
+        }
+
+        $totalRatio = 0;
+        foreach ($flexIndices as $i) {
+            $totalRatio += $measured[$i]['item']->ratio;
+        }
+
+        $assigned = 0;
+        foreach ($flexIndices as $i) {
+            $share = (int) \floor($flexFree * $measured[$i]['item']->ratio / $totalRatio);
+            $measured[$i]['allocated'] = $share;
+            $assigned                 += $share;
+        }
+
+        $leftover = $flexFree - $assigned;
+        $flexCount = \count($flexIndices);
+        for ($k = 0; $k < $leftover; $k++) {
+            $measured[$flexIndices[$k % $flexCount]]['allocated']++;
+        }
+
+        return $measured;
+    }
 
     private function measureWidth(FlexItem $item): int
     {

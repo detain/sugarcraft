@@ -3,9 +3,9 @@
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-flexbox)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-flexbox)
-[![Packagist Version](https://img.shields.io/packagist/v/sugarcore/sugar-flexbox?label=packagist)](https://packagist.org/packages/sugarcore/sugar-flexbox)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-flexbox?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-flexbox)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 # SugarFlexbox
@@ -25,7 +25,7 @@ sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provide
 - **Ratio-based sizing** — items with grow ratios fill available space
 
 ### Table
-- **Sortable columns** — click to sort by any column, ascending/descending
+- **Sortable columns** — sortBy()/sortByNext() toggle ascending/descending (mouse wiring belongs to the app)
 - **Filterable** — filter rows by cell content
 - **Configurable columns** — title, width, alignment, formatter
 - **Cell styling** — per-column ANSI style support
@@ -51,6 +51,9 @@ composer require sugarcraft/sugar-flexbox
 
 ## FlexBox Quick Start
 
+All dimensions (widths, heights, gaps, bases, ratios across FlexBox, Table and
+Viewport) are **terminal cells** — columns × rows — not bytes or pixels.
+
 ```php
 use SugarCraft\Flexbox\Flex\{FlexBox, FlexItem};
 
@@ -65,35 +68,38 @@ echo $box->render(80, 24);
 
 ## Table Quick Start
 
+Table and Column are immutable: every builder returns a NEW instance, so the
+result must be assigned (or chained) — calling a method for effect discards it.
+
 ```php
 use SugarCraft\Flexbox\Table\{Table, Column};
 
-$table = new Table();
-$table->addColumn(Column::make('Name', 20));
-$table->addColumn(Column::make('Age', 5)->withAlign('right'));
-$table->addColumn(Column::make('City', 15));
+$table = (new Table())
+    ->addColumn(Column::make('Name', 20))
+    ->addColumn(Column::make('Age', 5)->withAlign('right'))
+    ->addColumn(Column::make('City', 15))
+    ->addRow(['Alice', '30', 'NYC'])
+    ->addRow(['Bob', '25', 'LA'])
+    ->addRow(['Carol', '35', 'Chicago']);
 
-$table->addRow(['Alice', 30, 'NYC']);
-$table->addRow(['Bob',   25, 'LA']);
-$table->addRow(['Carol', 35, 'Chicago']);
+$sorted = $table->sortBy(0);    // sort by Name column → new Table
+$filtered = $sorted->filter('a'); // rows containing 'a' → new Table
 
-$table->sortBy(0);  // sort by Name column
-$table->filter('a'); // filter rows
-
-echo $table->render();
+echo $sorted->render();
 ```
 
 ## Viewport Quick Start
 
 ```php
 use SugarCraft\Flexbox\Viewport;
-use SugarCraft\Flexbox\Scrollbar;
 
 $viewport = Viewport::withContent(str_repeat("Line\n", 50), 80, 24);
 $viewport = $viewport->withScrollbar(true);
 
-// Use as a model in your SugarCraft app
-$model = $viewport;
+// Viewport is a plain immutable component, not a Core\Model: drive it from
+// your own Model's update() and render the view it returns.
+$viewport = $viewport->lineDown(3);
+echo $viewport->view();
 ```
 
 ## Buffer diffing
@@ -104,10 +110,10 @@ builds the current Buffer, computes `current->diff(previous)` (from
 the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces
 `previousFrame` for the next render.
 
-**SSH bandwidth + flicker win:** a one-character change in an 80×24 viewport
-produces ~8 bytes of delta ops instead of ~1 940 bytes for a full repaint.
-Over an SSH session this means far less per-frame data on the wire and
-eliminates the full-screen flicker of rewrite-based terminals. The first render
+**SSH bandwidth + flicker win:** a one-character change emits only the ops for
+the affected cells instead of a full repaint — for an 80×24 screen (~1.9 KB of
+styled cells) that is orders of magnitude less per-frame data on the wire, and
+it avoids the flicker of rewrite-based terminals. The first render
 after startup or a resize still emits a full Buffer (no diff possible), so
 behaviour is always correct.
 

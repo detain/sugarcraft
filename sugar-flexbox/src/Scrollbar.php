@@ -51,6 +51,18 @@ final readonly class Scrollbar
     }
 
     /**
+     * The canonical widgets scrollbar this wrapper delegates to.
+     *
+     * Needed so {@see Viewport::withVerticalScrollbar()} (which delegates to
+     * the widgets viewport) can accept THIS lib's Scrollbar and unwrap it —
+     * the wrapper is opaque otherwise (docs-fix-1023).
+     */
+    public function widgetScrollbar(): BitsScrollbar
+    {
+        return $this->inner;
+    }
+
+    /**
      * Render the scrollbar into `$height` rows.
      *
      * @param ScrollbarState|array{total:int,position:int,viewport:int} $state

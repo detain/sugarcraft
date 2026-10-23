@@ -205,4 +205,33 @@ final class ColumnTest extends TestCase
         $col = Column::make('Test', 10);
         $this->assertSame(0, $col->sortPriority());
     }
+
+    // ---- per-column style reaches the render (docs-fix-1023 B2) --------
+
+    public function testColumnAnsiStyleIsAppliedToDataCellsAtRender(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('N', 5)->withStyle('31'))
+            ->addColumn(Column::make('M', 4))
+            ->addRow(['ab', 'z']);
+
+        $out = $t->render();
+
+        // The style wraps the FULL padded cell of column N (3 trailing spaces).
+        $this->assertStringContainsString("\x1b[31mab   \x1b[0m", $out);
+        // Column M (no style) must NOT be wrapped in red.
+        $this->assertStringNotContainsString("\x1b[31mz", $out);
+    }
+
+    public function testColumnStyleComposesInsideTheCursorStyle(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('N', 5)->withStyle('31'))
+            ->addRow(['ab'])
+            ->setCursor(0)
+            ->withCursorStyle('7');
+
+        // Cursor wraps outside the column style, so its opener lands first.
+        $this->assertStringContainsString("\x1b[7m\x1b[31mab   \x1b[0m\x1b[0m", $t->render());
+    }
 }

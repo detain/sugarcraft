@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox;
 
-use SugarCraft\Widgets\Scrollbar\Scrollbar;
-use SugarCraft\Widgets\Viewport\Viewport as BitsViewport;
-use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Widgets\Scrollbar\Scrollbar as BitsScrollbar;
+use SugarCraft\Widgets\Viewport\Viewport as BitsViewport;
 
 /**
  * Sticker-level viewport wrapping the canonical {@see BitsViewport}.
@@ -25,7 +24,10 @@ final readonly class Viewport
     private ?Viewport $syncedViewport;
 
     /**
-     * @param list<string> $lines
+     * @param BitsViewport        $inner        canonical widgets viewport holding content + dimensions
+     * @param int                 $stickyHeader rows pinned to the top
+     * @param int                 $stickyFooter rows pinned to the bottom
+     * @param Viewport|null       $syncedViewport scroll-sync partner
      */
     private function __construct(
         BitsViewport $inner,
@@ -45,9 +47,6 @@ final readonly class Viewport
         return new self(BitsViewport::new($width, $height));
     }
 
-    /**
-     * @param list<string>|null $lines
-     */
     public static function withContent(string $content, int $width = 80, int $height = 24): self
     {
         return new self(BitsViewport::new($width, $height)->setContent($content));
@@ -108,15 +107,24 @@ final readonly class Viewport
         return $this->syncedViewport !== null;
     }
 
-    // ---- Model contract ------------------------------------------------
+    // ---- init/update/view forwarding (NOT the Core\Model contract) -----
 
+    /**
+     * Forward to the canonical widgets viewport.
+     *
+     * TRUTH (docs-fix-1023): this class does NOT implement
+     * {@see \SugarCraft\Core\Model} — it has no `subscriptions()`, so
+     * `instanceof Model` is false. It merely forwards the Model-shaped
+     * init/update/view trio it delegates to. Compose it from your own
+     * Model; do not hand it to a program loop as one.
+     */
     public function init(): ?\Closure
     {
         return $this->inner->init();
     }
 
     /**
-     * @return array{0: Model, 1: ?\Closure}
+     * @return array{0: self, 1: ?\Closure}
      */
     public function update(Msg $msg): array
     {
@@ -167,18 +175,22 @@ final readonly class Viewport
             ? array_slice($lines, $middleStart, $scrollableHeight)
             : [];
 
-        // Fill each region to full width with padding.
+        // Fill each region to full width with padding. When the scrollbar is
+        // shown its column is reserved (paintScrollbar appends it) — padding
+        // to the FULL width first made every sticky row one cell too wide
+        // (docs-fix-1023).
         $width = $this->inner->width;
-        $pad = fn(string $l): string => $this->padRight($l, $width);
+        $contentWidth = $this->inner->showScrollbar ? max(0, $width - 1) : $width;
+        $pad = fn(string $l): string => $this->padRight($l, $contentWidth);
 
         $headerLines = array_map($pad, $headerLines);
         $middleLines = array_map($pad, $middleLines);
         $footerLines = array_map($pad, $footerLines);
 
         // Pad each region to its full height.
-        $headerLines = $this->padLines($headerLines, $headerCount);
-        $middleLines = $this->padLines($middleLines, $scrollableHeight);
-        $footerLines = $this->padLines($footerLines, $footerCount);
+        $headerLines = $this->padLines($headerLines, $headerCount, $contentWidth);
+        $middleLines = $this->padLines($middleLines, $scrollableHeight, $contentWidth);
+        $footerLines = $this->padLines($footerLines, $footerCount, $contentWidth);
 
         $combined = array_merge($headerLines, $middleLines, $footerLines);
 
@@ -207,9 +219,9 @@ final readonly class Viewport
      * @param list<string> $lines
      * @return list<string>
      */
-    private function padLines(array $lines, int $count): array
+    private function padLines(array $lines, int $count, int $width): array
     {
-        $pad = str_repeat(' ', $this->inner->width);
+        $pad = str_repeat(' ', max(0, $width));
         $lineCount = count($lines);
         while ($lineCount < $count) {
             $lines[] = $pad;
@@ -323,9 +335,18 @@ final readonly class Viewport
         return new self($this->inner->withScrollbarRunes($thumb, $track), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
     }
 
+    /**
+     * Attach the lib's own {@see Scrollbar} wrapper.
+     *
+     * The parameter previously type-hinted the shadowing `use` import of the
+     * widgets class, so passing THIS lib's Scrollbar — the documented
+     * companion — threw a TypeError (docs-fix-1023). It now accepts the
+     * library's own value object and unwraps the canonical widget for the
+     * delegate.
+     */
     public function withVerticalScrollbar(Scrollbar $scrollbar): self
     {
-        return new self($this->inner->withVerticalScrollbar($scrollbar), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return new self($this->inner->withVerticalScrollbar($scrollbar->widgetScrollbar()), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
     }
 
     public function withSmoothScroll(bool $enable = true): self

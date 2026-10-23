@@ -27,26 +27,26 @@ echo $table->render();
 echo "\n";
 
 // Sort by Name ascending
-$table = $table->sortBy(0, false);
+$table = $table->sortBy(0, true);
 echo "=== Sorted by Name (asc) ===\n";
 echo $table->render();
 echo "\n";
 
 // Sort by Name descending
-$table = $table->sortBy(0, true);
+$table = $table->sortBy(0, false);
 echo "=== Sorted by Name (desc) ===\n";
 echo $table->render();
 echo "\n";
 
 // Sort by Active status (Yes/No — alphabetical)
-$table = $table->sortBy(2, false);
+$table = $table->sortBy(2, true);
 echo "=== Sorted by Active (asc) ===\n";
 echo $table->render();
 echo "\n";
 
 // Set cursor to row 2 (0-indexed), toggle sort
-$table = $table->setCursor(2)->sortByNext(0);  // sort by Name (col 0), descending (was asc)
-echo "=== After setCursor(2) then sortByNext() (Name desc) ===\n";
+$table = $table->setCursor(2)->sortByNext(0);  // previous sort was column 2; a different column starts ascending
+echo "=== After setCursor(2) then sortByNext() (Name asc) ===\n";
 echo $table->render();
 echo "\n";
 

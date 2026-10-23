@@ -192,11 +192,32 @@ final class TableRenderer
     }
 
     /**
-     * Convert an SGR parameter string (e.g. "7", "1;32") into a Style object.
+     * The canonical xterm-256 palette as 0xRRGGBB: the 16 system colors
+     * (used directly for SGR 30-37/90-97/40-47/100-107 and as the head of
+     * the 256-entry ramp; 256-color and RGB colors map to a Style color so
+     * the cell buffer diff can SEE color-only changes — before this they
+     * were silently dropped to null, making 38;5/38;2 a dead knob in delta
+     * mode (docs-fix-1023). Re-emission goes through SgrEmitter as
+     * truecolor: visually equal to the original, byte-equal only when the
+     * original was already 38;2.
+     */
+    private const BASIC_ANSI_RGB = [
+        0x000000, 0x800000, 0x008000, 0x808000,
+        0x000080, 0x800080, 0x008080, 0xc0c0c0,
+        0x808080, 0xff0000, 0x00ff00, 0xffff00,
+        0x0000ff, 0xff00ff, 0x00ffff, 0xffffff,
+    ];
+
+    /**
+     * Convert an SGR parameter string (e.g. "7", "1;32", "38;5;196") into a
+     * Style object.
      *
-     * Parses SGR codes and builds a minimal Style:
+     * Parses SGR codes and builds a Style:
      *   - Attribute codes 1-9 map to ATTR_* constants (bold, faint, italic, etc.)
-     *   - 256-color and RGB colors are not yet supported (stored as null)
+     *   - 38;5;N / 38;2;R;G;B set the foreground, 48;* the background
+     *   - 39/49 reset foreground/background
+     *   - Malformed extended-color sequences fall through (the stray codes are
+     *     ignored, never guessed) — fail quiet at this display-only boundary
      *
      * @param string|null $sgr SGR parameter string or null for default style
      * @return \SugarCraft\CellBuffer\Style|null
@@ -212,7 +233,37 @@ final class TableRenderer
         $bg = null;
 
         $codes = \array_map('intval', \explode(';', $sgr));
-        foreach ($codes as $code) {
+        $count = \count($codes);
+
+        for ($i = 0; $i < $count; $i++) {
+            $code = $codes[$i];
+
+            if ($code === 38 || $code === 48) {
+                $kind = $codes[$i + 1] ?? null;
+                if ($kind === 5 && isset($codes[$i + 2])) {
+                    if ($code === 38) {
+                        $fg = self::xterm256ToRgb($codes[$i + 2]);
+                    } else {
+                        $bg = self::xterm256ToRgb($codes[$i + 2]);
+                    }
+                    $i += 2;
+                    continue;
+                }
+                if ($kind === 2 && isset($codes[$i + 4])) {
+                    $rgb = ($codes[$i + 2] << 16) | ($codes[$i + 3] << 8) | $codes[$i + 4];
+                    if ($code === 38) {
+                        $fg = $rgb;
+                    } else {
+                        $bg = $rgb;
+                    }
+                    $i += 4;
+                    continue;
+                }
+                // Malformed extended-color tail: ignore the 38/48 and keep
+                // walking so later valid codes still apply.
+                continue;
+            }
+
             switch ($code) {
                 case 1:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_BOLD;       break;
                 case 2:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_FAINT;      break;
@@ -220,6 +271,7 @@ final class TableRenderer
                 case 4:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_UNDERLINE;  break;
                 case 5:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_BLINK;      break;
                 case 7:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_REVERSE;    break;
+                case 8:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_INVISIBLE;  break;
                 case 9:  $attrs |= \SugarCraft\CellBuffer\Style::ATTR_STRIKE;     break;
                 case 22: $attrs &= ~(\SugarCraft\CellBuffer\Style::ATTR_BOLD | \SugarCraft\CellBuffer\Style::ATTR_FAINT); break;
                 case 23: $attrs &= ~\SugarCraft\CellBuffer\Style::ATTR_ITALIC;    break;
@@ -227,10 +279,48 @@ final class TableRenderer
                 case 25: $attrs &= ~\SugarCraft\CellBuffer\Style::ATTR_BLINK;     break;
                 case 27: $attrs &= ~\SugarCraft\CellBuffer\Style::ATTR_REVERSE;   break;
                 case 29: $attrs &= ~\SugarCraft\CellBuffer\Style::ATTR_STRIKE;    break;
+                case 39: $fg = null; break;
+                case 49: $bg = null; break;
+                default:
+                    if ($code >= 30 && $code <= 37) {
+                        $fg = self::BASIC_ANSI_RGB[$code - 30];
+                    } elseif ($code >= 90 && $code <= 97) {
+                        $fg = self::BASIC_ANSI_RGB[$code - 82];
+                    } elseif ($code >= 40 && $code <= 47) {
+                        $bg = self::BASIC_ANSI_RGB[$code - 40];
+                    } elseif ($code >= 100 && $code <= 107) {
+                        $bg = self::BASIC_ANSI_RGB[$code - 92];
+                    }
             }
         }
 
         return \SugarCraft\CellBuffer\Style::new($fg, $bg, $attrs);
+    }
+
+    /**
+     * xterm-256 color index → 0xRRGGBB via the canonical palette
+     * (16 system colors, 6×6×6 cube, 24-step grey ramp).
+     */
+    private static function xterm256ToRgb(int $index): int
+    {
+        $index = \max(0, \min(255, $index));
+
+        if ($index < 16) {
+            return self::BASIC_ANSI_RGB[$index];
+        }
+
+        if ($index >= 232) {
+            $v = 8 + ($index - 232) * 10;
+            return ($v << 16) | ($v << 8) | $v;
+        }
+
+        $steps = [0, 95, 135, 175, 215, 255];
+        $i = $index - 16;
+        $r = $steps[intdiv($i, 36) % 6];
+        $g = $steps[intdiv($i, 6) % 6];
+        $b = $steps[$i % 6];
+
+        return ($r << 16) | ($g << 8) | $b;
     }
 
     /**

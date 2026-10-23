@@ -224,12 +224,15 @@ final class Table
         }
         $lines[] = \implode($this->separator, $headerCols);
 
-        // Separator line
+        // Separator line — the joint between column runs is derived from the
+        // configured separator's cell width so a custom separator can never
+        // desync header from ruler (docs-fix-1023). The default ' │ ' is
+        // 3 cells wide, producing '─┬─' exactly as before.
         $sepParts = [];
         foreach ($this->columns as $col) {
             $sepParts[] = \str_repeat('─', $col->width);
         }
-        $lines[] = \implode('─┬─', $sepParts);
+        $lines[] = \implode($this->rulerJoint(), $sepParts);
 
         // Data rows
         foreach ($this->rows as $ri => $row) {
@@ -239,6 +242,13 @@ final class Table
             foreach ($this->columns as $ci => $col) {
                 $val = $row[$ci] ?? '';
                 $cellStr = $col->padded($val, $ri);
+
+                // Per-column style reaches every data cell (docs-fix-1023:
+                // the knob was stored but never rendered). Cursor style wraps
+                // outside it so the selected row stays visually dominant.
+                if ($col->ansiStyle !== '') {
+                    $cellStr = $this->applyStyle($cellStr, $col->ansiStyle);
+                }
 
                 if ($isCursor && $this->cursorStyle !== '') {
                     $cellStr = $this->applyStyle($cellStr, $this->cursorStyle);
@@ -335,17 +345,31 @@ final class Table
         );
     }
 
+    /**
+     * Cell-width ruler segment joining two column runs, honoring the
+     * configured separator's display width (docs-fix-1023).
+     */
+    private function rulerJoint(): string
+    {
+        $sepWidth = Width::string($this->separator);
+        if ($sepWidth <= 0) {
+            return '';
+        }
+        $left  = intdiv($sepWidth - 1, 2);
+        $right = $sepWidth - 1 - $left;
+        return \str_repeat('─', $left) . '┬' . \str_repeat('─', $right);
+    }
+
     private function padHeader(string $text, int $width, string $align): string
     {
-        $len = \strlen($text);
-        if ($len >= $width) {
-            return \substr($text, 0, $width);
-        }
-        $pad = $width - $len;
+        // Header titles carry '▲ '/'▼ ' prefixes and may hold wide (CJK) glyphs;
+        // padding must be display-cell based, not byte based (docs-fix-1023).
+        // For plain ASCII this is byte-identical to the old strlen path.
+        $truncated = Width::truncateAnsi($text, $width);
         return match ($align) {
-            'right'  => \str_repeat(' ', $pad) . $text,
-            'center' => \str_repeat(' ', (int) \floor($pad / 2)) . $text . \str_repeat(' ', (int) \ceil($pad / 2)),
-            default  => $text . \str_repeat(' ', $pad),
+            'right'  => Width::padLeft($truncated, $width),
+            'center' => Width::padCenter($truncated, $width),
+            default  => Width::padRight($truncated, $width),
         };
     }
 

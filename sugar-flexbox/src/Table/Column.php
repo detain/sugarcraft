@@ -7,7 +7,14 @@ namespace SugarCraft\Flexbox\Table;
 /**
  * Column definition for a Table.
  *
- * Defines a single column: title, width, alignment, formatter, and optional sort.
+ * Defines a single column: title, width, alignment, per-column ANSI style
+ * (applied to every data cell of that column at render — the SGR parameter
+ * string, e.g. '31' or '1;38;5;196', wrapped as `CSI <style> m`), formatter,
+ * and optional sort.
+ *
+ * Instances are immutable: every `with*` and the sort-state mutators return a
+ * NEW Column (house style — see sugar-style/src/Style.php); `make()` is the
+ * only entry point.
  */
 final class Column
 {
@@ -58,6 +65,12 @@ final class Column
         return self::fromState($this->title, $this->width, $align, $this->ansiStyle, $this->formatter, $this->sortDir, $this->sortPriority);
     }
 
+    /**
+     * Set the SGR style applied to every data cell of this column at render
+     * (wrapped outside the cursor style, so a cursor row stays dominant).
+     *
+     * @param string $ansiStyle bare SGR parameter string ('' clears the style)
+     */
     public function withStyle(string $ansiStyle): self
     {
         self::assertSgrParams($ansiStyle);
