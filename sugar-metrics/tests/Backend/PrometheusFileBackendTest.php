@@ -223,27 +223,70 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertStringContainsString('lat_sum{route="/api"} 0.05', $content);
     }
 
-    public function testRemoveIsNoOp(): void
+    public function testRemoveDropsTheAccumulatedSeries(): void
     {
         $b = new PrometheusFileBackend($this->path);
         $b->counter('hits', 5);
-        $b->remove('hits', []); // No-op — must not throw or alter data.
+        $b->remove('hits', []); // Real reclaim now — next flush omits the series.
         $b->flush();
 
         $content = (string) file_get_contents($this->path);
-        $this->assertStringContainsString('hits 5', $content);
+        $this->assertStringNotContainsString('hits 5', $content);
     }
 
-    public function testClearIsNoOp(): void
+    public function testRemoveTargetsOnlyTheNamedSeries(): void
     {
         $b = new PrometheusFileBackend($this->path);
-        $b->counter('hits', 5);
-        $b->clear(); // No-op — must not throw.
+        $b->counter('hits', 5, ['route' => '/a']);
+        $b->counter('hits', 7, ['route' => '/b']);
+        $b->remove('hits', ['route' => '/a']);
         $b->flush();
 
         $content = (string) file_get_contents($this->path);
-        // Clear does not affect the Prometheus textfile backend.
-        $this->assertStringContainsString('hits 5', $content);
+        $this->assertStringNotContainsString('route="/a"', $content);
+        $this->assertStringContainsString('hits{route="/b"} 7', $content);
+    }
+
+    public function testClearForgetsEverySeries(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('hits', 5);
+        $b->gauge('depth', 2);
+        $b->clear();
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringNotContainsString('hits 5', $content);
+        $this->assertStringNotContainsString('depth 2', $content);
+    }
+
+    public function testFamilyCapEvictsOldestSeriesFifo(): void
+    {
+        // maxSeriesPerFamily=2: creating a third distinct series in the
+        // same family must drop the oldest so memory stays bounded.
+        $b = new PrometheusFileBackend($this->path, null, 2);
+        $b->counter('hits', 1, ['route' => '/a']);
+        $b->counter('hits', 2, ['route' => '/b']);
+        $b->counter('hits', 3, ['route' => '/c']); // evicts /a
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringNotContainsString('route="/a"', $content);
+        $this->assertStringContainsString('hits{route="/b"} 2', $content);
+        $this->assertStringContainsString('hits{route="/c"} 3', $content);
+    }
+
+    public function testZeroOrNegativeFamilyCapIsRefused(): void
+    {
+        foreach ([0, -1] as $bad) {
+            $threw = false;
+            try {
+                new PrometheusFileBackend($this->path, null, $bad);
+            } catch (\InvalidArgumentException) {
+                $threw = true;
+            }
+            $this->assertTrue($threw, "maxSeriesPerFamily={$bad} must be refused at construction");
+        }
     }
 
     public function testDescribeWithNoSamplesEmitsDescriptorOnly(): void

@@ -19,6 +19,14 @@ use SugarCraft\Metrics\Descriptor;
  * their last set value, histograms emit the full set of bucket
  * lines (`*_bucket{le="..."}`) plus `_count` and `_sum`.
  *
+ * The accumulator arrays are bounded: each metric family may hold at
+ * most `maxSeriesPerFamily` distinct series (default 10 000 — the same
+ * budget the {@see \SugarCraft\Metrics\Registry} enforces on
+ * cardinality); creating a new series beyond the cap FIFO-drops that
+ * family's oldest series. {@see remove()} and {@see clear()} drop
+ * accumulated state from memory, so the next flush no longer emits the
+ * removed series.
+ *
  * **Always call {@see flush()} explicitly** for guaranteed delivery
  * and error visibility. The destructor calls flush() but silently
  * drops all errors (failed rename/permission issues are swallowed
@@ -42,6 +50,9 @@ final class PrometheusFileBackend implements Backend
 
     /** NUL byte separator between metric name and label block. Chosen because it cannot appear in sanitized Prometheus metric names. */
     private const KEY_SEPARATOR = "\0";
+
+    /** Default per-family series budget; mirrors the Registry cardinality default. */
+    public const DEFAULT_MAX_SERIES_PER_FAMILY = 10_000;
 
     /** @var list<float> */
     private array $buckets;
@@ -84,9 +95,19 @@ final class PrometheusFileBackend implements Backend
     /**
      * @param string $path     Path to the Prometheus textfile.
      * @param list<float>|null $buckets Histogram bucket upper bounds. Defaults to DEFAULT_BUCKETS.
+     * @param int $maxSeriesPerFamily Distinct series each metric family may accumulate
+     *                                before the oldest is FIFO-dropped. Must be >= 1.
      */
-    public function __construct(private readonly string $path, ?array $buckets = null)
-    {
+    public function __construct(
+        private readonly string $path,
+        ?array $buckets = null,
+        private readonly int $maxSeriesPerFamily = self::DEFAULT_MAX_SERIES_PER_FAMILY,
+    ) {
+        if ($maxSeriesPerFamily < 1) {
+            throw new \InvalidArgumentException(
+                'maxSeriesPerFamily must be at least 1, got ' . $maxSeriesPerFamily . '.',
+            );
+        }
         $this->buckets = $buckets ?? self::DEFAULT_BUCKETS;
     }
 
@@ -102,6 +123,9 @@ final class PrometheusFileBackend implements Backend
     public function counter(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        if (!isset($this->counters[$key])) {
+            $this->enforceFamilyCap($this->counters, $this->dirtyCounters, $name, $key);
+        }
         $this->counters[$key] = ($this->counters[$key] ?? 0.0) + $value;
         $this->dirtyCounters[$key] = true;
     }
@@ -109,6 +133,9 @@ final class PrometheusFileBackend implements Backend
     public function gauge(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        if (!isset($this->gauges[$key])) {
+            $this->enforceFamilyCap($this->gauges, $this->dirtyGauges, $name, $key);
+        }
         $this->gauges[$key] = $value;
         $this->dirtyGauges[$key] = true;
     }
@@ -116,6 +143,9 @@ final class PrometheusFileBackend implements Backend
     public function histogram(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        if (!isset($this->histograms[$key])) {
+            $this->enforceFamilyCap($this->histograms, $this->dirtyHistograms, $name, $key);
+        }
         $h = $this->histograms[$key] ?? ['count' => 0, 'sum' => 0.0, 'buckets' => $this->emptyBuckets()];
         $h['count']++;
         $h['sum'] += $value;
@@ -141,9 +171,49 @@ final class PrometheusFileBackend implements Backend
         return $buckets;
     }
 
+    /**
+     * Does a storage key belong to the given sanitized metric family?
+     * Bare keys (no labels) equal the family name exactly; labelled keys
+     * start with `name . KEY_SEPARATOR`.
+     */
+    private static function keyInFamily(string $key, string $family): bool
+    {
+        return $key === $family || str_starts_with($key, $family . self::KEY_SEPARATOR);
+    }
+
+    /**
+     * Bound the accumulator arrays: when a NEW series would push its
+     * family past maxSeriesPerFamily, drop the family's oldest series
+     * (insertion order — PHP preserves it for string keys that are never
+     * re-assigned after unset). Called before writing a key that does not
+     * exist yet; existing series never trigger a scan of the map itself.
+     *
+     * @param array<string,mixed> $accumulator
+     * @param array<string,bool> $dirty
+     */
+    private function enforceFamilyCap(array &$accumulator, array &$dirty, string $name, string $newKey): void
+    {
+        $family = self::sanitizeName($name);
+        $count = 0;
+        $oldest = null;
+        foreach ($accumulator as $key => $_) {
+            if (!self::keyInFamily($key, $family)) {
+                continue;
+            }
+            $oldest ??= $key;
+            ++$count;
+        }
+        if ($count >= $this->maxSeriesPerFamily && $oldest !== null) {
+            unset($accumulator[$oldest], $dirty[$oldest]);
+        }
+    }
+
     public function upDownCounter(string $name, float $amount, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        if (!isset($this->upDownCounters[$key])) {
+            $this->enforceFamilyCap($this->upDownCounters, $this->dirtyUpDownCounters, $name, $key);
+        }
         $this->upDownCounters[$key] = ($this->upDownCounters[$key] ?? 0.0) + $amount;
         $this->dirtyUpDownCounters[$key] = true;
     }
@@ -151,6 +221,9 @@ final class PrometheusFileBackend implements Backend
     public function asyncCounter(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        if (!isset($this->asyncCounters[$key])) {
+            $this->enforceFamilyCap($this->asyncCounters, $this->dirtyAsyncCounters, $name, $key);
+        }
         $this->asyncCounters[$key] = $value;
         $this->dirtyAsyncCounters[$key] = true;
     }
@@ -158,6 +231,9 @@ final class PrometheusFileBackend implements Backend
     public function asyncGauge(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        if (!isset($this->asyncGauges[$key])) {
+            $this->enforceFamilyCap($this->asyncGauges, $this->dirtyAsyncGauges, $name, $key);
+        }
         $this->asyncGauges[$key] = $value;
         $this->dirtyAsyncGauges[$key] = true;
     }
@@ -340,24 +416,51 @@ final class PrometheusFileBackend implements Backend
     }
 
     /**
-     * PrometheusFileBackend does not support in-process metric removal;
-     * metrics are persisted to the textfile on each flush().
+     * Drop one accumulated series (name + label set) from the backend's
+     * in-memory state. The key is derived exactly like the write path,
+     * so this reclaims what counter()/gauge()/histogram()/... stored —
+     * including the Registry's cardinality-eviction forward, which
+     * arrives with the merged tag set. The next flush() simply no longer
+     * emits the removed series; the textfile itself is rewritten whole
+     * on every flush, so no stale line survives.
      *
      * @param array<string,string> $tags
      */
     public function remove(string $name, array $tags = []): void
     {
-        // No-op: Prometheus textfile backend accumulates to a file;
-        // to remove a metric series, delete the file and restart.
+        $key = $this->key($name, $tags);
+        unset(
+            $this->counters[$key], $this->dirtyCounters[$key],
+            $this->gauges[$key], $this->dirtyGauges[$key],
+            $this->histograms[$key], $this->dirtyHistograms[$key],
+            $this->upDownCounters[$key], $this->dirtyUpDownCounters[$key],
+            $this->asyncCounters[$key], $this->dirtyAsyncCounters[$key],
+            $this->asyncGauges[$key], $this->dirtyAsyncGauges[$key],
+        );
     }
 
     /**
-     * PrometheusFileBackend does not support in-process clearing;
-     * call clear() on the Registry's in-memory view if needed.
+     * Reset the backend: forget every accumulated series, dirty flag,
+     * and registered descriptor. The next flush() writes an empty
+     * textfile (the file itself is not unlinked — deleting the target
+     * from under a watching node_exporter is a deployment decision, not
+     * a metrics-library one).
      */
     public function clear(): void
     {
-        // No-op: Prometheus textfile backend persists all metrics.
+        $this->counters = [];
+        $this->gauges = [];
+        $this->histograms = [];
+        $this->upDownCounters = [];
+        $this->asyncCounters = [];
+        $this->asyncGauges = [];
+        $this->dirtyCounters = [];
+        $this->dirtyGauges = [];
+        $this->dirtyHistograms = [];
+        $this->dirtyUpDownCounters = [];
+        $this->dirtyAsyncCounters = [];
+        $this->dirtyAsyncGauges = [];
+        $this->descriptors = [];
     }
 
     /**
