@@ -9,17 +9,17 @@ use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 
 /**
- * PostgreSQL stub implementation of AdminProviderInterface.
+ * PostgreSQL implementation of AdminProviderInterface.
  *
- * Provides placeholder data so the admin UI remains functional when
- * connected to PostgreSQL. The processlist, status variables, and
- * server variables map PostgreSQL's system catalogs to the AdminProvider
- * interface schema.
+ * Maps PostgreSQL's system catalogs onto the AdminProvider interface
+ * schema: pg_stat_database for status counters, pg_settings for server
+ * variables, pg_stat_activity for the processlist (docs-fix-1023 n7: this
+ * was labelled a "stub" although every method was fully implemented).
  *
- * Full PostgreSQL support requires:
- * - pg_stat_activity GRANT for processlist
- * - pg_stat_database mapping for status counters
- * - pg_settings for server variables
+ * Operational visibility notes (permissions, not missing code):
+ * - pg_stat_activity only exposes other sessions to a superuser, the
+ *   pg_read_all_stats role, or sessions of the same user
+ * - pg_stat_database / pg_settings are readable by PUBLIC on stock clusters
  *
  * @see AdminProviderInterface
  */

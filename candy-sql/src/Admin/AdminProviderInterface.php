@@ -19,7 +19,7 @@ use SugarCraft\Sql\Db\Flavor;
  * provider at startup based on the detected Flavor.
  *
  * @see MysqlAdminProvider for MySQL implementation
- * @see PostgresAdminProvider for PostgreSQL stub
+ * @see PostgresAdminProvider for the PostgreSQL implementation
  */
 interface AdminProviderInterface
 {

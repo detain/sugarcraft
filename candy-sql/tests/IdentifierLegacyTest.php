@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Tests;
 
+// Second fixture set for SugarCraft\Sql\Db\Identifier; the primary
+// suite lives in tests/Db/IdentifierTest.php (docs-fix-1023 n6 rename).
+
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\Identifier;
 use PHPUnit\Framework\TestCase;
 
-final class IdentifierTest extends TestCase
+final class IdentifierLegacyTest extends TestCase
 {
     // ── MySQL / MariaDB / Percona (backtick) ─────────────────────────────────
 
