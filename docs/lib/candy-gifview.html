@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyGifView — SugarCraft</title>
-<meta name="description" content="CandyGifView: Terminal GIF and .ansi-art viewer.">
+<meta name="description" content="CandyGifView: Terminal GIF viewer.">
 <meta property="og:title" content="CandyGifView — SugarCraft">
-<meta property="og:description" content="Terminal GIF and .ansi-art viewer CLI on top of sugar-animation.">
+<meta property="og:description" content="Terminal GIF viewer CLI on top of sugar-animation.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-gifview.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-gifview.html">
 <meta property="og:type" content="website">
@@ -38,11 +38,11 @@
       <img class="detail-icon" src="../img/icons/candy-gifview.png" alt="CandyGifView">
       <div>
         <h2>📽 CandyGifView</h2>
-        <p class="detail-sub">Terminal GIF and .ansi-art viewer</p>
+        <p class="detail-sub">Terminal GIF viewer</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/namzug16/gifterm" style="color: inherit;">namzug16/gifterm</a></span>
           <span class="tag-chip">gif</span>
-          <span class="tag-chip">ansi-art</span>
+          <span class="tag-chip">animation</span>
           <span class="tag-chip">viewer</span>
           <span class="tag-chip">cli</span>
         </div>
@@ -50,7 +50,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-gifview"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-gifview" alt="CandyGifView code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">The terminal GIF + <code>.ansi</code>-art viewer: point it at a file and it sizes to your viewport, decodes via <a href="lib/sugar-animation.html">sugar-animation</a>, and plays the animation in the alternate screen — full-cell 24-bit blocks or a luminance-density ramp, toggled live. This is the command that used to ship as <code>bin/sugar-animation</code>, split into its own app package.</p>
+    <p class="lede" style="margin-top: 28px;">The terminal GIF viewer: point it at a <code>.gif</code> and it sizes to your viewport, decodes via <a href="lib/sugar-animation.html">sugar-animation</a> (which needs <code>ext-gd</code>), and plays the animation in the alternate screen — full-cell 24-bit blocks or an ASCII luminance-density ramp, toggled live. This is the command that used to ship as <code>bin/sugar-animation</code>, split into its own app package.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-gifview</code></pre>
@@ -63,7 +63,7 @@ candy-gifview my-animation.gif density # luminance-density ramp
 #   Space   pause / resume
 #   Left/Right  step frames
 #   d       toggle solid <-> density
-#   q / Esc quit</code></pre>
+#   q / Esc / Ctrl-C  quit</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -73,7 +73,7 @@ candy-gifview my-animation.gif density # luminance-density ramp
       <div class="feature"><strong>Live preset toggle</strong><span><code>d</code> swaps solid blocks ↔ the <code>` .:-=+*#%@`</code> density ramp without losing your frame position.</span></div>
       <div class="feature"><strong>Helpable</strong><span><code>--help</code> / <code>-h</code> print the localized usage line and exit 0; missing or unreadable files exit non-zero with the decoder's error on stderr.</span></div>
       <div class="feature"><strong>Testable core</strong><span>All argument handling lives in <code>SugarCraft\GifView\Cli</code> — the bin is a two-line shim, and a closure seam lets tests drive the wired <code>Player</code> without a terminal.</span></div>
-      <div class="feature"><strong>Localized</strong><span>Usage and autoload-probe messages ship in sixteen locales via the sugar-core i18n lookup.</span></div>
+      <div class="feature"><strong>Localized</strong><span>CLI usage and refusal messages ship in sixteen locales via the sugar-core i18n lookup.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>

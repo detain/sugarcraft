@@ -93,12 +93,13 @@ final class CliLoopWatchTest extends TestCase
     /**
      * @param ?\Closure(Player): int $play
      * @param ?\Closure(string): (array|false) $watchStat
+     * @param ?\Closure(string, int, int): array{string, list<\SugarCraft\Animation\Frame>} $decode
      */
-    private function cli(array $argv, ?\Closure $play = null, ?\Closure $watchStat = null): array
+    private function cli(array $argv, ?\Closure $play = null, ?\Closure $watchStat = null, ?\Closure $decode = null): array
     {
         $out = $this->memory();
         $err = $this->memory();
-        $exit = Cli::main(array_merge(['candy-gifview'], $argv), $out, $err, $play, $watchStat);
+        $exit = Cli::main(array_merge(['candy-gifview'], $argv), $out, $err, $play, $watchStat, $decode);
 
         return [$exit, self::drain($out), self::drain($err)];
     }
@@ -245,5 +246,52 @@ final class CliLoopWatchTest extends TestCase
             return 0;
         }, $stat);
         $this->assertSame(0, $exit);
+    }
+
+    /**
+     * Security m11: a raw \Error escaping the reload walk (outside the
+     * Decoder's documented RuntimeException contract) must not kill the
+     * watch loop. The $decode seam answers the wiring-time intake with the
+     * real frames and throws \Error on the reload — the widened rescue catch
+     * keeps the stale frames playing and the poll armed.
+     */
+    public function testRawErrorOnReloadKeepsPlayingStale(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD required to build test GIFs');
+        }
+        $path = $this->blackGifPath();
+        $tokens = [['dev' => 1, 'ino' => 7, 'size' => 100, 'mtime_ns' => 1000],
+            ['dev' => 1, 'ino' => 8, 'size' => 100, 'mtime_ns' => 2000]];
+        $stat = static function (string $p) use (&$tokens): array {
+            return array_shift($tokens) ?? ['dev' => 1, 'ino' => 8, 'size' => 100, 'mtime_ns' => 2000];
+        };
+
+        $decodeCalls = 0;
+        $decode = static function (string $p, int $w, int $h) use (&$decodeCalls): array {
+            $decodeCalls++;
+            if ($decodeCalls === 1) {
+                $bytes = \SugarCraft\Animation\Decoder::readFile($p);
+
+                return [$bytes, iterator_to_array(
+                    \SugarCraft\Animation\Decoder::decodeBytes($bytes, $w, $h),
+                    preserve_keys: false,
+                )];
+            }
+
+            throw new \Error('simulated walk failure on reload');
+        };
+
+        [$exit, , $err] = $this->cli(['--watch', $path], function (Player $p) use (&$decodeCalls): int {
+            self::assertSame(1, $decodeCalls, 'wiring consumed the first intake');
+            [$same, $cmd] = $p->update(new WatchMsg());
+            self::assertSame($p, $same, 'an \Error on reload keeps the stale frames');
+            self::assertNotNull($cmd, 'and the poll stays armed');
+
+            return 0;
+        }, $stat, $decode);
+
+        $this->assertSame(0, $exit, $err);
+        $this->assertSame(2, $decodeCalls, 'the reload was attempted — the \Error came from inside the guarded walk');
     }
 }

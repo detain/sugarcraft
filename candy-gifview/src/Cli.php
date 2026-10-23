@@ -20,26 +20,34 @@ use SugarCraft\Pty\SizeIoctl;
  * app package (rename campaign step 1.3). The bin is a two-line shim over
  * {@see main()} so every branch here is testable in-process.
  *
- * E-09 adds chicle-style playback controls: --fps=N (uniform cadence via
- * Player::withFixedFps), --speed=N|Nfps|max (multiplier onto the effective
- * fps, chicle's parser shape at chicle-options.c:1439-1473; the bare
- * multiplier is applied to the GIF's own nominal frame rate, which under the
- * fixed-cadence model means the decoded frames' average delay), and
- * --duration=SECONDS (Player::withMaxSeconds — a model-side deadline, never
- * a wall-clock kill, E646-clean).
+ * Playback controls: --fps=N (uniform cadence via Player::withFixedFps),
+ * --speed=N|Nfps|max (multiplier onto the effective fps, mirroring chicle's
+ * parser shape at chicle-options.c:1439-1473; the bare multiplier is applied
+ * to the GIF's own nominal frame rate, which under the fixed-cadence model
+ * means the decoded frames' average delay), and --duration=SECONDS
+ * (Player::withMaxSeconds — a model-side deadline, never a wall-clock kill).
  *
- * E-02 honours the authored NETSCAPE loop count: the decoded Player is bound
+ * The authored NETSCAPE loop count is honoured: the decoded Player is bound
  * with Decoder::loopCount() over the same bytes (null = play forever, the
- * absent-extension answer SugarCrush chose over libnsgif's gif.c:1601
- * single-play default). E-10 adds --watch: chicle's run_watch rebind
- * (chafa.c:908-955) becomes Player::withWatch behind a host-probe seam, so
- * CI drives change tokens without a real 10 ms busy-poll.
+ * absent-extension answer chosen over libnsgif's gif.c:1601 single-play
+ * default). --watch binds chicle's run_watch rebind (chafa.c:908-955) to
+ * Player::withWatch behind a host-probe seam, so CI drives change tokens
+ * without a real 10 ms busy-poll.
  */
 final class Cli
 {
     /** Viewport used when STDOUT is not a tty (piped output, CI, examples). */
     public const FALLBACK_CELLS_W = 60;
     public const FALLBACK_CELLS_H = 24;
+
+    /**
+     * Hard ceiling on the frames the viewer materialises at once: the whole
+     * animation lives in RAM while playing (sugar-animation exposes no
+     * streaming playback seam), so an unbounded frame count would be an
+     * unbounded-RAM open-and-quit path. Over-cap files are refused loudly;
+     * see the README "Limits" section.
+     */
+    public const MAX_FRAMES = 4_096;
 
     /** chicle's own ceiling (CHICLE_ANIM_FPS_MAX, chicle-options.h:60) = "--speed max". */
     private const SPEED_MAX = 'max';
@@ -57,11 +65,18 @@ final class Cli
      * @param ?\Closure(Player): int $play test seam: invoked with the wired
      *        Player instead of launching the blocking Program loop; its int
      *        becomes the exit code.
-     * @param ?\Closure(string): (array|false) $watchStat test seam for E-10:
-     *        answers stat() for a path; null falls back to the real @stat().
+     * @param ?\Closure(string): (array|false) $watchStat test seam for the
+     *        watcher: answers stat() for a path; null falls back to the real
+     *        @stat().
+     * @param ?\Closure(string, int, int): array{string, list<\SugarCraft\Animation\Frame>} $decode
+     *        test seam for the intake: answers [bytes, frames] for a path and
+     *        grid; null falls back to {@see decodeFrames()}. Pins can drive a
+     *        raw \Error out of the walk to prove the rescue catches absorb it.
      */
-    public static function main(array $argv, $stdout, $stderr, ?\Closure $play = null, ?\Closure $watchStat = null): int
+    public static function main(array $argv, $stdout, $stderr, ?\Closure $play = null, ?\Closure $watchStat = null, ?\Closure $decode = null): int
     {
+        $decode ??= static fn (string $p, int $w, int $h): array => self::decodeFrames($p, $w, $h);
+
         $path = null;
         $presetToken = null;
         $fps = null;
@@ -92,8 +107,8 @@ final class Cli
                     return 1;
                 }
 
-                // E-10: --watch is the only bare (value-less) flag; the
-                // value-taking flags below keep their bad_value refusal.
+                // --watch is the only bare (value-less) flag; the
+                // value-taking flags above keep their bad_value refusal.
                 if ($flag === 'watch') {
                     if ($raw !== null && $raw !== '') {
                         \fwrite($stderr, Lang::t('cli.unexpected_value', ['flag' => 'watch']) . "\n");
@@ -180,12 +195,15 @@ final class Cli
         [$cellsW, $cellsH] = self::viewportCells();
 
         try {
-            // E-02: read once, then decode and audit the SAME bytes — the
-            // authored loop count rides the same intake as the frames
-            // (E-11 law), so nothing re-opens the file behind the capture.
-            $bytes = Decoder::readFile($path);
-            $frames = iterator_to_array(Decoder::decodeBytes($bytes, $cellsW, $cellsH), preserve_keys: false);
-        } catch (\RuntimeException $e) {
+            // Read once, then decode and audit the SAME bytes — the authored
+            // loop count rides the same intake as the frames, so nothing
+            // re-opens the file behind the capture.
+            [$bytes, $frames] = $decode($path, $cellsW, $cellsH);
+        } catch (\Throwable $e) {
+            // \Throwable, not just the Decoder's documented RuntimeExceptions:
+            // the GIF walk is hand-rolled, and a latent \Error (ValueError/
+            // TypeError) from hostile bytes must exit 1 loudly here rather
+            // than fatal mid-launch.
             \fwrite($stderr, $e->getMessage() . "\n");
 
             return 1;
@@ -194,12 +212,12 @@ final class Cli
         $renderer = Renderer::withConstraints($cellsH, $cellsW);
         $player = new Player($frames, preset: $preset, renderer: $renderer);
 
-        // E-02: honour the file. null (unauthored or raw 0) keeps the
-        // Player's infinite default; N >= 2 stops the schedule after N
-        // complete playthroughs, exactly chicle-style intent.
+        // Honour the file: null (unauthored or raw 0) keeps the Player's
+        // infinite default; N >= 2 stops the schedule after N complete
+        // playthroughs, exactly chicle-style intent.
         $player = $player->withLoops(Decoder::loopCount($bytes));
 
-        // E-09: --fps / --speed both land on the SAME fixed-cadence seam
+        // --fps / --speed both land on the SAME fixed-cadence seam
         // (sugar-animation exposes no per-frame multiplier; applying the
         // multiplier to the nominal rate derived from the decoded frames is
         // the honest mapping and it trades per-frame timing for smoothness —
@@ -214,12 +232,12 @@ final class Cli
             $player = $player->withMaxSeconds($duration);
         }
 
-        // E-10: arm the chicle-style change watcher. The poll seam is the
+        // Arm the chicle-style change watcher. The poll seam is the
         // host probe (change token over stat); the Player re-arms a
         // WATCH_POLL_SECONDS tick whenever the probe reports no change, and
         // rebinds frames + loop count when it does.
         if ($watch) {
-            $player = $player->withWatch(self::watchProbe($path, $cellsW, $cellsH, $watchStat));
+            $player = $player->withWatch(self::watchProbe($path, $cellsW, $cellsH, $watchStat, $decode));
         }
 
         if ($play !== null) {
@@ -249,7 +267,45 @@ final class Cli
     }
 
     /**
-     * E-10: stat-shaped change token for a path — dev+ino+size+mtime_ns, or
+     * Default intake: read the file once and materialise its frames for the
+     * given grid, bounded by {@see MAX_FRAMES} (fail-loud: the cap stops the
+     * walk one frame past the ceiling instead of buffering the whole stream).
+     *
+     * @return array{string, list<\SugarCraft\Animation\Frame>} [bytes, frames]
+     */
+    private static function decodeFrames(string $path, int $cellsW, int $cellsH): array
+    {
+        $bytes = Decoder::readFile($path);
+
+        return [$bytes, self::collectFrames(Decoder::decodeBytes($bytes, $cellsW, $cellsH), self::MAX_FRAMES)];
+    }
+
+    /**
+     * Drain a decoder generator into a list, refusing anything longer than
+     * $max frames. Throws a RuntimeException (not an Error) so both rescue
+     * catches report it through the normal exit-1 / keep-stale channels.
+     *
+     * @param \Traversable<\SugarCraft\Animation\Frame> $frames
+     *
+     * @return list<\SugarCraft\Animation\Frame>
+     */
+    private static function collectFrames(\Traversable $frames, int $max): array
+    {
+        $out = [];
+        foreach ($frames as $frame) {
+            $out[] = $frame;
+            if (count($out) > $max) {
+                throw new \RuntimeException(
+                    'candy-gifview: animation exceeds the ' . $max . '-frame limit; refusing to load'
+                );
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Stat-shaped change token for a path — dev+ino+size+mtime_ns, or
      * ['missing'] when stat fails (deleted between frames: keep watching,
      * chicle keeps polling too). $stat is the injectable seam; null uses the
      * real @stat so a transient permission blip never fakes a change.
@@ -267,7 +323,7 @@ final class Cli
     }
 
     /**
-     * E-10: build the Player's watch probe for --watch.
+     * Build the Player's watch probe for --watch.
      *
      * chicle's run_watch (chafa.c:908-955) destroys and recreates the
      * animation whenever the file's change counter moves; it deliberately
@@ -280,16 +336,19 @@ final class Cli
      * if (media_loader) guard shape.
      *
      * @param ?\Closure(string): (array<string|int,mixed>|false) $watchStat
+     * @param ?\Closure(string, int, int): array{string, list<\SugarCraft\Animation\Frame>} $decode
      *
      * @return \Closure(): ?array{frames: list<\SugarCraft\Animation\Frame>, loops: ?int}
      */
-    private static function watchProbe(string $path, int $cellsW, int $cellsH, ?\Closure $watchStat): \Closure
+    private static function watchProbe(string $path, int $cellsW, int $cellsH, ?\Closure $watchStat, ?\Closure $decode = null): \Closure
     {
+        $decode ??= static fn (string $p, int $w, int $h): array => self::decodeFrames($p, $w, $h);
+
         // The file was JUST decoded successfully, so its present token is
         // the baseline — the first poll must not reload what we already have.
         $last = self::changeToken($path, $watchStat);
 
-        return static function () use ($path, $cellsW, $cellsH, $watchStat, &$last): ?array {
+        return static function () use ($path, $cellsW, $cellsH, $watchStat, $decode, &$last): ?array {
             $token = self::changeToken($path, $watchStat);
             if ($token === $last) {
                 return null;
@@ -297,10 +356,12 @@ final class Cli
             $last = $token;
 
             try {
-                $bytes = Decoder::readFile($path);
-                $frames = iterator_to_array(Decoder::decodeBytes($bytes, $cellsW, $cellsH), preserve_keys: false);
+                [$bytes, $frames] = $decode($path, $cellsW, $cellsH);
                 $loops = Decoder::loopCount($bytes);
-            } catch (\RuntimeException) {
+            } catch (\Throwable) {
+                // \Throwable, not just RuntimeException: a raw \Error escaping
+                // the reload walk must not kill the watch loop — stale frames
+                // keep playing and the poll stays armed (same guard shape).
                 return null;
             }
 

@@ -1,11 +1,11 @@
 {
     "title": "CandyGifView — SugarCraft",
-    "description": "CandyGifView: Terminal GIF and .ansi-art viewer.",
+    "description": "CandyGifView: Terminal GIF viewer.",
     "ogTitle": "CandyGifView — SugarCraft",
-    "ogDescription": "Terminal GIF and .ansi-art viewer CLI on top of sugar-animation.",
+    "ogDescription": "Terminal GIF viewer CLI on top of sugar-animation.",
     "emoji": "📽",
     "displayName": "CandyGifView",
-    "tagline": "Terminal GIF and .ansi-art viewer",
+    "tagline": "Terminal GIF viewer",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/namzug16/gifterm\" style=\"color: inherit;\">namzug16/gifterm</a></span>\n          <span class=\"tag-chip\">gif</span>\n          <span class=\"tag-chip\">ansi-art</span>\n          <span class=\"tag-chip\">viewer</span>\n          <span class=\"tag-chip\">cli</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/namzug16/gifterm\" style=\"color: inherit;\">namzug16/gifterm</a></span>\n          <span class=\"tag-chip\">gif</span>\n          <span class=\"tag-chip\">animation</span>\n          <span class=\"tag-chip\">viewer</span>\n          <span class=\"tag-chip\">cli</span>"
 }

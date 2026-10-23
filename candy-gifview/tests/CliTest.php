@@ -288,4 +288,81 @@ final class CliTest extends TestCase
         $this->assertNull($player->fixedFps);
         $this->assertNull($player->maxSeconds);
     }
+
+    /**
+     * The intake cap is a documented promise: the README "Limits" section
+     * names 4096, and the whole animation is materialised below it.
+     */
+    public function testTheFrameCeilingIsTheDocumentedConstant(): void
+    {
+        $this->assertSame(4_096, Cli::MAX_FRAMES);
+    }
+
+    /**
+     * collectFrames() drains lazily and refuses one frame past the cap, so
+     * an over-cap file never buffers its full stream. Driven directly with
+     * generators: the cap logic is value-generic, only the walk matters.
+     */
+    public function testCollectFramesRefusesOneFramePastTheCap(): void
+    {
+        $collect = new \ReflectionMethod(Cli::class, 'collectFrames');
+        $collect->setAccessible(true);
+
+        $five = static function (): \Generator {
+            for ($i = 0; $i < 5; $i++) {
+                yield new \stdClass();
+            }
+        };
+
+        $this->assertCount(5, $collect->invoke(null, $five(), 5), 'at the cap the walk succeeds');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('exceeds the 4-frame limit');
+        $collect->invoke(null, $five(), 4);
+    }
+
+    /**
+     * Security m11: a raw \Error escaping the hand-rolled GIF walk (the
+     * Decoder's documented contract is RuntimeException, but the walk is
+     * byte-driven) must exit 1 with the message on stderr, not fatal
+     * mid-launch. The $decode seam is the throwing fixture.
+     */
+    public function testRawErrorFromTheIntakeExitsOneLoudly(): void
+    {
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(
+            ['candy-gifview', 'synthetic.gif'],
+            $stdout,
+            $stderr,
+            null,
+            null,
+            static fn (string $p, int $w, int $h): array => throw new \Error('simulated walk failure'),
+        );
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('simulated walk failure', self::drain($stderr));
+        $this->assertSame('', self::drain($stdout));
+    }
+
+    /**
+     * Structural pin for the rescue-catch widening: both decode sites catch
+     * \Throwable, and a re-narrowed `catch (\RuntimeException` anywhere in
+     * the front end reddens this fail-loud.
+     */
+    public function testBothDecodeRescueCatchesStayWidenedToThrowable(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/Cli.php');
+
+        $this->assertStringNotContainsString(
+            'catch (\RuntimeException',
+            $src,
+            'a narrow catch re-lets a raw \Error escape the launch/watch path',
+        );
+        $this->assertSame(
+            2,
+            substr_count($src, 'catch (\Throwable'),
+            'exactly the launch and watch-reload rescue sites must catch \Throwable',
+        );
+    }
 }
