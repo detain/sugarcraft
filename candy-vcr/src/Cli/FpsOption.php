@@ -20,6 +20,10 @@ final class FpsOption
      * @param mixed $raw the raw option value (string from argv, int/float
      *                   from programmatic callers, or null when absent)
      *
+     * Messages carry no tool prefix: every catch site re-wraps them with its
+     * own label (`candy-vcr inspect: ` in InspectCommand, `Failed: ` in the
+     * render commands), so an embedded prefix would reach users doubled.
+     *
      * @return float|null null means "not provided — use the caller's
      *                    default"; a provided value must be a positive
      *                    finite number or this throws
@@ -34,13 +38,13 @@ final class FpsOption
         }
         if (!is_numeric($raw)) {
             throw new \InvalidArgumentException(
-                "candy-vcr: --fps must be a positive number, got " . var_export($raw, true) . "."
+                "--fps must be a positive number, got " . var_export($raw, true) . "."
             );
         }
         $fps = (float) $raw;
         if (!is_finite($fps) || $fps <= 0.0) {
             throw new \InvalidArgumentException(
-                "candy-vcr: --fps must be a positive finite number of frames per second, got " . var_export($raw, true) . "."
+                "--fps must be a positive finite number of frames per second, got " . var_export($raw, true) . "."
             );
         }
         return $fps;
