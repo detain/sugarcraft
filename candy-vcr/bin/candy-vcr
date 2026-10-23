@@ -11,7 +11,40 @@ declare(strict_types=1);
 //       __DIR__ . '/../../../autoload.php' resolves to the parent vendor.
 //   - via `php vendor/bin/candy-vcr` where vendor/bin is a Composer
 //     proxy script that already required the autoload before delegating.
+//   - as a phar archive: the archive's own vendor/, addressed as phar://
+//     (see the DST-1 block below).
 $autoload = null;
+
+// DST-1 (guard shape ported from candy-code/candy-top, measured on PHP 8.3.6):
+// when `php candy-vcr.phar` runs, THIS file is the archive's stub and the
+// process is NOT inside the archive — Phar::running() answers '' in exactly
+// this context, and a bare '/x.phar/entry' path fails is_file()/require for
+// every caller. Two identities therefore cover the two phar shapes: the stub
+// names itself in __FILE__, and a require-from-inside names the archive in
+// Phar::running(). Both are addressed the only way that works, as a phar://
+// URI. The archive's own vendor is then the ONLY root — a stray vendor beside
+// (or above) a downloaded phar must never boot the app with code from outside
+// the frozen archive — so the $GLOBALS hint and the filesystem candidates
+// below are skipped entirely when the archive identity exists. In every
+// composer-mode checkout Phar::running() is '' and __FILE__ is not a .phar,
+// so the arms below are byte-untouched.
+$archive = \Phar::running(false) !== ''
+    ? 'phar://' . \Phar::running(false)
+    : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+if ($archive !== '') {
+    $path = $archive . '/vendor/autoload.php';
+    if (!is_file($path)) {
+        // A phar without its own vendor/ is a build defect, not a fallback
+        // case: booting from an outside vendor would run code the frozen
+        // archive does not contain, which is the exact lie the guard exists
+        // to prevent. Fail loud.
+        \fwrite(\STDERR, "candy-vcr: the archive has no vendor/autoload.php — the phar was built without a packaged vendor.\n");
+        exit(1);
+    }
+    require $path;
+
+    exit((new SugarCraft\Vcr\Cli\Application())->run($argv, STDOUT, STDERR));
+}
 
 if (isset($GLOBALS['_composer_autoload_path']) && \is_string($GLOBALS['_composer_autoload_path'])) {
     if (\file_exists($GLOBALS['_composer_autoload_path'])) {

@@ -86,8 +86,21 @@ final class FontLoader
                     }
                 }
 
-                if (is_dir($dir . '/' . $name)) {
-                    foreach (glob($dir . '/' . $name . '/*.ttf') ?: [] as $sub) {
+                $familyDir = $dir . '/' . $name;
+                if (is_dir($familyDir)) {
+                    // scandir, not glob: glob() reads no stream wrapper, and under a
+                    // phar build (tools/build-phar.php) a family subdirectory can live
+                    // INSIDE the phar:// archive, where a glob listing comes back empty
+                    // and the bundled fonts would silently vanish from the shipped
+                    // artifact. scandir + the .ttf filter below reproduces the glob set
+                    // exactly on a real filesystem (globs never return `.`/`..`; both
+                    // sort ascending), and it is the house law the same artifact obeys
+                    // at candy-code's ToolCatalog/BuiltInCommands sites.
+                    foreach (scandir($familyDir) ?: [] as $entry) {
+                        if (!str_ends_with($entry, '.ttf')) {
+                            continue;
+                        }
+                        $sub = $familyDir . '/' . $entry;
                         if (is_file($sub)) {
                             $this->lastResolvedPath = $sub;
                             return $sub;

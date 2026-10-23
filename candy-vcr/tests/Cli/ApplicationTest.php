@@ -31,6 +31,26 @@ final class ApplicationTest extends TestCase
         $this->assertStringContainsString('stats', $stdout);
     }
 
+    public function testVersionFlagPrintsTheVersionAndExitsZero(): void
+    {
+        // Outside an archive the fallback answers (the app had no version
+        // string before the phar program; 'dev' is the honest composer-mode
+        // report). Inside a phar the build manifest wins — that precedence
+        // is pinned structurally in tests/PharBuildScriptTest.php, because
+        // minting an archive belongs to the build smoke, not this suite.
+        foreach (['--version', '-V'] as $flag) {
+            [$exit, $stdout] = $this->exec(new Application(), ['candy-vcr', $flag]);
+            $this->assertSame(0, $exit, "flag {$flag} should exit 0");
+            $this->assertSame("candy-vcr " . Application::FALLBACK_VERSION . "\n", $stdout);
+        }
+
+        // --version is answered BEFORE the help arm and before the
+        // unknown-subcommand arm: it must not be swept into usage/exit 2.
+        [$exit, $stdout] = $this->exec(new Application(), ['candy-vcr', '--version']);
+        $this->assertStringNotContainsString('usage:', $stdout);
+        $this->assertSame(0, $exit);
+    }
+
     public function testHelpExitsZero(): void
     {
         foreach (['help', '-h', '--help'] as $flag) {
