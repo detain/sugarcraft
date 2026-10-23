@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-log)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-log)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-log?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-log)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 # SugarLog
@@ -18,13 +18,15 @@ sugar-log — a minimal, colorful leveled logging library for PHP 8.3+.
 
 - **Leveled logging** — `Debug`, `Info`, `Warn`, `Error`, `Fatal` levels
 - **Colorful human-readable output** — terminal-styled by default (Probe-driven: respects `NO_COLOR` / `FORCE_COLOR`)
-- **Multiple formatters** — `TextFormatter` (default), `JSONFormatter`, `LogfmtFormatter`
+- **Multiple formatters** — `TextFormatter` (default), `JsonFormatter`, `LogfmtFormatter`
 - **Structured key/value pairs** — pass arbitrary context with every log call
 - **Sub-loggers** — `with([...])` creates a child logger with persistent fields
 - **Per-field styling** — `Styles::keys` maps field names to their ANSI styles
 - **syslog-aligned levels** — integer values (-4/0/4/8/12) for easy threshold filtering
 - **stdlog adapter** — wrap in `Log\StandardLogAdapter` for `*log.Logger` interface compatibility
-- **PSR-3 bridge** — `PsrBridge` wrapper provides full PSR-3 `LoggerInterface` methods
+- **PSR-3 bridge** — `PsrBridge` implements `Psr\Log\LoggerInterface` and satisfies type-hints anywhere a PSR-3 logger is expected
+- **Record integrity** — colliding context keys are namespaced (`ctx_`), logfmt values escape `\` and `"`, control bytes are neutralised (see [Record integrity](#record-integrity))
+- **Error-stream routing** — optional second stream for severe records (threshold defaults to `Error`) without moving everything else off `STDOUT`
 - **Hook system** — register callbacks per log level via `HookRegistry::onLevel()`
 - **Configurable log-part ordering** — `PartsOrder` DTO controls which parts appear and in what sequence
 
@@ -61,8 +63,28 @@ $log->info('info message');
 $log->warn('warn message');
 $log->error('error message');
 $log->fatal('fatal message'); // throws RuntimeException
-$log->print('always prints');   // no level prefix
+$log->print('always prints');   // bypasses the level FILTER — the label still renders
 ```
+
+## Static Facade
+
+`Log` is a process-shared façade over one lazily-created default `Logger` — the
+package-level function style of charmbracelet/log:
+
+```php
+use SugarCraft\Log\Log;
+
+Log::debug('compiling plan');
+Log::info('baking started', ['temp' => 375]);
+Log::warn('timer almost up');
+Log::error('power cut');
+Log::fatal('out of flour'); // writes, then throws RuntimeException
+
+Log::default()->setOutput($fh); // reach the shared logger itself
+```
+
+Swap the shared logger wholesale with `Log::setLogger(Logger::new(...))`, and
+`Log::reset()` returns to the lazily-created default.
 
 ## Structured Fields
 
@@ -96,25 +118,43 @@ and `FORCE_COLOR` environment variables.
 
 Override level styles via `Logger::styles()`:
 
+> **Shared singleton:** `Logger::styles()` returns the process-wide
+> `Styles::default()` instance. Mutating it changes every logger that was not
+> given its own `Styles`. For per-logger styling, build a fresh `Styles`
+> (or hand one to the formatter) and install it with `setStyles()`:
+
 ```php
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Log\Level;
+use SugarCraft\Log\Styles;
 use SugarCraft\Style\Style;
-$log = Logger::new();
-$styles = $log->styles();
-$styles->levels[Level::Error->value] = Style::new()->foreground('red')->bold();
+
+$styles = new Styles();
+$styles->levels[Level::Error->value] = Style::new()->foreground(Color::parse('red'))->bold();
 $log->setStyles($styles);
 ```
 
 ### Per-field styles
 
-`Styles::keys` maps field names (`time`, `level`, `prefix`, `caller`,
-`message`, `key`, `value`) to individual `Style` objects:
+`Styles::keys` maps the log parts (`time`, `level`, `prefix`, `caller`,
+`message`) and the field-pair roles (`key`, `value`) to individual `Style`
+objects. Part roles ship as do-nothing styles (raw bytes, no SGR); the
+formatter falls back to the matching property (`$timestamp`, `$prefix`,
+`$caller`, `$message`) or the level colour map when a part style is unset:
 
 ```php
-$styles = $log->styles();
-$styles->keys['time']   = Style::new()->foreground('cyan');
-$styles->keys['caller'] = Style::new()->foreground('grey');
+$styles = new Styles();
+$styles->keys['time']    = Style::new()->foreground(Color::parse('cyan'));
+$styles->keys['level']   = Style::new()->foreground(Color::parse('magenta')); // wins over the level map
+$styles->keys['message'] = Style::new()->italic();
+$styles->keys['value']   = Style::new()->foreground(Color::parse('green'));   // splits k=v into segments
+$styles->values['batch'] = Style::new()->foreground(Color::parse('magenta')); // per-field override
 $log->setStyles($styles);
 ```
+
+Without a `value` style, each context pair is rendered as one `key=value` run
+using `keys['key']`; setting `keys['value']` (or a per-field `values[$key]`)
+renders key and value as separate styled segments around a bare `=`.
 
 ### Level text alignment
 
@@ -125,6 +165,61 @@ column-aligned log output:
 Styles::padLevelText('INFO');  // "INFO "
 Styles::padLevelText('DEBUG'); // "DEBUG"
 ```
+
+Set `Styles::$padLevelText = true` to make `TextFormatter` apply it to every
+rendered level label:
+
+```php
+$styles = new Styles();
+$styles->padLevelText = true; // renders "INF  " / "DEBUG" instead of "INF" / "DEBUG"
+$log->setStyles($styles);
+```
+
+## Output and streams
+
+By default **every level is written to `STDOUT`**. This deliberately deviates
+from charmbracelet/log, which writes to `os.Stderr`; the single-stream default
+is kept because existing consumers rely on it. Two knobs change where records
+go:
+
+```php
+use SugarCraft\Log\Formatter\TextFormatter;
+use SugarCraft\Log\Logger;
+use SugarCraft\Log\Level;
+
+// 1. Custom stream — send a logger anywhere (immutable: returns a new Logger)
+$fh  = fopen('/tmp/app.log', 'a');
+$out = $log->withOutput($fh);
+
+// 2. Error-stream routing — severe records go to a second stream
+$err = fopen('php://stderr', 'w');
+$log = Logger::new(errorStream: $err);                              // Error+Fatal → STDERR
+$log = Logger::new(errorStream: $err, errorStreamAt: Level::Warn); // Warn and above → STDERR
+$one = $log->withErrorStream(null);                                // back to a single stream
+```
+
+Routing is decided per record when it is emitted; `Fatal` still throws
+`RuntimeException` after writing. Constructor and `setOutput()`/
+`withOutput()`/`setErrorStream()`/`withErrorStream()` reject non-resource
+streams with an `InvalidArgumentException`.
+
+## Record integrity
+
+Untrusted data can never forge or reshape a record:
+
+- **Sanitisation** — text reaching `TextFormatter` and `LogfmtFormatter` passes
+  through `Sanitize::untrusted()`, stripping ESC-based injection (terminal
+  repositioning, hyperlinks, image markers) before anything is written; JSON
+  output is escaped by `json_encode` and falls back to a minimal safe envelope
+  if a value cannot be encoded.
+- **logfmt escaping** — backslash and double-quote inside values are escaped
+  (`\\`, `\"`), newline/CR/tab become `\n`/`\r`/`\t`, and a value is quoted
+  whenever it contains whitespace, `=`, `"`, or `\`.
+- **Reserved keys** — context keys colliding with the record envelope
+  (`level`, `msg`, `time`, `caller`, `prefix`) are renamed with a repeated
+  `ctx_` prefix in both JSON and logfmt output (`level` → `ctx_level`,
+  `ctx_level` → `ctx_ctx_level`). Decoded records therefore always carry the
+  *real* level, time and message no matter what a context array contains.
 
 ## Panic Handlers
 
@@ -140,11 +235,11 @@ Log::installPanicHandler();
 Log::restoreTerminal();
 ```
 
-The panic handler catches uncaught exceptions and fatal errors (E_ERROR, E_PARSE), restores the terminal to a usable state, and prints a colorized banner with the exception class, message, and backtrace.
+The panic handler catches uncaught exceptions and fatal PHP errors (`E_ERROR`, `E_PARSE`, `E_CORE_ERROR`, `E_COMPILE_ERROR`, `E_USER_ERROR`), restores the terminal to a usable state, and prints a colorized banner with the error class, message, and backtrace. Internal frames with no file/line render honestly as `?:?`, and the report ends with a neutral footer identifying sugar-log for issue filing.
 
 ## PSR-3 Bridge
 
-`PsrBridge` wraps a `Logger` instance and provides the full PSR-3 `LoggerInterface` API (`emergency`, `alert`, `critical`, `error`, `warning`, `notice`, `info`, `debug`, `log`). Use it anywhere a PSR-3 logger is expected:
+`PsrBridge` wraps a `Logger` instance and **implements** `Psr\Log\LoggerInterface`: all nine methods (`emergency`, `alert`, `critical`, `error`, `warning`, `notice`, `info`, `debug`, `log`) are real interface methods, so the bridge satisfies a `LoggerInterface` type-hint anywhere a PSR-3 logger is expected. `log()` accepts the PSR-3 spec's `mixed $level` — unknown or non-string levels fall back to `Info`:
 
 ```php
 use SugarCraft\Log\Logger;
@@ -185,7 +280,7 @@ $id = $hooks->onLevel(Level::Warn, function (Level $level, string $psrLevel, str
 $hooks->fire(Level::Warn, 'warning', 'Something is off', []);
 ```
 
-`HookRegistry::onLevel(Level, callable)` returns a registration ID. `HookRegistry::fire(Level, psrLevel, message, context)` dispatches to all handlers whose minimum level is met.
+`HookRegistry::onLevel(Level, callable)` returns a registration ID. `HookRegistry::fire(Level, psrLevel, message, context)` dispatches to all handlers whose minimum level is met, and `remove($id)` unregisters a handler (unknown ids are ignored).
 
 The `Hook` interface is also available for structured implementations:
 
@@ -238,6 +333,13 @@ $caller = CallerFormatter::find(); // e.g. "my-script.php:42"
 ```
 
 Used internally by formatters when `$reportCaller` is enabled on the `Logger`.
+
+## Translations
+
+Error-path prose — the two messages thrown by `Logger` (`logger.fatal`,
+`logger.invalid_stream`) — is resolved through `sugar-core`'s `Lang` lookup in
+`en` plus 15 locales (exact → base → `en` → raw). Log content (level labels,
+timestamps, field text) is never translated.
 
 ## License
 
