@@ -566,8 +566,11 @@ final class Game implements Model
         }
 
         // After locking, canHold is re-enabled and the lock window state
-        // resets for the fresh piece. B2B state persists only if the
-        // current clear was B2B-eligible.
+        // resets for the fresh piece. Back-to-back follows the Tetris
+        // Guideline: a placement that clears no lines leaves the chain
+        // untouched, and only a clear that is not itself difficult (neither
+        // a Tetris nor a full T-Spin) breaks it. Resetting on quiet locks
+        // silently dropped the armed state players had earned.
         return $this->mutate([
             'board' => $cleared,
             'piece' => $newPiece,
@@ -576,7 +579,7 @@ final class Game implements Model
             'hold' => $this->hold,
             'canHold' => true,
             'combo' => $newCombo,
-            'backToBack' => $b2bEligible,
+            'backToBack' => $b2bEligible === true ? true : ($count > 0 ? false : $this->backToBack),
             'lastActionWasRotation' => false,
             'lockWindowGeneration' => null,
             'lockResets' => 0,

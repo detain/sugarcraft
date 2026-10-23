@@ -53,7 +53,8 @@ final class Piece
      * for board validity and use the first that fits.
      *
      * @return list<self> first element is the naive rotation; subsequent
-     *                    elements are wall-kick offsets in SRS order
+     *                    elements are wall-kick offsets in SRS order,
+     *                    converted to board coordinates
      */
     public function rotationsWithKicks(int $delta = 1): array
     {
@@ -63,7 +64,10 @@ final class Piece
         $candidates = [$naive];
 
         foreach (SrsKickTable::kicks($this->kind, $this->rotation, $to) as [$dx, $dy]) {
-            $candidates[] = new self($this->kind, $to, $this->x + $dx, $this->y + $dy);
+            // The table is spec-verbatim (y grows UP); the board grows DOWN
+            // (see Tetromino). Negating dy here — at the single choke every
+            // caller reads through — is the only sign conversion in the lib.
+            $candidates[] = new self($this->kind, $to, $this->x + $dx, $this->y - $dy);
         }
 
         return $candidates;

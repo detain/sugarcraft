@@ -4,137 +4,124 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tetris\Tests\Rotation;
 
+use PHPUnit\Framework\TestCase;
 use SugarCraft\Tetris\Rotation\SrsKickTable;
 use SugarCraft\Tetris\Tetromino;
-use PHPUnit\Framework\TestCase;
 
+/**
+ * Transcription pin for {@see SrsKickTable}: the table must keep matching the
+ * published SRS numbers (spec coordinates, y grows UP).
+ *
+ * Board-space meaning is NOT tested here — that is
+ * {@see SrsKickBehaviorTest()}'s job. Splitting the two means an edit to the
+ * constants reddens this file, and moving the spec→board sign conversion
+ * reddens that one; neither can silently vouch for the other.
+ */
 final class SrsKickTableTest extends TestCase
 {
     /**
-     * @dataProvider jlstzKicksProvider
+     * The SRS JLSTZ offsets exactly as published on tetris.fandom.com/wiki/SRS
+     * (each transition's five (dx, dy) pairs, spec axes).
+     *
+     * @var array<string, list<array{int, int}>>
      */
-    public function testJlstzKicks(string $transition, int $from, int $to, array $expected): void
-    {
-        $kicks = SrsKickTable::kicks(Tetromino::T, $from, $to);
-        $this->assertSame($expected, $kicks, "T-piece $transition kick offsets mismatch");
-    }
+    private const SPEC_JLSTZ = [
+        '0→R' => [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+        'R→2' => [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]],
+        '2→L' => [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+        'L→0' => [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+        'R→0' => [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]],
+        '0→L' => [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+        'L→2' => [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+        '2→R' => [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+    ];
 
     /**
-     * @dataProvider iPieceKicksProvider
+     * The published SRS I-piece offsets (spec axes).
+     *
+     * @var array<string, list<array{int, int}>>
      */
-    public function testIPieceKicks(string $transition, int $from, int $to, array $expected): void
+    private const SPEC_I = [
+        '0→R' => [[0, 0], [-2, 0], [1, 0], [-2, -1], [1, 2]],
+        'R→2' => [[0, 0], [-1, 0], [2, 0], [-1, 2], [2, -1]],
+        '2→L' => [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]],
+        'L→0' => [[0, 0], [1, 0], [-2, 0], [1, -2], [-2, 1]],
+        'R→0' => [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]],
+        '0→L' => [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]],
+        'L→2' => [[0, 0], [1, 0], [-2, 0], [1, 2], [-2, -1]],
+        '2→R' => [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, 2]],
+    ];
+
+    /** Transition key → [from, to] rotation indices. */
+    private const TRANSITIONS = [
+        '0→R' => [0, 1],
+        'R→2' => [1, 2],
+        '2→L' => [2, 3],
+        'L→0' => [3, 0],
+        'R→0' => [1, 0],
+        '0→L' => [0, 3],
+        'L→2' => [3, 2],
+        '2→R' => [2, 1],
+    ];
+
+    public function testTableMatchesThePublishedSrsTranscription(): void
     {
-        $kicks = SrsKickTable::kicks(Tetromino::I, $from, $to);
-        $this->assertSame($expected, $kicks, "I-piece $transition kick offsets mismatch");
+        foreach (self::SPEC_JLSTZ as $key => $spec) {
+            [$from, $to] = self::TRANSITIONS[$key];
+            foreach ([Tetromino::T, Tetromino::J, Tetromino::L, Tetromino::S, Tetromino::Z] as $kind) {
+                self::assertSame(
+                    $spec,
+                    SrsKickTable::kicks($kind, $from, $to),
+                    sprintf('JLSTZ kick %s drifted from the spec for %s', $key, $kind->name),
+                );
+            }
+        }
+
+        foreach (self::SPEC_I as $key => $spec) {
+            [$from, $to] = self::TRANSITIONS[$key];
+            self::assertSame(
+                $spec,
+                SrsKickTable::kicks(Tetromino::I, $from, $to),
+                sprintf('I-piece kick %s drifted from the spec', $key),
+            );
+        }
     }
 
-    public function testOPieceUsesJlstzTable(): void
+    public function testEighteenDegreeTransitionsAreNaiveOnly(): void
     {
-        $oKicks = SrsKickTable::kicks(Tetromino::O, 0, 1);
-        $tKicks = SrsKickTable::kicks(Tetromino::T, 0, 1);
-        $this->assertSame($tKicks, $oKicks, 'O uses JLSTZ table');
+        // 180° flips have no SRS spec entry; the shipped tables give them the
+        // naive offset only, so callers never invent an unspec'd kick.
+        foreach ([[0, 2], [2, 0], [1, 3], [3, 1]] as [$from, $to]) {
+            self::assertSame([[0, 0]], SrsKickTable::kicks(Tetromino::T, $from, $to));
+            self::assertSame([[0, 0]], SrsKickTable::kicks(Tetromino::I, $from, $to));
+        }
     }
 
-    /**
-     * @dataProvider jlstzCcwKicksProvider
-     */
-    public function testJlstzCcwKicks(string $transition, int $from, int $to, array $expected): void
+    public function testOPieceRoutesThroughTheJlstzTable(): void
     {
-        $kicks = SrsKickTable::kicks(Tetromino::T, $from, $to);
-        $this->assertSame($expected, $kicks, "T-piece $transition ccw kick offsets mismatch");
+        $this->assertSame(
+            SrsKickTable::kicks(Tetromino::T, 0, 1),
+            SrsKickTable::kicks(Tetromino::O, 0, 1),
+            'O uses the JLSTZ table',
+        );
     }
 
-    /**
-     * @dataProvider iPieceCcwKicksProvider
-     */
-    public function testIPieceCcwKicks(string $transition, int $from, int $to, array $expected): void
+    public function testAllKicksAgreesWithPerTransitionLookup(): void
     {
-        $kicks = SrsKickTable::kicks(Tetromino::I, $from, $to);
-        $this->assertSame($expected, $kicks, "I-piece $transition ccw kick offsets mismatch");
-    }
+        // Structural consistency pin (no literals): allKicks() and kicks()
+        // must expose one table, and the I piece must differ from JLSTZ.
+        foreach ([Tetromino::T, Tetromino::I, Tetromino::O] as $kind) {
+            $all = SrsKickTable::allKicks($kind);
+            foreach (self::TRANSITIONS as $key => [$from, $to]) {
+                self::assertArrayHasKey($key, $all);
+                self::assertSame($all[$key], SrsKickTable::kicks($kind, $from, $to));
+            }
+        }
 
-    public function testUnknownTransitionFallsBackToNaive(): void
-    {
-        // Direct 180 transitions (0↔2, R↔L) have no SRS spec entry
-        $kicks = SrsKickTable::kicks(Tetromino::T, 0, 2);
-        $this->assertSame([[0, 0]], $kicks, 'Unknown 180 transition must return naive-only kick');
-
-        $kicks180 = SrsKickTable::kicks(Tetromino::I, 0, 2);
-        $this->assertSame([[0, 0]], $kicks180, 'Unknown 180 transition for I-piece must return naive-only kick');
-    }
-
-    public function testAllKicksReturnsFullTableForJlstz(): void
-    {
-        $all = SrsKickTable::allKicks(Tetromino::T);
-        $this->assertIsArray($all);
-        $this->assertArrayHasKey('0→R', $all);
-        $this->assertArrayHasKey('R→2', $all);
-        $this->assertArrayHasKey('2→L', $all);
-        $this->assertArrayHasKey('L→0', $all);
-        $this->assertArrayHasKey('R→0', $all);
-        $this->assertArrayHasKey('0→L', $all);
-        $this->assertArrayHasKey('L→2', $all);
-        $this->assertArrayHasKey('2→R', $all);
-        $this->assertArrayHasKey('0→2', $all);
-        $this->assertSame([[0, 0]], $all['0→2']);
-    }
-
-    public function testAllKicksReturnsFullTableForIPiece(): void
-    {
-        $all = SrsKickTable::allKicks(Tetromino::I);
-        $this->assertIsArray($all);
-        $this->assertArrayHasKey('0→R', $all);
-        $this->assertArrayHasKey('R→2', $all);
-        // I-piece has different kick values than JLSTZ
-        $this->assertNotSame(SrsKickTable::allKicks(Tetromino::T)['0→R'], $all['0→R']);
-    }
-
-    public function testAllKicksOPieceUsesJlstzTable(): void
-    {
-        $oAll = SrsKickTable::allKicks(Tetromino::O);
-        $tAll = SrsKickTable::allKicks(Tetromino::T);
-        $this->assertSame($tAll, $oAll, 'O-piece must use JLSTZ kick table');
-    }
-
-    public static function jlstzKicksProvider(): array
-    {
-        return [
-            '0→R' => ['0→R', 0, 1, [[0, 0], [-1, 0], [-1, +1], [0, -2], [-1, -2]]],
-            'R→2' => ['R→2', 1, 2, [[0, 0], [+1, 0], [+1, -1], [0, +2], [+1, +2]]],
-            '2→L' => ['2→L', 2, 3, [[0, 0], [+1, 0], [+1, +1], [0, -2], [+1, -2]]],
-            'L→0' => ['L→0', 3, 0, [[0, 0], [-1, 0], [-1, -1], [0, +2], [-1, +2]]],
-        ];
-    }
-
-    public static function jlstzCcwKicksProvider(): array
-    {
-        // Counter-clockwise: negation of reverse cw pair
-        return [
-            'R→0' => ['R→0', 1, 0, [[0, 0], [+1, 0], [+1, -1], [0, +2], [+1, +2]]],
-            '0→L' => ['0→L', 0, 3, [[0, 0], [+1, 0], [+1, +1], [0, -2], [+1, -2]]],
-            'L→2' => ['L→2', 3, 2, [[0, 0], [-1, 0], [-1, -1], [0, +2], [-1, +2]]],
-            '2→R' => ['2→R', 2, 1, [[0, 0], [-1, 0], [-1, +1], [0, -2], [-1, -2]]],
-        ];
-    }
-
-    public static function iPieceKicksProvider(): array
-    {
-        return [
-            '0→R' => ['0→R', 0, 1, [[0, 0], [-2, 0], [+1, 0], [-2, -1], [+1, +2]]],
-            'R→2' => ['R→2', 1, 2, [[0, 0], [-1, 0], [+2, 0], [-1, +2], [+2, -1]]],
-            '2→L' => ['2→L', 2, 3, [[0, 0], [+2, 0], [-1, 0], [+2, +1], [-1, -2]]],
-            'L→0' => ['L→0', 3, 0, [[0, 0], [+1, 0], [-2, 0], [+1, -2], [-2, +1]]],
-        ];
-    }
-
-    public static function iPieceCcwKicksProvider(): array
-    {
-        // Counter-clockwise: negation of reverse cw pair
-        return [
-            'R→0' => ['R→0', 1, 0, [[0, 0], [+2, 0], [-1, 0], [+2, +1], [-1, -2]]],
-            '0→L' => ['0→L', 0, 3, [[0, 0], [-1, 0], [+2, 0], [-1, -2], [+2, +1]]],
-            'L→2' => ['L→2', 3, 2, [[0, 0], [+1, 0], [-2, 0], [+1, +2], [-2, -1]]],
-            '2→R' => ['2→R', 2, 1, [[0, 0], [-2, 0], [+1, 0], [-2, +1], [+1, +2]]],
-        ];
+        $this::assertNotSame(
+            SrsKickTable::allKicks(Tetromino::T)['0→R'],
+            SrsKickTable::allKicks(Tetromino::I)['0→R'],
+            'the I piece must keep its own larger offsets',
+        );
     }
 }

@@ -3,6 +3,12 @@
 
 declare(strict_types=1);
 
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Tetris\Game;
+use SugarCraft\Tetris\LaunchMode;
+use SugarCraft\Tetris\VsGame;
+
 (static function () {
     foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
         $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
@@ -15,27 +21,20 @@ declare(strict_types=1);
     exit(1);
 })();
 
-use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
-use SugarCraft\Tetris\Game;
-use SugarCraft\Tetris\VsGame;
+try {
+    $mode = LaunchMode::resolve($argv);
+} catch (InvalidArgumentException $problem) {
+    fwrite(STDERR, $problem->getMessage() . "\n\n" . LaunchMode::helpText());
+    exit(1);
+}
 
-$mode = 'single';
-if ($argc > 1) {
-    if ($argv[1] === 'v' || $argv[1] === '--vs') {
-        $mode = 'vs';
-    } elseif ($argv[1] === 'h' || $argv[1] === '--help') {
-        fwrite(STDOUT, "candy-tetris - Tetris clone\n\n");
-        fwrite(STDOUT, "Usage: candy-tetris [options]\n");
-        fwrite(STDOUT, "  (no args)   Start single player game\n");
-        fwrite(STDOUT, "  -v, --vs    Start VS Computer mode\n");
-        fwrite(STDOUT, "  -h, --help  Show this help\n");
-        exit(0);
-    }
+if ($mode === LaunchMode::HELP) {
+    fwrite(STDOUT, LaunchMode::helpText());
+    exit(0);
 }
 
 $game = match ($mode) {
-    'vs' => VsGame::start(),
+    LaunchMode::VS => VsGame::start(),
     // Single-player enables lock delay so a grounded piece can still be
     // nudged/rotated for a short window before it locks (W15 / SRS QoL).
     default => Game::startWithLockDelay(),

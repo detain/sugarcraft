@@ -20,6 +20,14 @@ use SugarCraft\Tetris\Tetromino;
  * Each entry maps a rotation transition to a list of (dx, dy) deltas to
  * try in order. The piece is first rotated, then each kick is applied;
  * the first kick that results in a valid board position is used.
+ *
+ * The deltas are transcribed VERBATIM from the spec, whose y axis grows
+ * UPWARD (tetris.fandom.com/wiki/SRS). The board's y grows DOWNWARD (see
+ * {@see Tetromino}), so the vertical sign is negated exactly once, at the
+ * single consumption choke {@see Piece::rotationsWithKicks()} — never here.
+ * Do not pre-negate the table: SrsKickTableTest pins this transcription
+ * against the spec numbers and SrsKickBehaviorTest pins the board-space
+ * outcome, and the two halves go red if the flip ever moves location.
  */
 final class SrsKickTable
 {

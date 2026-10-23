@@ -781,6 +781,46 @@ final class GameTest extends TestCase
         $this->assertSame(4, $after->score->lines, 'Should have cleared 4 lines');
     }
 
+    public function testBackToBackSurvivesAQuietLock(): void
+    {
+        // Tetris Guideline: only line clears speak to the back-to-back chain.
+        // A placement that clears nothing must leave an armed chain alone —
+        // the pre-fix code reset it on every lock, silently discarding the
+        // bonus the player had earned.
+        $g = $this->deterministicGame();
+        $game = $g->mutate(['backToBack' => true, 'piece' => new Piece(Tetromino::O, 0, 4, 0)]);
+
+        [$after] = $game->update($this->key(' ')); // lands on an empty board: zero lines cleared
+
+        self::assertSame(0, $after->score->lines, 'fixture premise: nothing was cleared');
+        self::assertTrue($after->backToBack, 'a quiet lock must preserve an armed back-to-back chain');
+    }
+
+    public function testBackToBackBreaksOnNonDifficultClear(): void
+    {
+        // The other side of the guideline: a single plain (non-Tetris,
+        // non-T-Spin) line clear DOES break an armed chain.
+        $g = $this->deterministicGame();
+
+        $rows = $g->board->rows();
+        for ($col = 0; $col < Board::COLS; $col++) {
+            if ($col === 1 || $col === 2) {
+                continue; // the gap an O piece at x=0 fills (O occupies x+1, x+2)
+            }
+            $rows[Board::ROWS - 1][$col] = Tetromino::I;
+        }
+        $game = $g->mutate([
+            'board' => new Board($rows),
+            'piece' => new Piece(Tetromino::O, 0, 0, 0),
+            'backToBack' => true,
+        ]);
+
+        [$after] = $game->update($this->key(' '));
+
+        self::assertSame(1, $after->score->lines, 'fixture premise: exactly one line cleared');
+        self::assertFalse($after->backToBack, 'a plain single clear must break back-to-back');
+    }
+
     // ------------------------------------------------------------------
     // T-Spin semantics — last successful input was a rotation (findings 3/4)
     // ------------------------------------------------------------------
