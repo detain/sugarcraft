@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Input\Driver\SignalResizeDriver;
 
 /**
- * E715 pins for SignalResizeDriver's tput capability gate.
+ * Gate pins for SignalResizeDriver's tput capability (shell-injection guard).
  *
  * Both polarities: well-formed terminfo names reach the shell ONLY as a
  * quoted, exact command shape; injection-shaped names are refused at the
@@ -16,9 +16,9 @@ use SugarCraft\Input\Driver\SignalResizeDriver;
  * is captured through the driver's internal executor seam — no real
  * subprocess ever runs here.
  *
- * NOTE: with pcntl available the constructor itself probes cols/lines, so
- * makeDriver() arms the recorder and then DRAINS the construction-time
- * shell-outs; each test's assertions see only the commands it triggered.
+ * NOTE: construction is side-effect free (only arm() probes dimensions),
+ * so the command log starts empty; the drain in makeDriver() is kept as a
+ * guard in case a future constructor ever shells out before a test runs.
  */
 final class SignalResizeDriverCapabilityGateTest extends TestCase
 {
