@@ -60,4 +60,36 @@ final class UpDownCounterTest extends TestCase
         $this->assertSame('http_requests', $counter->name());
         $this->assertSame('Incoming HTTP requests', $counter->help());
     }
+
+    public function testFactoryStaticTagsLandOnEveryAdd(): void
+    {
+        // The defect this pin cures: Registry::newUpDownCounter() accepted
+        // $tags but dropped them, so the documented README form
+        // (newUpDownCounter('conns', help, ['host' => $host])) silently
+        // aggregated every host into one series.
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $counter = $r->newUpDownCounter('conns', 'Active connections', ['host' => 'h1']);
+        $counter->add(1.0);
+        $counter->add(1.0);
+        $this->assertSame(2.0, $b->upDownCounterValue('conns', ['host' => 'h1']));
+    }
+
+    public function testStaticTagsMergeWithPerCallTagsAndPerCallWins(): void
+    {
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $counter = $r->newUpDownCounter('conns', 'Active connections', ['host' => 'h1', 'zone' => 'a']);
+        $counter->add(1.0, ['zone' => 'b']);
+        $this->assertSame(1.0, $b->upDownCounterValue('conns', ['host' => 'h1', 'zone' => 'b']));
+    }
+
+    public function testRegistryDefaultTagsApplyToInstrumentAdds(): void
+    {
+        $b = new InMemoryBackend();
+        $r = new Registry($b, ['env' => 'prod']);
+        $counter = $r->newUpDownCounter('conns', 'Active connections', ['host' => 'h1']);
+        $counter->add(2.0);
+        $this->assertSame(2.0, $b->upDownCounterValue('conns', ['env' => 'prod', 'host' => 'h1']));
+    }
 }

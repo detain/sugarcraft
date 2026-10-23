@@ -149,7 +149,7 @@ final class Registry
      */
     public function newUpDownCounter(string $name, string $help = '', array $tags = []): Instrument\UpDownCounter
     {
-        return new Instrument\UpDownCounter($this, $name, $help);
+        return new Instrument\UpDownCounter($this, $name, $help, $tags);
     }
 
     /**

@@ -16,19 +16,30 @@ use SugarCraft\Metrics\Registry;
  */
 final class UpDownCounter
 {
+    /**
+     * @param array<string,string> $tags Static tags applied on every add() call;
+     *                                   per-call tags win on key conflicts.
+     */
     public function __construct(
         private readonly Registry $registry,
         private readonly string $name,
         private readonly string $help = '',
+        private readonly array $tags = [],
     ) {}
 
     /**
      * Add `$amount` to the current value. Positive increments
      * increase the sum; negative increments decrease it.
+     *
+     * The instrument's static tags are emitted on every call; the
+     * `$tags` argument adds (or overrides) per-call tags on top.
+     *
+     * @param array<string,string> $tags
      */
     public function add(float $amount, array $tags = []): void
     {
-        $this->registry->upDownCounter($this->name, $amount, $tags);
+        $merged = $this->tags === [] ? $tags : \array_merge($this->tags, $tags);
+        $this->registry->upDownCounter($this->name, $amount, $merged);
     }
 
     public function name(): string
