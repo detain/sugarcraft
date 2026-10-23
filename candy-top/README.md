@@ -13,6 +13,7 @@ candy-top reads btop's config format and btop's `.theme` files, and its keys, me
 - [Run](#run)
 - [The boxes](#the-boxes)
 - [Menus and overlays](#menus-and-overlays)
+- [Logo](#logo)
 - [Presets](#presets)
 - [Key bindings](#key-bindings)
 - [Mouse](#mouse)
@@ -32,6 +33,7 @@ candy-top reads btop's config format and btop's `.theme` files, and its keys, me
 - PHP 8.3 or newer, CLI.
 - A terminal with an interactive tty on both stdin and stdout. Like btop, candy-top refuses to start without one ("No tty detected!").
 - Truecolor is recommended. With `truecolor = false` colours are mapped to the 256-colour cube, and in [TTY mode](#tty-mode) the 16 terminal colours are used.
+- Colour depth comes from the config, not the environment: `tty_mode` and `truecolor` decide the palette the renderer paints. The ambient `NO_COLOR` / `CLICOLOR` variables are not yet honoured by candy-top (sugar-core detects an environment-derived colour profile and hands it to the program layer, but the app's renderer does not consult it); `truecolor = false` or `tty_mode = true` in the config, or the matching options-menu toggle, is the supported way to step colours down.
 - Optional PHP extensions:
   - `ext-posix` shows user names in the process list (otherwise numeric uids), sends signals (`posix_kill`) and detects a real console (`posix_ttyname`).
   - `ext-pcntl` renices processes (`pcntl_setpriority`; PHP's `proc_nice()` cannot renice another pid) and traps SIGTERM/SIGHUP so the config is still saved.
@@ -84,13 +86,16 @@ vendor/bin/candy-top                     # live host, default config
 vendor/bin/candy-top --config ~/top.conf # another config file (also the save target)
 vendor/bin/candy-top --fake              # deterministic demo data, never the real host
 vendor/bin/candy-top --help              # options plus the full key list
+vendor/bin/candy-top --version           # version line, no tty needed
 ```
 
 | Flag | Effect |
 |---|---|
 | `--fake` | Uses the seeded fake collectors (`Source\Fake\*`) instead of the live host. The data is deterministic and the pids are invented, so it suits demos and VHS tapes. The fake host has two GPUs and one NPU (gpu boxes `gpu0`-`gpu2`), with per-process GPU use. |
 | `--config <path>`, `--config=<path>` | Reads the config from `<path>` instead of `$XDG_CONFIG_HOME/candy-top/config.conf`. That file is also where the config is saved. A missing value is an error (exit 2). So is a following argument that starts with `-` in the space-separated form (`--config -x`); `--config=-x` is accepted as a path. |
+| `--version` | Prints `candy-top <version>` on stdout and exits 0, before any config, theme or host probe. Works without a tty. A tagged phar build prints the tag it was built from; a plain checkout prints the dev version and short sha (`+dirty` when the tree is modified), and `unknown` when the package's composer metadata is unavailable. |
 | `-h`, `--help` | Prints usage and the KEYS section, which is generated from the same key table as the help overlay, then exits 0. Works without a tty. |
+| `self-update [flags]` | The updater verb for a phar install: `--check`, `--rollback` and `--allow-unsigned` (see [Phar release and self-update](#phar-release-and-self-update)). It answers before the tty gate, so it works over ssh and in cron; every argument after `self-update` belongs to the updater, not to candy-top. A composer install is refused loudly rather than silently no-op'd. |
 
 Any other argument exits with status 2. There is no `--tty` flag. TTY mode comes from the `force_tty` option or from running on a real console, as described in [TTY mode](#tty-mode). Config load warnings (bad values) are printed on stderr at startup, and the option keeps its default.
 
@@ -213,8 +218,8 @@ Up to six gpu boxes can be shown at once (btop #1730), one per accelerator: `gpu
 
 While a menu is open, the frame behind it is dimmed to `inactive_fg`. With `background_update = false`, and always in TTY mode, that dimmed frame is also frozen. Menus re-centre when the terminal is resized. The main, help, options and signal-chooser menus need at least 80x24, and the other menus need 50x20. On a smaller terminal a size-error box is shown instead.
 
-- **Main menu** (`Esc`, `m`, or the `m` menu button in the cpu border). Shows the banner and three block-letter entries: Options, Help and Quit. Use the arrows, Tab or `j`/`k` to move and Enter or Space to open. Options and Help open on top of the main menu, which comes back when they close.
-- **Options menu** (`F2`, `o`). A 78-column box with tabs 0 general, 1 cpu, 2 mem, 3 net, 4 proc and 5 gpu (btop #1411). The gpu tab appears only once a GPU has answered. Options are grouped under non-selectable headings (btop #1791b), and the selected option's description is shown on the right.
+- **Main menu** (`Esc`, `m`, or the `m` menu button in the cpu border). Shows the logo (by default a random ANSI-art piece; see [Logo](#logo)) over the legacy banner artwork, then three block-letter entries: Options, Help and Quit. Use the arrows, Tab or `j`/`k` to move and Enter or Space to open. Options and Help open on top of the main menu, which comes back when they close.
+- **Options menu** (`F2`, `o`). A box up to 92 columns wide (`min(92, terminal width - 2)`, so 78 cells on an 80-column terminal) with tabs 0 general, 1 cpu, 2 mem, 3 net, 4 proc and 5 gpu (btop #1411). The gpu tab appears only once a GPU has answered. Options are grouped under non-selectable headings (btop #1791b), and the selected option's description is shown on the right.
   - Up and down move between options, skipping headings. Page Up and Page Down flip pages.
   - Tab and Shift+Tab change tabs, and a digit picks a tab directly.
   - `←` and `→` flip a boolean, step a number (`update_ms` by 100), or cycle a list. `color_theme` cycles the installed themes. `cpu_graph_*`, `cpu_sensor` and `selected_battery` cycle what the collectors reported.
@@ -225,6 +230,17 @@ While a menu is open, the frame behind it is dimmed to `inactive_fg`. With `back
 - **Signal chooser** (`s`). A 5-column grid of signals 1 to 31 (16, SIGSTKFLT, is skipped). Type a number, move with the arrows or `h`/`j`/`k`/`l`, and press Enter or Space to send.
 - **Renice** (`N`). A nice value from -20 to 19. Type a value, step with up and down (by 1) or left and right (by 5), and press Enter to apply.
 - **Message boxes.** These are the terminate and kill confirmations (Yes/No), the signal and renice failure box, the "terminal too small" box for a toggle or preset that would not fit, and warning boxes for an invalid option value, a config-save failure, or a load warning on `ctrl+r` reload.
+
+### Logo
+
+The main, options and help menus replace the plain banner with an ANSI-art logo drawn centred above the entries. The corpus ships inside the package (`logo/*.ansi`, animated pieces included) and carries depth variants, so the same slug renders within the terminal's real colour depth (`tty_mode`, `truecolor`) instead of smuggling truecolor bytes into a 16-colour or TTY terminal. The environment picks the artwork:
+
+- `CANDY_TOP_LOGO` unset (the default) — a random logo, re-rolled every time a menu opens. This is why the logo changes between `Esc` presses.
+- `CANDY_TOP_LOGO=off` — no logo; the menus paint the legacy banner (the byte-identical fallback the goldens pin).
+- `CANDY_TOP_LOGO=<slug>` — that piece, every open, memoised per depth.
+- `CANDY_TOP_LOGO_SEED=<int>` — reseeds the draw once per process: the seed fixes the *sequence* of per-open draws (a deterministic replay for demos and screenshots), not one pinned logo.
+
+A missing `logo/` directory, an unparsable corpus or an unknown slug degrades to the legacy banner — the decoration never stops the monitor from drawing.
 
 ## Presets
 
@@ -333,7 +349,7 @@ Context rules, following btop's input handling:
 
 ## Mouse
 
-Mouse reporting is on unless `disable_mouse` is set. The mode is button and motion tracking (`?1002h` + SGR `?1006h`), the same as btop, and flipping the option at runtime turns reporting on or off at once.
+Mouse reporting is on unless `disable_mouse` is set. The mode is button and motion tracking (`?1002h` + SGR `?1006h`), the same as btop, and flipping the option at runtime turns reporting on or off at once. A terminal that does not implement SGR mouse reporting simply never answers — nothing breaks and no coordinates arrive; every affordance in the table has a key equivalent in the [key table](#key-bindings), and `disable_mouse = true` stops candy-top asking at all.
 
 | Where | Action |
 |---|---|
@@ -646,7 +662,7 @@ These are deliberate deviations and gaps. Each phase's full notes are in `CALIBE
 - No CPU package watts (`show_cpu_watts` has no RAPL reader).
 - No ZFS pool IO.
 - No MAC-address fallback for an interface without an IP.
-- Accepted but not acted on: `terminal_sync` (synchronized output is always on), `log_level` (no log file), `disk_free_priv` (free space is always the unprivileged figure), `keep_dead_proc_usage`, `proc_info_smaps`, and the PCIe keys `nvml_measure_pcie_speeds` and `rsmi_measure_pcie_speeds`. The options menu marks these keys "not used yet".
+- Accepted but not acted on: `terminal_sync` (candy-top does not emit synchronized-output sequences — the crash-reset path switches DEC mode 2026 off defensively, which is harmless when it was never on), `log_level` (no log file), `disk_free_priv` (free space is always the unprivileged figure), `keep_dead_proc_usage`, `proc_info_smaps`, and the PCIe keys `nvml_measure_pcie_speeds` and `rsmi_measure_pcie_speeds`. The options menu marks these keys "not used yet".
 - `freq_mode`, `cpu_sensor` and `zfs_arc_cached` take effect after a restart; the menu says so.
 
 **Behaves differently**
@@ -695,8 +711,8 @@ vendor/bin/phpunit
 
 - **Golden fixtures.** Goldens live under `tests/fixtures/` (frames, panels, overlays). Regenerate them with `CANDY_TOP_UPDATE_GOLDENS=1 vendor/bin/phpunit <test>` and review the diff.
 - **README tables.** The key, config and theme blocks above are generated. After a deliberate roster change, run `CANDY_TOP_UPDATE_DOCS=1 vendor/bin/phpunit tests/Docs` and review the README diff.
-- **i18n.** User-facing strings are `Lang::t()` keys in `lang/en.php`.
-- **Architecture.** For the architecture (Model–Update–View runtime, panel seam, input precedence, overlays) and implementation notes, read `CALIBER_LEARNINGS.md` at the monorepo root.
+- **i18n.** User-facing strings are `Lang::t()` keys in `lang/en.php`; `en` is currently the only shipped locale.
+- **Architecture.** For the architecture (Model–Update–View runtime, panel seam, input precedence, overlays) and implementation notes, read `candy-top/CALIBER_LEARNINGS.md` (shipped with this package).
 
 ## License
 
