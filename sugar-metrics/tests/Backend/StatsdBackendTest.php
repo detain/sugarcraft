@@ -204,8 +204,19 @@ final class StatsdBackendTest extends TestCase
 
     public function testDestructorClosesOwnedSocket(): void
     {
-        // Test that destructor does not throw when closing an owned socket.
-        $b = new StatsdBackend('127.0.0.1', 8125);
+        // Hermetic: claim a free ephemeral UDP port on loopback and release
+        // it before connecting, so the test never pokes a real statsd daemon
+        // that may listen on the well-known 8125 of the machine running it.
+        // (UDP endpoints need the explicit BIND flag; connect semantics are
+        // meaningless for datagrams.)
+        $probe = @stream_socket_server('udp://127.0.0.1:0', $errno, $errstr, STREAM_SERVER_BIND);
+        $this->assertIsResource($probe, "ephemeral UDP port discovery failed: $errno $errstr");
+        $name = (string) stream_socket_get_name($probe, false);
+        fclose($probe);
+        $port = (int) substr($name, strrpos($name, ':') + 1);
+        $this->assertGreaterThan(0, $port, 'ephemeral UDP port discovery failed');
+
+        $b = new StatsdBackend('127.0.0.1', $port);
         unset($b); // Destructor must not throw.
         $this->assertTrue(true);
     }
