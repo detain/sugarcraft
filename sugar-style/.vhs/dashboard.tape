@@ -1,4 +1,4 @@
-# Render the Sprinkles dashboard example.
+# Render the sugar-style dashboard example.
 Output .vhs/dashboard.gif
 
 Set FontSize 14

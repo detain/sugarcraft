@@ -10,7 +10,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-style)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-style)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-style?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-style)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.2-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -33,7 +33,7 @@ echo Style::new()
     ->fg('#ff5f87')        // accepts hex string or Color instance
     ->on('#1e1e2e')        // background — reads naturally in chains
     ->pad(0, 2)            // CSS-style 1/2/4-arg padding
-    ->of('hello, candy world')
+    ->of('hello, styled world')
     ->render() . "\n";
 ```
 
@@ -44,13 +44,14 @@ the call site:
 
 ```php
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Style\Style;
 
 echo Style::new()
     ->bold()
     ->foreground(Color::hex('#ff5f87'))
     ->background(Color::hex('#1e1e2e'))
     ->padding(0, 2)
-    ->setString('hello, candy world')
+    ->setString('hello, styled world')
     ->render() . "\n";
 ```
 
@@ -59,6 +60,12 @@ echo Style::new()
 ```php
 use SugarCraft\Style\Layout;
 use SugarCraft\Style\Position;
+
+$left = 'sidebar';
+$right = 'content';
+$header = 'top';
+$body = 'middle';
+$footer = 'bottom';
 
 // Side-by-side
 echo Layout::joinHorizontal(Position::TOP, $left, $right);
@@ -75,6 +82,10 @@ echo Layout::joinVerticalWithSpacing(Position::LEFT, 1, $header, $body, $footer)
 // Place inside a fixed rectangle
 echo Layout::place(40, 10, Position::CENTER, Position::CENTER, 'centered text');
 ```
+
+Only lowercase method names are defined (`joinHorizontal`, `place`, …);
+the capitalized spellings inherited from the upstream Go API resolve to the
+same functions because PHP method names are case-insensitive.
 
 ## Constraint-based layout
 
@@ -96,7 +107,7 @@ $rows = Layout::vertical([
 // Further split the body row into 3 columns
 $cols = Layout::horizontal([
     Constraint::length(20),     // sidebar — fixed 20 cols
-    Constraint::percentage(60), // main    — 60% of remaining
+    Constraint::percentage(60), // main    — 60% of the total width
     Constraint::fill(1),        // extra   — absorbs the rest
 ])->split($rows[1]);
 ```
@@ -112,8 +123,69 @@ Available constraints:
 | `Constraint::ratio($num, $denom)` | Proportional size as `$num/$denom` of the area |
 | `Constraint::fill($weight)` | Fills all remaining space; weight controls distribution |
 
-The solver handles all combinations of constraints in a single pass.
+Each wrapper exposes its payload through typed accessors — `n` on
+`length`/`min`/`max`/`percentage`, `numerator`/`denominator` on `ratio`,
+`weight` on `fill` — e.g. `Constraint::length(20)->n`. Internally the value
+lives in a private constraints-library object and a shared dynamic-read arm
+(trait `Layout\ReadsConstraintPayload`, reached through `__get`) forwards the
+solver's per-class field reads and carries the ONE unknown-name rejection;
+that magic is why reflection-based tooling must not treat the wrappers as
+plain property bags. Constraint-layer error strings are hard-coded English
+— this sub-namespace is deliberately not routed through `Lang`.
+
+The solver partitions any combination of constraints with a greedy
+re-distribution pass (fixed sizes first, then caps, then minimum floors,
+then proportional and fill constraints sharing what is left). It is not a
+single linear-scan formula: when one constraint is clamped, its reclaimed or
+deficit cells are re-spread over the remaining constraints.
 See `examples/constraint-dashboard.php` for a full 3-pane dashboard demo.
+
+Each `solve()` call constructs a fresh solver instance (the layout layer is
+stateless); the `SUGARCRAFT_LAYOUT_SOLVER` environment decision itself is
+read once per process and cached — see “The layout-solver environment
+gate” below.
+
+### The layout-solver environment gate
+
+`Solver::solve()` asks `SolverFactory::fromEnvironment()` for a solver, and
+the factory reads `SUGARCRAFT_LAYOUT_SOLVER` once per process:
+
+- unset or any value other than `cassowary` → `GreedySolver` (the canonical
+  partitioner).
+- exactly `cassowary` → `CassowarySolver`, which today **delegates to
+  GreedySolver** — sugar-constraints's simplex engine was removed, so the
+  opt-in is a deprecated-but-harmless setting that raises an
+  `E_USER_DEPRECATED` notice once. Behaviour is identical either way.
+
+The decision (not the instance) is memoized in a static; tests that toggle
+the variable mid-process call
+`SolverFactory::resetEnvironmentResolutionForTesting()`. `SolverFactory::default()`
+is a deprecated alias for `fromEnvironment()`.
+`sugar-style`'s factory is the only code in the fleet that reads the
+variable; sugar-constraints names it only in `CassowarySolver`'s docblock
+(as the legacy opt-in its shim answers to), and no other package consults it.
+
+### Sharing regions across packages (`RegionBridge`)
+
+`sugar-constraints` and `sugar-cellbuffer` each model a screen rectangle,
+and `sugar-style` is the lowest package that depends on both. The layout
+sub-namespace ships `Layout\RegionBridge` as the converter seam:
+
+```php
+use SugarCraft\CellBuffer\Position;
+use SugarCraft\CellBuffer\Region as BufferRegion;
+use SugarCraft\Constraints\Region as ConstraintsRegion;
+use SugarCraft\Style\Layout\RegionBridge;
+
+$constraintsRgn = new ConstraintsRegion(0, 0, 80, 24);
+$bufferRegion   = RegionBridge::toBuffer($constraintsRgn);   // Position(0,0), 80×24
+$roundTrip      = RegionBridge::toConstraints($bufferRegion); // same rectangle back
+```
+
+`toBuffer()` always succeeds. `toConstraints()` throws
+`\InvalidArgumentException` when the buffer region carries a negative
+origin — the constraints `Region` is non-negative-guarded by design, and
+the bridge refuses to paper over that rather than silently clamping.
 
 ## Tables
 
@@ -156,14 +228,26 @@ echo Tree::new()
 ## Public API
 
 - **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `accent`/`muted` default to `primary`/`secondary` in the `dark()`/`light()`/`ansi()` themes, but are set to distinct colour values in the richer named themes (dracula, tokyoNight, oneDark, githubDark, solarizedDark/Light); consumers must NOT assume `$theme->accent === $theme->primary`. Every `with*($color)` setter returns a new `Theme`. `Theme::catalog()` enumerates the factory names as a `list<string>` for programmatic discovery. SSOT for theming across consumer libs.
-- **`Style`** — every lipgloss prop (~40 `with*()` methods): fg/bg/border
+- **`Style`** — the immutable value object. Style is the fleet's legacy
+  builder: its setters are bare-named (`bold()`, `fg()`, `width()`) rather
+  than `with*()`-prefixed, yet each returns a **new** `Style` — measured
+  2026-10: 72 fluent setters, 0 `with*()` methods, 34 getters (`get*` /
+  `is*`), 31 `unset*()`. Re-derive with reflection over non-static public
+  methods (return-`self` = setter; `get*`/`is*` = getter; `unset*` =
+  unsetter). Every setter and `inherit()` route through one private
+  62-positional-parameter `with()` choke. Props covered: fg/bg/border
   colours (incl. per-side), bold/italic/underline/strikethrough/faint/blink/
-  rapidBlink/reverse, padding/margin (1/2/4-arg shorthand + per-side), width/height,
+  rapidBlink/reverse/overline/invisible, padding/margin (1/2/4-arg shorthand
+  + per-side) with `paddingChar()`/`marginChar()` fill glyphs, width/height,
   maxWidth/maxHeight, align (Align/VAlign), inline, transform, tabWidth,
-  marginBackground, colorWhitespace. Plus 21 getters, 15 `unset*()`,
-  `copy()` (shallow clone), `inherit($parent)` (unset-only merge), and
+  marginBackground, colorWhitespace. Plus `copy()` (shallow clone),
+  `inherit($parent)` (unset-only merge), and
   `patch($other)` (incremental merge — only props set in $other are applied;
   a null colour/width/border in $other is skipped, not a clear).
+  Bare-named methods exist because PHP cannot overload by arity: the short
+  forms (`fg`, `bg`, `pad`, `mg`, `of`) are aliases of the long forms
+  (`foreground`, …) — the same rationale upstream lipgloss gives for its
+  `GetX` getter family.
 - **`Border`** — `normal()`, `rounded()`, `thick()`, `double()`, `block()`,
   `ascii()`, `hidden()`, `markdownBorder()`. `Border::catalog()` enumerates the
   factory names as a `list<string>` for programmatic discovery. Per-side toggles
@@ -179,10 +263,15 @@ echo Tree::new()
   right concrete colour at render time per `ColorProfile` (TrueColor / 256 /
   Ansi) or per dark-vs-light background.
 - **`LightDark`** — pick helper for dark-bg vs light-bg colour schemes.
-- **`Layout`** — `Place`, `PlaceHorizontal`, `PlaceVertical`,
-  `JoinHorizontal`, `JoinVertical`, `JoinHorizontalWithSpacing`,
-  `JoinVerticalWithSpacing`, `Width`, `Height`, `Size` (all package-level
-  layout primitives from lipgloss).
+- **`Layout`** (package-level) — `place`, `placeHorizontal`, `placeVertical`,
+  `joinHorizontal`, `joinVertical`, `joinHorizontalWithSpacing`,
+  `joinVerticalWithSpacing`, `width`, `height`, `size` (all plain-string
+  layout primitives from lipgloss). The lowercase spellings are canonical;
+  capitalized calls compile identically because PHP resolves method names
+  case-insensitively. Note there are **two** `Layout` classes: this
+  package-level primitive facade (`SugarCraft\Style\Layout`) and the
+  constraint solver in the sub-namespace (`SugarCraft\Style\Layout\Layout`,
+  imported as `use SugarCraft\Style\Layout\Layout;`).
 - **`Position`** — `TOP / LEFT / CENTER / RIGHT / BOTTOM` floats for layout
   anchors.
 - **`Layout`** (sub-namespace) — ratatui-inspired constraint solver:
@@ -207,8 +296,13 @@ echo Tree::new()
 - **`Renderer`** — per-writer rendering context: `withColorProfile` /
   `withHasDarkBackground` / `newStyle()` / `lightDark()` /
   `resolveAdaptive(AdaptiveColor)` / `fromEnvironment()`.
-- **`Palette`** — named ANSI 16-slot constants (Black / Red / …
-  BrightWhite) + `hasDarkBackground()` helper.
+- **`Palette`** — the ANSI 16-slot palette as lowercase static factories
+  (`Palette::red()`, `Palette::brightWhite()`, … plus a `gray()` alias and
+  `Palette::all(): list<Color>`) returning `Color` instances — there are no
+  `Palette::Red`-style constants. `Palette::hasDarkBackground(?Color $background)`
+  answers `true`/`false` for a *given* background colour and returns `null`
+  when you pass `null` (meaning “unknown — don't switch schemes”); it does
+  not probe the terminal by itself.
 - **`UnderlineStyle`** — enum (None / Single / Double / Curly /
   Dotted / Dashed) for SGR `4:N` sub-style emit.
 - **`Hsl`** — CSS-style HSL factory: `Hsl::color($h, $s, $l)` (hue 0-360,
@@ -218,19 +312,36 @@ echo Tree::new()
   Distinct from `StyleParser` (which uses `[text](fg:red,bold)` syntax).
   Supports color names, fg:/bg: shortcuts, and bold/dim/italic/
   underline/reverse/strikethrough.
+- **`StyleParser`** — `StyleParser::parse(string)` for the termui-style
+  `[text](fg:red,bg:blue,bold)` inline form, returning `list<Cell>`
+  (port of sugar-dashboard's inline parser).
+- **`Cell`** — one styled grapheme produced by `Markup`/`StyleParser`.
+- **`Canvas` / `Layer`** — multi-layer compositor: `Canvas::new()->addLayer(
+  Layer::new($block)->withX(...)->withY(...)->withZ(...))->render()`
+  composites rectangular styled blocks back-to-front by z-order (see
+  `.vhs/canvas.gif`).
+- **`Bar\StatusBar` / `Bar\HelpBar`** — one-line chrome widgets: StatusBar
+  holds left/center/right `Segment` lists with separator/style/width knobs;
+  HelpBar binds key→label pairs (`fromMap`) with key/label styles.
+- **`TitleSgr`** — `@internal` border-title alignment enum; not part of the
+  public surface.
 
 ## Custom Renderer & color-profile
 
-`Sprinkles\Renderer` bundles a colour profile + a dark-background
+`Style\Renderer` bundles a colour profile + a dark-background
 flag so you can branch behaviour without threading the values
 through every `Style` call:
 
 ```php
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Style\Renderer;
+
 $r     = Renderer::new()
     ->withColorProfile(ColorProfile::Ansi256)   // forced 256-colour
     ->withHasDarkBackground(false);              // light terminal
-$style = $r->newStyle()->bold()->foreground(...);
-$pick  = $r->lightDark();                        // closure(light, dark)
+$style = $r->newStyle()->bold()->foreground(Color::hex('#ff5f87'));
+$pick  = $r->lightDark();                        // Closure(Color $light, Color $dark): Color
 ```
 
 Each `Style` owns a `colorProfile()` setter too — the renderer is
@@ -242,6 +353,36 @@ Output is returned as strings rather than written to a bound writer, so
 there is no writer-carrying renderer constructor. Pair with
 `Output::fprint($stream, ...)` when you need to write to a
 specific stream.
+
+## The ambient default profile — `Style::setDefaultProfile()` (process-global)
+
+`Style::setDefaultProfile($profile)` is a **process-global mutable static**:
+it changes the profile that every later `Style::new()` (and each private
+`new self()` behind the setters) inherits — fleet-wide, including sugar-code's
+TUI renderer and agent status paths, which use it to fold capability
+detection into style creation. Pass `null` to restore TrueColor.
+
+```php
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Style\Style;
+
+Style::setDefaultProfile(ColorProfile::Ansi256); // everything after is 256-colour
+Style::setDefaultProfile(null);                    // back to TrueColor
+$was = Style::getDefaultProfile();                  // read what is in force
+```
+
+Because the setting leaks across object boundaries, **tests must save and
+restore it** around any change:
+
+```php
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Style\Style;
+
+$had = Style::getDefaultProfile();
+Style::setDefaultProfile(ColorProfile::Ascii);
+// …assertions…
+Style::setDefaultProfile($had); // always, e.g. in tearDown
+```
 
 ## Color blending utilities
 
@@ -255,19 +396,22 @@ specific stream.
 | `Color::parse('cyan')` / `Color::parse('bright-red')` | lookup by CSS/ANSI name |
 | `Color::hsl($h, $s, $l)` | from HSL (0-360, 0-1, 0-1) |
 | `$c->blend($other, $t)` | linear LERP, t ∈ [0, 1] |
-| `Color::blend1D($a, $b, int $steps)` | list of N stops |
-| `Color::blend2D($tl, $tr, $bl, $br, $w, $h)` | 2D grid |
+| `$a->blend1d($b, $steps)` | list of N stops from $a to $b |
+| `$tl->blend2d($tr, $bl, $br, $rows, $cols)` | 2D gradient grid |
 | `$c->lighten($amount)` / `darken($amount)` | luminance ±amount |
-| `$c->alpha($amount)` | premultiply alpha onto a backdrop |
+| `$c->alpha($amount, $bg)` | premultiply alpha onto a backdrop |
 | `$c->complementary()` | hue + 180° |
 
-Named ANSI slots live on `Sprinkles\Palette`:
-`Palette::Red`, `Palette::BrightWhite`, etc. Use
-`Palette::hasDarkBackground()` for a no-args terminal-detect.
+Named ANSI slots live on `Style\Palette`: the lowercase factories
+`Palette::red()` … `Palette::brightWhite()` (16 slots + a `gray()` alias),
+each returning a `Color`. `Palette::hasDarkBackground($bg)` answers
+`$bg->isDark()` for a *given* background colour and returns `?bool` — pass
+`null` when the terminal's background is unknown and it returns `null`
+(“don't switch schemes”); it performs no terminal probing.
 
 ## HSL colour factory
 
-`Sprinkles\Hsl` provides CSS-style HSL colour construction:
+`Style\Hsl` provides CSS-style HSL colour construction:
 
 ```php
 use SugarCraft\Style\Hsl;
@@ -282,7 +426,7 @@ $blue = Hsl::parse('hsl(240, 100%, 50%)');
 
 ## Inline markup parser
 
-`Sprinkles\Markup` parses Rich-style `[tag]text[/]` markup into
+`Style\Markup` parses Rich-style `[tag]text[/]` markup into
 `Cell` arrays — distinct from `StyleParser`'s `[text](fg:red,bold)`
 syntax:
 
@@ -300,28 +444,40 @@ reverse, strikethrough, fg:color, bg:color.
 
 ## OSC-8 hyperlinks & underline styles
 
-`Style::hyperlink($url)` wraps the rendered output in `\x1b]8;;URL…`
-escapes; modern terminals turn it into a clickable link, the rest
-fall through to plain text. Combine with `Style::underline()` +
-`Style::underlineStyle(UnderlineStyle::Curly)` (the SGR `4:3`
-sub-style) and `Style::underlineColor(Color::hex('#ff0000'))` to
-emit a wavy red spell-check-style underline that degrades cleanly
-to a plain SGR 4 underline on terminals that don't speak the
-sub-style.
+`Style::hyperlink($url, $id = '')` wraps the rendered output in
+OSC 8 escapes — `\x1b]8;;URL\x1b\\` (with the `id=…` parameter segment
+inserted only when `$id` is non-empty) and the no-op closing sequence —
+so modern terminals turn it into a clickable link, while the rest strip
+the sequences and fall through to plain text. URL and id
+pass through OSC control-byte stripping, so host-supplied values cannot
+inject a second hyperlink.
+
+For underlines, combine `Style::underline()` with
+`Style::underlineStyle(UnderlineStyle::Curly)` (the SGR `4:N` sub-style)
+and `Style::underlineColor(Color::hex('#ff0000'))` to ask for a wavy red
+spell-check-style underline. Truth about the wire: sugar-style emits only
+the extended form — **Terminals that understand SGR `4:N` render the
+styled underline; terminals that don't typically ignore the extended form
+and render no underline at all, since no plain SGR 4 companion is
+emitted.** For a guaranteed plain underline, do not set a style: bare
+`underline()` alone emits SGR 4.
 
 ## Style copy-vs-inheritance
 
-Every `with*()` setter returns a new `Style` — the receiver is
+Every `Style` setter returns a new `Style` — the receiver is
 never mutated. `Style::copy()` returns a shallow clone for those
 moments you want a known checkpoint to branch from.
 
-`Style::inherit($parent)` merges *unset* props from the parent.
-Inheritable properties: `bold` / `italic` / `underline` / `strike` /
-`faint` / `blink` / `reverse` / `fg` / `bg` / `borderFg` / `borderBg`
-(only if the child hasn't set them). Layout / structural properties
-(width / height / padding / margin / border / borderSides) **don't**
-inherit — every component is layout-independent. This matches
-lipgloss v2's "explicit wins" rule.
+`Style::inherit($parent)` merges every property the child has not
+explicitly set — attribute props (`bold` / `italic` / `underline` /
+`strike` / `faint` / `blink` / `reverse`, `fg` / `bg`, `borderFg` /
+`borderBg`, …) *and* layout props (`width` / `height` / `padding` /
+`margin` / `border` / `borderSides` / alignment). “Explicit wins”: a prop
+counts as child-owned only once its setter has been called, tracked via a
+per-instance `propsSet` ledger, so an unset child slot takes the parent's
+value while a set child slot keeps its own. `unset*()` clears the ledger
+slot again, so an un-set prop falls back to the parent on the next
+inherit. This matches lipgloss's "explicit wins" inheritance rule.
 
 ## Theme — canonical colour palette
 
@@ -329,6 +485,7 @@ lipgloss v2's "explicit wins" rule.
 across SugarCraft consumer libs.
 
 ```php
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Style\Theme;
 
 // Pick a built-in theme
@@ -336,7 +493,7 @@ $dark = Theme::dark();
 $tokyo = Theme::tokyoNight();
 $dracula = Theme::dracula();
 
-// Auto-detect from $COLORFGBG: the last field's palette slot decides light vs
+// Auto-detect from COLORFGBG: the last field's palette slot decides light vs
 // dark by luminance (7/15 light, 0/8 dark); unset or unparseable → dark
 $theme = Theme::adaptive();
 
@@ -347,9 +504,9 @@ $names = Theme::catalog(); // ['dark', 'light', 'dracula', …, 'adaptive']
 $custom = $dark->withPrimary(Color::hex('#ff5f87'))
                 ->withError(Color::ansi(1));
 
-// Read colours
-echo $custom->primary;   // Color('#ff5f87')
-echo $custom->foreground; // Color('#c5c9d4') — kept from dark()
+// Read colours — slots are Color objects (use toHex() to print them)
+echo $custom->primary->toHex();      // #ff5f87
+echo $custom->foreground->toHex();   // #c5c9d4 — kept from dark()
 ```
 
 Available factories:
@@ -374,13 +531,17 @@ themes; distinct in richer named themes), `error`, `warning`, `success`,
 
 ## Measurement utilities
 
-`Sprinkles\Layout` exposes the three measurement helpers from
-lipgloss's package level:
+`Style\Layout` (the package-level facade) exposes the three measurement
+helpers from lipgloss's package level:
 
-- `Layout::Width($s)` — visible cell width of a (possibly
+- `Layout::width($s)` — visible cell width of a (possibly
   ANSI-coloured, multibyte) string.
-- `Layout::Height($s)` — number of `\n`-separated lines.
-- `Layout::Size($s)` — `[width, height]` tuple.
+- `Layout::height($s)` — number of `\n`-separated lines.
+- `Layout::size($s)` — `[width, height]` tuple.
+
+(The capitalized `Width` / `Height` / `Size` spellings resolve to the same
+functions — PHP method names are case-insensitive — but only the lowercase
+names are declared.)
 
 All three strip ANSI escapes before measuring, honour East-Asian
 wide cells, and round the same way `Style::render()` does — so
@@ -394,6 +555,9 @@ per cell to pick its style. Row index `Table::HEADER_ROW` (constant
 `-1`) identifies the header.
 
 ```php
+use SugarCraft\Style\Style;
+use SugarCraft\Style\Table\Table;
+
 $striped = Table::new()
     ->headers('Name', 'Score')
     ->rows([['Alice', '93'], ['Bob', '87']])
@@ -402,6 +566,7 @@ $striped = Table::new()
             ? Style::new()->bold()
             : ($r % 2 === 0 ? Style::new()->faint() : Style::new()),
     );
+echo $striped->render();
 ```
 
 The four border-section flags (`borderHeader` / `borderRow` /
@@ -415,7 +580,7 @@ verticals; row separators off.
 `Border::withEmbeddedTitle(string $text, ?TitleAnchor $anchor = null,
 ?string $open = null, ?string $close = null)` instead brackets it in
 junction runes so it reads as cut into the line — btop's box titles and
-clock (`Draw::createBox` / `Draw::update_clock` in `btop_draw.cpp`):
+clock placement are the antecedent design:
 
 ```php
 use SugarCraft\Style\Border;
@@ -493,16 +658,63 @@ terminal: the whole render — including
 escapes carried in by pre-styled content, a `transform()` callback or a
 border title — is stripped, while padding, borders and alignment stay.
 
+One measured exception to "underline colour tints the underline": SGR `58`
+has no 4-bit palette spelling, so at the `Ansi` tier `underlineColor()`
+falls back to the *foreground* slot and recolours the glyphs —
+`Style::new()->colorProfile(ColorProfile::Ansi)->underline()->underlineColor(Color::hex('#ff0000'))->of('x')->render()`
+emits `ESC[4m ESC[91m x ESC[0m` (bright-red text, plain underline). At
+TrueColor/Ansi256 the `58;2;…`/`58;5;…` underline colour is emitted as
+documented and the text keeps its own colour.
+
 Use `Style::colorProfile(ColorProfile::Ansi)` for a forced
 downgrade or `Renderer::fromEnvironment()` to auto-detect from
 `NO_COLOR` / `CLICOLOR_FORCE` / `TERM` / `COLORTERM` /
 `TERM_PROGRAM` / `WT_SESSION` / CI markers.
+
+## Accessibility
+
+Colour alone must never carry meaning (WCAG 1.4.1): pair colour-coded
+state with text, an icon+label, or structure. For constrained displays
+this library offers honest degradation paths — `Theme::ansi()` and
+`ColorProfile::Ascii` (`NO_COLOR`) drop the palette but keep text
+attributes, and OSC 8 hyperlinks survive both, so emphasis- and
+link-based affordances still read. `ColorProfile::NoTty` strips every
+escape yet preserves padding, borders and alignment, so a piped capture
+keeps the document's visual structure. Border *styles* (rounded vs
+double vs thick) are decorative: never encode a state distinction in the
+border family alone — combine it with a title or colour slot. Adaptive
+colours (`AdaptiveColor` / `Theme::adaptive()`) track dark-vs-light
+terminals so foreground/background contrast doesn't silently invert on
+scheme change.
+
+## Performance — build once, render many
+
+A `Style` instance is a value, and building one is the expensive half of
+the pipeline: `Style::new()->border(Border::rounded())->padding(1, 2)`
+costs roughly **twice** what `render()`ing a pre-built style costs
+(measured on a dev box 2026-10: ~16.5 µs/op to rebuild per frame vs
+~8.4 µs/op to `of()`+`render()` a reused instance, and reused instances
+additionally benefit from the internal `render()` memo — see the class
+docblock). Re-layout-per-frame TUIs should construct each style once at
+setup (or keep a small keyed cache) and call `render()` per frame, not
+rebuild the chain each time. `copy()` carries a still-valid memo; every
+setter and `inherit()` correctly resets it, so only the repeated-render
+path pays off.
+
+On the layout side, `Solver::solve()` intentionally constructs a fresh
+solver per call (the layout layer is stateless) — what the process-level
+memoization removes is the `getenv()` decision, not the allocation
+(measured: `SolverFactory::fromEnvironment()` ~350 ns/op after, ~470
+ns/op with a per-call `getenv()`, dev box 2026-10).
 
 ## Test
 
 ```sh
 cd sugar-style && composer install && vendor/bin/phpunit
 ```
+
+Suite at the docs-fix-1023 close: 928 tests, 3,011 assertions, 0 failures
+(cited figure is a point-in-time measurement, not a live-pinned number).
 
 ## Demos
 

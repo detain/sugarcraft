@@ -12,7 +12,7 @@ $banner = Style::new()
     -&gt;bold()
     -&gt;foreground(Color::hex('#ff5f87'))
     -&gt;padding(0, 2)
-    -&gt;render('hello, candy world');
+    -&gt;render('hello, styled world');
 
 $table = Table::new()
     -&gt;headers('Name', 'Age')
@@ -25,11 +25,11 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Style</strong><span>Foreground / background, bold / italic / underline, padding, margin, width, alignment. Immutable <code>with*()</code> chain.</span></div>
-      <div class="feature"><strong>Border</strong><span>Six built-in styles + custom. <code>Border::rounded()</code>, <code>thick()</code>, <code>double()</code>, <code>hidden()</code>, <code>normal()</code>, <code>ascii()</code>.</span></div>
+      <div class="feature"><strong>Style</strong><span>Foreground / background, bold / italic / underline, overline, padding, margin, width, alignment. Immutable value object; setters keep lipgloss's bare names (<code>fg()</code>, <code>bold()</code>, <code>width()</code>) and each returns a <em>new</em> Style.</span></div>
+      <div class="feature"><strong>Border</strong><span>Eight built-in styles + custom. <code>Border::rounded()</code>, <code>thick()</code>, <code>double()</code>, <code>block()</code>, <code>hidden()</code>, <code>normal()</code>, <code>ascii()</code>, <code>markdownBorder()</code>.</span></div>
       <div class="feature"><strong>Table</strong><span>Headers, rows, per-cell styleFunc. ANSI-aware width calc with grapheme cluster support. Optional <code>wrap()</code> callback: every line it returns renders, so a wrapped row spans several physical lines.</span></div>
       <div class="feature"><strong>List + Tree</strong><span>Bulleted lists and ASCII trees with custom enumerators.</span></div>
-      <div class="feature"><strong>Layout</strong><span><code>joinHorizontal</code>, <code>joinVertical</code>, <code>place</code>, <code>placeOverlay</code> for popovers.</span></div>
+      <div class="feature"><strong>Layout</strong><span><code>joinHorizontal</code>, <code>joinVertical</code>, <code>place</code>, plus the ratatui-style constraint solver (<code>Layout\Layout::vertical([...])-&gt;split()</code>) and <code>RegionBridge</code> for handing rectangles between sugar-constraints and sugar-cellbuffer.</span></div>
       <div class="feature"><strong>Canvas</strong><span>Multi-layer compositor. Z-ordered overlays, alpha-aware merge, ideal for modals + tooltips.</span></div>
       <div class="feature"><strong>Theme</strong><span>SSOT colour palette. 10 named factories (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized*/ansi/adaptive). 13 colour slots (foreground/background/primary/secondary/accent/muted/error/warning/success/info/border/separator/cursor). All <code>with*()</code> setters return a new Theme. <code>adaptive()</code> reads <code>$COLORFGBG</code>: the last field's palette slot decides light vs dark by luminance (7/15 light, 0/8 dark); unset or unparseable falls back to dark.</span></div>
       <div class="feature"><strong>Embedded titles + seams</strong><span>btop-style box titles: <code>Border::withEmbeddedTitle()</code> brackets text in junctions (<code>╭─┐cpu┌────┐12:00┌───────╮</code>) on any of six anchors; <code>Border::seam()</code> picks the <code>┬ ┴ ├ ┤ ┼</code> rune where an internal divider meets the frame, preserving the border family.</span></div>
@@ -78,7 +78,7 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
 <tr><td>BorderGradientBlend</td><td>fromColors(Color ...$colors)</td><td>1-5 colors → 4 interpolated border-side colors</td></tr>
 <tr><td>Style</td><td>padding(top, right, bottom, left)</td><td>Add padding</td></tr>
 <tr><td>Style</td><td>render(content)</td><td>Render styled content</td></tr>
-<tr><td>Border</td><td>rounded(), thick(), double(), hidden()</td><td>Border style presets</td></tr>
+<tr><td>Border</td><td>normal(), rounded(), thick(), double(), block(), ascii(), hidden(), markdownBorder()</td><td>All eight border style presets</td></tr>
 <tr><td>Border</td><td>withEmbeddedTitle(text, ?anchor, ?open, ?close)</td><td>btop-style title cut into the edge (<code>╭─┐cpu┌──╮</code>); left/right inset one rune, center uses btop's clock formula, overflow shrinks with <code>…</code></td></tr>
 <tr><td>Border</td><td>embedJunctions(bool $bottom = false)</td><td>Default <code>[open, close]</code> junction pair from the border's own corners (rounded arcs squared off)</td></tr>
 <tr><td>Border</td><td>seam(left, right, up, down)</td><td>Junction rune where a divider meets the frame (<code>┬ ┴ ├ ┤ ┼</code>), in the border's own family</td></tr>
@@ -105,7 +105,7 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/border.gif" alt="Border">
                 <h3>Border</h3>
-                <span class="demo-caption">All six built-in border styles.</span>
+                <span class="demo-caption">All eight built-in border styles.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/table.gif" alt="Table">
