@@ -144,6 +144,69 @@ final class SmtpSecurityTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Fix 4 — attachment header injection (docs-fix-1023 C-2)
+    // -------------------------------------------------------------------------
+
+    public function testAttachmentFilenameCarryingCrlfIsRefused(): void
+    {
+        $forged = "evil.txt\r\nX-Injected: YES\r\n";
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('CRLF injection detected in attachment filename header');
+
+        \SugarCraft\Mail\Attachment::fromContent('payload', $forged);
+    }
+
+    public function testAttachmentFromPathForgedDisplayNameIsRefused(): void
+    {
+        $tmp = \tempnam(\sys_get_temp_dir(), 'sp-sec-att-');
+        \file_put_contents($tmp, 'x');
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            \SugarCraft\Mail\Attachment::fromPath($tmp, "ok.txt\r\nX-Injected: 1");
+        } finally {
+            @\unlink($tmp);
+        }
+    }
+
+    public function testAttachmentMimeTypeCarryingCrlfIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('CRLF injection detected in attachment MIME type header');
+
+        \SugarCraft\Mail\Attachment::fromContent('x', 'a.txt', "text/plain\r\nX-Injected2: MIME");
+    }
+
+    public function testInlineAttachmentForgedFilenameIsRefused(): void
+    {
+        $tmp = \tempnam(\sys_get_temp_dir(), 'sp-sec-inline-');
+        \file_put_contents($tmp, "\x89PNG");
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            \SugarCraft\Mail\Attachment::inline($tmp, 'cid-1', "a.png\r\nX-Foo: bar");
+        } finally {
+            @\unlink($tmp);
+        }
+    }
+
+    public function testQuoteAndBackslashInFilenameAreEscapedInPartHeaders(): void
+    {
+        $email = new Email(
+            from:  ['from@example.com'],
+            to:    ['to@example.com'],
+            body:  'x',
+            attachments: [\SugarCraft\Mail\Attachment::fromContent('data', 'a"b\\c.txt', 'text/plain')],
+        );
+        $mime = (new SmtpTransport('smtp.example.com', 587))->buildMimeMessage($email);
+
+        // RFC 2045 quoted-string: every interior " and \ rides escaped, so the
+        // parameter cannot terminate early and forge a header tail.
+        $this->assertStringContainsString('name="a\\"b\\\\c.txt"', $mime);
+        $this->assertStringContainsString('filename="a\\"b\\\\c.txt"', $mime);
+        $this->assertStringNotContainsString('name="a"b', $mime);
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

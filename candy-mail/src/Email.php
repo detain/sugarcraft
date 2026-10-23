@@ -208,7 +208,7 @@ final class Email
         return $this->mutate(['attachments' => \array_merge($this->attachments, [$att])]);
     }
 
-    public function withInlineAttachment(string $path, string $cid, string $filename = null): self
+    public function withInlineAttachment(string $path, string $cid, ?string $filename = null): self
     {
         $att = Attachment::inline($path, $cid, $filename);
 

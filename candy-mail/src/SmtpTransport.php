@@ -467,12 +467,17 @@ final class SmtpTransport implements Transport
             $content = $att->getContent();
             $encoded = \chunk_split(\base64_encode($content), 76, "\n");
 
+            // RFC 2045 quoted-string: CRLF is refused at Attachment construction
+            // (docs-fix-1023 C-2); quotes and backslashes are escaped here so a
+            // name like a"b.txt cannot corrupt the quoted parameter.
+            $name = self::quoteMimeParam($att->filename);
+
             $headers = [
-                "Content-Type: {$att->mimeType}; name=\"{$att->filename}\"",
+                "Content-Type: {$att->mimeType}; name=\"{$name}\"",
                 "Content-Transfer-Encoding: base64",
                 "Content-Disposition: " . ($att->cid !== null
-                    ? "inline; filename=\"{$att->filename}\""
-                    : "attachment; filename=\"{$att->filename}\""
+                    ? "inline; filename=\"{$name}\""
+                    : "attachment; filename=\"{$name}\""
                 ),
             ];
 
@@ -568,6 +573,14 @@ final class SmtpTransport implements Transport
     private function getHeloHost(): string
     {
         return $this->heloHost !== '' ? $this->heloHost : (\gethostname() ?: 'localhost');
+    }
+
+    /**
+     * Escape a value for use inside an RFC 2045 quoted-string parameter.
+     */
+    private static function quoteMimeParam(string $value): string
+    {
+        return \str_replace(['\\', '"'], ['\\\\', '\\"'], $value);
     }
 
     /**

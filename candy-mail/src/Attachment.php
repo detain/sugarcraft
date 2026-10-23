@@ -32,7 +32,7 @@ final class Attachment
      *
      * @throws \RuntimeException if the file cannot be read
      */
-    public static function fromPath(string $path, string $filename = null): self
+    public static function fromPath(string $path, ?string $filename = null): self
     {
         $name = $filename ?? \basename($path);
         $mime = self::detectMimeType($path);
@@ -69,7 +69,7 @@ final class Attachment
      * @throws \RuntimeException if the file cannot be read
      * @throws \InvalidArgumentException if the CID is not a valid RFC 2392 format
      */
-    public static function inline(string $path, string $cid, string $filename = null): self
+    public static function inline(string $path, string $cid, ?string $filename = null): self
     {
         $name = $filename ?? \basename($path);
 
@@ -94,7 +94,11 @@ final class Attachment
     }
 
     /**
-     * Get the raw content bytes (reads from path if needed).
+     * Get the raw content bytes.
+     *
+     * Every public factory reads eagerly, so `$content` is normally already
+     * set; the path re-read below is defense-in-depth for a future factory
+     * that defers the read, not a behavior reachable through today's API.
      *
      * @throws \RuntimeException if the path is set but the file cannot be read
      */
@@ -139,12 +143,33 @@ final class Attachment
         string $encoding,
         ?string $cid,
     ) {
+        // docs-fix-1023 C-2: filename and mimeType are interpolated into MIME
+        // part headers at send time. The package already refuses CR/LF in
+        // subjects and addresses (Email::sanitizeHeader); attachments rode the
+        // same interpolation channel unguarded, letting an archive/web-upload
+        // filename forge arbitrary headers — or whole MIME sub-parts — into
+        // outgoing mail. Fail loud at construction, not silent-strip at send.
+        self::refuseHeaderInjection($filename, 'attachment filename');
+        self::refuseHeaderInjection($mimeType, 'attachment MIME type');
+
         $this->filename  = $filename;
         $this->path      = $path;
         $this->content   = $content;
         $this->mimeType  = $mimeType;
         $this->encoding  = $encoding;
         $this->cid       = $cid;
+    }
+
+    /**
+     * Refuse CR/LF in a value that will be interpolated into a MIME header.
+     *
+     * @throws \InvalidArgumentException on any CR or LF byte
+     */
+    private static function refuseHeaderInjection(string $value, string $field): void
+    {
+        if (\preg_match('/[\r\n]/', $value)) {
+            throw new \InvalidArgumentException(Lang::t('email.crlf_in_header', ['field' => $field]));
+        }
     }
 
     /**
