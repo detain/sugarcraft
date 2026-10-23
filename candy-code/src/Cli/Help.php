@@ -108,9 +108,10 @@ final class Help
      * `dev-master (311f572)` was what the shipped 0.1.0 phar reported — so
      * the Composer metadata cannot answer for an artifact whose version was
      * stamped at build time. When the manifest names a version this class
-     * can order, that is the answer; a dev-built archive (whose stamp is
-     * `dev-build`) falls through to every arm below unchanged, which is the
-     * honest report for a working-tree build.
+     * can order — a `v?X.Y.Z` release stamp or a canonical `dev-<shortsha>`
+     * dev stamp — that is the answer. A working-tree build (whose fallback
+     * stamp is `dev-build`) falls through to every arm below unchanged,
+     * which is the honest report for a build that was never named.
      */
     public static function versionString(): string
     {

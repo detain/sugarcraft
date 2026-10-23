@@ -892,10 +892,23 @@ final class HelpTest extends TestCase
         $dev = self::mintStampedPhar('dev-build');
         try {
             Help::pretendHostArchiveForTesting($dev);
-            $this->assertSame($fallback, Help::versionString(), 'a dev-built archive falls through to the Composer arms unchanged');
+            $this->assertSame($fallback, Help::versionString(), 'an unnamed working-tree build falls through to the Composer arms unchanged');
         } finally {
             Help::pretendHostArchiveForTesting(null);
             self::discardStampedPhar($dev);
+        }
+
+        // The CI dev stamp is a NAME, not a guess: `dev-<shortsha>` reads
+        // back from the manifest exactly as the release tag does, so the
+        // dev channel of `self-update` compares against the commit this
+        // archive was built from — never the frozen vendor's stale guess.
+        $named = self::mintStampedPhar('dev-1a2b3c4');
+        try {
+            Help::pretendHostArchiveForTesting($named);
+            $this->assertSame('dev-1a2b3c4', Help::versionString(), 'a canonical dev stamp is the version inside a dev-built archive');
+        } finally {
+            Help::pretendHostArchiveForTesting(null);
+            self::discardStampedPhar($named);
         }
     }
 }

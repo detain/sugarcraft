@@ -30,6 +30,14 @@ namespace SugarCraft\Code\Support;
  * `self-update` treats a `null` comparison as "no swap", because guessing
  * the intent of an ordering it cannot express is how a dev checkout gets
  * downgraded to the last stable tag.
+ *
+ * THE ONE THING IT NAMES WITHOUT ORDERING. A DEV build is a version string
+ * whose lowercase spelling starts with {@see self::DEV_PREFIX} — the stable
+ * grammar is untouched (ordering a moving target is exactly the guess the
+ * paragraph above refuses), but `self-update`'s channel decision only asks
+ * "is this a dev build?", and {@see self::isDev()} answers that; the
+ * canonical stamp a CI dev build carries is `dev-<shortsha>`
+ * ({@see self::devShaOf()} reads the commit out of it).
  */
 final class Version
 {
@@ -40,6 +48,24 @@ final class Version
      * reader strips it — three readers, one spelling, no local copy to drift.
      */
     public const TAG_PREFIX = 'candy-code/';
+
+    /**
+     * The lowercase spelling every DEV build stamp starts with. The stable
+     * grammar of {@see self::parse()} deliberately does NOT accept this
+     * family — dev builds are ordered by commit identity, not by a triple
+     * that never moves — but `self-update` must know which train it is
+     * riding, and that question is a prefix test, not an ordering.
+     */
+    public const DEV_PREFIX = 'dev-';
+
+    /**
+     * A git object name at any honest abbreviation: 4 digits is `git`'s own
+     * minimum, 40 a full id. This is the shape both halves of a dev-channel
+     * comparison must be — the commit embedded in a `dev-<shortsha>` stamp
+     * and the `target_commitish` a release names — and the shared gate that
+     * makes "short" a refusal instead of a coincidental prefix match.
+     */
+    public const HEX_SHA_PATTERN = '/^[0-9a-f]{4,40}$/i';
 
     private function __construct()
     {
@@ -98,6 +124,38 @@ final class Version
     }
 
     /**
+     * Whether $version is a DEV build: its lowercase spelling starts with
+     * 'dev-'. Deliberately the literal rule and nothing more — no trim (the
+     * canonical sources, `Help::versionString()` and the injected seam,
+     * arrive trimmed), no grammar beyond the prefix. `dev-master` IS a dev
+     * build under this rule, and so is the canonical CI stamp
+     * `dev-<shortsha>`; `v1.2.3` and the `unknown` answer are not.
+     */
+    public static function isDev(string $version): bool
+    {
+        return \str_starts_with(\strtolower($version), self::DEV_PREFIX);
+    }
+
+    /**
+     * The commit embedded in a canonical dev stamp `dev-<hex4-40>`, lower-
+     * cased — or null for every string the dev channel cannot compare with
+     * that precision ('dev' bare, 'dev-' with nothing after it, 'dev-master'
+     * — a branch name, not a commit — and every non-dev shape). This is the
+     * parse-don't-validate seam: one read turns the stamp into the trusted
+     * hex it means, and the ordering rule downstream never re-inspects it.
+     */
+    public static function devShaOf(string $version): ?string
+    {
+        $trimmed = \trim($version);
+        $body = \substr($trimmed, \strlen(self::DEV_PREFIX));
+        if (!self::isDev($trimmed) || \preg_match(self::HEX_SHA_PATTERN, $body) !== 1) {
+            return null;
+        }
+
+        return \strtolower($body);
+    }
+
+    /**
      * The version string a phar archive at $path was built to carry, or null
      * when the archive answers none this class can order.
      *
@@ -112,10 +170,16 @@ final class Version
      * The tag arrives prefixed (`candy-code/v0.1.0` — what `git describe`
      * answers and what the release carries); the {@see self::TAG_PREFIX}
      * decoration is stripped here so callers get the version itself. A stamp
-     * that is not a `v?X.Y.Z` under any spelling (`dev-build`, a foreign
-     * namespace, junk of the wrong type) answers null: fail-closed, so a
-     * dev-built archive falls through to the Composer/checkout arms instead
-     * of shipping a version the release stream cannot order against.
+     * that is neither a `v?X.Y.Z` nor a canonical `dev-<sha>` under any
+     * spelling (`dev-build`, a foreign namespace, junk of the wrong type)
+     * answers null: fail-closed, so a working-tree build falls through to
+     * the Composer/checkout arms instead of shipping a label the release
+     * stream cannot name. A canonical dev stamp, by contrast, IS the answer
+     * — the CI dev build stamps `dev-$SHORT_SHA` precisely so `--version`
+     * and the dev channel of `self-update` can read the commit back (the
+     * DST-1 lesson: inside a phar the manifest is the authority, and
+     * falling through to the frozen vendor reproduces the stale-guess lie
+     * the stamp exists to cure).
      *
      * Every failure to OPEN the archive is likewise null, never an exception
      * — `--version` must answer on a machine whose phar is unreadable, and
@@ -146,6 +210,6 @@ final class Version
             $stamp = \substr($stamp, \strlen(self::TAG_PREFIX));
         }
 
-        return self::isComparable($stamp) ? $stamp : null;
+        return (self::isComparable($stamp) || self::devShaOf($stamp) !== null) ? $stamp : null;
     }
 }
