@@ -74,9 +74,9 @@
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Config discovery</strong><span><code>--config</code> ▸ <code>~/.config/wishlist.yml</code> ▸ <code>~/.config/wishlist.yaml</code> ▸ <code>~/.config/wishlist.json</code> ▸ <code>./wishlist.{yml,yaml,json}</code>.</span></div>
-      <div class="feature"><strong>YAML schema</strong><span>name, host, port, user, identity_file, options[].</span></div>
-      <div class="feature"><strong>Type-filter</strong><span>Type to fuzzy-narrow the list.</span></div>
+      <div class="feature"><strong>Config discovery</strong><span><code>--config</code> ▸ <code>./wishlist.{yml,yaml,json}</code> ▸ <code>~/.config/wishlist.{yml,yaml,json}</code> — first file that exists wins at each tier.</span></div>
+      <div class="feature"><strong>YAML schema</strong><span>name, host, port, user, description, identityFiles[] (or identity_file), proxyJump, options[].</span></div>
+      <div class="feature"><strong>Type-filter</strong><span>Type to fuzzy-narrow the list (sugar-fuzzy Smith–Waterman scoring, live match count, 16 locales).</span></div>
       <div class="feature"><strong>ProxyJump / Options</strong><span>Pass any ssh option through the entry's <code>options</code> array.</span></div>
       <div class="feature"><strong>pcntl_exec</strong><span>Replaces the launcher process — no double-shell — so signals + exit codes propagate cleanly.</span></div>
       <div class="feature"><strong>Composer-installable</strong><span>Single binary at <code>vendor/bin/candy-ssh-launcher</code>.</span></div>
@@ -100,7 +100,9 @@
 <tr><td>Endpoint</td><td>withUser(user)</td><td>Set SSH user</td></tr>
 <tr><td>Endpoint</td><td>withIdentityFile(path)</td><td>Set identity file</td></tr>
 <tr><td>Config</td><td>load(path)</td><td>Load endpoints from YAML</td></tr>
-<tr><td>App</td><td>start(endpoints)</td><td>Create the app model</td></tr>
+<tr><td>Config</td><td>importFromSshConfig(path)</td><td>Import endpoints from ~/.ssh/config</td></tr>
+<tr><td>Picker</td><td>pick(endpoints)</td><td>Interactive selection (null on cancel)</td></tr>
+<tr><td>Launcher</td><td>dispatch(endpoint, binary)</td><td>pcntl_exec handoff — never returns</td></tr>
 </table>
   </div>
 </section>

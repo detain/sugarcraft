@@ -7,34 +7,30 @@
 
 
 
-OpenSSH applies the first matching `Host` pattern for each option. CandySshLauncher mirrors this: when parsing, each `Host` block is stored in order and processed sequentially. Global defaults from `Host *` are applied first, then per-host options override them.
+OpenSSH applies the first matching `Host` pattern for each option. CandySshLauncher mirrors this: when parsing, each `Host` block is stored in order and processed sequentially, and for every option the FIRST obtained value across the matching blocks wins (2026-10-23 measured rewrite — the earlier text here claimed `Host *` defaults were applied first and per-host options overrode them; that is not what the parser does, and not what ssh_config(5) says).
 
 Do not reorder host blocks during parsing — the order is semantically significant.
 
-### `Host *` global defaults
+### `Host *` is not a defaults layer
 
 
 
 
-`Host *` blocks set defaults that apply to all subsequent hosts. When parsing:
-
-1. Store `Host *` options in `$globalOptions`
-2. When a named host block is encountered, merge `$globalOptions` with host-specific options (host-specific wins)
-3. Do not emit an Endpoint for `Host *` itself
+There is no `$globalOptions` bag and no "host-specific wins" merge. `Host *` is an ordinary block evaluated in FILE ORDER through the same positional first-obtained rule: written BEFORE a specific block it supplies the winning value for every host (pinned: `testWildcardFirstWinsUsesGlobal`); written LAST — the convention — it acts as a fallback because specific blocks got there first. It never mints an Endpoint itself. The pre-2026-10-23 text here described a defaults-merge that does not exist in the parser; ssh_config(5) describes neither.
 
 ### `~` path expansion
 
 
 
 
-IdentityFile paths starting with `~` must be expanded to the user's home directory. Use `getenv('HOME')` with a fallback to `posix_getpwuid(posix_geteuid())['dir']` or `/root`.
+IdentityFile paths starting with `~` must be expanded to the user's home directory. As of 2026-10-23 `SshConfigParser::homeDirectory()` walks: `$HOME` → `posix_getpwuid(posix_geteuid())['dir']` (when ext-posix is loaded) → throws `config.home_unset`. It never falls back to `/root`: the earlier note here described a posix fallback that did NOT exist at the time — the code was `getenv('HOME') ?: '/root'`, which quietly built `/root/.ssh/...` identity paths for any non-root user running with `$HOME` unset. `~user` targets resolve via `posix_getpwnam` when available and stay literal otherwise.
 
 ### Port coercion
 
 
 
 
-Port defaults to `22` when not specified. The SSH config file may contain port as an unquoted integer string — cast with `(int)` to normalize.
+Port defaults to `22` when not specified. Junk is REFUSED, not zeroed: `Endpoint::parsePort()` accepts digit-only values in 1..65535 and throws `endpoint.port_invalid` naming the host otherwise. The earlier "(int) cast to normalize" advice on this page was an invitation to silently turn `Port ssh` into port 0 — the code never did that, and must not start (2026-10-23).
 
 ### Ignored SSH config keywords
 
@@ -57,13 +53,13 @@ The final `Launcher::dispatch()` call uses `pcntl_exec` to replace the PHP proce
 
 
 
-The binary checks for config in this order:
+The binary checks for config in this order (2026-10-23 rewrite — the list here had tiers 2–5 inverted):
 
 1. `--config <path>` CLI flag
-2. `~/.config/wishlist.yml`
-3. `~/.config/wishlist.yaml`
-4. `~/.config/wishlist.json`
-5. `wishlist.{yml,yaml,json}` in current directory <!-- @rename-keep -->
+2. `wishlist.{yml,yaml,json}` in the CURRENT directory — first that EXISTS <!-- @rename-keep -->
+3. `~/.config/wishlist.{yml,yaml,json}` — first that exists, only when `$HOME` is set
+
+Both tiers are existence-gated. The HOME tier previously appended candidates unconditionally, so a missing `~/.config/wishlist.yml` shadowed a valid `wishlist.yaml` sibling and the run died on a "not found" for a path the user never named.
 
 ## Testing SSH Config Parsing
 
