@@ -369,6 +369,10 @@ final class CliTest extends TestCase
 
     public function testPngOutputAnnouncesIgnoredSvgOnlyOptions(): void
     {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not loaded');
+        }
+
         $dir = $this->makeTempDir();
         try {
             $result = $this->runCli(['--format', 'png', '--ligatures', '-o', 'shot.png'], "x\n", $dir);
