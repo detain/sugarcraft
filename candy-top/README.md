@@ -61,7 +61,20 @@ An installed phar updates itself:
 php candy-top.phar self-update --check    # report only: exit 0 current, 1 update available
 php candy-top.phar self-update            # swap to the latest stable candy-top/v* release
 php candy-top.phar self-update --rollback # undo the swap once (restores the kept .old copy)
+php candy-top.phar self-update --channel=dev # consult the rolling candy-top/dev release instead
 ```
+
+The channel defaults to what the build itself is: an archive stamped
+`dev-<commit>` (the CI dev builds) consults the dev train, everything else
+the stable head — asking the stable train "what is new" from a dev build
+would answer "downgrade to the last tag" every time. `--channel=stable|dev`
+overrides explicitly. On the dev train the release's `target_commitish` is
+located against the build's stamp (this build IS the tip when its stamp is
+that commit's prefix); a release that names no well-formed commit is
+refused rather than guessed at, and there is no downgrade concept — dev
+stamps are located, never ordered. The stable rules (skip drafts and
+prereleases, tag prefix, sidecar pairing, version ordering, downgrade
+refusal) are unchanged by all of this.
 
 The swap verifies the downloaded bytes against the sidecar digest before
 anything moves, keeps the previous phar at `<path>.old` for the one-shot
