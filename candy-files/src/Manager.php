@@ -10,6 +10,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\SubscriptionCapable;
 use SugarCraft\Core\Undo\UndoActionType;
@@ -133,7 +134,14 @@ final class Manager implements Model
 
     public function init(): ?\Closure
     {
-        return null;
+        // Ask kitty-capable terminals (kitty, WezTerm, foot, contour, ...)
+        // to disambiguate their key reporting, so Ctrl+Tab / Ctrl+Shift+Tab
+        // arrive as `CSI 9;5u` / `CSI 9;6u` instead of a bare 0x09 byte
+        // indistinguishable from plain Tab. Terminals without the kitty
+        // protocol ignore the push bytes; sugar-core Program's shutdown
+        // release writes the matching pop unconditionally, so the flag
+        // stack can never strand on exit.
+        return Cmd::pushKittyKeyboard(KeyboardEnhancementsMsg::DISAMBIGUATE);
     }
 
     /**
@@ -244,6 +252,25 @@ final class Manager implements Model
         return match (true) {
             $msg->type === KeyType::Char && $msg->rune === '/'
                 => $this->search(''),
+            // Tab cycling. The parser NEVER puts a "\t" rune on a Char
+            // message — bare 0x09 and every modified Tab decode to
+            // KeyType::Tab (xterm-family reports Ctrl+Tab as `CSI 1;5I`,
+            // Ctrl+Shift+Tab as `CSI 1;6I`; kitty-capable terminals
+            // negotiated in init() report `CSI 9;5u` / `CSI 9;6u`).
+            // These arms key on TYPE plus the modifier flags and MUST
+            // stay above the unmodified-Tab arm below: that arm used to
+            // shadow them, so Ctrl+Tab pane-swapped instead of cycling.
+            // Ctrl+PageUp / Ctrl+PageDown are the universal alternative:
+            // they arrive unambiguously modified even on a plain xterm,
+            // where Ctrl+Tab is indistinguishable from Tab.
+            $msg->type === KeyType::Tab && $msg->ctrl && $msg->shift,
+            $msg->type === KeyType::PageDown && $msg->ctrl
+                => $this->tabs === [] ? $this : $this->switchTab(($this->tabIndex - 1 + count($this->tabs)) % count($this->tabs)),
+            $msg->type === KeyType::Tab && $msg->ctrl,
+            $msg->type === KeyType::PageUp && $msg->ctrl
+                => $this->tabs === []
+                    ? $this->duplicateTab()
+                    : $this->switchTab(($this->tabIndex + 1) % count($this->tabs)),
             $msg->type === KeyType::Tab
                 => $this->withActive(1 - $this->activeIdx),
             $msg->type === KeyType::Up,
@@ -287,15 +314,11 @@ final class Manager implements Model
                 => $this->undo(),
             $msg->ctrl && $msg->rune === 'y'
                 => $this->redo(),
-            // Tab management: t duplicates, Ctrl+w closes, Ctrl+Tab/Ctrl+Shift+Tab cycles
+            // Tab management: t duplicates, Ctrl+w closes.
+            // (Ctrl+Tab cycling lives at the top of this match, keyed on
+            // KeyType::Tab — see the comment there.)
             $msg->ctrl && $msg->rune === 'w'
                 => $this->closeTab(),
-            $msg->ctrl && $msg->shift && $msg->rune === "\t"
-                => $this->tabs === [] ? $this : $this->switchTab(($this->tabIndex - 1 + count($this->tabs)) % count($this->tabs)),
-            $msg->ctrl && !$msg->shift && $msg->rune === "\t"
-                => $this->tabs === []
-                    ? $this->duplicateTab()
-                    : $this->switchTab(($this->tabIndex + 1) % count($this->tabs)),
             $msg->type === KeyType::Char && $msg->rune === 't'
                 => $this->duplicateTab(),
             default => $this,

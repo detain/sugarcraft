@@ -62,10 +62,23 @@ Default: left pane = current directory, right pane = `$HOME`.
 | `Escape`        | Exit search mode                                          |
 | `t`             | Duplicate current tab                                   |
 | `Ctrl+w`        | Close current tab                                        |
-| `Ctrl+Tab`      | Cycle to next tab                                        |
-| `Ctrl+Shift+Tab`| Cycle to previous tab                                    |
+| `Ctrl+Tab`      | Cycle to next tab — needs a terminal that reports modified Tab (see below) |
+| `Ctrl+Shift+Tab`| Cycle to previous tab — same terminal-support caveat     |
+| `Ctrl+PgUp` / `Ctrl+PgDn` | Cycle tabs forward / back — works on every terminal |
 | `u` / `Ctrl+z`  | Undo last operation                                      |
 | `Ctrl+y`        | Redo last undone operation                               |
+
+### Terminal support for Ctrl+Tab
+
+A bare Tab keypress has no way to carry a modifier: on a plain terminal
+Ctrl+Tab sends the same 0x09 byte as Tab, and here that keeps its
+documented pane-swap. Cycling fires whenever the terminal *can* tell the
+two apart — natively (xterm-family `CSI 1;5I` / `CSI 1;6I`, e.g. mintty)
+or through the kitty keyboard protocol's disambiguate flag, which the
+app negotiates at startup (`CSI > 1u`; terminals without the protocol
+ignore it), delivering `CSI 9;5u` / `CSI 9;6u` on kitty, WezTerm, foot,
+contour and friends. `Ctrl+PgUp`/`Ctrl+PgDn` are the universal
+alternative: the Page keys always report modified unambiguously.
 
 ## Architecture
 
@@ -87,7 +100,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 
 ## Test plan
 
-- 193 tests / 716 assertions
+- 201 tests / 762 assertions
 - Pure-state coverage: `Entry` (size formatting, parent sentinel, escape-sequence sweep incl. OSC/CSI/generic-ESC), `Sort` (every order × dirs-first × cycle), `Pane` (open / navigate / move / select / sort / hidden toggle / parent-path / join)
 - `Manager` integration: Tab swap (incl. `t <path>` landing on the given directory), key dispatch per pane, confirm gate (`d` arms, `y` confirms, anything else cancels), refresh status
 - Async copy end-to-end: the `c`/`y` command is executed against the real event loop and its `CopyCompletedMsg` re-enters `update()` — status, undo entry and refreshed destination pane are all asserted, plus the error-count path

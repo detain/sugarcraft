@@ -11,3 +11,8 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 Pattern: When a constructor grows beyond ~10 parameters, a fluent builder improves readability and eliminates parameter-order mistakes. Manager had 15 params; the builder captures each as a named `with*()` method so call sites are self-documenting.
 Anti-pattern: Constructing Manager with 15 positional args — the order is impossible to memorise and a mistake is silent.
 Source: step-25 ai/god-class-builders
+
+### 2026-10-23 — key-bind tests must be fed wire bytes, not fabricated messages
+Pattern: Dispatch arms for modified keys key on `KeyType::Tab` + the `ctrl`/`shift` flags — the shape `InputReader` actually emits (`CSI 1;5I`, kitty `CSI 9;5u`). Test fixtures decode the exact terminal bytes through `new InputReader()->parse(...)`; a removed arm now reddens the routing pin.
+Anti-pattern: `new KeyMsg(KeyType::Char, "\t", ctrl: true)` — the parser never emits a Tab rune on a Char message, so such pins stay green over dead code (this shipped as MAJOR-1: documented Ctrl+Tab cycling matched no reachable message and was shadowed by the plain-Tab arm).
+Source: docs-fix-1023 lane B3 (dfix/coretab)

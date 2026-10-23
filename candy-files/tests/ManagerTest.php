@@ -6,6 +6,10 @@ namespace SugarCraft\Files\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
+use SugarCraft\Core\RawMsg;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\InputReader;
 use SugarCraft\Files\ConfirmState;
 use SugarCraft\Files\Entry;
 use SugarCraft\Files\Manager;
@@ -338,36 +342,120 @@ final class ManagerTest extends TestCase
         $this->assertSame(0, $m->tabIndex);
     }
 
-    public function testCtrlTabDuplicatesFirstTab(): void
+    /**
+     * Ctrl+Tab must be fed as the BYTES a terminal actually sends —
+     * the old fixtures fabricated `new KeyMsg(KeyType::Char, "\t",
+     * ctrl: true)`, a shape InputReader can never produce, so these
+     * pins stayed green while the feature was dead. The parse() seam
+     * below makes every fixture reachable from real wire bytes; a
+     * removed dispatch arm now goes RED here.
+     */
+    public static function ctrlTabWireBytes(): iterable
+    {
+        // xterm-family modified-Tab report.
+        yield 'xterm ctrl+tab'      => ["\x1b[1;5I"];
+        // Kitty `disambiguate` (negotiated in init()) per-key report.
+        yield 'kitty ctrl+tab'      => ["\x1b[9;5u"];
+        // Universal alternative chord — arrives unmodified-safe even
+        // on a plain xterm where Ctrl+Tab collapses to bare 0x09.
+        yield 'ctrl+pageup'         => ["\x1b[5;5~"];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('ctrlTabWireBytes')]
+    public function testCtrlTabDuplicatesFirstTab(string $bytes): void
     {
         $m = $this->start();
         $this->assertCount(1, $m->tabs);
         // Ctrl+Tab with existing tabs should switch to next tab
-        $msg = new KeyMsg(KeyType::Char, "\t", ctrl: true, shift: false);
-        [$next] = $m->update($msg);
+        [$next] = $m->update($this->decode($bytes));
         // From tab 0, Ctrl+Tab wraps to tab 0 (only 1 tab)
         $this->assertCount(1, $next->tabs);
         $this->assertSame(0, $next->tabIndex);
     }
 
-    public function testCtrlTabCyclesToNextTab(): void
+    #[\PHPUnit\Framework\Attributes\DataProvider('ctrlTabWireBytes')]
+    public function testCtrlTabCyclesToNextTab(string $bytes): void
     {
         $m = $this->start()->duplicateTab();
         $this->assertSame(1, $m->tabIndex);
         // Ctrl+Tab should cycle to next (which wraps to 0)
-        $msg = new KeyMsg(KeyType::Char, "\t", ctrl: true, shift: false);
-        [$next] = $m->update($msg);
+        [$next] = $m->update($this->decode($bytes));
         $this->assertSame(0, $next->tabIndex);
     }
 
-    public function testCtrlShiftTabGoesToPreviousTab(): void
+    public static function ctrlShiftTabWireBytes(): iterable
+    {
+        yield 'xterm ctrl+shift+tab' => ["\x1b[1;6I"];
+        yield 'kitty ctrl+shift+tab' => ["\x1b[9;6u"];
+        yield 'ctrl+pagedown'        => ["\x1b[6;5~"];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('ctrlShiftTabWireBytes')]
+    public function testCtrlShiftTabGoesToPreviousTab(string $bytes): void
     {
         $m = $this->start()->duplicateTab();
         $this->assertSame(1, $m->tabIndex);
         // Ctrl+Shift+Tab should go to previous (0)
-        $msg = new KeyMsg(KeyType::Char, "\t", ctrl: true, shift: true);
-        [$next] = $m->update($msg);
+        [$next] = $m->update($this->decode($bytes));
         $this->assertSame(0, $next->tabIndex);
+    }
+
+    /**
+     * Decode one wire event through the production parser and hand
+     * back the KeyMsg the app will really see. Asserts the fixture
+     * premise itself: exactly one message, and a key.
+     */
+    private function decode(string $bytes): KeyMsg
+    {
+        $msgs = (new InputReader())->parse($bytes);
+        $this->assertCount(1, $msgs, "fixture premise: {$bytes} must decode to one message");
+        $key = $msgs[0];
+        $this->assertInstanceOf(KeyMsg::class, $key);
+        return $key;
+    }
+
+    /**
+     * The shadowing regression: with the ctrl arms in place, an
+     * UNMODIFIED Tab (bare 0x09 or the kitty equivalent) must still
+     * swap panes, not cycle tabs — ctrl arms above must not widen.
+     */
+    public function testPlainTabStillSwapsPaneEvenWithCycleArmsAbove(): void
+    {
+        $m = $this->start();
+        $this->assertSame(0, $m->activeIdx);
+        [$next] = $m->update($this->decode("\t"));
+        $this->assertSame(1, $next->activeIdx);
+        [$back] = $next->update($this->decode("\x1b[9u")); // kitty unmodified Tab
+        $this->assertSame(0, $back->activeIdx);
+    }
+
+    /**
+     * On a plain terminal Ctrl+Tab is byte-identical to Tab (0x09 has
+     * no room for modifiers); the cycle arms must therefore NOT fire
+     * for it — it keeps the documented pane-swap. Pinned so no future
+     * "cleverness" pretends to see ctrl in a bare 0x09.
+     */
+    public function testBareTabBytesAreUnmodifiedTabNotCycle(): void
+    {
+        $msg = $this->decode("\t");
+        $this->assertSame(KeyType::Tab, $msg->type);
+        $this->assertFalse($msg->ctrl);
+        $this->assertFalse($msg->shift);
+    }
+
+    /**
+     * init() must negotiate the kitty disambiguate flag — the only
+     * way Ctrl+Tab becomes distinguishable from Tab on kitty-family
+     * terminals. Program writes the returned Cmd's RawMsg bytes once
+     * at startup; Program's shutdown release pops unconditionally.
+     */
+    public function testInitNegotiatesKittyDisambiguate(): void
+    {
+        $cmd = $this->start()->init();
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $msg = $cmd();
+        $this->assertInstanceOf(RawMsg::class, $msg);
+        $this->assertSame(Ansi::pushKittyKeyboard(KeyboardEnhancementsMsg::DISAMBIGUATE), $msg->bytes);
     }
 
     public function testTCreatesNewTab(): void
@@ -546,13 +634,6 @@ final class ManagerTest extends TestCase
         // A bogus path must not open a dead listing: fall back to the
         // current pane's cwd (the pre-fix behaviour) instead.
         $this->assertSame($m->tabs[0]['left']->cwd, $m->tabs[1]['left']->cwd);
-    }
-
-    public function testInitReturnsNull(): void
-    {
-        $m = $this->start();
-        $result = $m->init();
-        $this->assertNull($result);
     }
 
     public function testViewReturnsString(): void
