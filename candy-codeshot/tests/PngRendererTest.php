@@ -146,4 +146,43 @@ final class PngRendererTest extends TestCase
             }
         }
     }
+
+    public function testMalformedThemeColourIsRefusedNotPaintedBlack(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not loaded');
+        }
+
+        $theme = new Theme(
+            background:   'oops',
+            foreground:   '#c9d1d9',
+            border:       '#30363d',
+            shadow:       'rgba(0, 0, 0, 0.5)',
+            lineNumber:   '#6e7681',
+            windowRed:    '#ff5f56',
+            windowYellow: '#ffbd2e',
+            windowGreen:  '#27c93f',
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("PNG colour must be a 6-digit #rrggbb hex string, got 'oops'");
+
+        (new PngRenderer($theme))->withWindow(false)->withShadow(false)->render("x\n");
+    }
+
+    public function testWindowStyleNoneCollapsesTheHeaderBandInPng(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not loaded');
+        }
+
+        $none  = PngRenderer::dark()->withWindowStyle('none')->withShadow(false)->render("x\n");
+        $macos = PngRenderer::dark()->withWindowStyle('macos')->withShadow(false)->render("x\n");
+
+        $this->assertSame(
+            36,
+            getimagesizefromstring($macos)[1] - getimagesizefromstring($none)[1],
+            'WindowStyle::None must remove the 36px header band, not leave it empty',
+        );
+    }
 }

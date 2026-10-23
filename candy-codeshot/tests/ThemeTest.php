@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\CodeShot\Tests;
 
 use SugarCraft\CodeShot\Theme;
-use SugarCraft\CodeShot\WindowStyle;
 use PHPUnit\Framework\TestCase;
 
 final class ThemeTest extends TestCase
@@ -66,12 +65,6 @@ final class ThemeTest extends TestCase
         $this->assertSame(1.4, $theme->lineHeight);
     }
 
-    public function testDarkThemeHasMacosWindowStyle(): void
-    {
-        $theme = Theme::dark();
-        $this->assertSame(WindowStyle::Macos, $theme->windowStyle);
-    }
-
     public function testLightThemeHasCorrectColors(): void
     {
         $theme = Theme::light();
@@ -127,7 +120,7 @@ final class ThemeTest extends TestCase
         $reflection = new \ReflectionClass(Theme::class);
         foreach (['background', 'foreground', 'border', 'shadow', 'lineNumber',
                      'windowRed', 'windowYellow', 'windowGreen',
-                     'fontFamily', 'fontSize', 'lineHeight', 'windowStyle'] as $prop) {
+                     'fontFamily', 'fontSize', 'lineHeight'] as $prop) {
             $property = $reflection->getProperty($prop);
             $this->assertTrue($property->isReadOnly(), "Property {$prop} should be readonly");
         }

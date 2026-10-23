@@ -12,6 +12,11 @@ use SugarCraft\Core\Util\Ansi;
 final class LayoutCalculator
 {
     /**
+     * @param bool $chrome When false, the 36px window-title band is collapsed:
+     *                     `--window-style none` (WindowStyle::None) keeps the
+     *                     framed look but paints no title bar, and must not
+     *                     reserve empty space for one that never arrives.
+     *
      * @return array{0:int, 1:int, 2:float, 3:int, 4:int, 5:int, 6:int, 7:int}
      *   [maxCols, gutter, contentWidth, contentHeight, headerHeight, shadowMargin, totalW, totalH]
      */
@@ -23,6 +28,7 @@ final class LayoutCalculator
         bool $shadow,
         float $cellW,
         float $cellH,
+        bool $chrome = true,
     ): array {
         $maxCols = 0;
         foreach ($lines as $line) {
@@ -38,7 +44,7 @@ final class LayoutCalculator
         $contentWidth  = ($maxCols + $gutter) * $cellW;
         $contentHeight = count($lines) * $cellH;
 
-        $headerHeight = $window ? 36 : 0;
+        $headerHeight = ($window && $chrome) ? 36 : 0;
         $frameWidth    = $contentWidth + $padding * 2;
         $frameHeight   = $contentHeight + $padding * 2 + $headerHeight;
 

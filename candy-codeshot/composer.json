@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-codeshot",
-    "description": "PHP port of charmbracelet/freeze \u2014 render code or terminal output to SVG screenshots with macOS-style window controls, drop shadow, line numbers, and inline ANSI SGR colour parsing.",
+    "description": "PHP port of charmbracelet/freeze \u2014 render code or terminal output to SVG (or PNG with ext-gd) screenshots with macOS-style window controls, drop shadow, line numbers, and inline ANSI SGR colour parsing.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -27,6 +27,7 @@
     },
     "require": {
         "php": "^8.3",
+        "ext-mbstring": "*",
         "sugarcraft/sugar-ansi-parser": "dev-master",
         "sugarcraft/sugar-core": "dev-master"
     },

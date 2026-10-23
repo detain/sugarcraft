@@ -302,6 +302,117 @@ final class CliTest extends TestCase
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Review fixes (docs-fix-1023): filename-driven detection, option-value
+    // refusals, highlight range refusal, PNG honesty, chrome-band geometry
+    // -------------------------------------------------------------------------
+
+    public function testFilenameExtensionDrivesHighlightWhereContentCannot(): void
+    {
+        $dir = $this->makeTempDir();
+        try {
+            // Content alone detects 'text' (probed); only the .py filename can
+            // route this body through the python highlighter.
+            file_put_contents($dir . '/loop.py', "total = 0\nfor i in range(3):\n    total += i\n");
+            $result = $this->runCli(['--no-window', '--no-shadow', '--theme', 'dracula', 'loop.py'], null, $dir);
+
+            $this->assertSame(0, $result['exitCode'], $result['stderr']);
+            $this->assertStringContainsString('fill="#ff79c6"', $result['stdout'], 'filename detection must highlight for/in keywords');
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testUnknownExtensionFallsBackToContentDetection(): void
+    {
+        $dir = $this->makeTempDir();
+        try {
+            file_put_contents($dir . '/notes.txt', "<?php echo 1;\n");
+            $result = $this->runCli(['--no-window', '--no-shadow', '--theme', 'dracula', 'notes.txt'], null, $dir);
+
+            $this->assertSame(0, $result['exitCode'], $result['stderr']);
+            $this->assertStringContainsString('fill="#ff79c6"', $result['stdout'], 'content detection must still fire for unknown extensions');
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testNonNumericPaddingExitsTwoWithFriendlyMessage(): void
+    {
+        $result = $this->runCli(['--padding', 'wide']);
+
+        $this->assertSame(2, $result['exitCode']);
+        $this->assertStringContainsString("--padding expects a non-negative integer", $result['stderr']);
+        $this->assertStringNotContainsString('Uncaught', $result['stderr']);
+    }
+
+    public function testFlagWithoutValueExitsTwoWithFriendlyMessage(): void
+    {
+        $result = $this->runCli(['--theme']);
+
+        $this->assertSame(2, $result['exitCode']);
+        $this->assertStringContainsString('--theme requires a value', $result['stderr']);
+    }
+
+    public function testImpossibleHighlightRangesExitTwoWithoutFatal(): void
+    {
+        foreach (['0:5' => 'start must be >= 1', '5:3' => 'end must be >= start'] as $spec => $needle) {
+            $result = $this->runCli(['--no-window', '--no-shadow', '--highlight', $spec], "x\n");
+
+            $this->assertSame(2, $result['exitCode'], $spec . ': ' . $result['stderr']);
+            $this->assertStringContainsString("rejected highlight '$spec'", $result['stderr']);
+            $this->assertStringContainsString($needle, $result['stderr']);
+            $this->assertStringNotContainsString('Uncaught', $result['stderr']);
+            $this->assertSame('', $result['stdout']);
+        }
+    }
+
+    public function testPngOutputAnnouncesIgnoredSvgOnlyOptions(): void
+    {
+        $dir = $this->makeTempDir();
+        try {
+            $result = $this->runCli(['--format', 'png', '--ligatures', '-o', 'shot.png'], "x\n", $dir);
+
+            $this->assertSame(0, $result['exitCode'], $result['stderr']);
+            $this->assertStringContainsString('ignores SVG-only options: --ligatures', $result['stderr']);
+            $this->assertFileExists($dir . '/shot.png');
+            $this->assertSame("\x89PNG", substr((string) file_get_contents($dir . '/shot.png'), 0, 4));
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testPngFilenameWithSvgFormatWarnsButKeepsDocumentedExit(): void
+    {
+        $dir = $this->makeTempDir();
+        try {
+            $result = $this->runCli(['-o', 'shot.png'], "x\n", $dir);
+
+            $this->assertSame(0, $result['exitCode'], $result['stderr']);
+            $this->assertStringContainsString("does not match the extension", $result['stderr']);
+            $this->assertStringStartsWith('<?xml', (string) file_get_contents($dir . '/shot.png'));
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testWindowStyleNoneCollapsesTheHeaderBand(): void
+    {
+        $none  = $this->runCli(['--window-style', 'none', '--no-shadow'], "x\n");
+        $macos = $this->runCli(['--window-style', 'macos', '--no-shadow'], "x\n");
+
+        $this->assertSame(0, $none['exitCode'], $none['stderr']);
+        $this->assertSame(0, $macos['exitCode'], $macos['stderr']);
+        $this->assertMatchesRegularExpression('/height="(\d+)"/', $none['stdout']);
+        $this->assertMatchesRegularExpression('/height="(\d+)"/', $macos['stdout']);
+
+        // The chrome band is 36 user-space units tall: dropping it must shrink
+        // the canvas by exactly that, not leave an empty band behind.
+        preg_match('/height="(\d+)"/', $none['stdout'], $a);
+        preg_match('/height="(\d+)"/', $macos['stdout'], $b);
+        $this->assertSame(36, (int) $b[1] - (int) $a[1], 'WindowStyle::None must collapse the 36px header band');
+    }
+
     private function makeTempDir(): string
     {
         $dir = sys_get_temp_dir() . '/codeshot_cwd_' . uniqid('', true);

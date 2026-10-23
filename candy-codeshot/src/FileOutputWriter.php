@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\CodeShot;
 
 /**
- * Output writer that streams chunks directly to a file.
- * Use for large outputs where buffering in memory is undesirable.
+ * Output writer that forwards chunks straight to a file handle as they
+ * arrive. Standalone helper — the renderers return complete bytes and
+ * never write through this class themselves.
  */
 final class FileOutputWriter implements OutputWriter
 {

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\CodeShot\Theme;
 
 use SugarCraft\CodeShot\Theme;
-use SugarCraft\CodeShot\WindowStyle;
 
 /**
  * Loads a chroma JSON theme file and maps its token colors to a
@@ -19,6 +18,8 @@ use SugarCraft\CodeShot\WindowStyle;
  */
 final class ChromaThemeLoader
 {
+    use NormalizesHexColor;
+
     /** Maps chroma token names to Theme property names. */
     private const TOKEN_MAP = [
         'comment'          => 'lineNumber',
@@ -40,7 +41,12 @@ final class ChromaThemeLoader
     /**
      * Load a Theme from a chroma JSON theme file at `$path`.
      *
-     * @throws \InvalidArgumentException if the file does not exist or is not valid JSON.
+     * The file is read up to 1 MB; a larger file is truncated, and the
+     * truncated JSON then fails to parse (JsonException) rather than
+     * silently loading half a theme.
+     *
+     * @throws \InvalidArgumentException if the file does not exist or cannot be read.
+     * @throws \JsonException if the (possibly truncated) contents are not valid JSON.
      */
     public static function load(string $path): Theme
     {
@@ -73,8 +79,11 @@ final class ChromaThemeLoader
 
         $propertyMap = [];
         foreach (self::TOKEN_MAP as $token => $prop) {
-            if (isset($colors[$token]) && !isset($propertyMap[$prop])) {
-                $propertyMap[$prop] = self::normalizeHex($colors[$token]);
+            if (isset($colors[$token]) && is_string($colors[$token]) && !isset($propertyMap[$prop])) {
+                $normalized = self::normalizeHex($colors[$token]);
+                if (self::isValidHexColor($normalized)) {
+                    $propertyMap[$prop] = $normalized;
+                }
             }
         }
 
@@ -103,12 +112,15 @@ final class ChromaThemeLoader
             fontFamily:    $fontFamily,
             fontSize:      14.0,
             lineHeight:    1.4,
-            windowStyle:   WindowStyle::Macos,
         );
     }
 
     /**
      * Return a valid 6-digit hex colour string or null.
+     *
+     * The guard checks the normalised value honestly: normalizeHex always
+     * prefixes '#', so the old `str_starts_with(..., '#')` test was
+     * tautological and let CSS names and junk through into renderers.
      */
     private static function coerceColor(mixed $value): ?string
     {
@@ -116,26 +128,6 @@ final class ChromaThemeLoader
             return null;
         }
         $normalized = self::normalizeHex($value);
-        return str_starts_with($normalized, '#') ? $normalized : null;
-    }
-
-    /**
-     * Normalize a hex colour to 6-digit lowercase #rrggbb.
-     *
-     * Handles 3-digit #rgb and 8-digit #rrggbbaa formats.
-     */
-    private static function normalizeHex(string $hex): string
-    {
-        $hex = trim($hex);
-        if (str_starts_with($hex, '#')) {
-            $hex = substr($hex, 1);
-        }
-        if (strlen($hex) === 3) {
-            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
-        }
-        if (strlen($hex) === 8) {
-            $hex = substr($hex, 0, 6);
-        }
-        return '#' . strtolower($hex);
+        return self::isValidHexColor($normalized) ? $normalized : null;
     }
 }

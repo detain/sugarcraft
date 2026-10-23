@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\CodeShot\Theme;
 
 use SugarCraft\CodeShot\Theme;
-use SugarCraft\CodeShot\WindowStyle;
 
 /**
  * Loads a VS Code JSON theme file and maps its token colors to a
@@ -21,6 +20,8 @@ use SugarCraft\CodeShot\WindowStyle;
  */
 final class VsCodeThemeLoader
 {
+    use NormalizesHexColor;
+
     /** Maps TextMate scope roots to Theme property names. */
     private const SCOPE_MAP = [
         'comment'          => 'lineNumber',
@@ -39,7 +40,12 @@ final class VsCodeThemeLoader
     /**
      * Load a Theme from a VS Code JSON theme file at `$path`.
      *
-     * @throws \InvalidArgumentException if the file does not exist or is not valid JSON.
+     * The file is read up to 1 MB; a larger file is truncated, and the
+     * truncated JSON then fails to parse (JsonException) rather than
+     * silently loading half a theme.
+     *
+     * @throws \InvalidArgumentException if the file does not exist or cannot be read.
+     * @throws \JsonException if the (possibly truncated) contents are not valid JSON.
      */
     public static function load(string $path): Theme
     {
@@ -114,12 +120,13 @@ final class VsCodeThemeLoader
             fontFamily:     $fontFamily,
             fontSize:       14.0,
             lineHeight:     1.4,
-            windowStyle:    WindowStyle::Macos,
         );
     }
 
     /**
      * Extract a colour value from the colours map, trying multiple keys.
+     * Values that are not 6-digit hex after normalisation are treated as
+     * absent — the next key (or the fallback) answers instead.
      *
      * @param array<string, string> $colors
      * @param list<string> $keys
@@ -128,7 +135,10 @@ final class VsCodeThemeLoader
     {
         foreach ($keys as $key) {
             if (isset($colors[$key]) && is_string($colors[$key])) {
-                return self::normalizeHex($colors[$key]);
+                $normalized = self::normalizeHex($colors[$key]);
+                if (self::isValidHexColor($normalized)) {
+                    return $normalized;
+                }
             }
         }
         return $fallback;
@@ -158,8 +168,11 @@ final class VsCodeThemeLoader
             $scopes = is_array($scope) ? $scope : [$scope];
             $foreground = $settings['foreground'] ?? null;
 
-            if ($foreground !== null) {
+            if ($foreground !== null && is_string($foreground)) {
                 $hex = self::normalizeHex($foreground);
+                if (!self::isValidHexColor($hex)) {
+                    continue;
+                }
                 foreach ($scopes as $s) {
                     $root = self::scopeRoot($s);
                     if (isset(self::SCOPE_MAP[$root])) {
@@ -190,25 +203,5 @@ final class VsCodeThemeLoader
     {
         $dot = strpos($scope, '.');
         return $dot !== false ? substr($scope, 0, $dot) : $scope;
-    }
-
-    /**
-     * Normalize a hex colour to 6-digit lowercase #rrggbb.
-     *
-     * Handles 3-digit #rgb and 8-digit #rrggbbaa formats.
-     */
-    private static function normalizeHex(string $hex): string
-    {
-        $hex = trim($hex);
-        if (str_starts_with($hex, '#')) {
-            $hex = substr($hex, 1);
-        }
-        if (strlen($hex) === 3) {
-            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
-        }
-        if (strlen($hex) === 8) {
-            $hex = substr($hex, 0, 6);
-        }
-        return '#' . strtolower($hex);
     }
 }

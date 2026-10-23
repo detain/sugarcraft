@@ -4,22 +4,48 @@
 declare(strict_types=1);
 
 /**
- * `candy-codeshot` — render code or terminal output to an SVG screenshot.
+ * `candy-codeshot` — render code or terminal output to an SVG (or PNG)
+ * screenshot.
  *
  * Usage:
  *   echo "hello" | candy-codeshot --theme dracula > out.svg
  *   candy-codeshot input.txt --theme tokyo-night --no-window --line-numbers
  *
- * Reads from stdin when no path is supplied; writes the SVG to
- * stdout (or `--output <path>`).
+ * Reads from stdin when no path is supplied; writes the image to
+ * stdout (or `--output <path>`). Options take their value as a separate
+ * argument (`--theme dracula`, not `--theme=dracula`).
+ *
+ * Exit codes: 0 success, 1 I/O failure (read/write/autoload), 2 refused
+ * input (unknown flag/theme/format/style, bad option value, path outside
+ * the CWD, missing ext-gd).
  */
 
-$root = dirname(__DIR__, 2);
-foreach ([__DIR__ . '/../vendor/autoload.php', $root . '/vendor/autoload.php'] as $auto) {
-    if (file_exists($auto)) {
+// The three house autoload shapes, in the order candy-mdview probes them:
+// a standalone dev checkout, a composer-installed dependency copied to its
+// real dist path under <project>/vendor/sugarcraft/candy-codeshot/bin, and a
+// composer-generated <project>/vendor/bin symlink inside the monorepo or any
+// consuming project. The middle candidate is what makes a plain
+// `composer require sugarcraft/candy-codeshot` consumer work — without it the
+// bin silently loaded nothing and every class reference fatalled.
+$autoloadCandidates = [
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../../autoload.php',
+    __DIR__ . '/../../vendor/autoload.php',
+];
+
+$autoloadFound = false;
+foreach ($autoloadCandidates as $auto) {
+    if (is_file($auto)) {
         require $auto;
+        $autoloadFound = true;
         break;
     }
+}
+if (!$autoloadFound) {
+    // Fail loud: a missing autoloader used to degrade into a bare
+    // "Class not found" fatal naming an internal class — unactionable.
+    fwrite(STDERR, "candy-codeshot: cannot find composer autoload.php - run 'composer install' in this checkout, or invoke the bin through a composer-installed project's vendor/bin\n");
+    exit(1);
 }
 
 use SugarCraft\CodeShot\CodeHighlighter;
@@ -75,6 +101,36 @@ function candy_codeshot_confine_path(string $path, bool $unsafe): ?string
     return $resolved;
 }
 
+/**
+ * Every flag that takes a value must actually receive one. A trailing flag
+ * (`--theme` at the end of argv) used to stringify null into '' and surface
+ * as a confusing "unknown theme ''" (or, for -o, as a write against the CWD
+ * directory); refuse the shape by name instead.
+ */
+function candy_codeshot_flag_value(string $option, ?string $value): string
+{
+    if ($value === null || $value === '') {
+        fwrite(STDERR, Lang::t('cli.missing_value', ['option' => $option]) . "\n");
+        exit(2);
+    }
+    return $value;
+}
+
+/**
+ * Numeric flags are digit-only and non-negative by contract. The old
+ * `(int) array_shift(...)` silently turned `--padding wide` into 0 — an
+ * unrequested layout change with no diagnostic.
+ */
+function candy_codeshot_int_flag(string $option, ?string $value): int
+{
+    $raw = candy_codeshot_flag_value($option, $value);
+    if (preg_match('/^\d+$/', $raw) !== 1) {
+        fwrite(STDERR, Lang::t('cli.bad_number', ['option' => $option, 'value' => $raw]) . "\n");
+        exit(2);
+    }
+    return (int) $raw;
+}
+
 $argv = $_SERVER['argv'] ?? $argv ?? [];
 array_shift($argv);
 
@@ -94,18 +150,24 @@ $inputPath      = null;
 $format         = 'svg';
 $language       = null;
 $unsafePaths    = false;
+// Which SVG-only options the operator actually asked for — the PNG backend
+// cannot honour these, so we announce the drop loudly (stderr) instead of
+// silently rendering a PNG that ignored them.
+$sawLigatures = false;
+$sawFont      = false;
+$sawHighlight = false;
 
 while (($arg = array_shift($argv)) !== null) {
     switch ($arg) {
-        case '--theme':         $themeName    = (string) array_shift($argv); break;
-        case '--padding':       $padding      = (int) array_shift($argv); break;
+        case '--theme':         $themeName    = candy_codeshot_flag_value('--theme', array_shift($argv)); break;
+        case '--padding':       $padding      = candy_codeshot_int_flag('--padding', array_shift($argv)); break;
         case '--no-window':     $window       = false; break;
         case '--no-shadow':     $shadow       = false; break;
         case '--no-border':     $border       = false; break;
         case '--line-numbers':  $lineNumbers  = true;  break;
-        case '--border-radius': $borderRadius = (int) array_shift($argv); break;
+        case '--border-radius': $borderRadius = candy_codeshot_int_flag('--border-radius', array_shift($argv)); break;
         case '--window-style':
-            $styleRaw = (string) array_shift($argv);
+            $styleRaw = candy_codeshot_flag_value('--window-style', array_shift($argv));
             $valid = ['macos', 'windows-terminal', 'iterm', 'hyper', 'none'];
             if (!in_array($styleRaw, $valid, true)) {
                 fwrite(STDERR, Lang::t('cli.unknown_window_style', ['style' => $styleRaw]) . "\n");
@@ -113,15 +175,16 @@ while (($arg = array_shift($argv)) !== null) {
             }
             $windowStyle = $styleRaw;
             break;
-        case '--ligatures':     $ligatures    = true; break;
+        case '--ligatures':     $ligatures    = true; $sawLigatures = true; break;
         case '--unsafe-paths':  $unsafePaths  = true; break;
         case '--font':
             // Existence, confinement and font-signature checks are deferred
             // until after parsing so --unsafe-paths (order-independent) applies.
-            $fontPath = (string) array_shift($argv);
+            $fontPath = candy_codeshot_flag_value('--font', array_shift($argv));
+            $sawFont = true;
             break;
         case '--highlight':
-            $hlFormat = (string) array_shift($argv);
+            $hlFormat = candy_codeshot_flag_value('--highlight', array_shift($argv));
             if (!preg_match('/^(\d+):(\d+)(?::([^:]+))?$/', $hlFormat, $m)) {
                 fwrite(STDERR, Lang::t('cli.bad_highlight', ['format' => $hlFormat]) . "\n");
                 exit(2);
@@ -130,11 +193,12 @@ while (($arg = array_shift($argv)) !== null) {
             $end   = (int) $m[2];
             $color = $m[3] ?? '#fffbe6';
             $highlight = [$start, $end, $color];
+            $sawHighlight = true;
             break;
         case '-o':
-        case '--output':        $output       = (string) array_shift($argv); break;
+        case '--output':        $output       = candy_codeshot_flag_value($arg, array_shift($argv)); break;
         case '--format':
-            $format = (string) array_shift($argv);
+            $format = candy_codeshot_flag_value('--format', array_shift($argv));
             if (!in_array($format, ['svg', 'png'], true)) {
                 fwrite(STDERR, Lang::t('cli.unknown_format', ['format' => $format]) . "\n");
                 exit(2);
@@ -142,7 +206,7 @@ while (($arg = array_shift($argv)) !== null) {
             break;
         case '-t':
         case '--type':
-            $language = (string) array_shift($argv);
+            $language = candy_codeshot_flag_value($arg, array_shift($argv));
             break;
         case '-h':
         case '--help':
@@ -224,7 +288,18 @@ if ($text === false || $text === null) {
 // the render stays byte-identical. Unrecognised / plain-text languages tokenise
 // to a single Plain span, so CodeHighlighter::highlight() returns the input
 // unchanged; the `!== 'text'` guard just skips the needless tokenise pass.
-$detectedLang = LanguageDetector::detect($text);
+//
+// When a file path is supplied, its extension names the language FIRST (the
+// README has always documented filename as a detection source, and content
+// signatures are a deliberately small list — a plain `.py` loop body scores
+// zero and used to render unhighlighted); unknown extensions and stdin fall
+// through to shebang + content heuristics.
+$detectedLang = $inputPath !== null
+    ? LanguageDetector::detectFromFilename($inputPath)
+    : 'text';
+if ($detectedLang === 'text') {
+    $detectedLang = LanguageDetector::detect($text);
+}
 if ($language === null) {
     $language = $detectedLang;
 }
@@ -233,6 +308,15 @@ if (strpos($text, "\x1b") === false && $language !== 'text' && $language !== '')
 }
 
 if ($format === 'png') {
+    // The PNG backend draws with GD bitmap fonts: three options have no PNG
+    // equivalent. Announce every dropped one instead of silently ignoring it.
+    $dropped = [];
+    if ($sawLigatures) { $dropped[] = '--ligatures'; }
+    if ($sawFont)      { $dropped[] = '--font'; }
+    if ($sawHighlight) { $dropped[] = '--highlight'; }
+    if ($dropped !== []) {
+        fwrite(STDERR, Lang::t('cli.png_ignores', ['options' => implode(', ', $dropped)]) . "\n");
+    }
     if (!extension_loaded('gd')) {
         fwrite(STDERR, Lang::t('cli.gd_required') . "\n");
         exit(2);
@@ -260,6 +344,9 @@ if ($format === 'png') {
         $renderer = $renderer->withLigatures(true);
     }
     if ($fontPath !== null) {
+        // The path was existence/sniffed above, so withFont's own not-found
+        // throw is unreachable from this CLI today; the catch stays as the
+        // fail-closed net for a file deleted between the check and the embed.
         try {
             $renderer = $renderer->withFont($fontPath);
         } catch (\InvalidArgumentException $e) {
@@ -269,7 +356,14 @@ if ($format === 'png') {
     }
     if ($highlight !== null) {
         [$start, $end, $color] = $highlight;
-        $renderer = $renderer->withHighlight($start, $end, $color);
+        try {
+            $renderer = $renderer->withHighlight($start, $end, $color);
+        } catch (\InvalidArgumentException $e) {
+            // `--highlight 0:5` / `5:3` pass the shape regex but violate the
+            // renderer's range contract — refuse with exit 2, not a fatal.
+            fwrite(STDERR, Lang::t('cli.highlight_rejected', ['spec' => $start . ':' . $end, 'reason' => $e->getMessage()]) . "\n");
+            exit(2);
+        }
     }
 }
 if ($windowStyle !== null) {
@@ -279,6 +373,16 @@ if ($windowStyle !== null) {
 $result = $renderer->render($text);
 
 if ($output !== null) {
+    // `-o shot.png` without `--format png` used to write SVG bytes into a
+    // .png-named file (and vice versa) in silence. Warn on stderr; the bytes
+    // themselves keep their documented meaning — the flag, not the filename,
+    // chooses the format.
+    $lowerOutput = strtolower($output);
+    if (($format === 'svg' && str_ends_with($lowerOutput, '.png'))
+        || ($format === 'png' && str_ends_with($lowerOutput, '.svg'))
+    ) {
+        fwrite(STDERR, Lang::t('cli.format_mismatch', ['format' => $format, 'path' => $output]) . "\n");
+    }
     if (@file_put_contents($output, $result) === false) {
         fwrite(STDERR, Lang::t('cli.write_failed', ['path' => $output]) . "\n");
         exit(1);

@@ -6,7 +6,7 @@ namespace SugarCraft\CodeShot;
 
 /**
  * Output writer that accumulates all chunks into a string.
- * Use for cases where the entire output is needed as a single string.
+ * Use when the chunks must be reassembled into a single string.
  */
 final class StringOutputWriter implements OutputWriter
 {

@@ -7,10 +7,11 @@ namespace SugarCraft\CodeShot;
 use SugarCraft\Core\Util\Palettes;
 
 /**
- * Visual theme for {@see SvgRenderer}. Carries the colours of every
- * surface the renderer paints (background, foreground, frame chrome,
- * window controls), plus typographic settings (font family, size,
- * line height).
+ * Visual theme shared by {@see SvgRenderer} and {@see PngRenderer}.
+ * Carries the colours of every surface the renderers paint
+ * (background, foreground, frame chrome, window controls), plus
+ * typographic settings (font family, size, line height). The active
+ * window-chrome style lives on the renderers, not the theme.
  *
  * Mirrors charmbracelet/freeze's `Theme`. Built-in presets cover the
  * common dark / light / Dracula / Tokyo Night / Nord palettes.
@@ -29,7 +30,6 @@ final class Theme
         public readonly string $fontFamily   = 'Hack, "JetBrains Mono", Menlo, Consolas, monospace',
         public readonly float  $fontSize     = 14.0,
         public readonly float  $lineHeight   = 1.4,
-        public readonly WindowStyle $windowStyle = WindowStyle::Macos,
     ) {}
 
     /** Default dark theme (charm-ish). */

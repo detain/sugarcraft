@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeShot;
 
-use SugarCraft\Core\Util\Ansi;
-
 /**
  * Renders text (with optional ANSI styling) to an SVG document. The
  * output is plain text — no `ext-gd` / Imagick required — making it
@@ -131,9 +129,10 @@ final class SvgRenderer
      * Render `$text` (which may contain ANSI escape sequences) to an
      * SVG document and return the bytes.
      *
-     * @note Rendering is synchronous and CPU-bound. For very large
-     *       screenshots (>1MB SVG), a future major version may offer
-     *       streaming output via a dedicated renderToStream() method.
+     * Rendering is synchronous and returns the complete document; it does
+     * not stream. The {@see OutputWriter} trio is a standalone chunking
+     * helper for callers that assemble output themselves — no renderer in
+     * this library calls into it.
      */
     public function render(string $text): string
     {
@@ -150,6 +149,10 @@ final class SvgRenderer
                 shadow: $this->shadow,
                 cellW: $cellW,
                 cellH: $cellH,
+                // WindowStyle::None paints no title bar (see buildWindowChrome),
+                // so the 36px band must collapse with it — otherwise a
+                // `--window-style none` frame carries an empty header.
+                chrome: $this->windowStyle !== WindowStyle::None,
             );
 
         $svgWidth  = (int) ($totalW - $shadowMargin * 2);
@@ -296,6 +299,9 @@ final class SvgRenderer
 
     private function buildWindowsTerminalWindow(int $shadowMargin, int $contentWidth): string
     {
+        // Deliberately theme-blind: Windows Terminal's own chrome is dark
+        // regardless of the code theme, so the title bar and buttons keep
+        // these fixed literals. A themeable variant is a future API seam.
         $geo = WindowChromeGeometry::windowsTerminal($shadowMargin, $contentWidth);
         $titleBarY = $shadowMargin;
         $rightEdge = $shadowMargin + $contentWidth - 12;

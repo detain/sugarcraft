@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeShot;
 
-use SugarCraft\Core\Util\Ansi;
-
 /**
  * Renders text (with optional ANSI styling) to a PNG image via GD.
  * Requires ext-gd.
@@ -23,7 +21,10 @@ use SugarCraft\Core\Util\Ansi;
  *    honoured.
  *
  * Uses GD's built-in bitmap fonts (imagestring) for portability — no
- * TTF font file required.
+ * TTF font file required. Because the bitmap font is fixed, the theme's
+ * `fontSize`/`lineHeight` are not honoured here (SVG only), and there is
+ * no PNG equivalent of font embedding, ligatures or line highlighting;
+ * the CLI announces those drops on stderr instead of ignoring them.
  *
  * @warning GD bitmap fonts do not support Unicode; multi-byte characters
  *          (including emoji, CJK, and most non-Latin scripts) will render
@@ -94,8 +95,6 @@ final class PngRenderer
      * @note Unicode content produces incorrect output with GD's built-in
      *       bitmap fonts. For syntax highlighted code with non-ASCII
      *       characters, use {@see SvgRenderer} instead.
-     * @note Rendering is synchronous and CPU-bound. For very large
-     *       screenshots, a future major version may offer streaming output.
      */
     public function render(string $text): string
     {
@@ -117,6 +116,9 @@ final class PngRenderer
                 shadow: $this->shadow,
                 cellW: $cellW,
                 cellH: $cellH,
+                // Mirror SvgRenderer: no painted title bar means no reserved
+                // 36px band.
+                chrome: $this->windowStyle !== WindowStyle::None,
             );
 
         // Ensure integer dimensions for GD functions.
@@ -239,6 +241,11 @@ final class PngRenderer
      */
     private function allocateColor(\GdImage $img, string $hex): int
     {
+        if (!preg_match('/^#[0-9a-fA-F]{6}$/', $hex)) {
+            // hexdec(substr(...)) on malformed input silently yielded 0 —
+            // a black-on-black invisibility bug. Name the bad value instead.
+            throw new \InvalidArgumentException("PNG colour must be a 6-digit #rrggbb hex string, got '{$hex}'");
+        }
         if (!isset($this->colorCache[$img])) {
             $this->colorCache[$img] = [];
         }

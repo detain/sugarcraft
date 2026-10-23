@@ -16,7 +16,6 @@ final class WindowChromeGeometry
      * @param int $base Left edge X for first traffic light
      * @param int $r Radius for traffic light circles
      * @param int $gap Horizontal spacing between traffic lights
-     * @param array<empty, empty, empty> $colors Placeholder for theme colors (unused in geometry)
      * @param int $titleBarHeight Height of title bar (0 for traffic-light styles)
      * @param int $buttonSize Size of Windows-style buttons
      * @param int $buttonGap Gap between Windows-style buttons
@@ -27,7 +26,6 @@ final class WindowChromeGeometry
         public readonly int $base,
         public readonly int $r,
         public readonly int $gap,
-        public readonly array $colors,
         public readonly int $titleBarHeight = 0,
         public readonly int $buttonSize = 0,
         public readonly int $buttonGap = 0,
@@ -41,7 +39,7 @@ final class WindowChromeGeometry
     {
         $cy = $shadowMargin + 18;
         $base = $shadowMargin + 18;
-        return new self(cy: $cy, base: $base, r: 6, gap: 18, colors: []);
+        return new self(cy: $cy, base: $base, r: 6, gap: 18);
     }
 
     /**
@@ -51,7 +49,7 @@ final class WindowChromeGeometry
     {
         $cy = $shadowMargin + 14;
         $base = $shadowMargin + 14;
-        return new self(cy: $cy, base: $base, r: 4, gap: 14, colors: []);
+        return new self(cy: $cy, base: $base, r: 4, gap: 14);
     }
 
     /**
@@ -70,7 +68,6 @@ final class WindowChromeGeometry
             base: $base,
             r: $r,
             gap: $gap,
-            colors: [],
             titleBarHeight: $titleBarHeight,
             frameWidth: $contentWidth,
         );
@@ -87,7 +84,6 @@ final class WindowChromeGeometry
             base: 0,
             r: 0,
             gap: 0,
-            colors: [],
             titleBarHeight: $titleBarHeight,
             buttonSize: 14,
             buttonGap: 8,

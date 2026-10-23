@@ -220,4 +220,24 @@ final class LayoutCalculatorTest extends TestCase
         // Total H: 17 + 10*2 + 36 + 32*2 = 17 + 20 + 36 + 64 = 137
         $this->assertEquals(137, $totalH);
     }
+
+    public function testChromeFalseCollapsesTheHeaderBandOnAWindowedCanvas(): void
+    {
+        // WindowStyle::None keeps --window true (frame border etc.) but must
+        // remove the 36px title band rather than leave it as an empty strip.
+        $with    = LayoutCalculator::calculate(
+            lines: ['content'], lineNumbers: false, padding: 10, window: true,
+            shadow: false, cellW: 8.0, cellH: 17.0,
+        );
+        $without = LayoutCalculator::calculate(
+            lines: ['content'], lineNumbers: false, padding: 10, window: true,
+            shadow: false, cellW: 8.0, cellH: 17.0, chrome: false,
+        );
+
+        $this->assertSame(36, $with[4]);
+        $this->assertSame(0, $without[4]);
+        // Total height is the only thing that moves: same content box.
+        $this->assertEquals(36, $with[7] - $without[7]);
+        $this->assertSame($with[2], $without[2]);
+    }
 }

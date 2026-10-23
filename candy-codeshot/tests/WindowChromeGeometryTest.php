@@ -146,17 +146,9 @@ final class WindowChromeGeometryTest extends TestCase
     public function testAllPropertiesAreReadonly(): void
     {
         $reflection = new \ReflectionClass(WindowChromeGeometry::class);
-        foreach (['cy', 'base', 'r', 'gap', 'colors', 'titleBarHeight', 'buttonSize', 'buttonGap', 'frameWidth'] as $prop) {
+        foreach (['cy', 'base', 'r', 'gap', 'titleBarHeight', 'buttonSize', 'buttonGap', 'frameWidth'] as $prop) {
             $property = $reflection->getProperty($prop);
             $this->assertTrue($property->isReadOnly(), "Property {$prop} should be readonly");
         }
-    }
-
-    public function testColorsArrayIsEmptyForAllStyles(): void
-    {
-        $this->assertSame([], WindowChromeGeometry::macos(10)->colors);
-        $this->assertSame([], WindowChromeGeometry::iterm2(10)->colors);
-        $this->assertSame([], WindowChromeGeometry::hyper(10, 100)->colors);
-        $this->assertSame([], WindowChromeGeometry::windowsTerminal(10, 100)->colors);
     }
 }
