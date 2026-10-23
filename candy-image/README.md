@@ -15,7 +15,7 @@
 Terminal image viewer for PHP 8.3+ — the **chafa-independent** front end
 built on [`sugarcraft/sugar-image`](../sugar-image/). Point it at an image
 file and it detects your terminal, picks the best protocol, and writes the
-rendered bytes to stdout. This is the F-18 surface: 45 chafa CLI flags
+rendered bytes to stdout. This is the candy-image surface: 45 chafa CLI flags
 distilled to the ones the SugarCraft core can actually honor — and no
 shell-out to `chafa`, ever.
 
@@ -33,7 +33,7 @@ candy-image --format=symbols --canvas=ansi256 --work=7 logo.png
 | Option                  | Meaning                                                          |
 |-------------------------|------------------------------------------------------------------|
 | `--format=F`            | Force a protocol: `auto` `sixel` `kitty` `iterm2` `half` (`halfblock`) `quarter` (`quarterblock`) `ascii` `ansi16` `ansi256` `truecolor` `symbols`. |
-| `--symbols=CLASS[+CLASS…]` | Select the symbol tier's glyph corpus with chafa's tag-selector grammar (`all`, `block`, `border`, `braille`, `ascii`, `latin`, `legacy`, `sextant`, `octant`, `technical`, `geometric`, `stipple`, `wedge`, `wide`, …; `+` adds, `-` removes, a leading sign is relative to the default corpus). Default: sugar-image's byte-frozen 676-glyph corpus; `wide` carries the opt-in double-width kana tier (A-09 engine). |
+| `--symbols=CLASS[+CLASS…]` | Select the symbol tier's glyph corpus with chafa's tag-selector grammar (`all`, `block`, `border`, `braille`, `ascii`, `latin`, `legacy`, `sextant`, `octant`, `technical`, `geometric`, `stipple`, `wedge`, `wide`, …; `+` adds, `-` removes, a leading sign is relative to the default corpus). Default: sugar-image's byte-frozen 676-glyph corpus; `wide` carries the opt-in double-width kana tier (rendered by the double-width wide-glyph engine). |
 | `--canvas=MODE`         | Colour canvas for the text tiers: `truecolor` (default) `ansi256` `ansi16` `fgbg`. A no-op on backends without the dial. |
 | `--work=N`              | Candidate-search effort: chafa's integer `1`–`9`, config float `(N−1)/8` — `1` is the cheapest render, `9` runs the exhaustive path. |
 | `--size=WxH`            | Render box in terminal cells (chafa spelling).                    |
@@ -49,13 +49,13 @@ candy-image --format=symbols --canvas=ansi256 --work=7 logo.png
 
 | chafa flag       | status here | reason |
 |------------------|-------------|--------|
-| `--format`       | ✅ subset    | every `Mosaic::fromModeString()` arm except `chafa` (refused by design — F-18's point is a viewer that never shells out). |
+| `--format`       | ✅ subset    | every `Mosaic::fromModeString()` arm except `chafa` (refused by design — the whole point is a viewer that never shells out). |
 | `--size`         | ✅          | cells; `--width`/`--height` as explicit-leg aliases. |
 | `--dump-detect`  | ✅          | chafa's debugging gold, re-expressed over `Detect` + `TermDb` + the palette probe. |
-| `--passthrough`  | ✅ `auto`/`none` | `tmux` (force) and `screen` (the S7.1 ScreenPassthrough decorator) refuse with a pointer — no seam on this base yet. |
+| `--passthrough`  | ✅ `auto`/`none` | `tmux` (force) and `screen` (the `Passthrough\ScreenPassthrough` decorator) refuse with a pointer — no seam on this base yet. |
 | `--polite`       | ✅ no-op    | sugar-image has no async worker model; every render is already "polite". |
-| `--symbols`      | ✅ tag classes | chafa's `--symbols=` class grammar over the ported narrow corpus (1,260 glyphs: ASCII, Latin, block table, legacy, misc, braille, sextant, octant) plus the opt-in wide kana tier (181 double-width glyphs, `wide`; rendered by the A-09 wide engine). `[chars]` literal sets and codepoint ranges are not implemented. |
-| `--canvas` / `--work` | ✅ (REACH-A04) | the A-07 canvas and A-08 work-factor dials, threaded onto whichever backend speaks them. |
+| `--symbols`      | ✅ tag classes | chafa's `--symbols=` class grammar over the ported narrow corpus (1,251 effective glyphs — 1,260 entries with nine AMBIGUOUS-tagged misc-narrow glyphs BAD-vetoed even by `all`, as in the C build: ASCII, Latin, block table, legacy, misc, braille, sextant, octant) plus the opt-in wide kana tier (181 double-width glyphs, `wide`; rendered by the double-width wide-glyph engine). `[chars]` literal sets and codepoint ranges are not implemented. |
+| `--canvas` / `--work` | ✅ | the canvas-mode and work-factor dials, threaded onto whichever backend speaks them. |
 | `--probe=off`    | ⏭ refuses   | `Detect` exposes no env-only probe seam yet. |
 | everything else  | ⏭ refuses   | out of scope for a thin composition-only viewer (façade law): the capability stays in the libs. |
 

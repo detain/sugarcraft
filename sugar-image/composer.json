@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-image",
-    "description": "Image-to-cell renderer \u2014 PNG/JPEG/static GIF to terminal via Sixel, Kitty, iTerm2, or half-block Unicode fallback. Port of charmbracelet/x/mosaic.",
+    "description": "Image-to-cell renderer for terminals \u2014 PNG/JPEG/GIF/APNG/WebP decoded via ext-gd and rendered through the best available protocol: Sixel, Kitty, iTerm2, the chafa CLI, or Unicode text tiers (half/quarter block, character ramp, chafa-style symbol coverage).",
     "type": "library",
     "license": "MIT",
     "keywords": [

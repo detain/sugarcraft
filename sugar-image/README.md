@@ -1,14 +1,15 @@
 # SugarImage
 
-Image-to-cell renderer for the terminal — PNG/JPEG/static GIF decoded
-via ext-gd and rendered via the best available protocol:
+Image-to-cell renderer for the terminal — PNG, JPEG, GIF (still and
+animated), APNG, WebP and BMP decoded via ext-gd and rendered via the best
+available protocol:
 
 - **Sixel** — xterm, foot, mlterm, wezterm, contour
 - **Kitty graphics protocol** — kitty, ghostty, wezterm
 - **iTerm2 inline images** (OSC 1337) — iTerm2, wezterm, mintty
 - **Half-block Unicode** (▀ + 24-bit fg/bg) — universal fallback
 - **Quarter-block Unicode** (░▒▓█ 2×2) — higher fidelity than half-block
-- **Symbols** (braille/sextant/octant/block glyph cells) — coverage-class rendering chosen by Hamming-distance candidate search (the chafa symbol engine). `SymbolMap::withSelectors()` applies chafa's `--symbols=` tag grammar over the full 1,260-glyph narrow corpus (ASCII/Latin/misc/legacy tables, the U+1FB80–U+1FB8B eighth-block tier, braille, sextants, octants); the default 676-glyph corpus is byte-frozen.
+- **Symbols** (braille/sextant/octant/block glyph cells) — coverage-class rendering chosen by Hamming-distance candidate search (the chafa symbol engine). `SymbolMap::withSelectors()` applies chafa's `--symbols=` tag grammar over the narrow glyph corpus (ASCII/Latin/misc/legacy tables, the U+1FB80–U+1FB8B eighth-block tier, braille, sextants, octants) — **1,251 glyphs effective** under `all`: the corpus parses to 1,260 entries, but nine misc-narrow glyphs carry chafa's AMBIGUOUS tag (they have emoji variants) and are BAD-vetoed by every selector that does not name ambiguous/ugly/bad, exactly as the C build does (derivation: `Symbol/SymbolSetTables.php`). The default 676-glyph corpus is byte-frozen.
 
 ```sh
 composer require sugarcraft/sugar-image
@@ -30,6 +31,7 @@ echo $ansi;
 
 ```php
 use SugarCraft\Image\KittyOptions;
+use SugarCraft\Image\Renderer\AsciiColorMode;
 use SugarCraft\Image\Renderer\QuarterBlockRenderer;
 
 // Probe terminal once, pick best protocol
@@ -40,6 +42,11 @@ $mosaic = Mosaic::sixel();
 $mosaic = Mosaic::kitty();
 $mosaic = Mosaic::iterm2();
 $mosaic = Mosaic::halfBlock();
+$mosaic = Mosaic::quarterBlock();
+$mosaic = Mosaic::ascii();                          // character ramp, monochrome
+$mosaic = Mosaic::ascii(AsciiColorMode::Ansi256);   // ...or Ansi16 / TrueColor chars
+$mosaic = Mosaic::symbols();                        // chafa symbol engine, default corpus
+$mosaic = Mosaic::chafa('--colors=256');            // external chafa CLI
 
 // Render — returns ANSI bytes
 $ansi = $mosaic->render($image, width: 40, height: 20);
@@ -53,12 +60,15 @@ $mosaic = Mosaic::builder()
 $ansi = $mosaic->render($image);          // 40×20 cells
 $ansi = $mosaic->render($image, 60);      // explicit width wins; height from aspect
 
-// Kitty: virtual-image placement (transmit once, place at multiple offsets)
-// Step 1 — transmit with a specific id and store as virtual (a=p)
+// Kitty: virtual-image placement — store once, place at many offsets.
+// Step 1 — a STORING transmit: withUseVirtual(true) sends a=T,U=1 with the
+// payload and closes with a control-only a=p frame, so the image is both
+// loaded into terminal memory and drawn.
 $renderer = (Mosaic::kitty())->renderer();
 $opts = KittyOptions::transmit(1)->withUseVirtual(true);
 $transmitted = $renderer->renderWithOptions($image, 40, null, $opts);
-// Step 2 — place the same image at a different cell offset (a=p, same id)
+// Step 2 — place the stored image at a cell offset: place() emits a one-shot
+// control-only a=p frame (same id) and never carries payload.
 $opts = KittyOptions::place(1, x: 5, y: 10)->withZIndex(5);
 $placed = $renderer->renderWithOptions($image, 40, null, $opts);
 
@@ -76,7 +86,7 @@ Codec matrix (sugar-image native paths only):
 | PNG (still + APNG) | ✅ decode | APNG frames via `fromAnimatedFile()` |
 | JPEG, static GIF | ✅ decode | GIF animates via `fromAnimatedFile()` |
 | WebP — static (VP8/VP8L/VP8X) | ✅ decode via `fromString()` | ext-gd WebP build |
-| WebP — animated (VP8X ANIM bit / ANMF) | ❌ refused by name | `UnsupportedFormatException` — needs chafa CLI or ffmpeg; the refusal is structural (pure-PHP RIFF walk), so the silent first-frame degrade class is closed on every host |
+| WebP — animated (VP8X ANIM bit / ANMF) | ❌ refused by name | `UnsupportedFormatException` — needs chafa CLI or sugar-video's pure-PHP `AnimatedWebpDecoder` (no released ffmpeg decodes animated WebP frames — its demuxer skips ANMF); the refusal is structural (pure-PHP RIFF walk), so the silent first-frame degrade class is closed on every host |
 | AVIF / HEIF / HEIC (`ftyp` brands) | ❌ refused by name | no PHP-side decoder; chafa CLI renders a still |
 | JPEG XL (`FF 0A` codestream, `jxl ` brand) | ❌ refused by name | same |
 | TIFF (`II*\0` / `MM\0*`) | ❌ refused as input | output-only: the GD-free iTerm2 payload encoder (`Codec\TiffUncompressed`) |
@@ -90,6 +100,18 @@ Codec matrix (sugar-image native paths only):
 - Palette PNGs are automatically converted to truecolor before
   processing.
 - Animated GIF and APNG via `ImageSource::fromAnimatedFile()`.
+
+## Limits
+
+Decoding untrusted images is budgeted — the caps are live constants on
+`ImageSource`, each pinned by tests:
+
+| Budget | Value | What it stops |
+|---|---|---|
+| `ImageSource::MAX_BYTES` | 64 MiB | the file/payload read itself — oversized files are refused before GD ever sees them |
+| `ImageSource::MAX_PIXELS` | 50,000,000 px | per-decode pixel budget (constructor and every factory take `maxPixels` to tune it) |
+| `FLIP_MAX_TOTAL_CELLS` (private) | 400,000 cells | animated-GIF aggregate budget: frames × per-frame pixels — stops a bomb whose every single frame is individually in-budget |
+| `MAX_RIFF_CHUNKS` (private) | 64 | the pure-PHP WebP RIFF walk bails out of a chunk flood instead of iterating forever |
 
 ## Remote images
 
@@ -151,9 +173,10 @@ $mosaic = Mosaic::probe();
 $cache  = new DiskCache($_SERVER['HOME'] . '/.cache/posters', maxEntries: 512);
 
 // Key includes the protocol — the same image at the same size encodes
-// differently for sixel vs kitty vs half-block. A-06: the ASCII renderer's
-// colour arms share one protocol name, so pass protocol() plus modeDetail()
-// (Mosaic::posterCacheKey does exactly this) to keep them cache-distinct.
+// differently for sixel vs kitty vs half-block. The ASCII renderer's colour
+// arms share one protocol name, so append modeDetail() to protocol() (this
+// protocol/modeDetail split is how Mosaic keys its own posters internally)
+// to keep them cache-distinct.
 $key = DiskCache::key($url, width: 24, height: 36, protocol: $mosaic->protocol() . ($mosaic->modeDetail() ? ':' . $mosaic->modeDetail() : ''));
 
 $ansi = $cache->getOrCompute($key, fn (): string =>
@@ -172,11 +195,16 @@ the cache directory.
 
 The Kitty renderer supports two advanced options via `KittyOptions`:
 
-- **Virtual-image placement** (`a=p`): Transmit an image once with
-  `withUseVirtual(true)`, then place it at multiple on-screen locations
-  using `withUseVirtual(true)` with the same image ID. The first render
-  stores the image data in the terminal; subsequent renders reference it
-  by ID and offset, reducing bandwidth.
+- **Virtual-image placement**: a plain transmit draws the image with `a=T`
+  (the default) and is *not* kept around for referencing. Transmit combined
+  with `withUseVirtual(true)` **stores** it: the transmit frame carries
+  `a=T,U=1` with the payload, and the renderer closes the chunk sequence
+  with a control-only `a=p` frame that places it. Afterwards,
+  `KittyOptions::place($imageId, x:, y:)` emits a one-shot control-only
+  `a=p` frame at a cell offset — never the payload again — so one
+  transmission can be placed at many locations, reducing bandwidth.
+  Under/over text follows `withPlacementU()`: `1` renders the image under
+  text (the default), `0` over it.
 
 - **Zlib compression** (`o=z`): Pass `withCompression(1)` to compress
   the PNG payload with zlib before base64-encoding; the transmit is
@@ -187,11 +215,11 @@ The Kitty renderer supports two advanced options via `KittyOptions`:
 ```php
 use SugarCraft\Image\KittyOptions;
 
-// Transmit once (a=T, the default)
-$opts = KittyOptions::transmit(imageId: 1);
-$first = $renderer->renderWithOptions($image, 40, null, $opts);
+// Storing transmit: a=T,U=1 payload frames + a trailing control-only a=p
+$opts = KittyOptions::transmit(imageId: 1)->withUseVirtual(true);
+$stored = $renderer->renderWithOptions($image, 40, null, $opts);
 
-// Place at a different cell offset using the same transmitted image (a=p)
+// Place the stored image at another offset — control-only a=p, no payload
 $opts = KittyOptions::place(imageId: 1, x: 5, y: 10)
     ->withZIndex(5);           // z-index for stacking order
 $placed = $renderer->renderWithOptions($image, 40, null, $opts);
@@ -217,6 +245,26 @@ during rendering (Kitty) or a placeholder for interface compatibility
 | HalfBlock | _(none)_ | Plain text SGR; no stored image identity; returns `''` |
 | QuarterBlock | _(none)_ | Plain text SGR; no stored image identity; returns `''` |
 | Chafa | _(none)_ | External command; no persistent image identity; returns `''` |
+| Ascii | _(none)_ | Plain text SGR; character ramp; returns `''` |
+| SymbolMap | _(none)_ | Plain text SGR; glyph-coverage engine; returns `''` |
+
+## Inside tmux
+
+tmux panes **swallow** DCS, APC and OSC strings unless the window's
+`allow-passthrough` option is `on` (or `all`), so Sixel, Kitty (APC) and
+iTerm2 (OSC 1337) output would otherwise vanish inside tmux — the decorated
+renderer's bytes never reach the outer terminal and the user sees a blank
+line. `TmuxPassthrough` automates chafa's workaround as a pane-scoped
+transaction: `ensure()` reads the current value (`show-options -pqv`), flips
+`set-option -p allow-passthrough on` only when needed, and `retire()`
+restores the prior value — or unsets with `-u` exactly when it was unset
+before. A process-lifetime restore is registered on first change, and the
+whole thing is **fail-soft**: outside tmux, without the binary, or against
+an unparseable answer it degrades to the manual-configuration silence,
+never a throw. Embedders who own their tmux configuration opt out with
+`Detect::setAutoPassthrough(false)`. GNU screen has its own envelope
+instead: the `Passthrough/` decorators (`TmuxPassthroughDecorator`,
+`ScreenPacketizer` / `ScreenPassthrough`).
 
 ## Animation
 
@@ -252,6 +300,33 @@ echo $driver->view(); // renders first frame immediately
 
 `AnimationDriver` composes `Animation` + current frame index + paused flag. Call `withIndex()` / `withPaused()` / `withImageId()` for fluent state changes. On Kitty-capable terminals, `KittyRenderer::renderFrame($image, $width, $height, $imageId)` renders a single frame with a stable id that `delete($imageId)` can later target.
 
+## Text-tier renderers
+
+Three backends need no graphics protocol at all — they paint the image as
+text, so they work everywhere:
+
+- **Half-block** (`▀`, 24-bit fg/bg over two pixel rows per cell) and
+  **quarter-block** (`░▒▓█`, 2×2 sub-pixel canvas per cell) shade pixels
+  directly.
+- **ASCII ramp** — one luminance sample per cell mapped onto a character
+  ramp: `Mosaic::ascii()` emits monochrome characters;
+  `Mosaic::ascii(AsciiColorMode::Ansi16 | Ansi256 | TrueColor)` carries the
+  pixel colours on the characters themselves.
+- **Symbol map** — chafa's coverage-class engine: each cell's bit coverage
+  picks the closest Unicode braille/sextant/octant/block glyph by
+  Hamming-distance candidate search over a symbol corpus.
+  `Mosaic::symbols(canvas:, workFactor:, symbols:)` picks the colour
+  canvas (`CanvasMode`), the candidate-budget work factor, and a chafa
+  `--symbols=` selector expression over the wider corpus (1,251 effective
+  glyphs under `all`; default corpus byte-frozen at 676). The double-width
+  wide-glyph engine plus the opt-in kana tier ride
+  `SymbolMap::withSelectors('wide')` and the renderer's lookback pass.
+
+`Mosaic::auto()` seats the symbol engine on the fallback ladder below the
+chafa CLI rung and above half-block; the ASCII ramp is explicit-selection
+only. Every text-tier renderer also honours `withCanvasMode()` and
+`withOptimization()` like the protocol backends.
+
 ## ImageLayer — image boxes in a text frame
 
 `ImageLayer` is the turnkey way to put real images inside a text UI. Instead of
@@ -274,7 +349,7 @@ return new View($frame, images: $layer->placements());
 
 Identical bytes register once — dedup is by content hash (`xxh3`), so the same
 image shown in several places shares one id and paints at every marker. The id
-space is the Private-Use-Area window (`ImageOverlay::MAX_IMAGES`, 6400); once it
+space is the Private-Use-Area window (`ImageOverlay::MAX_IMAGES`, 6398); once it
 is exhausted, further placements get a blank block of the requested size rather
 than a wrong image.
 
@@ -318,19 +393,33 @@ placement at all, so it reports a stale unrelated id.
 SugarCraft\Image
 ├── Animation              # Immutable frame sequence value object
 ├── AnimationDriver        # Model; drives Animation onto a Renderer via tick()
-├── FrameTickMsg          # Internal Msg for frame-advance ticks
+├── FrameTickMsg           # Internal Msg for frame-advance ticks
 ├── ImageLayer             # Per-frame image registry: marker blocks + placements
-├── ImageSource            # Image bytes + metadata (bytes, format, aspect ratio)
+├── ImageSource            # Image bytes + metadata + decode budgets (Limits)
 ├── KittyOptions           # Kitty protocol options (transmit / place / compress)
 ├── Lang                   # i18n facade
-├── Mosaic                 # Facade: probe / builder / render
+├── Mosaic                 # Facade: probe / auto / builder / render
+├── MosaicBuilder          # Fluent Mosaic assembly
+├── Detect / TermDb / TermInfo  # Terminal capability detection + quirks tables
+├── DiskCache              # On-disk render cache (key includes protocol + mode detail)
+├── AdaptiveImage          # In-memory LRU poster cache (within a session)
+├── AsyncRenderer / PacedAsyncRenderer / SyncAsyncRenderer  # Async render paths
 ├── PixelGrid              # 2-D cell grid (foreground, background, alpha, char)
 ├── PlacedImage            # placeTracked() result: marker block + assigned id
-└── Renderer
-    ├── ChafaRenderer      # External command renderer
-    ├── HalfBlockRenderer  # Unicode ▀ with 24-bit fg/bg
-    ├── Iterm2Renderer     # iTerm2 OSC 1337
-    ├── KittyRenderer      # Kitty APC graphics (chunked PNG)
-    ├── QuarterBlockRenderer # Unicode ░▒▓█ 2×2 sub-pixel
-    └── SixelRenderer      # DEC sixel with median-cut quantizer
+├── Renderer
+│   ├── AsciiRenderer      # Character ramp (Mono/Ansi16/Ansi256/TrueColor)
+│   ├── ChafaRenderer      # External command renderer
+│   ├── HalfBlockRenderer  # Unicode ▀ with 24-bit fg/bg
+│   ├── Iterm2Renderer     # iTerm2 OSC 1337
+│   ├── KittyRenderer      # Kitty APC graphics (chunked PNG, virtual placement)
+│   ├── QuarterBlockRenderer # Unicode ░▒▓█ 2×2 sub-pixel
+│   ├── SixelRenderer      # DEC sixel with median-cut quantizer
+│   └── SymbolMapRenderer  # chafa coverage-class symbol engine
+├── Symbol                 # Glyph corpora: tables, tags, kana + wide defs
+├── Codec                  # GD-free payload codecs (TIFF encoder, raw RGBA)
+├── Dither                 # Shared dithering arithmetic (Floyd-Steinberg, ordered…)
+├── Levels                 # Luminance stretching (Rec.709 weights)
+├── Render                 # Band splitting
+├── Passthrough            # tmux/screen envelope decorators
+└── Support                # OutputOptimizer, GdAvailability, PushToPull
 ```

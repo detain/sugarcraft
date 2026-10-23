@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">The chafa-independent terminal image viewer: point <code>candy-image</code> at a PNG/GIF/JPEG and it detects your terminal, picks the best protocol — <code>sixel</code>, <code>kitty</code>, <code>iTerm2</code>, half/quarter blocks, or an ANSI ramp — and writes the rendered bytes to stdout. All capability stays in <a href="lib/sugar-image.html">sugar-image</a>; this app is composition only (campaign finding F-18).</p>
+<p class="lede" style="margin-top: 28px;">The chafa-independent terminal image viewer: point <code>candy-image</code> at a PNG/GIF/JPEG and it detects your terminal, picks the best protocol — <code>sixel</code>, <code>kitty</code>, <code>iTerm2</code>, half/quarter blocks, an ANSI character ramp, or the chafa symbol engine — and writes the rendered bytes to stdout. All capability stays in <a href="lib/sugar-image.html">sugar-image</a>; this app is composition only.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-image</code></pre>
@@ -14,8 +14,8 @@ candy-image --animate clip.gif            # sugar-animation playback</code></pre
       <div class="feature"><strong>One-command viewer</strong><span><code>candy-image file.png</code> — protocol auto-detection (kitty → iterm2 → sixel → chafa-free text floors) behind a single flag surface.</span></div>
       <div class="feature"><strong>--dump-detect</strong><span>chafa's debugging gold re-expressed over the native stack: env table, TermDb chain + claims, probe capabilities, cell pixels, default fg/bg, DA1 reply, and the resolved auto() choice.</span></div>
       <div class="feature"><strong>Cell sizing</strong><span><code>--size=WxH</code> / <code>--width</code> / <code>--height</code> / <code>--scale=fit|shrink|fill|stretch|none|crop</code>, mapped straight onto sugar-image's <code>Scale</code> enum.</span></div>
-      <div class="feature"><strong>Never shells out</strong><span><code>--format=chafa</code> is refused by design — F-18 exists precisely to retire the chafa dependency from the image path.</span></div>
-      <div class="feature"><strong>Honest flags</strong><span>chafa spellings whose backing seam is not on the base yet (<code>--symbols</code>, <code>--passthrough=screen</code>, <code>--probe=off</code>) exit 1 naming what is missing; <code>--polite</code> is a documented no-op.</span></div>
+      <div class="feature"><strong>Never shells out</strong><span><code>--format=chafa</code> is refused by design — this viewer exists precisely to retire the chafa dependency from the image path.</span></div>
+      <div class="feature"><strong>Honest flags</strong><span>chafa spellings with no PHP backing here (<code>--format=chafa</code>, <code>--passthrough=tmux</code> / <code>screen</code>) exit 1 naming what is missing — no silent ignore; <code>--polite</code> is a documented no-op.</span></div>
       <div class="feature"><strong>Testable core</strong><span>All argument handling lives in <code>SugarCraft\CandyImage\Cli</code> — the bin is a two-line shim, and a closure seam lets tests drive the wired <code>Player</code> without a terminal.</span></div>
       <div class="feature"><strong>Exit-code contract</strong><span>0 success, 1 usage error, 2 input/decode failure — pinned in the suite so scripts can branch on it.</span></div>
     </div>
@@ -26,7 +26,7 @@ candy-image --animate clip.gif            # sugar-animation playback</code></pre
       <li><a href="https://github.com/sugarcraft/candy-image/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-image/tree/main/examples">Runnable examples</a></li>
       <li>Detection + render engine: <a href="lib/sugar-image.html">sugarcraft/sugar-image</a>; animation playback: <a href="lib/sugar-animation.html">sugarcraft/sugar-animation</a>.</li>
-      <li>The CLI surface was sparked by <a href="https://github.com/hpjajak/chafa">chafa</a> (C); SugarCraft is a native PHP project — this is a composition-only viewer, not a port.</li>
+      <li>The CLI surface was sparked by <a href="https://github.com/hpjansson/chafa">chafa</a> (C); SugarCraft is a native PHP project — this is a composition-only viewer, not a port.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>

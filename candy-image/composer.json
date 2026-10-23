@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-image",
-    "description": "Terminal image viewer CLI (F-18) — the chafa-independent front end of sugarcraft/sugar-image: file in, best-protocol image out, zero new render logic.",
+    "description": "Terminal image viewer CLI — the chafa-independent front end of sugarcraft/sugar-image: file in, best-protocol image out, zero new render logic.",
     "type": "project",
     "license": "MIT",
     "keywords": [
