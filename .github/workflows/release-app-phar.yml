@@ -1,0 +1,249 @@
+# Build and publish versioned PHARs for every phar-capable app EXCEPT the
+# two that already own dedicated pipelines (candy-code → release-phar.yml,
+# candy-top → release-candy-top-phar.yml; both are proven and stay untouched
+# — this file's scope guard exits green with a notice when one of their tags
+# arrives, so a `candy-code/v*` push can never double-publish here).
+#
+# Triggered by pushing a tag spelled `<app>/v*` for any other candy-* app
+# (per-lib tagging on the shared repo stream), or manually with a tag input.
+#
+# REPRODUCIBILITY CAVEAT (inherited from the reference pipeline, disclosed
+# not solved): the build runs `composer install` with the lock deliberately
+# absent — house rule forbids committing per-lib composer.lock — and the
+# `sugarcraft/*` siblings resolve from Packagist at their `dev-master` moving
+# target. Two builds of the same tag can therefore differ byte-wise; the
+# .sha256 published alongside each release names the bytes that job produced,
+# not a rebuild guarantee. The build script REFUSES symlinked sibling
+# vendors, dirty source trees, and detached HEADs, so a linked-mode working
+# tree can never freeze uncommitted sibling code into a public artifact; the
+# checkout below attaches HEAD to a named branch because the preflight
+# demands exactly that attribution.
+#
+# `phar.readonly=0` is passed with `-d` to the BUILD command only. It is
+# never a runtime requirement: the produced archive executes under a normal
+# `php <app>.phar` with the default readonly=On.
+#
+# The signing step reads the sugarcraft-WIDE secret SUGARCRAFT_SIGNING_KEY
+# (owner ruling 2026-10-21: one keypair signs every app's phar; each app pins
+# the public half in its own source). Absent the secret, the build ships
+# UNSIGNED; nothing else changes.
+name: Release app PHARs
+
+on:
+  push:
+    tags:
+      - 'candy-*/v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing <app>/v* tag to build and publish'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # ci.yml's rationale: the detached checkout versions each lib as
+  # dev-<sha>; circular sibling back-requires on dev-master then fail
+  # install unless the root version is pinned.
+  COMPOSER_ROOT_VERSION: dev-master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d4b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+
+      - name: Resolve app and guard the dedicated pipelines
+        id: scope
+        run: |
+          set -euo pipefail
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
+            tag='${{ github.event.inputs.tag }}'
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          if ! printf '%s' "$tag" | grep -qE '^candy-[a-z0-9-]+/v'; then
+            echo "tag '$tag' does not have the <app>/v* shape this workflow builds" >&2
+            exit 1
+          fi
+          app="${tag%%/*}"
+          if [ "$app" = 'candy-code' ] || [ "$app" = 'candy-top' ]; then
+            echo "::notice::$app is owned by its dedicated phar pipeline — skipping to avoid double-publish"
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ ! -f "$app/tools/build-phar.php" ]; then
+            # A version tag on an app without build plumbing is a mistake
+            # worth a red X: silently skipping would let release intent rot
+            # unnoticed. Add <app>/tools/build-phar.php or retag.
+            echo "tag '$tag' names '$app', but $app/tools/build-phar.php does not exist — this app is not plumbed for phar releases" >&2
+            exit 1
+          fi
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Attach HEAD to the tag
+        if: steps.scope.outputs.proceed == 'true'
+        # The build's integrity preflight refuses detached HEADs (a tag
+        # checkout IS detached); re-attaching the same commit to a branch
+        # name keeps the artifact attributable without weakening the door.
+        run: |
+          set -euo pipefail
+          git checkout -B phar-build '${{ steps.scope.outputs.tag }}'
+
+      - name: Setup PHP
+        if: steps.scope.outputs.proceed == 'true'
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.3'
+          coverage: none
+          # The full ci.yml extension union: this job serves an open-ended
+          # fleet of apps, so every extension any of them may
+          # composer-resolve has to be present.
+          extensions: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, pdo_mysql, pdo_pgsql, ssh2, gd, curl, openssl, ffi
+
+      - name: Install production dependencies
+        if: steps.scope.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          cd '${{ steps.scope.outputs.app }}'
+          rm -f composer.lock
+          composer install --no-dev --prefer-dist --no-interaction --no-progress
+
+      - name: Build the archive
+        if: steps.scope.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          app='${{ steps.scope.outputs.app }}'
+          # SOURCE_DATE_EPOCH pins metadata['built_at'] to the tagged
+          # commit's date so rebuilds of one tag agree on the stamp
+          # (DST-1's discipline); the byte-level guarantee still stops at
+          # the moving dev-master window disclosed in this header.
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT '${{ steps.scope.outputs.tag }}')"
+          php -d phar.readonly=0 "$app/tools/build-phar.php" \
+            --out="dist/$app.phar" \
+            --version='${{ steps.scope.outputs.tag }}'
+
+      - name: Assert the archive carries the tagged stamp
+        if: steps.scope.outputs.proceed == 'true'
+        # The DST-1 release-shape proof, generalized: the manifest metadata
+        # (what --version reads back via Version::fromPharMetadata) must be
+        # the tag, never the frozen vendor's dev-master. Asserted on the
+        # artifact itself so apps whose CLI does not echo the stamp are
+        # still verified.
+        run: |
+          set -euo pipefail
+          php -r '
+            $phar = getenv("PHAR_PATH");
+            $want = getenv("WANT_STAMP");
+            $meta = (new Phar($phar))->getMetadata();
+            $got = is_array($meta) ? ($meta["version"] ?? null) : null;
+            if ($got !== $want) {
+              fwrite(STDERR, "release stamp mismatch: metadata has " . var_export($got, true) . ", expected " . $want . "\n");
+              exit(1);
+            }
+          '
+        env:
+          PHAR_PATH: ${{ github.workspace }}/dist/${{ steps.scope.outputs.app }}.phar
+          WANT_STAMP: ${{ steps.scope.outputs.tag }}
+
+      - name: Sign the archive (pinned-key mode)
+        if: steps.scope.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          app='${{ steps.scope.outputs.app }}'
+          if [ -z "${SUGARCRAFT_SIGNING_KEY:-}" ]; then
+            echo "::notice::SUGARCRAFT_SIGNING_KEY secret not set — shipping unsigned (keyless state)"
+            exit 0
+          fi
+          php -r '
+            $app = getenv("APP");
+            $key = base64_decode(getenv("SUGARCRAFT_SIGNING_KEY"), true);
+            if ($key === false || strlen($key) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
+              fwrite(STDERR, "SUGARCRAFT_SIGNING_KEY must be the base64 of the 64-byte sodium secret key\n");
+              exit(1);
+            }
+            $sig = sodium_crypto_sign_detached(file_get_contents("dist/$app.phar"), $key);
+            file_put_contents("dist/$app.phar.minisig", base64_encode($sig) . "\n");
+          '
+        env:
+          APP: ${{ steps.scope.outputs.app }}
+          SUGARCRAFT_SIGNING_KEY: ${{ secrets.SUGARCRAFT_SIGNING_KEY }}
+
+      - name: Checksum
+        if: steps.scope.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          app='${{ steps.scope.outputs.app }}'
+          (cd dist && sha256sum "$app.phar" > "$app.phar.sha256")
+          if [ -f "dist/$app.phar.minisig" ]; then
+            (cd dist && sha256sum "$app.phar.minisig" > "$app.phar.minisig.sha256")
+          fi
+          cat "dist/$app.phar.sha256"
+
+      - name: Smoke — version and help on a virgin HOME
+        if: steps.scope.outputs.proceed == 'true'
+        # App-agnostic shape (the reference pipelines' candy-code-specific
+        # headless-echo arm deliberately does NOT live here): every candy-*
+        # app must answer --version and render --help with no config, no
+        # data dir, and no controlling terminal. The stamp assertion above
+        # already proved the tagged version is the artifact's own; a CLI
+        # that has not wired the metadata read-back earns a notice, not a
+        # silent pass.
+        run: |
+          set -euo pipefail
+          app='${{ steps.scope.outputs.app }}'
+          tag='${{ steps.scope.outputs.tag }}'
+          fake_home="$(mktemp -d)"
+          out="$(HOME="$fake_home" php "dist/$app.phar" --version)"
+          test -n "$out"
+          echo "--version says: $out"
+          if ! printf '%s' "$out" | grep -qF "${tag#"$app"/}"; then
+            echo "::notice::$app --version does not surface the tagged stamp (archive metadata still carries $tag)"
+          fi
+          HOME="$fake_home" php "dist/$app.phar" --help >/dev/null
+
+      - name: PharCompatTest heavy arm (apps that have one)
+        if: steps.scope.outputs.proceed == 'true'
+        # Generalized from the reference pipelines: only apps that actually
+        # ship a PharCompatTest run their CANDY_<APP>_PHAR-gated stage 4
+        # against the fresh archive — file-existence gate, never a
+        # hardcoded roster. Dev dependencies install only here; the
+        # artifact above was built from the --no-dev vendor, and re-running
+        # install does not touch dist/.
+        run: |
+          set -euo pipefail
+          app='${{ steps.scope.outputs.app }}'
+          if [ ! -f "$app/tests/PharCompatTest.php" ]; then
+            echo "$app ships no PharCompatTest — heavy arm not applicable"
+            exit 0
+          fi
+          cd "$app"
+          composer install --prefer-dist --no-interaction --no-progress
+          env_var="$(printf '%s' "$app" | tr '[:lower:]-' '[:upper:]_')_PHAR"
+          env "$env_var=${GITHUB_WORKSPACE}/dist/$app.phar" vendor/bin/phpunit --no-coverage --filter PharCompatTest
+
+      - name: Publish GitHub release
+        if: steps.scope.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          app='${{ steps.scope.outputs.app }}'
+          tag='${{ steps.scope.outputs.tag }}'
+          assets=("dist/$app.phar" "dist/$app.phar.sha256")
+          if [ -f "dist/$app.phar.minisig" ]; then
+            assets+=("dist/$app.phar.minisig" "dist/$app.phar.minisig.sha256")
+          fi
+          notes="Self-contained $app PHAR built by .github/workflows/release-app-phar.yml at commit ${GITHUB_SHA}.\n\nVerify: sha256sum -c $app.phar.sha256\n\nRun: php $app.phar --version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --title "$app ${tag#"$app"/}" --verify-tag --notes "$(printf '%b' "$notes")"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
