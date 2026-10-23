@@ -31,7 +31,13 @@ final class JsonStreamBackend implements Backend
     public function __construct($target = null, bool $throwOnError = true)
     {
         if (is_string($target)) {
-            $stream = fopen($target, 'a');
+            // fopen() raises an E_WARNING *before* returning false when its
+            // parent cannot host the file, which would redden the suite under
+            // failOnWarning even though the `=== false` branch below is the
+            // documented refusal contract. Probe the door first; keep the
+            // check as the probe-vs-open race fallback with the same message.
+            $dir = dirname($target);
+            $stream = is_dir($dir) && is_writable($dir) ? fopen($target, 'a') : false;
             if ($stream === false) {
                 throw new \RuntimeException(Lang::t('jsonstream.cannot_open_target', ['target' => $target]));
             }

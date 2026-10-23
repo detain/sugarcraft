@@ -80,10 +80,45 @@ final class JsonStreamBackendTest extends TestCase
 
     public function testConstructWithFilePathThatCannotBeOpened(): void
     {
-        // Non-existent path with a directory that itself cannot be created (root-only dir)
-        $this->expectException(\RuntimeException::class);
-        /** @ suppression needed: we EXPECT this fopen to fail and it triggers a PHP warning */
-        @new JsonStreamBackend('/cannot-possibly-exist/nope.txt');
+        // Both uncreatable shapes — parent dir missing AND parent is a
+        // regular file (ENOTDIR, hermetic: it fails for every uid including
+        // root) — must refuse through the RuntimeException contract without
+        // raising a PHP diagnostic: the constructor probes the door first.
+        $dir = sys_get_temp_dir() . '/sugar-metrics-jsonstream-door-' . uniqid();
+        mkdir($dir);
+        $blocker = $dir . '/blocker';
+        file_put_contents($blocker, '');
+        $missingParent = $dir . '/nested/metrics.json';
+        $fileParent = $blocker . '/metrics.json';
+
+        $raised = [];
+        set_error_handler(static function (int $severity, string $message) use (&$raised): bool {
+            $raised[] = $message;
+
+            return true; // consume the diagnostic: the refusal must stay silent
+        });
+
+        $refusalMessages = [];
+        try {
+            foreach ([$missingParent, $fileParent] as $path) {
+                try {
+                    new JsonStreamBackend($path);
+                } catch (\RuntimeException $e) {
+                    $refusalMessages[$path] = $e->getMessage();
+                }
+            }
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertSame([$missingParent, $fileParent], array_keys($refusalMessages), 'both uncreatable shapes must refuse');
+        foreach ($refusalMessages as $path => $message) {
+            $this->assertStringContainsString($path, $message, "refusal for {$path} must name the target");
+        }
+        $this->assertSame([], $raised, 'the refusal door must not raise a PHP diagnostic');
+
+        @unlink($blocker);
+        @rmdir($dir);
     }
 
     public function testAsyncCounterEmitsCorrectKind(): void
