@@ -13,7 +13,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Sql\App;
-use SugarCraft\Sql\Database;
+use SugarCraft\Sql\Db\SqliteDatabase;
 
 $pdo = new PDO('sqlite::memory:');
 $pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, role TEXT)');
@@ -28,4 +28,4 @@ $pdo->exec("INSERT INTO posts (title, author_id) VALUES
     ('first post',  2),
     ('intro',       3)");
 
-(new Program(App::start(new Database($pdo)), new ProgramOptions(useAltScreen: true)))->run();
+(new Program(App::start(new SqliteDatabase($pdo)), new ProgramOptions(useAltScreen: true)))->run();
