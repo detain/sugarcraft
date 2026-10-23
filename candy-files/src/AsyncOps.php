@@ -8,10 +8,16 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 
 /**
- * Async file operations via React\Promise.
+ * Tick-deferred file operations wrapped in React\Promise.
  *
- * Wraps copy/move/rename operations in promises so long-running
- * file I/O does not block the TUI event loop.
+ * HONEST SEMANTICS (docs-fix-1023): each operation defers its work to the
+ * next event-loop tick via Loop::futureTick — that lets the keypress
+ * round-trip finish and the frame paint BEFORE the I/O starts. It does NOT
+ * make the I/O itself non-blocking: once a tick runs a large recursive
+ * copy, the loop is occupied until that copy completes. "copyManyAsync"
+ * batches with a concurrency window the same way — tick-sliced sequential
+ * batches, never parallel disk I/O. A worker/fork pipeline would be needed
+ * for truly non-blocking bulk copies; deliberately not built here.
  *
  * Mirrors yorukot/superfile.asyncOps.
  *
@@ -21,6 +27,18 @@ use React\Promise\PromiseInterface;
  */
 final class AsyncOps
 {
+    /**
+     * The ONE synchronous copy engine: file, symlink, or depth-capped and
+     * cycle-guarded directory tree. Shared by every path that copies —
+     * the async tick and Manager::copy's sync face alike. (Manager used to
+     * carry a second hand-copied copyDir; the copies could drift.)
+     *
+     * @return bool True on success; false on any error
+     */
+    public static function copyPath(string $src, string $dst): bool
+    {
+        return self::doCopy($src, $dst);
+    }
     /**
      * Copy a file or directory asynchronously.
      *
@@ -94,10 +112,15 @@ final class AsyncOps
     }
 
     /**
-     * Copy multiple files/directories in parallel with concurrency limiting.
+     * Copy multiple files/directories through a bounded tick pipeline.
+     *
+     * The $concurrency window caps how many copyAsync operations are
+     * in-flight at once, but because each one runs its whole I/O synchronously
+     * inside a futureTick, batches execute SEQUENTIALLY across ticks — they do
+     * not interleave disk work in parallel. See the class docblock.
      *
      * @param array<string, string> $map Source → Destination mapping
-     * @param int $concurrency Maximum concurrent copy operations (default 4)
+     * @param int $concurrency Maximum queued copy operations (default 4)
      * @return PromiseInterface<array<string, bool>> Map of source → success
      */
     public function copyManyAsync(array $map, int $concurrency = 4): PromiseInterface
@@ -207,7 +230,8 @@ final class AsyncOps
      *
      * Bounds runaway recursion — copying a directory into its own subtree,
      * or a hardlink/bind-mount cycle — before it can exhaust the call stack
-     * or flood the filesystem (DoS). Mirrors {@see Manager::MAX_COPY_DEPTH}.
+     * or flood the filesystem (DoS). This is the single home of the cap;
+     * Manager::copy() delegates here.
      */
     public const MAX_COPY_DEPTH = 256;
 

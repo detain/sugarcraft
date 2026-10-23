@@ -20,15 +20,15 @@ use SugarCraft\Core\Msg;
 final readonly class CopyCompletedMsg implements Msg
 {
     /**
-     * @param array<string, string> $copiedItems Map of source → destination
+     * @param array<string, string> $copiedItems Map of source → destination for the legs that ACTUALLY copied (undo records these only)
      * @param int $errors Number of items that failed to copy
-     * @param list<string|null> $names Names of items that were copied
-     * @param string|null $dst Destination directory
+     * @param int $skipped Number of names filtered before scheduling (null/'..'/'' entries)
+     * @param int $overwrote Number of successful legs that replaced a destination already existing at schedule time
      */
     public function __construct(
         public array $copiedItems,
         public int $errors,
-        public array $names,
-        public ?string $dst,
+        public int $skipped,
+        public int $overwrote,
     ) {}
 }

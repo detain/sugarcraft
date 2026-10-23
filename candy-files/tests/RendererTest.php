@@ -44,6 +44,27 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('/', $out);
     }
 
+    /**
+     * MAJOR-2 (docs-fix-1023): pane widths derive from the live terminal
+     * width captured via WindowSizeMsg. At 120 cols each pane gets
+     * intdiv(118, 2) = 59 outer cells → 55 inner, and the in-pane separator
+     * row is exactly that wide. At termCols === 0 (no size seen yet — unit
+     * shape) the legacy 40-cell pane and its 36-cell separator survive
+     * byte-identically.
+     */
+    public function testPanesWidenWithTheTerminalAndDefaultToLegacyWidth(): void
+    {
+        $m = Manager::start('/', '/', $this->fakeFs());
+        $legacy = Renderer::render($m);
+        $this->assertStringContainsString(str_repeat('─', 36), $legacy);
+        $this->assertStringNotContainsString(str_repeat('─', 55), $legacy);
+
+        [$m] = $m->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+        $wide = Renderer::render($m);
+        $this->assertStringContainsString(str_repeat('─', 55), $wide, 'resize must widen the pane separator');
+        $this->assertStringNotContainsString(str_repeat('─', 36) . '│', $wide, 'the legacy 36-cell rule must not survive a 120-col frame');
+    }
+
     public function testRenderShowsSelectedEntries(): void
     {
         $m = Manager::start('/', '/', $this->fakeFs());

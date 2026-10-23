@@ -11,6 +11,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\SubscriptionCapable;
 use SugarCraft\Core\Undo\UndoActionType;
@@ -56,7 +57,7 @@ final class Manager implements Model
      * DESIGN NOTE (deliberate, pre-1.0): this trash is EPHEMERAL. The
      * shutdown handler registered in start() removes the whole directory
      * when the process exits, so `delete` is recoverable via undo (u)
-     * ONLY within the same sugar-files session — quit, crash, or reboot
+     * ONLY within the same candy-files session — quit, crash, or reboot
      * and the deleted bytes are gone for good. A persistent, XDG-trash
      * spec-compatible bin with cross-session restore is a separate
      * feature, intentionally not built here.
@@ -68,6 +69,7 @@ final class Manager implements Model
      * @param array<int,array{left:Pane,right:Pane,activeIdx:int}> $tabs
      * @param list<UndoAction> $undoStack Stack of undoable actions
      * @param list<UndoAction> $redoStack Stack of redoable actions (cleared on new action)
+     * @param int $termCols Live terminal width in cells (0 = unknown, Renderer falls back to its fixed 40-cell pane)
      */
     public function __construct(
         public readonly Pane $left,
@@ -86,6 +88,7 @@ final class Manager implements Model
         public readonly ?string $pendingOpDest = null,
         public readonly ?string $pendingOpType = null,
         public readonly ?string $inputBuffer = null,
+        public readonly int $termCols = 0,
     ) {
         $this->lister = $lister ?? FsLister::lister();
     }
@@ -154,6 +157,18 @@ final class Manager implements Model
 
     public function update(Msg $msg): array
     {
+        // Terminal resize: capture the live width so the next view() derives
+        // pane widths from it. sugar-core's Program emits WindowSizeMsg at
+        // startup and on every SIGWINCH, then re-renders — handling it here
+        // is what makes the layout responsive. No Cmd: re-render is the
+        // Program's dirty-flag step.
+        if ($msg instanceof WindowSizeMsg) {
+            if ($msg->cols === $this->termCols) {
+                return [$this, null];
+            }
+            return [$this->mutate(['termCols' => $msg->cols]), null];
+        }
+
         // Async copy completion: the Cmd ran on the loop, files landed in the
         // destination pane's directory. Re-read both listings, report the
         // honest outcome (per-file errors included), and finalize undo state.
@@ -186,19 +201,25 @@ final class Manager implements Model
     /**
      * Finalize an async copy that the Cmd completed on the event loop.
      *
-     * The pre-completion state armed by performCopyAsync() is optimistic
-     * ("copied N"); this is where the truth from the wire lands: per-file
-     * failures counted by the promise chain surface in the status instead of
-     * being discarded, the copy enters the undo history (the dead sync
-     * `performCopy()` used to push this and never ran), and BOTH panes
-     * re-read — the destination pane is the one whose listing actually
-     * changed.
+     * The pre-completion state armed by performCopyAsync() says "copying…"
+     * (nothing has landed yet); this is where the truth from the wire lands.
+     * Counts are ACTIONS APPLIED, never arm-time intentions: $copiedItems
+     * carries only the legs that really wrote, $errors counts failed legs,
+     * $skipped counts names filtered before scheduling, and $overwrote
+     * counts successful legs whose destination already existed at schedule
+     * time (copy silently replaces — users must be able to see it happened).
+     * Status precedence is errors > skipped > overwrote > plain; both
+     * copy-undo and the entry refresh read the honest ok-set.
      */
     private function handleCopyCompleted(CopyCompletedMsg $msg): self
     {
-        $status = $msg->errors === 0
-            ? Lang::t('status.copied', ['count' => count($msg->names)])
-            : Lang::t('status.copied_with_errors', ['errors' => $msg->errors]);
+        $applied = count($msg->copiedItems);
+        $status = match (true) {
+            $msg->errors > 0 => Lang::t('status.copied_with_errors', ['count' => $applied, 'errors' => $msg->errors]),
+            $msg->skipped > 0 => Lang::t('status.copied_skipped', ['count' => $applied, 'skipped' => $msg->skipped]),
+            $msg->overwrote > 0 => Lang::t('status.copied_overwrote', ['count' => $applied, 'overwrote' => $msg->overwrote]),
+            default => Lang::t('status.copied', ['count' => $applied]),
+        };
         $newUndoStack = $this->undoStack;
         if ($msg->copiedItems !== []) {
             $newUndoStack[] = UndoAction::copy($msg->copiedItems);
@@ -308,6 +329,13 @@ final class Manager implements Model
                 => $this->armRename(),
             $msg->type === KeyType::Char && $msg->rune === 'r'
                 => $this->refresh(),
+            // Escape (outside search/confirm — those consume it earlier):
+            // clear the multi-select. Before this arm existed,
+            // Pane::clearSelection() had no production caller at all, so a
+            // mis-clicked selection could only be undone one entry at a
+            // time by re-pressing space.
+            $msg->type === KeyType::Escape
+                => $this->withActivePane(fn(Pane $p) => $p->clearSelection()),
             $msg->type === KeyType::Char && $msg->rune === 'u'
                 => $this->undo(),
             $msg->ctrl && $msg->rune === 'z'
@@ -385,9 +413,10 @@ final class Manager implements Model
 
     private function refresh(): self
     {
-        return $this->withActivePane(fn(Pane $p) =>
-            Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-            ->withStatus('refreshed');
+        // relist() (not Pane::open) so a re-read does not silently wipe the
+        // cursor position and the entries of the selection that survived.
+        return $this->withActivePane(fn(Pane $p) => $p->relist($this->lister))
+            ->withStatus(Lang::t('status.refreshed'));
     }
 
     private function armDelete(): self
@@ -398,8 +427,8 @@ final class Manager implements Model
             return $this->withStatus(Lang::t('status.nothing_to_delete'));
         }
         $names = $selectedCount > 0
-            ? "{$selectedCount} selected entries"
-            : "'" . Entry::sanitizeName($current->name) . "'";
+            ? Lang::t('confirm.selected_entries', ['count' => $selectedCount])
+            : "'" . Entry::sanitizeName((string) $current?->name) . "'";
         return $this->withConfirm(ConfirmState::DeleteSelected, Lang::t('confirm.delete', ['names' => $names]));
     }
 
@@ -498,9 +527,17 @@ final class Manager implements Model
                 'trash' => $trashPath,
             ];
         }
-        $msg = $errors === 0
-            ? Lang::t('status.deleted', ['count' => count($names)])
-            : Lang::t('status.deleted_with_errors', ['errors' => $errors]);
+        // HONEST COUNTS: applied = entries that really moved to trash (or
+        // were really removed), errors = failed legs, skipped = names
+        // filtered at the loop head. count($names) counted intentions, which
+        // inflated the number whenever a stale selection name was filtered
+        // or a leg failed.
+        $skipped = count(array_filter($names, static fn(?string $n): bool => $n === null || $n === '..' || $n === ''));
+        $msg = match (true) {
+            $errors > 0 => Lang::t('status.deleted_with_errors', ['count' => count($deletedItems), 'errors' => $errors]),
+            $skipped > 0 => Lang::t('status.deleted_skipped', ['count' => count($deletedItems), 'skipped' => $skipped]),
+            default => Lang::t('status.deleted', ['count' => count($deletedItems)]),
+        };
         // Build new undo stack with this deletion
         $newUndoStack = $this->undoStack;
         if ($deletedItems !== []) {
@@ -556,12 +593,14 @@ final class Manager implements Model
             return $this->withStatus(Lang::t('status.nothing_to_copy'));
         }
         $inactive = $this->inactivePane();
+        // Both names and destination are filesystem data — sanitize at the
+        // message-build choke before they ride into the rendered status line.
         $names = $selectedCount > 0
-            ? "{$selectedCount} selected entries"
-            : "'" . Entry::sanitizeName($current->name) . "'";
+            ? Lang::t('confirm.selected_entries', ['count' => $selectedCount])
+            : "'" . Entry::sanitizeName((string) $current?->name) . "'";
         return $this->withConfirm(
             ConfirmState::CopySelected,
-            Lang::t('confirm.copy', ['names' => $names, 'dest' => $inactive->cwd]),
+            Lang::t('confirm.copy', ['names' => $names, 'dest' => Entry::sanitizeName($inactive->cwd)]),
             $inactive->cwd,
             'copy'
         );
@@ -578,11 +617,11 @@ final class Manager implements Model
         }
         $inactive = $this->inactivePane();
         $names = $selectedCount > 0
-            ? "{$selectedCount} selected entries"
-            : "'" . Entry::sanitizeName($current->name) . "'";
+            ? Lang::t('confirm.selected_entries', ['count' => $selectedCount])
+            : "'" . Entry::sanitizeName((string) $current?->name) . "'";
         return $this->withConfirm(
             ConfirmState::MoveSelected,
-            Lang::t('confirm.move', ['names' => $names, 'dest' => $inactive->cwd]),
+            Lang::t('confirm.move', ['names' => $names, 'dest' => Entry::sanitizeName($inactive->cwd)]),
             $inactive->cwd,
             'move'
         );
@@ -605,27 +644,27 @@ final class Manager implements Model
     }
 
     /**
+     * Copy a file, symlink or directory tree to $dst.
+     *
+     * The recursive-directory machinery lives in exactly ONE home —
+     * {@see AsyncOps::copyPath()} (cycle-guarded, depth-capped). Manager::copy
+     * is the sync public face; the async copy path runs the same code on a
+     * loop tick. (This used to be a second copyDir() copy here; the two
+     * copies could and did drift.)
+     *
      * @param string $src Source path
      * @param string $dst Destination path
      * @return bool True on success; false on any error (file not found, permission denied, etc.)
-     * @throws void
      */
     public function copy(string $src, string $dst): bool
     {
-        if (is_link($src)) {
-            return @symlink(readlink($src), $dst);
-        }
-        if (is_dir($src)) {
-            return $this->copyDir($src, $dst);
-        }
-        return @copy($src, $dst);
+        return AsyncOps::copyPath($src, $dst);
     }
 
     /**
      * @param string $src Source path
      * @param string $dst Destination path
      * @return bool True on success; false on any error
-     * @throws void
      */
     public function move(string $src, string $dst): bool
     {
@@ -636,7 +675,6 @@ final class Manager implements Model
      * @param string $src Source path
      * @param string $newName New name (not full path — placed in the same directory as src)
      * @return bool True on success; false on any error
-     * @throws void
      */
     public function rename(string $src, string $newName): bool
     {
@@ -646,68 +684,20 @@ final class Manager implements Model
     }
 
     /**
-     * Maximum directory-nesting depth for a single recursive copy.
+     * Schedule an async copy and return [Manager, Cmd].
      *
-     * Bounds runaway recursion — copying a directory into its own subtree,
-     * or a hardlink/bind-mount cycle — before it can exhaust the call stack
-     * or flood the filesystem (DoS). Real directory trees are shallow;
-     * nothing legitimate comes close to this.
-     */
-    public const MAX_COPY_DEPTH = 256;
-
-    /**
-     * Recursively copy a directory.
+     * HONEST SEMANTICS: AsyncOps defers the I/O to a loop tick
+     * ({@see futureTick}) so the keypress round-trip finishes and the frame
+     * paints first — but each individual copy then runs to completion
+     * synchronously inside that tick. A huge recursive copy still blocks
+     * the loop for its duration; this is tick-deferred, not non-blocking.
      *
-     * Guards against filesystem cycles two ways: a visited set of
-     * realpath()-resolved source directories (catches a directory that
-     * resolves back onto one already entered) and a hard depth cap. Either
-     * trips to `false` — the same error convention copy() uses everywhere.
-     *
-     * @param array<string,true> $visited realpath()s already entered this copy
-     */
-    private function copyDir(string $src, string $dst, array &$visited = [], int $depth = 0): bool
-    {
-        if ($depth > self::MAX_COPY_DEPTH) {
-            return false;
-        }
-        $real = realpath($src);
-        if ($real !== false) {
-            if (isset($visited[$real])) {
-                return false; // cycle: this real directory was already entered
-            }
-            $visited[$real] = true;
-        }
-        if (!@mkdir($dst, 0755, true) && !is_dir($dst)) {
-            return false;
-        }
-        $items = @scandir($src) ?: [];
-        foreach ($items as $item) {
-            if ($item === '.' || $item === '..') {
-                continue;
-            }
-            $srcPath = Pane::join($src, $item);
-            $dstPath = Pane::join($dst, $item);
-            if (is_link($srcPath)) {
-                @symlink(readlink($srcPath), $dstPath);
-            } elseif (is_dir($srcPath)) {
-                if (!$this->copyDir($srcPath, $dstPath, $visited, $depth + 1)) {
-                    return false;
-                }
-            } else {
-                if (!@copy($srcPath, $dstPath)) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Async copy - runs through AsyncOps to avoid blocking the TUI event loop
-     * during the potentially slow file I/O of a large recursive copy.
-     *
-     * Returns [Manager, Cmd] where the Cmd wraps the async operation.
-     * When the promise resolves, a CopyCompletedMsg is broadcast.
+     * What the pending state may claim: nothing has landed yet, so the
+     * status says "copying…" (past-tense "copied" was a lie until the
+     * completion message replaced it). The Cmd's promise resolves to a
+     * CopyCompletedMsg carrying the ok-set only, the failed-leg count, the
+     * names filtered before scheduling, and how many successful legs
+     * replaced a pre-existing destination.
      *
      * @return array{0: self, 1: \Closure}
      */
@@ -732,20 +722,34 @@ final class Manager implements Model
             $target = Pane::join($dst, $name);
             $copiedItems[$src] = $target;
         }
+        $skipped = count($names) - count($copiedItems);
+
+        // Which destinations already exist? copy() silently replaces them —
+        // measured at SCHEDULE time (a race with a third party in between is
+        // disclosed; the completion message is still honest about the bytes
+        // that landed over something that was there when we armed).
+        $existedSrcs = [];
+        foreach ($copiedItems as $src => $target) {
+            if (file_exists($target) || is_link($target)) {
+                $existedSrcs[$src] = true;
+            }
+        }
 
         // Build the initial Manager state (before async op completes)
-        $pendingManager = $this->withConfirm(ConfirmState::None, Lang::t('status.copied', ['count' => count($names)]));
+        $pendingManager = $this->withConfirm(ConfirmState::None, Lang::t('status.copy_pending', ['count' => count($copiedItems)]));
 
-        // Return a Cmd that runs the async copy via AsyncOps
-        // Note: Loop::futureTick defers the actual I/O to the next event loop tick,
-        // which keeps the TUI responsive. For very large copies, consider wiring
-        // copy through AsyncOps::copyAsync with progress reporting.
+        // Return a Cmd that runs the async copy via AsyncOps.
         $asyncOps = new AsyncOps();
-        $cmd = Cmd::promise(static function () use ($asyncOps, $copiedItems, $names, $dst): \React\Promise\PromiseInterface {
+        $cmd = Cmd::promise(static function () use ($asyncOps, $copiedItems, $skipped, $existedSrcs): \React\Promise\PromiseInterface {
             return $asyncOps->copyManyAsync($copiedItems)
-                ->then(static function (array $results) use ($copiedItems, $names, $dst): CopyCompletedMsg {
-                    $errors = count(array_filter($results, static fn($ok) => $ok === false));
-                    return new CopyCompletedMsg($copiedItems, $errors, $names, $dst);
+                ->then(static function (array $results) use ($copiedItems, $skipped, $existedSrcs): CopyCompletedMsg {
+                    // UNDO RECORDS SUCCESSES ONLY: a failed leg has nothing
+                    // to forget, and an undo entry over the whole map
+                    // pretended to have copied bytes that never landed.
+                    $okItems = array_filter($results, static fn($ok): bool => $ok === true);
+                    $errors = count($results) - count($okItems);
+                    $overwrote = count(array_intersect_key($okItems, $existedSrcs));
+                    return new CopyCompletedMsg($okItems, $errors, $skipped, $overwrote);
                 });
         });
 
@@ -770,14 +774,20 @@ final class Manager implements Model
             }
             $src = Pane::join($pane->cwd, $name);
             $target = Pane::join($dst, $name);
-            $movedItems[$src] = $target;
             if (!$this->move($src, $target)) {
                 $errors++;
+                continue; // failed leg: not moved, not undoable, not counted
             }
+            $movedItems[$src] = $target;
         }
-        $msg = $errors === 0
-            ? Lang::t('status.moved', ['count' => count($names)])
-            : Lang::t('status.moved_with_errors', ['errors' => $errors]);
+        // Counts report ACTIONS APPLIED; skipped names (filtered at the loop
+        // head) are surfaced separately instead of inflating the total.
+        $skipped = count($names) - count($movedItems) - $errors;
+        $msg = match (true) {
+            $errors > 0 => Lang::t('status.moved_with_errors', ['count' => count($movedItems), 'errors' => $errors]),
+            $skipped > 0 => Lang::t('status.moved_skipped', ['count' => count($movedItems), 'skipped' => $skipped]),
+            default => Lang::t('status.moved', ['count' => count($movedItems)]),
+        };
         $newUndoStack = $this->undoStack;
         if ($movedItems !== []) {
             $newUndoStack[] = UndoAction::move($movedItems);
@@ -811,17 +821,23 @@ final class Manager implements Model
         if (str_contains($newName, '/') === true || str_contains($newName, '\\') === true || str_contains($newName, '..') === true) {
             return $this->withActivePane(fn(Pane $p) =>
                 Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-                ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => $srcName]))
+                ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => Entry::sanitizeName($srcName)]))
                 ->withInputBuffer(null);
         }
         // Additional path traversal guard: validate resolved path stays within source directory
         $dst = Pane::join($pane->cwd, $newName);
-        $resolvedDst = \Phar::canonicalize($dst);
-        $resolvedCwd = \Phar::canonicalize($pane->cwd);
-        if (str_starts_with($resolvedDst, $resolvedCwd) === false) {
+        $resolvedDst = self::canonicalPath($dst);
+        $resolvedCwd = self::canonicalPath($pane->cwd);
+        // The '/' boundary is load-bearing hygiene: without it a sibling
+        // directory whose name extends this one ('/tmp/pane' vs
+        // '/tmp/panex') would satisfy a bare prefix match. Today the
+        // separator guard above makes that unreachable, but the containment
+        // check must stand on its own — hence the explicit boundary plus its
+        // structural pin.
+        if (str_starts_with($resolvedDst, $resolvedCwd . '/') === false && $resolvedDst !== $resolvedCwd) {
             return $this->withActivePane(fn(Pane $p) =>
                 Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-                ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => $srcName]))
+                ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => Entry::sanitizeName($srcName)]))
                 ->withInputBuffer(null);
         }
         $renamedItems = [];
@@ -829,7 +845,7 @@ final class Manager implements Model
         if (!$this->rename($src, $newName)) {
             return $this->withActivePane(fn(Pane $p) =>
                 Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-                ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => $srcName]))
+                ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => Entry::sanitizeName($srcName)]))
                 ->withInputBuffer(null);
         }
         $newUndoStack = $this->undoStack;
@@ -837,7 +853,13 @@ final class Manager implements Model
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
         return $this->withActivePane(fn(Pane $p) =>
             Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-            ->withConfirm(ConfirmState::None, Lang::t('status.renamed', ['old' => $srcName, 'new' => $newName]))
+            // Old and new names are raw filesystem bytes — a filename is
+            // attacker-writable data and this string rides straight into the
+            // rendered status line. Sanitize at the message-build choke.
+            ->withConfirm(ConfirmState::None, Lang::t('status.renamed', [
+                'old' => Entry::sanitizeName($srcName),
+                'new' => Entry::sanitizeName($newName),
+            ]))
             ->withInputBuffer(null)
             ->withUndoRedoStacks($newUndoStack, []);
     }
@@ -846,6 +868,48 @@ final class Manager implements Model
     private function performRenameWithBuffer(): self
     {
         return $this->performRename();
+    }
+
+    /**
+     * Lexical path canonicalization (no filesystem access, no extension
+     * dependency). Collapses duplicate slashes, '.' segments, and resolves
+     * '..' segments purely by name.
+     *
+     * This REPLACES the ext-phar canonicalize call: that method is NOT
+     * universally present — measured on the 8.3.6 CLI of the CI/dev box,
+     * method_exists for it returned false despite ext-phar being
+     * loaded — so the rename COMMIT path threw an uncaught Error for every
+     * single rename attempt on this box (the shipped test skipped the
+     * commit step for exactly this reason). A guard must never crash the
+     * thing it guards.
+     */
+    private static function canonicalPath(string $path): string
+    {
+        $unified = str_replace('\\', '/', $path);
+        $absolute = str_starts_with($unified, '/');
+        $segments = [];
+        foreach (explode('/', $unified) as $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue;
+            }
+            if ($segment === '..') {
+                if ($absolute) {
+                    // '/a/..' pops to '/a' → then '' : '..' at root is root.
+                    array_pop($segments);
+                    continue;
+                }
+                if ($segments !== [] && end($segments) !== '..') {
+                    array_pop($segments);
+                    continue;
+                }
+            }
+            $segments[] = $segment;
+        }
+        $joined = implode('/', $segments);
+        if ($absolute) {
+            return '/' . $joined;
+        }
+        return $joined === '' ? '.' : $joined;
     }
 
     private function withConfirm(ConfirmState $state, string $status, ?string $pendingOpDest = null, ?string $pendingOpType = null, ?string $inputBuffer = null): self
@@ -1256,6 +1320,16 @@ final class Manager implements Model
     }
 
     /**
+     * Reverse an undo action (for restore on redo).
+     *
+     * A delete item whose trash path is empty was removed PERMANENTLY (the
+     * cross-device EXDEV fallback in performDelete). Its bytes no longer
+     * exist anywhere, so "restoring" it cannot succeed: counting it as an
+     * error is the only honest polarity. Silently skipping made
+     * `undo` of such a delete report full success while restoring zero
+     * bytes — a data-loss lie on the one screen the user watches to
+     * verify recovery.
+     *
      * @param list<array{path:string,isDir:bool,trash:string}> $items
      */
     private function reverseDelete(array $items): int
@@ -1277,8 +1351,10 @@ final class Manager implements Model
                 if (!is_dir($path) && !@mkdir($path, 0755, true)) {
                     $errors++;
                 }
+            } else {
+                // File with no live trash bytes: unrecoverable — report loud.
+                $errors++;
             }
-            // Files without a trash path and without content are unrecoverable — skip
         }
         return $errors;
     }

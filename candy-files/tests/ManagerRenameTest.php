@@ -213,16 +213,111 @@ final class ManagerRenameTest extends TestCase
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
 
-        // Type new name (short, to avoid path traversal checks)
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'n'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'e'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'w'));
         $this->assertSame('new', $m->inputBuffer);
 
-        // Confirm with Enter - note: this hits a code path with Phar::canonicalize()
-        // which is broken in PHP 8, so we skip actually confirming
-        // Instead, just verify the input buffer accumulates correctly
-        $this->assertSame('new', $m->inputBuffer);
-        $this->assertSame(ConfirmState::RenameSelected, $m->confirm);
+        // Commit. (The shipped version of this test REFUSED to commit here:
+        // the guard used \Phar::canonicalize(), which is undefined on this
+        // PHP 8.3.6 build — every real rename threw an uncaught Error. The
+        // guard is now Manager::canonicalPath(), pure lexical and portable.)
+        [$done] = $m->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertStringContainsString('renamed oldname.txt to new', $done->status);
+        $this->assertFileDoesNotExist($file);
+        $this->assertFileExists($this->tmpDir . '/new');
+        $this->assertTrue($done->canUndo());
+    }
+
+    /**
+     * SECURITY (docs-fix-1023, report MAJOR-2 cluster): filenames are
+     * attacker-writable bytes and the rename status line embeds the OLD
+     * name verbatim. A crafted name carrying an SGR sequence plus BEL must
+     * render INERT: every escape byte is swept at the message-build choke.
+     */
+    public function testRenamedStatusCarriesNoEscapeBytesFromSourceName(): void
+    {
+        $evil = "x\x1b[7mE\x07.txt";   // reverse-video SGR + BEL inside the name
+        file_put_contents($this->tmpDir . '/' . $evil, 'content');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));   // onto the evil name
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+        $this->assertStringNotContainsString("\x1b", $armed->status, 'arm prompt was already sanitized — stays so');
+
+        [$m] = $armed->update(new KeyMsg(KeyType::Char, 's'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'a'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'f'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'e'));
+        [$done] = $m->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringNotContainsString("\x1b", $done->status, 'status line must not carry ESC from a crafted filename');
+        $this->assertStringNotContainsString("\x07", $done->status, 'nor BEL');
+        $this->assertStringContainsString('safe', $done->status);
+        $this->assertFileExists($this->tmpDir . '/safe');
+    }
+
+    /**
+     * The same choke on the FAILURE path: rename_failed embeds the source
+     * name, so a blocked traversal attempt on an escape-named file must
+     * still report inertly.
+     */
+    public function testRenameFailedStatusCarriesNoEscapeBytes(): void
+    {
+        $evil = "v\x1b]0;pwned\x07ictim.txt";
+        file_put_contents($this->tmpDir . '/' . $evil, 'content');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '.'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '.'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'o'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'u'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 't'));
+        [$blocked] = $m->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('failed', $blocked->status);
+        $this->assertStringNotContainsString("\x1b", $blocked->status, 'even the refusal must not echo raw escape bytes');
+        $this->assertStringNotContainsString("\x07", $blocked->status);
+    }
+
+    /**
+     * STRUCTURAL pin (docs-fix-1023): the resolved-destination containment
+     * check must compare against the source directory WITH a '/' boundary.
+     * Without the boundary a sibling like '/tmp/pane' would prefix-match
+     * '/tmp/panex'; unreachable through typed input today (the separator
+     * guard above rejects it first), so the spelling itself is pinned.
+     */
+    public function testRenameContainmentComparesWithTrailingBoundary(): void
+    {
+        $src = file_get_contents(__DIR__ . '/../src/Manager.php');
+        $this->assertIsString($src);
+        $this->assertStringContainsString("\$resolvedCwd . '/'", $src,
+            'performRename must str_starts_with against $resolvedCwd . "/"');
+        // The single-home rule for recursive copy: Manager must NOT keep a
+        // private copyDir duplicate of AsyncOps' cycle-guarded engine.
+        $this->assertFalse(method_exists(Manager::class, 'copyDir'),
+            'recursive copy has exactly ONE home (AsyncOps::copyDir)');
+        $this->assertFalse((new \ReflectionClass(Manager::class))->hasConstant('MAX_COPY_DEPTH'),
+            'the depth cap has exactly ONE home (AsyncOps::MAX_COPY_DEPTH)');
+        $copyPath = new \ReflectionMethod(\SugarCraft\Files\AsyncOps::class, 'copyPath');
+        $this->assertTrue($copyPath->isPublic() && $copyPath->isStatic(),
+            'AsyncOps::copyPath is the shared synchronous copy engine');
+        // The rename guard must stay extension-free: \Phar::canonicalize()
+        // is absent on this box's PHP build and crashed the commit path.
+        $this->assertStringNotContainsString('Phar::canonicalize', $src,
+            'path canonicalization must not depend on ext-phar');
+
+        $cp = new \ReflectionMethod(Manager::class, 'canonicalPath');
+        $cp->setAccessible(true);
+        /** @param string $in */
+        $canon = static fn(string $in): string => $cp->invoke(null, $in);
+        $this->assertSame('/a/b', $canon('/a//./b'));
+        $this->assertSame('/a', $canon('/a/b/..'));
+        $this->assertSame('/', $canon('/..'));
+        $this->assertSame('/', $canon('/'));
+        $this->assertSame('/a', $canon('/a'));
     }
 }

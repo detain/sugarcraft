@@ -187,6 +187,59 @@ final class ManagerDeleteTest extends TestCase
         $this->assertStringContainsString('redone', $redone->status, 'status: ' . $redone->status);
     }
 
+    /**
+     * docs-fix-1023 count integrity: the deleted status counted the ARMED
+     * name list, inflating the number when a stale selection entry was
+     * filtered ('..'/null/''). Applied actions and skipped names are
+     * reported separately.
+     */
+    public function testDeleteCountsSkippedNamesSeparately(): void
+    {
+        file_put_contents($this->tmpDir . '/keep.txt', 'x');
+
+        $base = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        $stale = new \SugarCraft\Files\Pane($base->left->cwd, $base->left->entries, $base->left->cursor, ['..' => true, 'keep.txt' => true]);
+        $m = Manager::builder()
+            ->withLeft($stale)
+            ->withRight($base->right)
+            ->withLister($this->lister)
+            ->build();
+
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame(ConfirmState::DeleteSelected, $armed->confirm);
+        [$deleted] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+
+        $this->assertSame('deleted 1 entries (1 skipped)', $deleted->status,
+            'count must report ACTIONS APPLIED, not the arm-time intention');
+        $this->assertFileDoesNotExist($this->tmpDir . '/keep.txt');
+    }
+
+    /**
+     * docs-fix-1023 EXDEV polarity flip: a delete whose bytes were removed
+     * PERMANENTLY (cross-device fallback, trash '') could not be undone,
+     * yet undo reported FULL SUCCESS — a data-loss lie on the screen the
+     * user watches. Undo must now count it as an error.
+     */
+    public function testUndoOfPermanentDeleteReportsAnError(): void
+    {
+        $ghost = $this->tmpDir . '/already-gone.txt';   // never existed: bytes are gone
+        $left = \SugarCraft\Files\Pane::open($this->tmpDir, $this->lister);
+        $m = Manager::builder()
+            ->withLeft($left)
+            ->withRight($left)
+            ->withLister($this->lister)
+            ->withUndoStack([\SugarCraft\Files\UndoAction::delete([
+                ['path' => $ghost, 'isDir' => false, 'trash' => ''],
+            ])])
+            ->build();
+
+        [$undone] = $m->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringContainsString('error', $undone->status,
+            'unrecoverable undo must NOT report success: ' . $undone->status);
+        $this->assertStringContainsString('1', $undone->status);
+        $this->assertFileDoesNotExist($ghost);
+    }
+
     /** Content of the first trashed file matching $needle, or '' if none is found. */
     private function findInTrash(string $needle): string
     {

@@ -188,7 +188,8 @@ final class ManagerCopyTest extends TestCase
         Loop::run();
 
         $this->assertInstanceOf(Manager::class, $finalState);
-        $this->assertStringContainsString('copied with 1 errors', $finalState->status);
+        $this->assertStringContainsString('copied 0 entries with 1 errors', $finalState->status,
+            'counts must report ACTIONS APPLIED, not arm-time intentions');
         $this->assertFileDoesNotExist($dstDir . '/vanishing.txt');
     }
 
@@ -200,7 +201,7 @@ final class ManagerCopyTest extends TestCase
      */
     public function testCopyCompletedMsgIsACoreMsg(): void
     {
-        $msg = new CopyCompletedMsg([], 0, [], '/dst');
+        $msg = new CopyCompletedMsg([], 0, 0, 0);
         $this->assertInstanceOf(Msg::class, $msg);
     }
 
@@ -260,7 +261,7 @@ final class ManagerCopyTest extends TestCase
     {
         // One mkdir builds the whole chain; go two levels past the cap so
         // the recursion is forced to trip.
-        $depth = Manager::MAX_COPY_DEPTH + 2;
+        $depth = \SugarCraft\Files\AsyncOps::MAX_COPY_DEPTH + 2;
         $deepRoot = $this->tmpDir . '/deep';
         $leaf = $deepRoot . str_repeat('/d', $depth);
         $this->assertTrue(mkdir($leaf, 0755, true), 'setup: deep tree created');
@@ -294,5 +295,137 @@ final class ManagerCopyTest extends TestCase
         $this->assertFileExists($dst . '/real.txt');
         // The loop entry is preserved as a symlink, not recursed into.
         $this->assertTrue(is_link($dst . '/self'), 'symlink copied as a link, not followed');
+    }
+
+    /** Drive a scheduled copy to completion and return the final Manager. */
+    private function runToCompletion(Manager $pending, \Closure $cmd): Manager
+    {
+        $async = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $async);
+        $final = null;
+        $async->promise->then(function (?Msg $resolved) use ($pending, &$final): void {
+            if ($resolved !== null) {
+                [$final] = $pending->update($resolved);
+            }
+        });
+        Loop::run();
+        $this->assertInstanceOf(Manager::class, $final, 'completion message must reach update()');
+        return $final;
+    }
+
+    /**
+     * docs-fix-1023 count integrity: the optimistic pre-completion status
+     * claimed PAST tense ('copied N') for work that had not started. The
+     * pending state now says 'copying…' and the number is the count that
+     * actually gets scheduled (skipped names are not intentions).
+     */
+    public function testPendingCopySaysCopyingNotCopied(): void
+    {
+        $srcDir = $this->tmpDir . '/pend-src';
+        $dstDir = $this->tmpDir . '/pend-dst';
+        mkdir($srcDir, 0755, true);
+        mkdir($dstDir, 0755, true);
+        file_put_contents($srcDir . '/only.txt', 'x');
+
+        $m = Manager::start($srcDir, $dstDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'c'));
+        [$pending, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+
+        $this->assertStringContainsString('copying', $pending->status);
+        $this->assertStringNotContainsString('copied', $pending->status, 'nothing has landed yet — past tense is a lie');
+    }
+
+    /**
+     * docs-fix-1023 count integrity: a stale selection name (here the '..'
+     * sentinel key) is FILTERED at scheduling, and the completion status
+     * surfaces it as skipped instead of counting it as copied.
+     */
+    public function testCopySurfacesSkippedNames(): void
+    {
+        $srcDir = $this->tmpDir . '/skip-src';
+        $dstDir = $this->tmpDir . '/skip-dst';
+        mkdir($srcDir, 0755, true);
+        mkdir($dstDir, 0755, true);
+        file_put_contents($srcDir . '/a.txt', 'x');
+
+        $base = Manager::start($srcDir, $dstDir, $this->lister);
+        // A selection carrying a stale '..' key next to a real entry —
+        // exactly what count($names) used to inflate.
+        $stale = new \SugarCraft\Files\Pane($base->left->cwd, $base->left->entries, $base->left->cursor, ['..' => true, 'a.txt' => true]);
+        $m = Manager::builder()
+            ->withLeft($stale)
+            ->withRight($base->right)
+            ->withLister($this->lister)
+            ->build();
+
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertStringContainsString('2 selected entries', $armed->status, 'the arm prompt reports the raw selection size');
+        [$pending, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertStringContainsString('copying 1 entries', $pending->status, 'scheduled count excludes the filtered name');
+
+        $final = $this->runToCompletion($pending, $cmd);
+        $this->assertSame('copied 1 entries (1 skipped)', $final->status);
+    }
+
+    /**
+     * docs-fix-1023: copy silently REPLACES a pre-existing destination.
+     * The completion message must announce how many legs overwrote
+     * something (measured at schedule time).
+     */
+    public function testCopyAnnouncesOverwrite(): void
+    {
+        $srcDir = $this->tmpDir . '/ovr-src';
+        $dstDir = $this->tmpDir . '/ovr-dst';
+        mkdir($srcDir, 0755, true);
+        mkdir($dstDir, 0755, true);
+        file_put_contents($srcDir . '/dup.txt', 'new bytes');
+        file_put_contents($dstDir . '/dup.txt', 'old bytes');
+
+        $m = Manager::start($srcDir, $dstDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'c'));
+        [$pending, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+
+        $final = $this->runToCompletion($pending, $cmd);
+        $this->assertSame('copied 1 entries (1 overwrote)', $final->status);
+        $this->assertSame('new bytes', file_get_contents($dstDir . '/dup.txt'));
+    }
+
+    /**
+     * docs-fix-1023: copy undo recorded the WHOLE map including failed
+     * legs, so history claimed copies that never happened. Undo state must
+     * carry the ok-set only, and the status must separate applied from
+     * errors: 'copied 1 entries with 1 errors'.
+     */
+    public function testCopyUndoRecordsOnlySucceededLegs(): void
+    {
+        $srcDir = $this->tmpDir . '/osrc';
+        $dstDir = $this->tmpDir . '/odst';
+        mkdir($srcDir, 0755, true);
+        mkdir($dstDir, 0755, true);
+        file_put_contents($srcDir . '/a.txt', 'aaa');
+        file_put_contents($srcDir . '/b.txt', 'bbb');
+
+        $m = Manager::start($srcDir, $dstDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // select a.txt, cursor advances
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // select b.txt
+        $this->assertCount(2, $m->activePane()->selectedNames());
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'c'));
+        [$pending, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+
+        // Pull the rug out under the second leg before the loop ticks.
+        unlink($srcDir . '/b.txt');
+
+        $final = $this->runToCompletion($pending, $cmd);
+        $this->assertStringContainsString('copied 1 entries with 1 errors', $final->status);
+        $this->assertFileExists($dstDir . '/a.txt');
+        $this->assertFileDoesNotExist($dstDir . '/b.txt');
+
+        $top = $final->undoStack[array_key_last($final->undoStack)];
+        $this->assertSame([$srcDir . '/a.txt'], array_keys($top->items), 'undo must carry the survived leg only');
     }
 }

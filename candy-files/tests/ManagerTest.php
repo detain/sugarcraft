@@ -145,11 +145,62 @@ final class ManagerTest extends TestCase
         $this->assertStringContainsString('refreshed', $next->status);
     }
 
-    public function testNonKeyMsgIgnored(): void
+    /**
+     * docs-fix-1023: `r` re-reads through Pane::relist(), which keeps the
+     * selection and cursor for entries that survived. Before this, refresh
+     * rebuilt via Pane::open() and silently WIPED user selection — a re-read
+     * of the same directory must not consume marks the user placed.
+     */
+    public function testRefreshKeepsSelectionAndCursor(): void
     {
         $m = $this->start();
-        $msg = new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24);
-        [$next, $cmd] = $m->update($msg);
+        // '/' has no parent sentinel; NameAsc order is etc, home, readme.
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // select 'etc'
+        $this->assertSame(['etc'], $m->activePane()->selectedNames());
+        [$r] = $m->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertSame(['etc'], $r->activePane()->selectedNames(), 'refresh must preserve surviving selection');
+        // space ADVANCED the cursor to home (index 1) — relist must keep it there.
+        $this->assertSame(1, $r->activePane()->cursor, 'cursor must stay on the entry it was on');
+    }
+
+    /**
+     * docs-fix-1023: Escape outside search/confirm clears the selection —
+     * Pane::clearSelection() had ZERO production callers before this arm,
+     * so a mis-marked multi-select could only be undone entry by entry.
+     */
+    public function testEscapeClearsSelection(): void
+    {
+        $m = $this->start();
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // select 'etc'
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // cursor advanced; select 'home'
+        $this->assertCount(2, $m->activePane()->selectedNames());
+        [$cleared] = $m->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertSame([], $cleared->activePane()->selectedNames());
+    }
+
+    public function testWindowSizeMsgCapturesWidthWithoutCommand(): void
+    {
+        // Responsive-layout transition: the resize is MODEL state (the next
+        // view() derives pane widths from it), never a command — the
+        // re-render itself is sugar-core Program's dirty-flag step.
+        $m = $this->start();
+        $this->assertSame(0, $m->termCols);
+        [$next, $cmd] = $m->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        $this->assertNotSame($m, $next, 'resize must produce a new Model');
+        $this->assertSame(80, $next->termCols);
+        $this->assertNull($cmd);
+        // Same width again: identity, no pointless rebuild.
+        [$same, $cmd2] = $next->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        $this->assertSame($next, $same);
+        $this->assertNull($cmd2);
+    }
+
+    public function testOtherNonKeyMsgsIgnored(): void
+    {
+        // Only WindowSizeMsg and CopyCompletedMsg are meaningful non-key
+        // traffic; anything else must keep falling through untouched.
+        $m = $this->start();
+        [$next, $cmd] = $m->update(new RawMsg("\x1b[anything"));
         $this->assertSame($m, $next);
         $this->assertNull($cmd);
     }

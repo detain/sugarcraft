@@ -130,6 +130,62 @@ final class PaneTest extends TestCase
         $this->assertSame([], $p->selectedNames());
     }
 
+    /**
+     * docs-fix-1023: relist() is the re-read transition used by refresh and
+     * '.' — it KEEPS the selection/cursor for entries that survived, while
+     * Pane::open() (entering a directory) still starts clean.
+     */
+    public function testRelistKeepsSurvivingSelectionAndCursor(): void
+    {
+        $tree = $this->tree();
+        $fs = $this->fakeFs($tree);
+        $home = Pane::open('/home', $fs);            // ['..','alice','bob']
+        $p = $home->moveCursor(1)->toggleSelection(); // cursor 'alice', alice selected
+        $this->assertSame(['alice'], $p->selectedNames());
+
+        $again = $p->relist($fs);
+        $this->assertSame(['alice'], $again->selectedNames(), 're-read of the same dir must keep selection');
+        $this->assertSame(1, $again->cursor, 'cursor must stay on the same entry');
+    }
+
+    public function testRelistPrunesGoneNamesAndClampsCursor(): void
+    {
+        $tree = $this->tree();
+        $fs = $this->fakeFs($tree);
+        $home = Pane::open('/home', $fs);
+        $p = $home->moveCursor(1)->toggleSelection()
+            ->moveCursor(1)->toggleSelection();       // alice + bob selected, cursor on bob
+        $this->assertSame(['alice', 'bob'], $p->selectedNames());
+
+        // The directory shrinks to bob only.
+        $shrunk = $this->fakeFs(['/home' => [new Entry('bob', true, 0, 0)]]);
+        $after = $p->relist($shrunk);
+        $this->assertSame(['bob'], $after->selectedNames(), 'vanished names leave the selection');
+        $this->assertSame(1, $after->cursor, 'cursor lands on bob (entry order: .., bob)');
+
+        // Even the cursor entry gone: clamped into range, no crash.
+        $empty = $after->relist($this->fakeFs(['/home' => []]));
+        $this->assertSame(0, $empty->cursor);
+    }
+
+    /**
+     * '.' (toggleHidden) re-reads via relist, so toggling hidden visibility
+     * must not consume the selection either.
+     */
+    public function testToggleHiddenKeepsSelection(): void
+    {
+        $tree = $this->tree();
+        $fs = $this->fakeFs($tree);
+        $home = Pane::open('/home', $fs);
+        $p = $home->moveCursor(1)->toggleSelection();
+        $toggled = $p->toggleHidden($fs);
+        $this->assertTrue($toggled->showHidden);
+        $this->assertSame(['alice'], $toggled->selectedNames(), 'hidden toggle must preserve surviving selection');
+        // With dotfiles visible, NameAsc order is ['..','.config','alice','bob'] —
+        // relist follows the ENTRY, not the stale index.
+        $this->assertSame(2, $toggled->cursor);
+    }
+
     public function testSetSortRefreshesAndUpdatesOrder(): void
     {
         $fs = $this->fakeFs($this->tree());

@@ -26,7 +26,7 @@ Dual-pane terminal file manager built on the SugarCraft stack for PHP 8.3+, with
 │    notes.md                12KB   │  │                                    │
 │    todo.txt              512B    │  │                                    │
 └────────────────────────────────────┘  └────────────────────────────────────┘
- Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · d delete · r refresh · q quit · / search · t tabs · u undo
+ Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · t new tab · ^w close tab · ^tab cycle
 ```
 
 ## Run it
@@ -59,7 +59,7 @@ Default: left pane = current directory, right pane = `$HOME`.
 | `r`             | Refresh active pane                                      |
 | `q`             | Quit                                                      |
 | `/`             | Start search mode; type to filter; Enter to open          |
-| `Escape`        | Exit search mode                                          |
+| `Escape`        | Exit search mode; rename prompt: cancel; otherwise: clear the selection |
 | `t`             | Duplicate current tab                                   |
 | `Ctrl+w`        | Close current tab                                        |
 | `Ctrl+Tab`      | Cycle to next tab — needs a terminal that reports modified Tab (see below) |
@@ -67,6 +67,8 @@ Default: left pane = current directory, right pane = `$HOME`.
 | `Ctrl+PgUp` / `Ctrl+PgDn` | Cycle tabs forward / back — standard terminal emulators (tmux/browser terminals may intercept modified Page keys) |
 | `u` / `Ctrl+z`  | Undo last operation                                      |
 | `Ctrl+y`        | Redo last undone operation                               |
+
+ Notation legend: the bottom help line spells chords with a caret — `^w` is Ctrl+w and `^tab` is Ctrl+Tab. The trailing `_` shown while renaming is the text-entry caret.
 
 ### Terminal support for Ctrl+Tab
 
@@ -82,6 +84,12 @@ standard terminal emulators: there the Page keys report modified
 unambiguously — but tmux and browser terminals may intercept modified
 Page keys themselves.
 
+## Layout & terminal size
+
+The two panes split the live terminal width (`WindowSizeMsg`, reported at startup and on every resize): each pane gets `max(40, (cols − 2) ÷ 2)` cells, so the layout is usable from about **82 columns** up, and widens gracefully on larger frames. Below that floor the panes stay 40 cells wide and the outer frame will wrap — there is no horizontal scroll. The name column, header clip and separator rule all derive from the same width. Before the first size report (and in unit tests) the renderer keeps its historical fixed 40-cell pane.
+
+Honest limitation: there is **no scroll viewport**. A listing longer than the frame is clipped by the window; the cursor moves through entries but the view does not follow it past the bottom row. Tall directories need a tall terminal (or `Home`/`End`/search) until a scroll window is built.
+
 ## Architecture
 
 The whole transition layer is pure — filesystem I/O is injected as a `Closure(string $path): list<Entry>` so every transition is unit-testable without tmp dirs or stat fixtures.
@@ -95,19 +103,21 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 | `Manager`           | SugarCraft Model — orchestrates two panes, handles all keys + confirm gate |
 | `FsLister`          | Default lister: `scandir` + `lstat` against the live filesystem          |
 | `Renderer`          | Pure view function — two pane boxes side-by-side + status line           |
-| `AsyncOps`          | Async copy via React\Promise + futureTick (move/rename available but sync) |
+| `AsyncOps`          | Tick-deferred copy/move/rename futures (React\Promise + futureTick); sole home of the recursive copy engine + depth cap |
 | `UndoAction`        | Immutable undo record (delete/rename/move/copy) consumed by the undo stacks |
-| `ManagerBuilder`    | Fluent builder for `Manager` — avoids 16-argument positional construction   |
-| `Msg/CopyCompleted` | Async-copy completion Msg dispatched by the Program into `Manager::update()` |
+| `ManagerBuilder`    | Fluent builder for `Manager` — avoids 17-argument positional construction   |
+| `Msg/CopyCompletedMsg` | Async-copy completion Msg dispatched by the Program into `Manager::update()` |
 
 ## Test plan
 
-- 201 tests / 762 assertions
-- Pure-state coverage: `Entry` (size formatting, parent sentinel, escape-sequence sweep incl. OSC/CSI/generic-ESC), `Sort` (every order × dirs-first × cycle), `Pane` (open / navigate / move / select / sort / hidden toggle / parent-path / join)
-- `Manager` integration: Tab swap (incl. `t <path>` landing on the given directory), key dispatch per pane, confirm gate (`d` arms, `y` confirms, anything else cancels), refresh status
-- Async copy end-to-end: the `c`/`y` command is executed against the real event loop and its `CopyCompletedMsg` re-enters `update()` — status, undo entry and refreshed destination pane are all asserted, plus the error-count path
-- Renderer: cell-width math for CJK names (size column stays aligned), tab-bar clipping never splits a codepoint, search echo is sanitized
-- `LangCoverageTest` enforces translation-key coverage in both directions (every used key exists; no unused key lingers)
+- 222 tests / 2931 assertions
+- Pure-state coverage: `Entry` (size formatting, parent sentinel, escape-sequence sweep incl. OSC/CSI/generic-ESC), `Sort` (every order × dirs-first × cycle), `Pane` (open / relist-with-selection-preservation / navigate / move / select / sort / hidden toggle / parent-path / join)
+- `Manager` integration: Tab swap, key dispatch per pane, confirm gate (`d` arms, `y` confirms, anything else cancels), refresh status, Escape clears selection, resize capture (`WindowSizeMsg` → derived widths, other non-key Msgs dropped)
+- `t` duplicates the current tab; `Manager::openNewTab(path)` lands a tab on the given directory as an API (no key binding carries a path)
+- Async copy end-to-end: the `c`/`y` command is executed against the real event loop and its `CopyCompletedMsg` re-enters `update()` — status, undo entry and refreshed destination pane are all asserted, plus the error-count path, the skipped-name path, the overwrite announcement and undo-recording-successes-only
+- Status-line injection defense: filenames carrying raw ESC/OSC bytes render inert in every rename/copy/move message (adversarial pins), plus the structural pins for the rename containment boundary and the single copyDir home
+- Renderer: cell-width math for CJK names (size column stays aligned), tab-bar clipping never splits a codepoint, search echo is sanitized, pane widths follow the terminal
+- `LangCoverageTest` enforces translation-key coverage in both directions (every used key exists; no unused key lingers); `LocaleParityTest` pins all 16 shipped locales to the English key set with identical placeholder tokens
 
 ## Demos
 
@@ -141,7 +151,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 
 ## Constructing Manager
 
-`Manager` has 16 constructor parameters. Use the fluent builder for readability and to avoid parameter-order mistakes:
+`Manager` has 17 constructor parameters. Use the fluent builder for readability and to avoid parameter-order mistakes:
 
 ```php
 $manager = Manager::builder()
@@ -150,7 +160,7 @@ $manager = Manager::builder()
     ->withActiveIdx(0)
     ->withStatus('')
     ->withConfirm(ConfirmState::None)
-    ->withLister(fn(string $path): list<Entry> => FsLister::lister()($path))
+    ->withLister(FsLister::lister())
     ->withSearchQuery(null)
     ->withSearchResults([])
     ->withSearchCursor(0)
@@ -160,6 +170,8 @@ $manager = Manager::builder()
     ->withRedoStack([])
     ->withPendingOpDest(null)
     ->withPendingOpType(null)
+    ->withInputBuffer(null)
+    ->withTermCols(0)
     ->build();
 ```
 
@@ -168,6 +180,14 @@ The direct constructor is kept for backward compatibility only — new code shou
 ## Status
 
 Phase 10 entry — copy / move / rename / undo are wired. Delete moves files into a **per-session ephemeral trash**: undo (`u`) recovers them only while the process lives — quitting wipes the trash, and there is no cross-session bin (a persistent XDG-trash implementation is deliberately out of scope). Three-phase confirm gate (`c`/`m`/`R` arms, `y` confirms, anything else cancels). Undo restores delete/move/rename; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
+
+Status-line semantics (all counts are **actions applied**, never arm-time intentions):
+
+- `deleted N entries` / `copied N entries` / `moved N entries` count entries that really landed.
+- When a stale or filtered name was skipped (`..`, empty), the message appends `(S skipped)`; when a leg failed, it says `N entries with E errors` instead — error precedence wins over skipped, and skipped wins over the overwrite note.
+- Copy silently **replaces** an existing destination; the completion message announces `(O overwrote)` for the legs that landed on a pre-existing target (measured at schedule time).
+- A delete that had to fall back to **permanent removal** (cross-device EXDEV) cannot be undone — undo reports it as an error rather than claiming a restore that has no bytes to recover.
+- The selection survives `r` (refresh) and `.` (hidden toggle) for entries that still exist, and `Escape` clears it; failed copy/move legs never enter the undo history.
 
 ## Credits & inspiration
 

@@ -17,7 +17,11 @@ use SugarCraft\Core\Undo\UndoActionType;
 final class UndoAction
 {
     /**
-     * @param list<array{path:string,isDir:bool,content:?string,stat:array}> $items Items the action operates on (for delete)
+     * @param list<array{path:string,isDir:bool,trash:string}>|array<string,string> $items Items the action operates on
+     *        (delete: the list shape — path, isDir, and the trash location the
+     *        bytes were moved to; '' when the cross-device fallback removed
+     *        them permanently. move/rename/copy: a map of old/source path →
+     *        new/destination path.)
      * @param array<string,string> $renames Map of old path => new path (for rename)
      * @param array<string,string> $moves Map of original path => new path (for move)
      * @param array<string,string> $copies Map of source => destination (for copy)
@@ -32,13 +36,13 @@ final class UndoAction
     /**
      * Create a delete action that can restore deleted items.
      *
-     * @param list<array{path:string,isDir:bool,content:?string,stat:array}> $items
+     * @param list<array{path:string,isDir:bool,trash:string}> $items
      */
     public static function delete(array $items): self
     {
         return new self(
             UndoActionType::Delete,
-            sprintf('delete %d item(s)', count($items)),
+            Lang::t('undo.delete', ['count' => count($items)]),
             $items,
         );
     }
@@ -52,7 +56,7 @@ final class UndoAction
     {
         return new self(
             UndoActionType::Rename,
-            sprintf('rename %d item(s)', count($renames)),
+            Lang::t('undo.rename', ['count' => count($renames)]),
             $renames,
         );
     }
@@ -66,7 +70,7 @@ final class UndoAction
     {
         return new self(
             UndoActionType::Move,
-            sprintf('move %d item(s)', count($moves)),
+            Lang::t('undo.move', ['count' => count($moves)]),
             $moves,
         );
     }
@@ -80,7 +84,7 @@ final class UndoAction
     {
         return new self(
             UndoActionType::Copy,
-            sprintf('copy %d item(s)', count($copies)),
+            Lang::t('undo.copy', ['count' => count($copies)]),
             $copies,
         );
     }

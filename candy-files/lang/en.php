@@ -14,6 +14,7 @@ return [
     'confirm.copy'       => 'copy {names} to {dest}? (y/n)',
     'confirm.move'      => 'move {names} to {dest}? (y/n)',
     'confirm.rename'     => "rename '{name}' to: ",
+    'confirm.selected_entries' => '{count} selected entries',
 
     // Status messages
     'status.nothing_to_delete' => 'nothing to delete',
@@ -21,12 +22,18 @@ return [
     'status.nothing_to_move'   => 'nothing to move',
     'status.nothing_to_rename' => 'nothing to rename',
     'status.cancelled'        => 'cancelled',
+    'status.refreshed'        => 'refreshed',
+    'status.copy_pending'     => 'copying {count} entries…',
     'status.deleted'           => 'deleted {count} entries',
-    'status.deleted_with_errors' => 'deleted with {errors} errors',
+    'status.deleted_with_errors' => 'deleted {count} entries with {errors} errors',
+    'status.deleted_skipped'   => 'deleted {count} entries ({skipped} skipped)',
     'status.copied'           => 'copied {count} entries',
-    'status.copied_with_errors' => 'copied with {errors} errors',
+    'status.copied_with_errors' => 'copied {count} entries with {errors} errors',
+    'status.copied_skipped'   => 'copied {count} entries ({skipped} skipped)',
+    'status.copied_overwrote' => 'copied {count} entries ({overwrote} overwrote)',
     'status.moved'            => 'moved {count} entries',
-    'status.moved_with_errors' => 'moved with {errors} errors',
+    'status.moved_with_errors' => 'moved {count} entries with {errors} errors',
+    'status.moved_skipped'    => 'moved {count} entries ({skipped} skipped)',
     'status.renamed'          => 'renamed {old} to {new}',
     'status.rename_failed'    => 'rename failed: {name}',
     'status.nothing_to_undo'    => 'nothing to undo',
@@ -37,6 +44,12 @@ return [
     'status.redo_with_errors'  => 'redo {description} with {errors} error(s)',
     'status.nothing_to_redo'    => 'nothing to redo',
     'status.copy_undo_noop'    => 'copy left in place (nothing to undo)',
+
+    // Undo/redo action descriptions (rendered inside status.undone/&c.)
+    'undo.delete' => 'delete {count} item(s)',
+    'undo.rename' => 'rename {count} item(s)',
+    'undo.move'   => 'move {count} item(s)',
+    'undo.copy'   => 'copy {count} item(s)',
 
     // Key help
     'keyhelp.default' => 'Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · t new tab · ^w close tab · ^tab cycle',

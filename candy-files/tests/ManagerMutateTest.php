@@ -70,6 +70,7 @@ final class ManagerMutateTest extends TestCase
             pendingOpDest: '/pending/dest',
             pendingOpType: 'copy',
             inputBuffer: 'SENTINEL-BUFFER',
+            termCols: 120,
         );
     }
 

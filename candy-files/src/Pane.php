@@ -80,6 +80,46 @@ final class Pane
         return self::open($next, $lister, $this->sort, $this->showHidden);
     }
 
+    /**
+     * Re-read this pane's directory IN PLACE, preserving the selection and
+     * cursor where they still make sense: a selected name survives only if
+     * the entry still exists, and the cursor stays on the entry it was on
+     * (falling back to a clamped index).
+     *
+     * This is the refresh/toggleHidden transition. Pane::open() is for
+     * ENTERING a (new) directory and legitimately starts empty; using it
+     * for re-reads silently wiped user selection on every `r` and `.`.
+     *
+     * @param \Closure(string): list<Entry> $lister
+     * @param bool|null $showHidden new hidden-visibility state (default: keep)
+     */
+    public function relist(\Closure $lister, ?bool $showHidden = null): self
+    {
+        $show = $showHidden ?? $this->showHidden;
+        $entries = self::filterHidden($lister($this->cwd), $show);
+        if ($this->cwd !== '/' && $this->cwd !== '') {
+            $entries = array_merge([Entry::parent()], $entries);
+        }
+        $entries = $this->sort->apply($entries);
+
+        $positions = [];
+        foreach ($entries as $i => $entry) {
+            $positions[$entry->name] = $i;
+        }
+        $selected = [];
+        foreach (array_keys($this->selected) as $name) {
+            if (isset($positions[$name])) {
+                $selected[$name] = true;
+            }
+        }
+        $underCursor = $this->currentEntry();
+        $cursor = $underCursor !== null && isset($positions[$underCursor->name])
+            ? $positions[$underCursor->name]
+            : max(0, min($this->cursor, count($entries) - 1));
+
+        return new self($this->cwd, $entries, $cursor, $selected, $this->sort, $show);
+    }
+
     public function moveCursor(int $delta): self
     {
         $count = count($this->entries);
@@ -159,11 +199,17 @@ final class Pane
     }
 
     /**
+     * Flip hidden-file visibility and re-read the directory IN PLACE.
+     *
+     * relist() (not open()): toggling `.` must not silently drop the
+     * multi-selection for the entries that remain listed, nor teleport the
+     * cursor to the top of the pane.
+     *
      * @param \Closure(string): list<Entry> $lister
      */
     public function toggleHidden(\Closure $lister): self
     {
-        return self::open($this->cwd, $lister, $this->sort, !$this->showHidden);
+        return $this->relist($lister, !$this->showHidden);
     }
 
     public function currentEntry(): ?Entry
