@@ -93,7 +93,7 @@ for ($i = 0; $i < count($args); $i++) {
             $pairs,
         ));
         fwrite(STDOUT, Lang::t('cli.help.title') . "\n\n"
-            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>] [--version]\n  candy-top self-update [--check] [--rollback] [--allow-unsigned]\n\n"
+            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>] [--version]\n  candy-top self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]\n\n"
             . Lang::t('cli.help.options') . "\n" . $rows([
                 '--fake' => Lang::t('cli.help.opt.fake'),
                 '--config <path>' => Lang::t('cli.help.opt.config'),

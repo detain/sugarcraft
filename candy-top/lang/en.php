@@ -307,10 +307,14 @@ return [
     'cli.help.opt.config' => 'Config file (default: $XDG_CONFIG_HOME/candy-top/config.conf).',
     'cli.help.opt.help' => 'Show this help.',
     'cli.help.opt.version' => 'Print the installed version and exit.',
+    'cli.selfupdate.channel_invalid' => 'self-update: --channel takes stable or dev, not {value}.',
     'cli.selfupdate.check_available' => 'candy-top: update available — this install is {current}, the latest release is {latest}. (--check reports only; nothing was installed.)',
     'cli.selfupdate.check_unknown' => 'candy-top: cannot compare this install ({current}) with the latest release ({latest}).',
     'cli.selfupdate.check_up_to_date' => 'candy-top: up to date — this install is {current}, the latest release is {latest}.',
     'cli.selfupdate.composer_mode' => 'candy-top: self-update replaces a phar install, and this copy was installed through Composer — there is no phar here to swap. Update it with: {command} (a global install runs `composer global update sugarcraft/candy-top` instead).',
+    'cli.selfupdate.dev_channel_unlocatable' => 'candy-top: the dev channel needs this install to carry a locatable dev-<commit> stamp; this build reports {current}. Nothing was swapped.',
+    'cli.selfupdate.dev_target_none' => 'it names none',
+    'cli.selfupdate.dev_target_unusable' => 'candy-top: the dev release is not locatable — its target commit is {target}, not a git commit id. Nothing was swapped.',
     'cli.selfupdate.dir_not_writable' => 'candy-top: cannot replace the phar — directory {dir} is not writable.',
     'cli.selfupdate.downgrade_refused' => 'candy-top: refusing to downgrade — this install is {current}, the latest release is {latest}. (--rollback restores the kept copy; nothing else goes backwards.)',
     'cli.selfupdate.download_failed' => 'candy-top: could not download {asset}: {reason}',
@@ -335,7 +339,7 @@ return [
     'cli.selfupdate.unexpected_operand' => '{operand}: self-update takes no operands.',
     'cli.selfupdate.unsigned_allowed' => 'candy-top: --allow-unsigned skips the pinned-key signature leg; the sha256 sidecar still bound these bytes. Dev/test bypass — never a release habit.',
     'cli.selfupdate.up_to_date' => 'candy-top: self-update: this install is already the latest release ({current}).',
-    'cli.selfupdate.usage' => 'Usage: candy-top self-update [--check] [--rollback] [--allow-unsigned]',
+    'cli.selfupdate.usage' => 'Usage: candy-top self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]',
     // ---- net panel (phase P-C) ----
     // No new keys: NetPanel reuses net.download/upload/zero/auto/sync/top/total
     // and help.net_* above. Button labels are held to btop's four cells.

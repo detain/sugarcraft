@@ -22,7 +22,7 @@ use SugarCraft\Top\Support\Version;
  * slice after the verb and parses the three known flags itself. Every
  * refusal ORDER and security law is identical.
  *
- *     self-update [--check] [--rollback] [--allow-unsigned]
+ *     self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
  *
  * PHAR-MODE ONLY. The verb acts on the file `bin/candy-top` was launched
  * from: `\Phar::running(false)`. On a Composer install that answer is the
@@ -42,6 +42,21 @@ use SugarCraft\Top\Support\Version;
  * release. The signature asset (`candy-top.phar.minisig`) is OPTIONAL at
  * selection: whether it is REQUIRED is a fact about the pinned-key state,
  * not about the release, and the two must not be conflated.
+ *
+ * CHANNELS — WHICH TRAIN, DECIDED BEFORE SELECTION. `--channel=stable|dev`
+ * says which release train to consult; omitted, what this build IS decides:
+ * a dev-stamped archive (`dev-<sha>` through {@see Version::isDev()}, the
+ * shape CI's dev builds carry) defaults to the DEV train, everything else
+ * to STABLE. The stable story is the paragraph above, unchanged. The dev
+ * train is the SINGLE moving release tagged exactly `candy-top/dev`
+ * ({@see self::DEV_TAG}), prerelease flag allowed, draft refused, carrying
+ * the same two required assets; its `target_commitish` names the commit the
+ * archive was cut from, and "up to date" there means this build's stamp is
+ * a prefix of that commit. Dev stamps are LOCATED, never ordered (the
+ * Version law) — so the dev channel has no ordering compare and no
+ * downgrade refusal: the moving tag is the whole answer, and a build whose
+ * stamp cannot be located against it is REFUSED rather than silently
+ * switched to the stable train. The verified swap legs are shared.
  *
  * HOW THE SWAP HAPPENS. The sidecar is fetched first and must parse to a
  * lowercase 64-hex-digit digest (its optional name field must match the phar
@@ -81,7 +96,8 @@ use SugarCraft\Top\Support\Version;
  * refused downgrade, a comparison that cannot be made, a fetch, hash or
  * signature failure, --check finding an update available (that is the
  * scripted answer to "should I update?"). 2: usage errors (unknown operand,
- * `--check` together with `--rollback` or `--allow-unsigned`).
+ * `--channel=` with anything other than `stable` or `dev`, `--check`
+ * together with `--rollback` or `--allow-unsigned`).
  * `--allow-unsigned` is the dev-only bypass of the signature leg in pinned
  * state; it never bypasses the sha256 sidecar and is refused next to
  * `--check` (there is nothing to bypass when nothing is swapped).
@@ -118,6 +134,44 @@ final class SelfUpdate
      * phar stamp and the release filter must strip the same string.
      */
     public const TAG_PREFIX = Version::TAG_PREFIX;
+
+    /**
+     * The release train carrying tagged, ordered, permanent versions — the
+     * default for every stable install, and the only train {@see
+     * selectRelease()} orders.
+     */
+    public const CHANNEL_STABLE = 'stable';
+
+    /**
+     * The moving-tag train built from every master push by CI, stamped into
+     * the phar metadata as `dev-<shortsha>`. Default for dev-built archives
+     * only; never consulted by ordering.
+     */
+    public const CHANNEL_DEV = 'dev';
+
+    /**
+     * The dev train's one and only tag. Matched EXACTLY by {@see
+     * selectDevRelease()} — unlike stable tags, whose `candy-top/` prefix
+     * carries the version itself, `candy-top/dev` is the whole name, so a
+     * startswith filter would silently invent a grammar.
+     */
+    public const DEV_TAG = 'candy-top/dev';
+
+    /**
+     * The prefix a dev version stamp must carry to be dev ({@see
+     * Version::isDev()}) — and the exact number of characters to cut off the
+     * front before what remains can be matched against the dev train's
+     * commit. One spelling, two readers.
+     */
+    private const DEV_PREFIX = 'dev-';
+
+    /**
+     * What a dev stamp's suffix, or the dev release's `target_commitish`,
+     * must look like to be LOCATABLE: a git hex commit id of the shortest
+     * unambiguous length GitHub can hand back (7) up to a full sha (40).
+     * Same grammar the `--version` checkout probe in Help.php uses.
+     */
+    private const LOCATABLE_COMMIT = '/^[0-9a-f]{7,40}$/';
 
     public const PHAR_ASSET = 'candy-top.phar';
 
@@ -212,10 +266,13 @@ final class SelfUpdate
     ): int {
         // Gate ORDER mirrors candy-code exactly: flag exclusivity is judged
         // before the operand refusal, so `--check --rollback junk` reports
-        // the exclusivity, not the junk.
+        // the exclusivity, not the junk. A bad --channel value is a usage
+        // error too — judged next, before an operand that may sit beside it.
         $check = false;
         $rollback = false;
         $allowUnsigned = false;
+        $channel = null;
+        $invalidChannel = null;
         $unexpectedOperand = null;
         foreach ($options as $token) {
             if ($token === '--check') {
@@ -224,6 +281,16 @@ final class SelfUpdate
                 $rollback = true;
             } elseif ($token === '--allow-unsigned') {
                 $allowUnsigned = true;
+            } elseif (\str_starts_with($token, '--channel=')) {
+                // The `=`-form only; a bare `--channel` answers as the
+                // operand it is. Last valid value wins, first bad value is
+                // the one reported — a train is a choice, not a position.
+                $value = \substr($token, \strlen('--channel='));
+                if ($value === self::CHANNEL_STABLE || $value === self::CHANNEL_DEV) {
+                    $channel = $value;
+                } elseif ($invalidChannel === null) {
+                    $invalidChannel = $value;
+                }
             } elseif ($unexpectedOperand === null) {
                 $unexpectedOperand = $token;
             }
@@ -231,6 +298,11 @@ final class SelfUpdate
         if ($check && ($rollback || $allowUnsigned)) {
             return self::failUsage(
                 'candy-top: ' . Lang::t('cli.selfupdate.flags_exclusive'),
+            );
+        }
+        if ($invalidChannel !== null) {
+            return self::failUsage(
+                'candy-top: ' . Lang::t('cli.selfupdate.channel_invalid', ['value' => $invalidChannel]),
             );
         }
         if ($unexpectedOperand !== null) {
@@ -281,48 +353,104 @@ final class SelfUpdate
             return self::EXIT_FAILURE;
         }
         $decoded = \json_decode((string) $response->getBody()->getContents(), true);
-        $release = \is_array($decoded) ? self::selectRelease($decoded) : null;
+
+        // The channel is decided by WHAT THIS BUILD IS, so the current
+        // version is resolved BEFORE selection: asking the stable train
+        // "what is new" from a dev build answers "downgrade to the last
+        // tag" every single time. The injected $currentVersion is the
+        // suite's window; production reads the build manifest through
+        // Help::versionString() (DST-1) — which is exactly where the dev
+        // stamp lives, and this is the line that turns that stamp into a
+        // channel choice.
+        $current = $currentVersion ?? \trim(Help::versionString());
+        $channel ??= Version::isDev($current) ? self::CHANNEL_DEV : self::CHANNEL_STABLE;
+        $release = \is_array($decoded)
+            ? ($channel === self::CHANNEL_DEV ? self::selectDevRelease($decoded) : self::selectRelease($decoded))
+            : null;
         if ($release === null) {
             self::stderr(Lang::t('cli.selfupdate.no_release', ['phar' => self::PHAR_ASSET, 'sidecar' => self::SIDECAR_ASSET]));
 
             return self::EXIT_FAILURE;
         }
 
-        $current = $currentVersion ?? \trim(Help::versionString());
-        $cmp = Version::compare($release['version'], $current);
+        if ($channel === self::CHANNEL_DEV) {
+            // The dev train answers "is this build AT the position the
+            // moving tag points to", never "which is newer" — dev stamps
+            // have no ordering (the Version law: located, not ordered).
+            $stamp = \substr(\strtolower(\trim($current)), \strlen(self::DEV_PREFIX));
+            if (!Version::isDev($current) || \preg_match(self::LOCATABLE_COMMIT, $stamp) !== 1) {
+                // Also the shape of an explicit `--channel=dev` on a
+                // stable build: this install has no position on the dev
+                // train, and refusing beats quietly consulting the wrong
+                // train instead.
+                self::stderr(Lang::t('cli.selfupdate.dev_channel_unlocatable', ['current' => $current]));
 
-        if ($check) {
+                return self::EXIT_FAILURE;
+            }
+            $target = $release['version'];
+            if (\preg_match(self::LOCATABLE_COMMIT, $target) !== 1) {
+                // A dev release that names no well-formed commit cannot
+                // be located against — and located-against is the only
+                // thing gating this swap. Fail closed on the release's
+                // broken answer, not on our silence.
+                self::stderr(Lang::t('cli.selfupdate.dev_target_unusable', [
+                    'target' => $target === '' ? Lang::t('cli.selfupdate.dev_target_none') : $target,
+                ]));
+
+                return self::EXIT_FAILURE;
+            }
+            if (\str_starts_with($target, $stamp)) {
+                self::stderr($check
+                    ? Lang::t('cli.selfupdate.check_up_to_date', ['current' => $current, 'latest' => $target])
+                    : Lang::t('cli.selfupdate.up_to_date', ['current' => $current]));
+
+                return self::EXIT_OK;
+            }
+            if ($check) {
+                self::stderr(Lang::t('cli.selfupdate.check_available', ['current' => $current, 'latest' => $target]));
+
+                return self::EXIT_FAILURE;
+            }
+            // Off the train tip and not checking: fall through to the
+            // shared swap legs. There is no downgrade concept here — the
+            // moving tag IS the answer — and the hash, sidecar and
+            // pinned-key gates are channel-agnostic by construction.
+        } else {
+            $cmp = Version::compare($release['version'], $current);
+
+            if ($check) {
+                if ($cmp === null) {
+                    self::stderr(Lang::t('cli.selfupdate.check_unknown', ['current' => $current, 'latest' => $release['version']]));
+
+                    return self::EXIT_FAILURE;
+                }
+                if ($cmp > 0) {
+                    self::stderr(Lang::t('cli.selfupdate.check_available', ['current' => $current, 'latest' => $release['version']]));
+
+                    return self::EXIT_FAILURE;
+                }
+                self::stderr(Lang::t('cli.selfupdate.check_up_to_date', ['current' => $current, 'latest' => $release['version']]));
+
+                return self::EXIT_OK;
+            }
+
             if ($cmp === null) {
-                self::stderr(Lang::t('cli.selfupdate.check_unknown', ['current' => $current, 'latest' => $release['version']]));
+                self::stderr(Lang::t('cli.selfupdate.uncomparable', ['current' => $current]));
 
                 return self::EXIT_FAILURE;
             }
-            if ($cmp > 0) {
-                self::stderr(Lang::t('cli.selfupdate.check_available', ['current' => $current, 'latest' => $release['version']]));
+            if ($cmp === 0) {
+                self::stderr(Lang::t('cli.selfupdate.up_to_date', ['current' => $current]));
+
+                return self::EXIT_OK;
+            }
+            if ($cmp < 0) {
+                // The sanctioned downgrade path is --rollback, which returned
+                // above without consulting the network at all.
+                self::stderr(Lang::t('cli.selfupdate.downgrade_refused', ['current' => $current, 'latest' => $release['version']]));
 
                 return self::EXIT_FAILURE;
             }
-            self::stderr(Lang::t('cli.selfupdate.check_up_to_date', ['current' => $current, 'latest' => $release['version']]));
-
-            return self::EXIT_OK;
-        }
-
-        if ($cmp === null) {
-            self::stderr(Lang::t('cli.selfupdate.uncomparable', ['current' => $current]));
-
-            return self::EXIT_FAILURE;
-        }
-        if ($cmp === 0) {
-            self::stderr(Lang::t('cli.selfupdate.up_to_date', ['current' => $current]));
-
-            return self::EXIT_OK;
-        }
-        if ($cmp < 0) {
-            // The sanctioned downgrade path is --rollback, which returned
-            // above without consulting the network at all.
-            self::stderr(Lang::t('cli.selfupdate.downgrade_refused', ['current' => $current, 'latest' => $release['version']]));
-
-            return self::EXIT_FAILURE;
         }
 
         // Sidecar first: a shape it cannot answer with stops the verb before
@@ -487,6 +615,77 @@ final class SelfUpdate
         }
 
         return $best;
+    }
+
+    /**
+     * The dev train's release in a decoded GitHub release list, or null when
+     * it carries none with both required assets.
+     *
+     * The dev train is ONE moving release tagged exactly {@see self::DEV_TAG}
+     * — a full-string equality, not the prefix filter the stable stream uses,
+     * because on this train the tag is a NAME, not a version in disguise.
+     * A PRERELEASE flag is ALLOWED here (the moving tag is conventionally
+     * marked prerelease precisely so stable consumers' "latest" routes skip
+     * it — that flag is part of the train's design, not a doubt about it);
+     * a DRAFT never is (drafts are unpublished scaffolding). Required and
+     * optional assets are collected under the same names, by the same rules,
+     * as {@see self::selectRelease()}.
+     *
+     * GitHub answers the list newest-created first, so the first matching
+     * entry is the train head. There is no ordering among dev tags — the
+     * payload this selector reports as `version` is the release's
+     * `target_commitish` lowercased, the commit the archive was built from,
+     * which the caller LOCATES the current stamp against.
+     *
+     * @param array<array-key, mixed> $releases
+     *
+     * @return array{version: string, pharUrl: string, sidecarUrl: string, sigUrl: string}|null
+     */
+    public static function selectDevRelease(array $releases): ?array
+    {
+        foreach ($releases as $release) {
+            if (!\is_array($release) || ($release['draft'] ?? false) === true) {
+                continue;
+            }
+            if ((string) ($release['tag_name'] ?? '') !== self::DEV_TAG) {
+                continue;
+            }
+            $pharUrl = null;
+            $sidecarUrl = null;
+            $sigUrl = '';
+            $assets = $release['assets'] ?? [];
+            if (!\is_array($assets)) {
+                continue;
+            }
+            foreach ($assets as $asset) {
+                if (!\is_array($asset)) {
+                    continue;
+                }
+                $url = (string) ($asset['browser_download_url'] ?? '');
+                if ($url === '') {
+                    continue;
+                }
+                if ((string) ($asset['name'] ?? '') === self::PHAR_ASSET) {
+                    $pharUrl = $url;
+                } elseif ((string) ($asset['name'] ?? '') === self::SIDECAR_ASSET) {
+                    $sidecarUrl = $url;
+                } elseif ((string) ($asset['name'] ?? '') === self::SIGNATURE_ASSET) {
+                    $sigUrl = $url;
+                }
+            }
+            if ($pharUrl === null || $sidecarUrl === null) {
+                continue;
+            }
+
+            return [
+                'version' => \strtolower(\trim((string) ($release['target_commitish'] ?? ''))),
+                'pharUrl' => $pharUrl,
+                'sidecarUrl' => $sidecarUrl,
+                'sigUrl' => $sigUrl,
+            ];
+        }
+
+        return null;
     }
 
     /**
