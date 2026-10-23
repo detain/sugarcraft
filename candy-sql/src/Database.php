@@ -11,17 +11,12 @@ use SugarCraft\Sql\Db\Export\CsvExporter;
 use SugarCraft\Sql\Db\Export\SqlExporter;
 
 /**
- * Thin SQLite wrapper implementing DatabaseInterface.
+ * Deprecated thin alias over {@see SqliteDatabase}, kept for backwards
+ * compatibility with code written against this class before the driver
+ * implementations were extracted into {@see DatabaseInterface}.
  *
- * @deprecated Use SqliteDatabase directly instead.
- *             This class is kept for backwards compatibility.
- *
- * Everything else in this app talks to a {@see Database} (an interface
- * in spirit, sealed concrete class in practice — now implements
- * DatabaseInterface so any impl can be substituted).
- *
- * The wrapper is split out so the Model can be tested against an
- * in-memory `:memory:` PDO with no fixture files on disk.
+ * @deprecated Use {@see SqliteDatabase} (or ConnectionFactory) directly;
+ *             every method here forwards to a SqliteDatabase delegate.
  */
 final class Database implements DatabaseInterface
 {
@@ -40,8 +35,10 @@ final class Database implements DatabaseInterface
         }
         $pdo = new \PDO('sqlite:' . $path);
         $instance = new self($pdo);
-        // Initialize delegate via SqliteDatabase::open for proper path tracking
-        $instance->delegate = SqliteDatabase::open($path);
+        // One PDO handle backs both the wrapper and its delegate; the earlier
+        // SqliteDatabase::open() here left a second connection on the same
+        // file and discarded the first delegate's label (docs-review-1023 m11).
+        $instance->delegate = new SqliteDatabase($pdo, $path);
         return $instance;
     }
 
@@ -54,7 +51,6 @@ final class Database implements DatabaseInterface
      */
     public function __construct(private readonly \PDO $pdo)
     {
-        // For backwards compatibility - store pdo but also create delegate
         $this->delegate = new SqliteDatabase($this->pdo, ':memory:');
     }
 
@@ -164,6 +160,13 @@ final class Database implements DatabaseInterface
         $this->sqlExporter()->exportSql($path);
     }
 
-    public function dsn(): string { return ''; }
-    public function username(): string { return ''; }
+    public function dsn(): string
+    {
+        return $this->delegate->dsn();
+    }
+
+    public function username(): string
+    {
+        return $this->delegate->username();
+    }
 }

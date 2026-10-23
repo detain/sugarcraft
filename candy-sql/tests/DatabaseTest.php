@@ -232,4 +232,23 @@ final class DatabaseTest extends TestCase
         $this->assertTrue($stmt->execute([1, 'via interface']));
         $this->assertSame([['id' => 1, 'v' => 'via interface']], $db->query('SELECT * FROM t'));
     }
+    /**
+     * After the docs-review-1023 m8/m11 fold Database::open() shares a single
+     * PDO with its delegate and forwards identity methods, so the DSN names
+     * the real file instead of the old hardcoded empty string.
+     */
+    public function testOpenReportsTheRealDsnThroughTheDelegate(): void
+    {
+        $path = \sys_get_temp_dir() . '/candy_sql_dsn_' . \uniqid() . '.sqlite';
+        (new \PDO('sqlite:' . $path))->exec('CREATE TABLE t (x INTEGER)');
+
+        $db = Database::open($path);
+
+        $this->assertSame('sqlite:' . $path, $db->dsn());
+        $this->assertSame('', $db->username());
+        $this->assertSame(['t'], $db->tables());
+
+        $db->close();
+        @\unlink($path);
+    }
 }

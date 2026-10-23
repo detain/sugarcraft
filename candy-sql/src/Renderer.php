@@ -23,8 +23,12 @@ use SugarCraft\Style\Style;
  *
  * `Renderer::render(App)` composes the three panes (tables list, rows
  * preview, query editor) plus a help footer into a single ANSI string.
- * Pure function — given the same {@see App} it always produces the
- * same bytes.
+ *
+ * Stateless with respect to the {@see App} model - it never mutates it -
+ * but NOT a pure function: layout reads the process-global terminal size
+ * cache below, written via {@see Renderer::setSize()} when the framework
+ * reports a WindowSizeMsg. Same App + same cached size produces the same
+ * bytes; a concurrent setSize() changes the answer for every caller.
  */
 final class Renderer
 {
