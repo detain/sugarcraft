@@ -39,9 +39,11 @@ use SugarCraft\Metrics\Descriptor;
  * are not rendered (no `observe()` path exists for summary in this
  * library). This is consistent with the OpenTelemetry API shape.
  *
- * Atomicity: write to `<path>.tmp`, then `rename()` over `<path>`.
- * Concurrent writers serialise via `flock(LOCK_EX)` on the temp
- * file.
+ * Atomicity: each flush() writes its body to a unique per-writer temp
+ * file (`<path>.tmp.<pid>-<entropy>`), then `rename()`s it over `<path>`.
+ * Concurrent writers never share the staging file and readers never see
+ * a half-written body; simultaneous flushes resolve last-writer-wins,
+ * which is the textfile-collector contract.
  */
 final class PrometheusFileBackend implements Backend
 {
@@ -389,9 +391,17 @@ final class PrometheusFileBackend implements Backend
             }
         }
 
-        $tmp = $this->path . '.tmp';
+        // Unique per-writer temp name: two processes flushing the same path
+        // must never share the staging file. A shared `<path>.tmp` meant one
+        // writer's rename could steal the file mid-flight (or truncate the
+        // other's half-written body), and the loser then died on a spurious
+        // rename_failed(ENOENT). flock still guards the write phase of THIS
+        // staging file; rename(2) publishes atomically, so a reader only ever
+        // sees a complete body — last writer wins, which is exactly the
+        // textfile-collector contract.
+        $tmp = $this->path . '.tmp.' . uniqid((string) getmypid() . '-', true);
         $dir = dirname($tmp);
-        // E740: fopen() raises an E_WARNING *before* returning false when its
+        // fopen() raises an E_WARNING *before* returning false when its
         // parent cannot host the file (missing dir, parent is a file,
         // unwritable dir). The RuntimeException below is this door's documented
         // contract, so probe the parent first and only reach fopen() when
@@ -411,6 +421,9 @@ final class PrometheusFileBackend implements Backend
             fclose($fh);
         }
         if (@rename($tmp, $this->path) === false) {
+            if (is_file($tmp)) {
+                unlink($tmp); // the unique name would otherwise leak one file per failure
+            }
             throw new \RuntimeException(Lang::t('prom.rename_failed', ['tmp' => $tmp, 'dest' => $this->path]));
         }
     }

@@ -19,10 +19,20 @@ final class PrometheusFileBackendTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach ([$this->path, $this->path . '.tmp'] as $f) {
+        foreach ([$this->path] as $f) {
             if ($f !== '' && is_file($f)) {
                 unlink($f);
             }
+        }
+        // flush() stages into unique per-writer files `<path>.tmp.<pid>-...`;
+        // sweep them so a leak (or a test planted residue) cannot survive.
+        foreach (glob($this->path . '.tmp.*') ?: [] as $leaked) {
+            if (is_file($leaked)) {
+                unlink($leaked);
+            }
+        }
+        if (is_file($this->path . '.tmp')) {
+            unlink($this->path . '.tmp');
         }
     }
 
@@ -390,8 +400,8 @@ final class PrometheusFileBackendTest extends TestCase
         $b = new PrometheusFileBackend($path);
         $b->counter('x', 1);
 
-        // E740 turned this refusal silent: flush() rejects at the parent probe
-        // before fopen() can warn, so neither the explicit flush below nor the
+        // flush() refuses at the parent probe before fopen() can warn, so
+        // neither the explicit flush below nor the
         // destructor's implicit second flush emits a PHP diagnostic — the old
         // `@$b = null` suppression dance around the destructor is gone.
         $thrown = null;
@@ -408,7 +418,7 @@ final class PrometheusFileBackendTest extends TestCase
     }
 
     /**
-     * E740: both uncreatable-tmp shapes — parent dir missing AND parent is a
+     * Both uncreatable-tmp shapes — parent dir missing AND parent is a
      * regular file — must refuse through the RuntimeException contract WITHOUT
      * raising any PHP diagnostic. The file-as-parent shape (ENOTDIR) is the
      * hermetic always-fails mechanism: it fails for every uid including root,
@@ -418,7 +428,7 @@ final class PrometheusFileBackendTest extends TestCase
      */
     public function testCannotOpenTmpPathRefusesWithoutWarning(): void
     {
-        $dir = sys_get_temp_dir() . '/sugar-metrics-e740-' . uniqid();
+        $dir = sys_get_temp_dir() . '/sugar-metrics-tmpdoor-' . uniqid();
         mkdir($dir);
         $blocker = $dir . '/blocker';
         file_put_contents($blocker, '');
@@ -474,5 +484,77 @@ final class PrometheusFileBackendTest extends TestCase
         // But both sample lines should be present.
         $this->assertStringContainsString('described_metric 1', $content);
         $this->assertStringContainsString('described_metric{tag="v"} 2', $content);
+    }
+
+    /**
+     * Structural pin: flush() must stage into a per-writer UNIQUE temp file.
+     * A fixed shared name (`<path>.tmp`) lets one writer's rename steal the
+     * other's staging file, so the loser dies on a spurious
+     * rename_failed(ENOENT) — this pin reddens deterministically if the unique
+     * suffix is ever dropped, without relying on process interleavings.
+     */
+    public function testFlushStagesIntoAPerWriterUniqueTmpName(): void
+    {
+        $method = new \ReflectionMethod(PrometheusFileBackend::class, 'flush');
+        $lines = file((string) $method->getFileName());
+        self::assertIsArray($lines);
+        $body = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+
+        self::assertStringContainsString('.tmp.', $body, 'flush() must stage into a .tmp.<suffix> file');
+        self::assertStringContainsString('uniqid(', $body, 'the staging name must be unique per flush');
+        self::assertStringNotContainsString("\$this->path . '.tmp';", $body, 'a fixed shared staging name re-introduces the rename race');
+    }
+
+    /**
+     * End-to-end probe: two processes flushing the same path concurrently
+     * must both succeed (zero child failure, zero parent throws), publish a
+     * complete last-writer-wins snapshot, and leave no staging residue.
+     */
+    public function testConcurrentFlushesFromTwoProcessesPublishCleanly(): void
+    {
+        $childScript = __DIR__ . '/_fixtures/concurrent-flush-child.php';
+        self::assertFileExists($childScript);
+
+        $proc = proc_open(
+            [PHP_BINARY, $childScript, $this->path],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes
+        );
+        self::assertIsResource($proc);
+
+        $parent = new PrometheusFileBackend($this->path);
+        for ($i = 0; $i < 30; $i++) {
+            $parent->counter('parent_tally', 1.0, ['writer' => 'parent']);
+            $parent->flush(); // must never throw on the other process's staging traffic
+            usleep(2000);
+        }
+
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        self::assertSame(0, proc_close($proc), 'child flush loop failed: ' . $stderr);
+
+        $content = (string) file_get_contents($this->path);
+        self::assertNotSame('', $content);
+        foreach (explode("\n", $content) as $line) {
+            if ($line === '' || str_starts_with($line, '#')) {
+                continue;
+            }
+            self::assertMatchesRegularExpression(
+                '/^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^{}]*\})? [-+.eE0-9]+$/',
+                $line,
+                'published body must be a complete well-formed snapshot, not an interleaved write'
+            );
+        }
+        self::assertNotSame(
+            str_contains($content, 'parent_tally'),
+            str_contains($content, 'child_tally'),
+            'the final file must be one writer\'s complete snapshot (last-writer-wins), never a mix'
+        );
+
+        unset($parent);
+        foreach (glob($this->path . '.tmp.*') ?: [] as $leaked) {
+            self::fail('unique staging file leaked to disk: ' . $leaked);
+        }
     }
 }
