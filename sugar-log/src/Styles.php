@@ -16,16 +16,41 @@ final class Styles
     /** @var array<int, Style> keyed by Level->value */
     public array $levels = [];
 
-    /** @var array<string, Style> per-field key styling */
+    /**
+     * Per-field styling consulted by {@see \SugarCraft\Log\Formatter\TextFormatter}
+     * for the record parts named `time`, `level`, `prefix`, `caller`, `message`,
+     * plus the context pair conventions `key` (whole `k=v` by default) and
+     * `value` (switches pairs to split key/value styling).
+     *
+     * Envelope entries default to the identity (empty) style so default output
+     * stays byte-identical to the no-styles case; the fallback chain is
+     * `keys[<part>]` (when configured) → dedicated property below (`time` falls
+     * back to {@see self::$timestamp}) → raw bytes. Assign a real style to
+     * make it live.
+     *
+     * @var array<string, Style>
+     */
     public array $keys = [];
 
-    /** @var array<string, Style> */
+    /**
+     * Per-CONTEXT-key value styling: `$values['request_id']` overrides the
+     * global `keys['value']` for that one key. Empty by default.
+     *
+     * @var array<string|int, Style>
+     */
     public array $values = [];
 
     public Style $timestamp;
     public Style $prefix;
     public Style $caller;
     public Style $message;
+
+    /**
+     * When true, level labels are right-padded to {@see self::PAD_LENGTH}
+     * characters (see {@see self::padLevelText()}) for column-aligned output.
+     * Disabled by default so standard short labels keep their exact bytes.
+     */
+    public bool $padLevelText = false;
 
     private const PAD_LENGTH = 5;
 
@@ -34,7 +59,9 @@ final class Styles
 
     public function __construct()
     {
-        $this->timestamp = Style::new()->foreground(Color::ansi(8));
+        // Envelope styling is opt-in: every fallback defaults to the identity
+        // (empty) style so TextFormatter emits raw bytes until configured.
+        $this->timestamp = Style::new();
         $this->prefix = Style::new()->foreground(Color::ansi(5));
         $this->caller = Style::new()->foreground(Color::ansi(8));
         $this->message = Style::new();
@@ -49,16 +76,28 @@ final class Styles
             };
         }
 
-        // Per-field key styles (e.g., "time", "level", "msg", "caller")
-        $this->keys['time']    = Style::new()->foreground(Color::ansi(8));
-        $this->keys['level']   = Style::new()->foreground(Color::ansi(8));
-        $this->keys['prefix']  = Style::new()->foreground(Color::ansi(5));
-        $this->keys['caller']  = Style::new()->foreground(Color::ansi(8));
+        // Per-field key styles (e.g., "time", "level", "msg", "caller").
+        // Identity defaults keep previously-dead knobs honest: configuring one
+        // now actually changes output; leaving it untouched changes nothing.
+        $this->keys['time']    = Style::new();
+        $this->keys['level']   = Style::new();
+        $this->keys['prefix']  = Style::new();
+        $this->keys['caller']  = Style::new();
         $this->keys['message'] = Style::new();
         $this->keys['key']     = Style::new()->foreground(Color::ansi(8));
         $this->keys['value']  = Style::new();
     }
 
+    /**
+     * The process-wide shared Styles instance every Logger and TextFormatter
+     * uses unless given its own.
+     *
+     * WARNING — this object is MUTABLE and SHARED: `$log->styles()->keys['time']
+     * = ...` recolors time for EVERY logger in the process built on defaults.
+     * For per-logger styling, hand that logger a fresh instance instead:
+     * `$log->setStyles(new Styles())` or construct the formatter with
+     * `new TextFormatter(styles: new Styles())`.
+     */
     public static function default(): self
     {
         return self::$defaultInstance ??= new self();

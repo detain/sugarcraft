@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Log\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Log\Formatter\JsonFormatter;
 use SugarCraft\Log\Formatter\LogfmtFormatter;
 use SugarCraft\Log\Formatter\TextFormatter;
 use SugarCraft\Log\Level;
 use SugarCraft\Log\Logger;
 use SugarCraft\Log\Styles;
+use SugarCraft\Style\Style;
 
 /**
  * Tests for TextFormatter color output, value coercion, field merging,
@@ -340,5 +342,132 @@ final class TextFormatterTest extends TestCase
 
         $this->assertStringNotContainsString("\x1b", $line);
         $this->assertSame(1, \substr_count($line, "\n"));
+    }
+
+    // -------------------------------------------------------------------------
+    // [M7] Per-field envelope styles are live, identity defaults are not
+    // -------------------------------------------------------------------------
+
+    public function testConfiguredKeyStyleColorsItsEnvelopePart(): void
+    {
+        $styles = new Styles();
+        $styles->keys['time'] = Style::new()->foreground(Color::ansi(6));
+
+        $tf = new TextFormatter(true, null, false, true, $styles);
+        $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable('2026-01-01 12:00:00'), null, null);
+
+        // The documented README example: keys['time'] recolors the timestamp
+        // part. Pre-fix the knob was read by nothing and time stayed raw.
+        $this->assertStringContainsString("\x1b[36m2026/01/01 12:00:00", $line);
+    }
+
+    public function testEnvelopeKeyDefaultsStayIdentityRaw(): void
+    {
+        $tf = new TextFormatter(true, null, false, true, new Styles());
+        $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable('2026-01-01 12:00:00'), null, null);
+
+        // Default bytes: raw timestamp, colored level (levels map fallback),
+        // raw message. Over-coloring defaults would silently restyle every
+        // existing consumer.
+        $this->assertStringStartsWith('2026/01/01 12:00:00', $line);
+        $this->assertStringContainsString("\x1b[34mINF", $line);
+        $this->assertStringEndsWith("msg\n", $line);
+    }
+
+    public function testConfiguredMessageStyleColorsTheMessage(): void
+    {
+        $styles = new Styles();
+        $styles->keys['message'] = Style::new()->foreground(Color::ansi(2));
+
+        $tf = new TextFormatter(false, null, false, true, $styles);
+        $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, null);
+
+        $this->assertStringContainsString("\x1b[32mmsg", $line);
+    }
+
+    public function testMessagePropertyAppliesWhenKeyStaysIdentity(): void
+    {
+        $styles = new Styles();
+        $styles->message = Style::new()->foreground(Color::ansi(3));
+
+        $tf = new TextFormatter(false, null, false, true, $styles);
+        $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, null);
+
+        $this->assertStringContainsString("\x1b[33mmsg", $line);
+    }
+
+    public function testLevelKeyStyleOverridesThePerLevelMap(): void
+    {
+        $styles = new Styles();
+        $styles->keys['level'] = Style::new()->foreground(Color::ansi(6));
+
+        $tf = new TextFormatter(false, null, false, true, $styles);
+        $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, null);
+
+        // keys['level'] wins over levels[Info] (blue) for every label.
+        $this->assertStringContainsString("\x1b[36mINF", $line);
+        $this->assertStringNotContainsString("\x1b[34m", $line);
+    }
+
+    public function testPadLevelTextFlagAlignsLabels(): void
+    {
+        $styles = new Styles();
+        $styles->padLevelText = true;
+
+        // Colors off so the padding is inspectable in plain text.
+        $tf = new TextFormatter(false, null, false, false, $styles);
+        $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, null);
+
+        // 'INF' padded to 5, plus the part separator: 'INF' + '  ' + ' ' + 'msg'.
+        $this->assertStringStartsWith('INF   msg', $line);
+    }
+
+    public function testPadLevelTextOffByDefaultKeepsExactLabels(): void
+    {
+        $tf = new TextFormatter(false, null, false, false, new Styles());
+        $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, null);
+
+        $this->assertStringStartsWith('INF msg', $line);
+    }
+
+    // -------------------------------------------------------------------------
+    // [M7] Value styling: global keys['value'] and per-context $values
+    // -------------------------------------------------------------------------
+
+    public function testValueStyleSplitsKeyAndValueRendering(): void
+    {
+        $styles = new Styles();
+        $styles->keys['value'] = Style::new()->foreground(Color::ansi(2));
+
+        $tf = new TextFormatter(false, null, false, true, $styles);
+        $line = $tf->format(Level::Info, 'msg', ['k' => 'v'], new \DateTimeImmutable(), null, null);
+
+        // Split form: value wrapped on its own (green on 'v'), not swallowed
+        // into the gray whole-pair render; the '=' rides the key's reset.
+        $this->assertStringContainsString("\x1b[32mv", $line);
+        $this->assertStringContainsString("\x1b[90mk\x1b[0m=", $line);
+    }
+
+    public function testPerContextKeyValueStyleOverridesTheGlobalValueStyle(): void
+    {
+        $styles = new Styles();
+        $styles->keys['value'] = Style::new()->foreground(Color::ansi(2));
+        $styles->values['secret'] = Style::new()->foreground(Color::ansi(5));
+
+        $tf = new TextFormatter(false, null, false, true, $styles);
+        $line = $tf->format(Level::Info, 'msg', ['secret' => 'top', 'other' => 'v'], new \DateTimeImmutable(), null, null);
+
+        $this->assertStringContainsString("\x1b[35mtop", $line);
+        $this->assertStringContainsString("\x1b[32mv", $line);
+    }
+
+    public function testWholePairStylingIsTheNoValueStyleDefault(): void
+    {
+        // Without a value style the documented gray key style still wraps the
+        // full k=v token (byte-compatible with pre-M7 output).
+        $tf = new TextFormatter(false, null, false, true, new Styles());
+        $line = $tf->format(Level::Info, 'msg', ['k' => 'v'], new \DateTimeImmutable(), null, null);
+
+        $this->assertStringContainsString("\x1b[90mk=v", $line);
     }
 }
