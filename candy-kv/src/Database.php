@@ -251,6 +251,10 @@ final class Database
         $stmt->execute();
         $stmt->close();
 
+        // Read-back is deliberate (docs-fix-1023 NIT): returning a locally
+        // built Entry would duplicate the row-parsing contract and could
+        // hand the caller a value no reader can ever observe. One extra
+        // SELECT keeps writer and reader views provably identical.
         return $this->get($key) ?? throw new \RuntimeException(Lang::t('database.entry_unreadable'));
     }
 
