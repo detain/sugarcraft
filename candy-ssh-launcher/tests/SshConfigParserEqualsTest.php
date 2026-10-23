@@ -166,6 +166,45 @@ final class SshConfigParserEqualsTest extends TestCase
         self::assertSame(['dup1', 'dup2'], array_keys($byName));
     }
 
+    public function testRepeatedPatternAcrossSeparateBlocksMintsOneEndpoint(): void
+    {
+        // WELD-G cure 1 (docs-fix-1023): README promises "a repeated Host
+        // pattern reuses its block instead of duplicating endpoints". The
+        // collapse is BLOCK-level: a second, separate `Host web1` block
+        // adds its options to the first endpoint (first-obtained-wins via
+        // resolveOptions) but never a second entry — and the first block's
+        // position/order is kept.
+        $raw = implode("\n", [
+            'Host web1',
+            '  User alice',
+            'Host other',
+            '  User bob',
+            'Host web1',
+            '  User carol',
+            '  Port 2222',
+        ]);
+
+        $endpoints = (new SshConfigParser())->parse($raw);
+
+        self::assertSame(['web1', 'other'], array_map(fn(Endpoint $e) => $e->name, $endpoints));
+        self::assertSame('alice', $endpoints[0]->user, 'first-obtained-wins across blocks');
+        self::assertSame(2222, $endpoints[0]->port, 'later block contributes unseen keywords');
+    }
+
+    public function testDoubleEqualsSeparatorKeepsLeadingEqualsInValue(): void
+    {
+        // WELD-G cure 2 (docs-fix-1023): the KEYWORD_PATTERN leniency
+        // pinned as intentional-permissive — `User == bob` consumes the
+        // first `=` as the separator and stores the verbatim `= bob`.
+        // OpenSSH errors on this line; we accept and let ssh refuse the
+        // name at connect time (see the class docblock note).
+        $byName = self::byName((new SshConfigParser())->parse(
+            "Host len\n  User == bob\n"
+        ));
+
+        self::assertSame('= bob', $byName['len']->user);
+    }
+
     public function testPatternMatchingIsLiteralNotGlobLike(): void
     {
         // Honest-subset documentation (M3/C3): OpenSSH would cross-apply a

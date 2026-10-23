@@ -46,6 +46,15 @@ final class SshConfigParser
      * block's hosts. (2026-10-23, ssh_config(5) "ARGUMENTS": equals form is
      * legal for every keyword, Host included; verified against OpenSSH 9.x
      * `ssh -G`.)
+     *
+     * INTENTIONALLY PERMISSIVE edge, kept by design: a doubled separator
+     * (`User == bob`) still matches — the first `=` is consumed as the
+     * separator and `= bob` becomes the value, so the endpoint carries
+     * user `= bob`. OpenSSH would reject that config; we accept it rather
+     * than guess intent, and the failure surfaces late but LOUDLY at
+     * connect time when ssh refuses the name. Refusing it here instead
+     * would mean a new hard-error message in all 16 locales at once
+     * (LocaleParityTest) — deliberately not taken.
      */
     private const KEYWORD_PATTERN = '/^(\w+)(?:\s*=\s*|\s+)(.*)$/';
 
@@ -88,9 +97,9 @@ final class SshConfigParser
                     continue;
                 }
                 // Split multi-pattern Host lines (e.g. "Host a b c") into
-                // individual patterns, preserving left-to-right order and
-                // collapsing repeats — a pattern listed twice must not
-                // mint the same endpoint twice.
+                // individual patterns, preserving left-to-right order.
+                // Repeats — within one header line or across separate
+                // blocks — collapse to a single endpoint in buildEndpoints.
                 $patterns = $this->uniquePatterns(
                     preg_split('/\s+/', $argument) ?: []
                 );
@@ -153,6 +162,7 @@ final class SshConfigParser
     private function buildEndpoints(): array
     {
         $endpoints = [];
+        $minted = [];
         foreach ($this->blocks as $block) {
             foreach ($block['patterns'] as $pattern) {
                 if ($pattern === '*') {
@@ -160,6 +170,15 @@ final class SshConfigParser
                     // it only contributes options (see resolveOptions).
                     continue;
                 }
+                if (isset($minted[$pattern])) {
+                    // BLOCK-level collapse (README "a repeated Host pattern
+                    // reuses its block"): the same pattern in a second,
+                    // separate Host block does not mint a second entry —
+                    // resolveOptions already merged both blocks under
+                    // first-obtained-wins when the first one was minted.
+                    continue;
+                }
+                $minted[$pattern] = true;
                 $endpoints[] = $this->makeEndpoint($pattern, $this->resolveOptions($pattern));
             }
         }
