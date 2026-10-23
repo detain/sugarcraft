@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Mail;
 
 use SugarCraft\Async\CancellationToken;
-use SugarCraft\Mail\Lang;
 
 /**
  * Sends email via the Resend REST API.
@@ -31,6 +30,12 @@ final class ResendTransport implements Transport
     {
         if ($token !== null && $token->isCancelled()) {
             throw new \RuntimeException(Lang::t('resend.send_cancelled'));
+        }
+
+        if (!\function_exists('curl_init')) {
+            // Fail loud with a named remedy instead of an undefined-function
+            // Error mid-send (ext-curl is a suggested, not required, extension).
+            throw new \RuntimeException(Lang::t('resend.curl_missing'));
         }
 
         $payload = $this->buildPayload($email);
@@ -59,6 +64,17 @@ final class ResendTransport implements Transport
     public function name(): string
     {
         return 'resend';
+    }
+
+    /**
+     * Mask the API key so var_dump()/print_r()/reflection-based logging never
+     * exposes the credential (parity with SmtpTransport's password mask).
+     */
+    public function __debugInfo(): array
+    {
+        return [
+            'apiKey' => $this->apiKey === '' ? '' : '****',
+        ];
     }
 
     /**
