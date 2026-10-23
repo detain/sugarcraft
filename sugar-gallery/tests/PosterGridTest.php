@@ -485,4 +485,43 @@ final class PosterGridTest extends TestCase
         $refetched = $evicted->withItems([0 => new PosterCard('0', 'Zero', 'https://cdn/0.png')]);
         self::assertSame([0], $refetched->indicesNeedingPoster(), 'the poster was evicted with the card, so it is pending again');
     }
+
+    public function testAnEmptyGridRendersNothing(): void
+    {
+        // Documented law (docs-review-1023 m4): total() === 0 paints NO
+        // skeleton frame — render() returns '' and the owner draws its own
+        // empty-state.
+        $g = PosterGrid::new(16, 9)->withViewport(80, 24);
+        self::assertSame('', $g->render());
+        self::assertSame('', $g->reset(0)->render(focused: true, zones: null));
+    }
+
+    public function testRightAndLeftWalkByCellAcrossRowBoundaries(): void
+    {
+        // The README edge truth (docs-review-1017 m1): ← → move by ONE CELL
+        // and therefore wrap onto the next/previous row at the row edges —
+        // they are index steps, not within-row clamps.
+        $g = PosterGrid::new(10, 4, 0, 0)->withViewport(20, 24)->reset(4);
+        self::assertSame(2, $g->columns());
+
+        $walk = [];
+        foreach ([1, 1, 1] as $i) {
+            $g = $g->right();
+            $walk[] = $g->cursorIndex();
+        }
+        self::assertSame([1, 2, 3], $walk, 'right() steps the index, crossing rows');
+
+        $g = $g->right();
+        self::assertSame(3, $g->cursorIndex(), 'right() clamps at the last item');
+
+        $back = [];
+        foreach ([1, 1, 1] as $i) {
+            $g = $g->left();
+            $back[] = $g->cursorIndex();
+        }
+        self::assertSame([2, 1, 0], $back);
+
+        $g = $g->left();
+        self::assertSame(0, $g->cursorIndex(), 'left() clamps at the first item');
+    }
 }

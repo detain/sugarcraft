@@ -1,12 +1,13 @@
 <?php
 
-declare(strict_types=1);
-
 /**
- * English translations for sugar-gallery.
+ * English translations for sugar-gallery — the source of truth for the
+ * key set every locale must carry (pinned by tests/LocaleParityTest.php).
  *
- * Mirrors charmbracelet/gum's i18n entry points.
+ * @return array<string, string>
  */
+
+declare(strict_types=1);
 
 return [
     'rail.empty' => '(no items)',

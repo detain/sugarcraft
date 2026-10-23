@@ -1,177 +1,60 @@
 # Audit: sugar-gallery
 
-**Library:** SugarCraft/sugar-gallery  
-**Date:** 2026-06-30  
+**Library:** SugarCraft/sugar-gallery
+**Date:** 2026-06-30 — **RETRACTED 2026-10-23 (docs-fix-1023 / dfix/gallery), see Erratum**
 
 ---
 
-## Overview
-
-`sugar-gallery` is a port of `charmbracelet/bubbles/gallery` — an image gallery browser for terminals supporting various image formats via FFI and file system browsing.
-
----
-
-## 1. Issues (Bugs, Edge Cases, Error Handling)
-
-### Finding 1 — Image loading doesn't validate file type
-
-**Severity:** HIGH  
-**Location:** `src/Gallery.php:78-85`
-
-The loader opens any file and attempts to decode it as an image. No magic-bytes validation. Passing a non-image file could cause the decoder to throw or behave unexpectedly.
-
-**Recommendation:** Check magic bytes before attempting decode.
-
----
-
-### Finding 2 — Directory traversal in path navigation
-
-**Severity:** HIGH  
-**Location:** `src/Gallery.php:95`
-
-`chdir($path)` is used to navigate directories. No sandboxing. If a user navigates to `/etc` or similar, subsequent file operations could be restricted or expose system files.
-
-**Recommendation:** Validate that `$path` is within an allowed root directory.
-
----
-
-### Finding 3 — FFI image decoder doesn't validate dimensions
-
-**Severity:** MEDIUM  
-**Location:** `src/FFIDecoder.php:45`
-
-If image dimensions are 0×0 or extremely large, no validation is performed. Large images could exhaust memory.
-
-**Recommendation:** Validate width/height before allocating decode buffer.
-
----
-
-### Finding 4 — Missing format support fallback
-
-**Severity:** MEDIUM  
-**Location:** `src/Gallery.php`
-
-If a format is unsupported, the error is thrown but not caught. The gallery crashes instead of showing an error message and continuing.
-
-**Recommendation:** Catch format errors, show user-friendly message, skip to next image.
-
----
-
-## 2. Performance Problems
-
-### Finding 5 — Full directory scan on every navigation
-
-**Severity:** MEDIUM  
-**Location:** `src/Gallery.php`
-
-Every `chdir()` triggers a full filesystem scan of the new directory. For directories with many files, this causes perceptible lag.
-
-**Recommendation:** Cache directory listings, invalidate on file system events.
-
----
-
-### Finding 6 — No image thumbnail caching
-
-**Severity:** MEDIUM  
-**Location:** `src/FFIDecoder.php`
-
-Same image revisited requires full decode. No thumbnails cached in memory.
-
----
-
-## 3. Memory Leaks
-
-### Finding 7 — FFI buffer not explicitly freed
-
-**Severity:** HIGH  
-**Location:** `src/FFIDecoder.php`
-
-FFI C allocations must be explicitly `free()`'d. PHP GC can't manage C memory.
-
-**Recommendation:** Wrap FFI allocations in explicit try/finally with free.
-
----
-
-### Finding 8 — Image buffer held during viewing
-
-**Severity:** MEDIUM  
-**Location:** `src/Gallery.php`
-
-Full decoded image held in memory while viewing. Large images could exhaust RAM.
-
----
-
-## 4. Security
-
-### Finding 9 — No security concerns beyond Finding 1 & 2
-
-**Severity:** MEDIUM  
-
-Path traversal risk (Finding 2) is the main concern.
-
----
-
-## 5. Complexity
-
-### Finding 10 — FFIDecoder abstraction is thin
-
-**Severity:** LOW  
-**Location:** `src/FFIDecoder.php`
-
-The FFI wrapper is a thin passthrough. Consider whether abstraction adds value.
-
----
-
-## 6. Missing Features / Incomplete Ports
-
-### Finding 11 — No animated image support (GIF)
-
-**Severity:** MEDIUM  
-**Location:** `src/FFIDecoder.php`
-
-Only first frame decoded. Animated GIFs don't animate.
-
----
-
-### Finding 12 — No metadata display (EXIF, dimensions, size)
-
-**Severity:** LOW  
-**Location:** `src/Gallery.php`
-
-Gallery shows filename but not dimensions/file size/date.
-
----
-
-## 7. PHP 8.3/8.4 Compatibility
-
-### Finding 13 — FFI requires PHP 8.4+ on Windows
-
-**Severity:** MEDIUM  
-**Location:** `composer.json`
-
-FFI only available reliably on PHP 8.4+ for Windows. Library should note this constraint.
-
----
-
-## 8. Async/ReactPHP Improvements
-
-### Finding 14 — Image decoding is blocking
-
-**Severity:** MEDIUM  
-**Location:** `src/FFIDecoder.php`
-
-Decoding a large image blocks the event loop. For large images, this causes UI freeze.
-
-**Recommendation:** Decode in background process, stream result back.
-
----
-
-## Summary
-
-| Severity | Count | Key Issues |
-|----------|-------|------------|
-| HIGH | 3 | No file type validation, path traversal, FFI buffer not freed |
-| MEDIUM | 6 | Missing format fallback, full dir scan, no thumbnail cache, large image memory, animated GIF not supported, PHP 8.4 FFI, blocking decode |
-| LOW | 2 | Thin FFI abstraction, no metadata display |
-
-**Total: 15 findings**
+## Erratum (2026-10-23)
+
+The audit below was written against a library that **does not exist**. Its
+cited files — `src/Gallery.php`, `src/FFIDecoder.php` — have never existed in
+this repo at any commit, and its premise that sugar-gallery "is a port of
+`charmbracelet/bubbles/gallery`" is false: `docs/MATCHUPS.md` records sugar-gallery
+as an **original SugarCraft component** (no 1:1 Go counterpart), and upstream has
+no `gallery` bubble at all. Every "Finding" (1–15: magic-byte validation,
+`chdir()` traversal, FFI buffer frees, blocking decode, …) describes phantom code
+and is **withdrawn in full**. `findings/plan_sugar-gallery.md` already recorded
+this contradiction ("Gallery.php and FFIDecoder.php do not exist"); this file was
+the stale half.
+
+## What the library actually is
+
+Three widgets plus one guard, all immutable, all renderer-agnostic:
+
+- `src/PosterGrid.php` — 2-D virtualized, sparse, owner-paged poster grid
+  (absolute-indexed cards, `visibleRange()`/`needsFetch()` need-range pattern).
+- `src/Rail.php` — horizontal carousel (browse rows).
+- `src/PosterCard.php` — one tile (plain/styled title, inline ANSI poster or an
+  overlay image + marker id, progress).
+- `src/AnsiGuard.php` — the SGR-only trust boundary for verbatim-echoed bytes.
+- `src/Lang.php` + `lang/*.php` — i18n facade, 16-locale family (one key: `rail.empty`).
+
+There is no file-system browsing, no `chdir()`, and no FFI anywhere in the lib.
+
+## Live findings ledger — docs-review-1023 (2026-10-23, persona: gallery review)
+
+Verdict 0 BLOCKER / 5 MAJOR / 11 minor / 4 nit — all fixed by the `dfix/gallery`
+lane (this commit); pins named per row.
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| M1 | README `ImageOverlay::MAX_IMAGES` cited as 6400 | fixed — 6398 (const truth, sugar-core) |
+| M2 | `lang/en.php` dormant phantom: zero `Lang::t` callers | **wired** — `Rail` empty state via new `src/Lang.php` + 16-locale backfill + `tests/LocaleParityTest.php` |
+| M3 | en.php docblock claimed "charmbracelet/gum i18n entry points" | fixed — truthful origin notes |
+| M4 | `Rail` heading emitted `title` verbatim (terminal injection through the network pipeline) | **fixed** — `AnsiGuard::stripControls()` on the heading + per-line rail-width clamp; adversarial pins in `tests/RailGuardTest.php` |
+| M5 | Poster bytes (`withPoster`) enter the frame ungarded | **fixed** — documented caller-law + new coercing `withSafePoster()` (per-line SGR sweep); pins in `tests/PosterCardPosterSweepTest.php` |
+| m1 | README "← → move within a row" false at row edges | fixed (doc truth + `tests/PosterGridTest.php` walk pin) |
+| m2 | `anyInBounds` example annotated with the string id, not the `Zone` object | fixed |
+| m3 | Rail head unbounded to rail width | fixed with M4 (`fitHead()` + pins) |
+| m4 | empty grid `render()` returning `''` undocumented | fixed (README + docblock + pin) |
+| m5 | API doc gap (nav set, accessors, geometry clamps, caches) | fixed — README "API surface" section |
+| m6 | `PosterCard` five hand-rolled positional `new self(...)` carriers (state-drop hazard) | fixed — one `carrying()` choke via `get_object_vars` spread; per-field + census pins in `tests/PosterCardCarriersTest.php` |
+| m7 | zero in-repo consumers (informational) | noted — lib ships examples + tests only; first consumer expected in a media app (candy-phlix era); no action |
+| m8 | Rail `moveCursor` docblock advice non-actionable | fixed — construct-with-`$scroll` guidance (docblock + README) |
+| m9 | stale findings file auditing phantom files (this file) | fixed — erratum + ledger above |
+| m10 | Rail/PosterGrid `focused` asymmetry undocumented | fixed — README API section states it + rationale |
+| nit×4 | dead local in `PosterGrid::new()`; twin scroll-clamp math (Rail); README `ESC [ 1 m` spacing; GD note on mosaic example | all fixed (inline removal; shared `windowedScroll()`; reworded; prereq note + composer `suggest` block) |
+
+**Consumer-surface note (accessibility persona):** the chrome glyphs `●` `○` `▸`
+`░` `▓` are East-Asian-Ambiguous; documented in README, unchanged by design.

@@ -5,11 +5,24 @@ declare(strict_types=1);
 namespace SugarCraft\Gallery\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Gallery\PosterCard;
 use SugarCraft\Gallery\Rail;
 
 final class RailTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        // render() consults the T registry for the empty-state line; pin the
+        // locale so the '(no items)' assertions below do not follow the
+        // runner's LANG environment.
+        T::setLocale('en');
+    }
+
+    protected function tearDown(): void
+    {
+        T::reset();
+    }
     /** @return list<PosterCard> */
     private function cards(int $n): array
     {

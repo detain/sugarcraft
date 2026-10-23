@@ -36,6 +36,10 @@
         "phpunit/phpunit": "^10.5",
         "sugarcraft/sugar-image": "dev-master"
     },
+    "suggest": {
+        "sugarcraft/sugar-image": "Render poster bytes for the pipeline example and its integration tests (dev-only; the widgets never depend on it)",
+        "ext-gd": "Decode raster sources when producing posters through sugar-image"
+    },
     "autoload": {
         "psr-4": {
             "SugarCraft\\Gallery\\": "src/"

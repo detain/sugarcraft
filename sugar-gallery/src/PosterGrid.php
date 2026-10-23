@@ -69,9 +69,7 @@ final class PosterGrid
      */
     public static function new(int $cardWidth, int $posterHeight, int $hSpacing = 2, int $vSpacing = 1): self
     {
-        $grid = new self(max(4, $cardWidth), max(1, $posterHeight), max(0, $hSpacing), max(0, $vSpacing));
-
-        return $grid;
+        return new self(max(4, $cardWidth), max(1, $posterHeight), max(0, $hSpacing), max(0, $vSpacing));
     }
 
     // ---- result set ----------------------------------------------------
@@ -448,6 +446,10 @@ final class PosterGrid
      * $focused (so an unfocused grid shows no cursor). When a {@see ZoneManager}
      * is given, each real cell is wrapped as zone id `cell:<index>` for mouse
      * hit-testing — the caller scans the assembled frame and resolves clicks.
+     *
+     * @return string the framed rows, or `''` when the grid is empty
+     *                (`total() === 0` — nothing is reserved, nothing is drawn;
+     *                the owner paints its own empty-state).
      */
     public function render(bool $focused = true, ?ZoneManager $zones = null): string
     {

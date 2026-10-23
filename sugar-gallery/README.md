@@ -33,12 +33,29 @@ $grid = PosterGrid::new(cardWidth: 16, posterHeight: 9)
     ->reset(total: 5000);          // a fresh result set
 
 // Keyboard nav (map your keys to these — all clamp + keep the cursor on screen):
-$grid = $grid->right();            // ← → move within a row
+$grid = $grid->right();            // ← → step one cell (crosses row edges)
 $grid = $grid->down();             // ↑ ↓ move between rows
 $grid = $grid->pageDown();         // PgUp / PgDn
 $grid = $grid->home()->end();      // Home / End
 $grid = $grid->moveTo(2600);       // jump (e.g. an A–Z letter offset)
 ```
+
+The lib owns **no** keys — these methods are yours to map however you like:
+
+```php
+return match ($key) {
+    '↓' => $grid->down(),
+    'J' => $grid->down(),      // vim-style, if that's your scheme
+    default => $grid,
+};
+```
+
+It also owns **no colour**: every frame ships unstyled text, and any SGR you see
+in output rode in on *your* card bytes (`withPoster()` / `withStyledTitle()`).
+Theming is entirely yours. (One heads-up for narrow layouts: the chrome glyphs
+`●` `○` `▸` and the skeleton `░` are East-Asian-Ambiguous width — most modern
+terminals render them single-cell, but a user's ambiguous-width setting moves
+them, no font install required.)
 
 ### Owner-driven paging (the `need-range` pattern)
 
@@ -103,13 +120,17 @@ just scrolled away.
 echo $grid->render(focused: true);     // cursor shown only when the grid is focused
 ```
 
+An empty grid (`isEmpty()`) renders `''` — zero rows, not a blank frame — so the
+owner can tell "nothing here yet" from "framed empty cells" and paint its own
+empty-state in its own chrome.
+
 Pass a [sugar-mouse](https://github.com/sugarcraft/sugar-mouse) `Manager` to make
 cells mouse-clickable — each is wrapped as zone id `cell:<index>`:
 
 ```php
 $frame = $grid->render(true, $zones);
 $clean = $zones->scan($frame);                 // strip markers, record bounds
-$zone  = $zones->anyInBounds($mouseMsg);       // → "cell:42"
+$zone  = $zones->anyInBounds($mouseMsg);       // → Zone|null — read $zone->id ("cell:42")
 ```
 
 ## Rail — horizontal carousel
@@ -121,6 +142,13 @@ $rail = new Rail('Continue Watching', $cards);
 $rail = $rail->moveCursor(+1, Rail::perRow($railWidth, $cardWidth));
 echo $rail->render($railWidth, focused: true, cardWidth: 16, posterHeight: 9);
 ```
+
+The heading rides the **same** title guard as a card — `AnsiGuard::stripControls()`
+plus a rail-width clamp — and the empty state is localised
+(`Lang::t('rail.empty')`, see [Internationalisation](#internationalisation)).
+`moveCursor()` takes a *delta*; to restore an arbitrary `(scroll, cursor)` pair
+(e.g. returning to a remembered position) construct via `new Rail(...)` with the
+fourth argument.
 
 ## PosterCard — one tile
 
@@ -164,13 +192,13 @@ Pixel-graphics protocols (`sixel`, `kitty`, `iterm2`) are not cell text — a
 ```php
 $placed = $layer->placeTracked($bytes, $cardWidth, $posterHeight);   // sixel / kitty / iterm2
 
-if ($placed->imageId !== null) {                 // null once the 6400-marker window is full
+if ($placed->imageId !== null) {                 // null once the 6398-marker window is full
     $grid = $grid->withItem($index, $card->withImage($bytes, $placed->imageId));
 }
 ```
 
 `imageId` is nullable for exactly that reason: the overlay addresses images with
-private-use-area cells, and there are only 6400 of them (`ImageOverlay::MAX_IMAGES`),
+private-use-area cells, and there are only 6398 of them (`ImageOverlay::MAX_IMAGES`),
 so an exhausted layer leaves the cell as the skeleton instead of painting the wrong art.
 
 Cache the *rendered* bytes, not the source image — a render is expensive, a decode
@@ -180,20 +208,27 @@ less so, and the cache key must change when the terminal's protocol does:
 Run the whole thing yourself (GD only, no network):
 
 ```sh
-php examples/poster-grid-mosaic.php
+composer install          # the mosaic example needs the dev-only sugar-image dep…
+php examples/poster-grid-mosaic.php   # …plus ext-gd, both pulled by the lib's own install
 ```
+
+`examples/poster-grid.php` by contrast is pure PHP — no image stack, no extensions.
 
 ### Title trust boundary
 
 The plain `title` is treated as **untrusted** (it is typically DB-sourced):
-`render()` runs it through `AnsiGuard::stripControls()` before drawing it, which
-removes every control byte and every escape sequence — C0 (including `BEL`, `TAB`,
-CR/LF, and the `ESC` that introduces a cursor-move or clear-screen), DEL, the 8-bit
-C1 controls in both wire forms, and any SGR styling a plain title has no business
-carrying. Opaque bytes that are simply not valid UTF-8 stay put — they
-are mojibake, not controls, and one of them must never be able to disable the
-strip — with the single exception of a byte in the 8-bit C1 band that no
-well-formed sequence claimed: a terminal reads that one as a control, so it goes.
+`PosterCard::render()` runs it through `AnsiGuard::stripControls()` before
+drawing it — and since docs-review-1023 **so does the `Rail` heading** —
+removing every control byte and every escape sequence: C0 (including `BEL`,
+`TAB`, CR/LF, and the `ESC` that introduces a cursor-move or clear-screen),
+DEL, the 8-bit C1 controls in both wire forms, and any SGR styling a plain
+title has no business carrying. Both rail header lines (title and empty
+state) are additionally clamped to the rail width with an ellipsis, so no
+title — and no locale — can overflow it. Opaque bytes that are simply not
+valid UTF-8 stay put — they are mojibake, not controls, and one of them must
+never be able to disable the strip — with the single exception of a byte in
+the 8-bit C1 band that no well-formed sequence claimed: a terminal reads
+that one as a control, so it goes.
 
 `withStyledTitle($ansi)` is the **escape hatch** for a *pre-styled* title (e.g. a
 [sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy) match highlight). It is
@@ -204,10 +239,10 @@ already-safe text, **never** raw untrusted / DB-sourced bytes. When the source
 is untrusted, leave the styled title unset and rely on the sanitised plain
 `title`.
 
-Two opt-ins turn that documented contract into an enforced one. Both admit **SGR
+Three opt-ins turn that documented contract into an enforced one. All admit **SGR
 styling only** — `ESC [` followed by nothing but digits, `;` and `:` until a final
-`m`; a private (`ESC [ ?…m`) or intermediate-byte (`ESC [ 1 m`) SGR is *not*
-accepted — every other escape form (cursor movement,
+`m`; a private (`ESC [ ?…m`) or intermediate-byte SGR (a `… [` with a space before
+the final `m`) is *not* accepted — every other escape form (cursor movement,
 erase, OSC / DCS / APC payloads, bare C0 controls, an 8-bit C1 control written
 either as the raw byte or as the UTF-8 encoding of U+0080–U+009F, a truncated
 sequence) counts as unsafe, per `AnsiGuard`:
@@ -219,11 +254,69 @@ PosterCard::assertSafeAnsi($highlight);           // same guard, standalone
 
 // Coerce instead: keep the colour, drop anything else
 $card = $card->withSafeStyledTitle($maybeHostile);
+$card = $card->withSafePoster($bytesFromYourCache);   // same sweep for poster bytes
 ```
 
 `AnsiGuard::isSafe()` / `::sanitize()` are public if you want to check or clean
 before you build the highlight. Nothing about the default path changed —
 `withStyledTitle($ansi)` is still verbatim, so existing callers are untouched.
+
+**Poster bytes carry the same contract as styled titles.** `withPoster($ansi)`
+is emitted verbatim by design (cell-text art is SGR + block glyphs, and a strip
+would eat the art); whoever produced those bytes owns their safety — generate
+them yourself (e.g. a `Mosaic` render of an image you chose). If your poster can
+come from somewhere you do not control, `withSafePoster($ansi)` applies the SGR
+whitelist sweep row-by-row: colours and block glyphs stay byte-identical, every
+cursor-move / OSC / DCS / control sequence goes. `withImage($bytes, $id)` overlay
+bytes never enter the text frame at all — the card carries only the marker id —
+but they travel their own protocol's trust boundary on the way to the screen.
+
+## Internationalisation
+
+`Lang::t()` resolves through `src/Lang.php` (namespace `gallery`) over the 16-locale
+family in `lang/` — ar · cs · de · en · es · fr · it · ja · ko · nl · pl · pt · pt-br ·
+ru · tr · zh-cn — with `en.php` as the source of truth. Exactly one key lives there
+today: `rail.empty`, the Rail carousel's empty-state string; everything else the
+widgets draw is geometry, not prose. `tests/LocaleParityTest.php` pins the file
+family, the key set, and the ordering against `en.php`, so a new key must land in
+all 16 files (or nowhere) to stay green. Locale selection follows the standard
+`LC_ALL` → `LC_MESSAGES` → `LANG` chain of `sugar-core`'s `T::detect()`.
+
+## API surface
+
+Beyond the workflow above, the public surface is small and mostly self-evident:
+
+**PosterGrid** — navigation `left()` / `right()` (one cell, crossing row edges,
+clamped at both ends), `up()` / `down()` (one row; `down()` steps onto the last
+item on a partial bottom row), `pageUp()` / `pageDown()` (one viewport:
+`columns() × visibleRows()`), `home()` / `end()`, `moveTo($index)` (clamped).
+State: `total()`, `loadedCount()` (sparse map size), `cursorIndex()`,
+`cursorRow()`, `scrollRow()`, `item($i)`, `cursorCard()`, `isEmpty()`.
+Geometry: `columns()` = `max(1, intdiv(cols + hSpacing, cardWidth + hSpacing))`,
+`visibleRows()`, `totalRows()`, `cellHeight()` (= `posterHeight + 2`).
+Result set: `reset($total)`, `withTotal($total)` (keeps cached cards, clamps the
+cursor), `withItem()` / `withItems()`, `withoutItemsOutside([$a, $b])`,
+`withViewport($cols, $rows)`.
+Window: `visibleRange($overscan)`, `visibleCards($overscan)`,
+`needsFetch($lastFetched, $overscan)`, `indicesNeedingPoster(...)` — all documented
+above.
+
+**Rail** — `withCards()` / `withCard()` / `withTitle()` / `withCursor()`,
+`moveCursor($delta, $perRow)` (scrolls minimally to keep the cursor in view),
+`focusedCard()`, `isEmpty()`, and the static layout helper
+`Rail::perRow($railWidth, $cardWidth, $spacing)` (how many cards fit a row). `Rail::render()` takes `focused:` as a
+**required** argument — the asymmetry against `PosterGrid::render(bool $focused =
+true)` is deliberate (a rail in a media browser is usually *not* the focused pane
+and defaulting it lit up the wrong row in early apps).
+
+**PosterCard** — plus two cache levers: `PosterCard::clearFitCache()` and
+`PosterGrid::clearBoxCache()` drop process-wide memos (self-bounding at
+`BOX_CACHE_CAP = 2048` with oldest-half eviction; clearing them returns an entry
+count and never changes a single rendered byte).
+
+Geometry is clamped at construction: `cardWidth ≥ 4`, `posterHeight ≥ 1`, both
+spacings `≥ 0` (and again inside `render()` — a card asked to render narrower than
+4 cells re-clamps silently rather than emitting a negative pad).
 
 ## License
 

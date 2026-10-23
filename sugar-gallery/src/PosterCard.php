@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Gallery;
 
+use InvalidArgumentException;
 use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\Util\Width;
 
@@ -14,7 +15,9 @@ use SugarCraft\Core\Util\Width;
  * Immutable and rendering-agnostic — the card holds *already-rendered* poster
  * bytes (produced however the app likes, e.g. sugar-image), so this widget
  * pulls in no image decoder. Attach the poster with {@see withPoster()} when an
- * async render resolves.
+ * async render resolves (bytes VERBATIM — the caller owns their safety) or
+ * {@see withSafePoster()} when it cannot (the guard sweeps every non-SGR
+ * control out per line).
  *
  * Title sizing is ANSI-aware (via sugar-core {@see Width}): an optional
  * pre-styled title (e.g. a fuzzy-highlighted one set with {@see withStyledTitle()})
@@ -68,9 +71,48 @@ final readonly class PosterCard
         return new self($id, $title, $posterUrl, $progress, $poster, $styledTitle, $posterImage, $imageId);
     }
 
+    /**
+     * Attach already-rendered poster bytes VERBATIM. The caller owns their
+     * safety — see the class docblock's trust-boundary law and
+     * {@see withSafePoster()} for the coercing half.
+     */
     public function withPoster(string $ansi): self
     {
-        return new self($this->id, $this->title, $this->posterUrl, $this->progress, $ansi, $this->styledTitle, $this->posterImage, $this->imageId);
+        return $this->carrying(['poster' => $ansi]);
+    }
+
+    /**
+     * Attach poster bytes after keeping only SGR styling and printable
+     * glyphs — the coercion half of the poster trust boundary, for bytes
+     * that arrived from somewhere the caller cannot vouch for (a cache, a
+     * server, a disk pipeline). {@see AnsiGuard::sanitize()} drops cursor
+     * moves, erases, and every OSC/DCS/APC payload (forged OSC-8 hyperlinks
+     * and stray `ESC` bytes alike); a poster rendered by e.g.
+     * `Mosaic::halfBlock()` from clean art is returned byte-identical,
+     * because half-block glyphs and true-color SGR are exactly what the
+     * guard admits.
+     *
+     * The sweep runs PER LINE: LF is a C0 control the guard drops with
+     * everything else unsafe, and a poster is inherently multi-line, so
+     * whole-string sanitising would collapse the art into one row. Sweeping
+     * each line keeps the row structure (any line ending normalises to
+     * `\n`, matching what {@see posterRows()} splits on anyway) while no
+     * line can smuggle a control sequence to the terminal.
+     *
+     * Like {@see withSafeStyledTitle()}, this guards the TEXT channel only.
+     * Private-use-area codepoints survive (they are printable glyphs to the
+     * guard — the same declared boundary candy-core's Sanitize keeps); an
+     * app that composes frames for a marker-consuming renderer sanitises the
+     * assembled frame at its own boundary, not here.
+     */
+    public function withSafePoster(string $ansi): self
+    {
+        $lines = preg_split('/\r\n|\r|\n/', $ansi) ?: [''];
+
+        return $this->carrying(['poster' => implode("\n", array_map(
+            static fn (string $line): string => AnsiGuard::sanitize($line),
+            $lines,
+        ))]);
     }
 
     /**
@@ -81,12 +123,12 @@ final readonly class PosterCard
      */
     public function withImage(string $bytes, int $id): self
     {
-        return new self($this->id, $this->title, $this->posterUrl, $this->progress, $this->poster, $this->styledTitle, $bytes, $id);
+        return $this->carrying(['posterImage' => $bytes, 'imageId' => $id]);
     }
 
     public function withProgress(?float $progress): self
     {
-        return new self($this->id, $this->title, $this->posterUrl, $progress, $this->poster, $this->styledTitle, $this->posterImage, $this->imageId);
+        return $this->carrying(['progress' => $progress]);
     }
 
     /**
@@ -126,7 +168,37 @@ final readonly class PosterCard
             self::assertSafeAnsi($ansi);
         }
 
-        return new self($this->id, $this->title, $this->posterUrl, $this->progress, $this->poster, $ansi, $this->posterImage, $this->imageId);
+        return $this->carrying(['styledTitle' => $ansi]);
+    }
+
+    /**
+     * The ONE carrier path every with*-mutator flows through: snapshot the
+     * whole current state, apply named overrides, rebuild via the
+     * constructor. A `readonly class` forbids writing to a clone, so state
+     * re-enters only through `new self(...)` — and routing that through a
+     * single choke point means a field can never be silently dropped the way
+     * five hand-rolled positional reconstructions could (docs-review-1023
+     * m6; the snapshot rides {@see get_object_vars()}, so a field added to
+     * the constructor flows through automatically and a typo in an override
+     * name fails loud).
+     *
+     * @param array<string, mixed> $overrides constructor parameter name => new value
+     *
+     * @throws InvalidArgumentException when an override names no constructor field
+     */
+    private function carrying(array $overrides): self
+    {
+        foreach (array_keys($overrides) as $name) {
+            if (!property_exists($this, (string) $name)) {
+                throw new InvalidArgumentException(sprintf(
+                    'PosterCard::carrying(): "%s" is not a constructor field of %s.',
+                    (string) $name,
+                    self::class,
+                ));
+            }
+        }
+
+        return new self(...array_merge(get_object_vars($this), $overrides));
     }
 
     /**
