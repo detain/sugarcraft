@@ -115,7 +115,7 @@ use SugarCraft\Mouse\Scanner;
 $bc = (new Breadcrumb())->withScanner(Scanner::new());
 
 $output = $bc->render($stack);
-// Each crumb is wrapped in a named zone marker: "crumb-0", "crumb-1", …
+// Each crumb is wrapped in a named zone marker keyed by stack position: "crumb-0", "crumb-1", …
 
 $bc->scan($output);
 $zone = $bc->hit($col, $row); // returns Zone for clicked crumb-N or null
