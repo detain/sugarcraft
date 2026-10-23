@@ -33,6 +33,21 @@ $autoloadCandidates = [
     __DIR__ . '/../../vendor/autoload.php',
 ];
 
+// A phar build stamps THIS file as the archive stub: under `php
+// candy-codeshot.phar` __FILE__ names the archive while \Phar::running(false)
+// answers '' (measured PHP 8.3 — a bare '/x.phar/entry' path fails is_file,
+// so the probe must be the 'phar://' stream over the real archive path);
+// when required from inside the archive, running() answers the path instead.
+// Either identity resolves the archive, and once found its bundled vendor/
+// becomes the ONLY candidate — a working-tree vendor beside a published
+// .phar must never outrank it. Outside an archive nothing changes.
+$archive = str_ends_with(__FILE__, '.phar')
+    ? 'phar://' . __FILE__
+    : (\Phar::running(false) !== '' ? 'phar://' . \Phar::running(false) : '');
+if ($archive !== '') {
+    $autoloadCandidates = [$archive . '/vendor/autoload.php'];
+}
+
 $autoloadFound = false;
 foreach ($autoloadCandidates as $auto) {
     if (is_file($auto)) {
@@ -53,7 +68,35 @@ use SugarCraft\CodeShot\Lang;
 use SugarCraft\CodeShot\LanguageDetector;
 use SugarCraft\CodeShot\PngRenderer;
 use SugarCraft\CodeShot\SvgRenderer;
+use SugarCraft\CodeShot\Support\Version;
 use SugarCraft\CodeShot\Theme;
+
+/**
+ * Real filesystem path of the running phar archive, or '' outside one. The
+ * bin file IS the archive stub, so both identities must be consulted: under
+ * `php candy-codeshot.phar` \Phar::running(false) answers '' while __FILE__
+ * names the archive (measured PHP 8.3); when required from inside, running()
+ * answers the path.
+ */
+function runningArchivePath(): string
+{
+    if (str_ends_with(__FILE__, '.phar')) {
+        return __FILE__;
+    }
+    $running = \Phar::running(false);
+
+    return $running !== '' ? $running : '';
+}
+
+/**
+ * Version the CLI prints: the archive's build stamp when running inside a
+ * phar (the DST-1 law — InstalledVersions lies under a frozen vendor/), else
+ * the compiled-in Version::CURRENT constant.
+ */
+function displayVersion(): string
+{
+    return Version::resolve(runningArchivePath(), Version::CURRENT);
+}
 
 /**
  * Resolve a filesystem path and require it to live inside the current working
@@ -208,6 +251,10 @@ while (($arg = array_shift($argv)) !== null) {
         case '--type':
             $language = candy_codeshot_flag_value($arg, array_shift($argv));
             break;
+        case '-v':
+        case '--version':
+            fwrite(STDOUT, 'candy-codeshot ' . displayVersion() . "\n");
+            exit(0);
         case '-h':
         case '--help':
             fwrite(STDOUT, Lang::t('cli.usage') . "\n");
