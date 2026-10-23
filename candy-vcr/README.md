@@ -15,7 +15,7 @@ equality via [sugar-vterm](../sugar-vterm/), with byte-equality fallback).
 
 - [Status](#status) · [Use cases](#use-cases) · [Install](#install)
 - [Cassette formats](#cassette-formats) — Jsonl / CompressedJsonl / Relative / Yaml / Asciinema
-- [PHP API](#cassette-format-jsonl) — `Cassette`, `Recorder`, `Player`, `Player::loadAny()`
+- [PHP API](#php-api) — `Cassette`, `Recorder`, `Player`, `Player::loadAny()`
 - [Assertion classes](#replay) — Byte / Screen / Contains / Regex
 - [Matcher classes](#matcher-classes--replay-side-flexibility) — Passthrough / Content / TimingTolerant
 - [Hook system](#hook-system) · [Migration system](#cassette-migration)
@@ -56,7 +56,7 @@ composer require sugarcraft/candy-vcr
 > structure.
 
 ```jsonl
-{"v":1,"created":"2026-05-07T10:00:00Z","cols":80,"rows":24,"runtime":"sugarcraft/sugar-core@1.0.0"}
+{"v":1,"created":"2026-05-07T10:00:00Z","cols":80,"rows":24,"runtime":"sugarcraft/candy-vcr@record"}
 {"t":0.000,"k":"resize","cols":80,"rows":24}
 {"t":0.001,"k":"output","b":"[2J[H..."}
 {"t":0.450,"k":"input","msg":{"@type":"KeyMsg","key":"j"}}
@@ -64,8 +64,9 @@ composer require sugarcraft/candy-vcr
 ```
 
 - Line 1 is the header (carries `v`).
-- Subsequent lines are events keyed by `k` (`resize`, `input`, `output`,
-  `quit`) with kind-specific payload fields.
+- Subsequent lines are events keyed by `k` — all seven `EventKind` cases
+  (`resize`, `input`, `output`, `quit`, `snapshot`, `hide`, `show`) with
+  kind-specific payload fields; see [`docs/CASSETTE.md`](docs/CASSETTE.md).
 - `t` is seconds since cassette start (ms precision).
 
 ### Cassette formats
@@ -161,42 +162,42 @@ $format->write($cassette, '/tmp/session.cas.gz');
 $cassette = $format->read('/tmp/session.cas.gz');
 ```
 
- Compressed cassettes are typically 5-10x smaller than plain JSONL,
- making them suitable for CI storage and git repositories. The format
- uses streaming gzip with per-line flush to maintain memory efficiency
- for large cassettes.
+Compressed cassettes are typically 5-10x smaller than plain JSONL,
+making them suitable for CI storage and git repositories. The format
+uses streaming gzip with per-line flush to maintain memory efficiency
+for large cassettes.
 
- ## Asciinema import (L2)
+### Asciinema import
 
- Import asciinema v3 cast files as candy-vcr Cassettes for replay:
+Import asciinema v3 cast files as candy-vcr Cassettes for replay:
 
- ```php
- use SugarCraft\Vcr\Format\AsciinemaFormat;
+```php
+use SugarCraft\Vcr\Format\AsciinemaFormat;
 
- $cassette = (new AsciinemaFormat())->read('/path/to/session.cast');
- $player = new Player($cassette);
- $result = $player->play(programFactory: $factory, speed: Player::SPEED_REALTIME);
- ```
+$cassette = (new AsciinemaFormat())->read('/path/to/session.cast');
+$player = new Player($cassette);
+$result = $player->play(programFactory: $factory, speed: Player::SPEED_REALTIME);
+```
 
- The importer handles asciinema v3's relative timestamps, converts `o` (stdout)
- events to output events, `i` (stdin) events to input events, and `x` (exit)
- events to quit events.
+The importer handles asciinema v3's relative timestamps, converts `o` (stdout)
+events to output events, `i` (stdin) events to input events, and `x` (exit)
+events to quit events.
 
- ## PHP API
+## PHP API
 
 The core types in `SugarCraft\Vcr\`:
 
 | Class | Role |
 |-------|------|
 | `Cassette` | Immutable container: `header: CassetteHeader`, `events: list<Event>`. Accessors `eventCount()`, `header()`, `duration()`. |
-| `CassetteHeader` | Schema metadata — `$version`, `$cols`, `$rows`, `$runtime`, `$theme`, `$typingSpeed`, `$env`, `$timestampMode`, `$created`. Constants `CURRENT_VERSION`, `TIMESTAMP_MODE_ABSOLUTE`, `TIMESTAMP_MODE_RELATIVE`. |
+| `CassetteHeader` | Schema metadata — `$version`, `$createdAt`, `$cols`, `$rows`, `$runtime`, `$theme`, `$typingSpeed`, `$env`, `$timestampMode`, `$playbackSpeed`, `$fontSize`, `$fontFamily`, `$widthPx`, `$heightPx`. Constants `CURRENT_VERSION`, `TIMESTAMP_MODE_ABSOLUTE`, `TIMESTAMP_MODE_RELATIVE`. (The wire key is `created`; the DTO property is `$createdAt`.) |
 | `Event` | One recorded line. Fields: `t: float`, `kind: EventKind`, payload `array`. |
-| `EventKind` | Enum: `Resize`, `Input`, `Output`, `Quit`. |
-| `Recorder` | Record-side. Construct via `Recorder::open($path)`. Methods: `withFormat(Format)`, `withHook(Hook)`, `withIdleTrim($threshold, $compressedMax=0.5)`, `recordResize($cols, $rows)`, `recordInputBytes($bytes)`, `recordOutput($bytes)`, `recordQuit()`, `close()`. Helpers `defaultHeader($cols, $rows, $runtime)`, `filteredHostEnv($regex)`, `hooks(): HookRegistry`. |
-| `Player` | Replay-side. Factories: `Player::open($path)` (extension-only), `Player::loadAny($path)` (extension + content sniff via `CassetteLoader`, accepts `.tape` sources). Methods: `withIdleTrim(?float)`, `play(programFactory, ?assertion, ?speed, ?idleThresholdSeconds, ?useRawTimestamps)`. Constants `SPEED_INSTANT`, `SPEED_REALTIME`, `INSTANT_YIELD_SECONDS`. |
+| `EventKind` | Enum: `Resize`, `Input`, `Output`, `Quit`, `Snapshot`, `Hide`, `Show`. |
+| `Recorder` | Record-side. Construct via `Recorder::open($path)` — the cassette file is created and tightened to `0600` (owner-only) because cassettes can embed secrets. Methods: `withFormat(Format)`, `withHook(Hook)`, `withIdleTrim($threshold, $compressedMax=0.5)`, `recordResize($cols, $rows)`, `recordInputBytes($bytes)`, `recordOutput($bytes)`, `recordQuit()`, `close()`. Helpers `defaultHeader($cols, $rows, $runtime)`, `hooks(): HookRegistry`. Env filtering is `RecordCommand::filteredHostEnv()` — see the record options below. |
+| `Player` | Replay-side. Factories: `Player::open($path)` (content-sniffs the second line — a `dt` field selects `RelativeFormat`, otherwise `JsonlFormat`; the extension is not consulted), `Player::loadAny($path)` (extension + content sniff via `CassetteLoader`, accepts `.tape` sources). Methods: `withIdleTrim(?float)`, `play(programFactory, ?assertion, speed, ?serializerRegistry, ?timeoutSeconds, skipFirstResize, ?matcher, ?idleThresholdSeconds, useRawTimestamps)`. Constants `SPEED_INSTANT`, `SPEED_REALTIME`, `INSTANT_YIELD_SECONDS`. |
 | `Format\Format` (interface) | `write(Cassette, $path)`, `read($path): Cassette`, `encode(Cassette): string`, `decode(string): Cassette`. Implementations: `JsonlFormat` (default), `CompressedJsonlFormat`, `RelativeFormat`, `YamlFormat`, `AsciinemaFormat` (read-only). |
 | `Format\CassetteLoader` | `load($path): Cassette` — auto-detects cassette vs tape source. `isTape($path): bool` — exposes the sniff. |
-| `ReplayResult` | DTO returned by `Player::play()`. `$ok: bool`, `diffSummary(): string`, `$expectedBytes`, `$actualBytes`. |
+| `ReplayResult` | DTO returned by `Player::play()`. `$ok: bool`, `$diff: ?string`, `$eventCount`, `$inputCount`, `$resizeCount`, `$outputCount`, `$quitCount`, `$programQuitCleanly: bool`; helper `diffSummary(): string`. |
 
 ## Quickstart
 
@@ -264,7 +265,11 @@ Env capture is **opt-in** — `--env` snapshots the host environment into the ca
 
 #### `--env-all` (formerly `--env-allow-secrets`)
 
-**DANGEROUS — for trusted, isolated environments only.** When this flag is set, secret-key filtering is disabled entirely and the cassette will contain the **full** host environment with credential values verbatim (API tokens, passwords, private keys, etc.). Because that is a footgun, capturing everything now requires this explicit flag, and every captured variable name is printed to stderr as a warning so you can see exactly what landed in the cassette. Only use it when recording in a fully isolated environment and you understand that the resulting cassette must never be shared or stored in an untrusted location. `--env-allow-secrets` remains as a legacy alias.
+**DANGEROUS — for trusted, isolated environments only.** When this flag is set, secret-key filtering is disabled entirely and the cassette will contain the **full** host environment with credential values verbatim (API tokens, passwords, private keys, etc.). Because that is a footgun, capturing everything now requires this explicit flag, and every captured variable name is printed to stderr as a warning so you can see exactly what landed in the cassette. Only use it when recording in a fully isolated environment and you understand that the resulting cassette must never be shared or stored in an untrusted location. `--env-allow-secrets` remains as a legacy alias. The cassette file itself is
+created `0600` (owner read/write only) by `Recorder::open()` even under the
+default umask — but file permissions are hygiene, not confidentiality: an
+`--env-all` cassette still contains every credential in plaintext, so store
+it accordingly and delete it when done.
 
 ```sh
 vendor/bin/candy-vcr record --env-all -- bash -c 'echo $GITHUB_TOKEN'
@@ -295,10 +300,10 @@ Replay defaults to the compressed timeline. Pass `--no-trim` to replay to honour
 
 ### Host TTY safety net
 
-`record` puts the host stdin into raw mode while the recorded program runs. The in-band `finally` restores it on every PHP-controlled exit path (clean exit, exception). For exits that bypass `finally` — SIGTERM, SIGHUP, fatal errors — the command installs:
+`record` puts the host stdin into raw mode while the recorded program runs. The in-band `finally` restores it on every PHP-controlled exit path (clean exit, exception). For exits that bypass `finally` — SIGTERM, SIGHUP, SIGINT, fatal errors — the command installs:
 
 - `register_shutdown_function([RecordCommand::class, 'rescueRestore'])` — fires on every PHP run shutdown, including fatal errors.
-- `pcntl_signal(SIGTERM/SIGHUP, [RecordCommand::class, 'handleRescueSignal'])` with `pcntl_async_signals(true)` — restores then re-raises the signal with the default handler so the process still dies with the right status.
+- `pcntl_signal(SIGTERM/SIGHUP/SIGINT, [RecordCommand::class, 'handleRescueSignal'])` with `pcntl_async_signals(true)` — restores then re-raises the signal with the default handler so the process still dies with the right status.
 
 `SIGKILL` cannot be intercepted by anything. As a mitigation, while recording is in flight the command drops a marker file at `sys_get_temp_dir() . '/candy-vcr-rescue.<pid>'` containing the host TTY's device path (resolved via `posix_ttyname(STDIN)`). If a hard kill leaves your terminal stuck in raw mode, run `stty sane < /path/to/your/tty` (you'll find the path in the marker file, which is cleaned up on every clean exit).
 
@@ -308,15 +313,15 @@ The static handlers are signal-safe (no allocation, no logging) and idempotent; 
 
 The PosixPump recorder tap is a single conditional `recorder->recordOutput($bytes)` call per master-read chunk — no extra syscalls on the hot path, no per-chunk serialization beyond appending a JSON line to the open cassette stream.
 
-Benchmark (`tests/Integration/ShirleyOverheadTest.php`, median of 5 timed runs after a warmup, `time bash -c 'seq 100000'`):
+Benchmark (`tests/Integration/ShirleyOverheadTest.php`: one warmup iteration, then 6 timed interleaved iterations per scenario — two rounds of `ROUNDS = 3` without/with pairs — reduced to a **trimmed mean** (min and max discarded, middle four averaged), `time bash -c 'seq 100000'`):
 
-| Scenario | Median wallclock |
-|----------|------------------|
+| Scenario | Typical trimmed-mean wallclock |
+|----------|-------------------------------|
 | Pump WITHOUT recorder | ~47 ms |
 | Pump WITH recorder | ~40 ms |
-| Measured overhead | **within noise (≤2%)** |
+| Measured overhead | **within noise** |
 
-The CI bound is set to 5 % to absorb shared-runner jitter while still catching the regression class this test exists to flag (a real serialization-per-chunk regression would land at dozens of percent).
+The assertion budget is 8 % to absorb shared-runner jitter while still catching the regression class this test exists to flag (a real serialization-per-chunk regression would land at dozens of percent). The plan's 2 % acceptance target is reported by the test but not asserted.
 
 ### Hook system
 
@@ -378,6 +383,14 @@ Custom matchers implement `EventMatcher::matches(Event $recorded, Event $actual)
 ### Rendering `.tape` files to GIF
 
 The `render-tape` and `render-batch` commands convert `.tape` files to animated GIFs. They use the `TapeToGif` pipeline: Lexer → Parser → Compiler → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder.
+
+> **⚠ Security — a `.tape` file is a program.** The `Set Shell` directive,
+> `--shell=<sh>`, or `--exec` put the renderer into exec mode: every typed
+> keystroke is written to a real PTY-hosted shell and **executed**. Rendering
+> a third-party tape is therefore arbitrary code execution on your machine —
+> treat untrusted `.tape` files the way you would treat an unfamiliar
+> `Makefile` or `package.json` and review them before rendering. See
+> [Exec mode](#exec-mode--rendering-program-output-set-shell) below.
 
 ```sh
 # Render a single .tape file
@@ -474,19 +487,23 @@ candy-vcr render-tape demo.tape --dry-run | head -5
 #### `inspect --frames`
 
 `inspect <cassette|.tape> --frames` walks the cassette through a Renderer
-and Terminal at the configured fps (default 30), printing one line per
+and Terminal at the configured fps (default 30; set it with `--fps=<n>` or
+the space form `--fps <n>` — both spellings are accepted, validated once,
+and a non-positive or non-numeric value exits 2), printing one line per
 snapshot:
 
 ```
 time<TAB>cursor_row,cursor_col<TAB>grid_sha1
 ```
 
-`grid_sha1` is a deterministic digest of every `(row, col, char, fg,
-bg, attrs)` cell tuple plus the cursor state. Two snapshots that would
-rasterize to identical pixels share the same hash. The footer reports
-total frame count, frames before dedup, and unique frames after
-`FrameDedup` — handy for sizing the GIF-encoding job before committing
-to a full render.
+`grid_sha1` is a deterministic digest of every
+`(row, col, char, fg, bg, attrs, fgTruecolor, bgTruecolor, rendition)`
+cell tuple plus the cursor state. Two snapshots that would rasterize to
+identical pixels share the same hash. The footer reports
+`frames: <total>  unique: <n>  deduped: <n>`, where uniqueness is decided
+by consecutive `Snapshot::equals()` comparison — the same rule
+`FrameDedup` applies on the render path — handy for sizing the
+GIF-encoding job before committing to a full render.
 
 ```sh
 candy-vcr inspect demo.tape --frames --fps 60
@@ -610,7 +627,7 @@ typed as `EventKind::Input` with raw bytes (`['b' => string]`) payloads.
 `Sleep` directives advance the virtual clock without emitting events, so
 inter-event timing is preserved for the Player.
 
-**Corpus coverage:** All 841+ `.tape` files in the monorepo parse without
+**Corpus coverage:** Every `.tape` file in the monorepo parses without
 error and compile to valid Cassettes (verified by `TapeCorpusTest`).
 
 ### Decompiler — Cassette → tape source
@@ -678,7 +695,7 @@ $player = Player::open('demo.cas');
 
 // Create terminal emulator and renderer
 $terminal = Terminal::new(80, 24);
-$renderer = new Renderer($player, $terminal, fps: 30.0);
+$renderer = new Renderer();
 
 // Get frame stream and optionally dedup identical frames
 $stream = $renderer->render($player, $terminal, 30.0);
@@ -727,11 +744,10 @@ use SugarCraft\Vcr\Raster\FontLoader;
 
 $rasterizer = new GdRasterizer(fontSize: 14, fontFamily: 'DejaVuSansMono');
 
-$png = $rasterizer->rasterize($snapshot, cellW: 8, cellH: 16);
+$image = $rasterizer->rasterize($snapshot, cellW: 8, cellH: 16); // \GdImage
 
-$pngData = stream_get_contents(fopen('php://memory', 'r+'), null, 0);
-imagepng($png);
-imagedestroy($png);
+imagepng($image, 'frame.png');
+imagedestroy($image);
 ```
 
 **Cell metrics (FontSize 14, JetBrainsMono / DejaVuSansMono):**
@@ -799,7 +815,7 @@ $tapeToGif->render('demo.tape', 'demo.gif');
 | Encoder | Description |
 |--------|-------------|
 | `FfmpegGifEncoder` | Default; uses ffmpeg with two-pass palette generation. CFR via `-framerate`; VFR via concat demuxer with process substitution. |
-| `PhpGifEncoder` | Pure-PHP fallback using native GD LZW encoding. Slower than ffmpeg (~5-10×) but requires no external binaries. |
+| `PhpGifEncoder` | Pure-PHP fallback: rasterizes frames with GD and hand-assembles the animated GIF byte stream (header, NETSCAPE looping extension, per-frame LZW) in PHP. Slower than ffmpeg (~5-10×) but requires no external binaries. |
 
 **TapeToGif options:**
 
@@ -1013,7 +1029,7 @@ Invalid PCRE patterns throw `\InvalidArgumentException` at construction.
 
 `SugarCraft\Vcr\Msg\Registry::default()` is preloaded with:
 
-- **`BuiltinSerializer`** — covers 19 Msgs: `KeyMsg`,
+- **`BuiltinSerializer`** — covers 17 Msgs: `KeyMsg`,
   `MouseClickMsg / MotionMsg / WheelMsg / ReleaseMsg`, `WindowSizeMsg`,
   `FocusGainedMsg / FocusLostMsg / BlurMsg`, `FocusInMsg / FocusOutMsg`,
   `PasteStartMsg / EndMsg / Msg`, `BackgroundColorMsg`, `ForegroundColorMsg`,
@@ -1081,8 +1097,9 @@ Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (
 php candy-vcr/bin/candy-vcr render-batch <lib>/.vhs/ --encoder ffmpeg
 ```
 
-The `vhs-candy-vcr` job in `.github/workflows/vhs.yml` renders the seed libs with
-this command, smoke-checks that every produced GIF is non-empty, and uploads them
+The `vhs-candy-vcr` job in `.github/workflows/vhs.yml` renders its seed libs with
+this command (the matrix currently holds `sugar-core`; it widens after the soak
+window), smoke-checks that every produced GIF is non-empty, and uploads them
 as `vhs-candy-vcr-<lib>` workflow artifacts with 7-day retention. The job is
 currently advisory (`continue-on-error: true`); the legacy `render` job remains
 the blocking renderer, and reverting the `vhs-candy-vcr` job stanza is the

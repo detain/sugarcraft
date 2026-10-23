@@ -16,7 +16,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[gotcha:project]** When mutating env via `putenv()` inside a PHPUnit test that later spawns a PTY child to write the cassette, the captured env (via `RecordCommand::filteredHostEnv()`) lives in the parent PHP process — so direct-call tests of `filteredHostEnv()` see the putenv'd vars, but if the cassette header ends up empty in a record-and-read-back test, the failure is downstream (cassette write/read round-trip), NOT a putenv visibility issue. Verify with a one-liner: `php -r 'putenv("X=y"); var_dump(getenv()["X"] ?? "missing");'` before adding more env plumbing.
  - **[convention:project]** `candy-vcr` `CassetteHeader::env` is opt-in (defaults `[]`) and gated on `record --env` — never default to capturing the full shell environment. The conservative secret-name regex (`/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i`) is intentionally over-aggressive (it strips `KEYBOARD_LAYOUT` because it contains `KEY`); callers needing finer control use `--env-regex=PATTERN`. Don't relax the default to keep more keys.
  - **[pattern:project]** SIGINT rescue on macOS: when `record` puts the host TTY in raw mode and the recorded child has a controlling terminal, `SIGINT` propagates correctly. The rescue shutdown handler + `pcntl_signal(SIGTERM/SIGHUP)` covers `SIGTERM`/`SIGHUP` cleanly, but `SIGKILL` remains unhandleable. Always leave the rescue marker file mechanism in place for hard-kill recovery.
- - **[gotcha:project]** `RecordCommand::filteredHostEnv('')` (empty string regex) skips ALL env filtering — no keys are stripped. This is the internal mechanism behind `--env-allow-secrets` and it is a genuine footgun: any test that accidentally passes `''` instead of `null` or a proper regex will record credentials verbatim into cassettes.
+ - **[gotcha:project]** `RecordCommand::filteredHostEnv('')` (empty string regex) skips ALL env filtering — no keys are stripped. This is the internal mechanism behind `--env-allow-secrets` and it is a genuine footgun: any test that accidentally passes `''` instead of `null` or a proper regex will record credentials verbatim into cassettes. **(corrected 2026-10-23)** No longer true: an empty/null `$regex` now falls back to `SECRET_KEY_REGEX` (`RecordCommand.php:535`) — there is no accidental pass-through via `''` anymore; only `$captureAll = true` (the `--env-all` path) captures everything, and an invalid PCRE throws `InvalidArgumentException` up front (E712 probe, `:547-551`). The footgun was fixed by making the fallback the default.
 - **[pattern:relative-format-dt]** `RelativeFormat` uses `dt` (delta since previous event) at file level; `Player::detectFormat()` auto-selects `RelativeFormat` vs `JsonlFormat` by checking for `dt` on the first event line — callers pass `Recorder::withFormat(new RelativeFormat())` to record in delta-time mode, and replay requires no format argument.
 - **[pattern:idle-trim-realtime-playback]** `Player::withIdleTrim(?float $seconds)` sets a replay-time idle-gap ceiling: when `SPEED_REALTIME` playback encounters a delay between events that exceeds the threshold, the delay is clamped to the threshold so CI tests don't hang on multi-second gaps from the original recording. The same pattern (clamp `delta` when `idleTrim !== null && delta > idleTrim`) is applied in `ReplayCommand` so the CLI honours `--idle-trim` flags. `withIdleTrim(null)` disables trimming. The explicit `$idleThresholdSeconds` parameter to `play()` overrides the fluent setting — the parameter form is useful for one-off test overrides while the fluent form suits library-level configuration.
 - **[pattern:tape-compiler-emits-raw-bytes]** The `Compiler::compile()` for `TypeDirective` emits `Input` events with `['b' => string]` payload (raw bytes) rather than `['msg' => [...]]` envelope form. This avoids the need to serialize `KeyMsg` objects (which don't implement `\JsonSerializable`) and is the simplest path since the downstream `Player` handles both forms identically. Direct raw-byte emission also avoids double-parsing through `InputReader`. The trade-off: `TypeDirective` can't emit non-KeyMsg input events (mouse, focus, etc.) — but those never appear in `.tape` files so this is not a limitation in practice.
@@ -71,7 +71,7 @@ The A/B parallel run ensures zero downtime risk during the switchover.
 
 ### phpstan baseline
 
-Added `candy-vcr/phpstan.neon` (level: max, paths: src/ + tests/) and a generated baseline (`phpstan-baseline.neon`, 441 errors suppressed). The pre-existing type-inference issues in the legacy code require broader cleanup beyond Phase 0 scope; baselines preserve signal for NEW errors introduced by subsequent phases. Same pattern applied to `sugar-vterm/phpstan.neon` (128 errors baseline).
+Added `candy-vcr/phpstan.neon` (level: max, paths: src/ + tests/) and a generated baseline (`phpstan-baseline.neon`, 441 errors suppressed). **(corrected 2026-10-23)** The baseline no longer exists — subsequent phases cleared the suppressed issues; `phpstan.neon` now runs level: max clean with no baseline. The pre-existing type-inference issues in the legacy code require broader cleanup beyond Phase 0 scope; baselines preserve signal for NEW errors introduced by subsequent phases. Same pattern applied to `sugar-vterm/phpstan.neon` (128 errors baseline).
 
 ### Benchmark — Player replay (counter.cas, 6 events)
 
@@ -122,7 +122,7 @@ The tape `Compiler` now stores `Set TypingSpeed` values in the `CassetteHeader::
 ### Namespace: `SugarCraft\Vcr\Encode`
 
 New files created:
-- `src/Encode/GifEncoder.php` — interface `encode(\Iterator, int $cols, int $rows, array $frameHolds, string $outputPath): void`
+- `src/Encode/GifEncoder.php` — interface `encode(\Iterator, int $cols, int $rows, array $frameHolds, string $outputPath): void` **(current interface as of 2026-10-23:** `encode(array $pngPaths, string $outputPath, int $fps = 30, ?array $durations = null): bool` — the pixel dimensions were dropped per the decision log below**)**
 - `src/Encode/FfmpegGifEncoder.php` — default ffmpeg implementation; two-pass palettegen with `stats_mode=diff`; CFR via `-framerate` and VFR via concat demuxer with `proc_open` + process substitution
 - `src/Encode/PhpGifEncoder.php` — pure-PHP stub throwing `RuntimeException('Pure-PHP GIF encoder not yet implemented; use FfmpegGifEncoder')`
 - `src/Encode/TapeToGif.php` — full pipeline: Lexer → Parser → Compiler → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder
@@ -193,8 +193,8 @@ Cell metrics at FontSize 14:
 ### Font vendoring
 
 DejaVuSansMono is vendored as a fallback (no JetBrainsMono in env). The `fonts/` directory contains:
-- `JetBrainsMono-Regular.ttf` — pending download
-- `JetBrainsMono-Bold.ttf` — pending download
+- `JetBrainsMono-Regular.ttf` — pending download **(corrected 2026-10-23:** vendored, along with Bold/Italic/BoldItalic**)**
+- `JetBrainsMono-Bold.ttf` — pending download **(corrected 2026-10-23:** vendored**)**
 - `DejaVuSansMono.ttf` — fallback
 - `DejaVuSansMono-Bold.ttf` — fallback
 

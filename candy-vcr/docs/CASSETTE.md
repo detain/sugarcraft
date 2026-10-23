@@ -5,6 +5,13 @@ Each line is a self-contained event. The format is append-only and
 flushes after every event so a crash mid-recording does not lose the
 cassette.
 
+> **⚠ Security.** A cassette is *data*: replaying one never executes a
+> program. The `.tape` files that cassettes are compiled from are not —
+> `Set Shell`, `render-tape --shell`, and `--exec` render a tape by
+> spawning a real PTY shell that runs every typed line. Treat third-party
+> `.tape` files the way you treat a Makefile or an npm `preinstall`
+> script. See the README's exec-mode section.
+
 ---
 
 ## Header (line 1)
@@ -21,13 +28,36 @@ cassette.
 | `rows` | `int` | Initial terminal rows. Overridden by the first `resize` event if present. |
 | `runtime` | `string` | Identifier of the recording runtime — e.g. `sugarcraft/candy-vcr@record`. |
 | `timestampMode` | `string` | Optional. `absolute` (default) or `relative` (interval-since-previous-event, asciinema v3 style). |
-| `env` | `object` | Optional. Captured host environment, filtered through the secret regex. |
+| `env` | `object` | Optional. Captured host environment, filtered through the secret regex (`/(SECRET\|TOKEN\|KEY\|PASSWORD\|API\|CRED\|AUTH\|PRIV)/i` by default). `record --env-all` captures the full host environment unfiltered — cassette files are written `0600` for precisely this reason. |
+| `typingSpeed` | `number` | Optional. Milliseconds between typed keystrokes, carried from a `.tape`'s `Set TypingSpeed`. Absent on cassettes recorded from a live PTY. |
+| `theme` | `string` | Optional. VHS theme name carried from a `.tape`'s `Set Theme`. Absent on cassettes recorded from a live PTY. |
+
+`created` is the wire key; the PHP DTO property is
+`CassetteHeader::$createdAt`. The remaining header fields on a
+tape-compiled cassette (`playbackSpeed`, `fontSize`, `fontFamily`,
+`widthPx`, `heightPx`) live on the DTO in memory but are not written to
+line 1. On the live-recording path, `cols`/`rows` are read from the PTY
+winsize at the moment recording starts.
 
 ---
 
 ## Event Lines
 
-Every event line contains at least `t` (seconds since cassette start, ms precision) and `k` (event kind).
+The full set of kinds is the `EventKind` enum: `output`, `input`,
+`resize`, `quit`, `snapshot`, `hide`, `show`.
+
+Every event line contains at least one timestamp and `k` (event kind).
+Absolute-mode cassettes carry `t` (seconds since cassette start, ms
+precision); relative-mode cassettes (`"timestampMode":"relative"`,
+asciinema v3 style) carry `dt` (interval since the previous event)
+instead:
+
+```jsonl
+{"dt":0.001,"k":"output","b":"\u001b[2J\u001b[H"}
+```
+
+`Player::open()` content-sniffs the file and selects the `RelativeFormat`
+decoder when it sees `dt`; the extension is never consulted.
 
 ### `output` — terminal output bytes
 
@@ -40,7 +70,7 @@ Every event line contains at least `t` (seconds since cassette start, ms precisi
 | `t` | `float` | Compressed timestamp (seconds since cassette start). |
 | `tRaw` | `float` | Present only when idle-trim has been applied after a prior event gap exceeded the threshold. Carries the original wallclock-relative timestamp. |
 | `k` | `"output"` | Kind discriminant. |
-| `b` | `string` | Raw output bytes written to the PTY master. ANSI escape sequences are included verbatim. |
+| `b` | `string` | Output written to the PTY master. ANSI escape sequences survive intact (they are valid ASCII and JSON-escaped); the payload is JSON-encoded with `JSON_INVALID_UTF8_SUBSTITUTE`, so well-formed UTF-8 round-trips byte-exact but invalid bytes land as U+FFFD — lossy for 8-bit streams by design (the Recorder defers torn multibyte tails; base64 transport was declined). |
 
 ### `input` — input bytes fed to the PTY slave
 
@@ -48,12 +78,20 @@ Every event line contains at least `t` (seconds since cassette start, ms precisi
 {"t":0.450,"k":"input","b":"j"}
 ```
 
+An input event may instead carry a structured `msg` envelope — a decoded
+Msg object — in place of raw `b` bytes:
+
+```jsonl
+{"t":0.450,"k":"input","msg":{"@type":"KeyMsg","key":"j"}}
+```
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `t` | `float` | Timestamp. |
 | `tRaw` | `float` | Present only on trimmed events (see above). |
 | `k` | `"input"` | Kind discriminant. |
-| `b` | `string` | Raw bytes written to the PTY slave (keystrokes). |
+| `b` | `string` | Raw bytes written to the PTY slave (keystrokes). Present when no `msg` is. |
+| `msg` | `object` | Serialized Msg envelope (`@type` names the class). The Player decodes it through `Msg\Registry` and feeds the typed object to the program. Emitted by session-host pipelines; the `.tape` Compiler emits only `b`. |
 
 ### `resize` — terminal size change
 
@@ -83,6 +121,29 @@ implementations. candy-vcr emits and replays `resize`.
 |-------|------|-------------|
 | `t` | `float` | Timestamp of the final observed event + pump teardown. |
 | `k` | `"quit"` | Kind discriminant. No additional payload. |
+
+### `snapshot` — screenshot directive
+
+```jsonl
+{"t":2.500,"k":"snapshot","path":"frame-001.png"}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `t` | `float` | Timestamp. |
+| `k` | `"snapshot"` | Kind discriminant. |
+| `path` | `string` | Output path requested by the `.tape`'s `Screenshot` directive. Replay pauses the program at this event and captures the frame; rendering to GIF uses the path for per-frame emission. |
+
+### `hide` / `show` — timing markers
+
+```jsonl
+{"t":3.000,"k":"hide"}
+{"t":3.400,"k":"show"}
+```
+
+Kind discriminants `hide` and `show` carry no payload. They mirror the
+`.tape` `Hide`/`Show` directives: during GIF rendering, output produced
+between a `hide` and its `show` is skipped from the frame sequence.
 
 ---
 
