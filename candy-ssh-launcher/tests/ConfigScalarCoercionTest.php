@@ -177,9 +177,10 @@ YAML;
 
     public function testYamlScalarOptionsValue(): void
     {
-        // Options as simple key-value (not nested list) - the tiny YAML parser
-        // creates a scalar string, which is silently ignored since options
-        // must be an array. This tests that Config handles this gracefully.
+        // Options as simple key-value (not nested list): the tiny YAML
+        // parser produces a scalar string, and the documented shorthand
+        // means ONE option — it must not vanish silently (2026-10-23
+        // ruling; the old behaviour was a no-op with no word said).
         $raw = <<<YAML
 - name: prod
   host: prod.example.com
@@ -187,8 +188,8 @@ YAML;
 YAML;
         $endpoints = Config::parse($raw, 'wishlist.yml');
         $this->assertCount(1, $endpoints);
-        // Options as non-array is silently ignored (empty array)
-        $this->assertSame([], $endpoints[0]->options);
+        // Scalar value == single-item list.
+        $this->assertSame(['ServerAliveInterval=30'], $endpoints[0]->options);
     }
 
     public function testParseWithNoExtensionGuessesJson(): void

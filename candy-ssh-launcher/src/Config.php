@@ -44,8 +44,28 @@ final class Config
         if (!is_file($path)) {
             throw new \RuntimeException(Lang::t('config.not_found', ['path' => $path]));
         }
-        $raw = (string) file_get_contents($path);
+        $raw = self::readOrThrow($path);
         return self::parse($raw, $path);
+    }
+
+    /**
+     * Read a config file or refuse loudly. The old `(string) file_get_contents`
+     * cast turned a read failure (permissions, I/O error, race with a
+     * deletion) into an empty string, which parsed into ZERO endpoints and
+     * surfaced as a confusing 'cancelled.' with exit 130 — the user could
+     * not tell a broken file from an aborted picker (2026-10-23). The call
+     * is @-suppressed because file_get_contents emits an E_WARNING before
+     * returning false; the false check below is the loud channel by design
+     * (PHPUnit's failOnWarning is blind to suppressed diagnostics, so the
+     * pin tests exercise the refusal, not the warning).
+     */
+    private static function readOrThrow(string $path): string
+    {
+        $raw = @file_get_contents($path);
+        if ($raw === false) {
+            throw new \RuntimeException(Lang::t('config.unreadable', ['path' => $path]));
+        }
+        return $raw;
     }
 
     /**
@@ -189,6 +209,14 @@ final class Config
             || (str_starts_with($v, "'") && str_ends_with($v, "'"))) {
             return substr($v, 1, -1);
         }
+        // YAML inline flow collections (`[a, b]`, `{k: v}`) are valid YAML
+        // this flat parser cannot represent — silently carrying them as the
+        // literal string would put "[a, b]" into an ssh argv token. Refuse
+        // with the fix spelled out instead (2026-10-23, C6). Quoted forms
+        // ("[a,b]") are ordinary scalars and keep passing through above.
+        if (str_starts_with($v, '[') || str_starts_with($v, '{')) {
+            throw new \RuntimeException(Lang::t('config.yaml_inline_flow', ['value' => $v]));
+        }
         if (preg_match('/^-?\d+$/', $v)) {
             return (int) $v;
         }
@@ -226,15 +254,13 @@ final class Config
             self::assertScalar('proxyJump', $row['proxyJump']);
         }
         $opts = [];
-        if (isset($row['options']) && is_array($row['options'])) {
-            foreach ($row['options'] as $o) {
-                self::assertScalar('options', $o);
-                $opts[] = (string) $o;
-            }
+        foreach (self::normalizeList($row['options'] ?? null) as $o) {
+            self::assertScalar('options', $o);
+            $opts[] = (string) $o;
         }
         $identityFiles = [];
-        if (isset($row['identityFiles']) && is_array($row['identityFiles'])) {
-            foreach ($row['identityFiles'] as $f) {
+        if (isset($row['identityFiles'])) {
+            foreach (self::normalizeList($row['identityFiles']) as $f) {
                 self::assertScalar('identityFiles', $f);
                 $identityFiles[] = (string) $f;
             }
@@ -265,11 +291,16 @@ final class Config
      * otherwise cast silently — an array becomes the literal "Array", which
      * is a config-injection footgun; throw loudly instead.
      *
-     * @throws \InvalidArgumentException when $value is not a scalar
+     * Booleans are `is_scalar` but have no sane string form here: the tiny
+     * YAML parser maps `yes`/`no` to bool, and without this leg a config
+     * `name: yes` reached ssh as the literal host user "1" (2026-10-23,
+     * C5). Numeric fields go through parsePort which rejects bools too.
+     *
+     * @throws \InvalidArgumentException when $value is not a usable scalar
      */
     private static function assertScalar(string $field, mixed $value): void
     {
-        if (!is_scalar($value)) {
+        if (!is_scalar($value) || is_bool($value)) {
             throw new \InvalidArgumentException(
                 Lang::t('config.field_not_scalar', ['field' => $field, 'type' => get_debug_type($value)])
             );
@@ -277,12 +308,37 @@ final class Config
     }
 
     /**
+     * Accept both the documented nested-list form and the scalar shorthand
+     * (`options: ServerAliveInterval=30` is one item, not silently dropped).
+     * null and the empty list-mode placeholder both normalize to []
+     * (2026-10-23 ruling: previously a scalar value here vanished without a
+     * word — a documented config key must never no-op silently).
+     *
+     * @return list<mixed>
+     */
+    private static function normalizeList(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if ($value === null) {
+            return [];
+        }
+        return [$value];
+    }
+
+    /**
      * Import endpoints from an OpenSSH config file (~/.ssh/config).
      *
-     * Parses `Host` blocks and `Host *` global defaults (IdentityFile,
-     * ProxyJump, User, Port, HostName). Per-host options override global
-     * defaults. Host patterns become the endpoint `name`; HostName (or
-     * the pattern itself if no HostName is given) becomes the `host`.
+     * Parses `Host` blocks (whitespace or equals form) and their
+     * HostName/User/Port/IdentityFile/ProxyJump options. Precedence is
+     * POSITIONAL first-obtained across all matching blocks in file order —
+     * `Host *` is not a global-defaults section that per-host options
+     * "override"; a `Host *` written before a specific block supplies the
+     * first-obtained value and WINS for every host (see SshConfigParser's
+     * class docblock, 2026-10-23 truth rewrite). Host patterns become the
+     * endpoint `name`; HostName (or the pattern itself if no HostName is
+     * given) becomes the `host`.
      *
      * @return list<Endpoint>
      */
@@ -291,7 +347,7 @@ final class Config
         if (!is_file($path)) {
             throw new \RuntimeException(Lang::t('config.not_found', ['path' => $path]));
         }
-        $raw = (string) file_get_contents($path);
+        $raw = self::readOrThrow($path);
         $parser = new SshConfigParser();
         return $parser->parse($raw);
     }
