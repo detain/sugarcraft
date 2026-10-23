@@ -47,6 +47,19 @@ final class Cli
 {
     public const VERSION = '0.1.0';
 
+    /**
+     * The version this run reports: the phar archive's build stamp when
+     * executing inside one (DST-1 — InstalledVersions lies under the frozen
+     * vendor/), else the compiled-in {@see VERSION} constant. The archive is
+     * identified by \Phar::running(false), which is exactly the real path the
+     * \Phar constructor wants here (the class file only ever runs required
+     * from inside the archive, never as the stub).
+     */
+    public static function runningVersion(): string
+    {
+        return Support\Version::resolve(\Phar::running(false) ?: '', self::VERSION);
+    }
+
     public const EXIT_OK = 0;
     public const EXIT_USAGE = 1;
     public const EXIT_INPUT = 2;
@@ -114,7 +127,7 @@ final class Cli
             }
 
             if ($token === '--version') {
-                \fwrite($stdout, 'candy-image ' . self::VERSION . "\n");
+                \fwrite($stdout, 'candy-image ' . self::runningVersion() . "\n");
 
                 return self::EXIT_OK;
             }
@@ -332,7 +345,7 @@ final class Cli
             \fwrite($stdout, $line . "\n");
         };
 
-        $write('candy-image ' . self::VERSION . ' — terminal detection dump');
+        $write('candy-image ' . self::runningVersion() . ' — terminal detection dump');
         $write('env: TERM=' . (getenv('TERM') !== false && getenv('TERM') !== '' ? getenv('TERM') : '(unset)')
             . '  COLORTERM=' . (getenv('COLORTERM') !== false && getenv('COLORTERM') !== '' ? getenv('COLORTERM') : '(unset)'));
 
