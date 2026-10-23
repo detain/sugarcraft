@@ -6,10 +6,14 @@ declare(strict_types=1);
  * SugarReadline — interactive TTY demo via sugar-input.
  *
  * Demonstrates real TTY keypress handling: arrow keys, Ctrl+chars,
- * Escape, F-keys, and bracketed paste.
+ * Escape, and bracketed paste — with the terminal put in non-canonical
+ * mode so those bytes reach the prompt at all (cooked line discipline
+ * would eat Enter, Backspace and Ctrl+ chords; see the README's
+ * "Terminal mode" section).
  *
  * Run: php examples/interactive.php
- * (Requires a TTY — won't work in non-interactive environments)
+ * (Requires a TTY — on a pipe the raw-mode step is skipped and the loop
+ * exits at EOF instead of spinning.)
  */
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -19,15 +23,29 @@ use SugarCraft\Readline\TextPrompt;
 use SugarCraft\Readline\History\InMemoryHistory;
 
 echo "=== Interactive Readline Demo ===\n";
-echo "Try: type text, arrow keys, Ctrl+A/E, Tab, Enter to submit, Esc to abort\n";
+echo "Try: type text, arrow keys, Ctrl+A/E, Ctrl+R search, Tab, Enter to submit, Esc to abort\n";
 echo "Paste: select text and paste (bracketed paste mode)\n";
 echo "Type 'quit' to exit.\n\n";
 
-// Use Readline with real TTY input
+// Raw-ish mode: keep the line discipline out of the way, restore on the way
+// out. `stty -g` prints a settings string that re-applies everything as-is.
+$isTty = stream_isatty(STDIN);
+$savedMode = '';
+if ($isTty) {
+    $savedMode = trim((string) shell_exec('stty -g'));
+    shell_exec('stty -icanon -echo min 1 time 0');
+    register_shutdown_function(static function () use ($isTty, $savedMode): void {
+        if ($isTty && $savedMode !== '') {
+            shell_exec('stty ' . escapeshellarg($savedMode));
+        }
+    });
+}
+
 $history = new InMemoryHistory();
 
 $readline = Readline::fromStdin()
     ->onKey('ctrl_c', function ($event) {
+        // Notification only; the prompt aborts through its own binding.
         echo "\n[Ctrl+C — abort]\n";
     })
     ->onPaste(function ($event) {
@@ -37,35 +55,31 @@ $readline = Readline::fromStdin()
         echo "\n[" . ($event->gained ? 'focus gained' : 'focus lost') . "]\n";
     });
 
-// Simple interactive loop
-$running = true;
-$prompt = TextPrompt::new('> ')
-    ->withHistory($history);
+// Simple interactive loop. run() paints the prompt's view() as it changes;
+// pass STDOUT or nothing is drawn.
+$prompt = TextPrompt::new('> ')->withHistory($history);
 
-echo $prompt->view() . "\n";
+while (true) {
+    $prompt = $readline->run($prompt, STDOUT);
 
-while ($running) {
-    $result = $readline->run($prompt);
-
-    if ($result->isAborted()) {
+    if ($prompt->isAborted()) {
         echo "\n[aborted — empty input]\n";
-        $prompt = TextPrompt::new('> ')->withHistory($history);
-        echo $prompt->view() . "\n";
-        continue;
+        break;
     }
 
-    if ($result->isSubmitted()) {
-        $value = $result->value();
-        echo "\n[submitted: '$value']\n";
-
-        if ($value === 'quit') {
-            echo "Goodbye!\n";
-            $running = false;
-        } else {
-            echo $prompt->view() . "\n";
-            $prompt = TextPrompt::new('> ')
-                ->withHistory($history);
-            echo $prompt->view() . "\n";
-        }
+    if (!$prompt->isSubmitted()) {
+        // True EOF: the owned pump has nothing left to read.
+        echo "\n[end of input]\n";
+        break;
     }
+
+    $value = $prompt->value();
+    echo "\n[submitted: '$value']\n";
+
+    if ($value === 'quit') {
+        echo "Goodbye!\n";
+        break;
+    }
+
+    $prompt = TextPrompt::new('> ')->withHistory($history);
 }

@@ -12,7 +12,7 @@ Anti-pattern: Reaching for `STDIN` directly in the run loop — hard to test, co
 Source: step-21 ai/sugar-readline-input
 
 ### 2026-05-31 — Vim keybindings via shared sugar-forms VimKeyHandler
-Anti-pattern: Do NOT add new vim keybindings to per-lib branching logic (ViMode or TextInput vimMode flags). Always add new bindings to `VimAction` enum + `VimKeyHandler` so sugar-forms, sugar-forms, sugar-widgets, and sugar-readline all benefit at once.
+Anti-pattern: Do NOT add new vim keybindings to per-lib branching logic (ViMode or TextInput vimMode flags). Always add new bindings to `VimAction` enum + `VimKeyHandler` so sugar-forms, sugar-widgets, and sugar-readline all benefit at once.
 Source: step-24 ai/vim-mode-shared
 
 ### 2026-06-29 — Emacs word-delete/transpose O(n) replay deferred
@@ -37,6 +37,22 @@ Implemented: `HistoryInterface::search()` (read-only, does not disturb navigatio
 
 ### ~~Emacs incremental search (Finding 12)~~ — DONE 2026-07-04
 EmacsMode Ctrl+R/Ctrl+S start the shared TextPrompt search machine in reverse/forward direction; no search state lives in the mode itself.
+
+## 2026-10-23 — One key language: normalize at the choke
+
+Keys arrive in two shapes: raw control bytes off a live stream and symbolic
+names from sugar-input's decoder (`ctrl_a`, `esc`, `alt_b`). The 2026 docs
+audit found the dispatch dead in practice — `Readline` fed symbolic names into
+modes matching raw bytes. The cure is `Key::normalize()`: bytes are folded
+into the canonical symbolic language at every entry point
+(`TextPrompt::handleKey`/`handleKeyDirect`, both modes, `Readline::onKey`), so
+match arms are written once, in names, and both spellings work. Mode-claiming
+of typed characters goes through `ModeInterface::consumesCharacters()` (Emacs:
+meta prefix armed; Vi: outside insert) — never via callers remembering to ask.
+Byte aliases surviving in old arms are harmless dead weight after normalize;
+delete them opportunistically. Tests must feed bytes through
+`Readline::run()` (socket-pair driver), not just call handlers directly —
+handler-level pins passed while the real dispatch was broken.
 
 ## Future work (deferred pre-1.0)
 
