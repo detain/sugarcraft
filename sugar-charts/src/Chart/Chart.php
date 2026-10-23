@@ -6,6 +6,7 @@ namespace SugarCraft\Charts\Chart;
 
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Style\Theme;
 
@@ -71,6 +72,12 @@ abstract class Chart
     {
         $chart = $this->renderChart();
 
+        // NOTE: the early return deliberately does NOT test showDataLabels.
+        // No composer at this level draws value labels (LineChart's
+        // dot-per-column geometry has no room for them — see
+        // withDataLabels() for the honest surface; BarChart renders labels
+        // through its own API). Gating here would only re-wrap the bare
+        // chart through an empty extras pass.
         if (!$this->showLegend && $this->title === null && $this->xLabel === null && $this->yLabel === null) {
             return $chart;
         }
@@ -108,7 +115,9 @@ abstract class Chart
 
     private function buildLegend(): Legend
     {
-        $legend = Legend::new($this->legendItems)
+        $items = $this->theme === null ? $this->legendItems : $this->themeLegendItems();
+
+        $legend = Legend::new($items)
             ->withPosition($this->legendPosition);
 
         if ($this->legendIndicatorChar !== null) {
@@ -116,6 +125,56 @@ abstract class Chart
         }
 
         return $legend;
+    }
+
+    /**
+     * The theme's series-color palette, in render order. Seven color roles
+     * cycle across series, so a seven-dataset chart still gets a distinct
+     * hue per line. WHY these roles: primary/accent carry the two hero
+     * colors of every shipped theme; info/success/warning/secondary cover
+     * mid-range data hues; error closes the set. Mirrors sugar-style's
+     * named `Theme` color roles.
+     *
+     * @return non-empty-list<Color>
+     */
+    protected static function themePalette(Theme $theme): array
+    {
+        return [
+            $theme->primary,
+            $theme->accent,
+            $theme->info,
+            $theme->success,
+            $theme->warning,
+            $theme->secondary,
+            $theme->error,
+        ];
+    }
+
+    /**
+     * Legend items recolored from the active theme: item `i` takes palette
+     * slot `i % paletteSize`. Subclasses whose series render in a different
+     * order than their legend items appear (LineChart plots an unlisted
+     * primary series first) override this to keep indicators and strokes
+     * the same color.
+     *
+     * @return list<array{label: string, color: string}>
+     */
+    protected function themeLegendItems(): array
+    {
+        $theme = $this->theme;
+        if ($theme === null) {
+            return $this->legendItems;
+        }
+
+        $palette = self::themePalette($theme);
+        $size    = count($palette);
+
+        $items = $this->legendItems;
+        foreach ($items as $i => $item) {
+            $items[$i]['color'] = $palette[$i % $size]->toHex();
+        }
+
+        return $items;
     }
 
     /**
@@ -225,13 +284,27 @@ abstract class Chart
         return $this->copy(yLabel: $label);
     }
 
-    /** Enable or disable data point labels. */
+    /**
+     * Enable or disable data point labels.
+     *
+     * Value labels are drawn by {@see BarChart} through its own
+     * `withDataLabels()` (a row of bar values above the bars, or a suffix
+     * per row in horizontal mode). On this base only the flag is stored —
+     * LineChart's dot-per-column geometry has no room to print a number
+     * next to each sample, so nothing renders. Bar labels (the category
+     * names under each bar) are the separate `showLabels` axis.
+     */
     public function withDataLabels(bool $show = true): self
     {
         return $this->copy(showDataLabels: $show);
     }
 
-    /** Set a custom formatter for data point labels. */
+    /**
+     * Set a custom formatter for data point labels. Storage-only on this
+     * base — see {@see withDataLabels()} for which class actually renders.
+     * (BarChart's own `withDataLabelFormatter()` is the consuming API:
+     * `fn(Bar $bar, int $index): string`.)
+     */
     public function withDataLabelFormatter(\Closure $formatter): self
     {
         return $this->copy(dataLabelFormatter: $formatter);
@@ -267,10 +340,17 @@ abstract class Chart
     }
 
     /**
-     * Apply a named color theme to the chart.
-     * Themes provide consistent foreground/background/primary/secondary
-     * colors. Use Theme::dracula(), Theme::oneDark(), etc.
-     * Mirrors sugar-style Theme palette (step 02.01).
+     * Apply a named color theme to the chart. The theme's palette drives
+     * every series color and legend indicator: series render in
+     * primary/accent/info/success/warning/secondary/error order (cycling),
+     * and the legend recolours to match. Without a theme, series render
+     * with their default colors (cell mode: unstyled; braille mode: the
+     * legend's CSS colors) — the unthemed output is byte-identical.
+     * Honored by {@see LineChart}, the only class extending this base;
+     * {@see BarChart} and the rest compose their own legends via the
+     * ChartExtras trait and have no theme surface. Use
+     * `Theme::dracula()`, `Theme::oneDark()`, etc. Mirrors sugar-style
+     * `Theme` palette roles.
      */
     public function withTheme(Theme $theme): self
     {
@@ -306,19 +386,38 @@ abstract class Chart
         return $this->copy(animationProgress: max(0.0, min(1.0, $progress)));
     }
 
-    /** Set animation duration in milliseconds (0 = instant, no animation). */
+    /**
+     * Set animation duration in milliseconds (0 = instant, no animation).
+     *
+     * Storage only: rendering is progress-driven ({@see
+     * withAnimationProgress()} is what actually clamps the frame). The
+     * duration is the wall-clock budget a CALLER's driver loop should pace
+     * progress across — no renderer here owns a clock (chart libraries
+     * must not spawn timers; the embedding program does). Read it back with
+     * `getAnimationDuration()` / drive the frames with your own loop.
+     */
     public function withAnimationDuration(int $durationMs): self
     {
         return $this->copy(animationDuration: $durationMs);
     }
 
-    /** Returns current animation progress (0.0 to 1.0). */
+    /**
+     * Returns current animation progress (0.0 to 1.0).
+     *
+     * Kept `get`-prefixed by exception: the bare short form
+     * `animationProgress()` is taken by the {@see withAnimationProgress()}
+     * alias (see README "Accessor conventions").
+     */
     public function getAnimationProgress(): float
     {
         return $this->animationProgress;
     }
 
-    /** Returns animation duration in milliseconds. */
+    /**
+     * Returns animation duration in milliseconds. Bare name occupied by
+     * the setter alias — see {@see getAnimationProgress()} for the
+     * exception note.
+     */
     public function getAnimationDuration(): int
     {
         return $this->animationDuration;

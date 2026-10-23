@@ -35,7 +35,7 @@ final class Canvas
      * Write a single rune into cell ($x, $y). Out-of-range
      * coordinates are silently dropped (no exception).
      *
-     * Audit F6: the rune is measured with the shared sugar-core display
+     * the rune is measured with the shared sugar-core display
      * width. A wide (CJK / emoji) rune claims two columns — the next one
      * receives a width-0 continuation cell — and a zero-width cluster
      * claims none; ordinary single-cell runes behave exactly as before.
@@ -66,6 +66,9 @@ final class Canvas
      * return an empty placeholder Cell.
      *
      * @return Cell
+     *
+     * @deprecated Use {@see self::cell()} — the house law is bare
+     *             accessors (no `get` prefix).
      */
     public function getCell(int $x, int $y): Cell
     {
@@ -73,6 +76,15 @@ final class Canvas
             return new Cell();
         }
         return $this->cells[$y][$x] ?? new Cell();
+    }
+
+    /**
+     * Bare-name accessor for {@see self::getCell()} — the house law is
+     * accessors without a `get` prefix.
+     */
+    public function cell(int $x, int $y): Cell
+    {
+        return $this->getCell($x, $y);
     }
 
     /**
@@ -93,8 +105,20 @@ final class Canvas
     /**
      * Read a cell's style (or null when unset). Mirrors ntcharts'
      * `GetCellStyle`.
+     *
+     * @deprecated Use {@see self::cellStyle()} — the house law is bare
+     *             accessors (no `get` prefix).
      */
     public function getCellStyle(int $x, int $y): ?Style
+    {
+        return $this->getCell($x, $y)->style;
+    }
+
+    /**
+     * Bare-name accessor for {@see self::getCellStyle()} — the house
+     * law is accessors without a `get` prefix.
+     */
+    public function cellStyle(int $x, int $y): ?Style
     {
         return $this->getCell($x, $y)->style;
     }
@@ -105,7 +129,7 @@ final class Canvas
      * ntcharts' `SetRunes` when used per-row. Cells that fall outside
      * the canvas bounds are silently dropped.
      *
-     * Audit F6: advancement is by each rune's DISPLAY width, so a wide
+     * Advancement is by each rune's DISPLAY width, so a wide
      * rune consumes two columns instead of nudging the rest of the row
      * one cell to the left of where the terminal will paint it. A
      * zero-width mark is MERGED into the cell just written (below 8.4

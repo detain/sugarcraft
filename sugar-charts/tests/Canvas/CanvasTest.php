@@ -321,4 +321,14 @@ final class CanvasTest extends TestCase
         $c->setString(0, 0, "a\u{0301}b");
         self::assertSame('a' . "\u{0301}" . 'b', $c->view());
     }
+
+    public function testBareAccessorsAgreeWithTheGetPrefixedOnes(): void
+    {
+        $c = new Canvas(2, 2);
+        $c->setCell(1, 1, 'q', Style::new()->bold());
+        self::assertSame($c->getCell(1, 1), $c->cell(1, 1));
+        self::assertSame($c->getCellStyle(1, 1), $c->cellStyle(1, 1));
+        self::assertNull($c->cellStyle(0, 0));
+        self::assertEquals($c->getCell(9, 9), $c->cell(9, 9));
+    }
 }

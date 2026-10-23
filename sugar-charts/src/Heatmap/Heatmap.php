@@ -56,7 +56,7 @@ final class Heatmap
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('heatmap.dim_nonneg'));
         }
-        // Audit F3: pinned value range must be finite and ordered.
+        // pinned value range must be finite and ordered.
         Range::pin($min, $max, 'value');
     }
 
@@ -187,6 +187,11 @@ final class Heatmap
         return $this->copy(cellStyle: $style, cellStyleSet: true);
     }
 
+    /**
+     * Read the pre-styled overlay. The bare `cellStyle()` name is taken
+     * by the setter alias ({@see withCellStyle()}), so this accessor keeps
+     * the `get` prefix as a documented exception to the house law.
+     */
     public function getCellStyle(): ?Style { return $this->cellStyle; }
 
     /**
@@ -201,6 +206,11 @@ final class Heatmap
         return $this->copy(autoValueRange: $on);
     }
 
+    /**
+     * Read the auto-range flag. The bare `autoValueRange()` name is taken
+     * by the setter alias ({@see withAutoValueRange()}), so this accessor
+     * keeps the `get` prefix as a documented exception to the house law.
+     */
     public function getAutoValueRange(): bool { return $this->autoValueRange; }
 
     // Short-form aliases.

@@ -308,4 +308,28 @@ final class GraphTest extends TestCase
         $view = $c->view();
         $this->assertNotEmpty(trim($view));
     }
+
+    public function testBareStaticAliasesReturnIdenticalSamples(): void
+    {
+        $this->assertSame(
+            Graph::getCirclePoints(4, 4, 3, 16),
+            Graph::circlePoints(4, 4, 3, 16),
+        );
+        $this->assertSame(
+            Graph::getCirclePointsWithLimit(4, 4, 3, 5),
+            Graph::circlePointsWithLimit(4, 4, 3, 5),
+        );
+        $this->assertSame(
+            Graph::getFullCirclePoints(4, 4, 3),
+            Graph::fullCirclePoints(4, 4, 3),
+        );
+        $this->assertSame(
+            Graph::getFullCirclePointsWithLimit(4, 4, 3, 4),
+            Graph::fullCirclePointsWithLimit(4, 4, 3, 4),
+        );
+        $this->assertSame(
+            Graph::getLinePointsWithLimit(0, 0, 6, 2, 4),
+            Graph::linePointsWithLimit(0, 0, 6, 2, 4),
+        );
+    }
 }

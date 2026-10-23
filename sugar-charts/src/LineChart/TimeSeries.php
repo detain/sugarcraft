@@ -86,6 +86,14 @@ final class TimeSeries
         return $this->withTimeRange($start, $end);
     }
 
+    /**
+     * Read the pinned time range as [start, end] (either may be null).
+     * The bare `timeRange()` name is taken by the setter alias
+     * ({@see withTimeRange()}), so this accessor keeps the `get` prefix
+     * as a documented exception to the house law.
+     *
+     * @return array{0: ?\DateTimeImmutable, 1: ?\DateTimeImmutable}
+     */
     public function getTimeRange(): array
     {
         return [$this->rangeStart, $this->rangeEnd];

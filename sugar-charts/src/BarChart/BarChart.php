@@ -10,6 +10,7 @@ use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Range;
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
 /**
@@ -62,6 +63,9 @@ final class BarChart
         public readonly ?string $yLabel = null,
         private readonly array $legendItems = [],
         public readonly ?\Closure $barColorFn = null,
+        public readonly bool $autoBarWidth = true,
+        public readonly bool $showDataLabels = false,
+        public readonly ?\Closure $dataLabelFormatter = null,
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('barchart.dim_nonneg'));
@@ -72,7 +76,7 @@ final class BarChart
         if ($barGap !== null && $barGap < 0) {
             throw new \InvalidArgumentException(Lang::t('barchart.bar_gap_nonneg'));
         }
-        // Audit F3: pinned value range must be finite and ordered.
+        // pinned value range must be finite and ordered.
         Range::pin($min, $max, 'value');
     }
 
@@ -135,6 +139,11 @@ final class BarChart
 
     public function withMin(?float $m): self       { return $this->copy(min: $m, minSet: true); }
     public function withMax(?float $m): self       { return $this->copy(max: $m, maxSet: true); }
+    /**
+     * Show the CATEGORY labels under each bar (vertical) or left of each
+     * row (horizontal) — the axis text, not the values. For values on the
+     * bars use {@see withDataLabels()}.
+     */
     public function withShowLabels(bool $on): self { return $this->copy(showLabels: $on); }
 
     /**
@@ -183,7 +192,11 @@ final class BarChart
      */
     public function withBarWidth(?int $width): self
     {
-        return $this->barWidthCopy(barWidth: $width, barWidthSet: true);
+        return $this->copy(
+            barWidth:      $width,
+            barWidthSet:   true,
+            autoBarWidth:  $width === null,
+        );
     }
 
     /**
@@ -198,17 +211,19 @@ final class BarChart
     }
 
     /**
-     * Disable auto-fit on `barWidth` — synonymous with
-     * `withBarWidth($w)` once a width is pinned, but expressed as a
-     * boolean for parity with ntcharts' `WithNoAutoBarWidth`. With
-     * no pinned barWidth this is a no-op.
+     * Disable auto-fit of bar width (vertical mode; horizontal bars grow
+     * across the width and never auto-fit). With a pinned
+     * {@see withBarWidth()} this is equivalent to that pin alone; without
+     * one, each bar renders exactly 1 cell wide instead of distributing
+     * the available width — the ntcharts `WithNoAutoBarWidth` shape.
+     * `false` re-enables auto-fit and clears any width pin.
      */
     public function withNoAutoBarWidth(bool $on = true): self
     {
         if (!$on) {
-            return $this->barWidthCopy(barWidth: null, barWidthSet: true);
+            return $this->copy(autoBarWidth: true, barWidth: null, barWidthSet: true);
         }
-        return $this;
+        return $this->copy(autoBarWidth: false);
     }
 
     /**
@@ -229,6 +244,29 @@ final class BarChart
     public function withBarColor(?\Closure $fn): self
     {
         return $this->copy(barColorFn: $fn, barColorFnSet: true);
+    }
+
+    /**
+     * Render each bar's VALUE as a text label: a centered row above the
+     * bars (vertical mode, one cell-run per bar column) or a suffix
+     * trailing each row's bar (horizontal mode, only where the width
+     * budget fits). The category labels under the bars are the separate
+     * `showLabels` axis. Labels are plain text (never colored). Mirrors
+     * ntcharts' `SetShowDataLabels`.
+     */
+    public function withDataLabels(bool $show = true): self
+    {
+        return $this->copy(showDataLabels: $show);
+    }
+
+    /**
+     * Custom value formatter: `fn(Bar $bar, int $index): string`. Default
+     * prints integral values bare and trims trailing zeros of a
+     * 2-decimal rendering (12 → "12", 2.5 → "2.5", 2.25 → "2.25").
+     */
+    public function withDataLabelFormatter(\Closure $formatter): self
+    {
+        return $this->copy(dataLabelFormatter: $formatter);
     }
 
     // ─── Legend & Label Configuration ──────────────────────────────────
@@ -298,6 +336,8 @@ final class BarChart
     /** Short-form alias for {@see withFractionalHeights()}. */
     public function fractional(bool $on = true): self { return $this->withFractionalHeights($on); }
     public function barWidth(?int $width): self       { return $this->withBarWidth($width); }
+    public function dataLabels(bool $on = true): self { return $this->withDataLabels($on); }
+    public function dataLabelFormat(\Closure $fn): self { return $this->withDataLabelFormatter($fn); }
     public function barGap(?int $gap): self           { return $this->withBarGap($gap); }
     /** Short-form alias for {@see withNoAutoBarWidth()}. */
     public function noAutoBarWidth(bool $on = true): self { return $this->withNoAutoBarWidth($on); }
@@ -397,6 +437,8 @@ final class BarChart
         }
         if ($this->barWidth !== null) {
             $colW = $this->barWidth;
+        } elseif (!$this->autoBarWidth) {
+            $colW = 1;
         } else {
             $avail = $this->width - ($count - 1) * $gap;
             $colW  = max(1, intdiv($avail, max(1, $count)));
@@ -456,6 +498,19 @@ final class BarChart
             }
             $rows[] = rtrim($labelRow);
         }
+
+        // Value labels ride their own top row (the bar grid has no room
+        // beside a bar): one cell-run per bar, centered over its column.
+        if ($this->showDataLabels) {
+            $valueRow = $this->showAxis ? ' ' : '';
+            foreach ($bars as $i => $bar) {
+                $text  = self::truncate($this->dataLabel($bar, $i), $colW);
+                $cell  = Width::padCenter($text, $colW, ' ');
+                $valueRow .= $i === 0 ? $cell : str_repeat(' ', $gap) . $cell;
+            }
+            array_unshift($rows, rtrim($valueRow));
+        }
+
         return implode("\n", $rows);
     }
 
@@ -481,7 +536,7 @@ final class BarChart
         $labelGutter = 0;
         if ($this->showLabels) {
             foreach ($bars as $b) {
-                $labelGutter = max($labelGutter, mb_strlen($b->label, 'UTF-8'));
+                $labelGutter = max($labelGutter, Width::string($b->label));
             }
             $labelGutter = min($labelGutter, max(1, intdiv($this->width, 3)));
         }
@@ -504,19 +559,55 @@ final class BarChart
             $row = '';
             if ($this->showLabels) {
                 $label = self::truncate($bar->label, $labelGutter);
-                $row .= str_pad($label, $labelGutter, ' ', STR_PAD_RIGHT) . ' ';
+                $row .= Width::padRight($label, $labelGutter, ' ') . ' ';
             }
             if ($this->showAxis) {
                 $row .= '├';
             }
             $body = str_repeat('█', $filled) . $cap;
             $row .= $body !== '' && $styles[$i] !== null ? $styles[$i]->render($body) : $body;
+            // Value labels trail the bar when the width budget allows
+            // (the cell geometry is known without re-measuring the
+            // styled run): gutter + separator + axis + bar cells.
+            if ($this->showDataLabels) {
+                $printed = $labelGutter + ($this->showLabels ? 1 : 0) + $axisCol + $filled + ($cap !== '' ? 1 : 0);
+                $text    = $this->dataLabel($bar, $i);
+                $room    = $this->width - $printed - 1;
+                if ($room >= 1) {
+                    $row .= ' ' . self::truncate($text, $room);
+                }
+            }
             $rows[] = rtrim($row);
         }
         return implode("\n", $rows);
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Render a bar's value as its data label text: through
+     * {@see $dataLabelFormatter} when set, else the default
+     * integral-or-trimmed-2dp form.
+     */
+    private function dataLabel(Bar $bar, int $i): string
+    {
+        if ($this->dataLabelFormatter !== null) {
+            return (string) ($this->dataLabelFormatter)($bar, $i);
+        }
+        return self::defaultDataLabel($bar->value);
+    }
+
+    /**
+     * Default value text: whole numbers print bare (12, not 12.00);
+     * fractional values print up to 2dp with trailing zeros trimmed.
+     */
+    private static function defaultDataLabel(float $value): string
+    {
+        if ($value === floor($value) && abs($value) < 1.0e15) {
+            return (string) (int) $value;
+        }
+        return rtrim(rtrim(sprintf('%.2f', $value), '0'), '.');
+    }
 
     /**
      * Resolve each rendered bar's style through {@see $barColorFn}; all
@@ -574,10 +665,9 @@ final class BarChart
         if ($max <= 0) {
             return '';
         }
-        if (mb_strlen($s, 'UTF-8') <= $max) {
-            return $s;
-        }
-        return mb_substr($s, 0, $max, 'UTF-8');
+        // Cell-correct cut: codepoint counting desyncs columns on CJK
+        // and emoji labels (each is 1 codepoint but 2 terminal cells).
+        return Width::truncate($s, $max);
     }
 
     /**
@@ -647,6 +737,9 @@ final class BarChart
         ?array $legendItems = null,
         ?\Closure $barColorFn = null,
         bool $barColorFnSet = false,
+        ?bool $autoBarWidth = null,
+        ?bool $showDataLabels = null,
+        ?\Closure $dataLabelFormatter = null,
     ): self {
         return new self(
             bars:               $bars               ?? $this->bars,
@@ -669,35 +762,9 @@ final class BarChart
             yLabel:             $yLabel             ?? $this->yLabel,
             legendItems:        $legendItems        ?? $this->legendItems,
             barColorFn:         $barColorFnSet ? $barColorFn : $this->barColorFn,
-        );
-    }
-
-    /**
-     * Specialized copy for barWidth to handle explicit null.
-     */
-    private function barWidthCopy(?int $barWidth, bool $barWidthSet): self
-    {
-        return new self(
-            bars:               $this->bars,
-            width:              $this->width,
-            height:             $this->height,
-            min:                $this->min,
-            max:                $this->max,
-            showLabels:         $this->showLabels,
-            horizontal:         $this->horizontal,
-            showAxis:           $this->showAxis,
-            fractionalHeights:  $this->fractionalHeights,
-            barWidth:           $barWidthSet ? $barWidth : ($barWidth ?? $this->barWidth),
-            barGap:             $this->barGap,
-            showLegend:         $this->showLegend,
-            legendPosition:     $this->legendPosition,
-            legendIndicatorChar:$this->legendIndicatorChar,
-            title:              $this->title,
-            titlePosition:      $this->titlePosition,
-            xLabel:             $this->xLabel,
-            yLabel:             $this->yLabel,
-            legendItems:        $this->legendItems,
-            barColorFn:         $this->barColorFn,
+            autoBarWidth:       $autoBarWidth       ?? $this->autoBarWidth,
+            showDataLabels:     $showDataLabels     ?? $this->showDataLabels,
+            dataLabelFormatter: $dataLabelFormatter ?? $this->dataLabelFormatter,
         );
     }
 }

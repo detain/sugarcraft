@@ -137,7 +137,7 @@ final class Graph
             for ($i = 0; $i < $count; $i++) {
                 $col = $xOrigin + (int) round($i * ($xLen - 1) / max(1, $count - 1));
                 $label = $xLabels[$i];
-                // Audit F6: anchor by DISPLAY width — mb_strlen charges an
+                // anchor by DISPLAY width — mb_strlen charges an
                 // escape-free CJK/emoji rune 1, the terminal paints it 2.
                 $labelLen = Width::string($label);
                 if ($i === $count - 1 && $count > 1) {
@@ -376,6 +376,42 @@ final class Graph
     }
 
     /**
+     * Bare-name aliases for the sampling helpers — the house law is
+     * accessors/factories without a `get` prefix. The `get*` spellings
+     * remain as the ntcharts mirror surface.
+     *
+     * @return list<array{0:int,1:int}>
+     */
+    public static function circlePoints(int $cx, int $cy, int $radius, int $samples = 32): array
+    {
+        return self::getCirclePoints($cx, $cy, $radius, $samples);
+    }
+
+    /** @return list<array{0:int,1:int}> */
+    public static function circlePointsWithLimit(int $cx, int $cy, int $radius, int $limit, int $samples = 32): array
+    {
+        return self::getCirclePointsWithLimit($cx, $cy, $radius, $limit, $samples);
+    }
+
+    /** @return list<array{0:int,1:int}> */
+    public static function fullCirclePoints(int $cx, int $cy, int $radius): array
+    {
+        return self::getFullCirclePoints($cx, $cy, $radius);
+    }
+
+    /** @return list<array{0:int,1:int}> */
+    public static function fullCirclePointsWithLimit(int $cx, int $cy, int $radius, int $limit): array
+    {
+        return self::getFullCirclePointsWithLimit($cx, $cy, $radius, $limit);
+    }
+
+    /** @return list<array{0:int,1:int}> */
+    public static function linePointsWithLimit(int $x0, int $y0, int $x1, int $y1, int $limit): array
+    {
+        return self::getLinePointsWithLimit($x0, $y0, $x1, $y1, $limit);
+    }
+
+    /**
      * Draw a vertical line from bottom (`$yBottom`) up to `$yTop`. Mirrors
      * ntcharts' `DrawVerticalLineUp`.
      */
@@ -608,7 +644,7 @@ final class Graph
 
         // Pick the nicest multiplier: 1, 2, 5, 10.
         //
-        // Audit F22: the comparison used to be `$candidate >= $step10`,
+        // the comparison used to be `$candidate >= $step10`,
         // which the very first candidate (m = 1.0) always satisfied — the
         // 2/5/10 rungs were dead code and every step collapsed to a bare
         // power of ten (range 0..3 with target 5 emitted 31 ticks). The

@@ -20,16 +20,22 @@ use SugarCraft\Style\Style;
 use SugarCraft\Style\Theme;
 
 /**
- * Single-series line plot drawn onto a {@see Canvas}. Each data point
+ * Multi-series line plot drawn onto a {@see Canvas}. Each data point
  * becomes one column; the series is scaled into the canvas height and
  * a `*` (configurable) is plotted at the rounded row. Adjacent points
  * are connected with `|`, `/`, or `\` strokes when their rows differ,
  * giving an at-a-glance trend without requiring sub-cell rasterisation.
- * `withUnicodeConnectors()` swaps those strokes for the `│ ─ ╱ ╲` runes
- * used by {@see Waveline}; ASCII remains the default.
+ * The unnamed `$data` series renders first; {@see withDataset()} adds
+ * named series on the same Y scale with automatic legend entries and a
+ * cycling per-series color. {@see withTheme()} recolors every series and
+ * legend indicator from a sugar-style `Theme` palette, and
+ * `withUnicodeConnectors()` swaps the connector strokes for the `│ ─ ╱ ╲`
+ * runes used by {@see Waveline} (ASCII remains the default).
  *
  * ```php
- * echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view();
+ * $chart = LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)
+ *     ->withDataset('trend', [2, 3, 5, 7, 6, 4, 5]);
+ * echo $chart->view();
  * ```
  */
 final class LineChart extends Chart
@@ -114,7 +120,7 @@ final class LineChart extends Chart
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('linechart.dim_nonneg'));
         }
-        // Audit F3: every ingestion door (new / with* / lineChartCopy)
+        // every ingestion door (new / with* / lineChartCopy)
         // rebuilds through this constructor, so one check pair covers both
         // axes for NaN/INF endpoints and inverted ranges. `null` ends are
         // legal and mean "auto" — including autoAdjustRange()'s all-null.
@@ -221,13 +227,11 @@ final class LineChart extends Chart
     /**
      * Add or replace a named series, auto-managing its legend entry.
      *
-     * REPLACE semantics (audit F4 fix): re-calling with an existing name
-     * swaps that series' values and keeps its original legend slot and
-     * colour — the former code de-duplicated `datasets` by name but always
-     * APPENDED a legend item, so a re-call produced a duplicated label and
-     * shifted the colour cycle for every later series. A brand-new name
-     * appends its legend entry with the next colour in the cycle, exactly
-     * as before (append-only flows render byte-identically).
+     * REPLACE semantics: re-calling with an existing name swaps that
+     * series' values and keeps its original legend slot and colour, so a
+     * re-call never duplicates the label or shifts the colour cycle for
+     * later series. A brand-new name appends its legend entry with the
+     * next colour in the cycle (append-only flows render identically).
      *
      * @param list<int|float> $values
      */
@@ -325,8 +329,9 @@ final class LineChart extends Chart
      * Per-point color resolver: `fn(string $dataset, int $x, float $value): ?Color`.
      * A non-null Color overrides the series color for that sample's dot,
      * its fill run, and the connector segment leaving it; null falls
-     * through to the existing per-series resolution (legend color in
-     * braille mode, unstyled in cell mode). `$dataset` is the series name
+     * through to the series default — the theme palette slot when a theme
+     * is active, otherwise the legend color (braille mode) or unstyled
+     * (cell mode). `$dataset` is the series name
      * ({@see PRIMARY_SERIES} for the unnamed `$data` series) and `$x` the
      * sample's index in that series. WHY: btop colors every graph point
      * by its value through the theme gradient, so one color per series is
@@ -430,13 +435,21 @@ final class LineChart extends Chart
         return $this->lineChartCopy(yLabel: $label);
     }
 
-    /** Enable or disable data point labels. */
+    /**
+     * Enable or disable data point labels. Storage-only on LineChart:
+     * one column per sample leaves no room to print the value beside it.
+     * Use {@see BarChart::withDataLabels()} for rendered value labels,
+     * or read the numbers from your own `$data` array.
+     */
     public function withDataLabels(bool $show = true): self
     {
         return $this->lineChartCopy(showDataLabels: $show);
     }
 
-    /** Set a custom formatter for data point labels. */
+    /**
+     * Set a custom formatter for data point labels. Storage-only on
+     * LineChart — see {@see withDataLabels()}.
+     */
     public function withDataLabelFormatter(\Closure $formatter): self
     {
         return $this->lineChartCopy(dataLabelFormatter: $formatter);
@@ -468,11 +481,45 @@ final class LineChart extends Chart
     }
 
     /**
-     * Apply a named color theme to the chart.
+     * Apply a named color theme. The palette colors every series (ASCII
+     * and braille modes) and the legend indicators; the unnamed primary
+     * series takes slot 0, then {@see withDataset()} series in insertion
+     * order. Unthemed rendering is byte-identical to the historical
+     * default (legend CSS colors in braille mode, unstyled in cell mode).
      */
     public function withTheme(Theme $theme): self
     {
         return $this->lineChartCopy(theme: $theme);
+    }
+
+    /**
+     * Legend indicators must match the strokes: LineChart plots an
+     * implicit {@see PRIMARY_SERIES} first that usually carries no legend
+     * entry, so a dataset named "temp" is legend slot 0 but render slot 1.
+     * Map each label to its position in the render order before taking a
+     * palette slot; unknown labels fall back to their own legend index.
+     *
+     * @return list<array{label: string, color: string}>
+     */
+    protected function themeLegendItems(): array
+    {
+        $theme = $this->theme;
+        if ($theme === null) {
+            return $this->legendItems;
+        }
+
+        $palette = self::themePalette($theme);
+        $size    = count($palette);
+        $order   = array_keys([self::PRIMARY_SERIES => true] + $this->datasets);
+
+        $items = $this->legendItems;
+        foreach ($items as $i => $item) {
+            $slot   = array_search($item['label'], $order, true);
+            $index  = $slot === false ? $i : (int) $slot;
+            $items[$i]['color'] = $palette[$index % $size]->toHex();
+        }
+
+        return $items;
     }
 
     /**
@@ -497,7 +544,11 @@ final class LineChart extends Chart
         return $this->lineChartCopy(animationProgress: max(0.0, min(1.0, $progress)));
     }
 
-    /** Set animation duration in milliseconds (0 = instant, no animation). */
+    /**
+     * Set animation duration in milliseconds (0 = instant, no animation).
+     * Storage-only pacing hint for the caller's frame loop — rendering
+     * reads only `withAnimationProgress()`; no renderer here owns a clock.
+     */
     public function withAnimationDuration(int $durationMs): self
     {
         return $this->lineChartCopy(animationDuration: $durationMs);
@@ -580,7 +631,7 @@ final class LineChart extends Chart
         if ($this->showAxes) {
             $maxYLabel = 0;
             foreach ($yLabels as $lbl) {
-                // Audit F6: gutter sized by DISPLAY width, not codepoint count.
+                // gutter sized by DISPLAY width, not codepoint count.
                 $maxYLabel = max($maxYLabel, Width::string($lbl));
             }
             $gutterLeft   = max(2, $maxYLabel + 1);
@@ -592,7 +643,7 @@ final class LineChart extends Chart
         // Plot primary + named series on the same axes.
         $allSeries = [self::PRIMARY_SERIES => $this->data] + $this->datasets;
         if ($this->brailleCanvas !== null) {
-            // Audit F11: braille mode — series rasterize into a dot grid
+            // braille mode — series rasterize into a dot grid
             // (2×4 dots per cell) so per-dataset legend colors reach the
             // strokes. MarkLines and the axis frame still compose in cell
             // space above/below the dot region.
@@ -600,7 +651,16 @@ final class LineChart extends Chart
         } else {
             /** @var array<string,Style> $pointStyleMemo */
             $pointStyleMemo = [];
+            // Theme palette drives series color when set; without a theme
+            // cell mode stays unstyled (byte-identical default path).
+            $themePalette = $this->theme === null ? [] : self::themePalette($this->theme);
+            $paletteSize  = count($themePalette);
+            $seriesIndex  = 0;
             foreach ($allSeries as $name => $values) {
+                $seriesStyle = $paletteSize === 0
+                    ? null
+                    : Style::new()->fg($themePalette[$seriesIndex % $paletteSize]);
+                $seriesIndex++;
                 if ($values === []) {
                     continue;
                 }
@@ -631,11 +691,12 @@ final class LineChart extends Chart
                         break;
                     }
                     [$x, $y] = $coords[$i];
-                    // No resolver → no per-point style: the unstyled
-                    // default stays byte-identical.
+                    // No resolver → the series default: null (unstyled)
+                    // without a theme, the theme slot with one; the
+                    // unthemed default stays byte-identical.
                     $style = $this->seriesColorFn === null
-                        ? null
-                        : $this->pointStyle((string) $name, $xOffset + $i, (float) $points[$i], null, $pointStyleMemo);
+                        ? $seriesStyle
+                        : $this->pointStyle((string) $name, $xOffset + $i, (float) $points[$i], $seriesStyle, $pointStyleMemo);
                     $canvas->setCell($x, $y, $rune, $style);
                     // Draw connector to next point if within animation bounds
                     if ($i + 1 < $maxPointIndex) {
@@ -732,7 +793,27 @@ final class LineChart extends Chart
         /** @var array<string,Style> $pointStyleMemo */
         $pointStyleMemo = [];
 
+        // Theme palette wins over the legend's CSS colors when set; the
+        // legend-colored default path stays byte-identical unthemed.
+        $themePalette = $this->theme === null ? [] : self::themePalette($this->theme);
+        $paletteSize  = count($themePalette);
+        $seriesIndex  = 0;
+
         foreach ($allSeries as $name => $values) {
+            if ($paletteSize === 0) {
+                $colorName = $colorByLabel[$name] ?? null;
+                if ($colorName === null) {
+                    $seriesStyle = null;
+                } else {
+                    if (!array_key_exists($colorName, $styleMemo)) {
+                        $styleMemo[$colorName] = self::styleForColor($colorName);
+                    }
+                    $seriesStyle = $styleMemo[$colorName];
+                }
+            } else {
+                $seriesStyle = Style::new()->fg($themePalette[$seriesIndex % $paletteSize]);
+            }
+            $seriesIndex++;
             if ($values === []) {
                 continue;
             }
@@ -740,11 +821,6 @@ final class LineChart extends Chart
             $count  = count($points);
             $maxPointIndex = min($count, max(0, (int) floor($count * $progress)));
 
-            $colorName = $colorByLabel[$name] ?? null;
-            if ($colorName !== null && !array_key_exists($colorName, $styleMemo)) {
-                $styleMemo[$colorName] = self::styleForColor($colorName);
-            }
-            $seriesStyle = $colorName === null ? null : $styleMemo[$colorName];
             $xOffset = count($values) - $count;
 
             $coords = [];
