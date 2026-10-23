@@ -201,6 +201,8 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). Bugs, feature requests,
 and new libraries — original tools, components, and terminal apps that
 fill gaps in the PHP stack — are all welcome.
 For security issues, see [SECURITY.md](./SECURITY.md).
+The fleet trust model — what counts as untrusted input and where the
+sanitize gates must sit — is [docs/TRUST-BOUNDARY.md](./docs/TRUST-BOUNDARY.md).
 
 ## License
 
