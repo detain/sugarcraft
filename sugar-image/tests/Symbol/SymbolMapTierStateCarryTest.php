@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Symbol\SymbolMap;
 
 /**
- * A-05: tier-mutator full state-carry — every tier ADDER composes onto the
+ * Tier-mutator full state-carry — every tier ADDER composes onto the
  * current map, so narrow defs, the wide symbols2 selection, and the latin /
  * ascii-ibm face / kana flags all ride through. Before the fix,
  * withLatin() and withAsciiIbm() rebuilt the map without the wide tier:

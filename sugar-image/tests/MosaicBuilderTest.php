@@ -49,9 +49,9 @@ final class MosaicBuilderTest extends TestCase
     protected function tearDown(): void
     {
         parent::tearDown();
-        // F-05: re-arm the default any test opted out of (see the tmux dither pin).
+        // Re-arm the default any test opted out of (see the tmux dither pin).
         Detect::setAutoPassthrough(true);
-        // F-04: likewise, the termfeatures override must not outlive the test.
+        // Likewise, the termfeatures override must not outlive the test.
         Detect::clearTmuxTermFeaturesOverride();
         foreach ($this->savedEnv as $key => $value) {
             if ($value === false) {
@@ -129,7 +129,7 @@ final class MosaicBuilderTest extends TestCase
         putenv('TERM=xterm');
         $_ENV['TMUX'] = '/tmp/tmux-1000/default,1234,0';
         putenv('TMUX=/tmp/tmux-1000/default,1234,0');
-        // F-05 opted this pin out of the allow-passthrough transaction: the
+        // Opted this pin out of the allow-passthrough transaction: the
         // fake TMUX is decoration for the envelope/dither wiring under test,
         // and the transaction itself is pinned in TmuxPassthroughTest. F-04
         // opted the same way: on this devbox the socket component of the

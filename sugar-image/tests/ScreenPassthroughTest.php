@@ -16,7 +16,7 @@ use SugarCraft\Image\TermInfo;
 use SugarCraft\Image\TmuxPassthroughDecorator;
 
 /**
- * F-12: GNU Screen passthrough envelope — packetization at the 200-byte
+ * GNU Screen passthrough envelope — packetization at the 200-byte
  * cap with no ESC-doubling, plus the byte-wise ST workaround.
  *
  * Byte expectations are computed inline (zero-golden law), each shaped by

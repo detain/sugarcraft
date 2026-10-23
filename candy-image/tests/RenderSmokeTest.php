@@ -1,7 +1,7 @@
 <?php
 
 /**
- * F-18: golden-free render smokes for candy-image — a generated fixture goes
+ * Golden-free render smokes for candy-image — a generated fixture goes
  * through the real CLI and the bytes land on the caller's stdout stream.
  * No terminal is faked: with STDOUT piped (every phpunit run), detection
  * answers from the env table and Mosaic's always-available floor renders,

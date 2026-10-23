@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Codec\RawRgba;
 
 /**
- * F-13: the kitty `f=32` raw-quad serialiser — endianness, batching,
+ * The kitty `f=32` raw-quad serialiser — endianness, batching,
  * the GD bridge, and fail-fast length guards.
  */
 final class RawRgbaTest extends TestCase

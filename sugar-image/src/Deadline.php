@@ -14,7 +14,7 @@ namespace SugarCraft\Image;
  * the deprecated alias of remainingMs(). So a caller feeding remainingMs() to
  * stream_select as `$ms * 1000` microseconds waits real milliseconds — never
  * the 1000x-short window a microsecond-worth-of-a-nanosecond-budget used to
- * arm (lane p2, N1: the multi-chunk terminal-probe replies of Mosaic::auto()
+ * arm (the multi-chunk terminal-probe replies of Mosaic::auto()
  * truncated after about a millisecond of inter-chunk gap, silently degrading
  * capability detection).
  */
@@ -36,7 +36,7 @@ final class Deadline
     }
 
     /**
-     * D-06: Remaining whole milliseconds, floored, clamped at 0.
+     * Remaining whole milliseconds, floored, clamped at 0.
      *
      * Floor, never round: a caller sleeping `remainingMs() * 1000`
      * microseconds stays inside the budget instead of overshooting the
@@ -54,7 +54,7 @@ final class Deadline
     }
 
     /**
-     * D-06: Whether the budget has run out, judged on the raw ns clock.
+     * Whether the budget has run out, judged on the raw ns clock.
      *
      * Exact `<= 0`: the target instant having been reached is expiry (zero
      * budget left is nothing left to spend). Never derived through a
@@ -67,7 +67,7 @@ final class Deadline
     }
 
     /**
-     * D-06: @deprecated alias for {@see remainingMs()}.
+     * @Deprecated alias for {@see remainingMs()}.
      *
      * This method used to round, so a 0.4 ms live budget read as 0/expired
      * and a `remaining() * 1000`-microsecond sleep could run up to 0.5 ms

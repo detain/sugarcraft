@@ -12,7 +12,7 @@ use SugarCraft\Image\Symbol\SymbolMap;
 use SugarCraft\Image\Symbol\SymbolSetKana;
 
 /**
- * A-09: the wide-glyph engine — chafa's update_cells_row lookback
+ * The wide-glyph engine — chafa's update_cells_row lookback
  * (chafa-symbol-renderer.c:790) ported into SymbolMapRenderer.
  *
  * Every fixture below is BUILT from a real kana outline (left half into
@@ -90,7 +90,7 @@ final class SymbolWideEngineTest extends TestCase
 
     public function testTheFastAndExhaustiveWideTrialsAgreeOnTheSyntheticPair(): void
     {
-        // D-03 dial dispatch on the wide path: the Hamming shortlist holds
+        // Dial dispatch on the wide path: the Hamming shortlist holds
         // the exact glyph, so the exhaustive symbols2 scan cannot beat it.
         $strip = self::kanaStrip([0x3042]);
 
@@ -163,7 +163,7 @@ final class SymbolWideEngineTest extends TestCase
 
     public function testATransparentNeighbourIsNeverWidelyReplaced(): void
     {
-        // A-05a: a fully transparent cell keeps error 0, the pair is not
+        // A fully transparent cell keeps error 0, the pair is not
         // trialled, and the wide map emits the narrow bytes unchanged.
         $img = imagecreatetruecolor(16, 8);
         imagealphablending($img, false);

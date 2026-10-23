@@ -10,7 +10,7 @@ use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Image\Support\GdAvailability;
 
 /**
- * F-13: the kitty `f=32` raw-RGBA transmission — wire shape, GD-free
+ * The kitty `f=32` raw-RGBA transmission — wire shape, GD-free
  * ingress, and the clean GD-absence refusal on the decode ingress.
  *
  * The GD-absence legs run through {@see GdAvailability::override()} —

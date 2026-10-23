@@ -11,7 +11,7 @@ use SugarCraft\Image\Renderer\SixelRenderer;
 use LogicException;
 
 /**
- * F-12: GNU Screen passthrough envelope for a nested renderer.
+ * GNU Screen passthrough envelope for a nested renderer.
  *
  * chafa's passthrough encoder (internal/chafa-passthrough-encoder.c)
  * distinguishes tmux from Screen in both framing and escaping:

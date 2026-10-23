@@ -18,7 +18,7 @@ use SugarCraft\Image\Renderer\SixelRenderer;
 use SugarCraft\Image\Renderer\SixelRows;
 
 /**
- * D-05 — the paced async pump: bytes must match the one-shot render exactly
+ * — The paced async pump: bytes must match the one-shot render exactly
  * for every protocol, slice counts must be pinned off row arithmetic (never
  * a wall clock), and the loop must actually be yielded between slices.
  */
@@ -56,7 +56,7 @@ final class PacedAsyncRendererTest extends TestCase
     }
 
     /**
-     * D-05: sixel parity floor — full slice pump over the band stream equals
+     * Sixel parity floor — full slice pump over the band stream equals
      * Mosaic::render byte-for-byte, with the slice count pinned from row
      * arithmetic (head + 80 bands + terminator at rowsPerSlice 3).
      */
@@ -82,7 +82,7 @@ final class PacedAsyncRendererTest extends TestCase
     }
 
     /**
-     * D-05: kitty parity floor — frame-per-slice pump equals Mosaic::render;
+     * Kitty parity floor — frame-per-slice pump equals Mosaic::render;
      * the promise path (first slice inline, rest on futureTick) lands the
      * same bytes.
      */
@@ -106,7 +106,7 @@ final class PacedAsyncRendererTest extends TestCase
     }
 
     /**
-     * D-05: half-block parity floor — row pump equals Mosaic::render, and
+     * Half-block parity floor — row pump equals Mosaic::render, and
      * ceil(rows / rowsPerSlice) slices is exact.
      */
     public function testHalfBlockPumpBytesMatchMosaicRender(): void
@@ -126,7 +126,7 @@ final class PacedAsyncRendererTest extends TestCase
     }
 
     /**
-     * D-05: other loop work runs BETWEEN slices — with rowsPerSlice 1 the
+     * Other loop work runs BETWEEN slices — with rowsPerSlice 1 the
      * promise stays pending while queued ticks drain, so progress is
      * interleaved, not scheduled around one blocking encode.
      */
@@ -176,7 +176,7 @@ final class PacedAsyncRendererTest extends TestCase
     }
 
     /**
-     * D-05: a done session is inert — further advances are no-ops returning
+     * A done session is inert — further advances are no-ops returning
      * '' (the same settle-once posture that makes a reject after resolve
      * unobservable from the promise side).
      */
@@ -203,7 +203,7 @@ final class PacedAsyncRendererTest extends TestCase
     }
 
     /**
-     * D-05: a throwing row source rejects the promise; rows already encoded
+     * A throwing row source rejects the promise; rows already encoded
      * are not mistaken for a resolution.
      */
     public function testThrowingGeneratorRejects(): void
@@ -223,7 +223,7 @@ final class PacedAsyncRendererTest extends TestCase
     }
 
     /**
-     * D-05: budgets are refused fail-fast, never silently defaulted.
+     * Budgets are refused fail-fast, never silently defaulted.
      */
     public function testNonPositiveBudgetsAreRefused(): void
     {
@@ -245,7 +245,7 @@ final class PacedAsyncRendererTest extends TestCase
     }
 
     /**
-     * D-05: the E646 sentence — slice budget, not request cap — must stay on
+     * The E646 sentence — slice budget, not request cap — must stay on
      * the record in both pump files, and neither may arm a timer.
      */
     public function testSliceBudgetSentenceSurvivesAndNoTimersAreArmed(): void
@@ -269,7 +269,7 @@ final class PacedAsyncRendererTest extends TestCase
     }
 
     /**
-     * D-05: a session is a pure function of row count × cap — the same pump
+     * A session is a pure function of row count × cap — the same pump
      * re-run from fresh generators lands the identical slice plan (guards
      * against state smuggled between sessions).
      */

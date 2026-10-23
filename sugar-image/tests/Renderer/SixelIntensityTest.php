@@ -154,7 +154,7 @@ final class SixelIntensityTest extends TestCase
 
     /**
      * C-07: Mosaic::sixel() threads the knob — the renderer fingerprint the
-     * poster cache folds (D-04) gains the intensity segment only when set,
+     * poster cache folds gains the intensity segment only when set,
      * so a 0.5-ordered poster never cross-serves the default entry.
      */
     public function testMosaicSixelThreadsIntensity(): void

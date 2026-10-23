@@ -12,7 +12,7 @@ use SugarCraft\Image\Detect;
 use SugarCraft\Image\TermDb;
 
 /**
- * F-08: hermetic pins for the OSC 10/11 default fg/bg query stage —
+ * Hermetic pins for the OSC 10/11 default fg/bg query stage —
  * {@see Detect::probeDefaultColors()}, its parser, the reply-shape
  * terminators, and the finishProbe single-exit wiring that carries the
  * answers onto every probe path.
@@ -287,7 +287,7 @@ final class DetectQueryTest extends TestCase
     }
 
     /**
-     * F-08: continuation — the pair-completion `&&` break pinned staggered.
+     * Continuation — the pair-completion `&&` break pinned staggered.
      * The preload pin above hands fg and bg in ONE chunk, so it stays green
      * even if `&&` decays to `||` (the pair is in hand at the first read
      * either way). Here a real writer child delivers bg ~80 ms after fg — a

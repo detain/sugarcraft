@@ -45,10 +45,10 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * defaults plus inversion) and INDEXED_16_8 (:222, 16 FG with
  * bold/bright over 8 BG) have no counterpart anywhere in the monorepo.
  *
- * PC-14: candidate scoring in the symbol engine must use the SAME
+ * Candidate scoring in the symbol engine must use the SAME
  * quantised pens it will emit — with a limited palette the best glyph
  * is not the best truecolor glyph. Adaptive palettes are deliberately
- * out of scope (pixel-side only, per S6.2 ruling).
+ * out of scope (pixel-side only, by design).
  */
 enum CanvasMode: string
 {

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Levels;
 
 /**
- * B-15: chafa's `prepare_pixels` auto-levels pass — histogram-driven
+ * Chafa's `prepare_pixels` auto-levels pass — histogram-driven
  * per-channel stretch plus a saturation lift, ported to GD in place.
  *
  * Mirrors chafa/internal/chafa-pixops.c (1.19): `fill_histogram`-style
@@ -21,7 +21,7 @@ namespace SugarCraft\Image\Levels;
  * - **Saturation weights.** chafa's `boost_saturation_rgb` computes
  *   `P = sqrt(r²·.299 + g²·.587 + b²·.144)` — the `.144` is a typo in
  *   upstream (`.114` was the intended Rec.601 blue weight, and the
- *   survey NTC-1 rules that the port uses the Rec.709 luminance
+ *   port deliberately uses the Rec.709 luminance
  *   weights `.2126/.7152/.0722` instead, matching this repository's
  *   own convention in sugar-colorprofile `Palette.php`). The lift
  *   shape — `ch = P + (ch − P) · 2`, clamped — is otherwise verbatim.
@@ -104,7 +104,7 @@ final class LevelsStretch
 
     /**
      * Saturation lift for one pixel — public because it is a usable
-     * colour primitive on its own (and the testable core of the B-15
+     * colour primitive on its own (and the testable core of the stretch
      * math). Faithful to `boost_saturation_rgb` with the corrected
      * weights: `P = sqrt(Σ w·c²)`, then `ch = P + (ch − P)·2` truncated
      * to int and clamped, exactly as the C assignment did.

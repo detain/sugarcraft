@@ -19,7 +19,7 @@ use SugarCraft\Image\Renderer\Renderer;
  * {@see Renderer::delete()} API added in step 07.12, emitted in the
  * order that renderer family's delete semantics allow.
  *
- * E-15: delete-before-redraw left a per-frame empty-cell window (visible
+ * Delete-before-redraw left a per-frame empty-cell window (visible
  * flicker). The fix is per family, because the one delete() contract has
  * three implementations:
  * - Kitty (stable-id capable): {@see KittyRenderer::renderFrame()} commits
@@ -48,7 +48,7 @@ final class AnimationDriver implements Model
     /**
      * Lower bound, in milliseconds, on the delay between frame ticks.
      *
-     * GIF/APNG parity (lane p2, N4): a 0 in an animation header is a
+     * GIF/APNG parity: a 0 in an animation header is a
      * SENTINEL, not a duration — the netscape loop extension reads 0 as
      * "loop forever", and decoders read a 0-delay frame as "show as fast as
      * your host allows", which every browser floors to roughly one frame.
@@ -119,12 +119,12 @@ final class AnimationDriver implements Model
     }
 
     /**
-     * E-15: Emit the current frame, committing it before any retire byte.
+     * Emit the current frame, committing it before any retire byte.
      *
      * Kitty renderers get the double-buffered shape: `renderFrame(new) .
      * delete(other)` — new frame lands first, the other slot is retired
      * after, so there is no empty-cell window. All other renderers keep
-     * the pre-E-15 byte stream `delete($imageId) . render($frame)`: for
+     * the original byte stream `delete($imageId) . render($frame)`: for
      * ''-delete backends the order is invisible, and for Pop-based
      * iTerm2/WezTerm deleting after the redraw would retire the frame
      * just committed (see class docblock).
@@ -179,7 +179,7 @@ final class AnimationDriver implements Model
     }
 
     /**
-     * E-15: Change the base of the driver's stable image-id pair.
+     * Change the base of the driver's stable image-id pair.
      *
      * The kitty double-buffer reserves `imageId` and `imageId + 1` as its
      * two placement slots; choose a pair no other kitty image uses.

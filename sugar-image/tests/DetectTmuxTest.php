@@ -9,7 +9,7 @@ use ReflectionMethod;
 use SugarCraft\Image\Detect;
 
 /**
- * F-04: inside tmux, a termfeatures veto outranks any sixel claim.
+ * Inside tmux, a termfeatures veto outranks any sixel claim.
  *
  * tmux answers the pane's DA1 with the sixel capability bit ON on its own
  * behalf (chafa chicle-options.c:1755-1764: "tmux claims sixel support in
@@ -54,7 +54,7 @@ final class DetectTmuxTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // F-01: clear exactly the keys TermDb consults (see DetectTest),
+        // Clear exactly the keys TermDb consults (see DetectTest),
         // plus PATH — this file plants a fake tmux binary on it.
         $keys = array_merge(\SugarCraft\Image\TermDb::ENV_KEYS, ['PATH']);
         foreach ($keys as $key) {
@@ -274,7 +274,7 @@ final class DetectTmuxTest extends TestCase
             ['unknown', null],
             ['', null],
             ["\n \t", null],
-            // F-04 falsy spellings a malformed/degraded answer can carry:
+            // Falsy spellings a malformed/degraded answer can carry:
             // a present-but-useless list must NOT read as AUTO (null) — the
             // probe got an answer; it simply is not a sixel claim.
             ['0', false],

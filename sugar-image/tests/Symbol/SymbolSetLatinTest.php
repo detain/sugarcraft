@@ -154,7 +154,7 @@ final class SymbolSetLatinTest extends TestCase
 
     public function testTheLatinFlagResetsAcrossWithSelectors(): void
     {
-        // F-17 (rev-w10-2 m2): the W10 weld's union contract — the
+        // (Rev-w10-2 m2): the W10 weld's union contract — the
         // hasLatin flag is carried by withLatin()-built maps only, and
         // withSelectors() returns a plain corpus pick (SymbolMap.php
         // ctor resets the flag), so the tier stays reachable via the
@@ -212,7 +212,7 @@ final class SymbolSetLatinTest extends TestCase
         $this->assertEquals($all->defs(), $composed->defs());
 
         // The documented W10 seam shape: a relative withSelectors() resets
-        // the flag (F-17), yet re-composing withLatin() on the surviving
+        // the flag, yet re-composing withLatin() on the surviving
         // tier is a no-op append, not the 365-fold duplicate it was.
         $rel = SymbolMap::new()->withLatin()->withSelectors('+stipple');
         $again = $rel->withLatin();

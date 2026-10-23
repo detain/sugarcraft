@@ -9,7 +9,7 @@ use SugarCraft\Image\CellSize;
 use SugarCraft\Image\Detect;
 
 /**
- * F-19: implausible XTWINOPS replies are rejected, not adopted.
+ * Implausible XTWINOPS replies are rejected, not adopted.
  *
  * 4/6/8;t replies are trusted data once they match the terminator shape —
  * until something answers a well-formed LIE. Chafa issue #62 is the caution

@@ -284,7 +284,7 @@ final class MosaicPosterTest extends TestCase
      * Real `php -S` loopback server serving the fixture PNG at /poster.png —
      * a blocking stream fetch (sync poster()) needs an out-of-process listener.
      */
-    /** D-04: derive the renderer's poster key from Mosaic itself (private). */
+    /** Derive the renderer's poster key from Mosaic itself (private). */
     private function posterKey(Mosaic $mosaic, string $url): string
     {
         $method = new ReflectionMethod(Mosaic::class, 'posterCacheKey');

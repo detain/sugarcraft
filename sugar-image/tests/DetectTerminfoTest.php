@@ -12,7 +12,7 @@ use SugarCraft\ColorProfile\Probe\TerminalProbe;
 use SugarCraft\Image\Detect;
 
 /**
- * F-07: the terminfo sixl capability is consulted between env and DA1.
+ * The terminfo sixl capability is consulted between env and DA1.
  *
  * A `$TERM` whose published terminal entry declares a Sixel capability
  * (`sixl`, `Sixel#1`, `SixelScreenMode`, `Ss1`/`Ss2` — the spellings

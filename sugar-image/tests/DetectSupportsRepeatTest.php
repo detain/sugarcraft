@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Detect;
 
 /**
- * A-02: the REP capability gate. Truth rows of the env ladder plus the
+ * The REP capability gate. Truth rows of the env ladder plus the
  * test-seam polarity, until the S4.2 TermDb table replaces the body.
  */
 final class DetectSupportsRepeatTest extends TestCase

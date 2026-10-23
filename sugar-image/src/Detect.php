@@ -11,11 +11,11 @@ use SugarCraft\Core\Util\TtyDetect;
 /**
  * Terminal image-protocol capability detection.
  *
- * F-01: the env stage is a {@see TermDb} consult — a declarative port of
+ * The env stage is a {@see TermDb} consult — a declarative port of
  * chafa's 1338-line built-in terminal table — and a table claim is only
  * ever UPGRADED by a live DA1 reply, never downgraded through it.
  *
- * F-08: the OSC 10/11 default fg/bg query is a DETECTION surface only —
+ * The OSC 10/11 default fg/bg query is a DETECTION surface only —
  * the answers ride {@see Capability::$defaultFg}/{@see Capability::$defaultBg}
  * and no renderer consumes them yet (consumer wiring is the W6/W7 seam).
  *
@@ -38,16 +38,16 @@ final class Detect
     private const TIMEOUT_MS  = 100;
 
     /**
-     * F-08: the OSC 10/11 default fg/bg query pair, emitted as ONE write so
+     * The OSC 10/11 default fg/bg query pair, emitted as ONE write so
      * the terminal can pipeline both replies inside one read window. The
      * bytes are chafa's exactly (chafa-term-db.c:249/253): ``ESC ] 10 ; ? ST``
-     * and ``ESC ] 11 ; ? ST`` — note the ``;`` BEFORE the ``?`` (the survey's
+     * and ``ESC ] 11 ; ? ST`` — note the ``;`` BEFORE the ``?`` (a pre-port note's
      * ``\e]10?\e\\`` spelling was wrong; disk bytes win).
      */
     private const OSC_COLOR_QUERIES = "\x1b]10;?\x1b\\\x1b]11;?\x1b\\";
 
     /**
-     * F-08: total wall budget for the colour window. Chafa's sync probe runs
+     * Total wall budget for the colour window. Chafa's sync probe runs
      * the whole query batch against ONE caller-passed deadline (every
      * in_sync_pull waits only what remains — chafa-term.c:1013-1020; the
      * chicle caller feeds min(probe_duration×1000, G_MAXINT) ms, default
@@ -57,11 +57,11 @@ final class Detect
      */
     private const OSC_WINDOW_MS = 300;
 
-    /** F-08: read attempts inside {@see OSC_WINDOW_MS}; bounds a slow dribbler. */
+    /** Read attempts inside {@see OSC_WINDOW_MS}; bounds a slow dribbler. */
     private const OSC_WINDOW_SLICES = 3;
 
     /**
-     * F-08: hard cap on captured bytes for the pair. Chafa's READ_BUF_MAX
+     * Hard cap on captured bytes for the pair. Chafa's READ_BUF_MAX
      * (chafa-term.c:58) is a PER-READ buffer size; ours is per-window
      * because the terminator check runs on the accumulated buffer. A real
      * reply pair is a few dozen bytes — anything past this cap is typed
@@ -70,7 +70,7 @@ final class Detect
     private const OSC_REPLY_MAX_BYTES = 4096;
 
     /**
-     * F-04: the tmux format string carrying the OUTER terminal's negotiated
+     * The tmux format string carrying the OUTER terminal's negotiated
      * feature list, asked the way chafa asks it
      * (mirrors chafa `tools/chafa/chicle-options.c:1766-1796`
      * `query_tmux_client_sixels()` → `tmux display-message -p
@@ -81,13 +81,13 @@ final class Detect
      */
     private const CLIENT_FEATURES_FORMAT = '#{client_termfeatures}';
 
-    /** F-04: wall bound for one feature query — a socket round-trip, not a job. */
+    /** Wall bound for one feature query — a socket round-trip, not a job. */
     private const TERMFEATURES_DEADLINE_MS = 100;
 
-    /** F-04: hard cap on captured stdout before the child is killed (answers are short). */
+    /** Hard cap on captured stdout before the child is killed (answers are short). */
     private const TERMFEATURES_MAX_BYTES = 65536;
 
-    /** F-04: grace between SIGTERM and SIGKILL while escalating a runaway child. */
+    /** Grace between SIGTERM and SIGKILL while escalating a runaway child. */
     private const TERMFEATURES_TERM_GRACE_SECONDS = 0.25;
 
     /**
@@ -109,7 +109,7 @@ final class Detect
     public const XTWINOPS_REPLY_TERMINATOR = '/\e\[[468];[\d;]*t/';
 
     /**
-     * F-08: terminator for an OSC 10 (default foreground) reply:
+     * Terminator for an OSC 10 (default foreground) reply:
      * `` ESC ] 10 ; rgb:x/y/z (ST|BEL) `` with 1-4 hex digits per component.
      *
      * It demands the ``rgb:`` prefix and the full hex triplet — a shape the
@@ -126,12 +126,12 @@ final class Detect
     public const OSC10_REPLY_TERMINATOR
         = '/\e\]10;rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})(?:\e\\\\|\x07)/';
 
-    /** F-08: OSC 11 (default background) twin of {@see OSC10_REPLY_TERMINATOR}. */
+    /** OSC 11 (default background) twin of {@see OSC10_REPLY_TERMINATOR}. */
     public const OSC11_REPLY_TERMINATOR
         = '/\e\]11;rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})(?:\e\\\\|\x07)/';
 
     /**
-     * F-19: plausibility ceilings for an XTWINOPS reply. Chafa's real
+     * Plausibility ceilings for an XTWINOPS reply. Chafa's real
      * bounds (chafa-term.c:54-55) are per-TYPE: PIXEL_EXTENT_MAX (8192*3
      * = 24576) caps BOTH axes of a pixel reply (:476-477) and
      * CELL_EXTENT_PX_MAX 8192 caps BOTH axes of a cell reply (:498-499) —
@@ -143,7 +143,7 @@ final class Detect
      * back to font-estimated sizes), and a cell reply claiming more than
      * 8192 rows is accepted where chafa would refuse (harmless — cell
      * counts are display-bound, not pixel-bound). Per-type parity is a
-     * candidate alongside the S4.2 TermDb probe rework; the exclusive
+     * candidate alongside the TermDb probe rework; the exclusive
      * lower bound (zero extents are non-answers) is chafa-faithful
      * either way.
      */
@@ -154,7 +154,7 @@ final class Detect
     private static $probeStdin = null;
 
     /**
-     * F-05 opt-out: when false, {@see TmuxPassthrough::ensure()} refuses to
+     * Opt-out: when false, {@see TmuxPassthrough::ensure()} refuses to
      * touch the tmux `allow-passthrough` option at all. Library politeness
      * for embedders that own their tmux configuration — chafa gates the
      * same way CLI-side before ever calling the applier
@@ -164,7 +164,7 @@ final class Detect
     private static bool $autoPassthrough = true;
 
     /**
-     * F-04 test seam: forced tri-state for {@see probeTmuxTermFeatures()}.
+     * Test seam: forced tri-state for {@see probeTmuxTermFeatures()}.
      * null means "no override — ask (or fail-soft AUTO)"; when set, the
      * wrapped state is the whole answer and NO tmux process is spawned.
      * The array wrapper is what keeps "override with AUTO" (['state'=>null])
@@ -176,16 +176,16 @@ final class Detect
     private static ?array $tmuxFeaturesOverride = null;
 
     /**
-     * F-07 test seam: forced terminfo answer for {@see probeTerminfoSixel()}.
-     * null means "no override — run a live TerminalProbe". Unlike the F-04
+     * Test seam: forced terminfo answer for {@see probeTerminfoSixel()}.
+     * null means "no override — run a live TerminalProbe". Unlike the
      * feature list this stage has no AUTO polarity to preserve: a false
-     * answer falls through to the DA1 arm (exactly the pre-F-07 world), so a
-     * plain ?bool suffices where F-04 needed the sentinel wrapper.
+     * answer falls through to the DA1 arm (exactly the pre-terminfo world), so a
+     * plain ?bool suffices where the feature list needed the sentinel wrapper.
      */
     private static ?bool $terminfoSixelOverride = null;
 
     /**
-     * F-07 seam: the probe object the live arm consults; null constructs a
+     * Seam: the probe object the live arm consults; null constructs a
      * default TerminalProbe on each need (Detect::probe() caches
      * process-wide, so this runs at most once anyway). Tests inject a
      * subclass faking the protected runCommand/infocmpAvailable arms — the
@@ -199,7 +199,7 @@ final class Detect
     private static ?Capability $cached = null;
 
     /**
-     * A-02 test seam: forced answer for {@see supportsRepeat()}.
+     * Test seam: forced answer for {@see supportsRepeat()}.
      * null means "no override — consult the env truth table".
      */
     private static ?bool $repeatOverride = null;
@@ -248,14 +248,14 @@ final class Detect
             return self::finishProbe($cap->withCellSize(self::probeFontSize()));
         }
 
-        // F-04: inside tmux the pane's DA1 reply answers FOR TMUX, not for
+        // Inside tmux the pane's DA1 reply answers FOR TMUX, not for
         // the outer terminal — chicle-options.c:1755-1764: "tmux claims sixel
         // support in its own DA1 response regardless, so probing the pane
         // can't tell us" (it includes the sixel bit to enable passthrough).
         // Ask the server what the attached client's terminal really features;
         // a definite answer outranks any pane-side claim, and AUTO (tmux
         // absent/old, no client, dead socket, over-budget reply) leaves the
-        // pre-F-04 ladder exactly as it was — fail-soft, never a veto by
+        // original ladder exactly as it was — fail-soft, never a veto by
         // silence.
         $features = $inTmux ? self::probeTmuxTermFeatures() : null;
 
@@ -270,15 +270,15 @@ final class Detect
         // using a preloaded socket pair, DA1 reply bytes are not consumed
         // by probeFontSize() before probeDa1() gets to read them. A definite
         // feature-list NO (below) skips the round-trip outright: its answer
-        // is already known and the query is the thing F-04 distrusts.
+        // is already known and the query is the thing the veto distrusts.
         if ($features !== false) {
-            // F-07: consult the terminal database BEFORE the DA1 round-trip
+            // Consult the terminal database BEFORE the DA1 round-trip
             // (same ordering logic as chafa: a local fact costs nothing, a
             // live query costs a timeout). A sixl/Sixel/Ss1 capability in
             // the entry is a definite published fact about $TERM, so
             // TERM-only sixel terminals are recognised without waiting on
             // any reply at all. Only TRUE promotes; "no sixl" and "cannot
-            // ask" both leave the DA1 arm exactly as F-04 left it. Under a
+            // ask" both leave the DA1 arm exactly as before. Under a
             // definite feature-list VETO the stage is skipped: terminfo
             // describes the emulator $TERM names, not tmux's display
             // policy — a veto must not be laundered back into a sixel
@@ -308,7 +308,7 @@ final class Detect
     }
 
     /**
-     * F-08: the single exit of every probe path — attach the OSC 10/11
+     * The single exit of every probe path — attach the OSC 10/11
      * default-colour answers, then drain leftover bytes.
      *
      * WHY THE COLOUR STAGE RUNS LAST (disclosed divergence from chafa):
@@ -370,7 +370,7 @@ final class Detect
 
     /**
      * Opt the automatic tmux `allow-passthrough` transaction on or off
-     * (F-05). Default on; {@see TmuxPassthrough::ensure()} consults this
+     *. Default on; {@see TmuxPassthrough::ensure()} consults this
      * on every call. Takes effect immediately for future probes — an
      * already-open transaction is NOT rolled back here; retire it via
      * {@see TmuxPassthrough::retire()}.
@@ -380,14 +380,14 @@ final class Detect
         self::$autoPassthrough = $enabled;
     }
 
-    /** Whether {@see setAutoPassthrough()} currently permits the F-05 transaction. */
+    /** Whether {@see setAutoPassthrough()} currently permits the auto-toggle transaction. */
     public static function autoPassthrough(): bool
     {
         return self::$autoPassthrough;
     }
 
     /**
-     * A-02 capability gate: does the current terminal interpret
+     * Capability gate: does the current terminal interpret
      * `ESC[count b` (REP — repeat the preceding graphic character)?
      *
      * chafa models this per-emulator in its term.c tables
@@ -397,7 +397,7 @@ final class Detect
      * compressing a run.
      *
      * This is the env-only truth table that lives until the audited
-     * per-terminal REP axis lands on the S4.2 TermDb table (F-01 shipped
+     * per-terminal REP axis lands on the TermDb table (which shipped
      * that table pixel-only, deliberately) — the seam is exactly one
      * method body, mirroring how {@see probeTerminfoSixel()} names its own
      * swap point. Conservative rows (ECMA-48 REP is a core
@@ -429,7 +429,7 @@ final class Detect
     }
 
     /**
-     * Force the A-02 REP answer for tests (null restores the env table).
+     * Force the REP answer for tests (null restores the env table).
      * Same shape as the other Detect tri-states: while overridden, the
      * table below is never consulted.
      */
@@ -445,7 +445,7 @@ final class Detect
     }
 
     /**
-     * Force the F-04 termfeatures answer for tests: true = outer terminal
+     * Force the tmux termfeatures answer for tests: true = outer terminal
      * has sixel, false = definite no (veto), null = AUTO (the fail-soft
      * verdict — while overridden, NO tmux process is ever spawned).
      */
@@ -461,7 +461,7 @@ final class Detect
     }
 
     /**
-     * F-07 test seam: pin the terminfo sixl answer without touching a real
+     * Test seam: pin the terminfo sixl answer without touching a real
      * terminal database. true = short-circuit the ladder to sixel; false =
      * "terminfo says nothing", fall through to the DA1 arm. While overridden
      * no infocmp process is ever spawned.
@@ -478,7 +478,7 @@ final class Detect
     }
 
     /**
-     * F-07 seam: substitute the {@see TerminalProbe} the live arm runs
+     * Seam: substitute the {@see TerminalProbe} the live arm runs
      * (null restores default construction). The capability table itself
      * stays in sugar-colorprofile — this is wiring, not a second lookup.
      */
@@ -488,7 +488,7 @@ final class Detect
     }
 
     /**
-     * F-04: tri-state answer to "can the terminal OUTSIDE this tmux pane
+     * Tri-state answer to "can the terminal OUTSIDE this tmux pane
      * display sixels?", mirroring {@see chafa}'s `ChicleTristate`
      * (chicle-options.c:1760-1796).
      *
@@ -516,7 +516,7 @@ final class Detect
     }
 
     /**
-     * F-07: whether the terminfo entry for $TERM declares a Sixel graphics
+     * Whether the terminfo entry for $TERM declares a Sixel graphics
      * capability, consulted through sugar-colorprofile's TerminalProbe
      * (its Phase 2, sugar-colorprofile/src/Probe/TerminalProbe.php:247-259
      * and the name-position matcher at :297-324). The SIXEL_TERMCAPS table
@@ -535,13 +535,13 @@ final class Detect
      * suppression (the probe's own ladder rules, which terminate its
      * capability phases). Only TRUE promotes here: a terminfo NO is never
      * a veto, it leaves the DA1 arm byte-unchanged — the database is an
-     * accelerator, not an authority. F-01 note: the s2-5 ledger's swap seam
-     * ("the whole stage the S4.2 TermDb rework replaces in one move") landed
+     * accelerator, not an authority. The planned swap seam
+     * ("the whole stage the TermDb rework replaces in one move") landed
      * as a COMPLEMENT, not a replacement — the declarative table
      * {@see TermDb} took over the env stage ahead of this arm, and the live
      * infocmp consult stays as the long tail for $TERM entries the table
      * does not name. Chicle has no terminfo half — its detection is the
-     * term-db.c table plus the live DA1 only (PC-10); this arm is ours
+     * term-db.c table plus the live DA1 only; this arm is ours
      * alone, a strict superset beside the table, and collapsing it into
      * the table would be a behavior regression the DetectTest suite pins
      * forbid.
@@ -562,7 +562,7 @@ final class Detect
     }
 
     /**
-     * Parse a `#{client_termfeatures}` reply into the F-04 tri-state.
+     * Parse a `#{client_termfeatures}` reply into the tri-state verdict.
      *
      * Separator alphabet: chicle splits the comma list on `, \t\r\n`; tmux
      * builds that are 'us;suspend;...' style carry ';'. Split on both plus
@@ -783,7 +783,7 @@ final class Detect
      * This suppresses spurious replies from earlier queries.
      *
      * Null means {@see stdinFd()} found no usable descriptor 0, and there is
-     * then nothing to drain. This is the site the E318 fatal came out of:
+     * then nothing to drain. This is the site a past closed-handle fatal came out of:
      * {@see probe()} drains UNCONDITIONALLY on all three of its exits, with no
      * isInteractiveTty() ahead of it, so it is reached with a closed handle
      * where the two read paths are not.
@@ -823,8 +823,7 @@ final class Detect
      *
      * Null means {@see stdinFd()} found no usable descriptor 0. '' is already
      * this method's no-answer value and every caller handles it, so a dead
-     * descriptor degrades exactly the way a terminal that did not reply does
-     * (E318).
+     * descriptor degrades exactly the way a terminal that did not reply does.
      *
      * @param resource|null $fd
      */
@@ -878,7 +877,7 @@ final class Detect
      * guard below read as already handled — a method documented as returning a
      * boolean predicate is not one a reader checks for a closed resource.
      *
-     * NULL IS A REAL ANSWER, NOT A DEFENSIVE ONE (E318/E302). A closed
+     * NULL IS A REAL ANSWER, NOT A DEFENSIVE ONE. A closed
      * descriptor 0 is a legitimate state for a process to be in — a daemon, a
      * git hook, `candy-code 0<&-`, or a test harness that replaced its own fd 0
      * — and `defined('STDIN')` stays true after `fclose(STDIN)` while
@@ -906,7 +905,7 @@ final class Detect
      * The one detail that belongs on this side of the package boundary:
      * {@see isInteractiveTty()} below passes this method's result straight
      * into `TtyDetect::isAtty()`, and that method's `@param` reads
-     * `resource|null` for exactly this reason (E341). The null is a real
+     * `resource|null` for exactly this reason. The null is a real
      * answer crossing a package boundary, not defensive padding — the kind
      * of contract no single package's suite is positioned to catch.
      *
@@ -926,7 +925,7 @@ final class Detect
         // is_resource() is not redundant with the null check: a caller that
         // injected a stream and then closed it leaves a non-null handle that
         // is no longer a stream, and answering "interactive" for it is what
-        // carries a dead descriptor into readStdinTimed() (E318).
+        // carries a dead descriptor into readStdinTimed().
         if (self::$probeStdin !== null) {
             return \is_resource(self::$probeStdin);
         }
@@ -1009,7 +1008,7 @@ final class Detect
     }
 
     /**
-     * F-08: ask the terminal for its default foreground and background
+     * Ask the terminal for its default foreground and background
      * colours (OSC 10;? / OSC 11;?) and narrow the replies to 'rrggbb'.
      *
      * The shape mirrors {@see probeDa1()}: the same interactive-tty gate,
@@ -1035,7 +1034,7 @@ final class Detect
 
         $fd = self::stdinFd();
         if ($fd === null) {
-            return [null, null]; // E318 family: no usable descriptor 0, nothing to read
+            return [null, null]; // no usable descriptor 0, nothing to read
         }
 
         $written = @fwrite(STDOUT, self::OSC_COLOR_QUERIES);
@@ -1086,7 +1085,7 @@ final class Detect
     }
 
     /**
-     * F-08: narrow a reply buffer to 'rrggbb' for one OSC colour slot.
+     * Narrow a reply buffer to 'rrggbb' for one OSC colour slot.
      *
      * Every component is scaled by the XTerm/Xcms rule: fewer than four
      * hex digits are cyclically replicated to a 16-bit word and the 8-bit
@@ -1229,7 +1228,7 @@ final class Detect
         }
         [$id, $v1, $v2] = $parts;
 
-        // F-19: a well-formed reply can still lie about its size. Chafa
+        // A well-formed reply can still lie about its size. Chafa
         // learned this the hard way (issue #62: a hostile emulator/host can
         // answer 16t with absurd extents, and every pixel-budget arithmetic
         // downstream trusts the numbers). Reject out-of-range extents here —
@@ -1237,7 +1236,7 @@ final class Detect
         // fabricated reply is indistinguishable from "no reply" and the
         // caller falls back to font-estimated sizes. The bound also rejects
         // ZERO extents: a terminal that answers "0 rows" did not answer
-        // (pre-F-19, CellSize(0, n) rode through into division arithmetic).
+        // (before the zero-extent guard, CellSize(0, n) rode through into division arithmetic).
         if ($v1 < 1 || $v1 >= self::MAX_REPLY_Y || $v2 < 1 || $v2 >= self::MAX_REPLY_X) {
             return null;
         }
@@ -1256,11 +1255,11 @@ final class Detect
     }
 
     /**
-     * F-01: the environment stage is now a terminal-database consult.
+     * The environment stage is now a terminal-database consult.
      *
      * Snapshots the env vars {@see TermDb} knows about, resolves the chained
      * {@see TermInfo}, and maps it to a Capability under SugarCraft's family
-     * precedence (Kitty > iTerm2 > Sixel) — the same order the pre-F-01
+     * precedence (Kitty > iTerm2 > Sixel) — the same order the old
      * hardcoded ladder checked its three `if` blocks in, so realistic env
      * shapes answer as the old ladder did. Three synthetic edges diverge
      * (measured, disclosed): an EMPTY-string KITTY_WINDOW_ID counted by the

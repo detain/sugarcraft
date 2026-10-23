@@ -86,7 +86,7 @@ final class OrderedTextureTest extends TestCase
      * C-04: recentre range + multiset — magnitude 1.0 yields exactly
      * -128..127 once each (chafa's own comment: "magnitude == 1.0 =>
      * -128..127", which its +0.5f-trunc actually misses by one unit — the
-     * NTC-2 symmetric-rounding deviation makes the comment true here).
+     * Symmetric-rounding deviation makes the comment true here).
      */
     public function testBayer16RecentresToTheFullSignedRange(): void
     {

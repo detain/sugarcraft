@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image;
 
 /**
- * B-01: Pairwise Nearest Neighbour (PNN) palette quantizer.
+ * Pairwise Nearest Neighbour (PNN) palette quantizer.
  *
  * Mirrors chafa `chafa/internal/chafa-palette.c:616` (`pnn_palette`) and its
  * helpers — the algorithm chafa itself credits to nQuant by Mark Tyler,
@@ -17,11 +17,11 @@ namespace SugarCraft\Image;
  * merge error are merged repeatedly until the requested colour count is
  * reached. The merge error is the BT.601 luminance/chrominance decomposition
  * of the population-weighted colour distance — NOT a DIN99d inverse: per
- * PC-12 the error is computed with the plain `pnn_coeffs` rows verbatim.
+ * chafa's design, the error is computed with the plain `pnn_coeffs` rows verbatim.
  *
  * Deliberate deviations from the C (each deterministic, none visual):
  *  • selection is a plain rescan for the lowest-error live bin instead of
- *    chafa's binary heap — the plan blesses this at ≤4k bins (PC-12), and
+ *    chafa's binary heap — the plan blesses this at ≤4k bins, and
  *    the sample cap upstream (SixelRenderer::SAMPLE_CAP = 4096) bounds the
  *    live bin count at 4096 even on the 5-bit rung. Ties resolve to the
  *    lowest bin index; chafa's insertion-built heap agrees in practice.

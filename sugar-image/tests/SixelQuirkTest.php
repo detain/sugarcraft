@@ -14,7 +14,7 @@ use SugarCraft\Image\TermDb;
 use SugarCraft\Image\TermInfo;
 
 /**
- * F-02: terminal quirks consumption — the SIXEL_OVERSHOOT parking verdict
+ * Terminal quirks consumption — the SIXEL_OVERSHOOT parking verdict
  * and the MLTERM_EDGE_ROWS re-home ride the TermDb chain into the Sixel
  * renderer and the Capability snapshot.
  *

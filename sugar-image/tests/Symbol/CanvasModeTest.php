@@ -10,7 +10,7 @@ use SugarCraft\Image\Renderer\QuarterBlockRenderer;
 use SugarCraft\Image\Symbol\CanvasMode;
 
 /**
- * A-07: fixed-palette canvas modes (plan_chafa S6.2 / PC-14).
+ * Fixed-palette canvas modes (plan_chafa S6.2 / PC-14).
  *
  * The whole point of the quantize-before-score ladder is that a
  * limited palette must not be shown a truecolor-optimal glyph it

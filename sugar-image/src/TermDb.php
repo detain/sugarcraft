@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Image;
 
 /**
- * F-01: the declarative terminal database — chafa's built-in term table ported to SugarCraft.
+ * The declarative terminal database — chafa's built-in term table ported to SugarCraft.
  *
  * The port of chafa's hardcoded terminal knowledge (chafa/chafa-term-db.c, the
  * 1338-line `term_def[]` census: rows, env rules, priorities, version gates,
  * per-type matching and outer:inner chaining) plus the pixel-protocol claims
- * the s2-5 Detect ladder had learned by hand. Before this table, Detect's env
+ * the predecessor Detect ladder had learned by hand. Before this table, Detect's env
  * stage was three hardcoded `if` blocks; every terminal not named there fell
  * through to a `infocmp` subprocess or a live DA1 round-trip for an answer
  * that is a published fact of the terminal's own environment.
@@ -40,20 +40,20 @@ namespace SugarCraft\Image;
  *   rows carry only the claim + passthrough metadata.
  * - `mux` rows never DELETE an outer claim (chicle drops iterm2 inside tmux
  *   because tmux has no OSC 1337 passthrough); SC keeps the union because the
- *   tmux DISPLAY policy is owned by the F-04 termfeatures veto, not the table
- *   — laundering it through the database was the behavior the s2-5 pins fix.
+ *   tmux DISPLAY policy is owned by the termfeatures veto, not the table
+ *   — laundering it through the database was the behavior the pin tests fix.
  * - ISSET means set AND non-empty: an empty env value is not an advertisement.
  * - Chicle's `eat` family (chafa-term-db.c:617-651 — every eat row carries
  *   sixel_seqs) and its `ctx` row (chicle:611-615, the rep_seqs exemplar)
  *   have no SC rows at all: the eat pixel claims are dropped, deliberately,
- *   deferred with the vte/F-02 REP arm rather than silently omitted.
- * - F-06 safe-symbol masks (chicle's per-row `safe_symbol_tags`, attached via
+ *   deferred with the vte REP-quirk arm rather than silently omitted.
+ * - Safe-symbol masks (chicle's per-row `safe_symbol_tags`, attached via
  *   {@see TermInfo::$safeSymbols}): only the rows chicle curates are
  *   restricted (linux console = ASCII, mintty/windows-console = BLOCK|BORDER);
  *   everything else defaults to the full set. Chicle's LINUX_DESKTOP_SYMS
  *   (BLOCK|BORDER on kitty-class desktop rows, excluding braille) is NOT
  *   mirrored — SC braille canvases (sugar-charts) ride the full default,
- *   recorded as a product decision in the S6.4 lane report.
+ *   recorded as a deliberate product decision.
  *
  * Pure data + pure functions: nothing here reads the environment, spawns a
  * process, or touches a terminal. {@see snapshotEnv()} is the only getenv
@@ -125,7 +125,7 @@ final class TermDb
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_ISSET, 'key' => 'KITTY_PID', 'value' => null, 'priority' => 0],
                 // SC addition: the old ladder keyed on the window id, which
                 // kitty exports in every pane; keep it so the table claims
-                // exactly what Detect claimed before F-01.
+                // exactly what Detect claimed before the table shipped.
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_ISSET, 'key' => 'KITTY_WINDOW_ID', 'value' => null, 'priority' => 0],
             ]],
 
@@ -141,7 +141,7 @@ final class TermDb
         // wezterm. SC DIVERGENCE: chicle (:848-855) gives wezterm sixel+iterm2
         // and notes it lacks Kitty virtual placements; SugarCraft classifies
         // WezTerm as the Kitty protocol family outright (wezterm speaks the
-        // Kitty graphics protocol, and the family precedence predates F-01 —
+        // Kitty graphics protocol, and the family precedence predates the table —
         // pinned by testWezTermIsKittyOnlyNotIterm2 / DeleteApiTest).
         ['name' => 'wezterm', 'type' => self::TYPE_TERM, 'version' => null,
             'claims' => [TermInfo::PROTOCOL_KITTY], 'passthrough' => [],
@@ -166,14 +166,14 @@ final class TermDb
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM_PROGRAM', 'value' => 'iTerm.app', 'priority' => 0],
                 // SC addition: the old ladder also spelled the advertisement
                 // as plain "iTerm2"; keep both so the table claims exactly
-                // what Detect claimed before F-01.
+                // what Detect claimed before the table shipped.
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM_PROGRAM', 'value' => 'iTerm2', 'priority' => 0],
             ]],
 
         // mintty (chicle:731-738: iterm2+sixel, sixel overshoot quirk). Both
         // claims ride the union; Detect precedence resolves to iTerm2 exactly
         // as the old ladder hardcoded (OSC 1337 carries full-fidelity PNG).
-        // F-06: chicle attaches WIN_TERMINAL_SYMS to this row (:737) — mintty
+        // Chicle attaches WIN_TERMINAL_SYMS to this row (:737) — mintty
         // hosts cmd.exe sessions whose line-drawing coverage stops at the
         // block/border families; mirrored as BLOCK|BORDER.
         ['name' => 'mintty', 'type' => self::TYPE_TERM, 'version' => null,
@@ -199,7 +199,7 @@ final class TermDb
         // classifies mlterm as a SIXEL terminal (its OSC 1337 emulation is
         // partial, and the old ladder + testSixelViaTermAloneWithoutXtermVersion
         // pin sixel-only). The mlterm-256color head is named directly to
-        // preserve the pre-F-01 regex ladder; chicle's own mlterm arm is
+        // preserve the old regex ladder; chicle's own mlterm arm is
         // EXACT mlterm + $MLTERM isset (741-746), and chicle has NO
         // terminfo consult — it answers from this table plus a live DA1
         // round-trip (chafa-term.c:509-522).
@@ -310,7 +310,7 @@ final class TermDb
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM', 'value' => 'st-256color', 'priority' => 10],
             ]],
         // the Linux console (chicle:725-729: "TERM=linux is probably the Linux
-        // console" — 16 colors, no graphics). F-06: chicle attaches
+        // console" — 16 colors, no graphics). Chicle attaches
         // LINUX_CONSOLE_SYMS = ASCII-only (:86/:729); its hurd twin
         // (:676-680) has no SC row — recorded seam.
         ['name' => 'linux', 'type' => self::TYPE_TERM, 'version' => null,
@@ -326,13 +326,13 @@ final class TermDb
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_EXACT, 'key' => 'TERM_PROGRAM', 'value' => 'Apple_Terminal', 'priority' => 0],
             ]],
         // VTE-based emitters (chicle:827-838; the 5202 REP variant belongs to
-        // F-02, not to the pixel claim — no VTE version speaks sixel here).
+        // Not to the pixel claim — no VTE version speaks sixel here).
         ['name' => 'vte', 'type' => self::TYPE_TERM, 'version' => null,
             'claims' => [], 'passthrough' => [],
             'env' => [
                 ['op' => self::ENV_OP_INCL, 'cmp' => self::ENV_CMP_ISSET, 'key' => 'VTE_VERSION', 'value' => null, 'priority' => 0],
             ]],
-        // Windows console (chicle:857-860: ComSpec suffix). F-06: chicle
+        // Windows console (chicle:857-860: ComSpec suffix). Chicle
         // attaches WIN_TERMINAL_SYMS = BLOCK|BORDER (:88/:860) — Win10 TH2+
         // consoles draw ANSI and the box/block families, but not braille dots.
         ['name' => 'windows-console', 'type' => self::TYPE_TERM, 'version' => null,
@@ -370,7 +370,7 @@ final class TermDb
         // SC requires the self-advertisement `TERM_PROGRAM=tmux` (which every
         // ≥ 3.0 pane carries) before the native claim may fire — a leaked
         // $TMUX socket path alone does not prove the server's version, and a
-        // wrong native claim silently disables the F-04 termfeatures veto.
+        // wrong native claim silently disables the termfeatures veto.
         ['name' => 'tmux', 'type' => self::TYPE_MUX, 'version' => '3.4',
             'claims' => [TermInfo::PROTOCOL_SIXEL],
             'quirks' => TermInfo::QUIRK_SIXEL_OVERSHOOT,
@@ -429,14 +429,14 @@ final class TermDb
 
         $claims = self::mergeClaims($term['claims'] ?? [], $mux['claims'] ?? []);
 
-        // F-06: a class is safe on the chain only when every part that matched
+        // A class is safe on the chain only when every part that matched
         // says so — the intersection reading of chicle's chain line
         // (chafa-term-info.c:1691). A mux forwards UTF-8 text as-is, so its
         // rows carry no restriction today; a missing key defaults to the full
         // set exactly like chicle's untagged rows.
         $safeSymbols = self::symbolsOf($term) & self::symbolsOf($mux);
 
-        // F-02: quirks UNION across the chain (bitwise OR) — the opposite
+        // Quirks UNION across the chain (bitwise OR) — the opposite
         // merge law from symbols, and for the same physical reason: a quirk
         // is a cursor/behaviour defect any one link can introduce, so a
         // tmux overshoot row applies even when the outer terminal claims
@@ -456,7 +456,7 @@ final class TermDb
     }
 
     /**
-     * F-02: the quirk mask a matched row carries; absent means none (the
+     * The quirk mask a matched row carries; absent means none (the
      * table default — quirks are the curated exception, exactly like the
      * restricted symbol presets).
      *
@@ -468,8 +468,8 @@ final class TermDb
     }
 
     /**
-     * F-06: the safe-symbol mask a matched row carries; absent means the full
-     * set (table default, per S6.4: restricted rows are the curated exception).
+     * The safe-symbol mask a matched row carries; absent means the full
+     * set (table default: restricted rows are the curated exception).
      *
      * @param array{name: string, version: string|null, claims: list<string>, passthrough: array<string, bool>, symbols: int}|null $row
      */
@@ -480,9 +480,9 @@ final class TermDb
 
     /**
      * Pick the label row of $type and merge the union of every matching row's
-     * claims — SC union semantics, see the class docblock. F-06: the symbol
+     * claims — SC union semantics, see the class docblock. The symbol
      * mask intersects instead of unioning (conservative: every matching row
-     * of the type must allow a class for it to be safe). F-02: the quirk
+     * of the type must allow a class for it to be safe). The quirk
      * mask UNIONS (OR) — a defect any matching row reports is real for the
      * merged type, the mirror of the symbol law's conservatism.
      *

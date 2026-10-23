@@ -20,7 +20,7 @@ use SugarCraft\Image\Renderer\SixelRenderer;
 use SugarCraft\Image\TmuxPassthroughDecorator;
 
 /**
- * D-04: the poster disk-cache key must cover everything that changes the
+ * The poster disk-cache key must cover everything that changes the
  * encoded bytes — including renderer construction config that lives BELOW
  * the protocol name (Sixel dither/maxColors/cell geometry, Chafa CLI
  * options and format) — while renderers with no byte-varying config keep
@@ -164,7 +164,7 @@ final class DiskCacheKeyTest extends TestCase
     }
 
     /**
-     * A-02: the optimization mask rides the poster key as a trailing
+     * The optimization mask rides the poster key as a trailing
      * |opt=N segment — but ONLY when non-zero. A mask-0 mosaic (the
      * default, and an explicit Optimization::None) must keep its exact
      * pre-A-02 key byte-for-byte, or cache entries written before this
@@ -204,7 +204,7 @@ final class DiskCacheKeyTest extends TestCase
     }
 
     /**
-     * A-02: the segment rides AFTER the D-04 config fingerprint, so a
+     * The segment rides AFTER the D-04 config fingerprint, so a
      * configured sixel encoder carries both discriminators (the mask
      * changes the cache key even though pixel backends emit no REP).
      */
@@ -224,7 +224,7 @@ final class DiskCacheKeyTest extends TestCase
     }
 
     /**
-     * A-02: withOptimization() REPLACES the mask (last call wins) — the
+     * WithOptimization() REPLACES the mask (last call wins) — the
      * chain below ends at RepeatCells alone, so the key must not
      * accumulate the earlier ReuseAttributes bit.
      */

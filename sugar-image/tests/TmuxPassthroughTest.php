@@ -10,7 +10,7 @@ use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\TmuxPassthrough;
 
 /**
- * F-05: transactional tmux allow-passthrough ensure/restore.
+ * Transactional tmux allow-passthrough ensure/restore.
  *
  * A fake `tmux` planted on PATH records every invocation to a sidecar log
  * and emulates the option state in a sidecar file, so the pins below prove

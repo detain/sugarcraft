@@ -11,7 +11,7 @@ use SugarCraft\Image\Renderer\Iterm2Renderer;
 use SugarCraft\Image\Support\GdAvailability;
 
 /**
- * F-13: the iTerm2 `type=tiff` transmission — envelope shape, TIFF
+ * The iTerm2 `type=tiff` transmission — envelope shape, TIFF
  * payload round-trip, byte-stable PNG passthrough, and both GD-absence
  * branches (passthrough survives, re-encode refuses cleanly).
  */

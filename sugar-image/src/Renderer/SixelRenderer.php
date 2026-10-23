@@ -43,7 +43,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      */
     private const TRANSPARENT_BACKGROUND = '#0;2;P';
 
-    // F-09: the DECSIXEL `!N` cap (255) and the bare-literal threshold (4)
+    // The DECSIXEL `!N` cap (255) and the bare-literal threshold (4)
     // live with the shared emitter in sugar-core ({@see Ansi::sixelRle()}).
 
     /**
@@ -60,7 +60,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     private const BASE_INTENSITY_256C = 0.1;
 
     /**
-     * B-14: palette-sample ceiling. chafa scales its census ceiling with the
+     * Palette-sample ceiling. chafa scales its census ceiling with the
      * -w rung (quality_params.n_samples = 2^14..2^26); the port holds the
      * historical 4096 cap fixed — the dial moves the histogram DEPTH (bits
      * per channel), not the sample census. Disclosed deviation.
@@ -68,7 +68,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     private const SAMPLE_CAP = 4096;
 
     /**
-     * B-10: default alpha threshold — GD's fully-transparent value (0 =
+     * Default alpha threshold — GD's fully-transparent value (0 =
      * opaque .. 127 = transparent). The hole test `alpha >= threshold` at
      * the default therefore matches exactly today's `=== 127` semantics
      * (GD clamps alpha to 127, so `>= 127` and `=== 127` agree on every
@@ -80,10 +80,10 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     public const DEFAULT_ALPHA_THRESHOLD = 127;
 
     /**
-     * C-04: dither bias intensity for the opt-in Ordered/Noise axes.
+     * Dither bias intensity for the opt-in Ordered/Noise axes.
      * NULL (default) means "user did not ask" and behaves exactly as the
-     * pre-C-04 renderer on every path — the default diffusion stream is
-     * byte-frozen post-C-01. Chafa's chafa_dither_init() clamps diffusion
+     * original renderer on every path — the default diffusion stream is
+     * byte-frozen after the clamp freeze. Chafa's chafa_dither_init() clamps diffusion
      * strength to 1.0 and feeds ordered/noise magnitudes straight through,
      * so values above 1.0 clamp here and negatives/NaN are refused.
      */
@@ -96,21 +96,21 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * @param int $cellHeight Pixel height of a terminal cell.
      * @param float|null $intensity Ordered/Noise bias strength 0.0..1.0
      *                              (null = chafa's config default 1.0; the
-     *                              depth ladder rides on Ordered only, C-07).
-     * @param int $alphaThreshold   B-10: GD-alpha hole cut-off 0..127 — pixels
+     *                              depth ladder rides on Ordered only).
+     * @param int $alphaThreshold   GD-alpha hole cut-off 0..127 — pixels
      *                              with `alpha >= threshold` become background
      *                              holes and are excluded from the palette
      *                              census. 127 (default) reproduces the
-     *                              pre-B-10 `=== 127` test byte-identically.
+     *                              older `=== 127` test byte-identically.
      * @param Color|null $flattenBackground
-     *                              B-10: when set, semi-transparent pixels
+     *                              When set, semi-transparent pixels
      *                              (0 < alpha < threshold) are composited onto
      *                              this colour at base-read time, BEFORE any
      *                              sampling or diffusion, mirroring chafa's
      *                              prepare-pixels bg-carry so error diffusion
      *                              works on what the terminal will show.
      *                              Null (default) = no flattening.
-     * @param bool $serpentine      C-08: serpentine (boustrophedon) scan for
+     * @param bool $serpentine      Serpentine (boustrophedon) scan for
      *                              the diffusion kernels — odd rows walk x in
      *                              reverse and the kernel mirrors horizontally,
      *                              mirroring chafa's fs_dither row flip
@@ -124,7 +124,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *                              the nearest visible cell, SugarCraft
      *                              drops them) is disclosed at
      *                              Ditherer::indexRows().
-     * @param bool $mltermEdgeRows  F-03: mlterm workaround — force the global
+     * @param bool $mltermEdgeRows  mlterm workaround — force the global
      *                              first/last band of a transparent canvas to
      *                              carry a full-width run on the background
      *                              register (chafa-sixel-renderer.c:330-410
@@ -132,15 +132,15 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *                              applied at :415-440 to
      *                              is_global_first_row || is_global_last_row).
      *                              Default false: auto-enabling belongs to the
-     *                              F-02 TermDb capability table, not here.
-     * @param ?int $quality         B-14: chafa -w quality ladder rung (1-9)
-     * @param bool $autoLevels        B-15: chafa prepare_pixels auto-levels pass
+     *                              TermDb capability table, not here.
+     * @param ?int $quality         chafa -w quality ladder rung (1-9),
+     * @param bool $autoLevels        chafa prepare_pixels auto-levels pass
      *                                    (histogram stretch + saturation lift), default OFF
      *                              selecting the PNN histogram depth via
      *                              {@see \SugarCraft\Image\Quantizer} — null
      *                              (default) keeps median-cut, so the
      *                              byte-frozen default path is untouched.
-     * @param int|null $quirks      F-02: the {@see TermInfo} `QUIRK_*`
+     * @param int|null $quirks      the {@see TermInfo} `QUIRK_*`
      *                              bitmask of the terminal the poster is
      *                              destined for, armed through
      *                              {@see withQuirks()}. NULL (default) =
@@ -189,7 +189,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                 Lang::t('sixel.alpha_threshold_out_of_range', ['alphaThreshold' => $alphaThreshold])
             );
         }
-        // B-14: the quality rung is the SAME knob Quantizer::bitsForQuality
+        // The quality rung is the SAME knob Quantizer::bitsForQuality
         // parses, so the refusal comes from the shared ladder message.
         if ($quality !== null && ($quality < Quantizer::MIN_QUALITY || $quality > Quantizer::MAX_QUALITY)) {
             throw new \InvalidArgumentException(
@@ -303,7 +303,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         );
         imagedestroy($src);
 
-        // B-15: chafa's prepare_pixels pass runs on the RESIZED canvas
+        // Chafa's prepare_pixels pass runs on the RESIZED canvas
         // before any palette census, hole detection, or dither — so the
         // quantizer, the background-register decision, and every index
         // row see the leveled pixels. Opt-in only: with autoLevels off
@@ -328,7 +328,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             // is reserved, the colour budget shrinks by one so the highest
             // shifted register stays inside DEC's 0..255 range (#256 aliases
             // onto the transparent background on tolerant decoders).
-            // B-14: with the quality dial armed the census goes to the PNN
+            // With the quality dial armed the census goes to the PNN
             // quantiser instead — see buildPalette() for the routing rule.
             $palette = $this->buildPalette(
                 $this->samplePixels($resized, self::SAMPLE_CAP, $offset),
@@ -374,7 +374,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
             }
 
             $write(Ansi::sixelTerminator());
-            // F-02: the chafa.c:445-451 parking newline — one vertical space
+            // The chafa.c:445-451 parking newline — one vertical space
             // after the sixel when the terminal is known not to park the
             // cursor below the final band itself. Success path only: the
             // finally-arm above must never strand a DCS, but a half-failed
@@ -407,7 +407,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * indices) so {@see emitBand()} is agnostic to where the band sits in the
      * full canvas.
      *
-     * F-03: when the mlterm quirk is armed, a GLOBAL edge band (first or last)
+     * When the mlterm quirk is armed, a GLOBAL edge band (first or last)
      * of a transparent canvas that encodes to NOTHING at all is replaced by a
      * full-width zero-bit run on the background register. Per mlterm's own
      * comment in chafa (chafa-sixel-renderer.c:330-410 build_sixel_row_ansi):
@@ -472,24 +472,24 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * D-04: every ctor config that changes the encoded bytes rides the
+     * Every ctor config that changes the encoded bytes rides the
      * fingerprint — dither arms the index grid differently, maxColors
      * changes the palette, and the cell-pixel geometry resamples to a
      * different pixel canvas, so two SixelRenderers named 'sixel' with any
      * of these differing must never cross-serve a poster cache entry.
      *
-     * C-04: the intensity segment appears ONLY when set — the pinned
+     * The intensity segment appears ONLY when set — the pinned
      * default fingerprint stays byte-identical (DiskCacheKeyTest), while
      * every ordered/noise render under a non-default bias gets its own
      * cache key instead of cross-serving the 1.0-bias bytes.
      *
-     * B-10: threshold and flatten segments follow the same discipline —
+     * Threshold and flatten segments follow the same discipline —
      * they appear only when they deviate from the byte-frozen default.
-     * C-08: the serpentine segment likewise appears only when armed.
-     * B-14: the quality segment likewise appears ONLY when armed — the
-     * pinned default fingerprint stays byte-identical (C-04/B-10 discipline).
-     * B-15: the autoLevels segment likewise appears only when armed.
-     * F-02: the quirks segment appears ONLY when the terminal was actually
+     * The serpentine segment likewise appears only when armed.
+     * The quality segment likewise appears ONLY when armed — the
+     * pinned default fingerprint stays byte-identical (bias and alpha-cutoff discipline).
+     * The autoLevels segment likewise appears only when armed.
+     * The quirks segment appears ONLY when the terminal was actually
      * consulted — a queried quirks=0 differs from the frozen null default
      * (it earns the parking newline), so the two must never share a cache
      * key; the null default keeps every pinned fingerprint byte-identical.
@@ -542,8 +542,8 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * B-10: the GD-alpha hole cut-off in force (0..127; 127 = only fully
-     * transparent pixels are holes, the pre-B-10 behaviour).
+     * The GD-alpha hole cut-off in force (0..127; 127 = only fully
+     * transparent pixels are holes, the older behaviour).
      */
     public function alphaThreshold(): int
     {
@@ -551,7 +551,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * B-10: the flatten background in force, or null when semi-transparent
+     * The flatten background in force, or null when semi-transparent
      * pixels keep their stored colour.
      */
     public function flattenBackground(): ?Color
@@ -560,7 +560,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * B-10 copy with a different alpha threshold: pixels whose GD alpha
+     * Copy with a different alpha threshold: pixels whose GD alpha
      * reaches `$threshold` become background holes, and the hole decision
      * happens before the pixel ever enters the palette census or the
      * diffusion stream (chafa quantize_pixel skip semantics,
@@ -590,7 +590,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * B-10: opt-in pre-sampling flatten — every semi-transparent pixel
+     * Opt-in pre-sampling flatten — every semi-transparent pixel
      * (0 < alpha < threshold) is composited toward `$background` inside the
      * base read, BEFORE quantisation or diffusion touch it, so the encoder
      * dithers the colour the terminal will actually show instead of the raw
@@ -616,7 +616,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * C-08: true when the diffusion walk snakes (odd rows reversed).
+     * True when the diffusion walk snakes (odd rows reversed).
      */
     public function serpentine(): bool
     {
@@ -624,7 +624,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * C-08 copy with the serpentine scan armed. Only diffusion dithers are
+     * Copy with the serpentine scan armed. Only diffusion dithers are
      * affected — Ordered is a position-taken bias and None has no walk to
      * reverse, so both render byte-identically with or without it.
      */
@@ -647,7 +647,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * F-03: true when the mlterm first/last-row quirk is armed.
+     * True when the mlterm first/last-row quirk is armed.
      */
     public function mltermEdgeRows(): bool
     {
@@ -655,12 +655,12 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * F-03 copy with the mlterm edge-band quirk armed. The quirk only ever
+     * Copy with the mlterm edge-band quirk armed. The quirk only ever
      * fires on a canvas that carries the transparent background register
      * (offset 1) whose global first or last band encodes to nothing at all;
      * those bands then draw a full-width zero-bit run on register 0 so the
      * graphics position advances across the whole row. Off by default until
-     * the F-02 TermDb table can select it per terminal.
+     * the TermDb table can select it per terminal.
      */
     public function withMltermEdgeRows(bool $mltermEdgeRows = true): self
     {
@@ -681,11 +681,11 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * F-02 copy armed from a terminal-database quirks bitmask
+     * Copy armed from a terminal-database quirks bitmask
      * ({@see TermInfo::QUIRK_*}). Two chicle consumers re-home here:
-     * QUIRK_MLTERM_EDGE_ROWS arms the F-03 full-width edge-band forcing
-     * (the flag's "auto-enabling belongs to the F-02 TermDb capability
-     * table" home promised in its F-03 docblock), and the ABSENCE of
+     * QUIRK_MLTERM_EDGE_ROWS arms the full-width edge-band forcing
+     * (the flag's "auto-enabling belongs to the TermDb capability
+     * table" home promised in its docblock), and the ABSENCE of
      * QUIRK_SIXEL_OVERSHOOT on a KNOWN terminal makes the encoder append
      * the parking newline chafa writes at chafa.c:445-451 — a terminal
      * with the quirk parks its own cursor a row below the final band and
@@ -717,7 +717,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * F-02: the armed quirks mask, null when the terminal was never
+     * The armed quirks mask, null when the terminal was never
      * consulted (the byte-frozen default).
      */
     public function quirks(): ?int
@@ -726,7 +726,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * F-02: whether one `QUIRK_*` bit is armed. Null quirks answers false
+     * Whether one `QUIRK_*` bit is armed. Null quirks answers false
      * for every bit — no facts, no quirk-driven bytes.
      */
     public function hasQuirk(int $quirk): bool
@@ -735,7 +735,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * F-02: the parking newline chafa.c:445-451 appends after sixel output
+     * The parking newline chafa.c:445-451 appends after sixel output
      * when the terminal is KNOWN not to overshoot its cursor. Returns ''
      * for the frozen null default and for overshooting terminals.
      */
@@ -751,7 +751,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * B-14: the PNN quality rung in force (1-9), or null when the renderer
+     * The PNN quality rung in force (1-9), or null when the renderer
      * quantises with median-cut — the byte-frozen default.
      */
     public function quality(): ?int
@@ -760,7 +760,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * B-15: chafa's `--preprocessing` auto-levels in force — the
+     * Chafa's `--preprocessing` auto-levels in force — the
      * fast-intensity histogram bounds, per-channel stretch, and Rec.709
      * saturation lift run before the palette census (see
      * {@see LevelsStretch()}). Default OFF: every byte-frozen digest
@@ -794,7 +794,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * B-14 copy on a different rung of the chafa -w ladder (1-9). Arming it
+     * Copy on a different rung of the chafa -w ladder (1-9). Arming it
      * routes palette construction through {@see Quantizer} when the sample
      * census outweighs the colour budget; every other setting rides along.
      * The default path never calls this, so default bytes are untouched.
@@ -835,8 +835,8 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * Quick full-canvas scan for any pixel at or above the alpha threshold
      * (GD alpha >= 127 at the default = fully transparent).
      *
-     * B-10: with the default threshold only exact-127 pixels qualify, so the
-     * background-register decision stays byte-identical to the pre-B-10
+     * With the default threshold only exact-127 pixels qualify, so the
+     * background-register decision stays byte-identical to the older
      * scan; a lowered threshold additionally counts semi-transparent pixels
      * as holes (they will not be painted), keeping this census in lockstep
      * with the hole mask in {@see indexRows()}. The scan short-circuits on
@@ -865,7 +865,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * @param int $offset 1 when a background register is reserved — pixels at
      *                    or above the alpha threshold are holes, carry no
      *                    colour, and must not dilute the median-cut buckets
-     *                    (B-10; chafa's sample_to_bins_impl drops exactly
+     *                    (chafa's sample_to_bins_impl drops exactly
      *                    these, chafa/internal/chafa-palette.c:569).
      * @return list<array{int,int,int}>
      */
@@ -888,7 +888,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                 // an imagecolorsforindex associative-array allocation per pixel.
                 $rgb = imagecolorat($img, $x, $y);
                 $alpha = ($rgb >> 24) & 0xFF;
-                // B-10 ORDERING LAW: the hole census runs FIRST — a pixel at
+                // ORDERING LAW: the hole census runs FIRST — a pixel at
                 // or above the threshold never enters the sample, whether or
                 // not flattening is armed (flatten composites toward the bg
                 // for the terminal to PAINT; holes are never painted).
@@ -898,7 +898,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
                 $r = ($rgb >> 16) & 0xFF;
                 $g = ($rgb >> 8) & 0xFF;
                 $b = $rgb & 0xFF;
-                // B-10: semi-transparent survivors are flattened onto the
+                // Semi-transparent survivors are flattened onto the
                 // background here, before quantisation — the palette learns
                 // the colours the encoder will actually emit.
                 if ($this->flattenBackground !== null && $alpha > 0) {
@@ -912,11 +912,11 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * B-10: src-over composite of one pixel's RGB toward the flatten
+     * Src-over composite of one pixel's RGB toward the flatten
      * background, on GD's inverted alpha scale (0 = opaque, 127 = fully
      * transparent), so background weight is `alpha / 127`.
      *
-     * C-06: the arithmetic moved to {@see Ditherer::flattenOnto()} — the
+     * The arithmetic moved to {@see Ditherer::flattenOnto()} — the
      * encoder's palette census and the Ditherer's base read must composite
      * identically, so the formula lives once. This private static stays as
      * the samplePixels-side call shape its structural ordering pin reads.
@@ -968,7 +968,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * B-14: palette construction router.
+     * Palette construction router.
      *
      * Median-cut stays the default AND the fallback: it wins whenever the
      * quality dial is unarmed, the census is empty, or the sample stream
@@ -1086,7 +1086,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     // ─── Index grid (lazy, rolling-window) ────────────────────────────────────
 
     /**
-     * C-06: thin delegate onto {@see Ditherer::indexRows()} — the shared
+     * Thin delegate onto {@see Ditherer::indexRows()} — the shared
      * dithering stage the block/character renderers ride too. The texture is
      * built here because its magnitude is this renderer's palette-depth
      * knowledge (BASE_INTENSITY_* ladder, chafa-canvas.c:591-614); every
@@ -1099,7 +1099,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      *
      * @param list<array{int,int,int}> $palette
      * @param int $offset 1 when register 0 is the transparent background.
-     * @param int $yOrigin C-04: absolute pixel row of this call's row 0
+     * @param int $yOrigin Absolute pixel row of this call's row 0
      *                    (texture phase; see the Ditherer docblock).
      * @return \Generator<int, list<int>>
      */
@@ -1122,7 +1122,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * C-04/C-07: Ordered bias magnitude — chafa folds the depth base into
+     * Ordered bias magnitude — chafa folds the depth base into
      * the config intensity before reaching chafa_dither_init()
      * (chafa-canvas.c:591-614: `dither_intensity * config.dither_intensity`,
      * then `chafa_gen_bayer_matrix (TEXTURE_DIM, intensity)`), so this is
@@ -1134,7 +1134,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         return $this->orderedDepthBase() * ($this->intensity ?? 1.0);
     }
 
-    /** C-07: the depth rung of the ordered ladder (see BASE_INTENSITY_*). */
+    /** The depth rung of the ordered ladder (see BASE_INTENSITY_*). */
     private function orderedDepthBase(): float
     {
         return match (true) {
@@ -1146,11 +1146,11 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * C-05: Noise bias magnitude — chafa's chafa_dither_init() NOISE arm,
+     * Noise bias magnitude — chafa's chafa_dither_init() NOISE arm,
      * `chafa_gen_noise_matrix (dither->intensity * 0.1f)`, with the base
      * intensity left at 1.0: chafa-canvas.c (:591-614) applies the depth
      * ladder to ORDERED only, so Noise never sees a maxColors-derived
-     * factor (pinned by SixelIntensityTest with C-07).
+     * factor (pinned by SixelIntensityTest).
      */
     private function noiseTextureMagnitude(): float
     {
@@ -1161,8 +1161,8 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     // ─── Sixel encoding ───────────────────────────────────────────────────────
 
     /**
-     * F-14 removed the private linear nearestColor walk: the B-13 memo's miss
-     * handler rides the shared PaletteIndex (B-04) instead, and a fourth
+     * Removed the private linear nearestColor walk: the block-centre memo's miss
+     * handler rides the shared PaletteIndex instead, and a fourth
      * nearest-path in this file is banned by the single-implementation law.
      */
 
@@ -1196,7 +1196,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         array $palette,
         int $offset = 0,
     ): string {
-        // F-14 band-diff: one sweep builds a per-colour column bitset
+        // Band-diff: one sweep builds a per-colour column bitset
         // (palette index → column → 6-row mask), replacing the old two-pass
         // shape (discovery walk, then a per-colour full-width re-walk). The
         // emitted bytes are the same by construction: a column absent from a
@@ -1294,11 +1294,11 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
      * encoded per chafa's `format_schar_reps`
      * (chafa/internal/chafa-sixel-renderer.c:218-251): counts of 4..254 ride
      * as `!count byte`, runs of 255 or more split into repeated `!255`
-     * chunks plus remainder, and runs of 1..3 stay bare literals (F-09 —
+     * chunks plus remainder, and runs of 1..3 stay bare literals (since
      * an uncapped `!900` is illegal SIXEL and corrupts the band on real
      * decoders).
      *
-     * F-09 shared home: the split rule lives in {@see Ansi::sixelRle()}
+     * Shared home: the split rule lives in {@see Ansi::sixelRle()}
      * (sugar-core) so this band encoder and the palette-column helper can
      * never drift.
      */

@@ -12,7 +12,7 @@ use SugarCraft\Image\Renderer\QuarterBlockRenderer;
 use SugarCraft\Image\Support\OutputOptimizer;
 
 /**
- * A-13 reset-scope pins.
+ * Reset-scope pins.
  *
  * The pre-A-13 emitters closed every row (and, in the block renderers, every
  * cell) with `ESC[0m`. That is a full SGR clobber: it erases bold, underline,

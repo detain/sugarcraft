@@ -49,9 +49,9 @@ final class AsciiRendererTest extends TestCase
     }
 
     /**
-     * B-12: the ansi16 arm rides Color::ansi16Sgr()'s base-16 foreground rules
+     * The ansi16 arm rides Color::ansi16Sgr()'s base-16 foreground rules
      * (30-37 normal, 90-97 bright) — never the 38; extended spelling — and the
-     * A-13 row-end scope stays intact (39m, never a clobber).
+     * Row-end scope stays intact (39m, never a clobber).
      */
     public function testAnsi16EmitsBaseSixteenForeground(): void
     {
@@ -64,7 +64,7 @@ final class AsciiRendererTest extends TestCase
     }
 
     /**
-     * A-06: name() is the constant protocol identity 'ascii' for every
+     * Name() is the constant protocol identity 'ascii' for every
      * colour arm — the ramp moved to colorMode() so the PROTOCOL slot stops
      * leaking 'ansi256'/'truecolor' colour-mode names.
      */
@@ -98,7 +98,7 @@ final class AsciiRendererTest extends TestCase
     }
 
     /**
-     * A-11: the ramp is an injectable knob so sugar-video's bridge can thread
+     * The ramp is an injectable knob so sugar-video's bridge can thread
      * its named tables through this canonical quantizer instead of forking it.
      * Glyphs index the GIVEN table; the default stays the frozen 15-step ramp.
      */
@@ -118,7 +118,7 @@ final class AsciiRendererTest extends TestCase
     }
 
     /**
-     * A-11: an empty table cannot index a glyph — refuse at construction,
+     * An empty table cannot index a glyph — refuse at construction,
      * not mid-render on the first pixel.
      */
     public function testEmptyRampIsRefusedAtConstruction(): void

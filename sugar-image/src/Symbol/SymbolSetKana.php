@@ -17,7 +17,7 @@ namespace SugarCraft\Image\Symbol;
  * Unlike the narrow tables this tier is engine-coupled: chafa's
  * init_symbol_array_wide() (chafa-symbols.c) puts these glyphs in its wide
  * symbols2 array — never the narrow symbol array — and the wide machinery
- * (A-09, {@see SymbolMap::findWideCandidates()} and the renderer's
+ * ({@see SymbolMap::findWideCandidates()} and the renderer's
  * double-cell lookback pass) is what makes them renderable. The tier rides
  * {@see SymbolMap::withKana()} or the `wide` selector class; the default
  * corpus and every byte-frozen render digest stay untouched until then.

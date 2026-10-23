@@ -7,7 +7,7 @@ namespace SugarCraft\Image\Passthrough;
 use SugarCraft\Image\Renderer\Renderer;
 
 /**
- * F-12: common surface of the two passthrough envelopes.
+ * Common surface of the two passthrough envelopes.
  *
  * A terminal multiplexer sways control sequences addressed to the outer
  * terminal unless they ride inside a mux-specific passthrough wrapper.

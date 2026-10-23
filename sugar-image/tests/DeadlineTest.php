@@ -79,7 +79,7 @@ final class DeadlineTest extends TestCase
     }
 
     /**
-     * D-06: the deterministic 400 µs-before-zero pin (no sleeps).
+     * The deterministic 400 µs-before-zero pin (no sleeps).
      *
      * The class seam is the private float targetNs the constructor already
      * takes verbatim; reflection writes it so the residual is a chosen
@@ -97,7 +97,7 @@ final class DeadlineTest extends TestCase
     }
 
     /**
-     * D-06: floor never rounds up — the sleeping-caller half of the split.
+     * Floor never rounds up — the sleeping-caller half of the split.
      */
     public function testRemainingMsFloorsInsteadOfRounding(): void
     {
@@ -109,7 +109,7 @@ final class DeadlineTest extends TestCase
     }
 
     /**
-     * D-06: the deprecated alias delegates — remaining() and remainingMs()
+     * The deprecated alias delegates — remaining() and remainingMs()
      * can no longer disagree at any reading.
      */
     public function testRemainingDelegatesToRemainingMs(): void
@@ -122,7 +122,7 @@ final class DeadlineTest extends TestCase
     }
 
     /**
-     * D-06: expiry judged on the ns clock — a target even 400 µs in the
+     * Expiry judged on the ns clock — a target even 400 µs in the
      * past is expired, and exactly-at-target is expired (nothing left).
      */
     public function testIsExpiredIsExactAtAndPastTheTarget(): void
@@ -136,7 +136,7 @@ final class DeadlineTest extends TestCase
     }
 
     /**
-     * D-06 seam: write the private ns target relative to "now" without a
+     * Seam: write the private ns target relative to "now" without a
      * sleep, so edge readings are deterministic.
      */
     private function targetInTheFuture(Deadline $deadline, float $ns): void

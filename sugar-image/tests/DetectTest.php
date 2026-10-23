@@ -16,7 +16,7 @@ final class DetectTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // F-01: the cleared set is exactly TermDb::ENV_KEYS — the env vars
+        // The cleared set is exactly TermDb::ENV_KEYS — the env vars
         // the terminal database consults — so the negative pins stay
         // hermetic on machines that leak KONSOLE_VERSION or GHOSTTY_BIN_DIR.
         // TMUX is in the set because of F-04: with it set, probe() would
@@ -227,7 +227,7 @@ final class DetectTest extends TestCase
     }
 
     /**
-     * F-01 no-downgrade law: a Sixel claim that came from the terminal
+     * No-downgrade law: a Sixel claim that came from the terminal
      * database stays claimed even when the live DA1 reply denies sixel.
      * (The DA1 arm is true-only promotion — the reverse channel would let a
      * middlebox or a lying pane erase a published capability the table just
@@ -258,7 +258,7 @@ final class DetectTest extends TestCase
     }
 
     /**
-     * F-01 precedence union: an advertisement ($KITTY_WINDOW_ID) and a $TERM
+     * Precedence union: an advertisement ($KITTY_WINDOW_ID) and a $TERM
      * row (mlterm) can match at once; the family precedence resolves it to
      * Kitty exactly as the old hardcoded ladder did (its kitty block was
      * checked first).

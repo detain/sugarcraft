@@ -218,7 +218,7 @@ final class AnimationDriverTest extends TestCase
             imageId:    0,
         );
 
-        // S1.9/M2 cure: id 0 used to serialize as null, so the frame was
+        // M2 cure: id 0 used to serialize as null, so the frame was
         // transmitted with no i= at all and delete() could never target it.
         $this->assertStringStartsWith("\x1b_Ga=T,i=0,f=100,q=2,c=4,r=2,m=1;\x1b\\", $driver->view());
 

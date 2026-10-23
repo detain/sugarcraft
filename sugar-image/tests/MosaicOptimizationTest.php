@@ -13,7 +13,7 @@ use SugarCraft\Image\Renderer\AcceptsOptimization;
 use SugarCraft\Image\Renderer\SixelRenderer;
 
 /**
- * A-02: Mosaic::withOptimization matrix.
+ * Mosaic::withOptimization matrix.
  *
  * The law pinned here, in order of importance:
  *  1. None (and the documentary ReuseAttributes) is BYTE-IDENTICAL to the

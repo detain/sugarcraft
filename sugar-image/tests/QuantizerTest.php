@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Quantizer;
 
 /**
- * B-01: PNN quantizer pins — the chafa -w ladder mapping, the fail-loud
+ * PNN quantizer pins — the chafa -w ladder mapping, the fail-loud
  * edges, determinism (the palette is a pure function of the sample SET),
  * the histogram degenerate paths, and golden palettes that catch any drift
  * in the merge math. Goldens are hand-pinned digests (§4.11: this lib has
@@ -17,7 +17,7 @@ use SugarCraft\Image\Quantizer;
 final class QuantizerTest extends TestCase
 {
     /**
-     * B-01: bits-per-channel rows verbatim from chafa's quality_params
+     * Bits-per-channel rows verbatim from chafa's quality_params
      * (chafa-palette.c:63-76) for rungs -w1..-w9.
      */
     public function testQualityLadderMapsRungsToHistogramBits(): void

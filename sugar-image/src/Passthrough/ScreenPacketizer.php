@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Passthrough;
 
 /**
- * F-12: incremental Screen packetizer — the single source of framing truth
+ * Incremental Screen packetizer — the single source of framing truth
  * behind {@see ScreenPassthrough}.
  *
  * wrap() and encodeBandStream() both drive one instance of this machine
@@ -26,10 +26,10 @@ namespace SugarCraft\Image\Passthrough;
  * - a run's String Terminator is emitted byte-wise, one self-contained
  *   packet per ST byte (chafa-sixel-renderer.c end_sixels).
  *
- * Recorded divergence (rev-s7-1 m3): chafa additionally re-sizes the KITTY
+ * Recorded divergence: chafa additionally re-sizes the KITTY
  * payload itself under Screen — build_image_chunks emits 63-byte image
  * chunks when the encoder is in SCREEN mode and 510 otherwise
- * (internal/chafa-kitty-renderer.c:276). We do not re-chunk: the F-10 chunk
+ * (internal/chafa-kitty-renderer.c:276). We do not re-chunk: the chunk
  * sizes ride into this packetizer unchanged and the 200-byte begin/end
  * wrapping is placed purely by payload position, so Screen reassembly of
  * the envelope stays byte-identical either way; the smaller in-Screen chunk

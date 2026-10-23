@@ -1,10 +1,10 @@
 <?php
 
 /**
- * F-18: behavioural pins for the candy-image front end — usage/help exits,
+ * Behavioural pins for the candy-image front end — usage/help exits,
  * the flag grammar (values, formats, scale, size box), the refusal surface
  * (chafa by design, screen-passthrough by unwired app-surface dial), the
- * REACH-A04 dial flags (--symbols / --canvas / --work),
+ * Dial flags (--symbols / --canvas / --work),
  * and the terminal-detection dump. The blocking render path is pinned in
  * RenderSmokeTest; the blocking animation loop never runs here — the $play
  * seam returns the wired Player.
@@ -112,7 +112,7 @@ final class CliTest extends TestCase
 
     public function testProbeFlagIsRefusedAsUnknownOnThisBase(): void
     {
-        // F-18 kept --probe off the surface: Detect exposes no env-only
+        // Kept --probe off the surface: Detect exposes no env-only
         // probe seam, so honouring the spelling here would be a lie.
         [, , $err] = self::drive(['--probe=off', 'x.png']);
 
@@ -146,7 +146,7 @@ final class CliTest extends TestCase
 
     public function testSymbolsSelectorIsAcceptedAndValidated(): void
     {
-        // REACH-A04: chafa's tag-selector grammar now reaches the library.
+        // Chafa's tag-selector grammar now reaches the library.
         // A missing file still exits INPUT — proof the flag itself parsed.
         [$exit, , $err] = self::drive(['--symbols=braille', '/nonexistent.png']);
         $this->assertSame(Cli::EXIT_INPUT, $exit, $err);
@@ -185,7 +185,7 @@ final class CliTest extends TestCase
 
     public function testWorkFlagAcceptsChafaIntegersOnly(): void
     {
-        // REACH-A04/rev-w10-2 M3: chafa's --work is G_OPTION_ARG_INT 1..9
+        // Rev-w10-2 M3: chafa's --work is G_OPTION_ARG_INT 1..9
         // (chicle-options.c:2420); the bare-float sugar-image dial spelling
         // is gone — it was what inverted the polarity at the cheap end.
         foreach (['1', '5', '9'] as $value) {
@@ -201,7 +201,7 @@ final class CliTest extends TestCase
 
     public function testTheWorkDialCarriesChafasExactNormalization(): void
     {
-        // REACH-A04/rev-w10-2 M3: exact parity with chafa.c:570,
+        // Rev-w10-2 M3: exact parity with chafa.c:570,
         // (n - 1) / 8.0f — every step is a dyadic rational, so float
         // equality is exact (no epsilon). Polarity: 1 is the CHEAPEST
         // (0.0), 9 the most exhaustive (1.0).

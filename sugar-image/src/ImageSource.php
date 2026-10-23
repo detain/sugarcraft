@@ -56,7 +56,7 @@ final class ImageSource
      * GIF (`width × height × frameCount`). flip stores one PHP array per cell — measured
      * at ~250 bytes each, FAR heavier than a packed RGBA buffer — so
      * {@see self::MAX_PIXELS} (tuned for the packed path) alone lets an honest,
-     * in-budget GIF hand flip a multi-gigabyte grid: round-4 CRITICAL-1 measured a
+     * in-budget GIF hand flip a multi-gigabyte grid: measured — a
      * legitimately-structured 60-frame 316×316 GIF (5.99 M cells) at 1.5 GB / 20 s under
      * the previous 6 M ceiling. 400 k cells caps the sibling decoder's aggregate cost at
      * roughly 100 MB — enough for a real ~20-frame 128×128 GIF, far below an OOM.
@@ -72,7 +72,7 @@ final class ImageSource
     private const STAT_REGULAR_BIT = 0100000;
 
     /**
-     * E-05: ceiling on the number of RIFF chunks {@see self::webpCarriesAnimation()}
+     * Ceiling on the number of RIFF chunks {@see self::webpCarriesAnimation()}
      * walks before it gives up looking for animation proof. The walk is O(file)
      * otherwise; a 2 GB WebP with a thousand padding chunks must not stall a
      * render-loop ingress. Missing the budget is NOT a refusal (see the walk's
@@ -81,7 +81,7 @@ final class ImageSource
     private const MAX_RIFF_CHUNKS = 64;
 
     /**
-     * E-06: ISOBMFF `ftyp` major brands with no PHP-side decoder. avif/avis are
+     * ISOBMFF `ftyp` major brands with no PHP-side decoder. avif/avis are
      * AVIF; heic/heix/hevx/heim/heis and the HEIF-family container brands
      * mif1/msf1 cover the HEIC/HEVC-still line; 'jxl ' is boxed JPEG-XL.
      * Deliberately EXCLUDES generic video brands (isom/mp41/avc1 …) so a
@@ -108,9 +108,9 @@ final class ImageSource
         public readonly int $height,
         public readonly int $maxPixels = self::MAX_PIXELS,
     ) {
-        // MINOR-1 (C-10 review): the factories all guarantee ≥1, but this
+        // Zero-side guard: the factories all guarantee ≥1, but this
         // ctor is public — a hand-built 0×N source used to throw deep inside
-        // Scale::computeDimensions (C-11's boundary guard). Refuse it at the
+        // Scale::computeDimensions (its boundary guard). Refuse it at the
         // boundary instead, same InvalidArgumentException family.
         if ($width <= 0 || $height <= 0) {
             throw new \InvalidArgumentException("image source dimensions {$width}x{$height} must be positive");
@@ -289,8 +289,8 @@ final class ImageSource
      * non-PNG bytes to a terminal told they are PNG.
      *
      * @param string|null $sniffedMime getimagesizefromstring()'s `mime`, if any
-     * @throws UnsupportedFormatException  E-05 animated WebP (VP8X ANIM bit or
-     *                                    any ANMF chunk) and E-06 exotic
+     * @throws UnsupportedFormatException  animated WebP (VP8X ANIM bit or
+     *                                    any ANMF chunk) and exotic
      *                                    containers (AVIF/HEIF-family `ftyp`
      *                                    brands, JXL codestream, TIFF) — both
      *                                    refused on structure, before GD sees
@@ -313,7 +313,7 @@ final class ImageSource
         ) {
             return 'image/gif';
         }
-        // WebP: "RIFF" + 4 bytes + "WEBP". E-05: an animated WebP never gets a
+        // WebP: "RIFF" + 4 bytes + "WEBP". An animated WebP never gets a
         // label — on hosts whose libwebp demuxes animation to a first frame, GD
         // would decode one happy still from it; refusing on the STRUCTURE
         // (VP8X ANIM bit / ANMF chunk) happens PRE-decode, host-independently.
@@ -330,10 +330,10 @@ final class ImageSource
             return 'image/webp';
         }
 
-        // E-06: containers this library cannot decode AT ALL, recognisable by
+        // Containers this library cannot decode AT ALL, recognisable by
         // magic bytes alone — refuse them by name instead of letting GD emit a
         // generic "GD failed to load image" corruption accusation.
-        // Mirrors chicle's per-codec loader roster (survey E-06): the brands
+        // Mirrors chicle's per-codec loader roster: the brands
         // here have no PHP-side decoder and are not ext-gd formats.
         if (($brand = self::exoticFtypBrand($bytes)) !== null) {
             throw new UnsupportedFormatException(Lang::t('image_source.exotic_format', ['brand' => $brand]));
@@ -355,7 +355,7 @@ final class ImageSource
     }
 
     /**
-     * Pure-PHP RIFF walk proving a WebP carries animation (E-05.1).
+     * Pure-PHP RIFF walk proving a WebP carries animation.
      *
      * Animation evidence, either half sufficient: a VP8X chunk whose flags
      * byte has bit 1 (ANIM) set, or any ANMF chunk (a frame the VP8X header
@@ -405,7 +405,7 @@ final class ImageSource
 
     /**
      * Major brand of an ISOBMFF `ftyp` box when it names an exotic image
-     * codec with no PHP-side decoder (E-06), else null.
+     * codec with no PHP-side decoder, else null.
      *
      * The check is exactly `ftyp` at offset 4 plus a {@see self::EXOTIC_FTYPO_BRANDS}
      * match on the 4-byte major brand at offset 8 — generic video brands
@@ -649,7 +649,7 @@ final class ImageSource
         // NOT by re-opening `$path` via fromFile(): `getimagesize($path)` +
         // `imagecreatefrompng($path)` would re-follow the attacker-reachable path a
         // second time after our read, re-exposing the swap window the ingress closes
-        // (round-4 HIGH). fromString() produces an identical ImageSource from memory.
+        // (the byte-ingress swap-window finding). fromString() produces an identical ImageSource from memory.
         if (strlen($bytes) >= 8 && substr($bytes, 0, 8) === "\x89PNG\r\n\x1a\n") {
             return self::animationFromStillPng($bytes, $maxPixels);
         }
@@ -663,7 +663,7 @@ final class ImageSource
      * Turn already-read still-PNG bytes into the degenerate single-frame animation that
      * {@see self::fromAnimatedFile()} returns for a non-animated PNG.
      *
-     * Deliberately takes ONLY the bytes (never `$path`): the whole round-4 HIGH point is
+     * Deliberately takes ONLY the bytes (never `$path`): the whole point is
      * that every ingress consumer runs over the content read once through the bounded
      * descriptor. Routing the still-PNG branch through `fromFile($path)` would re-open the
      * caller-supplied path a second time (`getimagesize`/`imagecreatefrompng`) after the
@@ -686,11 +686,11 @@ final class ImageSource
      * is swapped to a FIFO in the nanoseconds before `fopen()` still blocks the open —
      * POSIX offers no non-blocking `fopen()`/`O_NONBLOCK` path through PHP's stream
      * layer, and any later re-open of `$path` would re-expose the same window. This is
-     * why {@see self::animatedFramesFromGif()} decodes from the bytes read HERE and —
-     * since E-07 — hands sugar-animation those bytes directly through its bytes-ingress
+     * why {@see self::animatedFramesFromGif()} decodes from the bytes read HERE and
+     * hands sugar-animation those bytes directly through its bytes-ingress
      * decoder (`decodeGifFramesFromBytes`): the attacker-reachable path is opened
      * exactly once on the whole GIF route, so a post-read swap cannot be re-followed
-     * at all (the round-4 HIGH private-temp-copy staging was the pre-E-07 mitigation of
+     * at all (the earlier private-temp-copy staging was the mitigation of
      * the sibling's path-only signature, and is gone). Closing the last
      * microsecond needs O_NONBLOCK at the host/loader boundary, out of scope for a
      * pure-PHP library; callers must not point `$path` at attacker-writable directories.
@@ -765,7 +765,7 @@ final class ImageSource
         // Read the logical screen size from the ALREADY-VALIDATED bytes, not by
         // re-opening $path: a second `getimagesize($path)` / `decode($path)` would
         // re-read a file an attacker can swap in the window after the bounded read,
-        // defeating the single-descriptor ingress (round-4 HIGH). The GIF LSD is a
+        // defeating the single-descriptor ingress. The GIF LSD is a
         // fixed-width LE pair at bytes 6..9; the signature was checked by the caller.
         // A GIF needs the full 13-byte header + logical-screen descriptor before ANY
         // structural walk (both walkers read byte 10), so demand 13, not 10.
@@ -806,13 +806,13 @@ final class ImageSource
         //
         // sugar-animation only emits trustworthy pixels when its walk lands on EXACTLY the
         // same descriptor positions a correct walk does. So the authoritative gate is
-        // the ORDERED OFFSET LISTS being equal (round-4 CRITICAL-2), NOT the counts: a
+        // the ORDERED OFFSET LISTS being equal, NOT the counts: a
         // phantom descriptor forged into a GCE region can preserve the frame COUNT while
         // replacing a real frame's bytes (honest `{33,68,91}` vs flip `{33,56,91}`), and
         // a count-only reconcile would ship that phantom frame as authentic. Equality
         // refuses it cheaply, before flip runs. When the lists match, `$declared` is both
         // the honest count AND flip's materialisation count — so the aggregate budget
-        // below is exact, not a bound (round-4 CRITICAL-1: the ceiling itself becomes the
+        // below is exact, not a bound (measured: the ceiling itself becomes the
         // limit only if the budget is the sole stop, which equality guarantees it is not).
         $honestOffsets = self::gifHonestDescriptorOffsets($bytes);
         $flipOffsets   = self::gifFlipWalkDescriptorOffsets($bytes);
@@ -821,7 +821,7 @@ final class ImageSource
         if ($honestOffsets !== $flipOffsets) {
             // Frame POSITIONS disagree → flip would decode a different (partial or
             // phantom-injected) sequence than the container describes, even when the
-            // counts happen to match (round-4 CRITICAL-2). The message names the honest
+            // counts happen to match. The message names the honest
             // frame COUNT whose positions disagreed (not each offset, which would leak
             // raw stream layout). A legitimately >256-frame GIF also lands here: flip
             // slices at FLIP_FRAME_CAP so its list is shorter than the honest one — a
@@ -844,7 +844,7 @@ final class ImageSource
         // flip stores one PHP array per cell — roughly 250 bytes — far heavier than a
         // packed RGBA buffer, so cap the aggregate grid at ~100 MB even for an honest
         // GIF whose packed pixel count sits under {@see self::MAX_PIXELS}. This is a
-        // hard ceiling, not a tuning knob: round-4 CRITICAL-1 showed flip materialises
+        // hard ceiling, not a tuning knob: measurement showed flip materialises
         // ~1.5 GB / 20 s on a legitimately-structured 60-frame 316×316 GIF (60 × 99,856
         // cells = 5.99 M) that a 6 M budget waved through, so the budget must sit well
         // under the point where the cell arrays themselves exhaust memory.
@@ -857,7 +857,7 @@ final class ImageSource
             ]));
         }
 
-        // Hand flip the bytes we already validated and bounded (E-07): the
+        // Hand flip the bytes we already validated and bounded: the
         // sibling decoder has no path to re-open, so a post-read swap of the
         // original path cannot be re-followed — the single-descriptor ingress
         // above is the only open of `$path` this route performs, and the round-4
@@ -906,7 +906,7 @@ final class ImageSource
      * an unknown block. The offsets (not just the count) let the
      * loader reconcile frame POSITIONS against sugar-animation's walk, so a phantom
      * descriptor that happens to preserve the frame count cannot masquerade as a valid
-     * frame (round-4 CRITICAL-2: `{33,68,91}` vs flip's `{33,56,91}`).
+     * frame (worked example: `{33,68,91}` vs flip's `{33,56,91}`).
      *
      * @return list<int>
      *
@@ -1010,16 +1010,16 @@ final class ImageSource
      * of failing, a sub-block length overrunning EOF ends the walk, and frameInfos are
      * sliced to {@see self::FLIP_FRAME_CAP}.
      *
-     * Load-bearing role (round-4): the ORDERED OFFSET LIST is reconciled against the
+     * Load-bearing role: the ORDERED OFFSET LIST is reconciled against the
      * honest {@see self::gifHonestDescriptorOffsets()}. sugar-animation only emits trustworthy
      * pixels when its walk lands on exactly the same descriptor positions a spec-correct
      * walk does. A phantom descriptor that preserves the frame COUNT while shifting a
-     * POSITION (round-4 CRITICAL-2: honest `{33,68,91}` vs flip `{33,56,91}`, reachable
+     * POSITION (honest `{33,68,91}` vs flip `{33,56,91}`, reachable
      * through the blind GCE skip) makes the lists differ, so the animation is refused —
      * BEFORE flip runs — instead of emitting the phantom frame as if authentic. Once the
      * two lists are equal, flip's frame count necessarily equals the honest count, so the
      * aggregate cost budget computed downstream from that count is EXACT, not merely an
-     * upper bound (round-4 CRITICAL-1).
+     * upper bound.
      *
      * Keep the walk byte-exact with the sibling: a clone that drifts from flip makes the
      * gate refuse valid GIFs (an earlier revision kept flip's pre-resync `+10` image-data
@@ -1106,7 +1106,7 @@ final class ImageSource
 
     /**
      * Drive sugar-animation's decoder over the ALREADY-VALIDATED bytes — the
-     * E-07 bytes-ingress twin of its path decode — under a temporary error
+     * Bytes-ingress twin of its path decode — under a temporary error
      * handler so a corrupt GIF (which trips GD/`imagecreatefromstring`
      * warnings inside the sibling) and any foreign exception surface as one
      * clean, translated fail-fast rather than warning text sprayed across a
@@ -1115,7 +1115,7 @@ final class ImageSource
      * There is deliberately NO path parameter: this method structurally cannot
      * re-open anything. The previous route staged the bytes into a private
      * 0600 temp file because `Decoder::decode()` spoke only path-ingress
-     * (round-4 HIGH) — a mitigation of the cross-open TOCTOU that E-07's
+     * — a mitigation of the cross-open TOCTOU that sugar-animation's
      * `Decoder::decodeBytes()` removes at the root: the sibling now decodes
      * the exact string this loader read once through the bounded descriptor,
      * and no second open of any name happens anywhere on the GIF route.
@@ -1149,7 +1149,7 @@ final class ImageSource
     /**
      * Convert one sugar-animation frame to an RGBA PNG-backed {@see ImageSource}.
      *
-     * E-07: the frame's packed pre-downsample canvas ({@see AnimationFrame::rgbaBytes()},
+     * The frame's packed pre-downsample canvas ({@see AnimationFrame::rgbaBytes()},
      * sized by its own `rgbaWidth()/rgbaHeight()`) rides straight into `fromRgb()` —
      * the cell-grid re-walk that used to rebuild these bytes triple-traversed the
      * pixel data (canvas → cell arrays → string) and made the sibling's 100k-cell

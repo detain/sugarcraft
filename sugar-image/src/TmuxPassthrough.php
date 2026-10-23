@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image;
 
 /**
- * F-05: transactional tmux `allow-passthrough` management.
+ * Transactional tmux `allow-passthrough` management.
  *
  * Inside tmux, the pane swallows DCS/APC/OSC graphics envelopes unless the
  * window's `allow-passthrough` option is `on` (or `all`) — the decorated
@@ -41,7 +41,7 @@ namespace SugarCraft\Image;
  * Fail-soft law: nothing here ever throws. Outside tmux, with the binary
  * absent, with a pane that cannot be targeted, or against an unparseable
  * answer, ensure() returns false and touches nothing — graphics degrade to
- * the pre-F-05 silence instead of the run dying over a preference toggle.
+ * the original silence instead of the run dying over a preference toggle.
  * The whole feature is opt-outable with {@see Detect::setAutoPassthrough()}
  * for embedders who own their tmux configuration.
  */

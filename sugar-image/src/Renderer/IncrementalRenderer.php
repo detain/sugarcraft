@@ -8,7 +8,7 @@ use SugarCraft\Image\ImageSource;
 
 /**
  * Optional capability interface for renderers that can emit their bytes one
- * row (or frame) at a time instead of materialising the whole encode (D-05).
+ * row (or frame) at a time instead of materialising the whole encode.
  *
  * The lib already encodes incrementally inside {@see SixelRenderer} — its
  * band stream and {@see SixelRenderer::encodeBandStream()} pull index rows

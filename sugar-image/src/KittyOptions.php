@@ -16,34 +16,34 @@ final class KittyOptions
     private const ACTION_PLACE    = 'p';
 
     /**
-     * F-11: the kitty graphics protocol caps any single APC frame at 4 KiB —
+     * The kitty graphics protocol caps any single APC frame at 4 KiB —
      * a longer frame is truncated by the terminal, corrupting the image.
      */
     public const MAX_FRAME_BYTES = 4096;
 
     /**
-     * F-11: default raw (pre-base64) payload bytes per data-chunk frame.
+     * Default raw (pre-base64) payload bytes per data-chunk frame.
      * intdiv(4096 - 9 - 128, 4) * 3 = 2967: 9 is the data-chunk envelope
      * (APC 2 + 'G' 1 + 'm=1' 3 + ';' 1 + ST 2), 128 is reserved for
      * worst-case co-located parameters, and the result is floored to a
      * multiple of 3 so every chunk base64-encodes without '=' padding
      * (only the final chunk ever pads). Worst emitted data frame is
      * 9 + 4*ceil(2967/3) = 3965 bytes — 131 bytes of margin, above the
-     * 16-byte floor F-11 requires. Mirrors chafa's raw-byte chunking in
+     * 16-byte floor the chunker requires. Mirrors chafa's raw-byte chunking in
      * chafa/internal/chafa-kitty-renderer.c build_image_chunks().
      */
     public const DEFAULT_CHUNK_BYTES = 2967;
 
     /**
-     * F-11: largest legal override: intdiv(4096 - 9, 4) * 3 — the envelope
+     * Largest legal override: intdiv(4096 - 9, 4) * 3 — the envelope
      * only, no parameter margin (frame stays under the cap by 3 bytes).
      */
     public const MAX_CHUNK_BYTES = 3063;
 
     /**
-     * S7.1: the kitty `U` placement parameter — text/image stacking at the
+     * The kitty `U` placement parameter — text/image stacking at the
      * destination of an a=p place frame. 1 composites the image UNDER the
-     * text (text renders over it), 0 places it OVER the text. The F-10
+     * text (text renders over it), 0 places it OVER the text. The original
      * place path emitted 1 unconditionally (chafa's virtual-pair default);
      * {@see self::withPlacementU()} makes the other side expressible.
      *
@@ -62,7 +62,7 @@ final class KittyOptions
         private readonly int $offsetX,
         private readonly int $offsetY,
         /**
-         * F-10: when true, the transmit stores the image as virtual —
+         * When true, the transmit stores the image as virtual —
          * the store frame carries U=1 (the background compositor renders
          * it UNDER the text) and a control-only a=p,U=<placement> frame
          * follows the payload chunks to place the stored image. The payload
@@ -72,12 +72,12 @@ final class KittyOptions
          */
         private readonly bool $useVirtual,
         /**
-         * F-11: raw payload bytes per data-chunk frame, already normalized to
+         * Raw payload bytes per data-chunk frame, already normalized to
          * a multiple of 3; null means {@see self::DEFAULT_CHUNK_BYTES}.
          */
         private readonly ?int $chunkBytes,
         /**
-         * S7.1: the `U` value carried by placement frames — both the a=p
+         * The `U` value carried by placement frames — both the a=p
          * place frame and the trailing frame of a virtual transmit pair.
          * Defaults to {@see self::PLACEMENT_UNDER_TEXT}, which is byte-
          * identical to what the renderer emitted before the value became
@@ -184,9 +184,9 @@ final class KittyOptions
     }
 
     /**
-     * F-10: enable virtual placement — store with a=T,U=1, then place via
+     * Enable virtual placement — store with a=T,U=1, then place via
      * a trailing control-only a=p,U=<placement> frame. The trailing frame's
-     * U follows {@see self::withPlacementU()} (S7.1); the store frame's U=1
+     * U follows {@see self::withPlacementU()}; the store frame's U=1
      * is fixed because it is the background-compositor flag, not a stacking
      * choice (chafa emits `U=1` on every transmit it may later place).
      */
@@ -208,7 +208,7 @@ final class KittyOptions
     }
 
     /**
-     * S7.1: choose the `U` value emitted on placement frames — both an
+     * Choose the `U` value emitted on placement frames — both an
      * explicit {@see self::place()} and the trailing frame of a virtual
      * transmit pair.
      *
@@ -278,11 +278,11 @@ final class KittyOptions
     }
 
     /**
-     * F-11: override the raw payload bytes carried per data-chunk frame.
+     * Override the raw payload bytes carried per data-chunk frame.
      *
      * The transport surface is this options object; wiring the value from
      * runtime terminal capability (chafa's 63-byte Screen packets are that
-     * consumer — F-12) is a later seam, not part of F-11.
+     * consumer) is a later seam, not part of the chunker.
      *
      * @param int|null $chunkBytes  null restores {@see self::DEFAULT_CHUNK_BYTES};
      *                              overrides are floored to a multiple of 3 so
@@ -323,7 +323,7 @@ final class KittyOptions
     {
         return [
             'a' => $this->action,
-            // S7.1 follow-up (audit row S1.9/M2): 0 is a real kitty image
+            // Follow-up: 0 is a real kitty image
             // id, not an unset sentinel — withImageId(0) used to serialize
             // as null and the driver placed un-addressable frames. Other
             // zero fields keep their omit-when-default shape.

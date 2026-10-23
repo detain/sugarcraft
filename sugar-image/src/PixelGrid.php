@@ -20,7 +20,7 @@ namespace SugarCraft\Image;
  * alpha blending would require compositor support which these renderers
  * do not implement. Semi-transparent pixels will display as opaque.
  *
- * B-10: every builder takes an optional `int $alphaThreshold = 127` —
+ * Every builder takes an optional `int $alphaThreshold = 127` —
  * the transparency test is `alpha >= threshold`, matching
  * {@see \SugarCraft\Image\Renderer\SixelRenderer::withAlphaThreshold()}.
  * At the default the `>= 127` test agrees with the historical `=== 127`
@@ -49,7 +49,7 @@ final class PixelGrid
      * @param int      $cellW  Number of cells wide
      * @param int      $cellH  Number of cells tall
      * @param int      $alphaThreshold
-     *                         B-10: GD alpha at which (and above) a pixel
+     *                         GD alpha at which (and above) a pixel
      *                         reads back as null; 127 (default) keeps the
      *                         historical exact-127 hole test byte-identical.
      * @return self            2-D grid of `[r, g, b, ?int]` triples; alpha
@@ -91,7 +91,7 @@ final class PixelGrid
                 $topIdx = imagecolorat($scaled, $cx, $cy * 2);
                 $topC   = imagecolorsforindex($scaled, $topIdx);
                 // GD alpha: 0 = fully opaque, 127 = fully transparent.
-                // B-10: alpha >= threshold → null (hole); below → opaque slot.
+                // Alpha >= threshold → null (hole); below → opaque slot.
                 $topA   = $topC['alpha'] >= $alphaThreshold ? null : $topC['alpha'];
                 // Bottom half of the cell pair (lower pixel).
                 $botIdx = imagecolorat($scaled, $cx, $cy * 2 + 1);
@@ -113,7 +113,7 @@ final class PixelGrid
     /**
      * Build a grid from raw GD image bytes (imagecreatefromstring path).
      * Used for testing with fixed PNG fixtures. The `$alphaThreshold` is
-     * B-10's hole cut-off, passed straight through to {@see fromGd()}.
+     * alpha hole cut-off, passed straight through to {@see fromGd()}.
      */
     public static function fromString(string $bytes, int $cellW, int $cellH, int $alphaThreshold = 127): self
     {
@@ -138,14 +138,14 @@ final class PixelGrid
      * pixels at or above `$alphaThreshold` (GD alpha 127 at the default,
      * fully transparent) read back as null so downstream callers can
      * exclude the quad from colour sampling instead of mistaking its
-     * stored RGB (often black) for image content (A-05a); alpha below the
+     * stored RGB (often black) for image content; alpha below the
      * threshold is treated as opaque.
      *
      * @param \GdImage $img    Source image (must be truecolor)
      * @param int      $cellW  Number of terminal cells wide
      * @param int      $cellH  Number of terminal cells tall
      * @param int      $alphaThreshold
-     *                         B-10: hole cut-off, same semantics as
+     *                         Hole cut-off, same semantics as
      *                         {@see fromGd()}'s; default 127 keeps the
      *                         historical exact-127 test byte-identical.
      * @return self            2-D grid of 4-element [ul, ur, ll, lr] quads,
@@ -187,7 +187,7 @@ final class PixelGrid
                 foreach ($offsets as list($ox, $oy)) {
                     $color = imagecolorsforindex($scaled, imagecolorat($scaled, $ox, $oy));
                     // GD alpha: 0 = fully opaque, 127 = fully transparent.
-                    // B-10: alpha >= threshold → null (hole), below = opaque slot.
+                    // Alpha >= threshold → null (hole), below = opaque slot.
                     $quads[] = [
                         $color['red'],
                         $color['green'],

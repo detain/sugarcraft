@@ -10,7 +10,7 @@ use SugarCraft\Image\Levels\LevelsStretch;
 use SugarCraft\Image\Renderer\SixelRenderer;
 
 /**
- * B-15: the auto-levels port — chafa pixops integer math, the Rec.709
+ * The auto-levels port — chafa pixops integer math, the Rec.709
  * saturation lift (with the corrected weights NTC-1 demands), the GD
  * hole exclusion the plan calls "loadBase alpha-exclusion", and the
  * sixel renderer wiring that keeps the whole pass default-OFF.

@@ -13,7 +13,7 @@ use SugarCraft\Image\Renderer\WorkFactorConfigurable;
 use SugarCraft\Image\Symbol\CanvasMode;
 
 /**
- * A-08: chafa's work-effort dial on the symbol renderer (plan_chafa S6.2).
+ * Chafa's work-effort dial on the symbol renderer (plan_chafa S6.2).
  *
  * The dial is deterministic by construction (candidate-window arithmetic,
  * never wall clock), so the op-counter observer seam pins exactly the
@@ -112,7 +112,7 @@ final class WorkFactorTest extends TestCase
 
     public function testMoreWorkNeverIncreasesTheBestCellError(): void
     {
-        // D-03 quality floor: the candidate windows are prefix-nested
+        // Quality floor: the candidate windows are prefix-nested
         // (chafa's insertion-sorted top-8 buffer truncated at k), so the
         // best error per cell must be non-increasing as the dial opens.
         $image = ImageSource::fromFile(self::FIXTURE);
@@ -205,7 +205,7 @@ final class WorkFactorTest extends TestCase
 
     public function testTheHalfBlockRendererStillExistsForExplicitSelection(): void
     {
-        // The ladder change (D-03) must not disturb the old floor's bytes.
+        // The ladder change must not disturb the old floor's bytes.
         $mosaic = Mosaic::fromModeString('halfblock');
         $this->assertNotNull($mosaic);
         $this->assertInstanceOf(HalfBlockRenderer::class, (new \ReflectionProperty(Mosaic::class, 'renderer'))->getValue($mosaic));

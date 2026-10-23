@@ -26,12 +26,12 @@ use SugarCraft\Core\Util\Ansi;
  * (entry style). Emission is a pure delta: bytes leave this class only when
  * a channel's value differs from the tracked one.
  *
- * A-09 double-width cells need no bookkeeping here: the renderer emits a
+ * Double-width cells need no bookkeeping here: the renderer emits a
  * wide lead and simply never calls cell() for its continuation half (the
  * C's `if (cell->c == 0) continue;`), and both halves share the lead's
  * pen pair, so the delta tracking stays exact across the gap.
  *
- * A-14 row capacity: chafa preallocates each row at
+ * Row capacity: chafa preallocates each row at
  * (cells+1)*(TERM_SEQ_MAX*3+6)+1 (chafa-canvas-printer.c:654-669). PHP strings
  * grow on their own, so the analogue here is the documented worst-case bound
  * {@see OutputOptimizer::rowByteCapacity()} — every produced row is pinned to
@@ -42,15 +42,15 @@ use SugarCraft\Core\Util\Ansi;
  * Idiom split (recorded in CALIBER_LEARNINGS): sugar-cellbuffer's
  * Buffer::toAnsi() runs an independent adjacent-run coalescer over its own
  * cell grid. The two MUST NOT be unified — toAnsi walks a finished grid, this
- * optimizer streams a render loop. What IS shared since A-02 is the
+ * optimizer streams a render loop. What IS shared since the REP level landed is the
  * REP-vs-literal decision itself: both paths consult
  * {@see \SugarCraft\CellBuffer\Diff\RepeatGate::worth()}, so a run can never
  * be compressed on one path and left literal on the other. With the
  * RepeatCells level off (the default), the run buffer flushes literal
- * repeats in place — byte-identical to the pre-A-02 inline appends, which is
+ * repeats in place — byte-identical to the pre-run-buffer inline appends, which is
  * what keeps the frozen mosaic goldens the None-path proof.
  *
- * A-01 dedup pass: the third piece of the same job — the SGR PARAMETER
+ * Dedup pass: the third piece of the same job — the SGR PARAMETER
  * spelling of a pen — also has one home now, sugar-core's
  * {@see \SugarCraft\Core\Util\Ansi::fgRgbParams()} family (plus
  * {@see \SugarCraft\Core\Util\Ansi::backgroundPenParams()} for the
@@ -92,13 +92,13 @@ final class OutputOptimizer
     private string $buffer = '';
 
     /**
-     * Pending glyph run for the A-02 RepeatCells level: the last glyph the
+     * Pending glyph run for the RepeatCells level: the last glyph the
      * caller requested and how many cells of it are still unflushed. The
      * run is flushed before ANY other byte (SGR, attribute toggle, row end)
      * so interleaving with pen traffic is byte-exact, and at flush time
      * {@see RepeatGate::worth()} decides literal-repeat vs `ESC[count b`.
      * With the level off the gate never wins, so the flush writes exactly
-     * the bytes the pre-A-02 emitter wrote inline — None is the byte-
+     * the bytes the pre-run-buffer emitter wrote inline — None is the byte-
      * identical path by construction.
      */
     private ?string $runGlyph = null;
@@ -110,7 +110,7 @@ final class OutputOptimizer
     /**
      * @param string|null $entryForeground SGR parameters of the caller's pen foreground (null = terminal default)
      * @param string|null $entryBackground SGR parameters of the caller's pen background (null = terminal default)
-     * @param bool $repeatCells A-02 Optimization::RepeatCells arm: coalesce repeated glyphs
+     * @param bool $repeatCells Optimization::RepeatCells arm: coalesce repeated glyphs
      *        through the run buffer so {@see RepeatGate} may encode winning runs as REP.
      *        The capability AND-gate ({@see Detect::supportsRepeat()}) is applied by the
      *        callers that turn this on — the optimizer itself stays a pure emitter.
@@ -235,7 +235,7 @@ final class OutputOptimizer
     }
 
     /**
-     * Documented worst-case row size for a row of $cells cells (A-14).
+     * Documented worst-case row size for a row of $cells cells.
      */
     public static function rowByteCapacity(int $cells): int
     {
@@ -260,7 +260,7 @@ final class OutputOptimizer
 
     /**
      * Write the pending glyph run into the buffer: as `ESC[count-1 b` when
-     * the A-02 level is on and the repeat beats the framing arithmetic, else
+     * RepeatCells level is on and the repeat beats the framing arithmetic, else
      * as literal repeats — which, byte for byte, is what the pre-run-buffer
      * emitter appended inline.
      */

@@ -18,13 +18,13 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * dim via background colour (both drawn from the same image pixel).
  *
  * Cell selection is an exhaustive minimum-error search over all 16 glyph
- * masks (A-03): each membership split's pens are the group averages and the
+ * masks: each membership split's pens are the group averages and the
  * winner is the split minimising summed squared colour distance. Because
  * complement(mask) with swapped pens paints identical pixels, the search
  * evaluates the 8 representatives 1..7 and resolves each split's pen
  * assignment by group luma (brighter group rides the foreground).
  *
- * Transparency is per quad (A-05a): a fully-transparent cell renders blank
+ * Transparency is per quad: a fully-transparent cell renders blank
  * (terminal default on both pens), and a partly-transparent cell renders
  * foreground-only — the filled mask is pinned to the opaque quadrant set so
  * transparent quadrants never paint black. Semi-transparent pixels follow the
@@ -33,12 +33,12 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * Higher visual fidelity than HalfBlockRenderer when Sixel/Kitty are
  * unavailable: 4 sub-pixel positions per cell vs 2.
  *
- * A-07 (HS-QBR minimum): {@see withCanvasMode()} puts the same PC-14
+ * {@see withCanvasMode()} puts the same
  * fixed-palette ladder under this tier — group-average pens are snapped
  * onto the palette BEFORE the membership split is scored, so the chosen
  * glyph is optimal for what the terminal can actually paint. TrueColor
  * (the default) scores and paints raw averages — byte-frozen against the
- * pre-A-07 corpus. Fgbg snaps the SCORING pens to the white/black
+ * original TrueColor corpus. Fgbg snaps the SCORING pens to the white/black
  * reference pair ({@see CanvasMode::quantizeRgb()}) but emits neither
  * leg — {@see CanvasMode::fgSgr()} and {@see CanvasMode::bgSgr()} both
  * return null, so the terminal default paints both sides of every cell.
@@ -96,7 +96,7 @@ final class QuarterBlockRenderer implements Renderer, AcceptsOptimization, Confi
     ];
 
     /**
-     * Fixed-palette canvas mode (A-07). TrueColor is the historical
+     * Fixed-palette canvas mode. TrueColor is the historical
      * default and stays byte-identical; the limited palettes snap the
      * candidate pens before error scoring — the same rule chafa applies
      * to its canvas ({@see CanvasMode}) — and emit snapped SGR.
@@ -164,11 +164,11 @@ final class QuarterBlockRenderer implements Renderer, AcceptsOptimization, Confi
     /**
      * Resolve one 2×2 cell to (glyph, foreground, background). All four
      * quadrants opaque: an exhaustive minimum-error search over the glyph
-     * masks (A-03) picks the membership split whose group averages best
+     * masks picks the membership split whose group averages best
      * reproduce the quadrant colours — complement(mask) with swapped pens
      * paints identical pixels, so masks 1..7 cover every split, and each
      * split's brighter-average group rides the foreground. Flat cells keep
-     * the solid shortcut. With at least one transparent quad (A-05a) the
+     * the solid shortcut. With at least one transparent quad the
      * search is skipped and the cell renders foreground-only: the filled
      * mask is pinned to the opaque quadrant set, transparent quads are
      * absent from the sample and from the group average, and the background
@@ -245,7 +245,7 @@ final class QuarterBlockRenderer implements Renderer, AcceptsOptimization, Confi
      * chafa-symbol-map.c:1189-1263 treats hd and 64-hd as one pair).
      *
      * @param list<array{int,int,int,?int}> $quads four opaque quadrants
-     * @param CanvasMode $mode palette the candidate pens snap to (PC-14)
+     * @param CanvasMode $mode palette the candidate pens snap to
      *
      * @return array{0:int, 1:array{int,int,int}, 2:array{int,int,int}} mask, fg, bg
      */
@@ -269,7 +269,7 @@ final class QuarterBlockRenderer implements Renderer, AcceptsOptimization, Confi
             $fg = self::averageColor($fgGroup);
             $bg = self::averageColor($bgGroup);
             if ($mode->quantizes()) {
-                // PC-14: score the pens the palette can actually paint.
+                // Score the pens the palette can actually paint.
                 $fg = $mode->quantizeRgb($fg);
                 $bg = $mode->quantizeRgb($bg);
             }

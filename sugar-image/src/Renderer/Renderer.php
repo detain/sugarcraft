@@ -13,7 +13,7 @@ use SugarCraft\Image\ImageSource;
  * interface. Renderers are immutable — all configuration is supplied
  * at construction time via their own factory methods.
  *
- * D-04: a backend whose construction config changes the encoded bytes
+ * A backend whose construction config changes the encoded bytes
  * beyond what name() identifies (Sixel's dither, Chafa's CLI options)
  * additionally implements {@see ConfigFingerprintProvider} so the poster
  * disk cache can tell two same-name configurations apart.
@@ -40,7 +40,7 @@ interface Renderer
      * True if this backend supports partial transparency (alpha channel).
      * Half-block does not; Sixel and Kitty do.
      *
-     * A-12 (chafa campaign): ADVISORY — capability reporting, not mode
+     * (Chafa campaign): ADVISORY — capability reporting, not mode
      * selection. No logic consumer exists tree-wide (the tmux/screen
      * passthrough decorators only forward it; chafa by contrast picks its
      * rung from terminal capability — the CLI default consults
@@ -51,7 +51,7 @@ interface Renderer
      * SEMI-transparent pixels composite?", not "are transparent pixels
      * mishandled?": the text renderers honour FULLY transparent pixels
      * by omitting the pen so the terminal default shows through — see
-     * the class docblock of {@see HalfBlockRenderer} and A-05a in
+     * the class docblock of {@see HalfBlockRenderer} and the note in
      * {@see QuarterBlockRenderer}. Giving this boolean teeth (alpha-
      * heavy source + no-alpha backend → prefer a graphics rung) is a
      * future auto-ladder decision, not present behaviour.

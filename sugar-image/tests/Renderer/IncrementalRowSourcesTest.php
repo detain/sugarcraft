@@ -21,7 +21,7 @@ use SugarCraft\Image\Support\PushToPull;
 final class IncrementalRowSourcesTest extends TestCase
 {
     /**
-     * D-05: half-block yields one display row per unit and reproduces render()
+     * Half-block yields one display row per unit and reproduces render()
      * byte-for-byte when concatenated.
      */
     public function testHalfBlockRowsConcatToRender(): void
@@ -37,7 +37,7 @@ final class IncrementalRowSourcesTest extends TestCase
     }
 
     /**
-     * D-05: the transparent-half shapes (holes both ways) survive the row split
+     * The transparent-half shapes (holes both ways) survive the row split
      * unchanged — the OutputOptimizer pen is row-stateful across yields.
      */
     public function testHalfBlockRowsOverTransparentFixture(): void
@@ -52,7 +52,7 @@ final class IncrementalRowSourcesTest extends TestCase
     }
 
     /**
-     * D-05: kitty yields the begin frame, then exactly one frame per raw-byte
+     * Kitty yields the begin frame, then exactly one frame per raw-byte
      * slice (ceil(payload/2967) — the PNG fixture rides through ensurePng
      * untouched), and concatenates to render().
      */
@@ -71,7 +71,7 @@ final class IncrementalRowSourcesTest extends TestCase
     }
 
     /**
-     * D-05: sixel rows are header + one chunk per 6-px band + terminator; an
+     * Sixel rows are header + one chunk per 6-px band + terminator; an
      * 8×4-cell box is a 80×80-px canvas → 14 bands.
      */
     public function testSixelRowsGranularityAndConcat(): void
@@ -88,7 +88,7 @@ final class IncrementalRowSourcesTest extends TestCase
     }
 
     /**
-     * D-05: the sixel pump advances one chunk at a time — each next() parks
+     * The sixel pump advances one chunk at a time — each next() parks
      * the wrapped encodeBandStream at exactly one more band (laziness itself
      * is pinned on PushToPull, which this class drives).
      */
@@ -108,7 +108,7 @@ final class IncrementalRowSourcesTest extends TestCase
     }
 
     /**
-     * D-05: abandoning a sixel pump mid-stream is safe — the suspended fiber
+     * Abandoning a sixel pump mid-stream is safe — the suspended fiber
      * discards, GD releases by refcount, no warnings escape.
      */
     public function testAbandoningSixelRowsMidStreamIsSafe(): void
@@ -127,7 +127,7 @@ final class IncrementalRowSourcesTest extends TestCase
     }
 
     /**
-     * D-05: PushToPull bridges a counting push producer 1:1, in order, and
+     * PushToPull bridges a counting push producer 1:1, in order, and
      * refuses non-string suspensions loudly rather than yielding garbage.
      */
     public function testPushToPullBridgesInOrderAndLazily(): void
@@ -155,7 +155,7 @@ final class IncrementalRowSourcesTest extends TestCase
     }
 
     /**
-     * D-05: every shipped row source really implements the narrow contract.
+     * Every shipped row source really implements the narrow contract.
      */
     public function testRowSourcesAdvertiseTheCapability(): void
     {

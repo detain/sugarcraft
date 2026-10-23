@@ -99,7 +99,7 @@ final class MosaicModeStringTest extends TestCase
 
     public function testAutoModeProtocolIsSymbolsOnBareEnvironment(): void
     {
-        // A-04 seats the Symbols rung below chafa and above HalfBlock.
+        // Seats the Symbols rung below chafa and above HalfBlock.
         $this->assertSame('symbols', Mosaic::fromModeString('auto')?->protocol());
     }
 
@@ -111,7 +111,7 @@ final class MosaicModeStringTest extends TestCase
     }
 
     /**
-     * A-06: protocol() reports 'ascii' for all four colour arms — the
+     * Protocol() reports 'ascii' for all four colour arms — the
      * ramp words 'ansi16'/'ansi256'/'truecolor' are accepted INPUT spellings
      * that reach AsciiRenderer's colour axis, carried by modeDetail()
      * instead of leaking into the protocol slot (B-12 added the ansi16 arm).
@@ -140,7 +140,7 @@ final class MosaicModeStringTest extends TestCase
     }
 
     /**
-     * A-06: the docblock above fromModeString() and the method's match arms are
+     * The docblock above fromModeString() and the method's match arms are
      * one contract stated twice, so the prose is re-derived from the code
      * rather than hand-copied: the set of backticked words in the docblock
      * must equal the set of string-literal arms the method matches. A spelling
@@ -165,7 +165,7 @@ final class MosaicModeStringTest extends TestCase
     }
 
     /**
-     * A-06: the behaviour-matrix provider must feed every accepted spelling —
+     * The behaviour-matrix provider must feed every accepted spelling —
      * a future match arm with no provider row (or a provider word the method
      * stopped accepting) reddens this pin before the matrix could go stale.
      */

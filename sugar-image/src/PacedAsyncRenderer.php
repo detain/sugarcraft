@@ -11,7 +11,7 @@ use SugarCraft\Image\Renderer\IncrementalRenderer;
 
 /**
  * Async renderer that pumps an {@see IncrementalRenderer} against a slice
- * budget (D-05).
+ * budget.
  *
  * The problem this replaces: {@see SyncAsyncRenderer} is a futureTick
  * wrapper around the blocking one-shot encode — scheduling only, a large
@@ -30,7 +30,7 @@ use SugarCraft\Image\Renderer\IncrementalRenderer;
  * timeout, and cannot truncate a slow-but-legitimate encode. There is no
  * request-wide ceiling anywhere in this class by design.
  *
- * Cancellation is by abandonment (the survey's prescription): drop the
+ * Cancellation is by abandonment (the port's prescription): drop the
  * promise and the session, the generator dies, and the encode dies with it —
  * a push stream half-delivered is a truncated transmission, the consumer's
  * destination contract, never a correctness hazard for the promise itself.
@@ -63,7 +63,7 @@ final class PacedAsyncRenderer implements AsyncRenderer
      * Render asynchronously in paced slices, resolving with the full bytes.
      *
      * The first slice runs inline before this method returns (progress
-     * immediately observable, matching the survey's pump), later slices
+     * immediately observable, matching the documented pump shape), later slices
      * re-arm on futureTick, so the promise needs the loop only when the
      * encode spans more than one slice.
      */

@@ -8,7 +8,7 @@ use SugarCraft\Image\Symbol\CanvasMode;
 
 /**
  * Optional capability: the renderer's colour canvas is a dial the host
- * can flip after construction (A-07). PHP interfaces cannot carry
+ * can flip after construction. PHP interfaces cannot carry
  * default bodies, so instead of widening {@see Renderer} every backend
  * that speaks canvas modes declares this interface and the single
  * Mosaic call site checks for it — every other implementer keeps

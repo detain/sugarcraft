@@ -75,7 +75,7 @@ final class Mosaic
         private readonly ?int $forcedHeight,
         private readonly ?Scale $scale,
         /**
-         * A-02 {@see Optimization} mask (Optimization::bits() fold).
+         * {@See Optimization} mask (Optimization::bits() fold).
          * 0 = None = every historical byte stream; a mask with
          * RepeatCells is handed to cell-mosaic backends through
          * {@see AcceptsOptimization} and always rides the poster cache key,
@@ -163,7 +163,7 @@ final class Mosaic
      * protocol. The palette report can still see Kitty/iTerm2 environment
      * advertisements Detect's env table misses; anything else keeps the
      * Detect snapshot (whose bestBackend lands on the Symbols rung).
-     * F-08 consumer wire: the rebuilt capabilities inherit the snapshot's
+     * Consumer wire: the rebuilt capabilities inherit the snapshot's
      * probed OSC 10/11 default colours — dropping them used to hand the
      * terminal a colour-blind text fallback two rungs down the ladder.
      */
@@ -276,7 +276,7 @@ final class Mosaic
      * $mosaic = Mosaic::sixel(Dither::Ordered, intensity: 0.5); // half-strength ordered bias
      * ```
      *
-     * C-07: $intensity threads through to the renderer's dither bias
+     * $intensity threads through to the renderer's dither bias
      * (null = chafa config default 1.0 — the byte-frozen legacy shape).
      */
     public static function sixel(Dither $dither = Dither::FloydSteinberg, ?float $intensity = null): self
@@ -316,15 +316,15 @@ final class Mosaic
     }
 
     /**
-     * Force the coverage-class symbol-map renderer (A-04).
+     * Force the coverage-class symbol-map renderer.
      *
      * Unicode braille/sextant/octant/block glyphs plus Hamming-distance
      * candidate search — pure inline SGR text, so the backend is always
-     * available. A-04 seats it in the auto() ladder BELOW the chafa shell
+     * available. The auto() ladder seats it BELOW the chafa shell
      * rung and ABOVE the HalfBlock fallback; explicit halfBlock() and
      * fromModeString('halfblock') selection is untouched. The canvas rung
-     * and work factor ride the A-07/A-08 dials; $symbols is chafa's
-     * `--symbols=` selector expression (REACH-A04/F-17) selecting the
+     * and work factor ride the palette and candidate-budget dials; $symbols is chafa's
+     * `--symbols=` selector expression selecting the
      * glyph corpus — null keeps the byte-frozen default corpus.
      */
     public static function symbols(
@@ -350,7 +350,7 @@ final class Mosaic
     }
 
     /**
-     * A-07: switch the colour canvas when the active backend is a
+     * Switch the colour canvas when the active backend is a
      * text-tier renderer that speaks {@see CanvasModeConfigurable}
      * (SymbolMapRenderer, QuarterBlockRenderer — also through a
      * passthrough envelope); returns the same instance otherwise.
@@ -377,7 +377,7 @@ final class Mosaic
     }
 
     /**
-     * REACH-A04/F-17: select the symbol corpus with chafa's `--symbols=`
+     * Select the symbol corpus with chafa's `--symbols=`
      * tag grammar when the active backend is the symbol-map renderer
      * (also through a passthrough envelope); same instance otherwise.
      * An invalid expression throws — never a silently empty corpus.
@@ -404,7 +404,7 @@ final class Mosaic
     }
 
     /**
-     * A-08/D-03: forward chafa's --work dial when the active backend
+     * Forward chafa's --work dial when the active backend
      * speaks {@see WorkFactorConfigurable}; same instance otherwise.
      */
     public function withWorkFactor(float $workFactor): self
@@ -452,7 +452,7 @@ final class Mosaic
     }
 
     /**
-     * A-02: return a new Mosaic configured with optimization levels
+     * Return a new Mosaic configured with optimization levels
      * (chafa CHAFA_OPTIMIZATIONS ladder parity).
      *
      * ```php
@@ -463,7 +463,7 @@ final class Mosaic
      * mask with the bits of THIS invocation — chains do not accumulate;
      * the last call wins. Semantics per level:
      *  - ReuseAttributes (1) is DOCUMENTARY on this port: the streaming
-     *    pen-delta emitter shipped with A-01/S2.2 is unconditional, so the
+     *    pen-delta emitter shipped with the streaming rewrite is unconditional, so the
      *    flag changes no bytes and None cannot turn the delta off — that is
      *    the level-1-vs-level-4 split, stated honestly instead of wiring a
      *    second literal-emitter mode nobody asked for.
@@ -512,7 +512,7 @@ final class Mosaic
 
     /**
      * Stable backend name: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'quarterblock' | 'ascii' | 'chafa' | 'symbols'.
-     * A-06: this slot names the PROTOCOL only. The three AsciiRenderer
+     * This slot names the PROTOCOL only. The three AsciiRenderer
      * colour arms all report 'ascii' here — pair with {@see modeDetail()}
      * wherever the encoded bytes must be told apart.
      */
@@ -523,7 +523,7 @@ final class Mosaic
 
     /**
      * Extra discriminator for when {@see protocol()} alone does not
-     * identify the encoded bytes. A-06: AsciiRenderer has four colour
+     * identify the encoded bytes. AsciiRenderer has four colour
      * arms behind one protocol name, so an Ansi16/Ansi256/TrueColor ascii mosaic
      * reports its {@see AsciiColorMode} value ('ansi16'/'ansi256'/'truecolor')
      * here; every other renderer — and the Mono ascii arm, whose protocol
@@ -658,8 +658,8 @@ final class Mosaic
             [$image, $boxIsFinal] = $this->applyScale($image, $w, $h);
             // Cover modes (Fill/Crop) keep their cropped full-resolution image and
             // render exactly $w×$h cells, so the explicit height is preserved, as
-            // does the centred pad canvas of a refused ShrinkToFit upscale (C-10
-            // fix, lane f8). The other modes resized the image to fit, so
+            // does the centred pad canvas of a refused ShrinkToFit upscale (the pad-canvas
+            // fix). The other modes resized the image to fit, so
             // re-derive height from its (now-final) aspect ratio.
             if (!$boxIsFinal && $this->scale !== Scale::Fill && $this->scale !== Scale::Crop) {
                 $h = null;
@@ -675,8 +675,8 @@ final class Mosaic
      * @return array{0: ImageSource, 1: bool} The (possibly transformed) image
      *         and whether the cell box is now final — true for the centred
      *         pad canvas of a refused ShrinkToFit upscale, where re-deriving
-     *         the height from the image aspect would undo the padding (C-10
-     *         fix, lane f8).
+     *         the height from the image aspect would undo the padding (pad-canvas
+     * fix).
      */
     private function applyScale(ImageSource $image, int $cellW, int $cellH): array
     {
@@ -692,7 +692,7 @@ final class Mosaic
 
         $dims = $this->scale->computeDimensions($image->width, $image->height, $cellW, $cropCellH);
 
-        // C-10 fix (lane f8): ShrinkToFit refuses the upscale in the factor math,
+        // Pad-canvas fix: ShrinkToFit refuses the upscale in the factor math,
         // but without a pad canvas the refusal re-happens one layer down — the
         // render() aspect re-derivation hands the native-size image plus the FULL
         // cell box to the renderer, and PixelGrid/resample fills rescale it to
@@ -705,7 +705,7 @@ final class Mosaic
         // PixelGrid::fromGdQuarter reads RGB only (always-coloured quads), so a
         // transparent pad would paint as black cells — a false image, not a
         // blank. The quarter tier keeps Fit-shaped output until nullable quads
-        // land (chafa campaign follow-up S3.1). Half-block/ASCII render fully
+        // land (disclosed follow-up). Half-block/ASCII render fully
         // transparent cells as blanks, and the alpha protocols (Sixel/Kitty/
         // iTerm2) composite the transparent pad on the terminal background.
         if ($this->scale === Scale::ShrinkToFit
@@ -812,7 +812,7 @@ final class Mosaic
     /**
      * Pick the best available renderer for the given capability snapshot.
      * Precedence: Kitty > iTerm2 > Sixel > Chafa > Symbols > HalfBlock.
-     * The Symbols rung (A-04) is the Unicode coverage tier — plain text,
+     * The Symbols rung is the Unicode coverage tier — plain text,
      * gated on the same text-availability slot HalfBlock rides, but one
      * rung richer; explicit halfBlock()/fromModeString('halfblock')
      * selection is untouched.
@@ -826,9 +826,9 @@ final class Mosaic
             return new Iterm2Renderer();
         }
         if ($cap->sixel) {
-            // F-02: hand the renderer the quirks verdict whenever the
+            // Hand the renderer the quirks verdict whenever the
             // terminal chain was consulted (null = never probed = frozen
-            // pre-F-02 behaviour, no parking newline decision taken).
+            // original behaviour, no parking newline decision taken).
             $sixel = new SixelRenderer();
             return $cap->quirks === null ? $sixel : $sixel->withQuirks($cap->quirks);
         }
@@ -854,7 +854,7 @@ final class Mosaic
     /**
      * Mint the mosaic for a capability snapshot: best backend for the
      * detected protocols, plus the passthrough envelope the mux demands —
-     * tmux when the env says tmux, GNU Screen (F-12) when the terminal
+     * tmux when the env says tmux, GNU Screen when the terminal
      * chain answers screen. Shared by {@see probe()}, {@see auto()} and the
      * palette fallback so every detection path ends in one place.
      */
@@ -868,14 +868,14 @@ final class Mosaic
         if ($cap->inTmux) {
             $renderer = new TmuxPassthroughDecorator($renderer);
         } elseif ($cap->passthroughMode === TermInfo::PASSTHROUGH_SCREEN) {
-            // F-12: under GNU Screen the mux is decided by the env chain —
+            // Under GNU Screen the mux is decided by the env chain —
             // the tmux envelope wins when both apply (tmux is the innermost
             // pipe, the chicle term-db posture), and Screen's packetized
             // `ESC P … ESC \` envelope takes the field otherwise.
             $renderer = new ScreenPassthrough($renderer);
         }
 
-        // F-05: the envelope only lands if tmux's allow-passthrough toggle
+        // The envelope only lands if tmux's allow-passthrough toggle
         // is on — flip it transactionally for the process lifetime when a
         // pixel protocol is in play (chicle-options.c:2412-2418 gates the
         // same way; text fallback emits nothing that needs the toggle).
@@ -926,7 +926,7 @@ final class Mosaic
      * case-insensitively, whitespace-trimmed.
      * `ansi16`/`ansi256`/`truecolor` select the ASCII ramp renderer tinted with
      * the matching colour mode, mirroring how the client config maps them.
-     * A-06: those are INPUT spellings of the 'ascii' protocol's
+     * Those are INPUT spellings of the 'ascii' protocol's
      * colour arms — {@see modeDetail()} tells them apart; {@see protocol()}
      * answers 'ascii' for all of them.
      *
@@ -1095,13 +1095,13 @@ final class Mosaic
      * scales either direction, ShrinkToFit refuses to enlarge) for an
      * otherwise identical (url, size, protocol) tuple — two mosaics at
      * different scales must never cross-serve each other's cache entries.
-     * A-06: since the ascii protocol name no longer carries the colour arm,
+     * Since the ascii protocol name no longer carries the colour arm,
      * modeDetail() rides in the same segment (':ansi256'/':truecolor') so
      * the three ascii arms stay cache-distinct. Mono keeps the exact
-     * pre-A-06 segment; the two non-Mono arms deliberately move to new keys
+     * original segment; the two non-Mono arms deliberately move to new keys
      * (old entries simply age out — a changed key is a miss, never a
      * wrong-serve).
-     * D-04: the same collision exists BELOW the protocol name — a Sixel
+     * The same collision exists BELOW the protocol name — a Sixel
      * renderer's dither/maxColors/cell geometry and a Chafa renderer's CLI
      * options change the bytes while name() stays constant — so the
      * renderer's {@see ConfigFingerprintProvider::configFingerprint()} rides
@@ -1117,8 +1117,8 @@ final class Mosaic
             . ($detail === null ? '' : ':' . $detail)
             . '|' . ($this->scale ?? Scale::Fill)->name
             . ($fingerprint === '' ? '' : '|' . $fingerprint)
-            // A-02: only a NON-ZERO mask appends — mask 0 keeps every
-            // pre-A-02 poster key byte-identical (cache entries written
+            // Only a NON-ZERO mask appends — mask 0 keeps every
+            // original poster key byte-identical (cache entries written
             // before this level exist must still hit).
             . ($this->optimizations === 0 ? '' : '|opt=' . $this->optimizations);
 
@@ -1126,7 +1126,7 @@ final class Mosaic
     }
 
     /**
-     * D-04: the renderer's byte-varying config fingerprint, '' when the
+     * The renderer's byte-varying config fingerprint, '' when the
      * renderer declares none. A tmux-decorated mosaic answers for its inner
      * renderer — the envelope re-wraps bytes identically around whatever the
      * inner encodes, so the inner config is what must discriminate cache

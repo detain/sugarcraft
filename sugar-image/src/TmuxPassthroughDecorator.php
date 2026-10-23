@@ -19,7 +19,7 @@ use SugarCraft\Image\Renderer\SixelRenderer;
  *
  * where any lone \x1b inside the payload is doubled (\x1b\x1b).
  *
- * Since F-05 the option itself is managed: when {@see Mosaic} mints a
+ * The option itself is managed too: when {@see Mosaic} mints a
  * capability that runs under tmux with a pixel protocol, {@see
  * TmuxPassthrough::ensure()} flips `allow-passthrough` on (pane-scoped)
  * for the process and restores the prior value at retire/shutdown.
@@ -27,12 +27,12 @@ use SugarCraft\Image\Renderer\SixelRenderer;
  * fallback when the transaction is opted out via {@see
  * Detect::setAutoPassthrough(false)} or tmux refuses the toggle.
  *
- * F-12: GNU Screen has its own envelope with different rules — payload
+ * GNU Screen has its own envelope with different rules — payload
  * packetized at 200 bytes, no ESC-doubling, and a byte-wise ST workaround
  * for sixel terminators — implemented by {@see
  * \SugarCraft\Image\Passthrough\ScreenPassthrough}. Screen needs no
  * option transaction like the one above: its parser accepts `ESC P … ESC \`
- * unconditionally, so this class's tmux-only scope stays exactly as F-05
+ * unconditionally, so this class's tmux-only scope stays exactly as
  * shipped it.
  *
  * @see https://github.com/tmux/tmux/wiki/Passthrough

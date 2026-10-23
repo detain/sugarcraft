@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Render\Bands;
 
 /**
- * D-02a: bands partition rows into unit-aligned [start, end) ranges. The
+ * Bands partition rows into unit-aligned [start, end) ranges. The
  * load-bearing property is band-split equality — walking every band of a
  * partition and stitching must visit each row of the whole range exactly
  * once, the same precondition C-04 pinned for texture phase
@@ -21,7 +21,7 @@ use SugarCraft\Image\Render\Bands;
 final class BandsTest extends TestCase
 {
     /**
-     * D-02a: the two public numbers are part of the contract — chafa's
+     * The two public numbers are part of the contract — chafa's
      * SIXEL_CELL_HEIGHT (chafa-sixel-renderer.c:31) and the plan's cost-gate
      * threshold (S5.2 / survey D-02a free-win 2).
      */
@@ -32,7 +32,7 @@ final class BandsTest extends TestCase
     }
 
     /**
-     * D-02a: zero rows carry no work — chafa returns before creating any
+     * Zero rows carry no work — chafa returns before creating any
      * batch (chafa-batch.c:92-93), so the partition is the empty list, not
      * one empty band.
      */
@@ -43,7 +43,7 @@ final class BandsTest extends TestCase
     }
 
     /**
-     * D-02a: nonsense geometry is refused loudly at the door — a negative
+     * Nonsense geometry is refused loudly at the door — a negative
      * canvas or a zero/negative unit or band ceiling.
      *
      * @param array{int, int, int} $args
@@ -70,7 +70,7 @@ final class BandsTest extends TestCase
     }
 
     /**
-     * D-02a: the whole contract as one sweep — heights crossing the cost
+     * The whole contract as one sweep — heights crossing the cost
      * gate and unit remainders, checked for contiguous exact coverage,
      * non-emptiness, unit alignment of every non-final band, and the two
      * count ceilings (maxBands, and the row count itself). Violations are
@@ -120,7 +120,7 @@ final class BandsTest extends TestCase
     }
 
     /**
-     * D-02a: the remainder lands in the last band (chafa-batch.c:129-131
+     * The remainder lands in the last band (chafa-batch.c:129-131
      * clamps only the final row_ofs). 70 rows at unit 6 across two bands is
      * 36 (six full sixel groups) + 34 (short, still exact).
      */
@@ -131,7 +131,7 @@ final class BandsTest extends TestCase
     }
 
     /**
-     * D-02a: asking for more bands than there are whole units clamps the
+     * Asking for more bands than there are whole units clamps the
      * count instead of emitting empty bands — chafa's truncation leg
      * (chafa-batch.c:134-139) is structural here. 256 rows at unit 6 is 43
      * units; 100 requested bands collapse to 43 non-empty ones.
@@ -149,7 +149,7 @@ final class BandsTest extends TestCase
     }
 
     /**
-     * D-02a: cost gate on both sides — 63 rows is one covering band no
+     * Cost gate on both sides — 63 rows is one covering band no
      * matter how much parallelism is asked for; 64 rows is the first height
      * allowed to split, and at unit 1 the split is exact eighths.
      */
@@ -161,7 +161,7 @@ final class BandsTest extends TestCase
     }
 
     /**
-     * D-02a: same gate, positive leg — at exactly 64 rows unit-1 groups do
+     * Same gate, positive leg — at exactly 64 rows unit-1 groups do
      * split into the requested ceiling.
      */
     public function testTheCostGateReleasesAtItsThreshold(): void
@@ -174,7 +174,7 @@ final class BandsTest extends TestCase
     }
 
     /**
-     * D-02a: the inline-when-single polarity (chafa-batch.c:153-159 — the
+     * The inline-when-single polarity (chafa-batch.c:153-159 — the
      * caller runs the one batch itself). A single-band ask never splits,
      * however tall the canvas, and below the gate the partition is always
      * exactly one band, so consumers keying on count($bands) === 1 take the
@@ -192,7 +192,7 @@ final class BandsTest extends TestCase
     }
 
     /**
-     * D-02a: band-split equality in the C-04 pin shape — a pure function of
+     * Band-split equality in the C-04 pin shape — a pure function of
      * the ABSOLUTE row, evaluated across the whole canvas, must equal the
      * same function stitched band-by-band (every row once, in order). The
      * second leg keeps it non-vacuous: stitching with band-LOCAL rows
@@ -225,7 +225,7 @@ final class BandsTest extends TestCase
     }
 
     /**
-     * D-02a: pure function, so repeated calls answer identically — the
+     * Pure function, so repeated calls answer identically — the
      * partition must not carry hidden state between invocations.
      */
     public function testPartitionIsDeterministicAcrossRepeatedCalls(): void

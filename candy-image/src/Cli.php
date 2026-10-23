@@ -23,24 +23,24 @@ use SugarCraft\Pty\SizeIoctl;
  * explicit --format), decode the image through sugar-image, and write the
  * rendered bytes to stdout.
  *
- * F-18: the chafa-independent viewer surface. This class is COMPOSITION
+ * The chafa-independent viewer surface. This class is COMPOSITION
  * ONLY — detection lives in {@see Detect}, protocol selection in
  * {@see Mosaic}, decode/scale in {@see ImageSource}/{@see Scale}. No render
- * logic may ever land here (façade law, plan_chafa.md §0). The bin is a
+ * logic may ever land here (the façade law). The bin is a
  * two-line shim so every branch is testable in-process; the optional $play
  * seam swaps the blocking animation Program for a callback, mirroring
  * candy-gifview's harness shape.
  *
- * Chafa flag-compat vocabulary (survey :870-875) and what this base honors:
+ * Chafa flag-compat vocabulary (chicle's chafa.c option table) and what this base honors:
  * --format/--size/--scale/--probe-shape/--dump-detect are wired; --polite is
  * an accepted no-op (this viewer always renders inline and synchronously);
  * --symbols=CLASS[+CLASS...], --canvas=MODE and --work=N thread the
- * sugar-image dials REACH-A04 minted (F-17 symbol corpus selectors,
- * A-07 canvas mode, A-08 work factor) — a no-op on backends that do not
- * speak the dial. --passthrough=screen refuses with a pointer: the S7.1
+ * sugar-image exposes (the symbol-corpus selector grammar,
+ * Canvas mode, work factor) — a no-op on backends that do not
+ * speak the dial. --passthrough=screen refuses with a pointer: the
  * Screen envelope is detection-chosen, never forced. --probe=off has no
  * seam in Detect yet, so the spelling is refused like any unknown flag.
- * --format=chafa is REFUSED by design: F-18's whole point is a viewer that
+ * --format=chafa is REFUSED by design: candy-image's whole point is a viewer that
  * does not shell out to chafa.
  */
 final class Cli
@@ -213,7 +213,7 @@ final class Cli
                         $scale = $case;
                         break;
                     case 'symbols':
-                        // REACH-A04/F-17: chafa's tag-selector grammar; the
+                        // Chafa's tag-selector grammar; the
                         // library validates (unknown class = configuration
                         // error, never a silently empty corpus).
                         try {
@@ -321,7 +321,7 @@ final class Cli
     /**
      * Print the resolved terminal detection state — the chafa
      * --dump-detect surface that answers "why is my image blank in this
-     * terminal" (survey :870-875). Read-only: env table, TermDb match,
+     * terminal". Read-only: env table, TermDb match,
      * Detect capability, DA1 reply, auto() selection, palette report.
      *
      * @param resource $stdout
@@ -419,7 +419,7 @@ final class Cli
     }
 
     /**
-     * chafa's --work normalization (REACH-A04, rev-w10-2 M3). The option
+     * chafa's --work normalization. The option
      * is an INTeger 1..9 (G_OPTION_ARG_INT at tools/chafa/
      * chicle-options.c:1989, range check :2420) mapped onto the config
      * float as (n - 1) / 8.0 (tools/chafa/chafa.c:570): `--work=1` is the

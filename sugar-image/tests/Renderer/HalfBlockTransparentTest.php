@@ -55,7 +55,7 @@ final class HalfBlockTransparentTest extends TestCase
         $lines = $this->renderBranchCells();
         // ▄ (U+2584) is filled by its FOREGROUND in the lower half, so the
         // bottom colour rides fgRgb and the upper half shows terminal default.
-        // A-01/A-13: no per-cell reset any more — the row ends with the
+        // No per-cell reset any more — the row ends with the
         // scoped fg restore so a caller pen survives the mosaic.
         $this->assertSame(
             Ansi::fgRgb(0, 255, 0) . "\u{2584}" . "\x1b[39m",
@@ -95,7 +95,7 @@ final class HalfBlockTransparentTest extends TestCase
         // 8x4_red.png: every cell is both-opaque red/red — no ▄ and no space.
         $image = ImageSource::fromFile(__DIR__ . '/../../tests/fixtures/8x4_red.png');
         $out = $this->renderer->render($image, 8, 4);
-        // A-01: identical neighbours ride the pen delta — the row arms the
+        // Identical neighbours ride the pen delta — the row arms the
         // pair of pens once, paints all eight glyphs, and closes with one
         // scoped restore (never the per-cell ESC[0m spam this used to pin).
         $row = Ansi::fgRgb(255, 0, 0) . Ansi::bgRgb(255, 0, 0) . str_repeat("\u{2580}", 8) . "\x1b[39;49m";

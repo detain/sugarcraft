@@ -9,7 +9,7 @@ use SugarCraft\Image\TermDb;
 use SugarCraft\Image\TermInfo;
 
 /**
- * F-01: golden chains for the declarative terminal database.
+ * Golden chains for the declarative terminal database.
  *
  * Every case here is a pure string-in / TermInfo-out evaluation of
  * {@see TermDb::matchChain()} — no getenv, no exec, no tty. The table is

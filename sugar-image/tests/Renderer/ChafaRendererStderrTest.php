@@ -9,7 +9,7 @@ use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Renderer\ChafaRenderer;
 
 /**
- * D-07: behavioural pins for the ChafaRenderer stderr sink, bounded stdout
+ * Behavioural pins for the ChafaRenderer stderr sink, bounded stdout
  * drain, and the TERM->KILL reap ladder (survey D-07 / plan S1.6).
  *
  * Before D-07 the chafa child inherited this process's fd 2: its diagnostics

@@ -18,7 +18,7 @@ use SugarCraft\Image\Renderer\ChafaRenderer;
  *
  *  - render() drains stdout to EOF, maps a non-zero exit to a typed
  *    failure, and leaves NO live or zombie child behind (proc_close reaps);
- *  - the child's stderr lands in a private 0600 temp-file sink (D-07),
+ *  - the child's stderr lands in a private 0600 temp-file sink,
  *    never on the caller's fd 2 and never on a reader-less pipe — a flood
  *    larger than the 64KB kernel buffer can neither scribble over the
  *    TUI nor wedge the render the way an unread `2 => pipe` entry would
@@ -129,7 +129,7 @@ final class ChafaRendererChildTest extends TestCase
     /**
      * @testdox the descriptor spec pipes stdout and FILES stderr — never a reader-less pipe, never the caller's fd 2
      *
-     * D-07 rewrote this pin (E722's posture was "stderr inherited"; the
+     * Rewrote this pin (E722's posture was "stderr inherited"; the
      * inherited fd 2 was the defect — chafa's error sentences scribbled
      * over the live TUI frame). The shape being pinned now: exactly one
      * pipe (stdout, read to EOF) and a `['file', $errPath, 'w']` sink on

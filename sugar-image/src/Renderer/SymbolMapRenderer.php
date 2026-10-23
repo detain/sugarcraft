@@ -16,7 +16,7 @@ use SugarCraft\Image\Symbol\WideSymbolDef;
 use SugarCraft\Image\Support\OutputOptimizer;
 
 /**
- * Coverage-class symbol renderer — the 'symbols' tier (A-04/A-07/A-08/D-03).
+ * Coverage-class symbol renderer — the 'symbols' tier.
  *
  * Resamples the source to an 8x8-pixel grid per terminal cell, derives
  * one fg/bg colour pair per cell from its extreme pixels (chafa
@@ -32,28 +32,28 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * means make the inverted paint an identity on the emitted glyph).
  *
  * Dials:
- *  - work factor: {@see withWorkFactor()} (A-08/D-03) on chafa's config
+ *  - work factor: {@see withWorkFactor()} on chafa's config
  *    scale; default 0.5 keeps the top-5 candidate window byte-stable.
  *  - canvas mode: {@see withCanvasMode()} fixed-palette quantize-before-
- *    scoring (A-07/PC-14). Fgbg runs chafa's fg-only discipline: the
- *    terminal's OSC 10/11 default pair (F-08 consumer wire, ctor-
+ *    scoring. Fgbg runs chafa's fg-only discipline: the
+ *    terminal's OSC 10/11 default pair (the consumer wire, ctor-
  *    injected) scores every cell, no inversion trials, nothing emitted.
  *
  * Transparency follows the lib-wide binary rule (GD alpha >= 127 reads
  * transparent): a fully-transparent cell renders blank (terminal
  * default on both pens); with a partial cell the transparent pixels are
  * absent from the pair scan and from every group average — never a
- * black paint (A-05a convention). They still occupy their positions in
+ * black paint, the lib-wide transparency convention. They still occupy their positions in
  * the bitmap vote (background side), which is what keeps the picked
  * glyph honest about the cell geometry.
  *
- * A-09 wide glyphs: when the selection carries a wide array (kana via
+ * Wide glyphs: when the selection carries a wide array (kana via
  * {@see SymbolMap::withKana()} or a `wide` selector), each row gets a
  * chafa lookback trial after the narrow pass; a winning pair emits the
  * wide lead and zero bytes for the continuation cell (see
  * {@see applyWidePass()}). With an empty wide array — every default,
  * latin and narrow-selector map — the pass is skipped outright and the
- * emitted bytes are identical to the pre-A-09 renderer (byte-freeze).
+ * emitted bytes are identical to the narrow-only renderer (byte-freeze).
  *
  * Mirrors chafa.ChafaSymbolRenderer (chafa/internal/chafa-symbol-renderer.c).
  */
@@ -83,12 +83,12 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
 
     private ?string $defaultBg;
 
-    /** @internal A-08 op-counter seam; see {@see withCandidateObserver()}. */
+    /** @internal work-factor op-counter seam; see {@see withCandidateObserver()}. */
     private ?\Closure $candidateObserver = null;
 
     /**
-     * @param ?string $defaultFg OSC 10 default foreground as 'rrggbb' (F-08)
-     * @param ?string $defaultBg OSC 11 default background as 'rrggbb' (F-08)
+     * @param ?string $defaultFg OSC 10 default foreground as 'rrggbb'
+     * @param ?string $defaultBg OSC 11 default background as 'rrggbb'
      */
     public function __construct(?SymbolMap $map = null, ?string $defaultFg = null, ?string $defaultBg = null)
     {
@@ -98,12 +98,12 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     }
 
     /**
-     * chafa's work-factor dial (A-08, D-03): 0..1, clamped. The config
+     * chafa's work-factor dial: 0..1, clamped. The config
      * float maps to chafa's integer (int)(wf*10 + 0.5); values >= 8 run
      * the exhaustive slow path (every corpus symbol, direct coverage
      * only — chafa-symbol-renderer.c), smaller values narrow the search
      * to the top-{@see candidateLimit()} Hamming candidates (with the
-     * inverse trial riding along). Default 0.5 keeps the pre-A-08
+     * inverse trial riding along). Default 0.5 keeps the pre-dial
      * behaviour byte-identical.
      *
      * Concrete-class dial only: widening the shared Renderer interface
@@ -129,7 +129,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     }
 
     /**
-     * F-17/REACH-A04: select the glyph corpus with chafa's `--symbols=`
+     * Select the glyph corpus with chafa's `--symbols=`
      * tag grammar ({@see SymbolMap::withSelectors()}). The default corpus
      * (W6's 676 entries) stays byte-frozen; a selector widens the map to
      * the full 1,260-glyph narrow array (1,251 under the BAD-vetoing `all`)
@@ -173,7 +173,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     }
 
     /**
-     * A-08 deterministic op-counter seam: called once per scored cell as
+     * Deterministic op-counter seam: called once per scored cell as
      * fn(bool $exhaustive, int $evaluated, string $winner, int $bestError).
      * Timing-fragile pins are banned repo-wide, so the work-factor dial is
      * measured through this observer instead of wall clock.
@@ -205,8 +205,8 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     }
 
     /**
-     * Select the fixed-palette canvas mode (A-07, PC-14). TrueColor (the
-     * default) reproduces the pre-A-07 byte output exactly; the limited
+     * Select the fixed-palette canvas mode. TrueColor (the
+     * default) reproduces the original byte output exactly; the limited
      * palettes snap the scoring pens BEFORE the candidate error sum —
      * a 16-colour terminal must pick the best glyph FOR THAT PALETTE —
      * and emit the snapped pens (Fgbg emits none, riding terminal
@@ -253,7 +253,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
             }
             foreach ($painted as [$glyph, $fg, $bg]) {
                 if ($glyph === null) {
-                    // A-09 continuation half of a committed wide pair:
+                    // Continuation half of a committed wide pair:
                     // chafa's printer emits zero bytes for c == 0.
                     continue;
                 }
@@ -336,10 +336,10 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
      * Resolve one cell to (glyph, foreground, background, error), or a
      * blank when nothing is opaque. Pens as RGB triples; render() turns
      * them into SGR parameters. The error is the winning symbol's colour
-     * error — chafa's update_cell return, the quantity the A-09 wide
+     * error — chafa's update_cell return, the quantity the wide-glyph
      * lookback compares against. A blank or perfect-solid cell is pinned
      * at 0: it carries no error to improve, and the wide pass never
-     * trials over it (A-05a discipline, see {@see applyWidePass()}).
+     * trials over it (see {@see applyWidePass()}).
      *
      * @param list<array{int,int,int,?int}> $pixels 64 cell pixels
      *
@@ -400,7 +400,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
 
     /**
      * The opaque RGB triples of a cell, in pixel order — the one place
-     * the alpha >= 127 drop is applied (A-05a).
+     * the alpha >= 127 drop is applied.
      *
      * @param list<array{int,int,int,?int}> $pixels
      *
@@ -438,7 +438,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     }
 
     /**
-     * A-09: chafa's update_cells_row wide lookback (chafa-symbol-
+     * Chafa's update_cells_row wide lookback (chafa-symbol-
      * renderer.c:790). After the narrow pass painted the row, walk left
      * to right; every pair whose left cell is not already a wide
      * continuation gets a double-width trial, and it replaces the two
@@ -453,7 +453,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
      * at most one per step, which this whole-row port reproduces while
      * holding the row's raw pixels directly.
      *
-     * Deviation from the C, recorded (A-05a): cells this port pinned at
+     * Deviation from the C, recorded: cells this port pinned at
      * error 0 — fully transparent (rendered blank) and perfect solids —
      * are never trialled over. Chafa would trial them and could commit a
      * wide lead painting foreground across a transparent half; the
@@ -474,10 +474,10 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
             $narrowA = $painted[$cx - 1][3];
             $narrowB = $painted[$cx][3];
             if ($narrowA === 0 || $narrowB === 0) {
-                // Load-bearing (rev-w11-2 M-1), not defense-in-depth: under
+                // Load-bearing, not defense-in-depth: under
                 // Fgbg pickWide skips the opaque-halves check and halfError
                 // skips alpha-null pixels, so without this veto a wide pair
-                // commits over a solid or transparent half — the A-05a note
+                // commits over a solid or transparent half — the transparency note
                 // above. Pinned by WideErrorGuardPinTest.
                 continue;
             }
@@ -495,7 +495,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     }
 
     /**
-     * A-09: chafa's update_cells_wide trial for one adjacent pair
+     * Chafa's update_cells_wide trial for one adjacent pair
      * (pick_symbol_and_colors_wide_fast / _slow). The two cells share a
      * single colour pair: the per-cell contrasting pairs averaged with
      * chafa_color_average_2 channels — or the terminal default pair
@@ -508,7 +508,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
      * Each candidate paints with per-half mean colours averaged into
      * the shared pair (chafa's eval_symbol_colors_wide calling
      * get_mean_colors_for_symbol per side), snapped through the canvas
-     * mode before scoring (PC-14 quantize-before-scoring, exactly the
+     * mode before scoring (quantize-before-scoring, exactly the
      * narrow scoredPens idiom), and scores each half against its own
      * coverage. Winner: strictly lowest summed error, earliest wins
      * ties. The inversion flag enriches the shortlist but is never
@@ -533,7 +533,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
             $opaqueA = self::opaqueOf($pixelsA);
             $opaqueB = self::opaqueOf($pixelsB);
             if ($opaqueA === [] || $opaqueB === []) {
-                return null; // a transparent half is never painted (A-05a)
+                return null; // a transparent half is never painted
             }
             $pairA = $this->contrastingPair($opaqueA);
             $pairB = $this->contrastingPair($opaqueB);
@@ -602,7 +602,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
      * Summed squared colour error of painting one 8x8 half of a wide
      * pair with the shared pens (chafa's eval_symbol_error over the
      * per-half coverage), limited to the pair's opaque pixels by the
-     * A-05a convention, bailing as soon as the running sum reaches
+     * Convention, bailing as soon as the running sum reaches
      * $budget so doomed candidates never finish.
      *
      * @param list<array{int,int,int,?int}> $pixels 64 cell pixels
@@ -632,11 +632,11 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
      * to full coverage when it leaves at most 32 pixels unpainted (chafa's
      * hamming_distance <= 32 gate against the all-ones bitmap); otherwise
      * null — chafa's 0 return — and flat cells fall through to the ordinary
-     * symbol path. Before F-17/rev-w10-2 M2 this shortcut returned U+2588
+     * symbol path. Before the selector-grammar fix this shortcut returned U+2588
      * unguarded, so `--symbols=braille` still painted 449 of 450 flat cells
      * with a glyph the selection had forbidden.
      *
-     * Adaptation at the A-05b fill-map seam: chafa consults its separate
+     * Adaptation at the fill-map seam: chafa consults its separate
      * fill_symbol_map first (has_symbol on both maps, then
      * find_fill_candidates); this port has no fill map, so both fill
      * lookups collapse into the single symbol-map walk below — the
@@ -783,7 +783,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
 
     /**
      * chafa FGBG discipline: fg_only forces the canvas default pair
-     * (OSC 10/11 when probed — F-08), the bitmap votes against THAT
+     * (OSC 10/11 when probed), the bitmap votes against THAT
      * pair, every candidate scores with the FIXED pens (chafa's
      * eval_symbol_colors bypass, chafa-symbol-renderer.c:188-220), and
      * consider_inverted is FALSE (chafa-canvas.c:556). Nothing is
@@ -859,7 +859,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     /**
      * meanPens() through the canvas mode's snap: under a fixed palette
      * the pens that SCORE a candidate are the pens that would paint it
-     * (PC-14 quantize-before-scoring). TrueColor passes through.
+     * (quantize-before-scoring). TrueColor passes through.
      *
      * @param list<array{int,int,int,?int}> $pixels 64 cell pixels
      * @param list<int> $cov 64 binary coverage bytes

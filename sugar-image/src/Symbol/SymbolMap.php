@@ -6,7 +6,7 @@ namespace SugarCraft\Image\Symbol;
 
 /**
  * Coverage-class symbol engine — the glyph corpus and candidate search
- * behind the 'symbols' render tier (A-04).
+ * behind the 'symbols' render tier.
  *
  * SYMBOL-TIER W11: the chafa narrow tables ascii (95), misc-narrow (23)
  * and the orphaned ascii-ibm (95) alternate face are all carried verbatim
@@ -26,7 +26,7 @@ namespace SugarCraft\Image\Symbol;
  * (only U+1CD00–U+1D000 codepoints are kept; U+2580-range octant
  * spellings are already covered by the basic table).
  *
- * PC-13: chafa's candidate search is a FLAT walk of packed 64-bit
+ * Chafa's candidate search is a FLAT walk of packed 64-bit
  * bitmaps comparing popcount Hamming distance — NOT a hash lookup —
  * and the per-pixel coverage a symbol paints is BINARY 0/1 read out of
  * that bitmap. The 8-bit 0..255 coverage ramp exists only in the
@@ -48,18 +48,18 @@ namespace SugarCraft\Image\Symbol;
  * owner — so this walk stays in build order. findWideCandidates() scans in
  * chafa's sort already (compare_symbols2_popcount, :373-395).
  *
- * PC-14 (fixed-palette quantize-before-scoring) lives in
+ * (Fixed-palette quantize-before-scoring) lives in
  * {@see CanvasMode}; the work-factor top-K clamp lives in the renderer
  * that consumes this map.
  *
  * Mirrors chafa.ChafaSymbolMap (chafa/chafa-symbol-map.c, chafa/internal/chafa-symbols.c).
  *
- * A-05b note: chafa's fill stipple map (apply_fill) consumes per-cell
+ * Note: chafa's fill stipple map (apply_fill) consumes per-cell
  * FILL flags produced upstream by the pre-renderer; sugar-image cells
  * carry no such flags, so the ░▒▓ stipple glyphs ride the corpus as
  * ordinary candidates and the fill-map selection semantics stay a seam.
  *
- * F-17 corpus extension (2026-10-21): the default corpus stays exactly the
+ * Corpus extension (2026-10-21): the default corpus stays exactly the
  * 676 W6 entries above — byte-frozen, because {@see SymbolMapRenderer}'s
  * output digest is pinned. Two additive tiers ride the FULL corpus
  * (1,260 glyphs = chafa's narrow symbol array: 95 ASCII + 365 Latin +
@@ -101,7 +101,7 @@ namespace SugarCraft\Image\Symbol;
  * codepoint-range selector forms are NOT implemented (documented seam —
  * sugar-image has no font probe, so tag classes are the useful subset).
  *
- * A-09 (implemented): wide glyphs ride as {@see WideSymbolDef} sym[2]
+ * (Implemented): wide glyphs ride as {@see WideSymbolDef} sym[2]
  * pairs — one 16x8-pixel cell split into two 8x8 halves, scored jointly
  * as hd[0] + hd[1] (inverse against 128). The symbol renderer trials
  * wide-vs-narrow with a lookback pass over each row
@@ -294,7 +294,7 @@ final class SymbolMap
     /** @var list<SymbolDef> */
     private readonly array $defs;
 
-    /** @var list<WideSymbolDef> chafa's wide symbols2 array (A-09); empty on every narrow-only map */
+    /** @var list<WideSymbolDef> chafa's wide symbols2 array; empty on every narrow-only map */
     private readonly array $wideDefs;
 
     private readonly bool $latin;
@@ -357,11 +357,11 @@ final class SymbolMap
      * {@see self::withAsciiIbm()}: an already-carried slot keeps its
      * selected spelling; the tier never re-spells it.
      *
-     * Flag law (F-17, unchanged): withSelectors() results reset the
+     * Flag law (unchanged): withSelectors() results reset the
      * latin flag; the flag records withLatin()-built provenance, while
      * codepoint presence — not the flag — is what makes an append a no-op.
      *
-     * A-05 (state-carry law): like every tier ADDER, this one composes
+     * (State-carry law): like every tier ADDER, this one composes
      * onto the current map — the wide selection and kana flag ride
      * through untouched, so withKana()->withLatin() keeps the 181-glyph
      * symbols2 tier (chafa's symbol sets are cumulative per map instance).
@@ -408,7 +408,7 @@ final class SymbolMap
      * withSelectors() — the face is not an appended tier, so preserving
      * it cannot double-apply.
      *
-     * A-05 (state-carry law): the face swap rewrites only carried ASCII
+     * (State-carry law): the face swap rewrites only carried ASCII
      * codepoints, so the wide symbols2 selection and kana flag ride
      * through untouched — withKana()->withAsciiIbm() keeps the 181-glyph
      * tier (the face is orthogonal to the wide partition; chafa hosts
@@ -450,7 +450,7 @@ final class SymbolMap
      * chafa's init_symbol_array_wide() takes exactly these glyphs (outline
      * length 128 and a wide codepoint) into symbols2 while
      * init_symbol_array_narrow() skips them, so a kana glyph can only ever
-     * be picked by the A-09 wide machinery, and only when a selection
+     * be picked by the wide machinery, and only when a selection
      * carries wide glyphs at all: with zero wide defs the wide pass is
      * structurally inert (chafa's update_cells_wide early-returns on
      * n_symbols2 == 0), which is the byte-freeze door for every existing
@@ -488,7 +488,7 @@ final class SymbolMap
 
     /**
      * The map's wide (two-cell) selection in build order — chafa's
-     * symbols2 array. Empty on every narrow-only map, so the A-09 render
+     * symbols2 array. Empty on every narrow-only map, so the wide render
      * pass never activates for the default corpus or the latin/ascii-ibm
      * tiers.
      *
@@ -500,7 +500,7 @@ final class SymbolMap
     }
 
     /**
-     * A-09: the wide selection in chafa's symbols2 scan order — joint
+     * The wide selection in chafa's symbols2 scan order — joint
      * popcount ascending, ties by codepoint ascending
      * ({@see findWideCandidates()} narrows inside the same order; the
      * renderer's exhaustive path walks it directly, so ties resolve
@@ -734,8 +734,8 @@ final class SymbolMap
      * relative to this map's current corpus, otherwise it replaces it.
      * Unknown class names throw (fail fast, never a silent empty corpus).
      *
-     * A-05 (state-carry audit, verdict: coherent): this REBUILD is not an
-     * adder — both tier flags reset (F-17 provenance law, withKana()
+     * (State-carry audit, verdict: coherent): this REBUILD is not an
+     * adder — both tier flags reset (provenance law, withKana()
      * docblock) — yet nothing is silently dropped: the wide symbols2
      * selection is filtered through the same tag walk as the narrow array,
      * so a kana-reachable selector (`all`, `wide`, `alpha` — kana carries
@@ -743,7 +743,7 @@ final class SymbolMap
      * `block` (or any non-reachable class) prunes it exactly the way it
      * prunes a narrow class. That is chafa's apply_selectors feeding both
      * init_symbol_array_* passes; a documented reset, not the defect the
-     * tier adders carried before A-05.
+     * tier adders carried before the state-carry fix.
      *
      * Seam: chafa's `[chars]` literal sets and codepoint ranges are not
      * implemented — tag classes are the useful subset for this port.
@@ -1104,7 +1104,7 @@ final class SymbolMap
     }
 
     /**
-     * A-09: chafa's find_wide_candidates (chafa-symbol-map.c:1268) — the
+     * Chafa's find_wide_candidates (chafa-symbol-map.c:1268) — the
      * same 8-slot insertion buffer over the WIDE selection, but the
      * distance is the joint hamming of the two 8x8 halves against the
      * candidate's sym[0]/sym[1] pair, seeded at hd 129 with the inverse
@@ -1173,7 +1173,7 @@ final class SymbolMap
      * 1/0) use the truthy form exactly like chafa's internal one; the
      * runtime conversion of a 0..255 pixel ramp passes $threshold = 127
      * (chafa/chafa-symbol-map.c:240) — the single place the 8-bit ramp
-     * becomes binary (PC-13).
+     * becomes binary.
      *
      * @param list<int> $coverage 64 bytes, 0..255 each
      */

@@ -8,7 +8,7 @@ use SugarCraft\Image\Optimization;
 
 /**
  * Optional contract for renderers whose OUTPUT BYTES are configured by the
- * A-02 {@see Optimization} ladder rather than by constructor-time state.
+ * {@See Optimization} ladder rather than by constructor-time state.
  *
  * The Renderer interface stays untouched (adding a method would force sixel/
  * kitty/iterm2/chafa backends to carry a knob they provably never read);

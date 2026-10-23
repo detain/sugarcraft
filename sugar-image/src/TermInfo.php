@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image;
 
 /**
- * F-01: one resolved terminal identity from the {@see TermDb} table.
+ * One resolved terminal identity from the {@see TermDb} table.
  *
  * Carries the chained result of matching the declarative rows against an
  * environment snapshot: which pixel protocols the (possibly nested) terminal
@@ -30,7 +30,7 @@ final class TermInfo
     public const PROTOCOLS = [self::PROTOCOL_KITTY, self::PROTOCOL_ITERM2, self::PROTOCOL_SIXEL];
 
     /**
-     * F-06: symbol classes — the subset of chafa's `ChafaSymbolTags`
+     * Symbol classes — the subset of chafa's `ChafaSymbolTags`
      * (chafa/chafa-symbol-map.h:34-58) whose glyphs SugarCraft renderers
      * actually emit, narrowed to one bit per drawn class. Chicle tags each
      * symbol with a set; SugarCraft tags each *terminal* with the set of
@@ -60,7 +60,7 @@ final class TermInfo
     public const BLOCK_BORDER_ONLY = self::SYMBOL_BLOCK | self::SYMBOL_BORDER;
 
     /**
-     * F-02: terminal quirks bitmask — mirrors chicle's `ChafaTermQuirk`
+     * Terminal quirks bitmask — mirrors chicle's `ChafaTermQuirk`
      * (chafa/chafa-term-info.h:53-60 in the legacy clone layout on disk).
      * The legacy enum carries only the overshoot bit; modern chafa widened
      * it (OPCODES_SEPARATED_BY_COMMAS … SEVEN_BIT_FOOT_SHORTEST,
@@ -72,7 +72,7 @@ final class TermInfo
     public const QUIRK_NONE = 0;
 
     /**
-     * F-02: after printing a sixel image in advance-down mode the terminal
+     * After printing a sixel image in advance-down mode the terminal
      * leaves the cursor on the row BELOW the final band (chicle's own doc,
      * chafa-term-info.h:53-58; rows carrying it in chafa-term-db.c:
      * alacritty :598, konsole :707, mintty :737, mlterm :746, rio :767,
@@ -84,15 +84,15 @@ final class TermInfo
     public const QUIRK_SIXEL_OVERSHOOT = 1 << 0;
 
     /**
-     * F-02: mlterm draws garbage unless the global first/last band of a
+     * Mlterm draws garbage unless the global first/last band of a
      * transparent canvas is fully drawn even when its rightmost pixels are
      * transparent (chafa-sixel-renderer.c:330-410 `force_full_width`,
      * applied at :415-440 to is_global_first_row || is_global_last_row).
      * SC-original bit — chicle keys that workaround on terminal identity
      * inside the renderer instead of the quirk table; lifting it here is
-     * the "re-home S4.1's mlterm flag through TermDb" half of plan step
-     * S7.1, disclosed as a structural divergence. It is the auto-select
-     * consumer of {@see SixelRenderer::withMltermEdgeRows()}'s F-03 flag.
+     * re-homing the mlterm flag into the quirk table — a
+     * disclosed structural divergence. It is the auto-select
+     * consumer of {@see SixelRenderer::withMltermEdgeRows()}'s edge-row flag.
      */
     public const QUIRK_MLTERM_EDGE_ROWS = 1 << 1;
 
@@ -100,7 +100,7 @@ final class TermInfo
     public const ALL_QUIRKS = self::QUIRK_SIXEL_OVERSHOOT | self::QUIRK_MLTERM_EDGE_ROWS;
 
     /**
-     * F-12: passthrough envelope modes — mirrors chicle's
+     * Passthrough envelope modes — mirrors chicle's
      * `ChafaPassthroughMode` (NONE/TMUX/SCREEN, dispatched in
      * chafa/internal/chafa-passthrough-encoder.c:145-165) as strings so
      * they survive var-export and JSON snapshots. Derived from the matched
@@ -119,13 +119,13 @@ final class TermInfo
      * @param array<string, bool>     $passthrough per-protocol "needs the mux passthrough wrapper";
      *                                             absent key = native (no wrapper)
      * @param string|null             $mux         label of the matched multiplexer row, if any
-     * @param int                     $safeSymbols F-06 bitmask of the symbol classes the chain
+     * @param int                     $safeSymbols bitmask of the symbol classes the chain
      *                                             draws; the table default is the full set —
      *                                             SC diverges from chicle's clueless-fallback
      *                                             "dumb" row (chafa-term-db.c:1169, ASCII-only),
      *                                             because "the table says nothing" is not
      *                                             evidence of an ancient seat.
-     * @param int                     $quirks      F-02 `QUIRK_*` bitmask of the chain's terminal
+     * @param int                     $quirks      `QUIRK_*` bitmask of the chain's terminal
      *                                             quirks; chicle stores one per term_info and
      *                                             chains it by OR across the mux link, so a
      *                                             quirk on either end affects the output —
@@ -167,7 +167,7 @@ final class TermInfo
     }
 
     /**
-     * F-06: whether every symbol class in $classes is safe to draw on this
+     * Whether every symbol class in $classes is safe to draw on this
      * chain. Pass one `SYMBOL_*` constant, or a union to require all of them.
      * ASCII is always safe on any SugarCraft output path (7-bit bytes reach
      * every seat the table knows about); the bit exists so the restricted
@@ -204,7 +204,7 @@ final class TermInfo
     }
 
     /**
-     * F-02: whether one `QUIRK_*` bit is armed on this chain.
+     * Whether one `QUIRK_*` bit is armed on this chain.
      */
     public function hasQuirk(int $quirk): bool
     {
@@ -212,7 +212,7 @@ final class TermInfo
     }
 
     /**
-     * F-12: which passthrough envelope the matched MUX row demands — tmux
+     * Which passthrough envelope the matched MUX row demands — tmux
      * rows pass CHAFA_PASSTHROUGH_TMUX (chafa-term-db.c:810/:818), the
      * screen row passes CHAFA_PASSTHROUGH_SCREEN (:786-789); with no mux
      * link there is nothing to envelope. The mux label from

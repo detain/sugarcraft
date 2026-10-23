@@ -18,7 +18,7 @@ use SugarCraft\Image\Support\GdAvailability;
  * inline without any pixel-space manipulation on our side — they
  * handle aspect-ratio and scaling themselves.
  *
- * F-13 adds {@see renderTiff()}: chafa's GD-free container (an
+ * Adds {@see renderTiff()}: chafa's GD-free container (an
  * uncompressed single-strip TIFF) selectable with an explicit raw-RGBA
  * buffer, so transmission works without imagepng() entirely.
  */
@@ -36,7 +36,7 @@ final class Iterm2Renderer implements Renderer
         if ($image->isPng()) {
             $pngBytes = $image->bytes;
         } else {
-            // F-13: without GD the re-encode is impossible — refuse cleanly
+            // Without GD the re-encode is impossible — refuse cleanly
             // (and see renderTiff() for the raw-buffer way around it).
             if (!GdAvailability::available()) {
                 throw new \RuntimeException(Lang::t('renderer.gd_unavailable'));
@@ -80,7 +80,7 @@ final class Iterm2Renderer implements Renderer
     /**
      * Transmit as an uncompressed TIFF (`type=tiff`) — the GD-free wire format.
      *
-     * F-13, per chafa's iTerm2 path (chafa/internal/chafa-iterm2-renderer.c
+     * Per chafa's iTerm2 path (chafa/internal/chafa-iterm2-renderer.c
      * wraps raw RGBA8_UNASSOCIATED quads in an 11-entry IFD TIFF and never
      * calls an image library): the payload comes from `$rgba` directly —
      * no GD — or from a GD decode when omitted. iTerm2 composites on the

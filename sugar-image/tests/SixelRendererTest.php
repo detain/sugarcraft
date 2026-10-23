@@ -248,14 +248,14 @@ final class SixelRendererTest extends TestCase
     }
 
     /**
-     * B-13: the 5-bit nearest-colour memo must answer with the nearest colour
+     * The 5-bit nearest-colour memo must answer with the nearest colour
      * of its 8×8×8 block CENTRE for every pixel sharing the block. Pre-B-13
      * it stored the nearest colour of whichever pixel warmed the key first,
      * so two same-block pixels split across palette entries silently became
      * the same colour — and that colour depended on scan arrival order.
      * Pin: the fixture pair genuinely splits under per-pixel nearest lookups,
      * yet both orderings of the same two pixels agree.
-     * F-14 note: the old ground-truth oracle reflected the private
+     * Note: the old ground-truth oracle reflected the private
      * nearestColor walk; F-14 retires that walk (the shared PaletteIndex
      * answers misses now), so the oracle is replicated in-test below — the
      * exact integer math the removed method used, pinned differentially
@@ -281,7 +281,7 @@ final class SixelRendererTest extends TestCase
     }
 
     /**
-     * F-14: in-test replica of the retired private nearestColor walk —
+     * In-test replica of the retired private nearestColor walk —
      * integer squared-Euclidean, strict < so the lowest index wins ties.
      *
      * @param list<array{int,int,int}> $palette

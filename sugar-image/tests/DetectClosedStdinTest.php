@@ -60,7 +60,7 @@ final class DetectClosedStdinTest extends TestCase
 
     protected function setUp(): void
     {
-        // F-04 made an ambient TMUX load-bearing for the probe: with the
+        // Made an ambient TMUX load-bearing for the probe: with the
         // variable set, probeQueries() consults tmux termfeatures BEFORE
         // trusting a DA1 sixel claim, and on a machine whose session runs
         // inside tmux a definite no-sixel answer vetoes the DA1 arm that the

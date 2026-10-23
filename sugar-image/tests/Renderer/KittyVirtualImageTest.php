@@ -10,7 +10,7 @@ use SugarCraft\Image\KittyOptions;
 use SugarCraft\Image\Renderer\KittyRenderer;
 
 /**
- * F-10: virtual placement is a store (a=T,U=1) + payload chunks + a
+ * Virtual placement is a store (a=T,U=1) + payload chunks + a
  * control-only placement (a=p,U=1) pair. The pre-F-10 shape streamed the
  * payload under a=p — spec-invalid for the place action — and never
  * emitted U= anywhere, so the "under text" feature did not exist.
@@ -44,7 +44,7 @@ final class KittyVirtualImageTest extends TestCase
 
         $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
 
-        // S1.9/M2: the default transmit's id 0 is real and now serializes —
+        // M2: the default transmit's id 0 is real and now serializes —
         // both frames carry i=0 (previously i= was dropped and the placed
         // image was un-addressable by any consumer that chose id 0).
         $this->assertStringStartsWith("\x1b_Ga=T,U=1,i=0,f=100,q=2,c=8,r=4,m=1;\x1b\\", $out);
@@ -100,7 +100,7 @@ final class KittyVirtualImageTest extends TestCase
 
         $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
 
-        // F-10/S7.1: placement carries U by default (composited under text);
+        // Placement carries U by default (composited under text);
         // this frame proves the default, pinned byte-exact.
         $this->assertSame("\x1b_Ga=p,i=1,U=1,x=5,y=10,z=5\x1b\\", $out);
     }

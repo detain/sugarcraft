@@ -313,7 +313,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-09: DECSIXEL repeat counts are capped at 255 — a decoder reading a
+     * DECSIXEL repeat counts are capped at 255 — a decoder reading a
      * pre-fix `!1024` sees `!1` and swallows `024` as resync/literal noise,
      * corrupting the whole band. Per chafa `format_schar_reps`
      * (chafa/internal/chafa-sixel-renderer.c:218-251) runs of 255+ split into
@@ -332,7 +332,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-09: the width-1024 empty-alpha band — a wide transparent region is
+     * The width-1024 empty-alpha band — a wide transparent region is
      * the routine trigger (widescreen content on a narrower canvas). The hole
      * columns ride as a long run of the register-0 byte `?` (chr 63) and the
      * run must split legally.
@@ -351,7 +351,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-09: a run whose length is an exact multiple of 255 leaves no
+     * A run whose length is an exact multiple of 255 leaves no
      * remainder byte — the chunk loop covers it entirely.
      */
     public function testExactMultipleOf255EmitsChunksOnly(): void
@@ -364,7 +364,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-09: chafa keeps runs of 1..3 as bare repeated bytes (`!2`/`!3` cost
+     * Chafa keeps runs of 1..3 as bare repeated bytes (`!2`/`!3` cost
      * more than the literals and buy nothing); 4 is the first count that
      * rides as `!4`.
      */
@@ -442,7 +442,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-03 helper: chunk stream of an $bands-row canvas at one pixel per cell
+     * Helper: chunk stream of an $bands-row canvas at one pixel per cell
      * where rows $redFrom..$redTo (absolute pixel rows) are opaque red and
      * every other row is a fully-transparent hole.
      *
@@ -461,7 +461,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-03: with the quirk OFF (the shipped default) fully-transparent edge
+     * With the quirk OFF (the shipped default) fully-transparent edge
      * bands encode to NOTHING — the first band lands as an empty chunk and the
      * last as a bare graphics-newline. This is the mlterm-defect shape and it
      * is byte-frozen: arming the quirk must be the only thing that changes it.
@@ -477,7 +477,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-03: armed, a fully-transparent GLOBAL FIRST band draws a full-width
+     * Armed, a fully-transparent GLOBAL FIRST band draws a full-width
      * zero-bit run on the background register — chafa's force_full_width pen
      * (chafa-sixel-renderer.c:330-410), flushed with one pen like chafa's
      * trailing '?' run. Width is honoured verbatim (W=4 → !4, W=10 → !10), so
@@ -496,7 +496,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-03: armed, the GLOBAL LAST empty band gets the same run (chafa applies
+     * Armed, the GLOBAL LAST empty band gets the same run (chafa applies
      * force_full_width to is_global_first_row || is_global_last_row,
      * chafa-sixel-renderer.c:415-440) while INTERIOR empty bands stay exactly
      * as bare as the default — the quirk is an edge repair, not a global
@@ -516,7 +516,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-03: the quirk never fires without a background register (offset 0 —
+     * The quirk never fires without a background register (offset 0 —
      * emitBand cannot produce an empty body there), so an opaque canvas is
      * byte-identical armed or not, on the corpus and on a solid fixture.
      */
@@ -539,7 +539,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-03: the streaming path and the one-shot render must agree under the
+     * The streaming path and the one-shot render must agree under the
      * quirk exactly as they do without it (both funnel through encodeInto).
      */
     public function testStreamAndRenderAgreeUnderQuirk(): void
@@ -558,7 +558,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-03: the flag is configuration — it rides the cache fingerprint (a
+     * The flag is configuration — it rides the cache fingerprint (a
      * quirk-built blob must never serve a plain cache entry) and survives
      * every other wither.
      */
@@ -577,7 +577,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * B-14: the default renderer carries no rung and its fingerprint stays
+     * The default renderer carries no rung and its fingerprint stays
      * byte-identical to the pre-dial pinned string — the quality segment may
      * appear only when explicitly armed (C-04/B-10 discipline).
      */
@@ -592,7 +592,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * B-14: arming the dial on a sparse census must NOT change bytes — the
+     * Arming the dial on a sparse census must NOT change bytes — the
      * router sends samples ≤ budget back through median-cut, so the opt-in
      * is inert without merge mass. On a dense census (4096 noise samples vs
      * 256 colours) the PNN path fires and replaces the median-cut palette.
@@ -619,7 +619,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * B-14: every wither carries the rung, in both stacking orders, and an
+     * Every wither carries the rung, in both stacking orders, and an
      * out-of-range rung is refused at the boundary (constructor and wither).
      */
     public function testQualityWithersCarryAndBoundaryRefuses(): void
@@ -641,7 +641,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * B-14: the wither refuses rung 10 before any copy escapes.
+     * The wither refuses rung 10 before any copy escapes.
      */
     public function testWithQualityRefusesHighRung(): void
     {
@@ -650,7 +650,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-14: representative render corpus with base-tree digests (captured
+     * Representative render corpus with base-tree digests (captured
      * BEFORE the band-diff landed, stream == render on every row). The
      * changed-columns bitset + PaletteIndex palette-hash memo are an
      * optimisation only: any byte moving here is a visual regression, not
@@ -686,7 +686,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-14: the PaletteIndex (Euclidean) that now answers the B-13 memo
+     * The PaletteIndex (Euclidean) that now answers the B-13 memo
      * misses must agree with the retired linear nearestColor walk on EVERY
      * pixel of a fixed synthetic palette sweep — including the lowest-index
      * tie leg (a duplicated palette entry sits equidistant from probe (5,0,0)).
@@ -730,7 +730,7 @@ final class SixelStreamTest extends TestCase
     }
 
     /**
-     * F-14: in-test replica of the retired private nearestColor walk —
+     * In-test replica of the retired private nearestColor walk —
      * integer squared-Euclidean, strict < so the lowest index wins ties.
      *
      * @param list<array{int,int,int}> $palette

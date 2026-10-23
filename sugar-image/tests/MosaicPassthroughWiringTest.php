@@ -13,7 +13,7 @@ use SugarCraft\Image\TermInfo;
 use SugarCraft\Image\TmuxPassthroughDecorator;
 
 /**
- * F-12: the mux verdict reaches the renderer through the public probe
+ * The mux verdict reaches the renderer through the public probe
  * surface — env-detection feeds Capability facts (quirks + passthrough
  * mode, F-02) into Mosaic's backend selection, and the Screen envelope
  * lands around whatever renderer the chain chose.

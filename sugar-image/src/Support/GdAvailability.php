@@ -7,7 +7,7 @@ namespace SugarCraft\Image\Support;
 /**
  * Single decision point for "is the GD extension usable right now".
  *
- * F-13: the GD-free encode paths (Codec\RawRgba, Codec\TiffUncompressed
+ * The GD-free encode paths (Codec\RawRgba, Codec\TiffUncompressed
  * and the renderers' refusal branches) must be testable on boxes that DO
  * have gd — the probe is a code-path flag seam, mirroring
  * {@see \SugarCraft\Image\ImageSource::overrideHostResolver()}, not a

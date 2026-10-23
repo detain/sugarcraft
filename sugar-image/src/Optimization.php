@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image;
 
 /**
- * Output-optimization levels for the character-mosaic renderers (A-02).
+ * Output-optimization levels for the character-mosaic renderers.
  *
  * Mirrors chafa's ChafaOptimizations bit field (chafa/chafa-common.h:187-196)
  * — flag VALUES are the upstream bits verbatim so a chafa bug report maps
@@ -13,7 +13,7 @@ namespace SugarCraft\Image;
  *
  *  - ReuseAttributes = 1<<0 — print only the SGR channels that actually
  *    change between cells (chafa's emit_attributes_truecolor). In this port
- *    that behaviour is UNCONDITIONAL since A-01/S2.2: OutputOptimizer is a
+ *    that behaviour is UNCONDITIONAL since the streaming rewrite: OutputOptimizer is a
  *    streaming pen-delta emitter for every mosaic renderer, so requesting
  *    this level changes nothing and None cannot switch it off (the byte-
  *    frozen mosaic goldens pin the delta stream as the default). The case

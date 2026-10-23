@@ -6,7 +6,7 @@ namespace SugarCraft\Image\Renderer;
 
 /**
  * Optional capability: the renderer exposes chafa's work-effort dial
- * (A-08/D-03) — 0.0 spends the least per cell (single best Hamming
+ * — 0.0 spends the least per cell (single best Hamming
  * candidate), 1.0 scores the whole corpus. Same interface-cannot-have-
  * bodies rationale as {@see CanvasModeConfigurable}: Mosaic delegates
  * only when the active backend declares this.

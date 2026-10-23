@@ -7,9 +7,9 @@ namespace SugarCraft\Image\Render;
 use InvalidArgumentException;
 
 /**
- * D-02a: unit-aligned band partition — splits a pixel/cell row range into
+ * Unit-aligned band partition — splits a pixel/cell row range into
  * [startRow, endRow) half-open band specs, the shape a later per-band worker
- * pool (S7.6) or incremental pump consumes. Pure utility: it owns no render
+ * pool or incremental pump consumes. Pure utility: it owns no render
  * state and no renderer calls it yet, so landing it cannot move a single
  * output byte (the DoD of this step).
  *
@@ -30,7 +30,7 @@ use InvalidArgumentException;
  *     deliberate — the
  *     boundary contract is pinned by the BandsTest invariants, not by chafa
  *     bit-parity, since chafa's band count comes from its thread-count
- *     ladder, which this stage does not reproduce (an S7.6 caller supplies
+ *     ladder, which this stage does not reproduce (the band-splitting caller supplies
  *     $maxBands).
  *  2. Chafa's empty-band truncation (`n_batches = i`, chafa-batch.c:134-139)
  *     is structurally impossible here: the band count is clamped to the unit
@@ -45,8 +45,8 @@ use InvalidArgumentException;
  * (chafa-batch.c:153-159: with fewer than two threads the work runs inline in
  * the caller) becomes simply `count($bands) === 1` for every consumer.
  *
- * D-02b verdict note (S7.6, measured 2026-10-20): the worker-pool stage was
- * SKIP-licensed out by data, so this partition keeps its planned consumers —
+ * Verdict note (measured 2026-10-20): the worker-pool stage was
+ * ruled out by measurement, so this partition keeps its planned consumers —
  * cost gating and the incremental pump — and gains none. With forking banned
  * (§0.13), a {@see \React\ChildProcess\Process} per band re-pays PHP
  * exec+autoload+decode (~110–160 ms) PLUS the whole-canvas setup the encode
@@ -60,7 +60,7 @@ use InvalidArgumentException;
  * each worker re-emits DECSIXEL header and terminator). Revisit only if a
  * band-range + band-state seam lands in the renderer for a ≥8190-row workload
  * class; the responsiveness goal is already served zero-fork by the landed
- * D-05 slice pump ({@see \SugarCraft\Image\PacedAsyncRenderer} over
+ * Slice pump ({@see \SugarCraft\Image\PacedAsyncRenderer} over
  * {@see \SugarCraft\Image\Renderer\SixelRows}).
  */
 final class Bands
@@ -77,8 +77,8 @@ final class Bands
     /**
      * Row count below which the partition collapses to a single band: at
      * this size the per-band fixed costs (color-set re-emit, worker spawn)
-     * outweigh anything the split can save. Per the cost-gate decision in
-     * plan_chafa.md S5.2 (survey D-02a free-win 2, `h < 64 ? 1 band`).
+     * outweigh anything the split can save. Chafa's own tiny-canvas rule of
+     * thumb, adopted here: `h < 64 ? 1 band`.
      */
     public const COST_GATE_ROWS = 64;
 

@@ -8,7 +8,7 @@ use SugarCraft\Image\Detect;
 use SugarCraft\Image\Optimization;
 
 /**
- * Carrier for the A-02 {@see Optimization} bit mask on the cell-mosaic
+ * Carrier for the {@see Optimization} bit mask on the cell-mosaic
  * renderers (house immutable style: with*() clones, the field is only ever
  * written on a fresh instance).
  *
@@ -37,7 +37,7 @@ trait OptimizationCarrierTrait
     /**
      * Whether this renderer's rows should coalesce repeated glyphs into REP
      * sequences: the level must be requested AND the terminal must
-     * advertise CSI#b (the Detect capability gate, A-02 — chafa checks
+     * advertise CSI#b (the Detect capability gate — chafa checks
      * CHAFA_TERM_SEQ_REPEAT_CHAR before ever consulting its byte gate).
      */
     private function emitsRepeatCells(): bool

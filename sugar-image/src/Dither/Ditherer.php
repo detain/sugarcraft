@@ -12,16 +12,16 @@ use SugarCraft\Image\Dither;
 use SugarCraft\Image\Renderer\OrderedTexture;
 
 /**
- * C-06: the shared dithering stage — error diffusion and bias texture lifted
+ * The shared dithering stage — error diffusion and bias texture lifted
  * out of {@see \SugarCraft\Image\Renderer\SixelRenderer::indexRows()} so the
  * block/character renderers can consume the same math chafa runs in its
  * common `prepare_pixels` pass (chafa-pixops.c), not sixel-only.
  *
  * The RGB walk ({@see indexRows()}) is a byte-identical relocation of the
  * renderer's old private pipeline — rolling window, hole census ordering,
- * flatten, texture bias, B-13 block-centre memo, and the S4.1 serpentine
- * row-parity state (C-08) all moved with it, per the S6.1 carry note
- * (roadmap K folds C-08 into this extraction). SixelRenderer keeps a thin
+ * flatten, texture bias, block-centre memo, and the serpentine
+ * row-parity state all moved with it, per the extraction carry note
+ * (roadmap K folds the serpentine state into this extraction). SixelRenderer keeps a thin
  * delegate so its reflection-pinned shape survives; equivalence is pinned by
  * tests/Dither/DithererTest.php replaying every pre-refactor arm digest.
  *
@@ -42,17 +42,17 @@ use SugarCraft\Image\Renderer\OrderedTexture;
  * renderer whose public constructor already refused NaN/negative intensity,
  * out-of-range alpha thresholds and colour budgets. This class takes those
  * values as settled; it validates only facts no caller can pre-judge — image
- * geometry against the grain (C-09).
+ * geometry against the grain.
  */
 final class Ditherer
 {
     /**
-     * C-05: chafa folds this factor into the NOISE texture magnitude —
+     * Chafa folds this factor into the NOISE texture magnitude —
      * chafa_dither_init()'s NOISE arm calls
      * `chafa_gen_noise_matrix (dither->intensity * 0.1f)`, shrinking the
      * table's ±128-scale offsets to ±12.8 so a full-intensity noise bias
      * stays well inside one palette-bin width. Named here so the constant
-     * has a home (NTC-3); C-06 moved it with the magnitude maths.
+     * has a home; the shared-stage lift moved it with the magnitude maths.
      */
     private const NOISE_BIAS_SCALE = 0.1;
 
@@ -63,16 +63,16 @@ final class Ditherer
      *                       BASE_INTENSITY_* ladder is canvas knowledge, not
      *                       dither knowledge — chafa-canvas.c:591-614)
      * @param float|null $intensity diffusion/bias strength, already clamped
-     *                              to 0..1 by the caller; null = 1.0 (C-07)
+     *                              to 0..1 by the caller; null = 1.0
      * @param int $alphaThreshold GD-alpha hole cut-off the caller validated
-     * @param Color|null $flattenBackground B-10 flatten target, or null
-     * @param bool $serpentine C-08 opt-in snake walk
-     * @param int $grainWidth C-09: grain horizontal size in source pixels
+     * @param Color|null $flattenBackground Flatten target, or null
+     * @param bool $serpentine Opt-in snake walk
+     * @param int $grainWidth Grain horizontal size in source pixels
      *                        (chafa dither_size); 1 = today's per-pixel walk
-     * @param int $grainHeight C-09: grain vertical size; the pair must
+     * @param int $grainHeight Grain vertical size; the pair must
      *                         divide the canvas (checked in indexRows, the
      *                         only place geometry is known)
-     * @param bool $serpentineErrorFold C-06/rev-s4-1: fold an edge grain's
+     * @param bool $serpentineErrorFold Fold an edge grain's
      *                         out-of-canvas diffusion taps back onto the
      *                         nearest visible column (error-recovering onto
      *                         the shape chafa's boundary call sites produce),
@@ -103,7 +103,7 @@ final class Ditherer
     }
 
     /**
-     * C-09: grain dimensions in source pixels (1x1 = per-pixel walk).
+     * Grain dimensions in source pixels (1x1 = per-pixel walk).
      */
     public function grainWidth(): int
     {
@@ -116,7 +116,7 @@ final class Ditherer
     }
 
     /**
-     * C-06/rev-s4-1: true when the edge-grain tap fold is armed. It has no
+     * True when the edge-grain tap fold is armed. It has no
      * effect unless {@see serpentine()} is armed as well — the walk honours
      * the pair, not the flag alone.
      */
@@ -131,7 +131,7 @@ final class Ditherer
     }
 
     /**
-     * C-05: Noise bias magnitude — chafa's chafa_dither_init() NOISE arm,
+     * Noise bias magnitude — chafa's chafa_dither_init() NOISE arm,
      * `chafa_gen_noise_matrix (dither->intensity * 0.1f)`, with the base
      * intensity left at 1.0: chafa-canvas.c (:591-614) applies the depth
      * ladder to ORDERED only, so Noise never sees a maxColors-derived
@@ -143,7 +143,7 @@ final class Ditherer
     }
 
     /**
-     * B-10: src-over composite of one pixel's RGB toward the flatten
+     * Src-over composite of one pixel's RGB toward the flatten
      * background, on GD's inverted alpha scale (0 = opaque, 127 = fully
      * transparent), so background weight is `alpha / 127`.
      *
@@ -173,10 +173,10 @@ final class Ditherer
      *     (≤32768 entries) — identical key arithmetic to the old code.
      *   • A pixel at or above the alpha threshold (GD alpha 127 at the
      *     default) maps to index 0 and diffuses no error whenever a
-     *     background register is reserved (B-10).
+     *     background register is reserved.
      *   • Error-diffusion dithering quantises each pixel, clamps the accumulated
      *     value to 0..255, and propagates the rounding error to unprocessed
-     *     neighbours. C-08 (opt-in, default OFF): with `serpentine` armed the
+     *     neighbours. Opt-in, default OFF: with `serpentine` armed the
      *     diffusion kernels snake — odd rows walk right→left and the kernel
      *     mirrors horizontally, so taps always land on unvisited pixels.
      *
@@ -194,10 +194,10 @@ final class Ditherer
      * @param list<array{int,int,int}> $palette
      * @param int $offset 1 when register 0 is the transparent background —
      *                    opaque pixels index from $offset and holes map to 0.
-     * @param int $yOrigin C-04: absolute pixel row of this call's row 0 — the
+     * @param int $yOrigin absolute pixel row of this call's row 0 — the
      *                    texture phase is taken on $y + $yOrigin, so encoding
      *                    a band sub-image yields exactly the grid rows the
-     *                    full-canvas pass produces (D-02 band-split equality;
+     *                    full-canvas pass produces (band-split equality;
      *                    error diffusion is by design NOT sliceable this way,
      *                    which is why the reach window stays stateful above).
      *                    The serpentine flip reads LOCAL $y, not $y +
@@ -211,7 +211,7 @@ final class Ditherer
         $w = imagesx($img);
         $h = imagesy($img);
 
-        // C-09: with a grain armed, the diffusion unit is a whole
+        // With a grain armed, the diffusion unit is a whole
         // grain-width x grain-height block — one mean, one lookup, one
         // spread (chafa fs_dither_grain). The 1x1 default below stays the
         // byte-frozen pixel walk, branch-free.
@@ -221,7 +221,7 @@ final class Ditherer
             return;
         }
 
-        // C-04/C-05: Ordered and Noise are bias textures, not error
+        // Ordered and Noise are bias textures, not error
         // diffusions — the old `$dither !== Dither::None` test would wrongly
         // arm the kernel for them, so the arms are spelled out.
         $hasDiffusion = match ($this->dither) {
@@ -240,7 +240,7 @@ final class Ditherer
             Dither::None, Dither::Ordered, Dither::Noise => 0,
         };
 
-        // C-06: the texture arrives pre-built — its magnitude is the calling
+        // The texture arrives pre-built — its magnitude is the calling
         // renderer's palette-depth knowledge (BASE_INTENSITY_* ladder).
         $texture = $this->texture;
 
@@ -260,7 +260,7 @@ final class Ditherer
         // Read one row's raw pixels into floating-point accumulators; when a
         // background register is reserved, remember which pixels are holes so
         // the diffusion pass (which carries colour, not transparency) can skip
-        // them exactly as the old full-canvas builder did. C-04: the ordered
+        // them exactly as the old full-canvas builder did. The ordered
         // bias is added HERE — before quantisation, after nothing diffuses —
         // mirroring chafa's simple_dither pass running ahead of palette lookup
         // (chafa-pixops.c fs/ordered walk order).
@@ -276,9 +276,9 @@ final class Ditherer
             $loadBase($y);
         }
 
-        $cache = []; // 5-bit RGB cube → nearest colour of the BLOCK CENTRE (B-13), reused across pixels.
+        $cache = []; // 5-bit RGB cube → nearest colour of the BLOCK CENTRE, reused across pixels.
 
-        // F-14: nearest lookup now rides the B-04 PaletteIndex. The metric is
+        // Nearest lookup now rides the shared PaletteIndex. The metric is
         // pinned to Euclidean because its recheck is the same integer-sum
         // comparison the old linear walk made — including lowest-index ties —
         // while the default Cie76 would reorder answers (differentially
@@ -291,11 +291,11 @@ final class Ditherer
             ColorDistance::Euclidean,
         );
 
-        // C-08: serpentine only means anything for a walk that carries
+        // Serpentine only means anything for a walk that carries
         // error — Ordered's bias is position-taken and None quantises
         // cold, so both render byte-identically snaked or straight.
         $snake = $this->serpentine && $hasDiffusion;
-        // C-06/rev-s4-1: the fold-into-visible cure is DOUBLE-GATED — armed
+        // The fold-into-visible cure is DOUBLE-GATED — armed
         // only when the caller opted into it AND the serpentine walk is on,
         // so the byte-frozen default streams stay out of its reach.
         $fold = $this->serpentineErrorFold && $snake;
@@ -324,7 +324,7 @@ final class Ditherer
                 $ri = (int) round($clampedR);
                 $gi = (int) round($clampedG);
                 $bi = (int) round($clampedB);
-                // B-13: key AND lookup input snap together to the block
+                // Key AND lookup input snap together to the block
                 // representative — the memo stores the nearest colour of the
                 // 8³-block CENTRE, not of whichever pixel happened to warm
                 // the entry first. A lookup for any pixel in the block then
@@ -342,8 +342,8 @@ final class Ditherer
                 if ($hasDiffusion) {
                     [$pr, $pg, $pb] = $palette[$palIdx];
                     // Quantization error (original − quantized), intensity-scaled
-                    // (C-07, 1.0 by default), diffused onward.
-                    // C-08: on a reversed pass every horizontal tap mirrors
+                    // (1.0 by default), diffused onward.
+                    // On a reversed pass every horizontal tap mirrors
                     // (x±1 → x∓1), so error keeps flowing to pixels the walk
                     // has not visited yet.
                     self::diffuseError(
@@ -379,12 +379,12 @@ final class Ditherer
      * Read one pixel row's raw colour into floating-point accumulators;
      * when a background register is reserved, return which pixels are
      * holes so the diffusion pass (which carries colour, not transparency)
-     * can skip them exactly as the old full-canvas builder did. C-04: the
+     * can skip them exactly as the old full-canvas builder did. The
      * ordered bias is added HERE — before quantisation, after nothing
      * diffuses — mirroring chafa's simple_dither pass running ahead of
      * palette lookup (chafa-pixops.c fs/ordered walk order).
      *
-     * B-10: the hole census is decided FIRST and on the RAW alpha —
+     * The hole census is decided FIRST and on the RAW alpha —
      * lowering the threshold widens the hole set, and a hole is never
      * flattened (unpainted pixels carry no colour to the terminal).
      * ORDERING LAW: everything below — the flatten, the texture bias, the
@@ -392,7 +392,7 @@ final class Ditherer
      * sample census and the diffusion stream see transparent-excluded,
      * optionally bg-composited colour.
      *
-     * C-09: the loader is shared with the grain walk; it never touches
+     * The loader is shared with the grain walk; it never touches
      * error state, so the reach-window ordering law of indexRows() stays
      * in the caller (grain mode accumulates error on its own grid).
      *
@@ -415,7 +415,7 @@ final class Ditherer
             $g = ($rgb >> 8) & 0xFF;
             $b = $rgb & 0xFF;
             if ($this->flattenBackground !== null && !$isHole && $alpha > 0) {
-                // B-10: semi-transparent (0 < alpha < threshold) -> src-over
+                // Semi-transparent (0 < alpha < threshold) -> src-over
                 // onto the background BEFORE quantisation/diffusion.
                 [$r, $g, $b] = self::flattenOnto($r, $g, $b, $alpha, $this->flattenBackground);
             }
@@ -451,7 +451,7 @@ final class Ditherer
      *    divides by the OPAQUE count and a fully-holed grain is skipped
      *    with no error consumed or spread (the alpha_sum == 0 return).
      *  - the chosen index REPLICATES across every pixel slot of the grain
-     *    — the "spread" of the survey wording, and the shape the S6.2
+     *    — the "spread" phrasing, and the shape the
      *    per-cell consumers read (one cell per grain).
      *
      * @param list<array{int,int,int}> $palette
@@ -484,7 +484,7 @@ final class Ditherer
         $texture = $this->texture;
         $diffusionStrength = $this->intensity ?? 1.0;
 
-        $cache = []; // B-13 memo, same block-representative discipline as the pixel walk.
+        $cache = []; // block-centre memo, same block-representative discipline as the pixel walk.
         $index = PaletteIndex::fromPalette(
             array_map(static fn(array $rgb): PaletteColor => new PaletteColor($rgb[0], $rgb[1], $rgb[2]), $palette),
             ColorDistance::Euclidean,
@@ -503,7 +503,7 @@ final class Ditherer
             $accum[$gy] = array_fill(0, $cols, [0.0, 0.0, 0.0]);
         }
         $snake = $this->serpentine && $hasDiffusion;
-        // C-06/rev-s4-1: same double gate as the pixel walk — the fold only
+        // Same double gate as the pixel walk — the fold only
         // rides a serpentine grain cascade (chafa fs_dither_grain boundary).
         $fold = $this->serpentineErrorFold && $snake;
 
@@ -590,11 +590,11 @@ final class Ditherer
     }
 
     /**
-     * C-06: per-luma error diffusion for scalar (one-channel) renderers —
-     * the ascii ramp threshold and, from S6.2 on, per-cell block luma.
+     * Per-luma error diffusion for scalar (one-channel) renderers —
+     * the ascii ramp threshold and, since the block-walk landed, per-cell block luma.
      * Mirrors chafa's structure of dithering the value the picker will
      * threshold (chafa dithers before the symbol/palette choice, never
-     * after), which is what C-06's "FS before the LumaRamp threshold"
+     * after), which is what the "FS before the LumaRamp threshold"
      * requires.
      *
      * Diffusion rides the exact RGB kernel via {@see diffuseError()} with the
@@ -613,9 +613,9 @@ final class Ditherer
      * @param float $intensity diffusion strength (already validated/clamped
      *                       by the caller — trust boundary above)
      * @param OrderedTexture|null $texture pre-built bias for Ordered/Noise
-     * @param bool $serpentine C-08 snake walk; parity reads LOCAL $y, same
+     * @param bool $serpentine Snake walk; parity reads LOCAL $y, same
      *                         documented phase behaviour as indexRows()
-     * @param bool $fold C-06/rev-s4-1: fold edge grains' out-of-canvas taps
+     * @param bool $fold Fold edge grains' out-of-canvas taps
      *                         onto the nearest visible column (error-
      *                         recovering; see diffuseError's $fold for the
      *                         exact arm-by-arm shape). DOUBLE-GATED the same way as the
@@ -654,10 +654,10 @@ final class Ditherer
             $accum[$y] = $line;
         }
 
-        // C-08: same rule as the colour path — the snake only means
+        // Same rule as the colour path — the snake only means
         // anything when the walk carries error.
         $snake = $serpentine && $hasDiffusion;
-        // C-06/rev-s4-1: the fold is double-gated exactly as in indexRows()
+        // The fold is double-gated exactly as in indexRows()
         // and indexGrainRows() — flag × serpentine parity.
         $foldActive = $fold && $snake;
 
@@ -689,7 +689,7 @@ final class Ditherer
     }
 
     /**
-     * C-04: chafa_gen_mods + dither_pixel_u32 — split the signed texture
+     * Chafa parity (chafa_gen_mods + dither_pixel_u32): — split the signed texture
      * offset into saturating pos/neg modifiers and add them to one channel.
      * Alpha never passes through here (holes short-circuit above; GD has no
      * per-channel alpha in the accumulator), matching chafa's `for (i=0; i<3)`
@@ -732,14 +732,14 @@ final class Ditherer
      * the bounds test. See {@see $fold} for both modes in full.
      *
      * @param list<list<array{float,float,float}> $accum
-     * @param int $dxSign C-08: +1 on a forward row, -1 on a serpentine
+     * @param int $dxSign +1 on a forward row, -1 on a serpentine
      *                    (reversed) row — the horizontal component of every
      *                    tap mirrors with the walk direction, the analogue
      *                    of chafa swapping its neighbour arguments when
      *                    fs_dither walks right→left (chafa-pixops.c:327-459).
      *                    Default +1 keeps the historical forward kernel and
      *                    every existing caller byte-unchanged.
-     * @param bool $fold C-06/rev-s4-1 cure for the row-end divergence below.
+     * @param bool $fold Cure for the row-end divergence below.
      *                   FALSE (default, the byte-frozen mode): any tap whose
      *                   target leaves the accumulator is DROPPED at the bounds
      *                   test, so error reaching a row end is lost — chafa does

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Symbol;
 
 /**
- * A-09: one candidate WIDE glyph of the coverage-class corpus — chafa's
+ * One candidate WIDE glyph of the coverage-class corpus — chafa's
  * ChafaSymbol2: a 16x8-pixel cell carried as TWO 8x8 bitmaps (sym[0] the
  * left half, sym[1] the right half), each packed row-major MSB-first like
  * {@see SymbolDef::$bits}, scored jointly as hd(left) + hd(right) against
@@ -16,7 +16,7 @@ namespace SugarCraft\Image\Symbol;
  * A wide glyph occupies two terminal columns; the cell under its right
  * half becomes a continuation the printer skips (chafa-canvas-printer.c
  * `if (cell->c == 0) continue;`). The pairing bookkeeping lives in the
- * renderer's lookback pass (see the A-09 note in {@see SymbolMap}); this
+ * renderer's lookback pass (see the wide-engine note in {@see SymbolMap}); this
  * class is only the packed datum.
  *
  * The weight is the joint popcount over both halves (chafa calc_weights

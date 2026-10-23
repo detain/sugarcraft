@@ -1,7 +1,7 @@
 <?php
 
 /**
- * F-18: structural pin for the descriptor the viewer hands to the size
+ * Structural pin for the descriptor the viewer hands to the size
  * ioctl, and for the tty gate in front of it.
  *
  * The defect family this guards (recorded in candy-gifview's CALIBER

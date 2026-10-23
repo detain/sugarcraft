@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Optimization;
 
 /**
- * A-02: the chafa CHAFA_OPTIMIZATIONS ladder parity vocabulary.
+ * The chafa CHAFA_OPTIMIZATIONS ladder parity vocabulary.
  */
 final class OptimizationTest extends TestCase
 {

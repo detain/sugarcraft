@@ -27,7 +27,7 @@ namespace SugarCraft\Image\Symbol;
  *
  * Membership rule is chafa's init_symbol_array(): an outline is narrow when
  * it is 8x8 (64 chars); the 16x8 (128-char) outlines belong to the wide
- * symbols2 array (A-09, unported). chafa-symbols-kana.h is 16x8-only, so
+ * symbols2 array. chafa-symbols-kana.h is 16x8-only, so
  * the kana set contributes NOTHING to the narrow corpus — see the
  * SymbolMap class docblock for the recorded seam.
  */

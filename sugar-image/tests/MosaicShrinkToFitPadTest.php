@@ -22,7 +22,7 @@ use SugarCraft\Image\Scale;
 final class MosaicShrinkToFitPadTest extends TestCase
 {
     /**
-     * The pen-delta row shape for fully-opaque red cells (A-01): the pair of
+     * The pen-delta row shape for fully-opaque red cells: the pair of
      * pens is armed ONCE per row, identical neighbours ride the tracked pen,
      * and the row closes with a scoped restore — not the pre-A-01 per-cell
      * `ESC[0m`. RED_ARMS arms both pens; a trailing blank run drops the

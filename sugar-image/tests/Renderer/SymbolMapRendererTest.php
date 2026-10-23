@@ -10,7 +10,7 @@ use SugarCraft\Image\Renderer\SymbolMapRenderer;
 use SugarCraft\Image\Symbol\CanvasMode;
 
 /**
- * A-04/D-03: the symbol renderer's emission contract (plan_chafa S6.2).
+ * The symbol renderer's emission contract (plan_chafa S6.2).
  *
  * The byte digests below are the double-sourced regression floor for the
  * port-fidelity fixes this lane shipped: chafa's eval_symbol never
@@ -18,7 +18,7 @@ use SugarCraft\Image\Symbol\CanvasMode;
  * OWN coverage — chafa-symbol-renderer.c:340-395), and Fgbg runs the
  * fg-only discipline on the terminal's OSC 10/11 default pair (F-08
  * consumer wire). Re-introducing the inverted-paint flip, or scoring
- * truecolor pens under a fixed palette (PC-14), moves these digests.
+ * truecolor pens under a fixed palette, moves these digests.
  */
 final class SymbolMapRendererTest extends TestCase
 {
@@ -37,7 +37,7 @@ final class SymbolMapRendererTest extends TestCase
 
     public function testAnsi16ScoresTheQuantizedPensNotTheTruecolorOnes(): void
     {
-        // PC-14 discriminating digest: scoring BEFORE the palette snap
+        // Discriminating digest: scoring BEFORE the palette snap
         // (pre-quantized means) picks the truecolor-optimal glyph and
         // moves this hash — the mutation proof runs exactly that swap.
         $image = ImageSource::fromFile(self::QB);
@@ -51,7 +51,7 @@ final class SymbolMapRendererTest extends TestCase
 
     public function testTheExhaustiveDialMovesThePickOnTheSameFixture(): void
     {
-        // D-03: the slow path is a different (never worse) search — on
+        // The slow path is a different (never worse) search — on
         // this fixture it lands different bytes, and both digests below
         // are stable across processes.
         $image = ImageSource::fromFile(self::QB);
@@ -65,7 +65,7 @@ final class SymbolMapRendererTest extends TestCase
 
     public function testSymbolSelectorsReachTheCorpusAndTheCacheFingerprint(): void
     {
-        // REACH-A04/F-17: the `--symbols=` selector rides the renderer —
+        // The `--symbols=` selector rides the renderer —
         // a braille-only corpus cannot pick the block glyphs the default
         // corpus prefers on this fixture, so the bytes move, and the
         // fingerprint (poster-cache key) records the selection.
@@ -155,7 +155,7 @@ final class SymbolMapRendererTest extends TestCase
 
     public function testTheSolidShortcutVetoesGlyphsOutsideTheSelection(): void
     {
-        // F-17/rev-w10-2 M2: chafa's find_best_solid_char
+        // Rev-w10-2 M2: chafa's find_best_solid_char
         // (chafa/chafa-canvas.c:335-374) guards the solid emission with
         // has_symbol(0x2588) and falls through a <=32-pixel candidate
         // ladder when the selection lacks it. The pre-fix shortcut was
@@ -186,7 +186,7 @@ final class SymbolMapRendererTest extends TestCase
 
     public function testFlatCellsActuallyMoveUnderTheSymbolsDialEndToEnd(): void
     {
-        // F-17/rev-w10-2 M2 production reachability: the photo-ish frame
+        // Rev-w10-2 M2 production reachability: the photo-ish frame
         // (two flat swatch cells, a gradient and a checker cell) through
         // the same renderer dial candy-image's --symbols= threads. The
         // reviewer's complaint was that the dial was a no-op on flat
@@ -243,7 +243,7 @@ final class SymbolMapRendererTest extends TestCase
     }
 
     /**
-     * A-07/PC-14 discriminating pin: candidate SELECTION must score the
+     * Discriminating pin: candidate SELECTION must score the
      * quantized pens, not the raw group means. Re-scoring raw (a mutation
      * that drops the quantizes() branch in scoredPens) flips glyph picks
      * on palettes-sensitivity-rich content and reddens BOTH digests here

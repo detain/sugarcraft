@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Support\OutputOptimizer;
 
 /**
- * A-02 RepeatCells arm of the streaming optimizer: identical-glyph runs
+ * RepeatCells arm of the streaming optimizer: identical-glyph runs
  * under an unchanged pen may encode as `ESC[count b` — but ONLY through
  * sugar-cellbuffer's RepeatGate byte arithmetic, and only when the level
  * is on. With the level off the run buffer must flush byte-identical to

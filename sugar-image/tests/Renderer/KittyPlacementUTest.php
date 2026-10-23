@@ -10,7 +10,7 @@ use SugarCraft\Image\KittyOptions;
 use SugarCraft\Image\Renderer\KittyRenderer;
 
 /**
- * S7.1: the a=p placement frame's U parameter was hardcoded 1 (under text),
+ * The a=p placement frame's U parameter was hardcoded 1 (under text),
  * so over-text placement was un-expressible (documented seam in the chafa
  * campaign rows). KittyOptions now carries the value — the default keeps
  * every frame emitted today byte-identical, and withPlacementU() opens the

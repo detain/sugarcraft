@@ -38,13 +38,13 @@ final class HalfBlockRenderer implements Renderer, IncrementalRenderer, AcceptsO
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
         // Whole-buffer implode over the row generator, so the one-shot and
-        // incremental paths can never drift (D-05; same twin shape as
+        // incremental paths can never drift (same twin shape as
         // SixelRenderer::render() over encodeInto()).
         return implode('', iterator_to_array($this->renderRows($image, $width, $height), false));
     }
 
     /**
-     * Yield the frame one display row at a time (D-05).
+     * Yield the frame one display row at a time.
      *
      * Each unit is one cell row of inline text — every row after the first is
      * prefixed with its joining newline, so concatenation reproduces

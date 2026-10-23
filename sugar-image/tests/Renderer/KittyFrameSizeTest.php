@@ -11,7 +11,7 @@ use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Testing\Graphics\KittyStream;
 
 /**
- * F-11: every emitted kitty APC frame must stay within the protocol's
+ * Every emitted kitty APC frame must stay within the protocol's
  * 4096-byte cap. The pre-F-11 shape sliced the BASE64 string at 4092
  * chars, so each data frame carried 9 envelope bytes on top: 4101 bytes
  * — every spec'd receiver truncates it and the image corrupts.
@@ -29,7 +29,7 @@ final class KittyFrameSizeTest extends TestCase
 
     public function testTheDefaultChunkSizeIsTheFramedArithmetic(): void
     {
-        // F-11: default = intdiv(4096 - envelope(9) - param reserve(128), 4) * 3
+        // Default = intdiv(4096 - envelope(9) - param reserve(128), 4) * 3
         // re-derived here, so a drifted constant without drifted math goes red.
         $this->assertSame(
             intdiv(KittyOptions::MAX_FRAME_BYTES - 9 - 128, 4) * 3,
@@ -78,7 +78,7 @@ final class KittyFrameSizeTest extends TestCase
             $this->assertLessThanOrEqual(KittyOptions::MAX_FRAME_BYTES, strlen($frame));
         }
 
-        // F-11 sizes the POST-compression stream: reassemble the chunk
+        // Sizes the POST-compression stream: reassemble the chunk
         // payloads and prove they are the zlib stream of the PNG bytes.
         $payload = '';
         foreach ($frames as $frame) {

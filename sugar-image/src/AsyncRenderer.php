@@ -9,16 +9,16 @@ use React\Promise\PromiseInterface;
 /**
  * Strategy interface for asynchronous rendering.
  *
- * E722 (round 82) posture, judged from the tree: this library ships TWO
+ * No-blanket-timeout posture, judged from the tree: this library ships TWO
  * implementations — {@see SyncAsyncRenderer}, a futureTick deferral, and
  * {@see PacedAsyncRenderer}, which drives a {@see PacedRenderSession}
- * slice pump from futureTick callbacks (D-05) — neither owns a child
+ * slice pump from futureTick callbacks — neither owns a child
  * process. The worker-pool and pcntl_fork-per-render
  * backends named below are design invitations, not shipped code, and the
- * E722 audit note about a "64 MiB stderr cap" has no referent here at all
+ * the older audit note about a "64 MiB stderr cap" has no referent here at all
  * (erratum: no such cap exists anywhere in sugar-image or its history —
  * the only external children in the lib are {@see \SugarCraft\Image\Renderer\ChafaRenderer}'s
- * probe and render: since D-07 the render redirects fd 2 to a private
+ * probe and render: the render redirects fd 2 to a private
  * 0600 temp-file sink and drains stdout under ChafaRenderer::MAX_STDOUT_BYTES;
  * the probe's transient fd-2 pipe is closed before reaping).
  *

@@ -9,7 +9,7 @@ use SugarCraft\Image\Lang;
 /**
  * Kitty graphics protocol `f=32` raw RGBA encoder — GD-free by design.
  *
- * F-13: chafa transmits Kitty payloads as raw RGBA8 quads
+ * Chafa transmits Kitty payloads as raw RGBA8 quads
  * (chafa/internal/chafa-kitty-renderer.c, term-db `f=%1` with the
  * transmissive path), never touching an image library. The on-the-wire
  * form is a flat byte string, one 4-byte R,G,B,A quad per pixel, rows

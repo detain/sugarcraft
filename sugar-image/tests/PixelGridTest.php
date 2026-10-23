@@ -96,7 +96,7 @@ final class PixelGridTest extends TestCase
     }
 
     /**
-     * A-05a: fromGdQuarter must expose transparency per quad (alpha null)
+     * FromGdQuarter must expose transparency per quad (alpha null)
      * instead of silently handing back the stored RGB of a transparent
      * pixel — the old colour-bits-only read turned a transparent-black
      * quadrant into a black quad fed to the renderer.

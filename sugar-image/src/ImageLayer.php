@@ -141,7 +141,7 @@ final class ImageLayer
         if ($id === null) {
             $candidate = count($this->idByDigest);
             if ($candidate >= ImageOverlay::MAX_IMAGES) {
-                // Claim BEFORE writing (lane p2, N5): the old `??=` stored a
+                // Claim BEFORE writing: the old `??=` stored a
                 // dead row for every post-exhaustion digest, so the one
                 // unbounded structure in the class grew forever on a stream
                 // of unique blobs. Refusing the write caps the table at

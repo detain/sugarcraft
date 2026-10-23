@@ -12,7 +12,7 @@ use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Image\Renderer\Renderer;
 
 /**
- * E-15: byte-order pins for AnimationDriver::view() per renderer family.
+ * Byte-order pins for AnimationDriver::view() per renderer family.
  *
  * The flicker defect was `delete($id) . render($frame)` — the screen lost
  * the image for one draw per tick. These tests pin the fix directly:

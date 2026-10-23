@@ -11,7 +11,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Image\Renderer\SixelRenderer;
 
 /**
- * F-09: the band encoder's `!N`-splitting rule has ONE implementation —
+ * The band encoder's `!N`-splitting rule has ONE implementation —
  * sugar-core's {@see Ansi::sixelRle()} — and SixelRenderer::emitRle()
  * delegates to it. This pin replays the private emitter across the mask and
  * run-length space and demands byte equality with the shared home, so a

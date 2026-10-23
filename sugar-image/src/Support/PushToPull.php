@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Support;
 
 /**
- * Turns a push (callback) producer into a lazy pull generator (D-05).
+ * Turns a push (callback) producer into a lazy pull generator.
  *
  * The sixel encoder streams through a `callable(string):void $write` sink
  * ({@see \SugarCraft\Image\Renderer\SixelRenderer::encodeBandStream()});
@@ -14,7 +14,7 @@ namespace SugarCraft\Image\Support;
  * `$write` suspends and hands its bytes out as the next yielded chunk, so the
  * producer only advances as far as the consumer pumps — the callback never
  * "collects then replays", which would reintroduce the whole-buffer freeze
- * D-05 exists to remove.
+ * Exists to remove.
  *
  * Abandonment semantics: dropping the generator before exhaustion discards
  * the fiber's stack. Objects held only there (the GD canvas inside the

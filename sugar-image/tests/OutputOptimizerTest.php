@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Support\OutputOptimizer;
 
 /**
- * A-01/A-14 pins for the streaming pen-delta optimizer.
+ * Pins for the streaming pen-delta optimizer.
  *
  * The emission law under test: bytes leave the optimizer only when a pen
  * channel actually changes (chafa-canvas-printer.c:139-215), blanks copy the

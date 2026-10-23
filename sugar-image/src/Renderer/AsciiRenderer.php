@@ -26,7 +26,7 @@ use SugarCraft\ColorProfile\Color;
  * Luminance is BT.601: `Y = (77R + 150G + 29B) >> 8`. Rows are joined with
  * `"\n"` (never `"\r\n"` — a stray carriage return collapses a stitched rail).
  *
- * The luminance ramp is injectable (A-11): sugar-video's renderer bridge threads
+ * The luminance ramp is injectable: sugar-video's renderer bridge threads
  * user-selected character tables (minimal/dense) through here so the canonical
  * quantizer stays the single implementation. The default ramp is byte-frozen —
  * every existing golden pins it.
@@ -39,13 +39,13 @@ final class AsciiRenderer implements Renderer, AcceptsOptimization
     /** Standard 15-step luminance ramp, darkest → brightest. */
     private const RAMP = ' .,:;i1tfLCG08@';
 
-    /** C-06: dither bias strength (null = chafa's config default 1.0). */
+    /** Dither bias strength (null = chafa's config default 1.0). */
     private readonly ?float $intensity;
 
     /**
-     * C-06: opt-in luminance dithering — chafa dithers inside the common
+     * Opt-in luminance dithering — chafa dithers inside the common
      * prepare_pixels pass, BEFORE the picker thresholds the value, and this
-     * renderer had no error control at all (the C-06 gap: gradients band).
+     * renderer had no error control at all (without it, gradients band).
      * Dither::None (default) keeps the byte-frozen cold-quantise walk; the
      * ramp default is what every existing golden pins.
      *
@@ -53,7 +53,7 @@ final class AsciiRenderer implements Renderer, AcceptsOptimization
      *                              1.0; above 1.0 clamps, chafa
      *                              chafa_dither_init() MIN rule)
      * @param Dither $dither        kernel for the luminance axis
-     * @param bool $serpentine      C-08 snake walk over cell rows (parity
+     * @param bool $serpentine      Snake walk over cell rows (parity
      *                              reads LOCAL row index, same documented
      *                              phase rule as the colour path)
      */
@@ -77,19 +77,19 @@ final class AsciiRenderer implements Renderer, AcceptsOptimization
         $this->intensity = $intensity === null ? null : min(1.0, $intensity);
     }
 
-    /** C-06: the diffusion kernel in force (Dither::None = cold quantise). */
+    /** The diffusion kernel in force (Dither::None = cold quantise). */
     public function dither(): Dither
     {
         return $this->dither;
     }
 
-    /** C-06: the dither bias strength in force, or null for chafa's 1.0. */
+    /** The dither bias strength in force, or null for chafa's 1.0. */
     public function intensity(): ?float
     {
         return $this->intensity;
     }
 
-    /** C-06: true when the diffusion walk snakes (odd cell rows reversed). */
+    /** True when the diffusion walk snakes (odd cell rows reversed). */
     public function serpentine(): bool
     {
         return $this->serpentine;
@@ -138,7 +138,7 @@ final class AsciiRenderer implements Renderer, AcceptsOptimization
                     $lines[] = $pen->finishRow();
                 }
             } else {
-                // C-06: the luminance axis is dithered BEFORE the ramp
+                // The luminance axis is dithered BEFORE the ramp
                 // threshold — the chafa prepare_pixels order — so a gradient
                 // walks the ramp instead of banding. Colour pens stay RAW
                 // per-pixel (the dither chooses glyphs, not tints: mixing a
@@ -227,7 +227,7 @@ final class AsciiRenderer implements Renderer, AcceptsOptimization
     }
 
     /**
-     * A-06: the protocol slot carries the protocol, not the colour ramp.
+     * The protocol slot carries the protocol, not the colour ramp.
      * All three AsciiColorMode arms encode through the same ASCII-symbol
      * protocol, so name() is the constant 'ascii'; the colour depth a
      * particular renderer instance encodes at is its own axis, exposed by
@@ -240,7 +240,7 @@ final class AsciiRenderer implements Renderer, AcceptsOptimization
 
     /**
      * The colour-ramp mode this renderer encodes with (Mono/Ansi16/Ansi256/TrueColor).
-     * A-06 relocated this value out of {@see name()} so protocol() stops
+     * Relocated this value out of {@see name()} so protocol() stops
      * leaking 'ansi256'/'truecolor' into the PROTOCOL slot; anything that
      * previously differentiated ascii variants by name() must key on this.
      */

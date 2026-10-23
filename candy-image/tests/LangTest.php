@@ -1,7 +1,7 @@
 <?php
 
 /**
- * F-18: the candy-image i18n Lang wrapper — every cli.* key the front end
+ * The candy-image i18n Lang wrapper — every cli.* key the front end
  * emits resolves to a real message (not the namespaced-fallback spelling),
  * and unknown keys degrade to the documented fallback.
  */

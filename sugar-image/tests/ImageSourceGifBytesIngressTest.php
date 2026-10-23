@@ -11,7 +11,7 @@ use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Tests\Support\AnimatedImageFixtures as F;
 
 /**
- * E-07: the GIF leg of fromAnimatedFile() decodes from the validated bytes
+ * The GIF leg of fromAnimatedFile() decodes from the validated bytes
  * exactly once — no temp-file staging, no path re-open (the round-4 HIGH).
  * The structural legs below pin that shape; the parity leg pins the promise
  * that the bytes route reproduces the legacy cell-grid reconstruction frame

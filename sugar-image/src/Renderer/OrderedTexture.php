@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Renderer;
 
 /**
- * C-04: Ordered-dither bias texture — an additive PRE-QUANTIZATION offset
+ * Ordered-dither bias texture — an additive PRE-QUANTIZATION offset
  * consulted per pixel before the palette lookup, with no error feedback
- * (PC-8: this is chafa's bias model, not a matrix-threshold model).
+ * (this is chafa's bias model, not a matrix-threshold model).
  *
- * Carries both of chafa's texture kinds: the C-04 16x16 Bayer matrix
- * (bayer16, single-channel) and the C-05 64x64 decorrelated blue-noise
+ * Carries both of chafa's texture kinds: the 16x16 Bayer matrix
+ * (bayer16, single-channel) and the 64x64 decorrelated blue-noise
  * table (blueNoise64, three channels).
  *
  * Mirrors chafa's chafa_gen_bayer_matrix() + fill_matrix()/fill_matrix_r()
@@ -68,7 +68,7 @@ final class OrderedTexture
     }
 
     /**
-     * C-05: The 64x64 three-channel blue-noise texture chafa uses for
+     * The 64x64 three-channel blue-noise texture chafa uses for
      * CHAFA_DITHER_MODE_NOISE. Mirrors chafa_gen_noise_matrix()
      * (chafa-noise.c:225-238): `matrix[i] = ((gfloat) blue_noise_src[i]
      * - 128.0f) * magnitude + 0.5f` -> gint, ported with the same NTC-2

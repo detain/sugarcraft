@@ -18,13 +18,13 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     use \SugarCraft\Image\Concerns\RenderValidationTrait;
 
     /**
-     * D-07: hard ceiling on the bytes the render keeps from the child's
+     * Hard ceiling on the bytes the render keeps from the child's
      * stdout. Legitimate chafa output at poster scale is a few megabytes;
      * anything past 32 MiB is runaway, not art. The drain keeps the first
      * this-many bytes and keeps reading to EOF beyond it (drain-to-null),
      * so the child never blocks on a full pipe nor dies of EPIPE.
      *
-     * RULING (review s1-6 m1, accepted): a SUCCESS truncated at this cap
+     * RULING (accepted): a SUCCESS truncated at this cap
      * returns the kept head silently — that is intended, not an oversight.
      * A real sixel/kitty payload past 32 MiB is a misuse case (no terminal
      * would display it), and a loud signal on the success path would punish
@@ -36,20 +36,20 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
      */
     public const MAX_STDOUT_BYTES = 32 * 1024 * 1024;
 
-    /** D-07: read chunk for {@see drainStdout()}. */
+    /** Read chunk for {@see drainStdout()}. */
     private const STDOUT_CHUNK_BYTES = 65536;
 
     /**
-     * D-07: how many trailing bytes of the child's stderr sink ride into
+     * How many trailing bytes of the child's stderr sink ride into
      * the failure message — chafa's own sentences are one-liners, and 8 KiB
      * bounds the exception even if the child flooded diagnostics.
      */
     public const STDERR_TAIL_BYTES = 8 * 1024;
 
-    /** D-07: post-stdout-EOF budget for the child to exit on its own. */
+    /** Post-stdout-EOF budget for the child to exit on its own. */
     private const REAP_WAIT_MS = 5000;
 
-    /** D-07: budget a SIGTERM gets before the ladder reaches for SIGKILL. */
+    /** Budget a SIGTERM gets before the ladder reaches for SIGKILL. */
     private const TERM_GRACE_MS = 1000;
 
     /**
@@ -141,7 +141,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
 
         $cmd[] = self::scratchFile($image->bytes);
 
-        // D-07: the child's diagnostics go to a private file sink, never to
+        // The child's diagnostics go to a private file sink, never to
         // this process's stderr. An inherited fd 2 let chafa's own error
         // sentences scribble over the TUI frame AND discarded the failure
         // reason — the user saw "exit code 1" while the actual sentence went
@@ -364,7 +364,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * D-04: the CLI options and the output format both change chafa's
+     * The CLI options and the output format both change chafa's
      * encoded bytes for identical input, so both ride the fingerprint —
      * Mosaic::chafa('--colors=16') must never serve a '--colors=256'
      * cache entry (or a symbols-format one) back.

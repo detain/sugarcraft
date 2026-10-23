@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image;
 
 /**
- * One paced, resumable pump over an incremental encode (D-05).
+ * One paced, resumable pump over an incremental encode.
  *
  * The session is the unit of fairness: {@see advanceSlice()} consumes rows
  * from the generator until the slice budget runs out — a fresh

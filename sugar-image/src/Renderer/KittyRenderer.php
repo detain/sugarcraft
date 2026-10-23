@@ -13,7 +13,7 @@ use SugarCraft\Image\Support\GdAvailability;
 /**
  * Kitty graphics protocol renderer via chunked APC sequences.
  *
- * F-11: payloads are chunked in RAW BYTES (default 2967 per chunk, see
+ * Payloads are chunked in RAW BYTES (default 2967 per chunk, see
  * {@see KittyOptions::DEFAULT_CHUNK_BYTES}) and each slice is base64-encoded
  * independently, so every emitted frame — APC introducer, parameters,
  * base64, string terminator — stays within the protocol's 4096-byte cap.
@@ -21,7 +21,7 @@ use SugarCraft\Image\Support\GdAvailability;
  * bytes on the wire per data frame: kitty truncates such frames and the
  * image corrupts.) Terminals handle aspect-ratio and scaling.
  *
- * Chunk-boundary note (s1-3 review m3, gzip path): the POST-gzip stream
+ * Chunk-boundary note (gzip path): the POST-gzip stream
  * rides the SAME 3-byte-aligned raw slices, so base64 padding can only
  * ever land on the trailing chunk — whose slice is by construction no
  * larger than a full one. Worst-case data frame is therefore
@@ -46,14 +46,14 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
      */
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
-        // Whole-buffer implode over the frame generator (D-05) — the same
+        // Whole-buffer implode over the frame generator — the same
         // twin shape SixelRenderer::render() uses over encodeInto(), so the
         // one-shot and incremental paths share one byte source.
         return implode('', iterator_to_array($this->renderRows($image, $width, $height), false));
     }
 
     /**
-     * Yield the transmission one protocol frame at a time (D-05).
+     * Yield the transmission one protocol frame at a time.
      *
      * Units are APC frames — the begin frame, then one data chunk frame per
      * raw-byte slice (base64 encoded as it is handed out, so a paced pump
@@ -98,12 +98,12 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
     /**
      * Render with explicit Kitty protocol options.
      *
-     * F-10: chain withUseVirtual(true) on a transmit to store the image
+     * Chain withUseVirtual(true) on a transmit to store the image
      * with the virtual flag (a=T,U=1), stream its payload in m=1/m=0 data
      * chunks, then composite it under the text with a trailing control-
-     * only a=p frame — a=p never carries payload. S7.1: the trailing
+     * only a=p frame — a=p never carries payload. The trailing
      * frame's U (and an explicit place()'s U) follow withPlacementU();
-     * the default keeps both frames byte-identical to F-10's output.
+     * the default keeps both frames byte-identical to the original store+place output.
      *
      * @param KittyOptions $opts  Use {@see KittyOptions::transmit()} for inline
      *                            transmission (a=T), {@see KittyOptions::place()}
@@ -123,8 +123,8 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         $optsArr   = $opts->toArray();
 
         if ($opts->isPlace()) {
-            // F-10: Place is a one-shot control frame — it must NOT open a
-            // chunked transmission (nothing would close it). S7.1: the U
+            // Place is a one-shot control frame — it must NOT open a
+            // chunked transmission (nothing would close it). The U
             // value rides the options (default 1 = under text, the value
             // this frame emitted before the seam existed; 0 = over text).
             return Ansi::kittyGraphicsControl([
@@ -148,7 +148,7 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         } else {
             $payload = $pngBytes;
         }
-        // F-11: chunk the raw payload — post-compression bytes when zlib is
+        // Chunk the raw payload — post-compression bytes when zlib is
         // on, PNG bytes otherwise — then base64 each slice. Sizing the
         // base64 string (the old shape) overshot the 4 KiB frame cap;
         // sizing the raw bytes bounds every frame before encoding.
@@ -156,7 +156,7 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         $total     = count($chunks);
         $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
 
-        // F-10: transmission is always a=T. Virtual mode keeps that and
+        // Transmission is always a=T. Virtual mode keeps that and
         // flags the stored image U=1 (composited UNDER the text), then
         // closes with a control-only a=p frame that places it — the
         // two-step shape chafa emits (chafa/chafa-term-db.c:439:
@@ -189,9 +189,9 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
             $out .= Ansi::kittyGraphicsEnd();
         }
         if ($useVirtual) {
-            // F-10: placement control frame — attributes only, no payload;
+            // Placement control frame — attributes only, no payload;
             // by default it composites the just-stored virtual image under
-            // the text. S7.1: U follows the options, so withPlacementU(0)
+            // the text. U follows the options, so withPlacementU(0)
             // flips this same frame to over-text placement.
             $out .= Ansi::kittyGraphicsControl([
                 'a' => 'p',
@@ -268,12 +268,12 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
     /**
      * Transmit as RAW RGBA (`f=32`) — the GD-free wire format.
      *
-     * F-13, per chafa's kitty path (chafa/internal/chafa-kitty-renderer.c
+     * Per chafa's kitty path (chafa/internal/chafa-kitty-renderer.c
      * sends raw RGBA quads and never encodes PNG): the payload is the
      * flat R,G,B,A byte stream from {@see RawRgba} — supplied directly
      * via `$rgba` (no GD at all) or decoded through GD when omitted.
      * `s`/`v` carry the pixel dimensions; `c`/`r` stay the cell extent,
-     * and the payload rides the same F-11 raw-byte chunker
+     * and the payload rides the same raw-byte chunker
      * ({@see KittyOptions::DEFAULT_CHUNK_BYTES}, multiples of 3 keep
      * base64 padding off every non-final chunk even though quads may
      * straddle slice boundaries — the terminal re-concatenates before
@@ -326,7 +326,7 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
             return $image->bytes;
         }
 
-        // F-13: GD-absence now costs a translated refusal, not an
+        // GD-absence now costs a translated refusal, not an
         // undefined-function fatal, and the raw f=32 path above is the
         // GD-free alternative for callers that hold pixels directly.
         if (!GdAvailability::available()) {
@@ -359,7 +359,7 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
     }
 
     /**
-     * Split a RAW payload into base64 slices bounded per F-11: every
+     * Split a RAW payload into base64 slices bounded by the frame cap: every
      * resulting data-chunk frame (envelope APC `ESC _ G` + `m=<0|1>` + ';' +
      * ST, 9 bytes) must stay within {@see KittyOptions::MAX_FRAME_BYTES}.
      *

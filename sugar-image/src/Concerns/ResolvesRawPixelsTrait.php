@@ -11,7 +11,7 @@ use SugarCraft\Image\Support\GdAvailability;
 
 /**
  * Shared "obtain a raw RGBA buffer for an ImageSource" step for the
- * F-13 GD-free transmission paths.
+ * GD-free transmission paths.
  *
  * Two ingress shapes:
  *  - caller-supplied `$rgba` (w×h×4 bytes of the SOURCE's pixel grid) —

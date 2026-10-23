@@ -21,7 +21,7 @@ final class Capability
         /** True when TMUX env var is set (requires allow-passthrough on). */
         public readonly bool $inTmux,
         /**
-         * F-08: terminal default foreground from the OSC 10 query, lowercase
+         * Terminal default foreground from the OSC 10 query, lowercase
          * 6-hex-digit 'rrggbb' — the same packed 0xRRGGBB fact chafa stores
          * from its reply parse (chafa-term.c:403-409 probe_color_to_packed_
          * rgb); where chafa keeps -1 for "unknown" the null of this ?string
@@ -31,10 +31,10 @@ final class Capability
          * probed AND answered — see {@see Detect::probeDefaultColors()}.
          */
         public readonly ?string $defaultFg = null,
-        /** F-08: OSC 11 default background, same representation and sentinel. */
+        /** OSC 11 default background, same representation and sentinel. */
         public readonly ?string $defaultBg = null,
         /**
-         * F-02: the terminal-database quirks bitmask ({@see TermInfo::QUIRK_*})
+         * The terminal-database quirks bitmask ({@see TermInfo::QUIRK_*})
          * for the resolved chain, or null when no chain was consulted — the
          * byte-frozen legacy shape. Null must never be collapsed to 0: "no
          * fact" and "fact: no quirks" drive different trailing-newline
@@ -43,9 +43,9 @@ final class Capability
          */
         public readonly ?int $quirks = null,
         /**
-         * F-12: which passthrough envelope the session needs, derived from
+         * Which passthrough envelope the session needs, derived from
          * the TermDb MUX row via {@see TermInfo::passthroughMode()} —
-         * TermInfo::PASSTHROUGH_NONE (default) keeps the pre-F-12 bytes
+         * TermInfo::PASSTHROUGH_NONE (default) keeps the pre-passthrough bytes
          * untouched.
          */
         public readonly string $passthroughMode = TermInfo::PASSTHROUGH_NONE,
@@ -101,18 +101,18 @@ final class Capability
             $this->chafa,
             $cellSize,
             $this->inTmux,
-            // F-08: colors survive a cell-size change — the two carriers are
+            // Colors survive a cell-size change — the two carriers are
             // orthogonal facets of the same probe, neither may blank the other.
             $this->defaultFg,
             $this->defaultBg,
-            // F-02/F-12: terminal facts survive the same way.
+            // Terminal facts survive the same way.
             $this->quirks,
             $this->passthroughMode,
         );
     }
 
     /**
-     * F-08: Return a copy of this capability with the terminal's reported
+     * Return a copy of this capability with the terminal's reported
      * default colours attached (lowercase 'rrggbb', null keeps unknown),
      * shaped exactly like {@see withCellSize()} — the OSC 10/11 answers
      * ride onto whichever protocol rung the ladder answered on.
@@ -135,7 +135,7 @@ final class Capability
     }
 
     /**
-     * F-02/F-12: return a copy carrying the terminal-database facts — the
+     * Return a copy carrying the terminal-database facts — the
      * quirks bitmask (null = chain never consulted, the byte-frozen shape)
      * and the passthrough envelope mode. Built by {@see Detect::probeEnv()}
      * on the resolved {@see TermInfo}, mirroring how chafa consults

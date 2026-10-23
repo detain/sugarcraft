@@ -12,7 +12,7 @@ use SugarCraft\Image\Symbol\SymbolMap;
 use SugarCraft\Image\Symbol\SymbolSetKana;
 
 /**
- * A-09: the per-cell error-0 veto in SymbolMapRenderer::applyWidePass() is
+ * The per-cell error-0 veto in SymbolMapRenderer::applyWidePass() is
  * LOAD-BEARING (rev-w11-2 M-1) — the build report's "defense-in-depth"
  * claim was false and is corrected by this pin.
  *

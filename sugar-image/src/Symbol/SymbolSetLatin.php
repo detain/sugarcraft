@@ -21,9 +21,9 @@ namespace SugarCraft\Image\Symbol;
  * stays off until a caller asks for it.
  *
  * Kana is deliberately NOT carried here: chafa-symbols-kana.h holds 181 WIDE
- * 16x8 glyphs (hiragana + katakana), which require the A-09 wide-glyph
+ * 16x8 glyphs (hiragana + katakana), which require the wide-glyph
  * engine — sym[2] paired scoring, four-cell lookback, continuation-skip
- * printer and double-width OutputOptimizer bookkeeping (see the A-09 note
+ * printer and double-width OutputOptimizer bookkeeping (see the wide-engine note
  * in {@see SymbolMap}). Narrow-only tables are data; wide ones are engine.
  *
  * Mirrors chafa.ChafaSymbolSetLatin (chafa/internal/chafa-symbols-latin.h).

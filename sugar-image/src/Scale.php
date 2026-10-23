@@ -13,7 +13,7 @@ enum Scale
      * Preserve aspect ratio; scale the image — in BOTH directions — so the
      * whole image fits inside the target bounds. A source smaller than the
      * target is upscaled to fill it; nothing is padded or centred here
-     * (C-10: the previous docblock promised padding the code never did).
+     * (the previous docblock promised padding the code never did).
      * For the shrink-only, pad-the-remainder behaviour, use
      * {@see Scale::ShrinkToFit}.
      */
@@ -31,8 +31,8 @@ enum Scale
      * it transparently on the terminal background. The quarter-block tier
      * cannot represent a blank quad yet (PixelGrid::fromGdQuarter reads RGB
      * only — a transparent pad would paint black), so it intentionally keeps
-     * Fit-shaped fill output there until nullable quads land (chafa-campaign
-     * follow-up S3.1).
+     * Fit-shaped fill output there until nullable quads land (disclosed
+     * follow-up).
      *
      * Mirrors chafa's CHAFA_TUCK_SHRINK_TO_FIT
      * (chafa/internal/chafa-math-util.c:70-79): when the image already fits
@@ -80,9 +80,9 @@ enum Scale
      * @return array{srcX:int, srcY:int, srcW:int, srcH:int, dstW:int, dstH:int}
      *                  Source crop rect and the destination size to pass to the
      *                  renderer.  dstW/dstH are > 0; srcW/srcH are >= 1 so the
-     *                  rect is always a legal crop source (lane p2, N2).
+     *                  rect is always a legal crop source.
      * @throws \InvalidArgumentException if the SOURCE has a non-positive side
-     *                  (C-11: the old guard echoed src<=0 unchanged, breaking
+     *                  (the old guard echoed src<=0 unchanged, breaking
      *                  the documented src>=1 invariant this very enum's fill()
      *                  and crop() floors were written to protect; a zero-sided
      *                  source rect reaches imagecrop downstream and GD fails
@@ -115,7 +115,7 @@ enum Scale
      * Fit: scale so the entire image fits within dst, preserving aspect ratio.
      * Scales by the smaller factor so neither dimension exceeds target. The
      * factor is unclamped: a source smaller than the target is upscaled
-     * (C-10 honesty — {@see Scale::ShrinkToFit} refuses it).
+     * ({@see Scale::ShrinkToFit} refuses it — the honest refusal).
      */
     private function fit(int $srcW, int $srcH, int $dstW, int $dstH): array
     {
@@ -133,10 +133,10 @@ enum Scale
 
     /**
      * ShrinkToFit: like fit() but the factor is floored at 1 — never
-     * enlarge (C-10, per chafa chafa-math-util.c:70-79). When the source
+     * enlarge (per chafa chafa-math-util.c:70-79). When the source
      * already fits, both legs stay at native size; Mosaic::applyScale then
-     * pastes it centred onto a box-sized transparent pad canvas (C-10 fix,
-     * lane f8 — the quarter tier alone cannot pad and falls back to fill);
+     * pastes it centred onto a box-sized transparent pad canvas (the fix,
+     * lane: the quarter tier alone cannot pad and falls back to fill);
      * otherwise it shrinks by the smaller factor so neither dimension
      * exceeds the target.
      */
@@ -165,7 +165,7 @@ enum Scale
         $scaleH = $srcH * $factor;
 
         // Crop from the centre to get the dst dimensions. Under extreme
-        // aspect mismatch dst/factor rounds below 1 (lane p2, N2): a
+        // aspect mismatch dst/factor rounds below 1: a
         // zero-sided SOURCE rect reaches imagecrop downstream and GD fails
         // there, so floor both dims at one pixel before centring — the src
         // mirror of the dst clamp in computeDimensions().
@@ -198,7 +198,7 @@ enum Scale
         if ($srcCropW > $srcW) { $srcCropW = $srcW; }
         if ($srcCropH > $srcH) { $srcCropH = $srcH; }
         // The opposite edge: extreme aspect makes the round land on 0, and a
-        // zero-sided source rect is what breaks imagecrop (lane p2, N2) —
+        // zero-sided source rect is what breaks imagecrop —
         // floor before the centring math, mirroring fill().
         if ($srcCropW < 1) { $srcCropW = 1; }
         if ($srcCropH < 1) { $srcCropH = 1; }

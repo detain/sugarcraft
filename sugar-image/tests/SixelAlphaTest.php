@@ -1,7 +1,7 @@
 <?php
 
 /**
- * B-10: alpha threshold + opt-in pre-sampling flatten for the Sixel path,
+ * Alpha threshold + opt-in pre-sampling flatten for the Sixel path,
  * plus the PixelGrid threshold mirror. Pins, in order: the byte-frozen
  * default on a semi-transparent fixture (sha1 captured at base 53ecc09f1,
  * before the B-10 knob existed — the exact pre-B-10 output the hole test
@@ -39,7 +39,7 @@ final class SixelAlphaTest extends TestCase
     private const RING_ALPHA = 100;
 
     /**
-     * B-10: the semi-transparent fringe colour after flattening toward the
+     * The semi-transparent fringe colour after flattening toward the
      * test background (200, 220, 240) at GD alpha 100, computed with the
      * src-over formula `c + (bg - c) * alpha / 127` (rounded):
      * r = 10 + 190*100/127 ≈ 160, g = 20 + 200*100/127 ≈ 177,
@@ -141,7 +141,7 @@ final class SixelAlphaTest extends TestCase
 
     public function testDefaultThresholdReproducesThePreB10Bytes(): void
     {
-        // B-10 semantics pinned as a LITERAL: the hole test is
+        // Semantics pinned as a LITERAL: the hole test is
         // `alpha >= threshold` and GD alpha is 7-bit (0 opaque .. 127
         // fully transparent), so the shipped default must sit on the top
         // band 127 — only fully transparent pixels hole. The l14 mutation

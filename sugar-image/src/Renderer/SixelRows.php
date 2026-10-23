@@ -8,7 +8,7 @@ use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Support\PushToPull;
 
 /**
- * Row-at-a-time view over a {@see SixelRenderer} (D-05).
+ * Row-at-a-time view over a {@see SixelRenderer}.
  *
  * Sixel is the protocol where incremental encoding pays: the encoder is
  * already band-lazy — {@see SixelRenderer::encodeBandStream()} pulls index

@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\Codec\TiffUncompressed;
 
 /**
- * F-13: the GD-free iTerm2 TIFF container.
+ * The GD-free iTerm2 TIFF container.
  *
  * The golden fixture tests/fixtures/tiff_uncompressed_2x2.tiff was
  * hand-generated from the chafa layout (chafa/internal/chafa-iterm2-

@@ -7,7 +7,7 @@ namespace SugarCraft\Image\Renderer;
 /**
  * Optional capability interface for renderers whose construction-time config
  * changes the encoded bytes beyond what {@see Renderer::name()} identifies
- * (D-04).
+ *.
  *
  * The poster disk cache keys on (url, size, protocol|scale) — but two
  * SixelRenderers both named 'sixel' produce different bytes under different

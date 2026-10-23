@@ -7,7 +7,7 @@ namespace SugarCraft\Image\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * A-01: the pen-delta emitter is scoped to character-mosaic output, and the graphics protocols stay out of it.
+ * The pen-delta emitter is scoped to character-mosaic output, and the graphics protocols stay out of it.
  *
  * {@see \SugarCraft\Image\Support\OutputOptimizer} tracks the six SGR pen channels a cell stream can move
  * (foreground, background, bright, underline, inverse, blink). The pixel-graphics renderers (Sixel, Kitty,
@@ -22,7 +22,7 @@ use PHPUnit\Framework\TestCase;
 final class GraphicsEmitterSeparationTest extends TestCase
 {
     /**
-     * The character-mosaic emitters that legitimately stream through the optimizer (A-01/A-13/A-14).
+     * The character-mosaic emitters that legitimately stream through the optimizer.
      * A new mosaic renderer must be added here deliberately — the completeness arm below reddens otherwise.
      */
     private const MOSAIC_EMITTERS = ['AsciiRenderer.php', 'HalfBlockRenderer.php', 'QuarterBlockRenderer.php', 'SymbolMapRenderer.php'];
@@ -32,7 +32,7 @@ final class GraphicsEmitterSeparationTest extends TestCase
      * renderers (graphics blobs or subprocess bytes), plus the interface, the colour-mode enum and the
      * fingerprint contract that share the directory.
      *
-     * D-05 additions judged here deliberately: IncrementalRenderer.php is a contract sharing the
+     * Additions judged here deliberately: IncrementalRenderer.php is a contract sharing the
      * directory with Renderer.php (same optional-interface posture as ConfigFingerprintProvider), and
      * SixelRows.php wraps the sixel DCS band stream — a protocol blob the pen cannot diff, exactly
      * like the SixelRenderer whose laziness it exposes.
@@ -48,11 +48,11 @@ final class GraphicsEmitterSeparationTest extends TestCase
         'IncrementalRenderer.php',
         'AsciiColorMode.php',
         'ConfigFingerprintProvider.php',
-        // A-02: the optional optimization contract — like Renderer.php itself,
+        // The optional optimization contract — like Renderer.php itself,
         // a shape file with zero emitter wiring (its docblock names the
         // optimizer only in prose, which the token walker excludes by design).
         'AcceptsOptimization.php',
-        // A-07/A-08: the optional canvas-mode and work-factor contracts —
+        // The optional canvas-mode and work-factor contracts —
         // pure shape files like AcceptsOptimization.php itself (their
         // docblocks name the optimizer only in prose, if at all; the token
         // walker excludes comments by design).

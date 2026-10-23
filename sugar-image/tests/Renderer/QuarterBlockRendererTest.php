@@ -131,7 +131,7 @@ final class QuarterBlockRendererTest extends TestCase
     }
 
     /**
-     * A-03: exhaustive search must beat the retired 1-step 2-means on the
+     * Exhaustive search must beat the retired 1-step 2-means on the
      * survey's mis-choice cell (chafa campaign survey A-03, :60-72): UL=0,
      * UR=200, LL=200, LR=100 grays. The old heuristic's most-distant seeds
      * {0,200} plus the `<=` tie-to-fg rule dragged the mid-gray LR into the
@@ -155,7 +155,7 @@ final class QuarterBlockRendererTest extends TestCase
     }
 
     /**
-     * A-03: on a clean two-group cell (upper row white, lower row black)
+     * On a clean two-group cell (upper row white, lower row black)
      * the exhaustive search lands on the same cell the seed heuristic chose
      * — zero-error split mask 3 (▀, fg 255,255,255 over bg 0,0,0). Pins the
      * equivalence half so the rewrite is proven to only ever improve.
@@ -176,7 +176,7 @@ final class QuarterBlockRendererTest extends TestCase
     }
 
     /**
-     * A-03: the flat shortcut survives the rewrite — four identical quads
+     * The flat shortcut survives the rewrite — four identical quads
      * stay a solid █ with fg and bg both the cell colour (byte-stable for
      * the whole goldens corpus).
      */
@@ -196,7 +196,7 @@ final class QuarterBlockRendererTest extends TestCase
     }
 
     /**
-     * A-05a: a transparent quadrant must never paint its stored RGB. The
+     * A transparent quadrant must never paint its stored RGB. The
      * old fromGdQuarter read colour bits only, so a transparent-black quad
      * became a BLACK background pen (survey A-05, chafa_improvemnts.md
      * :95-101). With three opaque quads the cell renders foreground-only:
@@ -219,7 +219,7 @@ final class QuarterBlockRendererTest extends TestCase
     }
 
     /**
-     * A-05a: two opaque diagonal quads keep only their own corners lit —
+     * Two opaque diagonal quads keep only their own corners lit —
      * fg-only mask 9 (▚) in the opaque colour, no background pen.
      */
     public function testPartiallyTransparentCellUsesFgOnlyGlyphFamily(): void
@@ -235,7 +235,7 @@ final class QuarterBlockRendererTest extends TestCase
     }
 
     /**
-     * A-05a: an all-transparent cell is a blank — a plain space with no
+     * An all-transparent cell is a blank — a plain space with no
      * colour sequence anywhere (the old path minted a solid black █).
      */
     public function testAllTransparentCellIsBlank(): void
@@ -252,7 +252,7 @@ final class QuarterBlockRendererTest extends TestCase
     }
 
     /**
-     * A-07 Fgbg truth pin: with every quadrant snapping onto the
+     * Fgbg truth pin: with every quadrant snapping onto the
      * white/black reference pair, a top-black / bottom-white cell resolves
      * its orientation by the group-luma swap (the swapped split's brighter
      * pen rides the foreground) and emits NEITHER leg — CanvasMode::fgSgr
@@ -275,7 +275,7 @@ final class QuarterBlockRendererTest extends TestCase
     }
 
     /**
-     * A-07 Fgbg quantization is the white/black luma pair, not the eight
+     * Fgbg quantization is the white/black luma pair, not the eight
      * dark ANSI colours: a near-black 15-value lower-right quadrant snaps
      * to the same black pen as the three zero quadrants, so every one of
      * the four opaque quadrants scores identically. The 1..7 half-search

@@ -88,7 +88,7 @@ final class KittyOptionsTest extends TestCase
         $opts = KittyOptions::transmit(0);
         $arr  = $opts->toArray();
 
-        // S1.9/M2 cure: id 0 is a real addressable image, serialized as-is.
+        // M2 cure: id 0 is a real addressable image, serialized as-is.
         $this->assertSame(0, $arr['i']);
         // z=0 should be omitted
         $this->assertNull($arr['z']);
@@ -147,7 +147,7 @@ final class KittyOptionsTest extends TestCase
 
     public function testWithChunkBytesFloorsToBase64Alignment(): void
     {
-        // F-11: an unaligned override is floored to a multiple of 3 so no
+        // An unaligned override is floored to a multiple of 3 so no
         // intermediate chunk ever carries base64 padding.
         $opts = KittyOptions::transmit(1)->withChunkBytes(500);
 
@@ -156,7 +156,7 @@ final class KittyOptionsTest extends TestCase
 
     public function testWithChunkBytesNullRestoresTheDefault(): void
     {
-        // F-11: null means "use the framed default", not "0 bytes".
+        // Null means "use the framed default", not "0 bytes".
         $opts = KittyOptions::transmit(1)->withChunkBytes(63)->withChunkBytes(null);
 
         $this->assertNull($opts->chunkBytes());
@@ -164,7 +164,7 @@ final class KittyOptionsTest extends TestCase
 
     public function testWithChunkBytesRejectsUndersizedOverride(): void
     {
-        // F-11: one base64 group is the floor; 2 bytes cannot align.
+        // One base64 group is the floor; 2 bytes cannot align.
         $this->expectException(\InvalidArgumentException::class);
 
         KittyOptions::transmit(1)->withChunkBytes(2);
@@ -172,7 +172,7 @@ final class KittyOptionsTest extends TestCase
 
     public function testWithChunkBytesRejectsOversizedOverride(): void
     {
-        // F-11: past MAX_CHUNK_BYTES the data-chunk envelope itself would
+        // Past MAX_CHUNK_BYTES the data-chunk envelope itself would
         // push the frame beyond the 4 KiB spec cap.
         $this->expectException(\InvalidArgumentException::class);
 

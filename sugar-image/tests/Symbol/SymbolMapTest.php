@@ -10,7 +10,7 @@ use SugarCraft\Image\Symbol\SymbolMap;
 use SugarCraft\Image\Symbol\SymbolTags;
 
 /**
- * A-04/F-17: coverage-class symbol engine pins (plan_chafa S6.2, W10).
+ * Coverage-class symbol engine pins (plan_chafa S6.2, W10).
  *
  * The braille / sextant / octant / eighth-block bitmaps are checked against
  * oracles re-derived in-test from the Unicode character properties
@@ -361,7 +361,7 @@ final class SymbolMapTest extends TestCase
         $this->assertCount(256, $this->map->withSelectors('braille')->defs());
         $this->assertCount(0, $this->map->withSelectors('none')->defs());
         $this->assertCount(286, $this->map->withSelectors('block+braille')->defs());
-        // F-17: BAD-veto parity with chafa char_is_selected
+        // BAD-veto parity with chafa char_is_selected
         // (chafa-symbol-map.c:489-545) — the nine table-declared AMBIGUOUS
         // misc-narrow glyphs stay out of every selector that does not name
         // them. Chafa's effective `all` count is 1,251 of the 1,260 array.
@@ -463,7 +463,7 @@ final class SymbolMapTest extends TestCase
 
     public function testHasSymbolMirrorsChafasSelectionMembership(): void
     {
-        // F-17: chafa_symbol_map_has_symbol (chafa-symbol-map.c:1137),
+        // Chafa_symbol_map_has_symbol (chafa-symbol-map.c:1137),
         // the gate of the solid-cell ladder.
         $this->assertTrue($this->map->hasSymbol(0x2588));
         $this->assertFalse($this->map->hasSymbol(0x20), 'the default corpus carries no space glyph — blanks ride the literal fallback');

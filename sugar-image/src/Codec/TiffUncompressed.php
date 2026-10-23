@@ -9,7 +9,7 @@ use SugarCraft\Image\Lang;
 /**
  * Minimal uncompressed-TIFF encoder — the GD-free iTerm2 payload.
  *
- * F-13, mirroring chafa's iTerm2 container
+ * Mirroring chafa's iTerm2 container
  * (chafa/internal/chafa-iterm2-renderer.c build_ansi, :280-330): little-
  * endian classic TIFF, a single strip of RGBA8_UNASSOCIATED pixels at a
  * fixed offset, and a fixed 11-entry IFD. No compression, no predictor,

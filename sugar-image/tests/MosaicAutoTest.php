@@ -82,7 +82,7 @@ final class MosaicAutoTest extends TestCase
 
         $mosaic = Mosaic::auto();
 
-        // A-04: no graphics protocol still outranks HalfBlock — the
+        // No graphics protocol still outranks HalfBlock — the
         // Unicode Symbols rung (always available) is the floor now.
         $this->assertSame('symbols', $mosaic->protocol());
     }
@@ -93,7 +93,7 @@ final class MosaicAutoTest extends TestCase
 
         $mosaic = Mosaic::auto();
 
-        // A-04: same Symbols floor as above; explicit 'halfblock' mode
+        // Same Symbols floor as above; explicit 'halfblock' mode
         // strings and halfBlock() force the historical renderer untouched.
         $this->assertSame('symbols', $mosaic->protocol());
     }

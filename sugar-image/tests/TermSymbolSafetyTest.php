@@ -9,7 +9,7 @@ use SugarCraft\Image\TermDb;
 use SugarCraft\Image\TermInfo;
 
 /**
- * F-06: the safe-symbol bitmask carried by the terminal table.
+ * The safe-symbol bitmask carried by the terminal table.
  *
  * Chicle curates a per-row `safe_symbol_tags` mask (chafa-term-db.c:86-88,
  * :156, :1071): the Linux console gets ASCII only, the Windows console and

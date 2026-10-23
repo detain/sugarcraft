@@ -33,7 +33,7 @@ final class AdaptiveImage
         private readonly ?AsyncRenderer $asyncRenderer = null,
     ) {
         // A capacity below 1 evicts every entry the moment render() stores
-        // it — the memo silently re-encodes forever (lane p2, N3). Clamp
+        // it — the memo silently re-encodes forever. Clamp
         // rather than throw: 1 is the smallest honest cache and the
         // degenerate values (0, negative) carry no intent it would violate.
         $this->maxCache = max(1, $maxCache);
@@ -44,7 +44,7 @@ final class AdaptiveImage
      *
      * The twin is a fresh instance: entries cached by render() on THIS one
      * do not carry over — the twin's first render at each size re-encodes
-     * (lane p2, N3 truth-flip: the old wording implied continuity).
+     * (truth-flip: the old wording implied continuity).
      *
      * The async renderer is used only for renderAsync(); the normal render()
      * method is always synchronous.
