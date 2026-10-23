@@ -205,7 +205,8 @@ final class FlexBox
      *
      * Items with a basis take exactly their basis and are excluded from the
      * flex pool. The remaining flex items (basis == 0, ratio > 0) split the
-     * usable free space by largest-remainder of their ratios: a floor base,
+     * usable free space by round-robin remainder carry (equivalent sum
+     * contract) of their ratios: a floor base,
      * then one extra cell each in item order until the leftover runs out.
      * The floor remainder is below one cell per flex item by construction,
      * so a single in-order pass always closes the budget: allocated widths
