@@ -15,17 +15,17 @@ use PHPUnit\Framework\TestCase;
  */
 final class FlexLayoutTest extends TestCase
 {
-    private SugarPanels $boxer;
+    private SugarPanels $panels;
 
     protected function setUp(): void
     {
-        $this->boxer = SugarPanels::new();
+        $this->panels = SugarPanels::new();
     }
 
     /** @return list<string> rendered rows (rtrimmed) */
     private function rows(Node $layout, int $w, int $h): array
     {
-        return array_map('rtrim', explode("\n", $this->boxer->render($layout, $w, $h)));
+        return array_map('rtrim', explode("\n", $this->panels->render($layout, $w, $h)));
     }
 
     /** Count rows whose first non-space content matches /^c\d/ (content body lines). */
@@ -36,14 +36,14 @@ final class FlexLayoutTest extends TestCase
 
     private function headerContentStatus(bool $grow): Node
     {
-        $content = $this->boxer->leaf("c1\nc2\nc3\nc4\nc5\nc6\nc7\nc8")->withBorder(false);
+        $content = $this->panels->leaf("c1\nc2\nc3\nc4\nc5\nc6\nc7\nc8")->withBorder(false);
         $content = $grow === true ? $content->withGrow() : $content;
 
         // spacing=1 → no inter-panel separators to collide with the 1-row leaves.
-        return $this->boxer->vertical(
-            $this->boxer->leaf('HEAD')->withBorder(false)->withMinHeight(1),
+        return $this->panels->vertical(
+            $this->panels->leaf('HEAD')->withBorder(false)->withMinHeight(1),
             $content,
-            $this->boxer->leaf('FOOT')->withBorder(false)->withMinHeight(1),
+            $this->panels->leaf('FOOT')->withBorder(false)->withMinHeight(1),
         )->withBorder(false)->withSpacing(1);
     }
 
@@ -76,12 +76,12 @@ final class FlexLayoutTest extends TestCase
     public function testTwoFlexChildrenSplitRemainderByWeight(): void
     {
         // weight 3 : 1 over a tall region → the first panel gets ~3x the rows.
-        $layout = $this->boxer->vertical(
-            $this->boxer->leaf("a1\na2\na3\na4\na5\na6\na7\na8\na9")->withBorder(false)->withFlex(3),
-            $this->boxer->leaf("b1\nb2\nb3\nb4\nb5\nb6\nb7\nb8\nb9")->withBorder(false)->withFlex(1),
+        $layout = $this->panels->vertical(
+            $this->panels->leaf("a1\na2\na3\na4\na5\na6\na7\na8\na9")->withBorder(false)->withFlex(3),
+            $this->panels->leaf("b1\nb2\nb3\nb4\nb5\nb6\nb7\nb8\nb9")->withBorder(false)->withFlex(1),
         )->withBorder(false)->withSpacing(1);
 
-        $rows = array_map('rtrim', explode("\n", $this->boxer->render($layout, 12, 13)));
+        $rows = array_map('rtrim', explode("\n", $this->panels->render($layout, 12, 13)));
         $a = count(array_filter($rows, static fn (string $r): bool => str_starts_with(ltrim($r), 'a')));
         $b = count(array_filter($rows, static fn (string $r): bool => str_starts_with(ltrim($r), 'b')));
 
@@ -94,12 +94,12 @@ final class FlexLayoutTest extends TestCase
     {
         // Fixed 6-wide sidebar + growing content. The content panel must be wide
         // enough for its 10-char word — a weight-by-minWidth split would starve it.
-        $layout = $this->boxer->horizontal(
-            $this->boxer->leaf('S')->withBorder(false)->withMinWidth(6),
-            $this->boxer->leaf('TENCHARABC')->withBorder(false)->withGrow(),
+        $layout = $this->panels->horizontal(
+            $this->panels->leaf('S')->withBorder(false)->withMinWidth(6),
+            $this->panels->leaf('TENCHARABC')->withBorder(false)->withGrow(),
         )->withBorder(false)->withSpacing(1);
 
-        $out = $this->boxer->render($layout, 20, 1);
+        $out = $this->panels->render($layout, 20, 1);
         $this->assertStringContainsString('TENCHARABC', $out);
         $this->assertStringContainsString('S', $out);
     }
@@ -109,10 +109,10 @@ final class FlexLayoutTest extends TestCase
         // Chrome-shaped: bordered header/status (min 1 → 3 rows incl. border) and a
         // bordered, growing content panel that fills the rest — the content region
         // is far taller than a 1/3 split.
-        $layout = $this->boxer->vertical(
-            $this->boxer->leaf('H')->withMinHeight(1),
-            $this->boxer->leaf("c1\nc2\nc3\nc4\nc5\nc6\nc7\nc8\nc9")->withGrow(),
-            $this->boxer->leaf('S')->withMinHeight(1),
+        $layout = $this->panels->vertical(
+            $this->panels->leaf('H')->withMinHeight(1),
+            $this->panels->leaf("c1\nc2\nc3\nc4\nc5\nc6\nc7\nc8\nc9")->withGrow(),
+            $this->panels->leaf('S')->withMinHeight(1),
         );
 
         // Content lines sit inside the bordered panel ("│c1        │"), so match
@@ -126,13 +126,13 @@ final class FlexLayoutTest extends TestCase
     {
         // Fixed bases exceed the viewport → flex gets 0 and trailing panels clip,
         // but rendering must not error and the first fixed panel still shows.
-        $layout = $this->boxer->vertical(
-            $this->boxer->leaf('TOP')->withBorder(false)->withMinHeight(3),
-            $this->boxer->leaf('mid')->withBorder(false)->withGrow(),
-            $this->boxer->leaf('BOT')->withBorder(false)->withMinHeight(3),
+        $layout = $this->panels->vertical(
+            $this->panels->leaf('TOP')->withBorder(false)->withMinHeight(3),
+            $this->panels->leaf('mid')->withBorder(false)->withGrow(),
+            $this->panels->leaf('BOT')->withBorder(false)->withMinHeight(3),
         )->withBorder(false);
 
-        $out = $this->boxer->render($layout, 10, 2); // only 2 rows for 6+ requested
+        $out = $this->panels->render($layout, 10, 2); // only 2 rows for 6+ requested
         $this->assertIsString($out);
         $this->assertStringContainsString('TOP', $out);
     }
@@ -179,12 +179,12 @@ final class FlexLayoutTest extends TestCase
         // totalWidth() the base was 4: the fixed child was under-reserved, its own
         // content ('SIDE') was truncated to 'SI', and the flex child stole 2 extra
         // columns (7 X's instead of 5).
-        $layout = $this->boxer->horizontal(
-            $this->boxer->leaf('SIDE')->withBorder(false)->withMinWidth(4)->withMargin(0, 2, 0, 0),
-            $this->boxer->leaf(str_repeat('X', 20))->withBorder(false)->withGrow(),
+        $layout = $this->panels->horizontal(
+            $this->panels->leaf('SIDE')->withBorder(false)->withMinWidth(4)->withMargin(0, 2, 0, 0),
+            $this->panels->leaf(str_repeat('X', 20))->withBorder(false)->withGrow(),
         )->withBorder(false)->withSpacing(1);
 
-        $out = $this->boxer->render($layout, 12, 1);
+        $out = $this->panels->render($layout, 12, 1);
 
         // Fixed child now reserves its full footprint → its content is not clipped.
         $this->assertStringContainsString('SIDE', $out);
@@ -199,12 +199,12 @@ final class FlexLayoutTest extends TestCase
         // margin-omitting totalHeight() the base was 1, the top margin consumed the
         // child's entire 1-row slot, and the header ('TOP') vanished while the body
         // absorbed the freed row (5 body lines instead of 4).
-        $layout = $this->boxer->vertical(
-            $this->boxer->leaf('TOP')->withBorder(false)->withMinHeight(1)->withMargin(1, 0, 0, 0),
-            $this->boxer->leaf("b1\nb2\nb3\nb4\nb5\nb6")->withBorder(false)->withGrow(),
+        $layout = $this->panels->vertical(
+            $this->panels->leaf('TOP')->withBorder(false)->withMinHeight(1)->withMargin(1, 0, 0, 0),
+            $this->panels->leaf("b1\nb2\nb3\nb4\nb5\nb6")->withBorder(false)->withGrow(),
         )->withBorder(false)->withSpacing(1);
 
-        $rows = array_map('rtrim', explode("\n", $this->boxer->render($layout, 10, 7)));
+        $rows = array_map('rtrim', explode("\n", $this->panels->render($layout, 10, 7)));
 
         // Header survives: blank top-margin row, then 'TOP' on row 1.
         $this->assertSame('', $rows[0]);

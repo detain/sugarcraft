@@ -16,11 +16,11 @@ use PHPUnit\Framework\TestCase;
  */
 final class AnsiPlacementTest extends TestCase
 {
-    private SugarPanels $boxer;
+    private SugarPanels $panels;
 
     protected function setUp(): void
     {
-        $this->boxer = SugarPanels::new();
+        $this->panels = SugarPanels::new();
     }
 
     /** Strip every ANSI sequence (CSI/OSC/two-byte) so visible text can be asserted. */
@@ -48,7 +48,7 @@ final class AnsiPlacementTest extends TestCase
 
     private function renderLine(string $line, int $w, int $h = 1): string
     {
-        return $this->boxer->render(Node::leaf($line)->withBorder(false), $w, $h);
+        return $this->panels->render(Node::leaf($line)->withBorder(false), $w, $h);
     }
 
     public function testEscapesDoNotConsumeColumns(): void
@@ -277,7 +277,7 @@ final class AnsiPlacementTest extends TestCase
         $this->assertStringContainsString('Y', $out2);
     }
 
-    public function testBoxerFactoryHelpersDelegateToNode(): void
+    public function testPanelsFactoryHelpersDelegateToNode(): void
     {
         $b = SugarPanels::new();
         $this->assertSame(Node::LEAF, $b->leaf('x')->kind);
@@ -291,7 +291,7 @@ final class AnsiPlacementTest extends TestCase
         // End-to-end: a reverse-video body line in a bordered leaf. The right
         // border cell must stay an unstyled box character (no colour bleed).
         $layout = Node::leaf("\e[7mhighlighted")->withBorder(true)->withMinWidth(8)->withMinHeight(1);
-        $out = $this->boxer->render($layout, 12, 3);
+        $out = $this->panels->render($layout, 12, 3);
 
         // The reset appears before the row's right border glyph on the body row.
         $this->assertStringContainsString("\e[0m", $out);

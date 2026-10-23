@@ -38,10 +38,10 @@ final class SolverDelegationTest extends TestCase
      */
     private function distributeFlex(int $available, array $bases, array $flexes, int $spacing, int $borderPad): array
     {
-        $boxer = SugarPanels::new();
+        $panels = SugarPanels::new();
         $m = new \ReflectionMethod(SugarPanels::class, 'distributeFlex');
         $m->setAccessible(true);
-        return $m->invoke($boxer, $available, $bases, $flexes, $spacing, $borderPad);
+        return $m->invoke($panels, $available, $bases, $flexes, $spacing, $borderPad);
     }
 
     /**
@@ -50,10 +50,10 @@ final class SolverDelegationTest extends TestCase
      */
     private function distribute(int $available, array $weights, int $spacing, int $borderPad): array
     {
-        $boxer = SugarPanels::new();
+        $panels = SugarPanels::new();
         $m = new \ReflectionMethod(SugarPanels::class, 'distribute');
         $m->setAccessible(true);
-        return $m->invoke($boxer, $available, $weights, \array_sum($weights), $spacing, $borderPad);
+        return $m->invoke($panels, $available, $weights, \array_sum($weights), $spacing, $borderPad);
     }
 
     /**
@@ -82,10 +82,10 @@ final class SolverDelegationTest extends TestCase
      */
     public function testDistributeFlexIsBackedByCompatGreedySolver(): void
     {
-        $boxer = SugarPanels::new();
+        $panels = SugarPanels::new();
         $p = new \ReflectionProperty(SugarPanels::class, 'flexSolver');
         $p->setAccessible(true);
-        $solver = $p->getValue($boxer);
+        $solver = $p->getValue($panels);
 
         $this->assertInstanceOf(GreedySolver::class, $solver, 'flex distribution delegates to sugar-constraints GreedySolver');
         $this->assertTrue($solver->roundSplit, 'compat: round-split ON');

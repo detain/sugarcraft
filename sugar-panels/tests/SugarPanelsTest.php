@@ -13,14 +13,14 @@ use PHPUnit\Framework\TestCase;
 
 final class SugarPanelsTest extends TestCase
 {
-    private SugarPanels $boxer;
+    private SugarPanels $panels;
 
     protected function setUp(): void
     {
-        $this->boxer = SugarPanels::new();
+        $this->panels = SugarPanels::new();
     }
 
-    public function testNewBoxer(): void
+    public function testNewPanels(): void
     {
         $b = SugarPanels::new();
         $this->assertInstanceOf(SugarPanels::class, $b);
@@ -101,7 +101,7 @@ final class SugarPanelsTest extends TestCase
     public function testRenderEmptyLayout(): void
     {
         $layout = Node::leaf('');
-        $result = $this->boxer->render($layout, 10, 5);
+        $result = $this->panels->render($layout, 10, 5);
         // Empty leaf still draws its full rounded frame.
         $this->assertSame(
             "╭────────╮\n│        │\n│        │\n│        │\n╰────────╯",
@@ -112,7 +112,7 @@ final class SugarPanelsTest extends TestCase
     public function testRenderLeafWithBorder(): void
     {
         $layout = Node::leaf('content')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
-        $result = $this->boxer->render($layout, 14, 5);
+        $result = $this->panels->render($layout, 14, 5);
 
         // Should contain box-drawing chars
         $this->assertStringContainsString('╭', $result);
@@ -125,7 +125,7 @@ final class SugarPanelsTest extends TestCase
     public function testRenderLeafNoBorder(): void
     {
         $layout = Node::leaf('plain')->withBorder(false);
-        $result = $this->boxer->render($layout, 10, 3);
+        $result = $this->panels->render($layout, 10, 3);
 
         $this->assertStringNotContainsString('╭', $result);
         $this->assertStringContainsString('plain', $result);
@@ -137,7 +137,7 @@ final class SugarPanelsTest extends TestCase
         // single spaces) — intentional runs of whitespace (column alignment,
         // padded key hints) have to survive verbatim.
         $layout = Node::leaf('a    b    c')->withBorder(false);
-        $result = $this->boxer->render($layout, 20, 1);
+        $result = $this->panels->render($layout, 20, 1);
 
         $this->assertStringContainsString('a    b    c', $result);
         $this->assertStringNotContainsString('a b c', $result);
@@ -148,7 +148,7 @@ final class SugarPanelsTest extends TestCase
         // A table-style row with right-padded columns survives intact.
         $row = '#   Title          Duration';
         $layout = Node::leaf($row)->withBorder(false);
-        $result = $this->boxer->render($layout, 40, 1);
+        $result = $this->panels->render($layout, 40, 1);
 
         $this->assertStringContainsString($row, $result);
     }
@@ -157,7 +157,7 @@ final class SugarPanelsTest extends TestCase
     {
         // Lines that do NOT fit must still wrap across rows (regression guard).
         $layout = Node::leaf('alpha beta gamma delta epsilon')->withBorder(false);
-        $result = $this->boxer->render($layout, 11, 6);
+        $result = $this->panels->render($layout, 11, 6);
 
         // Every word survives the wrap…
         foreach (['alpha', 'beta', 'gamma', 'delta', 'epsilon'] as $word) {
@@ -175,7 +175,7 @@ final class SugarPanelsTest extends TestCase
     {
         $line = 'x  y  z'; // width 7
         $layout = Node::leaf($line)->withBorder(false);
-        $result = $this->boxer->render($layout, 7, 1);
+        $result = $this->panels->render($layout, 7, 1);
 
         $this->assertStringContainsString($line, $result);
     }
@@ -187,7 +187,7 @@ final class SugarPanelsTest extends TestCase
             Node::leaf('RIGHT')->withMinWidth(5),
         )->withBorder(true);
 
-        $result = $this->boxer->render($layout, 30, 5);
+        $result = $this->panels->render($layout, 30, 5);
 
         $this->assertStringContainsString('LEFT',  $result);
         $this->assertStringContainsString('RIGHT', $result);
@@ -201,7 +201,7 @@ final class SugarPanelsTest extends TestCase
             Node::leaf('BOTTOM')->withMinHeight(2),
         )->withBorder(true);
 
-        $result = $this->boxer->render($layout, 20, 10);
+        $result = $this->panels->render($layout, 20, 10);
 
         $this->assertStringContainsString('TOP',    $result);
         $this->assertStringContainsString('BOTTOM', $result);
@@ -218,7 +218,7 @@ final class SugarPanelsTest extends TestCase
             Node::leaf('C')->withMinHeight(2),
         )->withBorder(true);
 
-        $result = $this->boxer->render($layout, 20, 10);
+        $result = $this->panels->render($layout, 20, 10);
 
         $this->assertStringContainsString('A', $result);
         $this->assertStringContainsString('B', $result);
@@ -228,7 +228,7 @@ final class SugarPanelsTest extends TestCase
     public function testRenderNoBorder(): void
     {
         $layout = Node::noBorder(Node::leaf('nested'));
-        $result = $this->boxer->render($layout, 10, 3);
+        $result = $this->panels->render($layout, 10, 3);
 
         $this->assertStringContainsString('nested', $result);
     }
@@ -236,7 +236,7 @@ final class SugarPanelsTest extends TestCase
     public function testLeafWithPadding(): void
     {
         $layout = Node::leaf('padded')->withPadding(3)->withBorder(true)->withMinWidth(10);
-        $result = $this->boxer->render($layout, 20, 5);
+        $result = $this->panels->render($layout, 20, 5);
 
         $this->assertStringContainsString('padded', $result);
     }
@@ -245,7 +245,7 @@ final class SugarPanelsTest extends TestCase
     {
         $multiline = "line1\nline2\nline3";
         $layout = Node::leaf($multiline)->withBorder(true)->withMinWidth(10)->withMinHeight(5);
-        $result = $this->boxer->render($layout, 20, 8);
+        $result = $this->panels->render($layout, 20, 8);
 
         $this->assertStringContainsString('line1', $result);
         $this->assertStringContainsString('line2', $result);
@@ -394,21 +394,21 @@ final class SugarPanelsTest extends TestCase
      */
     public function testDiffEmissionByteBenchmark(): void
     {
-        $boxer = SugarPanels::new();
+        $panels = SugarPanels::new();
 
         // Frame 1: full render
         $layout1 = Node::leaf('Hello')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
-        $out1 = $boxer->render($layout1, 20, 5);
+        $out1 = $panels->render($layout1, 20, 5);
         $bytes1 = \strlen($out1);
 
         // Frame 2: same layout but content changed by 1 char
         $layout2 = Node::leaf('Hello!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
-        $out2 = $boxer->render($layout2, 20, 5);
+        $out2 = $panels->render($layout2, 20, 5);
         $bytes2 = \strlen($out2);
 
         // Frame 3: another small change
         $layout3 = Node::leaf('Hello!!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
-        $out3 = $boxer->render($layout3, 20, 5);
+        $out3 = $panels->render($layout3, 20, 5);
         $bytes3 = \strlen($out3);
 
         // First frame is full output (baseline)
@@ -435,28 +435,28 @@ final class SugarPanelsTest extends TestCase
      */
     public function testDeferredBufferPreservesFullThenDeltaThenFullOnResize(): void
     {
-        $boxer = SugarPanels::new();
+        $panels = SugarPanels::new();
 
         // (a) Fresh instance, first frame → full output.
         $layout1 = Node::leaf('Hello')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
-        $full = $boxer->render($layout1, 20, 5);
+        $full = $panels->render($layout1, 20, 5);
         $this->assertStringContainsString('Hello', $full, 'Frame 1 should be the full render output');
         $this->assertGreaterThan(50, \strlen($full), 'Frame 1 should be full output, not a delta');
 
         // (b) Reused instance, second frame, same dims, small change → delta.
         $layout2 = Node::leaf('Hello!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
-        $delta = $boxer->render($layout2, 20, 5);
+        $delta = $panels->render($layout2, 20, 5);
         $this->assertStringNotContainsString('╭', $delta, 'Frame 2 should be a delta, not the full frame');
         $this->assertLessThanOrEqual(30, \strlen($delta), 'Frame 2 delta should be small');
 
         // (c) Resize (taller viewport → changed dimensions) → full output again.
-        $fullAgain = $boxer->render($layout2, 20, 7);
+        $fullAgain = $panels->render($layout2, 20, 7);
         $this->assertStringContainsString('Hello', $fullAgain, 'A resize should re-emit the full output');
         $this->assertGreaterThan(50, \strlen($fullAgain), 'Resize frame should be full output, not a delta');
 
         // After the resize full frame, a subsequent same-dim render is a delta again.
         $layout3 = Node::leaf('Hello!!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
-        $deltaAfterResize = $boxer->render($layout3, 20, 7);
+        $deltaAfterResize = $panels->render($layout3, 20, 7);
         $this->assertStringNotContainsString('╭', $deltaAfterResize, 'Post-resize frame 2 should be a delta');
         $this->assertLessThanOrEqual(30, \strlen($deltaAfterResize), 'Post-resize delta should be small');
     }
@@ -482,18 +482,18 @@ final class SugarPanelsTest extends TestCase
      */
     public function testResetPreviousFrameRestartsFullOutput(): void
     {
-        $boxer = SugarPanels::new();
+        $panels = SugarPanels::new();
 
         $layout1 = Node::leaf('Hello')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
-        $boxer->render($layout1, 20, 5);
+        $panels->render($layout1, 20, 5);
         $layout2 = Node::leaf('Hello!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
-        $delta = $boxer->render($layout2, 20, 5);
+        $delta = $panels->render($layout2, 20, 5);
         $this->assertStringNotContainsString('╭', $delta, 'Second frame is a delta before reset');
 
-        $boxer->resetPreviousFrame();
+        $panels->resetPreviousFrame();
 
         $layout3 = Node::leaf('Hello!!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
-        $full = $boxer->render($layout3, 20, 5);
+        $full = $panels->render($layout3, 20, 5);
         $this->assertStringContainsString('╭', $full, 'After reset, render re-emits full output');
         $this->assertGreaterThan(50, \strlen($full), 'After reset, render is full output, not a delta');
     }
@@ -521,7 +521,7 @@ final class SugarPanelsTest extends TestCase
     public function testTitleRendersInTopBorder(): void
     {
         $layout = Node::leaf('content')->withBorder(true)->withTitle('Panel')->withMinWidth(12);
-        $result = $this->boxer->render($layout, 20, 5);
+        $result = $this->panels->render($layout, 20, 5);
 
         // Title should appear in the FIRST line (top border row)
         $lines = \explode("\n", $result);
@@ -531,7 +531,7 @@ final class SugarPanelsTest extends TestCase
     public function testAlignCenterPadsContent(): void
     {
         $layout = Node::leaf('ABC')->withBorder(false)->withAlignH(Align::Center);
-        $result = $this->boxer->render($layout, 10, 3);
+        $result = $this->panels->render($layout, 10, 3);
         $lines = \explode("\n", $result);
 
         // In a 10-wide region, "ABC" (width 3) centered has left pad = (10-3)/2 = 3
@@ -544,7 +544,7 @@ final class SugarPanelsTest extends TestCase
     public function testAlignRightPadsContent(): void
     {
         $layout = Node::leaf('ABC')->withBorder(false)->withAlignH(Align::Right);
-        $result = $this->boxer->render($layout, 10, 3);
+        $result = $this->panels->render($layout, 10, 3);
         $lines = \explode("\n", $result);
 
         // In a 10-wide region, "ABC" (width 3) right-aligned has left pad = 10-3 = 7
@@ -557,7 +557,7 @@ final class SugarPanelsTest extends TestCase
     public function testAlignVMiddle(): void
     {
         $layout = Node::leaf("L1\nL2\nL3")->withBorder(false)->withAlignV(VAlign::Middle);
-        $result = $this->boxer->render($layout, 10, 8);
+        $result = $this->panels->render($layout, 10, 8);
         $lines = \explode("\n", $result);
 
         // In height 8 with 3 lines, middle gives topPad = (8-3)/2 = 2
@@ -569,7 +569,7 @@ final class SugarPanelsTest extends TestCase
     public function testAlignVBottom(): void
     {
         $layout = Node::leaf("L1\nL2\nL3")->withBorder(false)->withAlignV(VAlign::Bottom);
-        $result = $this->boxer->render($layout, 10, 8);
+        $result = $this->panels->render($layout, 10, 8);
         $lines = \explode("\n", $result);
 
         // In height 8 with 3 lines, bottom gives topPad = 8-3 = 5
@@ -583,7 +583,7 @@ final class SugarPanelsTest extends TestCase
         // Use Color::ansi(14) = cyan (ANSI 16 index 14 = RGB [0,255,255])
         // Renders to \x1b[36m in basic ANSI mode
         $layout = Node::leaf('test')->withBorder(false)->withStyle(Style::new()->fg(Color::ansi(14)));
-        $result = $this->boxer->render($layout, 10, 3);
+        $result = $this->panels->render($layout, 10, 3);
 
         // Should contain SGR reset after content
         $this->assertStringContainsString("\x1b[0m", $result, 'Output should contain SGR reset');
@@ -592,7 +592,7 @@ final class SugarPanelsTest extends TestCase
     public function testMaxWidthClampsContentWidth(): void
     {
         $layout = Node::leaf('1234567890')->withBorder(false)->withMaxWidth(6);
-        $result = $this->boxer->render($layout, 20, 3);
+        $result = $this->panels->render($layout, 20, 3);
         $lines = \explode("\n", $result);
 
         // No line should exceed 6 visible content cols
@@ -608,7 +608,7 @@ final class SugarPanelsTest extends TestCase
     {
         $multiline = "L1\nL2\nL3\nL4\nL5";
         $layout = Node::leaf($multiline)->withBorder(false)->withMaxHeight(3);
-        $result = $this->boxer->render($layout, 20, 10);
+        $result = $this->panels->render($layout, 20, 10);
         $lines = \explode("\n", $result);
 
         // Count non-empty lines
@@ -656,10 +656,10 @@ final class SugarPanelsTest extends TestCase
             $children[] = Node::leaf('c' . $i)->withBorder(false);
         }
         $layout = Node::horizontal(...$children);
-        $boxer = SugarPanels::new();
+        $panels = SugarPanels::new();
 
         // Should not throw and should return a valid multi-line string
-        $result = $boxer->render($layout, 12, 3);
+        $result = $panels->render($layout, 12, 3);
         $this->assertIsString($result);
         $this->assertGreaterThan(0, \strlen($result));
         $lines = \explode("\n", $result);
@@ -689,9 +689,9 @@ final class SugarPanelsTest extends TestCase
 
         // Warm: render once to populate the WeakMap, then resize to force the
         // full-output path again with the cache still warm (same Style object).
-        $warmBoxer = SugarPanels::new();
-        $warmBoxer->render($layout, 8, 1);         // warms the cache
-        $warm = $warmBoxer->render($layout, 8, 2); // full output, warm cache hit
+        $warmPanels = SugarPanels::new();
+        $warmPanels->render($layout, 8, 1);         // warms the cache
+        $warm = $warmPanels->render($layout, 8, 2); // full output, warm cache hit
 
         $this->assertSame($cold, $warm, 'Warm-cache render must be byte-identical to cold-cache render');
         $this->assertStringContainsString("\x1b[", $cold, 'Output is actually styled (carries an SGR escape)');
@@ -707,15 +707,15 @@ final class SugarPanelsTest extends TestCase
      */
     public function testSgrPrefixCacheEvictsFreedStyle(): void
     {
-        $boxer = SugarPanels::new();
-        $ref = new \ReflectionProperty($boxer, 'sgrPrefixCache');
+        $panels = SugarPanels::new();
+        $ref = new \ReflectionProperty($panels, 'sgrPrefixCache');
         $ref->setAccessible(true);
 
         $style = Style::new()->fg(Color::ansi(14));
         $node  = Node::leaf('x')->withBorder(false)->withStyle($style);
-        $boxer->render($node, 6, 1);
+        $panels->render($node, 6, 1);
 
-        $cache = $ref->getValue($boxer);
+        $cache = $ref->getValue($panels);
         $this->assertInstanceOf(\WeakMap::class, $cache, 'SGR prefix cache is a WeakMap keyed by Style object');
         $this->assertCount(1, $cache, 'Rendering a styled leaf populates the cache');
 
@@ -733,16 +733,16 @@ final class SugarPanelsTest extends TestCase
      */
     public function testResetPreviousFrameClearsSgrPrefixCache(): void
     {
-        $boxer = SugarPanels::new();
-        $ref = new \ReflectionProperty($boxer, 'sgrPrefixCache');
+        $panels = SugarPanels::new();
+        $ref = new \ReflectionProperty($panels, 'sgrPrefixCache');
         $ref->setAccessible(true);
 
         $style = Style::new()->fg(Color::ansi(14));
-        $boxer->render(Node::leaf('x')->withBorder(false)->withStyle($style), 6, 1);
-        $this->assertCount(1, $ref->getValue($boxer), 'Cache populated before reset');
+        $panels->render(Node::leaf('x')->withBorder(false)->withStyle($style), 6, 1);
+        $this->assertCount(1, $ref->getValue($panels), 'Cache populated before reset');
 
-        $boxer->resetPreviousFrame();
-        $this->assertCount(0, $ref->getValue($boxer), 'resetPreviousFrame() clears the SGR prefix cache');
+        $panels->resetPreviousFrame();
+        $this->assertCount(0, $ref->getValue($panels), 'resetPreviousFrame() clears the SGR prefix cache');
     }
 
     /**
@@ -770,7 +770,7 @@ final class SugarPanelsTest extends TestCase
 
     public function testRightAlignedLineKeepsTheRightBorderIntact(): void
     {
-        $rows = \explode("\n", $this->boxer->render(
+        $rows = \explode("\n", $this->panels->render(
             Node::leaf('hi')->withAlignH(Align::Right), 20, 5,
         ));
         // Pre-fix the remainder padding written from the shifted origin spilled
@@ -781,7 +781,7 @@ final class SugarPanelsTest extends TestCase
 
     public function testCenterAlignedLineKeepsBothBordersIntact(): void
     {
-        $rows = \explode("\n", $this->boxer->render(
+        $rows = \explode("\n", $this->panels->render(
             Node::leaf('hi')->withAlignH(Align::Center), 20, 5,
         ));
         // leftPad = intdiv(18-2,2) = 8 → 'hi' at cols 9-10 inside the region,
@@ -835,12 +835,12 @@ final class SugarPanelsTest extends TestCase
 
     public function testWideGlyphDeltaPlacesCellsAtVisibleColumns(): void
     {
-        $boxer = SugarPanels::new();
-        $boxer->render(Node::leaf('中文')->withBorder(false), 10, 2);
+        $panels = SugarPanels::new();
+        $panels->render(Node::leaf('中文')->withBorder(false), 10, 2);
         // '中' spans cols 0-1, 'x' lands on col 2, '文' on cols 3-4. Pre-fix the
         // diff buffer re-split the flattened string per codepoint (all width 1),
         // emitting the run one cell too far left.
-        $delta = $boxer->render(Node::leaf('中x文')->withBorder(false), 10, 2);
+        $delta = $panels->render(Node::leaf('中x文')->withBorder(false), 10, 2);
         $this->assertStringContainsString("\x1b[1;3H", $delta, 'Delta cursor targets col 2 (1-based 3) for x');
         $this->assertStringNotContainsString("\x1b[1;2H", $delta, 'No stale col-1 cursor for the shifted run');
         $this->assertStringContainsString('x', $delta);
@@ -849,13 +849,13 @@ final class SugarPanelsTest extends TestCase
     public function testStyledContentChangeEmitsNonEmptyDelta(): void
     {
         $style = Style::new()->fg(Color::ansi(6));
-        $boxer = SugarPanels::new();
-        $boxer->render(Node::leaf('ab')->withBorder(false)->withStyle($style), 10, 1);
+        $panels = SugarPanels::new();
+        $panels->render(Node::leaf('ab')->withBorder(false)->withStyle($style), 10, 1);
         // 'ab' -> 'a b' shifts the styled 'b' one cell right; the escape bytes ride
         // inside the cell runes, so the changed cells diff and the delta is non-empty
         // (the old codepoint re-split scattered escape bytes into phantom cells and
         // the encoder could emit nothing for the styled row).
-        $delta = $boxer->render(Node::leaf('a b')->withBorder(false)->withStyle($style), 10, 1);
+        $delta = $panels->render(Node::leaf('a b')->withBorder(false)->withStyle($style), 10, 1);
         $this->assertNotSame('', $delta, 'Styled-content change must produce a delta');
         $this->assertStringContainsString('b', $delta);
     }
