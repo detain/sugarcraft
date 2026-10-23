@@ -556,7 +556,7 @@ final class TerminalProbeTest extends TestCase
         $this->assertTrue($report->has(Capability::BasicAscii));
     }
 
-    // ─── A3b: env suppression short-circuits the whole capability ladder ────
+    // ─── env suppression short-circuits the whole capability ladder ────
 
     /**
      * A terminfo blob that advertises both TrueColor and Sixel, with a public

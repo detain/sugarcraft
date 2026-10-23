@@ -10,7 +10,7 @@ use SugarCraft\ColorProfile\NearestColor;
 
 /**
  * Tripwire pinning sugar-colorprofile's ANSI-256 lookup table to ONE source of truth
- * after audit #1 deleted the matcher's private even-51-step cube.
+ * After the vocabulary consolidation deleted the matcher's private even-51-step cube.
  *
  * Historically three 256-color tables coexisted: NearestColor::palette256()
  * built its cube at channel levels 0,51,102,153,204,255 while

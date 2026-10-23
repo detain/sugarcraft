@@ -11,7 +11,7 @@ use SugarCraft\ColorProfile\ColorDistance;
 use SugarCraft\ColorProfile\NearestColor;
 
 /**
- * B-07: error-compensated palette lookup pins for NearestColor::withError().
+ * error-compensated palette lookup pins for NearestColor::withError().
  *
  * The contract mirrors chafa chafa-palette.c:1160-1197: the query is pushed by
  * the accumulated error damped 0.9/16, the entry is chosen for the COMPENSATED
@@ -24,7 +24,7 @@ use SugarCraft\ColorProfile\NearestColor;
 final class NearestColorErrorCompensationTest extends TestCase
 {
     /**
-     * B-07: a null accumulator is pure passthrough — same answer as
+     * a null accumulator is pure passthrough — same answer as
      * ansi256() for both metric families, and the referenced variable is left
      * untouched (still null, no write).
      */
@@ -48,7 +48,7 @@ final class NearestColorErrorCompensationTest extends TestCase
     }
 
     /**
-     * B-07: a zero accumulator picks the plain-nearest entry and writes back
+     * a zero accumulator picks the plain-nearest entry and writes back
      * the full quantization residual (query minus found, per channel, floats).
      */
     public function testZeroErrorChoosesPlainNearestAndWritesResidual(): void
@@ -68,7 +68,7 @@ final class NearestColorErrorCompensationTest extends TestCase
     }
 
     /**
-     * B-07: the damped feedback MOVES the selection — with an error pushing
+     * the damped feedback MOVES the selection — with an error pushing
      * across a quantization boundary, the chosen entry is the one the
      * compensated query would pick plain, and it differs from the uncompensated
      * answer (the non-vacuity leg; without feedback the two legs would collapse).
@@ -104,7 +104,7 @@ final class NearestColorErrorCompensationTest extends TestCase
     }
 
     /**
-     * B-07: the residual comes from the UNCLAMPED compensated value (chafa
+     * the residual comes from the UNCLAMPED compensated value (chafa
      * :1189-1192) — white pushed to 264 still LOOKS UP clamped 255, but the
      * written error keeps the full +9 so the next cell inherits the push.
      * Pinning the exact expression `255 + (160 * 0.9) / 16` catches any change
@@ -128,7 +128,7 @@ final class NearestColorErrorCompensationTest extends TestCase
     }
 
     /**
-     * B-07: negative feedback pulls the query down and clamps at zero for the
+     * negative feedback pulls the query down and clamps at zero for the
      * lookup, while the residual stays unclamped (keeps the drag).
      */
     public function testNegativeErrorPullsAndKeepsDrag(): void
@@ -149,7 +149,7 @@ final class NearestColorErrorCompensationTest extends TestCase
     }
 
     /**
-     * B-07: the chain — three lookups feeding one accumulator forward, the
+     * the chain — three lookups feeding one accumulator forward, the
      * shape an ordered-dither scanline uses. Expectations replay the documented
      * recurrence independently of the implementation's internals.
      */
@@ -191,7 +191,7 @@ final class NearestColorErrorCompensationTest extends TestCase
     }
 
     /**
-     * B-07: malformed accumulators fail fast — wrong arity, non-list keys, or
+     * malformed accumulators fail fast — wrong arity, non-list keys, or
      * non-numeric channels are programming errors, never silently zeroed.
      */
     #[DataProvider('malformedAccumulators')]
@@ -214,7 +214,7 @@ final class NearestColorErrorCompensationTest extends TestCase
     }
 
     /**
-     * B-07: the palette searched is the ANSI-256 table itself (index domain
+     * the palette searched is the ANSI-256 table itself (index domain
      * 0-255, residual measured against palette256()), on the Cie76 metric too.
      */
     public function testCie76MatcherCompensatesInItsOwnSpace(): void

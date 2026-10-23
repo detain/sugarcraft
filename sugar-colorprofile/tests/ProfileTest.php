@@ -26,7 +26,7 @@ final class ProfileTest extends TestCase
 
     public function testDegradedToChain(): void
     {
-        // B-09: the chain gained the chafa-mirroring intermediate rungs
+        // the chain gained the chafa-mirroring intermediate rungs
         // (ANSI256 → Ansi240 → ANSI → Ansi8 → Fgbg → Ascii); full walk pinned
         // in ColorProfileVocabularyTest::testLadderWalksAllEightRungs.
         $this->assertSame(Profile::ANSI256, Profile::TrueColor->degradedTo());

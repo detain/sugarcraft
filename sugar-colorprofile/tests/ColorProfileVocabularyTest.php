@@ -11,7 +11,7 @@ use SugarCraft\ColorProfile\Palette;
 use SugarCraft\ColorProfile\Profile;
 
 /**
- * B-09: the two five-level vocabularies (renderer-facing Profile, detection-
+ * the two five-level vocabularies (renderer-facing Profile, detection-
  * facing ColorProfile) are consolidated into ColorProfile as canonical, with
  * Ansi240/Ansi8/Fgbg minted from chafa's canvas-mode ladder. These pins hold
  * the BREAKING surface honest: old spellings keep resolving, wire bytes of
@@ -135,7 +135,7 @@ final class ColorProfileVocabularyTest extends TestCase
         $out = $palette->degrade("\x1b[38;5;5m");
         $this->assertMatchesRegularExpression("/^\x1b\\[38;5;\\d{1,3}m$/", $out);
         $slot = (int) explode(';', rtrim(ltrim($out, "\x1b["), 'm'))[2];
-        $this->assertGreaterThanOrEqual(16, $slot, 'B-09: slot 5 must never survive 240-depth');
+        $this->assertGreaterThanOrEqual(16, $slot, 'slot 5 must never survive 240-depth');
         $this->assertLessThanOrEqual(255, $slot);
 
         $out = $palette->degrade("\x1b[48;5;0m");

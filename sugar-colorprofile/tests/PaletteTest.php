@@ -55,7 +55,7 @@ final class PaletteTest extends TestCase
         putenv('TMUX');  // Remove
         putenv('STY');  // Remove
         putenv('TERM_PROGRAM');  // Remove
-        putenv('FORCE_COLOR');  // Remove — B-02: makes the unset polarity deterministic
+        putenv('FORCE_COLOR');  // Remove — makes the unset polarity deterministic
 
         // Also update $_ENV superglobal to match putenv state.
         // Use unset to truly remove keys (not set to empty) so that
@@ -132,7 +132,7 @@ final class PaletteTest extends TestCase
 
     public function testForceColorTruthyWordsAndNumericLevelsFullTable(): void
     {
-        // B-02: FORCE_COLOR accepts the chalk/npm truthy words (any case) as
+        // FORCE_COLOR accepts the chalk/npm truthy words (any case) as
         // level 3 — previously intval('true')===0 forced the Ascii rung.
         // Numeric passthrough stays byte-identical; unrecognised words are
         // falsy and keep the level-0 (Ascii) rung.
@@ -169,7 +169,7 @@ final class PaletteTest extends TestCase
 
     public function testForceColorEmptyAndUnsetFallThroughToChain(): void
     {
-        // B-02 polarity pair: '' and absent must NOT hit the force branch —
+        // polarity pair: '' and absent must NOT hit the force branch —
         // detection falls through to the chain (NO_COLOR below proves it).
         $this->assertSame(
             Profile::NoTTY,
@@ -219,7 +219,7 @@ final class PaletteTest extends TestCase
 
     public function testITerm2UpgradesColorCapableTerminalToTrueColor(): void
     {
-        // The upgrade half of audit #2 stays: once the chain allows color,
+        // The upgrade half stays: once the chain allows color,
         // iTerm.app advertises 24-bit.
         $profile = Palette::detect(null, ['TERM_PROGRAM' => 'iTerm.app', 'TERM' => 'xterm']);
         $this->assertSame(Profile::TrueColor, $profile);
@@ -301,7 +301,7 @@ final class PaletteTest extends TestCase
     }
 
     /**
-     * A3b: the 13 shapes from the campaign probe. ECMA-48 intermediates
+     * the 13 shapes from the campaign probe. ECMA-48 intermediates
      * (0x20-0x2F), finals 0x40/0x5B-0x5F, and the Fe escapes ESC 7/8/c all
      * leaked through the old regex.
      *

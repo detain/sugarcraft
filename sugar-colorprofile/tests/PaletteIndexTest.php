@@ -14,7 +14,7 @@ use SugarCraft\ColorProfile\NearestColor;
 use SugarCraft\ColorProfile\PaletteIndex;
 
 /**
- * B-04: PaletteIndex differential-fuzz coverage.
+ * PaletteIndex differential-fuzz coverage.
  *
  * The contract under test is exactness, not speed: for ANY palette and query,
  * the bucketed lookup must return the same index a brute-force
@@ -27,7 +27,7 @@ use SugarCraft\ColorProfile\PaletteIndex;
 final class PaletteIndexTest extends TestCase
 {
     /**
-     * B-04: pinned fuzz seed — the Mt19937 stream that generated the palettes
+     * pinned fuzz seed — the Mt19937 stream that generated the palettes
      * and queries. Changing it re-rolls the corpus and must stay a deliberate act.
      */
     private const FUZZ_SEED = 20261020;
@@ -87,7 +87,7 @@ final class PaletteIndexTest extends TestCase
                         $matcher->closest($query, $palette),
                         $index->nearest($query),
                         \sprintf(
-                            'B-04 fuzz divergence (%s, palette #%d, size %d, query %d,%d,%d)',
+                            'fuzz divergence (%s, palette #%d, size %d, query %d,%d,%d)',
                             $metric->value,
                             $p,
                             $size,
@@ -104,7 +104,7 @@ final class PaletteIndexTest extends TestCase
     }
 
     /**
-     * B-04: exact ties resolve to the LOWEST palette index — the documented
+     * exact ties resolve to the LOWEST palette index — the documented
      * rule (chafa chafa-color-table.c:248, NearestColor's own contract). The
      * (5,0,0)-over-(10,0,0)/(0,0,0) geometry is an exact squared-distance tie
      * in Euclidean space (25 == 25); the bucketed scan visits them in
@@ -128,7 +128,7 @@ final class PaletteIndexTest extends TestCase
     }
 
     /**
-     * B-04: degenerate palette shapes — one entry always answers 0, empty
+     * degenerate palette shapes — one entry always answers 0, empty
      * palettes refuse at construction, and the all-identical palette (zero
      * covariance, degenerate eigenbasis) still answers every query.
      */
@@ -146,7 +146,7 @@ final class PaletteIndexTest extends TestCase
     }
 
     /**
-     * B-04: non-Euclidean-family metrics have no distance-preserving rotation;
+     * non-Euclidean-family metrics have no distance-preserving rotation;
      * the index refuses them loudly instead of silently degrading exactness.
      */
     #[DataProvider('unsupportedMetrics')]
@@ -166,7 +166,7 @@ final class PaletteIndexTest extends TestCase
     }
 
     /**
-     * B-04: fromPalette() memoizes per (metric, palette-bytes) identity; any
+     * fromPalette() memoizes per (metric, palette-bytes) identity; any
      * channel difference (alpha included) or metric change re-builds, and the
      * bounded cache drops the lot past the limit rather than growing without end.
      */
@@ -191,7 +191,7 @@ final class PaletteIndexTest extends TestCase
     }
 
     /**
-     * B-04: bare accessors; palette() hands back the list the index was built from.
+     * bare accessors; palette() hands back the list the index was built from.
      */
     public function testAccessors(): void
     {
@@ -204,7 +204,7 @@ final class PaletteIndexTest extends TestCase
     }
 
     /**
-     * B-04: end-to-end parity with the production hot path — an index over the
+     * end-to-end parity with the production hot path — an index over the
      * ANSI-256 palette must answer exactly what {@see NearestColor::ansi256()}
      * answers for a battery of derived corner/edge probes.
      */
@@ -227,7 +227,7 @@ final class PaletteIndexTest extends TestCase
                 self::assertSame(
                     $matcher->ansi256($query),
                     $index->nearest($query),
-                    \sprintf('B-04 ansi256-palette divergence (%s) at %s', $metric->value, $query->toHex()),
+                    \sprintf('ansi256-palette divergence (%s) at %s', $metric->value, $query->toHex()),
                 );
             }
         }

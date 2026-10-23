@@ -32,7 +32,7 @@ final class NearestColorTest extends TestCase
     public function testCubeUsesTheCanonicalXtermLevels(): void
     {
         $palette = NearestColor::palette256();
-        // audit #1: the cube is the industry-standard xterm 6×6×6 with channel
+        // the cube is the industry-standard xterm 6×6×6 with channel
         // levels 0,95,135,175,215,255 (Color::CUBE_LEVELS) — NOT the old even
         // 51-step table. index 16 + 36*r + 6*g + b -> channel = CUBE_LEVELS[level].
         self::assertSame('#00005f', $palette[17]->toHex());              // levels (0,0,1)

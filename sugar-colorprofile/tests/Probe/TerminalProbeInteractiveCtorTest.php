@@ -9,7 +9,7 @@ use SugarCraft\ColorProfile\Probe\Capability;
 use SugarCraft\ColorProfile\Probe\TerminalProbe;
 
 /**
- * Pins the two environment-semantics fixes in TerminalProbe (audit #5, #9).
+ * Pins the two environment-semantics fixes in TerminalProbe.
  *
  * #5: the constructor's $interactive decision was clobbered by runProbe()'s
  * old `bool $interactive = true` default — passing false to the constructor
@@ -38,7 +38,7 @@ final class TerminalProbeInteractiveCtorTest extends TestCase
 
         $this->assertFalse(
             $report->has(Capability::ITerm2),
-            'Phase 3 must stay off when the constructor said non-interactive (audit #5)'
+            'Phase 3 must stay off when the constructor said non-interactive'
         );
     }
 
@@ -84,7 +84,7 @@ final class TerminalProbeInteractiveCtorTest extends TestCase
 
         $this->assertFalse(
             $report->has(Capability::TrueColor),
-            'WT_SESSION set but empty is not a Windows Terminal session (audit #9)'
+            'WT_SESSION set but empty is not a Windows Terminal session'
         );
     }
 
@@ -118,7 +118,7 @@ final class TerminalProbeInteractiveCtorTest extends TestCase
 
         $this->assertTrue(
             $source === null || !str_starts_with((string) $source, 'env:TMUX|STY+'),
-            'empty TMUX must not take the env:TMUX|STY+ branch (audit #9)'
+            'empty TMUX must not take the env:TMUX|STY+ branch'
         );
     }
 

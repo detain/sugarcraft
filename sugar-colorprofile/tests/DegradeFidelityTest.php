@@ -10,7 +10,7 @@ use SugarCraft\ColorProfile\Palette;
 use SugarCraft\ColorProfile\Profile;
 
 /**
- * degrade() fidelity matrix (audit §A item 4).
+ * degrade() fidelity matrix.
  *
  * Pins the three reported corruption classes with byte-exact assertions:
  *  - channel swaps from mis-indexed capture groups (green→blue, blue→black),

@@ -7,7 +7,7 @@ namespace SugarCraft\ColorProfile\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Locale parity guard (audit #4): every shipped locale must cover every key
+ * Locale parity guard: every shipped locale must cover every key
  * the src actually asks Lang::t() for, with the same {placeholders} as en.
  */
 final class LangParityTest extends TestCase
