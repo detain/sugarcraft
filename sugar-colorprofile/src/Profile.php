@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\ColorProfile;
 
 /**
- * @deprecated B-09 — {@see Profile} no longer exists as its own enum. It is
- * a class_alias onto {@see ColorProfile}, the single consolidated color-depth
+ * @deprecated — {@see ColorProfile} is the real enum; this name no longer
+ * exists as its own type — it is a class_alias onto ColorProfile, the single
+ * consolidated color-depth
  * vocabulary (renderer and detection vocabularies carried the same five wire
  * values under drifting case spellings; PHP enums cannot alias cases, so the
  * unification is done by aliasing the TYPE and the two SCREAMING case names

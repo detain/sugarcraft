@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\ColorProfile;
 
 /**
- * Terminal color capability profile — THE single vocabulary (B-09).
+ * Terminal color capability profile — THE single vocabulary.
  *
  * Ordered richest to simplest so {@see self::degradedTo()} walks the chain
  * downwards:
  * TrueColor → ANSI256 → ANSI240 → ANSI → ANSI8 → FGBG → ASCII → NoTTY.
  *
- * B-09 CONSOLIDATION. This library used to carry two parallel five-level
+ * CONSOLIDATION. This library used to carry two parallel five-level
  * enums under the same wire values — {@see Profile} (renderer-facing,
  * SCREAMING case spellings) and this one (detection-facing, CamelCase
  * spellings) — because PHP enums cannot alias cases and unifying them was a
@@ -72,21 +72,21 @@ enum ColorProfile: string
     case NoTTY = 'notty';
 
     /**
-     * @deprecated B-09 — SCREAMING-era spelling kept for the old {@see Profile}
+     * @deprecated — SCREAMING-era spelling kept for the old {@see Profile}
      *             case names; it resolves to this very case object. Use
      *             {@see self::Ansi256()}.
      */
     public const ANSI256 = self::Ansi256;
 
     /**
-     * @deprecated B-09 — SCREAMING-era spelling kept for the old {@see Profile}
+     * @deprecated — SCREAMING-era spelling kept for the old {@see Profile}
      *             case names; it resolves to this very case object. Use
      *             {@see self::Ansi()}.
      */
     public const ANSI = self::Ansi;
 
     /**
-     * @deprecated B-09 — identity bridge. Since B-09 Profile IS this enum
+     * @deprecated — identity bridge. Profile IS this enum
      *             (class_alias façade), the two vocabularies are one; this
      *             method survives only so old call sites compile unchanged.
      */

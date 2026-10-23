@@ -23,7 +23,10 @@ namespace SugarCraft\ColorProfile;
  */
 final class DeltaE
 {
-    /** CIE94 graphic-arts weighting constants (kL = kC = kH = 1, K1 = K2 = 0). */
+    /**
+ * CIE94 graphic-arts weighting (kL = kC = kH = 1; K1 = 0.045 and K2 = 0.015
+ * are the graphic-arts textiles-free defaults, not the geometric-mean 0/0).
+ */
     private const CIE94_CHROMA_FACTOR = 0.045;
     private const CIE94_HUE_FACTOR = 0.015;
 

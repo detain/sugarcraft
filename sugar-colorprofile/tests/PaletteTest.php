@@ -181,15 +181,25 @@ final class PaletteTest extends TestCase
         );
     }
 
-    public function testColortermEnvImpliesTrueColor(): void
+    public function testColortermImpliesTrueColorOnADeclaredTerminal(): void
     {
-        $profile = Palette::detect(null, ['COLORTERM' => 'truecolor', 'TERM' => 'dumb']);
+        $profile = Palette::detect(null, ['COLORTERM' => 'truecolor', 'TERM' => 'xterm']);
         $this->assertSame(Profile::TrueColor, $profile);
+    }
+
+    public function testDumbTerminalBeatsColorterm(): void
+    {
+        // Unified ladder (all detectors agree): TERM=dumb is a promise of
+        // minimal capabilities and outranks an advertised COLORTERM. The
+        // previous polarity here answered truecolor on dumb+COLORTERM while
+        // TerminalProbe and the README documented the opposite.
+        $profile = Palette::detect(null, ['COLORTERM' => 'truecolor', 'TERM' => 'dumb']);
+        $this->assertSame(Profile::NoTTY, $profile);
     }
 
     public function testITerm2DoesNotResurrectColorOverDumbTerminal(): void
     {
-        // audit #2: TERM=dumb disables color unconditionally — an advertised
+        // TERM=dumb disables color unconditionally — an advertised
         // iTerm.app session must not override it.
         $profile = Palette::detect(null, ['TERM_PROGRAM' => 'iTerm.app', 'TERM' => 'dumb']);
         $this->assertSame(Profile::NoTTY, $profile);
@@ -310,6 +320,10 @@ final class PaletteTest extends TestCase
             'ESC 7 save-cursor' => ["a\x1b7b", 'ab'],
             'ESC 8 restore-cursor' => ["a\x1b8b", 'ab'],
             'ESC c RIS' => ["a\x1bcb", 'ab'],
+            'SS3 F1' => ["a\x1bOPb", 'ab'],
+            'SS3 Up (A final)' => ["a\x1bOAb", 'ab'],
+            'SS3 tilde final' => ["a\x1bO~b", 'ab'],
+            'SS3 truncated at EOL' => ["a\x1bO", 'a'],
             'OSC' => ["a\x1b]0;title\x07b", 'ab'],
             'DCS' => ["a\x1bPq#0\x1b\\b", 'ab'],
             'plain' => ['no escape', 'no escape'],

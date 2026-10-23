@@ -42,7 +42,7 @@ final class NearestColor
     /** @var list<array{l: float, a: float, b: float}>|null Memoized Lab of the ANSI-16 palette. */
     private static ?array $ansi16PaletteLab = null;
 
-    /** B-07 damping applied to the stored error before it pushes the query, per chafa chafa-palette.c:1170. */
+    /** Damping applied to the stored error before it pushes the query, per chafa chafa-palette.c:1170. */
     private const ERROR_DAMPING = 0.9;
 
     public function __construct(
@@ -124,7 +124,7 @@ final class NearestColor
     }
 
     /**
-     * B-07: error-compensated nearest lookup against the ANSI-256 palette.
+     * Error-compensated nearest lookup against the ANSI-256 palette.
      *
      * Mirrors chafa chafa-palette.c:1160-1197 (`chafa_palette_lookup_with_error`):
      * the query is pushed toward accumulated quantization error, damped by a
@@ -149,7 +149,7 @@ final class NearestColor
      *
      * The `with` in the name reads "accompanied by", not the immutable-setter
      * convention: this is a lookup with a by-reference feedback vector, the
-     * shape the survey (B-07) prescribes verbatim for dither loops.
+     * shape chafa's dither loop prescribes verbatim.
      *
      * @param ?array{0: float|int, 1: float|int, 2: float|int} $err in/out accumulator, list-shaped triple
      *

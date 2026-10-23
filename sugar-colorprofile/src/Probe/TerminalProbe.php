@@ -7,7 +7,13 @@ namespace SugarCraft\ColorProfile\Probe;
 use SugarCraft\ColorProfile\DetectionChain;
 
 /**
- * Terminal capability probe — the single source of truth for capability detection.
+ * Terminal capability probe — the full capability report (color depth plus
+ * Sixel/Kitty/iTerm2/Hyperlinks/keyboard flags).
+ *
+ * The suppression and color-depth steps delegate their core ladder to
+ * {@see DetectionChain}; this class then records richer capability detail
+ * (set-but-continue WT_SESSION/GOOGLE_CLOUD_SHELL, the terminfo and
+ * TERM_PROGRAM phases) that the chain's single-level answer does not carry.
  *
  * Runs a 12-step detection pipeline:
  *  1. CLICOLOR_FORCE=1                    → TrueColor  (overrides everything)
@@ -27,7 +33,7 @@ use SugarCraft\ColorProfile\DetectionChain;
  * issues no raw OSC query round-trips; see checkEscapeQueries):
  * - Sixel: terminfo (`infocmp -1` Sixel capability)
  * - Kitty: TERM=xterm-kitty
- * - ITerm2: TERM_PROGRAM=iTerm.app|Apple_Terminal table
+ * - ITerm2: TERM_PROGRAM=iTerm.app (Apple_Terminal excluded — no OSC 1337)
  * - Hyperlinks: TERM_PROGRAM=Hyper table
  * - TrueColor upgrade: TERM_PROGRAM=WezTerm|vscode|Ghostty table
  * - KittyKeyboard: TERM=xterm-kitty
@@ -93,7 +99,7 @@ class TerminalProbe
 
         $caps = $this->checkEnvVars();
 
-        // A3b gate order: NO_COLOR / CLICOLOR=0 / TERM=dumb from the env phase
+        // Gate order: NO_COLOR / CLICOLOR=0 / TERM=dumb from the env phase
         // terminate the whole capability ladder, per the de-facto NO_COLOR
         // spec ("…disable colored output…entirely"). Running terminfo or
         // escape queries after a suppression verdict re-added TrueColor/Sixel
@@ -231,7 +237,11 @@ class TerminalProbe
             return $caps;
         }
 
-        $output = $this->runCommand('infocmp -1 ' . escapeshellarg($term) . ' 2>/dev/null');
+        // Exec the SAME absolute path the availability gate checked — a bare
+        // relative `infocmp` would re-resolve through PATH at exec time and
+        // let a planted PATH entry answer a question the gate said it could not.
+        $binary = InfocmpBinary::path() ?? '';
+        $output = $this->runCommand($binary . ' -1 ' . escapeshellarg($term) . ' 2>/dev/null');
         if ($output === null || $output === '') {
             return $caps;
         }
@@ -332,12 +342,15 @@ class TerminalProbe
      */
     private function checkEscapeQueries(array $caps): array
     {
-        // TERM_PROGRAM hints for iTerm2 (and friends) — table lookup, no query.
+        // TERM_PROGRAM hints for terminal families that advertise a capability
+        // they actually implement — table lookup, no query. Apple_Terminal is
+        // deliberately absent: Terminal.app does not speak OSC 1337 inline
+        // images, and mapping it here made image consumers (sugar-image's
+        // Mosaic) pick the iTerm2 protocol on a terminal that renders garbage.
         $termProgram = $this->getEnv('TERM_PROGRAM');
         if ($termProgram !== null) {
             $known = [
                 'iTerm.app'       => Capability::ITerm2,
-                'Apple_Terminal'   => Capability::ITerm2,
                 'Hyper'           => Capability::Hyperlinks,
                 'WezTerm'         => Capability::TrueColor,
                 'vscode'          => Capability::TrueColor,
@@ -440,7 +453,7 @@ class TerminalProbe
     /**
      * Check if infocmp binary is available.
      *
-     * Delegates to the single shared sniff ({@see InfocmpBinary::path()});
+     * Delegates to the shared sniff ({@see InfocmpBinary::path()});
      * the method stays a protected seam so tests can override the answer.
      */
     protected function infocmpAvailable(): bool

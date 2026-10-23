@@ -29,6 +29,7 @@
     "require": {
         "php": "^8.3",
         "react/child-process": "^0.6",
+        "react/event-loop": "^0.5 || ^1.2",
         "react/promise": "^3.3",
         "sugarcraft/sugar-core": "dev-master"
     },

@@ -12,6 +12,13 @@ use SugarCraft\ColorProfile\Lang;
  * Mirrors the standard ANSI 16-color palette from the Go colorprofile
  * package. Use these as readable shortcuts in place of `Color::ansi(N)`.
  *
+ * CAUTION: these are public MUTABLE statics — an assignment anywhere in the
+ * process rewrites the value for every reader, and nothing pins them against
+ * reassignment. Treat them as read-only by convention; prefer the pure
+ * factories (Color::ansi(3), Color::true(0xff, 0, 0)) in new code.
+ * Making them constant-backed (readonly-forever) is a documented seam:
+ * it is a behavior change for any consumer that writes them today.
+ *
  * @see https://en.wikipedia.org/wiki/ANSI_escape_code#3/4-bit
  */
 final class StandardColors
@@ -98,7 +105,8 @@ final class StandardColors
     }
 }
 
-// Static initialization (PHP < 8.3 lazy enum support)
+// Static initialization — typed statics have no default, so the objects
+// are seeded eagerly at file load (first possible use).
 StandardColors::$black       = new Color(0x00, 0x00, 0x00);
 StandardColors::$red         = new Color(0xcd, 0x00, 0x00);
 StandardColors::$green       = new Color(0x00, 0xcd, 0x00);
@@ -110,8 +118,8 @@ StandardColors::$white       = new Color(0xe5, 0xe5, 0xe5);
 StandardColors::$brightBlack = new Color(0x7f, 0x7f, 0x7f);
 StandardColors::$brightRed   = new Color(0xff, 0x00, 0x00);
 StandardColors::$brightGreen = new Color(0x00, 0xff, 0x00);
-StandardColors::$brightYellow= new Color(0xff, 0xff, 0x00);
+StandardColors::$brightYellow = new Color(0xff, 0xff, 0x00);
 StandardColors::$brightBlue  = new Color(0x5c, 0x5c, 0xff);
-StandardColors::$brightMagenta=new Color(0xff, 0x00, 0xff);
+StandardColors::$brightMagenta = new Color(0xff, 0x00, 0xff);
 StandardColors::$brightCyan  = new Color(0x00, 0xff, 0xff);
 StandardColors::$brightWhite = new Color(0xff, 0xff, 0xff);

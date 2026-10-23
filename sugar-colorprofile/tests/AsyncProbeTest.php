@@ -140,7 +140,7 @@ final class AsyncProbeTest extends TestCase
         $this->assertFalse(Probe::isForceColor());
     }
 
-    // ─── A3b: env gate, no fabricated TERM, concurrency cap ────────────────
+    // ─── env gate, no fabricated TERM, bounded concurrency ───────────────
 
     public function testNoColorResolvesSynchronouslyWithoutSpawning(): void
     {
@@ -177,18 +177,15 @@ final class AsyncProbeTest extends TestCase
         $this->assertSame(ColorProfile::Ansi, $resolved, 'must be the sync default, not an async probe');
     }
 
-    public function testConcurrencyCapDegradesToSyncDetection(): void
+    public function testFreshSlotsAtCapDegradeToSyncDetection(): void
     {
         $_ENV['TERM'] = 'xterm-256color';
         putenv('TERM=xterm-256color');
         $counter = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
         $counter->setAccessible(true);
-        $original = $counter->getValue();
-        $cap = (new \ReflectionClass(AsyncProbe::class))
-            ->getConstant('MAX_CONCURRENT_PROBES');
 
         try {
-            $counter->setValue(null, $cap);
+            $counter->setValue(null, self::fakeSlots(4, \microtime(true) + 10.0));
 
             $resolved = null;
             AsyncProbe::colorProfile()->then(function (ColorProfile $p) use (&$resolved): void {
@@ -196,11 +193,88 @@ final class AsyncProbeTest extends TestCase
             });
 
             $this->assertSame(ColorProfile::Ansi256, $resolved, 'at-cap calls must sync-resolve');
-            $this->assertSame($cap, $counter->getValue(), 'the cap path must neither spawn nor book a slot');
+            $this->assertCount(4, $counter->getValue(), 'the cap path must neither spawn nor book a slot');
         } finally {
-            $counter->setValue(null, $original);
+            self::clearSlots($counter);
             unset($_ENV['TERM']);
             putenv('TERM');
         }
     }
+
+    public function testStaleSlotsAreReclaimedAndTheAsyncLegSettles(): void
+    {
+        $_ENV['TERM'] = 'xterm-256color';
+        putenv('TERM=xterm-256color');
+        $counter = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
+        $counter->setAccessible(true);
+
+        try {
+            // Four slots whose deadline passed: their callers abandoned the
+            // loop, so no exit/error event could ever release them. The next
+            // call must reclaim them instead of degrading forever.
+            $counter->setValue(null, self::fakeSlots(4, \microtime(true) - 10.0));
+
+            $resolved = null;
+            AsyncProbe::colorProfile()->then(function (ColorProfile $p) use (&$resolved): void {
+                $resolved = $p;
+            });
+
+            if ($resolved === null) {
+                // The reclaimed capacity went to a real infocmp child; run
+                // the loop with a wall-clock watchdog so a wedged child cannot
+                // hang the suite (its own ceiling timer settles it at 5s+1s).
+                $loop = \React\EventLoop\Loop::get();
+                $watchdog = $loop->addTimer(8.0, static function () use ($loop): void {
+                    $loop->stop();
+                });
+                $loop->addTimer(0.001, static function () use ($loop, $watchdog): void {
+                    $loop->cancelTimer($watchdog);
+                    $loop->stop();
+                });
+                $loop->run();
+            }
+
+            $this->assertInstanceOf(ColorProfile::class, $resolved, 'reclaimed capacity must settle a result');
+            $this->assertCount(0, $counter->getValue(), 'every settle path releases its slot');
+        } finally {
+            self::clearSlots($counter);
+            unset($_ENV['TERM']);
+            putenv('TERM');
+        }
+    }
+
+    public function testEverySpawnPathBooksABoundedDeadlineSlot(): void
+    {
+        // Structural pin for the bounded-child ladder: the ceiling timer
+        // escalates and settles, the exit handler cancels it, and stale
+        // reclamation kills the wedged child — remove any leg and this reddens.
+        $src = file_get_contents(__DIR__ . '/../src/AsyncProbe.php');
+        $this->assertStringContainsString('addTimer(self::PROBE_TIMEOUT_SECONDS', $src);
+        $this->assertStringContainsString('$process->terminate();', $src);
+        $this->assertStringContainsString('terminate(defined(\'SIGKILL\') ? \\SIGKILL : 9)', $src);
+        $this->assertStringContainsString('cancelTimer($timeoutTimer)', $src);
+        $this->assertStringContainsString('reclaimStaleSlots()', $src);
+    }
+
+    /**
+     * @return array<int, array{process: \\React\\ChildProcess\\Process, deadline: float}>
+     */
+    private static function fakeSlots(int $count, float $deadline): array
+    {
+        $slots = [];
+        for ($i = 0; $i < $count; $i++) {
+            $slots[$i + 1] = ['process' => new \React\ChildProcess\Process('sleep 30'), 'deadline' => $deadline];
+        }
+
+        return $slots;
+    }
+
+    private static function clearSlots(\ReflectionProperty $counter): void
+    {
+        foreach ($counter->getValue() as $slot) {
+            $slot['process']->terminate(defined('SIGKILL') ? \SIGKILL : 9);
+        }
+        $counter->setValue(null, []);
+    }
 }
+

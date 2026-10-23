@@ -18,8 +18,8 @@ namespace SugarCraft\ColorProfile;
  *  1. CLICOLOR_FORCE=1       → truecolor  (overrides everything)
  *  2. NO_COLOR (any value)   → none
  *  3. CLICOLOR=0             → none
- *  4. COLORTERM=24bit|truecolor|yes → truecolor
- *  5. TERM=dumb              → none
+ *  4. TERM=dumb              → none
+ *  5. COLORTERM=24bit|truecolor|yes → truecolor
  *  6. WT_SESSION (set)       → truecolor  (Windows Terminal)
  *  7. GOOGLE_CLOUD_SHELL=true → truecolor
  *  8. TMUX||STY + base TERM screen/tmux → ansi256
@@ -78,20 +78,23 @@ final class DetectionChain
             return new self(self::LEVEL_NONE, 'env:CLICOLOR=0', $term);
         }
 
-        // 4. COLORTERM=24bit|truecolor|yes → truecolor. Checked BEFORE
-        // TERM=dumb: an explicit truecolor declaration outranks a dumb TERM
-        // (matches Palette's documented precedence, steps 5 vs 7).
+        // 4. TERM=dumb → none. Checked BEFORE COLORTERM: a dumb terminal is a
+        // promise of minimal capabilities and a deliberate declaration by the
+        // environment owner, so it outranks an advertised truecolor COLORTERM.
+        // This matches the documented ladder in README/Probe/TerminalProbe and
+        // the upstream rule ("TERM=dumb is always treated as NoTTY unless
+        // CLICOLOR_FORCE=1") that sugar-core's Util\ColorProfile already honours.
+        if ($term === 'dumb') {
+            return new self(self::LEVEL_NONE, 'env:TERM=dumb', $term);
+        }
+
+        // 5. COLORTERM=24bit|truecolor|yes → truecolor
         $colorterm = $env['COLORTERM'] ?? null;
         if ($colorterm !== null) {
             $ctLower = strtolower($colorterm);
             if ($ctLower === '24bit' || $ctLower === 'truecolor' || $ctLower === 'yes') {
                 return new self(self::LEVEL_TRUECOLOR, 'env:COLORTERM=' . $colorterm, $term);
             }
-        }
-
-        // 5. TERM=dumb → none
-        if ($term === 'dumb') {
-            return new self(self::LEVEL_NONE, 'env:TERM=dumb', $term);
         }
 
         // 6. WT_SESSION (set) → truecolor (Windows Terminal)
@@ -166,7 +169,7 @@ final class DetectionChain
     /**
      * Convert the detection level to the profile enum.
      *
-     * @deprecated B-09 — {@see Profile} is now a class_alias façade over
+     * @deprecated — {@see Profile} is a class_alias façade over
      *             {@see ColorProfile}; this method and
      *             {@see self::toColorProfile()} return the same thing.
      *             Call toColorProfile() in new code.

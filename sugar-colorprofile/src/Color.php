@@ -76,7 +76,7 @@ final class Color
      * - TrueColor: returns a copy unchanged (already at max fidelity)
      * - Ansi256:  rounds to the nearest 216-color cube or 24-step grey ramp
      * - Ansi240:  same quantiser — it lands exclusively on slots 16-255 by
-     *             construction, which IS the chafa INDEXED_240 promise (B-09)
+     *             construction, which IS the chafa INDEXED_240 promise)
      * - Ansi:     rounds to one of 16 standard terminal colors
      * - Ansi8:    rounds to one of the 8 basic terminal colors (slots 0-7)
      * - Fgbg:     black or white by perceived brightness (the palette layer
@@ -247,7 +247,7 @@ final class Color
      *
      * Nearest-by-squared-RGB over the eight BASIC slots of
      * {@see self::ANSI16_RGB} — the bright half (8-15) is out of reach by
-     * definition. B-09 mints this level to mirror the low half of chafa's
+     * definition. This level mirrors the low half of chafa's
      * INDEXED_16_8 rung; every exact basic slot value round-trips to itself,
      * the same property toAnsi16Index() pins for all 16.
      */
@@ -308,7 +308,7 @@ final class Color
     /**
      * Emit a 16-color ANSI foreground escape using 4-bit SGR.
      *
-     * @see https://github.com/charmbracelet/colorprofile.Color.ToANSI16Foreground
+     * @see https://github.com/charmbracelet/colorprofile — Color.ToANSI16Foreground
      */
     public function toAnsi16Foreground(): string
     {
@@ -329,10 +329,10 @@ final class Color
      * Foreground: 0–7 → 30–37, 8–15 → 90–97
      * Background: 0–7 → 40–47, 8–15 → 100–107
      *
-     * Fail fast (A3b): an index outside 0–15 is not a color — it used to
+     * Fail fast: an index outside 0–15 is not a color — it used to
      * silently emit an off-by-N SGR code (e.g. -1 → "29", a cursor movement).
      *
-     * @see https://github.com/charmbracelet/colorprofile.Color.ANSI16SGR
+     * @see https://github.com/charmbracelet/colorprofile — Color.ANSI16SGR
      *
      * @throws \OutOfBoundsException when $idx is not an ANSI 16 slot
      */
@@ -358,7 +358,7 @@ final class Color
      * 16-231 is the fixed 6×6×6 cube, 232-255 the grey ramp; indices below 0
      * or above 255 clamp.
      *
-     * @see https://github.com/charmbracelet/colorprofile.Color.FromANSI256Index
+     * @see https://github.com/charmbracelet/colorprofile — Color.FromANSI256Index
      */
     public static function fromAnsi256Index(int $idx): self
     {

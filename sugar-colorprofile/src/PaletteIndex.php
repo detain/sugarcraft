@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ColorProfile;
 
 /**
- * B-04: PCA-bucketed accelerator for nearest-color lookup over a fixed palette.
+ * PCA-bucketed accelerator for nearest-color lookup over a fixed palette.
  *
  * Per chafa chafa-color-table.c:142-307 (`ChafaColorTable`): the palette is
  * projected onto the principal axes of its own distribution (PCA via a cyclic

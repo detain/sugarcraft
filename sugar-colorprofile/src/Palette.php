@@ -37,15 +37,22 @@ final class Palette
     /**
      * Detect the terminal color profile from the environment.
      *
-     * Priority (aligned with Probe::colorProfile SSOT):
+     * Steps 3-12 run through the shared {@see DetectionChain} ladder, with
+     * the SugarCraft-only extensions FORCE_COLOR levels (step 2), the iTerm
+     * TERM_PROGRAM upgrade (step 7), and TTY detection (step 13) living here —
+     * Probe does not read FORCE_COLOR or TERM_PROGRAM, so this is the richest
+     * ladder, not a byte-copy of Probe::colorProfile().
+     *
+     * Priority:
      *  1. CLICOLOR_FORCE=1   → TrueColor (SugarCraft extension)
      *  2. FORCE_COLOR=0..3   → profile by level (SugarCraft extension)
      *  3. NO_COLOR=          → NoTTY
      *  4. CLICOLOR=0         → NoTTY
-     *  5. COLORTERM=24bit|truecolor|yes → TrueColor
-     *  6. TERM=dumb          → NoTTY
+     *  5. TERM=dumb          → NoTTY
+     *  6. COLORTERM=24bit|truecolor|yes → TrueColor
      *  7. TERM_PROGRAM=iTerm.app → TrueColor (Palette-only upgrade — never
-     *     overrides steps 3/4/6: an explicit no-color env wins, audit #2)
+     *     overrides steps 3/4/5: an explicit no-color env wins, never
+     *     resurrected by an advertised terminal name)
      *  8. WT_SESSION non-empty → TrueColor
      *  9. GOOGLE_CLOUD_SHELL=true → TrueColor
      * 10. TMUX||STY + TERM screen/tmux → ANSI256
@@ -143,7 +150,9 @@ final class Palette
         // or `ESC [ 1 _ b` — those leaked as literal text under NoTTY.
         // OSC sequences: \x1b]...(\x07|\x1b\\)
         // DCS sequences: \x1bP...(\x07|\x1b\\)
-        // SS3 sequences: \x1bO{letter}
+        // SS3 sequences: \x1bO followed by its final byte (F1-F4, Up/Down …).
+        // A bare \x1bO at end of string still falls through to the Fe arm so
+        // the truncated pair is consumed too.
         // APC/PM/SOS strings: \x1b[_^X]...(\x07|\x1b\\)
         // Fe escapes: the C0 escape-code pairs — DECSC `ESC 7`, DECRC `ESC 8`,
         // RIS `ESC c`, NEL `ESC E`, keypad `ESC >` / `ESC =`, LS2 `ESC n`,
@@ -153,6 +162,7 @@ final class Palette
             '/(?:\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)|'
             . '\x1b\[[0-?]*[ -\/]*[@-~]|'
             . '\x1b[PX^_][^\x07\x1b]*(?:\x07|\x1b\\\\)|'
+            . '\x1bO[@-~]|'
             . '\x1b[OopeHMJKhCBDsunE78>=c]|'
             . '\x1b[()*+][ -~])/',
             '',
@@ -190,32 +200,13 @@ final class Palette
     // -------------------------------------------------------------------------
 
     /**
-     * Core detection logic — uses DetectionChain for env-based detection.
-     *
-     * Priority:
-     *  1. CLICOLOR_FORCE=1      → TrueColor (overrides everything)
-     *  2. FORCE_COLOR           → SugarCraft extension level override (0=Ascii, 1=ANSI, 2=ANSI256, 3=TC;
- *                             truthy strings true/yes/on treat as 3 — B-02)
-     *  3. NO_COLOR (any value) → NoTTY
-     *  4. CLICOLOR=0            → NoTTY
-     *  5. COLORTERM=24bit|truecolor|yes → TrueColor
-     *  6. TERM=dumb             → NoTTY
-     *  7. TERM_PROGRAM=iTerm.app → TrueColor (Palette-specific upgrade, only
-     *     when steps 3/4/6 allow color — NO_COLOR/CLICOLOR=0/TERM=dumb win)
-     *  8. WT_SESSION non-empty  → TrueColor (Windows Terminal)
-     *  9. GOOGLE_CLOUD_SHELL=true → TrueColor
-     * 10. TMUX||STY + base TERM screen/tmux → ANSI256
-     * 11. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
-     * 12. TERM=xterm*|screen*|tmux* → ANSI
-     * 13. isatty()              → NoTTY if not a TTY
-     * 14. Default               → ANSI
-     */
-    /**
-     * A3b: one env lookup for all three operator-knob reads in
+     * One env lookup for all three operator-knob reads in
      * {@see self::detectProfile()} — previously CLICOLOR_FORCE skipped the
      * $_ENV layer the other two consulted, an accident of edit history, not
-     * a designed difference. The injected DI map stays primary (that is what
+     * a designed difference. The injected DI map is primary (that is what
      * makes the chain testable); $_ENV then the real environment follow, and
+     * a key present-but-null falls THROUGH to the ambient layers rather than
+     * blocking them — blocking requires unsetting the key everywhere.
      * "unset" is normalised to null (getenv's `false` never leaks out).
      */
     private static function envValue(array $env, string $key): ?string
@@ -235,7 +226,7 @@ final class Palette
         // 2. FORCE_COLOR: SugarCraft extension (level-based) — not in DetectionChain
         $force = self::envValue($env, 'FORCE_COLOR');
         if (\is_string($force) && $force !== '') {
-            // B-02: chalk/npm convention spells "force color" as a truthy
+            // chalk/npm convention spells "force color" as a truthy
             // word, not a level digit — intval('true')===0 used to destroy
             // color down to Ascii. Truthy strings ride the level-3 rung.
             $force = \in_array(\strtolower($force), ['true', 'yes', 'on'], true) ? '3' : $force;
@@ -243,7 +234,7 @@ final class Palette
             return match (true) {
                 $level >= 3 => ColorProfile::TrueColor,
                 $level === 2 => ColorProfile::Ansi256,
-                $level === 1 => ColorProfile::ANSI,
+                $level === 1 => ColorProfile::Ansi,
                 default => ColorProfile::Ascii,
             };
         }
@@ -251,9 +242,9 @@ final class Palette
         // Use DetectionChain for core env-based detection (steps 3-12)
         $chain = DetectionChain::detect($env);
 
-        // 3-7: NO_COLOR, CLICOLOR=0, TERM=dumb disable color unconditionally.
+        // 3-6: NO_COLOR, CLICOLOR=0, TERM=dumb disable color unconditionally.
         // An advertised TERM_PROGRAM=iTerm.app must NOT resurrect color over an
-        // explicit no-color environment (audit #2): the iTerm upgrade below
+        // explicit no-color environment: the iTerm upgrade below
         // only runs when the chain allows color.
         if (!$chain->allowsColor()) {
             return ColorProfile::NoTTY;
@@ -482,7 +473,7 @@ final class Palette
      * At ANSI256 an in-range slot is already exactly addressable, so it is
      * passed through as the slot the theme picked — decoding to RGB and
      * re-quantising could knock a themeable basic slot (0-15) onto the fixed
-     * cube and strip the user's palette. At ANSI240 (B-09, chafa's
+     * cube and strip the user's palette. At ANSI240 (chafa's
      * INDEXED_240) that mercy does not extend to slots 0-15: those vary with
      * the user's theme and the 240-colour promise excludes them, so a
      * `38;5;k` with k < 16 is decoded and re-quantised onto the fixed range

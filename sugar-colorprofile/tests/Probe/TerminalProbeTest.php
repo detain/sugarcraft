@@ -7,6 +7,7 @@ namespace SugarCraft\ColorProfile\Tests\Probe;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\ColorProfile\Probe\Capability;
 use SugarCraft\ColorProfile\Probe\ProbeReport;
+use SugarCraft\ColorProfile\Probe\InfocmpBinary;
 use SugarCraft\ColorProfile\Probe\TerminalProbe;
 
 /**
@@ -94,6 +95,11 @@ final class TerminalProbeTest extends TestCase
             // 4. TERM=dumb → NoColor
             'term_dumb returns NoColor' => [
                 ['TERM' => 'dumb'],
+                [Capability::NoColor, Capability::BasicAscii],
+            ],
+            // dumb outranks an advertised COLORTERM (unified ladder)
+            'term_dumb vetoes colorterm' => [
+                ['COLORTERM' => 'truecolor', 'TERM' => 'dumb'],
                 [Capability::NoColor, Capability::BasicAscii],
             ],
 
@@ -338,7 +344,11 @@ final class TerminalProbeTest extends TestCase
         };
         $report = $probe->runProbe([], true);
 
-        $this->assertTrue($report->has(Capability::ITerm2));
+        // Apple_Terminal must NOT advertise ITerm2: Terminal.app has no
+        // OSC 1337 inline-image protocol, and the false positive made
+        // sugar-image's Mosaic pick the iTerm2 wire on a terminal that
+        // renders it as garbage.
+        $this->assertFalse($report->has(Capability::ITerm2));
     }
 
     public function testCheckEscapeQueriesWithHyper(): void
@@ -456,6 +466,47 @@ final class TerminalProbeTest extends TestCase
 
         $this->assertTrue($report->has(Capability::TrueColor));
         $this->assertSame('terminfo:Tc|RGB', $report->source(Capability::TrueColor));
+    }
+
+    public function testCheckTerminfoExecsTheResolvedBinaryNotABarePathLookup(): void
+    {
+        $this->env('TERM', 'xterm-256color');
+
+        $probe = new class(['TERM' => 'xterm-256color']) extends TerminalProbe {
+            public ?string $capturedCommand = null;
+
+            protected function infocmpAvailable(): bool
+            {
+                return true;
+            }
+
+            protected function runCommand(string $cmd): ?string
+            {
+                if (str_contains($cmd, 'infocmp')) {
+                    $this->capturedCommand = $cmd;
+
+                    return " Tc\n";
+                }
+
+                return null;
+            }
+        };
+        $probe->runProbe();
+
+        $binary = InfocmpBinary::path();
+        $this->assertNotNull($probe->capturedCommand);
+        // The exec string must carry exactly what the availability gate
+        // resolved — a bare relative `infocmp` would re-resolve through PATH
+        // at exec time and let a planted entry answer the probe.
+        if ($binary !== null) {
+            $this->assertStringStartsWith($binary, $probe->capturedCommand);
+        } else {
+            // No infocmp on this box: the exec leg must not quietly fall back
+            // to a PATH lookup either; the command must start at the (empty)
+            // resolved path.
+            $this->assertStringStartsWith(' -1 ', $probe->capturedCommand);
+        }
+        $this->assertDoesNotMatchRegularExpression('/^\s*infocmp\s/', $probe->capturedCommand);
     }
 
     public function testCheckTerminfoWithSixel(): void

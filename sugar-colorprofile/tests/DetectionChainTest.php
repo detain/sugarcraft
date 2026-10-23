@@ -45,23 +45,29 @@ final class DetectionChainTest extends TestCase
             ],
             // COLORTERM=24bit|truecolor|yes → truecolor
             'colorterm_24bit returns truecolor' => [
-                ['COLORTERM' => '24bit', 'TERM' => 'dumb'],
+                ['COLORTERM' => '24bit', 'TERM' => 'xterm'],
                 DetectionChain::LEVEL_TRUECOLOR,
                 'env:COLORTERM=24bit',
             ],
             'colorterm_truecolor returns truecolor' => [
-                ['COLORTERM' => 'truecolor', 'TERM' => 'dumb'],
+                ['COLORTERM' => 'truecolor', 'TERM' => 'xterm'],
                 DetectionChain::LEVEL_TRUECOLOR,
                 'env:COLORTERM=truecolor',
             ],
             'colorterm_yes returns truecolor' => [
-                ['COLORTERM' => 'yes', 'TERM' => 'dumb'],
+                ['COLORTERM' => 'yes', 'TERM' => 'xterm'],
                 DetectionChain::LEVEL_TRUECOLOR,
                 'env:COLORTERM=yes',
             ],
             // TERM=dumb → none
             'term_dumb returns none' => [
                 ['TERM' => 'dumb'],
+                DetectionChain::LEVEL_NONE,
+                'env:TERM=dumb',
+            ],
+            // TERM=dumb outranks COLORTERM (unified dumb-first ladder)
+            'term_dumb vetoes colorterm' => [
+                ['COLORTERM' => 'truecolor', 'TERM' => 'dumb'],
                 DetectionChain::LEVEL_NONE,
                 'env:TERM=dumb',
             ],

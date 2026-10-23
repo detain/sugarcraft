@@ -98,10 +98,17 @@ final class ProfileWriter
         if ($this->profile === ColorProfile::NoTTY) {
             $data = Palette::stripAnsi($data);
         } elseif ($this->profile !== ColorProfile::TrueColor) {
-            // Pin to the configured profile — do NOT re-detect from ambient env.
-            // Use null values to block parent state from leaking via $_ENV/getenv.
-            // NO_COLOR=1 forces the intermediate Palette to NoTTY; then
-            // withProfile() overrides to the configured profile for degradation.
+            // Pin to the configured profile: withProfile() below discards
+            // whatever the constructor detected, so the env map is belt-
+            // braces only. NO_COLOR=1 is the one entry with a real effect —
+            // if the override were ever dropped, the palette would default
+            // to no color rather than leaking ambient env detection here.
+            // The null entries are NOT blockers: Palette::envValue treats a
+            // present-but-null key as unset and falls through to $_ENV/getenv;
+            // blocking a key requires omitting it AND clearing the ambient
+            // layers, which this call deliberately does not do.
+            // NOTE (chunk boundary): degrade() operates per write() call —
+            // an SGR sequence split across two calls is not reassembled.
             $palette = (new Palette($this->stream, [
                 'NO_COLOR' => '1',
                 'CLICOLOR_FORCE' => null,
