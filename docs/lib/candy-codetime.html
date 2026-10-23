@@ -44,26 +44,27 @@
           <span class="tag-chip">time-tracking</span>
           <span class="tag-chip">wakatime</span>
           <span class="tag-chip">jsonl</span>
+          <span class="tag-chip">sqlite</span>
           <span class="tag-chip">dashboard</span>
         </div>
       </div>
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-codetime"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-codetime" alt="CandyCodetime code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Tracks edit-time per project / language to a local JSONL file (no cloud, no MongoDB) and renders a SugarCharts-driven dashboard. Editor plug-ins push heartbeats via the <code>tick push</code> CLI subcommand; the dashboard reads them.</p>
+    <p class="lede" style="margin-top: 28px;">Tracks edit-time per project / language to a local append-only JSONL file — or to an optional embedded SQLite backend via <code>--backend=sqlite</code> (no cloud, no database server either way) — and renders a SugarCharts-driven dashboard. Editor plugins record heartbeats with the <code>push</code> CLI subcommand; the dashboard reads whichever backend you picked.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codetime</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell"># Editor plug-in / cron / git hook pushes a heartbeat:
+    <pre class="code"><code class="language-shell"># Editor plugin / cron / git hook pushes a heartbeat:
 candy-codetime push sugarcraft php src/App.php 60
 
 # Open the dashboard:
 candy-codetime
 
 # Override the data dir:
-CANDY_CODETIME_DIR=/var/data/tick candy-codetime</code></pre>
+CANDY_CODETIME_DIR=/var/data/codetime candy-codetime</code></pre>
 <p>Formerly shipped as <code>sugar-tick</code>: the old <code>SUGARTICK_DIR</code> // @rename-keep
 env var and the <code>~/.local/share/sugar-tick</code> data directory are still // @rename-keep
 honoured once and migrated automatically on first launch.</p> <!-- @rename-keep -->
@@ -91,10 +92,11 @@ honoured once and migrated automatically on first launch.</p> <!-- @rename-keep 
     <h3 style="margin-top: 32px;">Key Classes</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Stats</td><td>compute(heartbeats)</td><td>Compute statistics from heartbeats</td></tr>
+<tr><td>Store</td><td>append(heartbeat)</td><td>Record one heartbeat (fail-loud, private file modes)</td></tr>
+<tr><td>SqliteBackend</td><td>insert(heartbeat)</td><td>Record via the optional indexed backend</td></tr>
+<tr><td>Stats</td><td>compute(heartbeats, from, to)</td><td>Pure fold of totals and day buckets</td></tr>
 <tr><td>Heartbeat</td><td>new(time, project, language, file, duration)</td><td>Create a heartbeat</td></tr>
-<tr><td>Dashboard</td><td>new(stats)</td><td>Create dashboard view</td></tr>
-<tr><td>App</td><td>start()</td><td>Create the app model</td></tr>
+<tr><td>Dashboard</td><td>start(reader)</td><td>Load the window over any HeartbeatReader</td></tr>
 </table>
   </div>
 </section>
@@ -102,17 +104,12 @@ honoured once and migrated automatically on first launch.</p> <!-- @rename-keep 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIFs of the shipped demos. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-codetime/.vhs/dashboard.gif" alt="Dashboard">
                 <h3>Dashboard</h3>
                 <span class="demo-caption">Seven-day window with project + language ranking and timeline sparkline.</span>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-codetime/.vhs/push.gif" alt="Push">
-                <h3>Push</h3>
-                <span class="demo-caption">One-shot CLI command that appends heartbeat JSONL entries to the daily log file.</span>
             </div>
         </div>
     </div>
