@@ -228,6 +228,6 @@ final class FlexBoxColumnTest extends TestCase
         );
 
         $lines = \explode("\n", $box->render(10, 10));
-        $this->assertCount(10, $lines, 'largest-remainder carry must use every row');
+        $this->assertCount(10, $lines, 'round-robin remainder carry (equivalent sum contract) must use every row');
     }
 }

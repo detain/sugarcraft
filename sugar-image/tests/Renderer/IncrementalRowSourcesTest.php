@@ -14,7 +14,7 @@ use SugarCraft\Image\Renderer\SixelRows;
 use SugarCraft\Image\Support\PushToPull;
 
 /**
- * Row-source pins for the D-05 incremental contract: every generator's
+ * Row-source pins for the incremental-render contract: every generator's
  * concatenation must equal its renderer's one-shot bytes, and the chunk
  * granularity must be what the pacing layer documents.
  */

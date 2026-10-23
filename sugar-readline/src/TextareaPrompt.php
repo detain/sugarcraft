@@ -86,6 +86,12 @@ final class TextareaPrompt
             return $this;
         }
 
+        // One canonical key language (same choke as TextPrompt and
+        // SelectionPrompt): raw control bytes become symbolic names here so
+        // the arms below fire identically whether driven through Readline or
+        // fed bytes directly.
+        $key = Key::normalize($key);
+
         return match ($key) {
             Key::Up        => $this->moveLine(-1),
             Key::Down      => $this->moveLine(1),

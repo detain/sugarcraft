@@ -165,6 +165,11 @@ try {
 }
 ```
 
+The captured `-g` string is implementation-specific — GNU `stty` prints it as
+dense single tokens (`-icanon`) while BSD/macOS `stty` uses space-separated
+words — so capture and restore on the same machine in the same run; never
+store the string to replay it on another platform.
+
 `sugar-core`'s `SugarCraft\Core\Util\RawMode` and the `sugar-pty` library
 provide the same transition as turnkey helpers if you already depend on them.
 `examples/interactive.php` carries the full recipe with shutdown-safe

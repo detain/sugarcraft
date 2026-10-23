@@ -12,7 +12,7 @@ use SugarCraft\Testing\Graphics\KittyStream;
 
 /**
  * Every emitted kitty APC frame must stay within the protocol's
- * 4096-byte cap. The pre-F-11 shape sliced the BASE64 string at 4092
+ * 4096-byte cap. An earlier shape sliced the BASE64 string at 4092
  * chars, so each data frame carried 9 envelope bytes on top: 4101 bytes
  * — every spec'd receiver truncates it and the image corrupts.
  */
@@ -36,7 +36,7 @@ final class KittyFrameSizeTest extends TestCase
             KittyOptions::DEFAULT_CHUNK_BYTES,
         );
         // Worst-case data frame with the default: 9-byte envelope + full
-        // base64 expansion. The 16-byte margin floor F-11 requires holds.
+        // base64 expansion. The 16-byte margin floor keeps it clear.
         $worst = 9 + 4 * intdiv(KittyOptions::DEFAULT_CHUNK_BYTES, 3);
         $this->assertLessThanOrEqual(KittyOptions::MAX_FRAME_BYTES - 16, $worst);
         // Absolute override ceiling: envelope only, still inside the cap.
@@ -106,8 +106,9 @@ final class KittyFrameSizeTest extends TestCase
     public function testExplicitChunkOverrideIsHonouredAndBounded(): void
     {
         $image = ImageSource::fromFile(self::LARGE_FIXTURE);
-        // 63-byte raw slices mirror chafa's Screen-mode packet size (F-12's
-        // future consumer); every frame must remain far inside the cap.
+        // 63-byte raw slices mirror the packet size chafa's Screen mode
+        // uses (the shape a chafa-backed consumer would emit); every frame
+        // must remain far inside the cap.
         $out = $this->renderer->renderWithOptions(
             $image,
             1024,

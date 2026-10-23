@@ -28,7 +28,10 @@ echo "Paste: select text and paste (bracketed paste mode)\n";
 echo "Type 'quit' to exit.\n\n";
 
 // Raw-ish mode: keep the line discipline out of the way, restore on the way
-// out. `stty -g` prints a settings string that re-applies everything as-is.
+// out. `stty -g` prints a settings string that re-applies everything as-is —
+// note the format is implementation-specific (GNU single tokens like -icanon,
+// BSD/macOS space-separated words), so this save/restore pair stays on one
+// machine within one run.
 $isTty = stream_isatty(STDIN);
 $savedMode = '';
 if ($isTty) {

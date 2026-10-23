@@ -621,6 +621,19 @@ final class ReadlineTest extends TestCase
         $this->assertFalse($p->result());
     }
 
+    public function testConfirmationAcceptsRawControlBytes(): void
+    {
+        // handleKey funnels the symbolic match through Key::normalize(), so
+        // raw control bytes act exactly like their symbolic names — the same
+        // choke TextPrompt and SelectionPrompt use.
+        $p = ConfirmationPrompt::new('Sure?')->handleKey('y')->handleKey("\r");
+        $this->assertTrue($p->isSubmitted());
+        $this->assertTrue($p->result());
+        $q = ConfirmationPrompt::new('Sure?')->handleKey("\x03");
+        $this->assertTrue($q->isAborted());
+        $this->assertFalse($q->result());
+    }
+
     public function testConfirmationViewContainsLabel(): void
     {
         $view = ConfirmationPrompt::new('Continue?')->view();
@@ -640,6 +653,15 @@ final class ReadlineTest extends TestCase
         $this->assertSame(1, $p->lineCount());
         $this->assertSame(0, $p->cursorLine());
         $this->assertSame(0, $p->cursorCol());
+    }
+
+    public function testTextareaAbortsOnRawCtrlCByte(): void
+    {
+        // Same Key::normalize() choke as the other prompts: the raw 0x03
+        // byte reaches the ctrl_c arm without the caller translating it.
+        $p = TextareaPrompt::new('Notes:')->handleChar('a')->handleKey("\x03");
+        $this->assertTrue($p->isAborted());
+        $this->assertFalse($p->isSubmitted());
     }
 
     public function testTextareaTypeOnSingleLine(): void

@@ -69,6 +69,12 @@ final class ConfirmationPrompt
             return $this;
         }
 
+        // One canonical key language (same choke as TextPrompt and
+        // SelectionPrompt): raw control bytes become symbolic names here so
+        // the arms below fire identically whether driven through Readline or
+        // fed bytes directly.
+        $key = Key::normalize($key);
+
         return match ($key) {
             'y', 'Y', Key::Left  => $this->select(true),
             'n', 'N', Key::Right => $this->select(false),
