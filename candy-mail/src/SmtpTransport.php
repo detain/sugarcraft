@@ -342,7 +342,7 @@ final class SmtpTransport implements Transport
      *
      * Mirrors charmbracelet/pop dot-stuffing.
      */
-    protected function dotStuff(string $mime): string
+    private function dotStuff(string $mime): string
     {
         return \preg_replace('/^\./m', '..', $mime);
     }
@@ -351,7 +351,18 @@ final class SmtpTransport implements Transport
     // MIME building
     // -------------------------------------------------------------------------
 
-    protected function buildMimeMessage(Email $email): string
+    /**
+     * Render the full RFC 2046 MIME message for an email (headers + body).
+     *
+     * Public render seam: it performs no I/O, so callers (and the CLI's
+     * `--render` dry-run) can inspect exactly what a send would transmit
+     * without connecting. The single generated boundary is authoritative —
+     * it is declared in the Content-Type header, opens every part, and
+     * closes the message (docs-fix-1023 C-1: a second random boundary used
+     * to open the body part, making every emitted message structurally
+     * invalid for strict parsers).
+     */
+    public function buildMimeMessage(Email $email): string
     {
         $boundary = \bin2hex(\random_bytes(16));
         $lines = [];
@@ -360,7 +371,7 @@ final class SmtpTransport implements Transport
         $lines = \array_merge($lines, $this->buildHeaders($email, $boundary));
 
         // Body
-        $lines = \array_merge($lines, $this->buildBody($email));
+        $lines = \array_merge($lines, $this->buildBody($email, $boundary));
 
         // Attachments
         $lines = \array_merge($lines, $this->buildAttachments($email->attachments, $boundary));
@@ -386,6 +397,8 @@ final class SmtpTransport implements Transport
         if ($email->subject !== null) {
             $lines[] = "Subject: {$this->encodeHeaderWord($email->subject)}";
         }
+        $lines[] = 'Date: ' . \date('r');
+        $lines[] = 'Message-ID: <' . \bin2hex(\random_bytes(16)) . '@' . $this->messageIdHost() . '>';
         $lines[] = "MIME-Version: 1.0";
         $lines[] = "Content-Type: multipart/mixed; boundary=\"{$boundary}\"";
         if ($email->replyTo !== null) {
@@ -397,13 +410,17 @@ final class SmtpTransport implements Transport
     /**
      * Build MIME body parts (text and/or HTML).
      *
+     * The part opener MUST use the caller's declared multipart/mixed
+     * boundary; an inner multipart/alternative declares its own boundary
+     * inside its own part header.
+     *
      * @return list<string>
      */
-    private function buildBody(Email $email): array
+    private function buildBody(Email $email, string $boundary): array
     {
         $lines = [];
         $lines[] = '';
-        $lines[] = '--' . \bin2hex(\random_bytes(16));
+        $lines[] = '--' . $boundary;
 
         $bodyBoundary = \bin2hex(\random_bytes(16));
         if ($email->htmlBody !== null) {
@@ -551,6 +568,17 @@ final class SmtpTransport implements Transport
     private function getHeloHost(): string
     {
         return $this->heloHost !== '' ? $this->heloHost : (\gethostname() ?: 'localhost');
+    }
+
+    /**
+     * RFC 2822 addr-spec domain for the generated Message-ID: the HELO host,
+     * filtered to legal hostname characters so arbitrary heloHost values can
+     * never forge header content.
+     */
+    private function messageIdHost(): string
+    {
+        $clean = \preg_replace('/[^A-Za-z0-9.\-]/', '', $this->getHeloHost());
+        return $clean !== '' ? $clean : 'localhost';
     }
 
     private function addrListHeader(array $addrs): string
