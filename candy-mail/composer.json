@@ -28,6 +28,10 @@
         "sugarcraft/sugar-async": "dev-master",
         "sugarcraft/sugar-core": "dev-master"
     },
+    "suggest": {
+        "ext-curl": "Required by the Resend API transport (ResendTransport); direct SMTP works without it",
+        "ext-fileinfo": "Enables automatic MIME type detection for attachments created from file paths"
+    },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
         "phpstan/phpstan": "^2.2",

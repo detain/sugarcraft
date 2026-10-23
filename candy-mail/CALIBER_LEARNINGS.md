@@ -24,8 +24,16 @@ Pattern: ResendTransport accepts empty constructor and reads RESEND_API_KEY from
 This allows deployment without hardcoding API keys in configuration files.
 Source: findings/plan_candy-mail.md Item 4.2
 
-### 2026-06-30 — getenv() consistency requires second parameter
-Pattern: Use $_ENV['VAR'] ?? getenv('VAR', true) ?: 'default' for consistent behavior.
-getenv() without second parameter returns false if not found, but behavior varies across PHP versions.
-$_ENV is the superglobal array and is more consistent.
+### 2026-06-30 — getenv() and $_ENV are different lookups
+Pattern: use `$_ENV['VAR'] ?? getenv('VAR', true) ?: 'default'` for a total lookup.
+Truth-checked 2026-10-23 (docs-fix-1023): the second parameter DOES exist
+(`mixed_return`, PHP >= 7.1). Without it, `getenv($name)` also consults the
+`$_ENV`/`$_SERVER` superglobals (and php.ini `env=`/`set_env` entries), so a
+test or framework that populates `$_ENV` WITHOUT putenv() changes the answer;
+with `true`, it reads only the real process environment. `$_ENV` itself may be
+empty depending on `variables_order` (CLI default often lacks `E`), which is
+why the chain reads the superglobal first and falls back to the real env.
+getenv() returns `false` when the name is absent — hence the `?:` guard for
+the empty-string case. The original "behavior varies across PHP versions" note
+referred to this split lookup, not to any version inconsistency in getenv().
 Source: findings/plan_candy-mail.md Item 4.7

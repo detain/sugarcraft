@@ -51,6 +51,7 @@ dump('HTML + plain-text multipart with CC / BCC', new Email(
 ));
 
 echo "=== Transports ===\n";
-echo "  SmtpTransport    — host, port, user, pass, encryption=tls|ssl|null\n";
+echo "  SmtpTransport    — host, port, user, pass; TLS required by default\n";
+echo "                     (withImplicitTls/withRequireTls(false)/withCaFile)\n";
 echo "  ResendTransport  — Resend API (RESEND_API_KEY env var)\n";
-echo "  Mailer(\$tx)      — fluent send(\$email): bool, throws on failure\n";
+echo "  Mailer(\$tx)      — send(\$email): void, throws on failure\n";

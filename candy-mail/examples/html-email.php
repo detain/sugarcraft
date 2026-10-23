@@ -6,14 +6,19 @@ declare(strict_types=1);
  * CandyMail CC/BCC and HTML body example.
  *
  * Run: php examples/html-email.php
+ * Prints an offline MIME preview unless RESEND_API_KEY is set.
  */
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Mail\{Email, Mailer, ResendTransport};
+use SugarCraft\Mail\{Email, Mailer, ResendTransport, SmtpTransport};
 
-$transport = new ResendTransport(getenv('RESEND_API_KEY') ?: 're_placeholder');
-$mailer = new Mailer($transport);
+/** Read an env var, treating unset and empty alike. */
+function envNonEmpty(string $name): ?string
+{
+    $value = $_ENV[$name] ?? \getenv($name, true);
+    return \is_string($value) && $value !== '' ? $value : null;
+}
 
 $email = new Email(
     from:     ['sender@example.com'],
@@ -33,9 +38,19 @@ $email = new Email(
 HTML,
 );
 
+$apiKey = envNonEmpty('RESEND_API_KEY');
+if ($apiKey === null) {
+    echo (new SmtpTransport('localhost'))->buildMimeMessage($email);
+    echo "\n[offline preview] set RESEND_API_KEY to send this via the Resend API.\n";
+    exit(0);
+}
+
+$mailer = new Mailer(new ResendTransport($apiKey));
+
 try {
     $mailer->send($email);
     echo "✓ HTML multi-recipient email sent.\n";
 } catch (\Throwable $e) {
     echo "✗ Failed: {$e->getMessage()}\n";
+    exit(1);
 }
