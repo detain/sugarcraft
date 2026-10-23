@@ -25,9 +25,44 @@ final class EmacsModeExtendedTest extends TestCase
         $prompt = TextPrompt::new('> ')->handleChar('a')->handleChar('b');
         $emacs = new EmacsMode();
         $prompt = $prompt->withMode($emacs);
-        // cursor at 0, Ctrl+T at start — cannot transpose
-        $result = $prompt->handleKey("\x14");
+        // Actually rewind to column 0 first — the old version of this test
+        // left the cursor at end-of-line while claiming "cursor at 0",
+        // pinning a no-op that the broken code produced for the wrong reason.
+        $prompt = $prompt->handleKeyDirect(Key::Left)->handleKeyDirect(Key::Left);
+        $result = $prompt->handleKey("\x14"); // raw byte form still accepted
         $this->assertSame('ab', $result->value());
+        $this->assertSame(0, $result->cursor());
+    }
+
+    public function testCtrlTAtEndOfLineSwapsLastTwoCharacters(): void
+    {
+        $prompt = TextPrompt::new('> ')->handleChar('a')->handleChar('b')->handleChar('c')->withMode(new EmacsMode());
+        // readline(3): at EOL transpose swaps the last two chars, cursor stays at EOL.
+        $result = $prompt->handleKey('ctrl_t');
+        $this->assertSame('acb', $result->value());
+        $this->assertSame(3, $result->cursor());
+    }
+
+    public function testCtrlTInMiddleSwapsPairStraddlingCursor(): void
+    {
+        $prompt = TextPrompt::new('> ')
+            ->handleChar('a')->handleChar('b')->handleChar('c')
+            ->handleChar('d')->handleChar('e')->handleChar('f')
+            ->withMode(new EmacsMode());
+        $prompt = $prompt->handleKeyDirect(Key::Left);        // cursor 5 (between e,f)? no: after Home+4 rights
+        $prompt = $prompt->handleKeyDirect(Key::Home);
+        $prompt = $prompt->handleKeyDirect(Key::Right)->handleKeyDirect(Key::Right)->handleKeyDirect(Key::Right);
+        // cursor 3, buffer 'abcdef': swap 'c' (before) and 'd' (at) -> 'abdcef', cursor 4
+        $result = $prompt->handleKey("\x14");
+        $this->assertSame('abdcef', $result->value());
+        $this->assertSame(4, $result->cursor());
+    }
+
+    public function testCtrlTSingleCharacterBufferIsNoOp(): void
+    {
+        $prompt = TextPrompt::new('> ')->handleChar('a')->withMode(new EmacsMode());
+        $result = $prompt->handleKey('ctrl_t');
+        $this->assertSame('a', $result->value());
     }
 
     // =========================================================================

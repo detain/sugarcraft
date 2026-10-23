@@ -23,6 +23,22 @@ final class TextPrompt
     /** History search direction: toward older entries (readline Ctrl+R). */
     public const SEARCH_REVERSE = 1;
 
+    /**
+     * Default (emacs-style) Ctrl movement → the canonical navigation keys
+     * the rest of handleKeyDirect() already implements. Applied before the
+     * match so a plain TextPrompt moves with Ctrl+A/B/E/F/P/N.
+     *
+     * @var array<string, string>
+     */
+    private const EMACS_MOVEMENT_ALIASES = [
+        'ctrl_a' => Key::Home,
+        'ctrl_e' => Key::End,
+        'ctrl_b' => Key::Left,
+        'ctrl_f' => Key::Right,
+        'ctrl_p' => Key::Up,
+        'ctrl_n' => Key::Down,
+    ];
+
     /** History search direction: toward newer entries (readline Ctrl+S). */
     public const SEARCH_FORWARD = -1;
 
@@ -77,9 +93,6 @@ final class TextPrompt
 
     /** Undo/redo manager for buffer changes. */
     private ?UndoManager $undoManager = null;
-
-    /** Syntax highlighter for buffer display. */
-    private ?Highlight $highlight = null;
 
     /** Whether fish-style autosuggest from history is enabled. */
     private bool $autoSuggestEnabled = true;
@@ -186,13 +199,6 @@ final class TextPrompt
         return $clone;
     }
 
-    public function withHighlight(Highlight $highlight): self
-    {
-        $clone = clone $this;
-        $clone->highlight = $highlight;
-        return $clone;
-    }
-
     public function withAutoSuggest(bool $enabled): self
     {
         $clone = clone $this;
@@ -216,6 +222,13 @@ final class TextPrompt
         // buffer, so this runs before the charLimit guard.
         if ($this->searching) {
             return $this->refineSearch($char);
+        }
+        // A mode may claim plain characters as commands (vi normal mode, an
+        // armed emacs meta prefix). Route them through the mode instead of
+        // inserting — otherwise the Readline dispatch would type straight
+        // over the mode's key table.
+        if ($this->mode !== null && $this->mode->consumesCharacters()) {
+            return $this->mode->handleKey($this, $char);
         }
         if ($this->charLimit > 0 && self::charCount($this->buffer) >= $this->charLimit) {
             return $this;
@@ -247,6 +260,11 @@ final class TextPrompt
             return $this;
         }
 
+        // One canonical key language: raw control bytes become symbolic
+        // names here so modes and search arms see the same strings whether
+        // they were driven through Readline or fed bytes directly.
+        $key = Key::normalize($key);
+
         // Active incremental search owns every key — checked before mode
         // delegation so vi/emacs bindings can't hijack search navigation.
         if ($this->searching) {
@@ -271,6 +289,16 @@ final class TextPrompt
             return $this;
         }
 
+        // Same canonical language as handleKey(); idempotent for the
+        // symbolic names modes replay.
+        $key = Key::normalize($key);
+
+        // The default keymap is emacs-style (GNU readline's default): bare
+        // Ctrl movement works on a plain prompt, no EmacsMode attachment
+        // required. The mode keeps its own arms for the meta-prefix
+        // extensions (ESC b/f/d, alt_*).
+        $key = self::EMACS_MOVEMENT_ALIASES[$key] ?? $key;
+
         // History navigation: ↑ / ↓
         if ($key === Key::Up || $key === Key::Down) {
             return $this->navigateHistory($key);
@@ -289,6 +317,10 @@ final class TextPrompt
             Key::Enter     => $this->submit(),
             Key::CtrlR, "\x12" => $this->startHistorySearch(self::SEARCH_REVERSE),
             Key::CtrlS, "\x13" => $this->startHistorySearch(self::SEARCH_FORWARD),
+            // Ctrl+D mirrors GNU readline's delete-char-or-eof: it deletes
+            // the character under the cursor, and on an empty line it acts
+            // as end-of-input (abort).
+            'ctrl_d'       => $this->buffer === '' ? $this->abort() : $this->deleteUnderCursor(),
             Key::Undo      => $this->undo(),
             Key::Redo      => $this->redo(),
             Key::Escape, Key::CtrlC => $this->abort(),
@@ -308,7 +340,9 @@ final class TextPrompt
             return $clone;
         }
         // Push to the ORIGINAL history so the caller's reference is updated.
-        if ($clone->historyOriginal !== null && $clone->buffer !== '') {
+        // Hidden (password) prompts never persist their input: the secret
+        // stays out of both in-memory and on-disk history.
+        if ($clone->historyOriginal !== null && $clone->buffer !== '' && !$clone->hidden) {
             $clone->historyOriginal->push($clone->buffer);
         }
         $clone->submitted = true;

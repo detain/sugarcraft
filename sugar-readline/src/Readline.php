@@ -17,14 +17,18 @@ use SugarCraft\Input\Driver\StreamInputDriver;
  * Run a sugar-readline prompt with real TTY input via sugar-input.
  *
  * Wiring:
- * 1. Construct with an InputDriver (production default: StreamInputDriver::fromStdin()).
+ * 1. Construct with an InputDriver, or leave it null for a pump that owns
+ *    php://stdin (that is also what fromStdin() builds).
  * 2. Register handlers via onKey(), onMouse(), onFocus(), onPaste().
- * 3. Call run() with a prompt that has a handleKey(string) method.
+ * 3. Call run() with a prompt that has a handleKey(string) method, passing
+ *    an output stream (e.g. STDOUT) whenever the prompt should repaint.
  *
- * The decode loop reads bytes from InputDriver, emits typed Events, and
- * routes KeyEvents to the symbolic key handler map. Mouse / focus / paste
- * events are dispatched to optional callbacks — ignored when no handler
- * is registered.
+ * The decode loop reads bytes from the InputDriver, emits typed Events, and
+ * routes KeyEvents to the symbolic key handler map. Key names reaching
+ * handleKey() and the onKey() map are canonical symbolic names (see
+ * {@see Key::normalize()}) — control bytes like "\x01" arrive as 'ctrl_a'.
+ * Mouse / focus / paste events are dispatched to optional callbacks —
+ * ignored when no handler is registered.
  *
  * @see Mirrors charmbracelet/bubbletea (input handling).
  */
@@ -51,8 +55,12 @@ final class Readline
     /** Ceiling flag for the input pump — see stop(). Plain bool store, safe from a signal callback. */
     private bool $stopped = false;
 
+    /** Rows painted by the previous repaint() — drives the multi-line erase sequence. */
+    private int $lastPaintedRows = 0;
+
     /**
-     * @param InputDriver|null $input       Defaults to StreamInputDriver::fromStdin()
+     * @param InputDriver|null $input       Null (default) opens a pump over php://stdin
+     *                                      inside run(); that pump is EOF-aware (see run()).
      * @param callable|null    $idleSleeper Test seam invoked with the computed idle-poll
      *                                      delay in microseconds; defaults to usleep().
      */
@@ -64,10 +72,13 @@ final class Readline
 
     /**
      * Factory: build a Readline that reads from STDIN.
+     *
+     * Identical to `new Readline()` — the loop opens php://stdin itself, which
+     * is what makes the pump's true-EOF exit work (see run()).
      */
     public static function fromStdin(): self
     {
-        return new self(new StreamInputDriver(fopen('php://stdin', 'r')));
+        return new self();
     }
 
     // -------------------------------------------------------------------------
@@ -77,21 +88,28 @@ final class Readline
     /**
      * Register a handler for a symbolic key name.
      *
-     * Symbolic names:
+     * The name is canonicalised through {@see Key::normalize()} at
+     * registration, so 'escape' and the ESC byte register under the same
+     * canonical 'esc' the dispatch loop produces. Symbolic names:
      *  - Navigation: 'up', 'down', 'left', 'right', 'home', 'end', 'pageup', 'pagedown'
      *  - Editing: 'tab', 'enter', 'backspace', 'delete', 'space', 'undo', 'redo'
-     *  - Control: 'ctrl_c', 'ctrl_u', 'ctrl_k', 'ctrl_w'
-     *  - Meta: 'escape'
+     *  - Control: 'ctrl_a'–'ctrl_z' (notably 'ctrl_c', 'ctrl_d', 'ctrl_u',
+     *    'ctrl_k', 'ctrl_w')
+     *  - Meta: 'esc', and 'alt_<key>' for Alt-chords reported with the ALT
+     *    modifier (kitty keyboard protocol)
      *  - Plain chars: 'a'–'z', 'A'–'Z', '0'–'9', etc.
      *  - Function: 'f1'–'f12'
      *
-     * @param string $key      Symbolic key name
+     * Handlers ADD to the prompt's own dispatch — they run before it and do
+     * not replace it.
+     *
+     * @param string $key      Symbolic key name (normalised)
      * @param callable(KeyEvent): void $handler
      */
     public function onKey(string $key, callable $handler): self
     {
         $clone = clone $this;
-        $clone->keyHandlers[$key] = $handler;
+        $clone->keyHandlers[Key::normalize($key)] = $handler;
         return $clone;
     }
 
@@ -137,7 +155,7 @@ final class Readline
 
     /**
      * Sleep for the first empty (no-data) read; doubles per consecutive empty
-     * read until capped at IDLE_POLL_MAX_MICROSECONDS (E713 ladder floor).
+     * read until capped at IDLE_POLL_MAX_MICROSECONDS.
      */
     public const IDLE_POLL_MIN_MICROSECONDS = 1_000;
 
@@ -176,7 +194,7 @@ final class Readline
 
     /**
      * Sleep duration in microseconds for the Nth consecutive empty read:
-     * 1ms floor, doubling per pass, 20ms cap (E713 idle backoff ladder).
+     * 1ms floor, doubling per pass, 20ms cap (idle backoff ladder).
      *
      * Pure and static so the ladder is pinned without wall-clock timing.
      * Counts below 1 coerce to the floor; absurd counts stay capped — the
@@ -199,35 +217,62 @@ final class Readline
     /**
      * Run the readline loop over a prompt object.
      *
-     * Reads events from InputDriver and routes them to registered handlers.
-     * For KeyEvents, dispatches to the symbolic key handler (by key name)
-     * and also invokes the prompt's handleChar() for printable keys or
-     * handleKey() for control keys.
+     * Reads events from the InputDriver and routes them to registered
+     * handlers. For KeyEvents, dispatches to the symbolic key handler (by
+     * canonical key name — see {@see Key::normalize()}) and also invokes the
+     * prompt's handleChar() for printable keys or handleKey() otherwise.
      *
-     * After each state change, if an output stream is provided and the prompt
-     * exposes a view() method, writes a redraw sequence to the output.
+     * Painting: pass $output (e.g. STDOUT) to make the loop repaint after
+     * each state change whenever the prompt exposes a view() method. With
+     * $output null — the default — NOTHING is written: the loop still
+     * mutates prompt state from injected input, but an interactive caller
+     * that passes no stream will type blind.
+     *
+     * Terminal mode contract: run() does not touch termios. In a cooked
+     * (default) TTY the line discipline owns Enter/Backspace/arrows and
+     * echoes typed characters itself, so multi-key chords (arrows, Ctrl
+     * combos, vi/emacs bindings) only work on a real terminal after the
+     * CALLER puts the TTY in raw mode — e.g. `stty -icanon -echo min 1
+     * time 0`, restoring `stty sane` (or the saved `stty -g` state) on
+     * exit. examples/interactive.php shows the guarded recipe, and
+     * sugar-core\Util\RawMode / sugar-pty offer turnkey versions. Piped or
+     * socket input (tests, scripted drives) needs no such setup — there is
+     * no discipline to fight.
      *
      * While running, bracketed paste mode (DEC private mode 2004) is enabled
      * on the output terminal so pastes arrive as a single PasteEvent instead
      * of a keystroke storm; it is restored on every exit path. Only emitted
      * when the output is a real TTY, so tests and piped output are unaffected.
      *
-     * Poll contract (E713, round 82): this is the interactive input pump —
-     * by design it waits for input rather than returning on a schedule. Its
-     * idle cost and lifetime are nevertheless bounded. Empty reads back off
-     * exponentially from IDLE_POLL_MIN_MICROSECONDS (1ms) doubling per
-     * consecutive empty read up to the IDLE_POLL_MAX_MICROSECONDS cap (20ms),
-     * and snap back to the floor on any activity; a fully idle pump costs at
-     * most 50 wake-ups per second. The wait itself is bounded by stop(): the
-     * loop checks the ceiling flag on every pass, so run() returns within one
-     * idle poll of the call. When the loop ends via stop() the current prompt
-     * state is returned untouched — neither submitted nor aborted; inspect
-     * isSubmitted()/isAborted() to learn how the exchange ended. Note this is
-     * an input-side idle bound, not a wall-clock kill on a request (E646).
+     * Poll contract: this is the interactive input pump — by design it waits
+     * for input rather than returning on a schedule. Its idle cost and
+     * lifetime are nevertheless bounded. Empty reads back off exponentially
+     * from IDLE_POLL_MIN_MICROSECONDS (1ms) doubling per consecutive empty
+     * read up to the IDLE_POLL_MAX_MICROSECONDS cap (20ms), and snap back to
+     * the floor on any activity; a fully idle pump costs at most 50 wake-ups
+     * per second. The wait itself is bounded by stop(): the loop checks the
+     * ceiling flag on every pass, so run() returns within one idle poll of
+     * the call. When the loop ends via stop() the current prompt state is
+     * returned untouched — neither submitted nor aborted; inspect
+     * isSubmitted()/isAborted() to learn how the exchange ended. Note this
+     * is an input-side idle bound, not a wall-clock timeout on any operation.
      *
-     * @param object       $prompt  Object with handleKey(string): object method
-     * @param resource|null $output Output stream for repainting (default: STDOUT)
-     * @return object  The final prompt state after user submits, aborts, or stop() fires
+     * EOF: when the pump owns its stream (input null / fromStdin()), a
+     * true end-of-file — STDIN redirected from a finished pipe or
+     * /dev/null — ends the loop the same way: run() returns the current
+     * prompt state, neither submitted nor aborted, instead of spinning on
+     * the idle ladder forever. An INJECTED driver cannot be distinguished:
+     * the sugar-input InputDriver contract reports null for both EOF and
+     * momentarily-live-empty reads, so an injected stream at EOF keeps the
+     * pump idling until stop() or an abort key. Pass a driver you control,
+     * or call stop() from the producer side.
+     *
+     * @param object        $prompt Object with handleKey(string): object method
+     * @param resource|null $output Output stream for repainting; null (the
+     *                              default) paints nothing — pass STDOUT to
+     *                              see the prompt.
+     * @return object  The final prompt state after the user submits, aborts,
+     *                 stop() fires, or the owned pump reaches EOF
      */
     public function run(object $prompt, $output = null): object
     {
@@ -247,7 +292,14 @@ final class Readline
      */
     private function runLoop(object $prompt, $output): object
     {
-        $driver = $this->input ?? new StreamInputDriver(fopen('php://stdin', 'r'));
+        $ownStream = null;
+        $eofDelivered = false;
+        if ($this->input === null) {
+            $ownStream = fopen('php://stdin', 'r');
+            $driver = new StreamInputDriver($ownStream);
+        } else {
+            $driver = $this->input;
+        }
 
         // Initial frame: repaint before entering the loop
         $this->repaint($prompt, $output);
@@ -256,15 +308,27 @@ final class Readline
 
         while (true) {
             if ($this->stopped) {
-                // Cancel ceiling (E713): stop() from a signal handler,
-                // watchdog, or this process. Last prompt state, untouched.
+                // Cancel ceiling: stop() from a signal handler, watchdog, or
+                // this process. Last prompt state, untouched.
                 return $prompt;
             }
 
             $event = $driver->read();
 
             if ($event === null) {
-                // No data this pass. Back off along the E713 ladder instead
+                // True EOF on the stream we own: exit with the current state
+                // rather than idling forever. The drain-on-EOF contract means
+                // a null after a delivered EOF is final — no data can follow.
+                // An injected driver reports null for EOF and live-empty
+                // alike, so it cannot be judged here.
+                if ($ownStream !== null && ($eofDelivered || feof($ownStream))) {
+                    return $prompt;
+                }
+                if ($ownStream !== null && feof($ownStream)) {
+                    $eofDelivered = true;
+                }
+
+                // No data this pass. Back off along the idle ladder instead
                 // of a fixed 20ms spin; the sleeper seam lets tests pin the
                 // schedule without wall-clock time.
                 $consecutiveEmptyReads++;
@@ -363,8 +427,12 @@ final class Readline
      * Write a redraw sequence to the output stream if provided and the prompt
      * exposes a view() method.
      *
-     * Emits "\r\x1b[K" (carriage-return + clear-line) followed by the view
-     * output to ensure the prompt line is refreshed cleanly.
+     * Each frame erases what the previous frame painted — the cursor is
+     * moved back up by the prior frame's row count and `CSI 0J` clears from
+     * cursor to end of screen — so multi-row views (suggestions, search
+     * rows) refresh in place instead of leaving a staircase. The view is
+     * assumed to fit the terminal width; wrapping rows would confuse any
+     * row-count-based repaint.
      */
     private function repaint(object $prompt, mixed $output): void
     {
@@ -378,7 +446,13 @@ final class Readline
         if ($view === '') {
             return;
         }
-        fwrite($output, "\r\x1b[K" . $view . "\n");
+        $sequence = "\r";
+        if ($this->lastPaintedRows > 0) {
+            $sequence .= "\x1b[" . $this->lastPaintedRows . "A";
+        }
+        $sequence .= "\x1b[0J" . $view . "\n";
+        $this->lastPaintedRows = substr_count($view, "\n") + 1;
+        fwrite($output, $sequence);
     }
 
     /**
@@ -499,10 +573,13 @@ final class Readline
             if (strlen($letter) === 1 && ctype_alpha($letter)) {
                 return 'ctrl_' . $letter;
             }
-            // If key is a special name like 'Escape' with Ctrl, map specially
+            // If key is a special name like 'Escape' with Ctrl, map specially.
+            // Ctrl+[ is the GNU antecedent for ESC itself (0x1B), and Ctrl+ESC
+            // decodes to the same byte — both are 'esc', never the abort of
+            // Ctrl+C.
             $ctrlMap = [
-                'Escape' => 'ctrl_c',  // Ctrl+[ is escape, but Ctrl+C is the canonical abort
-                '[' => 'ctrl_c',
+                'Escape' => 'esc',
+                '[' => 'esc',
             ];
             return $ctrlMap[$key] ?? 'ctrl_' . $letter;
         }

@@ -131,26 +131,28 @@ final class ReadlineExtendedTest extends TestCase
     // symbolicKey — Ctrl modifier special cases
     // =========================================================================
 
-    public function testSymbolicKeyCtrlEscapeMapsToCtrlC(): void
+    public function testSymbolicKeyCtrlEscapeMapsToEsc(): void
     {
         $readline = new Readline();
         $refl = new \ReflectionClass($readline);
         $method = $refl->getMethod('symbolicKey');
         $method->setAccessible(true);
 
+        // Ctrl+ESC carries the ESC byte — it is meta, not the Ctrl+C abort.
         $event = new KeyEvent('Escape', KeyModifier::CTRL(), "\x1b");
-        $this->assertSame('ctrl_c', $method->invoke($readline, $event));
+        $this->assertSame('esc', $method->invoke($readline, $event));
     }
 
-    public function testSymbolicKeyCtrlBracketMapsToCtrlC(): void
+    public function testSymbolicKeyCtrlBracketMapsToEsc(): void
     {
         $readline = new Readline();
         $refl = new \ReflectionClass($readline);
         $method = $refl->getMethod('symbolicKey');
         $method->setAccessible(true);
 
+        // GNU readline antecedent: Ctrl+[ is 0x1B, identical to ESC.
         $event = new KeyEvent('[', KeyModifier::CTRL(), "\x1b");
-        $this->assertSame('ctrl_c', $method->invoke($readline, $event));
+        $this->assertSame('esc', $method->invoke($readline, $event));
     }
 
     public function testSymbolicKeyCtrlDash(): void

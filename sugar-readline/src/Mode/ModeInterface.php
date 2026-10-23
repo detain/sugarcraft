@@ -32,16 +32,29 @@ interface ModeInterface
     /**
      * Handle a keypress within this mode.
      *
-     * Receives raw control bytes (e.g. "\x01" for Ctrl+A) or sugar-readline
-     * symbolic names ({@see \SugarCraft\Readline\Key}); each mode documents
-     * which forms it matches. Implementations must route unhandled keys to
-     * $prompt->handleKeyDirect() so the default bindings still apply.
+     * Keys arrive in the canonical symbolic language of
+     * {@see \SugarCraft\Readline\Key} — raw control bytes are translated by
+     * {@see \SugarCraft\Readline\Key::normalize()} at the prompt entry
+     * points, so both forms reach the same bindings. Implementations must
+     * route unhandled keys to $prompt->handleKeyDirect() so the default
+     * bindings still apply.
      *
      * @param TextPrompt $prompt The current prompt state
      * @param string     $key    The key that was pressed
      * @return TextPrompt A new TextPrompt (possibly with an updated mode attached)
      */
     public function handleKey(TextPrompt $prompt, string $key): TextPrompt;
+
+    /**
+     * Whether the mode claims plain printable characters as commands.
+     *
+     * When true, TextPrompt::handleChar() routes the character into
+     * handleKey() instead of inserting it — this is how vi normal mode keeps
+     * 'h' from typing, and how an armed Escape/meta prefix consumes its
+     * following letter. Default editing modes return false so typing still
+     * types.
+     */
+    public function consumesCharacters(): bool;
 
     /**
      * The name of this mode, used for introspection and tests.

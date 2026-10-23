@@ -10,31 +10,38 @@ use SugarCraft\Readline\TextPrompt;
 /**
  * Emacs-style key-binding mode for TextPrompt.
  *
- * Key bindings (in addition to TextPrompt defaults):
+ * Key bindings (in addition to TextPrompt defaults — Enter, Tab, Backspace,
+ * Delete, arrows, Ctrl+U/K/W/C and friends still come from
+ * TextPrompt::handleKeyDirect()):
  * - Ctrl+A     → move cursor to line start
  * - Ctrl+E     → move cursor to line end
  * - Ctrl+B     → move cursor left (back)
  * - Ctrl+F     → move cursor right (forward)
  * - Alt+B      → move one word backward
  * - Alt+F      → move one word forward
+ * - Alt+D      → delete word after cursor
  * - Ctrl+W     → delete word before cursor
- * - Alt+D       → delete word after cursor
- * - Ctrl+T      → transpose characters
- * - Ctrl+L      → no-op (clear screen — TTY level)
+ * - Ctrl+T     → transpose characters (readline(3) semantics, see transposeChars())
+ * - Ctrl+L     → no-op (clear screen — TTY level)
  * - Ctrl+P     → history previous (Up arrow)
  * - Ctrl+N     → history next (Down arrow)
  * - Ctrl+R     → reverse incremental history search
  * - Ctrl+S     → forward incremental history search
  *
- * Alt-prefixed keys arrive as Escape prefix followed by the character.
+ * Meta (Alt) chords arrive in two shapes and both are accepted: terminals
+ * with meta-sends-escape send Escape followed by the letter, and
+ * kitty-keyboard terminals report the Alt modifier directly (mapped to
+ * 'alt_b'/'alt_f'/'alt_d'). Escape by itself arms the meta prefix; a second
+ * Escape cancels it (like GNU readline) — while the prefix is armed, Escape
+ * does NOT abort. Callers who want Escape to quit should leave this mode
+ * unattached, where Escape stays bound to abort.
  *
  * Mirrors erikgeiser/promptkit emacs mode.
  */
 final class EmacsMode implements ModeInterface
 {
-    public function __construct(
-        private readonly TextPrompt $originalPrompt = new TextPrompt(''),
-    ) {
+    public function __construct()
+    {
     }
 
     public function name(): string
@@ -42,66 +49,82 @@ final class EmacsMode implements ModeInterface
         return 'emacs';
     }
 
+    public function consumesCharacters(): bool
+    {
+        // Only while a meta prefix is armed: the next letter is an Alt chord,
+        // not a character to insert.
+        return $this->altPrefix;
+    }
+
     public function handleKey(TextPrompt $prompt, string $key): TextPrompt
     {
+        $key = Key::normalize($key);
+
+        // Meta chords reported directly by extended-key terminals (kitty):
+        // Alt+B / Alt+F / Alt+D — no Escape prefix state involved.
+        if (\in_array($key, ['alt_b', 'alt_f', 'alt_d'], true)) {
+            return $this->handleAltKey($prompt, substr($key, 4));
+        }
+
         // Ctrl+A → line start
-        if ($key === $this->ctrlChar('a')) {
+        if ($key === 'ctrl_a') {
             return $this->attachTo($prompt->handleKeyDirect(Key::Home));
         }
 
         // Ctrl+E → line end
-        if ($key === $this->ctrlChar('e')) {
+        if ($key === 'ctrl_e') {
             return $this->attachTo($prompt->handleKeyDirect(Key::End));
         }
 
         // Ctrl+B → move left
-        if ($key === $this->ctrlChar('b')) {
+        if ($key === 'ctrl_b') {
             return $this->attachTo($prompt->handleKeyDirect(Key::Left));
         }
 
         // Ctrl+F → move right
-        if ($key === $this->ctrlChar('f')) {
+        if ($key === 'ctrl_f') {
             return $this->attachTo($prompt->handleKeyDirect(Key::Right));
         }
 
         // Ctrl+P → history previous (Up)
-        if ($key === $this->ctrlChar('p')) {
+        if ($key === 'ctrl_p') {
             return $this->attachTo($prompt->handleKeyDirect(Key::Up));
         }
 
         // Ctrl+N → history next (Down)
-        if ($key === $this->ctrlChar('n')) {
+        if ($key === 'ctrl_n') {
             return $this->attachTo($prompt->handleKeyDirect(Key::Down));
         }
 
         // Ctrl+R / Ctrl+S → reverse / forward incremental history search.
         // Once active, TextPrompt::handleKey() intercepts every key before
         // delegating to this mode, so only search entry is handled here.
-        if ($key === $this->ctrlChar('r') || $key === Key::CtrlR) {
+        if ($key === 'ctrl_r' || $key === Key::CtrlR) {
             return $this->attachTo($prompt->startHistorySearch(TextPrompt::SEARCH_REVERSE));
         }
-        if ($key === $this->ctrlChar('s') || $key === Key::CtrlS) {
+        if ($key === 'ctrl_s' || $key === Key::CtrlS) {
             return $this->attachTo($prompt->startHistorySearch(TextPrompt::SEARCH_FORWARD));
         }
 
         // Ctrl+W → delete word before cursor
-        if ($key === $this->ctrlChar('w')) {
+        if ($key === 'ctrl_w') {
             return $this->attachTo($this->deleteWordBefore($prompt));
         }
 
         // Ctrl+T → transpose characters
-        if ($key === $this->ctrlChar('t')) {
+        if ($key === 'ctrl_t') {
             return $this->attachTo($this->transposeChars($prompt));
         }
 
         // Ctrl+L → clear screen (no-op at prompt level, just keep prompt)
-        if ($key === $this->ctrlChar('l')) {
+        if ($key === 'ctrl_l') {
             return $this->attachTo($prompt);
         }
 
-        // Escape prefix for Alt-based bindings
+        // Escape arms the meta prefix; a second Escape cancels it (GNU
+        // readline: ESC ESC aborts the pending meta binding, not the prompt).
         if ($key === Key::Escape) {
-            return $this->withAltPrefix(true)->attachTo($prompt);
+            return $this->withAltPrefix(!$this->isAltPrefix())->attachTo($prompt);
         }
 
         // If we are in Alt-prefix waiting mode, handle Alt+B / Alt+F / Alt+D
@@ -309,63 +332,59 @@ final class EmacsMode implements ModeInterface
     // Transpose
     // -------------------------------------------------------------------------
 
+    /**
+     * Transpose the character before the cursor with the character at the
+     * cursor, following readline(3) `transpose-chars` semantics:
+     *
+     * - Cursor in the middle (0 < cursor < length): swap buffer[cursor-1]
+     *   and buffer[cursor]; the cursor ends just after the swapped pair.
+     * - Cursor at end of line (length > 0): swap the last two characters
+     *   and leave the cursor at end of line.
+     * - Empty buffer, single character, or cursor at column 0: no-op.
+     *
+     * Implemented as a key replay (rewind to the pair, two Deletes, two
+     * inserts) so buffer/cursor/undo stay inside TextPrompt's own mutation
+     * path — modes never touch prompt state directly.
+     */
     private function transposeChars(TextPrompt $prompt): TextPrompt
     {
         $buffer = $prompt->value();
         $cursor = $prompt->cursor();
         $len = mb_strlen($buffer, 'UTF-8');
 
-        // Need at least 2 characters to transpose
+        // Need at least 2 characters, and a character to the left of the
+        // cursor — transpose at column 0 has nothing before it to swap.
         if ($len < 2 || $cursor === 0) {
             return $prompt;
         }
 
-        // At end of buffer: transpose previous two characters
-        if ($cursor >= $len) {
-            $lastChar = mb_substr($buffer, -1, 1, 'UTF-8');
-            $secondLast = mb_substr($buffer, -2, 1, 'UTF-8');
-            // Move cursor back one
-            $p = $prompt->handleKeyDirect(Key::Left);
-            // Delete last char and insert in correct order using handleKeyDirect
-            $p = $p->handleKeyDirect(Key::Delete);  // delete last char (now at cursor)
-            $p = $p->handleKeyDirect(Key::Left);     // back to second-last position
-            $p = $p->handleKeyDirect(Key::Delete);  // delete second-last
-            $p = $p->handleChar($secondLast); // insert second-last
-            $p = $p->handleChar($lastChar);   // insert last
-            return $p;
-        }
+        // Index of the FIRST character of the pair to swap. At end of line
+        // that is the last pair; in the middle it is the pair straddling the
+        // cursor (the character before it and the character under it).
+        $pairStart = $cursor >= $len ? $len - 2 : $cursor - 1;
 
-        // In middle: swap char at cursor with previous char
-        $prevChar = mb_substr($buffer, $cursor - 1, 1, 'UTF-8');
-        $currChar = mb_substr($buffer, $cursor, 1, 'UTF-8');
+        $first  = mb_substr($buffer, $pairStart, 1, 'UTF-8');
+        $second = mb_substr($buffer, $pairStart + 1, 1, 'UTF-8');
 
-        // Simpler approach: move to position, delete both, insert reversed using handleKeyDirect
-        $p = $prompt;
-        // Go to the character before cursor
-        if ($cursor > 1) {
-            for ($i = 0; $i < $cursor - 1; $i++) {
-                $p = $p->handleKeyDirect(Key::Left);
-            }
-        } else {
-            $p = $p->handleKeyDirect(Key::Left); // at position 0, one left = at 0, cursor now 0
+        // Rewind to the pair start, delete both characters forward, then
+        // re-insert them swapped. Each Delete consumes the character AT the
+        // cursor, and each handleChar appends at the cursor, so the cursor
+        // lands immediately after the swapped pair.
+        $p = $prompt->handleKeyDirect(Key::Home);
+        for ($i = 0; $i < $pairStart; $i++) {
+            $p = $p->handleKeyDirect(Key::Right);
         }
-        // Delete two chars and insert reversed
-        $p = $p->handleKeyDirect(Key::Delete); // delete prev
-        $p = $p->handleKeyDirect(Key::Delete); // delete curr
-        $p = $p->handleChar($currChar);
-        $p = $p->handleChar($prevChar);
+        $p = $p->handleKeyDirect(Key::Delete);
+        $p = $p->handleKeyDirect(Key::Delete);
+        $p = $p->handleChar($second);
+        $p = $p->handleChar($first);
+
         return $p;
     }
 
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
-
-    private function ctrlChar(string $char): string
-    {
-        $code = ord($char) - ord('a') + 1;
-        return chr($code);
-    }
 
     private function attachTo(TextPrompt $prompt): TextPrompt
     {

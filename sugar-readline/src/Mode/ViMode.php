@@ -20,7 +20,9 @@ use SugarCraft\Readline\TextPrompt;
  * - insert: default; ESC enters normal mode; typing inserts characters via TextPrompt
  * - normal: h/l/0/$/b/w move cursor; i/a/A switch to insert mode; dd deletes line;
  *   text objects c/d/y + i/a + target (ci" di( da{ yiw ...) via sugar-forms TextObject
- * - visual: v from normal; movement extends selection (selection stored in prompt mode)
+ * - visual: v from normal; movement keys reposition the cursor, but the
+ *   selection itself is neither rendered nor operated on yet (motion-only
+ *   scaffold — there is no d/y-over-selection yet)
  *
  * Uses VimKeyHandler from sugar-forms for key-to-action mapping.
  *
@@ -41,9 +43,8 @@ final class ViMode implements ModeInterface
     /** Set when a pending operator was followed by i/a — waiting for the text-object target key. */
     private ?TextObjectScope $pendingScope = null;
 
-    public function __construct(
-        private readonly TextPrompt $originalPrompt = new TextPrompt(''),
-    ) {
+    public function __construct()
+    {
     }
 
     public function name(): string
@@ -53,6 +54,23 @@ final class ViMode implements ModeInterface
 
     public function handleKey(TextPrompt $prompt, string $key): TextPrompt
     {
+        // Canonicalize once: callers may feed raw control bytes or symbolic
+        // names (Key::normalize is idempotent, so both reach the same arms).
+        $key = Key::normalize($key);
+
+        // ESC+letter merged into one event ('alt_x' — what sugar-input
+        // reports when meta and body arrive in the same read chunk): vi
+        // reads that as Escape, THEN the letter as a command.
+        if (str_starts_with($key, 'alt_')) {
+            $letter = substr($key, 4);
+            if ($letter !== '' && mb_strlen($letter, 'UTF-8') === 1) {
+                $normal = $this->withViMode(self::VI_MODE_NORMAL)
+                    ->withPendingMotion(null)
+                    ->withPendingScope(null);
+                return $normal->handleKey($normal->clampToLastChar($prompt), $letter);
+            }
+        }
+
         // Always delegate Escape to normal mode switch. Standard vi pulls the
         // cursor back onto the last character when leaving insert mode at EOL.
         if ($key === Key::Escape) {
@@ -69,6 +87,13 @@ final class ViMode implements ModeInterface
             self::VI_MODE_VISUAL => $this->handleVisualMode($prompt, $key),
             default               => $prompt,
         };
+    }
+
+    public function consumesCharacters(): bool
+    {
+        // Normal and visual submodes read plain letters as vi commands
+        // (h/l/i/dd/ci"…), not as text to insert. Insert mode types normally.
+        return $this->viMode !== self::VI_MODE_INSERT;
     }
 
     // -------------------------------------------------------------------------
@@ -117,11 +142,12 @@ final class ViMode implements ModeInterface
      */
     private function normalizeKey(string $key): ?array
     {
-        // Handle Ctrl+P/Ctrl+N as history navigation
-        if ($key === "\x10") {
+        // Handle Ctrl+P/Ctrl+N as history navigation (symbolic — raw bytes
+        // were canonicalized by handleKey()'s normalize).
+        if ($key === 'ctrl_p') {
             return ['ctrl_p', false];
         }
-        if ($key === "\x0e") {
+        if ($key === 'ctrl_n') {
             return ['ctrl_n', false];
         }
 

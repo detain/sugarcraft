@@ -100,6 +100,8 @@ final class MultiSelectPrompt
             return $this;
         }
 
+        $key = Key::normalize($key);
+
         return match ($key) {
             Key::Up       => $this->moveCursor(-1),
             Key::Down     => $this->moveCursor(1),
@@ -110,8 +112,37 @@ final class MultiSelectPrompt
             Key::Space    => $this->toggleCurrent(),
             Key::Enter    => $this->submit(),
             Key::Escape, Key::CtrlC => $this->abort(),
+            // Filter editing — mirrors the [filter] bar the view renders.
+            Key::Backspace => $this->withFilter(mb_substr($this->filter, 0, max(0, mb_strlen($this->filter, 'UTF-8') - 1), 'UTF-8')),
+            'ctrl_u'       => $this->withFilter(''),
             default       => $this,
         };
+    }
+
+    /**
+     * Type-to-filter: plain characters extend the search needle shown in the
+     * [filter] bar (case-insensitive substring match via withFilter()).
+     * Space toggles rather than filters — that binding wins, as documented.
+     */
+    public function handleChar(string $char): self
+    {
+        if ($this->submitted || $this->aborted) {
+            return $this;
+        }
+        if ($char === '' || mb_strlen($char, 'UTF-8') !== 1) {
+            return $this;
+        }
+        $ord = \ord($char);
+        if ($ord === 32) {
+            // Space is a bound key (toggle), never needle text — some
+            // decoders surface it as the raw character.
+            return $this->handleKey(Key::Space);
+        }
+        if ($ord < 32 || $ord === 127) {
+            // Control bytes belong to handleKey(), not the needle.
+            return $this;
+        }
+        return $this->withFilter($this->filter . $char);
     }
 
     public function submit(): self

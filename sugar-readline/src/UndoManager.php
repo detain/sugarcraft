@@ -13,9 +13,16 @@ namespace SugarCraft\Readline;
  * Stack layout: [newest, ..., oldest]
  * - undo() pops newest and pushes to redo, returns the now-new-top
  * - redo() pops redo-stack and pushes to undo, returns it
+ *
+ * Both stacks are bounded at self::MAX_STATES entries; the oldest states
+ * fall off the tail. Undo history is a convenience, not an archive: a
+ * long typing session (every keystroke pushes) must not grow memory
+ * without limit.
  */
 final readonly class UndoManager
 {
+    /** Maximum states retained per stack (newest survive, oldest evicted). */
+    public const int MAX_STATES = 512;
     /**
      * @param list<string> $undoStack States to restore on undo (newest first).
      * @param list<string> $redoStack States to restore on redo (newest first).
@@ -34,7 +41,7 @@ final readonly class UndoManager
     }
 
     /**
-     * True if there are redo to redo.
+     * True if there are states to redo.
      */
     public function canRedo(): bool
     {
@@ -44,14 +51,18 @@ final readonly class UndoManager
     /**
      * Push a new state onto the undo stack.
      *
-     * Clears the redo stack (standard undo behavior).
+     * Clears the redo stack (standard undo behavior) and evicts the oldest
+     * undo states past self::MAX_STATES.
      *
      * @param string $state The state to save for potential undo.
      * @return self A new UndoManager with the state pushed.
      */
     public function push(string $state): self
     {
-        return new self([$state, ...$this->undoStack], []);
+        return new self(
+            \array_slice([$state, ...$this->undoStack], 0, self::MAX_STATES),
+            [],
+        );
     }
 
     /**
@@ -70,7 +81,10 @@ final readonly class UndoManager
         $newUndoStack = \array_slice($this->undoStack, 1);
 
         return [
-            new self($newUndoStack, [$current, ...$this->redoStack]),
+            new self(
+                $newUndoStack,
+                \array_slice([$current, ...$this->redoStack], 0, self::MAX_STATES),
+            ),
             $restored,
             true,
         ];
@@ -92,7 +106,10 @@ final readonly class UndoManager
         $newRedoStack = \array_slice($this->redoStack, 1);
 
         return [
-            new self([$current, ...$this->undoStack], $newRedoStack),
+            new self(
+                \array_slice([$current, ...$this->undoStack], 0, self::MAX_STATES),
+                $newRedoStack,
+            ),
             $restored,
             true,
         ];

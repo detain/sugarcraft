@@ -1081,8 +1081,8 @@ final class ReadlineTest extends TestCase
         $captured = stream_get_contents($output);
         fclose($output);
 
-        // Redraw sequence: \r\x1b[K followed by view() output + \n
-        $this->assertStringContainsString("\x1b[K", $captured);
+        // Redraw sequence: \r + clear-to-end-of-screen + view() output + \n
+        $this->assertStringContainsString("\x1b[0J", $captured);
         // At least one character from the rendered buffer should appear
         $this->assertStringContainsString('hi', $captured);
     }

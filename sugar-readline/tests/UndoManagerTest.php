@@ -121,6 +121,33 @@ final class UndoManagerTest extends TestCase
         $this->assertFalse($ok);
     }
 
+    public function testUndoStackIsBoundedAtTheCapEvictingOldest(): void
+    {
+        $um = new UndoManager();
+
+        for ($i = 0; $i <= UndoManager::MAX_STATES; $i++) {
+            $um = $um->push('s' . $i);
+        }
+
+        $undone = 0;
+        $current = 'live';
+        while (true) {
+            [$um, $current, $ok] = $um->undo($current);
+
+            if (!$ok) {
+                break;
+            }
+
+            $undone++;
+        }
+
+        // One MORE state than the cap was pushed; exactly the cap survives,
+        // so the oldest entry fell off the tail.
+        $this->assertSame(UndoManager::MAX_STATES, $undone);
+        // Walked back to s1 and stopped: s0 was evicted by the cap.
+        $this->assertSame('s1', $current, 'the deepest surviving undo state');
+    }
+
     public function testImmutability(): void
     {
         $um1 = new UndoManager();

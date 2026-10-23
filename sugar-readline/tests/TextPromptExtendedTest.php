@@ -9,7 +9,6 @@ use SugarCraft\Readline\History\InMemoryHistory;
 use SugarCraft\Readline\Key;
 use SugarCraft\Readline\TextPrompt;
 use SugarCraft\Readline\UndoManager;
-use SugarCraft\Readline\Highlight;
 
 /**
  * Additional TextPrompt tests covering untested view() branches:
@@ -193,18 +192,6 @@ final class TextPromptExtendedTest extends TestCase
     }
 
     // =========================================================================
-    // Highlight
-    // =========================================================================
-
-    public function testViewWithHighlightRendersBuffer(): void
-    {
-        $highlight = new Highlight();
-        $p = TextPrompt::new('> ')->withHighlight($highlight)->handleChar('a');
-        $view = $p->view();
-        $this->assertStringContainsString('a', $view);
-    }
-
-    // =========================================================================
     // submit — pushes to history only when non-empty buffer
     // =========================================================================
 
@@ -281,17 +268,6 @@ final class TextPromptExtendedTest extends TestCase
             ->withCompletions(['apple', 'apricot', 'banana'])
             ->handleChar('a')->handleChar('p');
         $this->assertSame('apple', $p->suggestion());
-    }
-
-    // =========================================================================
-    // withHighlight chain
-    // =========================================================================
-
-    public function testWithHighlightReturnsNewInstance(): void
-    {
-        $a = TextPrompt::new('> ');
-        $b = $a->withHighlight(new Highlight());
-        $this->assertNotSame($a, $b);
     }
 
     // =========================================================================
