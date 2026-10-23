@@ -12,4 +12,7 @@ return [
     'spring.fps_positive' => 'fps > 0 olmalıdır; alınan: {fps}',
     'spring.inputs_finite' => 'Spring girdileri sonlu olmalıdır; alınan: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.negative_dt' => 'deltaTime >= 0 olmalıdır; alınan: {deltaTime}',
+    'projectile.dt_finite' => 'deltaTime sonlu olmalı; alınan {deltaTime}',
+    'projectile.negative_dt' => 'deltaTime >= 0 olmalı; alınan {deltaTime}',
+    'projectile.components_finite' => 'Mermi {name} bileşenleri sonlu olmalı',
 ];

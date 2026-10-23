@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Spring;
 
 /**
- * Newtonian-physics projectile. Ports `harmonica.NewProjectile`.
+ * Newtonian-physics projectile. Mirrors charmbracelet/harmonica `NewProjectile`.
  *
  * Each call to {@see update()} advances position by velocity and
  * velocity by acceleration; acceleration usually carries the gravity
@@ -53,14 +53,14 @@ final class Projectile
         // non-finite state component never returns to the finite domain —
         // reject the poison at construction rather than propagating it.
         if (!is_finite($deltaTime)) {
-            throw new \InvalidArgumentException("deltaTime must be finite; got {$deltaTime}");
+            throw new \InvalidArgumentException(Lang::t('projectile.dt_finite', ['deltaTime' => $deltaTime]));
         }
         if ($deltaTime < 0.0) {
-            throw new \InvalidArgumentException("deltaTime must be >= 0; got {$deltaTime}");
+            throw new \InvalidArgumentException(Lang::t('projectile.negative_dt', ['deltaTime' => $deltaTime]));
         }
         foreach (['position' => $position, 'velocity' => $velocity, 'acceleration' => $acceleration] as $name => $vector) {
             if (!is_finite($vector->x) || !is_finite($vector->y) || !is_finite($vector->z)) {
-                throw new \InvalidArgumentException("Projectile {$name} components must be finite");
+                throw new \InvalidArgumentException(Lang::t('projectile.components_finite', ['name' => $name]));
             }
         }
     }

@@ -49,12 +49,20 @@ final class SpringChain
     }
 
     /**
-     * Add a stage to the chain (fluent).
+     * Add a stage to the end of the chain (fluent).
      *
      * @param Spring $spring      The spring for this stage
      * @param float  $position     Initial position
      * @param float  $velocity     Initial velocity
      * @param float  $target       Target position
+     *
+     * @return self A NEW chain holding the extended stage list.
+     *
+     * ⚠ Building-time only: the returned chain restarts at stage 0 (the new
+     * instance carries no activeIndex). Appending a stage to an ALREADY-TICKED
+     * chain rewinds the run — build the full stage list before the first
+     * tick(), and use {@see SpringCollection} for springs that join or retarget
+     * while an animation is in flight.
      */
     public function withStage(Spring $spring, float $position, float $velocity, float $target): self
     {

@@ -257,4 +257,33 @@ final class CubicBezierTest extends TestCase
         };
         return [$read('x1'), $read('y1'), $read('x2'), $read('y2')];
     }
+
+    /**
+     * Float-precision exit of solveCubicXSubdivision() (docs-fix-1023 spring
+     * MINOR): the earlier spelling returned the seed guess carried in a `$t`
+     * that was initialized to the input and never written inside the loop —
+     * a dead value that would be wrong if the epsilon hit never fired. The
+     * fallback must return the collapsed bracket midpoint. Pinned on the
+     * method body because the epsilon hit converges too reliably for the
+     * branch to be reached behaviorally; the branch's honesty is the contract.
+     */
+    public function testSubdivisionFallbackReturnsTheCollapsedBracketNotAStaleSeed(): void
+    {
+        $src    = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Easing/CubicBezier.php');
+        $start  = strpos($src, 'private function solveCubicXSubdivision');
+        $this->assertIsInt($start, 'solveCubicXSubdivision vanished from CubicBezier.php');
+        $body   = substr($src, $start, (int) strpos(substr($src, $start), "\n    }"));
+
+        $this->assertStringContainsString('return ($lower + $upper) / 2.0;', $body);
+        $this->assertStringNotContainsString('$t     = $x;', $body, 'stale seed variable must not return');
+        $this->assertDoesNotMatchRegularExpression('/return \$t;/s', $body);
+
+        // And the solver still lands every cited preset inside the epsilon band.
+        foreach ([CubicBezier::easeInOutExpo(), CubicBezier::easeInOutCirc(), CubicBezier::easeIn()] as $curve) {
+            foreach ([0.13, 0.37, 0.61, 0.88] as $x) {
+                $t = $curve->evaluate($x);
+                $this->assertTrue(is_finite($t));
+            }
+        }
+    }
 }

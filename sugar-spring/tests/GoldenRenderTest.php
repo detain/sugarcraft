@@ -15,9 +15,12 @@ use SugarCraft\Testing\Snapshot\GoldenFile;
  * Golden-file snapshot tests for sugar-spring spring/trajectory physics.
  *
  * sugar-spring outputs NUMERIC trajectories (JSON), not ANSI.
- * Uses assertGolden (file equality) on the JSON representation.
+ * Uses sugar-testing's GoldenFile::save()/load() with plain assertEquals
+ * file equality on the JSON representation — there is no single
+ * `assertGolden` helper on `SugarCraft\Testing\Assertions`; the assertGolden*
+ * family there is ANSI/cell-grid specific.
  *
- * @see Mirrors charmbracelet/harmonica spring physics
+ * Mirrors the spring physics of charmbracelet/harmonica.
  */
 final class GoldenRenderTest extends TestCase
 {

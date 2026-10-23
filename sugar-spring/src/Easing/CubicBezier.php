@@ -9,8 +9,11 @@ namespace SugarCraft\Spring\Easing;
  *
  * Use the static factory methods to construct named presets. The algorithm
  * follows the canonical CSS spec: find t such that x(t) = input, then return y(t).
- * This ensures the easing is monotonic in t even when control points would
- * otherwise cause non-monotonic behaviour.
+ * The solver only INVERTS x(t) — it does not make anything monotonic. The
+ * x(t) time mapping is guaranteed monotone by the constructor's x1/x2 ∈ [0, 1]
+ * range check (the very condition the CSS spec imposes for that reason); the
+ * y output may overshoot [0, 1] when the y control points do, which is the
+ * whole point of back/elastic-style curves.
  *
  * The named family beyond the four CSS keywords ships the ORIGINAL (pre-2022)
  * easings.net cubic-bezier approximation table; the site's 2022 redesign
@@ -133,8 +136,9 @@ final class CubicBezier
      * NOT rejected and NOT clamped — the Newton solve walks the polynomial
      * outside [0, 1] (the binary fallback stays inside it), so the result is
      * a curve-dependent extrapolation. The RETURN value is likewise unclamped: control points with y
-     * outside [0, 1] (back/elastic style curves, e.g. the easeInOutBack
-     * family) legitimately overshoot beyond 0..1 progress, and clamping
+     * outside [0, 1] (back/elastic style curves — the `Easing` enum's Back and
+     * Elastic cases are computed that way; CubicBezier ships no Back preset
+     * itself) legitimately overshoot beyond 0..1 progress, and clamping
      * would flatten exactly the motion those presets exist to express.
      */
     public function evaluate(float $t): float
@@ -179,7 +183,6 @@ final class CubicBezier
     {
         $lower = 0.0;
         $upper = 1.0;
-        $t     = $x;
 
         while ($lower < $upper) {
             $mid = ($lower + $upper) / 2.0;
@@ -194,7 +197,12 @@ final class CubicBezier
             }
         }
 
-        return $t;
+        // Float-precision exit: $lower and $upper have collapsed onto the same
+        // double, straddling the root as tightly as the representation allows.
+        // Return that bracket (== $lower == $upper); the earlier spelling
+        // returned the initial guess carried in a variable never written here
+        // — a dead value that would be WRONG if this branch ever fired.
+        return ($lower + $upper) / 2.0;
     }
 
     // Bézier polynomial: (1-3B+3C-D)t³ + (3B-6C+3D)t² + (-3B+3C)t + D

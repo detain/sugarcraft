@@ -12,4 +12,7 @@ return [
     'spring.fps_positive' => 'fps debe ser > 0; obtenido: {fps}',
     'spring.inputs_finite' => 'Las entradas de Spring deben ser finitas; obtenido: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.negative_dt' => 'deltaTime debe ser >= 0; obtenido: {deltaTime}',
+    'projectile.dt_finite' => 'deltaTime debe ser finito; se obtuvo {deltaTime}',
+    'projectile.negative_dt' => 'deltaTime debe ser >= 0; se obtuvo {deltaTime}',
+    'projectile.components_finite' => 'Los componentes del {name} del proyectil deben ser finitos',
 ];

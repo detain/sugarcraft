@@ -10,7 +10,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-spring)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-spring)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-spring?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-spring)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -44,21 +44,91 @@ for ($frame = 0; $frame < 60; $frame++) {
 }
 ```
 
-`Spring::fps(int $n)` returns `1.0 / $n` for the deltaTime — pair with the
+`Spring::fps(float $n)` returns `1.0 / $n` for the deltaTime — pair with the
 same `$n` per-second simulation cadence.
+
+### Driving a frame loop
+
+A spring bakes its `deltaTime` in at construction, so the simulation only
+matches wall-clock when you actually call `update()` at that rate. Two
+honest patterns:
+
+- **Fixed cadence (terminals, replays).** Build one spring with
+  `Spring::fps(60)` and tick it once per 60 Hz frame — with sugar-core
+  programs, once per `Tick` your `Program::subscriptions()` emits at
+  `1/60` of a second:
+
+  ```php
+  use SugarCraft\Spring\Spring;
+
+  $spring = new Spring(Spring::fps(60), 6.0, 1.0);
+  $pos = 0.0;
+  $vel = 0.0;
+
+  foreach ([10.0, 60.0, 60.0] as $target) {   // one frame per tick
+      [$pos, $vel] = $spring->update($pos, $vel, $target);
+      // render $pos this frame
+  }
+  ```
+
+  If the loop drifts slower than 60 Hz the motion slows with it. That is a
+  feature for deterministic replays; for wall-clock motion measure the
+  real frame time instead:
+
+  ```php
+  use SugarCraft\Spring\Spring;
+
+  $previous = hrtime(true);
+  $pos = 0.0;
+  $vel = 0.0;
+  $target = 100.0;
+
+  foreach ([10.0, 60.0, 100.0] as $target) {   // stand-in for a real frame loop
+      $now = hrtime(true);
+      $deltaTime = min(($now - $previous) / 1e9, 0.1);  // clamp long stalls
+      $previous = $now;
+
+      $spring = new Spring($deltaTime, 6.0, 1.0);       // coeffs are cheap
+      [$pos, $vel] = $spring->update($pos, $vel, $target);
+      // render $pos this frame
+  }
+  ```
 
 ### Reduced motion
 
-When the `REDUCE_MOTION=1` environment variable is set or the terminal
-signals `prefers-reduced-motion`, `Spring::update()` snaps to `$target`
-instantly and returns `[<target>, 0.0]`. This satisfies the
-[WCAG 2.1 reduced-motion guideline](https://www.w3.org/WIA/WDAG-ACCRM/)
-and matches the behaviour of `SugarCraft\ColorProfile\Probe::reducedMotion()`.
+`Spring::update()` snaps to `$target` instantly — returning
+`[<target>, 0.0]` — when reduced motion is requested. The signal is
+**environment-only**: `REDUCE_MOTION` or `PREFERS_REDUCED_MOTION` set to a
+truthy value (the lookup is
+`SugarCraft\ColorProfile\Probe::reducedMotion()`, which reads exactly
+those two env vars; there is no terminal query or accessibility-daemon
+channel). This satisfies the [WCAG 2.1 reduced-motion
+guideline](https://www.w3.org/WAI/WCAG21/Understanding/animate-from-interactions.html)
+when the host sets one of the variables.
+
+Two more knobs: the constructor's fourth parameter
+`?bool $reducedMotionOverride` pins the behaviour for one spring —
+pass `false` to animate even when the env var is set, `true` to snap even
+when it is not (`null`, the default, defers to the environment). And the
+scope is `Spring::update()` only: `Projectile::update()`, the `Easing`
+curves and `SpringChain` advance regardless — gate those yourself if your
+scene uses them.
 
 ```php
+use SugarCraft\Spring\Spring;
+
 // With REDUCE_MOTION=1 the spring skips animation entirely:
 putenv('REDUCE_MOTION=1');
+$spring = new Spring(deltaTime: Spring::fps(60), angularFrequency: 6.0, dampingRatio: 1.0);
 [$pos, $vel] = $spring->update(0.0, 0.0, 100.0);  // returns [100.0, 0.0]
+
+// Pin one spring to ignore the environment (e.g. a required progress cue):
+$alwaysAnimates = new Spring(
+    deltaTime: Spring::fps(60),
+    angularFrequency: 6.0,
+    dampingRatio: 1.0,
+    reducedMotionOverride: false,
+);
 ```
 
 ### Spring presets
@@ -109,13 +179,13 @@ a pre-wired `Spring` instance ready to drive `update()` calls.
 Newtonian-physics simulator for arcs / bouncing balls / particle effects.
 
 ```php
-use SugarCraft\Spring\{Point, Projectile, Vector};
+use SugarCraft\Spring\{Point, Projectile, Spring, Vector};
 
 $p = Projectile::new(
     deltaTime:    Spring::fps(60),
     position:     Point::zero(),
-    velocity:     new Vector(5.0, -10.0),
-    acceleration: Projectile::gravity(),  // (0, 9.81) — Y-down
+    velocity:     new Vector(5.0, 10.0),          // up-and-to-the-right (Y-up)
+    acceleration: Projectile::gravity(),          // (0, -9.81) — pulls down
 );
 for ($i = 0; $i < 60; $i++) {
     $p = $p->update();
@@ -125,8 +195,10 @@ for ($i = 0; $i < 60; $i++) {
 
 Gravity constants: `Projectile::GRAVITY` (9.81) and
 `Projectile::TERMINAL_GRAVITY` (53.0). Helper factories
-`Projectile::gravity()` and `Projectile::terminalGravity()` return Y-axis
-`Vector` instances ready to drop into the constructor.
+`Projectile::gravity()` and `Projectile::terminalGravity()` return Y-up
+`Vector` instances (`(0, -9.81, 0)` / `(0, -53, 0)`) ready to drop into
+the constructor; `gravityYDown()` / `terminalGravityYDown()` keep the
+legacy Y-down sign reachable.
 
 `SugarCraft\Spring\Gravity` exposes the same vectors as static
 accessors at the package level — `Gravity::standard()`,
@@ -174,7 +246,9 @@ Useful for staggered animations where each stage must complete before
 the next begins.
 
 ```php
-use SugarCraft\Spring\{SpringChain, Spring, SpringPreset};
+use SugarCraft\Spring\Spring;
+use SugarCraft\Spring\SpringChain;
+use SugarCraft\Spring\SpringPreset;
 
 $chain = (new SpringChain([]))
     ->withStage(Spring::fromPreset(SpringPreset::Gentle), 0.0, 0.0, 50.0)
@@ -182,15 +256,51 @@ $chain = (new SpringChain([]))
     ->withStage(Spring::fromPreset(SpringPreset::Stiff),  0.0, 0.0, 75.0);
 
 while (!$chain->isComplete()) {
-    [$positions, $complete] = $chain->tick();
-    // $positions reflects settled stages + the currently animating stage
+    [$positions, $complete, $chain] = $chain->tick();
+    // $positions reflects settled stages + the currently animating stage.
+    // MUST reassign $chain: tick() is copy-on-write and returns the advanced
+    // chain as its third element — dropping it replays the same frame forever.
 }
 ```
 
-Each `tick()` call advances only the active stage. When that stage reaches
-its target (position and velocity both within 0.001 of target), the chain
-activates the next stage. `isComplete()` returns `true` when all stages
-have settled.
+Each `tick()` call advances only the active stage and returns
+`[positions, chainComplete, newChain]`. When that stage reaches its target
+— position within `5e-4` of the target **and** velocity within `5e-4` of
+zero (`SpringChain::SETTLING_THRESHOLD`, looser than a lone spring's
+`Spring::SETTLING_THRESHOLD` of `1e-4` so stages hand off while still
+visually moving) — the chain activates the next stage. `isComplete()`
+returns `true` when all stages have settled. Note `withStage()` restarts
+the new chain at stage 0: build the full stage list before the first
+`tick()`.
+
+## SpringCollection
+
+Keep many named springs animating at once. Like every other type here,
+the collection is immutable: `withSpring()`, `without()`, `withTarget()`
+and `tick()` each return a **new** collection, so the carry-the-result
+assignment is mandatory:
+
+```php
+use SugarCraft\Spring\Spring;
+use SugarCraft\Spring\SpringCollection;
+
+$group = (new SpringCollection())
+    ->withSpring('menu',  Spring::fromPreset(\SugarCraft\Spring\SpringPreset::Stiff),    0.0, 0.0, 40.0)
+    ->withSpring('panel', Spring::fromPreset(\SugarCraft\Spring\SpringPreset::Molasses), 0.0, 0.0, 90.0);
+
+for ($frame = 0; $frame < 120; $frame++) {
+    $group = $group->tick();               // tick(): self — NOT a position map
+    $thisFrame = $group->all();            // array<string, float> lives here
+}
+
+echo sprintf("menu=%.2f panel=%.2f\n", $group->get('menu'), $group->get('panel'));
+```
+
+Read with `get($id)` / `all()` / `getTarget($id)` / `has($id)`. The
+earlier in-place `add()` / `remove()` / `setTarget()` mutators are
+**deprecated** shims that emit `E_USER_DEPRECATED` and will be dropped;
+migrate to the `with*()` forms above (the shims mutate the receiver and
+return `void`, so `$c = $c->add(...)` assigns `null`).
 
 ## Easing
 
@@ -211,9 +321,14 @@ for ($f = 0; $f <= 60; $f++) {
 ### CubicBezier
 
 `CubicBezier` implements the CSS `cubic-bezier()` easing algorithm
-(Newton-Raphson root-finding with binary-search fallback) for
-monotonic interpolation. Construct via static factory methods covering
-all 24 CSS standard easings:
+(Newton-Raphson root-finding with binary-search fallback). Construct via
+static factory methods: 26 named presets in total — the five
+CSS-spec-defined timing functions (`ease`, `easeIn`, `easeOut`,
+`easeInOut`, `linear`) plus 21 Penner-style curves approximated with the
+easings.net table. Note that CSS itself standardises only the four
+keywords and arbitrary `cubic-bezier()`; the Sine/Quad/Cubic/Quart/Quint/
+Expo/Circ rows are the Penner easing family expressed as bezier control
+points, not a CSS standard list:
 
 ```php
 use SugarCraft\Spring\Easing\CubicBezier;
@@ -268,17 +383,26 @@ using the Newton-Raphson algorithm from the W3C CSS Easing spec.
 
 ## Public API
 
-- **`Spring`** — `__construct($dt, $ω, $ζ)` / `update($pos, $vel, $target)` /
-  `fps(int)` / `fromPreset(SpringPreset, ?float)`. `update()` short-circuits
-  to `[$target, 0.0]` when `Probe::reducedMotion()` is true.
-- **`SpringChain`** — `__construct($stages)` / `build($stages)` /
-  `withStage(Spring, $pos, $vel, $target)` / `tick(): (list<float>, bool)` /
+- **`Spring`** — `__construct($dt, $ω, $ζ, ?bool $reducedMotionOverride = null)`
+  / `update($pos, $vel, $target)` / `fps(float)` /
+  `fromPreset(SpringPreset, ?float)` / static `settled($pos, $vel, $target,
+  $threshold = SETTLING_THRESHOLD)`. `update()` short-circuits to
+  `[$target, 0.0]` when the env-driven reduced-motion lookup — or the
+  per-instance override — resolves to `true`.
+- **`SpringChain`** — `__construct($stages)` / `new($stages)` /
+  `withStage(Spring, $pos, $vel, $target)` (build-time only; returns a
+  chain restarted at stage 0) /
+  `tick(): array{0: list<float>, 1: bool, 2: self}` — carry the returned
+  chain (`$chain = ...` via list destructuring) or the run never advances /
   `currentPositions(): list<float>` / `isComplete(): bool` /
   `activeStage(): int`.
-- **`SpringCollection`** — `add($id, Spring, ...)` / `remove($id)` /
-  `tick(): array<string,float>` / `get($id): float` / `has($id): bool` /
-  `all(): array<string,float>` / `setTarget($id, $target)` /
-  `getTarget($id): float`.
+- **`SpringCollection`** — `__construct($springs, $positions, $velocities, $targets)` /
+  `withSpring($id, Spring, $pos, $vel, $target)` / `without($id)` /
+  `withTarget($id, $target)` / `tick(): self` (new collection; positions
+  map via `all()`) / `get($id): float` / `has($id): bool` /
+  `all(): array<string,float>` / `getTarget($id): float`. The in-place
+  `add()` / `remove()` / `setTarget()` mutators are deprecated
+  `E_USER_DEPRECATED` shims slated for removal — use the `with*()` forms.
 - **`SpringPreset`** — `Gentle` / `Wobbly` / `Stiff` / `Slow` / `Molasses`.
   `resolve()` returns a `SpringConfig`.
 - **`SpringConfig`** — `__construct(tension, friction, mass)` /
@@ -296,9 +420,15 @@ using the Newton-Raphson algorithm from the W3C CSS Easing spec.
 - **`Easing`** — enum with `ease(float $t): float`. Cases: `Linear`,
   `QuadraticIn/Out/InOut`, `CubicIn/Out/InOut`, `ElasticIn/Out/InOut`,
   `BounceIn/Out/InOut`, `BackIn/Out/InOut`.
-- **`CubicBezier`** — `evaluate(float $t): float`. Static factories for
-  all 24 CSS named easings (`ease`, `easeIn`, `easeOut`, `easeInOut`,
-  `easeIn/OutSine/Quad/Cubic/Quart/Quint/Expo/Circ`, `linear`).
+- **`CubicBezier`** — `evaluate(float $t): float`. 26 static factories: the
+  five CSS-spec timing functions (`ease`, `easeIn`, `easeOut`, `easeInOut`,
+  `linear`) and 21 Penner-style curves (`easeIn/Out/InOut` × `Sine`, `Quad`,
+  `Cubic`, `Quart`, `Quint`, `Expo`, `Circ`) expressed as bezier control
+  points.
+
+Exception messages are translated through `SugarCraft\Spring\Lang`
+(`sugarcraft` i18n registry, `lang/<code>.php` files); set the locale with
+the shared core `Lang` machinery as elsewhere in the stack.
 
 ## Test
 
@@ -308,9 +438,18 @@ cd sugar-spring && composer install && vendor/bin/phpunit
 
 ## Snapshot tests
 
-Numeric trajectory output is pinned via `sugar-testing`'s `assertGolden` golden-file
-snapshots (JSON/CSV). Any change to the physics output must be intentional — re-record the
-fixture with `--update-golden` to accept a new canonical trajectory.
+Numeric trajectory output is pinned as golden files (JSON) in
+`tests/fixtures/`, using sugar-testing's `GoldenFile::save()`/`load()`
+with plain `assertEquals` equality in `tests/GoldenRenderTest.php` —
+sugar-testing's `assertGolden*` helper family is ANSI/cell-grid specific
+and not used here. Any change to the physics output must be intentional —
+re-record the fixtures with:
+
+```sh
+UPDATE_GOLDENS=1 vendor/bin/phpunit
+```
+
+(there is no `--update-golden` phpunit flag).
 
 ## Demos
 
@@ -321,6 +460,10 @@ fixture with `--update-golden` to accept a new canonical trajectory.
 ### Spring physics
 
 ![spring](.vhs/spring.gif)
+
+### Particle field
+
+![particle](.vhs/particle.gif)
 
 ## Credits & inspiration
 
