@@ -9,7 +9,8 @@ use SugarCraft\Kv\Store;
 /**
  * Imports key/value pairs into a Store from a YAML file.
  *
- * Expected YAML format:
+ * Expected YAML format (the flat dialect emitted by candy-kv itself —
+ * see {@see \SugarCraft\Kv\YamlDialect}):
  * ```yaml
  * key1: value1
  * key2: value2
@@ -20,11 +21,16 @@ use SugarCraft\Kv\Store;
  * token@passwords: hunter2
  * ```
  *
- * TTL can be set via special keys (skate_ttl_KEY: seconds):
+ * TTL and binary flags ride reserved metadata lines:
  * ```yaml
  * skate_ttl_token: 3600
+ * skate_binary_document: 1
  * token: hunter2
+ * document: U0dWIGJ5dGVz
  * ```
+ *
+ * A nested `_ttl` mapping (produced by pre-D4 exports through symfony/yaml)
+ * is still accepted and merged.
  */
 final class YamlImporter
 {
@@ -65,13 +71,37 @@ final class YamlImporter
     {
         $data = $this->parseYaml($yaml);
 
-        // Collect TTL map (skate_ttl_KEY: seconds entries)
+        // Collect TTL map (skate_ttl_KEY: seconds entries), the binary flag
+        // map, and the legacy nested _ttl/_binary envelope forms.
         $ttlMap = [];
+        $binaryMap = [];
         foreach ($data as $key => $value) {
-            if (\is_string($key) && \str_starts_with($key, 'skate_ttl_')) {
-                $actualKey = \substr($key, 10);
+            if (!\is_string($key)) {
+                continue;
+            }
+            if (\str_starts_with($key, \SugarCraft\Kv\YamlDialect::TTL_PREFIX)) {
+                $actualKey = \substr($key, \strlen(\SugarCraft\Kv\YamlDialect::TTL_PREFIX));
                 if (\is_int($value) || \is_numeric($value)) {
                     $ttlMap[$actualKey] = (int) $value;
+                }
+                unset($data[$key]);
+            } elseif (\str_starts_with($key, \SugarCraft\Kv\YamlDialect::BINARY_PREFIX)) {
+                $actualKey = \substr($key, \strlen(\SugarCraft\Kv\YamlDialect::BINARY_PREFIX));
+                $binaryMap[$actualKey] = (bool) ((int) $value);
+                unset($data[$key]);
+            } elseif ($key === \SugarCraft\Kv\YamlDialect::JSON_TTL_KEY && \is_array($value)) {
+                // Pre-D4 symfony-route export: nested `_ttl: {key: secs}`.
+                foreach ($value as $k => $secs) {
+                    if (\is_string($k) && (\is_int($secs) || \is_numeric($secs))) {
+                        $ttlMap[$k] = (int) $secs;
+                    }
+                }
+                unset($data[$key]);
+            } elseif ($key === \SugarCraft\Kv\YamlDialect::JSON_BINARY_KEY && \is_array($value)) {
+                foreach ($value as $k) {
+                    if (\is_string($k)) {
+                        $binaryMap[$k] = true;
+                    }
                 }
                 unset($data[$key]);
             }
@@ -80,14 +110,22 @@ final class YamlImporter
         // Merge with constructor options
         $ttlMap = \array_merge($this->options['ttl'] ?? [], $ttlMap);
 
-        $import = function () use ($data, $ttlMap): int {
+        $import = function () use ($data, $ttlMap, $binaryMap): int {
             $count = 0;
             foreach ($data as $key => $value) {
+                if ($value === null) {
+                    $value = '';
+                } elseif (\is_int($value) || \is_float($value)) {
+                    $value = (string) $value;
+                }
                 if (!\is_string($key) || !\is_string($value)) {
                     continue;
                 }
                 $ttl = $ttlMap[$key] ?? null;
-                $this->store->set($key, $value, false, $ttl);
+                if (($binaryMap[$key] ?? false) === true) {
+                    $value = \SugarCraft\Kv\YamlDialect::decodeBinary($value, $key);
+                }
+                $this->store->set($key, $value, ($binaryMap[$key] ?? false) === true, $ttl);
                 $count++;
             }
             return $count;
@@ -132,99 +170,27 @@ final class YamlImporter
     /**
      * YAML parser entry point.
      *
-     * Two paths, and only one of them is live in a stock install:
-     *
-     *  - symfony/yaml, IF the application happens to have it installed. It is
-     *    deliberately NOT a declared dependency of candy-kv, so in this
-     *    repo the `class_exists` branch below never fires and the fallback
-     *    parser is the ONLY live path.
-     *  - {@see minimalYamlParse()} — a strict flat `key: value` reader. Its
-     *    real capability (see its docblock for the full contract): scalar
-     *    values, quote-stripped values, `~`/`null` folded to empty. It does
-     *    NOT handle nested maps (indentation is silently flattened into
-     *    top-level keys), lists, quoted keys, anchors or aliases — anything
-     *    that is not a flat `key: value` line throws RuntimeException
-     *    ('Syntax error'). Applications needing full YAML 1.2 must require
-     *    symfony/yaml themselves.
+     * Both routes implement the same flat dialect (see
+     * {@see \SugarCraft\Kv\YamlDialect}): symfony/yaml when the component is
+     * present (declared as a `suggest`; candy-kv's own dev install ships it),
+     * otherwise the dialect's strict fallback parser — which since D4
+     * understands quoted keys, double-quote escapes (backslash, \n, control
+     * bytes) and plain scalars, and throws RuntimeException ('Syntax error')
+     * on anything it cannot represent faithfully.
      *
      * @return array<string, mixed>
      */
     private function parseYaml(string $yaml): array
     {
-        // Opportunistic upgrade: only reached when the surrounding project
-        // ships symfony/yaml (not a candy-kv dependency — dead branch in
-        // this repo's install graph, kept for host apps that do have it).
-        if (\class_exists(\Symfony\Component\Yaml\Yaml::class)) {
-            return \Symfony\Component\Yaml\Yaml::parse($yaml);
+        $data = \SugarCraft\Kv\YamlDialect::parse($yaml);
+        if ($data === []) {
+            return [];
+        }
+        $flat = [];
+        foreach ($data as $key => $value) {
+            $flat[(string) $key] = $value;
         }
 
-        // Fallback parser for simple YAML
-        return $this->minimalYamlParse($yaml);
-    }
-
-    /**
-     * Fallback parser: flat `key: value` lines only.
-     *
-     * Accepted per line (indentation-insensitive — leading whitespace is
-     * trimmed, so a nested `child:` under an empty `parent:` is silently
-     * flattened to another top-level key, with the parent stored as ''):
-     *   key: scalar-value        quotes around the value are stripped
-     *   key: / key:~/key:null    stored as empty string
-     * Keys must match [a-zA-Z0-9_\-.@]+ (no quotes, no spaces, no symbols).
-     * Any other non-empty, non-comment line (list item `- x`, bare scalar,
-     * quoted key, block scalar continuation) throws RuntimeException.
-     *
-     * @return array<string, mixed>
-     */
-    private function minimalYamlParse(string $yaml): array
-    {
-        $result = [];
-        $lines = \explode("\n", $yaml);
-        $currentKey = null;
-        $inBlock = false;
-        $blockIndent = 0;
-
-        foreach ($lines as $line) {
-            // Skip empty lines and comments
-            if ($line === '' || \str_starts_with(\trim($line), '#')) {
-                continue;
-            }
-
-            $trimmed = \trim($line);
-
-            // Handle document markers
-            if ($trimmed === '---' || $trimmed === '...') {
-                continue;
-            }
-
-            // Determine indentation level
-            $indent = \strlen($line) - \strlen(\ltrim($line));
-
-            // Top-level key: value
-            if (!$inBlock && \preg_match('/^([a-zA-Z0-9_\-.@]+):\s*(.*)$/', $trimmed, $m)) {
-                $key = $m[1];
-                $val = $m[2];
-
-                // Remove quotes
-                if ((\str_starts_with($val, "'") && \str_ends_with($val, "'")) ||
-                    (\str_starts_with($val, '"') && \str_ends_with($val, '"'))) {
-                    $val = \substr($val, 1, -1);
-                }
-
-                if ($val === '' || $val === '~' || $val === 'null') {
-                    $result[$key] = '';
-                } else {
-                    $result[$key] = $val;
-                }
-                $currentKey = $key;
-                $inBlock = false;
-            } else {
-                // Line has meaningful content but doesn't match key: value pattern
-                // This indicates malformed YAML (e.g., [valid yaml with unbalanced bracket)
-                throw new \RuntimeException('Syntax error');
-            }
-        }
-
-        return $result;
+        return $flat;
     }
 }

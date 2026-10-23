@@ -114,16 +114,20 @@ final class ImportExportTest extends TestCase
         $importer->importFromFile($path, true);
     }
 
-    public function testJsonImporterSkipsNonStringValues(): void
+    public function testJsonImporterCoercesScalarsSkipsComplexValues(): void
     {
+        // D4 (docs-fix-1023): null and numeric JSON scalars now import as
+        // text (matching what the flat YAML dialect stores); arrays and
+        // nested objects remain unrepresentable and are skipped.
         $path = $this->tmpDir . '/mixed.json';
         \file_put_contents($path, '{"str":"value","num":123,"arr":[1,2,3],"obj":{"a":1}}');
 
         $importer = new JsonImporter($this->store);
         $count = $importer->importFromFile($path, false);
 
-        $this->assertSame(1, $count);
+        $this->assertSame(2, $count);
         $this->assertSame('value', $this->store->get('str'));
+        $this->assertSame('123', $this->store->get('num'));
     }
 
     /**
@@ -327,11 +331,11 @@ final class ImportExportTest extends TestCase
         $this->assertSame(1, $exitCode);
     }
 
-    // ─── YamlImporter fallback parser syntax error ──────────────────────────
+    // ─── YAML import parser errors ──────────────────────────────────────────
 
-    public function testYamlFallbackParserThrowsOnSyntaxError(): void
+    public function testYamlParserThrowsOnSyntaxError(): void
     {
-        // The fallback parser throws "Syntax error" when it encounters malformed YAML
+        // Both engines surface "Syntax error" for malformed YAML
         $yaml = "[this is definitely not valid yaml: {nested";
         $importer = new YamlImporter($this->store);
 
@@ -340,7 +344,7 @@ final class ImportExportTest extends TestCase
         $importer->importFromString($yaml, false);
     }
 
-    public function testYamlFallbackParserHandlesDocumentMarkers(): void
+    public function testYamlParserHandlesDocumentMarkers(): void
     {
         // Document markers --- and ... should be skipped
         $yaml = "---\nkey1: value1\n...\n---\nkey2: value2\n";
@@ -352,7 +356,7 @@ final class ImportExportTest extends TestCase
         $this->assertSame('value2', $this->store->get('key2'));
     }
 
-    public function testYamlFallbackParserHandlesComments(): void
+    public function testYamlParserHandlesComments(): void
     {
         $yaml = "# This is a comment\nkey: value\n# Another comment";
         $importer = new YamlImporter($this->store);

@@ -30,7 +30,11 @@
         "ext-sqlite3": "*"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "symfony/yaml": "^6.0||^7.0"
+    },
+    "suggest": {
+        "symfony/yaml": "^6.0||^7.0 — used for YAML import/export when installed; without it candy-kv uses its own flat YAML dialect"
     },
     "autoload": {
         "psr-4": {

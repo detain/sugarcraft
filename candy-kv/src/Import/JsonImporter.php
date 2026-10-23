@@ -78,17 +78,38 @@ final class JsonImporter
             unset($data['_ttl']);
         }
 
+        // Extract binary key list (D4 M5: binary entries ride base64 values
+        // plus this flag; without it reimport would store the base64 text).
+        $binaryKeys = [];
+        if (isset($data['_binary']) && \is_array($data['_binary'])) {
+            foreach ($data['_binary'] as $bKey) {
+                if (\is_string($bKey)) {
+                    $binaryKeys[$bKey] = true;
+                }
+            }
+            unset($data['_binary']);
+        }
+
         // Merge constructor options with file-level TTL
         $ttlMap = \array_merge($this->options['ttl'] ?? [], $ttlMap);
 
-        $import = function () use ($data, $ttlMap): int {
+        $import = function () use ($data, $ttlMap, $binaryKeys): int {
             $count = 0;
             foreach ($data as $key => $value) {
+                if ($value === null) {
+                    $value = '';
+                } elseif (\is_int($value) || \is_float($value)) {
+                    $value = (string) $value;
+                }
                 if (!\is_string($key) || !\is_string($value)) {
                     continue;
                 }
                 $ttl = $ttlMap[$key] ?? null;
-                $this->store->set($key, $value, false, $ttl);
+                $binary = ($binaryKeys[$key] ?? false) === true;
+                if ($binary) {
+                    $value = \SugarCraft\Kv\YamlDialect::decodeBinary($value, $key);
+                }
+                $this->store->set($key, $value, $binary, $ttl);
                 $count++;
             }
             return $count;

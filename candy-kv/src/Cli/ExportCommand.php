@@ -51,6 +51,9 @@ final class ExportCommand
     public function exportToString(string $format, ?string $dbName = null, ?string $pattern = null): string
     {
         $entries = [];
+        $binaryKeys = [];
+        $ttlMap = [];
+
         foreach ($this->store->list($pattern, $dbName) as $entry) {
             if ($entry instanceof \SugarCraft\Kv\Entry) {
                 $ttl = null;
@@ -66,17 +69,31 @@ final class ExportCommand
                 } else {
                     $key = $entry->key;
                 }
-                $entries[$key] = $entry->rawValue();
+
+                // Fail loud on envelope collisions: exporting a key that
+                // looks like a reserved metadata form would silently turn
+                // into TTL/binary state on reimport.
+                $reason = \SugarCraft\Kv\YamlDialect::reservedKeyReason($key);
+                if ($reason !== null) {
+                    throw new \RuntimeException(\ucfirst($reason) . '.');
+                }
+
+                // Binary entries export their stored base64 (an ASCII-safe
+                // wire form) plus a flag; raw bytes through a text format is
+                // exactly what broke JSON export (D4 M5).
+                $entries[$key] = $entry->binary ? $entry->value : $entry->rawValue();
+                if ($entry->binary) {
+                    $binaryKeys[] = $key;
+                }
                 if ($ttl !== null) {
-                    $entries['_ttl'] = $entries['_ttl'] ?? [];
-                    $entries['_ttl'][$key] = $ttl;
+                    $ttlMap[$key] = $ttl;
                 }
             }
         }
 
         $output = match ($format) {
-            'json' => $this->exportJson($entries),
-            'yaml', 'yml' => $this->exportYaml($entries),
+            'json' => $this->exportJson($entries, $ttlMap, $binaryKeys),
+            'yaml', 'yml' => $this->exportYaml($entries, $ttlMap, $binaryKeys),
             default => throw new \RuntimeException("Unknown export format: {$format}. Use 'json' or 'yaml'."),
         };
 
@@ -84,10 +101,19 @@ final class ExportCommand
     }
 
     /**
-     * @param array<string, mixed> $entries
+     * @param array<string, string> $entries
+     * @param array<string, int>    $ttlMap
+     * @param list<string>          $binaryKeys
      */
-    private function exportJson(array $entries): string
+    private function exportJson(array $entries, array $ttlMap, array $binaryKeys): string
     {
+        if ($ttlMap !== []) {
+            $entries['_ttl'] = $ttlMap;
+        }
+        if ($binaryKeys !== []) {
+            $entries['_binary'] = $binaryKeys;
+        }
+
         $flags = \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE;
         $json = \json_encode($entries, $flags, 512);
         if ($json === false) {
@@ -97,64 +123,22 @@ final class ExportCommand
     }
 
     /**
-     * @param array<string, mixed> $entries
+     * @param array<string, string> $entries
+     * @param array<string, int>    $ttlMap
+     * @param list<string>          $binaryKeys
      */
-    private function exportYaml(array $entries): string
+    private function exportYaml(array $entries, array $ttlMap, array $binaryKeys): string
     {
-        // Try symfony/yaml first
-        if (\class_exists(\Symfony\Component\Yaml\Yaml::class)) {
-            return \Symfony\Component\Yaml\Yaml::dump($entries, 4, 0, \Symfony\Component\Yaml\Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK);
+        // One flat dialect on both engines: TTL rides skate_ttl_<key>,
+        // binary rides skate_binary_<key> (D4 M4: the symfony route used to
+        // dump a nested _ttl map the README never described).
+        foreach ($ttlMap as $key => $seconds) {
+            $entries[\SugarCraft\Kv\YamlDialect::TTL_PREFIX . $key] = $seconds;
+        }
+        foreach ($binaryKeys as $key) {
+            $entries[\SugarCraft\Kv\YamlDialect::BINARY_PREFIX . $key] = 1;
         }
 
-        // Fallback to minimal YAML output
-        $lines = [];
-        foreach ($entries as $key => $value) {
-            if (\is_array($value)) {
-                // _ttl map — skip for fallback
-                continue;
-            }
-            // Quote keys/values that need it
-            $key = $this->yamlString($key);
-            $val = $this->yamlString((string) $value);
-            $lines[] = "{$key}: {$val}";
-        }
-
-        // Append _ttl if present
-        if (isset($entries['_ttl']) && \is_array($entries['_ttl'])) {
-            foreach ($entries['_ttl'] as $k => $v) {
-                $lines[] = "skate_ttl_{$k}: {$v}";
-            }
-        }
-
-        return \implode("\n", $lines) . \PHP_EOL;
-    }
-
-    private function yamlString(string $value): string
-    {
-        // Values that need quoting
-        if ($value === '' || $value === '~' || $value === 'null' ||
-            \preg_match('/^[0-9]+$/', $value) ||
-            \str_contains($value, ':') ||
-            \str_contains($value, '#') ||
-            \str_starts_with($value, "'") ||
-            \str_starts_with($value, '"') ||
-            \str_starts_with($value, '[') ||
-            \str_starts_with($value, '{') ||
-            \str_starts_with($value, '&') ||
-            \str_starts_with($value, '*') ||
-            \str_starts_with($value, '!') ||
-            \str_starts_with($value, ' ') ||
-            \str_ends_with($value, ' ') ||
-            \str_starts_with($value, '}') ||
-            \str_starts_with($value, ']') ||
-            \str_starts_with($value, ',') ||
-            \str_starts_with($value, '`') ||
-            \str_starts_with($value, '%') ||
-            \str_starts_with($value, '?') ||
-            \preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', $value)
-        ) {
-            return '"' . \addcslashes($value, "\\\"\n") . '"';
-        }
-        return $value;
+        return \SugarCraft\Kv\YamlDialect::build($entries);
     }
 }

@@ -8,7 +8,7 @@ declare(strict_types=1);
  * Run: php examples/binary.php
  *
  * Exercises:
- * - Entry::binary() to create a binary entry
+ * - Store::set(binary: true) to store raw bytes
  * - Entry::rawValue() to decode it
  * - Store::setFile() / getFile()
  */
@@ -16,7 +16,6 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Kv\Store;
-use SugarCraft\Kv\Entry;
 
 $tmp = sys_get_temp_dir() . '/candy-kv-binary-demo-' . uniqid();
 $store = new Store($tmp);
@@ -40,13 +39,16 @@ $retrieved = file_get_contents($outPath);
 echo "Retrieved size: " . strlen($retrieved) . " bytes\n";
 echo "Integrity: " . ($retrieved === $imgData ? "OK ✓" : "FAILED ✗") . "\n";
 
-// Manual binary entry via Entry::binary()
-$entry = Entry::binary('document', "PDF-like\x00\xff\xfe\xfd data here");
-$store->set('document', $entry->value, true);
+// Manual binary entry from raw bytes. Store::set() base64-encodes when the
+// binary flag is set — pass the RAW bytes, not Entry::binary()'s encoded
+// form (doing that double-encoded, printing 30 chars for 22 bytes of data).
+$rawDoc = "PDF-like\x00\xff\xfe\xfd data here";
+$store->set('document', $rawDoc, true);
 
 $restored = $store->entry('document');
 echo "\nManual binary entry:\n";
 echo "  binary flag: " . ($restored->binary ? 'yes' : 'no') . "\n";
 echo "  raw length:  " . strlen($restored->rawValue()) . " bytes\n";
+echo "  integrity:   " . ($restored->rawValue() === $rawDoc ? "OK ✓" : "FAILED ✗") . "\n";
 
 echo "\nDone.\n";

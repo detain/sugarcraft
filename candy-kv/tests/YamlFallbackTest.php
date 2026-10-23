@@ -10,10 +10,12 @@ use SugarCraft\Kv\Store;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests for the YAML fallback parser/serializer round-trip.
+ * Importer-level YAML round-trip locks.
  *
- * Symfony\Component\Yaml\Yaml is not installed in this lib, so the fallback
- * path is always exercised. These tests lock the fallback behaviour.
+ * These tests drive ExportCommand → YamlImporter through whichever engine
+ * YamlDialect selects (symfony/yaml when installed, the flat fallback
+ * otherwise). The dialect contract itself — including the fallback emitter
+ * and parser — is pinned engine-by-engine in YamlDialectTest.
  */
 final class YamlFallbackTest extends TestCase
 {
@@ -124,8 +126,10 @@ final class YamlFallbackTest extends TestCase
         $exportCmd = new ExportCommand($this->store);
         $output = $exportCmd->exportToString('yaml');
 
-        // The fallback emitter should have quoted the value
-        $this->assertStringContainsString('"', $output);
+        // The emitter must quote a ': '-bearing value on whichever engine is
+        // active (symfony single-quotes, our fallback double-quotes) — pin
+        // the engine-neutral property: no unquoted form may appear.
+        $this->assertStringNotContainsString("header: Content-Type: text/plain\n", $output);
 
         // Re-import the exported YAML
         $importer = new YamlImporter($this->store);
@@ -156,8 +160,10 @@ final class YamlFallbackTest extends TestCase
         $exportCmd = new ExportCommand($this->store);
         $output = $exportCmd->exportToString('yaml');
 
-        // Leading space should be quoted in output
-        $this->assertStringContainsString('"  indented"', $output);
+        // Leading space must be quoted on whichever engine is active
+        // (symfony single-quotes, our fallback double-quotes). The unquoted
+        // shape would be "indent:" + space + the value's two own spaces.
+        $this->assertStringNotContainsString("indent:   indented\n", $output);
 
         $importer = new YamlImporter($this->store);
         $importer->importFromString($output, false);
