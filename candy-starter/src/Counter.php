@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Subscriptions;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
 
@@ -29,8 +30,11 @@ use SugarCraft\Style\Style;
  * To extend:
  *   1. Add a field to the constructor (e.g. `int $step = 1`).
  *   2. Add a Msg handler in update() that returns a new Model with
- *      the field updated.
+ *      the field updated. (Key events only? Define your own Msg
+ *      class and route it — the contract accepts any Msg.)
  *   3. Reflect the new state in view().
+ *   4. Extend the quit/key matrix in tests/CounterTest.php to match —
+ *      the pinned matrix is this template's test reference.
  */
 final class Counter implements Model
 {
@@ -58,18 +62,20 @@ final class Counter implements Model
         }, null];
     }
 
-    // Returns a plain string here; the Model contract also allows a View
-    // (cursor pos, window title, alt-screen) — see SugarCraft\Core\View.
+    // Returns a plain string here; the Model contract also allows a
+    // \SugarCraft\Core\View for per-frame extras (cursor, window
+    // title, colours — alt-screen itself is ProgramOptions):
+    // return new \SugarCraft\Core\View($frame, windowTitle: 'count ' . $this->n);
     public function view(): string
     {
-        $body = sprintf("  count: %d  \n  ↑ ↓ to change · q to quit  ", $this->n);
+        $body = sprintf("count: %d\n↑ ↓ to change · q to quit", $this->n);
         return Style::new()
             ->border(Border::rounded())
             ->padding(1, 2)
             ->render($body);
     }
 
-    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    public function subscriptions(): ?Subscriptions
     {
         return null;
     }

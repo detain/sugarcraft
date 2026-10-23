@@ -9,18 +9,23 @@
  * tick, signal handling, raw-mode setup, alt-screen lifecycle) is
  * production-ready out of the box — you just write the Model.
  * Supports an opt-in panic handler via `Log::installPanicHandler()`
- * (uncomment in bootstrap).
+ * (uncomment below).
  */
 
 declare(strict_types=1);
 
-(static function () {
-    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php'] as $candidate) {
-        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
-        if (is_file($path)) {
-            require $path;
-            return;
-        }
+use App\Counter;
+use SugarCraft\Core\Program;
+
+// Resolve the autoloader relative to this file, not the working
+// directory — the same script works as a fresh `composer
+// create-project` app and inside the monorepo
+// (`cd candy-starter && bin/start`).
+(static function (): void {
+    $autoload = __DIR__ . '/../vendor/autoload.php';
+    if (is_file($autoload)) {
+        require $autoload;
+        return;
     }
     fwrite(STDERR, "candy-starter: cannot find composer autoload.php — did you `composer install`?\n");
     exit(1);
@@ -30,12 +35,15 @@ declare(strict_types=1);
 // OPT-IN: Panic handler — uncomment to catch uncaught exceptions and
 // display a styled backtrace on crash.  Run `composer require
 // sugarcraft/sugar-log` first; in a monorepo add a path-repo to
-// composer.json repositories[] as well.
+// composer.json repositories[] as well (development only — never ship
+// it, it breaks every create-project consumer of your app).
 // -----------------------------------------------------------------------
 // use SugarCraft\Log\Log;
 // Log::installPanicHandler();
 
-use App\Counter;
-use SugarCraft\Core\Program;
+// Harness tunables live in ProgramOptions (framerate, alt-screen,
+// mouse tracking, raw-mode details) — pass one as the second argument
+// when you need them:
+// (new Program(new Counter(), new \SugarCraft\Core\ProgramOptions(framerate: 30.0)))->run();
 
 (new Program(new Counter()))->run();
