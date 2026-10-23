@@ -72,15 +72,15 @@ final class Slide
         // A LEFT-anchored overlay's final column is the left edge, so it must
         // START left of there (negative = off-screen left) and travel right.
         // A RIGHT anchor mirrors it. TOP/BOTTOM do the same on the row axis.
-        if ($this->isLeftAnchor($vertical, $horizontal) === TRUE) {
+        if ($this->isLeftAnchor($horizontal) === true) {
             $hOffset = -(int) \round($factor * $fgWidth);
-        } elseif ($this->isRightAnchor($vertical, $horizontal) === TRUE) {
+        } elseif ($this->isRightAnchor($horizontal) === true) {
             $hOffset = (int) \round($factor * $fgWidth);
         }
 
-        if ($this->isTopAnchor($vertical, $horizontal) === TRUE) {
+        if ($this->isTopAnchor($vertical) === true) {
             $vOffset = -(int) \round($factor * $fgHeight);
-        } elseif ($this->isBottomAnchor($vertical, $horizontal) === TRUE) {
+        } elseif ($this->isBottomAnchor($vertical) === true) {
             $vOffset = (int) \round($factor * $fgHeight);
         }
 
@@ -91,7 +91,7 @@ final class Slide
         ];
     }
 
-    private function isTopAnchor(Position $v, Position $h): bool
+    private function isTopAnchor(Position $v): bool
     {
         return match ($v) {
             Position::TOP, Position::TOP_LEFT, Position::TOP_RIGHT => true,
@@ -99,7 +99,7 @@ final class Slide
         };
     }
 
-    private function isBottomAnchor(Position $v, Position $h): bool
+    private function isBottomAnchor(Position $v): bool
     {
         return match ($v) {
             Position::BOTTOM, Position::BOTTOM_LEFT, Position::BOTTOM_RIGHT => true,
@@ -107,7 +107,7 @@ final class Slide
         };
     }
 
-    private function isLeftAnchor(Position $v, Position $h): bool
+    private function isLeftAnchor(Position $h): bool
     {
         return match ($h) {
             Position::LEFT, Position::TOP_LEFT, Position::BOTTOM_LEFT => true,
@@ -115,7 +115,7 @@ final class Slide
         };
     }
 
-    private function isRightAnchor(Position $v, Position $h): bool
+    private function isRightAnchor(Position $h): bool
     {
         return match ($h) {
             Position::RIGHT, Position::TOP_RIGHT, Position::BOTTOM_RIGHT => true,

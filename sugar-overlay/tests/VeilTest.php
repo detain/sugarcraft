@@ -178,9 +178,11 @@ final class VeilTest extends TestCase
         $this->assertSame('', Veil::new()->composite('', '', Position::CENTER, Position::CENTER));
     }
 
-    public function testEmptyBackgroundOverlayAppliesAutoSizeBorder(): void
+    public function testEmptyBackgroundOverlayAppliesBorderChrome(): void
     {
-        $v = Veil::new()->withAutoSize()->withBorder(Border::normal());
+        // bg=='' returns the overlay itself as the frame — with the border
+        // chrome applied (unconditionally since M3; no autoSize needed).
+        $v = Veil::new()->withBorder(Border::normal());
         $this->assertSame($v->applyBorderChrome('X'), $v->composite('X', '', Position::CENTER, Position::CENTER));
     }
 
@@ -562,9 +564,13 @@ final class VeilTest extends TestCase
         $this->assertStringStartsWith('Hi', $lines[0]);
     }
 
-    public function testCompositeAutoSizeFalseUsesRawContentDimensions(): void
+    public function testCompositeAppliesBorderChromeWithoutAutoSize(): void
     {
-        // When autoSize is false, raw content dimensions are used regardless of border
+        // M3 (docs-fix-1023): border chrome is UNCONDITIONAL. The old
+        // autoSize gate made withBorder() silently inert unless the caller
+        // also discovered withAutoSize() — the README always promised the
+        // border alone. autoSize is now a documented no-op; a set border
+        // wraps the foreground on every composite, flagged or not.
         $v = Veil::new()
             ->withAutoSize(false)
             ->withBorder(Border::normal());
@@ -575,10 +581,10 @@ final class VeilTest extends TestCase
         $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
         $lines = $v->splitLines($result);
 
-        // Without autoSize, border chrome is NOT applied during composite
-        // So raw "Hi" is placed, not the bordered version
-        $this->assertStringStartsWith('Hi', $lines[0]);
-        $this->assertStringNotContainsString('┌', $result);
+        // Bordered block is placed, not the raw "Hi".
+        $this->assertStringStartsWith('┌', $lines[0]);
+        $this->assertStringContainsString('Hi', $result);
+        $this->assertStringNotContainsString('Hi', $lines[0]);
     }
 
     // ─── combinations ─────────────────────────────────────────────────────────

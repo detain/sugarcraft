@@ -49,7 +49,7 @@ final class RenderSession
     public function shouldEmitFull(int $width, int $height): bool
     {
         // justClearedFrame: rememberFull() cleared the diff buffer → next call must be full
-        if ($this->justClearedFrame === TRUE && $this->previousOutput !== null) {
+        if ($this->justClearedFrame === true && $this->previousOutput !== null) {
             $this->justClearedFrame = false;
 
             return true;
@@ -132,8 +132,6 @@ final class RenderSession
 
     /**
      * Reset all session state, forcing the next composite to emit a full frame.
-     *
-     * @see release() for an alias useful when discarding a session
      */
     public function reset(): void
     {
@@ -147,21 +145,5 @@ final class RenderSession
         // conjuncts, but that coupling is latent — reset means reset).
         $this->justClearedFrame = false;
         $this->diffWasCalled = false;
-    }
-
-    /**
-     * Release all session state, preventing memory growth in long-running apps.
-     *
-     * This is an alias for reset(). Call this when you are done using the
-     * RenderSession and want to ensure all held references are cleared.
-     * In long-running TUI applications with many frame transitions, calling
-     * release() periodically (e.g., every ~1000 frames) prevents unbounded
-     * memory accumulation from the diff buffer cache.
-     *
-     * @see reset()
-     */
-    public function release(): void
-    {
-        $this->reset();
     }
 }

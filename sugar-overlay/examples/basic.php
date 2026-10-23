@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * SugarOverlay basic demo — overlay a modal box over a background.
+ * sugar-overlay basic demo — overlay a modal box over a background.
  *
  * Run: php examples/basic.php
  */
@@ -11,8 +11,6 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Overlay\{Position, Veil};
-
-$veil = Veil::new();
 
 // Build a simple background panel
 $bg = "┌────────────────────────────────────────┐\n" .
@@ -33,14 +31,16 @@ $fg = "╔════════════════╗\n" .
 echo "=== Background ===\n{$bg}\n";
 echo "=== Foreground (modal) ===\n{$fg}\n\n";
 
-// Center the modal
+// The diff law: a Veil remembers what it painted and, for a same-size
+// canvas, subsequent composite() calls return the DIFF — cursor moves plus
+// changed cells only. That is exactly what a live terminal redraw wants and
+// exactly what echoing a demo is not: each placement below therefore runs
+// on its own fresh Veil (or ->withoutSession()) so every frame is FULL.
 echo "=== Centered overlay ===\n";
-echo $veil->composite($fg, $bg, Position::CENTER, Position::CENTER) . "\n";
+echo Veil::new()->composite($fg, $bg, Position::CENTER, Position::CENTER) . "\n";
 
-// Top-right corner
 echo "=== Top-Right overlay ===\n";
-echo $veil->composite($fg, $bg, Position::TOP, Position::RIGHT) . "\n";
+echo Veil::new()->composite($fg, $bg, Position::TOP, Position::RIGHT) . "\n";
 
-// Bottom-left with offset
 echo "=== Bottom-Left (offset +2, -1) ===\n";
-echo $veil->composite($fg, $bg, Position::BOTTOM, Position::LEFT, xOffset: 2, yOffset: -1) . "\n";
+echo Veil::new()->composite($fg, $bg, Position::BOTTOM, Position::LEFT, xOffset: 2, yOffset: -1) . "\n";

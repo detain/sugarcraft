@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-overlay",
-    "description": "PHP port of rmhubbert/bubbletea-overlay \u2014 modal/overlay compositing for terminal UIs. Composite foreground content over a background at any position (Top/Right/Bottom/Left/Center) with optional cell (column/row) offsets.",
+    "description": "Modal/overlay compositing for terminal UIs. Composite foreground content over a background at any position (Top/Right/Bottom/Left/Center) with optional cell (column/row) offsets, backdrop dimming, animated transitions, border chrome and click-zone hit-testing. Antecedent design: rmhubbert/bubbletea-overlay.",
     "type": "library",
     "license": "MIT",
     "keywords": [

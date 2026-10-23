@@ -8,6 +8,16 @@ namespace SugarCraft\Overlay;
  * Overlay position constants.
  *
  * Matches rmhubbert/bubbletea-overlay Position values.
+ *
+ * Composite placement is TWO-AXIS (vertical + horizontal). The corner and
+ * side cases carry a projection on each axis independently: the vertical
+ * anchor reads only the case's row component (TOP-family → first row,
+ * BOTTOM-family → last row, everything else centered) and the horizontal
+ * anchor reads only the column component (LEFT-family → column 0,
+ * RIGHT-family → last column, everything else centered). So CENTER, TOP
+ * and BOTTOM all mean "horizontally centered" on the column axis, and
+ * LEFT/RIGHT-style cases likewise center vertically — any case is a valid
+ * argument on either axis.
  */
 enum Position
 {

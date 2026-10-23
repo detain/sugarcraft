@@ -144,29 +144,6 @@ final class RenderSessionTest extends TestCase
         $this->assertTrue($session->shouldEmitFull(80, 24));
     }
 
-    // ─── release ─────────────────────────────────────────────────────────────────
-
-    public function testReleaseIsAliasForReset(): void
-    {
-        $session = new RenderSession();
-
-        $session->rememberFull("output", 80, 24);
-        $session->release();
-
-        $this->assertTrue($session->shouldEmitFull(80, 24));
-    }
-
-    public function testReleaseClearsAllState(): void
-    {
-        $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
-
-        $session->diff("frame1", 80, 24, $factory);
-        $session->release();
-
-        $this->assertTrue($session->shouldEmitFull(80, 24));
-    }
-
     // ─── Constructor ─────────────────────────────────────────────────────────────────
 
     public function testNewSessionHasNoPreviousOutput(): void

@@ -8,6 +8,7 @@ use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Hyperlink;
 use SugarCraft\CellBuffer\Style as BufferStyle;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
@@ -26,7 +27,7 @@ use SugarCraft\Overlay\Animation\Slide;
  * position with optional cell offsets (columns / rows). Supports backdrop dimming
  * and animated transitions via sugar-spring CubicBezier easing.
  *
- * Port of rmhubbert/bubbletea-overlay.
+ * Mirrors the compositor semantics of rmhubbert/bubbletea-overlay.
  *
  * @see https://github.com/rmhubbert/bubbletea-overlay
  */
@@ -44,7 +45,7 @@ final class Veil
     /** @var bool Dismiss veil when mouse click lands outside its zone */
     private readonly bool $clickOutsideDismiss;
 
-    /** @var bool Compute veil dimensions from content rather than fixed width/height */
+    /** @var bool Deprecated no-op — dimensions are ALWAYS measured from content */
     private readonly bool $autoSize;
 
     /** @var Border|null Border chrome to wrap content with */
@@ -82,7 +83,7 @@ final class Veil
      * @param AnimationKind|null $animationKind Animation kind for transitions
      * @param int $zIndex Stacking order
      * @param bool $clickOutsideDismiss Dismiss on outside click
-     * @param bool $autoSize Compute size from content
+     * @param bool $autoSize Deprecated no-op (dimensions always come from content)
      * @param Border|null $border Border chrome
      * @param Scanner|null $scanner Self-contained mouse hit-testing scanner
      * @param string|null $lastRendered Last rendered output for scanner
@@ -166,7 +167,14 @@ final class Veil
         return $this->clickOutsideDismiss;
     }
 
-    /** Read-only accessor for auto-size flag. */
+    /**
+     * Read-only accessor for the auto-size flag.
+     *
+     * @deprecated The flag is a no-op: composite() always measures the
+     *             foreground (border chrome included) to decide its own
+     *             dimensions — there is no fixed width/height mode to opt
+     *             out of. Kept for source compatibility only.
+     */
     public function autoSize(): bool
     {
         return $this->autoSize;
@@ -203,9 +211,11 @@ final class Veil
     /**
      * Set the auto-size flag.
      *
-     * When true, veil dimensions are computed from content rather than
-     * fixed width/height. The border chrome (if present) is applied
-     * to the content and the resulting sized output is used.
+     * @deprecated The flag is a no-op. Border chrome is applied by
+     *             composite() unconditionally (see withBorder()) and the
+     *             overlay is always sized from its content — sugar-overlay
+     *             has no fixed-width/height mode. Retained so pre-existing
+     *             call sites keep compiling.
      */
     public function withAutoSize(bool $enabled = true): self
     {
@@ -215,9 +225,11 @@ final class Veil
     /**
      * Set the border chrome for wrapping veil content, or clear it with null.
      *
-     * Uses sugar-style Border + Style to wrap the content with
-     * a terminal border. When combined with autoSize, dimensions
-     * are computed from the bordered content.
+     * Uses sugar-style Border + Style to wrap the content with a terminal
+     * border. The chrome is applied by composite() whenever a border is
+     * set — unconditionally, independent of the (deprecated, no-op)
+     * autoSize flag — and the overlay is then positioned and diffed as the
+     * bordered block, so anchoring accounts for the border's own cells.
      */
     public function withBorder(?Border $border): self
     {
@@ -234,8 +246,8 @@ final class Veil
      * the stack default on that axis); offsets always reset to the given
      * values, so withPosition(null, null) restores full defaults.
      *
-     * @param Position|null $vertical Vertical anchor (TOP, CENTER, BOTTOM) or null to clear
-     * @param Position|null $horizontal Horizontal anchor (LEFT, CENTER, RIGHT) or null to clear
+     * @param Position|null $vertical Vertical anchor; TOP-family pins to the first row, BOTTOM-family to the last, others center (any of the 9 cases accepted — only its row component is read on this axis); null clears
+     * @param Position|null $horizontal Horizontal anchor; LEFT-family pins to column 0, RIGHT-family to the last column, others center (column component read, row component ignored); null clears
      * @param int $x Additional columns rightward (+) / leftward (-)
      * @param int $y Additional lines downward (+) / upward (-)
      */
@@ -256,10 +268,41 @@ final class Veil
      * it. A veil WITHOUT content acts as a backdrop-only layer: the stack
      * pass dims (or passes through) the canvas beneath it and writes no
      * foreground of its own.
+     *
+     * TRUST BOUNDARY: content is passed through VERBATIM, and the
+     * compositor is marker-sensitive — U+E000/U+E001 zone sentinels become
+     * real hit-test zones and OSC 8 hyperlinks become live links in the
+     * rendered frame. Content from anything you do not control (network,
+     * transcripts, other processes) must arrive swept: pass it through
+     * Sanitize::untrustedForMarkedFrames() (or use
+     * withUntrustedContent()) rather than handing it to this method raw.
+     * This veil's own mark() zones legitimately ride the same sentinels
+     * and are preserved, which is why the sweep is caller-side, not
+     * automatic.
+     *
+     * @see withUntrustedContent()
+     * @see mark()
      */
     public function withContent(string $content): self
     {
         return $this->mutate(content: $content);
+    }
+
+    /**
+     * withContent() for text you do NOT trust: the sweep applies
+     * Sanitize::untrustedForMarkedFrames() before attaching — SGR/OSC/C1
+     * control sequences and forged U+E000/U+E001 zone sentinels are
+     * stripped, image markers (U+E002 and up) are preserved by design.
+     *
+     * This is the sugar-core house law: untrusted text enters render
+     * pipelines only through the sanitizer, never through the raw channel.
+     * Content attached here can no longer mint phantom hit-zones or hidden
+     * hyperlinks; the veil's own mark() calls remain effective because
+     * they wrap AFTER this point (mark the sanitized text, then compose).
+     */
+    public function withUntrustedContent(string $content): self
+    {
+        return $this->withContent(Sanitize::untrustedForMarkedFrames($content));
     }
 
     /** Read-only accessor for the stack-driven overlay content ('' = none). */
@@ -293,7 +336,7 @@ final class Veil
     }
 
     /**
-     * Wrap content with border chrome using Sprinkles Style.
+     * Wrap content with border chrome using sugar-style Style.
      *
      * @param string $content The content to wrap
      * @return string Content wrapped in border (or unchanged if no border set)
@@ -321,7 +364,7 @@ final class Veil
      */
     public function isClickOutside(\SugarCraft\Core\Msg\MouseMsg $mouse): bool
     {
-        if ($this->clickOutsideDismiss === FALSE) {
+        if ($this->clickOutsideDismiss === false) {
             return false;
         }
         if ($this->lastRendered === null) {
@@ -373,6 +416,13 @@ final class Veil
      * can later extract bounding boxes.
      *
      * Uses sugar-mouse Mark internally — no external Manager needed.
+     *
+     * TRUST BOUNDARY: the marker IS the U+E000/U+E001 sentinel pair —
+     * the same bytes a forged payload would use to mint a phantom zone.
+     * Only ever mark() text you assembled yourself (or text already swept
+     * via withUntrustedContent()); never wrap untrusted text in a
+     * mark()ed zone and assume the zone is all the attacker got — bytes
+     * OUTSIDE the markers flow into the frame unvalidated too.
      */
     public function mark(string $id, string $content): string
     {
@@ -382,7 +432,7 @@ final class Veil
     /**
      * Apply animation and composite the overlay onto the background.
      *
-     * @param string    $foreground  The overlay content (e.g. a modal)
+     * @param string    $foreground  The overlay content (e.g. a modal). TRUST BOUNDARY: passed through verbatim — forged zone sentinels / OSC 8 links inside it become REAL zones and links (see withContent()).
      * @param string    $background    The base content
      * @param Position  $vertical     Vertical position anchor
      * @param Position  $horizontal   Horizontal position anchor
@@ -455,7 +505,7 @@ final class Veil
      * against what was actually emitted; a frame with no cells at all resets
      * the session, forcing the next one out in full.
      *
-     * @param string    $foreground  The overlay content (e.g. a modal)
+     * @param string    $foreground  The overlay content (e.g. a modal). TRUST BOUNDARY: passed through verbatim — forged zone sentinels / OSC 8 links inside it become REAL zones and links (see withContent()).
      * @param string    $background   The base content
      * @param Position $vertical     Vertical position anchor
      * @param Position $horizontal    Horizontal position anchor
@@ -475,8 +525,12 @@ final class Veil
         $bgHeight = \count($bgLines);
         $bgWidth  = $this->maxLineWidth($bgLines);
 
-        // When autoSize is enabled, apply border chrome first and compute dimensions from bordered content
-        if ($this->autoSize === TRUE) {
+        // Border chrome is unconditional: a set border wraps the foreground
+        // before any measurement, so anchoring and diffing see the bordered
+        // block (there is no fixed-size mode; the legacy autoSize flag
+        // never re-gated this — sugar-overlay has always sized from
+        // content).
+        if ($this->border !== null) {
             $foreground = $this->applyBorderChrome($foreground);
         }
 
@@ -597,7 +651,7 @@ final class Veil
             return $fullOutput;
         }
 
-        if ($this->session->shouldEmitFull($width, $height) === TRUE) {
+        if ($this->session->shouldEmitFull($width, $height) === true) {
             $this->session->rememberFull($fullOutput, $width, $height);
             return $fullOutput;
         }
@@ -846,7 +900,7 @@ final class Veil
             if ($byte === "\xEE" && $pos + 2 < $len && $line[$pos + 1] === "\x80") {
                 if ($line[$pos + 2] === "\x80") { // U+E000 OPEN — skip id to CLOSE
                     $close = \strpos($line, "\xEE\x80\x81", $pos + 3);
-                    $pos = $close === FALSE ? $len : $close + 3;
+                    $pos = $close === false ? $len : $close + 3;
                     continue;
                 }
                 if ($line[$pos + 2] === "\x81") { // U+E001 CLOSE without an OPEN
@@ -1080,7 +1134,7 @@ final class Veil
         }
         $rest = \substr($body, 2);
         $sep  = \strpos($rest, ';');
-        if ($sep === FALSE) {
+        if ($sep === false) {
             return $carry; // malformed OSC 8 (no URI field) — leave pen unchanged
         }
         $params = \substr($rest, 0, $sep);
@@ -1098,8 +1152,12 @@ final class Veil
     }
 
     /**
-     * Reset the previous-frame buffer, forcing the next composite to emit
-     * a full frame (used on window resize or cursor-position-lost events).
+     * Reset the diff state, forcing the next composite to emit a full frame.
+     *
+     * Dimension changes already force a full frame on their own, so this is
+     * for OUT-OF-BAND invalidation: something other than this veil painted
+     * over the terminal, or the cursor position is no longer trusted, and
+     * the remembered frame no longer describes the screen.
      *
      * NOTE: This does NOT reset the scanner state. Hit-testing reads the
      * zones from the most recent scan() output — Scanner::scan() replaces

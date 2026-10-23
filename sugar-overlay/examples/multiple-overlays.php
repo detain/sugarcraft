@@ -11,6 +11,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Overlay\Position;
 use SugarCraft\Overlay\Veil;
+use SugarCraft\Overlay\VeilStack;
 
 // Simulated base terminal content
 $base = implode("\n", [
@@ -30,90 +31,51 @@ $base = implode("\n", [
 
 echo "Base view:\n{$base}\n\n";
 
-// Overlay 1: a tooltip at top-right (single line)
-$tooltip = [
-    'content' => "  [Tooltip] Unsaved changes  ",
-    'x'       => 50,  // column (0 = left, negative = from right edge)
-    'y'       => 3,   // row
-    'width'   => 28,
-];
+// Overlay contents. Placement is NOT part of the content — it is decided
+// at composite time by the Position anchors plus column/row offsets.
+$tooltip = "  [Tooltip] Unsaved changes  ";
+$modal   = "+----------------------------------+\n"
+         . "|  Save changes before closing?   |\n"
+         . "|  [Y] Yes   [N] No   [C] Cancel |\n"
+         . "+----------------------------------+";
 
-// Overlay 2: a modal dialog centered
-$modal = [
-    'content' => "+----------------------------------+\n"
-               . "|  Save changes before closing?   |\n"
-               . "|  [Y] Yes   [N] No   [C] Cancel |\n"
-               . "+----------------------------------+",
-    'x'       => 15,
-    'y'       => 8,
-    'width'   => 36,
-];
-
-// Stack: base → tooltip → modal
-// Veil::composite() composites one foreground over one background.
-// For multiple overlays, composite from bottom to top: base → tooltip → modal
+// Veil::composite() composites ONE foreground over ONE background.
+// For multiple overlays, composite bottom-to-top: base → tooltip → modal.
 //
-// Note: Veil uses diff encoding for subsequent composites to optimize SSH bandwidth.
-// For demos, we create fresh instances to show full output each time.
-
-$veil = Veil::new();
-
-// Tooltip at top-right with RIGHT anchor
-// xOffset/yOffset allow fine-tuning from the anchor position
-$withTooltip = $veil->composite(
-    $tooltip['content'],
+// The diff law: a reused Veil answers same-size frames with a DIFF
+// (cursor moves + changed cells) — right for a live terminal, wrong for a
+// demo being echo()d. Each render below runs on a fresh Veil so every
+// frame shown here is FULL output.
+echo "With tooltip (top-right, +3 rows) composited:\n";
+echo Veil::new()->composite(
+    $tooltip,
     $base,
     Position::TOP,
     Position::RIGHT,
-    0,
-    3,
-);
+    0,   // $xOffset: fine-tune from the RIGHT edge in columns (+ right / − left)
+    3,   // $yOffset: push 3 rows down from the TOP edge
+) . "\n\n";
 
-echo "With tooltip (top-right) composited:\n";
-echo $withTooltip . "\n\n";
+echo "With tooltip + modal (modal centered) composited:\n";
+$withTooltip = Veil::new()->composite($tooltip, $base, Position::TOP, Position::RIGHT, 0, 3);
+echo Veil::new()->composite($modal, $withTooltip, Position::CENTER, Position::CENTER) . "\n\n";
 
-// Reset to get full frame output (diff encoding is for SSH optimization)
-$veil->resetPreviousFrame();
+// Stacking the declarative way: a VeilStack sorts its layers by z-index
+// (lowest painted first) and compositeAll() places each veil at its OWN
+// withPosition() anchor — CENTER when unset — with its stored offsets.
+// A content-less veil with backdrop dimming is a backdrop-only layer.
+echo "VeilStack::compositeAll() — backdrop dim + tooltip + modal:\n";
+$stack = VeilStack::new()
+    ->add(Veil::new()->withBackdrop(60)->withZIndex(0))
+    ->add(Veil::new()
+        ->withContent($tooltip)
+        ->withZIndex(1)
+        ->withPosition(Position::TOP, Position::RIGHT, 0, 3))
+    ->add(Veil::new()
+        ->withContent($modal)
+        ->withZIndex(2)
+        ->withPosition(Position::CENTER, Position::CENTER));
+echo $stack->compositeAll($base) . "\n\n";
 
-// Modal centered - composite tooltip result over modal
-$withBoth = $veil->composite(
-    $modal['content'],
-    $withTooltip,
-    Position::CENTER,
-    Position::CENTER,
-    0,
-    0,
-);
-
-echo "With tooltip + modal (centered) composited:\n";
-echo $withBoth . "\n\n";
-
-// Fresh instance for clean full output
-$veil2 = Veil::new();
-
-$renderedModal = $veil2->composite(
-    $modal['content'],
-    $base,
-    Position::CENTER,
-    Position::CENTER,
-);
-echo "Modal only:\n";
-echo $renderedModal . "\n\n";
-
-// Fresh instance for clean full output
-$veil3 = Veil::new();
-
-$renderedTooltip = $veil3->composite(
-    $tooltip['content'],
-    $base,
-    Position::TOP,
-    Position::RIGHT,
-    0,
-    3,
-);
-echo "Tooltip only:\n";
-echo $renderedTooltip . "\n\n";
-
-// Base only (no overlay)
 echo "Base only (no overlay):\n";
 echo $base . "\n";
