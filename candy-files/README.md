@@ -110,7 +110,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 
 ## Test plan
 
-- 222 tests / 2931 assertions
+- 226 tests / 2953 assertions
 - Pure-state coverage: `Entry` (size formatting, parent sentinel, escape-sequence sweep incl. OSC/CSI/generic-ESC), `Sort` (every order × dirs-first × cycle), `Pane` (open / relist-with-selection-preservation / navigate / move / select / sort / hidden toggle / parent-path / join)
 - `Manager` integration: Tab swap, key dispatch per pane, confirm gate (`d` arms, `y` confirms, anything else cancels), refresh status, Escape clears selection, resize capture (`WindowSizeMsg` → derived widths, other non-key Msgs dropped)
 - `t` duplicates the current tab; `Manager::openNewTab(path)` lands a tab on the given directory as an API (no key binding carries a path)
