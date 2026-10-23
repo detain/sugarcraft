@@ -96,13 +96,20 @@ final class App implements Model
 
     /**
      * @param Flavor::* $flavor Database flavor for driver-specific behavior
+     * @param HistoryRecorder|null $historyRecorder When set, admin polls append
+     *     snapshots to the history store (wired by bin/candy-sql; the matching
+     *     fluent path is AppBuilder::withHistoryDbPath()).
      */
-    public static function start(DatabaseInterface $db, Flavor $flavor = Flavor::Sqlite): self
-    {
+    public static function start(
+        DatabaseInterface $db,
+        Flavor $flavor = Flavor::Sqlite,
+        ?HistoryRecorder $historyRecorder = null,
+    ): self {
         $tables = $db->tables();
         $a = new self(
             ConnectionState::new($db, $flavor),
             BrowseState::new()->withTables($tables),
+            admin: new AdminState(historyRecorder: $historyRecorder),
         );
         if ($tables !== []) {
             $a = $a->loadTable($tables[0]);

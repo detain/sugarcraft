@@ -3,8 +3,6 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Sql\bin;
-
 (static function () {
     foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
         $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
@@ -19,6 +17,8 @@ namespace SugarCraft\Sql\bin;
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Sql\Admin\History\HistoryRecorder;
+use SugarCraft\Sql\Admin\History\SqliteHistoryStore;
 use SugarCraft\Sql\App;
 use SugarCraft\Sql\App\AppBuilder;
 use SugarCraft\Sql\Db\ConnectionFactory;
@@ -37,6 +37,9 @@ if ($exit !== null) {
     exit($exit);
 }
 
+$historyPath = resolveHistoryPath($argv);
+$argv = stripHistoryFlags($argv);
+
 $database = buildDatabase($argv);
 
 // Extract flavor from database type
@@ -47,8 +50,13 @@ $flavor = match (true) {
     default => Flavor::Sqlite,
 };
 
+$historyRecorder = null;
+if ($historyPath !== null) {
+    $historyRecorder = new HistoryRecorder(new SqliteHistoryStore($historyPath));
+}
+
 (new Program(
-    App::start($database, $flavor),
+    App::start($database, $flavor, $historyRecorder),
     new ProgramOptions(useAltScreen: true),
 ))->run();
 
@@ -82,7 +90,10 @@ function handleGlobalFlags(array $argv): ?int
     }
 
     if ($hasVersion) {
-        fwrite(STDOUT, "candy-sql 1.0.0\n");
+        $version = \Composer\InstalledVersions::isInstalled('sugarcraft/candy-sql')
+            ? \Composer\InstalledVersions::getPrettyVersion('sugarcraft/candy-sql')
+            : 'dev';
+        fwrite(STDOUT, "candy-sql {$version}\n");
         return 0;
     }
 
@@ -110,7 +121,8 @@ ARGUMENTS
     SQLite database file path, e.g.: app.sqlite
     Or a DSN string, e.g.:  mysql://user:pass@localhost:3306/dbname
 
-  When omitted entirely, this help is shown.
+  When omitted entirely, a short usage line is printed and the
+  process exits with status 1; run --help for this full screen.
 
 OPTIONS
   --help, -h
@@ -137,7 +149,11 @@ OPTIONS
   --ssl-mode=<mode>
     Individual connection parameters (all except --driver and --db are optional).
     --driver must be one of: sqlite, mysql, pgsql
-    --ssl-mode defaults to "prefer" for MySQL.
+    --ssl-mode defaults to "prefer" for MySQL. "require" and "verify_*" enforce
+    TLS with server-certificate verification; CA trust must be configured
+    server-side or via my.cnf (see README).
+    Prefer CANDY_SQL_PASS over --pass= to keep the password out of the
+    process command line (visible in ps).
 
 EXAMPLES
   # SQLite (default — bare path or DSN)
@@ -150,19 +166,33 @@ EXAMPLES
   candy-sql --dsn=mysql://root:secret@localhost:3306/mydb
 
   # MySQL via individual flags
-  candy-sql --driver=mysql --host=localhost --port=3306 --user=root --pass=secret --db=mydb
+  CANDY_SQL_PASS=secret candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
 
   # PostgreSQL
   candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
   candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb
 
+HISTORY
+  By default every admin poll is recorded to
+  $HOME/.candy-sql/history.db (0700 dir / 0600 file), powering the
+  Dashboard sparklines and the query-history reports.
+
+  --no-history
+    Disable recording entirely (nothing is written to disk).
+
+  --history=<path>
+    Store snapshots at <path> instead of the default location.
+
 KEYBOARD SHORTCUTS (TUI)
-  Tab         Cycle focus through panes (Tables → Rows → Query)
+  Tab         Cycle focus through panes (Tables → Rows → Query → Admin)
   ↑ / ↓       Navigate list rows (or j/k)
   Enter       Load selected table's rows
   Ctrl+Enter  Execute the current query
   Ctrl+R      Execute the current query
-  q           Quit (from Tables or Rows pane)
+  Ctrl+E      Execute the current query
+  Ctrl+F      Save the current query to the favorites store
+  1-8         Jump to an admin pane (only while the Admin pane is focused)
+  q           Quit
 
 SEE ALSO
   https://github.com/sugarcraft/candy-sql
@@ -212,5 +242,70 @@ function buildDatabase(array $argv): DatabaseInterface
     }
 
     // Parse and build from ConnectionFactory
-    return ConnectionFactory::fromArgv($args);
+    return ConnectionFactory::fromArgv(injectPasswordFromEnv($args));
+}
+
+/**
+ * Fall back to CANDY_SQL_PASS when no --pass= was given: keeps the password
+ * out of the world-readable /proc/<pid>/cmdline (docs-review-1023 m6).
+ *
+ * @param array<string> $args
+ * @return array<string>
+ */
+function injectPasswordFromEnv(array $args): array
+{
+    foreach ($args as $arg) {
+        if (str_starts_with($arg, '--pass=')) {
+            return $args; // explicit flag wins
+        }
+    }
+    $fromEnv = getenv('CANDY_SQL_PASS');
+    if (is_string($fromEnv) && $fromEnv !== '') {
+        $args[] = '--pass=' . $fromEnv;
+    }
+    return $args;
+}
+
+/**
+ * Remove the history flags from argv so the connection parser never sees
+ * them. --no-history disables persistence; --history=<path> overrides the
+ * default store location.
+ *
+ * @param array<string> $argv
+ * @return array<string>
+ */
+function stripHistoryFlags(array $argv): array
+{
+    return array_values(array_filter(
+        $argv,
+        static fn(string $arg): bool => $arg !== '--no-history' && !str_starts_with($arg, '--history=')
+    ));
+}
+
+/**
+ * Resolve the history path from the raw argv (history flags read before strip).
+ *
+ * Default: $HOME/.candy-sql/history.db, recorded on with no opt-in needed.
+ * --no-history wins over --history=<path>. Returns null when disabled or
+ * when HOME is unset (no writable well-known location to fall back to).
+ */
+function resolveHistoryPath(array $argv): ?string
+{
+    $explicit = null;
+    foreach ($argv as $arg) {
+        if ($arg === '--no-history') {
+            return null;
+        }
+        if (str_starts_with($arg, '--history=')) {
+            $explicit = substr($arg, strlen('--history='));
+        }
+    }
+    if ($explicit !== null && $explicit !== '') {
+        return $explicit;
+    }
+    $home = getenv('HOME');
+    if (!is_string($home) || $home === '') {
+        return null;
+    }
+    return rtrim($home, '/') . '/.candy-sql/history.db';
 }

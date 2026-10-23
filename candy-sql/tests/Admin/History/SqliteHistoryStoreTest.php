@@ -188,4 +188,26 @@ final class SqliteHistoryStoreTest extends TestCase
         $this->assertEqualsWithDelta($tsWithSubsecond, $results[0]->ts, 0.001);
         $this->assertSame('subsecond', $results[0]->variables['Y']);
     }
+    /**
+     * A freshly created store must be private to the user even under a
+     * permissive umask: directory 0700, database file 0600
+     * (docs-review-1023 n4). The default location lives under $HOME.
+     */
+    public function testFreshlyCreatedStoreIsOwnerReadWriteOnly(): void
+    {
+        $dir = \sys_get_temp_dir() . '/candy_sql_perms_' . \uniqid() . '/deep';
+        $path = $dir . '/history.db';
+
+        $store = new SqliteHistoryStore($path);
+        $store->close();
+
+        $this->assertSame(0700, \fileperms($dir) & 0777, 'history directory must be 0700');
+        $this->assertSame(0600, \fileperms($path) & 0777, 'history database must be 0600');
+
+        @\unlink($path);
+        @\unlink($path . '-wal');
+        @\unlink($path . '-shm');
+        @\rmdir($dir);
+        @\rmdir(\dirname($dir));
+    }
 }

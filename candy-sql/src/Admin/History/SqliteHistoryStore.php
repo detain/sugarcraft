@@ -27,13 +27,28 @@ final class SqliteHistoryStore implements HistoryStoreInterface
     public function __construct(private readonly string $dbPath)
     {
         $dir = \dirname($dbPath);
+        $dirCreated = false;
         if (!\is_dir($dir)) {
-            if (!\mkdir($dir, 0755, true) && !\is_dir($dir)) {
+            if (!\mkdir($dir, 0700, true) && !\is_dir($dir)) {
                 throw new \RuntimeException("Cannot create history directory: {$dir}");
             }
+            $dirCreated = true;
         }
 
+        // History rows carry server variable names and values - keep the
+        // store readable only by its owner. mkdir()'s mode is umask-filtered
+        // and SQLite creates the database file with the default 0644, so
+        // re-assert the modes on anything this constructor just created
+        // (docs-review-1023 n4). Files and directories we did not create are
+        // left untouched.
+        $fileCreated = !\is_file($dbPath);
         $this->db = new \SQLite3($dbPath);
+        if ($dirCreated) {
+            @\chmod($dir, 0700);
+        }
+        if ($fileCreated) {
+            @\chmod($dbPath, 0600);
+        }
         $this->db->busyTimeout(5000);
         $this->db->exec('PRAGMA journal_mode = WAL');
         $this->init();
