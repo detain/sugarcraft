@@ -12,18 +12,19 @@ return [
     // Mailer.php
     'mailer.no_recipient'        => 'Email must have at least one recipient (to, cc, or bcc)',
     'mailer.no_from'             => 'Email must have a from address',
-    'mailer.send_cancelled'      => 'Send cancelled before completion',
+    'mailer.send_cancelled'      => 'Send cancelled before it started',
 
     // SmtpTransport.php
     'smtp.send_failed'           => 'SMTP send failed: {message}',
     'smtp.connect_failed'        => 'Cannot connect to {addr}: {errstr} ({errno})',
     'smtp.starttls_failed'       => 'STARTTLS negotiation failed',
     'smtp.tls_required'          => 'TLS is required but could not be established: {host} did not offer STARTTLS',
+    'smtp.auth_insecure'         => 'Refusing to authenticate over an insecure (unencrypted) SMTP channel',
     'smtp.not_connected'         => 'Not connected',
     'smtp.no_response'           => 'Server sent no response',
     'smtp.empty_response'        => 'Server sent empty response',
     'smtp.unexpected_response'   => 'SMTP unexpected response: {response}',
-    'smtp.send_cancelled'        => 'SMTP send cancelled before completion',
+    'smtp.send_cancelled'        => 'SMTP send cancelled before it started',
     'smtp.write_error'           => 'Failed to write to SMTP server',
     'smtp.incomplete_write'      => 'Incomplete write to SMTP server',
 
@@ -33,7 +34,7 @@ return [
     'email.crlf_in_header'      => 'CRLF injection detected in {field} header',
 
     // ResendTransport.php
-    'resend.send_cancelled'     => 'Resend send cancelled before completion',
+    'resend.send_cancelled'     => 'Resend send cancelled before it started',
     'resend.network_error'       => 'Resend network error: {error}',
     'resend.api_error'           => 'Resend API error ({status}): {body}',
 

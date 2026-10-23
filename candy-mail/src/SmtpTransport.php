@@ -18,11 +18,15 @@ use SugarCraft\Mail\Lang;
  *  - **Implicit TLS / SMTPS** (port 465, or {@see withImplicitTls()}): the
  *    socket is wrapped in TLS at connect time, before any SMTP bytes are
  *    exchanged. STARTTLS is never sent on such a connection.
- *  - **Opportunistic STARTTLS** (e.g. port 587): plaintext connect, then the
- *    channel is upgraded via STARTTLS *only when the server advertises it*.
+ *  - **STARTTLS** (e.g. port 587): plaintext connect, then the channel is
+ *    upgraded via STARTTLS. TLS is REQUIRED by default — if the server does
+ *    not advertise STARTTLS (or the upgrade fails), the send throws instead
+ *    of falling back to plaintext. {@see withRequireTls(false)} restores the
+ *    historical opportunistic behaviour for trusted networks only.
  *
- * Peer certificates are verified in both modes. {@see withRequireTls()} turns
- * an unencrypted outcome into a hard failure, closing the downgrade-strip hole.
+ * Peer certificates are verified in both modes; {@see withCaFile()} selects a
+ * custom CA bundle. Credentials are never sent over an unencrypted channel:
+ * AUTH LOGIN refuses to start on a plaintext connection in every mode.
  *
  * Mirrors charmbracelet/pop SMTP transport.
  */
@@ -38,6 +42,8 @@ final class SmtpTransport implements Transport
     /** When true, a send that cannot establish TLS throws instead of proceeding in plaintext. */
     private bool $requireTls;
     private string $heloHost;
+    /** Optional custom CA bundle for peer verification (null = system trust store). */
+    private ?string $caFile = null;
 
     /** @var resource|null */
     private $socket = null;
@@ -59,17 +65,21 @@ final class SmtpTransport implements Transport
         $this->password    = $password;
         $this->timeout     = $timeout;
         $this->implicitTls = ($port === 465);
-        $this->requireTls  = false;
+        // Secure by default (docs-fix-1023 S-1): a send that cannot reach an
+        // encrypted channel throws rather than leaking mail/credentials in
+        // plaintext. Opt out explicitly with withRequireTls(false).
+        $this->requireTls  = true;
         $this->heloHost    = $heloHost;
     }
 
     /**
-     * Return a copy that fails the send unless the channel ends up encrypted.
+     * Control whether the send fails when the channel cannot be encrypted.
      *
-     * With implicit TLS this is always satisfied at connect; with opportunistic
-     * STARTTLS it means "throw if the server did not offer STARTTLS or the
-     * upgrade failed" — i.e. never fall back to sending credentials/mail in the
-     * clear. Immutable per repo convention: yields a fresh, unconnected clone.
+     * REQUIRED TLS is the constructor default (docs-fix-1023 S-1): with the
+     * flag on, a server that does not offer STARTTLS (or a failed upgrade)
+     * throws instead of sending credentials/mail in the clear. Pass false to
+     * opt back into opportunistic behaviour — trusted networks only.
+     * Immutable per repo convention: yields a fresh, unconnected clone.
      */
     public function withRequireTls(bool $require = true): self
     {
@@ -98,6 +108,24 @@ final class SmtpTransport implements Transport
     }
 
     /**
+     * Return a copy that verifies the server certificate against a custom CA
+     * bundle instead of the system trust store (e.g. a private CA).
+     *
+     * Applies to both TLS modes: the ssl context at connect for implicit TLS,
+     * and the stream options set before the STARTTLS crypto upgrade. An empty
+     * path clears it again. Immutable: yields a fresh, unconnected clone.
+     */
+    public function withCaFile(string $caFile): self
+    {
+        $clone = clone $this;
+        $clone->caFile       = $caFile === '' ? null : $caFile;
+        $clone->socket       = null;
+        $clone->lastResponse = '';
+        $clone->encrypted    = false;
+        return $clone;
+    }
+
+    /**
      * Mask secrets so the SMTP password never leaks through var_dump(),
      * print_r(depth), stack traces, or logging that reflects object state.
      */
@@ -112,6 +140,7 @@ final class SmtpTransport implements Transport
             'implicitTls' => $this->implicitTls,
             'requireTls'  => $this->requireTls,
             'heloHost'    => $this->heloHost,
+            'caFile'      => $this->caFile,
             'encrypted'   => $this->encrypted,
             'connected'   => $this->socket !== null,
         ];
@@ -231,6 +260,9 @@ final class SmtpTransport implements Transport
                 'peer_name'        => $this->host,
                 'SNI_enabled'      => true,
             ];
+            if ($this->caFile !== null) {
+                $options['ssl']['cafile'] = $this->caFile;
+            }
         }
         return $options;
     }
@@ -260,9 +292,14 @@ final class SmtpTransport implements Transport
         \stream_context_set_option($this->socket, 'ssl', 'verify_peer', true);
         \stream_context_set_option($this->socket, 'ssl', 'verify_peer_name', true);
         \stream_context_set_option($this->socket, 'ssl', 'peer_name', $this->host);
+        if ($this->caFile !== null) {
+            \stream_context_set_option($this->socket, 'ssl', 'cafile', $this->caFile);
+        }
 
         $crypto = \stream_socket_enable_crypto($this->socket, true, \STREAM_CRYPTO_METHOD_TLS_CLIENT);
-        if ($crypto === false) {
+        if ($crypto !== 1) {
+            // 1 = handshake completed; 0/false = failure. Treat anything else as
+            // a failed upgrade so requireTls semantics stay honest.
             throw new \RuntimeException(Lang::t('smtp.starttls_failed'));
         }
         $this->encrypted = true;
@@ -276,6 +313,14 @@ final class SmtpTransport implements Transport
     {
         if ($this->username === '' || $this->password === '') {
             return;
+        }
+
+        if (!$this->encrypted) {
+            // docs-fix-1023 S-1: AUTH LOGIN ships base64 (not encrypted)
+            // credentials. A plaintext channel here is either a stripped
+            // STARTTLS downgrade or an explicit withRequireTls(false) opt-out
+            // — refuse either way rather than hand the network a password.
+            throw new \RuntimeException(Lang::t('smtp.auth_insecure'));
         }
 
         if (!$this->hasExtension('AUTH')) {

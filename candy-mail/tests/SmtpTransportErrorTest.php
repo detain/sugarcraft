@@ -135,14 +135,15 @@ final class SmtpTransportErrorTest extends TestCase
 
     public function testStartTlsIfNeededSkipsWhenStarttlsNotAvailable(): void
     {
-        $transport = new SmtpTransport('smtp.example.com', 587);
+        $transport = (new SmtpTransport('smtp.example.com', 587))->withRequireTls(false);
 
         // Set lastResponse to indicate no STARTTLS
         $prop = new \ReflectionProperty($transport, 'lastResponse');
         $prop->setAccessible(true);
         $prop->setValue($transport, "220 server ready\r\n250-foo\r\n250 HELP\r\n");
 
-        // requireTls is false by default, so should not throw
+        // TLS was explicitly waived (default is requireTls=true since S-1),
+        // so the missing STARTTLS is a no-op, not a throw.
         $this->invokePrivate($transport, 'startTlsIfNeeded');
 
         $this->assertTrue(true);
