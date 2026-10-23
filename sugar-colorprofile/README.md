@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-colorprofile)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-colorprofile)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-colorprofile?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-colorprofile)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 # SugarColorprofile
@@ -18,13 +18,13 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
 ## Features
 
 - **Detect terminal color profile** from environment variables and TTY info
-- **ColorProfile enum** (B-09 canonical vocabulary): `TrueColor` (24-bit) → `Ansi256` (256-color) → `Ansi240` (fixed slots 16-255) → `Ansi` (16-color) → `Ansi8` (basic 8) → `Fgbg` (two-color fg/bg) → `Ascii` (black/white) → `NoTTY`; the former renderer-facing `Profile` enum is now a deprecated `class_alias` façade over it — every old `Profile::X` spelling still resolves
-- **Color conversion**: downsample RGBA colors to any target profile in one shared vocabulary (detection and renderer enums consolidated under B-09)
+- **ColorProfile enum** (canonical vocabulary): `TrueColor` (24-bit) → `Ansi256` (256-color) → `Ansi240` (fixed slots 16-255) → `Ansi` (16-color) → `Ansi8` (basic 8) → `Fgbg` (two-color fg/bg) → `Ascii` (black/white) → `NoTTY`; the former renderer-facing `Profile` enum is now a deprecated `class_alias` façade over it — every old `Profile::X` spelling still resolves
+- **Color conversion**: downsample RGBA colors to any target profile in one shared vocabulary (detection and renderer enums consolidated)
 - **ProfileWriter**: wrap a stream and automatically degrade color codes to match the terminal
 - **ANSI stripping**: `NoTTY` strips all ANSI sequences from output
 - **Environment-aware**: reads `TERM`, `COLORTERM`, `FORCE_COLOR`, `NO_COLOR`, `TERM_PROGRAM`
 - **Probe class**: static env-detection layer with precedence-ordered rules + infocmp Phase 2 upgrade
-- **ColorProfile enum**: the single shared color-depth vocabulary (8 levels) — detection chain and renderer speak it together (B-09 consolidation)
+- **ColorProfile enum**: the single shared color-depth vocabulary (8 levels) — detection chain and renderer speak it together
 - **Perceptual color distance**: CIELAB conversion + ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ (CIEDE2000) metrics with an opt-in nearest-palette matcher (`NearestColor`), palette Lab values memoised for hot loops, a PCA-bucketed exact lookup index for repeated queries (`PaletteIndex`), and error-compensated quantization for dither chains (`NearestColor::withError()`)
 
 ## Install
@@ -69,7 +69,7 @@ $writer->write("\x1b[38;2;107;80;255mFancy text\x1b[0m\n");
 | Ascii        | 2         | Black & white                                   |
 | NoTTY        | 0         | No color (ANSI stripped)                        |
 
-`Profile` is the deprecated alias of `ColorProfile` (B-09); `Profile::ANSI256`
+`Profile` is the deprecated alias of `ColorProfile`; `Profile::ANSI256`
 and `Profile::ANSI` keep resolving through deprecated constant bridges.
 
 ## Color Degradation
@@ -122,14 +122,16 @@ $index   = $matcher->ansi256(new Color(30, 120, 30));
 $brand = ['logo' => new Color(10, 20, 30), 'accent' => new Color(240, 250, 255)];
 $key   = $matcher->closest(new Color(12, 34, 56), $brand);
 
-// Repeated lookups over one fixed palette: the PCA-bucketed index (B-04).
+// Repeated lookups over one fixed palette: the PCA-bucketed index.
 // Answers EXACTLY what the brute-force scan answers (lowest index on ties) —
 // it only trades construction cost for a sublinear lookup. Euclidean and Cie76
 // only; those are the metrics that admit a distance-preserving rotation.
 $idx  = PaletteIndex::fromPalette(NearestColor::palette256(), ColorDistance::Cie76);
-$near = $idx->nearest(new Color(30, 120, 30));                    // === $matcher->ansi256(...)
+$near = $idx->nearest(new Color(30, 120, 30));  // === a Cie76-metric NearestColor->ansi256() answer
+// (the index only claims equality with the brute-force matcher under the SAME metric —
+//  the $matcher above is Cie2000, so compare against `new NearestColor(ColorDistance::Cie76)`)
 
-// Error-compensated lookup (B-07), chafa chafa-palette.c:1160-1197: pass the
+// Error-compensated lookup, chafa chafa-palette.c:1160-1197: pass the
 // per-channel accumulator by reference; the query is pushed by error * 0.9/16
 // before matching, and the new residual is written back for the next pixel.
 $acc  = [0.0, 0.0, 0.0];                                    // start of the scanline
@@ -191,7 +193,7 @@ if (Probe::reducedMotion()) {
 
 ## ColorProfile Enum
 
-`ColorProfile` is the single shared color-depth vocabulary (B-09): the detection chain speaks it, `Palette`/`ProfileWriter` degrade against it, and libs that need the raw profile value consume it directly (sugar-log, sugar-image, candy-codeshot, sugar-vterm). `Profile` remains only as a deprecated `class_alias` façade over it.
+`ColorProfile` is the single shared color-depth vocabulary: the detection chain speaks it, `Palette`/`ProfileWriter` degrade against it, and libs that need the raw profile value consume it directly (live roster, derived from `use SugarCraft\ColorProfile\` imports: sugar-log, sugar-image, sugar-spring, sugar-video, candy-mdview). `Profile` remains only as a deprecated `class_alias` façade over it.
 
 ```php
 use SugarCraft\ColorProfile\ColorProfile;
@@ -223,13 +225,56 @@ $writer = $writer->withProfile(ColorProfile::Ansi240); // never touch slots 0-15
 SugarCraft\ColorProfile\
 ├── Color          — RGBA color value object with conversion methods (Color::namedColors() lists standard names)
 ├── Palette        — instance-based detection + degradation + ProfileWriter
-├── ColorProfile   — THE color-depth enum (8 levels, richest→simplest; B-09 consolidation)
-├── Profile        — deprecated class_alias façade over ColorProfile (B-09)
+├── ColorProfile    — THE color-depth enum (8 levels, richest→simplest)
+├── Profile         — deprecated class_alias façade over ColorProfile
+├── DetectionChain  — shared env ladder (the one precedence core; see below)
+├── Palette         — instance detection + degrade/strip over the chain (adds FORCE_COLOR + TERM_PROGRAM)
 ├── Probe           — static env-probe layer (colorProfile/isNoColor/isForceColor/reducedMotion)
-├── StandardColors  — ANSI/ANSI256 standard palette
-├── ProfileWriter  — stream wrapper for automatic color degradation
-└── Lang           — i18n strings
+├── AsyncProbe      — ReactPHP child-process infocmp probe (bounded children, sync fallback)
+├── Probe\TerminalProbe — full 12-step capability report (color + Sixel/Kitty/hyperlinks/keyboard)
+├── Probe\Capability / ProbeReport / Probe\InfocmpBinary — capability enum, sourced report, resolved infocmp path
+├── ColorMath       — sRGB→linear→XYZ (D65)→Lab conversion
+├── DeltaE          — ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ metrics
+├── ColorDistance   — distance strategy enum (Euclidean/Cie76/Cie94/Cie2000)
+├── NearestColor    — nearest-palette matcher (memoised Lab, error-compensation carrier)
+├── PaletteIndex    — PCA-bucketed exact accelerator for repeated lookups
+├── StandardColors  — ANSI/ANSI256 standard palette (public MUTABLE statics — read-only by convention)
+├── ProfileWriter   — stream wrapper for automatic color degradation
+└── Lang            — i18n strings
 ```
+
+## Terminal capability probes
+
+Beyond the env ladder above, the library exposes a richer capability surface:
+
+- **`Probe\TerminalProbe`** — 12-step probe returning a **`Probe\ProbeReport`**: each
+  detected **`Probe\Capability`** (TrueColor, Ansi256, Color8/16, Sixel, Kitty, ITerm2,
+  Hyperlinks, KittyKeyboard, Mouse, NoColor, BasicAscii, …) carries its source string
+  (`env:VAR`, `terminfo:cap`, `query`, `fallback`). Steps 1-4 suppressions and the core
+  color-depth levels delegate to `DetectionChain`, so the ladder cannot drift; terminfo
+  capabilities are read through `infocmp -1` **exec'd at the `Probe\InfocmpBinary`-resolved
+  absolute path** (the same path the availability gate checked — no PATH re-resolution).
+  `TERM_PROGRAM` maps only terminals that actually implement what they advertise —
+  notably `Apple_Terminal` does NOT set `ITerm2` (Terminal.app has no OSC 1337 images).
+- **`AsyncProbe::colorProfile()`** — the same infocmp check in a ReactPHP child process;
+  returns a promise. Every child is bounded (5 s ceiling → TERM, 1 s grace → KILL, promise
+  settles with the sync detection) and slot reclamation kills children whose loop was
+  abandoned, so the `MAX_CONCURRENT_PROBES = 4` cap can never wedge. Falls back to the
+  sync path on env suppression, missing infocmp, unset/`dumb` TERM (never probes a
+  fabricated `xterm`), or when the cap is reached. Results are advisory only.
+
+| Env var | Effect |
+|---------|--------|
+| `NO_COLOR` | suppress all color (`NoTTY` / `NoColor` capability) |
+| `CLICOLOR=0` | suppress color |
+| `TERM=dumb` | suppress color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
+| `CLICOLOR_FORCE=1` | force TrueColor past every suppression leg |
+| `FORCE_COLOR=0..3` | SugarCraft level override (Palette/AsyncProbe paths) |
+| `COLORTERM=24bit\|truecolor\|yes` | TrueColor |
+| `TERM=xterm*\|screen*\|tmux*`, `*-256color`, `xterm-kitty`, `xterm-ghostty` | ladder levels |
+| `WT_SESSION` | Windows Terminal — TrueColor |
+| `GOOGLE_CLOUD_SHELL=true` | TrueColor |
+| `TMUX` / `STY` | re-anchor to the base TERM before grading |
 
 ## License
 
