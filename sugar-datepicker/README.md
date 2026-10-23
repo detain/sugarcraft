@@ -82,6 +82,11 @@ floor (January 0001 — earlier years cannot be represented as `Y-m-d` grid
 dates) and, when set, at the `min`/`max` bound months. Stepping at a clamp
 boundary is a no-op. The cursor index is re-clamped into the new month on
 every navigation step, so navigating to a shorter month lands on its last day.
+The mirror edge exists at the top: an unbounded picker stepping past year 9999
+enters year 10000, which cannot be written as `%04d`, so the grid date is
+unresolvable — `View()` still renders (reporting year 10000), but
+`dateAtCursor()` is `null` and `SelectDate()` refuses. This tolerated upper
+edge never crashes.
 
 ## Selection
 

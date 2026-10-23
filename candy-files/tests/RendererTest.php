@@ -56,7 +56,14 @@ final class RendererTest extends TestCase
     {
         $m = Manager::start('/', '/', $this->fakeFs());
         $legacy = Renderer::render($m);
-        $this->assertStringContainsString(str_repeat('─', 36), $legacy);
+        // Full-row equality (WELD-H cure for review M1): the legacy
+        // separator must survive as ONE byte-exact frame row, not merely a
+        // 36-dash substring.
+        $this->assertContains(
+            sprintf('┃ %s     ┃  │ %s     │', str_repeat('─', 36), str_repeat('─', 36)),
+            explode("\n", $legacy),
+            'the legacy separator row must survive byte-exact'
+        );
         $this->assertStringNotContainsString(str_repeat('─', 55), $legacy);
 
         [$m] = $m->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));

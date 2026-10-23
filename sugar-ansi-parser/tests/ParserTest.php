@@ -841,4 +841,30 @@ final class ParserTest extends TestCase
         $this->assertSame(ord('\\'), $st['final']);
         $this->assertSame(0, $st['intermediate'], 'Aborted DCS intermediates must not bleed into the ESC dispatch');
     }
+
+    public function testResetFlushesInFlightOscThenClearsToGround(): void
+    {
+        // WELD-H cure (docs-fix-1023): reset() is NOT a silent clear — it
+        // delegates to flush(), so the in-flight OSC payload dispatches
+        // first, then state and buffers clear.
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        $parser->feed("\x1b]0;in-flight");
+        $this->assertNotSame(State::Ground, $parser->currentState(), 'sanity: OSC is in flight');
+
+        $parser->reset();
+
+        $oscs = $handler->filter('osc');
+        $this->assertNotEmpty($oscs, 'reset() must flush the in-flight OSC string');
+        $this->assertSame('0;in-flight', $oscs[0]['detail'], 'the flush must carry the full collected payload');
+        $this->assertSame(State::Ground, $parser->currentState(), 'reset() must land on Ground');
+
+        // A post-reset sequence collects into a fresh buffer (the clear half
+        // of the contract): this must dispatch exactly its own payload.
+        $parser->feed("\x1b]2;after\x07");
+        $oscs = $handler->filter('osc');
+        $this->assertCount(2, $oscs, 'post-reset feed starts a clean string buffer');
+        $this->assertSame('2;after', $oscs[1]['detail'], 'the new OSC must not inherit the flushed payload');
+    }
 }

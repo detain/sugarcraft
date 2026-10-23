@@ -766,6 +766,41 @@ final class GameTest extends TestCase
         $this->assertNotNull($g->startedAt, 'the first actual reveal arms the clock');
     }
 
+    /**
+     * WELD-H cure (docs-fix-1023 M-E): the revealAt()/chordAt()
+     * board-identity guards exist ONLY on the mouse path — every keyboard
+     * dud pin routes through reveal()/chord() directly and stays green even
+     * with the revealAt guard neutered. This pin drives the guards
+     * themselves: a left-click on a flagged cell and a middle-click on an
+     * unrevealed cell must neither arm the clock nor move the cursor.
+     */
+    public function testMouseDudClicksNeitherArmClockNorMoveCursor(): void
+    {
+        $rows = [
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 2), new \SugarCraft\Minesweeper\Cell(false, false, false, 1)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 2), new \SugarCraft\Minesweeper\Cell(false, false, false, 1)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, true, 0)],
+        ];
+        $board = new \SugarCraft\Minesweeper\Board(3, 3, 1, $rows, true, false, 0, 1);
+        $g     = new Game($board, 0, 0, static fn(int $_max): int => 0);  // cursor at (0,0)
+
+        $this->assertTrue($g->board->cell(2, 2)->flagged, 'sanity: click target is a flagged dud');
+
+        // Interior cell (2,2) sits at terminal coords (5,4).
+        [$next, ] = $g->update(self::mouseClick(5, 4, MouseButton::Left));
+        $this->assertFalse($next->board->cell(2, 2)->revealed, 'sanity: the dud revealed nothing');
+        $this->assertNull($next->startedAt, 'a dud left-click must not arm the clock');
+        $this->assertSame(0, $next->cursorX, 'a dud left-click must not move the cursor');
+        $this->assertSame(0, $next->cursorY, 'a dud left-click must not move the cursor');
+
+        // Same refusal through the chord guard: (2,2) is unrevealed, so the
+        // chord is refused (its flagged mine neighbour is irrelevant).
+        [$chorded, ] = $g->update(self::mouseClick(5, 4, MouseButton::Middle));
+        $this->assertNull($chorded->startedAt, 'a refused chord click must not arm the clock');
+        $this->assertSame(0, $chorded->cursorX, 'a refused chord click must not move the cursor');
+        $this->assertSame(0, $chorded->cursorY, 'a refused chord click must not move the cursor');
+    }
+
     // ─── E3: custom boards keep a readable final time ───────────────────────
 
     /** A 5×5/3 board matches no preset → difficulty() is null ("custom"). */

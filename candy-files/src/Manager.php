@@ -894,7 +894,8 @@ final class Manager implements Model
             }
             if ($segment === '..') {
                 if ($absolute) {
-                    // '/a/..' pops to '/a' → then '' : '..' at root is root.
+                    // An absolute '..' pops the last named segment and can
+                    // never escape: '/a/..' lands back on '/'.
                     array_pop($segments);
                     continue;
                 }
