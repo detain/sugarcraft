@@ -5,29 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\DatePicker;
 
 /**
- * Keyboard navigation handler for date grids.
+ * Grid-index → date conversion for the calendar.
+ *
+ * The former move() helper and its ROW/COL constants duplicated
+ * DatePicker's own MoveCursor* family (the production path) and were never
+ * called from src/ — removed 2026-10-23 (docs-fix-1023 E2) under the
+ * single-source-of-truth law; cursor clamping lives in DatePicker alone.
  */
 final readonly class Navigation
 {
-    public const ROW_DOWN  = 7;
-    public const ROW_UP   = -7;
-    public const COL_RIGHT = 1;
-    public const COL_LEFT  = -1;
-
-    /** @param int $gridIndex 0-41 */
-    public static function move(int $gridIndex, string $key): int
-    {
-        return match ($key) {
-            'left'  => max(0, $gridIndex - 1),
-            'right' => min(41, $gridIndex + 1),
-            'up'    => max(0, $gridIndex - 7),
-            'down'  => min(41, $gridIndex + 7),
-            'home'  => 0,
-            'end'   => 41,
-            default => $gridIndex,
-        };
-    }
-
     /**
      * Convert grid index to \DateTimeImmutable for given month/year.
      *

@@ -1,6 +1,7 @@
 <?php
 /**
- * sugar-datepicker — navigation, cursor movement, and date selection demo.
+ * sugar-datepicker — min/max date-constraint demo: clamped navigation and
+ * refused out-of-range selection.
  *
  * Run: php examples/constraints.php
  */
@@ -11,58 +12,42 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\DatePicker\DatePicker;
 
-echo "=== Calendar navigation and selection demo ===\n\n";
+echo "=== Date constraints (min 2026-05-10, max 2026-07-20) ===\n\n";
 
-// Start at June 2026
-$picker = DatePicker::new(new \DateTimeImmutable('2026-06-15'));
-echo "Initial view (June 2026):\n";
-echo $picker->view() . "\n\n";
+$picker = DatePicker::new(new \DateTimeImmutable('2026-06-15'))
+    ->withMinDate(new \DateTimeImmutable('2026-05-10'))
+    ->withMaxDate(new \DateTimeImmutable('2026-07-20'));
 
-// Navigate months
-$prev = $picker->GoToPreviousMonth();
-echo "Previous month (May 2026):\n";
-echo $prev->view() . "\n\n";
+echo "Initial view (June 2026, inside the window):\n";
+echo $picker->View() . "\n\n";
 
-$next = $picker->GoToNextMonth();
-echo "Next month (July 2026):\n";
-echo $next->view() . "\n\n";
+// Navigation is clamped at the bound months — stepping past them is a no-op.
+$march = $picker->GoToPreviousMonth()->GoToPreviousMonth();
+echo "Two months back (May 2026 — the min month):\n";
+echo $march->View() . "\n";
+$still = $march->GoToPreviousMonth();
+echo "One more step back stays put: "
+    . $still->ViewYear() . '-' . $still->ViewMonth() . "\n\n";
 
-// Navigate years
-$jan = $picker->GoToPreviousYear();
-echo "Previous year (June 2025):\n";
-echo $jan->view() . "\n\n";
+// Selection outside the window is refused; the picker comes back unchanged.
+$beforeBound = $march
+    ->handleKey(DatePicker::KEY_HOME)          // cursor onto the empty lead-in
+    ->handleKey(DatePicker::KEY_LEFT);         // stays at 0
+$refused = $beforeBound->handleKey(DatePicker::KEY_ENTER);
+echo "Enter on the empty lead-in cell (fallback = May 1, before the bound): "
+    . ($refused->IsSelecting() ? 'SELECTED?!' : 'refused') . "\n";
 
-// Go to today
-$today = DatePicker::new()->GoToToday();
-echo "Today:\n";
-echo $today->view() . "\n\n";
-
-// Cursor navigation on June 2026
-$june = DatePicker::new(new \DateTimeImmutable('2026-06-01'));
-echo "June 2026 with cursor at start:\n";
-echo $june->view() . "\n\n";
-
-// Move cursor right 4 times (should land on day 4)
-$cursor = $june;
-for ($i = 0; $i < 4; $i++) {
-    $cursor = $cursor->MoveCursorRight();
+// May 10 sits at grid index 14 (May 2026 starts Friday, firstDow=5).
+$atBound = $march;
+for ($i = 0; $i < 14; $i++) {
+    $atBound = $atBound->MoveCursorRight();
 }
-echo "After MoveCursorRight() x4:\n";
-echo $cursor->view() . "\n\n";
+echo "Date under cursor: " . ($atBound->dateAtCursor()?->format('Y-m-d') ?? 'none') . "\n";
+$accepted = $atBound->handleKey(DatePicker::KEY_ENTER);
+echo "Enter on the bound itself: "
+    . ($accepted->SelectedDate()?->format('Y-m-d') ?? 'refused') . "\n\n";
 
-// Move cursor down a row
-$cursor = $cursor->MoveCursorDown();
-echo "After MoveCursorDown() (next row):\n";
-echo $cursor->view() . "\n\n";
-
-// Select the date
-$selected = $cursor->SelectDate();
-echo "After SelectDate():\n";
-echo $selected->view() . "\n";
-echo "Selected: " . ($selected->SelectedDate()?->format('Y-m-d') ?? 'none') . "\n\n";
-
-// Clear and re-select
-$cleared = $selected->ClearDate();
-echo "After ClearDate():\n";
-echo $cleared->view() . "\n";
-echo "Selected after clear: " . ($cleared->SelectedDate()?->format('Y-m-d') ?? 'none') . "\n";
+// Lifting a bound restores free navigation in that direction.
+$unlocked = $accepted->withoutMinDate()->GoToPreviousMonth();
+echo "After withoutMinDate(), one month back lands in April 2026: "
+    . $unlocked->ViewYear() . '-' . $unlocked->ViewMonth() . "\n";

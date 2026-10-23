@@ -7,14 +7,18 @@ namespace SugarCraft\DatePicker;
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Style;
-use SugarCraft\DatePicker\Lang;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Interactive date picker component.
  *
  * Manages: current view month/year, cursor position (row/col grid),
- * selected date, today marker, and navigation.
+ * selected date, today marker, optional min/max selection bounds, and
+ * navigation.
+ *
+ * All navigation and selection methods are immutable: they return a new
+ * instance and never mutate the receiver.
  *
  * Port of EthanEFung/bubble-datepicker.
  *
@@ -23,6 +27,14 @@ use SugarCraft\Core\Util\Color;
 final class DatePicker
 {
     private const DAYS_IN_WEEK = 7;
+
+    /**
+     * Lower month-position bound of the calendar itself: January 0001
+     * (position encoding is year*12 + month-1). The library has no dates
+     * below year 1 — decrementing past it used to underflow the view into
+     * year 0, where date construction throws (docs-fix-1023 E2 / M4).
+     */
+    private const VIEW_FLOOR_POS = 12;
 
     // Key constants for handleKey()
     public const KEY_LEFT  = 'left';
@@ -60,6 +72,12 @@ final class DatePicker
 
     /** Whether range selection mode is active. */
     private bool $rangeMode = false;
+
+    /** Earliest selectable/visible date (null = unbounded below). */
+    private ?\DateTimeImmutable $minDate = null;
+
+    /** Latest selectable/visible date (null = unbounded above). */
+    private ?\DateTimeImmutable $maxDate = null;
 
     /** Styling (SGR ANSI codes). */
     private string $headerStyle       = '1;37';  // bold white
@@ -112,49 +130,169 @@ final class DatePicker
 
     public function GoToPreviousMonth(): self
     {
-        $clone = clone $this;
-        if ($clone->viewMonth === 1) {
-            $clone->viewMonth = 12;
-            $clone->viewYear--;
-        } else {
-            $clone->viewMonth--;
-        }
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
+        return $this->stepView(-1);
     }
 
     public function GoToNextMonth(): self
     {
-        $clone = clone $this;
-        if ($clone->viewMonth === 12) {
-            $clone->viewMonth = 1;
-            $clone->viewYear++;
-        } else {
-            $clone->viewMonth++;
-        }
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
+        return $this->stepView(1);
     }
 
     public function GoToPreviousYear(): self
     {
-        $clone = clone $this;
-        $clone->viewYear--;
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
+        return $this->stepView(-12);
     }
 
     public function GoToNextYear(): self
     {
+        return $this->stepView(12);
+    }
+
+    /**
+     * Step the viewed month by $deltaMonths, clamped to the calendar floor
+     * (year >= 1) and to the [minDate, maxDate] month window when set.
+     */
+    private function stepView(int $deltaMonths): self
+    {
         $clone = clone $this;
-        $clone->viewYear++;
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
+        [$clone->viewYear, $clone->viewMonth] = $this->boundedView(
+            $this->viewYear,
+            $this->viewMonth,
+            $deltaMonths,
+        );
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+
+        return $clone;
     }
 
     public function GoToToday(): self
     {
         $today = $this->today();
         $clone = clone $this;
-        $clone->viewMonth = (int) $today->format('n');
-        $clone->viewYear  = (int) $today->format('Y');
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
+        [$clone->viewYear, $clone->viewMonth] = $this->boundedView(
+            (int) $today->format('Y'),
+            (int) $today->format('n'),
+            0,
+        );
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+
+        return $clone;
+    }
+
+    /**
+     * Clamp a target year/month (optionally shifted by $deltaMonths) into
+     * the viewable window: never below January 0001, never outside the
+     * configured min/max months. Pure — reads only.
+     *
+     * @return array{0:int,1:int} [viewYear, viewMonth]
+     */
+    private function boundedView(int $year, int $month, int $deltaMonths = 0): array
+    {
+        $pos = $year * 12 + ($month - 1) + $deltaMonths;
+        $pos = max(self::VIEW_FLOOR_POS, $pos);
+        if ($this->minDate !== null) {
+            $pos = max($pos, self::monthPos($this->minDate));
+        }
+        if ($this->maxDate !== null) {
+            $pos = min($pos, self::monthPos($this->maxDate));
+        }
+
+        return [intdiv($pos, 12), ($pos % 12) + 1];
+    }
+
+    /** Month-window position encoding (year*12 + month-1) for a date. */
+    private static function monthPos(\DateTimeImmutable $date): int
+    {
+        return (int) $date->format('Y') * 12 + ((int) $date->format('n') - 1);
+    }
+
+    // -------------------------------------------------------------------------
+    // Selection bounds (min/max constraints)
+    //
+    // Bounds clamp navigation to the containing months and refuse selection
+    // of dates outside them. Existing selections are NOT retroactively
+    // cleared when a bound is tightened — the bounds govern future
+    // navigation and selection only.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Set the earliest selectable date. If the current view is before the
+     * bound's month it is pulled back into the window.
+     *
+     * @throws \InvalidArgumentException if $min falls after the current maxDate.
+     */
+    public function withMinDate(\DateTimeImmutable $min): self
+    {
+        if ($this->maxDate !== null && self::midnight($min) > self::midnight($this->maxDate)) {
+            throw new \InvalidArgumentException('minDate must not be after maxDate');
+        }
+
+        return $this->withBounds($min, $this->maxDate);
+    }
+
+    /** Remove the lower selection bound. */
+    public function withoutMinDate(): self
+    {
+        return $this->withBounds(null, $this->maxDate);
+    }
+
+    /**
+     * Set the latest selectable date. If the current view is after the
+     * bound's month it is pulled back into the window.
+     *
+     * @throws \InvalidArgumentException if $max falls before the current minDate.
+     */
+    public function withMaxDate(\DateTimeImmutable $max): self
+    {
+        if ($this->minDate !== null && self::midnight($max) < self::midnight($this->minDate)) {
+            throw new \InvalidArgumentException('maxDate must not be before minDate');
+        }
+
+        return $this->withBounds($this->minDate, $max);
+    }
+
+    /** Remove the upper selection bound. */
+    public function withoutMaxDate(): self
+    {
+        return $this->withBounds($this->minDate, null);
+    }
+
+    public function minDate(): ?\DateTimeImmutable
+    {
+        return $this->minDate;
+    }
+
+    public function maxDate(): ?\DateTimeImmutable
+    {
+        return $this->maxDate;
+    }
+
+    /** Whether $date lies inside the configured bounds (inclusive). */
+    public function inBounds(\DateTimeImmutable $date): bool
+    {
+        $d = self::midnight($date);
+        if ($this->minDate !== null && $d < self::midnight($this->minDate)) {
+            return false;
+        }
+
+        return !($this->maxDate !== null && $d > self::midnight($this->maxDate));
+    }
+
+    private static function midnight(\DateTimeImmutable $date): \DateTimeImmutable
+    {
+        return $date->setTime(0, 0, 0);
+    }
+
+    /** Shared write path for the bound setters; re-clamps the view. */
+    private function withBounds(?\DateTimeImmutable $min, ?\DateTimeImmutable $max): self
+    {
+        $clone = clone $this;
+        $clone->minDate = $min;
+        $clone->maxDate = $max;
+        [$clone->viewYear, $clone->viewMonth] = $clone->boundedView($clone->viewYear, $clone->viewMonth);
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+
+        return $clone;
     }
 
     /**
@@ -167,6 +305,15 @@ final class DatePicker
         $clone->today = $today;        return $clone;
     }
 
+    /** Drop the pinned "today" reference (back to real wall-clock now). */
+    public function withoutToday(): self
+    {
+        $clone = clone $this;
+        $clone->today = null;
+
+        return $clone;
+    }
+
     /** Resolve the "today" reference: injected value or real now. */
     private function today(): \DateTimeImmutable
     {
@@ -176,9 +323,13 @@ final class DatePicker
     public function SetTime(\DateTimeImmutable $t): self
     {
         $clone = clone $this;
-        $clone->viewMonth = (int) $t->format('n');
-        $clone->viewYear  = (int) $t->format('Y');
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
+        [$clone->viewYear, $clone->viewMonth] = $this->boundedView(
+            (int) $t->format('Y'),
+            (int) $t->format('n'),
+        );
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+
+        return $clone;
     }
 
     // -------------------------------------------------------------------------
@@ -223,12 +374,24 @@ final class DatePicker
      * Enter selection mode and set the selected date to the cursor date.
      * Falls back to the first of the viewed month when the cursor is on
      * an empty cell (before the 1st or past the last day of the month).
+     *
+     * Early exit: when no date can be resolved (month beyond 4-digit
+     * representation) or the resolved date lies outside the configured
+     * [minDate, maxDate] bounds, selection is REFUSED — the receiver is
+     * returned unchanged.
      */
     public function SelectDate(): self
     {
+        $date = $this->dateAtCursor() ?? $this->firstOfViewMonth();
+        if ($date === null || !$this->inBounds($date)) {
+            return $this;
+        }
+
         $clone = clone $this;
         $clone->selecting = true;
-        $clone->selectedDate = $clone->dateAtCursor() ?? $clone->firstOfViewMonth();        return $clone;
+        $clone->selectedDate = $date;
+
+        return $clone;
     }
 
     /**
@@ -276,12 +439,16 @@ final class DatePicker
     }
 
     /**
-     * Handle keyboard navigation and range selection.
+     * Handle keyboard navigation and selection (single AND range mode).
      *
-     * Arrow keys: move cursor
-     * Enter: set range start (first press) or range end (second press)
-     * Escape: clear range when in range mode
-     * Home/End: jump to first/last cell
+     * Arrow keys: move cursor (grid clamp, no month-boundary wrap)
+     * Enter:      range mode — set range start (first press) or range end
+     *             (second press); single mode — select the highlighted date
+     *             (same semantics as SelectDate(), incl. the empty-cell
+     *             fallback and min/max refusal)
+     * Escape:     range mode — clear the range; single mode — clear the
+     *             selection (same as ClearDate())
+     * Home/End:   jump to first/last cell
      */
     public function handleKey(string $key): self
     {
@@ -305,12 +472,20 @@ final class DatePicker
         if ($key === self::KEY_END) {
             $clone->cursorIndex = 41;            return $clone;
         }
-        if ($key === self::KEY_ENTER && $this->rangeMode) {
-            return $this->handleRangeEnter($clone);
+        if ($key === self::KEY_ENTER) {
+            return $this->rangeMode
+                ? $this->handleRangeEnter($clone)
+                : $this->SelectDate();
         }
-        if ($key === self::KEY_ESCAPE && $this->rangeMode) {
-            $clone->rangeStart = null;
-            $clone->rangeEnd = null;            return $clone;
+        if ($key === self::KEY_ESCAPE) {
+            if ($this->rangeMode) {
+                $clone->rangeStart = null;
+                $clone->rangeEnd = null;
+
+                return $clone;
+            }
+
+            return $this->ClearDate();
         }
 
         return $clone;
@@ -319,7 +494,8 @@ final class DatePicker
     private function handleRangeEnter(self $clone): self
     {
         $date = $this->dateAtCursor();
-        if ($date === null) {
+        if ($date === null || !$this->inBounds($date)) {
+            // Early exit: empty cell or out-of-bounds date cannot anchor a range.
             return $clone;
         }
 
@@ -401,7 +577,8 @@ final class DatePicker
      * Render the calendar view as an ANSI string using a Buffer.
      *
      * @param int $width    Terminal width in characters (default 21 = 7 days × 3 chars).
-     *                      Must be at least 15 (5 days minimum) and at most 63 (21 days max).
+     *                      Values outside 15-63 are CLAMPED to that range
+     *                      (15 = 5 columns minimum, 63 = 21 columns maximum).
      * @param bool $showWeekNumbers Show ISO week number column on the left (default false).
      */
     public function View(int $width = 21, bool $showWeekNumbers = false): string
@@ -532,15 +709,17 @@ final class DatePicker
     // -------------------------------------------------------------------------
 
     /**
-     * Validate an SGR code string — must be empty or digits-only with optional
-     * semicolons (e.g. "1;31", "7", ""). Throws if a full escape sequence is
-     * passed, which would mangle explode(';') inside sgrToBufferStyle().
+     * Validate an SGR code string — must be empty, or digit groups joined by
+     * single semicolons (e.g. "1;31", "7", ""). Dangling or empty parameter
+     * shapes (";", "1;", "1;;2") are refused: sgrToBufferStyle() explodes on
+     * ';' and would silently mis-parse them. Throws if a full escape sequence
+     * is passed, which would mangle that parsing.
      *
      * @throws \InvalidArgumentException
      */
     private static function assertSgr(string $s): void
     {
-        if ($s !== '' && !\preg_match('/^[0-9;]*$/', $s)) {
+        if ($s !== '' && !\preg_match('/^(?:\d+(?:;\d+)*)$/', $s)) {
             throw new \InvalidArgumentException(
                 'SGR code must be empty or digits/semicolons only, got: ' . $s
             );
@@ -565,7 +744,9 @@ final class DatePicker
             }
             $gw = $this->graphemeWidth($cluster);
             if ($gw === 0) {
-                $colCursor++;
+                // Zero-width clusters consume no column (they are not grapheme-
+                // joined to the previous cell in this buffer model — dropping
+                // them is correct; advancing used to shift later cells right).
                 continue;
             }
             $buf = $buf->withCellAt($colCursor, $row, new Cell($cluster, $style, null, $gw));
@@ -636,34 +817,16 @@ final class DatePicker
         return ($r << 16) | ($g << 8) | $b;
     }
 
+    /**
+     * Display width of one cluster, delegated to the canonical
+     * SugarCraft\Core\Util\Width table (Unicode 16.0 East_Asian_Width +
+     * Emoji_Presentation). The former hand-rolled range fork here was a
+     * stale copy that scored modern emoji as 1 cell and misjudged CJK
+     * punctuation (docs-fix-1023 E2 / r9x family fix).
+     */
     private function graphemeWidth(string $g): int
     {
-        if ($g === '') return 0;
-        $cp = \function_exists('mb_ord') ? \mb_ord($g, 'UTF-8') : \ord($g[0]);
-        if ($cp === false || $cp === 0) return 0;
-        // ASCII control chars (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F) → 0
-        // TAB(0x09), LF(0x0A), CR(0x0D) → 1 (visible)
-        // DEL(0x7F) → 0
-        if (($cp <= 0x08) || ($cp >= 0x0E && $cp <= 0x1F) || ($cp === 0x7F)) {
-            return 0;
-        }
-        // Zero-width combining marks (0300-036F, 0483-0489, etc.)
-        if (($cp >= 0x0300 && $cp <= 0x036F)
-            || ($cp >= 0x0483 && $cp <= 0x0489)
-            || ($cp >= 0x200b && $cp <= 0x200f)
-            || ($cp >= 0x2028 && $cp <= 0x2029)
-            || ($cp >= 0x2060 && $cp <= 0x2064)
-            || ($cp === 0xfeff)) {
-            return 0;
-        }
-        // Wide East-Asian chars → 2
-        if (($cp >= 0x1100 && $cp <= 0x115f)
-            || ($cp >= 0x3040 && $cp <= 0xfe6f)
-            || ($cp >= 0xff00 && $cp <= 0xff60)
-            || ($cp >= 0x20000 && $cp <= 0x2fffd)) {
-            return 2;
-        }
-        return 1;
+        return Width::of($g);
     }
 
     /**
@@ -768,24 +931,25 @@ final class DatePicker
         return new DateRange($this->rangeStart, $this->rangeEnd);
     }
 
-    private function firstDayOffset(): int
-    {
-        $firstOfMonth = $this->firstOfViewMonth();
-        return $firstOfMonth !== null ? (int) $firstOfMonth->format('w') : 0;
-    }
-
     /**
      * Compute the clamped cursor index for the current view month.
      * Pure: returns the clamped value without mutating $this.
+     *
+     * When the month itself is unconstructable (view year beyond the
+     * 4-digit %04d representation — reachable historically by decrementing
+     * past year 1 before the navigation floor existed), fall back to the
+     * raw grid clamp instead of dereferencing a false createFromFormat()
+     * result (docs-fix-1023 E2 / M4).
      */
     private function clampedCursor(int $idx): int
     {
-        $daysInMonth = (int) \DateTimeImmutable::createFromFormat(
-            'Y-m-d', \sprintf('%04d-%02d-01', $this->viewYear, $this->viewMonth)
-        )->format('t');
+        $firstOfMonth = $this->firstOfViewMonth();
+        if ($firstOfMonth === null) {
+            return \min(41, \max(0, $idx));
+        }
 
-        $firstDow = $this->firstDayOffset();
-        $lastIndex = $firstDow + $daysInMonth - 1;
+        $daysInMonth  = (int) $firstOfMonth->format('t');
+        $lastIndex    = (int) $firstOfMonth->format('w') + $daysInMonth - 1;
 
         return \min($idx, \max(0, $lastIndex));
     }

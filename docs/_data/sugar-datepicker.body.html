@@ -26,8 +26,9 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Month grid</strong><span>A 6×7 month view with localised day and month names, today and the cursor highlighted, and optional ISO week numbers.</span></div>
-      <div class="feature"><strong>Keyboard nav</strong><span><code>handleKey()</code> takes the <code>KEY_*</code> constants: arrows move the cursor, Home/End jump to the first/last cell, Enter and Esc drive range mode.</span></div>
+      <div class="feature"><strong>Keyboard nav</strong><span><code>handleKey()</code> takes the <code>KEY_*</code> constants: arrows move the cursor, Home/End jump to the first/last cell, Enter selects (single mode) or sets the range start/end, Esc clears.</span></div>
       <div class="feature"><strong>Range selection</strong><span><code>withRangeMode(true)</code>: the first Enter sets the start, the second the end (swapped if needed), a third starts over; Esc clears.</span></div>
+      <div class="feature"><strong>Date bounds</strong><span><code>withMinDate()</code>/<code>withMaxDate()</code> clamp navigation to the allowed months and refuse out-of-range selection; <code>withoutMinDate()</code>/<code>withoutMaxDate()</code> lift a bound.</span></div>
       <div class="feature"><strong>SugarCraft model</strong><span><code>Model</code> wraps the picker as a sugar-core Model with an optional event store.</span></div>
     </div>
 
@@ -49,6 +50,8 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
 <tr><td>DatePicker</td><td>MoveCursorLeft/Right/Up/Down() / handleKey(string $key)</td><td>Move the cursor</td></tr>
 <tr><td>DatePicker</td><td>SelectDate() / ClearDate() / ToggleSelection() / SelectedDate() / IsSelecting()</td><td>Single-date selection</td></tr>
 <tr><td>DatePicker</td><td>withRangeMode(bool) / rangeStart() / rangeEnd() / isRangeMode()</td><td>Range selection</td></tr>
+<tr><td>DatePicker</td><td>withMinDate(DateTimeImmutable) / withMaxDate(DateTimeImmutable) / withoutMinDate() / withoutMaxDate() / minDate() / maxDate() / inBounds()</td><td>Min/max date constraints (clamped navigation, refused selection)</td></tr>
+<tr><td>DatePicker</td><td>withoutToday()</td><td>Drop the pinned "today" reference</td></tr>
 <tr><td>DatePicker</td><td>View(int $width = 21, bool $showWeekNumbers = false)</td><td>Render the month grid</td></tr>
 <tr><td>DatePicker</td><td>WithHeaderStyle() / WithTodayStyle() / WithSelectedStyle() / WithCursorStyle() / WithRangeStyle()</td><td>Styling (SGR strings)</td></tr>
 <tr><td>Model</td><td>static new(?DateTimeImmutable, ?EventStoreInterface) / picker()</td><td>sugar-core Model wrapping the picker</td></tr>

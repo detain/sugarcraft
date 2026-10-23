@@ -275,4 +275,94 @@ final class ModelTest extends TestCase
         $this->assertSame($initialIndex, $nextModel->picker()->CursorIndex());
         $this->assertNull($cmd);
     }
+
+    // -------------------------------------------------------------------------
+    // Single-mode selection end-to-end (docs-fix-1023 E2 / M1)
+    //
+    // These pins drive REAL key bytes through update() — the whole point of
+    // the TEA wrapper. Before the fix, Enter in single mode no-oped inside
+    // handleKey(), the 'date_selected' branch below was dead code, and the
+    // docblock promise "Enter to select, Esc to close" was unreachable.
+    // -------------------------------------------------------------------------
+
+    public function testEnterInSingleModeSelectsThroughTheTeaLoop(): void
+    {
+        $store = new EventStore();
+        // May 2026 starts Friday (firstDow=5) → May 1 sits at grid index 5.
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+        for ($i = 0; $i < 5; $i++) {
+            $model = $model->update(new KeyMsg(KeyType::Right))[0];
+        }
+
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];
+
+        $this->assertTrue($model->picker()->IsSelecting(),
+            'Enter in single mode must enter selection mode through update()');
+        $this->assertSame('2026-05-01', $model->picker()->SelectedDate()?->format('Y-m-d'));
+
+        $events = $store->release();
+        $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === 'date_selected'));
+        $this->assertCount(1, $selected);
+        $this->assertSame('2026-05-01', $selected[0]['payload']['date'],
+            'The date transition must be recorded once with the selected value');
+    }
+
+    public function testSecondEnterInSingleModeDoesNotDuplicateTheRecord(): void
+    {
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+        $model = $model->update(new KeyMsg(KeyType::End))[0];  // index 41
+        $model = $model->update(new KeyMsg(KeyType::Home))[0]; // index 0 (empty cell → May 1 fallback)
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];
+        $this->assertTrue($model->picker()->IsSelecting());
+
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];
+
+        $events = $store->release();
+        $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === 'date_selected'));
+        $this->assertCount(1, $selected,
+            'Re-entering the same selecting state must not re-record');
+        $this->assertSame('2026-05-01', $model->picker()->SelectedDate()?->format('Y-m-d'));
+    }
+
+    public function testEscapeInSingleModeClearsThroughTheTeaLoop(): void
+    {
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'));
+        $model = $model->update(new KeyMsg(KeyType::Home))[0];
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];
+        $this->assertTrue($model->picker()->IsSelecting());
+
+        $model = $model->update(new KeyMsg(KeyType::Escape))[0];
+
+        $this->assertFalse($model->picker()->IsSelecting());
+        $this->assertNull($model->picker()->SelectedDate());
+    }
+
+    public function testEnterOnOutOfBoundDateRecordsNothing(): void
+    {
+        // Selection refusal (bound) must not fabricate a date_selected event.
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+        $picker = $model->picker()->withMinDate(new \DateTimeImmutable('2026-05-10'));
+        $model = new Model($picker, $store);
+        $model = $model->update(new KeyMsg(KeyType::Home))[0];
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0]; // May 1 fallback < min
+
+        $this->assertFalse($model->picker()->IsSelecting());
+        $this->assertFalse($store->hasEvents(),
+            'A refused selection must record nothing');
+    }
+
+    public function testModelViewDelegatesLayoutArguments(): void
+    {
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'));
+
+        $this->assertSame(
+            $model->picker()->View(40, true),
+            $model->view(40, true),
+            'view() must forward width/week-number options'
+        );
+        $this->assertSame($model->picker()->View(), $model->view());
+        $this->assertNotSame($model->view(40, true), $model->view());
+    }
 }

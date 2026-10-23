@@ -71,4 +71,26 @@ final class EventStoreTest extends TestCase
         $store = new EventStore();
         $this->assertInstanceOf(EventStoreInterface::class, $store);
     }
+
+    public function testInjectedClockStampsRecordedEvents(): void
+    {
+        // docs-fix-1023 E2: deterministic timestamps for tests/replay.
+        $store = new EventStore(static fn(): int => 1_762_000_000);
+        $store->record('date_selected', ['date' => '2026-05-01']);
+
+        $events = $store->release();
+        $this->assertCount(1, $events);
+        $this->assertSame(1_762_000_000, $events[0]['time']);
+    }
+
+    public function testDefaultClockUsesWallTime(): void
+    {
+        $store = new EventStore();
+        $before = time();
+        $store->record('cursor_moved', ['index' => 3]);
+        $events = $store->release();
+
+        $this->assertGreaterThanOrEqual($before, $events[0]['time']);
+        $this->assertLessThanOrEqual(time(), $events[0]['time']);
+    }
 }

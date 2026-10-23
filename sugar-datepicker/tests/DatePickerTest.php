@@ -450,24 +450,105 @@ final class DatePickerTest extends TestCase
     // Edge-case coverage
     // -------------------------------------------------------------------------
 
-    public function testHandleKeyEnterOutsideRangeModeIsNoOp(): void
+    public function testHandleKeyEnterOutsideRangeModeSelectsDate(): void
     {
-        // handleKey('enter') in non-range mode is a no-op (current behaviour)
+        // 2026-10-23 (docs-fix-1023 E2 / M1): this pin used to assert the OLD
+        // broken polarity — 'enter' outside range mode was a no-op, which made
+        // Model.php's documented Enter→select contract (and the README
+        // promise) unreachable through the keyboard path. The fix makes Enter
+        // select the highlighted date in single mode (same semantics, and the
+        // same min/max refusal, as SelectDate()).
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-05-15'));
 
-        // Navigate to a valid day first
+        // Navigate to a valid day first: index 5 = May 1 (May 2026 starts Friday)
         for ($i = 0; $i < 5; $i++) {
             $dp = $dp->MoveCursorRight();
         }
 
         $dp = $dp->handleKey('enter');
 
-        // Enter outside range mode should not select anything
+        $this->assertTrue($dp->IsSelecting(),
+            'Enter outside range mode must enter selection mode');
+        $this->assertNotNull($dp->SelectedDate(),
+            'Enter outside range mode must set a selected date');
+        $this->assertSame('2026-05-01', $dp->SelectedDate()->format('Y-m-d'));
+    }
+
+    public function testHandleKeyEscapeOutsideRangeModeClearsDate(): void
+    {
+        // 2026-10-23 (docs-fix-1023 E2 / M1): Escape clears the selection in
+        // single mode (it already did in range mode, clearing the range).
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'))
+            ->handleKey('end')   // index 41
+            ->handleKey('home'); // index 0
+
+        $dp = $dp->SelectDate();
+        $this->assertTrue($dp->IsSelecting());
+
+        $dp = $dp->handleKey('esc');
         $this->assertFalse($dp->IsSelecting(),
-            'Enter outside range mode must not enter selection mode');
+            'Escape outside range mode must exit selection mode');
         $this->assertNull($dp->SelectedDate(),
-            'Enter outside range mode must not set a selected date');
+            'Escape outside range mode must clear the selected date');
+    }
+
+    public function testGoToPreviousYearClampsAtYearOne(): void
+    {
+        // 2026-10-23 (docs-fix-1023 E2 / M4): the calendar floor is January
+        // 0001. Decrementing used to underflow into year 0, where the cursor
+        // clamp dereferenced a false date and crashed.
+        $dp = DatePicker::new(new \DateTimeImmutable('0002-06-15'));
+
+        $dp = $dp->GoToPreviousYear();
+        $this->assertSame(1, $dp->ViewYear());
+        $this->assertSame(6, $dp->ViewMonth());
+
+        // Further presses stay pinned at the floor — no crash, no year 0.
+        $dp = $dp->GoToPreviousYear();
+        $this->assertSame(1, $dp->ViewYear());
+        $dp = $dp->GoToPreviousMonth();
+        $this->assertSame(1, $dp->ViewYear());
+        $this->assertSame(1, $dp->ViewMonth());
+
+        // Queries and rendering all work at the floor.
+        $this->assertIsString($dp->View());
+        $this->assertIsString($dp->View(30, true));
+        $selected = $dp->SelectDate();
+        $this->assertTrue($selected->IsSelecting());
+    }
+
+    public function testNavigatingPastYear9999DoesNotCrash(): void
+    {
+        // 2026-10-23 (docs-fix-1023 E2 / M4): year 10000 cannot be written as
+        // %04d, so createFromFormat returns false there. The clamp path must
+        // survive it (5-digit years only arise from unbounded GoToNextYear in
+        // an unbounded picker — this pin documents the tolerated upper edge).
+        $dp = DatePicker::new(new \DateTimeImmutable('9999-12-31'));
+        $dp = $dp->GoToNextYear();
+
+        $this->assertSame(10000, $dp->ViewYear());
+        // Rendering must not throw and must produce a string.
+        $this->assertIsString($dp->View());
+        // The cursor date is unresolvable, so selection falls back to the
+        // first-of-month probe which is also null → SelectDate REFUSES.
+        $this->assertNull($dp->dateAtCursor());
+        $refused = $dp->SelectDate();
+        $this->assertFalse($refused->IsSelecting());
+        $this->assertNull($refused->SelectedDate());
+    }
+
+    public function testViewWidthIsClampedNotRejected(): void
+    {
+        // 2026-10-23 (docs-fix-1023 E2): the docblock used to claim "must be";
+        // the real law is a silent clamp to 15-63.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+
+        $this->assertSame($dp->View(15), $dp->View(5));
+        $this->assertSame($dp->View(15), $dp->View(0));
+        $this->assertSame($dp->View(63), $dp->View(100));
+        $this->assertSame($dp->View(21), $dp->View());
     }
 
     public function testClampCursorAfterNavigatingToShorterMonth(): void
@@ -706,5 +787,41 @@ final class DatePickerTest extends TestCase
         // View must render (the selectedTodayStyle branch applies)
         $view = $dp->View();
         $this->assertIsString($view);
+    }
+
+    public function testWithoutTodayDropsThePinnedReference(): void
+    {
+        // docs-fix-1023 E2 (XSet law): withToday had no counterpart unset.
+        $pinned = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-12-25'));
+
+        // With the pin, GoToToday lands on the injected date's month.
+        $this->assertSame(12, $pinned->GoToToday()->ViewMonth());
+
+        $unpinned = $pinned->withoutToday();
+        $this->assertNotSame($pinned, $unpinned);
+
+        // Without it, GoToToday follows the real wall clock — prove the
+        // reference is gone by comparing against a bare picker's behaviour.
+        $bare = DatePicker::new(new \DateTimeImmutable('2026-05-01'))->GoToToday();
+        $this->assertSame((int) $bare->ViewMonth(), $unpinned->GoToToday()->ViewMonth());
+
+        // Immutability: the pinned instance keeps its injected today.
+        $this->assertSame(12, $pinned->GoToToday()->ViewMonth());
+    }
+
+    public function testSelectDateFallsBackToFirstOfMonthOnEmptyCell(): void
+    {
+        // The empty-cell fallback is now also a BOUND-checked candidate
+        // (docs-fix-1023 E2): with no bound set it selects May 1 from index 0.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'))
+            ->handleKey('home');
+
+        $this->assertNull($dp->dateAtCursor(), 'Index 0 is an empty lead-in cell');
+
+        $selected = $dp->SelectDate();
+        $this->assertTrue($selected->IsSelecting());
+        $this->assertSame('2026-05-01', $selected->SelectedDate()?->format('Y-m-d'));
     }
 }

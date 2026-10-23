@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\DatePicker;
 
-use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -15,8 +14,6 @@ use SugarCraft\Core\Subscriptions;
  *
  * Wraps a DatePicker and an optional EventStore, exposing the full
  * DatePicker keyboard navigation via the TEA update() loop.
- *
- * @implements Model
  */
 final class Model implements \SugarCraft\Core\Model
 {
@@ -110,11 +107,12 @@ final class Model implements \SugarCraft\Core\Model
     }
 
     /**
-     * Render the calendar view as an ANSI string.
+     * Render the calendar view as an ANSI string, delegating the layout
+     * options to DatePicker::View() (width is clamped there to 15-63).
      */
-    public function view(): string
+    public function view(int $width = 21, bool $showWeekNumbers = false): string
     {
-        return $this->picker->View();
+        return $this->picker->View($width, $showWeekNumbers);
     }
 
     /**

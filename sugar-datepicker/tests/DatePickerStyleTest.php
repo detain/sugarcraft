@@ -311,6 +311,31 @@ final class DatePickerStyleTest extends TestCase
         return $meth->invoke($this->dp, $idx, $bright);
     }
 
+    public function testWithStyleRejectsDanglingSgrShapes(): void
+    {
+        // docs-fix-1023 E2: sgrToBufferStyle() explode(';')-parses, so
+        // dangling/empty parameter shapes are refused (they used to slip
+        // through the loose '^[0-9;]*$' guard as silent no-op segments).
+        foreach ([';', '1;', ';1', '1;;2'] as $shape) {
+            try {
+                $this->dp->WithHeaderStyle($shape);
+                $this->fail("SGR shape '{$shape}' must be rejected");
+            } catch (\InvalidArgumentException) {
+                $this->assertTrue(true);
+            }
+        }
+    }
+
+    public function testWithStyleAcceptsCanonicalSgrShapes(): void
+    {
+        // Positive half of the previous pin: legal shapes stay accepted.
+        $dp = $this->dp
+            ->WithHeaderStyle('1;31')
+            ->WithTodayStyle('105')
+            ->WithCursorStyle('38;5;226');
+        $this->assertNotSame($this->dp, $dp);
+    }
+
     private function invokeGraphemeWidth(string $g): int
     {
         $ref = new \ReflectionClass($this->dp);

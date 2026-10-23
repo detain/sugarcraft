@@ -9,60 +9,10 @@ use PHPUnit\Framework\TestCase;
 
 final class NavigationTest extends TestCase
 {
-    public function testMoveLeft(): void
-    {
-        $this->assertSame(5, Navigation::move(6, 'left'));
-    }
-
-    public function testMoveLeftAtBoundary(): void
-    {
-        $this->assertSame(0, Navigation::move(0, 'left'));
-    }
-
-    public function testMoveRight(): void
-    {
-        $this->assertSame(10, Navigation::move(9, 'right'));
-    }
-
-    public function testMoveRightAtBoundary(): void
-    {
-        $this->assertSame(41, Navigation::move(41, 'right'));
-    }
-
-    public function testMoveUp(): void
-    {
-        $this->assertSame(7, Navigation::move(14, 'up'));
-    }
-
-    public function testMoveUpAtBoundary(): void
-    {
-        $this->assertSame(0, Navigation::move(3, 'up'));
-    }
-
-    public function testMoveDown(): void
-    {
-        $this->assertSame(21, Navigation::move(14, 'down'));
-    }
-
-    public function testMoveDownAtBoundary(): void
-    {
-        $this->assertSame(41, Navigation::move(38, 'down'));
-    }
-
-    public function testMoveHome(): void
-    {
-        $this->assertSame(0, Navigation::move(25, 'home'));
-    }
-
-    public function testMoveEnd(): void
-    {
-        $this->assertSame(41, Navigation::move(10, 'end'));
-    }
-
-    public function testMoveUnknownKeyReturnsUnchanged(): void
-    {
-        $this->assertSame(15, Navigation::move(15, 'unknown'));
-    }
+    // Navigation::move() and its ROW_*/COL_* constants (a production-dead twin
+    // of DatePicker's MoveCursor* family) were removed 2026-10-23
+    // (docs-fix-1023 E2); the cursor semantics they pinned stay covered by
+    // the MoveCursor* tests in DatePickerTest.
 
     public function testGridIndexToDate(): void
     {

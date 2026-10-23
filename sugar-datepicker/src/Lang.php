@@ -10,8 +10,8 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * Per-library translation facade for sugar-datepicker.
  *
  * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
- * `'datepicker'` namespace baked in. Translated strings live in
- * {@see ../lang/en.php}.
+ * `'datepicker'` namespace baked in. Translation arrays live under the
+ * package's lang/ directory (lang/en.php is the source of truth).
  *
  * @extends BaseLang
  */
