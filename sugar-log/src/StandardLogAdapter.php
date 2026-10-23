@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Log;
 
+use SugarCraft\Log\Formatter\ValueCoercion;
+
 /**
  * Wrap a Logger as a *log.Logger interface for compatibility with
  * code that expects the standard log.Logger type (e.g. net/http Server#ErrorLog).
@@ -28,29 +30,35 @@ final class StandardLogAdapter
     /**
      * Print a line at the configured or forced level.
      *
+     * Arguments are space-joined; non-string values are coerced the same
+     * way the formatters render context (arrays become '[a b]', never the
+     * literal 'Array' of an (string) cast).
+     *
      * @param mixed ...$args Values to concatenate and log.
      */
-    public function print(...$args): void
+    public function print(mixed ...$args): void
     {
-        $msg = \implode(' ', \array_map(fn($a) => (string) $a, $args));
-        $level = $this->forceLevel ?? Level::Info;
-        $this->logger->log($level, $msg);
+        $this->logger->log($this->forceLevel ?? Level::Info, $this->message($args));
     }
 
-    public function printLn(...$args): void
+    public function printLn(mixed ...$args): void
     {
         $this->print(...$args);
     }
 
-    public function fatal(...$args): void
+    public function fatal(mixed ...$args): void
     {
-        $msg = \implode(' ', \array_map(fn($a) => (string) $a, $args));
-        $this->logger->fatal($msg);
+        $this->logger->fatal($this->message($args));
     }
 
-    public function panic(...$args): void
+    public function panic(mixed ...$args): void
     {
-        $msg = \implode(' ', \array_map(fn($a) => (string) $a, $args));
-        $this->logger->fatal($msg);
+        $this->logger->fatal($this->message($args));
+    }
+
+    /** Space-joined line body with formatter-grade value coercion. */
+    private function message(array $args): string
+    {
+        return \implode(' ', \array_map(static fn($a) => ValueCoercion::stringify($a), $args));
     }
 }

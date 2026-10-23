@@ -10,4 +10,5 @@ declare(strict_types=1);
 
 return [
     'logger.fatal' => 'Fatales Protokoll: {message}',
+    'logger.invalid_stream' => 'Der Stream muss eine gültige Ressource sein',
 ];

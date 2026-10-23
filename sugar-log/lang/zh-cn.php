@@ -10,4 +10,5 @@ declare(strict_types=1);
 
 return [
     'logger.fatal' => '致命日志：{message}',
+    'logger.invalid_stream' => '流必须是有效的资源',
 ];

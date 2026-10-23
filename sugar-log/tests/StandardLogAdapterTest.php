@@ -183,4 +183,28 @@ final class StandardLogAdapterTest extends TestCase
         // All args joined with space
         $this->assertStringContainsString('count: 42 status: ok', $content);
     }
+
+    public function testArrayArgsCoercionNotWarningNotLiteralArray(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $logger = Logger::new(stream: $stream, level: Level::Debug, reportTimestamp: false);
+        $adapter = new StandardLogAdapter($logger);
+
+        // Any PHP warning becomes a test failure: the old (string) cast on an
+        // array arg emitted 'Array to string conversion' and logged the
+        // literal 'Array'.
+        set_error_handler(static function (int $severity, string $message): never {
+            throw new \ErrorException($message, 0, $severity);
+        });
+        try {
+            $adapter->print('ids:', [1, 2], 'flag:', true, 'none:', null);
+        } finally {
+            restore_error_handler();
+        }
+
+        \fclose($stream);
+        $content = (string) \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('ids: [1 2] flag: true none: null', $content);
+        $this->assertStringNotContainsString('Array', $content);
+    }
 }

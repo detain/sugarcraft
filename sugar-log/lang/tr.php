@@ -10,4 +10,5 @@ declare(strict_types=1);
 
 return [
     'logger.fatal' => 'öldürücü günlük: {message}',
+    'logger.invalid_stream' => 'Akış geçerli bir kaynak olmalıdır',
 ];

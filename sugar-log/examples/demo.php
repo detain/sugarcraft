@@ -17,8 +17,8 @@ use SugarCraft\Log\Formatter\JsonFormatter;
 use SugarCraft\Log\Formatter\LogfmtFormatter;
 use SugarCraft\Log\StandardLogAdapter;
 
-// Capture output for display
-$stderr = fopen('php://stdout', 'w');
+// A dedicated stdout stream so every section below lands in one capture.
+$out = fopen('php://stdout', 'w');
 
 echo "=== Text (default) logger ===\n";
 $log = Logger::new(prefix: '🍪');
@@ -32,23 +32,32 @@ $debug->debug('Entering bake cycle', ['batch' => 1, 'butter' => true]);
 $debug->info('Debug is visible now');
 
 echo "\n=== JSON formatter ===\n";
-$json = Logger::new(formatter: new JsonFormatter(), prefix: 'app', stream: $stderr);
+$json = Logger::new(formatter: new JsonFormatter(), prefix: 'app', stream: $out);
 $json->info('Bake complete', ['batch' => 3, 'cookies' => 24]);
 
 echo "\n=== Logfmt formatter ===\n";
-$logfmt = Logger::new(formatter: new LogfmtFormatter(), prefix: 'baker', stream: $stderr);
+$logfmt = Logger::new(formatter: new LogfmtFormatter(), prefix: 'baker', stream: $out);
 $logfmt->warn('Low flour', ['brand' => 'King Arthur']);
 
 echo "\n=== Sub-logger (child logger with persistent fields) ===\n";
-$parent = Logger::new(prefix: 'oven', stream: $stderr);
+$parent = Logger::new(prefix: 'oven', stream: $out);
 $child = $parent->with(['user' => 'chef', 'session' => 'am-batch']);
 $child->info('Preheating');
 $child->info('Adding mix-ins', ['chocolate' => true, 'nuts' => false]);
 
 echo "\n=== StandardLogAdapter (net/http *log.Logger compat) ===\n";
-$stdLogger = new StandardLogAdapter(Logger::new(prefix: 'http'), Level::Error);
-$stdAdapter = $stdLogger;
-$stdAdapter->print('GET /bake 200 12ms'); // note: print uses info level
-$stdAdapter->fatal('listen tcp :8080: bind: address already in use');
+// The adapter forces every line to the constructor's level (Error here),
+// so even its print() renders with the ERR label.
+$stdAdapter = new StandardLogAdapter(Logger::new(prefix: 'http', stream: $out), Level::Error);
+$stdAdapter->print('GET /bake 200 12ms');
+
+// The Fatal level throws a RuntimeException right after writing — in Go
+// log.Fatal exits the process; the port surfaces that stop as an exception
+// so callers can decide. Catch it to keep this demo running to the end.
+try {
+    $stdAdapter->fatal('listen tcp :8080: bind: address already in use');
+} catch (RuntimeException $e) {
+    echo "(fatal contract: {$e->getMessage()})\n";
+}
 
 echo "\nDone.\n";

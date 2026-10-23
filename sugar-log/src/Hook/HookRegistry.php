@@ -13,8 +13,8 @@ use SugarCraft\Log\Level;
 final class HookRegistry
 {
     /**
-     * @var array<int, array{level: Level, callback: callable(Level, string, string, array<mixed>): void}|null>
-     * @phpstan-var array<int, array{level: Level, callback: \Closure(Level, string, string, array<mixed>): void}|null>
+     * @var array<int, array{level: Level, callback: callable(Level, string, string, array<mixed>): void}>
+     * @phpstan-var array<int, array{level: Level, callback: \Closure(Level, string, string, array<mixed>): void}>
      */
     private array $handlers = [];
 
@@ -52,12 +52,13 @@ final class HookRegistry
      *
      * After removal, the handler will no longer be invoked when fire() is called.
      * If the ID is invalid or the handler was already removed, this is a no-op.
+     * The entry is dropped outright — removed handlers keep no tombstone slot.
      *
      * @param int $id  The ID returned by onLevel() or addHook().
      */
     public function remove(int $id): void
     {
-        $this->handlers[$id] = null;
+        unset($this->handlers[$id]);
     }
 
     /**
@@ -79,9 +80,6 @@ final class HookRegistry
     public function fire(Level $level, string $psrLevel, string $message, array $context): void
     {
         foreach ($this->handlers as $handler) {
-            if ($handler === null) {
-                continue;
-            }
             if ($level->value >= $handler['level']->value) {
                 $handler['callback']($level, $psrLevel, $message, $context);
             }

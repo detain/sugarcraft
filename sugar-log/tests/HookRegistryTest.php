@@ -167,7 +167,7 @@ final class HookRegistryTest extends TestCase
         $this->assertTrue($called);
     }
 
-    public function testFireSkipsNullHandlersInArray(): void
+    public function testRemovedHandlerFreesItsSlot(): void
     {
         $registry = new HookRegistry();
         $called = false;
@@ -176,10 +176,13 @@ final class HookRegistryTest extends TestCase
             $called = true;
         });
 
-        // Remove the handler, creating a null slot
+        // Remove the handler — the map entry must be gone, not tombstoned.
         $registry->remove($id);
 
-        // Fire should skip the null slot and not call anything
+        $slots = (new \ReflectionProperty(HookRegistry::class, 'handlers'))->getValue($registry);
+        $this->assertSame([], $slots, 'remove() must reclaim the slot');
+
+        // Fire has nothing to call.
         $registry->fire(Level::Info, 'info', 'msg', []);
         $this->assertFalse($called);
     }
