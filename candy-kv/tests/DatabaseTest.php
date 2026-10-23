@@ -367,4 +367,33 @@ final class DatabaseTest extends TestCase
         $this->expectException(\Error::class);
         $this->db->set('after-close', 'value');
     }
+
+    // ─── file permissions (docs-fix D4: secrets store is 0600) ──────────────
+
+    public function testDatabaseFileIsTightenedToOwnerOnly(): void
+    {
+        $path = $this->tmpDir . '/perms.db';
+        // Simulate the in-the-wild shape: umask 022 creation, world-readable.
+        \touch($path);
+        \chmod($path, 0o644);
+
+        $db = new Database($path, 'perms');
+        $db->set('x', 'y');
+
+        \clearstatcache(true, $path);
+        $perms = \fileperms($path);
+        $this->assertSame(0, $perms & 0o077, 'group/other bits must be cleared — the file holds tokens in plaintext');
+        $db->close();
+    }
+
+    public function testFreshDatabaseFileIsCreatedOwnerOnly(): void
+    {
+        $path = $this->tmpDir . '/fresh-perms.db';
+        $db = new Database($path, 'fresh-perms');
+        $db->set('x', 'y');
+        \clearstatcache(true, $path);
+        $perms = \fileperms($path);
+        $this->assertSame(0, $perms & 0o077);
+        $db->close();
+    }
 }

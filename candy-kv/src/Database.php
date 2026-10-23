@@ -18,8 +18,19 @@ use SugarCraft\Kv\Lang;
  *     value       TEXT NOT NULL,
  *     binary      INTEGER NOT NULL DEFAULT 0,
  *     created     TEXT NOT NULL,
- *     modified    TEXT NOT NULL
+ *     modified    TEXT NOT NULL,
+ *     expires_at  INTEGER   -- epoch seconds, NULL = never
  *   );
+ *
+ * created/modified stay human-readable ISO-8601 (DATE_ATOM) strings;
+ * expiry comparison alone is numeric, because offset-bearing strings
+ * compare lexicographically, NOT by instant (docs-fix D4 M3): a
+ * '+02:00' stamp read on a '-05:00' box expired early or late depending
+ * on the local clock text. Legacy DBs whose expires_at column holds
+ * DATE_ATOM strings are converted once on open (see migrateExpiryColumn).
+ *
+ * The database file is a secrets store: it is chmod'ed to 0600 on open,
+ * tightening any pre-existing world/group-readable file in place.
  */
 final class Database
 {
@@ -34,6 +45,34 @@ final class Database
         $this->db->busyTimeout(5000);
         $this->name = $name;
         $this->init();
+        \clearstatcache(true, $path);
+        $this->secureFilePermissions($path);
+    }
+
+    /**
+     * Tighten the database file (and WAL sidecars, if present) to 0600.
+     *
+     * SQLite creates files with the process umask, which is commonly 022
+     * — leaving stored tokens world-readable. A file we cannot tighten
+     * is refused loudly rather than silently exposed.
+     */
+    private function secureFilePermissions(string $path): void
+    {
+        foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            if (!\is_file($file)) {
+                continue;
+            }
+            \clearstatcache(true, $file);
+            $perms = @\fileperms($file);
+            if ($perms !== false && ($perms & 0o077) === 0) {
+                continue;
+            }
+            if (!@\chmod($file, 0o600)) {
+                throw new \RuntimeException(
+                    \sprintf('Cannot set 0600 permissions on key-value store file: %s', $file)
+                );
+            }
+        }
     }
 
     private function init(): void
@@ -45,7 +84,7 @@ final class Database
                 binary      INTEGER NOT NULL DEFAULT 0,
                 created     TEXT NOT NULL,
                 modified    TEXT NOT NULL,
-                expires_at  TEXT
+                expires_at  INTEGER
             )
         ');
         // Migrate legacy schema (no expires_at column)
@@ -57,8 +96,78 @@ final class Database
         if (!\in_array('expires_at', $columns, true)) {
             $this->db->exec('ALTER TABLE entries ADD COLUMN expires_at TEXT');
         }
+        $this->migrateExpiryColumn();
         $this->db->exec('PRAGMA journal_mode = WAL');
         $this->db->exec('PRAGMA foreign_keys = ON');
+    }
+
+    /**
+     * Convert legacy offset-string expiries to integer epoch seconds once.
+     *
+     * Pre-D4 databases stored expires_at as a DATE_ATOM string; SQLite's
+     * dynamic typing means the column may hold a mix. Rows whose value is
+     * non-numeric text are parsed (offset-aware) and rewritten as epoch
+     * seconds — an integer in fresh INTEGER-affinity columns, numeric text
+     * in legacy TEXT-affinity columns (SQLite column affinity); the read
+     * predicates CAST either shape to the same integer comparison.
+     * Unparseable garbage is refused loudly — silently leaving
+     * it would resurrect the lexicographic comparison for that row.
+     * The rewrite runs inside a transaction: a crash mid-migration leaves
+     * the old values intact, and every read predicate already tolerates
+     * unmigrated text via CAST, so the migration is safe to re-run.
+     */
+    private function migrateExpiryColumn(): void
+    {
+        $select = $this->db->prepare(
+            "SELECT key, expires_at FROM entries
+             WHERE typeof(expires_at) = 'text'
+               AND (expires_at NOT GLOB '[0-9]*' OR expires_at GLOB '*[!0-9]*')"
+        );
+        $rows = $select->execute();
+        $pending = [];
+        while ($row = $rows->fetchArray(\SQLITE3_ASSOC)) {
+            $pending[] = [$row['key'], $row['expires_at']];
+        }
+        $select->close();
+
+        if ($pending === []) {
+            return;
+        }
+
+        $update = $this->db->prepare('UPDATE entries SET expires_at = :epoch WHERE key = :key');
+        $this->db->exec('BEGIN IMMEDIATE');
+        try {
+            foreach ($pending as [$key, $raw]) {
+                if ($raw === '') {
+                    // An empty-string expiry means "never"; normalise to NULL
+                    // (new DateTimeImmutable('') would silently mean "now").
+                    $update->bindValue(':epoch', null, \SQLITE3_NULL);
+                    $update->bindValue(':key', $key, \SQLITE3_TEXT);
+                    $update->execute();
+                    $update->reset();
+                    continue;
+                }
+                try {
+                    $instant = new \DateTimeImmutable((string) $raw);
+                } catch (\Exception $e) {
+                    throw new \RuntimeException(
+                        \sprintf('Cannot migrate expiry "%s" for key "%s" to epoch seconds: %s', $raw, $key, $e->getMessage()),
+                        0,
+                        $e
+                    );
+                }
+                $update->bindValue(':epoch', $instant->getTimestamp(), \SQLITE3_INTEGER);
+                $update->bindValue(':key', $key, \SQLITE3_TEXT);
+                $update->execute();
+                $update->reset();
+            }
+            $this->db->exec('COMMIT');
+        } catch (\Throwable $e) {
+            $this->db->exec('ROLLBACK');
+            $update->close();
+            throw $e;
+        }
+        $update->close();
     }
 
     /**
@@ -71,10 +180,10 @@ final class Database
             'SELECT key, value, binary, created, modified, expires_at
              FROM entries
              WHERE key = :key
-               AND (expires_at IS NULL OR expires_at >= :now)'
+               AND (expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now)'
         );
         $stmt->bindValue(':key', $key, \SQLITE3_TEXT);
-        $stmt->bindValue(':now', (new \DateTimeImmutable())->format(\DATE_ATOM), \SQLITE3_TEXT);
+        $stmt->bindValue(':now', \time(), \SQLITE3_INTEGER);
         $result = $stmt->execute();
 
         $row = $result->fetchArray(\SQLITE3_ASSOC);
@@ -113,9 +222,11 @@ final class Database
     {
         $now = (new \DateTimeImmutable())->format(\DATE_ATOM);
 
+        // Expiry is stored as an absolute epoch integer; created/modified
+        // stay DATE_ATOM because they are display metadata only.
         $expiresAt = null;
         if ($ttlSeconds !== null && $ttlSeconds > 0) {
-            $expiresAt = (new \DateTimeImmutable())->modify("+{$ttlSeconds} seconds")->format(\DATE_ATOM);
+            $expiresAt = \time() + $ttlSeconds;
         }
 
         $stmt = $this->db->prepare(
@@ -132,7 +243,7 @@ final class Database
         $stmt->bindValue(':binary', $binary ? 1 : 0, \SQLITE3_INTEGER);
         $stmt->bindValue(':created', $now, \SQLITE3_TEXT);
         $stmt->bindValue(':modified', $now, \SQLITE3_TEXT);
-        $stmt->bindValue(':expires_at', $expiresAt, \SQLITE3_TEXT);
+        $stmt->bindValue(':expires_at', $expiresAt, $expiresAt === null ? \SQLITE3_NULL : \SQLITE3_INTEGER);
         $stmt->execute();
         $stmt->close();
 
@@ -171,20 +282,20 @@ final class Database
     ): \Generator {
         $order = $reverse ? 'DESC' : 'ASC';
 
-        $now = (new \DateTimeImmutable())->format(\DATE_ATOM);
+        $now = \time();
         if ($pattern !== null) {
             [$sql, $bindings] = $this->buildGlobQuery($pattern, $order, $now);
         } else {
             $sql = "SELECT key, value, binary, created, modified, expires_at
                     FROM entries
-                    WHERE expires_at IS NULL OR expires_at >= :now
+                    WHERE expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now
                     ORDER BY key {$order}";
             $bindings = [':now' => $now];
         }
 
         $stmt = $this->db->prepare($sql);
         foreach ($bindings as $k => $v) {
-            $stmt->bindValue($k, $v, \SQLITE3_TEXT);
+            $stmt->bindValue($k, $v, \is_int($v) ? \SQLITE3_INTEGER : \SQLITE3_TEXT);
         }
         $result = $stmt->execute();
 
@@ -206,16 +317,16 @@ final class Database
      */
     public function count(?string $pattern = null): int
     {
-        $now = (new \DateTimeImmutable())->format(\DATE_ATOM);
+        $now = \time();
 
         if ($pattern === null) {
             // Total count must honour TTL exactly like get()/list()/allKeys():
             // expired rows are dead and must not inflate the total.
             $stmt = $this->db->prepare(
                 'SELECT COUNT(*) FROM entries
-                 WHERE expires_at IS NULL OR expires_at >= :now'
+                 WHERE expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now'
             );
-            $stmt->bindValue(':now', $now, \SQLITE3_TEXT);
+            $stmt->bindValue(':now', $now, \SQLITE3_INTEGER);
             $r = $stmt->execute();
             if ($r === false) {
                 $stmt->close();
@@ -229,10 +340,10 @@ final class Database
         $like = $this->globToLike($pattern);
         $stmt = $this->db->prepare(
             'SELECT COUNT(*) FROM entries WHERE key LIKE :pat ESCAPE \'\\\''
-                . ' AND (expires_at IS NULL OR expires_at >= :now)'
+                . ' AND (expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now)'
         );
         $stmt->bindValue(':pat', $like, \SQLITE3_TEXT);
-        $stmt->bindValue(':now', $now, \SQLITE3_TEXT);
+        $stmt->bindValue(':now', $now, \SQLITE3_INTEGER);
         $result = $stmt->execute();
         if ($result === false) {
             $stmt->close();
@@ -303,13 +414,13 @@ final class Database
     public function allKeys(): array
     {
         $keys = [];
-        $now = (new \DateTimeImmutable())->format(\DATE_ATOM);
+        $now = \time();
         $stmt = $this->db->prepare(
             'SELECT key FROM entries
-             WHERE expires_at IS NULL OR expires_at >= :now
+             WHERE expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now
              ORDER BY key ASC'
         );
-        $stmt->bindValue(':now', $now, \SQLITE3_TEXT);
+        $stmt->bindValue(':now', $now, \SQLITE3_INTEGER);
         $result = $stmt->execute();
         while ($row = $result->fetchArray(\SQLITE3_ASSOC)) {
             $keys[] = $row['key'];
@@ -399,7 +510,7 @@ final class Database
      *   ?     → _
      *   other glob chars are escaped
      */
-    private function buildGlobQuery(string $pattern, string $order, string $now): array
+    private function buildGlobQuery(string $pattern, string $order, int $now): array
     {
         $like = $this->globToLike($pattern);
 
@@ -407,7 +518,7 @@ final class Database
             "SELECT key, value, binary, created, modified, expires_at
              FROM entries
              WHERE key LIKE :pat ESCAPE '\\'
-               AND (expires_at IS NULL OR expires_at >= :now)
+               AND (expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now)
              ORDER BY key {$order}",
             [':pat' => $like, ':now' => $now],
         ];

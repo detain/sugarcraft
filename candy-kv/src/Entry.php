@@ -42,13 +42,13 @@ final class Entry
     /**
      * Whether this entry has expired (applies only if expiresAt is set).
      *
-     * Strictly-past comparison: at the exact expiry instant the entry is
-     * ALIVE, mirroring every SQL predicate in Database (`expires_at >= :now`
-     * keeps the row at equality) so the PHP-side and SQL-side answers agree
-     * on the boundary. A wall-clock race remains at sub-second resolution
-     * only because SQL stores DATE_ATOM (second precision) while this check
-     * reads microseconds — an entry stays SQL-visible for the remainder of
-     * its final second.
+     * Expiry is stored as an absolute epoch-seconds integer (D4 fix); it no
+     * longer depends on the local clock's UTC offset, so a row written on a
+     * UTC+X box reads with the same true instant everywhere. Strictly-past
+     * comparison: at the exact expiry second the SQL side (`>= :now` with
+     * integer time()) still keeps the row, while this check reads
+     * sub-second resolution — a same-second race of at most one second
+     * remains by design, resolved in the user's favour on reads.
      */
     public function isExpired(): bool
     {
@@ -61,14 +61,16 @@ final class Entry
     /**
      * Build from a database row (key, value, binary, created, modified[, expires_at]).
      *
-     * @param array{key:string,value:string,binary:int,created:string,modified:string,expires_at?:string|null} $row
+     * expires_at is an epoch integer (post-D4 schema). Rows still holding a
+     * legacy DATE_ATOM string are parsed by instant so pre-migration reads
+     * and getRaw() keep working; a future rewrite of the column happens on
+     * Database open.
+     *
+     * @param array{key:string,value:string,binary:int,created:string,modified:string,expires_at?:int|string|null} $row
      */
     public static function fromRow(array $row): self
     {
-        $expiresAt = null;
-        if (isset($row['expires_at']) && $row['expires_at'] !== null && $row['expires_at'] !== '') {
-            $expiresAt = new \DateTimeImmutable($row['expires_at']);
-        }
+        $expiresAt = self::parseExpiry($row['expires_at'] ?? null);
         return new self(
             $row['key'],
             $row['value'],
@@ -77,6 +79,23 @@ final class Entry
             new \DateTimeImmutable($row['modified']),
             $expiresAt,
         );
+    }
+
+    /**
+     * Normalise an expires_at cell (epoch int, epoch-text, or legacy string)
+     * into a DateTimeImmutable, or null when there is no expiry.
+     */
+    private static function parseExpiry(int|string|null $raw): ?\DateTimeImmutable
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        if (\is_int($raw) || \preg_match('/^-?[0-9]+$/', $raw) === 1) {
+            return (new \DateTimeImmutable())->setTimestamp((int) $raw);
+        }
+
+        return new \DateTimeImmutable($raw);
     }
 
     /**

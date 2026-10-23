@@ -9,7 +9,7 @@
 declare(strict_types=1);
 
 return [
-    'database.entry_unreadable' => 'Entry set but not readable',
+    'database.entry_unreadable' => 'Entry was written but is no longer readable (expired, deleted, or corrupt)',
     'store.cannot_read'         => 'Cannot read file: {path}',
 
     // bin/candy-kv
@@ -23,5 +23,5 @@ return [
     'cli.unknown_command'       => 'Unknown command: {cmd}',
     'cli.pattern_not_supported' => 'get takes an exact key, not a pattern. Use "{bin} list <pattern>" to match glob patterns.',
     'store.did_you_mean'        => 'key not found; did you mean \'{key}\'?',
-    'database.entry_unreadable_after_set' => 'Entry was written but is no longer readable (expired, deleted, or corrupt): {key}',
+    'database.query_failed'     => 'The database query failed.',
 ];
