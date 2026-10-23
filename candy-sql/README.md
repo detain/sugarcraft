@@ -629,19 +629,26 @@ use SugarCraft\Sql\Admin\History\SqliteHistoryStore;
 use SugarCraft\Sql\Admin\History\HistoryRecorder;
 use SugarCraft\Sql\Admin\History\HistoryQuery;
 
-$store = new SqliteHistoryStore('/tmp/candy-sql-history.sqlite');  // WAL, busy timeout 5s
+$historyPath = sys_get_temp_dir() . '/candy-sql-doc-history-' . getmypid() . '.sqlite';
+$store    = new SqliteHistoryStore($historyPath);  // WAL, busy timeout 5s
 $recorder = new HistoryRecorder($store);
 
 // One snapshot per admin poll tick; the recorder never writes on its own initiative
 $recorder->record(new \SugarCraft\Sql\Admin\StatusSnapshot(['Queries' => '4242'], microtime(true)));
 
 // Read historical patterns
-$q = new HistoryQuery($store);
-$snapshots = $q->querySince(microtime(true) - 3600.0);
-$qps = $q->getRate('Queries', microtime(true) - 3600.0, microtime(true)); // ?float per-second
+$query     = new HistoryQuery($store);
+$snapshots = $query->querySince(microtime(true) - 3600.0);
+$qps        = $query->getRate('Queries', microtime(true) - 3600.0, microtime(true)); // ?float per-second
 
 // Pruning is manual
 $removed = $store->prune(new DateTimeImmutable('-30 days'));
+
+$store->close();
+foreach (glob($historyPath . '*') ?: [] as $residue) {  // db + WAL/SHM files
+    unlink($residue);
+}
+unset($snapshots, $qps, $removed);
 ```
 
 ## Known limitations
@@ -718,7 +725,7 @@ The interface defines 12 methods:
 use SugarCraft\Sql\Db\DatabaseInterface;
 
 // Type-hint against the interface for driver-agnostic code
-function processDb(DatabaseInterface $db): void { ... }
+function processDb(DatabaseInterface $db): void { /* works with any driver */ }
 ```
 
 ### PreparedStatementInterface
