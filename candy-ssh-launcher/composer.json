@@ -30,7 +30,7 @@
         "bin/candy-ssh-launcher"
     ],
     "require": {
-        "php": ">=8.3",
+        "php": "^8.3",
         "ext-pcntl": "*",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-fuzzy": "dev-master"

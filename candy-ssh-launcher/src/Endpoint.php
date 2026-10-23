@@ -100,6 +100,9 @@ final class Endpoint
         // Emit one `-i <file>` pair per identity file, preserving order.
         // Previously only identityFiles[0] was passed, silently dropping every
         // additional key ssh(1) should have been offered.
+        // No assertNotOption here on purpose: ssh always consumes the token
+        // after `-i` as the filename, so a leading-dash value cannot turn
+        // into an option — unlike the free-standing values guarded below.
         foreach ($this->identityFiles as $identityFile) {
             if ($identityFile === '') {
                 continue;
