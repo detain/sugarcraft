@@ -29,6 +29,19 @@ final class InMemoryBackendTest extends TestCase
         $this->assertSame(2.0, $b->counterValue('hits', ['route' => '/b']));
     }
 
+    public function testLookalikeTagSetsDoNotCollapseIntoOneAccumulator(): void
+    {
+        // Storage-key collision from the audit: 'x=a|y=b' was reachable
+        // both from the single tag ['x' => 'a|y=b'] and the pair
+        // ['x' => 'a', 'y' => 'b'], so one series silently accumulated
+        // into the other. Separators are escaped now; they must not mix.
+        $b = new InMemoryBackend();
+        $b->counter('m', 1.0, ['x' => 'a|y=b']);
+        $b->counter('m', 2.0, ['x' => 'a', 'y' => 'b']);
+        $this->assertSame(1.0, $b->counterValue('m', ['x' => 'a|y=b']));
+        $this->assertSame(2.0, $b->counterValue('m', ['x' => 'a', 'y' => 'b']));
+    }
+
     public function testGaugeLastWriteWins(): void
     {
         $b = new InMemoryBackend();

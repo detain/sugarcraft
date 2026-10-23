@@ -315,7 +315,9 @@ final class Registry
 
     /**
      * Build a stable tag-only string key for cardinality tracking.
-     * Returns `k1=v1|k2=v2` (no metric name prefix) with tags sorted by key.
+     * Returns sorted, backslash-escaped `k=v|k2=v2` (see
+     * {@see Util::tagKey()}; no metric name prefix) so separators inside
+     * tag payloads cannot forge additional pairs.
      * Distinct from InMemoryBackend::key() which includes the metric name
      * and uses a different separator for storage accumulation.
      *

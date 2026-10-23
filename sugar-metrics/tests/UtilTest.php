@@ -41,4 +41,35 @@ final class UtilTest extends TestCase
     {
         $this->assertSame('host=localhost:8080', Util::tagKey(['host' => 'localhost:8080']));
     }
+
+    public function testTagKeySeparatorsInsideValuesDoNotForgeExtraPairs(): void
+    {
+        // The adversarial pair from the audit: unescaped serialization
+        // made BOTH of these render the string 'x=a|y=b', collapsing two
+        // distinct series into one storage/cardinality slot.
+        $forged = Util::tagKey(['x' => 'a|y=b']);
+        $genuine = Util::tagKey(['x' => 'a', 'y' => 'b']);
+
+        $this->assertNotSame($forged, $genuine);
+        $this->assertSame('x=a\\|y\\=b', $forged);
+        $this->assertSame('x=a|y=b', $genuine);
+    }
+
+    public function testTagKeyEscapesSeparatorsInsideKeys(): void
+    {
+        $this->assertSame('a\\|b=c', Util::tagKey(['a|b' => 'c']));
+        $this->assertSame('a\\=b=c', Util::tagKey(['a=b' => 'c']));
+    }
+
+    public function testTagKeyEscapesBackslashSoItCannotUnEscapeSeparators(): void
+    {
+        // The escape character itself must be escaped (first): value 'a\'
+        // serializes to the doubled-backslash form, so it can never make
+        // a following separator ambiguous or undo a pair escape.
+        $this->assertSame('x=a\\\\', Util::tagKey(['x' => 'a\\']));
+        $this->assertNotSame(
+            Util::tagKey(['x' => 'a\\|y\\=b']),
+            Util::tagKey(['x' => 'a|y=b']),
+        );
+    }
 }

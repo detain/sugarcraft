@@ -253,4 +253,15 @@ final class RegistryTest extends TestCase
         $r->remove('never_existed', ['x' => 'y']); // must not throw.
         $this->assertTrue(true);
     }
+
+    public function testLookalikeTagSetsCountAsDistinctSeries(): void
+    {
+        // Cardinality tracking must not collapse the forged-pair tag set
+        // into the real two-tag set (the Util::tagKey escape collision).
+        $b = new InMemoryBackend();
+        $r = new Registry($b, [], 1000);
+        $r->counter('m', 1.0, ['x' => 'a|y=b']);
+        $r->counter('m', 1.0, ['x' => 'a', 'y' => 'b']);
+        $this->assertSame(2, $r->cardinality('m'));
+    }
 }

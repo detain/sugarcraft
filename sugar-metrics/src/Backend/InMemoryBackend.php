@@ -205,7 +205,10 @@ final class InMemoryBackend implements Backend
 
     /**
      * Build a storage key for this backend's accumulator arrays.
-     * Format: `name|k1=v1|k2=v2` with tags sorted by key.
+     * Format: `name|k1=v1|k2=v2` with tags sorted by key and each key
+     * and value backslash-escaped (see {@see Util::tagKey()}), so a
+     * separator inside a tag payload cannot forge a second pair and
+     * collapse two distinct series into one accumulator.
      * This format is for in-memory storage accumulation (not cardinality tracking).
      *
      * @param array<string,string> $tags
