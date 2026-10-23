@@ -128,7 +128,7 @@ final class Store
         $suggestion = $this->suggestSimilar($entryKey, $dbName);
         if ($suggestion !== null) {
             // Emit suggestion to stderr so it doesn't pollute stdout
-            \fwrite(STDERR, "key not found; did you mean '{$suggestion}'?" . \PHP_EOL);
+            \fwrite(STDERR, Lang::t('store.did_you_mean', ['key' => $suggestion]) . \PHP_EOL);
         }
 
         return $fallback;

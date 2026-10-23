@@ -245,6 +245,68 @@ final class CliSmokeTest extends TestCase
     /**
      * @param array{stdout: string, stderr: string, exit: int} $result
      */
+    public function testGetPatternIsRefusedWithPointerToList(): void
+    {
+        // M2: get is exact-key; a glob must be refused loudly, not silently
+        // treated as a literal miss.
+        $this->runSkate(['set', 'user-1', 'alice']);
+        $get = $this->runSkate(['get', 'user-*']);
+        $this->assertSame(2, $get['exit'], 'pattern in get must exit 2');
+        $this->assertStringContainsString('list', $get['stderr'], 'refusal must point at list');
+        $this->assertNoFatal($get);
+    }
+
+    public function testDeleteMissingKeyExitsOne(): void
+    {
+        // n-minor: delete of a non-matching key used to print "0 entries" and
+        // exit 0 — indistinguishable from success for scripts.
+        $hit = $this->runSkate(['delete', 'absent-key']);
+        $this->assertSame(1, $hit['exit'], 'delete of a missing key must exit 1');
+        $this->assertStringContainsString('absent-key', $hit['stderr']);
+
+        $this->runSkate(['set', 'present-key', 'v']);
+        $ok = $this->runSkate(['delete', 'present-key']);
+        $this->assertSame(0, $ok['exit'], 'delete of a matching key still exits 0');
+    }
+
+    public function testNonNumericTtlExitsTwo(): void
+    {
+        $set = $this->runSkate(['set', 'soon-key', 'v', '--ttl=soon']);
+        $this->assertSame(2, $set['exit'], '--ttl=soon must be a usage error, not exit 0 storing ttl 0');
+        $this->assertNoFatal($set);
+        // The value must not have been stored (fail-loud, before any write).
+        $get = $this->runSkate(['get', 'soon-key']);
+        $this->assertSame(1, $get['exit']);
+    }
+
+    public function testTtlSpaceFormWorksEndToEnd(): void
+    {
+        // M1: the documented space form must actually store a TTL.
+        $set = $this->runSkate(['set', 'ttl-space', 'v', '--ttl', '3600']);
+        $this->assertSame(0, $set['exit']);
+        $list = $this->runSkate(['list', '-v']);
+        $this->assertSame("v\n", $list['stdout']);
+        $this->assertNoFatal($set);
+        $this->assertNoFatal($list);
+    }
+
+    public function testListDelimiterSpaceFormWorksEndToEnd(): void
+    {
+        $this->runSkate(['set', 'd1', 'v1']);
+        $list = $this->runSkate(['list', '-d', ':']);
+        $this->assertSame(0, $list['exit']);
+        $this->assertStringContainsString('d1:v1', $list['stdout']);
+        $this->assertNoFatal($list);
+    }
+
+    public function testListAttachedDelimiterStillWorks(): void
+    {
+        $this->runSkate(['set', 'd2', 'v2']);
+        $list = $this->runSkate(['list', '-d|']);
+        $this->assertSame(0, $list['exit']);
+        $this->assertStringContainsString('d2|v2', $list['stdout']);
+    }
+
     private function assertNoFatal(array $result): void
     {
         $combined = $result['stdout'] . "\n" . $result['stderr'];

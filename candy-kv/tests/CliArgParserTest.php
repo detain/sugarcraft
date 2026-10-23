@@ -209,4 +209,74 @@ final class CliArgParserTest extends TestCase
         $result = ArgParser::export(['candy-kv', 'export', 'json', '--unknown-flag'], 2);
         $this->assertSame('json', $result['format']);
     }
+
+    // ─── both-form option parsing (docs-fix D4, M1) ─────────────────────────
+
+    public function testSetAcceptsTtlSpaceForm(): void
+    {
+        $result = ArgParser::set(['candy-kv', 'set', 'mykey', '--ttl', '3600'], 2);
+        $this->assertSame('mykey', $result['key']);
+        $this->assertSame(3600, $result['ttl']);
+    }
+
+    public function testSetAcceptsTtlSpaceFormBeforePositionals(): void
+    {
+        $result = ArgParser::set(['candy-kv', 'set', '--ttl', '60', 'mykey', 'myvalue'], 2);
+        $this->assertSame('mykey', $result['key']);
+        $this->assertSame('myvalue', $result['value']);
+        $this->assertSame(60, $result['ttl']);
+    }
+
+    public function testSetAcceptsTtlAttachedFormStill(): void
+    {
+        $result = ArgParser::set(['candy-kv', 'set', 'mykey', '--ttl=3600'], 2);
+        $this->assertSame(3600, $result['ttl']);
+    }
+
+    public function testSetRefusesNonNumericTtlAttached(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('non-negative integer');
+        ArgParser::set(['candy-kv', 'set', 'mykey', '--ttl=soon'], 2);
+    }
+
+    public function testSetRefusesNonNumericTtlSpaceForm(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ArgParser::set(['candy-kv', 'set', 'mykey', '--ttl', 'soon'], 2);
+    }
+
+    public function testSetRefusesEmptyTtl(): void
+    {
+        // '--ttl=' used to silently store 0; the shared choke refuses it now.
+        $this->expectException(\InvalidArgumentException::class);
+        ArgParser::set(['candy-kv', 'set', 'mykey', '--ttl='], 2);
+    }
+
+    public function testSetRefusesBareTtlWithoutValue(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('requires a value');
+        ArgParser::set(['candy-kv', 'set', 'mykey', '--ttl'], 2);
+    }
+
+    public function testListAcceptsDelimiterSpaceForm(): void
+    {
+        $result = ArgParser::list(['candy-kv', 'list', '-d', '|', 'user-*'], 2);
+        $this->assertSame('|', $result['delimiter']);
+        $this->assertSame('user-*', $result['pattern']);
+    }
+
+    public function testListAcceptsDelimiterSpaceFormWithColon(): void
+    {
+        $result = ArgParser::list(['candy-kv', 'list', '-d', ':'], 2);
+        $this->assertSame(':', $result['delimiter']);
+        $this->assertNull($result['pattern']);
+    }
+
+    public function testListBareTrailingDelimiterKeepsTab(): void
+    {
+        $result = ArgParser::list(['candy-kv', 'list', '-d'], 2);
+        $this->assertSame("\t", $result['delimiter']);
+    }
 }

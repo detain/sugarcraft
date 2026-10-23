@@ -16,22 +16,34 @@ final class ArgParser
     /**
      * Parse arguments for the `set` command.
      *
+     * The --ttl option accepts both spellings: the attached form
+     * `--ttl=3600` and the separated form `--ttl 3600` (documented in
+     * README as the space form). A non-numeric value is refused loudly
+     * rather than silently stored as 0.
+     *
      * @param list<string> $argv  Full argv array.
      * @param int         $offset Offset where set subcommand args begin.
      * @return array{key: string|null, value: string|null, ttl: int|null}
+     * @throws \InvalidArgumentException when --ttl carries a non-integer value.
      */
     public static function set(array $argv, int $offset): array
     {
-        $key = null;
-        $value = null;
-        $ttl = null;
-
         $remaining = \array_slice($argv, $offset);
         $positional = [];
+        $ttl = null;
 
-        foreach ($remaining as $arg) {
+        $count = \count($remaining);
+        for ($i = 0; $i < $count; $i++) {
+            $arg = $remaining[$i];
             if (\str_starts_with($arg, '--ttl=')) {
-                $ttl = (int) \substr($arg, 6);
+                $ttl = self::ttlSeconds(\substr($arg, 6), \substr($arg, 6));
+            } elseif ($arg === '--ttl') {
+                $next = $remaining[$i + 1] ?? null;
+                if ($next === null) {
+                    throw new \InvalidArgumentException('Option --ttl requires a value.');
+                }
+                $i++;
+                $ttl = self::ttlSeconds($next, $next);
             } elseif (\str_starts_with($arg, '--')) {
                 // Ignore unknown flags for set (--no-atomic is not applicable).
             } else {
@@ -39,14 +51,35 @@ final class ArgParser
             }
         }
 
-        $key = $positional[0] ?? null;
-        $value = $positional[1] ?? null;
+        return [
+            'key' => $positional[0] ?? null,
+            'value' => $positional[1] ?? null,
+            'ttl' => $ttl,
+        ];
+    }
 
-        return ['key' => $key, 'value' => $value, 'ttl' => $ttl];
+    /**
+     * Validate a TTL option payload as a non-negative integer of seconds.
+     *
+     * @throws \InvalidArgumentException naming the offending value.
+     */
+    private static function ttlSeconds(string $raw, string $shown): int
+    {
+        if (\preg_match('/^[0-9]+$/', $raw) !== 1) {
+            throw new \InvalidArgumentException(
+                \sprintf('Option --ttl expects a non-negative integer of seconds, got "%s".', $shown)
+            );
+        }
+
+        return (int) $raw;
     }
 
     /**
      * Parse arguments for the `list` command.
+     *
+     * The -d option accepts both spellings: the attached form `-d:` (or
+     * `-d|`) and the separated form `-d :`. A bare -d at the end of the
+     * argument list keeps the pinned default tab delimiter.
      *
      * @param list<string> $argv  Full argv array.
      * @param int         $offset Offset where list subcommand args begin.
@@ -62,7 +95,9 @@ final class ArgParser
         $remaining = \array_slice($argv, $offset);
         $positional = [];
 
-        foreach ($remaining as $arg) {
+        $count = \count($remaining);
+        for ($i = 0; $i < $count; $i++) {
+            $arg = $remaining[$i];
             if ($arg === '-k') {
                 $mode = 'keys';
             } elseif ($arg === '-v') {
@@ -70,7 +105,16 @@ final class ArgParser
             } elseif ($arg === '-r') {
                 $reverse = true;
             } elseif (\str_starts_with($arg, '-d')) {
-                $delimiter = \substr($arg, 2) ?: "\t";
+                $attached = \substr($arg, 2);
+                if ($attached !== '') {
+                    $delimiter = $attached;
+                } else {
+                    $next = $remaining[$i + 1] ?? null;
+                    $delimiter = $next ?? "\t";
+                    if ($next !== null) {
+                        $i++;
+                    }
+                }
             } elseif (\str_starts_with($arg, '-')) {
                 // Ignore unknown flags.
             } else {

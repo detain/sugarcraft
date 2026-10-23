@@ -7,9 +7,9 @@ declare(strict_types=1);
  * CandyKv CLI — charmbracelet/skate equivalent.
  *
  * Usage:
- *   candy-kv set <key> [value] [--ttl=SECONDS]  Set a key (reads from stdin if no value)
+ *   candy-kv set <key> [value] [--ttl SECONDS]  Set a key (reads from stdin if no value)
  *   candy-kv get <key>                         Get a value (suggests typo on miss)
- *   candy-kv list [-k|-v] [-r] [-d delim] [pattern]  List entries
+ *   candy-kv list [-k|-v] [-r] [-d DELIM] [pattern]  List entries
  *   candy-kv delete <key>                       Delete a key (supports glob)
  *   candy-kv list-dbs                          List all databases
  *   candy-kv import <format> <path>           Import from JSON/YAML file
@@ -40,7 +40,21 @@ if ($argc < 2) {
 $store = new Store();
 $cmd = $argv[1];
 
-switch ($cmd) {
+// ArgParser refuses malformed option values (e.g. --ttl=soon) with an
+// InvalidArgumentException; usage errors exit 2, distinct from runtime
+// failures (1) and missing keys (get/delete exit 1).
+try {
+    run($store, $cmd, $argv, $bin);
+} catch (\InvalidArgumentException $e) {
+    fwrite(STDERR, 'candy-kv: ' . $e->getMessage() . "\n");
+    exit(2);
+}
+
+exit(0);
+
+function run(Store $store, string $cmd, array $argv, string $bin): void
+{
+    switch ($cmd) {
     case 'set':
         $opts = ArgParser::set($argv, 2);
         if ($opts['key'] === null) {
@@ -59,9 +73,14 @@ switch ($cmd) {
         break;
 
     case 'get':
-        if ($argc < 3) {
+        if (\count($argv) < 3) {
             fwrite(STDERR, Lang::t('cli.usage_get', ['bin' => $bin]) . "\n");
             exit(1);
+        }
+        // get() is exact-key by design; glob patterns belong to list.
+        if (\strpbrk($argv[2], '*?') !== false) {
+            fwrite(STDERR, Lang::t('cli.pattern_not_supported', ['bin' => $bin]) . "\n");
+            exit(2);
         }
         // get() already emits any "did you mean" typo suggestion to stderr on a
         // miss; branch on entry existence so a truly-missing key exits 1 while an
@@ -75,8 +94,8 @@ switch ($cmd) {
 
     case 'list':
         $opts = ArgParser::list($argv, 2);
-        $delim = $opts['delimiter'];
-        foreach ($store->list($opts['pattern'], null, $opts['reverse'], $opts['mode'], $delim) as $item) {
+        $delim = Store::sanitizeForTty($opts['delimiter']);
+        foreach ($store->list($opts['pattern'], null, $opts['reverse'], $opts['mode'], $opts['delimiter']) as $item) {
             if ($item instanceof Entry) {
                 $key = Store::sanitizeForTty($item->key);
                 $val = Store::sanitizeForTty($item->rawValue());
@@ -89,11 +108,15 @@ switch ($cmd) {
         break;
 
     case 'delete':
-        if ($argc < 3) {
+        if (\count($argv) < 3) {
             fwrite(STDERR, Lang::t('cli.usage_delete', ['bin' => $bin]) . "\n");
             exit(1);
         }
         $n = $store->delete($argv[2]);
+        if ($n === 0) {
+            fwrite(STDERR, Lang::t('cli.deleted_none', ['key' => $argv[2]]) . "\n");
+            exit(1);
+        }
         echo Lang::t('cli.deleted_n', ['count' => $n]) . "\n";
         break;
 
@@ -139,6 +162,7 @@ switch ($cmd) {
         fwrite(STDERR, Lang::t('cli.unknown_command', ['cmd' => $cmd]) . "\n");
         help($bin);
         exit(1);
+    }
 }
 
 function help(string $bin): void
@@ -147,25 +171,28 @@ function help(string $bin): void
 CandyKv — personal key/value store
 
 Usage:
-  {$bin} set <key> [value] [--ttl=SECONDS]
+  {$bin} set <key> [value] [--ttl SECONDS]
                                   Set a key (reads stdin if no value)
   {$bin} get <key>                Get a value (suggests typo on miss)
-  {$bin} list [-k|-v] [-r] [-d delim] [pattern]
+  {$bin} list [-k|-v] [-r] [-d DELIM] [pattern]
                                   List entries (default: keys+values)
   {$bin} delete <key>             Delete a key (glob patterns supported)
   {$bin} list-dbs                 List all databases
-  {$bin} import <format> <path>   Import entries (json|yaml, path=- for stdin)
+  {$bin} import <format> <path>   Import entries (json|yaml|yml, path=- for stdin)
   {$bin} export <format> [db] [pattern]
-                                  Export entries (json|yaml)
+                                  Export entries (json|yaml|yml)
   {$bin} --help                   Show this help
 
 Options:
-  --ttl=SECONDS   Set a TTL (expiry in seconds) for the key.
-  --no-atomic      Disable atomic transaction for import.
+  --ttl SECONDS                   Set a TTL (expiry in seconds) for the key.
+  --ttl=SECONDS                   Same as above; both spellings accepted.
+  -d DELIM, -dDELIM               Output delimiter for list (default: tab).
+  --no-atomic                     Disable atomic transaction for import.
 
 Patterns:
   *  matches any characters
   ?  matches a single character
+  Patterns apply to list and delete; get is exact-key.
 
 Database suffix:
   Use key@dbname to target a specific database.
