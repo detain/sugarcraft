@@ -1,0 +1,323 @@
+# Rolling DEV phars for every phar-capable app in the monorepo.
+#
+# Each app gets a permanent, wget-able channel:
+#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar
+#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.sha256
+#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.minisig        (when signed)
+#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.minisig.sha256 (when signed)
+#
+# The phar-capable set is FILESYSTEM-DRIVEN: an app is built iff it appears
+# in the affected set of scripts/affected-libs.php AND carries a
+# <app>/tools/build-phar.php. Adding build plumbing to another app (the
+# PHD/PHE/PHF waves) needs no edit to this file. candy-code and candy-top are
+# built HERE for the dev channel; their versioned releases stay owned by the
+# dedicated release-phar.yml / release-candy-top-phar.yml pipelines.
+#
+# VERSION STAMP LAW (pinned by the self-update dev gates shipped by PHA/PHB):
+# every archive here is stamped --version="dev-<SHORT_SHA>" (7 hex). The
+# `dev-` prefix is what classifies the build as development for the
+# self-update comparators; the SHORT_SHA is what makes it LOCATABLE — an
+# update can tell exactly which commit it hands you. build-phar.php's
+# fallback stamp `dev-build` also classifies as dev but names no commit, so
+# this workflow never publishes it: the --version flag is always explicit,
+# and a fail-closed step below asserts the archive's own metadata carries
+# exactly `dev-<SHORT_SHA>` (the stamp self-update reads back via
+# Version::fromPharMetadata — metadata truth, independent of whether the
+# app's CLI happens to surface it).
+#
+# REPRODUCIBILITY CAVEAT (inherited from the release pipelines, disclosed not
+# solved): composer install runs with the lock deliberately absent (house
+# rule forbids per-lib composer.lock) and sugarcraft/* siblings resolve from
+# Packagist at their dev-master moving target. Two dev builds of one commit
+# can differ byte-wise; the .sha256 names the bytes this job produced.
+#
+# GITHUB_TOKEN pushes do not trigger other workflows, and this file
+# deliberately chains nothing: the <app>/dev tag pushes below exist only to
+# anchor the rolling release, never to kick off release-app-phar.yml (whose
+# `candy-*/v*` filter could not match `dev` anyway).
+name: Dev PHARs
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      all:
+        description: 'Rebuild every phar-capable app (not just the affected ones)'
+        type: boolean
+        default: false
+
+# Serialize the whole stream: publishes force-move shared <app>/dev tags and
+# clobber shared release assets, so two concurrent runs racing on the same
+# app could interleave a tag with another run's release edit. Queued (not
+# cancelled) rebuilds are the honest semantics for a rolling channel.
+concurrency:
+  group: phar-dev
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # Same reason as ci.yml: a detached checkout versions each lib as
+  # dev-<sha>; circular sibling back-requires on dev-master then fail
+  # install. Pinning the root version keeps every lib-under-test dev-master.
+  COMPOSER_ROOT_VERSION: dev-master
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+      matrix_count: ${{ steps.select.outputs.matrix_count }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          # The range diff needs both endpoints on disk.
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Select phar-capable affected apps
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          DISPATCH_ALL: ${{ github.event.inputs.all }}
+        run: |
+          set -euo pipefail
+          ZERO="0000000000000000000000000000000000000000"
+          MODE="--all"
+          case "$EVENT_NAME" in
+            workflow_dispatch)
+              # 'all' checked -> whole fleet; otherwise just the head commit's
+              # blast radius (the script itself falls back to force-all when
+              # HEAD~1 is unresolvable, e.g. the repo's first commit).
+              if [ "${DISPATCH_ALL:-false}" != "true" ]; then
+                MODE="--range HEAD~1..HEAD"
+              fi
+              ;;
+            push)
+              if [ -n "${BEFORE_SHA:-}" ] && [ "$BEFORE_SHA" != "$ZERO" ]; then
+                MODE="--range ${BEFORE_SHA}..${HEAD_SHA}"
+              fi
+              ;;
+          esac
+          # A force push (rewritten history) arrives as BEFORE_SHA=ZERO ->
+          # MODE stays --all, exactly the ci.yml fallback.
+
+          echo "affected-libs mode: $MODE" >&2
+          # shellcheck disable=SC2086 # intentional word-split for --range
+          JSON=$(php scripts/affected-libs.php $MODE)
+          if [ "${DISPATCH_ALL:-false}" = "true" ]; then
+            JSON=$(echo "$JSON" | jq '.force_all = true')
+          fi
+          echo "$JSON" | jq -r '"force_all=\(.force_all) affected=\(.affected | length)"' >&2
+
+          # Universe: every lib when force-all (or dispatch-all), else the
+          # affected closure; filtered to dirs actually carrying build-phar.
+          mapfile -t CANDIDATES < <(echo "$JSON" | jq -r 'if .force_all then .all_libs[] else .affected[] end')
+          APPS=()
+          for lib in "${CANDIDATES[@]}"; do
+            if [ -f "$lib/tools/build-phar.php" ]; then
+              APPS+=("$lib")
+            fi
+          done
+
+          COUNT=${#APPS[@]}
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No phar-capable app in this change-set — nothing to build."
+            # Empty matrix DIMENSIONS are a hard job-setup error; the
+            # `{include: []}` shape collapses to zero cells cleanly, and the
+            # build job is additionally gated on matrix_count != '0' below
+            # (the ci.yml law for docs-only pushes).
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+            echo "matrix_count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # jq -s is load-bearing: without slurp, `{app: .}` is re-emitted as
+          # one JSON document per input line and the output collapses into
+          # garbage (the harness caught exactly this).
+          MATRIX=$(printf '%s\n' "${APPS[@]}" | jq -R . | jq -cs '{app: .}')
+          echo "phar matrix ($COUNT): $MATRIX" >&2
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "matrix_count=$COUNT" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: detect
+    if: needs.detect.outputs.matrix_count != '0'
+    runs-on: ubuntu-latest
+    strategy:
+      # One app's broken build must not cancel its siblings' publishes.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.3'
+          coverage: none
+          # The full ci.yml extension union, not either app's slimmer
+          # release-pipeline list: this job builds an open-ended fleet of
+          # apps, so every extension any of them may composer-resolve has to
+          # be present. Over-install is cheap on ubuntu-latest; a missing one
+          # is a red matrix cell.
+          extensions: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, pdo_mysql, pdo_pgsql, ssh2, gd, curl, openssl, ffi
+
+      - name: Install production dependencies
+        run: |
+          set -euo pipefail
+          cd "${{ matrix.app }}"
+          # Linked-mode local checkouts can carry a path-repo lock; CI starts
+          # from git, and build-phar REFUSES symlinked sibling vendors as the
+          # second line of defence against frozen sibling WIP.
+          rm -f composer.lock
+          composer install --no-dev --prefer-dist --no-interaction --no-progress
+
+      - name: Build the archive
+        id: build
+        run: |
+          set -euo pipefail
+          app='${{ matrix.app }}'
+          short="$(git rev-parse --short=7 HEAD)"
+          # SOURCE_DATE_EPOCH pins metadata['built_at'] to the commit date
+          # (the same DST-1 discipline as the release pipelines); the
+          # byte-level guarantee still stops at the dev-master window
+          # disclosed in this file's header.
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT HEAD)"
+          php -d phar.readonly=0 "$app/tools/build-phar.php" \
+            --out="dist/$app.phar" \
+            --version="dev-$short"
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+
+      - name: Assert the dev stamp is locatable in the archive metadata
+        # Fail-closed locator gate: the release channel is only trustworthy
+        # if the archive itself says which commit it is. This reads the
+        # manifest metadata — the exact value self-update recovers via
+        # Version::fromPharMetadata — so the assertion is about the artifact,
+        # not about whether the app's CLI happens to print it.
+        run: |
+          set -euo pipefail
+          app='${{ matrix.app }}'
+          want="dev-${{ steps.build.outputs.short }}"
+          php -r '
+            $phar = getenv("PHAR_PATH");
+            $want = getenv("WANT_STAMP");
+            $meta = (new Phar($phar))->getMetadata();
+            $got = is_array($meta) ? ($meta["version"] ?? null) : null;
+            if ($got !== $want) {
+              fwrite(STDERR, "dev stamp mismatch: metadata has " . var_export($got, true) . ", expected " . $want . "\n");
+              exit(1);
+            }
+          '
+        env:
+          PHAR_PATH: ${{ github.workspace }}/dist/${{ matrix.app }}.phar
+          WANT_STAMP: dev-${{ steps.build.outputs.short }}
+
+      - name: Sign the archive (pinned-key mode)
+        # OPTIONAL by design (identical semantics to the release pipelines):
+        # without SUGARCRAFT_SIGNING_KEY the step skips green and the dev
+        # channel ships unsigned. When the owner populates the sugarcraft-wide
+        # secret, every app's phar carries a detached Ed25519 minisig verified
+        # by each app against the public half pinned in its own source.
+        run: |
+          set -euo pipefail
+          app='${{ matrix.app }}'
+          if [ -z "${SUGARCRAFT_SIGNING_KEY:-}" ]; then
+            echo "::notice::SUGARCRAFT_SIGNING_KEY secret not set — shipping unsigned (keyless state)"
+            exit 0
+          fi
+          php -r '
+            $app = getenv("APP");
+            $key = base64_decode(getenv("SUGARCRAFT_SIGNING_KEY"), true);
+            if ($key === false || strlen($key) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
+              fwrite(STDERR, "SUGARCRAFT_SIGNING_KEY must be the base64 of the 64-byte sodium secret key\n");
+              exit(1);
+            }
+            $sig = sodium_crypto_sign_detached(file_get_contents("dist/$app.phar"), $key);
+            file_put_contents("dist/$app.phar.minisig", base64_encode($sig) . "\n");
+          '
+        env:
+          APP: ${{ matrix.app }}
+          SUGARCRAFT_SIGNING_KEY: ${{ secrets.SUGARCRAFT_SIGNING_KEY }}
+
+      - name: Checksum
+        run: |
+          set -euo pipefail
+          app='${{ matrix.app }}'
+          (cd dist && sha256sum "$app.phar" > "$app.phar.sha256")
+          if [ -f "dist/$app.phar.minisig" ]; then
+            (cd dist && sha256sum "$app.phar.minisig" > "$app.phar.minisig.sha256")
+          fi
+          cat "dist/$app.phar.sha256"
+
+      - name: Smoke — the archive runs
+        # Honest, app-agnostic shape: --version must succeed and print
+        # something on a virgin HOME, and --help must render. Which of those
+        # answers carries the dev stamp varies by app (candy-code and
+        # candy-top read their phar metadata back into --version; apps without
+        # that arm print their frozen composer version). The stamp gate
+        # above asserted metadata truth for EVERY app, so this step never
+        # pretends: a missing CLI echo is a ::notice:: naming the gap, not a
+        # pass-by-omission.
+        run: |
+          set -euo pipefail
+          app='${{ matrix.app }}'
+          stamp="dev-${{ steps.build.outputs.short }}"
+          fake_home="$(mktemp -d)"
+          out="$(HOME="$fake_home" php "dist/$app.phar" --version)"
+          test -n "$out"
+          echo "--version says: $out"
+          if printf '%s' "$out" | grep -qF "$stamp"; then
+            echo "CLI echoes the dev stamp"
+          else
+            echo "::notice::$app --version does not surface the phar metadata stamp (archive metadata still carries $stamp)"
+          fi
+          HOME="$fake_home" php "dist/$app.phar" --help >/dev/null
+
+      - name: Publish rolling dev release
+        # CRITICAL: --target with the explicit commit SHA on BOTH branches.
+        # A GITHUB_TOKEN-created release defaults target_commitish to the
+        # default BRANCH NAME; the self-update dev gates (PHA/PHB) fail
+        # closed on exactly that shape, and gh release create after a
+        # force-moved tag can otherwise keep a stale target from the old
+        # release object — hence `gh release edit --target` on the
+        # already-exists path too, never skipped.
+        run: |
+          set -euo pipefail
+          app='${{ matrix.app }}'
+          stamp="dev-${{ steps.build.outputs.short }}"
+          git tag -f "$app/dev" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$app/dev"
+          assets=("dist/$app.phar" "dist/$app.phar.sha256")
+          if [ -f "dist/$app.phar.minisig" ]; then
+            assets+=("dist/$app.phar.minisig" "dist/$app.phar.minisig.sha256")
+            signed="Signed with the sugarcraft-wide key (verify: sha256sum -c $app.phar.minisig.sha256; signature: sodium detached, public half pinned in source)."
+          else
+            signed="Unsigned in this build (no SUGARCRAFT_SIGNING_KEY on the runner at build time)."
+          fi
+          notes="Rolling development PHAR for $app at ${stamp}. Rebuilt by .github/workflows/phar-dev.yml whenever a change touches the app (master push, or workflow_dispatch with 'all'). This archive carries the locatable stamp dev-${GITHUB_SHA::7} in its manifest metadata. ${signed} Not a stable channel — the bytes move with every master merge."
+          if gh release view "$app/dev" >/dev/null 2>&1; then
+            gh release upload "$app/dev" "${assets[@]}" --clobber
+            gh release edit "$app/dev" --target "$GITHUB_SHA" --title "$app dev ${stamp#dev-}" --notes "$(printf '%b' "$notes")"
+          else
+            gh release create "$app/dev" "${assets[@]}" \
+              --prerelease \
+              --target "$GITHUB_SHA" \
+              --title "$app dev ${stamp#dev-}" \
+              --notes "$(printf '%b' "$notes")"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_SHA: ${{ github.sha }}
