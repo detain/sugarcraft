@@ -218,7 +218,7 @@ Up to six gpu boxes can be shown at once (btop #1730), one per accelerator: `gpu
 
 While a menu is open, the frame behind it is dimmed to `inactive_fg`. With `background_update = false`, and always in TTY mode, that dimmed frame is also frozen. Menus re-centre when the terminal is resized. The main, help, options and signal-chooser menus need at least 80x24, and the other menus need 50x20. On a smaller terminal a size-error box is shown instead.
 
-- **Main menu** (`Esc`, `m`, or the `m` menu button in the cpu border). Shows the logo (by default a random ANSI-art piece; see [Logo](#logo)) over the legacy banner artwork, then three block-letter entries: Options, Help and Quit. Use the arrows, Tab or `j`/`k` to move and Enter or Space to open. Options and Help open on top of the main menu, which comes back when they close.
+- **Main menu** (`Esc`, `m`, or the `m` menu button in the cpu border). Shows the logo (by default a random ANSI-art piece; see [Logo](#logo)) in place of the legacy banner artwork, then three block-letter entries: Options, Help and Quit. Use the arrows, Tab or `j`/`k` to move and Enter or Space to open. Options and Help open on top of the main menu, which comes back when they close.
 - **Options menu** (`F2`, `o`). A box up to 92 columns wide (`min(92, terminal width - 2)`, so 78 cells on an 80-column terminal) with tabs 0 general, 1 cpu, 2 mem, 3 net, 4 proc and 5 gpu (btop #1411). The gpu tab appears only once a GPU has answered. Options are grouped under non-selectable headings (btop #1791b), and the selected option's description is shown on the right.
   - Up and down move between options, skipping headings. Page Up and Page Down flip pages.
   - Tab and Shift+Tab change tabs, and a digit picks a tab directly.
@@ -235,7 +235,7 @@ While a menu is open, the frame behind it is dimmed to `inactive_fg`. With `back
 
 The main, options and help menus replace the plain banner with an ANSI-art logo drawn centred above the entries. The corpus ships inside the package (`logo/*.ansi`, animated pieces included) and carries depth variants, so the same slug renders within the terminal's real colour depth (`tty_mode`, `truecolor`) instead of smuggling truecolor bytes into a 16-colour or TTY terminal. The environment picks the artwork:
 
-- `CANDY_TOP_LOGO` unset (the default) — a random logo, re-rolled every time a menu opens. This is why the logo changes between `Esc` presses.
+- `CANDY_TOP_LOGO` unset (the default) or `=random` — a random logo, re-rolled every time a menu opens. This is why the logo changes between `Esc` presses.
 - `CANDY_TOP_LOGO=off` — no logo; the menus paint the legacy banner (the byte-identical fallback the goldens pin).
 - `CANDY_TOP_LOGO=<slug>` — that piece, every open, memoised per depth.
 - `CANDY_TOP_LOGO_SEED=<int>` — reseeds the draw once per process: the seed fixes the *sequence* of per-open draws (a deterministic replay for demos and screenshots), not one pinned logo.
@@ -662,7 +662,7 @@ These are deliberate deviations and gaps. Each phase's full notes are in `CALIBE
 - No CPU package watts (`show_cpu_watts` has no RAPL reader).
 - No ZFS pool IO.
 - No MAC-address fallback for an interface without an IP.
-- Accepted but not acted on: `terminal_sync` (candy-top does not emit synchronized-output sequences — the crash-reset path switches DEC mode 2026 off defensively, which is harmless when it was never on), `log_level` (no log file), `disk_free_priv` (free space is always the unprivileged figure), `keep_dead_proc_usage`, `proc_info_smaps`, and the PCIe keys `nvml_measure_pcie_speeds` and `rsmi_measure_pcie_speeds`. The options menu marks these keys "not used yet".
+- Accepted but not acted on: `terminal_sync` (the key never gates anything — synchronized output comes from the foundation renderer, which wraps every frame in DEC 2026 begin/end markers always-on; toggling the key changes nothing), `log_level` (no log file), `disk_free_priv` (free space is always the unprivileged figure), `keep_dead_proc_usage`, `proc_info_smaps`, and the PCIe keys `nvml_measure_pcie_speeds` and `rsmi_measure_pcie_speeds`. The options menu marks these keys "not used yet".
 - `freq_mode`, `cpu_sensor` and `zfs_arc_cached` take effect after a restart; the menu says so.
 
 **Behaves differently**
