@@ -10,9 +10,13 @@ use SugarCraft\Core\Util\Sanitize;
  * Shared sentinel constants for zone markup.
  *
  * Both Mark (encoder) and Scan (decoder) must agree on these values.
- * U+E000 / U+E001 are in the Unicode Private Use Area and guaranteed
- * not to appear in ANSI escape sequences (CSI starts ESC [, OSC starts
- * ESC]) or regular text.
+ * U+E000 / U+E001 are in the Unicode Private Use Area and cannot
+ * appear in ANSI escape sequences (CSI starts ESC [, OSC starts
+ * ESC]). They are NOT reserved from all text, though: pasted foreign
+ * frames and Nerd Font / powerline glyph runs legitimately carry
+ * private-use codepoints — which is why the lone-sentinel rule in
+ * {@see Scan} and the consumer sweep below exist, not a collision
+ * guarantee.
  *
  * The values are anchored to {@see Sanitize::ZONE_SENTINEL_OPEN} /
  * {@see Sanitize::ZONE_SENTINEL_CLOSE} — sugar-core owns the codepoint

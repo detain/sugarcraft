@@ -24,8 +24,8 @@ namespace SugarCraft\Mouse;
  *
  * Either way the RELEASE call must carry its own fresh re-resolution of the
  * release coordinate against the CURRENT frame: the click fires only when
- * that fresh zone agrees with the press zone on id AND box (the X1
- * agreement gate).  A re-render between press and release that moved the
+ * that fresh zone agrees with the press zone on id AND box (the
+ * release-agreement gate).  A re-render between press and release that moved the
  * zone or slid another control under the cursor drops the pending press —
  * a lost click beats firing the wrong control (permission-grant zones are
  * dispatched by positional ids and reflow across frames).
@@ -51,7 +51,7 @@ final class ZoneClickTracker
      *                                a FRESH re-resolution against the
      *                                current frame — the click fires only if
      *                                it agrees with the stored press zone
-     *                                (X1 agreement gate, see class docs).
+     *                                (release-agreement gate, see class docs).
      *                                Pass null on Press to use the legacy
      *                                two-call pattern.
      *
@@ -99,7 +99,7 @@ final class ZoneClickTracker
                 return null;
             }
 
-            // X1 agreement gate: the stored press box alone is not enough.
+            // Release-agreement gate: the stored press box alone is not enough.
             // A re-render between Press and Release can slide a different
             // control (or nothing) under these coordinates while the press
             // box still contains them, and dispatch acts on the LIVE model —
@@ -124,7 +124,7 @@ final class ZoneClickTracker
      * Inject the zone that was hit at the time of the press event.
      * Call this immediately after track(Press) when you have the zone.
      * The Release call must still carry the fresh re-hit zone for the
-     * X1 agreement gate — setPressZone() only stores the press half.
+     * Release-agreement gate — setPressZone() only stores the press half.
      */
     public function setPressZone(Zone $zone, int $button): void
     {

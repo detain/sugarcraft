@@ -1,16 +1,27 @@
 # SugarMouse
 
-> Formerly published as `sugarcraft/candy-mouse` (renamed 2026-10). <!-- @rename-keep -->
+> Formerly published as `sugarcraft/candy-mouse` (renamed 2026-10); the former
+> `candy-zone` package was absorbed into this one (2026-10). <!-- @rename-keep -->
 
-Self-contained Mark/Scan/Get mouse hit-testing plus `ZoneClickTracker` for press/release deduplication. No external Manager wiring needed.
+[![codecov](https://codecov.io/gh/sugarcraft/sugar-mouse/branch/master/graph/badge.svg?flag=sugar-mouse)](https://codecov.io/gh/sugarcraft/sugar-mouse)
+
+Mouse zones for terminal apps — wrap rendered chunks with invisible zone
+markers, scan the frame to discover each zone's bounding box, then ask which
+zone a mouse event landed in. One package, two layers:
+
+- **Primitive layer (`SugarCraft\Mouse`)** — self-contained Mark/Scan/Get
+  hit-testing, `Scanner`, `ZoneClickTracker` press/release dedup, and the
+  `Selection` / `SelectionRange` text-selection machine. No Manager wiring
+  needed; each consumer owns its own `Scanner` instance.
+- **Zones façade (`SugarCraft\Mouse\Zones`)** — the app-facing bubblezone
+  surface: a `Manager` that owns a zone registry, the package-level `Zones`
+  facade, and the hover / drag / multi-click trackers. The façade delegates
+  marker encoding and geometry to the primitive layer **in this same
+  package** — the wire format lives in exactly one place.
 
 ```
-composer require sugarcraft/sugar-mouse: dev-master
+composer require sugarcraft/sugar-mouse
 ```
-
-## Role
-
-Replaces the model where consumers wire `sugar-mouse`'s `Manager` externally. Each consumer owns its own `Scanner` instance — click handling stays local, no shared global state.
 
 ## Quickstart
 
@@ -34,11 +45,12 @@ $scanner = Scanner::new()->scan($rendered);
 // 3. Reverse-lookup on mouse events ('  OK  ' spans cols 1-6 on row 1).
 $zone = $scanner->hit(4, 1); // Zone 'btn-ok'
 
-// 4. A click emits only when the release lands on the pressed zone,
-//    so track the full Press+Release pair.
+// 4. A click fires only when the release's fresh re-hit agrees with the
+//    press zone on id AND box — resolve each event against the frame it
+//    arrived in; never reuse the press-side zone for the release.
 $tracker = new ZoneClickTracker();
-$tracker->track(MouseEvent::press(4, 1), $zone);
-$click = $tracker->track(MouseEvent::release(4, 1), $zone);
+$tracker->track(MouseEvent::press(4, 1), $scanner->hit(4, 1));
+$click = $tracker->track(MouseEvent::release(4, 1), $scanner->hit(4, 1));
 if ($click !== null) {
     echo "Clicked zone: " . $click->zone->id . "\n"; // btn-ok
 }
@@ -66,9 +78,51 @@ end. What it keeps locally is what this lib leaves to the app — a
 drift-latched dragging flag, the release/copy record, and the highlight
 repaint.
 
-## Sentinel design
+The `Zones` layer (`Manager`, `Zones`, `Zone` adapter, `ZoneHoverTracker`,
+`DragTracker`, `ClickCounter`) is documented in its own section below.
 
-Sentinels use private-use codepoints U+E000 (open) and U+E001 (close) — they never collide with ANSI SGR sequences or regular text, and terminal emulators render them invisibly. Scanning *reads* them from the rendered string to compute zone bounding boxes; it does not modify the string. Stripping the sentinels from the bytes actually written to the terminal is the consumer's job (e.g. candy-code's renderer scans, then strips).
+## Sentinel design and trust boundary
+
+Zone markers are two three-byte Unicode **private-use** codepoints:
+U+E000 (open) and U+E001 (close), anchored to sugar-core's
+`Sanitize::ZONE_SENTINEL_OPEN` / `::ZONE_SENTINEL_CLOSE` so a sanitizer sweep
+and the markup it defends against can never drift apart.
+
+**What they defend against.** ANSI escape sequences and ordinary ASCII UI
+text can never carry these bytes, so normal rendering cannot fabricate a
+zone boundary. But the PUA is not empty space: pasted foreign frames,
+image-overlay payloads and Nerd Font / powerline glyph runs all live in the
+private-use area. Content that already contains `U+E000 <id> U+E001` is
+structurally indistinguishable from a marker this lib emitted — the sentinels
+*delimit* our markup, they authenticate nothing.
+
+**The defenses in this lib:**
+
+- **Id charset.** `Mark::isValidId()` accepts only
+  `\A[A-Za-z0-9._:-]+\z`, matched byte-wise (no `/u`) and anchored with
+  `\A…\z`, not `^…$` (a trailing newline slips past `$`). An id can never
+  smuggle a sentinel, control, escape or non-ASCII byte into the stream.
+- **The lone-sentinel rule.** A `U+E000` that does not begin a valid tag
+  costs exactly its own three bytes when scanning; everything after it is
+  measured as visible text. Foreign PUA bytes can never swallow a span of
+  the frame and shift the zones to its right or below it.
+- **Bounded work.** `Mark::MAX_ID_BYTES` is checked before any substring
+  is materialised, so an attacker-sized span between a stray `U+E000` and a
+  distant `U+E001` is rejected in O(1).
+
+**The consumer's duty.** Anything pasted or otherwise untrusted must be
+swept *before* it is composed into a marked frame, via sugar-core's
+`Sanitize::stripZoneSentinels()` / `Sanitize::untrustedForMarkedFrames()`
+(candy-code's renderer does exactly this on its input path). Any other host
+of marked frames owns the same responsibility — see
+[`docs/TRUST-BOUNDARY.md`](../docs/TRUST-BOUNDARY.md). The reservation is fleet-wide: image-overlay markers were moved to
+U+E002+ precisely so they can never collide with this arena by construction.
+
+Scanning *reads* the sentinels from the rendered string to compute zone
+bounding boxes; it never modifies the string. Stripping the sentinels from
+the bytes actually written to the terminal is the consumer's job (e.g.
+candy-code's renderer scans, then strips; `Manager::scan()` returns the
+stripped, display-ready frame).
 
 ## Scan rules
 
@@ -103,34 +157,47 @@ row 2; and opened at column 1 a box that also spans the unpainted row 1.
 
 A zone spanning multiple rows (e.g. `"line1\nline2"`) is stored as the **smallest axis-aligned bounding box** that contains all marked cells.  The `inBounds()` check uses this rectangle, so an interior cell that was never part of the original content may still report as inside the zone.  Callers wrapping reflowed or indented text should be aware that the hit-test is approximate for multi-line content.
 
-## See also
+## Mouse-tracking modes
 
-[sugar-mouse](../sugar-mouse) is the app-facing façade (`Manager`, hover /
-drag / multi-click trackers, package-level `Zones`) layered over this
-low-level Mark/Scan/Zone primitive. It delegates its marker wrapping and
-bounding-box scanning to `SugarCraft\Mouse` — reach for sugar-mouse when you
-want the Manager-based zone workflow, and for sugar-mouse directly when you
-just need self-contained hit-testing.
+This lib is a text-processing component: it never writes to the TTY itself.
+The terminal must be told to report mouse events before any tracker can see
+one, and the trackers need different reporting:
 
-## Coverage
+| Mode | Reports | Needed by |
+|---|---|---|
+| `1000` | press / release / wheel | `ZoneClickTracker`, `ClickCounter` (clean press+release pairs, clicks) |
+| `1002` | 1000 + drag (button held, crossing a cell) | `DragTracker` boundary crossings while pressed |
+| `1003` | all motion, button held or not | `ZoneHoverTracker` (enter/exit with no press at all) |
+| `1006` | SGR extended coordinates (`CSI <x;yM/m`) | any of the above beyond row/col 222, where legacy X10 encoding saturates |
 
-[![codecov](https://codecov.io/gh/sugarcraft/sugar-mouse/branch/master/graph/badge.svg?flag=sugar-mouse)](https://codecov.io/gh/sugarcraft/sugar-mouse)
+`Manager::setMotionTracking(bool)` returns the `CSI ?1003 h/l` byte string
+for the all-motion case — write it to the terminal yourself. The other modes
+are the host app's enable sequence (its input layer — e.g. sugar-input —
+turns the reports into `MouseMsg` / `MouseEvent` values). Consequence: the
+hover tracker emits nothing unless motion is reported (`1003`), and the drag
+tracker's cross-boundary moves need at least `1002`; click trackers work on
+plain `1000` reporting alone.
 
-## Zones (bubblezone)
+## Zones façade (`SugarCraft\Mouse\Zones`)
 
-sugar-mouse — a mouse-zone tracker for TUI apps, for PHP 8.3+.
-Wrap rendered chunks with named markers,
-let SugarMouse discover their bounding boxes, then ask zones whether a
-{@see \SugarCraft\Core\Msg\MouseMsg} fell inside them.
+Wrap rendered chunks with named markers, let the `Manager` discover their
+bounding boxes, then ask zones whether a
+{@see \SugarCraft\Core\Msg\MouseMsg} fell inside them. The `Zones` layer is
+the app-facing surface; the marker scheme and its parser live once in the
+primitive `Mark` / `Scan` classes of this same package and are reused by
+every SugarCraft zone consumer. `mark()` encodes through
+`SugarCraft\Mouse\Mark::zone()` (which validates via `wrap()`), and `scan()`
+takes its bounding boxes from `SugarCraft\Mouse\Scan::parse()`, then strips
+the markers so the returned frame is display-ready.
+
 ```php
 use SugarCraft\Mouse\Zones\Manager;
-use SugarCraft\Style\Style;
 
 $z = Manager::newGlobal();
 
 // Build a frame
-$btnOk     = $z->mark('btn:ok',     Style::new()->padding(0, 2)->render('OK'));
-$btnCancel = $z->mark('btn:cancel', Style::new()->padding(0, 2)->render('Cancel'));
+$btnOk     = $z->mark('btn:ok',     '  OK  ');
+$btnCancel = $z->mark('btn:cancel', 'Cancel');
 $frame     = $btnOk . '   ' . $btnCancel;
 
 // Scan once before printing — Manager records marker positions and strips them.
@@ -143,16 +210,10 @@ if ($z->get('btn:ok')?->inBounds($mouseMsg)) {
 }
 ```
 
-SugarMouse is a thin app-facing façade over
-[sugar-mouse](../sugar-mouse), the shared low-level hit-test primitive —
-the marker scheme and its parser live there once and are reused by every
-SugarCraft zone consumer. `mark()` delegates to
-`SugarCraft\Mouse\Mark::wrap()` and `scan()` delegates its bounding-box
-computation to `SugarCraft\Mouse\Scan::parse()`, then strips the markers
-so the returned frame is display-ready.
-
 Markers are invisible **private-use-area sentinels** (not visible text or
-ANSI, so they don't affect layout):
+ANSI, so they don't affect layout — see
+[Sentinel design and trust boundary](#sentinel-design-and-trust-boundary)
+for the full threat model):
 
 ```
 open:  U+E000 <id> U+E001
@@ -163,9 +224,9 @@ close: U+E000 /<id> U+E001
 cells, accounting for ANSI styling and Unicode (CJK) width.
 
 **Id format:** the marked id — including any manager prefix, i.e.
-`prefix() . $id` — must match `^[A-Za-z0-9._:-]+$` (ASCII letters, digits,
-and `._:-`). sugar-mouse validates this in `Mark::wrap()` and `mark()`
-throws `\InvalidArgumentException` on a bad id, since an id carrying a
+`prefix() . $id` — must match `\A[A-Za-z0-9._:-]+\z` (ASCII letters, digits,
+and `._:-`, byte-wise). The primitive validates this in `Mark::wrap()` and
+`mark()` throws `\InvalidArgumentException` on a bad id, since an id carrying a
 sentinel / control / whitespace byte would desync zone scanning. The real
 consumer ids (`tab-N`, `cell:N`, `item:N`) and the auto-generated prefixes
 (`1-`, `2-`, …) already comply.
@@ -177,9 +238,9 @@ Beyond `mark()` / `scan()` / `get()`:
 - `setEnabled(bool)` / `isEnabled()` — flip marker emission off in
   non-interactive contexts (CI logs, file dumps). When off, `mark()`
   returns content verbatim and `scan()` is identity.
-- `Manager::newPrefix(?string)` — namespace every id with a prefix so
-  two SugarMouse-aware components don't collide on `'item-0'`. Auto-
-  generates a monotonic prefix when called bare.
+- `Manager::newPrefix(string $prefix = '')` — namespace every id with a
+  prefix so two SugarMouse-aware components don't collide on `'item-0'`.
+  Auto-generates a monotonic prefix when called bare.
 - `prefix()` — read-only accessor for the prefix string.
 - `get($id)` / `all()` / `clear(?$id)` — single-zone lookup, every
   zone, and targeted-or-wipe-all clear.
@@ -214,7 +275,10 @@ manager.
 `ZoneHoverTracker` wraps a `Manager` and tracks which zone the cursor
 is in across `MouseMsg` events. It emits `ZoneEnterMsg` when the cursor
 crosses into a zone and `ZoneExitMsg` when it leaves — ideal for
-tooltips, highlights, or data-fetch-on-hover:
+tooltips, highlights, or data-fetch-on-hover. The terminal must be
+reporting motion (mode `1003`, see
+[Mouse-tracking modes](#mouse-tracking-modes)) for this tracker to
+see anything at all:
 
 ```php
 use SugarCraft\Mouse\Zones\Manager;
@@ -250,7 +314,10 @@ the enter.
 `DragTracker` wraps a `Manager` and tracks press → move → release
 drag sequences within and across zones. It emits a `ZoneDragStartMsg` on
 button-down inside a zone, `ZoneDragMoveMsg` when the cursor crosses a
-zone boundary while dragging, and `ZoneDragEndMsg` on button release:
+zone boundary while dragging, and `ZoneDragEndMsg` on button release.
+Cross-boundary moves only arrive when the terminal reports drag or all
+motion (mode `1002` / `1003`, see
+[Mouse-tracking modes](#mouse-tracking-modes)):
 
 ```php
 use SugarCraft\Mouse\Zones\Manager;
@@ -294,7 +361,9 @@ the transition before routing the next enter.
 streaks inside zones. It emits `DoubleClickMsg` on the second press
 and `TripleClickMsg` on the third press — all within a configurable
 click interval (default 500 ms). The streak resets when the interval
-expires or when the cursor moves to a different zone:
+expires or when the cursor moves to a different zone. Presses arrive
+with plain mode-`1000` reporting (see
+[Mouse-tracking modes](#mouse-tracking-modes)):
 
 ```php
 use SugarCraft\Mouse\Zones\Manager;
@@ -335,8 +404,9 @@ text-processing component that produces the raw CSI sequence.
   shadow each other's ids.
 - Run `scan()` once on the **full root frame**, not per sub-tree —
   nested zone bounds depend on the outer layout.
-- `lipgloss.Width()` (SugarStyle) and SugarMouse interact cleanly:
-  `scan()` strips markers before measurement.
+- `Manager::scan()` strips the markers from its return value, so
+  measuring what you print (sugar-core's `Width::string()`) sees
+  only visible cells.
 - `Zone::isZero()` distinguishes "never rendered" from "rendered but
   empty bounding box".
 - Organic shapes (ASCII art) report a rectangular bounding box —
@@ -344,7 +414,7 @@ text-processing component that produces the raw CSI sequence.
 - `scan()` is synchronous (no background worker), so
   `close()` is purely a state reset / disable rather than a thread
   join.
-- `scan()` strips exactly the tags sugar-mouse's `Scan::parse()` decodes:
+- `scan()` strips exactly the tags the primitive `Scan::parse()` decodes:
   `U+E000 [/] <id> U+E001` where `<id>` passes `Mark::isValidId()` (or is
   empty) is removed whole. Any other sentinel — an open `U+E000` with no
   closing `U+E001`, one whose would-be id holds a space/newline/CR/escape/
@@ -359,30 +429,38 @@ text-processing component that produces the raw CSI sequence.
 | Class | Method | Description |
 |---|---|---|
 | `Manager` | `newGlobal()` | Create global manager |
-| `Manager` | `newPrefix(?prefix)` | Create prefixed manager for isolation |
+| `Manager` | `newPrefix(prefix)` | Create prefixed manager for isolation |
 | `Manager` | `mark(name, rendered)` | Wrap output with zone marker |
 | `Manager` | `scan(output)` | Record positions, strip markers |
 | `Manager` | `anyInBounds(mouseMsg)` | Return the innermost zone under the mouse |
 | `Manager` | `get(name)` | Get zone by name |
 | `Manager` | `setMotionTracking(bool)` | Return CSI 1003 h/l escape sequence |
 | `Zone` | `inBounds(mouseMsg)` | Test if mouse is inside zone |
-| `ZoneHoverTracker` | `new(manager)` | Track hover state over a manager |
+| `ZoneHoverTracker` | `__construct(manager)` | Track hover state over a manager |
 | `ZoneHoverTracker` | `update(mouseMsg)` | Process mouse event, return enter/exit msg |
 | `ZoneHoverTracker` | `currentZone()` | Get the hovered Zone or null |
 | `ZoneEnterMsg` | `zone` | Zone the cursor just entered |
 | `ZoneExitMsg` | `zone` | Zone the cursor just left |
-| `DragTracker` | `new(manager)` | Track drag sequences over a manager |
+| `DragTracker` | `__construct(manager)` | Track drag sequences over a manager |
 | `DragTracker` | `update(mouseMsg)` | Process mouse event, return drag msg |
 | `DragTracker` | `originZone()` | Get the origin Zone or null |
 | `DragTracker` | `currentZone()` | Get the current Zone or null |
 | `ZoneDragStartMsg` | `originZone / currentZone` | Zone where drag started; zone at current cursor |
 | `ZoneDragMoveMsg` | `originZone / currentZone` | Fixed origin zone; zone cursor just crossed into |
 | `ZoneDragEndMsg` | `originZone / currentZone` | Zone drag started from; zone at release |
-| `ClickCounter` | `new(manager, clickIntervalMs)` | Track double/triple click streaks |
+| `ClickCounter` | `__construct(manager, clickIntervalMs)` | Track double/triple click streaks |
 | `ClickCounter` | `update(mouseMsg)` | Process press event, return double/triple msg |
 | `ClickCounter` | `clickCount()` | Current streak count (0 = no streak) |
 | `DoubleClickMsg` | `zone` | Zone of the second press |
 | `TripleClickMsg` | `zone` | Zone of the third press |
+
+## Where this fits
+
+The whole stack consumes this package through one of its two layers:
+sugar-widgets and sugar-gallery drive the `Zones` façade; candy-code's TUI
+runs the primitive `Selection` / `SelectionRange` machine for its
+mouse text-selection, and its renderer owns the sentinel sweep described
+above.
 
 ## Credits & inspiration
 

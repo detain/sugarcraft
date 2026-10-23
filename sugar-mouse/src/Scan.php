@@ -25,8 +25,9 @@ use SugarCraft\Core\Util\Width;
  * terminal. Every byte of a tag is zero-width. A tag with an EMPTY id
  * (`U+E000 U+E001`, `U+E000 / U+E001`) is also consumed as zero-width markup
  * but never opens or closes a zone — Mark cannot emit one, so it is foreign
- * PUA (an image-marker pair, a Nerd Font glyph run) that happens to look like
- * a tag.
+ * PUA that happens to look like a tag (a Nerd Font / powerline glyph run, or
+ * forged markup). Image-overlay markers cannot form such a pair: sugar-core
+ * moved them to U+E002+, disjoint from this arena by construction.
  *
  * A sentinel that does NOT begin a valid tag — a bare U+E000 whose would-be
  * id contains a space, an escape, a newline, a non-ASCII byte or more than

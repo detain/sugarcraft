@@ -11,11 +11,11 @@ use SugarCraft\Core\Util\Width;
  * A normalised, inclusive range of cells a mouse text selection covers over a
  * painted frame — the frozen product of a {@see Selection} gesture.
  *
- * Ported upstream from candy-code's `Tui\TextSelection` (scout item S12,
- * docs/plans upstream-port campaign): with SGR mouse tracking on, the terminal
+ * Ported upstream from candy-code's `Tui\TextSelection`: with SGR mouse
+ * tracking on, the terminal
  * runs NO copy-on-select of its own, so every mouse-tracking app that wants
  * the drag gesture terminal users expect has to own it — the way tmux
- * copy-mode, crush and opencode each do. This class is that gesture's
+ * copy-mode, Candy Code and OpenCode each do. This class is that gesture's
  * geometry and nothing else: no model, no clipboard, no painting.
  *
  * STREAM, NOT BLOCK. The first row runs from the start cell to the text

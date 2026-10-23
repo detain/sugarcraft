@@ -14,14 +14,14 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Style\Border;
-use SugarCraft\Style\Style;
 use SugarCraft\Mouse\Zones\Manager;
 
 $mgr = Manager::newGlobal();
 
-$ok     = $mgr->mark('btn:ok',     Style::new()->padding(0, 2)->border(Border::rounded())->render('  OK  '));
-$cancel = $mgr->mark('btn:cancel', Style::new()->padding(0, 2)->border(Border::rounded())->render('Cancel'));
+// Plain padded content — styling (e.g. sugar-style borders) would ride the
+// string unchanged; zones measure visible cells only.
+$ok     = $mgr->mark('btn:ok',     '  OK  ');
+$cancel = $mgr->mark('btn:cancel', ' Cancel ');
 
 $frame = $ok . "  " . $cancel;
 echo $mgr->scan($frame) . "\n\n";

@@ -16,17 +16,23 @@ use SugarCraft\Mouse\Sentinel;
  * a logical "zone"; {@see scan()} later finds those markers, records each
  * zone's bounding box in terminal cells, and returns the cleaned-up frame.
  *
- * Marker + bounding-box computation are delegated to sugar-mouse, the shared
- * hit-test primitive (single source of truth for the wire format across the
- * SugarCraft tree). Markers are the private-use-area sentinel triples emitted
- * by {@see \SugarCraft\Mouse\Mark::wrap()}:
+ * Marker + bounding-box computation are delegated to this package's
+ * primitive layer — {@see \SugarCraft\Mouse\Mark} and
+ * {@see \SugarCraft\Mouse\Scan} (single source of truth for the wire format
+ * across the SugarCraft tree). Markers are the private-use-area sentinel
+ * triples emitted by {@see \SugarCraft\Mouse\Mark::zone()} (encoding in
+ * {@see \SugarCraft\Mouse\Mark::wrap()}):
  *
  *   open:  U+E000 <id> U+E001
  *   close: U+E000 /<id> U+E001
  *
- * U+E000 / U+E001 are invisible and never collide with visible text or ANSI
- * escape sequences, so they don't affect layout. Ids must match sugar-mouse's
- * charset `^[A-Za-z0-9._:-]+$` (letters, digits, and `._:-`) — an id carrying
+ * The sentinels cannot appear in ANSI escape sequences or ASCII text, but
+ * they do live in the private-use area shared with pasted foreign glyphs —
+ * the id charset below and the lone-sentinel rule in {@see \SugarCraft\Mouse\Scan}
+ * are what keep foreign PUA bytes from forging a zone; sweeping untrusted
+ * content is the consumer's duty (see {@see \SugarCraft\Mouse\Sentinel}).
+ * Ids must match the primitive's charset `\A[A-Za-z0-9._:-]+\z` (letters,
+ * digits, and `._:-`) — an id carrying
  * a sentinel/control/whitespace byte would desync scanning and is rejected by
  * {@see mark()} with an \InvalidArgumentException. The combined
  * `prefix() . $id` is what gets validated.
@@ -58,7 +64,7 @@ final class Manager
      * Mirrors bubblezone's `NewPrefix`. Pass an explicit `$prefix` to
      * fix the namespace; omit (or pass empty) to auto-generate one
      * from a monotonic counter. The generated prefix uses the
-     * sugar-mouse-safe charset (`<n>-`), so `prefix() . $id` stays valid.
+     * primitive's charset (`<n>-`), so `prefix() . $id` stays valid.
      */
     public static function newPrefix(string $prefix = ''): self
     {
@@ -117,13 +123,14 @@ final class Manager
     /**
      * Wrap $content with start/end markers for `prefix() . $id`.
      *
-     * Delegates the marker encoding to {@see \SugarCraft\Mouse\Mark::wrap()}
+     * Delegates the marker encoding to {@see \SugarCraft\Mouse\Mark::zone()}
+     * (which validates through {@see \SugarCraft\Mouse\Mark::wrap()})
      * so the wire format lives in exactly one place. No-op (returns
      * $content verbatim) when the manager is disabled.
      *
      * @throws \InvalidArgumentException When `prefix() . $id` contains a byte
-     *         outside sugar-mouse's `^[A-Za-z0-9._:-]+$` charset (validated by
-     *         Mark::wrap). sugar-mouse's own prefixes and real consumer ids
+     *         outside the primitive's `\A[A-Za-z0-9._:-]+\z` charset (validated by
+     *         Mark::wrap). This package's own prefixes and real consumer ids
      *         (`tab-N`, `cell:N`, `item:N`) already comply.
      */
     public function mark(string $id, string $content): string
@@ -153,7 +160,7 @@ final class Manager
             return $rendered;
         }
 
-        // sugar-mouse is the single source of truth for parsing + bounds.
+        // The primitive layer (Scan) is the single source of truth for parsing + bounds.
         foreach ((new Scan())->parse($rendered) as $id => $mouseZone) {
             $this->zones[$id] = Zone::fromMouseZone($mouseZone);
         }
@@ -253,11 +260,11 @@ final class Manager
     }
 
     /**
-     * Remove sugar-mouse's PUA sentinel tags from a rendered frame, leaving
+     * Remove this package's PUA sentinel tags from a rendered frame, leaving
      * the visible content byte-for-byte intact.
      *
      * Applies exactly the tag rule {@see \SugarCraft\Mouse\Scan::parse()}
-     * decodes (sugar-mouse commit 15a7f0c9f), so the cleaned display string
+     * decodes (commit 15a7f0c9f), so the cleaned display string
      * and the scanned bounds stay in lock-step:
      *
      * - A *tag* is `U+E000 [/] <id> U+E001`, where `<id>` runs to the FIRST
@@ -335,7 +342,7 @@ final class Manager
      * Whether the id field [$idStart, $idEnd) makes the preceding U+E000 a
      * tag: empty (inert foreign markup, consumed whole) or a valid zone id.
      *
-     * Mirrors sugar-mouse `Scan::tagId()` (private there) through the public
+     * Mirrors the primitive's `Scan::tagId()` (private there) through the public
      * {@see Mark::isValidId()} predicate. The length is checked before any
      * substr so an attacker-sized span between a stray U+E000 and a distant
      * U+E001 costs O(1) to reject.

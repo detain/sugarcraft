@@ -8,11 +8,11 @@ namespace SugarCraft\Mouse;
  * The press → drag → release state machine of a mouse text-selection
  * gesture, clamped to a selectable region of the painted frame.
  *
- * Ported upstream from candy-code's `Tui\TextSelection` (scout item S12).
+ * Ported upstream from candy-code's `Tui\TextSelection`.
  * With SGR mouse tracking on, the terminal hands every press/drag/release to
  * the application instead of running its own copy-on-select, so an app that
  * wants the gesture every terminal user expects has to own it — the way tmux
- * copy-mode, crush and opencode do. candy-code grew this as an immutable
+ * copy-mode, Candy Code and OpenCode do. candy-code grew this as an immutable
  * value object rebuilt per event (its `Tui\TextSelection` is now an immutable
  * adapter that clones this machine per step); upstreamed, it is one small mutable
  * machine — the same deliberate exception to the fluent convention

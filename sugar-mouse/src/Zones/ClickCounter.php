@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mouse\Zones;
 
-use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Zones\Msg\DoubleClickMsg;
@@ -25,17 +24,16 @@ use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
  *
  * Mirrors bubblezone's `NewZoneClickTracker`.
  *
- * dedup overlap with Mouse\ZoneClickTracker deferred: sugar-mouse's
- * ZoneClickTracker does Press+Release single-click dedup, NOT the
+ * dedup overlap with {@see \SugarCraft\Mouse\ZoneClickTracker} deferred: the
+ * primitive's ZoneClickTracker does Press+Release single-click dedup, NOT the
  * interval-based double/triple streak counting this class implements.
  * Routing this counter's single-click detection through it would change
  * the emitted DoubleClickMsg/TripleClickMsg timing, so the delegation is
- * intentionally not done. This class hit-tests via the (sugar-mouse-backed)
- * {@see Manager}, so its geometry already flows through the SSOT.
+ * intentionally not done. This class hit-tests via {@see Manager}, whose
+ * geometry already flows through the primitive SSOT.
  */
 final class ClickCounter
 {
-    use Mutable;
     /** How many consecutive clicks have occurred in the current streak. */
     private int $clickCount = 0;
 

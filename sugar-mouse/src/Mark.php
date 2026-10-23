@@ -96,8 +96,11 @@ final class Mark
      * When this instance was constructed with {@see $enabled} = false,
      * returns $content unchanged (no sentinels emitted).
      *
-     * The sentinels use private-use codepoints (U+E000 / U+E001) so they
-     * never collide with visible text or ANSI escape sequences.
+     * The sentinels use private-use codepoints (U+E000 / U+E001), which
+     * cannot appear in ANSI escape sequences or in charset-validated ids;
+     * foreign private-use content (pasted glyphs) is neutralised by the
+     * lone-sentinel rule in {@see Scan} and the consumer's sanitizer sweep
+     * ({@see Sentinel} / docs/TRUST-BOUNDARY.md).
      *
      * @throws \InvalidArgumentException When $id contains any byte outside
      *         {@see self::ID_PATTERN} — e.g. a raw sentinel byte, a control

@@ -20,14 +20,14 @@ use SugarCraft\Mouse\Zone as MouseZone;
  * surface (readonly bounds + `MouseMsg`-based {@see inBounds()} / {@see pos()}
  * plus {@see contains()}), but delegates the point-in-rect / width / height
  * math to a wrapped {@see \SugarCraft\Mouse\Zone} built from the same bounds.
- * That keeps the geometry engine in exactly one place (sugar-mouse) across
- * both zone ports while consumers of sugar-mouse (sugar-widgets, sugar-gallery)
+ * That keeps the geometry engine in exactly one place (the primitive layer)
+ * while consumers of this package (sugar-widgets, sugar-gallery)
  * keep reading `->id`, `->startCol`, … and passing `MouseMsg`s unchanged.
  */
 final class Zone
 {
     /**
-     * Shared geometry engine — the sugar-mouse hit-test primitive built from
+     * Shared geometry engine — the primitive-layer hit-test zone built from
      * the same bounds. All point-in-rect / dimension math routes through it.
      */
     private readonly MouseZone $geometry;
@@ -43,9 +43,10 @@ final class Zone
     }
 
     /**
-     * Adapt a sugar-mouse {@see \SugarCraft\Mouse\Zone} into a sugar-mouse Zone,
-     * preserving id + bounds. Used by {@see Manager::scan()} to store the
-     * SSOT-parsed zones under sugar-mouse's public type.
+     * Adapt a primitive {@see \SugarCraft\Mouse\Zone} (as parsed by
+     * {@see \SugarCraft\Mouse\Scan}) into a Zones-layer Zone, preserving id +
+     * bounds. Used by {@see Manager::scan()} to store the SSOT-parsed zones
+     * under this namespace's public type.
      */
     public static function fromMouseZone(MouseZone $zone): self
     {
@@ -104,7 +105,7 @@ final class Zone
     }
 
     /**
-     * Bridge a Core {@see MouseMsg} into a sugar-mouse {@see MouseEvent} for
+     * Bridge a Core {@see MouseMsg} into a primitive {@see MouseEvent} for
      * geometry checks. Only x/y are read by the geometry primitive; button
      * and action are irrelevant here, so a placeholder Press is used.
      */
