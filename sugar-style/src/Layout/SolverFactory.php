@@ -15,12 +15,32 @@ use SugarCraft\Constraints\LayoutSolver;
  *  - "cassowary" → CassowarySolver (deprecated; delegates to GreedySolver)
  *  - otherwise   → GreedySolver (default)
  *
+ * The variable is a boot-time setting: it is read ONCE per process and the
+ * decision memoized, so per-split solves cost no getenv. A mid-process
+ * change takes effect only via {@see resetEnvironmentResolutionForTesting()}
+ * (the test seam) or a fresh process. A fresh solver instance is still
+ * constructed on every call — the factory caches the decision, never an
+ * instance.
+ *
  * Mirrors ratatui's pluggable solver architecture.
  */
 final class SolverFactory
 {
     /** @var bool tracks whether the cassowary deprecation notice has been raised */
     private static bool $cassowaryNoticeEmitted = false;
+
+    /** @var bool|null the once-resolved SUGARCRAFT_LAYOUT_SOLVER decision (null = not yet read) */
+    private static ?bool $cassowaryRequested = null;
+
+    /**
+     * Drop the memoized environment decision and the notice latch.
+     * Test seam: production code resolves exactly once and never calls this.
+     */
+    public static function resetEnvironmentResolutionForTesting(): void
+    {
+        self::$cassowaryRequested     = null;
+        self::$cassowaryNoticeEmitted = false;
+    }
 
     /**
      * Pick the layout solver the environment asks for.
@@ -46,8 +66,8 @@ final class SolverFactory
      */
     public static function fromEnvironment(): LayoutSolver
     {
-        $env = getenv('SUGARCRAFT_LAYOUT_SOLVER');
-        if ($env === 'cassowary') {
+        self::$cassowaryRequested ??= getenv('SUGARCRAFT_LAYOUT_SOLVER') === 'cassowary';
+        if (self::$cassowaryRequested) {
             if (!self::$cassowaryNoticeEmitted) {
                 self::$cassowaryNoticeEmitted = true;
                 trigger_error(

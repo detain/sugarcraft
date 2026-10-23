@@ -8,7 +8,9 @@ namespace SugarCraft\Style\Layout;
  * Base for all constraint types used by {@see Layout::split()}.
  *
  * Mirrors ratatui's `Constraint` enum — Length, Percentage, Min, Max,
- * Ratio, Fill — with a simple one-pass solver.
+ * Ratio, Fill — solved by a greedy allocator that re-distributes space
+ * reclaimed by `Max` caps (see {@see Solver} + sugar-constraints's
+ * GreedySolver).
  */
 abstract class Constraint
 {

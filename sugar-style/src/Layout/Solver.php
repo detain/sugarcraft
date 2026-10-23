@@ -46,7 +46,7 @@ final class Solver
     }
 
     /**
-     * Convert Sprinkles constraints to Constraints-library constraints.
+     * Convert Style constraint wrappers to Constraints-library constraints.
      *
      * @param Constraint[] $constraints
      * @return list<ConstraintsConstraint\Constraint>
@@ -69,7 +69,7 @@ final class Solver
     }
 
     /**
-     * Convert Constraints-library regions back to Sprinkles rects.
+     * Convert Constraints-library regions back to Style Rect values.
      *
      * @param Region[] $regions
      * @return Rect[]

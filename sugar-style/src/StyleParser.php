@@ -11,7 +11,8 @@ use SugarCraft\Core\Util\Color;
  *
  * Format: [text](fg:red,bg:blue,bold,italic,underline)
  *
- * Ported from sugar-dashboard/src/Foundation/StyleParser.php (step-02-styleparser-in-sugar-style).
+ * Ported from sugar-dashboard's Foundation layer, where the parser was
+ * duplicated per app; consolidated into sugar-style as the single home.
  * Mirrors termui's style parsing state machine — written as a clean-room
  * implementation from the algorithmic description, not derived from any
  * GPL'd source.

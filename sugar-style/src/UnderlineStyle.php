@@ -6,7 +6,7 @@ namespace SugarCraft\Style;
 
 /**
  * Underline-line style — drives the SGR 4:N sub-parameter that
- * modern terminals (kitty, WezTerm, iTerm2, recent xterm) interpret
+ * terminals such as kitty, WezTerm, iTerm2 and recent xterm interpret
  * as a distinct line shape under the text.
  *
  * Mirrors upstream lipgloss `UnderlineStyle`.
@@ -17,9 +17,11 @@ namespace SugarCraft\Style;
  * - {@see Dotted} (4:4) — dotted line.
  * - {@see Dashed} (4:5) — dashed line.
  *
- * Terminals that don't recognise the sub-parameter fall back to a
- * plain underline (SGR 4) — every value still reads as "underlined"
- * even if the line shape doesn't match.
+ * Terminals that understand SGR `4:N` render the styled underline;
+ * terminals that don't typically ignore the extended form and render no
+ * underline at all, since no plain SGR 4 companion is emitted. For a
+ * guaranteed plain underline do not set a style: bare underline() alone
+ * emits SGR 4.
  */
 enum UnderlineStyle: int
 {

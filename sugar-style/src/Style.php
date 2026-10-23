@@ -24,6 +24,25 @@ use SugarCraft\Core\Util\Width;
  * Each public setter records the prop it touched in {@see $propsSet}, which
  * lets {@see inherit()} merge a parent style into a child while preserving
  * any value the child explicitly set.
+ *
+ * PROCESS-AMBIENT WARNING: {@see setDefaultProfile()} writes a process-global
+ * mutable static consulted by every later {@see new()}. It is a
+ * host-application startup knob, not a per-widget setting — test suites that
+ * touch it must restore it (the sibling {@see getDefaultProfile()} read makes
+ * the save/restore pair trivial). Everything else on this class is immutable.
+ *
+ * NAMING EXCEPTION: this class is the fleet's one exemption from the
+ * `with*()`-fluent convention. Its setters keep lipgloss's bare names
+ * (`bold()`, `fg()`, `width()`) and its getters keep lipgloss's `get*`/`is*`
+ * prefixes, yet every setter still returns a NEW instance — the immutability
+ * law holds; only the spelling deviates. The bare names are load-bearing
+ * twice over: PHP cannot overload by arity, so the short forms (`fg`, `pad`,
+ * `of`) and long forms (`foreground`, `padding`, `setString`) coexist as
+ * aliases precisely because neither could be a `with`-suffixed variant of
+ * the other, and a bare `width()` getter would collide with the bare
+ * `width()` setter — hence `getWidth()`. Upstream lipgloss gives the same
+ * rationale for its `GetX` family. Do not copy this spelling into new
+ * SugarCraft classes.
  */
 final class Style
 {
@@ -88,8 +107,9 @@ final class Style
      * from this style's own text attributes — fg/bg/bold/italic/…). Because
      * Style is immutable, that sequence never changes for a given instance,
      * so {@see buildContentSgr()} derives it once and reuses it across the
-     * repeated render() calls of a per-frame loop. `with*()`/`inherit()`
-     * build a fresh instance via `new self(...)`, which leaves this at its
+     * repeated render() calls of a per-frame loop. Every setter and
+     * `inherit()` build a fresh instance via `new self(...)` (through the one
+     * private `with()` choke), which leaves this at its
      * null default (forcing a recompute for the new attributes); `copy()`'s
      * clone carries a still-valid memo because the copy is byte-identical.
      * `null` = not yet computed; `''` is a valid computed (empty) result.
@@ -152,6 +172,9 @@ final class Style
      * Coloured underline, separate from the foreground colour. Mirrors
      * lipgloss's `UnderlineColor`. Emits SGR `58;...` (xterm-256
      * extension) when underlining is active. Pass null to clear.
+     * Tier caveat: SGR 58 has no 4-bit form, so at the Ansi profile the
+     * colour falls back to the FOREGROUND slot and recolours the glyphs
+     * themselves (`Color::toUnderline()`), rather than tinting the line.
      */
     public function underlineColor(?Color $c): self
     {
@@ -162,10 +185,11 @@ final class Style
     public function getUnderlineColor(): ?Color { return $this->underlineColor; }
 
     /**
-     * Underline-line shape (single / double / curly / dotted / dashed).
-     * Modern terminals interpret SGR `4:N` as a sub-style; older
-     * terminals draw a plain underline regardless. Mirrors lipgloss
-     * `UnderlineStyle`.
+     * Underline-line shape (single / double / curly / dotted / dashed),
+     * emitted as the SGR `4:N` sub-parameter. Terminals that understand
+     * SGR `4:N` render the styled underline; terminals that don't typically
+     * ignore the extended form and render no underline at all, since no
+     * plain SGR 4 companion is emitted. Mirrors lipgloss `UnderlineStyle`.
      */
     public function underlineStyle(UnderlineStyle $style): self
     {
@@ -501,7 +525,8 @@ final class Style
      * {@see Width::TAB_WIDTH}. Pass 0 to keep tabs as literal `\t` (no
      * expansion).
      *
-     * E69: `Width::string()` charges a tab `Width::TAB_WIDTH` cells, which is
+     * Tab width (in cells) when the tab character is expanded. Note:
+     * `Width::string()` charges a tab `Width::TAB_WIDTH` cells, which is
      * what {@see render()} expands it to at the DEFAULT. Setting a non-default
      * width here re-opens that gap — content laid out by this Style will not
      * measure the same as `Width::string()` reports — so a caller that also
@@ -1054,7 +1079,7 @@ final class Style
         }
         // Tab expansion (before any width measurements). The default width
         // is Width::TAB_WIDTH so that Width::string() of the expanded result
-        // equals Width::string() of the input — see E69 and
+        // equals Width::string() of the input — see the tabWidth() note and
         // Width::TAB_WIDTH's domain note for where that stops holding.
         if ($this->tabWidth > 0 && str_contains($content, "\t")) {
             $content = str_replace("\t", str_repeat(' ', $this->tabWidth), $content);
@@ -1666,9 +1691,12 @@ final class Style
 
         // Sub-styled underline — SGR `4:N` where N is the line shape.
         // Only `4:N` is emitted: plain SGR 4 is gated to
-        // UnderlineStyle::None above, so no fallback sequence accompanies
-        // the sub-parameter (kitty, WezTerm, recent xterm honour it;
-        // terminals that don't grok it render no underline at all).
+        // UnderlineStyle::None above. Terminals that understand
+        // SGR `4:N` render the styled underline; terminals that don't
+        // typically ignore the extended form and render no underline at
+        // all, since no plain SGR 4 companion is emitted. For a
+        // guaranteed plain underline do not set a style: bare
+        // underline() alone emits SGR 4.
         if ($this->underline && $this->underlineStyle !== UnderlineStyle::None) {
             $sgr .= "\x1b[4:" . $this->underlineStyle->value . 'm';
         }

@@ -15,6 +15,8 @@ use SugarCraft\Constraints\Constraint as ConstraintsConstraint;
  */
 final class Min extends Constraint
 {
+    use ReadsConstraintPayload;
+
     private ConstraintsConstraint\Min $inner;
 
     public function __construct(int $n)
@@ -27,9 +29,6 @@ final class Min extends Constraint
 
     public function __get(string $name): mixed
     {
-        return match ($name) {
-            'n' => $this->inner->n,
-            default => throw new \Error("Property {$name} does not exist on " . static::class),
-        };
+        return $this->payloadValue($name, ['n' => $this->inner->n]);
     }
 }

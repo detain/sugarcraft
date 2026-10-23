@@ -262,8 +262,8 @@ final class BorderTitleTest extends TestCase
 
     /**
      * A title takes the colour of the edge it is written on, including a
-     * per-side override with no global borderForeground set (crush_libs
-     * sprinkles finding #2). Before the fix the title SGR read only the global
+     * per-side override with no global borderForeground set (a per-side edge
+     * colour must also style titles riding that edge). Before the fix the title SGR read only the global
      * colour, so this style — which colours the top edge green — emitted a
      * bare, uncoloured `T` between two coloured corners.
      */

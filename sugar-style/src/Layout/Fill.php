@@ -15,6 +15,8 @@ use SugarCraft\Constraints\Constraint as ConstraintsConstraint;
  */
 final class Fill extends Constraint
 {
+    use ReadsConstraintPayload;
+
     private ConstraintsConstraint\Fill $inner;
 
     public function __construct(int $weight = 1)
@@ -27,9 +29,6 @@ final class Fill extends Constraint
 
     public function __get(string $name): mixed
     {
-        return match ($name) {
-            'weight' => $this->inner->weight,
-            default => throw new \Error("Property {$name} does not exist on " . static::class),
-        };
+        return $this->payloadValue($name, ['weight' => $this->inner->weight]);
     }
 }

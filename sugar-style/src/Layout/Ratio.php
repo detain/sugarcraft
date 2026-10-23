@@ -15,6 +15,8 @@ use SugarCraft\Constraints\Constraint as ConstraintsConstraint;
  */
 final class Ratio extends Constraint
 {
+    use ReadsConstraintPayload;
+
     private ConstraintsConstraint\Ratio $inner;
 
     public function __construct(int $numerator, int $denominator)
@@ -30,10 +32,6 @@ final class Ratio extends Constraint
 
     public function __get(string $name): mixed
     {
-        return match ($name) {
-            'numerator' => $this->inner->numerator,
-            'denominator' => $this->inner->denominator,
-            default => throw new \Error("Property {$name} does not exist on " . static::class),
-        };
+        return $this->payloadValue($name, ['numerator' => $this->inner->numerator, 'denominator' => $this->inner->denominator]);
     }
 }

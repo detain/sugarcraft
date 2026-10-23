@@ -15,17 +15,71 @@ use SugarCraft\Style\Layout\SolverFactory;
 
 final class SolverFactoryTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // SUGARCRAFT_LAYOUT_SOLVER is resolved once per process (memoized
+        // getenv); every test here re-arms the seam so its own putenv() is
+        // the value that gets read.
+        SolverFactory::resetEnvironmentResolutionForTesting();
+    }
+
     protected function tearDown(): void
     {
         putenv('SUGARCRAFT_LAYOUT_SOLVER');
+        SolverFactory::resetEnvironmentResolutionForTesting();
         parent::tearDown();
     }
 
     public function testFromEnvironmentReturnsGreedySolverByDefault(): void
     {
-        putenv('SUGARCRAFT_LAYOUT_SOLVER');
         $solver = SolverFactory::fromEnvironment();
         $this->assertInstanceOf(GreedySolver::class, $solver);
+    }
+
+    /**
+     * Performance-honesty pin (docs-fix-1023 style): the factory memoizes the
+     * environment DECISION, never an instance — each call still hands out a
+     * fresh solver, which is why the README may not claim "single
+     * allocation". Deleting the `new` per call (instance caching) must go red
+     * here and force a docs re-decision.
+     */
+    public function testEachCallConstructsAFreshSolverInstance(): void
+    {
+        $this->assertNotSame(SolverFactory::fromEnvironment(), SolverFactory::fromEnvironment());
+    }
+
+    /**
+     * The memoize itself: a mid-process putenv must NOT be observed until
+     * the test seam resets the resolution. Pins "read once" so a future
+     * re-widening to per-call getenv has to re-decide this test too.
+     */
+    public function testEnvironmentDecisionIsResolvedOncePerProcessUntilReset(): void
+    {
+        putenv('SUGARCRAFT_LAYOUT_SOLVER=cassowary');
+        [$solver] = self::captureNotices(static fn(): \SugarCraft\Constraints\LayoutSolver => SolverFactory::fromEnvironment());
+        $this->assertInstanceOf(CassowarySolver::class, $solver);
+
+        // Flip the variable; the memoized decision must ignore it...
+        putenv('SUGARCRAFT_LAYOUT_SOLVER=greedy');
+        $this->assertInstanceOf(CassowarySolver::class, $this->lastFromEnvironment());
+
+        // ...until the seam re-arms resolution.
+        SolverFactory::resetEnvironmentResolutionForTesting();
+        $this->assertInstanceOf(GreedySolver::class, SolverFactory::fromEnvironment());
+    }
+
+    /** Resolve through fromEnvironment() and return it for instanceof checks. */
+    private function lastFromEnvironment(): \SugarCraft\Constraints\LayoutSolver
+    {
+        // The cassowary branch may raise its once-per-process notice; swallow
+        // it here — notice SEVERITY and count are pinned elsewhere.
+        $previous = set_error_handler(static fn(): bool => true, E_USER_DEPRECATED | E_USER_WARNING);
+        try {
+            return SolverFactory::fromEnvironment();
+        } finally {
+            set_error_handler($previous);
+        }
     }
 
     /**
@@ -107,6 +161,7 @@ final class SolverFactoryTest extends TestCase
         $greedy = Solver::solve($area, $constraints, Direction::Horizontal);
 
         putenv('SUGARCRAFT_LAYOUT_SOLVER=cassowary');
+        SolverFactory::resetEnvironmentResolutionForTesting();
         [$cassowary] = self::captureNotices(
             static fn(): array => Solver::solve($area, $constraints, Direction::Horizontal),
         );
@@ -145,6 +200,7 @@ final class SolverFactoryTest extends TestCase
         $this->assertInstanceOf(GreedySolver::class, SolverFactory::default());
 
         putenv('SUGARCRAFT_LAYOUT_SOLVER=cassowary');
+        SolverFactory::resetEnvironmentResolutionForTesting();
         [[$viaAlias, $viaCanonical], $raised] = self::captureNotices(static fn(): array => [
             SolverFactory::default(),
             SolverFactory::fromEnvironment(),
