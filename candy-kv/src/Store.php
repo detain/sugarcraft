@@ -22,18 +22,20 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Kv\Lang;
 
 /**
- * Main entry point for the Skate key/value store.
+ * Main entry point for the candy-kv key/value store.
  *
  * Provides a store-wide API that routes operations to the appropriate
  * database. Each distinct database maps to its own SQLite file in the
- * skate data directory (default: ~/.config/skate/).
+ * data directory (default: $XDG_CONFIG_HOME/skate or ~/.config/skate —
+ * the 'skate' name is the upstream port's directory and is kept for
+ * users migrating from Go skate; the files themselves live 0600).
  *
  * @example
  * ```php
- * $skate = new Store();
- * $skate->set('key', 'value');
- * echo $skate->get('key');
- * foreach ($skate->list() as $entry) { ... }
+ * $kv = new Store();
+ * $kv->set('key', 'value');
+ * echo $kv->get('key');
+ * foreach ($kv->list() as $entry) { ... }
  * ```
  *
  * Factories: Store/Database deliberately have no `::new()` convenience
@@ -64,11 +66,17 @@ final class Store
      */
     public function __construct(?string $dataDir = null, string $defaultDb = 'default')
     {
-        $this->dataDir = $dataDir ?? $this->defaultDataDir();
+        $this->dataDir = $dataDir ?? self::resolveDataDir();
         $this->defaultDb = $defaultDb;
 
         if (!\is_dir($this->dataDir)) {
-            \mkdir($this->dataDir, 0o700, true);
+            // Fail loud: a silently-skipped mkdir would defer the real error
+            // to an opaque SQLite open failure on a path that does not exist.
+            if (!@\mkdir($this->dataDir, 0o700, true) && !\is_dir($this->dataDir)) {
+                throw new \RuntimeException(
+                    \sprintf('Cannot create the key-value data directory: %s', $this->dataDir)
+                );
+            }
         }
 
         $this->database($this->defaultDb);
@@ -98,13 +106,23 @@ final class Store
      * Set a value that automatically expires after $ttlSeconds.
      *
      * @param string $key         Entry key (supports @dbname suffix).
-     * @param mixed  $value       The value to store (cast to string).
-     * @param int    $ttlSeconds  Seconds until the entry expires.
+     * @param mixed  $value       Scalar value (stringified); arrays,
+     *                            non-stringable objects and resources are
+     *                            refused rather than silently mangled.
+     * @param int    $ttlSeconds  Seconds until the entry expires. A value
+     *                            <= 0 is a documented NO-OP: nothing is
+     *                            written (it does NOT store the key forever).
+     * @throws \InvalidArgumentException for values with no scalar string form.
      */
     public function setWithTtl(string $key, mixed $value, int $ttlSeconds): void
     {
         if ($ttlSeconds <= 0) {
             return;
+        }
+        if (\is_array($value) || \is_resource($value) || (\is_object($value) && !\method_exists($value, '__toString'))) {
+            throw new \InvalidArgumentException(
+                \sprintf('setWithTtl expects a scalar value, got %s for key "%s".', \get_debug_type($value), $key)
+            );
         }
         $this->set($key, (string) $value, false, $ttlSeconds);
     }
@@ -343,8 +361,18 @@ final class Store
         if (!\file_exists($path)) {
             return false;
         }
-        unset($this->databases[$dbName]);
-        return \unlink($path) !== false;
+        // Close the cached connection explicitly: relying on unset + GC to
+        // release the handle before unlink() raced WAL sidecar recreation.
+        if (isset($this->databases[$dbName])) {
+            $this->databases[$dbName]->close();
+            unset($this->databases[$dbName]);
+        }
+        foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            if (\is_file($file)) {
+                @\unlink($file);
+            }
+        }
+        return !\file_exists($path);
     }
 
     // -------------------------------------------------------------------------
@@ -441,17 +469,58 @@ final class Store
 
     /**
      * Determine the default data directory.
+     *
+     * @deprecated Kept as the historical entry point; resolves through
+     *             self::resolveDataDir().
      */
     private function defaultDataDir(): string
     {
+        return self::resolveDataDir();
+    }
+
+    /**
+     * Resolve the data directory: $XDG_CONFIG_HOME/skate, then
+     * $HOME/.config/skate, then the passwd entry's home directory.
+     *
+     * There is deliberately NO fallback to the library install tree:
+     * a HOME-less process must fail loudly, not write secrets into a
+     * world-writable-shared vendor directory.
+     *
+     * @throws \RuntimeException when no home directory can be determined.
+     */
+    public static function resolveDataDir(): string
+    {
         $xdg = \getenv('XDG_CONFIG_HOME');
         if ($xdg !== false && $xdg !== '') {
-            $base = $xdg;
-        } else {
-            $home = \getenv('HOME') ?: \dirname(__DIR__, 2);
-            $base = $home . '/.config';
+            return \rtrim($xdg, '/') . '/skate';
         }
-        return $base . '/skate';
+
+        $home = \getenv('HOME');
+        if ($home === false || $home === '') {
+            $home = self::homeFromPasswd();
+        }
+        if ($home === null || $home === '') {
+            throw new \RuntimeException(
+                'Cannot determine the data directory: set XDG_CONFIG_HOME or HOME.'
+            );
+        }
+
+        return \rtrim($home, '/') . '/' . self::DEFAULT_SUBDIR;
+    }
+
+    /**
+     * Read the effective user's home from the passwd database.
+     */
+    private static function homeFromPasswd(): ?string
+    {
+        if (!\function_exists('posix_getpwuid') || !\function_exists('posix_geteuid')) {
+            return null;
+        }
+        $entry = @\posix_getpwuid(\posix_geteuid());
+
+        return (\is_array($entry) && isset($entry['dir']) && $entry['dir'] !== '' && $entry['dir'] !== '/')
+            ? $entry['dir']
+            : null;
     }
 
     /**

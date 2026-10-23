@@ -634,4 +634,121 @@ final class StoreTest extends TestCase
 
         $this->assertFalse($method->invoke($this->store, 'plainkey'));
     }
+
+    // ─── docs-fix D4: data dir resolution, mkdir fail-loud, setWithTtl ─────
+
+    public function testResolveDataDirPrefersXdgThenHome(): void
+    {
+        $savedXdg = \getenv('XDG_CONFIG_HOME');
+        $savedHome = \getenv('HOME');
+        try {
+            \putenv('XDG_CONFIG_HOME=' . $this->tmpDir . '/xdg');
+            $this->assertSame($this->tmpDir . '/xdg/skate', Store::resolveDataDir());
+
+            \putenv('XDG_CONFIG_HOME');
+            \putenv('HOME=' . $this->tmpDir . '/home');
+            $this->assertSame($this->tmpDir . '/home/.config/skate', Store::resolveDataDir());
+        } finally {
+            $this->restoreEnv('XDG_CONFIG_HOME', $savedXdg);
+            $this->restoreEnv('HOME', $savedHome);
+        }
+    }
+
+    public function testResolveDataDirNeverFallsBackIntoTheInstallTree(): void
+    {
+        // The D4 bug: with HOME unset the old code wrote .config/skate
+        // under dirname(__DIR__,2) — inside the library's own checkout.
+        $savedXdg = \getenv('XDG_CONFIG_HOME');
+        $savedHome = \getenv('HOME');
+        try {
+            \putenv('XDG_CONFIG_HOME');
+            \putenv('HOME');
+
+            try {
+                $dir = Store::resolveDataDir();
+            } catch (\RuntimeException $e) {
+                // passwd/posix unavailable and no env: refusal is the
+                // correct loud outcome.
+                $this->assertStringContainsString('data directory', $e->getMessage());
+                return;
+            }
+
+            $installRoot = \dirname((new \ReflectionClass(Store::class))->getFileName(), 2);
+            $this->assertStringNotContainsString($installRoot, $dir, 'resolution must not land in the install tree');
+            $this->assertStringEndsWith('/.config/skate', $dir, 'passwd fallback must end at the conventional subdir');
+            // Cross-check against the passwd entry when ext-posix is present.
+            if (\function_exists('posix_getpwuid') && \function_exists('posix_geteuid')) {
+                $entry = @\posix_getpwuid(\posix_geteuid());
+                if (\is_array($entry) && isset($entry['dir']) && $entry['dir'] !== '' && $entry['dir'] !== '/') {
+                    $this->assertSame($entry['dir'] . '/.config/skate', $dir);
+                }
+            }
+        } finally {
+            $this->restoreEnv('XDG_CONFIG_HOME', $savedXdg);
+            $this->restoreEnv('HOME', $savedHome);
+        }
+    }
+
+    private function restoreEnv(string $name, string|false $value): void
+    {
+        \putenv($value === false ? $name : $name . '=' . $value);
+    }
+
+    public function testConstructorRefusesUncreatableDataDir(): void
+    {
+        $blocker = $this->tmpDir . '/blocker';
+        \file_put_contents($blocker, 'not-a-dir');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Cannot create the key-value data directory');
+        new Store($blocker . '/sub/dir');
+    }
+
+    public function testSetWithTtlRefusesArrayValue(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('scalar value');
+        $this->store->setWithTtl('arr', ['a'], 60);
+    }
+
+    public function testSetWithTtlRefusesNonStringableObject(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->store->setWithTtl('obj', new \stdClass(), 60);
+    }
+
+    public function testSetWithTtlAcceptsScalarsAndStringables(): void
+    {
+        $this->store->setWithTtl('num', 42, 3600);
+        $this->assertSame('42', $this->store->get('num'));
+
+        $stringable = new class {
+            public function __toString(): string
+            {
+                return 'str-form';
+            }
+        };
+        $this->store->setWithTtl('str-obj', $stringable, 3600);
+        $this->assertSame('str-form', $this->store->get('str-obj'));
+    }
+
+    public function testSetWithTtlZeroTtlIsNoOpNotForever(): void
+    {
+        // Documented polarity: ttl<=0 writes NOTHING (it must not store the
+        // key un-expiring, which the old silent return could be mistaken for).
+        $this->store->setWithTtl('zero', 'v', 0);
+        $this->assertNull($this->store->entry('zero'));
+    }
+
+    public function testDeleteDatabaseClosesHandleBeforeUnlink(): void
+    {
+        $this->store->set('keeper@sidedb', 'v');
+        $path = $this->tmpDir . '/sidedb.db';
+        $this->assertFileExists($path);
+
+        $this->assertTrue($this->store->deleteDatabase('sidedb'));
+        $this->assertFileDoesNotExist($path);
+        $this->assertFileDoesNotExist($path . '-wal', 'WAL sidecar must not survive the delete');
+        $this->assertFileDoesNotExist($path . '-shm', 'SHM sidecar must not survive the delete');
+    }
 }
