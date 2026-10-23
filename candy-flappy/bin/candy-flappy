@@ -4,8 +4,26 @@
 declare(strict_types=1);
 
 (static function () {
-    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
-        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+    // Guard shape ported from candy-code/candy-top (DST-1, measured on PHP
+    // 8.3.6): when `php candy-flappy.phar` runs, THIS file is the archive's
+    // stub and the process is NOT inside the archive — Phar::running()
+    // answers '' there, and a bare '/x.phar/entry' path fails
+    // is_file()/require for every caller. Two identities cover the two phar
+    // shapes: the stub names itself in __FILE__, and a require-from-inside
+    // names the archive in Phar::running(). Both are addressed the only way
+    // that works, as a phar:// URI. When an archive identity exists, the
+    // archive's own vendor is the ONLY root — a stray vendor beside (or
+    // above) a downloaded phar must never boot the app with code from
+    // outside the frozen archive. In every composer-mode checkout both
+    // probes answer nothing and the filesystem candidates are untouched.
+    $candidates = [__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
+    $archive = \Phar::running(false) !== ''
+        ? 'phar://' . \Phar::running(false)
+        : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+    if ($archive !== '') {
+        $candidates = [$archive . '/vendor/autoload.php'];
+    }
+    foreach ($candidates as $path) {
         if (is_file($path)) {
             require $path;
             return;
@@ -19,6 +37,24 @@ use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\LegacyPaths;
 use SugarCraft\Flappy\Game;
+use SugarCraft\Flappy\Support\Version;
+
+// Diagnostic flags answer before anything else runs — notably before the
+// one-time legacy migration below, which moves directories under $HOME and
+// must never be a side effect of asking a version.
+$flags = array_slice($argv ?? [], 1);
+if (in_array('--version', $flags, true)) {
+    fwrite(STDOUT, Version::line());
+    exit(0);
+}
+if (in_array('--help', $flags, true) || in_array('-h', $flags, true)) {
+    fwrite(STDOUT, "candy-flappy — terminal flappy-bird clone\n\n"
+        . "Usage:\n"
+        . "  candy-flappy            Play\n"
+        . "  candy-flappy --version  Print the version\n"
+        . "  candy-flappy --help     Show this help\n");
+    exit(0);
+}
 
 // One-time migration of the pre-rename high-score directory (plan_rename.md R4.4).
 // Mirrors Game::getDefaultConfigDir()'s base resolution (XDG_CONFIG_HOME, then
