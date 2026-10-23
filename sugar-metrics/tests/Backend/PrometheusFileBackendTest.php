@@ -460,7 +460,7 @@ final class PrometheusFileBackendTest extends TestCase
 
         self::assertSame([$missingParent, $fileParent], array_keys($refusalMessages), 'both uncreatable shapes must refuse');
         foreach ($refusalMessages as $path => $message) {
-            self::assertStringStartsWith('prometheus textfile: cannot open ', $message, "refusal for {$path} must use the documented door message");
+            self::assertStringStartsWith('Prometheus textfile: cannot open ', $message, "refusal for {$path} must use the documented door message");
             self::assertStringContainsString($path . '.tmp', $message, "refusal for {$path} must name the tmp path");
         }
         self::assertSame([], $raised, 'the refusal door must not raise a PHP diagnostic');

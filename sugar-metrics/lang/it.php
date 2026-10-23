@@ -12,8 +12,10 @@ return [
     'jsonstream.cannot_open_target' => 'impossibile aprire la destinazione delle metriche: {target}',
     'jsonstream.cannot_open_stderr' => 'impossibile aprire php://stderr',
     'jsonstream.invalid_target'     => 'la destinazione deve essere un percorso, una risorsa o null',
+    'jsonstream.write_failed'       => 'scrittura jsonstream non riuscita: {name}',
     'statsd.socket_not_resource'    => 'existingSocket deve essere una risorsa',
     'statsd.connect_failed'         => 'connessione statsd fallita: {errstr} ({errno})',
     'prom.cannot_open'              => 'prometheus textfile: impossibile aprire {path}',
     'prom.rename_failed'            => 'prometheus textfile: ridenominazione fallita: {tmp} -> {dest}',
+    'multibackend.aggregate'        => 'MultiBackend: {count} backend figlio/i falliti. Errori: {errors}',
 ];

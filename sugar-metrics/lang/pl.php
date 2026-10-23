@@ -12,8 +12,10 @@ return [
     'jsonstream.cannot_open_target' => 'nie można otworzyć celu metryk: {target}',
     'jsonstream.cannot_open_stderr' => 'nie można otworzyć php://stderr',
     'jsonstream.invalid_target'     => 'cel musi być ścieżką, zasobem lub null',
+    'jsonstream.write_failed'       => 'zapis jsonstream nie powiódł się: {name}',
     'statsd.socket_not_resource'    => 'existingSocket musi być zasobem',
     'statsd.connect_failed'         => 'połączenie statsd nie powiodło się: {errstr} ({errno})',
     'prom.cannot_open'              => 'prometheus textfile: nie można otworzyć {path}',
     'prom.rename_failed'            => 'prometheus textfile: zmiana nazwy nie powiodła się: {tmp} -> {dest}',
+    'multibackend.aggregate'        => 'MultiBackend: {count} backendów podrzędnych nie powiodło się. Błędy: {errors}',
 ];

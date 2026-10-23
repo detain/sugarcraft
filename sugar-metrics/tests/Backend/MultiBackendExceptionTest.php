@@ -9,12 +9,12 @@ use PHPUnit\Framework\TestCase;
 
 final class MultiBackendExceptionTest extends TestCase
 {
-    public function testGetErrorsReturnsTheCollectedThrowables(): void
+    public function testErrorsReturnsTheCollectedThrowables(): void
     {
         $a = new \RuntimeException('a');
         $b = new \LogicException('b');
         $e = new MultiBackendException([$a, $b]);
-        $this->assertSame([$a, $b], $e->getErrors());
+        $this->assertSame([$a, $b], $e->errors());
     }
 
     public function testIsARuntimeException(): void

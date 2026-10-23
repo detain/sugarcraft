@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Metrics\Backend;
 
+use SugarCraft\Metrics\Lang;
+
 /**
  * Thrown by {@see MultiBackend} when multiple child backends fail
  * during a fanout operation in continue-on-error mode.
  *
- * Use {@see getErrors()} to retrieve the full list of failures.
+ * Use {@see errors()} to retrieve the full list of failures.
  */
 final class MultiBackendException extends \RuntimeException
 {
@@ -21,7 +23,10 @@ final class MultiBackendException extends \RuntimeException
     ) {
         if ($message === '') {
             $messages = array_map(fn(\Throwable $e) => $e->getMessage(), $this->errors);
-            $message = 'MultiBackend: ' . count($this->errors) . ' child backend(s) failed. Errors: ' . implode('; ', $messages);
+            $message = Lang::t('multibackend.aggregate', [
+                'count' => count($this->errors),
+                'errors' => implode('; ', $messages),
+            ]);
         }
         parent::__construct($message, previous: $this->errors[0] ?? null);
     }
@@ -31,7 +36,7 @@ final class MultiBackendException extends \RuntimeException
      *
      * @return array<\Throwable>
      */
-    public function getErrors(): array
+    public function errors(): array
     {
         return $this->errors;
     }

@@ -14,7 +14,8 @@ return [
     'jsonstream.invalid_target'     => 'target must be path, resource, or null',
     'jsonstream.write_failed'       => 'jsonstream write failed: {name}',
     'statsd.socket_not_resource'    => 'existingSocket must be a resource',
-    'statsd.connect_failed'         => 'statsd connect failed: {errstr} ({errno})',
-    'prom.cannot_open'              => 'prometheus textfile: cannot open {path}',
-    'prom.rename_failed'            => 'prometheus textfile: rename failed: {tmp} -> {dest}',
+    'statsd.connect_failed'         => 'StatsD connect failed: {errstr} ({errno})',
+    'prom.cannot_open'              => 'Prometheus textfile: cannot open {path}',
+    'prom.rename_failed'            => 'Prometheus textfile: rename failed: {tmp} -> {dest}',
+    'multibackend.aggregate'        => 'MultiBackend: {count} child backend(s) failed. Errors: {errors}',
 ];
