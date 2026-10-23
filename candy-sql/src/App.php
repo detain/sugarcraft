@@ -26,6 +26,7 @@ use SugarCraft\Sql\Admin\PostgresServerContext;
 use SugarCraft\Sql\Admin\ReactMysqlConnection;
 use SugarCraft\Sql\Admin\ReactPostgresConnection;
 use SugarCraft\Sql\Admin\Reports\ReportsPage;
+use SugarCraft\Sql\Admin\RowNavigable;
 use SugarCraft\Sql\Admin\Providers\PostgresAdminProvider;
 use SugarCraft\Sql\Admin\PerfSchema\EasySetupDetector;
 use SugarCraft\Sql\Admin\PerfSchema\PerfSchemaPage;
@@ -284,12 +285,18 @@ final class App implements Model
     /**
      * Handle keyboard input while the Admin pane is focused.
      *
-     * App-level keys (digits 1-9, q, j/k, p, r) are handled first. All other
-     * keys — Tab, Space, 'a', 'w', 's', and any other navigation/editing keys
-     * — are delegated to the active page's update() method so pages like
-     * VariablesPage and DashboardPage can respond to them. The page returned
-     * by update() is stored back in App, preserving any in-memory state
-     * (cursor, active tab, pending edits) that survived the refresh cycle.
+     * App-level keys handled here first: digits 1-8 (pane select), q (back
+     * to Tables), p (pause polling), r (drop the query cache), and sidebar
+     * j/k/arrows — but only when the focused page does NOT implement
+     * {@see RowNavigable}; row-navigable pages receive j/k/arrows through
+     * the delegation below so their in-table cursors work. Keys that are
+     * globally consumed in update() BEFORE reaching this method at all:
+     * Tab (pane cycle) and Escape/Ctrl+C (quit). Everything else — Space,
+     * 'a', 'w', 's', 'h', 'l', '/' and any other editing keys — is
+     * delegated to the active page's update() so pages like VariablesPage
+     * and PerfSchemaPage can respond. The page returned by update() is
+     * stored back in App, preserving in-memory state (cursor, active tab,
+     * pending edits) across refresh cycles.
      *
      * @return array{App, ?Cmd} [updated App, optional command to execute]
      */
@@ -317,24 +324,30 @@ final class App implements Model
         if ($msg->type === KeyType::Char && $msg->rune === 'q') {
             return [$this->withPane(Pane::Tables), null];
         }
-        // j/k or arrows navigate within admin sidebar (with wrap-around)
-        if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
-            $newCursor = ($this->admin->cursor + 1) % $count;
-            $newPane = $allPanes[$newCursor];
-            if ($newPane !== $this->admin->pane) {
-                $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
-                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder))];
+        // j/k or arrows navigate — but a RowNavigable page owns these keys:
+        // its cursor lives inside the table, and intercepting them here made
+        // the page handlers dead code (docs-review-1023 M8). The sidebar is
+        // still fully reachable via digits, and arrow navigation is kept for
+        // pages without row navigation (ServerStatus, Dashboard).
+        if (!$this->adminPage() instanceof RowNavigable) {
+            if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+                $newCursor = ($this->admin->cursor + 1) % $count;
+                $newPane = $allPanes[$newCursor];
+                if ($newPane !== $this->admin->pane) {
+                    $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
+                    return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder))];
+                }
+                return [$this->withAdminCursor($newCursor), null];
             }
-            return [$this->withAdminCursor($newCursor), null];
-        }
-        if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
-            $newCursor = ($this->admin->cursor - 1 + $count) % $count;
-            $newPane = $allPanes[$newCursor];
-            if ($newPane !== $this->admin->pane) {
-                $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
-                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder))];
+            if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+                $newCursor = ($this->admin->cursor - 1 + $count) % $count;
+                $newPane = $allPanes[$newCursor];
+                if ($newPane !== $this->admin->pane) {
+                    $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
+                    return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder))];
+                }
+                return [$this->withAdminCursor($newCursor), null];
             }
-            return [$this->withAdminCursor($newCursor), null];
         }
         // [p] pause/resume polling (sync with DashboardPage if present)
         if ($msg->type === KeyType::Char && $msg->rune === 'p') {
@@ -359,10 +372,12 @@ final class App implements Model
         }
 
         // Delegate unhandled keys to the active page's update(), following the
-        // precedence: app-level keys (digits, q, j/k, p, r) are handled above;
-        // page keys (Tab, w, s, etc.) reach the page here. This ensures pages
-        // like VariablesPage can respond to Tab/Space/etc. while preserving
-        // the returned page state across poll-tick refreshes.
+        // precedence documented on handleAdminKey(): app-level digits, q, p,
+        // r (and sidebar j/k for non-RowNavigable pages) are handled above;
+        // page keys (j/k/arrows on RowNavigable pages, w, s, /, Space, etc.)
+        // reach the page here. This ensures pages like VariablesPage can
+        // respond to their own keys while preserving the returned page state
+        // across poll-tick refreshes.
         $page = $this->adminPage();
         [$newPage, $cmd] = $page->update($msg);
         return [$this->withAdminPage($newPage), $cmd];

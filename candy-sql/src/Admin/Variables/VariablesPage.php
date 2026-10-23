@@ -13,6 +13,7 @@ use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Sql\Admin\PageBase;
+use SugarCraft\Sql\Admin\RowNavigable;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Style\Layout;
 use SugarCraft\Style\Position;
@@ -39,7 +40,7 @@ use SugarCraft\Table\Table;
  *
  * @see Mirrors charmbracelet/lazysql VariablesPage
  */
-final class VariablesPage extends PageBase
+final class VariablesPage extends PageBase implements RowNavigable
 {
     /** Tab enum for Status vs System variables. */
     public const TAB_STATUS = 'status';
@@ -203,6 +204,9 @@ final class VariablesPage extends PageBase
         $type = $msg->type;
 
         // Tab key toggles between Status/System tabs
+        // NOTE: App::update() consumes Tab for the global pane cycle before
+        // admin delegation, so this width-toggle branch is unreachable while
+        // the sidebar keeps Tab as its escape hatch (docs-review-1023 F1).
         if ($type === KeyType::Tab && !$msg->shift) {
             return [$this->withToggleTab(), null];
         }
@@ -834,7 +838,7 @@ final class VariablesPage extends PageBase
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[tab] toggle  [w] rw filter  [s] search  [j/k] nav  [e] edit(dynamic)  [q] quit');
+            ->render('[w] rw filter  [s] search  [j/k] nav  [e] edit(dynamic)  [q] quit');
     }
 
     /**

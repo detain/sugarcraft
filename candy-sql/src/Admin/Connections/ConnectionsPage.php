@@ -11,6 +11,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Sql\Admin\AsyncCachingServerContext;
 use SugarCraft\Sql\Admin\PageBase;
+use SugarCraft\Sql\Admin\RowNavigable;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Admin\StatusSnapshot;
 use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
@@ -26,7 +27,7 @@ use SugarCraft\Table\{Column, Row, RowData, Table};
  *
  * @see Mirrors charmbracelet/lazysql connections page
  */
-final class ConnectionsPage extends PageBase
+final class ConnectionsPage extends PageBase implements RowNavigable
 {
     public const DETAIL_TAB_DETAILS = 'details';
     public const DETAIL_TAB_ATTRIBUTES = 'attributes';
@@ -232,7 +233,8 @@ final class ConnectionsPage extends PageBase
             return [$this->withCycleDetailTab(), null];
         }
 
-        // 1/2/3 switch to specific detail tabs
+        // 1/2/3 switch to specific detail tabs — UNREACHABLE while App
+        // maps digits 1-8 to panes (docs-review-1023 F1 seam).
         if ($ch === '1') {
             return [$this->withDetailTab(self::DETAIL_TAB_DETAILS), null];
         }

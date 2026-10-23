@@ -15,6 +15,7 @@ use SugarCraft\Dashboard\Components\Card\Divider;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Sql\Admin\PageBase;
+use SugarCraft\Sql\Admin\RowNavigable;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Style\Style;
@@ -63,7 +64,7 @@ use SugarCraft\Table\Table;
  *
  * @see Mirrors mysql-workbench wb_admin_performance_schema
  */
-final class PerfSchemaPage extends PageBase
+final class PerfSchemaPage extends PageBase implements RowNavigable
 {
     /** Tab constants */
     public const TAB_EASY_SETUP = 'easy_setup';
@@ -202,6 +203,9 @@ final class PerfSchemaPage extends PageBase
         $type = $msg->type;
 
         // Tab switches tabs
+        // NOTE: App consumes Tab for the pane cycle (see VariablesPage) — the
+        // tab-pair below is unreachable in the live app; kept for a future
+        // dedicated in-page tab key (docs-review-1023 F1 seam).
         if ($type === KeyType::Tab && !$msg->shift) {
             return [$this->withNextTab(), null];
         }
@@ -1210,7 +1214,7 @@ final class PerfSchemaPage extends PageBase
 
     private function renderFooter(): string
     {
-        $navHint = '[j/k] nav  [Space] toggle  [Tab] tabs';
+        $navHint = '[j/k] nav  [Space] toggle';
         $actionHint = $this->isDirty() ? '  [c] commit  [r] revert' : '';
         $quitHint = '  [q] quit';
         $base = Style::new()->foreground(Color::hex('#6b7280'))->render($navHint . $actionHint . $quitHint);

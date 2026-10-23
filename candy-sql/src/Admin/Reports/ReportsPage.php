@@ -13,6 +13,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Forms\Spinner\Spinner;
 use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
 use SugarCraft\Sql\Admin\PageBase;
+use SugarCraft\Sql\Admin\RowNavigable;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
 use SugarCraft\Sql\Db\DatabaseInterface;
@@ -44,7 +45,7 @@ use SugarCraft\Table\Table;
  *
  * @see Mirrors mysql-workbench wb_admin_perfschema_reports
  */
-final class ReportsPage extends PageBase
+final class ReportsPage extends PageBase implements RowNavigable
 {
     /** @var DatabaseInterface|null */
     private ?DatabaseInterface $db = null;
@@ -716,7 +717,7 @@ final class ReportsPage extends PageBase
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[j/k] nav rows  [h/l] category  [/] report  [c] unit toggle  [q] quit');
+            ->render('[j/k] nav rows  [h/l] category  [/] cycle report  [c] unit toggle  [q] quit');
     }
 
     private function renderErrorScreen(): string

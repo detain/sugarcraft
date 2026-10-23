@@ -9,6 +9,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Sql\Admin\PageBase;
+use SugarCraft\Sql\Admin\RowNavigable;
 use SugarCraft\Sql\Admin\QueryLogger;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Style\Style;
@@ -28,7 +29,7 @@ use SugarCraft\Style\Style;
  *
  * @see QueryLogger
  */
-final class DebugPage extends PageBase
+final class DebugPage extends PageBase implements RowNavigable
 {
     /** Maximum SQL length to display before truncation. */
     private const MAX_SQL_DISPLAY = 120;

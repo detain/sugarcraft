@@ -104,7 +104,7 @@ final class VariablesPageTest extends TestCase
         $page = new VariablesPage($this->context);
         $result = $page->view();
 
-        $this->assertStringContainsString('[tab] toggle', $result);
+        $this->assertStringContainsString('[j/k] nav', $result); // Tab is globally consumed by the pane cycle - the footer must not advertise it
         $this->assertStringContainsString('[q] quit', $result);
     }
 
