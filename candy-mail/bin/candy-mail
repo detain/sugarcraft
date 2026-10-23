@@ -10,7 +10,13 @@ declare(strict_types=1);
  *   candy-mail --from <addr> --to <addr> [--subject "Subject"] [--attach <file>]
  *   candy-mail < message.txt   (reads body from stdin; --from/--to required via flags or env)
  *
- * Env: RESEND_API_KEY, CANDY_MAIL_FROM, CANDY_MAIL_SMTP_HOST/PORT/USERNAME/PASSWORD, CANDY_MAIL_SIGNATURE
+ * Flags accept both `--flag value` and `--flag=value`; repeatable flags are
+ * --to/--cc/--bcc/--attach. --render prints the SMTP MIME message without any
+ * network I/O; --version prints the package version.
+ *
+ * Env: RESEND_API_KEY, CANDY_MAIL_FROM, CANDY_MAIL_SMTP_HOST/PORT/USERNAME/PASSWORD,
+ *      CANDY_MAIL_SMTP_REQUIRE_TLS (default on), CANDY_MAIL_SMTP_IMPLICIT_TLS (default off),
+ *      CANDY_MAIL_SIGNATURE
  */
 namespace SugarCraft\Mail;
 
@@ -32,11 +38,20 @@ use SugarCraft\Mail\{Email, Lang, Mailer, ResendTransport, SmtpTransport};
 
 // Guard: only run dispatch when called as CLI script (not when required by tests)
 if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
-    // Parse arguments manually (no getopt dependence on platform)
-    $args = parseArgs($argv);
-    $bin  = basename($argv[0]);
+    try {
+        $args = parseArgs($argv);
+    } catch (\Throwable $e) {
+        fwrite(STDERR, Lang::t('cli.error', ['message' => $e->getMessage()]) . "\n");
+        exit(1);
+    }
+    $bin = basename($argv[0]);
 
-    if ($args['help'] || ($argc = \count($args['positional'])) === 0 && !isset($args['opts']['from'])) {
+    if ($args['version']) {
+        fwrite(STDOUT, cliVersion() . "\n");
+        exit(0);
+    }
+
+    if (cliWantsHelp($args)) {
         fwrite(STDOUT, help($bin));
         exit(0);
     }
@@ -56,6 +71,22 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
     } catch (\Throwable $e) {
         fwrite(STDERR, Lang::t('cli.error', ['message' => $e->getMessage()]) . "\n");
         exit(1);
+    }
+
+    // --render: print the RFC 822 envelope offline. Prefer the configured SMTP
+    // transport (its host feeds Message-ID); fall back to a non-connected
+    // instance so previewing never requires working credentials.
+    if ($args['render']) {
+        try {
+            $configured = buildTransport();
+        } catch (\Throwable) {
+            $configured = null;
+        }
+        $renderer = $configured instanceof SmtpTransport
+            ? $configured
+            : new SmtpTransport(host: 'localhost');
+        fwrite(STDOUT, $renderer->buildMimeMessage($email));
+        exit(0);
     }
 
     // Choose transport
@@ -81,48 +112,75 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Parse CLI arguments.
+ *
+ * Long flags accept `--flag value` and `--flag=value`; repeatable flags
+ * (--to/--cc/--bcc/--attach) always collect into a list so both forms feed
+ * Email the same shape. Unknown long flags and unknown short flags throw
+ * rather than being silently dropped. `--` ends option parsing so later
+ * tokens are positional recipients even if they start with a dash.
+ *
+ * @return array{positional: list<string>, opts: array<string, mixed>, help: bool, version: bool, render: bool}
+ */
 function parseArgs(array $argv): array
 {
     $positional = [];
-    $opts = [];
+    $opts       = [];
+    $total      = \count($argv);
+
+    // flag name => opts key, split by how many values they take
+    $listFlags    = ['to' => 'to', 'cc' => 'cc', 'bcc' => 'bcc', 'attach' => 'attachments'];
+    $boolFlags    = ['help' => 'help', 'version' => 'version', 'render' => 'render'];
+    $scalarFlags  = ['from' => 'from', 'subject' => 'subject', 'body' => 'body', 'reply-to' => 'reply_to', 'html' => 'html'];
+    $shortAliases = ['f' => 'from', 't' => 'to', 's' => 'subject', 'a' => 'attach', 'h' => 'help'];
 
     $i = 1;
-    while ($i < \count($argv)) {
-        $arg = $argv[$i];
+    while ($i < $total) {
+        $arg           = (string) $argv[$i];
+        $inlineValue   = null;
+        $name          = null;
 
         if ($arg === '--') {
-            // End of options
-            while (++$i < \count($argv)) {
-                $positional[] = $argv[$i];
+            while (++$i < $total) {
+                $positional[] = (string) $argv[$i];
             }
-        } elseif ($arg === '--from' || $arg === '-f') {
-            $opts['from'] = $argv[++$i] ?? '';
-        } elseif ($arg === '--to' || $arg === '-t') {
-            $opts['to'][] = $argv[++$i] ?? '';
-        } elseif ($arg === '--cc') {
-            $opts['cc'][] = $argv[++$i] ?? '';
-        } elseif ($arg === '--bcc') {
-            $opts['bcc'][] = $argv[++$i] ?? '';
-        } elseif ($arg === '--subject' || $arg === '-s') {
-            $opts['subject'] = $argv[++$i] ?? '';
-        } elseif ($arg === '--body') {
-            $opts['body'] = $argv[++$i] ?? '';
-        } elseif ($arg === '--attach' || $arg === '-a') {
-            $opts['attachments'][] = $argv[++$i] ?? '';
-        } elseif ($arg === '--reply-to') {
-            $opts['reply_to'] = $argv[++$i] ?? '';
-        } elseif ($arg === '--html') {
-            $opts['html'] = $argv[++$i] ?? '';
-        } elseif ($arg === '--help' || $arg === '-h') {
-            $opts['help'] = true;
-        } elseif (\str_starts_with($arg, '--')) {
-            // Long flag with =
-            if (($pos = \strpos($arg, '=')) !== false) {
-                $key = \substr($arg, 2);
-                $opts[$key] = \substr($arg, $pos + 1);
+            break;
+        }
+
+        if (\str_starts_with($arg, '--')) {
+            $body = \substr($arg, 2);
+            $eq   = \strpos($body, '=');
+            if ($eq === false) {
+                $name = $body;
+            } else {
+                $name        = \substr($body, 0, $eq);
+                $inlineValue = \substr($body, $eq + 1);
             }
-        } else {
+        } elseif (\str_starts_with($arg, '-') && $arg !== '-' && isset($shortAliases[\substr($arg, 1)])) {
+            $name = $shortAliases[\substr($arg, 1)];
+        }
+
+        $known = isset($listFlags[$name]) || isset($boolFlags[$name]) || isset($scalarFlags[$name]);
+        if ($name === '' || ($name !== null && !$known)) {
+            $name = null;
+        }
+
+        if ($name === null) {
+            if (\str_starts_with($arg, '-')) {
+                throw new \InvalidArgumentException(Lang::t('cli.unknown_option', ['option' => $arg]));
+            }
             $positional[] = $arg;
+            $i++;
+            continue;
+        }
+
+        if (isset($boolFlags[$name])) {
+            $opts[$boolFlags[$name]] = true;
+        } elseif (isset($listFlags[$name])) {
+            $opts[$listFlags[$name]][] = $inlineValue ?? (string) ($argv[++$i] ?? '');
+        } else {
+            $opts[$scalarFlags[$name]] = $inlineValue ?? (string) ($argv[++$i] ?? '');
         }
         $i++;
     }
@@ -132,33 +190,103 @@ function parseArgs(array $argv): array
         $opts['to'] = $positional;
     }
 
-    return ['positional' => $positional, 'opts' => $opts, 'help' => isset($opts['help'])];
+    return [
+        'positional' => $positional,
+        'opts'       => $opts,
+        'help'       => ($opts['help'] ?? false) === true,
+        'version'    => ($opts['version'] ?? false) === true,
+        'render'     => ($opts['render'] ?? false) === true,
+    ];
+}
+
+/**
+ * The help gate (docs-fix-1023 M-5): bare invocation shows help, but an
+ * env-provided sender or any recipient means the user meant to send —
+ * `CANDY_MAIL_FROM=… candy-mail --to you@example.com` must not print help.
+ */
+function cliWantsHelp(array $args): bool
+{
+    if ($args['help']) {
+        return true;
+    }
+
+    $hasRecipients = $args['positional'] !== [] || isset($args['opts']['to']);
+    $hasSender     = isset($args['opts']['from']) || senderFromEnvironment() !== '';
+
+    return !$hasRecipients && !$hasSender;
+}
+
+/**
+ * Default sender from the environment, or '' when unset. Reads both the
+ * $_ENV copy and getenv() because CLI launchers populate only one depending
+ * on how the process was started.
+ */
+function senderFromEnvironment(): string
+{
+    $from = $_ENV['CANDY_MAIL_FROM'] ?? \getenv('CANDY_MAIL_FROM', true);
+
+    return \is_string($from) ? $from : '';
+}
+
+/**
+ * Boolean env switch: unset/empty keeps the default; '1'/'true'/'yes'/'on'
+ * turn it on, anything else turns it off.
+ */
+function envFlag(string $name, bool $default): bool
+{
+    $raw = $_ENV[$name] ?? \getenv($name, true);
+    if (!\is_string($raw) || $raw === '') {
+        return $default;
+    }
+
+    return \in_array(\strtolower($raw), ['1', 'true', 'yes', 'on'], true);
+}
+
+/**
+ * SMTP port from CANDY_MAIL_SMTP_PORT (default 587 — the STARTTLS submission
+ * port). Refuses garbage loudly instead of sending to port 0.
+ */
+function portFromEnvironment(): int
+{
+    $raw = $_ENV['CANDY_MAIL_SMTP_PORT'] ?? \getenv('CANDY_MAIL_SMTP_PORT', true);
+    if (!\is_string($raw) || $raw === '') {
+        return 587;
+    }
+
+    if (!\ctype_digit($raw) || (int) $raw < 1 || (int) $raw > 65535) {
+        throw new \InvalidArgumentException(Lang::t('cli.invalid_port', ['port' => $raw]));
+    }
+
+    return (int) $raw;
 }
 
 function buildEmail(array $opts, string $stdinBody): Email
 {
-    $from = $opts['from'] ?? ($_ENV['CANDY_MAIL_FROM'] ?? \getenv('CANDY_MAIL_FROM', true) ?: 'unknown@localhost');
-    $to   = $opts['to'] ?? [];
+    $envFrom = senderFromEnvironment();
+    $from    = $opts['from'] ?? ($envFrom !== '' ? $envFrom : 'unknown@localhost');
+    $to      = $opts['to'] ?? [];
 
     if ($to === []) {
         throw new \InvalidArgumentException(Lang::t('cli.no_to_recipient'));
     }
 
-    $body = $stdinBody !== '' ? $stdinBody : ($opts['body'] ?? null);
+    $body      = $stdinBody !== '' ? $stdinBody : ($opts['body'] ?? null);
     $signature = $_ENV['CANDY_MAIL_SIGNATURE'] ?? \getenv('CANDY_MAIL_SIGNATURE', true);
 
     $email = new Email(
-        from:    [$from],
-        to:      $to,
-        subject: $opts['subject'] ?? '(no subject)',
-        body:    $body,
-        cc:      $opts['cc'] ?? [],
-        bcc:     $opts['bcc'] ?? [],
+        from:     [$from],
+        to:       $to,
+        subject:  $opts['subject'] ?? '(no subject)',
+        body:     $body,
+        cc:       $opts['cc'] ?? [],
+        bcc:      $opts['bcc'] ?? [],
         htmlBody: $opts['html'] ?? null,
-        replyTo: $opts['reply_to'] ?? null,
+        replyTo:  $opts['reply_to'] ?? null,
     );
 
-    if ($signature !== null && $signature !== '') {
+    // getenv() yields false (not '') when the var is absent — only a real
+    // string signature may reach withSignature(): string.
+    if (\is_string($signature) && $signature !== '') {
         $email = $email->withSignature($signature);
     }
 
@@ -180,15 +308,38 @@ function buildTransport(): Transport
 
     $host = $_ENV['CANDY_MAIL_SMTP_HOST'] ?? \getenv('CANDY_MAIL_SMTP_HOST', true) ?: '';
     if ($host !== '') {
-        return new SmtpTransport(
+        return (new SmtpTransport(
             host:     $host,
-            port:     (int) ($_ENV['CANDY_MAIL_SMTP_PORT'] ?? \getenv('CANDY_MAIL_SMTP_PORT', true) ?: 587),
+            port:     portFromEnvironment(),
             username: $_ENV['CANDY_MAIL_SMTP_USERNAME'] ?? \getenv('CANDY_MAIL_SMTP_USERNAME', true) ?: '',
             password: $_ENV['CANDY_MAIL_SMTP_PASSWORD'] ?? \getenv('CANDY_MAIL_SMTP_PASSWORD', true) ?: '',
-        );
+        ))
+            ->withRequireTls(envFlag('CANDY_MAIL_SMTP_REQUIRE_TLS', true))
+            ->withImplicitTls(envFlag('CANDY_MAIL_SMTP_IMPLICIT_TLS', false));
     }
 
     throw new \RuntimeException(Lang::t('cli.no_transport'));
+}
+
+/**
+ * Package version for --version, resolved from Composer metadata when the
+ * library (or its host app) was installed by Composer; 'dev' otherwise.
+ */
+function cliVersion(): string
+{
+    if (!\class_exists(\Composer\InstalledVersions::class)) {
+        return 'dev';
+    }
+
+    try {
+        if (\Composer\InstalledVersions::isInstalled('sugarcraft/candy-mail')) {
+            return (string) \Composer\InstalledVersions::getPrettyVersion('sugarcraft/candy-mail');
+        }
+
+        return (string) (\Composer\InstalledVersions::getRootPackage()['pretty_version'] ?? 'dev');
+    } catch (\Throwable) {
+        return 'dev';
+    }
 }
 
 function help(string $bin): string
@@ -200,30 +351,40 @@ Usage:
   {$bin} --from <addr> --to <addr> [--subject "s"] [--body "text"]
   {$bin} --from <addr> --to <addr> --attach file.pdf < message.txt
   cat message.txt | {$bin} --from <addr> --to <addr>
+  {$bin} --from <addr> --to <addr> --render        (print MIME, send nothing)
 
-  (body is read from STDIN if no --body flag is given)
+  Flags accept --name value and --name=value. Body is read from STDIN if no
+  --body flag is given. Unknown options are rejected, not ignored.
 
 Options:
-  --from <addr>     Sender email address
-  --to <addr>       Recipient email address (may be repeated)
-  --cc <addr>       CC recipient (may be repeated)
-  --bcc <addr>      BCC recipient (may be repeated)
-  --subject <s>     Email subject
-  --body <text>     Email body (else reads STDIN)
-  --html <html>     HTML body alternative
-  --attach <file>   Attach a file (may be repeated)
-  --reply-to <addr> Reply-to address
-  --help, -h        Show this help
+  --from <addr>        Sender email address
+  --to <addr>          Recipient email address (may be repeated)
+  --cc <addr>          CC recipient (may be repeated)
+  --bcc <addr>         BCC recipient (may be repeated)
+  --subject <s>        Email subject
+  --body <text>        Email body (else reads STDIN)
+  --html <html>        HTML body alternative
+  --attach <file>      Attach a file (may be repeated)
+  --reply-to <addr>    Reply-to address
+  --render             Print the SMTP MIME message and exit (no network)
+  --version            Print the package version and exit
+  --help, -h           Show this help
 
 Environment variables:
-  RESEND_API_KEY          Resend API key (preferred)
-  CANDY_MAIL_SMTP_HOST/PORT/USER/PASS   SMTP credentials
-  CANDY_MAIL_FROM                Default sender address
-  CANDY_MAIL_SIGNATURE           Appended to email body
+  RESEND_API_KEY                   Resend API key (preferred transport)
+  CANDY_MAIL_SMTP_HOST             SMTP server host (when no API key is set)
+  CANDY_MAIL_SMTP_PORT             SMTP port (default 587, STARTTLS submission)
+  CANDY_MAIL_SMTP_USERNAME         SMTP AUTH user (needs a TLS channel)
+  CANDY_MAIL_SMTP_PASSWORD         SMTP AUTH password (needs a TLS channel)
+  CANDY_MAIL_SMTP_REQUIRE_TLS      Set to 0 to allow a plaintext channel (default: on)
+  CANDY_MAIL_SMTP_IMPLICIT_TLS     Set to 1 for port-465 implicit TLS (default: off)
+  CANDY_MAIL_FROM                  Default sender address
+  CANDY_MAIL_SIGNATURE             Appended to email body
 
 Examples:
   {$bin} --from me@example.com --to you@example.com --subject "Hello"
-  CANDY_MAIL_FROM=me@example.com cat message.txt | {$bin} --to you@example.com
+  export CANDY_MAIL_FROM=me@example.com
+  cat message.txt | {$bin} --to you@example.com --subject "Hello"
   {$bin} --from me@example.com --to a@b.com --attach invoice.pdf --subject "Invoice"
 
 HELP;
