@@ -176,4 +176,65 @@ final class PsrBridgeTest extends TestCase
         $this->assertStringContainsString('fallback message', $content);
         $this->assertStringContainsString('INF', $content);
     }
+
+    public function testImplementsPsrLoggerInterface(): void
+    {
+        $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
+        $bridge = new PsrBridge($logger);
+
+        // The README promise: pass it anywhere a PSR-3 logger is expected.
+        // Pre-fix this class did NOT implement the interface, so the typed
+        // sink below would TypeError at the call.
+        $this->assertInstanceOf(\Psr\Log\LoggerInterface::class, $bridge);
+        $this->writeViaInterface($bridge);
+
+        \fclose($this->tempFile);
+        $content = \file_get_contents($this->tempPath);
+
+        $this->assertStringContainsString('typed sink', $content);
+    }
+
+    private function writeViaInterface(\Psr\Log\LoggerInterface $logger): void
+    {
+        $logger->warning('typed sink');
+    }
+
+    public function testLogAcceptsNonStringLevelWithoutTypeError(): void
+    {
+        $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
+        $bridge = new PsrBridge($logger);
+
+        // PSR-3's log() leaves $level untyped; a hostile/sloppy caller must
+        // still land on the Info fallback rather than raising.
+        $bridge->log(123, 'numeric level');
+        $bridge->log(null, 'null level');
+        $bridge->log(['array'], 'array level');
+
+        \fclose($this->tempFile);
+        $content = \file_get_contents($this->tempPath);
+
+        $this->assertStringContainsString('numeric level', $content);
+        $this->assertStringContainsString('null level', $content);
+        $this->assertStringContainsString('array level', $content);
+    }
+
+    public function testStringableLevelIsMappedByItsStringForm(): void
+    {
+        $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
+        $bridge = new PsrBridge($logger);
+
+        $stringable = new class implements \Stringable {
+            public function __toString(): string
+            {
+                return LogLevel::ERROR;
+            }
+        };
+        $bridge->log($stringable, 'from stringable');
+
+        \fclose($this->tempFile);
+        $content = \file_get_contents($this->tempPath);
+
+        $this->assertStringContainsString('ERR', $content);
+        $this->assertStringContainsString('from stringable', $content);
+    }
 }
