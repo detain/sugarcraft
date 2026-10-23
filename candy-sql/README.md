@@ -10,7 +10,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-sql)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-sql)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-sql?label=packagist)](https://packagist.org/packages/sugarcraft/candy-sql)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -28,25 +28,39 @@ composer require sugarcraft/candy-sql
 # SQLite via bare path (inferred as Flavor::Sqlite)
 bin/candy-sql app.sqlite
 
-# Any DSN — MySQL, PostgreSQL, SQLite, SQLSRV
-bin/candy-sql --dsn mysql://user:pass@localhost:3306/dbname
-bin/candy-sql --dsn pgsql://user:pass@localhost:5432/dbname
-bin/candy-sql --dsn sqlsrv://localhost/dbname
+# Any DSN — MySQL, PostgreSQL, SQLite (flags use --key=value form)
+bin/candy-sql --dsn=mysql://user:pass@localhost:3306/dbname
+bin/candy-sql --dsn=pgsql://user:pass@localhost:5432/dbname
+bin/candy-sql --dsn=sqlite:///absolute/path/to/db.sqlite
 
-# Explicit SQLite path via DSN
-bin/candy-sql --dsn sqlite:///absolute/path/to/db.sqlite
+# Individual flags (no DSN)
+bin/candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
+
+# Password via environment instead of argv (keeps it out of /proc/<pid>/cmdline)
+CANDY_SQL_PASS=secret bin/candy-sql --driver=mysql --user=root --db=mydb
+
+# Query history: on by default at $HOME/.candy-sql/history.db
+bin/candy-sql app.sqlite --no-history
+bin/candy-sql app.sqlite --history=/var/tmp/my-history.db
 ```
 
-`App::start(database, ?Flavor $flavor = Flavor::Sqlite)` accepts an optional `$flavor` to override auto-detection.
+Supported drivers are `sqlite`, `mysql` and `pgsql` (`ConnectionFactory::SUPPORTED_DRIVERS`); anything else — including
+`sqlsrv://` DSNs — throws at parse time.
+
+`App::start($db, Flavor $flavor = Flavor::Sqlite, ?HistoryRecorder $historyRecorder = null)` accepts an optional
+`$flavor` override and an optional history recorder (the launcher builds one itself — see Query History).
 
 ## Keys
 
 | Key                | Action                                          |
 |--------------------|-------------------------------------------------|
-| `Tab`              | Switch pane (Tables → Rows → Query)             |
+| `Tab`              | Cycle pane (Tables → Rows → Query → Admin)      |
 | `↑/↓` or `j/k`     | Move cursor in active list pane                 |
 | `Enter` / `Space`  | Load the highlighted table into the rows pane   |
 | `Ctrl+R`           | Run the SQL in the query pane                   |
+| `Ctrl+E`           | Run the SQL in the query pane                   |
+| `Ctrl+F`           | Save the query pane's text to the favorites list |
+| `Ctrl+Shift+F` | Remove the current query from favorites |
 | `Backspace`        | Delete last character (query pane)              |
 | `q` / `Esc`        | Quit (except inside the query pane — `q` types) |
 
@@ -54,40 +68,40 @@ bin/candy-sql --dsn sqlite:///absolute/path/to/db.sqlite
 
 | Key                | Action                                          |
 |--------------------|-------------------------------------------------|
-| `[p]`              | Pause/resume auto-refresh (Dashboard)           |
+| `[p]`              | Pause/resume auto-refresh (global)              |
 | `[r]`              | Reset counters (Dashboard) / Refresh processlist (Connections) |
-| `[j/k]`            | Navigate rows down/up (Variables, Connections, Reports) |
-| `[↑/↓]`            | Navigate rows down/up — alias for j/k on all list pages |
+| `[j/k]` `[↑/↓]`    | Navigate rows down/up on the row-navigable pages (Variables, Connections, Reports, PerfSchema, Debug) |
 | `[e]`              | Edit selected variable — dynamic vars only (Variables page): type new value, [Enter] confirm → [Enter] execute or [Esc] cancel |
 | `[w]`              | Toggle read/write filter (Variables page)       |
 | `[s]`              | Focus search input (Variables page)              |
-| `[tab]`            | Toggle Status/System tab (Variables page) / Cycle detail tabs (Connections) |
 | `[f]`              | Toggle hide-sleeping filter (Connections page)  |
-| `[1]`              | Switch to Details detail tab (Connections page) |
-| `[2]`              | Switch to Attributes detail tab (Connections page) |
-| `[3]`              | Switch to MDL detail tab (Connections page)    |
 | `[c]`              | Commit pending changes (PerfSchema page)        |
+| `[c]`              | Toggle column unit formatting (Reports page)    |
 | `[x]`              | Export report to CSV (Reports page)             |
-| `[t]`              | Toggle column unit formatting (Reports page)    |
 | `[a]`              | Dismiss all pending alerts (Dashboard)          |
 | `1` – `8`          | Switch admin page (see digit map below)         |
 
-> **Key routing** — Admin keys use a two-tier model. App-level keys (`1–9`, `q`, `j/k`, `p`, `r`) are intercepted by `App::handleAdminKey()` first and do **not** reach the page. All other keys (Tab, Space, `a`, `w`, `s`, `e`, etc.) are delegated to the active page's `update()` method, so each page can respond to its own navigation and editing keys independently.
+The admin page's own `Tab`/`[1]`/`[2]`/`[3]` detail-tab handlers exist in the page code but are currently unreachable:
+`Tab` cycles the focus pane and the digits select admin pages, both at the app level. (docs-review-1023 seam, reported.)
+
+> **Key routing** — Admin keys use a two-tier model. `App::update()` consumes `Tab` (pane cycle), `q`/`Esc`/`Ctrl+C` (quit) and `Ctrl+R`/`Ctrl+E` before any dispatch. App-level admin keys (`1`–`8`, `p`, `r`) are intercepted by `App::handleAdminKey()` next; `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`. Pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar. All other keys are delegated to the active page's `update()` method.
+
+> **MySQL / PostgreSQL only** — the Admin pane needs server introspection data. On SQLite, `App::createContext()` falls back to `EmptyServerContext`, whose variable/status/processlist accessors all return empty sets (`connection()` throws and the async fetch path swallows it in a `Throwable` guard); admin pages render empty rather than crashing — run the admin panes against MySQL or PostgreSQL to see live content.
 
 ### Admin Page Digit Map
 
-The admin sidebar is split into two sections (Management, then Performance). Digits `1`–`8` select pages in display order:
+The admin sidebar is split into two sections (Management, then Performance). Digits `1`–`8` select pages in display order (digits outside the mapped range are ignored):
 
 | Digit | Management Section | Digit | Performance Section |
 |-------|--------------------|-------|----------------------|
-| `1`   | Process List       | `5`   | Dashboard            |
-| `2`   | Variables          | `6`   | Table Stats          |
-| `3`   | Status             | `7`   | Performance Schema   |
-| `4`   | Query Stats        | `8`   | Debug                |
+| `1`   | Process List       | `5`   | Query Stats          |
+| `2`   | Variables          | `6`   | Dashboard            |
+| `3`   | Status             | `7`   | Table Stats          |
+| `4`   | Debug              | `8`   | Performance Schema   |
 
-Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performance Schema** (not Table Stats). Display order and digit selection are both derived from `AdminPane::orderedCases()` — any code needing the mapping should call that method rather than hard-coding indices.
+Digit `4` selects **Debug** (a Management-section page); digit `8` selects **Performance Schema**. Display order and digit selection are both derived from `AdminPane::orderedCases()` — any code needing the mapping should call that method rather than hard-coding indices.
 >
-> **Page state survival** — Admin pages (Variables, Dashboard, Connections, etc.) preserve their in-memory state (active tab, cursor position, pending edits) across the 3-second poll-tick refresh cycle. Fresh server data is read from the shared `AdminQueryCache` on each render; only switching panes (`1–9`, `q`, `j/k`) rebuilds the page from scratch.
+> **Page state survival** — Admin pages (Variables, Dashboard, Connections, etc.) preserve their in-memory state (active tab, cursor position, pending edits) across the admin poll cycle (1.0s tick, 1.0s fetch window — `CacheTtl::DASHBOARD`). Fresh server data is read from the shared `AdminQueryCache` on each render; only switching panes (digits `1`–`8`) rebuilds the page from scratch.
 
 ## Architecture
 
@@ -116,20 +130,20 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `SqliteExplainProvider` | `ExplainProviderInterface` via `EXPLAIN QUERY PLAN`. Parses tree prefixes (`|--`, `` `-- ``) for depth. |
 | `MysqlExplainProvider` | `ExplainProviderInterface` via `EXPLAIN`. Returns `EXPLAIN` formatted rows with tag/parent/detail/indent. |
 | `PostgresExplainProvider` | `ExplainProviderInterface` via `EXPLAIN (ANALYZE, FORMAT JSON)`. Parses JSON structure for tree hierarchy. |
-| `AdminProviderInterface` | Flavor-agnostic interface for admin operations: `dashboard()`, `connections()`, `serverInfo()`. Bridges to `ServerContextInterface` and `ServerContext`. |
+| `AdminProviderInterface` | Flavor-agnostic admin-data port: `flavor()`, `fetchStatusVariables()`, `fetchServerVariables()`, `fetchProcesslist()`, `maxConnections()`, `statusVariablesTs()`, `wasReset()`, `refresh()`. Bridges to `ServerContextInterface` and `ServerContext`. |
 | `MysqlAdminProvider` | `AdminProviderInterface` via MySQL `SHOW GLOBAL STATUS/VARIABLES`, `SHOW ENGINE INNODB STATUS`, `SHOW REPLICA STATUS`, and `fetchProcesslist()` (prefers Performance Schema `performance_schema.threads` with graceful fallback to `SHOW FULL PROCESSLIST` on permission errors). |
 | `PostgresAdminProvider` | `AdminProviderInterface` via `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Dashboard/connections implemented via `PostgresWidgetCatalog`. |
 | `PostgresWidgetCatalog` | Provides `io()` (10 widgets: tuple metrics) and `cache()` (4 widgets: Shared Buffers) panels. Includes `parseSharedBuffers()` for byte conversion. |
-| `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. (Active — distinct from the deleted `ResultPager` pagination class.) |
+| `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
 | `ServerStatusPage` | 2-column admin page: info/features/directories/SSL/replication/firewall panels on left, `SidebarGaugeSet` on right. Gauges poll ServerContext and optional Sampler for per-second rate calculations. `r` refresh, `q` quit. |
 | `ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
 | `ServerStatusSnapshotAdapter` | Adapter wrapping `ServerContextInterface` to satisfy `StatusSnapshotProviderInterface`, enabling `Sampler` to compute per-second rate deltas across poll cycles. Stores snapshots internally so two-sample rate logic can operate on the same context without the context needing to implement the interface directly. |
 | `Sampler` | Rate computer service: takes two status snapshots and elapsed time, computes per-second deltas (Bytes_received, Bytes_sent, etc.) with negative-delta clamping. Restart detection is consumed from `provider->wasReset()` via `StatusSnapshotProviderInterface` — delegating to `ServerContext::detectReset()` as the single owner. Advance via `sample()` on each gauge refresh cycle. |
-| `VariablesPage`     | Dual-tab (Status/System) variable browser with category tree, search filtering, keyboard nav (j/k/w/s/tab/e/q), and inline edit via VariableEditor. The `[e]` key opens a two-phase dialog: type the new value (DLG_INPUT), press [Enter] to review the SET statement (DLG_CONFIRM), then [Enter] again to execute or [Esc] to cancel. Self-write is guarded: setting a variable to its current value is a no-op. Static (non-dynamic) variables show error 1238 with a clear message rather than silently refusing. Follows the VariablesPage convention of the original design. |
+| `VariablesPage`     | Dual-tab (Status/System) variable browser with category tree, search filtering, keyboard nav (j/k/w/s/e/q), and inline edit via VariableEditor. The `[e]` key opens a two-phase dialog: type the new value (DLG_INPUT), press [Enter] to review the SET statement (DLG_CONFIRM), then [Enter] again to execute or [Esc] to cancel. Self-write is guarded: setting a variable to its current value is a no-op. Static (non-dynamic) variables show error 1238 with a clear message rather than silently refusing. Follows the VariablesPage convention of the original design. |
 | `VariableEditor`    | Inline editor for MySQL variables via `SET GLOBAL` / `SET PERSIST` / `SET PERSIST_ONLY` / `RESET PERSIST` (8.0+). Uses prepared statements; backtick-escapes variable names (from catalog, not user input), uses `?` placeholder for values. Error handling: 1142 (no privilege), 1227 (access denied), 1238 (variable is not dynamic — requires restart or use PERSIST_ONLY), 3680 (persisted_variables restriction). Press [p] in the edit dialog to cycle through GLOBAL → PERSIST → PERSIST_ONLY modes. Mirrors `mysql-workbench wb_admin_variable_editor`. |
 | `VariableMetadata` | Immutable descriptor: name, description, editable flag, **dynamic flag**, group memberships. Single MySQL system variable. `editable` = can be set at all (SET GLOBAL / SET PERSIST); `dynamic` = can be changed at runtime without restart (static vars like `innodb_log_file_size` accept SET GLOBAL but error 1238). Constructed from `data/variable_metadata.json` (1563 entries). |
 | `Catalog` | Loads `data/variable_metadata.json` (1563 variables, 67 groups). Provides `get()`, `all()`, `byGroup()`, `groups()`, `isEditable()`, `isDynamic()`. `isDynamic()` returns false for static variables (e.g. `innodb_log_file_size`) — used by VariablesPage to gate inline editing. Missing metadata is non-fatal — the page renders without categories or `[rw]` indicators. |
-| `ConnectionsPage`  | Processlist browser with selection navigation (j/k/↑/↓), detail tab cycling (Tab/1/2/3), hide-sleeping filter (f), and async refresh (r) via `Cmd::send`. Follows the connections-page convention of the original design. |
+| `ConnectionsPage`  | Processlist browser with selection navigation (j/k/↑/↓), hide-sleeping filter (f), and async refresh (r) via `Cmd::send`. The detail-tab cycling handlers (Tab / 1 / 2 / 3) are unreachable today: Tab cycles panes globally and digits 1–8 select admin panes first. Follows the connections-page convention of the original design. |
 | `ConnectionFilters` | Immutable filter config: hide-sleeping, hide-background, skip-full-info, refresh-rate. All fields are readonly with paired `$Set` sentinels. |
 | `ConnectionCounters` | Connection metrics from `SHOW GLOBAL STATUS`: threads-connected/running/cached, connections, aborted-connects, connection-errors. Computes `connectionUsageRatio()` lazily (0.0–1.0). |
 | `ConnectionDetailTabs` | Three detail tabs (Details/Attributes/MDL) per processlist thread. Details from `performance_schema.threads`; Attributes from `session_connect_attrs`; MDL from `performance_schema.metadata_locks` with graceful fallback to `information_schema.metadata_lock_info`. Gracefully returns `null` on permission errors (1142/1146/1227). |
@@ -163,10 +177,10 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `SetupTimers` | Mutable model for a PS timer entry. On MySQL <8.0, loaded from `performance_schema.setup_timers` and can be modified via `withTimerName()`. `isDirty()` tracks unsaved changes; `commitStatements()` generates `UPDATE setup_timers SET TIMER_NAME=? WHERE NAME=?`. On MySQL >=8.0, loaded from `performance_schema.performance_timers` as clean (read-only) instances. |
 | `SetupThreads` | Mutable model for a PS thread entry carrying `INSTRUMENTED` flag. `withInstrumented(bool)` toggles; `isDirty()` tracks changes; `instrumentedFragment()` generates a `THREAD_ID=N AND INSTRUMENTED='YES'/'NO'` SQL fragment for CommitPlanner's batch UPDATE (deferred wiring to STEP 5.3). |
 | `CommitPlanner` | Generates SQL statements to commit PS configuration changes. All statements are fully parameterized — returns `list<array{sql:string, params:list<mixed>}>` tuples with all values bound as `?` placeholders, not interpolated. Produces anchored `UPDATE ... RLIKE '^name$'` for instruments (regex-escaped via `preg_quote()`), `UPDATE ... IN(?)` for consumers, and `INSERT/UPDATE/DELETE` for actors and objects. SetupTimers/SetupThreads wiring deferred to STEP 5.3. |
-| `HistoryStoreInterface` | Persistence interface for query history. Implement `save(entry)`, `query(from, to, limit)`, `prune(before)`, and `count()` to plug in any storage backend. |
-| `SqliteHistoryStore` | `HistoryStoreInterface` via SQLite with WAL mode. Schema: `id INTEGER PRIMARY KEY`, `query TEXT`, `duration_ms INTEGER`, `rows_affected INTEGER`, `error TEXT`, `ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP`. |
-| `HistoryRecorder` | Passive recorder implementing `StatusSnapshotProviderInterface`. Accepts a `HistoryStoreInterface` and calls `save()` only when `provideStatusSnapshot()` is invoked by the polling loop — no active recording, no coupling to the UI. Records StatusSnapshot metrics (not SQL query text — see Query History section for SQL text storage). |
-| `HistoryQuery` | Historical query helpers: `queriesPerSecond(from, to)`, `averageDuration(from, to)`, `errorRate(from, to)`, `topQueries(limit)`. All accept an optional `limit` to bound results. |
+| `HistoryStoreInterface` | Persistence interface for admin status history: `save(StatusSnapshot)`, `query(DateTimeImmutable $since, DateTimeImmutable $until): list<StatusSnapshot>`, `count()`, `prune(DateTimeImmutable $before): int`, `close()`. |
+| `SqliteHistoryStore` | `HistoryStoreInterface` via SQLite with WAL mode. Schema: `history(id INTEGER PRIMARY KEY, ts REAL, recorded_at TEXT, variables TEXT)` — `variables` is the JSON-encoded status-variable map. A freshly created store is owner-only (dir 0700 / file 0600). |
+| `HistoryRecorder` | Passive recorder implementing `StatusSnapshotProviderInterface`. `record(StatusSnapshot)` persists one snapshot; `recordFromProvider()` pulls from an attached provider; `pruneOlderThan($cutoff)` delegates to the store. It writes only when told — no active recording, no coupling to the UI. Records server metrics (`StatusSnapshot`), not SQL query text. |
+| `HistoryQuery` | Read-side helpers over a store: `query(float $sinceTs, float $untilTs): list<StatusSnapshot>`, `querySince(float $sinceTs)`, `getRate(string $variable, float $sinceTs, float $untilTs): ?float` (per-second delta of one status variable across two snapshots; `null` when fewer than two rows are available). |
 
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
 
@@ -174,17 +188,17 @@ Multi-driver support is now available via `DatabaseInterface`. `CsvExporter` and
 
 ## Connection factory
 
-`ConnectionFactory` provides three static methods to build a configured `PDO` connection:
+`ConnectionFactory` provides three static methods that turn connection parameters into a usable connection:
 
 ```php
 use SugarCraft\Sql\Db\ConnectionFactory;
 use SugarCraft\Sql\Db\ConnectionConfig;
 
-// From a DSN string
-$pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname?ssl-mode=REQUIRED');
+// From a DSN string -> a ConnectionConfig value object
+$config = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname?ssl-mode=REQUIRED');
 
-// From a ConnectionConfig value object
-$config = new ConnectionConfig(
+// From a ConnectionConfig (all eight constructor args are required; ::new() supplies defaults)
+$config = ConnectionConfig::new(
     driver: 'mysql',
     host: 'localhost',
     port: 3306,
@@ -193,10 +207,10 @@ $config = new ConnectionConfig(
     dbname: 'dbname',
     sslMode: 'REQUIRED',
 );
-$pdo = ConnectionFactory::fromConfig($config);
+$db = ConnectionFactory::fromConfig($config);   // -> DatabaseInterface
 
-// From command-line arguments (--db-driver, --db-host, --db-port, --db-user, --db-pass, --db-name, --db-ssl-mode)
-$pdo = ConnectionFactory::fromArgv();
+// From command-line arguments (--driver, --host, --port, --user, --pass, --db, --ssl-mode, --dsn; --key=value form only)
+$db = ConnectionFactory::fromArgv($argv);        // -> DatabaseInterface
 ```
 
 ### DSN format
@@ -207,7 +221,7 @@ driver://[user][:pass]@host[:port]/dbname[?query]
 
 | Part     | Description                                                           |
 |----------|-----------------------------------------------------------------------|
-| driver   | `mysql`, `pgsql`, `sqlite`, `sqlsrv`                                 |
+| driver   | `mysql`, `pgsql`, `sqlite`                                            |
 | user     | Database username (URL-encoded via `rawurlencode()` if contains `@` or `:`) |
 | pass     | Database password — URL-encoded if it contains special chars; never echoed |
 | host     | Server hostname or IP; IPv6 addresses use brackets: `[::1]`           |
@@ -215,7 +229,18 @@ driver://[user][:pass]@host[:port]/dbname[?query]
 | dbname   | Database name                                                         |
 | query    | Optional query string — `ssl-mode=MODE` is parsed and stored in `ConnectionConfig.sslMode`, then applied as PDO driver options at connect time |
 
-> **MySQL SSL** — `ssl-mode` is parsed from the query string (e.g. `?ssl-mode=require`) and stored in `ConnectionConfig.sslMode`. It is **never** embedded in the MySQL DSN string (PDO mysql does not support `ssl-mode` as a DSN parameter). SSL is applied as `PDO::MYSQL_ATTR_SSL_CA` / `PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT` driver options in `MysqlDatabase::connect()`.
+> **MySQL SSL** — `ssl-mode` is parsed from the query string (e.g. `?ssl-mode=require`) and stored in `ConnectionConfig.sslMode`; matching is case-insensitive and accepts the hyphenated/underscored spellings (`verify-ca` == `verify_ca`). It is **never** embedded in the MySQL DSN string (PDO mysql does not support `ssl-mode` as a DSN parameter). `MysqlDatabase::connect()`/`reconnect()` apply it via `sslDriverOptions()`:
+>
+> | Mode | Effect |
+> |------|--------|
+> | `` (empty) / `disable` | Plain TCP, no TLS options. |
+> | `allow` / `prefer` / `preferred` | Opportunistic TLS: `MYSQL_ATTR_SSL_CA=null`, `SSL_VERIFY_SERVER_CERT=false` — encrypts when the server supports it, verifies nothing (a downgraded connection is not reported). |
+> | `require` / `required` / `verify_ca` / `verify_identity` | TLS enforced with `SSL_VERIFY_SERVER_CERT=true`. Because no client CA is configured, verification runs against the server's system CA trust store. |
+> | anything else | Rejected with `RuntimeException: Unknown MySQL ssl-mode`. |
+>
+> **Async caveat** — the ReactPHP admin path (`ReactMysqlConnection`) builds a `mysql://` URI that carries no TLS material at all: `--ssl-mode` only protects the synchronous PDO connection; background status/processlist fetches stay plaintext on that transport.
+
+> **PostgreSQL SSL** — the `sslmode=` DSN parameter is appended for pgsql connections when `sslMode` is set (`disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full`; MySQL-flavoured spellings `required`/`verify_identity`/`verify_full` map onto it). Unknown or empty values omit the parameter and inherit libpq's default (`prefer`).
 
 ### DSN parsing: `parse_url()` over manual `explode()`
 
@@ -225,23 +250,21 @@ driver://[user][:pass]@host[:port]/dbname[?query]
 - IPv6 hosts — `mysql://u:p@[::1]:3306/db` (brackets stripped from host, port preserved)
 - SQLite — handled via direct regex since `parse_url()` returns `false` for `sqlite:///path`
 
-Source: step 2.1 ai/candy-sql-dsn-and-factory
 
 ## Schema introspection
 
 `SchemaBrowser` uses a strategy pattern based on `Flavor` to delegate schema introspection to the appropriate `SchemaProviderInterface` implementation:
 
 ```php
-use SugarCraft\Sql\Schema\SchemaBrowser;
+use SugarCraft\Sql\SchemaBrowser;
+use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 
-// Auto-detect flavor from PDO driver and use correct provider
-$browser = (new SchemaBrowser($pdo))->refresh();
+// The browser needs a DatabaseInterface (any driver impl) and the flavor
+// $db = ConnectionFactory::fromDsn('sqlite:///var/data/app.sqlite');  // -> ConnectionConfig
+$db = new \SugarCraft\Sql\Db\SqliteDatabase(new \PDO('sqlite:' . $path), $path);
 
-// Or specify explicitly
-$browser = SchemaBrowser::forFlavor(Flavor::Sqlite, $pdo);
-$browser = SchemaBrowser::forFlavor(Flavor::MySQL, $pdo);
-$browser = SchemaBrowser::forFlavor(Flavor::Postgres, $pdo);
+$browser = SchemaBrowser::new($db, Flavor::Sqlite)->refresh();
 
 foreach ($browser->tables as $table) {
     echo $table->name;
@@ -258,67 +281,18 @@ Available providers:
 
 Schema value objects (`SchemaTable`, `SchemaColumn`, `SchemaIndex`, `SchemaForeignKey`) are all `readonly` classes with bare accessors.
 
-## Pagination
-
-`ResultPager` wraps a full result-set and provides cursor-based navigation:
-
-```php
-$pager = new ResultPager($allRows, pageSize: 25);
-while ($pager->hasNextPage()) {
-    $pageRows = $pager->page();   // list of row arrays
-    // process $pageRows
-    $pager = $pager->nextPage();  // new immutable instance
-}
-```
-
-`goToPage(1-based-int)`, `prevPage()`, and `withPageSize(int)` are also available. Page size defaults to 25 rows.
-
-## Cell editing
-
-`CellEditor` targets a table + primary-key column at construction, then performs single-cell or multi-cell updates by row identity:
-
-```php
-$editor = new CellEditor($pdo, 'users', 'id');
-$editor->updateCell(rowId: 42, column: 'email', newValue: 'new@example.com');
-$editor->updateRow(rowId: 42, cells: ['name' => 'Alice', 'email' => 'alice@example.com']);
-$current = $editor->readCell(rowId: 42, column: 'email');
-```
-
-All identifiers are safely quoted via `str_replace('"', '""', $name)`. `updateCell` and `updateRow` return rows affected (0 or 1).
-
-## Snippet store
-
-`SnippetStore` persists named SQL snippets to a JSON file, surviving process restarts:
-
-```php
-$store = SnippetStore::load();                    // load from /tmp/candy-sql-snippets.json
-$store = $store->add('active-users', 'SELECT * FROM users WHERE active = 1', 'Fetch active users');
-$store->flush();                                   // persist to disk
-
-$store->find('active-users');                     // → Snippet|null
-$store->search('users');                           // → list<Snippet> (name or SQL match)
-$store->delete('active-users')->flush();          // remove and persist
-```
-
-`Snippet(name, description, sql, createdAt)` is a plain readonly value object. The store is immutable — every mutation returns a new instance.
-
 ## Query plan viewer
 
 `ExplainView` uses a strategy pattern based on `Flavor` to delegate EXPLAIN parsing to the appropriate `ExplainProviderInterface` implementation:
 
 ```php
-use SugarCraft\Sql\QueryPlan\ExplainView;
-use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\ExplainView;
+use SugarCraft\Sql\Db\DatabaseInterface;
 
-// Auto-detect driver from PDO and use correct provider
-$view = ExplainView::run($pdo, 'SELECT * FROM users JOIN orders ON users.id = orders.user_id');
-echo $view->render();   // ANSI coloured tree
-print_r($view->toArray());  // JSON-serialisable structure
-
-// Or specify flavor explicitly
-$view = ExplainView::forFlavor(Flavor::MySQL, $pdo);
-$view = ExplainView::forFlavor(Flavor::Postgres, $pdo);
-$view = ExplainView::forFlavor(Flavor::Sqlite, $pdo);
+// run() takes a DatabaseInterface and detects the flavor/provider itself
+$view = ExplainView::run($db, 'SELECT * FROM users JOIN orders ON users.id = orders.user_id');
+echo $view->render();        // ANSI coloured tree
+print_r($view->toArray());   // JSON-serialisable structure
 ```
 
 Each detail line is classified by op type: `SEARCH` (cyan), `SCAN` (yellow), `USING` (green), `JOIN` (purple), `SUBQUERY` (pink), `COMPOUND` (orange).
@@ -332,19 +306,18 @@ Available providers:
 
 ## Admin providers
 
-`AdminProviderInterface` is the flavor-agnostic entry point for admin panel data, exposing three methods: `dashboard()`, `connections()`, and `serverInfo()`. Each method returns structured data that the admin UI renders — whether that UI targets MySQL or Postgres.
+`AdminProviderInterface` is the flavor-agnostic port for admin panel data. It exposes eight methods —
+`flavor()`, `fetchStatusVariables()`, `fetchServerVariables()`, `fetchProcesslist()`, `maxConnections()`,
+`statusVariablesTs()`, `wasReset()`, `refresh()` — returning structured data the admin UI renders for either flavor.
+Providers are not built through a static factory: the app's `ServerContext` (MySQL) and `PostgresServerContext`
+(PostgreSQL) construct and drive them.
 
 ```php
-use SugarCraft\Sql\Admin\AdminProviderInterface;
-use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Admin\ServerContext;
 
-// Auto-detect flavor from PDO and use correct provider
-$provider = AdminProviderInterface::forFlavor(Flavor::MySQL, $serverContext);
-$provider = AdminProviderInterface::forFlavor(Flavor::Postgres, $serverContext);
-
-$dashboard = $provider->dashboard();
-$connections = $provider->connections();
-$serverInfo = $provider->serverInfo();
+$context = new ServerContext($db);   // picks the MySQL admin provider internally
+$status  = $context->statusVariables();
+$rows    = $context->processlist();
 ```
 
 Available providers:
@@ -399,7 +372,7 @@ echo $page->render();
 | Key | Action |
 |-----|--------|
 | `[r]` | Refresh data |
-| `[q]` | Quit to previous view |
+| `[q]` | Quit (exits the application) |
 | `[g]` | Open GTID mode selector dialog (MySQL ≥ 5.7.6 only) |
 
 GTID dialog: press `[c]` to cycle through `OFF → OFF_PERMISSIVE → OFF_SECURE → ON_PERMISSIVE → ON`, then `[Enter]` to execute `SET @@GLOBAL.GTID_MODE = <mode>` or `[Esc]` to cancel. The dialog is only active when the server version is at least MySQL 5.7.6.
@@ -408,7 +381,7 @@ GTID dialog: press `[c]` to cycle through `OFF → OFF_PERMISSIVE → OFF_SECURE
 
 ## Performance Reports
 
-The Performance Reports page (`[8]` in admin) displays data from MySQL's `sys` schema views — grouped by category (problems, schema, IO, memory, etc.). Report queries are fully asynchronous: `validate()` calls only `Catalog::load()` (file I/O), then `App` dispatches `ReloadReportMsg` after the admin data tick, queuing the report query via `AdminQueryCache` for the next event-loop tick. This means the page never blocks on a slow `SELECT * FROM sys.x$*` query, matching the non-blocking behaviour of processlist and replica pages.
+The Performance Reports pages (`[5]` Query Stats / `[7]` Table Stats in admin) displays data from MySQL's `sys` schema views — grouped by category (problems, schema, IO, memory, etc.). Report queries are fully asynchronous: `validate()` calls only `Catalog::load()` (file I/O), then `App` dispatches `ReloadReportMsg` after the admin data tick, queuing the report query via `AdminQueryCache` for the next event-loop tick. This means the page never blocks on a slow `SELECT * FROM sys.x$*` query, matching the non-blocking behaviour of processlist and replica pages.
 
 **Async flow:**
 1. `ReportsPage::validate()` — loads `Catalog` from `data/sys_reports.json` (file I/O, always sync, never blocks)
@@ -430,7 +403,7 @@ The Performance Reports page (`[8]` in admin) displays data from MySQL's `sys` s
 | `r` | Refresh current report (async — queues a new query) |
 | `x` | Export current report to CSV (RFC-4180, formula-safe) |
 | `c` | Toggle unit display for time/byte columns (global; `selectedColumnIndex` is tracked for future per-column targeting) |
-| `q` | Quit to previous view |
+| `q` | Quit (exits the application) |
 
 > **Category/report navigation** — `h`/`l` and `[`/`]` keys traverse the category tree and the report list within each category respectively. Both wrap around at boundaries. Selecting a category or report triggers `loadCurrentReport()` asynchronously via `AdminQueryCache`, exactly as if the user clicked it in the tree.
 
@@ -438,7 +411,7 @@ The Performance Reports page (`[8]` in admin) displays data from MySQL's `sys` s
 
 ## Performance Schema Setup
 
-The Performance Schema Setup page (`[7]` in admin) provides a tabbed interface for configuring MySQL's `performance_schema`. It is version-aware and adapts its queries and editable fields to the detected MySQL version.
+The Performance Schema Setup page (`[8]` in admin) provides a tabbed interface for configuring MySQL's `performance_schema`. It is version-aware and adapts its queries and editable fields to the detected MySQL version.
 
 **EasySetupDetector (STEP 5.3):** The page uses `EasySetupDetector` (created via `EasySetupDetector::fromContext($context)` when not explicitly provided) to detect the current PS setup state as one of four values shown in the header badge:
 
@@ -485,7 +458,7 @@ The detector is wired from `App::adminPage()` into the `PerfSchemaPage` construc
 | `c` | Commit pending changes (when dirty) |
 | `r` | Revert pending changes (when dirty) |
 | `1/2/3` | Easy Setup actions (enable full / disable / reset to defaults) |
-| `q` | Quit to previous view |
+| `q` | Quit (exits the application) |
 
 > **Timer mutation safety** — on MySQL ≥8.0 the Options tab renders `performance_timers` as read-only instances. `SetupTimers::commitStatements()` returns `[]` for these because they carry `dirty=false`. Only timers loaded from `setup_timers` on <8.0 generate `UPDATE` statements.
 
@@ -563,7 +536,7 @@ if ($notifier->hasAlerts()) {
 
 ### Performance Dashboard
 
-`DashboardPage` renders a 3-column live monitoring view (Network / MySQL / InnoDB panels) updated every 3 seconds via `ServerContext` polling. Each panel shows timeline sparklines, counter values, and meters.
+`DashboardPage` renders a 3-column live monitoring view (Network / MySQL / InnoDB panels) updated every second via `ServerContext` polling (`AdminTickMsg` at 1.0s, throttled by `CacheTtl::DASHBOARD`). Each panel shows timeline sparklines, counter values, and meters.
 
 **Architecture:**
 - `pollAndUpdateCells()` measures actual wall-clock elapsed via `microtime(true)` — `$elapsed = max(0.001, $now - $lastPollAt)`. On the very first poll (when `lastPollAt` is null), a 3.0s fallback is used; thereafter `lastPollAt` is always set and real elapsed time is used.
@@ -582,7 +555,7 @@ if ($notifier->hasAlerts()) {
 
 | Key | Action |
 |-----|--------|
-| `p` | Pause/resume 3-second auto-refresh |
+| `p` | Pause/resume the 1-second auto-refresh |
 | `r` | Reset all timeline/counter/meter history |
 | `a` | Dismiss all pending alert toasts |
 
@@ -644,36 +617,31 @@ try {
 
 When `pcntl` is unavailable, `StatementTimeout::execute()` degrades gracefully and runs without enforcement (logs a warning at construction time).
 
-## Query History (optional)
+## Query History (default-on in the launcher)
 
-Query history is an opt-in SQLite-backed layer with two separate concerns:
-
-1. **StatusSnapshot metrics** — `HistoryRecorder` captures server metrics (connections, QPS, cache hit rates, etc.) via `StatusSnapshotProviderInterface` on each poll cycle and persists them to `SqliteHistoryStore`.
-2. **SQL query text** — Stored via `SqliteHistoryStore::save()` (schema includes `query TEXT`, `duration_ms`, `rows_affected`, `error`). This integration point is `App::runQuery()` — see future work in `CALIBER_LEARNINGS.md`.
-
-Both share the same `SqliteHistoryStore` (WAL mode) and `HistoryQuery` helpers.
+The launcher records the admin poll snapshots to SQLite — on by default, opt out with `--no-history`. Default location is
+`$HOME/.candy-sql/history.db` (created with dir 0700 / file 0600; if `HOME` is unset the recorder stays disabled);
+`--history=<path>` relocates it. The recorded unit is a `StatusSnapshot` (a timestamped map of server status variables) —
+SQL statement text is never persisted. The in-memory query history (`App::runQuery()` result rows) is session-scoped only.
 
 ```php
 use SugarCraft\Sql\Admin\History\SqliteHistoryStore;
 use SugarCraft\Sql\Admin\History\HistoryRecorder;
 use SugarCraft\Sql\Admin\History\HistoryQuery;
 
-// Persist to a SQLite file (WAL mode, auto-pruned at 1000 entries)
-$store = SqliteHistoryStore::open('/tmp/candy-sql-history.sqlite');
+$store = new SqliteHistoryStore('/tmp/candy-sql-history.sqlite');  // WAL, busy timeout 5s
 $recorder = new HistoryRecorder($store);
 
-// Attach to the polling loop via StatusSnapshotProviderInterface
-// The recorder only writes when provideStatusSnapshot() is called
-$status = $recorder->provideStatusSnapshot($previousStatus);
+// One snapshot per admin poll tick; the recorder never writes on its own initiative
+$recorder->record(new \SugarCraft\Sql\Admin\StatusSnapshot(['Queries' => '4242'], microtime(true)));
 
-// Query historical patterns
+// Read historical patterns
 $q = new HistoryQuery($store);
-$qps = $q->queriesPerSecond(from: new DateTimeImmutable('-1 hour'), to: new DateTimeImmutable());
-$avgDuration = $q->averageDuration(from: new DateTimeImmutable('-1 day'), to: new DateTimeImmutable());
-$errorRate = $q->errorRate(from: new DateTimeImmutable('-1 hour'), to: new DateTimeImmutable());
+$snapshots = $q->querySince(microtime(true) - 3600.0);
+$qps = $q->getRate('Queries', microtime(true) - 3600.0, microtime(true)); // ?float per-second
 
-// Prune entries older than 30 days
-$store->prune(before: new DateTimeImmutable('-30 days'));
+// Pruning is manual
+$removed = $store->prune(new DateTimeImmutable('-30 days'));
 ```
 
 ## Known limitations
