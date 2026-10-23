@@ -18,4 +18,10 @@ return [
     'custom.max_cols'            => 'columns must be at most 50',
     'custom.min_mines'           => 'at least 1 mine required',
     'custom.max_mines'           => 'too many mines — leave a safe starting area',
+    'ui.status' => 'mines: {mines}  ·  flags: {flags}  ·  remaining: {remaining}  ·  time: {time}',
+    'ui.boom' => '💥 boom — press r to restart',
+    'ui.cleared' => '★ cleared — press r to play again',
+    'ui.help_moves' => '↑ ↓ ← → / hjkl  move  ·  space / enter  reveal',
+    'ui.help_board' => 'f  flag  ·  c / middle-click  chord  ·  right-click  flag',
+    'ui.help_session' => 'r  restart  ·  S  save  ·  L  load  ·  q / Esc / Ctrl+C  quit',
 ];

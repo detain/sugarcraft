@@ -731,4 +731,90 @@ final class GameTest extends TestCase
             }
         }
     }
+
+    // ─── E3 (docs-fix-1023): the clock arms on the first ACTUAL reveal ───────
+
+    public function testRevealOnFlaggedCellDoesNotArmClock(): void
+    {
+        $g = Game::start(5, 5, 3, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f'));    // flag (0,0)
+        [$g, ] = $g->update(self::key(KeyType::Space));        // dud reveal
+
+        $this->assertTrue($g->board->cell(0, 0)->flagged, 'sanity: cell is flagged');
+        $this->assertNull($g->startedAt, 'a reveal that revealed nothing must not arm the timer');
+        $this->assertNull($g->elapsed());
+    }
+
+    public function testChordOnUnrevealedCellDoesNotArmClock(): void
+    {
+        $g = Game::start(5, 5, 3, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Char, 'c'));    // chord on a hidden cell
+
+        $this->assertNull($g->startedAt, 'a refused chord must not arm the timer');
+    }
+
+    public function testDudKeypressThenRealRevealArmsExactlyOnce(): void
+    {
+        $g = Game::start(5, 5, 3, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f'));    // flag (0,0)
+        [$g, ] = $g->update(self::key(KeyType::Space));        // dud: flagged cell
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f'));    // unflag (0,0)
+
+        $this->assertNull($g->startedAt, 'still unarmed after two duds and an unflag');
+
+        [$g, ] = $g->update(self::key(KeyType::Space));        // real reveal
+        $this->assertNotNull($g->startedAt, 'the first actual reveal arms the clock');
+    }
+
+    // ─── E3: custom boards keep a readable final time ───────────────────────
+
+    /** A 5×5/3 board matches no preset → difficulty() is null ("custom"). */
+    private function customExplodedTransitionGame(): Game
+    {
+        $rand = static fn(int $_max): int => 0;
+        $g = Game::start(5, 5, 3, $rand);
+        [$g, ] = $g->update(self::key(KeyType::Space));        // safe first reveal, arms clock
+
+        for ($y = 0; $y < 5; $y++) {
+            for ($x = 0; $x < 5; $x++) {
+                $cell = $g->board->cell($x, $y);
+                if ($cell !== null && $cell->mine && !$cell->revealed) {
+                    while ($g->cursorX !== $x) {
+                        [$g, ] = $g->update($g->cursorX < $x ? self::key(KeyType::Right) : self::key(KeyType::Left));
+                    }
+                    while ($g->cursorY !== $y) {
+                        [$g, ] = $g->update($g->cursorY < $y ? self::key(KeyType::Down) : self::key(KeyType::Up));
+                    }
+                    [$g, ] = $g->update(self::key(KeyType::Space));   // explode
+                    break 2;
+                }
+            }
+        }
+
+        $this->assertTrue($g->board->exploded, 'sanity: custom board exploded');
+        $this->assertNull($g->difficulty(), 'sanity: this shape is a custom board');
+        return $g;
+    }
+
+    public function testCustomLossStillFreezesTheEndScreenTime(): void
+    {
+        $g = $this->customExplodedTransitionGame();
+
+        // Pre-fix this was null: recordResult() early-returned on custom
+        // boards WITHOUT freezing elapsedSeconds, so the finished game
+        // displayed 'time: 0:00' no matter how long it ran.
+        $this->assertNotNull($g->elapsed(), 'a finished custom game must report its final time');
+        $this->assertSame((int) round($g->elapsed()), $g->elapsedSeconds);
+    }
+
+    public function testRecordResultOnCustomBoardFreezesForRenderer(): void
+    {
+        $g = $this->customExplodedTransitionGame();
+        $frozen = $g->recordResult(9.7);
+
+        $this->assertSame(9, $frozen->elapsedSeconds, 'custom freeze floors the float like presets');
+        $this->assertSame(9.0, $frozen->elapsed(), 'elapsed() reads the frozen end time, not null');
+        $this->assertStringContainsString('💥 boom', $frozen->view(), 'end screen still paints the boom line');
+        $this->assertSame(0, $frozen->stats()->gamesPlayed(Difficulty::STANDARD), 'but custom games still tally nothing');
+    }
 }

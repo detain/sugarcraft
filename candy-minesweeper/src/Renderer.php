@@ -18,7 +18,7 @@ use SugarCraft\Style\Style as SugarStyle;
  * snapshot tests can assert against the output directly.
  *
  * Rendering uses a {@see Buffer} for the minefield: each cell is
- * zone-tagged via {@see Mark::wrap()} using "cell:$row:$col" so
+ * zone-tagged via {@see Mark::zone()} using "cell:$row:$col" so
  * {@see Scanner::hit()} can resolve mouse coordinates to cell
  * positions on click/flag events.
  *
@@ -37,6 +37,20 @@ final class Renderer
         7 => 0xfb923c,  // orange
         8 => 0xff5f87,  // hot pink
     ];
+
+    /**
+     * Geometry coupling between {@see frame()} and mouse hit-testing: the
+     * rounded border costs 1 cell and the padding(0,1) layer 1 more, so the
+     * first interior cell glyph sits at 0-based terminal coordinates
+     * (2, 1). {@see Game::onMouse()} subtracts these constants to translate
+     * 1-based MouseMsg positions into the Scanner's 1-based interior
+     * coordinates — and {@see frame()} indents the status/footer by the
+     * column offset so text lines up with the first interior column. Any
+     * frame change (double border, wider padding) moves the click mapping
+     * with it; it cannot silently drift.
+     */
+    public const INTERIOR_COL_OFFSET = 2;
+    public const INTERIOR_ROW_OFFSET = 1;
 
     public static function render(Game $g): string
     {
@@ -80,8 +94,20 @@ final class Renderer
             ->render($interior);
 
         $status = self::status($g->board, $g->elapsed());
-        $help   = "↑ ↓ ← →  move  ·  space  reveal  ·  f  flag  ·  r  restart  ·  q  quit";
-        return $framed . "\n " . $status . "\n " .
+        // Indent matches INTERIOR_COL_OFFSET — border cell + horizontal
+        // padding cell — so status and footer line up under the first
+        // interior column. Each footer line carries it, not just the first.
+        $indent = str_repeat(' ', self::INTERIOR_COL_OFFSET);
+        // Every bound key names itself here — the footer is the app's only
+        // discoverability surface (there is no separate help screen). Values
+        // ship translated in all 16 locales; each line stays under 80 cells
+        // so even the 2×2 board's view is not clipped on a stock terminal.
+        $help = implode("\n" . $indent, [
+            Lang::t('ui.help_moves'),
+            Lang::t('ui.help_board'),
+            Lang::t('ui.help_session'),
+        ]);
+        return $framed . "\n" . $indent . $status . "\n" . $indent .
                SugarStyle::new()->foreground(Color::hex('#7d6e98'))->render($help) . "\n";
     }
 
@@ -89,7 +115,7 @@ final class Renderer
      * Build a Buffer cell for the minefield at (col, row).
      *
      * When $mark is true the glyph is zone-tagged with
-     * Mark::wrap("cell:$row:$col", $glyph) so Scanner::hit() can map
+     * Mark::zone("cell:$row:$col", $glyph) so Scanner::hit() can map
      * mouse coordinates back to a cell.
      */
     private static function cellBufferCell(Board $b, int $col, int $row, int $cx, int $cy, bool $mark = false): \SugarCraft\CellBuffer\Cell
@@ -193,16 +219,21 @@ final class Renderer
     {
         if ($b->exploded) {
             return SugarStyle::new()->foreground(Color::hex('#ff5f87'))->bold()
-                ->render('💥 boom — press r to restart');
+                ->render(Lang::t('ui.boom'));
         }
         if ($b->isWon()) {
             return SugarStyle::new()->foreground(Color::hex('#6ee7b7'))->bold()
-                ->render('★ cleared — press r to play again');
+                ->render(Lang::t('ui.cleared'));
         }
         $remaining = max(0, $b->mineCount - $b->flagCount());
         $time = $elapsed !== null ? self::formatTime((int) $elapsed) : '0:00';
         return SugarStyle::new()->foreground(Color::hex('#a78bfa'))
-            ->render("mines: {$b->mineCount}  ·  flags: {$b->flagCount()}  ·  remaining: {$remaining}  ·  time: {$time}");
+            ->render(Lang::t('ui.status', [
+                'mines'     => $b->mineCount,
+                'flags'     => $b->flagCount(),
+                'remaining' => $remaining,
+                'time'      => $time,
+            ]));
     }
 
     private static function formatTime(int $seconds): string

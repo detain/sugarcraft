@@ -23,6 +23,13 @@ use SugarCraft\Minesweeper\Game;
 use SugarCraft\Minesweeper\Stats\DifficultyStats;
 use SugarCraft\Minesweeper\Ui\CustomDifficulty;
 
+// Activate the locale detected from LANG/LC_ALL/LC_MESSAGES before any string
+// is translated (house pattern, cf. candy-mail): in-game text routes through
+// Lang::t, and without this call T's 'en' default would make the shipped
+// locales unreachable. The usage/error prose below this point stays English on
+// purpose — it must be parseable even when the terminal's locale is broken.
+\SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
+
 // Pre-rename env compatibility (plan_rename.md R4.5): CANDY_MINES_STATS was // @rename-keep
 // this app's stats-path var before the 2026-10 rename. Import any old-prefix
 // exports under the new name (new name always wins), then warn once per var.
@@ -35,29 +42,52 @@ foreach (\SugarCraft\Core\Util\LegacyEnv::import([
 /**
  * CLI:
  *   candy-minesweeper                        # default 10×10, 12 mines
- *   candy-minesweeper [width] [height] [mines]
- *   candy-minesweeper --easy|--standard|--medium|--expert
+ *   candy-minesweeper [width] [height] [mines]   # custom board
+ *   candy-minesweeper --easy|--standard|--medium|--expert   # preset
+ *
+ * A preset flag and custom dimensions are mutually exclusive, and only one
+ * preset may be given; violating either rule is an error, not a silent
+ * precedence rule.
  *
  * Stats persistence is opt-in: set CANDY_MINESWEEPER_STATS=/path/to/stats.json and a
  * completed game's outcome is recorded there across sessions.
+ * Mid-game saves (in-app 'S' / 'L') live at $HOME/.config/candy-minesweeper/savegame.json.
  */
+$usage = "usage: candy-minesweeper [width] [height] [mines]\n"
+      . "       candy-minesweeper --easy | --standard | --medium | --expert\n";
 $args   = array_slice($argv ?? [], 1);
 $preset = null;
 $positional = [];
+$presets = [
+    '--easy'     => Difficulty::EASY,
+    '--standard' => Difficulty::STANDARD,
+    '--medium'   => Difficulty::MEDIUM,
+    '--expert'   => Difficulty::EXPERT,
+];
 foreach ($args as $arg) {
-    switch ($arg) {
-        case '--easy':     $preset = Difficulty::EASY;     break;
-        case '--standard': $preset = Difficulty::STANDARD; break;
-        case '--medium': $preset = Difficulty::MEDIUM; break;
-        case '--expert': $preset = Difficulty::EXPERT; break;
-        default:
-            if (str_starts_with($arg, '-')) {
-                fwrite(STDERR, "candy-minesweeper: unknown option {$arg}\n");
-                fwrite(STDERR, "usage: candy-minesweeper [width] [height] [mines] | --easy | --standard | --medium | --expert\n");
-                exit(1);
-            }
-            $positional[] = $arg;
+    if (isset($presets[$arg])) {
+        if ($preset !== null) {
+            // Two presets is a contradiction, not a last-wins rule.
+            fwrite(STDERR, "candy-minesweeper: more than one preset flag given\n");
+            fwrite(STDERR, $usage);
+            exit(1);
+        }
+        $preset = $presets[$arg];
+        continue;
     }
+    if (str_starts_with($arg, '-')) {
+        fwrite(STDERR, "candy-minesweeper: unknown option {$arg}\n");
+        fwrite(STDERR, $usage);
+        exit(1);
+    }
+    $positional[] = $arg;
+}
+if ($preset !== null && $positional !== []) {
+    // Refuse loudly: silently letting the preset win turns `--expert 10 10`
+    // into a game the player did not ask for, with no signal anything moved.
+    fwrite(STDERR, "candy-minesweeper: a preset flag and custom dimensions are mutually exclusive\n");
+    fwrite(STDERR, $usage);
+    exit(1);
 }
 
 // Opt-in stats persistence: seed accumulated stats from disk if the file exists.

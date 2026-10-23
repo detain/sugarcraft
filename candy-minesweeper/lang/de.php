@@ -18,4 +18,10 @@ return [
     'custom.max_cols' => 'Spalten dürfen höchstens 50 sein',
     'custom.min_mines' => 'mindestens 1 Mine erforderlich',
     'custom.max_mines' => 'zu viele Minen — lassen Sie einen sicheren Startbereich',
+    'ui.status' => 'Minen: {mines}  ·  Flaggen: {flags}  ·  verbleibend: {remaining}  ·  Zeit: {time}',
+    'ui.boom' => '💥 Boom — drücken Sie r für einen Neustart',
+    'ui.cleared' => '★ Geschafft — drücken Sie r für eine neue Partie',
+    'ui.help_moves' => '↑ ↓ ← → / hjkl  bewegen  ·  Space / Enter  aufdecken',
+    'ui.help_board' => 'f  flaggen  ·  c / Mittelklick  chord  ·  Rechtsklick  flaggen',
+    'ui.help_session' => 'r  Neustart  ·  S  speichern  ·  L  laden  ·  q / Esc / Ctrl+C  beenden',
 ];

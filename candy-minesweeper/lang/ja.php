@@ -18,4 +18,10 @@ return [
     'custom.max_cols' => '列数は50以下である必要があります',
     'custom.min_mines' => '地雷は1つ以上必要です',
     'custom.max_mines' => '地雷が多すぎます — 安全な開始領域を残してください',
+    'ui.status' => '地雷: {mines}  ·  フラグ: {flags}  ·  残り: {remaining}  ·  時間: {time}',
+    'ui.boom' => '💥 ドカン — r で再スタート',
+    'ui.cleared' => '★ クリア — r でもう一度',
+    'ui.help_moves' => '↑ ↓ ← → / hjkl  移動  ·  space / enter  開く',
+    'ui.help_board' => 'f  旗  ·  c / 中クリック  和音  ·  右クリック  旗',
+    'ui.help_session' => 'r  リスタート  ·  S  保存  ·  L  読込  ·  q / Esc / Ctrl+C  終了',
 ];

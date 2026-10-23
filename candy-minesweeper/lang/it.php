@@ -18,4 +18,10 @@ return [
     'custom.max_cols' => 'le colonne devono essere al massimo 50',
     'custom.min_mines' => 'è richiesta almeno 1 mina',
     'custom.max_mines' => 'troppe mine — lascia un\'area di partenza sicura',
+    'ui.status' => 'mine: {mines}  ·  bandiere: {flags}  ·  rimanenti: {remaining}  ·  tempo: {time}',
+    'ui.boom' => '💥 boom — premi r per ricominciare',
+    'ui.cleared' => '★ completato — premi r per giocare ancora',
+    'ui.help_moves' => '↑ ↓ ← → / hjkl  muovi  ·  spazio / invio  rivela',
+    'ui.help_board' => 'f  bandiera  ·  c / clic centrale  accordo  ·  clic destro  bandiera',
+    'ui.help_session' => 'r  ricomincia  ·  S  salva  ·  L  carica  ·  q / Esc / Ctrl+C  esci',
 ];

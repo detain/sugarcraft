@@ -18,4 +18,10 @@ return [
     'custom.max_cols' => 'يجب ألا يتجاوز عدد الأعمدة 50',
     'custom.min_mines' => 'مطلوب لغم واحد على الأقل',
     'custom.max_mines' => 'ألغام كثيرة جدًا — اترك منطقة بداية آمنة',
+    'ui.status' => 'ألغام: {mines}  ·  أعلام: {flags}  ·  متبقٍ: {remaining}  ·  وقت: {time}',
+    'ui.boom' => '💥 بوم — اضغط r لإعادة البدء',
+    'ui.cleared' => '★ تمّ التنقية — اضغط r للعب مجدداً',
+    'ui.help_moves' => '↑ ↓ ← → / hjkl  تحريك  ·  مسافة / enter  كشف',
+    'ui.help_board' => 'f  علم  ·  c / الزر الأوسط  وتر  ·  النقر الأيمن  علم',
+    'ui.help_session' => 'r  إعادة  ·  S  حفظ  ·  L  تحميل  ·  q / Esc / Ctrl+C  خروج',
 ];

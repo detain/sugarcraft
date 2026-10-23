@@ -48,12 +48,17 @@ final class LocaleParityTest extends TestCase
         }
     }
 
-    public function testEnglishSourceOfTruthCarriesBothKeyFamilies(): void
+    public function testEnglishSourceOfTruthCarriesAllKeyFamilies(): void
     {
         $en = require __DIR__ . '/../lang/en.php';
         $this->assertArrayHasKey('board.rows_shape_mismatch', $en);
         foreach (['min_rows', 'min_cols', 'max_rows', 'max_cols', 'min_mines', 'max_mines'] as $suffix) {
             $this->assertArrayHasKey("custom.$suffix", $en);
+        }
+        // The ui.* family is what makes MAJOR-2 (i18n dormant) stay fixed:
+        // every visible game string must live here, never inline in code.
+        foreach (['status', 'boom', 'cleared', 'help_moves', 'help_board', 'help_session'] as $suffix) {
+            $this->assertArrayHasKey("ui.$suffix", $en);
         }
     }
 }

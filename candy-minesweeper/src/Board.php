@@ -357,9 +357,16 @@ final class Board
     /**
      * Chord click — reveal all unflagged neighbors of a "satisfied" number.
      *
-     * A cell is satisfied when its adjacent count equals the number of
-     * flagged neighbors. Chord-clicking it is safe because the player
+     * A cell is satisfied when its (positive) adjacent count equals the number
+     * of flagged neighbors. Chord-clicking it is safe because the player
      * has correctly identified all mines around that cell.
+     *
+     * A zero-adjacent cell can satisfy the letter of that definition vacuously
+     * (0 flagged neighbours around a 0), but it is deliberately NOT chordable:
+     * a revealed 0 has already flood-filled every neighbour it owns, so a
+     * chord there could never reveal anything new, and treating it as
+     * "satisfied" would let a stray click on empty ground look like a move
+     * that did something. Chording an unrevealed cell likewise does nothing.
      *
      * Mirrors standard minesweeper left+right / middle-click chord.
      */

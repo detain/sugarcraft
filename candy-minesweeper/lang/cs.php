@@ -18,4 +18,10 @@ return [
     'custom.max_cols' => 'sloupců musí být nejvýše 50',
     'custom.min_mines' => 'je vyžadováno alespoň 1 mina',
     'custom.max_mines' => 'příliš mnoho min — nechte bezpečnou výchozí oblast',
+    'ui.status' => 'miny: {mines}  ·  vlajky: {flags}  ·  zbývá: {remaining}  ·  čas: {time}',
+    'ui.boom' => '💥 bouch — stiskněte r pro restart',
+    'ui.cleared' => '★ vyčištěno — stiskněte r pro novou hru',
+    'ui.help_moves' => '↑ ↓ ← → / hjkl  pohyb  ·  mezerník / enter  odkrytí',
+    'ui.help_board' => 'f  vlajka  ·  c / prostřední tlačítko  chord  ·  pravé tlačítko  vlajka',
+    'ui.help_session' => 'r  restart  ·  S  uložit  ·  L  načíst  ·  q / Esc / Ctrl+C  konec',
 ];

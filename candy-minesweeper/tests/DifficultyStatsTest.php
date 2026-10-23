@@ -23,7 +23,12 @@ final class DifficultyStatsTest extends TestCase
 
     protected function tearDown(): void
     {
-        array_map('unlink', glob($this->tmpDir . '/*'));
+        // FilesystemIterator, not glob('*'): AtomicJsonFile's lock sidecar is
+        // a DOTFILE and glob would miss it, leaving rmdir to warn (which
+        // failOnWarning turns into suite noise).
+        foreach (new \FilesystemIterator($this->tmpDir) as $residue) {
+            @unlink($residue->getPathname());
+        }
         rmdir($this->tmpDir);
     }
 
@@ -172,15 +177,19 @@ final class DifficultyStatsTest extends TestCase
     }
 
     /**
-     * The atomic write must leave the directory holding ONLY the target file —
-     * no temp artifact (whatever naming scheme AtomicJsonFile uses). Robust to
-     * the sugar-core temp pattern `.<name>.tmp.<hex>`, unlike a `.tmp_*` glob.
+     * The atomic write must leave the directory holding ONLY the target file
+     * plus the documented fixed-name lock sidecar — no random temp artifact
+     * may survive (whatever naming scheme AtomicJsonFile uses). Robust to the
+     * sugar-core temp pattern `.<name>.tmp.<hex>`; the persistent
+     * `.stats.json.lock` flock sidecar is documented sugar-core design and
+     * carved explicitly (same ruling as the sugar-dashboard temp-residue
+     * carve) — carving it by exact name keeps every "no stray temp" leg live.
      */
     public function testSaveLeavesNoTempArtifacts(): void
     {
         DifficultyStats::fromStats(new Stats(easyGames: 1))->save($this->persistencePath);
 
-        $entries = array_values(array_diff(scandir($this->tmpDir), ['.', '..']));
+        $entries = array_values(array_diff(scandir($this->tmpDir), ['.', '..', '.stats.json.lock']));
         $this->assertSame(['stats.json'], $entries, 'Only the target file should remain');
     }
 

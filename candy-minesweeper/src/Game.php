@@ -13,21 +13,35 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\MouseMode;
+use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Minesweeper\Stats\DifficultyStats;
 
 /**
  * Minesweeper as a SugarCraft Model. Keys:
- *   - arrows / hjkl  → move cursor
- *   - space          → reveal
- *   - f              → toggle flag
- *   - r              → restart
- *   - q / esc        → quit
+ *   - arrows / hjkl        → move cursor
+ *   - space / enter        → reveal
+ *   - f                    → toggle flag
+ *   - c                    → chord
+ *   - S                    → save the live game (single slot under
+ *                            $HOME/.config/candy-minesweeper/, 0600)
+ *   - L                    → load that save — works even after game over,
+ *                            so a lost board can step back to the saved one
+ *   - r                    → restart
+ *   - q / esc / Ctrl+C     → quit
+ * Mouse: left-click reveals, right-click flags, middle-click chords.
  *
  * The PRNG is injected as a `Closure(int $maxInclusive): int` so
  * fixture tests can pin the layout. Default is `random_int(0, $max)`.
  */
 final class Game implements Model
 {
+    /**
+     * Version tag of the savegame envelope (the inner board payload carries
+     * its own {@see Board::serialize()} version — both must match on read
+     * or the file is refused, never half-parsed).
+     */
+    private const SAVE_VERSION = 1;
+
     /** @var \Closure(int):int */
     private \Closure $rand;
 
@@ -65,6 +79,13 @@ final class Game implements Model
         return self::start($d->width(), $d->height(), $d->mines(), $rand, $stats, $statsPath);
     }
 
+    /**
+     * Convenience alias of {@see start()} for named-argument call sites
+     * ("custom" dimensions vs the preset ladder). Deliberately carries no
+     * validation of its own — callers coming from user input route through
+     * {@see \SugarCraft\Minesweeper\Ui\CustomDifficulty::fromInput()} first
+     * (the CLI does), which is what makes the alias safe to keep.
+     */
     public static function withCustom(int $width, int $height, int $mines, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null): self
     {
         return self::start($width, $height, $mines, $rand, $stats, $statsPath);
@@ -79,6 +100,12 @@ final class Game implements Model
         );
     }
 
+    /**
+     * The injected PRNG. Exposed because {@see Board::reveal()} takes the
+     * closure per call — a caller cloning a Game (or driving the Board
+     * directly, as the save round-trip pins do) must reuse this game's
+     * sequence rather than silently switching to `random_int`.
+     */
     public function rand(): \Closure
     {
         return $this->rand;
@@ -127,9 +154,18 @@ final class Game implements Model
                 $this->rand, $this->stats, $this->statsPath,
             ), null];
         }
+        if ($msg->type === KeyType::Char && $msg->rune === 'L') {
+            // Load deliberately sits ABOVE the over-gate: the point of loading
+            // a save is often to step away from a board you just lost.
+            return [$this->loadSaved(), null];
+        }
         if ($this->board->exploded || $this->board->isWon()) {
-            // Only `r` and `q` work after the game ends.
+            // Only r, q and L work after the game ends — saving a finished
+            // board would only overwrite a live savegame with a dead one.
             return [$this, null];
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === 'S') {
+            return [$this->saveGame(), null];
         }
         $next = match (true) {
             $msg->type === KeyType::Up    || ($msg->type === KeyType::Char && $msg->rune === 'k')
@@ -196,6 +232,99 @@ final class Game implements Model
         }
     }
 
+    /**
+     * Absolute path of the single-slot savegame, resolved from $HOME at call
+     * time (never cached — tests sandbox HOME per test, and a process that
+     * learned its HOME after boot should still find the file). Null when the
+     * environment carries no usable HOME: save then degrades to a no-op and
+     * load keeps the current game, mirroring the best-effort stats writes.
+     */
+    public static function savePath(): ?string
+    {
+        $home = getenv('HOME');
+        if ($home === false || $home === '') {
+            return null;
+        }
+        return rtrim($home, '/') . '/.config/candy-minesweeper/savegame.json';
+    }
+
+    /**
+     * 'S' — persist the live board to the single savegame slot. Written
+     * through {@see AtomicJsonFile} with 0600: a savegame reveals nothing
+     * secret, but it lives under $HOME like the user's other config and the
+     * strict mode costs nothing. The clock rides as elapsed SECONDS at save
+     * time, so 'L' in a fresh process (later this session or next week)
+     * resumes the timer from where it stood. Failures are swallowed exactly
+     * like {@see persistStats()} — a full disk must never crash a game.
+     */
+    private function saveGame(): self
+    {
+        $path = self::savePath();
+        if ($path === null) {
+            return $this;
+        }
+        try {
+            AtomicJsonFile::new($path)
+                ->withPermissions(0600)
+                ->write([
+                    'v'       => self::SAVE_VERSION,
+                    'board'   => $this->board->serialize(),
+                    'cursorX' => $this->cursorX,
+                    'cursorY' => $this->cursorY,
+                    'elapsed' => $this->elapsed(),
+                ]);
+        } catch (\Throwable) {
+            // Non-fatal by design; the in-memory game stays fully playable.
+        }
+        return $this;
+    }
+
+    /**
+     * 'L' — replace the running game with the savegame slot's state, keeping
+     * this session's stats tally (a load is a time machine, not a memory
+     * wipe). Missing/unreadable/unversioned files are refused quietly and
+     * the current game continues. The board itself goes through
+     * {@see Board::unserialize()}, whose tamper hardening (recomputed
+     * revealed/flagged counts, enforced version) is what makes trusting a
+     * file on disk safe at all.
+     */
+    private function loadSaved(): self
+    {
+        $path = self::savePath();
+        if ($path === null) {
+            return $this;
+        }
+        try {
+            $payload = AtomicJsonFile::new($path)->read();
+        } catch (\Throwable) {
+            return $this;
+        }
+        if (($payload['v'] ?? null) !== self::SAVE_VERSION
+            || !is_string($payload['board'] ?? null)) {
+            return $this;
+        }
+        try {
+            $board = Board::unserialize($payload['board']);
+        } catch (\InvalidArgumentException) {
+            return $this;
+        }
+        $elapsed = $payload['elapsed'] ?? null;
+        return new self(
+            board: $board,
+            cursorX: max(0, min($board->width  - 1, (int) ($payload['cursorX'] ?? 0))),
+            cursorY: max(0, min($board->height - 1, (int) ($payload['cursorY'] ?? 0))),
+            rand: $this->rand,
+            // Re-anchor the wall clock so elapsed() continues from the
+            // saved reading; a save taken before the first reveal carries
+            // elapsed null and stays a clock-not-started game.
+            startedAt: (is_float($elapsed) || is_int($elapsed))
+                ? microtime(true) - (float) $elapsed
+                : null,
+            stats: $this->stats,
+            statsPath: $this->statsPath,
+        );
+    }
+
     public function view(): string
     {
         return Renderer::render($this);
@@ -217,13 +346,20 @@ final class Game implements Model
 
     private function reveal(): self
     {
-        $now = $this->startedAt ?? microtime(true);
+        // Compute the board FIRST: a no-op reveal (already-revealed or flagged
+        // cell) returns the same Board, and must not arm the clock — the timer
+        // is documented (README, subscriptions()) to start on the first actual
+        // reveal, not on the first keypress that happened to hit a dud.
+        $board = $this->board->reveal($this->cursorX, $this->cursorY, $this->rand);
+        if ($board === $this->board) {
+            return $this;
+        }
         return new self(
-            board: $this->board->reveal($this->cursorX, $this->cursorY, $this->rand),
+            board: $board,
             cursorX: $this->cursorX,
             cursorY: $this->cursorY,
             rand: $this->rand,
-            startedAt: $now,
+            startedAt: $this->startedAt ?? microtime(true),
             elapsedSeconds: null,
             stats: $this->stats,
             statsPath: $this->statsPath,
@@ -246,13 +382,19 @@ final class Game implements Model
 
     private function chord(): self
     {
-        $now = $this->startedAt ?? microtime(true);
+        // Same first-reveal discipline as reveal(): a refused chord (number not
+        // satisfied, or cell unchordable) leaves the board untouched and must
+        // leave the clock disarmed.
+        $board = $this->board->chord($this->cursorX, $this->cursorY);
+        if ($board === $this->board) {
+            return $this;
+        }
         return new self(
-            board: $this->board->chord($this->cursorX, $this->cursorY),
+            board: $board,
             cursorX: $this->cursorX,
             cursorY: $this->cursorY,
             rand: $this->rand,
-            startedAt: $now,
+            startedAt: $this->startedAt ?? microtime(true),
             elapsedSeconds: null,
             stats: $this->stats,
             statsPath: $this->statsPath,
@@ -262,13 +404,10 @@ final class Game implements Model
     /**
      * Dispatch a mouse message into a board action (reveal / flag / chord).
      *
-     * MouseMsg coordinates are 1-based absolute terminal positions.
-     * The interior starts after the rounded border (1 col/row) and the
-     * padding(0,1) layer (1 extra col each side), so the first cell glyph
-     * sits at terminal (x=3, y=2). Scanner zones are ALSO 1-based (the
-     * first cell resolves at scanner (col=1, row=1)), hence:
-     *   scanner_col = msg.x - 2   (x=3 → col 1)
-     *   scanner_row = msg.y - 1   (y=2 → row 1)
+     * MouseMsg coordinates are 1-based absolute terminal positions; the
+     * frame-to-interior translation runs through
+     * {@see Renderer::INTERIOR_COL_OFFSET} / {@see Renderer::INTERIOR_ROW_OFFSET}
+     * (documented there: border + padding geometry, Scanner zones 1-based).
      *
      * Ignores clicks outside the board and does nothing after game ends.
      */
@@ -281,9 +420,11 @@ final class Game implements Model
         if ($this->board->exploded || $this->board->isWon()) {
             return $this;
         }
-        // Convert absolute terminal coords → 1-based scanner coords.
-        $col = $msg->x - 2;
-        $row = $msg->y - 1;
+        // Convert absolute terminal coords → 1-based scanner coords. The
+        // frame coupling lives in Renderer as named constants, so border or
+        // padding changes move this translation with them.
+        $col = $msg->x - Renderer::INTERIOR_COL_OFFSET;
+        $row = $msg->y - Renderer::INTERIOR_ROW_OFFSET;
         $cell = Renderer::resolveClick($this, $col, $row);
         if ($cell === null) {
             return $this;
@@ -299,13 +440,19 @@ final class Game implements Model
 
     private function revealAt(int $x, int $y): self
     {
-        $now = $this->startedAt ?? microtime(true);
+        // A reveal click that reveals nothing (flagged or already-open cell)
+        // is a full no-op: no cursor jump, no clock arming — matching the
+        // keyboard, where Space on a dud cell does not start the timer.
+        $board = $this->board->reveal($x, $y, $this->rand);
+        if ($board === $this->board) {
+            return $this;
+        }
         return new self(
-            board: $this->board->reveal($x, $y, $this->rand),
+            board: $board,
             cursorX: $x,
             cursorY: $y,
             rand: $this->rand,
-            startedAt: $now,
+            startedAt: $this->startedAt ?? microtime(true),
             elapsedSeconds: null,
             stats: $this->stats,
             statsPath: $this->statsPath,
@@ -328,13 +475,17 @@ final class Game implements Model
 
     private function chordAt(int $x, int $y): self
     {
-        $now = $this->startedAt ?? microtime(true);
+        // No-op chord = no-op click (see revealAt()).
+        $board = $this->board->chord($x, $y);
+        if ($board === $this->board) {
+            return $this;
+        }
         return new self(
-            board: $this->board->chord($x, $y),
+            board: $board,
             cursorX: $x,
             cursorY: $y,
             rand: $this->rand,
-            startedAt: $now,
+            startedAt: $this->startedAt ?? microtime(true),
             elapsedSeconds: null,
             stats: $this->stats,
             statsPath: $this->statsPath,
@@ -361,15 +512,30 @@ final class Game implements Model
      *
      * Recording is per-preset ({@see Difficulty}): the shipped default shape
      * (10×10, 12 mines) is the STANDARD preset, so default games DO tally.
-     * Truly custom boards match no preset and record nothing — a mixed-size
+     * Truly custom boards match no preset and record no stats — a mixed-size
      * "custom" bucket would make best-time meaningless, so the gap is
-     * deliberate and documented rather than silently dishonest.
+     * deliberate and documented rather than silently dishonest. They still
+     * freeze the elapsed clock, so {@see elapsed()} reports the real final
+     * time instead of null once the board is over.
      */
     public function recordResult(?float $elapsed): self
     {
         $difficulty = $this->difficulty();
         if ($difficulty === null) {
-            return $this;
+            // Custom boards tally nothing (no preset bucket to file the
+            // result under) — but the end-of-game clock must still freeze.
+            // Without this, elapsed() falls through to null once the board
+            // is over and a finished custom game has no final time at all.
+            return new self(
+                board: $this->board,
+                cursorX: $this->cursorX,
+                cursorY: $this->cursorY,
+                rand: $this->rand,
+                startedAt: $this->startedAt,
+                elapsedSeconds: $elapsed !== null ? (int) $elapsed : null,
+                stats: $this->stats,
+                statsPath: $this->statsPath,
+            );
         }
         $won = $this->board->isWon();
         return new self(
@@ -386,7 +552,8 @@ final class Game implements Model
 
     /**
      * Arm the 1 Hz 'clock' tick while — and only while — the timer is live:
-     * from the first reveal (startedAt set) to the win/lose transition (board
+     * from the first actual reveal (startedAt set; dud keypresses and refused
+     * clicks never arm it) to the win/lose transition (board
      * over, elapsed frozen into elapsedSeconds). The runtime reconciles
      * subscriptions after every update cycle, so the tick starts on the first
      * reveal and is cancelled when this method stops listing the id.

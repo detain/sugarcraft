@@ -9,5 +9,7 @@
 │           │
 │          [0m │
 ╰───────────╯
- [1m[38;2;255;95;135m💥 boom — press r to restart[0m
- [38;2;125;110;152m↑ ↓ ← →  move  ·  space  reveal  ·  f  flag  ·  r  restart  ·  q  quit[0m
+  [1m[38;2;255;95;135m💥 boom — press r to restart[0m
+  [38;2;125;110;152m↑ ↓ ← → / hjkl  move  ·  space / enter  reveal                 [0m
+[38;2;125;110;152m  f  flag  ·  c / middle-click  chord  ·  right-click  flag    [0m
+[38;2;125;110;152m  r  restart  ·  S  save  ·  L  load  ·  q / Esc / Ctrl+C  quit[0m
