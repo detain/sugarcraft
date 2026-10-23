@@ -81,6 +81,33 @@ final class StatsdBackendTest extends TestCase
         $this->assertSame('ev_il:x_steal:1|c|#route:/a_b,k_2:v_3', $payload);
     }
 
+    public function testColonInTagKeyCannotForgeSecondPair(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter('hits', 1.0, ['a:b' => 'v']);
+        rewind($sock);
+        $payload = (string) stream_get_contents($sock);
+        fclose($sock);
+
+        // `a:b:v` would let a first-colon split re-key the tag to `a`; the
+        // key's colon is flattened at the wire choke, leaving exactly one
+        // colon inside the tag segment (the structural key/value one).
+        $this->assertSame('hits:1|c|#a_b:v', $payload);
+        $tags = explode('|#', $payload, 2)[1];
+        $this->assertSame(1, substr_count($tags, ':'), 'only the pair separator colon may survive in a tag');
+
+        // Values keep their colons — the pair's first colon already owns
+        // the separator, so a later one cannot forge a new pair.
+        $sock2 = fopen('php://memory', 'w+');
+        $b2 = new StatsdBackend(existingSocket: $sock2);
+        $b2->counter('hits', 1.0, ['url' => 'https://example/x']);
+        rewind($sock2);
+        $payload2 = (string) stream_get_contents($sock2);
+        fclose($sock2);
+        $this->assertSame('hits:1|c|#url:https://example/x', $payload2);
+    }
+
     public function testUpDownCounterEmitsSignedDelta(): void
     {
         $sock = fopen('php://memory', 'w+');

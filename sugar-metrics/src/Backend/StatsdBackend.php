@@ -124,15 +124,16 @@ final class StatsdBackend implements Backend
     private function sendRaw(string $name, string $valueStr, string $kind, array $tags): void
     {
         // StatsD's wire grammar is line-oriented and field-separated: a
-        // control byte in any token forges extra lines, and a `|` smuggles
-        // values into neighbouring fields. Every token reaching the socket is
-        // flattened at this one chokepoint, so hostile tag values can never
-        // split or fake a packet.
+        // control byte in any token forges extra lines, a `|` smuggles
+        // values into neighbouring fields, and a `:` inside a DogStatsD tag
+        // key re-splits the key/value pair. Every token reaching the socket
+        // is flattened at this one chokepoint, so hostile tag payloads can
+        // never split or fake a packet.
         $line = self::wireToken($name) . ':' . self::wireToken($valueStr) . '|' . $kind;
         if ($tags !== [] && $this->dogstatsd) {
             $parts = [];
             foreach ($tags as $k => $v) {
-                $parts[] = self::wireToken($k) . ':' . self::wireToken($v);
+                $parts[] = self::wireTagKey($k) . ':' . self::wireToken($v);
             }
             $line .= '|#' . implode(',', $parts);
         }
@@ -151,6 +152,20 @@ final class StatsdBackend implements Backend
     private static function wireToken(string $token): string
     {
         return (string) preg_replace('/[\x00-\x1F\x7F|]/', '_', $token);
+    }
+
+    /**
+     * Flatten a DogStatsD tag KEY. On top of the general wire tokens, a key
+     * may not contain `:` — the tag segment's own key/value separator. Left
+     * raw, `['a:b' => 'v']` would ride the wire as `a:b:v` and a collector
+     * splitting on the first colon would file it under key `a` with value
+     * `b:v`, silently re-keying the series. Tag VALUES keep their colons:
+     * the first colon of the pair already owns the separator position, so a
+     * later colon cannot forge a new pair.
+     */
+    private static function wireTagKey(string $key): string
+    {
+        return \str_replace(':', '_', self::wireToken($key));
     }
 
     private static function fmt(float $v): string

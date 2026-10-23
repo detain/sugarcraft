@@ -24,7 +24,12 @@ final class ExampleSmokeTest extends TestCase
     private const SSH_EXAMPLE = __DIR__ . '/../../examples/ssh-server-with-metrics.php';
     private const SHOWCASE_EXAMPLE = __DIR__ . '/../../examples/showcase.php';
     private const FIXTURE = __DIR__ . '/_fixtures/load-middleware-example.php';
-    private const SCRATCH_TEXTFILE = '/tmp/sugar-ssh-server-metrics.prom';
+
+    /**
+     * Scratch textfile THIS test aimed the child at — per-process unique so
+     * concurrent runs never share (or unlink each other's) inode.
+     */
+    private ?string $scratchTextfile = null;
 
     public function testSshServerExampleLintsClean(): void
     {
@@ -49,7 +54,16 @@ final class ExampleSmokeTest extends TestCase
     {
         $this->assertFileExists(self::FIXTURE);
 
-        [$code, $out, $err] = $this->runPhp([self::FIXTURE, self::SSH_EXAMPLE]);
+        // proc_open with no env array inherits this process's environment,
+        // so putenv() aims the example's registry construction at a path
+        // only this run owns; tearDown() removes exactly that file.
+        $this->scratchTextfile = \sys_get_temp_dir() . '/sugar-ssh-server-metrics-' . \uniqid((string) \getmypid(), true) . '.prom';
+        \putenv('SSH_METRICS_TEXTFILE=' . $this->scratchTextfile);
+        try {
+            [$code, $out, $err] = $this->runPhp([self::FIXTURE, self::SSH_EXAMPLE]);
+        } finally {
+            \putenv('SSH_METRICS_TEXTFILE');
+        }
 
         // Exit 255 == class-declaration fatal (handle() signature no
         // longer compatible with Middleware). Any non-zero code means the
@@ -67,10 +81,12 @@ final class ExampleSmokeTest extends TestCase
     protected function tearDown(): void
     {
         // The fixture's eval'd registry construction hands the child a
-        // PrometheusFileBackend whose destructor writes this scratch path.
-        if (\is_file(self::SCRATCH_TEXTFILE)) {
-            \unlink(self::SCRATCH_TEXTFILE);
+        // PrometheusFileBackend whose destructor writes the scratch path
+        // this test armed via SSH_METRICS_TEXTFILE (per-process unique).
+        if ($this->scratchTextfile !== null && \is_file($this->scratchTextfile)) {
+            \unlink($this->scratchTextfile);
         }
+        $this->scratchTextfile = null;
     }
 
     /**

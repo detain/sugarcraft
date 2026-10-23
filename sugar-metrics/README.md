@@ -200,4 +200,12 @@ Pass `extraTags` (a callable receiving the `Session`) to add things like client 
 
 ## Status
 
-Complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 195 tests (0.15s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
+Complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 196 tests (0.15s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
+
+## Breaking changes
+
+**`MultiBackendException::getErrors()` → `errors()`.** The accessor now follows
+the library's bare-accessor convention (no `get` prefix). A repo-wide grep
+found no call sites outside sugar-metrics itself, so the rename landed complete
+in one pass; external code still calling `getErrors()` must switch to
+`errors()`.
