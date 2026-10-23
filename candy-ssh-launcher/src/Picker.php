@@ -6,6 +6,8 @@ namespace SugarCraft\SshLauncher;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\RawMode;
+use SugarCraft\Core\Util\Tty;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
@@ -21,11 +23,22 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * and exit fast — no event loop, no full Program lifecycle.
  *
  * Test seam: the streams are constructor arguments and tests subclass
- * this class overriding {@see setRawMode()} — there is no
+ * this class overriding {@see setRawMode()} (and {@see detectColumns()}
+ * for the width-clamp pin) — there is no
  * `inputStream()` / `outputStream()` to override.
  */
 class Picker
 {
+    /**
+     * Palette bytes for the selected-row marker and the filter echo, as
+     * exactly produced by Ansi::sgr(1,36)/Ansi::reset()/Ansi::sgr(36).
+     * Byte-pinned by the picker tests (2026-10-23, T4 — extracted from the
+     * inline literals without changing a single emitted byte).
+     */
+    private const SELECTED_MARKER = "\x1b[1;36m▸\x1b[0m ";
+    private const UNSELECTED_MARKER = "  ";
+    private const FILTER_COLOR = "\x1b[36m";
+
     /** @var resource */
     protected $in;
     /** @var resource */
@@ -33,6 +46,16 @@ class Picker
     private string $filter = '';
     private int $cursor = 0;
     private SmithWatermanMatcher $matcher;
+    /**
+     * Denominator for the "N of M" count row while filtering: total
+     * endpoints handed to pick(), so `draw()` still takes its test-pinned
+     * single argument (2026-10-23, U1).
+     */
+    private int $totalEndpoints = 0;
+    private bool $aborted = false;
+    /** Terminal width in columns; null = probed-and-not-a-tty, unset = not yet probed. */
+    private ?int $cols = null;
+    private bool $colsProbed = false;
 
     /**
      * @param resource|null $in
@@ -53,6 +76,8 @@ class Picker
         if ($endpoints === []) {
             return null;
         }
+        $this->totalEndpoints = count($endpoints);
+        $this->aborted = false;
         $this->setRawMode(true);
         try {
             while (true) {
@@ -66,6 +91,7 @@ class Picker
                 switch ($key) {
                     case "\x03": /* ^C */
                     case "\x1b": /* ESC */
+                        $this->aborted = true;
                         return null;
                     case "\r":
                     case "\n":
@@ -123,6 +149,15 @@ class Picker
             }
         } finally {
             $this->setRawMode(false);
+            if ($this->aborted) {
+                // Esc/^C: erase the transient frame before releasing the
+                // cursor line. After a successful pick the frame is a
+                // meaningful record (and ssh takes the screen over
+                // anyway), so only the cancel path cleans up — and only
+                // the cancel path may show eraseScreen, pinned by the
+                // sanitize suite (2026-10-23, T1).
+                fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseScreen());
+            }
             fwrite($this->out, "\n");
         }
     }
@@ -172,7 +207,9 @@ class Picker
             ];
         }
 
-        // Filter to only matched (score > 0) and sort by score descending
+        // Filter to only matched (score > 0) and sort by score descending.
+        // usort() has been stable since PHP 8.0 — equal scores keep config
+        // order (pinned by testEqualScoresPreserveConfigOrder, 2026-10-23).
         $matched = array_filter($out, static fn(array $r) => $r['result'] !== null);
         usort($matched, static fn(array $a, array $b) =>
             $b['result']->score <=> $a['result']->score
@@ -187,25 +224,81 @@ class Picker
     private function draw(array $matches): void
     {
         fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseToEnd());
-        fwrite($this->out, "── wishlist ──\r\n");
+        fwrite($this->out, Lang::t('picker.title') . "\r\n");
         // Belt-and-braces: intake (isTextKey) already refuses control bytes,
         // but the echo passes through the same sanitizer the config-derived
         // strings use, so no raw ESC can reach the terminal from here either.
-        fwrite($this->out, 'filter: ' . Ansi::sgr(36) . $this->stripControls($this->filter) . Ansi::reset() . "\r\n");
+        // The 'en' filter prompt is byte-pinned as 'filter: ' by the
+        // integrity suite — picker.filter must keep that shape verbatim.
+        $filterLine = Lang::t('picker.filter') . self::FILTER_COLOR . $this->stripControls($this->filter) . Ansi::reset();
+        fwrite($this->out, $this->clampRow($filterLine) . "\r\n");
+        if ($this->filter !== '' && $this->totalEndpoints > 0) {
+            // Honest funnel: how much of the config the filter killed
+            // (2026-10-23, U1). The count row stays out of the filter line
+            // itself (the integrity suite counts ESC bytes per 'filter: '
+            // line) and out of reflection draws where totalEndpoints is
+            // still 0.
+            fwrite($this->out, Lang::t('picker.count', [
+                'shown' => (string) count($matches),
+                'total' => (string) $this->totalEndpoints,
+            ]) . "\r\n");
+        }
         if ($matches === []) {
-            fwrite($this->out, "  (no matches)\r\n");
+            fwrite($this->out, Lang::t('picker.no_matches') . "\r\n");
         }
         foreach ($matches as $i => $record) {
             $e = $record['endpoint'];
-            $marker = $i === $this->cursor ? Ansi::sgr(1, 36) . '▸' . Ansi::reset() . ' ' : '  ';
+            $marker = $i === $this->cursor ? self::SELECTED_MARKER : self::UNSELECTED_MARKER;
             // The displayLine is already sanitized from filterMatches()
             $line = $this->highlightLine($record['displayLine'], $record['result']);
             if ($e->description !== null && $e->description !== '') {
                 $line .= '  ' . Ansi::sgr(Ansi::FAINT) . $this->stripControls($e->description) . Ansi::reset();
             }
-            fwrite($this->out, "{$marker}{$line}\r\n");
+            fwrite($this->out, $this->clampRow("{$marker}{$line}") . "\r\n");
         }
-        fwrite($this->out, "\r\n  ↑/↓ select · Enter connect · Esc quit · type to filter\r\n");
+        fwrite($this->out, "\r\n" . Lang::t('picker.help') . "\r\n");
+    }
+
+    /**
+     * Truncate a composed row to one less than the terminal width, so a
+     * long host or description cannot force a soft wrap that strands the
+     * overflow under the next redraw (eraseToEnd only clears to the end of
+     * the CURRENT line; 2026-10-23, T2). Non-terminals — every byte-pinned
+     * picker test and any piped run — probe null and pass through unclamped.
+     */
+    private function clampRow(string $row): string
+    {
+        $cols = $this->columns();
+        if ($cols === null) {
+            return $row;
+        }
+        $limit = max(8, $cols - 1);
+        if (Width::of($row) <= $limit) {
+            return $row;
+        }
+        // One cell is reserved for the ellipsis itself.
+        return Width::truncateAnsi($row, $limit - 1) . '…';
+    }
+
+    private function columns(): ?int
+    {
+        if (!$this->colsProbed) {
+            $this->colsProbed = true;
+            $this->cols = $this->detectColumns();
+        }
+        return $this->cols;
+    }
+
+    /**
+     * Test seam: the real terminal width when $out is a tty, null otherwise.
+     */
+    protected function detectColumns(): ?int
+    {
+        $tty = new Tty($this->out);
+        if (!$tty->isTty()) {
+            return null;
+        }
+        return $tty->size()['cols'] ?? null;
     }
 
     /**
