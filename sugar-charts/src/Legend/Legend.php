@@ -105,7 +105,7 @@ final class Legend
         }
         $line = implode('  ', $parts);
         if ($this->showBorder) {
-            // Audit F5: borders sized by DISPLAY width — the line carries
+            // borders sized by DISPLAY width — the line carries
             // SGR escapes whose bytes mb_strlen would count.
             $w = Width::string($line);
             return '┌' . str_repeat('─', $w) . '┐' . "\n" . $line . "\n" . '└' . str_repeat('─', $w) . '┘';
@@ -192,7 +192,7 @@ final class Legend
             return $code . $this->indicatorChar . Ansi::sgr(39);
         }
 
-        // Audit F24: shorthand 3-digit hex is a valid CSS color — Color::hex
+        // shorthand 3-digit hex is a valid CSS color — Color::hex
         // expands 'rgb' → 'rrggbb' itself, so only the gate needed widening.
         if (preg_match('/^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/', $color)) {
             $hex = ltrim($color, '#');

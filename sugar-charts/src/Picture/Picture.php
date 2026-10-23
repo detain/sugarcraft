@@ -11,7 +11,7 @@ use SugarCraft\Core\Util\Color;
  * and emits the appropriate terminal escape sequence for the active
  * (or explicitly-selected) image protocol.
  *
- * Mirrors ntcharts' `picture` chart slot in CONVERSION.md Phase 6.
+ * Mirrors ntcharts' `picture` chart slot.
  *
  * Pure-PHP Sixel encoding ships in `Picture\Sixel`. Kitty and iTerm2
  * encodings additionally need PNG bytes — provide them externally

@@ -61,7 +61,7 @@ final class Scatter
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('scatter.dim_nonneg'));
         }
-        // Audit F3: single door for every copy()/with* rebuild — pinned axis
+        // single door for every copy()/with* rebuild — pinned axis
         // ranges must be finite and ordered; null ends stay legal ("auto").
         Range::pin($minX, $maxX, 'X');
         Range::pin($minY, $maxY, 'Y');

@@ -24,9 +24,10 @@ use SugarCraft\Core\Util\Color;
  *
  * Output is plain ASCII bytes (no Imagick / GD required).
  *
- * For a 320×200 image with 16 colours the output is roughly 30-60 KB
- * — fine over local terminals, somewhat heavy over slow SSH but the
- * encoder doesn't try to do further compression.
+ * Encoded size scales with pixel count and colour passes: the shipped
+ * 16×6 / 16-colour demo encodes to 326 bytes, while a 320×200 image
+ * runs into the tens of kilobytes — fine over local terminals, heavy
+ * over slow SSH, and the encoder does no further compression.
  */
 final class Sixel
 {

@@ -12,9 +12,11 @@ namespace SugarCraft\Charts\Picture;
  *   Most widely supported (xterm, mlterm, foot, Windows Terminal,
  *   iTerm2, WezTerm). Pure-PHP encoder ships in `Picture\Sixel`.
  * - **Kitty** (`ESC _ G ... ESC \`) — APC-wrapped base64-encoded PNG.
- *   Requires `ext-gd` to encode the PNG.
- * - **iTerm2** (`OSC 1337 ; File=...`) — OSC-wrapped base64 PNG.
- *   Requires `ext-gd`.
+ *   `Picture` accepts PNG bytes already encoded by the caller
+ *   (`fromPng`) — producing them typically needs `ext-gd` or similar
+ *   on the caller's side; the lib itself encodes no raster.
+ * - **iTerm2** (`OSC 1337 ; File=...`) — OSC-wrapped base64 PNG, same
+ *   caller-supplied-PNG contract.
  *
  * Pick automatically at runtime via {@see Picture::detect()}.
  */

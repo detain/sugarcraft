@@ -179,7 +179,7 @@ final class Streamline
      */
     private function withRange(?float $min, ?float $max, string $point): self
     {
-        // Audit F3: funnel for withMin/withMax/withYRange — reject NaN/INF
+        // funnel for withMin/withMax/withYRange — reject NaN/INF
         // endpoints and inverted pairs before they reach the stored state.
         Range::pin($min, $max, 'Y');
         return new self(

@@ -73,7 +73,7 @@ final class OHLCChart
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('ohlc.dim_nonneg'));
         }
-        // Audit F3: pinned price range must be finite and ordered.
+        // pinned price range must be finite and ordered.
         Range::pin($min, $max, 'Y');
     }
 

@@ -9,8 +9,9 @@ Each script is self-contained — `php examples/<name>.php` from the
 | `bar.php` | `BarChart::new` with labelled bars, auto-scaled to the data range. |
 | `heatmap.php` | `Heatmap::new` with a perlin-style 2D grid + the cold→hot palette + `withLegend(true)`. |
 | `line.php` | `LineChart::new` over a data series with the default axes. |
-| `ohlc.php` | `OHLC::new` candlestick rendering with body / wick styling. |
-| `picture.php` | `Picture::new` Sixel image-to-terminal demo (requires a Sixel-capable terminal). |
+| `animated_line.php` | Progressive `LineChart` frames via `withAnimationProgress()` — the caller-driven animation story. |
+| `ohlc.php` | `OHLCChart::new` candlestick rendering with body / wick styling. |
+| `picture.php` | `Picture::fromGrid` / `Picture::detect` encoding demo (Sixel / Kitty / iTerm2) — prints labelled hex dumps where the terminal can't paint images, so no Sixel capability is required. |
 | `scatter.php` | XY scatter plot with auto-ranged axes. |
 | `sparkline.php` | Single-row `Sparkline::new` over a synthesised series, plus `withStyle` to colour the glyphs. |
 | `timeseries.php` | `TimeSeries::new` with `[\DateTimeImmutable, value]` tuples + `withTimeFormat('H:i')`. |

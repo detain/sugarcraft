@@ -19,8 +19,11 @@ use SugarCraft\Style\Style;
  * proportional to the value within `[min, max]`.
  *
  * ```php
- * echo Sparkline::new([1, 4, 2, 7, 5])->view(); // ▁▄▂█▅
+ * echo Sparkline::new([1, 4, 2, 7, 5])->view(); // " ▄▁█▅"
  * ```
+ *
+ * (Measured output: the minimum value maps to `GLYPHS[0]`, a blank
+ * cell, so `[1, 4, 2, 7, 5]` starts with a space, not `▁`.)
  *
  * If the configured {@see $width} exceeds `count($data)` the line is
  * left-padded with the empty glyph; if it's smaller, only the *last*
@@ -45,11 +48,11 @@ final class Sparkline
         if ($width < 0) {
             throw new \InvalidArgumentException(Lang::t('sparkline.width_nonneg'));
         }
-        // Audit F7: every ingestion door (new / withData / push / pushAll)
+        // every ingestion door (new / withData / push / pushAll)
         // rebuilds through this constructor, so one finite sweep covers the
         // whole surface — a NaN glyph index silently picks the empty cell.
         Finite::assertAll($data);
-        // Audit F3: an explicit range must be ordered; null ends are "auto".
+        // an explicit range must be ordered; null ends are "auto".
         Range::pin($min, $max, 'value');
     }
 

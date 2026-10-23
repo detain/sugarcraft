@@ -39,6 +39,10 @@
         "sugarcraft/sugar-style": "dev-master",
         "sugarcraft/sugar-dashboard": "dev-master"
     },
+    "suggest": {
+        "ext-mbstring": "Codepoint handling across the renderers (labels, truncation, row walking).",
+        "ext-intl": "Enables grapheme-cluster splitting in BufferHelper/Canvas so combining marks and ZW sequences keep exact display widths."
+    },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
         "sugarcraft/sugar-testing": "dev-master",
