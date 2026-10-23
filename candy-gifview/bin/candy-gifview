@@ -3,9 +3,30 @@
 
 declare(strict_types=1);
 
-(static function () {
-    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
-        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+// ---------------------------------------------------------------------------
+// Autoloader (archive-aware). A phar build stamps THIS file as the archive
+// stub, so under `php candy-gifview.phar` __FILE__ names the archive and its
+// bundled vendor/ is the only correct source. Measured PHP 8.3 law: in the
+// stub context \Phar::running(false) answers '' and a bare '/x.phar/entry'
+// path fails is_file — resolve from BOTH identities ('phar://' . __FILE__
+// under the stub, 'phar://' . running() when required from inside), and once
+// an archive is found DROP the filesystem candidates so a working-tree vendor
+// beside a published .phar can never outrank the archive. The three original
+// candidates are preserved verbatim for every non-archive run.
+// ---------------------------------------------------------------------------
+(static function (): void {
+    $archive = str_ends_with(__FILE__, '.phar')
+        ? 'phar://' . __FILE__
+        : (\Phar::running(false) !== '' ? 'phar://' . \Phar::running(false) : '');
+    $candidates = $archive !== ''
+        ? [$archive . '/vendor/autoload.php']
+        : ['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
+    foreach ($candidates as $candidate) {
+        // phar:// URIs are absolute too — the old '/'-only prefix test would
+        // re-anchor them onto __DIR__ and miss the archive.
+        $path = (str_starts_with($candidate, '/') || str_starts_with($candidate, 'phar://'))
+            ? $candidate
+            : __DIR__ . '/../' . $candidate;
         if (is_file($path)) {
             require $path;
             return;

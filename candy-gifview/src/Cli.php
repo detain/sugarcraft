@@ -52,6 +52,19 @@ final class Cli
     /** chicle's own ceiling (CHICLE_ANIM_FPS_MAX, chicle-options.h:60) = "--speed max". */
     private const SPEED_MAX = 'max';
 
+    /**
+     * The version this run reports: the phar archive's build stamp when
+     * executing inside one (DST-1 — InstalledVersions lies under the frozen
+     * vendor/), else the compiled-in Support\Version::CURRENT. The archive is
+     * identified by \Phar::running(false), which is exactly the real path the
+     * \Phar constructor wants here (this class only ever runs required from
+     * inside the archive, never as the stub).
+     */
+    public static function runningVersion(): string
+    {
+        return Support\Version::resolve(\Phar::running(false) ?: '', Support\Version::CURRENT);
+    }
+
     private function __construct()
     {
     }
@@ -88,6 +101,12 @@ final class Cli
         foreach (array_slice($argv, 1) as $token) {
             if ($token === '--help' || $token === '-h') {
                 \fwrite($stdout, Lang::t('cli.usage') . "\n");
+
+                return 0;
+            }
+
+            if ($token === '--version' || $token === '-v') {
+                \fwrite($stdout, 'candy-gifview ' . self::runningVersion() . "\n");
 
                 return 0;
             }
