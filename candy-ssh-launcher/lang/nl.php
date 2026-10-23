@@ -25,7 +25,7 @@ return [
     'endpoint.option_injection' => 'wishlist-endpoint: veld [{field}] heeft een onveilige waarde met een koppelteken aan het begin [{value}]',
     'endpoint.port_invalid'     => 'wishlist-endpoint [{host}]: ongeldige poort [{port}] — moet een geheel getal zijn van 1 tot 65535',
 
-    'cli.usage'         => 'Gebruik: candy-ssh-launcher [--config <pad>] [--ssh <ssh-binair>] [--list] [-h|--help]',
+    'cli.usage'         => 'Gebruik: candy-ssh-launcher [--config <pad>] [--ssh <ssh-binair>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: onbekend argument: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: geen configuratie gevonden. Geef --config <pad> door.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

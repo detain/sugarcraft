@@ -26,7 +26,7 @@ return [
     'endpoint.port_invalid'     => 'wishlist endpoint [{host}]: invalid port [{port}] — must be an integer from 1 to 65535',
 
     // bin/candy-ssh-launcher
-    'cli.usage'         => 'Usage: candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list] [-h|--help]',
+    'cli.usage'         => 'Usage: candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: unknown arg: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: no config found. Pass --config <path>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

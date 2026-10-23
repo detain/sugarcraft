@@ -27,7 +27,7 @@ return [
 
 
     // bin/candy-ssh-launcher
-    'cli.usage'         => 'Uso: candy-ssh-launcher [--config <ruta>] [--ssh <binario-ssh>] [--list] [-h|--help]',
+    'cli.usage'         => 'Uso: candy-ssh-launcher [--config <ruta>] [--ssh <binario-ssh>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: argumento desconocido: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: no se encontró configuración. Pase --config <ruta>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

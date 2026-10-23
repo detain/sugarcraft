@@ -221,7 +221,7 @@ candy-ssh-launcher uses [sugar-fuzzy](https://github.com/detain/sugarcraft#sugar
 
 ## Status
 
-SSH config import (`Host`/`Host=` blocks, both spacing forms) is supported. 295 tests / 1550 assertions. Endpoint, Config (JSON + flat-YAML + SSH config), Picker, Launcher, SshConfigParser are all covered.
+SSH config import (`Host`/`Host=` blocks, both spacing forms) is supported. 300 tests / 1575 assertions. Endpoint, Config (JSON + flat-YAML + SSH config), Picker, Launcher, SshConfigParser are all covered.
 
 ## Credits & inspiration
 

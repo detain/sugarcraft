@@ -25,7 +25,7 @@ return [
     'endpoint.option_injection' => 'эндпоинт wishlist: поле [{field}] содержит небезопасное значение с ведущим дефисом [{value}]',
     'endpoint.port_invalid'     => 'эндпоинт wishlist [{host}]: недопустимый порт [{port}] — должно быть целое число от 1 до 65535',
 
-    'cli.usage'         => 'Использование: candy-ssh-launcher [--config <путь>] [--ssh <ssh-бинарник>] [--list] [-h|--help]',
+    'cli.usage'         => 'Использование: candy-ssh-launcher [--config <путь>] [--ssh <ssh-бинарник>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: неизвестный аргумент: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: конфигурация не найдена. Передайте --config <путь>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

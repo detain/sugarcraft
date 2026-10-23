@@ -25,7 +25,7 @@ return [
     'endpoint.option_injection' => 'wishlist uç noktası: [{field}] alanı başında tire olan güvensiz bir değer içeriyor [{value}]',
     'endpoint.port_invalid'     => 'wishlist uç noktası [{host}]: geçersiz bağlantı noktası [{port}] — 1 ile 65535 arasında bir tam sayı olmalı',
 
-    'cli.usage'         => 'Kullanım: candy-ssh-launcher [--config <yol>] [--ssh <ssh-ikili>] [--list] [-h|--help]',
+    'cli.usage'         => 'Kullanım: candy-ssh-launcher [--config <yol>] [--ssh <ssh-ikili>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: bilinmeyen argüman: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: yapılandırma bulunamadı. --config <yol> iletin.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

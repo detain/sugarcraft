@@ -25,7 +25,7 @@ return [
     'endpoint.option_injection' => 'endpoint do wishlist: o campo [{field}] tem um valor inseguro com hífen inicial [{value}]',
     'endpoint.port_invalid'     => 'endpoint do wishlist [{host}]: porta inválida [{port}] — deve ser um inteiro de 1 a 65535',
 
-    'cli.usage'                => 'Uso: candy-ssh-launcher [--config <caminho>] [--ssh <binário-ssh>] [--list] [-h|--help]',
+    'cli.usage'                => 'Uso: candy-ssh-launcher [--config <caminho>] [--ssh <binário-ssh>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'          => 'candy-ssh-launcher: argumento desconhecido: {arg}',
     'cli.no_config'            => 'candy-ssh-launcher: não foi encontrada configuração. Passe --config <caminho>.',
     'cli.error'                => 'candy-ssh-launcher: {message}',

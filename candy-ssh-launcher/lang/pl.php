@@ -25,7 +25,7 @@ return [
     'endpoint.option_injection' => 'punkt końcowy wishlist: pole [{field}] zawiera niebezpieczną wartość zaczynającą się od myślnika [{value}]',
     'endpoint.port_invalid'     => 'punkt końcowy wishlist [{host}]: nieprawidłowy port [{port}] — musi to być liczba całkowita od 1 do 65535',
 
-    'cli.usage'         => 'Użycie: candy-ssh-launcher [--config <ścieżka>] [--ssh <ssh-binarny>] [--list] [-h|--help]',
+    'cli.usage'         => 'Użycie: candy-ssh-launcher [--config <ścieżka>] [--ssh <ssh-binarny>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: nieznany argument: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: nie znaleziono konfiguracji. Podaj --config <ścieżka>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

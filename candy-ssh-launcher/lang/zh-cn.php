@@ -25,7 +25,7 @@ return [
     'endpoint.option_injection' => 'wishlist 端点：字段 [{field}] 含有以短横线开头的不安全值 [{value}]',
     'endpoint.port_invalid'     => 'wishlist 端点 [{host}]：无效端口 [{port}] — 必须是 1 到 65535 之间的整数',
 
-    'cli.usage'                => '用法：candy-ssh-launcher [--config <路径>] [--ssh <ssh二进制>] [--list] [-h|--help]',
+    'cli.usage'                => '用法：candy-ssh-launcher [--config <路径>] [--ssh <ssh二进制>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'          => 'candy-ssh-launcher：未知参数：{arg}',
     'cli.no_config'            => 'candy-ssh-launcher：未找到配置。请传递 --config <路径>。',
     'cli.error'                => 'candy-ssh-launcher：{message}',

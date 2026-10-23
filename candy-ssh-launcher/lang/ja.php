@@ -25,7 +25,7 @@ return [
     'endpoint.option_injection' => 'wishlist エンドポイント: フィールド [{field}] に先頭がダッシュの安全でない値 [{value}] があります',
     'endpoint.port_invalid'     => 'wishlist エンドポイント [{host}]: 無効なポート [{port}] — 1 から 65535 の整数である必要があります',
 
-    'cli.usage'                => '用法：candy-ssh-launcher [--config <パス>] [--ssh <sshバイナリ>] [--list] [-h|--help]',
+    'cli.usage'                => '用法：candy-ssh-launcher [--config <パス>] [--ssh <sshバイナリ>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'          => 'candy-ssh-launcher：不明な引数：{arg}',
     'cli.no_config'            => 'candy-ssh-launcher：設定が見つかりません。--config <パス> を渡してください。',
     'cli.error'                => 'candy-ssh-launcher：{message}',

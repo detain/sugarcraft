@@ -25,7 +25,7 @@ return [
     'endpoint.option_injection' => 'نقطة نهاية wishlist: الحقل [{field}] يحتوي قيمة غير آمنة تبدأ بشرطة [{value}]',
     'endpoint.port_invalid'     => 'نقطة نهاية wishlist [{host}]: منفذ غير صالح [{port}] — يجب أن يكون عدداً صحيحاً من 1 إلى 65535',
 
-    'cli.usage'         => 'الاستخدام: candy-ssh-launcher [--config <مسار>] [--ssh <ssh-ثنائي>] [--list] [-h|--help]',
+    'cli.usage'         => 'الاستخدام: candy-ssh-launcher [--config <مسار>] [--ssh <ssh-ثنائي>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: وسيطة غير معروفة: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: لم يتم العثور على تكوين. مرر --config <مسار>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

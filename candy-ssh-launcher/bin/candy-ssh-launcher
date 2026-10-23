@@ -7,7 +7,7 @@ declare(strict_types=1);
  * `candy-ssh-launcher` — SSH endpoint picker.
  *
  *   candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list]
- *                      [-h|--help]
+ *                      [-h|--help] [-v|--version]
  *
  * Without `--config` the search order is: `wishlist.yml`, @rename-keep
  * `wishlist.yaml`, `wishlist.json` in the CURRENT DIRECTORY first, @rename-keep
@@ -29,14 +29,29 @@ use SugarCraft\SshLauncher\Launcher;
 use SugarCraft\SshLauncher\Picker;
 
 // ---------------------------------------------------------------------------
-// Autoloader
+// Autoloader (archive-aware). A phar build stamps THIS file as the archive
+// stub, so under `php candy-ssh-launcher.phar` __FILE__ names the archive and
+// the bundled vendor/ inside it is the only correct source. Measured PHP 8.3
+// law: in the stub context \Phar::running(false) answers '' (so a bare
+// '/x.phar/entry' path — and any 'phar://'.running() — fails to locate it),
+// while a required-from-inside file reports the archive via running(false).
+// Handle BOTH identities, and once an archive is found DROP the filesystem
+// candidates — a working-tree vendor beside a published .phar must never win.
+// The three existing fallback candidates (package root, sibling checkout,
+// monorepo parent) are preserved for every non-archive invocation.
 // ---------------------------------------------------------------------------
 (static function (): void {
-    foreach ([
-        __DIR__ . '/../vendor/autoload.php',
-        __DIR__ . '/../../vendor/autoload.php',
-        __DIR__ . '/../../../vendor/autoload.php',
-    ] as $candidate) {
+    $archive = str_ends_with(__FILE__, '.phar')
+        ? 'phar://' . __FILE__
+        : (\Phar::running(false) !== '' ? 'phar://' . \Phar::running(false) : '');
+    $candidates = $archive !== ''
+        ? [$archive . '/vendor/autoload.php']
+        : [
+            __DIR__ . '/../vendor/autoload.php',
+            __DIR__ . '/../../vendor/autoload.php',
+            __DIR__ . '/../../../vendor/autoload.php',
+        ];
+    foreach ($candidates as $candidate) {
         if (is_file($candidate)) {
             require $candidate;
             return;
@@ -95,6 +110,19 @@ for ($i = 0; $i < $count; $i++) {
     if ($name === '-h' || $name === '--help') {
         // Help wins before anything else can fail, in every form.
         fwrite(STDOUT, Lang::t('cli.usage') . "\n");
+        exit(0);
+    }
+
+    if ($name === '-v' || $name === '--version') {
+        // Version prints before anything else can fail — no config read, no
+        // HOME guard, no terminal touch. Under a running archive the build
+        // stamp wins (DST-1: InstalledVersions lies under the frozen vendor/);
+        // outside one the compiled-in Support\Version::CURRENT fallback answers.
+        $archive = str_ends_with(__FILE__, '.phar')
+            ? __FILE__
+            : (\Phar::running(false) ?: '');
+        fwrite(STDOUT, 'candy-ssh-launcher '
+            . \SugarCraft\SshLauncher\Support\Version::resolve($archive) . "\n");
         exit(0);
     }
 

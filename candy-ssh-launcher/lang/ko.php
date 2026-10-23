@@ -25,7 +25,7 @@ return [
     'endpoint.option_injection' => 'wishlist 엔드포인트: 필드 [{field}]에 대시로 시작하는 안전하지 않은 값 [{value}]이(가) 있습니다',
     'endpoint.port_invalid'     => 'wishlist 엔드포인트 [{host}]: 잘못된 포트 [{port}] — 1에서 65535 사이의 정수여야 합니다',
 
-    'cli.usage'         => '사용법: candy-ssh-launcher [--config <경로>] [--ssh <ssh-binary>] [--list] [-h|--help]',
+    'cli.usage'         => '사용법: candy-ssh-launcher [--config <경로>] [--ssh <ssh-binary>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: 알 수 없는 인수: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: 구성을 찾을 수 없습니다. --config <경로>를 전달하세요.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

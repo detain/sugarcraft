@@ -25,7 +25,7 @@ return [
     'endpoint.option_injection' => 'endpoint wishlist: pole [{field}] má nebezpečnou hodnotu začínající pomlčkou [{value}]',
     'endpoint.port_invalid'     => 'endpoint wishlist [{host}]: neplatný port [{port}] — musí to být celé číslo od 1 do 65535',
 
-    'cli.usage'         => 'Použití: candy-ssh-launcher [--config <cesta>] [--ssh <ssh-binární>] [--list] [-h|--help]',
+    'cli.usage'         => 'Použití: candy-ssh-launcher [--config <cesta>] [--ssh <ssh-binární>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: neznámý argument: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: konfigurace nenalezena. Předejte --config <cesta>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
