@@ -21,7 +21,33 @@ declare(strict_types=1);
 
 namespace SugarCraft\GitServer\Bin;
 
-require __DIR__ . '/../vendor/autoload.php';
+// ---------------------------------------------------------------------------
+// Autoloader (archive-aware). A phar build stamps THIS file as the archive
+// stub, so under `php candy-git-server.phar` __FILE__ names the archive; the
+// bundled vendor/ inside it is then the only correct source. Measured PHP 8.3
+// law: in the stub context \Phar::running(false) answers '' (so a bare
+// '/x.phar/entry' path — and any 'phar://'.running() — fails to locate it),
+// and a required-from-inside file instead reports the archive via
+// running(false). Handle BOTH identities, and once an archive is found drop
+// the filesystem candidates entirely — a working-tree vendor sitting beside a
+// published .phar must never outrank the archive it ships in.
+// ---------------------------------------------------------------------------
+(static function (): void {
+    $archive = str_ends_with(__FILE__, '.phar')
+        ? 'phar://' . __FILE__
+        : (\Phar::running(false) !== '' ? 'phar://' . \Phar::running(false) : '');
+    $candidates = $archive !== ''
+        ? [$archive . '/vendor/autoload.php']
+        : [__DIR__ . '/../vendor/autoload.php'];
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate)) {
+            require $candidate;
+            return;
+        }
+    }
+    fwrite(STDERR, "candy-git-server: cannot find composer autoload.php\n");
+    exit(1);
+})();
 
 use SugarCraft\GitServer\{AccessControl, Config, Git\GitDaemon, Lang, Repo, SSH\SSHServer, User};
 
@@ -35,6 +61,33 @@ foreach (\SugarCraft\Core\Util\LegacyEnv::import([
 }
 
 const VERSION = '0.1.0';
+
+/**
+ * Absolute filesystem path of the running .phar, or '' when not executing
+ * inside one. Under the stub __FILE__ is the archive path; a file required
+ * from inside instead reports it through \Phar::running(false). Read the stamp
+ * identically whichever identity is live. (This is the plain path, NOT a
+ * phar:// URL — \Phar's constructor and is_file() both want the real file.)
+ */
+function runningArchivePath(): string
+{
+    if (str_ends_with(__FILE__, '.phar')) {
+        return __FILE__;
+    }
+    $running = \Phar::running(false);
+
+    return $running !== '' ? $running : '';
+}
+
+/**
+ * Version the CLI prints: the archive's build stamp when running inside a
+ * phar (the DST-1 law — InstalledVersions lies under a frozen vendor/), else
+ * the compiled-in VERSION constant.
+ */
+function displayVersion(): string
+{
+    return \SugarCraft\GitServer\Support\Version::resolve(runningArchivePath(), VERSION);
+}
 
 function main(array $argv): int
 {
@@ -80,7 +133,7 @@ function cmdServe(array $args): int
 
     $ac = AccessControl::getInstance();
 
-    echo Lang::t('cli.banner', ['version' => VERSION]) . "\n";
+    echo Lang::t('cli.banner', ['version' => displayVersion()]) . "\n";
     echo Lang::t('cli.config_summary', [
         'data_path' => $config->dataPath,
         'ssh_addr'  => $config->sshListenAddr,
@@ -370,7 +423,7 @@ function cmdHelp(): int
 
 function cmdVersion(): int
 {
-    echo Lang::t('cli.banner', ['version' => VERSION]) . "\n";
+    echo Lang::t('cli.banner', ['version' => displayVersion()]) . "\n";
     return 0;
 }
 
