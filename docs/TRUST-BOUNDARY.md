@@ -46,8 +46,10 @@ as its internal marker space:
   `untrustedForMarkedFrames()` before it can enter a marked frame:
   forged sentinels could otherwise hijack a zone.
 - **Image markers from U+E002 upward** (`ImageOverlay::MARKER_BASE =
-  0xE002`, `MAX_IMAGES = 6398`, topping the arena at exactly U+F8FF,
-  `sugar-mosaic`/`sugar-gallery` renderers): the marker range and the
+  0xE002` (:62), `MAX_IMAGES = 6398` (:89), topping the arena at
+  exactly U+F8FF — the class lives at `sugar-core/src/ImageOverlay.php`
+  and consumers such as `sugar-gallery`'s `PosterCard` emit its
+  markers): the marker range and the
   sentinel range are **disjoint by construction**. Nerd Font / icon
   glyphs live outside the reserved band.
 - `stripPrivateUse()` (:573) removes the whole BMP PUA via the

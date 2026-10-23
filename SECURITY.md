@@ -12,8 +12,10 @@ If you discover a security vulnerability in any SugarCraft library,
 - Steps to reproduce — minimum working example preferred.
 - Your name / handle for the credit (optional).
 
-GitHub private-vulnerability reporting is not enabled on this repository,
-so email is the only private intake channel.
+GitHub private-vulnerability reporting is enabled on this repository and
+is the **primary** private intake channel — use the "Report a
+vulnerability" form on the security tab. The email address above is the
+secondary route, for when the form is unavailable or you prefer mail.
 
 You can expect:
 
@@ -30,16 +32,18 @@ SugarCraft ships on two rails, and both get security fixes:
 - **`master` (the monorepo)** — the source of truth. Every security
   fix lands here first and is available immediately to composer and
   git consumers.
-- **Tagged signed releases** — `candy-code/v0.1.0`, `candy-code/v0.1.1`,
-  `candy-top/v0.1.0` and successors are built by
-  `.github/workflows/release-phar.yml` into a self-contained
-  `candy-code.phar` published to GitHub Releases with a SHA-256
-  sidecar and an Ed25519 `minisig` signature. The release key is
+- **Tagged signed releases** — `candy-code/v0.1.0`, `candy-code/v0.1.1`
+  and successors are built by `.github/workflows/release-phar.yml` into
+  a self-contained `candy-code.phar`; `candy-top/v0.1.0` and successors
+  are built by `.github/workflows/release-candy-top-phar.yml` into
+  `candy-top.phar`. Both ship to GitHub Releases with a SHA-256 sidecar
+  and an Ed25519 `minisig` signature. The release key is
   **sugarcraft-wide and pinned** in `SelfUpdate.php`
   (`PUBLIC_KEY_BASE64`, pinned 2026-10-20): `candy-code self-update`
   refuses a payload that does not verify against it, and loudly
-  refuses an absent signature. Pre-2026-10-20 builds (v0.1.0) are
-  keyless — SHA-256 only. The container mirror
+  refuses an absent signature. The one keyless exception is the earliest
+  candy-code build (`candy-code/v0.1.0`, pre-dating the key pin) —
+  SHA-256 only; `candy-top/v0.1.0` shipped signed. The container mirror
   `ghcr.io/detain/sugarcraft-candy-code` (tags `latest` + commit SHA)
   is rebuilt by `.github/workflows/candy-code-image.yml` from the
   published composer stream.
