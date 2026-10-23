@@ -9,7 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'launcher.no_pcntl'        => 'pcntl_exec no disponible; se requiere ext-pcntl',
     'launcher.exec_failed'     => 'falló la ejecución de {bin}',
     'config.not_found'         => 'Configuración de wishlist no encontrada: {path}',
     'config.json_top_level'    => 'wishlist json: el valor de nivel superior debe ser un array',
@@ -18,6 +17,9 @@ return [
     'config.yaml_unparseable'  => 'wishlist yaml: línea no analizable: {line}',
     'config.entry_missing_field' => 'entrada wishlist sin campo requerido: name o host',
     'config.field_not_scalar'  => 'entrada de wishlist: el campo [{field}] debe ser un escalar, se obtuvo {type}',
+    'config.unreadable'       => 'no se pudo leer la configuración de wishlist: {path}',
+    'config.home_unset'       => 'no se puede expandir ~ sin $HOME: {path}',
+    'config.yaml_inline_flow' => 'wishlist yaml: colección de flujo en línea no admitida: {value} (use una lista anidada)',
 
     // endpoint security
     'endpoint.option_injection' => 'endpoint de wishlist: el campo [{field}] tiene un valor no seguro con guion inicial [{value}]',
@@ -25,10 +27,19 @@ return [
 
 
     // bin/candy-ssh-launcher
-    'cli.usage'         => 'Uso: candy-ssh-launcher [--config <ruta>] [--ssh <binario-ssh>]',
+    'cli.usage'         => 'Uso: candy-ssh-launcher [--config <ruta>] [--ssh <binario-ssh>] [--list] [-h|--help]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: argumento desconocido: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: no se encontró configuración. Pase --config <ruta>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: cancelado.',
     'cli.ssh_not_executable' => 'candy-ssh-launcher: binario ssh no encontrado o no ejecutable: {bin}',
+    'cli.missing_value'  => 'candy-ssh-launcher: {arg} requiere un valor',
+    'cli.no_endpoints'   => 'candy-ssh-launcher: sin endpoints en {path}',
+
+    // picker chrome
+    'picker.title'       => '── wishlist ──',
+    'picker.filter'      => 'filtro: ',
+    'picker.no_matches'  => '  (sin coincidencias)',
+    'picker.help'        => '  ↑/↓ seleccionar · Enter conectar · Esc salir · escribe para filtrar',
+    'picker.count'       => '  ({shown} de {total})',
 ];

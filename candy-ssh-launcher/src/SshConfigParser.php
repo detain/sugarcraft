@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\SshLauncher;
 
+use RuntimeException;
+
 /**
  * Parses an OpenSSH config file (~/.ssh/config) into a list of Endpoints.
  *
@@ -11,19 +13,42 @@ namespace SugarCraft\SshLauncher;
  * - `Host <pattern>` blocks (including `Host *`, which matches every host)
  * - Per-host options: HostName, User, Port, IdentityFile, ProxyJump
  * - Multi-pattern Host lines ("Host a b c") become one endpoint per pattern
+ * - Both argument grammars ssh_config(5) allows: whitespace (`User bob`) and
+ *   the equals form (`User=bob`, `Host=web1`) — "if the first character
+ *   after the keyword is an equal sign it is ignored".
  *
- * Precedence mirrors openssh-client/ssh_config.5 exactly: "For each
- * parameter, the first obtained value will be used." Resolution walks ALL
- * blocks in file order and, for each endpoint, takes the first value a
- * matching block defines. `Host *` is therefore NOT a subordinate defaults
- * section — it is simply conventionally written last, which is what makes
- * it lose. A `Host *` written FIRST in the file wins over every later
- * specific block, exactly as OpenSSH would honour it.
+ * Precedence follows ssh_config(5): "For each parameter, the first obtained
+ * value will be used." Resolution walks ALL blocks in file order and, for
+ * each endpoint, takes the first value a matching block defines. `Host *`
+ * is therefore NOT a subordinate defaults section — it is simply
+ * conventionally written last, which is what makes it lose. A `Host *`
+ * written FIRST in the file wins over every later specific block.
  * IdentityFile is the documented exception: values accumulate across
  * matching blocks in file order (ssh tries them in that order).
+ *
+ * This is a DELIBERATE SUBSET of ssh_config(5), not the full grammar:
+ * - Pattern matching is literal-or-bare-`*` only. OpenSSH's `?`, character
+ *   classes, and negated `!patterns` are not interpreted — a `Host web*`
+ *   block never cross-applies to the host `web1`; only the exact string
+ *   `web*` (or the universal bare `*`) matches.
+ * - Quoted arguments, `Match` blocks, and multi-line continuations are
+ *   unimplemented.
  */
 final class SshConfigParser
 {
+    /**
+     * One keyword line: keyword, then EITHER whitespace or an equals sign
+     * (with optional surrounding whitespace on both sides, as OpenSSH
+     * tolerates), then the argument. `Host` headers route through the same
+     * split so `Host=web1` opens a block instead of being dropped — the old
+     * whitespace-only regex silently ignored equals forms, and an ignored
+     * `Host=x` header let that block's options leak into the PREVIOUS
+     * block's hosts. (2026-10-23, ssh_config(5) "ARGUMENTS": equals form is
+     * legal for every keyword, Host included; verified against OpenSSH 9.x
+     * `ssh -G`.)
+     */
+    private const KEYWORD_PATTERN = '/^(\w+)(?:\s*=\s*|\s+)(.*)$/';
+
     /**
      * Every Host block in file order — wildcard blocks included, because
      * precedence is positional, not categorical.
@@ -39,10 +64,8 @@ final class SshConfigParser
     {
         $this->blocks = [];
 
-        /** @var list<string>|null $currentHostPatterns */
-        $currentHostPatterns = null;
-        /** @var array<string,string|list<string>> $currentOptions */
-        $currentOptions = [];
+        /** @var int|null $currentIndex Index into $blocks, null before the first Host header. */
+        $currentIndex = null;
 
         foreach (explode("\n", $raw) as $rawLine) {
             $line = preg_replace('/\s+#.*$/', '', $rawLine) ?? $rawLine;
@@ -51,37 +74,60 @@ final class SshConfigParser
                 continue;
             }
 
-            // Host keyword opens a new block
-            if (preg_match('/^host\s+(.+)$/i', $line, $m)) {
-                if ($currentHostPatterns !== null) {
-                    $this->blocks[] = ['patterns' => $currentHostPatterns, 'options' => $currentOptions];
+            if (preg_match(self::KEYWORD_PATTERN, $line, $m) !== 1) {
+                // Bare `Host` (no argument) and unrecognisable lines match
+                // nothing — same silence as before this rewrite.
+                continue;
+            }
+
+            $keyword = strtolower($m[1]);
+            $argument = trim($m[2]);
+
+            if ($keyword === 'host') {
+                if ($argument === '') {
+                    continue;
                 }
                 // Split multi-pattern Host lines (e.g. "Host a b c") into
-                // individual patterns, preserving left-to-right order.
-                $rawPatterns = preg_split('/\s+/', trim($m[1]));
-                $currentHostPatterns = array_values(array_filter(
-                    $rawPatterns,
-                    static fn(string $p) => $p !== ''
-                ));
-                $currentOptions = [];
+                // individual patterns, preserving left-to-right order and
+                // collapsing repeats — a pattern listed twice must not
+                // mint the same endpoint twice.
+                $patterns = $this->uniquePatterns(
+                    preg_split('/\s+/', $argument) ?: []
+                );
+                $this->blocks[] = ['patterns' => $patterns, 'options' => []];
+                $currentIndex = count($this->blocks) - 1;
                 continue;
             }
 
-            // Keyword VALUE lines (inside a Host block)
-            if ($currentHostPatterns !== null && preg_match('/^(\w+)\s+(.+)$/i', $line, $m)) {
-                $key = strtolower($m[1]);
-                $value = trim($m[2]);
-                $this->applyKeyword($currentOptions, $key, $value);
-                continue;
+            // Keyword VALUE lines (inside a Host block). Lines before the
+            // first Host header, and empty arguments, are ignored.
+            if ($currentIndex !== null && $argument !== '') {
+                $currentOptions = &$this->blocks[$currentIndex]['options'];
+                $this->applyKeyword($currentOptions, $keyword, $argument);
+                unset($currentOptions);
             }
-        }
-
-        // Flush final block
-        if ($currentHostPatterns !== null) {
-            $this->blocks[] = ['patterns' => $currentHostPatterns, 'options' => $currentOptions];
         }
 
         return $this->buildEndpoints();
+    }
+
+    /**
+     * @param array<string> $tokens
+     * @return list<string>
+     */
+    private function uniquePatterns(array $tokens): array
+    {
+        $seen = [];
+        $unique = [];
+        foreach ($tokens as $token) {
+            if ($token === '' || isset($seen[$token])) {
+                continue;
+            }
+            $seen[$token] = true;
+            $unique[] = $token;
+        }
+
+        return $unique;
     }
 
     /**
@@ -199,8 +245,7 @@ final class SshConfigParser
         $len = strlen($path);
         if ($len >= 2 && $path[1] === '/') {
             // ~/path — current user's home
-            $home = getenv('HOME') ?? '/root';
-            return $home . substr($path, 1);
+            return $this->homeDirectory($path) . substr($path, 1);
         }
 
         // ~user/path — find the first slash
@@ -215,9 +260,8 @@ final class SshConfigParser
         }
 
         if ($user === '') {
-            // Edge case: just ~ or ~/... (already handled above)
-            $home = getenv('HOME') ?? '/root';
-            return $home . $rest;
+            // Edge case: just ~ (the ~/... shape was handled above)
+            return $this->homeDirectory($path) . $rest;
         }
 
         // ~user/path — try to resolve via posix_getpwnam
@@ -231,6 +275,29 @@ final class SshConfigParser
         // Cannot resolve ~user — return path unchanged rather than
         // producing garbage like <home>user/...
         return $path;
+    }
+
+    /**
+     * Home directory for `~` expansion: $HOME, then the passwd entry of the
+     * effective user, then a loud refusal. The old code silently substituted
+     * the literal '/root', so an import run without $HOME would have hunted
+     * identity files under /root (2026-10-23).
+     */
+    private function homeDirectory(string $path): string
+    {
+        $home = getenv('HOME');
+        if (is_string($home) && $home !== '') {
+            return rtrim($home, '/');
+        }
+
+        if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
+            $pw = @posix_getpwuid(posix_geteuid());
+            if (is_array($pw) && isset($pw['dir']) && is_string($pw['dir']) && $pw['dir'] !== '') {
+                return rtrim($pw['dir'], '/');
+            }
+        }
+
+        throw new RuntimeException(Lang::t('config.home_unset', ['path' => $path]));
     }
 
     /**

@@ -9,7 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'launcher.no_pcntl'        => 'pcntl_exec nicht verfügbar; ext-pcntl erforderlich',
     'launcher.exec_failed'     => 'Ausführung von {bin} fehlgeschlagen',
     'config.not_found'         => 'Wishlist-Konfiguration nicht gefunden: {path}',
     'config.json_top_level'    => 'Wishlist-JSON: Oberster Wert muss ein Array sein',
@@ -18,6 +17,9 @@ return [
     'config.yaml_unparseable'  => 'Wishlist-YAML: nicht analysierbare Zeile: {line}',
     'config.entry_missing_field' => 'Wishlist-Eintrag mit fehlendem Pflichtfeld: name oder host',
     'config.field_not_scalar'  => 'wishlist-Eintrag: Feld [{field}] muss ein Skalar sein, erhalten {type}',
+    'config.unreadable'       => 'Wishlist-Konfiguration konnte nicht gelesen werden: {path}',
+    'config.home_unset'       => '~ kann ohne $HOME nicht expandiert werden: {path}',
+    'config.yaml_inline_flow' => 'Wishlist-YAML: Inline-Flow-Sammlung nicht unterstützt: {value} (verschachtelte Liste verwenden)',
 
     // endpoint security
     'endpoint.option_injection' => 'wishlist-Endpunkt: Feld [{field}] enthält unsicheren Wert mit führendem Bindestrich [{value}]',
@@ -25,10 +27,19 @@ return [
 
 
     // bin/candy-ssh-launcher
-    'cli.usage'         => 'Aufruf: candy-ssh-launcher [--config <pfad>] [--ssh <ssh-binär>]',
+    'cli.usage'         => 'Aufruf: candy-ssh-launcher [--config <pfad>] [--ssh <ssh-binär>] [--list] [-h|--help]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: unbekanntes Argument: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: keine Konfiguration gefunden. Übergeben Sie --config <pfad>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: abgebrochen.',
     'cli.ssh_not_executable' => 'candy-ssh-launcher: ssh-Binary nicht gefunden oder nicht ausführbar: {bin}',
+    'cli.missing_value'  => 'candy-ssh-launcher: {arg} benötigt einen Wert',
+    'cli.no_endpoints'   => 'candy-ssh-launcher: keine Endpunkte in {path}',
+
+    // picker chrome
+    'picker.title'       => '── wishlist ──',
+    'picker.filter'      => 'Filter: ',
+    'picker.no_matches'  => '  (keine Treffer)',
+    'picker.help'        => '  ↑/↓ wählen · Enter verbinden · Esc beenden · tippen filtert',
+    'picker.count'       => '  ({shown} von {total})',
 ];
