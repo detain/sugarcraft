@@ -42,7 +42,9 @@ my-app/
 ├── src/
 │   └── Counter.php       # demo Model: up/down/quit, styled border
 ├── tests/
-│   └── CounterTest.php   # pinned behavior matrix — the test-shape reference
+│   ├── CounterTest.php                    # pinned behavior matrix — the test-shape reference
+│   ├── ModelContractDocumentationTest.php # README fence vs interface drift guard
+│   └── ReadmeSnippetsTest.php             # lint+execute every README php fence
 └── .vhs/
     ├── start.tape        # CI gif recording of the running app
     └── start.gif         # the rendered demo (force-tracked; CI regenerates)
@@ -68,7 +70,7 @@ final class Greeter implements Model
 }
 ```
 
-Only the *return* of `init()` is optional — the method itself is required, and returning `null` just means "no startup Cmd". `subscriptions()` is likewise required; return `null` for a static subscription set.
+Only the *return* of `init()` is optional — the method itself is required, and returning `null` just means "no startup Cmd". `subscriptions()` is likewise required; return `null` when the model needs no subscriptions.
 
 The shape follows the MVC-style Model–Update–View architecture. State lives on the value object, transitions are pure functions, side effects (timers, HTTP, file I/O) get *scheduled* as Cmds rather than executed inline. The demo schedules only `Cmd::quit()`; `sugar-core`'s `Cmd` also offers `every()`, `tick()`, `promise()` and friends — return one from `init()` or `update()` and the harness runs it, feeding whatever `Msg` it produces back through `update()`.
 
