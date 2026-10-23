@@ -6,16 +6,23 @@ declare(strict_types=1);
 /**
  * `candy-ssh-launcher` — SSH endpoint picker.
  *
- *   candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--help]
+ *   candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list]
+ *                      [-h|--help]
  *
  * Without `--config` the search order is: `wishlist.yml`, @rename-keep
  * `wishlist.yaml`, `wishlist.json` in the CURRENT DIRECTORY first, @rename-keep
- * then `~/.config/wishlist.{yml,yaml,json}`. `--ssh` must be an
- * absolute path to the ssh binary (`pcntl_exec` does not search
- * `$PATH`). On Enter, replaces the current process with `ssh`
- * connecting to the chosen entry; Esc exits 130.
+ * then `~/.config/wishlist.{yml,yaml,json}` — first candidate that EXISTS
+ * wins at each tier. `--ssh` must be an existing executable PATH
+ * (`pcntl_exec` performs no `$PATH` search — a bare name like `ssh` fails
+ * loudly at the gate below; relative paths resolve against the CWD).
+ * `--list` prints the resolved endpoints and exits 0 without touching the
+ * terminal or ssh. On Enter, the picker replaces the current process with
+ * `ssh` connecting to the chosen entry; Esc/Ctrl-C exits 130, a broken or
+ * empty config exits 1, and a bad argument exits 2.
  */
 
+use SugarCraft\Core\I18n\T;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\SshLauncher\Config;
 use SugarCraft\SshLauncher\Lang;
 use SugarCraft\SshLauncher\Launcher;
@@ -40,39 +47,88 @@ use SugarCraft\SshLauncher\Picker;
 })();
 
 // ---------------------------------------------------------------------------
+// Locale activation
+// ---------------------------------------------------------------------------
+// T::setLocale(T::detect()) reads LC_ALL → LC_MESSAGES → LANG. Without it
+// every Lang::t() below would print the English default regardless of the
+// user's locale (house pattern, matches every other candy-* bin; the
+// lang/ files have shipped translations since the rename era).
+T::setLocale(T::detect());
+
+// ---------------------------------------------------------------------------
 // CLI argument parsing
 // ---------------------------------------------------------------------------
-// PHP's getopt() silently stops at the first unrecognised option, so a
-// typo like `--confg` would be ignored and the run would proceed with
-// defaults. Scan the raw argv first: every `-`-prefixed token must be
-// one of the three known flags (value may be glued with `=`), and
-// `--help` short-circuits with the usage line on stdout.
-$allowed = ['--config', '--ssh'];
-foreach (array_slice($argv, 1) as $arg) {
-    if (!str_starts_with($arg, '-')) {
-        continue;
+// Hand-rolled instead of getopt() on purpose: PHP's getopt silently stops
+// at the first unrecognised option (a `--confg` typo would sail through on
+// defaults), mis-handles valueless long flags given as `--help=1` in a
+// version-flaky way, and gives no diagnostics for `--config` with no
+// value. Every token is judged here; anything after a bare `--` is
+// ignored (there are no positional arguments to interpret).
+$fail = static function (string $message, int $code): never {
+    fwrite(STDERR, $message . "\n");
+    exit($code);
+};
+
+$cfgPath = '';
+$sshBin = Launcher::DEFAULT_SSH;
+$wantList = false;
+
+$tokens = array_slice($argv, 1);
+$count = count($tokens);
+for ($i = 0; $i < $count; $i++) {
+    $token = (string) $tokens[$i];
+
+    if ($token === '--') {
+        // End of options: the remainder is not read (no positionals exist).
+        break;
     }
-    $name = $arg;
-    $eq = strpos($arg, '=');
-    if ($eq !== false) {
-        $name = substr($arg, 0, $eq);
+
+    if (!str_starts_with($token, '-')) {
+        $fail(Lang::t('cli.unknown_arg', ['arg' => $token]), 2);
     }
-    if ($name === '--help') {
-        // Handled here rather than via getopt(): getopt's treatment of a
-        // valueless long flag given as `--help=1` is version-flaky, and
-        // help must win before anything else can fail.
+
+    // Split `--name=value` from `--name value` uniformly; the glued form
+    // supplies its own value (possibly empty → refused below).
+    $eq = strpos($token, '=');
+    $name = $eq === false ? $token : substr($token, 0, $eq);
+
+    if ($name === '-h' || $name === '--help') {
+        // Help wins before anything else can fail, in every form.
         fwrite(STDOUT, Lang::t('cli.usage') . "\n");
         exit(0);
     }
-    if (!in_array($name, $allowed, true)) {
-        fwrite(STDERR, Lang::t('cli.unknown_arg', ['arg' => $arg]) . "\n");
-        exit(2);
+
+    if ($name === '--list') {
+        $wantList = true;
+        continue;
+    }
+
+    if ($name !== '--config' && $name !== '--ssh') {
+        // Unknown flags name the FULL token (glued value included) so the
+        // user sees exactly what the program choked on.
+        $fail(Lang::t('cli.unknown_arg', ['arg' => $token]), 2);
+    }
+
+    if ($eq !== false) {
+        $value = substr($token, $eq + 1);
+        if ($value === '') {
+            $fail(Lang::t('cli.missing_value', ['arg' => $token]), 2);
+        }
+    } else {
+        $next = $tokens[$i + 1] ?? null;
+        if ($next === null || str_starts_with((string) $next, '-')) {
+            $fail(Lang::t('cli.missing_value', ['arg' => $token]), 2);
+        }
+        $i++;
+        $value = (string) $next;
+    }
+
+    if ($name === '--config') {
+        $cfgPath = $value;
+    } else {
+        $sshBin = $value;
     }
 }
-
-$opts = getopt('', ['config:', 'ssh:']);
-$cfgPath = $opts['config'] ?? '';
-$sshBin = $opts['ssh'] ?? Launcher::DEFAULT_SSH;
 
 // ---------------------------------------------------------------------------
 // Config file search (with HOME guard)
@@ -88,24 +144,30 @@ if ($cfgPath === '') {
     }
     // Only add ~/.config/... candidates when HOME is set and non-empty
     // to prevent probing '/.config/wishlist.yml' when HOME is unset.
+    // Both tiers are existence-gated (2026-10-23): the HOME candidates used
+    // to be appended WITHOUT is_file, so a missing ~/.config/wishlist.yml
+    // shadowed a valid wishlist.yaml sibling and the run died on
+    // 'not found' for a path nobody had asked for.
     if ($home !== false && $home !== '') {
         foreach (['.config/wishlist.yml', '.config/wishlist.yaml', '.config/wishlist.json'] as $name) {
-            $candidates[] = $home . '/' . $name;
+            $path = $home . '/' . $name;
+            if (is_file($path)) {
+                $candidates[] = $path;
+            }
         }
     }
     if ($candidates === []) {
-        fwrite(STDERR, Lang::t('cli.no_config') . "\n");
-        exit(1);
+        $fail(Lang::t('cli.no_config'), 1);
     }
     $cfgPath = $candidates[0];
 }
 
 // ---------------------------------------------------------------------------
-// SSH binary validation
+// SSH binary validation (--list never launches anything, so it never
+// requires ssh to exist)
 // ---------------------------------------------------------------------------
-if (!is_file($sshBin) || !is_executable($sshBin)) {
-    fwrite(STDERR, Lang::t('cli.ssh_not_executable', ['bin' => $sshBin]) . "\n");
-    exit(1);
+if (!$wantList && (!is_file($sshBin) || !is_executable($sshBin))) {
+    $fail(Lang::t('cli.ssh_not_executable', ['bin' => $sshBin]), 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -114,8 +176,27 @@ if (!is_file($sshBin) || !is_executable($sshBin)) {
 try {
     $endpoints = Config::load($cfgPath);
 } catch (\Throwable $e) {
-    fwrite(STDERR, Lang::t('cli.error', ['message' => $e->getMessage()]) . "\n");
-    exit(1);
+    // Config errors echo bytes taken from the file itself (paths, YAML
+    // fragments) — the stderr channel wraps them as untrusted so a hostile
+    // config cannot forge terminal control sequences through the error
+    // report (docs/TRUST-BOUNDARY.md).
+    $fail(Lang::t('cli.error', ['message' => Sanitize::untrusted($e->getMessage())]), 1);
+}
+
+if ($wantList) {
+    foreach ($endpoints as $endpoint) {
+        fwrite(STDOUT, Sanitize::untrusted($endpoint->name) . "\t"
+            . Sanitize::untrusted($endpoint->host) . ':' . $endpoint->port . "\t"
+            . Sanitize::untrusted($endpoint->user ?? '-') . "\n");
+    }
+    exit(0);
+}
+
+// An empty (or wholly-commented) config is a config problem, not a user
+// abort: saying 'cancelled.' with 130 made the two indistinguishable
+// (2026-10-23).
+if ($endpoints === []) {
+    $fail(Lang::t('cli.no_endpoints', ['path' => $cfgPath]), 1);
 }
 
 $pick = (new Picker())->pick($endpoints);
