@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Db;
 
 use SugarCraft\Sql\Lang;
-use Sqlite3;
 
 /**
  * SQLite implementation of DatabaseInterface.
