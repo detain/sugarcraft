@@ -123,11 +123,16 @@ final class StatsdBackend implements Backend
      */
     private function sendRaw(string $name, string $valueStr, string $kind, array $tags): void
     {
-        $line = $name . ':' . $valueStr . '|' . $kind;
+        // StatsD's wire grammar is line-oriented and field-separated: a
+        // control byte in any token forges extra lines, and a `|` smuggles
+        // values into neighbouring fields. Every token reaching the socket is
+        // flattened at this one chokepoint, so hostile tag values can never
+        // split or fake a packet.
+        $line = self::wireToken($name) . ':' . self::wireToken($valueStr) . '|' . $kind;
         if ($tags !== [] && $this->dogstatsd) {
             $parts = [];
             foreach ($tags as $k => $v) {
-                $parts[] = $k . ':' . $v;
+                $parts[] = self::wireToken($k) . ':' . self::wireToken($v);
             }
             $line .= '|#' . implode(',', $parts);
         }
@@ -136,6 +141,16 @@ final class StatsdBackend implements Backend
         } else {
             fwrite($this->sock, $line);
         }
+    }
+
+    /**
+     * Flatten a wire token: control bytes (NUL-US, DEL) and the field
+     * separator `|` become `_`. Ordinary names/values are untouched, so
+     * well-formed payloads stay byte-identical.
+     */
+    private static function wireToken(string $token): string
+    {
+        return (string) preg_replace('/[\x00-\x1F\x7F|]/', '_', $token);
     }
 
     private static function fmt(float $v): string

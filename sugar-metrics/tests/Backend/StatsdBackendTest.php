@@ -65,6 +65,22 @@ final class StatsdBackendTest extends TestCase
         fclose($sock);
     }
 
+    public function testControlBytesAndPipesCannotForgeWireLines(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter("ev\nil:x|steal", 1.0, ['route' => "/a\nb", 'k|2' => 'v|3']);
+        rewind($sock);
+        $payload = (string) stream_get_contents($sock);
+        fclose($sock);
+
+        // One line, no smuggled separators: control bytes and inner `|` are
+        // flattened, leaving only the line's own structural pipes.
+        $this->assertStringNotContainsString("\n", $payload);
+        $this->assertSame(2, substr_count($payload, '|'), 'only the :value|kind and |# tags separators may survive');
+        $this->assertSame('ev_il:x_steal:1|c|#route:/a_b,k_2:v_3', $payload);
+    }
+
     public function testUpDownCounterEmitsSignedDelta(): void
     {
         $sock = fopen('php://memory', 'w+');

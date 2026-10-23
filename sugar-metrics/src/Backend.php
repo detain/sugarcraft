@@ -16,6 +16,15 @@ namespace SugarCraft\Metrics;
  * that don't support labels (StatsD legacy mode) flatten them
  * into the metric name; backends that do (Prometheus, DogStatsD)
  * pass them through.
+ *
+ * Trust boundary: names and tags are treated as potentially hostile.
+ * The Registry's cardinality keys backslash-escape the `|` and `=`
+ * separators ({@see Util::tagKey()}) so lookalike tag sets never
+ * collapse, and line-oriented backends (StatsD, Prometheus textfile)
+ * normalise control bytes at their emit chokepoints. Callers should
+ * still bound cardinality at the source — see
+ * {@see SessionMetrics::normalizeTag()} and the Registry's
+ * `cardinalityLimit`.
  */
 interface Backend
 {
