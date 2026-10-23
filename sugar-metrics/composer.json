@@ -29,7 +29,7 @@
         "docs": "https://sugarcraft.github.io/lib/sugar-metrics.html"
     },
     "require": {
-        "php": ">=8.3",
+        "php": "^8.3",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-ssh-server": "dev-master"
     },
