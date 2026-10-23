@@ -20,6 +20,24 @@ final class EmacsModeExtendedTest extends TestCase
     // Ctrl+T — transpose at start is no-op
     // =========================================================================
 
+    public function testModeHandleKeyAcceptsRawControlBytesDirectly(): void
+    {
+        // Direct mode callers may feed raw control bytes; the mode folds them
+        // into the canonical symbolic language at its own choke (Key::normalize).
+        $prompt = TextPrompt::new('> ')
+            ->handleChar('a')
+            ->handleChar('b')
+            ->handleChar('c')
+            ->withMode(new EmacsMode());
+        $mode = new EmacsMode();
+
+        $result = $mode->handleKey($prompt, "\x01");
+        $this->assertSame(0, $result->cursor());
+
+        $result = $mode->handleKey($result, "\x05");
+        $this->assertSame(3, $result->cursor());
+    }
+
     public function testCtrlTWithCursorAtZeroIsNoOp(): void
     {
         $prompt = TextPrompt::new('> ')->handleChar('a')->handleChar('b');

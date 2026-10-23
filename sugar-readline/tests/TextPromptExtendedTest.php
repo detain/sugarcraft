@@ -61,6 +61,29 @@ final class TextPromptExtendedTest extends TestCase
     }
 
     // =========================================================================
+    public function testHiddenPromptValueNeverEntersHistory(): void
+    {
+        // A secret typed into a withHidden() prompt must stay out of the
+        // history store (both in-memory and any FileHistory behind it).
+        $history = new InMemoryHistory();
+        $prompt = TextPrompt::new('Password: ')
+            ->withHistory($history)
+            ->withHidden(true);
+        $prompt = $prompt->handleChar('s')->handleChar('e')->handleChar('c');
+        $prompt = $prompt->submit();
+
+        $this->assertTrue($prompt->isSubmitted());
+        $this->assertNull($history->getPrevious());
+
+        // Control: a visible prompt with the same text does enter history.
+        $visible = TextPrompt::new('Name: ')
+            ->withHistory($history)
+            ->handleChar('s')->handleChar('e')->handleChar('c')
+            ->submit();
+        $this->assertTrue($visible->isSubmitted());
+        $this->assertSame('sec', $history->getPrevious());
+    }
+
     // view() — fish-style autosuggest from history
     // =========================================================================
 
