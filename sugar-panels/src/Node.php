@@ -13,8 +13,9 @@ use SugarCraft\Style\VAlign;
  * Immutable layout tree node.
  *
  * Every public dimension/style facet is a declared `readonly` property below;
- * the `with*()` builders return new instances (audit #10: the previous
- * @property mirror block drifted and cited a phantom `NodeKind` type).
+ * the `with*()` builders return new instances. (An earlier @property mirror
+ * block drifted and cited a phantom `NodeKind` type — the declared properties
+ * are the single source of truth.)
  */
 final class Node
 {
@@ -178,7 +179,7 @@ final class Node
 
     /**
      * Set the border character set from sugar-style.
-     * Passing null CLEARS the style (audit #4): the frame then falls back to
+     * Passing null CLEARS the style: the frame then falls back to
      * {@see Border::rounded()} at draw time. The border bool still controls
      * visibility — clearing the style does not hide the border.
      */
@@ -252,7 +253,12 @@ final class Node
     // Dimension queries
     // -------------------------------------------------------------------------
 
-    /** Total width including border, padding and the node's own left+right margin. */
+    /**
+     * Total width including border, padding, the node's own left+right margin,
+     * and — for HORIZONTAL layouts only — the inter-child spacing. Vertical
+     * spacing consumes rows, never columns, so it is excluded from the width
+     * footprint (mirroring totalHeight()'s treatment of horizontal spacing).
+     */
     public function totalWidth(): int
     {
         // The renderer insets each node's region by its own margin before laying
@@ -269,24 +275,27 @@ final class Node
             return $inner + $marginW;
         }
 
-        $gaps = (\count($this->children) - 1) * $this->spacing;
-
-        // For HORIZONTAL, children sit side-by-side so width is their SUM and the
-        // border is shared once. Compute the child sum only on this branch — the
-        // VERTICAL branch below never uses it, so summing there was a wasted full
-        // subtree traversal (it already re-walks the children for the max).
+        // For HORIZONTAL, children sit side-by-side so width is their SUM plus
+        // one spacing gap between neighbours; the border is shared once. The
+        // child sum is computed only on this branch — VERTICAL never uses it,
+        // so summing there was a wasted full subtree traversal (it already
+        // re-walks the children for the max).
         if ($this->kind === self::HORIZONTAL) {
             $childWidths = \array_sum(\array_map(fn(Node $c) => $c->totalWidth(), $this->children));
+            $gaps = (\count($this->children) - 1) * $this->spacing;
             $extra = $this->border === true ? 2 : 0;
             return $childWidths + $gaps + $extra + $marginW;
         }
 
-        // VERTICAL: use max child width
+        // VERTICAL (and the single-child NOBORDER wrapper): children stack, so
+        // the width is the widest child — inter-child spacing does not inflate
+        // it. Adding (n-1)*spacing here reserved phantom columns for vertical
+        // gaps and let an inflated flex basis starve horizontal siblings.
         $maxChild = \count($this->children) > 0
             ? \max(...\array_map(fn(Node $c) => $c->totalWidth(), $this->children))
             : 0;
         $extra = $this->border === true ? 2 : 0;
-        return $maxChild + $gaps + $extra + $marginW;
+        return $maxChild + $extra + $marginW;
     }
 
     /** Total height including border, padding and the node's own top+bottom margin. */
@@ -329,9 +338,10 @@ final class Node
      * sentinel", canonical sugar-style Style / sugar-core Mutable): each
      * clearable nullable field has a paired `...Set` flag. Omitting both keeps
      * the current value; passing `field: $v, fieldSet: true` WRITES $v even
-     * when $v is null/''/[0,0,0,0] — so an explicit clear is observable
-     * (audit #4: the old Preserve-sentinel scheme let explicit nulls silently
-     * no-op, contradicting the docblocks and README).
+     * when $v is null/''/[0,0,0,0] — so an explicit clear is observable.
+     * (An earlier Preserve-sentinel scheme let explicit nulls silently no-op,
+     * contradicting the docblocks and README; the flag pair removes that
+     * divergence by construction.)
      *
      * @param array{int,int,int,int}|null $margin
      */

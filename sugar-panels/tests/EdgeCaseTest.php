@@ -16,11 +16,11 @@ use PHPUnit\Framework\TestCase;
  */
 final class EdgeCaseTest extends TestCase
 {
-    private SugarPanels $boxer;
+    private SugarPanels $panels;
 
     protected function setUp(): void
     {
-        $this->boxer = SugarPanels::new();
+        $this->panels = SugarPanels::new();
     }
 
     // -------------------------------------------------------------------------
@@ -31,7 +31,7 @@ final class EdgeCaseTest extends TestCase
     {
         // An empty horizontal node should render without error.
         $n = Node::horizontal();
-        $result = $this->boxer->render($n, 10, 3);
+        $result = $this->panels->render($n, 10, 3);
         $this->assertIsString($result);
         $this->assertSame(3, \count(\explode("\n", $result)));
     }
@@ -39,7 +39,7 @@ final class EdgeCaseTest extends TestCase
     public function testVerticalNodeWithNoChildren(): void
     {
         $n = Node::vertical();
-        $result = $this->boxer->render($n, 10, 3);
+        $result = $this->panels->render($n, 10, 3);
         $this->assertIsString($result);
         $this->assertSame(3, \count(\explode("\n", $result)));
     }
@@ -48,7 +48,7 @@ final class EdgeCaseTest extends TestCase
     {
         $n = Node::leaf('');
         $this->assertSame('', $n->content);
-        $result = $this->boxer->render($n, 10, 3);
+        $result = $this->panels->render($n, 10, 3);
         $this->assertIsString($result);
     }
 
@@ -58,7 +58,7 @@ final class EdgeCaseTest extends TestCase
         // A noBorder with no children (created via private constructor) is not
         // directly creatable, but the noBorder() factory wraps one child.
         $n = Node::noBorder(Node::leaf('x'));
-        $result = $this->boxer->render($n, 10, 3);
+        $result = $this->panels->render($n, 10, 3);
         $this->assertStringContainsString('x', $result);
     }
 
@@ -298,7 +298,7 @@ final class EdgeCaseTest extends TestCase
     {
         $layout = Node::leaf('content')->withBorder(false);
         // width=0 → array_fill(0, 0, ...) creates empty arrays → result is 5 empty rows.
-        $result = $this->boxer->render($layout, 0, 5);
+        $result = $this->panels->render($layout, 0, 5);
         $this->assertIsString($result);
         $lines = \explode("\n", $result);
         $this->assertCount(5, $lines);
@@ -308,7 +308,7 @@ final class EdgeCaseTest extends TestCase
     {
         $layout = Node::leaf('content')->withBorder(false);
         // height=0 → array_fill(0, 0, ...) creates empty outer array → result is empty.
-        $result = $this->boxer->render($layout, 10, 0);
+        $result = $this->panels->render($layout, 10, 0);
         $this->assertIsString($result);
         // With height 0, there are no rows to fill.
         $this->assertSame('', $result);
@@ -320,7 +320,7 @@ final class EdgeCaseTest extends TestCase
         // Audit #11: the named-domain guard replaces array_fill()'s raw ValueError.
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Viewport dimensions must not be negative, got -5x5');
-        $this->boxer->render($layout, -5, 5);
+        $this->panels->render($layout, -5, 5);
     }
 
     public function testRenderNegativeHeightViewport(): void
@@ -328,14 +328,14 @@ final class EdgeCaseTest extends TestCase
         $layout = Node::leaf('content')->withBorder(false);
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Viewport dimensions must not be negative, got 10x-5');
-        $this->boxer->render($layout, 10, -5);
+        $this->panels->render($layout, 10, -5);
     }
 
     public function testRenderLeafWidthExceedsViewportWithBorder(): void
     {
         // Border + content wider than viewport.
         $layout = Node::leaf('TOOLONGWORD')->withBorder(true)->withMinWidth(20);
-        $result = $this->boxer->render($layout, 8, 5);
+        $result = $this->panels->render($layout, 8, 5);
         $rows = \explode("\n", $result);
         $this->assertCount(5, $rows);
         // Frame survives the overflow and every row is exactly viewport width.
@@ -351,7 +351,7 @@ final class EdgeCaseTest extends TestCase
     {
         $multiline = "L1\nL2\nL3\nL4\nL5\nL6\nL7";
         $layout = Node::leaf($multiline)->withBorder(true)->withMinHeight(10);
-        $result = $this->boxer->render($layout, 20, 3);
+        $result = $this->panels->render($layout, 20, 3);
         $rows = \explode("\n", $result);
         $this->assertCount(3, $rows);
         $this->assertStringStartsWith('╭', $rows[0]);
@@ -370,7 +370,7 @@ final class EdgeCaseTest extends TestCase
             Node::leaf('B')->withBorder(false)->withMinWidth(5),
         )->withBorder(true)->withSpacing(0);
 
-        $result = $this->boxer->render($layout, 15, 3);
+        $result = $this->panels->render($layout, 15, 3);
         $this->assertStringContainsString('A', $result);
         $this->assertStringContainsString('B', $result);
     }
@@ -382,7 +382,7 @@ final class EdgeCaseTest extends TestCase
             Node::leaf('BOT')->withBorder(false)->withMinHeight(2),
         )->withBorder(true)->withSpacing(0);
 
-        $result = $this->boxer->render($layout, 15, 8);
+        $result = $this->panels->render($layout, 15, 8);
         $this->assertStringContainsString('TOP', $result);
         $this->assertStringContainsString('BOT', $result);
     }
@@ -395,7 +395,7 @@ final class EdgeCaseTest extends TestCase
     {
         // width <= 0 returns [''] immediately.
         $layout = Node::leaf('hello')->withBorder(false);
-        $result = $this->boxer->render($layout, 0, 3);
+        $result = $this->panels->render($layout, 0, 3);
         // [''] wrapping at width 0 => three empty rows.
         $this->assertSame("\n\n", $result);
     }
@@ -405,14 +405,14 @@ final class EdgeCaseTest extends TestCase
         // Reached via render()'s boundary guard (audit #11) before any wrapping.
         $layout = Node::leaf('hello')->withBorder(false);
         $this->expectException(\InvalidArgumentException::class);
-        $this->boxer->render($layout, -1, 3);
+        $this->panels->render($layout, -1, 3);
     }
 
     public function testWordWrapSingleOversizedWordSplits(): void
     {
         // A single word wider than the region must split.
         $layout = Node::leaf('ABCDEFGHIJ')->withBorder(false);
-        $result = $this->boxer->render($layout, 4, 4);
+        $result = $this->panels->render($layout, 4, 4);
         $this->assertStringContainsString('ABCD', $result);
         $this->assertStringContainsString('EFGH', $result);
         $this->assertStringContainsString('IJ', $result);
@@ -422,7 +422,7 @@ final class EdgeCaseTest extends TestCase
     {
         // Leading spaces on a fitting line should not be stripped.
         $layout = Node::leaf('  hello')->withBorder(false);
-        $result = $this->boxer->render($layout, 10, 2);
+        $result = $this->panels->render($layout, 10, 2);
         $this->assertStringContainsString('  hello', $result);
     }
 
@@ -431,7 +431,7 @@ final class EdgeCaseTest extends TestCase
         // Multiple spaces between words (not just single spaces) should be
         // preserved when lines fit.
         $layout = Node::leaf('a    b')->withBorder(false);
-        $result = $this->boxer->render($layout, 10, 2);
+        $result = $this->panels->render($layout, 10, 2);
         $this->assertStringContainsString('a    b', $result);
     }
 
@@ -439,7 +439,7 @@ final class EdgeCaseTest extends TestCase
     {
         $text = "para1 line\n\npara2 line";
         $layout = Node::leaf($text)->withBorder(false);
-        $result = $this->boxer->render($layout, 20, 5);
+        $result = $this->panels->render($layout, 20, 5);
         $this->assertStringContainsString('para1', $result);
         $this->assertStringContainsString('para2', $result);
     }
@@ -452,7 +452,7 @@ final class EdgeCaseTest extends TestCase
     {
         // A string that is ONLY an escape sequence (no grapheme).
         $layout = Node::leaf("\x1b[0m")->withBorder(false);
-        $result = $this->boxer->render($layout, 5, 1);
+        $result = $this->panels->render($layout, 5, 1);
         // Pure escape (zero visible cells) renders as five blanks.
         $this->assertSame('     ', $result);
     }
@@ -471,7 +471,7 @@ final class EdgeCaseTest extends TestCase
         }
         $text = 'A' . \implode('', $chars) . 'B';
         $layout = Node::leaf($text)->withBorder(false);
-        $result = $this->boxer->render($layout, 10, 1);
+        $result = $this->panels->render($layout, 10, 1);
         // Should render 'A' and 'B' with the combining marks attached.
         $this->assertStringContainsString('B', $result);
     }
@@ -480,7 +480,7 @@ final class EdgeCaseTest extends TestCase
     {
         // When line fits and has trailing SGR, it should be attached to last cell.
         $layout = Node::leaf("\x1b[1mbold\x1b[0m")->withBorder(false);
-        $result = $this->boxer->render($layout, 10, 1);
+        $result = $this->panels->render($layout, 10, 1);
         // Should contain the reset somewhere.
         $this->assertStringContainsString("\x1b[0m", $result);
     }
@@ -491,7 +491,7 @@ final class EdgeCaseTest extends TestCase
         // (they belonged to the clipped cells), but the safety reset still
         // gets appended to the last real cell.
         $layout = Node::leaf("\x1b[1mVERYLONGTEXT\x1b[0m")->withBorder(false);
-        $result = $this->boxer->render($layout, 4, 1);
+        $result = $this->panels->render($layout, 4, 1);
         // The truncation safety reset must be present.
         $this->assertNoDanglingStyle($result);
     }
@@ -515,7 +515,7 @@ final class EdgeCaseTest extends TestCase
     {
         // ESC[m (empty params) is a reset.
         $layout = Node::leaf("\x1b[1m\x1b[mTEXT")->withBorder(false);
-        $result = $this->boxer->render($layout, 10, 1);
+        $result = $this->panels->render($layout, 10, 1);
         $this->assertStringContainsString('TEXT', $result);
     }
 
@@ -523,7 +523,7 @@ final class EdgeCaseTest extends TestCase
     {
         // 38;5;N sets a color, stays open.
         $layout = Node::leaf("\x1b[38;5;196mRED")->withBorder(false);
-        $result = $this->boxer->render($layout, 10, 1);
+        $result = $this->panels->render($layout, 10, 1);
         // Reset must be appended by safety.
         $this->assertStringContainsString("\x1b[0m", $result);
     }
@@ -532,7 +532,7 @@ final class EdgeCaseTest extends TestCase
     {
         // 38;2;R;G;B sets a color, stays open.
         $layout = Node::leaf("\x1b[38;2;255;0;0mRGB")->withBorder(false);
-        $result = $this->boxer->render($layout, 10, 1);
+        $result = $this->panels->render($layout, 10, 1);
         $this->assertStringContainsString("\x1b[0m", $result);
     }
 
@@ -540,7 +540,7 @@ final class EdgeCaseTest extends TestCase
     {
         // Multiple non-zero codes (1, 4, 94) all open style.
         $layout = Node::leaf("\x1b[1;4;94mSTRIKE")->withBorder(false);
-        $result = $this->boxer->render($layout, 10, 1);
+        $result = $this->panels->render($layout, 10, 1);
         $this->assertStringContainsString("\x1b[0m", $result);
     }
 
@@ -548,7 +548,7 @@ final class EdgeCaseTest extends TestCase
     {
         // 48;5;N (background) also stays open.
         $layout = Node::leaf("\x1b[48;5;21mBG")->withBorder(false);
-        $result = $this->boxer->render($layout, 10, 1);
+        $result = $this->panels->render($layout, 10, 1);
         $this->assertStringContainsString("\x1b[0m", $result);
     }
 
@@ -560,7 +560,7 @@ final class EdgeCaseTest extends TestCase
     {
         // drawBorder returns early when w < 2 or h < 2.
         $layout = Node::leaf('x')->withBorder(true)->withMinWidth(1)->withMinHeight(1);
-        $result = $this->boxer->render($layout, 1, 1);
+        $result = $this->panels->render($layout, 1, 1);
         // No border drawn (w<2), content clipped: a single blank cell.
         $this->assertSame(' ', $result);
     }
@@ -569,7 +569,7 @@ final class EdgeCaseTest extends TestCase
     {
         // Title only renders when w >= 4 (needs corners + 1 title cell).
         $layout = Node::leaf('content')->withBorder(true)->withTitle('X')->withMinWidth(2);
-        $result = $this->boxer->render($layout, 3, 5);
+        $result = $this->panels->render($layout, 3, 5);
         // Title should not appear (w < 4 means no space for title).
         $this->assertStringNotContainsString('X', $result);
     }
@@ -578,7 +578,7 @@ final class EdgeCaseTest extends TestCase
     {
         // Title with wide glyphs clips at interior width.
         $layout = Node::leaf('content')->withBorder(true)->withTitle('世World')->withMinWidth(12);
-        $result = $this->boxer->render($layout, 12, 5);
+        $result = $this->panels->render($layout, 12, 5);
         $this->assertStringContainsString('World', $result);
         // '世' is 2 columns; in a 10-wide interior, '世World' (7 cols) should fit.
     }
@@ -590,7 +590,7 @@ final class EdgeCaseTest extends TestCase
             Node::leaf('A')->withBorder(false)->withMinWidth(5),
             Node::leaf('B')->withBorder(false)->withMinWidth(5),
         )->withBorder(false)->withSpacing(0);
-        $result = $this->boxer->render($layout, 12, 3);
+        $result = $this->panels->render($layout, 12, 3);
         // Vertical separator (rounded fallback) runs the full height at col 5.
         $rows = \explode("\n", $result);
         $this->assertCount(3, $rows);
@@ -607,7 +607,7 @@ final class EdgeCaseTest extends TestCase
             Node::leaf('TOP')->withBorder(false)->withMinHeight(2),
             Node::leaf('BOT')->withBorder(false)->withMinHeight(2),
         )->withBorder(false)->withSpacing(0);
-        $result = $this->boxer->render($layout, 12, 8);
+        $result = $this->panels->render($layout, 12, 8);
         $rows = \explode("\n", $result);
         $this->assertCount(8, $rows);
         // Horizontal separator (rounded fallback) after TOP's 2+2 block.
@@ -626,7 +626,7 @@ final class EdgeCaseTest extends TestCase
         // This is indirectly tested by zero/negative viewport renders above.
         // Explicit test: a leaf with margin that pushes content out of bounds.
         $leaf = Node::leaf('x')->withBorder(false)->withMargin(100, 0, 0, 100);
-        $result = $this->boxer->render($leaf, 10, 5);
+        $result = $this->panels->render($leaf, 10, 5);
         // Offset lands past the grid; nothing leaks in.
         $this->assertSame(\str_repeat("          \n", 4) . '          ', $result);
     }
@@ -640,7 +640,7 @@ final class EdgeCaseTest extends TestCase
         // (w - lw) / 2 with w=5, lw=2 → intdiv(3,2) = 1 (not 1.5).
         // leftPad=1, rightPad=5-2-1=2 → " AB  ".
         $layout = Node::leaf('AB')->withBorder(false)->withAlignH(Align::Center);
-        $result = $this->boxer->render($layout, 5, 1);
+        $result = $this->panels->render($layout, 5, 1);
         $stripped = \preg_replace('/\x1b\[[0-9;]*m/', '', $result);
         $this->assertSame(' AB  ', $stripped);
     }
@@ -649,7 +649,7 @@ final class EdgeCaseTest extends TestCase
     {
         // When text width == region width, leftPad = 0.
         $layout = Node::leaf('ABC')->withBorder(false)->withAlignH(Align::Right);
-        $result = $this->boxer->render($layout, 3, 1);
+        $result = $this->panels->render($layout, 3, 1);
         $stripped = \preg_replace('/\x1b\[[0-9;]*m/', '', $result);
         $this->assertStringContainsString('ABC', $stripped);
     }
@@ -657,7 +657,7 @@ final class EdgeCaseTest extends TestCase
     public function testAlignBottomExactlyFits(): void
     {
         $layout = Node::leaf("L1\nL2\nL3")->withBorder(false)->withAlignV(VAlign::Bottom);
-        $result = $this->boxer->render($layout, 10, 3);
+        $result = $this->panels->render($layout, 10, 3);
         $lines = \explode("\n", $result);
         // VAlign::Bottom: topPad = h - numLines = 3 - 3 = 0.
         // So L1 at row 0, L2 at row 1, L3 at row 2.
@@ -667,7 +667,7 @@ final class EdgeCaseTest extends TestCase
     public function testAlignMiddleExactlyFits(): void
     {
         $layout = Node::leaf("L1\nL2\nL3")->withBorder(false)->withAlignV(VAlign::Middle);
-        $result = $this->boxer->render($layout, 10, 3);
+        $result = $this->panels->render($layout, 10, 3);
         $lines = \explode("\n", $result);
         // In height=3 with 3 lines, topPad = (3-3)/2 = 0.
         $this->assertSame('L1', \trim($lines[0] ?? ''));
@@ -677,7 +677,7 @@ final class EdgeCaseTest extends TestCase
     {
         // More vertical space than content: topPad centers the content.
         $layout = Node::leaf("L1\nL2")->withBorder(false)->withAlignV(VAlign::Middle);
-        $result = $this->boxer->render($layout, 10, 6);
+        $result = $this->panels->render($layout, 10, 6);
         $lines = \explode("\n", $result);
         // topPad = (6-2)/2 = 2. L1 should be at row 2.
         $this->assertSame('L1', \trim($lines[2] ?? ''));
@@ -692,7 +692,7 @@ final class EdgeCaseTest extends TestCase
     {
         // When 2*padding >= cw, padH is recalculated to max(0, intdiv(cw-1, 2)).
         $layout = Node::leaf('content')->withBorder(false)->withPadding(100)->withMinWidth(3);
-        $result = $this->boxer->render($layout, 5, 5);
+        $result = $this->panels->render($layout, 5, 5);
         // padH collapses to intdiv(cw-1,2): the word hard-splits, 'c' centers.
         $this->assertSame("     \n     \n  c  \n     \n     ", $result);
     }
@@ -700,7 +700,7 @@ final class EdgeCaseTest extends TestCase
     public function testRenderLeafMaxHeightLessThanPadding(): void
     {
         $layout = Node::leaf("L1\nL2\nL3")->withBorder(false)->withPadding(100)->withMinHeight(3);
-        $result = $this->boxer->render($layout, 10, 5);
+        $result = $this->panels->render($layout, 10, 5);
         // padV collapses to one surviving row.
         $this->assertSame("          \n          \n    L1    \n          \n          ", $result);
     }
@@ -709,14 +709,14 @@ final class EdgeCaseTest extends TestCase
     {
         // When maxWidth > pcw, no clamping happens.
         $layout = Node::leaf('AB')->withBorder(false)->withMaxWidth(100);
-        $result = $this->boxer->render($layout, 10, 3);
+        $result = $this->panels->render($layout, 10, 3);
         $this->assertStringContainsString('AB', $result);
     }
 
     public function testRenderLeafMaxHeightExceedsContentHeight(): void
     {
         $layout = Node::leaf("L1\nL2")->withBorder(false)->withMaxHeight(100);
-        $result = $this->boxer->render($layout, 10, 5);
+        $result = $this->panels->render($layout, 10, 5);
         $this->assertStringContainsString('L1', $result);
         $this->assertStringContainsString('L2', $result);
     }
@@ -735,7 +735,7 @@ final class EdgeCaseTest extends TestCase
             Node::leaf('C')->withBorder(false),
         )->withBorder(false)->withSpacing(0);
 
-        $result = $this->boxer->render($layout, 12, 1);
+        $result = $this->panels->render($layout, 12, 1);
         // All three should appear.
         $this->assertStringContainsString('A', $result);
         $this->assertStringContainsString('B', $result);
@@ -751,7 +751,7 @@ final class EdgeCaseTest extends TestCase
         $n = Node::horizontal();
         // hasFlex iterates over empty array and returns false; childless
         // container draws no frame.
-        $result = $this->boxer->render($n, 10, 3);
+        $result = $this->panels->render($n, 10, 3);
         $this->assertSame("          \n          \n          ", $result);
     }
 
@@ -768,7 +768,7 @@ final class EdgeCaseTest extends TestCase
             Node::leaf('LONGER')->withBorder(false)->withMinWidth(10)->withGrow(),
         )->withBorder(false)->withSpacing(1);
 
-        $result = $this->boxer->render($layout, 25, 1);
+        $result = $this->panels->render($layout, 25, 1);
         // SHORT's content is clamped to "SHO" (3 cols) by maxWidth.
         $this->assertStringContainsString('SHO', $result);
         $this->assertStringContainsString('LONGER', $result);
@@ -787,7 +787,7 @@ final class EdgeCaseTest extends TestCase
             Node::leaf("B1\nB2\nB3\nB4\nB5")->withBorder(false)->withMinHeight(5)->withGrow(),
         )->withBorder(false)->withSpacing(1);
 
-        $result = $this->boxer->render($layout, 20, 12);
+        $result = $this->panels->render($layout, 20, 12);
         // T1 and T2 should appear (clamped by maxHeight=2), T3 is cut off.
         $this->assertStringContainsString('T1', $result);
         $this->assertStringContainsString('T2', $result);
@@ -803,7 +803,7 @@ final class EdgeCaseTest extends TestCase
     {
         // Width::string with ASCII uses mb_strlen.
         $layout = Node::leaf('HELLO')->withBorder(false);
-        $result = $this->boxer->render($layout, 10, 1);
+        $result = $this->panels->render($layout, 10, 1);
         $this->assertStringContainsString('HELLO', $result);
     }
 
@@ -824,7 +824,7 @@ final class EdgeCaseTest extends TestCase
         // Content area collapses to 0 after border + padding.
         // The early return at line 228 (pcw <= 0 || pch <= 0) must fire.
         $layout = Node::leaf('x')->withBorder(true)->withPadding(100)->withMinWidth(1)->withMinHeight(1);
-        $result = $this->boxer->render($layout, 10, 10);
+        $result = $this->panels->render($layout, 10, 10);
         $rows = \explode("\n", $result);
         // Frame survives; only the recollapsed pad area centers the glyph.
         $this->assertSame('╭────────╮', $rows[0]);
@@ -840,14 +840,14 @@ final class EdgeCaseTest extends TestCase
     {
         // A styled word wider than the region splits with escapes attached.
         $layout = Node::leaf("\x1b[31mREDWOR D\x1b[0m")->withBorder(false);
-        $result = $this->boxer->render($layout, 5, 3);
+        $result = $this->panels->render($layout, 5, 3);
         $this->assertStringContainsString('RED', $result);
     }
 
     public function testSplitWordPlain(): void
     {
         $layout = Node::leaf('VERYLONGTEXT')->withBorder(false);
-        $result = $this->boxer->render($layout, 4, 3);
+        $result = $this->panels->render($layout, 4, 3);
         // Hard-split at exactly 4 columns.
         $this->assertSame("VERY\nLONG\nTEXT", $result);
     }
@@ -859,10 +859,10 @@ final class EdgeCaseTest extends TestCase
     public function testBufferFromGridFewerRowsThanHeight(): void
     {
         // When the grid has fewer rows than height, missing rows fall back to ' '.
-        $boxer = SugarPanels::new();
-        $ref = new \ReflectionMethod($boxer, 'bufferFromGrid');
+        $panels = SugarPanels::new();
+        $ref = new \ReflectionMethod($panels, 'bufferFromGrid');
         $ref->setAccessible(true);
-        $buf = $ref->invoke($boxer, [['a', 'b']], 3, 2);
+        $buf = $ref->invoke($panels, [['a', 'b']], 3, 2);
         $this->assertSame(3, $buf->width());
         $this->assertSame(2, $buf->height());
         $this->assertSame('a', $buf->cellAt(0, 0)->rune());
@@ -877,10 +877,10 @@ final class EdgeCaseTest extends TestCase
         // slot next to it maps to a zero-width cell (the pairing Buffer::diff
         // relies on). Flattened-string re-splitting used to give every cell
         // width 1 and shift wide content left (audit #5).
-        $boxer = SugarPanels::new();
-        $ref = new \ReflectionMethod($boxer, 'bufferFromGrid');
+        $panels = SugarPanels::new();
+        $ref = new \ReflectionMethod($panels, 'bufferFromGrid');
         $ref->setAccessible(true);
-        $buf = $ref->invoke($boxer, [['日', '', '本', '', 'x']], 5, 1);
+        $buf = $ref->invoke($panels, [['日', '', '本', '', 'x']], 5, 1);
         $this->assertSame('日', $buf->cellAt(0, 0)->rune());
         $this->assertSame(2, $buf->cellAt(0, 0)->width());
         $this->assertSame('', $buf->cellAt(1, 0)->rune());
@@ -894,10 +894,10 @@ final class EdgeCaseTest extends TestCase
     {
         // placeLine writes "\x1b[31ma" into a single cell; the buffer must read
         // its VISIBLE width (1), never one column per escape byte.
-        $boxer = SugarPanels::new();
-        $ref = new \ReflectionMethod($boxer, 'bufferFromGrid');
+        $panels = SugarPanels::new();
+        $ref = new \ReflectionMethod($panels, 'bufferFromGrid');
         $ref->setAccessible(true);
-        $buf = $ref->invoke($boxer, [["\x1b[31ma", "b\x1b[0m", ' ']], 3, 1);
+        $buf = $ref->invoke($panels, [["\x1b[31ma", "b\x1b[0m", ' ']], 3, 1);
         $this->assertSame(1, $buf->cellAt(0, 0)->width());
         $this->assertSame(1, $buf->cellAt(1, 0)->width());
         $this->assertSame(1, $buf->cellAt(2, 0)->width());
@@ -912,7 +912,7 @@ final class EdgeCaseTest extends TestCase
         // When margin consumes the entire region, renderNode returns early.
         // margin [10,10,10,10] on a 10x10 viewport → w=10-20=-10 → early return.
         $leaf = Node::leaf('x')->withBorder(false)->withMargin(10, 10, 10, 10);
-        $result = $this->boxer->render($leaf, 10, 10);
+        $result = $this->panels->render($leaf, 10, 10);
         $this->assertSame(10, \count(\explode("\n", $result)));
         $this->assertSame('', \trim($result, " x\n"));
     }
@@ -920,7 +920,7 @@ final class EdgeCaseTest extends TestCase
     public function testRenderNodeMarginOnlyRightConsumesWidth(): void
     {
         $leaf = Node::leaf('x')->withBorder(false)->withMinWidth(10)->withMargin(0, 15, 0, 0);
-        $result = $this->boxer->render($leaf, 10, 10);
+        $result = $this->panels->render($leaf, 10, 10);
         $this->assertIsString($result);
     }
 
@@ -935,7 +935,7 @@ final class EdgeCaseTest extends TestCase
             Node::leaf('B')->withBorder(true)->withMinWidth(5),
         );
         // Border=true adds 2 to each child's minWidth; 5+2 + 5+2 = 14 > viewport 10.
-        $result = $this->boxer->render($layout, 1, 10);
+        $result = $this->panels->render($layout, 1, 10);
         // Parent border self-skips at w<2; every row is the single blank column.
         $rows = \explode("\n", $result);
         $this->assertCount(10, $rows);
@@ -950,8 +950,106 @@ final class EdgeCaseTest extends TestCase
             Node::leaf('A')->withBorder(true)->withMinHeight(5),
             Node::leaf('B')->withBorder(true)->withMinHeight(5),
         );
-        $result = $this->boxer->render($layout, 10, 1);
+        $result = $this->panels->render($layout, 10, 1);
         // Parent border self-skips at h<2; children collapse. Single blank row.
         $this->assertSame('          ', $result);
+    }
+
+    // -------------------------------------------------------------------------
+    // Footprint math: inter-child spacing belongs to the STACKING axis only
+    // -------------------------------------------------------------------------
+
+    public function testTotalWidthVerticalExcludesChildSpacing(): void
+    {
+        // VERTICAL gaps consume ROWS, never columns. Counting them in
+        // totalWidth() reserved phantom columns for a stacked layout and let
+        // an inflated flex basis starve horizontal siblings.
+        $v = Node::vertical(
+            Node::leaf('a')->withBorder(false)->withMinWidth(4)->withMinHeight(2),
+            Node::leaf('b')->withBorder(false)->withMinWidth(4)->withMinHeight(2),
+        )->withBorder(false)->withSpacing(3);
+        $this->assertSame(4, $v->totalWidth(), 'vertical width = widest child, spacing excluded');
+        $this->assertSame(7, $v->totalHeight(), 'vertical height = 2+2 plus one 3-cell gap');
+    }
+
+    public function testTotalHeightHorizontalExcludesChildSpacing(): void
+    {
+        // The mirror half of the law: side-by-side children take their widths
+        // from the sum+gaps branch, so height must NOT count the gaps either.
+        $h = Node::horizontal(
+            Node::leaf('a')->withBorder(false)->withMinWidth(4)->withMinHeight(2),
+            Node::leaf('b')->withBorder(false)->withMinWidth(4)->withMinHeight(2),
+        )->withBorder(false)->withSpacing(3);
+        $this->assertSame(11, $h->totalWidth(), 'horizontal width = 4+4 plus one 3-cell gap');
+        $this->assertSame(2, $h->totalHeight(), 'horizontal height = tallest child, spacing excluded');
+    }
+
+    // -------------------------------------------------------------------------
+    // Hostile-input caps (fail-soft: styling may drop, size never runs away)
+    // -------------------------------------------------------------------------
+
+    public function testTenThousandMarksOnOneCellStayBounded(): void
+    {
+        // UAX#29 fuses a mark run into its base's cluster, so the payload
+        // arrives as ONE oversized segment — the per-cell clip is load-bearing.
+        $content = 'x' . \str_repeat("\u{0301}", 10_000);
+        $out = $this->panels->render(
+            Node::leaf($content)->withBorder(false),
+            10,
+            1,
+        );
+        $this->assertStringContainsString('x', $out);
+        $this->assertLessThanOrEqual(1024, \strlen($out), 'fused mark flood must stay bounded');
+    }
+
+    public function testTenThousandLeadingMarksStayBounded(): void
+    {
+        // Marks before any base grapheme ride the pre-base carry buffer.
+        $content = \str_repeat("\u{0301}", 10_000) . 'y';
+        $out = $this->panels->render(
+            Node::leaf($content)->withBorder(false),
+            10,
+            1,
+        );
+        $this->assertStringContainsString('y', $out);
+        $this->assertLessThanOrEqual(1024, \strlen($out));
+    }
+
+    public function testEscapeFloodStaysBounded(): void
+    {
+        // Pending escapes have their own budget (sized for legitimate OSC-8
+        // links); a 300 KB escape flood must not reach the frame verbatim.
+        $content = 'a' . \str_repeat("\x1b[0m", 100_000);
+        $out = $this->panels->render(
+            Node::leaf($content)->withBorder(false),
+            10,
+            1,
+        );
+        $this->assertStringContainsString('a', $out);
+        $this->assertLessThan(20_000, \strlen($out), 'escape flood must be capped');
+    }
+
+    // -------------------------------------------------------------------------
+    // SGR open/closed tracking: colon sub-parameter form (n13)
+    // -------------------------------------------------------------------------
+
+    public function testSgrTrackingHandlesColonForm(): void
+    {
+        $m = new \ReflectionMethod($this->panels, 'sgrLeavesStyleOpen');
+
+        // Colon truecolour opener: old [0-9;]* regex never even matched it.
+        $this->assertTrue($m->invoke($this->panels, "\x1b[38:2:1:255:0:0m", false));
+        // Colon opener followed by reset closes again.
+        $this->assertFalse($m->invoke($this->panels, "\x1b[38:2:1:255:0:0m\x1b[0m", false));
+        // Colon extended colour with index 0 must NOT read as a reset.
+        $this->assertTrue($m->invoke($this->panels, "\x1b[38:5:0m", false));
+        // Semicolon canonical form keeps working (skip lands past the params).
+        $this->assertTrue($m->invoke($this->panels, "\x1b[38;2;255;0;0m", false));
+        $this->assertFalse($m->invoke($this->panels, "\x1b[0m", true));
+        // Documented pre-existing quirk (unchanged by the colon fix): the
+        // non-canonical 6-part semicolon form 38;2;cs;r;g;b reads its CS slot
+        // as colour-type and lands one short, so a 0 component scores reset.
+        // No terminal emits it; the colon form above is the one that matters.
+        $this->assertFalse($m->invoke($this->panels, "\x1b[38;2;1;255;0;0m", false));
     }
 }

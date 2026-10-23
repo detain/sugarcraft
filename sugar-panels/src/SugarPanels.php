@@ -21,16 +21,35 @@ use SugarCraft\Style\VAlign;
  * Box-drawing layout renderer.
  *
  * Builds a tree of {@see Node}s (leaf/horizontal/vertical/noborder) and
- * renders it as ANSI box-drawing characters within a fixed viewport.
+ * renders it as ANSI box-drawing characters within a fixed viewport. Borders
+ * and styles ride in as sugar-style primitives; content is placed by visible
+ * columns (escapes zero-width, wide graphemes two).
  *
- * Port of treilik/bubbleboxer.
+ * Design antecedent: treilik/bubbleboxer — SugarPanels is a native PHP
+ * project that grew its own flex/solver/diff machinery beyond the original.
  *
  * @see https://github.com/treilik/bubbleboxer
  */
 final class SugarPanels
 {
-    /** Cap for combining character carry string to prevent memory exhaustion. */
+    /**
+     * Per-cell zero-width budget, in bytes: combining-mark accumulation on an
+     * already-placed base cell, and the pre-base carry buffer, are each clipped
+     * to this size (fail-soft — marks past the budget are dropped). Legitimate
+     * grapheme clusters sit far below it; the cap exists so hostile content
+     * cannot grow a single grid cell (and therefore the rendered frame) without
+     * bound.
+     */
     private const MAX_CARRY = 100;
+
+    /**
+     * Byte budget for escape sequences awaiting their grapheme inside
+     * {@see visualCells()} (and the line's trailing escape run). Whole
+     * sequences past the budget are dropped (fail-soft) so an escape flood
+     * cannot grow one cell's payload without bound; sized to keep legitimate
+     * OSC-8 hyperlink sequences intact.
+     */
+    private const MAX_PENDING_ESCAPES = 8192;
 
     /**
      * Per-Style SGR-prefix cache, keyed by the Style OBJECT via a WeakMap.
@@ -128,7 +147,7 @@ final class SugarPanels
      */
     public function render(Node $root, int $width, int $height): string
     {
-        // Fail loud at the API boundary (audit #11): without this, a negative
+        // Fail loud at the API boundary: without this, a negative
         // dimension leaks array_fill()'s raw ValueError from library internals.
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(
@@ -154,7 +173,7 @@ final class SugarPanels
         // is deferred to the first subsequent same-dimension render below. The
         // grid — not the flattened string — is the retained state: re-splitting
         // the flat string cannot recover cell boundaries once multi-byte glyphs
-        // and escape-prefixed cells have been concatenated (audit #5).
+        // and escape-prefixed cells have been concatenated.
         if ($this->previousCells === null || $this->prevWidth !== $width || $this->prevHeight !== $height) {
             $this->previousCells = $cells;
             $this->prevWidth = $width;
@@ -225,7 +244,7 @@ final class SugarPanels
         $cw = $w - $b * 2;      // content width
         $ch = $h - $b * 2;      // content height
 
-        // Draw the frame BEFORE the content-region guards (audit #2): a bordered
+        // Draw the frame BEFORE the content-region guards: a bordered
         // box whose region is exactly its border (h=2 or w=2) still has a valid
         // frame to show — returning early here used to blank the whole box.
         // drawBorder itself no-ops below 2x2, so this stays safe at 1-wide/tall.
@@ -273,11 +292,12 @@ final class SugarPanels
     /**
      * Render a horizontal (left-to-right) panel layout.
      *
-     * Flex children: separators between children are ONLY drawn when
-     * spacing === 0 AND the layout has NO flex children. This is because
-     * the flex distribution algorithm resizes children dynamically, making
-     * a fixed separator position meaningless. Use spacing >= 1 to add
-     * visual gaps, or use bordered panels for explicit separation.
+     * Separators between children are drawn whenever spacing === 0 — with or
+     * without flex children. In a flex layout the separator lands on the
+     * dynamically resolved child boundary, where it can overwrite the last
+     * column of a borderless child (bordered panels absorb it into their
+     * frame). Use spacing >= 1 to reserve a visual gap, or bordered panels
+     * for explicit separation.
      *
      * @param Node                           $node  Node to render
      * @param int                            $x     Left offset
@@ -298,7 +318,7 @@ final class SugarPanels
         $availableW = $w - $b * 2;
         $availableH = $h - $b * 2;
 
-        // Draw outer border first (audit #2): before the collapse guard, so a
+        // Draw outer border first: before the collapse guard, so a
         // panel whose children area shrinks to zero still shows its frame.
         if ($node->border) {
             $this->drawBorder($node, $x, $y, $w, $h, $cells);
@@ -349,11 +369,12 @@ final class SugarPanels
     /**
      * Render a vertical (top-to-bottom) panel layout.
      *
-     * Flex children: separators between children are ONLY drawn when
-     * spacing === 0 AND the layout has NO flex children. This is because
-     * the flex distribution algorithm resizes children dynamically, making
-     * a fixed separator position meaningless. Use spacing >= 1 to add
-     * visual gaps, or use bordered panels for explicit separation.
+     * Separators between children are drawn whenever spacing === 0 — with or
+     * without flex children. In a flex layout the separator lands on the
+     * dynamically resolved child boundary, where it can overwrite the last
+     * row of a borderless child (bordered panels absorb it into their
+     * frame). Use spacing >= 1 to reserve a visual gap, or bordered panels
+     * for explicit separation.
      *
      * @param Node                           $node  Node to render
      * @param int                            $x     Left offset
@@ -374,7 +395,7 @@ final class SugarPanels
         $availableW = $w - $b * 2;
         $availableH = $h - $b * 2;
 
-        // Draw outer border first (audit #2): before the collapse guard, so a
+        // Draw outer border first: before the collapse guard, so a
         // panel whose children area shrinks to zero still shows its frame.
         if ($node->border) {
             $this->drawBorder($node, $x, $y, $w, $h, $cells);
@@ -489,7 +510,7 @@ final class SugarPanels
             // The pad bound passed to placeLine is the REMAINING width after the
             // alignment shift: padding to the full $w from the shifted origin
             // would write leftPad cells past the region's right edge and erase
-            // the already-drawn border (audit #1).
+            // the already-drawn border.
             $lineToPlace = $sgrPrefix !== '' ? $sgrPrefix . $line : $line;
             $this->placeLine($lineToPlace, $x + $leftPad, $lineY, $w - $leftPad, $cells);
         }
@@ -510,6 +531,11 @@ final class SugarPanels
      * unbalanced or a reverse-video span got clipped by the width — is terminated
      * with an SGR reset on the last placed cell, so style never bleeds past the
      * content region into the border or the next row.
+     *
+     * Hostile input: zero-width payload per base cell, the pre-base carry, and
+     * the base cell's own payload are byte-capped (see MAX_CARRY); sequences
+     * past the budget are dropped fail-soft. Content is otherwise treated as
+     * TRUSTED — see the README trust boundary.
      */
     private function placeLine(string $line, int $x, int $y, int $w, array &$cells): void
     {
@@ -518,6 +544,7 @@ final class SugarPanels
         $col       = 0;
         $lastCol   = -1;
         $carry     = '';      // zero-width graphemes awaiting a base cell
+        $marks     = 0;       // zero-width bytes attached to the current base cell
         $styleOpen = false;
         $truncated = false;
 
@@ -525,17 +552,22 @@ final class SugarPanels
             $gw = $this->strWidth($seg);
 
             // Zero-width grapheme (combining mark / lone joiner): keep it attached
-            // to the previous cell, else carry it onto the next visible one.
+            // to the previous cell, else carry it onto the next visible one. Both
+            // paths fail SOFT at the per-cell byte budget: marks past MAX_CARRY are
+            // dropped so hostile content can never grow one grid cell without
+            // bound. (UAX#29 fuses a mark run into its base's cluster, so the
+            // attack arrives as one oversized zero-width segment — hence the
+            // segment itself is codepoint-clipped, not merely the counter.)
             if ($gw <= 0) {
                 if ($lastCol >= 0) {
-                    // Cap carry to prevent unbounded growth when attaching to a previous cell
-                    if (\strlen($carry) < self::MAX_CARRY) {
-                        $cells[$y][$x + $lastCol] .= $seg;
+                    if ($marks < self::MAX_CARRY) {
+                        $keep = $this->clipCodepoints($seg, self::MAX_CARRY - $marks);
+                        $cells[$y][$x + $lastCol] .= $keep;
+                        $marks += \strlen($keep);
                     }
                 } else {
-                    // Cap carry accumulation to prevent memory exhaustion
                     if (\strlen($carry) < self::MAX_CARRY) {
-                        $carry .= $seg;
+                        $carry .= $this->clipCodepoints($seg, self::MAX_CARRY - \strlen($carry));
                     }
                 }
                 $styleOpen = $this->sgrLeavesStyleOpen($seg, $styleOpen);
@@ -547,8 +579,11 @@ final class SugarPanels
                 break;
             }
 
-            $this->setChar($x + $col, $y, $carry . $seg, $cells);
+            // Base-cell payload is also bounded: carry (≤ MAX_CARRY) + a real
+            // grapheme cluster (legitimate clusters sit far below the slack).
+            $this->setChar($x + $col, $y, $this->clipCodepoints($carry . $seg, self::MAX_CARRY + 64), $cells);
             $carry     = '';
+            $marks     = 0;
             $styleOpen = $this->sgrLeavesStyleOpen($seg, $styleOpen);
             $lastCol   = $col;
 
@@ -598,7 +633,19 @@ final class SugarPanels
         while ($i < $len) {
             $seq = $this->escapeAt($line, $i);
             if ($seq !== null) {
-                $pending .= $seq;
+                // Cap pending-escape accumulation (fail-soft): whole sequences
+                // past the budget are dropped until the next grapheme lands,
+                // so an escape flood — or one absurdly long sequence — cannot
+                // grow a cell's payload without bound. The budget is sized so
+                // legitimate OSC-8 hyperlinks pass untouched. Dropped sequences
+                // only ever lose styling: width is never affected, and a lost
+                // reset leaves the tracker over-open (redundant trailing reset,
+                // harmless) rather than under-open (bleed).
+                if (\strlen($seq) <= self::MAX_PENDING_ESCAPES
+                    && \strlen($pending) + \strlen($seq) <= self::MAX_PENDING_ESCAPES
+                ) {
+                    $pending .= $seq;
+                }
                 $i += \strlen($seq);
                 continue;
             }
@@ -682,7 +729,8 @@ final class SugarPanels
      * Track SGR open/closed state across the escape sequences in $s, returning
      * whether a style is left open afterwards. ESC[0m / ESC[m close; any other
      * attribute opens. The parameters of extended-colour selectors
-     * (38/48 ; 5 ; n and 38/48 ; 2 ; r ; g ; b) are skipped so a colour index of
+     * (38/48 ; 5 ; n and 38/48 ; 2 ; r ; g ; b, plus their colon sub-parameter
+     * forms 38:5:n / 38:2:cs:r:g:b) are skipped so a colour index of
      * 0 isn't mistaken for a reset.
      */
     private function sgrLeavesStyleOpen(string $s, bool $open): bool
@@ -690,7 +738,7 @@ final class SugarPanels
         if (\strpos($s, "\x1b[") === false) {
             return $open;
         }
-        if (\preg_match_all('/\x1b\[([0-9;]*)m/', $s, $matches) === 0) {
+        if (\preg_match_all('/\x1b\[([0-9;:]*)m/', $s, $matches) === 0) {
             return $open;
         }
         foreach ($matches[1] as $params) {
@@ -698,11 +746,21 @@ final class SugarPanels
                 $open = false; // ESC[m == reset
                 continue;
             }
-            $codes = \explode(';', $params);
+            // Colon sub-parameter form (ITU T.416 / kitty-style: 38:2:cs:r:g:b)
+            // carries one MORE parameter than the semicolon form: the colour
+            // space sits between the type and the components. Normalise the
+            // separators, then skip 5 (truecolour: cs r g b + the extra) or 3
+            // (indexed: cs n + the extra) so the walk lands past the colour
+            // instead of reading a component (or the CS) as a plain SGR code —
+            // which is how 38:2:1:255:0:0m used to score as a reset.
+            $codes = \explode(';', \str_replace(':', ';', $params));
             for ($k = 0, $n = \count($codes); $k < $n; $k++) {
                 $code = (int) $codes[$k];
                 if (($code === 38 || $code === 48) && isset($codes[$k + 1])) {
-                    $k += ((int) $codes[$k + 1]) === 2 ? 4 : 2;
+                    $semicolonForm = \strpos($params, ':') === false;
+                    $k += $semicolonForm
+                        ? (((int) $codes[$k + 1]) === 2 ? 4 : 2)
+                        : (((int) $codes[$k + 1]) === 2 ? 5 : 3);
                     $open = true; // a colour is being set
                     continue;
                 }
@@ -890,6 +948,33 @@ final class SugarPanels
         $cells[$y][$x] = $char;
     }
 
+    /**
+     * Truncate a string to at most $maxBytes at CODEPOINT boundaries.
+     *
+     * Used by the hostile-input caps: codepoint-level truncation can orphan a
+     * combining mark when an adversarial payload is cut mid-cluster — legitimate
+     * grapheme clusters sit far below the caps and never reach the cut. Always
+     * yields valid UTF-8, so no broken byte ever reaches the terminal.
+     */
+    private function clipCodepoints(string $s, int $maxBytes): string
+    {
+        if ($maxBytes <= 0) {
+            return '';
+        }
+        if (\strlen($s) <= $maxBytes) {
+            return $s;
+        }
+        $out = '';
+        foreach (\mb_str_split($s, 1, 'UTF-8') as $cp) {
+            if (\strlen($out) + \strlen($cp) > $maxBytes) {
+                break;
+            }
+            $out .= $cp;
+        }
+
+        return $out;
+    }
+
     // -------------------------------------------------------------------------
     // Width distribution
     // -------------------------------------------------------------------------
@@ -899,8 +984,8 @@ final class SugarPanels
      * fallback: children weighted by minWidth/minHeight, defaulting to 1).
      *
      * Delegates the size computation to sugar-constraints's
-     * {@see GreedySolver::withMinShare()} (plan_missing.md W12 / sugar-constraints
-     * #1386), completing the fork-b dedup begun in {@see distributeFlex()}.
+     * {@see GreedySolver::withMinShare()}, completing the solver deduplication
+     * begun in {@see distributeFlex()}.
      * Each child maps to a {@see Constraint::fill()} weighted by its
      * minWidth/minHeight; the min-share floor reproduces distribute()'s bespoke
      * "reserve at least 1 column per not-yet-placed child" sequential clamp that
@@ -983,7 +1068,7 @@ final class SugarPanels
      * the remainder, which equals its computed size because the sizes sum exact).
      *
      * Delegates the actual size computation to sugar-constraints's
-     * {@see GreedySolver::compat()} (plan_missing.md W12 / sugar-constraints #1372): a
+     * {@see GreedySolver::compat()}: a
      * fixed child maps to a Length reserving its natural size, a flex child to a
      * Fill weighted by its flex weight. compat() mode makes sugar-constraints's greedy
      * solver reproduce this hand-rolled distribution byte-for-byte — the three
@@ -1054,7 +1139,7 @@ final class SugarPanels
      * Re-splitting the flattened output string instead (the previous approach)
      * mis-mapped every wide glyph and every escape-prefixed cell to width 1 at
      * shifted columns, so deltas misplaced or silently dropped styled/wide
-     * content (audit #5).
+     * content.
      *
      * @param list<list<string>> $cells  Grid from render(): one string per cell
      * @param int                $width  Buffer width in cells
