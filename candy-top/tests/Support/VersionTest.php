@@ -9,8 +9,11 @@ use SugarCraft\Top\Support\Version;
 
 /**
  * Pins for the version ordering `self-update` consults before it writes a
- * byte (DST-3): the exact grammar it accepts, the numeric ordering, and the
- * fail-closed `null` every non-conforming shape must answer with.
+ * byte (DST-3): the exact grammar it accepts, the numeric ordering, the
+ * fail-closed `null` every non-conforming shape must answer with — and the
+ * dev-classification arm (`isDev`) that decides which release CHANNEL
+ * `self-update` consults, kept strictly apart from the ordering laws: a dev
+ * stamp is located, never ordered.
  *
  * Port of candy-code/tests/Support/VersionTest.php — the ordering laws are
  * the release-safety laws, so they travel verbatim with the class.
@@ -34,6 +37,7 @@ final class VersionTest extends TestCase
             'two segments refused' => ['1.2', null],
             'four segments refused' => ['1.2.3.4', null],
             'bare word refused' => ['dev-master', null],
+            'canonical dev stamp refused' => ['dev-1a2b3c4', null],
             'double v refused' => ['vv1.2.3', null],
             'padded tag parses' => [' v1.2.3 ', [1, 2, 3]],
             'empty refused' => ['', null],
@@ -79,6 +83,7 @@ final class VersionTest extends TestCase
             'left unknown' => ['unknown', '1.0.0'],
             'right rc' => ['1.0.0', '1.0.0-rc1'],
             'both junk' => ['alpha', 'beta'],
+            'two dev stamps' => ['dev-1a2b3c4', 'dev-9f8e7d6'],
         ];
     }
 
@@ -95,6 +100,47 @@ final class VersionTest extends TestCase
         self::assertTrue(Version::isComparable('v0.1.0'));
         self::assertFalse(Version::isComparable('dev-master'));
         self::assertFalse(Version::isComparable('0.1'));
+    }
+
+    /**
+     * isDev() is a CLASSIFIER, not an ordering: true for exactly the
+     * trimmed, lowercased `dev-` prefixed strings, and the strict refusal of
+     * the same strings by parse()/isComparable() is the law this arm must
+     * not cross — a dev stamp is located, never ordered.
+     */
+    public static function devShapeProvider(): array
+    {
+        return [
+            'canonical short sha' => ['dev-1a2b3c4', true],
+            'branch-suffixed dev form' => ['dev-master', true],
+            'build fallback stamp' => ['dev-build', true],
+            'upper case classifies the same' => ['DEV-1A2B3C4', true],
+            'surrounding space classifies the same' => ["  dev-1a2b3c4\n", true],
+            'bare dev refused' => ['dev', false],
+            'dev without dash refused' => ['devbuild', false],
+            'dev as suffix refused' => ['1.2.3-dev', false],
+            'release version refused' => ['v0.1.0', false],
+            'unknown word refused' => ['unknown', false],
+            'empty refused' => ['', false],
+        ];
+    }
+
+    /**
+     * @dataProvider devShapeProvider
+     */
+    public function testIsDevClassifiesByThePrefixAlone(string $input, bool $expected): void
+    {
+        self::assertSame($expected, Version::isDev($input));
+    }
+
+    public function testTheDevArmNeverWidensTheOrderingLaws(): void
+    {
+        $stamp = 'dev-1a2b3c4';
+        self::assertTrue(Version::isDev($stamp));
+        self::assertNull(Version::parse($stamp), 'a dev stamp must stay unparseable — isDev must never leak into the ordering grammar');
+        self::assertFalse(Version::isComparable($stamp));
+        self::assertNull(Version::compare($stamp, 'v0.1.0'));
+        self::assertNull(Version::compare('v0.1.0', $stamp));
     }
 
     /**
@@ -124,9 +170,11 @@ final class VersionTest extends TestCase
     /**
      * DST-1: the minted-archive round-trip — a tagged stamp comes back as
      * the bare comparable version (the `candy-top/` namespace decoration
-     * stripped), and a dev-built archive answers null so the caller falls
-     * through to the Composer arms instead of shipping a version the
-     * release stream cannot order against. Mints via the shared child
+     * stripped), and a dev-form stamp (`dev-build`, `dev-<sha>`, tagged or
+     * bare) comes back verbatim: the manifest is the only truthful record of
+     * what a working-tree build is, and `self-update` reads it to choose its
+     * channel. Stamps that are neither form answer null so the caller falls
+     * through to the Composer arms. Mints via the shared child
      * process helper, so this runs (no skip) on every runner.
      */
     public function testFromPharMetadataReadsBackAStampedRelease(): void
@@ -144,7 +192,11 @@ final class VersionTest extends TestCase
 
             $dev = self::mintStampedPhar('dev-build');
             $mints[] = $dev;
-            self::assertNull(Version::fromPharMetadata($dev), 'a working-tree build is not a release version');
+            self::assertSame('dev-build', Version::fromPharMetadata($dev), 'a working-tree build is not a release version, but it IS the archive self-reporting its channel — the reader passes it through, unorderable');
+
+            $devSha = self::mintStampedPhar('candy-top/dev-1a2b3c4');
+            $mints[] = $devSha;
+            self::assertSame('dev-1a2b3c4', Version::fromPharMetadata($devSha), 'the canonical CI stamp round-trips decoration-free too');
 
             $junk = self::mintStampedPhar('banana');
             $mints[] = $junk;

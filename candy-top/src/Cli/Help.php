@@ -77,10 +77,11 @@ final class Help
      * authority, consulted BEFORE `InstalledVersions`. The frozen `vendor/`
      * baked into a release archive carries the build root's dev guess, so the
      * Composer metadata cannot answer for an artifact whose version was
-     * stamped at build time. When the manifest names a version this class can
-     * order, that is the answer; a dev-built archive (whose stamp is
-     * `dev-build`) falls through to every arm below unchanged, which is the
-     * honest report for a working-tree build.
+     * stamped at build time. When the manifest names a version this class
+     * can order — or a dev stamp it can classify (`dev-…`, the working-tree
+     * build's own self-report, and the input `self-update` uses to choose
+     * its release channel) — that is the answer; an archive whose manifest
+     * names neither falls through to every arm below unchanged.
      */
     public static function versionString(): string
     {

@@ -35,6 +35,14 @@ namespace SugarCraft\Top\Support;
  * `self-update` treats a `null` comparison as "no swap", because guessing
  * the intent of an ordering it cannot express is how a dev checkout gets
  * downgraded to the last stable tag.
+ *
+ * DEV IS LOCATED, NOT ORDERED. The {@see self::isDev()} arm classifies the
+ * canonical CI stamp `dev-<shortsha>` by its prefix alone — a dev tag names
+ * a POSITION in history, not a rung on a ladder, and no dev stamp is
+ * orderable against any other. `self-update` uses it to pick the release
+ * CHANNEL to consult (and `--channel=dev` to refuse acting on a build it
+ * cannot locate), never to answer "newer than" — the strict refusal above
+ * is exactly why the dev train exists as its own channel.
  */
 final class Version
 {
@@ -103,6 +111,20 @@ final class Version
     }
 
     /**
+     * Whether $version names a dev build: the canonical CI stamp is
+     * `dev-<shortsha>`, and this answers true for exactly the trimmed,
+     * lowercased strings that start with that `dev-` prefix. Nothing more —
+     * no hex-length rule, no ordering, no claim that `dev-abc123` relates to
+     * `dev-def456` in any way. Callers that need to LOCATE a dev build
+     * against the dev release train validate the suffix themselves; this
+     * only decides which channel `self-update` consults.
+     */
+    public static function isDev(string $version): bool
+    {
+        return \str_starts_with(\strtolower(\trim($version)), 'dev-');
+    }
+
+    /**
      * The version string a phar archive at $path was built to carry, or null
      * when the archive answers none this class can order.
      *
@@ -117,10 +139,14 @@ final class Version
      * The tag arrives prefixed (`candy-top/v0.1.0` — what `git describe`
      * answers and what the release carries); the {@see self::TAG_PREFIX}
      * decoration is stripped here so callers get the version itself. A stamp
-     * that is not a `v?X.Y.Z` under any spelling (`dev-build`, a foreign
-     * namespace, junk of the wrong type) answers null: fail-closed, so a
-     * dev-built archive falls through to the Composer/checkout arms instead
-     * of shipping a version the release stream cannot order against.
+     * that is neither a `v?X.Y.Z` nor the dev form `dev-…` (a foreign
+     * namespace, an unprefixed branch name like `master`, junk of the wrong
+     * type) answers null: fail-closed, so those archives
+     * fall through to the Composer/checkout arms. The dev form passes
+     * through verbatim, because on a dev-built archive the manifest is the
+     * ONLY truthful record of what is running — discarding it would let the
+     * frozen Composer guess classify the channel, which is the very DST-1
+     * lie this reader exists to kill.
      *
      * Every failure to OPEN the archive is likewise null, never an exception
      * — `--version` must answer on a machine whose phar is unreadable, and
@@ -151,6 +177,6 @@ final class Version
             $stamp = \substr($stamp, \strlen(self::TAG_PREFIX));
         }
 
-        return self::isComparable($stamp) ? $stamp : null;
+        return self::isComparable($stamp) || self::isDev($stamp) ? $stamp : null;
     }
 }
