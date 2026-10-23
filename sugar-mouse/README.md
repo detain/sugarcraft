@@ -174,7 +174,8 @@ one, and the trackers need different reporting:
 for the all-motion case — write it to the terminal yourself. The other modes
 are the host app's enable sequence (its input layer — e.g. sugar-input —
 turns the reports into `MouseMsg` / `MouseEvent` values). Consequence: the
-hover tracker emits nothing unless motion is reported (`1003`), and the drag
+hover tracker reacts to whatever it receives — enter/exit fire on a plain
+`1000` press — but press-free hover needs motion reporting (`1003`); the drag
 tracker's cross-boundary moves need at least `1002`; click trackers work on
 plain `1000` reporting alone.
 
@@ -275,10 +276,11 @@ manager.
 `ZoneHoverTracker` wraps a `Manager` and tracks which zone the cursor
 is in across `MouseMsg` events. It emits `ZoneEnterMsg` when the cursor
 crosses into a zone and `ZoneExitMsg` when it leaves — ideal for
-tooltips, highlights, or data-fetch-on-hover. The terminal must be
-reporting motion (mode `1003`, see
-[Mouse-tracking modes](#mouse-tracking-modes)) for this tracker to
-see anything at all:
+tooltips, highlights, or data-fetch-on-hover. `update()` gates no mouse
+action, so any reported event moves it: a plain mode-`1000` press inside
+a zone already fires `ZoneEnterMsg`, while press-free hover tracking needs
+the terminal to report motion (mode `1003`, see
+[Mouse-tracking modes](#mouse-tracking-modes)):
 
 ```php
 use SugarCraft\Mouse\Zones\Manager;
