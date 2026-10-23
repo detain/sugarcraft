@@ -281,6 +281,101 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame('PageDown', $events[0]->key);
     }
 
+    // ─── Legacy modified number keys (xterm `CSI number;modifier ~`) ───────
+
+    public function testCtrlDeleteNumberTildeForm(): void
+    {
+        // Ctrl+Delete arrives as CSI 3;5~ on terminals that keep the legacy
+        // numbered-key family under a modifier (modifyFunctionKeys scheme).
+        $events = $this->decoder->decode("\x1b[3;5~");
+        $this->assertCount(1, $events);
+        $this->assertSame('Delete', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
+        $this->assertSame("\x1b[3;5~", $events[0]->raw);
+    }
+
+    public function testShiftDeleteTerminfoKdcFrame(): void
+    {
+        // The xterm-256color and alacritty terminfo entries ship
+        // kDC (Shift+Delete) as exactly this frame.
+        $events = $this->decoder->decode("\x1b[3;2~");
+        $this->assertCount(1, $events);
+        $this->assertSame('Delete', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
+        $this->assertFalse($events[0]->modifiers->includes(KeyModifier::CTRL));
+    }
+
+    public function testCtrlFunctionKeyNumberTildeForm(): void
+    {
+        // wezterm's terminfo ships kf34 = CSI 21;5~ — Ctrl+F10, 21 being the
+        // plain F10 number, riding alongside the CSI 1;5P..S F1-F4 family.
+        $events = $this->decoder->decode("\x1b[21;5~");
+        $this->assertCount(1, $events);
+        $this->assertSame('F10', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
+    }
+
+    public function testAltFunctionKeyNumberTildeForm(): void
+    {
+        // xterm-256color ships kf53 = CSI 15;3~ — Alt+F5 in the same family.
+        $events = $this->decoder->decode("\x1b[15;3~");
+        $this->assertCount(1, $events);
+        $this->assertSame('F5', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+    }
+
+    public function testCtrlPageUpNumberTildeForm(): void
+    {
+        $events = $this->decoder->decode("\x1b[5;5~");
+        $this->assertCount(1, $events);
+        $this->assertSame('PageUp', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
+    }
+
+    public function testExplicitNoModifierNumberTildeStaysDropped(): void
+    {
+        // A ";1" modifier field means no-modifier — the arrow family leaves
+        // that shape undecoded too (a terminal that omits modifiers omits the
+        // field), so fabricating an event here would be inventing traffic.
+        $events = $this->decoder->decode("\x1b[3;1~z");
+        $this->assertCount(1, $events);
+        $this->assertSame('z', $events[0]->key);
+        $this->assertSame(1, $this->decoder->droppedUnknownCount());
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testZeroModifierNumberTildeRefusedBeforeBitFabrication(): void
+    {
+        // fromXtermParam(0) would de-base to -1 and light every modifier bit
+        // (the same trap the modifyOtherKeys guard names). Refused as a
+        // counted drop instead — no phantom Shift+Alt+Ctrl Delete.
+        $events = $this->decoder->decode("\x1b[3;0~z");
+        $this->assertCount(1, $events);
+        $this->assertSame('z', $events[0]->key);
+        $this->assertSame(1, $this->decoder->droppedUnknownCount());
+    }
+
+    public function testUnmappedNumberTildeFormStillDropped(): void
+    {
+        // 200/201 are bracketed-paste markers, not numbered-key table entries;
+        // a modifier riding on one decodes to neither and stays a counted drop.
+        $events = $this->decoder->decode("\x1b[200;5~x");
+        $this->assertCount(1, $events);
+        $this->assertSame('x', $events[0]->key);
+        $this->assertSame(1, $this->decoder->droppedUnknownCount());
+        $this->assertSame(0, $this->decoder->drainedReplyCount());
+    }
+
+    public function testModifyOtherKeysTripleParamFrameUntouchedByTwoParamGate(): void
+    {
+        // The 3-param modifyOtherKeys wrap (27;mods;keysym ~) must not be
+        // captured by the widened 2-param numbered-key branch.
+        $events = $this->decoder->decode("\x1b[27;5;97~");
+        $this->assertCount(1, $events);
+        $this->assertSame('a', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
+    }
+
     // ─── Partial sequence buffering ─────────────────────────────────────────
 
     public function testPartialSequenceReturnsEmpty(): void
