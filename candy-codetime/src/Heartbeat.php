@@ -31,6 +31,9 @@ final class Heartbeat
         }
     }
 
+    /**
+     * @param array<string,mixed> $row  One decoded JSONL line (or sqlite row)
+     */
     public static function fromArray(array $row): self
     {
         $tags = $row['tags'] ?? [];

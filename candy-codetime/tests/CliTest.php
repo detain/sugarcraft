@@ -5,17 +5,21 @@ declare(strict_types=1);
 namespace SugarCraft\CodeTime\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\CodeTime\Support\Version;
 
 /**
- * End-to-end tests for the `bin/candy-codetime` CLI that prove the three
- * orphaned features are wired into the real command paths:
+ * End-to-end tests for the `bin/candy-codetime` CLI that prove the shipped
+ * features are wired into the real command paths:
  *
  *   - `.sugartrackignore` is consulted by `push`
  *   - `--backend=sqlite` selects the SQLite backend for push/export
  *   - `milestone add|list` manages Milestone value objects
  *
+ *   - storage failures abort `push` with exit 1 instead of printing false success
+ *   - `--version`, duration validation, and translated diagnostics
+ *
  * Each test drives the binary in a subprocess so it exercises exactly what
- * a user (or editor plug-in) runs.
+ * a user (or editor plugin) runs.
  */
 final class CliTest extends TestCase
 {
@@ -101,7 +105,7 @@ final class CliTest extends TestCase
         // Non-matching file: should be tracked normally.
         $tracked = $this->runCli(['push', 'proj', 'php', 'main.php']);
         $this->assertSame(0, $tracked['exit'], $tracked['stderr']);
-        $this->assertStringContainsString('tick pushed', $tracked['stdout']);
+        $this->assertStringContainsString('entry pushed', $tracked['stdout']);
 
         // Read the store back via export: only main.php should have landed.
         $export = $this->runCli(['export', 'json', '1']);
@@ -124,7 +128,7 @@ final class CliTest extends TestCase
 
         $push = $this->runCli(['--backend=sqlite', 'push', 'proj', 'php', 'a.php', '120']);
         $this->assertSame(0, $push['exit'], $push['stderr']);
-        $this->assertStringContainsString('tick pushed', $push['stdout']);
+        $this->assertStringContainsString('entry pushed', $push['stdout']);
 
         // The SQLite db file is created inside the data dir.
         $this->assertFileExists($this->dataDir . '/candy-codetime.db');
@@ -187,5 +191,74 @@ final class CliTest extends TestCase
         $res = $this->runCli(['milestone', 'add']);
         $this->assertSame(1, $res['exit']);
         $this->assertStringContainsString('missing required argument', $res['stderr']);
+    }
+    // --- Version surface ------------------------------------------------------
+
+    public function testVersionFlagPrintsTheSingleSourceConstant(): void
+    {
+        $res = $this->runCli(['--version']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $this->assertSame('candy-codetime ' . Version::CURRENT . "\n", $res['stdout']);
+
+        $short = $this->runCli(['-v']);
+        $this->assertSame(0, $short['exit'], $short['stderr']);
+        $this->assertStringContainsString(Version::CURRENT, $short['stdout']);
+    }
+
+    // --- Duration boundary parse ----------------------------------------------
+
+    public function testPushRejectsNonNumericDurationInsteadOfRecordingZero(): void
+    {
+        $res = $this->runCli(['push', 'proj', 'php', 'a.php', 'abc']);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('duration', $res['stderr']);
+        $this->assertStringNotContainsString('entry pushed', $res['stdout']);
+
+        // The numeric path still succeeds.
+        $ok = $this->runCli(['push', 'proj', 'php', 'a.php', '120']);
+        $this->assertSame(0, $ok['exit'], $ok['stderr']);
+    }
+
+    // --- Translated diagnostics -----------------------------------------------
+
+    public function testUnknownCommandGoesThroughLang(): void
+    {
+        $res = $this->runCli(['frobnicate']);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('unknown command: frobnicate', $res['stderr']);
+    }
+
+    // --- Fail-loud storage ------------------------------------------------------
+
+    public function testPushReportsStorageFailureAndExitsNonZero(): void
+    {
+        // A plain FILE where the data directory wants to be: creation must fail,
+        // and push must NOT print the success line over a lost row.
+        $blocker = $this->workDir . '/blocked-dir';
+        file_put_contents($blocker, 'not a directory');
+
+        $res = $this->runCli(
+            ['push', 'proj', 'php', 'a.php'],
+            null,
+            ['CANDY_CODETIME_DIR' => $blocker],
+        );
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('cannot create data directory', $res['stderr']);
+        $this->assertStringNotContainsString('entry pushed', $res['stdout']);
+    }
+
+    // --- MAJOR-3 routing pin -----------------------------------------------------
+
+    public function testDashboardLaunchIsRoutedThroughTheSelectedBackend(): void
+    {
+        // The TUI used to open the JSONL store unconditionally, so `--backend=sqlite`
+        // users saw an empty dashboard. Pin the routing in the shipped entry point.
+        $bin = (string) file_get_contents(dirname(__DIR__) . '/bin/candy-codetime');
+        $this->assertStringContainsString(
+            '$reader = $backend === \'sqlite\' ? $sqlite() : $store;',
+            $bin,
+            'dashboard must pick its reader from the parsed --backend option',
+        );
+        $this->assertStringContainsString('Dashboard::start($reader', $bin);
     }
 }

@@ -80,4 +80,68 @@ final class RendererTest extends TestCase
         // Project name should appear as "xy" not "x y" or with embedded control chars
         $this->assertStringContainsString('xy', $out);
     }
+    public function testNarrowTerminalDoesNotCrashTheTimeline(): void
+    {
+        // Pre-fix, width 2 drove the sparkline budget negative and Sparkline
+        // threw out of view() — a terminal resize could kill the TUI.
+        $beats = [new Heartbeat(
+            time: (new \DateTimeImmutable('2024-06-07'))->getTimestamp(),
+            project: 'p', language: 'php', file: 'a.php', duration: 600,
+        )];
+        $end = new \DateTimeImmutable('2024-06-07');
+        $stats = Stats::compute($beats, $end->modify('-6 days'), $end);
+        $d = new \SugarCraft\CodeTime\Dashboard(new Store(sys_get_temp_dir()), $end, 7, $stats, 2);
+
+        $out = Renderer::render($d);
+        $this->assertStringContainsString('Daily activity', $out);
+    }
+
+    public function testWideTerminalsStretchTheTimeline(): void
+    {
+        $d = $this->dashboard([new Heartbeat(
+            time: (new \DateTimeImmutable('2024-06-07'))->getTimestamp(),
+            project: 'p', language: 'php', file: 'a.php', duration: 600,
+        )]);
+        $narrow = Renderer::render(new \SugarCraft\CodeTime\Dashboard(
+            new Store(sys_get_temp_dir()), new \DateTimeImmutable('2024-06-07'), 7, $d->stats, 60));
+        $wide = Renderer::render(new \SugarCraft\CodeTime\Dashboard(
+            new Store(sys_get_temp_dir()), new \DateTimeImmutable('2024-06-07'), 7, $d->stats, 120));
+        $this->assertNotSame($narrow, $wide, 'timeline must follow the terminal width');
+    }
+
+    public function testRankingDisclosesProjectsHiddenByTheSixRowCap(): void
+    {
+        $end = new \DateTimeImmutable('2024-06-07');
+        $beats = [];
+        for ($i = 1; $i <= 9; $i++) {
+            $beats[] = new Heartbeat(
+                time: $end->getTimestamp(), project: "proj{$i}",
+                language: 'php', file: "p{$i}.php", duration: 60 * $i,
+            );
+        }
+        $out = Renderer::render($this->dashboard($beats));
+        $this->assertStringContainsString('+3 more', $out);
+    }
+
+    public function testNoColorDropsEveryHexTint(): void
+    {
+        $d = $this->dashboard([new Heartbeat(
+            time: (new \DateTimeImmutable('2024-06-07'))->getTimestamp(),
+            project: 'p', language: 'php', file: 'a.php', duration: 600,
+        )]);
+
+        $previous = getenv('NO_COLOR');
+        try {
+            putenv('NO_COLOR');
+            $colored = Renderer::render($d);
+            $this->assertMatchesRegularExpression('/\x1b\[38/', $colored, 'tints ship by default');
+
+            putenv('NO_COLOR=1');
+            $plain = Renderer::render($d);
+            $this->assertDoesNotMatchRegularExpression('/\x1b\[38/', $plain, 'NO_COLOR must strip every foreground tint');
+            $this->assertStringContainsString('CandyCodetime', $plain);
+        } finally {
+            putenv($previous === false ? 'NO_COLOR' : "NO_COLOR={$previous}");
+        }
+    }
 }

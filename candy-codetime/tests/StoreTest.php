@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeTime\Tests;
 
 use SugarCraft\CodeTime\Heartbeat;
+use SugarCraft\CodeTime\Storage\HeartbeatReader;
 use SugarCraft\CodeTime\Store;
 use PHPUnit\Framework\TestCase;
 
@@ -287,5 +288,159 @@ final class StoreTest extends TestCase
         $this->assertTrue(is_dir($nestedDir));
         $loaded = $s->loadDay($day);
         $this->assertCount(1, $loaded);
+    }
+    public function testSatisfiesTheSharedReaderContract(): void
+    {
+        $this->assertInstanceOf(HeartbeatReader::class, new Store($this->tmp));
+    }
+
+    public function testAppendFailsLoudlyWhenDataPathCannotBecomeADirectory(): void
+    {
+        $blocked = $this->tmp . '/blocked-dir';
+        file_put_contents($blocked, 'a file where a directory must be');
+
+        $s = new Store($blocked);
+        try {
+            $s->append(new Heartbeat(time(), 'p', 'php', 'a.php', 60));
+            $this->fail('append over an un-createable data dir must throw');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('cannot create data directory', $e->getMessage());
+        }
+    }
+
+    public function testAppendSecuresOwnerPrivateModes(): void
+    {
+        $dir = $this->tmp . '/store';
+        mkdir($dir, 0o755);
+        $s = new Store($dir);
+        $s->append(new Heartbeat(time(), 'p', 'php', 'a.php', 60));
+
+        clearstatcache();
+        $this->assertSame(0o700, fileperms($dir) & 0o777, 'data dir must be tightened to 0700');
+        $file = $dir . '/' . date('Y-m-d') . '.jsonl';
+        $this->assertSame(0o600, fileperms($file) & 0o777, 'day file must be owner-private');
+    }
+
+    public function testTightensPreExistingLooseDayFile(): void
+    {
+        $dir = $this->tmp . '/store2';
+        mkdir($dir, 0o700);
+        $file = $dir . '/' . date('Y-m-d') . '.jsonl';
+        file_put_contents($file, "stale line\n");
+        chmod($file, 0o644);
+
+        $s = new Store($dir);
+        $s->append(new Heartbeat(time(), 'p', 'php', 'b.php', 60));
+
+        clearstatcache();
+        $this->assertSame(0o600, fileperms($file) & 0o777);
+        $this->assertStringContainsString('b.php', (string) file_get_contents($file));
+    }
+
+    public function testAppendRefusesAnUnencodableHeartbeatInsteadOfWritingGarbage(): void
+    {
+        $s = new Store($this->tmp);
+        try {
+            $s->append(new Heartbeat(time(), "pr\xffo", 'php', 'a.php', 60));
+            $this->fail('invalid UTF-8 must raise, not write a blank/broken line');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('could not be encoded', $e->getMessage());
+        }
+        $this->assertFileDoesNotExist($this->tmp . '/' . date('Y-m-d') . '.jsonl');
+    }
+
+    public function testLoadDayDropsOversizedLinesButKeepsTheirNeighbours(): void
+    {
+        $day  = new \DateTimeImmutable('2026-05-04');
+        $file = $this->tmp . '/2026-05-04.jsonl';
+        $good = static fn(string $project): string => json_encode([
+            'time' => $day->getTimestamp() + 60, 'project' => $project,
+            'language' => 'php', 'file' => $project . '.php', 'duration' => 60, 'tags' => [],
+        ]);
+        $monster = str_repeat('x', Store::MAX_LINE_BYTES + 4096) . "\n";
+        file_put_contents($file, $good('first') . "\n" . $monster . $good('last') . "\n");
+
+        $rows = (new Store($this->tmp))->loadDay($day);
+        $this->assertCount(2, $rows);
+        $this->assertSame(['first', 'last'], array_map(static fn($r) => $r->project, $rows));
+    }
+
+    public function testEnsurePrivateDirTightensAnExistingLooseDirectory(): void
+    {
+        $dir = $this->tmp . '/loose';
+        mkdir($dir, 0o755);
+        Store::ensurePrivateDir($dir);
+        clearstatcache();
+        $this->assertSame(0o700, fileperms($dir) & 0o777);
+    }
+public function testAppendValidatesTheFullWrittenLineCount(): void
+    {
+        // Structural pin for the write-count guard: the branch is not
+        // deterministically reachable as an unprivileged user everywhere
+        // (some kernels tolerate RLIMIT_FSIZE overshoot — see the probe in
+        // testAppendReportsAFailedWriteLoudly), so removing the check must
+        // still redden a test. The guarded body must count the whole line,
+        // not merely reject `false`.
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Store.php');
+        $start = strpos($src, '$written = @file_put_contents(');
+        $this->assertNotFalse($start, 'append() must write via @file_put_contents with errors surfaced for the message');
+        $tail = substr($src, $start, 1400);
+        $this->assertStringContainsString('if ($written !== strlen($line)) {', $tail,
+            'the write check must catch partial writes too, not just === false');
+        $this->assertStringContainsString('failed to append heartbeat', $tail);
+    }
+
+    public function testAppendReportsAFailedWriteLoudly(): void
+    {
+        // The portable way to make file_put_contents() actually fail as an
+        // ordinary user: a child under RLIMIT_FSIZE writing past the cap.
+        // SIGXFSZ is ignored (disposition rides exec), so a failing syscall
+        // returns an error/short count instead of killing the writer — the
+        // silent-loss window the count check closes. On kernels that do not
+        // enforce the limit (measured on this devbox), the probe below skips
+        // and the structural pin above carries the mutation guard.
+        $probeDir = $this->tmp . '/probe';
+        $probeOut = [];
+        $probeRc = 0;
+        exec(
+            'bash -c ' . escapeshellarg(
+                'trap "" XFSZ; ulimit -f 4; head -c 5000 /dev/zero > ' .
+                escapeshellarg($probeDir . '.probe') . ' 2>/dev/null; stat -c%s ' .
+                escapeshellarg($probeDir . '.probe')
+            ),
+            $probeOut,
+            $probeRc,
+        );
+        @unlink($probeDir . '.probe');
+        if ($probeRc !== 0 || (int) ($probeOut[0] ?? 0) > 4096) {
+            $this->markTestSkipped('RLIMIT_FSIZE overshoot is not enforced on this kernel');
+        }
+
+        $dir = $this->tmp . '/rlimit-store';
+        $child = $this->tmp . '/rlimit-child.php';
+        file_put_contents($child, implode("\n", [
+            '<?php',
+            "require getenv('CODETIME_AUTOLOAD');",
+            '$s = new SugarCraft\CodeTime\Store(getenv("CODETIME_DIR"));',
+            '$hb = new SugarCraft\CodeTime\Heartbeat(time(), "p", "php", "a.php", 60, [str_repeat("t", 5000)]);',
+            'try { $s->append($hb); echo "UNLUCKY\\n"; }',
+            'catch (RuntimeException $e) { echo "CAUGHT ", $e->getMessage(), "\\n"; }',
+        ]) . "\n");
+
+        $cmd = sprintf(
+            'trap "" XFSZ; ulimit -f 4; CODETIME_AUTOLOAD=%s CODETIME_DIR=%s %s %s',
+            escapeshellarg(dirname(__DIR__) . '/vendor/autoload.php'),
+            escapeshellarg($dir),
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg($child),
+        );
+        $out = [];
+        $rc = 0;
+        exec('bash -c ' . escapeshellarg($cmd), $out, $rc);
+
+        $this->assertSame(0, $rc, implode("\n", $out));
+        $joined = implode("\n", $out);
+        $this->assertStringContainsString('CAUGHT', $joined, 'a failed append must throw, never return silently');
+        $this->assertStringContainsString('failed to append heartbeat', $joined);
     }
 }

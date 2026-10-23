@@ -7,6 +7,7 @@ namespace SugarCraft\CodeTime\Tests\Storage;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Milestone;
+use SugarCraft\CodeTime\Storage\HeartbeatReader;
 use SugarCraft\CodeTime\Storage\SqliteBackend;
 
 final class SqliteBackendTest extends TestCase
@@ -16,6 +17,9 @@ final class SqliteBackendTest extends TestCase
 
     protected function setUp(): void
     {
+        if (!extension_loaded('sqlite3')) {
+            $this->markTestSkipped('sqlite3 extension not loaded');
+        }
         $this->dbPath = sys_get_temp_dir() . '/candy-codetime-test-' . uniqid() . '.db';
         $this->backend = new SqliteBackend($this->dbPath);
     }
@@ -107,5 +111,33 @@ final class SqliteBackendTest extends TestCase
         $this->assertSame('earlier', $milestones[0]->name);
         $this->assertSame('middle', $milestones[1]->name);
         $this->assertSame('later', $milestones[2]->name);
+    }
+    public function testLoadRangeHonoursWholeDayBounds(): void
+    {
+        $day = new \DateTimeImmutable('2026-05-05');
+        $inside  = new Heartbeat($day->setTime(9, 30)->getTimestamp(), 'in', 'php', 'a.php', 60);
+        $outside = new Heartbeat($day->modify('-2 days')->setTime(9, 30)->getTimestamp(), 'out', 'php', 'b.php', 60);
+        $this->backend->insert($inside);
+        $this->backend->insert($outside);
+
+        $rows = $this->backend->loadRange($day, $day);
+        $this->assertCount(1, $rows);
+        $this->assertSame('in', $rows[0]->project);
+    }
+
+    public function testInvalidateIsCallableNoOp(): void
+    {
+        $this->backend->insert(new Heartbeat(time(), 'p', 'php', 'a.php', 60));
+        $this->backend->invalidate();
+        $this->assertCount(1, $this->backend->loadRange(
+            new \DateTimeImmutable('today'), new \DateTimeImmutable('today'),
+        ));
+    }
+
+    public function testDatabaseFileIsCreatedOwnerPrivate(): void
+    {
+        clearstatcache();
+        $this->assertSame(0o600, fileperms($this->dbPath) & 0o777);
+        $this->assertInstanceOf(HeartbeatReader::class, $this->backend);
     }
 }

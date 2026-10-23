@@ -32,6 +32,12 @@ final class DashboardTest extends TestCase
             unlink($f);
         }
         rmdir($this->storeDir);
+        // sqlite-backed tests drop a .db straight into the tmp root
+        foreach (glob($this->tmp . '/*') ?: [] as $f) {
+            if (is_file($f)) {
+                unlink($f);
+            }
+        }
         rmdir($this->tmp);
     }
 
@@ -43,7 +49,7 @@ final class DashboardTest extends TestCase
 
         $d = new Dashboard($store, $endDay, 14, $stats);
 
-        $this->assertSame($store, $d->store);
+        $this->assertSame($store, $d->source);
         $this->assertSame($endDay, $d->endDay);
         $this->assertSame(14, $d->days);
         $this->assertSame($stats, $d->stats);
@@ -139,7 +145,7 @@ final class DashboardTest extends TestCase
         [$next, $cmd] = $d->update($msg);
 
         $this->assertNotSame($d, $next);
-        $this->assertSame($store, $next->store);
+        $this->assertSame($store, $next->source);
         $this->assertEquals($day, $next->endDay);
         $this->assertNull($cmd);
     }
@@ -256,7 +262,7 @@ final class DashboardTest extends TestCase
         $reloaded = $d->reload();
 
         $this->assertNotSame($d, $reloaded);
-        $this->assertSame($store, $reloaded->store);
+        $this->assertSame($store, $reloaded->source);
         $this->assertEquals($day, $reloaded->endDay);
         $this->assertNotSame($d->stats, $reloaded->stats);
         $this->assertArrayHasKey('reload-test', $reloaded->stats->perProject());
@@ -344,7 +350,7 @@ final class DashboardTest extends TestCase
         $stats = new Stats([], []);
 
         // Send a WindowSizeMsg with narrow width (< 56 threshold)
-        $d = new Dashboard($store, $end, 7, $stats, 40, null);
+        $d = new Dashboard($store, $end, 7, $stats, 40);
 
         $msg = new \SugarCraft\Core\Msg\WindowSizeMsg(40, 24);
         [$next, ] = $d->update($msg);
@@ -355,5 +361,21 @@ final class DashboardTest extends TestCase
         // When narrow, the view should stack panes (contains newline between projects and languages)
         $this->assertStringContainsString('Top projects', $out);
         $this->assertStringContainsString('By language', $out);
+    }
+    public function testDashboardReadsThroughTheSqliteBackendReader(): void
+    {
+        if (!extension_loaded('sqlite3')) {
+            $this->markTestSkipped('sqlite3 extension not loaded');
+        }
+        $dbPath = $this->tmp . '/dash.db';
+        $backend = new \SugarCraft\CodeTime\Storage\SqliteBackend($dbPath);
+        $backend->insert(new Heartbeat(
+            time: (new \DateTimeImmutable('today'))->setTime(9, 0)->getTimestamp(),
+            project: 'from-sqlite', language: 'php', file: 'a.php', duration: 600,
+        ));
+
+        $d = Dashboard::start($backend);
+        $this->assertSame($backend, $d->source);
+        $this->assertStringContainsString('from-sqlite', $d->view());
     }
 }

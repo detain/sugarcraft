@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeTime;
 
+use SugarCraft\CodeTime\Storage\HeartbeatReader;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -15,22 +16,25 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
  * Read-only dashboard Model. Loads the last `$days` days of
  * heartbeats once, computes Stats, and renders. `r` reloads from
  * disk, `←/→` shifts the window by one day, `q` quits.
+ *
+ * Reads through the {@see HeartbeatReader} contract, so the same Model
+ * runs over the JSONL store or the SQLite backend — whichever the
+ * `--backend=` option picked at launch.
  */
 final class Dashboard implements Model
 {
     public function __construct(
-        public readonly Store $store,
+        public readonly HeartbeatReader $source,
         public readonly \DateTimeImmutable $endDay,
         public readonly int $days = 7,
         public readonly Stats $stats = new Stats([], []),
         public readonly ?int $width = null,
-        public readonly ?int $height = null,
     ) {}
 
-    public static function start(Store $store, ?\DateTimeImmutable $endDay = null, int $days = 7): self
+    public static function start(HeartbeatReader $source, ?\DateTimeImmutable $endDay = null, int $days = 7): self
     {
         $end = ($endDay ?? new \DateTimeImmutable('today'))->setTime(0, 0);
-        return (new self($store, $end, $days))->reload();
+        return (new self($source, $end, $days))->reload();
     }
 
     public function init(): ?\Closure
@@ -42,12 +46,11 @@ final class Dashboard implements Model
     {
         if ($msg instanceof WindowSizeMsg) {
             return [new self(
-                $this->store,
+                $this->source,
                 $this->endDay,
                 $this->days,
                 $this->stats,
                 $msg->cols,
-                $msg->rows,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -77,21 +80,20 @@ final class Dashboard implements Model
 
     public function reload(): self
     {
-        $this->store->invalidate();
+        $this->source->invalidate();
         return $this->recompute();
     }
 
     private function recompute(): self
     {
         $from = $this->endDay->modify('-' . ($this->days - 1) . ' days');
-        $beats = $this->store->loadRange($from, $this->endDay);
+        $beats = $this->source->loadRange($from, $this->endDay);
         return new self(
-            $this->store,
+            $this->source,
             $this->endDay,
             $this->days,
             Stats::compute($beats, $from, $this->endDay),
             $this->width,
-            $this->height,
         );
     }
 
@@ -102,7 +104,7 @@ final class Dashboard implements Model
         if ($next > $today) {
             $next = $today;
         }
-        return (new self($this->store, $next, $this->days))->recompute();
+        return (new self($this->source, $next, $this->days))->recompute();
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

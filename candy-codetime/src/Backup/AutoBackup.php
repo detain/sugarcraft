@@ -7,6 +7,8 @@ namespace SugarCraft\CodeTime\Backup;
 /**
  * Rotating backup manager for JSONL data files.
  * Archives (copies) files whose mtime has aged past the keepDays threshold.
+ * Scope is the per-day `*.jsonl` files; a SQLite database file living in the
+ * same tree is not archived (point sqlite users at `.backup`/`VACUUM INTO`).
  */
 final class AutoBackup
 {
@@ -17,7 +19,9 @@ final class AutoBackup
     ) {}
 
     /**
-     * Rotate backups: archive files older than keepDays.
+     * Archive data files older than keepDays (copy-only — nothing is ever
+     * deleted from the data directory; the "rotating" in the class name is
+     * an archive cadence, not a retention sweeper).
      *
      * @param int $keepDays number of days to keep
      * @return int number of files copied

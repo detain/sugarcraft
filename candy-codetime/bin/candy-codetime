@@ -30,6 +30,7 @@ use SugarCraft\CodeTime\Lang;
 use SugarCraft\CodeTime\Report\GapsReport;
 use SugarCraft\CodeTime\Storage\SqliteBackend;
 use SugarCraft\CodeTime\Store;
+use SugarCraft\CodeTime\Support\Version;
 
 // Pre-rename compatibility (plan_rename.md R4.4/R4.5, sugar-tick -> // @rename-keep
 // candy-codetime): import any old-prefix env exports under the new name first
@@ -40,7 +41,7 @@ use SugarCraft\CodeTime\Store;
 foreach (LegacyEnv::import([
     'SUGARTICK_' => 'CANDY_CODETIME_', // @rename-keep
 ]) as $legacyVar) {
-    fwrite(STDERR, sprintf("candy-codetime: %s is deprecated; set CANDY_CODETIME_DIR instead.\n", $legacyVar));
+    fwrite(STDERR, Lang::t('cli.legacy_env_deprecated', ['variable' => $legacyVar]) . "\n");
 }
 if (getenv('CANDY_CODETIME_DIR') === false) {
     $dataBase = (static function (): string {
@@ -53,7 +54,7 @@ if (getenv('CANDY_CODETIME_DIR') === false) {
     })();
     $moved = LegacyPaths::migrate($dataBase . '/sugar-tick', $dataBase . '/candy-codetime'); // @rename-keep
     if ($moved !== null) {
-        fwrite(STDERR, "candy-codetime: {$moved}\n");
+        fwrite(STDERR, Lang::t('cli.migration_notice', ['notice' => $moved]) . "\n");
     }
 }
 
@@ -77,6 +78,12 @@ if (!in_array($backend, ['file', 'sqlite'], true)) {
 
 $cmd = $positional[0] ?? 'dashboard';
 
+// --version prints the single-source constant (no config, no autoload of storage).
+if ($cmd === '--version' || $cmd === '-v') {
+    fwrite(STDOUT, 'candy-codetime ' . Version::CURRENT . "\n");
+    exit(0);
+}
+
 $store = new Store(getenv('CANDY_CODETIME_DIR') ?: Store::defaultDir());
 $dbPath = $store->dir . '/candy-codetime.db';
 
@@ -87,9 +94,7 @@ $sqlite = static function () use ($store, $dbPath): SqliteBackend {
         fwrite(STDERR, Lang::t('cli.backend_unavailable') . "\n");
         exit(1);
     }
-    if (!is_dir($store->dir)) {
-        @mkdir($store->dir, 0755, true);
-    }
+    Store::ensurePrivateDir($store->dir);
     return new SqliteBackend($dbPath);
 };
 
@@ -130,15 +135,29 @@ if ($cmd === 'push') {
         exit(0);
     }
 
-    $duration = (int)($positional[4] ?? 60);
+    // A non-numeric duration used to silently cast to 0 — a heartbeat that
+    // records nothing but claims success. Refuse it at the boundary instead.
+    $durationRaw = $positional[4] ?? null;
+    if ($durationRaw !== null && !ctype_digit($durationRaw)) {
+        fwrite(STDERR, Lang::t('cli.push_invalid_duration', ['value' => $durationRaw]) . "\n");
+        exit(1);
+    }
+    $duration = (int)($durationRaw ?? 60);
     $duration = max(0, min($duration, 31_536_000));  // clamp to [0, 1 year]
     $hb = new Heartbeat(time(), $project, $language, $file, $duration);
-    if ($backend === 'sqlite') {
-        $sqlite()->insert($hb);
-    } else {
-        $store->append($hb);
+    try {
+        if ($backend === 'sqlite') {
+            $sqlite()->insert($hb);
+        } else {
+            $store->append($hb);
+        }
+    } catch (\RuntimeException $e) {
+        // Storage threw rather than losing the row silently (Store::append /
+        // SqliteBackend::insert fail loud) — surface it and exit non-zero.
+        fwrite(STDERR, $e->getMessage() . "\n");
+        exit(1);
     }
-    fwrite(STDOUT, Lang::t('cli.tick_pushed', [
+    fwrite(STDOUT, Lang::t('cli.entry_pushed', [
         'project'  => $project,
         'language' => $language,
         'duration' => $duration,
@@ -270,9 +289,12 @@ if ($cmd === 'backup') {
 
 // Unknown command - show usage
 if ($cmd !== 'dashboard') {
-    fwrite(STDERR, "Unknown command: {$cmd}\n");
+    fwrite(STDERR, Lang::t('cli.unknown_command', ['command' => $cmd]) . "\n");
     fwrite(STDERR, Lang::t('cli.usage') . "\n");
     exit(1);
 }
 
-(new Program(Dashboard::start($store), new ProgramOptions(useAltScreen: true)))->run();
+// The dashboard reads the SAME backend the other subcommands were routed to;
+// pre-fix it always opened the JSONL store, so sqlite users saw an empty TUI.
+$reader = $backend === 'sqlite' ? $sqlite() : $store;
+(new Program(Dashboard::start($reader), new ProgramOptions(useAltScreen: true)))->run();

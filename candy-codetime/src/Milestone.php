@@ -15,6 +15,9 @@ final readonly class Milestone
         public string $description = '',
     ) {}
 
+    /**
+     * @param array<string,mixed> $row  One sqlite milestone row
+     */
     public static function fromArray(array $row): self
     {
         return new self(

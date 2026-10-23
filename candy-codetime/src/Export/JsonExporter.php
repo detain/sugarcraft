@@ -43,6 +43,10 @@ final class JsonExporter implements TabularExporterInterface
      * Encode heartbeats as a JSON array of objects keyed by headers().
      *
      * @param array<Heartbeat> $heartbeats
+     * @throws \RuntimeException if a heartbeat field carries invalid UTF-8
+     *                           (the old bare json_encode() returned false and
+     *                           fatalled a TypeError against the : string
+     *                           contract mid-export instead)
      */
     public function encode(array $heartbeats): string
     {
@@ -57,7 +61,15 @@ final class JsonExporter implements TabularExporterInterface
             ],
             $heartbeats,
         );
-        return json_encode($objects, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        try {
+            return json_encode($objects, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            throw new \RuntimeException(
+                'candy-codetime: export could not be encoded: ' . $e->getMessage(),
+                0,
+                $e,
+            );
+        }
     }
 
     public function export(string $name, array $heartbeats): string
