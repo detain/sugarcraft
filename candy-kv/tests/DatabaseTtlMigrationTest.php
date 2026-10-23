@@ -33,10 +33,22 @@ final class DatabaseTtlMigrationTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (\glob($this->tmpDir . '/*') ?: [] as $f) {
-            @\unlink($f);
+        self::removeTree($this->tmpDir);
+    }
+
+    private static function removeTree(string $dir): void
+    {
+        if (!\is_dir($dir)) {
+            return;
         }
-        @\rmdir($this->tmpDir);
+        foreach (new \FilesystemIterator($dir, \FilesystemIterator::SKIP_DOTS) as $item) {
+            if ($item->isDir()) {
+                self::removeTree($item->getPathname());
+            } else {
+                @\unlink($item->getPathname());
+            }
+        }
+        @\rmdir($dir);
     }
 
     /**
@@ -202,5 +214,81 @@ final class DatabaseTtlMigrationTest extends TestCase
         $this->assertSame(\time() + 2, $entry->expiresAt?->getTimestamp());
         $this->assertNotNull($db->get('p'), 'a 2-second TTL is alive immediately');
         $db->close();
+    }
+
+    /**
+     * The in-the-wild story end to end: a pre-D4 database written by an old
+     * candy-kv, discovered by the tip BINARY (not a test-constructed
+     * Database), is migrated on open and read by true instant.
+     */
+    public function testTipBinaryReadsLegacyDatabase(): void
+    {
+        $future = (new \DateTimeImmutable('+1 hour'))->format(\DATE_ATOM);
+        $past = (new \DateTimeImmutable('-1 hour'))->format(\DATE_ATOM);
+        $legacy = $this->createLegacyDb('default', [
+            ['key' => 'alive', 'expires' => $future],
+            ['key' => 'dead', 'expires' => $past],
+            ['key' => 'no-expiry', 'expires' => null],
+        ]);
+
+        // Store() with no dataDir resolves XDG_CONFIG_HOME/skate/default.db —
+        // exactly where an old install's file lives.
+        $xdg = $this->tmpDir . '/xdg';
+        \mkdir($xdg . '/skate', 0o700, true);
+        \rename($legacy, $xdg . '/skate/default.db');
+
+        $alive = $this->runBin(['get', 'alive'], $xdg);
+        $this->assertSame(0, $alive['exit'], 'legacy alive row: ' . $alive['stderr']);
+        $this->assertSame('v-alive', \trim($alive['stdout']));
+
+        $dead = $this->runBin(['get', 'dead'], $xdg);
+        $this->assertSame(1, $dead['exit'], 'legacy expired row reads as missing');
+        $this->assertSame('', $dead['stdout']);
+
+        $listing = $this->runBin(['list'], $xdg);
+        $this->assertSame(0, $listing['exit']);
+        $this->assertStringContainsString('alive', $listing['stdout']);
+        $this->assertStringContainsString('no-expiry', $listing['stdout']);
+        $this->assertStringNotContainsString('dead', $listing['stdout']);
+
+        // The binary's own open persisted the one-time rewrite: expiry cells
+        // are pure digits afterwards (TEXT affinity may keep them numeric
+        // text — what matters is they no longer carry offset strings).
+        $sqlite = new \SQLite3($xdg . '/skate/default.db');
+        $raw = (string) $sqlite->querySingle("SELECT expires_at FROM entries WHERE key='alive'");
+        $sqlite->close();
+        $this->assertMatchesRegularExpression('/^[0-9]+$/', $raw, 'the tip binary must re-encode legacy expiries on open');
+        $this->assertSame((new \DateTimeImmutable($future))->getTimestamp(), (int) $raw, 'the rewritten epoch preserves the original instant');
+    }
+
+    /**
+     * Run `php bin/candy-kv <args...>` with an isolated XDG_CONFIG_HOME.
+     *
+     * @param list<string> $args
+     * @return array{stdout: string, stderr: string, exit: int}
+     */
+    private function runBin(array $args, string $xdg): array
+    {
+        $cmd = \array_merge([\PHP_BINARY, \dirname(__DIR__) . '/bin/candy-kv'], $args);
+
+        $env = \getenv();
+        $env['XDG_CONFIG_HOME'] = $xdg;
+
+        $proc = \proc_open($cmd, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, null, $env);
+        $this->assertIsResource($proc, 'failed to launch the candy-kv CLI');
+
+        // Close stdin so `set` never blocks waiting on a terminal.
+        \fclose($pipes[0]);
+        $stdout = \stream_get_contents($pipes[1]);
+        $stderr = \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        $exit = \proc_close($proc);
+
+        return ['stdout' => (string) $stdout, 'stderr' => (string) $stderr, 'exit' => $exit];
     }
 }

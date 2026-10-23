@@ -118,10 +118,14 @@ final class Database
      */
     private function migrateExpiryColumn(): void
     {
+        // SQLite GLOB negates a set with [^…] (NOT [!…] — that brackets the
+        // literal characters ! 0-9 and would match every migrated digit row,
+        // re-selecting it forever). A pure-digit TEXT cell is already a
+        // numeric epoch that CAST compares correctly, so skip it.
         $select = $this->db->prepare(
             "SELECT key, expires_at FROM entries
              WHERE typeof(expires_at) = 'text'
-               AND (expires_at NOT GLOB '[0-9]*' OR expires_at GLOB '*[!0-9]*')"
+               AND (expires_at NOT GLOB '[0-9]*' OR expires_at GLOB '*[^0-9]*')"
         );
         $rows = $select->execute();
         $pending = [];
@@ -443,6 +447,10 @@ final class Database
         $dbs = [];
         foreach (\glob($dataDir . '/*.db') ?: [] as $file) {
             $basename = \basename($file, '.db');
+            // `settings` is reserved: it carried per-app config in the
+            // upstream skate tool this port began from, and skate's own
+            // listing excluded it. The exclusion survives so a directory
+            // shared with skate does not surface a phantom value database.
             if ($basename !== '' && $basename !== 'settings') {
                 $dbs[] = $basename;
             }
