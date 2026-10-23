@@ -526,7 +526,9 @@ final class StderrEmitterCensusTest extends TestCase
         // doors — the flag-exclusivity refusal and the unexpected-operand
         // refusal. Same stderr-only decision as every sibling: the verb runs
         // before any session exists, so there is no transcript to name.
-        'src/Cli/SelfUpdate.php' => 2,
+        // +1 in PHA (self-update channels): the `--channel` value door rides
+        // the same failUsage envelope, same stderr-only decision.
+        'src/Cli/SelfUpdate.php' => 3,
         'src/Cli/Subcommands.php' => 37,
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN

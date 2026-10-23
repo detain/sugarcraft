@@ -15,7 +15,7 @@ use SugarCraft\Code\Support\Version;
  * published one, verified before the swap, with the pre-swap copy kept for a
  * one-shot rollback (plan_comparison DST-3).
  *
- *     self-update [--check] [--rollback] [--allow-unsigned]
+ *     self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
  *
  * PHAR-MODE ONLY. The verb acts on the file `bin/candy-code` was launched
  * from: `\Phar::running(false)`. On a Composer install that answer is the
@@ -35,6 +35,24 @@ use SugarCraft\Code\Support\Version;
  * release. The signature asset (`candy-code.phar.minisig`) is OPTIONAL at
  * selection: whether it is REQUIRED is a fact about the pinned-key state,
  * not about the release, and the two must not be conflated.
+ *
+ * TWO CHANNELS. The same fetch answers on two release trains. STABLE (what
+ * the verb always did): non-draft, non-prerelease `candy-code/v*` tags,
+ * highest by compare — byte-for-byte the selection described above. DEV:
+ * the single rolling `candy-code/dev` release the CI dev workflow moves
+ * (prerelease ALLOWED — it is one; draft still skipped), selected by exact
+ * tag equality and judged by COMMIT, not by ordering: it is current iff
+ * the `target_commitish` it names starts with the sha embedded in this
+ * install's `dev-<shortsha>` stamp. A target that is missing or not a git
+ * object name (a branch label like `main`) cannot answer that question and
+ * is refused fail-closed, exactly like the stable channel's unorderable
+ * version; the downgrade arm cannot fire on dev by construction (rolling
+ * channel: the decision is up-to-date or available, never behind), and the
+ * asset, sha256 and minisign rules are identical between channels — the
+ * signature stays required iff a key is pinned. The DEFAULT channel is read
+ * from the current version ({@see Version::isDev}: dev stamps ride dev,
+ * everything else rides stable); `--channel` overrides either way and
+ * composes with `--check`.
  *
  * HOW THE SWAP HAPPENS. The sidecar is fetched first and must parse to a
  * lowercase 64-hex-digit digest (its optional name field must match the phar
@@ -73,8 +91,9 @@ use SugarCraft\Code\Support\Version;
  * rollback restored. 1: composer-mode refusal, an unwritable target, a
  * refused downgrade, a comparison that cannot be made, a fetch, hash or
  * signature failure, --check finding an update available (that is the
- * scripted answer to "should I update?"). 2: usage errors (unknown operand,
- * `--check` together with `--rollback` or `--allow-unsigned`).
+ * scripted answer to "should I update?"). 2: usage errors (unknown
+ * operand, a `--channel` that is neither `stable` nor `dev`, `--check`
+ * together with `--rollback` or `--allow-unsigned`).
  * `--allow-unsigned` is the dev-only bypass of the signature leg in pinned
  * state; it never bypasses the sha256 sidecar and is refused next to
  * `--check` (there is nothing to bypass when nothing is swapped).
@@ -105,6 +124,20 @@ final class SelfUpdate
      * phar stamp and the release filter must strip the same string.
      */
     public const TAG_PREFIX = Version::TAG_PREFIX;
+
+    /** The stable train: tagged `candy-code/v*` releases, ordered by {@see Version::compare()}. */
+    public const CHANNEL_STABLE = 'stable';
+
+    /** The rolling train: the one `candy-code/dev` release, judged by commit identity. */
+    public const CHANNEL_DEV = 'dev';
+
+    /**
+     * The exact tag the dev release is moved under. Equality, not the
+     * TAG_PREFIX family test the stable channel uses: 'dev' is a channel
+     * name, never a version {@see Version} could order, so the strip-and-
+     * compare-triple rule has nothing to say about it either way.
+     */
+    public const DEV_TAG = self::TAG_PREFIX . 'dev';
 
     public const PHAR_ASSET = 'candy-code.phar';
 
@@ -199,6 +232,16 @@ final class SelfUpdate
                 Lang::t('cli.selfupdate.usage'),
             );
         }
+        $channelArg = isset($args->subcommandFlags['--channel'])
+            ? (string) $args->subcommandFlags['--channel']
+            : null;
+        if ($channelArg !== null && $channelArg !== self::CHANNEL_STABLE && $channelArg !== self::CHANNEL_DEV) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.selfupdate.channel_invalid', ['value' => $channelArg]),
+                $args->outputFormat,
+                Lang::t('cli.selfupdate.usage'),
+            );
+        }
         if ($args->subcommandArgs !== []) {
             return NonInteractive::failUsage(
                 'candy-code: ' . Lang::t('cli.selfupdate.unexpected_operand', ['operand' => (string) $args->subcommandArgs[0]]),
@@ -235,6 +278,11 @@ final class SelfUpdate
             return self::rollback($old, $phar);
         }
 
+        // Resolution moved ahead of the fetch (choosing a channel needs the
+        // current version): same seam, same arms, identical value.
+        $current = $currentVersion ?? \trim(Help::versionString());
+        $channel = $channelArg ?? (Version::isDev($current) ? self::CHANNEL_DEV : self::CHANNEL_STABLE);
+
         $http ??= self::httpClient();
         try {
             $response = $http->request('GET', $releasesUrl ?? self::RELEASES_URL);
@@ -249,28 +297,41 @@ final class SelfUpdate
             return NonInteractive::EXIT_FAILURE;
         }
         $decoded = \json_decode((string) $response->getBody()->getContents(), true);
-        $release = \is_array($decoded) ? self::selectRelease($decoded) : null;
-        if ($release === null) {
-            self::stderr(Lang::t('cli.selfupdate.no_release', ['phar' => self::PHAR_ASSET, 'sidecar' => self::SIDECAR_ASSET]));
+        if ($channel === self::CHANNEL_DEV) {
+            $release = \is_array($decoded) ? self::selectDevRelease($decoded) : null;
+            if ($release === null) {
+                self::stderr(Lang::t('cli.selfupdate.no_dev_release', [
+                    'tag' => self::DEV_TAG,
+                    'phar' => self::PHAR_ASSET,
+                    'sidecar' => self::SIDECAR_ASSET,
+                ]));
 
-            return NonInteractive::EXIT_FAILURE;
+                return NonInteractive::EXIT_FAILURE;
+            }
+            [$cmp, $latest] = self::devDecision($current, $release);
+        } else {
+            $release = \is_array($decoded) ? self::selectRelease($decoded) : null;
+            if ($release === null) {
+                self::stderr(Lang::t('cli.selfupdate.no_release', ['phar' => self::PHAR_ASSET, 'sidecar' => self::SIDECAR_ASSET]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            $cmp = Version::compare($release['version'], $current);
+            $latest = $release['version'];
         }
-
-        $current = $currentVersion ?? \trim(Help::versionString());
-        $cmp = Version::compare($release['version'], $current);
 
         if ($check) {
             if ($cmp === null) {
-                self::stderr(Lang::t('cli.selfupdate.check_unknown', ['current' => $current, 'latest' => $release['version']]));
+                self::stderr(Lang::t('cli.selfupdate.check_unknown', ['current' => $current, 'latest' => $latest]));
 
                 return NonInteractive::EXIT_FAILURE;
             }
             if ($cmp > 0) {
-                self::stderr(Lang::t('cli.selfupdate.check_available', ['current' => $current, 'latest' => $release['version']]));
+                self::stderr(Lang::t('cli.selfupdate.check_available', ['current' => $current, 'latest' => $latest]));
 
                 return NonInteractive::EXIT_FAILURE;
             }
-            self::stderr(Lang::t('cli.selfupdate.check_up_to_date', ['current' => $current, 'latest' => $release['version']]));
+            self::stderr(Lang::t('cli.selfupdate.check_up_to_date', ['current' => $current, 'latest' => $latest]));
 
             return NonInteractive::EXIT_OK;
         }
@@ -288,7 +349,10 @@ final class SelfUpdate
         if ($cmp < 0) {
             // The sanctioned downgrade path is --rollback, which returned
             // above without consulting the network at all.
-            self::stderr(Lang::t('cli.selfupdate.downgrade_refused', ['current' => $current, 'latest' => $release['version']]));
+            // On the dev train the decision is never behind (up-to-date or
+            // available, by construction), so this arm is stable-only — and
+            // the stable logic is byte-for-byte the one that shipped.
+            self::stderr(Lang::t('cli.selfupdate.downgrade_refused', ['current' => $current, 'latest' => $latest]));
 
             return NonInteractive::EXIT_FAILURE;
         }
@@ -385,7 +449,7 @@ final class SelfUpdate
         self::stderr(Lang::t('cli.selfupdate.installed', [
             'path' => $phar,
             'from' => $current,
-            'to' => $release['version'],
+            'to' => $latest,
             'old' => $old,
         ]));
 
@@ -422,39 +486,138 @@ final class SelfUpdate
             if (!Version::isComparable($version)) {
                 continue;
             }
-            $pharUrl = null;
-            $sidecarUrl = null;
-            $sigUrl = '';
-            $assets = $release['assets'] ?? [];
-            if (!\is_array($assets)) {
-                continue;
-            }
-            foreach ($assets as $asset) {
-                if (!\is_array($asset)) {
-                    continue;
-                }
-                $url = (string) ($asset['browser_download_url'] ?? '');
-                if ($url === '') {
-                    continue;
-                }
-                if ((string) ($asset['name'] ?? '') === self::PHAR_ASSET) {
-                    $pharUrl = $url;
-                } elseif ((string) ($asset['name'] ?? '') === self::SIDECAR_ASSET) {
-                    $sidecarUrl = $url;
-                } elseif ((string) ($asset['name'] ?? '') === self::SIGNATURE_ASSET) {
-                    $sigUrl = $url;
-                }
-            }
-            if ($pharUrl === null || $sidecarUrl === null) {
+            $urls = self::releaseAssetUrls($release['assets'] ?? []);
+            if ($urls === null) {
                 continue;
             }
             if ($best !== null && (Version::compare($version, $best['version']) ?? -1) <= 0) {
                 continue;
             }
-            $best = ['version' => $version, 'pharUrl' => $pharUrl, 'sidecarUrl' => $sidecarUrl, 'sigUrl' => $sigUrl];
+            $best = ['version' => $version, ...$urls];
         }
 
         return $best;
+    }
+
+    /**
+     * The dev-channel selection: the rolling `candy-code/dev` release that
+     * carries both required assets. Draft is skipped; prerelease is ALLOWED
+     * (the dev release is one — the stable channel's exclusion of it is
+     * exactly why the dev channel needs a sibling, not a widened filter).
+     * The target commit rides along lower-cased ('' when the entry names
+     * none) for {@see self::devDecision()} to judge: selection stays
+     * decidable on assets alone, so a malformed target is the loud
+     * cannot-compare refusal, never a silent no-release.
+     *
+     * GitHub makes tag names unique per repository, so at most one entry
+     * can match; the first with both assets wins (an asset-less dev entry
+     * is skipped, mirroring the stable channel's treatment).
+     *
+     * @param array<array-key, mixed> $releases
+     *
+     * @return array{version: string, pharUrl: string, sidecarUrl: string, sigUrl: string, commitish: string}|null
+     */
+    public static function selectDevRelease(array $releases): ?array
+    {
+        foreach ($releases as $release) {
+            if (!\is_array($release) || ($release['draft'] ?? false) === true) {
+                continue;
+            }
+            if ((string) ($release['tag_name'] ?? '') !== self::DEV_TAG) {
+                continue;
+            }
+            $urls = self::releaseAssetUrls($release['assets'] ?? []);
+            if ($urls === null) {
+                continue;
+            }
+            $commitish = $release['target_commitish'] ?? '';
+
+            return [
+                'version' => 'dev',
+                'commitish' => \is_string($commitish) ? \strtolower(\trim($commitish)) : '',
+                ...$urls,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Is the running dev build already the commit the dev release names?
+     * [decision, label]: 0 up to date, 1 a newer commit is published, null
+     * INDECIDABLE — the current version carries no commit to match (a
+     * `dev-` stamp whose remainder is not a hex abbreviation, or a stable
+     * install forced onto the dev channel by --channel), or the release
+     * names a target that is missing, shorter than git's own abbreviation
+     * floor, or not a hex object name at all (a branch label). Indecidable
+     * is the fail-closed shape the stable channel spells with a null
+     * compare: --check reports cannot-compare, a swap refuses.
+     *
+     * The match is the prefix law {@see Version::DEV_PREFIX} embeds: the
+     * canonical stamp `dev-<shortsha>` — its commit read by
+     * {@see Version::devShaOf()}, the hex after the 4-byte prefix (this is
+     * the spec's 'sha embedded after dev-', with the offset counted off the
+     * prefix's true length) — names the leading digits of the release's
+     * full target_commitish. A mismatch is not "behind": the rolling
+     * channel answers now or not-yet, never older.
+     *
+     * @param array{version: string, pharUrl: string, sidecarUrl: string, sigUrl: string, commitish: string} $release
+     *
+     * @return array{0: ?int, 1: string}
+     */
+    private static function devDecision(string $current, array $release): array
+    {
+        $target = $release['commitish'];
+        $label = 'dev@' . ($target === '' ? '?' : $target);
+        $embedded = Version::devShaOf($current);
+        if ($embedded === null || $target === '' || \preg_match(Version::HEX_SHA_PATTERN, $target) !== 1) {
+            return [null, $label];
+        }
+
+        return [\str_starts_with($target, $embedded) ? 0 : 1, $label];
+    }
+
+    /**
+     * The asset triple of one release entry: the two required download
+     * routes plus the signature route ('' when absent — required only by
+     * the pinned-key leg, never by selection). Null when either required
+     * asset is missing or the entry is not shaped like an asset list. The
+     * ONE walk both channels read (E174 discipline: a byte-copied second
+     * copy of this loop is the drift guards' favorite snack).
+     *
+     * @param mixed $assets
+     *
+     * @return ?array{pharUrl: string, sidecarUrl: string, sigUrl: string}
+     */
+    private static function releaseAssetUrls(mixed $assets): ?array
+    {
+        if (!\is_array($assets)) {
+            return null;
+        }
+        $pharUrl = null;
+        $sidecarUrl = null;
+        $sigUrl = '';
+        foreach ($assets as $asset) {
+            if (!\is_array($asset)) {
+                continue;
+            }
+            $url = (string) ($asset['browser_download_url'] ?? '');
+            if ($url === '') {
+                continue;
+            }
+            if ((string) ($asset['name'] ?? '') === self::PHAR_ASSET) {
+                $pharUrl = $url;
+            } elseif ((string) ($asset['name'] ?? '') === self::SIDECAR_ASSET) {
+                $sidecarUrl = $url;
+            } elseif ((string) ($asset['name'] ?? '') === self::SIGNATURE_ASSET) {
+                $sigUrl = $url;
+            }
+        }
+        if ($pharUrl === null || $sidecarUrl === null) {
+            return null;
+        }
+
+        return ['pharUrl' => $pharUrl, 'sidecarUrl' => $sidecarUrl, 'sigUrl' => $sigUrl];
     }
 
     /**

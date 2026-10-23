@@ -110,6 +110,7 @@ final readonly class ParsedArgs
         // landed); the sha256 leg is never bypassable.
         'self-update' => [
             '--allow-unsigned' => false,
+            '--channel' => true,
             '--check' => false,
             '--rollback' => false,
         ],
