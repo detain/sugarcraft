@@ -9,7 +9,28 @@ namespace SugarCraft\Readline\History;
  *
  * Extends InMemoryHistory with disk persistence.  The history file is
  * loaded on construction (created if absent) and updated on every push().
- * File locking is used to allow concurrent-safe access.
+ *
+ * Concurrency: every write — both the in-place append fast-path and the
+ * temp + rename rewrite — runs under an exclusive lock on a sidecar file
+ * `<history>.lock`, so two processes appending and/or rewriting the same
+ * history cannot lose each other's lines. (The rewrite previously raced:
+ * it copied existing content and renamed over the target without holding
+ * any lock on the shared path.) The sidecar is never written to; only its
+ * inode is locked, which avoids the unlink/rename window a lock-file
+ * rotation dance would introduce.
+ *
+ * Permissions: the history file and its sidecar are kept at 0600. An
+ * existing file whose mode cannot be tightened (e.g. foreign-owned) is a
+ * construction error — history can contain secrets.
+ *
+ * Deduplication is stricter than HistoryInterface's "differs from the last
+ * entry" floor: a line already present anywhere in the retained history is
+ * skipped (zsh `HIST_IGNORE_DUPS`-style).
+ *
+ * Write failures (lock or temp file unavailable) throw RuntimeException;
+ * queued entries are then lost loudly rather than silently. The automatic
+ * flush() on destruct downgrades to an error_log line — throwing from a
+ * destructor is fatal territory.
  */
 final class FileHistory extends InMemoryHistory
 {
@@ -41,17 +62,32 @@ final class FileHistory extends InMemoryHistory
         $this->filePath = $filePath;
         $this->tempDir = $tempDir !== '' ? $tempDir : \dirname($filePath);
         $this->deferWrites = $deferWrites;
-        // Touch the file so it exists after construction and set restrictive perms.
+        // Create the file if absent; in every case the mode must end at 0600 —
+        // history can contain secrets, so a pre-existing file left loose by an
+        // older tool or a permissive umask is tightened here, or the foreign
+        // ownership is refused loudly (chmod() returns false without a
+        // warning; touch() can warn, hence @).
         if (!file_exists($this->filePath)) {
-            touch($this->filePath);
-            chmod($this->filePath, 0600);
+            if (@touch($this->filePath) === false) {
+                throw new \RuntimeException('sugar-readline: cannot create history file ' . $this->filePath);
+            }
+        }
+        if (!chmod($this->filePath, 0600)) {
+            throw new \RuntimeException('sugar-readline: cannot set 0600 on history file ' . $this->filePath);
         }
         $this->load();
     }
 
     public function __destruct()
     {
-        $this->flush();
+        // Throwing from a destructor is fatal territory (it fires during
+        // shutdown / GC), so the loud auto-flush downgrades to an error_log
+        // line. Callers who want the exception should call flush() directly.
+        try {
+            $this->flush();
+        } catch (\Throwable $e) {
+            error_log('sugar-readline: history flush failed: ' . $e->getMessage());
+        }
     }
 
     public function __clone()
@@ -65,8 +101,17 @@ final class FileHistory extends InMemoryHistory
     /**
      * Append $line to the history file and notify the parent to update its
      * in-memory state. Persistence goes through appendLinesAtomically(), which
-     * takes an in-place LOCK_EX append fast-path and falls back to a secure
-     * temp + rename rewrite, keeping 0600 permissions either way.
+     * runs under the sidecar write lock and takes an in-place LOCK_EX append
+     * fast-path, falling back to a secure temp + rename rewrite, keeping 0600
+     * permissions either way.
+     *
+     * Dedup skips any line already retained in memory — stricter than
+     * HistoryInterface's "differs from the last entry" floor (see class
+     * docblock).
+     *
+     * @throws \RuntimeException when the file cannot be persisted (write lock
+     *                           or temp file unavailable) — failure is loud,
+     *                           never a silent drop.
      *
      * In deferred mode the entry is only queued; see flush().
      */
@@ -148,49 +193,63 @@ final class FileHistory extends InMemoryHistory
         if ($lines === []) {
             return;
         }
-
-        // Fast path: append in place when the on-disk tail is newline-terminated.
-        // The file already exists at 0600 (constructor touch + clear()/rewrite),
-        // so an in-place append preserves those perms; re-assert defensively in
-        // case it was re-created since construction.
-        if (file_exists($this->filePath)) {
-            $fp = fopen($this->filePath, 'a+');
-            if ($fp !== false) {
-                flock($fp, LOCK_EX);
-                $stat = fstat($fp);
-                $size = $stat !== false ? (int) ($stat['size'] ?? 0) : 0;
-                $endsWithNewline = true;
-                if ($size > 0) {
-                    fseek($fp, -1, SEEK_END);
-                    $endsWithNewline = fread($fp, 1) === "\n";
-                }
-                if ($endsWithNewline) {
-                    foreach ($lines as $line) {
-                        fwrite($fp, $line . "\n");
+        $this->withWriteLock(function () use ($lines): void {
+            // Fast path: append in place when the on-disk tail is newline-terminated.
+            // The file already exists at 0600 (constructor chmod + clear()/rewrite),
+            // so an in-place append preserves those perms; re-assert defensively in
+            // case it was re-created since construction.
+            if (file_exists($this->filePath)) {
+                $fp = fopen($this->filePath, 'a+');
+                if ($fp !== false) {
+                    flock($fp, LOCK_EX);
+                    $stat = fstat($fp);
+                    $size = $stat !== false ? (int) ($stat['size'] ?? 0) : 0;
+                    $endsWithNewline = true;
+                    if ($size > 0) {
+                        fseek($fp, -1, SEEK_END);
+                        $endsWithNewline = fread($fp, 1) === "\n";
                     }
-                    fflush($fp);
+                    if ($endsWithNewline) {
+                        foreach ($lines as $line) {
+                            fwrite($fp, $line . "\n");
+                        }
+                        fflush($fp);
+                        flock($fp, LOCK_UN);
+                        fclose($fp);
+                        chmod($this->filePath, 0600);
+                        return;
+                    }
+                    // Missing trailing newline — release and fall through to the
+                    // normalizing rewrite below.
                     flock($fp, LOCK_UN);
                     fclose($fp);
-                    chmod($this->filePath, 0600);
-                    return;
                 }
-                // Missing trailing newline — release and fall through to the
-                // normalizing rewrite below.
-                flock($fp, LOCK_UN);
-                fclose($fp);
             }
-        }
 
+            $this->rewriteLocked($lines);
+        });
+    }
+
+    /**
+     * Temp + rename rewrite appending $lines to the existing content. The
+     * caller holds the sidecar write lock, so the copy-read and the rename
+     * cannot interleave with another writer.
+     *
+     * @param list<string> $lines
+     */
+    private function rewriteLocked(array $lines): void
+    {
         $tempFile = @tempnam($this->tempDir, 'hist');
         if ($tempFile === false) {
-            return;
+            throw new \RuntimeException('sugar-readline: cannot create temp file for history rewrite in ' . $this->tempDir);
         }
         // Restrict perms before writing so history content is never exposed,
         // even briefly, on any platform/umask (tempnam is 0600 on POSIX only).
         chmod($tempFile, 0600);
         $fp = fopen($tempFile, 'w');
         if ($fp === false) {
-            return;
+            @unlink($tempFile);
+            throw new \RuntimeException('sugar-readline: cannot open temp file for history rewrite: ' . $tempFile);
         }
         flock($fp, LOCK_EX);
         // Copy existing content to temp file.
@@ -210,8 +269,45 @@ final class FileHistory extends InMemoryHistory
         fflush($fp);
         flock($fp, LOCK_UN);
         fclose($fp);
-        rename($tempFile, $this->filePath);
+        // rename() can fail when tempDir and the history file sit on
+        // different filesystems (EXDEV — tempnam() falls back to the system
+        // temp dir when its first choice is unwritable) or the destination
+        // mount is read-only. The write is then refused loudly, never half-
+        // done: the temp file is cleaned up before the throw.
+        if (!@rename($tempFile, $this->filePath)) {
+            @unlink($tempFile);
+            throw new \RuntimeException('sugar-readline: cannot replace history file ' . $this->filePath);
+        }
         chmod($this->filePath, 0600);
+    }
+
+    /**
+     * Serialize every writer of this history file — in-process and across
+     * processes — on an exclusive lock over a sidecar `<path>.lock`. The
+     * rename swap replaces the target's inode, so a lock taken on the target
+     * itself cannot order writers across a rewrite; the sidecar's inode is
+     * never renamed, making it the stable rendezvous. The sidecar carries no
+     * payload (only its inode is locked), so it is never unlinked and a
+     * symlink pre-planted at its path cannot redirect any write through it.
+     */
+    private function withWriteLock(\Closure $work): void
+    {
+        $lockPath = $this->filePath . '.lock';
+        $lock = @fopen($lockPath, 'c');
+        if ($lock === false) {
+            throw new \RuntimeException('sugar-readline: cannot open history write lock ' . $lockPath);
+        }
+        chmod($lockPath, 0600); // hygiene only — the inode never holds content
+        if (!flock($lock, LOCK_EX)) {
+            fclose($lock);
+            throw new \RuntimeException('sugar-readline: cannot acquire history write lock ' . $lockPath);
+        }
+        try {
+            $work();
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     /**
@@ -360,16 +456,21 @@ final class FileHistory extends InMemoryHistory
         parent::clear();
         // Drop queued-but-unwritten entries too — they were cleared with the rest.
         $this->pendingWrites = [];
-        // Atomic write via temp file to prevent corruption on crash.
-        $tempFile = @tempnam($this->tempDir, 'hist');
-        if ($tempFile === false) {
-            return;
-        }
-        chmod($tempFile, 0600);
-        file_put_contents($tempFile, '');
-        rename($tempFile, $this->filePath);
-        // Defensive: if the destination pre-existed with looser perms, the
-        // rename inherits the temp file's 0600, but re-assert to be safe.
-        chmod($this->filePath, 0600);
+        $this->withWriteLock(function (): void {
+            // Atomic write via temp file to prevent corruption on crash.
+            $tempFile = @tempnam($this->tempDir, 'hist');
+            if ($tempFile === false) {
+                throw new \RuntimeException('sugar-readline: cannot create temp file for history clear in ' . $this->tempDir);
+            }
+            chmod($tempFile, 0600);
+            file_put_contents($tempFile, '');
+            if (!@rename($tempFile, $this->filePath)) {
+                @unlink($tempFile);
+                throw new \RuntimeException('sugar-readline: cannot replace history file ' . $this->filePath);
+            }
+            // Defensive: if the destination pre-existed with looser perms, the
+            // rename inherits the temp file's 0600, but re-assert to be safe.
+            chmod($this->filePath, 0600);
+        });
     }
 }

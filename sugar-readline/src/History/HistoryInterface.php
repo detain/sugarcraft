@@ -11,6 +11,10 @@ interface HistoryInterface
 {
     /**
      * Add a line to history if it is non-empty and differs from the last entry.
+     *
+     * This is the floor every implementation honors; some apply stricter
+     * rules — {@see FileHistory} skips any duplicate of a retained entry,
+     * not just the most recent one.
      */
     public function push(string $line): void;
 

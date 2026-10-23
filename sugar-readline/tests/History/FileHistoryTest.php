@@ -492,4 +492,112 @@ final class FileHistoryTest extends TestCase
         $this->assertSame('C', $h->getPrevious());
         $this->assertNull($h->getPrevious());
     }
+
+    /**
+     * A history file left world-readable by an older tool or a permissive
+     * umask is tightened to 0600 at construction — history can hold secrets.
+     */
+    public function testPreExistingLooseFileIsTightenedTo0600(): void
+    {
+        file_put_contents($this->historyFile, "old\n");
+        chmod($this->historyFile, 0644);
+        clearstatcache();
+        $this->assertSame(0644, fileperms($this->historyFile) & 0777);
+
+        new FileHistory($this->historyFile);
+
+        clearstatcache();
+        $this->assertSame(0600, fileperms($this->historyFile) & 0777);
+    }
+
+    /**
+     * Persistence failure is loud, never a silent drop: if the write lock
+     * itself cannot be opened, push() refuses the entry. (tempnam()'s own
+     * false branch is unreachable in practice — it falls back to the system
+     * temp dir — so this is the deterministic arm of the same contract;
+     * rename() failures across filesystems throw alongside it.)
+     */
+    public function testUnopenableWriteLockThrowsLoudly(): void
+    {
+        file_put_contents($this->historyFile, "clean-tail\n");
+        // Plant a DIRECTORY at the sidecar lock path so fopen('c') must fail.
+        $lockDir = $this->historyFile . '.lock';
+        mkdir($lockDir);
+
+        $h = new FileHistory($this->historyFile);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cannot open history write lock');
+
+        try {
+            $h->push('extra');
+        } finally {
+            rmdir($lockDir);
+        }
+    }
+
+    /**
+     * Cross-process discipline: the append fast path AND the rewrite both run
+     * under an exclusive sidecar lock (<path>.lock — the target's inode is
+     * replaced by rename, so the stable rendezvous is the sidecar). A second
+     * process must therefore queue behind a writer that is holding it.
+     *
+     * The discriminating leg is timing: the "hold" child parks on the lock
+     * for 400 ms after announcing READY; the "push" child spawned behind it
+     * must block roughly that long. Strip the lock and the push child sails
+     * through in milliseconds while the content assert stays green — the
+     * wall-time floor is what a lock-neutering mutation reddens.
+     */
+    public function testConcurrentProcessWritesSerializeOnTheSidecarLock(): void
+    {
+        // Newline-terminated start: the push child takes the append fast path.
+        file_put_contents($this->historyFile, "base\n");
+        chmod($this->historyFile, 0600);
+        $child = \realpath(__DIR__ . '/../Support/history_lock_probe_child.php');
+        $this->assertIsString($child);
+
+        // NOTE: proc_open's pipe descriptors EBADF on some builds/environments
+        // (the spawn succeeds, the write reaches disk, only the parent-side
+        // pipe read is broken), so the probe drives plain popen children and
+        // uses file polling for completion.
+        $holdCmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($child)
+            . ' hold ' . escapeshellarg($this->historyFile) . ' from-hold 2>&1';
+        $pushCmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($child)
+            . ' push ' . escapeshellarg($this->historyFile) . ' from-push 2>&1';
+
+        $hold = popen($holdCmd, 'r');
+        $this->assertIsResource($hold);
+        try {
+            stream_set_timeout($hold, 5);
+            $readyLine = fgets($hold);
+            $this->assertIsString($readyLine);
+            $this->assertStringContainsString('READY', $readyLine, 'hold child failed to take the lock');
+
+            $pushStart = microtime(true);
+            $push = popen($pushCmd, 'r');
+            $this->assertIsResource($push);
+            stream_set_timeout($push, 10);
+            $pushOut = (string) stream_get_contents($push);
+            $pushElapsed = microtime(true) - $pushStart;
+            pclose($push);
+            $this->assertStringContainsString('DONE', $pushOut, 'push child failed: ' . $pushOut);
+
+            $holdOut = (string) stream_get_contents($hold);
+            $this->assertStringContainsString('DONE', $holdOut, 'hold child failed: ' . $holdOut);
+        } finally {
+            if (\is_resource($hold)) {
+                pclose($hold);
+            }
+        }
+
+        $contents = file_get_contents($this->historyFile);
+        $this->assertIsString($contents);
+        $this->assertStringContainsString("from-hold\n", $contents);
+        $this->assertStringContainsString("from-push\n", $contents);
+        // Hold sleeps 400 ms after READY; PHP startup is ~50 ms, so a
+        // lock-respecting push lands above 250 ms while a lock-free mutant
+        // finishes under that floor — the wall-time assert is what a
+        // lock-neutering mutation reddens.
+        $this->assertGreaterThanOrEqual(0.25, $pushElapsed, 'push child did not wait on the write lock');
+    }
 }
