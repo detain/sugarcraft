@@ -91,8 +91,8 @@ final class PanicFormatter
         $lines = array_merge($lines, $this->formatBacktrace($e));
         $lines[] = '';
 
-        // Caliber hint
-        $lines[] = $this->mutedStyle->render('  consider `caliber refresh` if this is config-related');
+        // Report footer (neutral attribution, no internal tooling hints)
+        $lines[] = $this->mutedStyle->render('  report rendered by sugar-log — include the trace above when filing an issue');
         $lines[] = '';
 
         return implode("\n", $lines);
@@ -152,7 +152,9 @@ final class PanicFormatter
                 $frameFile = str_replace($path, '[redacted]', $frameFile);
             }
 
-            $line = sprintf('    %s:%d %s()', $frameFile, $frameLine, $func);
+            // %s, not %d: internal frames (call_user_func et al.) carry no
+            // file/line, and '%d' would render the '?' placeholder as '0'.
+            $line = sprintf('    %s:%s %s()', $frameFile, $frameLine, $func);
             $lines[] = $this->backtraceStyle->render($line);
 
             if ($this->showLocals && isset($frame['args'])) {

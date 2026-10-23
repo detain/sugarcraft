@@ -568,4 +568,108 @@ final class LoggerTest extends TestCase
         $this->expectExceptionMessage('stream must be a valid resource');
         $log->withOutput('not a resource');
     }
+
+    // -------------------------------------------------------------------------
+    // Constructor stream validation (m3) + error-stream routing (M8)
+    // -------------------------------------------------------------------------
+
+    public function testConstructorRejectsNonResourceStream(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('stream must be a valid resource');
+        Logger::new(stream: 'not-a-resource');
+    }
+
+    public function testConstructorAcceptsNullStreamDefaultingToStdout(): void
+    {
+        // The STDOUT default must still pass the boundary guard untouched.
+        $log = Logger::new(reportTimestamp: false);
+        $this->assertInstanceOf(Logger::class, $log);
+    }
+
+    public function testErrorStreamRoutesSevereRecordsOnly(): void
+    {
+        $mainPath = \sys_get_temp_dir() . '/sugar-log-main-' . \uniqid() . '.log';
+        $errPath = \sys_get_temp_dir() . '/sugar-log-err-' . \uniqid() . '.log';
+        $main = \fopen($mainPath, 'w');
+        $err = \fopen($errPath, 'w');
+        $this->assertIsResource($main);
+        $this->assertIsResource($err);
+
+        $log = Logger::new(
+            level: Level::Debug,
+            reportTimestamp: false,
+            reportCaller: false,
+            stream: $main,
+            errorStream: $err,
+        );
+        $log->debug('quiet-debug');
+        $log->info('gentle-info');
+        $log->warn('rising-warn');
+        $log->error('loud-error');
+        \fclose($main);
+        \fclose($err);
+
+        $mainContent = (string) \file_get_contents($mainPath);
+        $errContent = (string) \file_get_contents($errPath);
+        \unlink($mainPath);
+        \unlink($errPath);
+
+        $this->assertStringContainsString('quiet-debug', $mainContent);
+        $this->assertStringContainsString('gentle-info', $mainContent);
+        $this->assertStringContainsString('rising-warn', $mainContent);
+        $this->assertStringNotContainsString('loud-error', $mainContent);
+        $this->assertStringContainsString('loud-error', $errContent);
+    }
+
+    public function testErrorStreamAtLowersTheRoutingThreshold(): void
+    {
+        $mainPath = \sys_get_temp_dir() . '/sugar-log-main-' . \uniqid() . '.log';
+        $errPath = \sys_get_temp_dir() . '/sugar-log-err-' . \uniqid() . '.log';
+        $main = \fopen($mainPath, 'w');
+        $err = \fopen($errPath, 'w');
+
+        $log = Logger::new(
+            level: Level::Debug,
+            reportTimestamp: false,
+            stream: $main,
+            errorStream: $err,
+            errorStreamAt: Level::Warn,
+        );
+        $log->info('calm-info');
+        $log->warn('hot-warn');
+        \fclose($main);
+        \fclose($err);
+
+        $mainContent = (string) \file_get_contents($mainPath);
+        $errContent = (string) \file_get_contents($errPath);
+        \unlink($mainPath);
+        \unlink($errPath);
+
+        $this->assertStringContainsString('calm-info', $mainContent);
+        $this->assertStringNotContainsString('hot-warn', $mainContent);
+        $this->assertStringContainsString('hot-warn', $errContent);
+    }
+
+    public function testWithErrorStreamNullRestoresSingleStream(): void
+    {
+        $singlePath = \sys_get_temp_dir() . '/sugar-log-single-' . \uniqid() . '.log';
+        $single = \fopen($singlePath, 'w');
+
+        $log = Logger::new(
+            reportTimestamp: false,
+            stream: $this->tempFile,
+            errorStream: $single,
+        )->withErrorStream(null);
+
+        $log->error('back-to-one');
+        \fclose($single);
+
+        $mainContent = (string) \file_get_contents($this->tempPath);
+        $singleContent = (string) \file_get_contents($singlePath);
+        \unlink($singlePath);
+
+        $this->assertStringContainsString('back-to-one', $mainContent);
+        $this->assertSame('', $singleContent);
+    }
 }

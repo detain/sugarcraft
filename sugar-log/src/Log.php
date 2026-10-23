@@ -76,10 +76,11 @@ final class Log
      *  - Prints a colorized banner with the exception class + message
      *  - Prints the backtrace with file paths and line numbers
      *  - Collapses repeated stack frames
-     *  - Appends a hint to run `caliber refresh` if applicable
+     *  - Appends a short report footer with filing guidance
      *
      * The shutdown function additionally catches fatal errors (E_ERROR,
-     * E_PARSE) that the exception handler cannot catch.
+     * E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR) that the
+     * exception handler cannot catch.
      *
      * Mirrors ratatui ecosystem's `color_eyre` handler.
      *
@@ -115,7 +116,7 @@ final class Log
         // Register shutdown function for fatal errors.
         register_shutdown_function(static function () use ($formatter): void {
             $err = error_get_last();
-            if ($err !== null && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+            if ($err !== null && \in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
                 self::restoreTerminal();
                 $msg = sprintf('%s: %s in %s on line %d', self::fatalTypeName($err['type']), $err['message'], $err['file'], $err['line']);
                 \fwrite(\STDERR, "\n{$formatter->format(new \ErrorException($msg))}\n");
@@ -133,7 +134,8 @@ final class Log
     {
         // Guard: only emit ANSI codes when running in a real TTY.
         // fwrite to a closed or non-TTY stream can cause warnings.
-        if (!\is_resource(\STDERR) || !\posix_isatty(\STDERR)) {
+        // stream_isatty() is core PHP — no ext-posix dependency.
+        if (!\is_resource(\STDERR) || !\stream_isatty(\STDERR)) {
             return;
         }
 
@@ -160,6 +162,7 @@ final class Log
             E_PARSE      => 'Parse error',
             E_CORE_ERROR => 'Core error',
             E_COMPILE_ERROR => 'Compile error',
+            E_USER_ERROR => 'User error',
             default      => 'Shutdown error',
         };
     }

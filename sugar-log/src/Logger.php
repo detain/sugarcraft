@@ -13,6 +13,17 @@ use SugarCraft\Style\Style;
 /**
  * Minimal colorful leveled logger.
  * Mirrors charmbracelet/log's Logger API.
+ *
+ * Output deviation: unlike charmbracelet/log (which writes everything to
+ * os.Stderr), this logger writes EVERY level to its main stream — STDOUT by
+ * default — because existing consumers treat that as the contract. Route
+ * severe records elsewhere with the `errorStream` knob: levels at or above
+ * `errorStreamAt` (default {@see Level::Error}) go to the error stream,
+ * everything else to the main stream.
+ *
+ * Hooks: {@see Hook\HookRegistry} callbacks fire only when records pass
+ * through a {@see PsrBridge}; the core Logger::log() path does not dispatch
+ * hooks (deliberate — the emit path stays synchronous and allocation-free).
  */
 final class Logger
 {
@@ -26,8 +37,12 @@ final class Logger
     private ?string $prefix;
     /** @var array<string,mixed> */
     private array $fields;
-    /** @var resource|null */
+    /** @var resource */
     private mixed $stream;
+    /** @var resource|null Secondary stream for records at/above $errorStreamAt. */
+    private mixed $errorStream = null;
+    /** Threshold for routing a record to $errorStream (null = never route). */
+    private ?Level $errorStreamAt = null;
 
     /** Styles for text-formatter level coloring. */
     private Styles $styles;
@@ -40,11 +55,25 @@ final class Logger
 
     /**
      * @param Formatter|null $formatter Output formatter (defaults to TextFormatter).
-     * @param Level|null     $minLevel  Minimum level to emit (defaults to Info).
+     * @param Level|null     $level     Minimum level to emit (defaults to Info).
      * @param string|null    $prefix    Prepended string on every line.
-     * @param bool           $reportTimestamp
+     * @param bool           $reportTimestamp Show a timestamp (main stream).
      * @param string|null    $timeFormat  PHP date format string (default: Y/m/d H:i:s).
      * @param bool           $reportCaller Show file:line of log call site.
+     * @param resource|null  $stream    Main output stream (default STDOUT). Must be a
+     *                                   stream resource; anything else throws.
+     * @param resource|null  $errorStream Optional secondary stream: records at or
+     *                                   above $errorStreamAt are written here instead
+     *                                   of $stream (e.g. STDERR for errors+fatals).
+     * @param Level|null     $errorStreamAt Routing threshold; defaults to
+     *                                   {@see Level::Error} when $errorStream is given.
+     *
+     * The $reportTimestamp/$timeFormat/$reportCaller flags shape the library's
+     * own TextFormatter (the default, and any formatter a later setReport*()
+     * rebuild produces). A custom $formatter ignores them — pass your own
+     * flags to JsonFormatter/LogfmtFormatter/etc.
+     *
+     * @throws \InvalidArgumentException If $stream or $errorStream is not a resource.
      */
     public function __construct(
         ?Formatter $formatter = null,
@@ -53,8 +82,10 @@ final class Logger
         bool $reportTimestamp = true,
         ?string $timeFormat = null,
         bool $reportCaller = false,
-        $stream = null,
+        mixed $stream = null,
         ?PartsOrder $partsOrder = null,
+        mixed $errorStream = null,
+        ?Level $errorStreamAt = null,
     ) {
         // Probe-driven color decision: disable colors when terminal cannot render them
         $useColors = Probe::colorProfile()->allowsColor();
@@ -77,7 +108,9 @@ final class Logger
         $this->timeFormat = $timeFormat;
         $this->reportCaller = $reportCaller;
         $this->fields = [];
-        $this->stream = $stream ?? \STDOUT;
+        $this->stream = self::requireStream($stream ?? \STDOUT);
+        $this->errorStream = $errorStream === null ? null : self::requireStream($errorStream);
+        $this->errorStreamAt = $this->errorStream === null ? null : ($errorStreamAt ?? Level::Error);
     }
 
     // -------------------------------------------------------------------------
@@ -92,10 +125,12 @@ final class Logger
         bool $reportTimestamp = true,
         ?string $timeFormat = null,
         bool $reportCaller = false,
-        $stream = null,
+        mixed $stream = null,
         ?PartsOrder $partsOrder = null,
+        mixed $errorStream = null,
+        ?Level $errorStreamAt = null,
     ): self {
-        return new self($formatter, $level, $prefix, $reportTimestamp, $timeFormat, $reportCaller, $stream, $partsOrder);
+        return new self($formatter, $level, $prefix, $reportTimestamp, $timeFormat, $reportCaller, $stream, $partsOrder, $errorStream, $errorStreamAt);
     }
 
     // -------------------------------------------------------------------------
@@ -112,7 +147,12 @@ final class Logger
         $this->emit($level, $message, $context, false);
     }
 
-    /** Print without a level prefix, ignoring level filters. */
+    /**
+     * Emit a line at Info level, bypassing the minimum-level filter.
+     *
+     * The formatted output still carries the Info level label — "bypasses
+     * the filter", not "prints bare".
+     */
     public function print(string $message, array $context = []): void
     {
         $this->emit(Level::Info, $message, $context, true);
@@ -139,7 +179,11 @@ final class Logger
         $time = new \DateTimeImmutable();
         $line = $this->formatter->format($level, $message, $merged, $time, $caller, $this->prefix);
 
-        \fwrite($this->stream, $line);
+        $target = $this->stream;
+        if ($this->errorStream !== null && $level->value >= $this->errorStreamAt?->value) {
+            $target = $this->errorStream;
+        }
+        \fwrite($target, $line);
 
         if ($level === Level::Fatal) {
             throw new \RuntimeException(Lang::t('logger.fatal', ['message' => $message]));
@@ -323,36 +367,70 @@ final class Logger
     }
 
     /**
-     * Set the output stream in-place.
+     * Set the main output stream in-place (the error stream, if any, is kept).
      *
      * @param resource $stream A valid output stream resource.
      * @throws \InvalidArgumentException If $stream is not a resource.
      */
     public function setOutput(mixed $stream): void
     {
-        if (!\is_resource($stream)) {
-            throw new \InvalidArgumentException(Lang::t('logger.invalid_stream'));
-        }
-        $this->stream = $stream;
+        $this->stream = self::requireStream($stream);
     }
 
     /**
-     * Create a child logger with a different output stream.
+     * Create a child logger with a different main output stream.
      *
      * @param resource $stream A valid output stream resource.
      * @throws \InvalidArgumentException If $stream is not a resource.
      */
     public function withOutput(mixed $stream): self
     {
-        if (!\is_resource($stream)) {
-            throw new \InvalidArgumentException(Lang::t('logger.invalid_stream'));
-        }
         $child = clone $this;
-        $child->stream = $stream;
+        $child->stream = self::requireStream($stream);
         return $child;
     }
 
-    /** Styles object for text-formatter level styling. */
+    /**
+     * Install (or replace) the secondary error stream in-place.
+     *
+     * Records whose level is at or above $errorStreamAt go to this stream
+     * instead of the main one; pass null to disable routing again.
+     *
+     * @param resource|null $stream A stream resource, or null to disable.
+     * @throws \InvalidArgumentException If a non-null $stream is not a resource.
+     */
+    public function setErrorStream(mixed $stream, ?Level $errorStreamAt = null): void
+    {
+        if ($stream === null) {
+            $this->errorStream = null;
+            $this->errorStreamAt = null;
+            return;
+        }
+        $this->errorStream = self::requireStream($stream);
+        $this->errorStreamAt = $errorStreamAt ?? Level::Error;
+    }
+
+    /**
+     * Create a child logger routing severe records to a second stream.
+     *
+     * @see setErrorStream() for the semantics.
+     * @throws \InvalidArgumentException If a non-null $stream is not a resource.
+     */
+    public function withErrorStream(mixed $stream, ?Level $errorStreamAt = null): self
+    {
+        $child = clone $this;
+        $child->setErrorStream($stream, $errorStreamAt);
+        return $child;
+    }
+
+    /**
+     * Styles object for text-formatter styling.
+     *
+     * Caution: the default Styles instance is process-wide shared mutable
+     * state ({@see Styles::default()}). Mutating what logger->styles()
+     * returns changes every logger that never called setStyles(). For a
+     * private palette use `$logger->setStyles(new Styles())` first.
+     */
     public function styles(): Styles
     {
         return $this->styles;
@@ -377,4 +455,18 @@ final class Logger
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
+
+    /**
+     * Boundary guard: an output must be a stream resource before it is stored.
+     *
+     * @return resource The validated stream.
+     * @throws \InvalidArgumentException If $stream is not a resource.
+     */
+    private static function requireStream(mixed $stream): mixed
+    {
+        if (!\is_resource($stream)) {
+            throw new \InvalidArgumentException(Lang::t('logger.invalid_stream'));
+        }
+        return $stream;
+    }
 }

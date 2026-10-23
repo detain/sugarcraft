@@ -86,12 +86,27 @@ final class PanicFormatterTest extends TestCase
         $this->assertIsString($f->format($e));
     }
 
-    public function testFormatIncludesCaliberHint(): void
+    public function testFormatCarriesNeutralFooterNotInternalJargon(): void
     {
         $f = PanicFormatter::plain();
         $e = new \RuntimeException('test');
         $out = $f->format($e);
-        $this->assertStringContainsString('caliber refresh', $out);
+        $this->assertStringContainsString('report rendered by sugar-log', $out);
+        $this->assertStringNotContainsString('caliber', $out);
+    }
+
+    public function testInternalFramesKeepQuestionPlaceholderNotZero(): void
+    {
+        $f = PanicFormatter::plain();
+        $e = new \RuntimeException('internal frame test');
+        $traceProp = new \ReflectionProperty(\Exception::class, 'trace');
+        $traceProp->setAccessible(true);
+        // A call_user_func-style frame: no file, no line.
+        $traceProp->setValue($e, [['function' => 'call_user_func', 'class' => 'X', 'type' => '::']]);
+
+        $out = $f->format($e);
+        $this->assertStringContainsString('?:? X::call_user_func()', $out);
+        $this->assertStringNotContainsString(':0 X::call_user_func()', $out);
     }
 
     public function testPrettyHasAnsiEscapes(): void
