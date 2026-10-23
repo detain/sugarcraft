@@ -224,7 +224,6 @@ $writer = $writer->withProfile(ColorProfile::Ansi240); // never touch slots 0-15
 ```
 SugarCraft\ColorProfile\
 ├── Color          — RGBA color value object with conversion methods (Color::namedColors() lists standard names)
-├── Palette        — instance-based detection + degradation + ProfileWriter
 ├── ColorProfile    — THE color-depth enum (8 levels, richest→simplest)
 ├── Profile         — deprecated class_alias façade over ColorProfile
 ├── DetectionChain  — shared env ladder (the one precedence core; see below)
@@ -269,7 +268,7 @@ Beyond the env ladder above, the library exposes a richer capability surface:
 | `CLICOLOR=0` | suppress color |
 | `TERM=dumb` | suppress color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
 | `CLICOLOR_FORCE=1` | force TrueColor past every suppression leg |
-| `FORCE_COLOR=0..3` | SugarCraft level override (Palette/AsyncProbe paths) |
+| `FORCE_COLOR=0..3` | SugarCraft level override (Palette path only — `Probe`/`AsyncProbe` do not read it) |
 | `COLORTERM=24bit\|truecolor\|yes` | TrueColor |
 | `TERM=xterm*\|screen*\|tmux*`, `*-256color`, `xterm-kitty`, `xterm-ghostty` | ladder levels |
 | `WT_SESSION` | Windows Terminal — TrueColor |

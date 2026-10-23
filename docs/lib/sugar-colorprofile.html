@@ -102,7 +102,7 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
 <tr><td>ColorProfile</td><td>TrueColor, Ansi256, Ansi240, Ansi, Ansi8, Fgbg, Ascii, NoTTY / label() / maxColors() / degradedTo()</td><td>Enum of colour profiles</td></tr>
 <tr><td>ProfileWriter</td><td>static wrap($stream, array $env = []) / write(string) / printf(format, ...)</td><td>Stream that degrades colour on write</td></tr>
 <tr><td>StandardColors</td><td>static $black, $red, … $brightWhite</td><td>The 16 ANSI colours</td></tr>
-<tr><td>DetectionChain</td><td>static detect(?array $env = null)</td><td>The shared env ladder every detector agrees on</td></tr>
+<tr><td>DetectionChain</td><td>static detect(array $env = [])</td><td>The shared env ladder every detector agrees on</td></tr>
 <tr><td>Probe</td><td>static colorProfile() / isNoColor() / isForceColor() / reducedMotion()</td><td>Static env-probe layer + infocmp upgrade</td></tr>
 <tr><td>AsyncProbe</td><td>static colorProfile(): PromiseInterface</td><td>Bounded ReactPHP infocmp child; sync fallback</td></tr>
 <tr><td>Probe\TerminalProbe</td><td>run() / runProbe() → ProbeReport</td><td>Full capability report (Sixel, Kitty, ITerm2, hyperlinks, keyboard) with per-capability sources</td></tr>

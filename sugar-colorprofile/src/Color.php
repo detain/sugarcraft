@@ -199,7 +199,8 @@ final class Color
         // bin alone can land one slot off on an exact ramp midpoint
         // (avg = 13, 23, …, 233), so probe bin-1, bin, bin+1 in ascending
         // order and keep the first strict minimum — at a tie that is the
-        // lower bin, matching a brute-force lowest-index scan. B-05.
+        // lower bin, matching a brute-force lowest-index scan (pinned by the
+        // stride and midpoint sweeps in tests/GreyRampEquivalenceTest.php).
         $avg = ($this->r + $this->g + $this->b) / 3.0;
         $greyBin = max(0, min(23, (int) \round(($avg - 8.0) / 10.0)));
         $greyIdx = 232;

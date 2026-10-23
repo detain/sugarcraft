@@ -10,13 +10,13 @@ use SugarCraft\Core\Util\Color as CoreColor;
 use SugarCraft\Core\Util\ColorProfile as CoreProfile;
 
 /**
- * B-05 SEAM PIN: sugar-core's private Color::nearest256() vs this library's
+ * Seam pin: sugar-core's private Color::nearest256() vs this library's
  * Color::toAnsi256Index().
  *
  * Both encoders agree on the cube candidate, on the grey bin's magnitude, and
  * on the cube-vs-grey comparison. They differ ONLY in how a grey-ramp TIE is
  * resolved: core keeps the single rounded bin, so an exact midpoint rounds UP
- * to the brighter slot (232+k+1); B-05 probes bin-1/bin/bin+1 and keeps the
+ * to the brighter slot (232+k+1); this library probes bin-1/bin/bin+1 and keeps the
  * first strict minimum, so the same midpoint resolves DOWN (232+k). The two
  * bins are equidistant at a midpoint — for grey levels g and g+10,
  * d(g) - d(g+10) = 60 * (avg - g - 5), which is zero exactly there — so the

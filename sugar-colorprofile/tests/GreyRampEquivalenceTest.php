@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\ColorProfile\Color;
 
 /**
- * B-05: brute-force equivalence pins for Color::toAnsi256Index().
+ * Brute-force equivalence pins for Color::toAnsi256Index().
  *
  * The grey-ramp single pick by RGB mean rounded one bin UP on an exact
  * ramp midpoint (avg = 13, 23, …, 233), so the returned index could sit
@@ -84,7 +84,7 @@ final class GreyRampEquivalenceTest extends TestCase
     }
 
     /**
-     * B-05: stride-4 sweep of the whole RGB cube (262,144 colors). No stride-4
+     * Stride-4 sweep of the whole RGB cube (262,144 colors). No stride-4
      * channel hits an odd cube midpoint and no stride-4 sum hits a grey ramp
      * midpoint, so the full 262,144-color set asserts the strong claim.
      */
@@ -103,7 +103,7 @@ final class GreyRampEquivalenceTest extends TestCase
     }
 
     /**
-     * B-05: dense sweep of every color on a grey-ramp midpoint sum (avg = 13,
+     * Dense sweep of every color on a grey-ramp midpoint sum (avg = 13,
      * 23, …, 233 → r+g+b = 39, 69, …, 699). This is the exact set the old
      * round-up pick mis-binned; the probe must land the lower bin, i.e. the
      * brute-force lowest-index winner, every time.
@@ -123,7 +123,7 @@ final class GreyRampEquivalenceTest extends TestCase
     }
 
     /**
-     * B-05: hand-computed midpoint pins (the shipped ±1 behaviour). Each pair
+     * Hand-computed midpoint pins (the shipped ±1 behaviour). Each pair
      * of ramp levels is equidistant; the lower slot must win.
      *
      * @return array<string, array{array{int,int,int}, int}>
@@ -146,7 +146,7 @@ final class GreyRampEquivalenceTest extends TestCase
     }
 
     /**
-     * B-05: the exact bins the pre-fix round-up pick mis-resolved.
+     * The exact bins the pre-fix round-up pick mis-resolved.
      *
      * @param array{int,int,int} $rgb
      * @dataProvider midpointPinProvider
@@ -160,7 +160,7 @@ final class GreyRampEquivalenceTest extends TestCase
     }
 
     /**
-     * B-05 parity note: cube-midpoint channels keep SC's round-UP convention.
+     * Parity note: cube-midpoint channels keep SC's round-UP convention.
      * The chosen and rejected slots are equidistant (distance leg still
      * pinned); the index leg records WHICH side of the arbitrary tie we keep,
      * as the survey ruled. sugar-core's nearest256() shares the round-up;
@@ -196,7 +196,7 @@ final class GreyRampEquivalenceTest extends TestCase
     }
 
     /**
-     * B-05: dense distance-only sweep across every cube-midpoint plane (one
+     * Dense distance-only sweep across every cube-midpoint plane (one
      * channel exactly at a midpoint, others stepped) — the round-up must never
      * cost distance, only the arbitrary slot choice.
      */
@@ -217,7 +217,7 @@ final class GreyRampEquivalenceTest extends TestCase
     }
 
     /**
-     * B-05: the exhaustive claim from the survey's fix text — every one of the
+     * The exhaustive claim behind the ±1 probe fix — every one of the
      * 16,777,216 colors agrees with brute force on distance, and on index
      * outside the documented cube-midpoint set. Too slow for default CI
      * (tens of minutes in PHP), so it is env-gated and group-tagged.
