@@ -14,7 +14,8 @@ use InvalidArgumentException;
  * usage screen, and no flag at all for single player. Anything else — including
  * bare `v`/`h`, which the parser shipped before this fix accepted while no
  * document ever mentioned them — is refused by name so a typo exits loudly
- * instead of silently starting the wrong game.
+ * instead of silently starting the wrong game. The diagnostic `--version`
+ * short-circuits in the binary before this contract runs (it names no mode).
  *
  * Parsing lives here (not inline in the binary) so the whole argv contract is
  * unit-testable without constructing a terminal-backed Program.
@@ -75,8 +76,9 @@ final class LaunchMode
     {
         return "candy-tetris - Tetris clone\n\n"
             . "Usage: candy-tetris [options]\n"
-            . "  (no args)   Start single player game\n"
-            . "  -v, --vs    Start VS Computer mode\n"
-            . "  -h, --help  Show this help\n";
+            . "  (no args)    Start single player game\n"
+            . "  -v, --vs     Start VS Computer mode\n"
+            . "  -h, --help   Show this help\n"
+            . "  --version    Print the version\n";
     }
 }

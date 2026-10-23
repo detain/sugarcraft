@@ -7,11 +7,30 @@ use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\LaunchMode;
+use SugarCraft\Tetris\Support\Version;
 use SugarCraft\Tetris\VsGame;
 
 (static function () {
-    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
-        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+    // Guard shape ported from candy-code/candy-top (DST-1, measured on PHP
+    // 8.3.6): when `php candy-tetris.phar` runs, THIS file is the archive's
+    // stub and the process is NOT inside the archive — Phar::running()
+    // answers '' there, and a bare '/x.phar/entry' path fails
+    // is_file()/require for every caller. Two identities cover the two phar
+    // shapes: the stub names itself in __FILE__, and a require-from-inside
+    // names the archive in Phar::running(). Both are addressed the only way
+    // that works, as a phar:// URI. When an archive identity exists, the
+    // archive's own vendor is the ONLY root — a stray vendor beside (or
+    // above) a downloaded phar must never boot the app with code from
+    // outside the frozen archive. In every composer-mode checkout both
+    // probes answer nothing and the filesystem candidates are untouched.
+    $candidates = [__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
+    $archive = \Phar::running(false) !== ''
+        ? 'phar://' . \Phar::running(false)
+        : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+    if ($archive !== '') {
+        $candidates = [$archive . '/vendor/autoload.php'];
+    }
+    foreach ($candidates as $path) {
         if (is_file($path)) {
             require $path;
             return;
@@ -20,6 +39,13 @@ use SugarCraft\Tetris\VsGame;
     fwrite(STDERR, "candy-tetris: cannot find composer autoload.php\n");
     exit(1);
 })();
+
+// The version line answers before the argv contract: `--version` is not a
+// game flag and must not reach the unknown-mode refusal in LaunchMode.
+if (in_array('--version', array_slice($argv ?? [], 1), true)) {
+    fwrite(STDOUT, Version::line());
+    exit(0);
+}
 
 try {
     $mode = LaunchMode::resolve($argv);
