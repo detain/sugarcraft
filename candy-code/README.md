@@ -127,7 +127,9 @@ verifies against the pinned key before any swap. Phars from `candy-code/v0.1.0`
 and earlier are unsigned and report an uncomparable `dev-master` version
 stamp, so an install from one cannot self-update — download
 `candy-code/v0.1.1` manually instead. `self-update` keeps the phar current
-from then on.
+from then on; a CI dev build stamped `dev-<shortsha>` rides the rolling
+`candy-code/dev` release instead (current iff that release's target commit
+matches the stamp — `--channel=stable|dev` overrides the default).
 
 Requirements: PHP 8.3+, `ext-sqlite3` (it backs the Team task list) and
 `pdo_sqlite` (the session store),
@@ -2114,6 +2116,10 @@ candy-code serve status|stop|logs|url|token
                                      # the running server: stop [--force], logs [-f], token [--rotate]
 candy-code self-update [--check]     # replace this phar with the latest verified release;
                                      #   --check only compares versions (exit 1 when one is newer)
+candy-code self-update [--channel=dev|stable]
+                                     #   release trains: a dev build rides the rolling
+                                     #   candy-code/dev release by default (freshness =
+                                     #   commit match), everything else rides stable
 candy-code self-update --rollback    # restore the kept pre-swap phar, exactly once
 candy-code self-update --allow-unsigned
                                      # skip only the pinned-key signature leg (dev/test)

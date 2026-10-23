@@ -294,7 +294,7 @@ session; acp runs turns for an editor, until the editor disconnects):
                          equivalent .mcp.json block to stdout. Prints only
                          the document and writes no file; the renames the
                          translation made are listed on stderr.
-  self-update [--check] [--rollback] [--allow-unsigned]
+  self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
                          Replace this phar install with the latest published
                          candy-code release, sha256-verified against the
                          release sidecar BEFORE the swap; the running phar is
@@ -305,7 +305,11 @@ session; acp runs turns for an editor, until the editor disconnects):
                          only that leg). --check only reports current vs
                          latest and exits 1 when an update is available. A
                          Composer install is refused loudly, naming the
-                         composer update command to run instead.
+                         composer update command to run instead. A dev-built
+                         install follows the rolling candy-code/dev release
+                         by default (it is current when the release's target
+                         commit matches the stamp's sha) and --channel
+                         selects either train explicitly.
   serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <list>]
         [--allowed-ips <list>] [--allowed-origin <list>] [--allow-dir-browse]
         [--browse-root <dir>] [--web-root <dir>] [--no-web] [--allow-bypass]
