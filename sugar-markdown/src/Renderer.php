@@ -128,7 +128,7 @@ final class Renderer
     private readonly bool $inlineTableLinks;
     private readonly bool $tableColumnBudget;
 
-    /** E43 step 1 (fence half): clip rendered fence lines at the available width. */
+    /** Clip rendered fence lines at the available width ({@see withFenceColumnBudget()}). */
     private readonly bool $fenceColumnBudget;
     private readonly bool $preservedNewLines;
     private readonly bool $expandEmoji;
@@ -277,7 +277,7 @@ final class Renderer
     }
 
     /**
-     * Incremental render channel (E736 7.3): consumes Markdown input as a
+     * Incremental render channel: consumes Markdown input as a
      * stream of string chunks and yields styled ANSI chunks as complete
      * top-level block sections finish — the sugar-ecosystem port of
      * glamour's render-then-print block-by-block intent, so a caller can
@@ -301,12 +301,12 @@ final class Renderer
      * carried across sections: a section is rendered against every
      * definition before it, and a section with a bracket the parser could
      * not resolve is held back until a later definition resolves it or the
-     * document ends (audit 15b-30). Documents without a boundary, and
+     * document ends. Documents without a boundary, and
      * renderers whose document-scope post-processing is global by nature
      * (block prefix/suffix, indent, margin, preservedNewLines), emit a
      * single final chunk — still byte-identical to {@see render()}.
      *
-     * Pure channel: no timers, no I/O handles, no ReactPHP (E646). Each
+     * Pure channel: no timers, no I/O handles, no ReactPHP. Each
      * yielded chunk is a plain string of composed SGR bytes; consuming the
      * generator lazily also makes the input iterable pull-on-demand, so a
      * caller feeding an unbounded source is never forced to materialise it.
@@ -365,7 +365,7 @@ final class Renderer
      * Write-side counterpart of {@see stream()}: an object channel that
      * accepts Markdown chunks through {@see Writer::feed()} and pushes every
      * newly proven section into the sink immediately (write-through flush
-     * law, E736 7.3). Shares the section stream and deferral predicate with
+     * law). Shares the section stream and deferral predicate with
      * this channel, so feed()/close() output equals stream() output for the
      * same bytes.
      */
@@ -532,7 +532,7 @@ final class Renderer
      * Default off (cells render unwrapped, matching glamour's default).
      * Mirrors glamour's `WithTableWrap`.
      *
-     * NOTE (E49): this wraps EACH CELL at the full `wrapWidth`, so it does
+     * NOTE: this wraps EACH CELL at the full `wrapWidth`, so it does
      * not bound the table itself — a three-column table can still render
      * roughly three times pane-wide with its border rows wrapping. For a
      * width-bounded table pair it with {@see withTableColumnBudget()}, the
@@ -557,21 +557,21 @@ final class Renderer
 
     /**
      * Bound a table's TOTAL rendered width by giving every column its share
-     * of the renderer's word-wrap width (E49). Natural column contents are
+     * of the renderer's word-wrap width. Natural column contents are
      * scaled down proportionally, floor one cell per column, until padding,
      * border rules and all columns together fit `withWordWrap($cols)`; each
      * cell is then CLIPPED to its column budget. Default off — legacy
      * `withTableWrap` per-cell full-width reflow is untouched.
      *
-     * When both are on, the budget wins over the wrap: this port's
-     * Sprinkles column metrics sum a wrapped multi-line cell's lines, so a
+     * When both are on, the budget wins over the wrap: the sugar-style
+     * table's column metrics sum a wrapped multi-line cell's lines, so a
      * reflowed cell would re-inflate the very border rows the budget exists
      * to bound. Clipping keeps one physical line per cell, which is exactly
-     * the shape E43's horizontal-scroll proposal wants — a genuinely wide
+     * the shape a horizontal-scroll follow-up wants — a genuinely wide
      * table keeps bounded geometry in sugar-markdown and regains the clipped
      * bytes by scrolling in the consumer, not by reflow. A budget-clipped
-     * table never needs the block-clip tag of that proposal's step 1; the
-     * tag remains only for blocks (fences) this API cannot shrink.
+     * table never needs a block-clip on such a follow-up; the clip
+     * remains only for blocks (fences) this API cannot shrink.
      */
     public function withTableColumnBudget(bool $on = true): self
     {
@@ -579,17 +579,18 @@ final class Renderer
     }
 
     /**
-     * Clip fenced-code lines to the renderer's word-wrap width (E43 step 1,
-     * fence half). {@see withTableColumnBudget()} bounds the one block kind
+     * Clip fenced-code lines to the renderer's word-wrap width (the fence
+     * half of the bounded-geometry pair). {@see withTableColumnBudget()}
+     * bounds the one block kind
      * whose geometry it can shrink by redistributing columns; a fence has no
      * columns to shrink, so its long lines simply overflow the pane today.
-     * This is the block-clip that proposal left for fences: with the option
+     * This is the block-clip the table budget leaves for fences: with the option
      * on (default OFF — every existing byte snapshot holds), each rendered
      * fence line is {@see Width::truncateAnsi()}-clipped at the current
      * block stack's available width, on both the plain code-block and the
      * syntax-highlighted paths. Content clipped here is the consumer's
      * scroll/pager territory, exactly the bounded-geometry-now /
-     * full-content-later trade E49 made for tables. Indented code blocks are
+     * full-content-later trade the column budget makes for tables. Indented code blocks are
      * NOT touched — the entry scopes the FENCED half only.
      */
     public function withFenceColumnBudget(bool $on = true): self
@@ -840,10 +841,10 @@ final class Renderer
      *
      * The C1 sweep matters because a UTF-8 terminal such as xterm decodes
      * `\xC2\x9B` to U+009B and executes it as CSI — markdown carrying
-     * `U+009B 2 J` would clear the screen without a single ESC byte (audit
-     * 15b-08). Only the introducer is removed; the inert tail stays visible.
+     * `U+009B 2 J` would clear the screen without a single ESC byte.
+     * Only the introducer is removed; the inert tail stays visible.
      *
-     * The lone-byte sweep (audit 15b-29) covers the 8-bit spelling: a bare
+     * The lone-byte sweep covers the 8-bit spelling: a bare
      * `\x9B` is malformed UTF-8, and a terminal with 8-bit controls enabled
      * runs it as CSI too. A plain `[\x80-\x9F]` class would shred every
      * multi-byte character whose continuation bytes land in that range (→,
@@ -857,7 +858,7 @@ final class Renderer
      * surviving 0x80–0x9F byte continues a lead that sits right before it,
      * and the C0 sweep removes only ASCII bytes and whole `\xC2` pairs.
      *
-     * The marker step (audit 15b-28) is sugar-core's
+     * The marker step is sugar-core's
      * `Sanitize::markInvisibleFormatting()`: a U+202E RIGHT-TO-LEFT OVERRIDE
      * in a code block would otherwise paint the rest of the line reversed
      * ("Trojan Source"), and a zero-width space would make two different
@@ -889,7 +890,7 @@ final class Renderer
      * Remove every 0x80–0x9F byte that is not part of a well-formed UTF-8
      * sequence — a lone 8-bit C1 control such as a bare `\x9B` (CSI) —
      * leaving every valid character, including those whose continuation
-     * bytes fall in that range, byte-identical (audit 15b-29).
+     * bytes fall in that range, byte-identical.
      */
     private static function stripLoneC1(string $s): string
     {
@@ -904,7 +905,7 @@ final class Renderer
      * Why before the parse and not only in {@see stripControls()}: CommonMark
      * refuses input that is not valid UTF-8 with an
      * `UnexpectedEncodingException`, so markdown carrying one raw `\x9B`
-     * (audit 15b-29) never reached the per-node sweep — it threw out of
+     * never reached the per-node sweep — it threw out of
      * {@see render()} instead. Removing the C1 byte (rather than repairing it
      * to U+FFFD) matches sugar-core's `Sanitize::untrusted()`, so the same
      * text reads the same through both. Every step is byte-local and never
@@ -983,11 +984,65 @@ final class Renderer
     }
 
     /**
+     * Schemes that turn a CLICKABLE OSC-8 target into arbitrary execution
+     * the moment a terminal (or the desktop opener behind it) obeys the
+     * link. `[x](javascript:alert(1))` inside hostile documentation must
+     * never reach an opener as a live target, so the envelope is refused
+     * for these schemes: the link text and its `(url)` suffix still
+     * render — visible, inert, no silent content loss — only the
+     * clickability is denied. Checked on the RESOLVED url (after
+     * {@see safeUrl()} strips control bytes, case-insensitively, leading
+     * whitespace tolerated), so a `java\x00script:` smuggling attempt
+     * cannot reform past the gate. Every other scheme passes through to
+     * the terminal's opener unfiltered — see the README's Link safety
+     * paragraph and the fleet-wide model in docs/TRUST-BOUNDARY.md.
+     */
+    private const REFUSED_URL_SCHEMES = ['javascript:', 'data:', 'vbscript:'];
+
+    /** True when $url targets a refused executable scheme. */
+    private static function refusesUrl(string $url): bool
+    {
+        foreach (self::schemeProbes($url) as $probe) {
+            foreach (self::REFUSED_URL_SCHEMES as $refused) {
+                if (str_starts_with($probe, $refused)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The lowercase spellings a target can take once a client that strips
+     * invisible characters resolves it: the url as emitted, and its
+     * percent-decoded form with U+FFFD replacements, control bytes and DEL
+     * removed. CommonMark percent-encodes a raw NUL (and the `&#0;` entity
+     * spelling) into %EF%BF%BD, so checking only the emitted text would let
+     * `java%EF%BF%BDscript:` reform into a live scheme inside the opener.
+     * Over-refusing exotic percent-escaped schemes (e.g. `%6Aavascript:`)
+     * is the accepted side of the trade: no real link spells its scheme
+     * that way, and a false refusal costs a click, never safety.
+     *
+     * @return list<string>
+     */
+    private static function schemeProbes(string $url): array
+    {
+        $raw = strtolower(ltrim($url, " \t\n\r\0\x0b\x0c"));
+
+        $decoded = rawurldecode($url);
+        $decoded = preg_replace('/[\x00-\x1f\x7f]/', '', $decoded) ?? '';
+        $decoded = strtolower(str_replace("\xEF\xBF\xBD", '', $decoded));
+
+        return $raw === $decoded ? [$raw] : [$raw, $decoded];
+    }
+
+    /**
      * Apply {@see withBaseURL()} to a relative link / image target.
      * Absolute URLs (any scheme, or `//host/...`) pass through unchanged.
-     * URLs always have control bytes stripped before return — C0 / ESC /
-     * BEL can break the OSC-8 envelope so they are removed unconditionally
-     * (URLs never legitimately contain them).
+     * URLs always have control bytes stripped before return — C0 / DEL /
+     * ESC / BEL can break the OSC-8 envelope so they are removed
+     * unconditionally (URLs never legitimately contain them).
      */
     private function resolveUrl(string $url): string
     {
@@ -1002,8 +1057,8 @@ final class Renderer
     }
 
     /**
-     * Strip C0 / ESC / BEL from a URL. These bytes cannot appear in a
-     * well-formed URI and would break the OSC-8 hyperlink envelope or
+     * Strip C0 controls, DEL, ESC and BEL from a URL. These bytes cannot
+     * appear in a well-formed URI and would break the OSC-8 hyperlink envelope or
      * inject spurious control sequences into the terminal. Applied
      * unconditionally in resolveUrl for defence-in-depth.
      *
@@ -1011,7 +1066,7 @@ final class Renderer
      */
     private static function safeUrl(string $url): string
     {
-        // Remove C0 controls + ESC + BEL.
+        // Remove C0 controls + DEL + ESC + BEL.
         return preg_replace('/[\x00-\x1f\x7f]/', '', $url);
     }
 
@@ -1133,7 +1188,7 @@ final class Renderer
     }
 
     /**
-     * E43 fence half: with the option on, every physical line of a rendered
+     * Fence clipping: with the option on, every physical line of a rendered
      * fence — plain or highlighted, theme decoration included — is clipped
      * so no line exceeds the available width. Off (default) is identity.
      */
@@ -1357,7 +1412,9 @@ final class Renderer
         $linkText = $this->theme->linkText ?? $this->theme->link;
 
         $insideTable = $this->inTableCell;
-        $hyperlinks  = $this->emitHyperlinks && !($insideTable && !$this->inlineTableLinks);
+        $hyperlinks  = $this->emitHyperlinks
+            && !self::refusesUrl($url)
+            && !($insideTable && !$this->inlineTableLinks);
         $showSuffix  = !$insideTable || $this->inlineTableLinks;
 
         // glamour shows an email autolink as its address alone, hyperlinked
@@ -1407,8 +1464,9 @@ final class Renderer
     }
 
     /**
-     * GitHub-flavoured Markdown tables → Sprinkles Table with a rounded
-     * border. The first TableSection (THEAD) becomes the headers; rows
+     * GitHub-flavoured Markdown tables → the sugar-style table renderer
+     * (`SugarCraft\Style\Table\Table`) with a rounded border. The first
+     * TableSection (THEAD) becomes the headers; rows
      * inside the second section (TBODY) become body rows. Cell content
      * is rendered with the inline pipeline so emphasis / code / links
      * still pick up their styles.
@@ -1416,7 +1474,7 @@ final class Renderer
     private function renderTable(MdTable $table): string
     {
         // Pass 1 renders every cell's inline pipeline RAW; wrap and cell
-        // style move to pass 2 so the E49 column budget can be computed
+        // style move to pass 2 so the column budget can be computed
         // from natural content widths first. The default path (budget off)
         // keeps the historic order — wrap@wrapWidth, then style — byte
         // for byte.
@@ -1460,9 +1518,9 @@ final class Renderer
             foreach ($cells as $i => $body) {
                 if ($budgets !== null) {
                     // Budget clips at the column width — a wrapped cell
-                    // would inflate the Sprinkles column metrics past any
-                    // budget anyway, and E49's chosen trade is bounded
-                    // geometry now, full content via E43's scroll later.
+                    // would inflate the table's column metrics past any
+                    // budget anyway, and the chosen trade is bounded
+                    // geometry now, full content via scrolling later.
                     $body = Width::truncateAnsi($body, $budgets[$i]);
                 } elseif ($this->tableWrap && $this->wrapWidth !== null) {
                     $body = Width::wrapAnsi($body, $this->wrapWidth);
@@ -1491,8 +1549,9 @@ final class Renderer
     /**
      * Per-column CONTENT budgets (cells only — padding and border rules
      * excluded) such that a bordered table never renders wider than the
-     * renderer's wrap width. The shrink mirrors Sprinkles\Table::render()'s
-     * width-cap math — proportional scale, floor 1 cell per column — so the
+     * renderer's wrap width. The shrink mirrors
+     * `SugarCraft\Style\Table\Table::render()`'s width-cap math —
+     * proportional scale, floor 1 cell per column — so the
      * two mechanisms agree whenever both could apply.
      *
      * @param list<array{0: list<string>, 1: bool}> $sections raw cell text per row

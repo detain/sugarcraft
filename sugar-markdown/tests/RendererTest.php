@@ -189,7 +189,7 @@ final class RendererTest extends TestCase
 | Bob   | 25  |
 MD;
         $out = $this->plain()->render($md);
-        // Sprinkles\Table\Table renders with a rounded border.
+        // SugarCraft\Style\Table\Table renders with a rounded border.
         $this->assertStringContainsString('Name',  $out);
         $this->assertStringContainsString('Alice', $out);
         $this->assertStringContainsString('Bob',   $out);

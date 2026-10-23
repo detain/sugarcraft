@@ -13,7 +13,7 @@ use League\CommonMark\Reference\ReferenceMap;
 use SugarCraft\Markdown\Renderer;
 
 /**
- * Incremental section renderer shared by the E736 7.3 streaming family
+ * Incremental section renderer shared by the streaming family
  * ({@see Renderer::stream()}, {@see \SugarCraft\Markdown\Writer}) and by any
  * caller that keeps a growing document's rendering between frames.
  *
@@ -32,7 +32,7 @@ use SugarCraft\Markdown\Renderer;
  *    all blocks before it closed, so the next section starts from the same
  *    state the whole document would be in. A refused proposal is merged
  *    into the following section.
- *  - **Link reference definitions** (audit 15b-30). A definition applies to
+ *  - **Link reference definitions**. A definition applies to
  *    the whole document. Every section is parsed with the definitions of
  *    the sections before it, so a reference to an earlier definition
  *    resolves. A section whose text still holds an unresolved `[...]` pair

@@ -7,7 +7,7 @@ namespace SugarCraft\Markdown;
 use SugarCraft\Markdown\Render\SectionStream;
 
 /**
- * Push-side object channel of the E736 7.3 streaming family: feed Markdown
+ * Push-side object channel of the streaming family: feed Markdown
  * chunks as they arrive, and every newly proven top-level section is
  * rendered and written through the {@see StreamSink} immediately —
  * write-through flush law, one flush per completed section, no buffering
@@ -33,7 +33,7 @@ use SugarCraft\Markdown\Render\SectionStream;
  * double-close the sink's handle.
  *
  * Pure channel aside from the sink: no timers, no ReactPHP, no reads
- * (E646). All doors — writable path, writable resource — fire at
+ * All doors — writable path, writable resource — fire at
  * construction via the {@see StreamSink} factories, before any rendering.
  */
 final class Writer
