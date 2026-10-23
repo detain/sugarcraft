@@ -221,14 +221,22 @@ final class AsyncProbeTest extends TestCase
 
             if ($resolved === null) {
                 // The reclaimed capacity went to a real infocmp child; run
-                // the loop with a wall-clock watchdog so a wedged child cannot
-                // hang the suite (its own ceiling timer settles it at 5s+1s).
+                // the loop until the settlement lands, with a wall-clock
+                // watchdog so a wedged child cannot hang the suite (the
+                // probe's own ceiling timer settles it at 5s+1s regardless).
                 $loop = \React\EventLoop\Loop::get();
+                $poll = null;
                 $watchdog = $loop->addTimer(8.0, static function () use ($loop): void {
                     $loop->stop();
                 });
-                $loop->addTimer(0.001, static function () use ($loop, $watchdog): void {
+                $poll = $loop->addPeriodicTimer(0.005, static function () use ($loop, &$resolved, &$poll, $watchdog): void {
+                    if ($resolved === null) {
+                        return;
+                    }
                     $loop->cancelTimer($watchdog);
+                    if ($poll !== null) {
+                        $loop->cancelTimer($poll);
+                    }
                     $loop->stop();
                 });
                 $loop->run();
