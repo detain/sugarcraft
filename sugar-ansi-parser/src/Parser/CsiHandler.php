@@ -22,8 +22,9 @@ interface CsiHandler
      * Despite the parameter name, this is not restricted to printable ASCII:
      * {@see HandlerAdapter::printChar()} forwards whole multi-byte UTF-8 runes
      * collected by the parser's Utf8 state (any lead byte >= 0xC2) alongside
-     * the 0x20-0x7E range, so implementations must accept a full codepoint
-     * cluster, not a single byte.
+     * the 0x20-0x7E range, so implementations must accept a complete
+     * multi-byte codepoint (a full rune, up to four bytes), not a single
+     * byte.
      */
     public function printable(string $byte): void;
 

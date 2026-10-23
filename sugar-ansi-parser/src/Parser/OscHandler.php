@@ -7,8 +7,13 @@ namespace SugarCraft\AnsiParser\Parser;
 /**
  * Receives OSC (Operating System Command) dispatches from the parser.
  *
- * Empty shell for now — Phase 1c fills in the implementations.
- * OSC sequences are terminated by BEL (0x07) or ST (ESC \).
+ * OSC sequences are terminated by BEL (0x07) or ST (ESC \). This is NOT a
+ * stub: the bridge is live in both directions. {@see HandlerAdapter} parses
+ * OSC 8 (hyperlink, `id=` included) and OSC 0/1/2 (title) out of the raw
+ * dispatch payload and calls these two methods, and {@see OscHandlerImpl}
+ * — shipping in this library — implements them with real storage,
+ * including the empty-URI close path that resets both fields. sugar-vterm
+ * carries its own implementer on the emulator side.
  *
  * Mirrors charmbracelet/x/ansi.OscHandler
  */

@@ -15,6 +15,13 @@ namespace SugarCraft\AnsiParser\Parser;
  * Mirrors charmbracelet/x/ansi/parser. Adds a Utf8 state so multi-byte
  * runes arrive at the handler as a single `printChar(string $rune)` call.
  *
+ * UTF-8 policy: by default the parser does NOT validate UTF-8 — every
+ * structurally-completed rune byte sequence is forwarded verbatim (overlong,
+ * surrogate and >U+10FFFF encodings included). Pass `$replaceMalformed =
+ * true` to the constructor for validation with U+FFFD replacement (needs
+ * ext-mbstring). Lone continuation bytes and invalid lead bytes never reach
+ * the rune path either way; they follow the table's default drop row.
+ *
  * @see https://github.com/charmbracelet/x/tree/main/ansi/parser
  * @see https://vt100.net/emu/dec_ansi_parser
  */
@@ -88,6 +95,13 @@ final class Parser
      *                             payload accumulator. Defaults to 64 KiB;
      *                             emulator front-ends (e.g. sugar-vterm) may raise
      *                             it for large passthrough payloads.
+     * @param bool $replaceMalformed Validate UTF-8 runes and substitute U+FFFD
+     *                               for invalid ones. DEFAULT FALSE means no
+     *                               validation at all: completed rune bytes ride
+     *                               through verbatim to printChar(). When true,
+     *                               validation calls mb_check_encoding(), so
+     *                               ext-mbstring (declared in composer.json) is
+     *                               required by this mode.
      */
     public function __construct(
         private readonly Handler $handler,
@@ -176,7 +190,14 @@ final class Parser
     }
 
     /**
-     * Reset the parser to ground state, clearing all accumulated state.
+     * Reset the parser to ground state.
+     *
+     * NOT a silent clear: this FLUSHES first, so an in-flight
+     * OSC/DCS/SOS/PM/APC sequence **dispatches** to the handler with whatever
+     * payload arrived (end-of-stream semantics), then all accumulated state
+     * clears. A consumer that wants to abandon a mid-stream string without
+     * receiving its dispatch has no API for that today — the dispatch is the
+     * documented behaviour of {@see flush()}, which reset() delegates to.
      */
     public function reset(): void
     {

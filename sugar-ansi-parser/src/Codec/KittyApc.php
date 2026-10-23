@@ -13,18 +13,20 @@ namespace SugarCraft\AnsiParser\Codec;
  *
  *   G <key>=<value>,<key>=<value>,… ; <base64 payload>
  *
- * The old inspector labelled every `G` APC by byte count only ("kitty
- * graphics (N bytes)"), which cannot distinguish a transmit frame from a
- * placement/delete control frame or say what was transmitted. This decoder
- * exposes the control pairs and the geometry/size labels:
+ * Byte-stream inspectors label every `G` APC by byte count only ("kitty
+ * graphics (N bytes)") — candy-ansi-inspect still does today (adoption of
+ * this decoder is an open seam, README "Decoders") — which cannot
+ * distinguish a transmit frame from a placement/delete control frame or say
+ * what was transmitted. This decoder exposes the control pairs and the
+ * geometry/size labels:
  *
  * - `s`/`v`  source width/height in PIXELS (kitty spec names);
  * - `c`/`r`  target width/height in terminal CELLS;
  * - `w`/`h`  accepted as non-standard aliases some peers emit
  *            ({@see width()}/{@see height()} resolve s → w → c and v → h → r);
  * - `x`/`y`  cell offsets, `z` the z-index layer;
- * - payload byte count ({@see payloadSize()}) — the only label the inspector
- *   used to print.
+ * - payload byte count ({@see payloadSize()}) — the only label inspectors
+ *   print today.
  *
  * The emitter side is sugar-core's `Ansi::kittyGraphicsBegin()` /
  * `kittyGraphicsControl()` (comma-joined `key=value`); this decoder is

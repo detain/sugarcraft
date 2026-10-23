@@ -7,7 +7,10 @@ namespace SugarCraft\AnsiParser\Parser;
 /**
  * VT500 ANSI transition table.
  *
- * Generated at first use as a 4096-byte string (15 states × 256 codes).
+ * Generated at first use as a 4096-byte string — 16 rows × 256 codes
+ * indexed `state << 8 | byte`. 15 rows carry the live states; row 15 is
+ * padding for the 4-bit state mask (15 × 256 = 3840 of the 4096 entries are
+ * reachable).
  * Each entry packs `(action << 4) | nextState` into one byte.
  *
  * Mirrors charmbracelet/x/ansi/parser.GenerateTransitionTable() — same
@@ -69,7 +72,11 @@ final class Transitions
             }
         };
 
-        // Anywhere transitions — applied to every state including Utf8
+        // Anywhere transitions — written for every state row including Utf8.
+        // Honesty note: Parser::advance() intercepts the
+        // Utf8 state before any table read, so the Utf8 row is BUILT but never
+        // consulted. The claim holds of the table, not of the machine; the
+        // row is harmless completeness padding.
         for ($state = 0; $state <= State::Utf8->value; $state++) {
             // Anywhere -> Ground
             $setMany($state, [0x18, 0x1A, 0x99, 0x9A], Action::Execute->value, $g);

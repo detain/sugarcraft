@@ -25,6 +25,9 @@ final class HandlerAdapter implements Handler
         $byte = $rune[0] ?? '';
         // Forward printable ASCII OR any valid UTF-8 lead byte (>= 0xC2).
         // Drop C0 (< 0x20) and C1 (0x80-0xBF continuation) control bytes.
+        // Defense-in-depth, not a live rule: the parser never routes a
+        // sub-0x20-leading rune here — C0 bytes arrive via execute(), and
+        // every rune path starts at a lead byte >= 0xC2 (or plain ASCII).
         if ($byte !== '' && ord($byte) >= 0x20) {
             $this->csi->printable($rune);
         }

@@ -6,8 +6,10 @@ namespace SugarCraft\AnsiParser\Codec;
 
 /**
  * F-16: structured DCS decoder — the shared codec home for the sequence
- * semantics a byte-stream inspector needs (candy-ansi-inspect used to carry
- * these branches inline in `Inspector::describeDcs()`).
+ * semantics a byte-stream inspector needs. candy-ansi-inspect STILL carries
+ * these branches inline in `Inspector::describeDcs()` (measured at this
+ * release); this class is the canonical home they are migrating TO — the
+ * migration is an open seam (README "Decoders"), not a landed change.
  *
  * It takes the exact five fields {@see \SugarCraft\AnsiParser\Parser\Handler::dcsDispatch()}
  * delivers, so the final byte is never lost: an inspector that only has a

@@ -106,7 +106,7 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Parser</td><td>__construct(Handler, bool $replaceMalformed = false, int $maxStringBuffer = 65536)</td><td>Parser bound to one handler</td></tr>
-<tr><td>Parser</td><td>feed(bytes) / flush() / parseComplete(bytes) / reset()</td><td>Stream bytes, settle end of stream, one-shot parse, return to Ground</td></tr>
+<tr><td>Parser</td><td>feed(bytes) / flush() / parseComplete(bytes) / reset()</td><td>Stream bytes, settle end of stream, one-shot parse, and reset (flushes an in-flight string first — it dispatches, then clears)</td></tr>
 <tr><td>Parser</td><td>currentState(): State / subparams(): list&lt;bool&gt;</td><td>Current state-machine state; colon flags for the last parameter list</td></tr>
 <tr><td>Parser</td><td>static groupSubparameters(params, flags)</td><td>Regroup a flat parameter list by its colon flags</td></tr>
 <tr><td>Handler</td><td>printChar / execute / csiDispatch / escDispatch / oscDispatch / dcsDispatch / sosPmApcDispatch</td><td>Parse events a handler receives</td></tr>
@@ -114,22 +114,11 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
 <tr><td>CsiHandler</td><td>printable / cuu/cud/cuf/cub / cup / sgr / ed / el / decset / decrst / decstbm / tbc / cht / cbt / …</td><td>Emulator-facing CSI actions</td></tr>
 <tr><td>OscHandler</td><td>title(string) / hyperlink(uri, id)</td><td>Emulator-facing OSC actions</td></tr>
 <tr><td>DebugHandler</td><td>$log / filter(type)</td><td>Records every action for inspection</td></tr>
+<tr><td>Codec\Dcs</td><td>static parse(final, params, prefix, intermediate, data) → kind() / isSixel() / isTruncated() / describe()</td><td>Typed DCS decoder: sixel, XTVERSION, DECRQSS/PSS, tmux, truncation</td></tr>
+<tr><td>Codec\Iterm1337</td><td>static parse(oscData) / static fromDcs(final, data)</td><td>iTerm2/WezTerm 1337 inline-image + control decoder; malformed() records, never throws</td></tr>
+<tr><td>Codec\KittyApc</td><td>static parse(apcData)</td><td>Kitty graphics frame decoder: control pairs, geometry labels, payload size</td></tr>
 </table>
   </div>
-</section>
-
-<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
-    <div class="container">
-        <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
-        <div class="demo-grid">
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-ansi-parser/.vhs/demo.gif" alt="ANSI parse and state">
-                <h3>ANSI parse and state</h3>
-                <span class="demo-caption">Feed raw ANSI bytes into the parser and print the action log a DebugHandler records.</span>
-            </div>
-        </div>
-    </div>
 </section>
 
 <footer class="footer">

@@ -16,11 +16,18 @@ namespace SugarCraft\AnsiParser\Parser;
 interface Handler
 {
     /**
-     * Print a single grapheme to the current cursor cell.
+     * Print a single codepoint (one UTF-8 rune) to the current cursor cell.
      *
      * For ASCII printable bytes the string is one byte. For UTF-8 leads
      * the parser accumulates continuation bytes and calls printChar once
-     * with the full multi-byte rune.
+     * with the full multi-byte rune. This is a CODEPOINT, not a grapheme
+     * cluster: an `e` followed by U+0301 arrives as two calls — keeping
+     * combining sequences together is the handler's concern.
+     *
+     * Under the parser's DEFAULT configuration (no `$replaceMalformed`) the
+     * rune is not validated UTF-8 — any structurally-completed byte sequence
+     * arrives verbatim, so handlers that require well-formed text must pass
+     * the flag or re-check (e.g. mb_check_encoding) themselves.
      */
     public function printChar(string $rune): void;
 
@@ -35,7 +42,11 @@ interface Handler
      * @param int        $final        Final command byte (e.g. ord('m')).
      * @param list<int>  $params       Numeric params; -1 marks a missing/default param.
      * @param int        $prefix       Private-marker byte 0x3C-0x3F (e.g. ord('?')); 0 if none.
+     *                                 SINGLE-BYTE slot: a multi-prefix CSI keeps only the last byte.
      * @param int        $intermediate Intermediate byte 0x20-0x2F; 0 if none.
+     *                                 SINGLE-BYTE slot: a multi-intermediate CSI
+     *                                 (`CSI 0x2F 0x21 m`) keeps only the last byte — a
+     *                                 known, documented parity deviation of the original design.
      */
     public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void;
 

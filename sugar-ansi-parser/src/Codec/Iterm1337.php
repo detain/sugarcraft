@@ -9,8 +9,9 @@ namespace SugarCraft\AnsiParser\Codec;
  *
  * The parser already delivers OSC payloads to
  * {@see \SugarCraft\AnsiParser\Parser\Handler::oscDispatch()}; this codec is
- * the missing decode arm for the `1337` family, so an inspector no longer
- * silently swallows inline-image transfers. Wire form (as emitted by
+ * the missing decode arm for the `1337` family — the fix for callers that
+ * adopt it. (candy-ansi-inspect does not yet: it still swallows 1337
+ * payloads today; see README "Decoders".) Wire form (as emitted by
  * sugar-core's `Ansi::iterm2InlineImage()` and sugar-image's
  * `Iterm2Renderer`):
  *
