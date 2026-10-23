@@ -61,7 +61,8 @@ final class Registry
 
     /**
      * Maximum unique label-value combinations allowed per metric.
-     * When exceeded, {@see deleteLabelValues()} evicts the oldest entry.
+     * When exceeded, {@see trackCardinality()} evicts the oldest entry
+     * and reclaims that series from the backend.
      */
     private int $cardinalityLimit;
 
@@ -230,18 +231,18 @@ final class Registry
     }
 
     /**
-     * Evict the oldest recorded label combination for `$name`
-     * when the cardinality limit is exceeded.
+     * Drop one label-combination entry from the cardinality tracker.
      *
-     * This is called automatically on every emit; backends MAY
-     * also call it directly to reclaim memory for stale label sets.
+     * `$tags` are the call-site tags — the registry's default tags are
+     * merged in first, because the tracker keys entries by the MERGED
+     * set that the emit path stored. Backend series are NOT touched by
+     * this method; use {@see remove()} for a full reclaim.
      *
      * @param array<string,string> $tags
      */
     public function deleteLabelValues(string $name, array $tags = []): void
     {
-        $key = $this->tagKey($tags);
-        unset($this->labelValueCache[$name][$key]);
+        unset($this->labelValueCache[$name][$this->tagKey($this->mergeTags($tags))]);
     }
 
     /**
@@ -249,12 +250,17 @@ final class Registry
      * cardinality cache. Useful for long-running processes or
      * testing cleanup.
      *
+     * `$tags` are the call-site tags; the default tags are merged in
+     * once here so both the backend key and the tracker key see the
+     * same label set the emit path used.
+     *
      * @param array<string,string> $tags
      */
     public function remove(string $name, array $tags = []): void
     {
-        $this->backend->remove($name, $tags);
-        $this->deleteLabelValues($name, $tags);
+        $merged = $this->mergeTags($tags);
+        $this->backend->remove($name, $merged);
+        unset($this->labelValueCache[$name][$this->tagKey($merged)]);
     }
 
     /**

@@ -200,6 +200,45 @@ final class RegistryTest extends TestCase
         $this->assertSame(2.0, $b->counterValue('hits', ['route' => '/y']));
     }
 
+    public function testDeleteLabelValuesWithDefaultTagsHitsTheMergedTrackerKey(): void
+    {
+        // The tracker keys by the MERGED label set (defaults plus call
+        // tags), so deleteLabelValues must merge the same way before
+        // computing its key — with a bare-tag lookup the reclaim missed
+        // every series on a registry that carries default tags.
+        $b = new InMemoryBackend();
+        $r = new Registry($b, ['env' => 'prod'], 1000);
+        $r->counter('hits', 1.0, ['route' => '/a']);
+        $r->counter('hits', 1.0, ['route' => '/b']);
+        $this->assertSame(2, $r->cardinality('hits'));
+
+        $r->deleteLabelValues('hits', ['route' => '/a']);
+        $this->assertSame(1, $r->cardinality('hits'));
+
+        // Same for the no-call-tags leg: the entry lives under the
+        // defaults key, not the empty key.
+        $r->counter('plain', 1.0);
+        $this->assertSame(1, $r->cardinality('plain'));
+        $r->deleteLabelValues('plain');
+        $this->assertSame(0, $r->cardinality('plain'));
+    }
+
+    public function testRemoveWithDefaultTagsReclaimsTheMergedBackendSeries(): void
+    {
+        // remove() forwards the merged label set to the backend — the
+        // series was stored under the merged key, so a bare-tag forward
+        // missed it and the stale value kept being emitted.
+        $b = new InMemoryBackend();
+        $r = new Registry($b, ['env' => 'prod'], 1000);
+        $r->counter('hits', 1.0, ['route' => '/x']);
+        $r->counter('hits', 2.0, ['route' => '/y']);
+
+        $r->remove('hits', ['route' => '/x']);
+        $this->assertSame(1, $r->cardinality('hits'));
+        $this->assertSame(0.0, $b->counterValue('hits', ['env' => 'prod', 'route' => '/x']));
+        $this->assertSame(2.0, $b->counterValue('hits', ['env' => 'prod', 'route' => '/y']));
+    }
+
     public function testCardinalityReturnsZeroForUnknownMetric(): void
     {
         $b = new InMemoryBackend();
