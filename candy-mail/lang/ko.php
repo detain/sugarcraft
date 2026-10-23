@@ -26,4 +26,23 @@ return [
     'cli.no_to_recipient'        => '--to 수신자가 지정되지 않음',
     'cli.attachment_not_found'   => '첨부 파일을 찾을 수 없음: {file}',
     'cli.no_transport'           => '전송이 구성되지 않았습니다. RESEND_API_KEY 또는 CANDY_MAIL_SMTP_HOST 환경 변수를 설정하세요.',
+
+    // Locale parity with en.php (docs-fix-1023 sweep)
+    'mailer.send_cancelled'        => '전송 시작 전에 취소됨',
+    'smtp.tls_required'            => 'TLS가 필요하지만 설정할 수 없음: {host}이(가) STARTTLS를 제공하지 않음',
+    'smtp.auth_insecure'           => '안전하지 않은(암호화되지 않은) SMTP 채널에서의 인증 거부',
+    'smtp.empty_response'          => '서버가 빈 응답을 보냄',
+    'smtp.send_cancelled'          => 'SMTP 전송 시작 전에 취소됨',
+    'smtp.write_error'             => 'SMTP 서버에 쓰기 실패',
+    'smtp.incomplete_write'        => 'SMTP 서버에 불완전한 쓰기',
+    'email.crlf_in_address'        => '전자우편 주소에서 CRLF 삽입 감지',
+    'email.invalid_address'        => '잘못된 전자우편 주소: {addr}',
+    'email.crlf_in_header'         => '{field} 헤더에서 CRLF 삽입 감지',
+    'resend.send_cancelled'        => 'Resend 전송 시작 전에 취소됨',
+    'resend.curl_missing'          => 'Resend 전송에는 ext-curl이 필요함 (SMTP 전송은 확장 불필요)',
+    'attachment.unreadable'        => '첨부 파일을 읽을 수 없음: {path}',
+    'attachment.no_path'           => '파일 이름으로 첨부할 때 파일 경로를 제공해야 함',
+    'attachment.invalid_cid'       => '잘못된 Content-ID 형식: {cid} (RFC 2392는 msg-id 형식 필요)',
+    'cli.unknown_option'           => '알 수 없는 옵션: {option}',
+    'cli.invalid_port'             => '잘못된 SMTP 포트: {port} (1~65535 사이여야 함)',
 ];

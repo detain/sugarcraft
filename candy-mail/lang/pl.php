@@ -26,4 +26,23 @@ return [
     'cli.no_to_recipient'        => 'Nie określono odbiorcy --to',
     'cli.attachment_not_found'   => 'Nie znaleziono załącznika: {file}',
     'cli.no_transport'           => 'Transport nieskonfigurowany. Ustaw zmienną środowiskową RESEND_API_KEY lub CANDY_MAIL_SMTP_HOST.',
+
+    // Locale parity with en.php (docs-fix-1023 sweep)
+    'mailer.send_cancelled'        => 'Wysyłanie anulowane przed rozpoczęciem',
+    'smtp.tls_required'            => 'Wymagane jest TLS, ale nie można go ustanowić: {host} nie zaproponował STARTTLS',
+    'smtp.auth_insecure'           => 'Odmowa uwierzytelniania przez niezabezpieczony (nieszyfrowany) kanał SMTP',
+    'smtp.empty_response'          => 'Serwer wysłał pustą odpowiedź',
+    'smtp.send_cancelled'          => 'Wysyłanie SMTP anulowane przed rozpoczęciem',
+    'smtp.write_error'             => 'Zapis na serwer SMTP nie powiódł się',
+    'smtp.incomplete_write'        => 'Niepełny zapis na serwer SMTP',
+    'email.crlf_in_address'        => 'Wykryto wstrzyknięcie CRLF w adresie e-mail',
+    'email.invalid_address'        => 'Nieprawidłowy adres e-mail: {addr}',
+    'email.crlf_in_header'         => 'Wykryto wstrzyknięcie CRLF w nagłówku {field}',
+    'resend.send_cancelled'        => 'Wysyłanie Resend anulowane przed rozpoczęciem',
+    'resend.curl_missing'          => 'ext-curl jest wymagany dla transportu Resend (transport SMTP nie potrzebuje rozszerzeń)',
+    'attachment.unreadable'        => 'Plik załącznika nie jest do odczytu: {path}',
+    'attachment.no_path'           => 'Podczas dołączania według nazwy pliku należy podać ścieżkę pliku',
+    'attachment.invalid_cid'       => 'Nieprawidłowy format Content-ID: {cid} (RFC 2392 wymaga formatu msg-id)',
+    'cli.unknown_option'           => 'Nieznana opcja: {option}',
+    'cli.invalid_port'             => 'Nieprawidłowy port SMTP: {port} (musi być między 1 a 65535)',
 ];

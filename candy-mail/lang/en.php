@@ -50,4 +50,6 @@ return [
     'cli.no_to_recipient'        => 'No --to recipient specified',
     'cli.attachment_not_found'   => 'Attachment file not found: {file}',
     'cli.no_transport'           => 'No transport configured. Set RESEND_API_KEY or CANDY_MAIL_SMTP_HOST environment variable.',
+    'cli.unknown_option'         => 'Unknown option: {option}',
+    'cli.invalid_port'           => 'Invalid SMTP port: {port} (must be between 1 and 65535)',
 ];
