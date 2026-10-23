@@ -39,10 +39,14 @@ use SugarCraft\Image\Detect;
  * protected arms TerminalProbe documents for injection (`infocmpAvailable`
  * / `runCommand`), so the REAL capability-name matcher runs against canned
  * `infocmp -1` text — including the `desc=...sixel...` decoy that the old
- * word-boundary regex used to swallow. The one end-to-end test plants a
- * fake `infocmp` first on a PATH with nothing else on it and resets the
- * InfocmpBinary memo around itself, and is skipped (not failed) on a
- * machine without the /usr/bin|/bin gate entry the probe requires.
+ * word-boundary regex used to swallow. The end-to-end pair covers both
+ * directions of the sugar-colorprofile security fix (a456d538e): a PATH-
+ * planted `infocmp` must NEVER be exec-ed (fail-loud, zero skips — the
+ * marker witness proves it on every machine), while the promoted live
+ * chain runs against a committed fixture terminfo DB through the REAL
+ * gate, the REAL binary and the REAL shell_exec — self-verifying its
+ * premise and skipped (not failed) where the host's infocmp hides
+ * capability names outside its table, or where no gate binary exists.
  */
 final class DetectTerminfoTest extends TestCase
 {
@@ -69,6 +73,7 @@ final class DetectTerminfoTest extends TestCase
         $keys = [
             'TMUX', 'TERM', 'TERM_PROGRAM', 'KITTY_WINDOW_ID', 'XTERM_VERSION',
             'LC_TERMINAL', 'PATH', 'NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE',
+            'TERMINFO',
         ];
         foreach ($keys as $key) {
             $this->savedEnv[$key] = getenv($key);
@@ -300,8 +305,16 @@ final class DetectTerminfoTest extends TestCase
         );
         if ($expectPromote) {
             $this->assertNull(Detect::lastDa1Reply(), 'a promoted entry must skip the DA1 read entirely');
+            // The exec must carry the SAME absolute path the availability
+            // gate resolved (sugar-colorprofile a456d538e): a bare relative
+            // `infocmp` would re-resolve through PATH at exec time and let a
+            // planted entry answer a question the gate said it could not.
+            // Deriving from InfocmpBinary::path() keeps the pin machine-
+            // portable while still red on any regression to PATH lookup —
+            // with a gate answer the shape must name the binary; without one
+            // it must start at the (empty) resolved path, never at "infocmp".
             $this->assertSame(
-                ["infocmp -1 'susetm' 2>/dev/null"],
+                [(InfocmpBinary::path() ?? '') . " -1 'susetm' 2>/dev/null"],
                 $double->commands,
                 'the exec command shape changed',
             );
@@ -316,17 +329,14 @@ final class DetectTerminfoTest extends TestCase
 
     // ------------------------------------------------ end-to-end via PATH
 
-    public function testPlantedInfocmpIsFoundThroughTheRealGateAndExec(): void
+    public function testPlantedPathInfocmpIsNeverExecutedThroughTheRealGate(): void
     {
-        if (!is_file('/usr/bin/infocmp') && !is_file('/bin/infocmp')) {
-            $this->markTestSkipped('InfocmpBinary gate requires a packaged infocmp on this machine');
-        }
-
+        $marker = $this->dir . '/planted-was-executed';
         $bin = $this->dir . '/infocmp';
-        // TAB inside the FORMAT string (POSIX printf processes escapes
-        // there; a %s ARGUMENT would print a literal backslash and the
-        // name-position matcher would — correctly — reject the line).
-        $script = "#!/bin/sh\nprintf 'susetm|sus terminal,\\n\\tsixl,\\n'\n";
+        // The planted script would answer the lookup AND leave a witness;
+        // the security contract is that neither happens.
+        $script = "#!/bin/sh\ntouch " . escapeshellarg($marker) . "\n"
+            . "printf 'susetm|sus terminal,\\n\\tsixl,\\n'\n";
         file_put_contents($bin, $script);
         chmod($bin, 0755);
         putenv('PATH=' . $this->dir);
@@ -334,14 +344,58 @@ final class DetectTerminfoTest extends TestCase
 
         $pair = $this->createStreamPair();
         Detect::setProbeStdin($pair['read']);
-        // No double: the REAL TerminalProbe, the REAL InfocmpBinary memo
-        // (reset so the planted PATH cannot inherit a stale gate answer),
-        // the REAL shell_exec — only `infocmp` itself is the fake.
+        $this->preload($pair, self::DA1_NO_SIXEL_REPLY);
+        // No double: the REAL TerminalProbe, the REAL InfocmpBinary gate,
+        // the REAL shell_exec — only the PATH layout is planted.
 
         $cap = Detect::probe();
 
-        $this->assertTrue($cap->sixel, 'the planted sixl entry must promote through the full live chain');
-        $this->assertNull(Detect::lastDa1Reply());
+        $this->assertFalse(
+            is_file($marker),
+            'a PATH-planted infocmp must never be exec-ed — the gate accepts only its absolute candidates',
+        );
+        $this->assertFalse($cap->sixel, 'the planted sixl entry must reach the matcher through no channel');
+        $this->assertSame(
+            self::DA1_NO_SIXEL_REPLY,
+            Detect::lastDa1Reply(),
+            'with no terminfo answer the DA1 arm must run',
+        );
+    }
+
+    public function testFixtureTerminfoPromotesThroughTheRealGateAndExec(): void
+    {
+        InfocmpBinary::reset();
+        $binary = InfocmpBinary::path();
+        if ($binary === null) {
+            $this->markTestSkipped('the InfocmpBinary gate finds no packaged infocmp on this machine');
+        }
+
+        putenv('TERMINFO=' . __DIR__ . '/support/terminfo');
+        // Self-verifying premise: some hosts' infocmp hides capability
+        // names outside its compiled-in table (ncurses 6.4 on this devbox
+        // does not print sixl without -x), so confirm the fixture
+        // round-trips through the EXACT shape src asks for before driving
+        // the detector through it. The header line distinguishes a host
+        // that hides names (skip — a property of the tool) from a fixture
+        // that no longer loads (fail loud — a property of this repo).
+        $direct = @shell_exec($binary . " -1 'susetm' 2>/dev/null");
+        if (!is_string($direct) || !str_contains($direct, 'susetm|')) {
+            $this->fail('the committed fixture terminfo entry did not load through ' . $binary);
+        }
+        if (!str_contains($direct, "\tsixl,")) {
+            $this->markTestSkipped('this host\'s infocmp hides capability names outside its table (sixl not printed under -1)');
+        }
+
+        $pair = $this->createStreamPair();
+        Detect::setProbeStdin($pair['read']);
+        $this->preload($pair, self::DA1_NO_SIXEL_REPLY);
+        // No double again: REAL gate, REAL exec of the REAL binary over the
+        // fixture database, REAL matcher; only the terminfo DATA is canned.
+
+        $cap = Detect::probe();
+
+        $this->assertTrue($cap->sixel, 'the fixture sixl entry must promote through the full live chain');
+        $this->assertNull(Detect::lastDa1Reply(), 'the terminfo answer must make the DA1 read redundant');
     }
 
     // -------------------------------------------------------------- harness
