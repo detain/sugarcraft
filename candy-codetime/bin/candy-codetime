@@ -3,9 +3,30 @@
 
 declare(strict_types=1);
 
-(static function () {
-    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
-        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+// ---------------------------------------------------------------------------
+// Autoloader (archive-aware). A phar build stamps THIS file as the archive
+// stub, so under `php candy-codetime.phar` __FILE__ names the archive and its
+// bundled vendor/ is the only correct source. Measured PHP 8.3 law: in the
+// stub context \Phar::running(false) answers '' and a bare '/x.phar/entry'
+// path fails is_file — resolve from BOTH identities ('phar://' . __FILE__
+// under the stub, 'phar://' . running() when required from inside), and once
+// an archive is found DROP the filesystem candidates so a working-tree vendor
+// beside a published .phar can never outrank the archive. The three original
+// candidates are preserved verbatim for every non-archive run.
+// ---------------------------------------------------------------------------
+(static function (): void {
+    $archive = str_ends_with(__FILE__, '.phar')
+        ? 'phar://' . __FILE__
+        : (\Phar::running(false) !== '' ? 'phar://' . \Phar::running(false) : '');
+    $candidates = $archive !== ''
+        ? [$archive . '/vendor/autoload.php']
+        : ['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
+    foreach ($candidates as $candidate) {
+        // phar:// URIs are absolute too — the old '/'-only prefix test would
+        // re-anchor them onto __DIR__ and miss the archive.
+        $path = (str_starts_with($candidate, '/') || str_starts_with($candidate, 'phar://'))
+            ? $candidate
+            : __DIR__ . '/../' . $candidate;
         if (is_file($path)) {
             require $path;
             return;
@@ -31,6 +52,33 @@ use SugarCraft\CodeTime\Report\GapsReport;
 use SugarCraft\CodeTime\Storage\SqliteBackend;
 use SugarCraft\CodeTime\Store;
 use SugarCraft\CodeTime\Support\Version;
+
+/**
+ * Real filesystem path of the running phar archive, or '' outside one. The
+ * bin file IS the archive stub, so the two identities must both be consulted:
+ * under `php candy-codetime.phar` \Phar::running(false) answers '' while
+ * __FILE__ names the archive (measured PHP 8.3); when this code is instead
+ * required from inside, running() answers the path.
+ */
+function runningArchivePath(): string
+{
+    if (str_ends_with(__FILE__, '.phar')) {
+        return __FILE__;
+    }
+    $running = \Phar::running(false);
+
+    return $running !== '' ? $running : '';
+}
+
+/**
+ * Version the CLI prints: the archive's build stamp when running inside a
+ * phar (the DST-1 law — InstalledVersions lies under a frozen vendor/), else
+ * the compiled-in Version::CURRENT constant.
+ */
+function displayVersion(): string
+{
+    return Version::resolve(runningArchivePath(), Version::CURRENT);
+}
 
 // Pre-rename compatibility (plan_rename.md R4.4/R4.5, sugar-tick -> // @rename-keep
 // candy-codetime): import any old-prefix env exports under the new name first
@@ -78,9 +126,10 @@ if (!in_array($backend, ['file', 'sqlite'], true)) {
 
 $cmd = $positional[0] ?? 'dashboard';
 
-// --version prints the single-source constant (no config, no autoload of storage).
+// --version prints the phar stamp when running inside an archive, else the
+// single-source constant (no config, no autoload of storage).
 if ($cmd === '--version' || $cmd === '-v') {
-    fwrite(STDOUT, 'candy-codetime ' . Version::CURRENT . "\n");
+    fwrite(STDOUT, 'candy-codetime ' . displayVersion() . "\n");
     exit(0);
 }
 
