@@ -64,7 +64,7 @@ Default: left pane = current directory, right pane = `$HOME`.
 | `Ctrl+w`        | Close current tab                                        |
 | `Ctrl+Tab`      | Cycle to next tab — needs a terminal that reports modified Tab (see below) |
 | `Ctrl+Shift+Tab`| Cycle to previous tab — same terminal-support caveat     |
-| `Ctrl+PgUp` / `Ctrl+PgDn` | Cycle tabs forward / back — works on every terminal |
+| `Ctrl+PgUp` / `Ctrl+PgDn` | Cycle tabs forward / back — standard terminal emulators (tmux/browser terminals may intercept modified Page keys) |
 | `u` / `Ctrl+z`  | Undo last operation                                      |
 | `Ctrl+y`        | Redo last undone operation                               |
 
@@ -77,8 +77,10 @@ two apart — natively (xterm-family `CSI 1;5I` / `CSI 1;6I`, e.g. mintty)
 or through the kitty keyboard protocol's disambiguate flag, which the
 app negotiates at startup (`CSI > 1u`; terminals without the protocol
 ignore it), delivering `CSI 9;5u` / `CSI 9;6u` on kitty, WezTerm, foot,
-contour and friends. `Ctrl+PgUp`/`Ctrl+PgDn` are the universal
-alternative: the Page keys always report modified unambiguously.
+contour and friends. `Ctrl+PgUp`/`Ctrl+PgDn` are the alternative on
+standard terminal emulators: there the Page keys report modified
+unambiguously — but tmux and browser terminals may intercept modified
+Page keys themselves.
 
 ## Architecture
 
