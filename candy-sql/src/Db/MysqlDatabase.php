@@ -26,9 +26,8 @@ final class MysqlDatabase implements DatabaseInterface
     /**
      * Connect to a MySQL database using connection configuration.
      *
-     * SSL is configured via PDO driver options, not the DSN string.
-     * sslMode values: '' (disabled/no SSL), 'prefer' (try SSL), 'require' (require SSL),
-     * 'verify_ca' (require + verify server cert), 'verify_identity' (require + verify CN).
+     * SSL is configured via PDO driver options, not the DSN string — the mode
+     * semantics live in {@see self::sslDriverOptions()}.
      */
     public static function connect(ConnectionConfig $config): self
     {
@@ -42,16 +41,7 @@ final class MysqlDatabase implements DatabaseInterface
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
         ];
-
-        // Apply SSL driver options based on sslMode when explicitly set
-        if ($config->sslMode !== '' && $config->sslMode !== 'disable') {
-            $pdoOptions[\PDO::MYSQL_ATTR_SSL_CA] = null; // Let PDO use system defaults
-            if ($config->sslMode === 'verify_ca' || $config->sslMode === 'verify_identity') {
-                $pdoOptions[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = true;
-            } else {
-                $pdoOptions[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
-            }
-        }
+        $pdoOptions += self::sslDriverOptions($config->sslMode);
 
         $pdo = new \PDO($config->dsn, $config->user, $config->pass, $pdoOptions);
 
@@ -59,6 +49,44 @@ final class MysqlDatabase implements DatabaseInterface
         $instance->connectionConfig = $config;
 
         return $instance;
+    }
+
+    /**
+     * PDO driver options that honour sslMode — case-insensitively and without
+     * silent security downgrades.
+     *
+     * '' / 'disable'   -> no TLS options at all (plaintext connection).
+     * 'allow'/'prefer' -> opportunistic TLS; the certificate is NOT verified.
+     * 'require'/'verify_ca'/'verify_identity' -> TLS mandatory AND the server
+     * certificate verified. An unverified 'require' was MITM-able, which is not
+     * what callers of these modes mean; hyphen spellings ('verify-ca') and any
+     * letter case are accepted so a formatting variant can never fall through
+     * to the unverified arm — that was the original downgrade bug.
+     * Anything else throws: a typo must fail loud, never negotiate silently.
+     *
+     * MYSQL_ATTR_SSL_CA stays null so PDO falls back to the system trust store.
+     *
+     * @return array<int, mixed>
+     */
+    private static function sslDriverOptions(string $sslMode): array
+    {
+        if ($sslMode === '' || strcasecmp($sslMode, 'disable') === 0) {
+            return [];
+        }
+
+        return match (strtolower(str_replace('-', '_', $sslMode))) {
+            'allow', 'prefer', 'preferred' => [
+                \PDO::MYSQL_ATTR_SSL_CA => null,
+                \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
+            ],
+            'require', 'required', 'verify_ca', 'verify_identity' => [
+                \PDO::MYSQL_ATTR_SSL_CA => null,
+                \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => true,
+            ],
+            default => throw new \InvalidArgumentException(
+                'Unknown MySQL ssl-mode: ' . $sslMode,
+            ),
+        };
     }
 
     /** @return list<string> */
@@ -303,16 +331,7 @@ final class MysqlDatabase implements DatabaseInterface
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
         ];
-
-        // Apply SSL driver options on reconnect as well
-        if ($config->sslMode !== '' && $config->sslMode !== 'disable') {
-            $pdoOptions[\PDO::MYSQL_ATTR_SSL_CA] = null;
-            if ($config->sslMode === 'verify_ca' || $config->sslMode === 'verify_identity') {
-                $pdoOptions[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = true;
-            } else {
-                $pdoOptions[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
-            }
-        }
+        $pdoOptions += self::sslDriverOptions($config->sslMode);
 
         try {
             $pdo = new \PDO(

@@ -31,7 +31,9 @@ final class ConnectionConfigTest extends TestCase
         $this->assertSame('secret123', $config->pass);
         $this->assertSame('testdb', $config->dbname);
         $this->assertSame('require', $config->sslMode);
-        // ssl-mode is NOT in the DSN — SSL is passed as PDO driver options at connect time
+        // MySQL ssl-mode is NOT in the DSN — SSL rides PDO driver options at
+        // connect time (MysqlDatabase::sslDriverOptions). PostgreSQL differs:
+        // see testCreatePgsqlIncludesSslModeBelow.
         $this->assertSame(
             'mysql:host=localhost;port=3306;dbname=testdb',
             $config->dsn,
@@ -86,7 +88,55 @@ final class ConnectionConfigTest extends TestCase
         $this->assertSame('pgsql', $config->driver);
         $this->assertSame('db.example.com', $config->host);
         $this->assertSame(5432, $config->port);
-        $this->assertSame('pgsql:host=db.example.com;port=5432;dbname=mydb', $config->dsn);
+        // sslMode reaches Postgres only through the DSN — libpq has no PDO
+        // driver option equivalent. Pinned by the docs-review-1023 F1 fix.
+        $this->assertSame('pgsql:host=db.example.com;port=5432;dbname=mydb;sslmode=require', $config->dsn);
+    }
+
+    /** MySQL-flavoured spellings must translate to libpq's hyphen forms. */
+    public function testPgsqlSslModeTranslatesMysqlFlavouredSpellings(): void
+    {
+        $translate = new \ReflectionMethod(ConnectionConfig::class, 'pgsqlSslModeSuffix');
+
+        $cases = [
+            '' => '',
+            'disable' => ';sslmode=disable',
+            'DISABLE' => ';sslmode=disable',
+            'allow' => ';sslmode=allow',
+            'prefer' => ';sslmode=prefer',
+            'required' => ';sslmode=require',
+            'verify_ca' => ';sslmode=verify-ca',
+            'VERIFY-CA' => ';sslmode=verify-ca',
+            'verify_identity' => ';sslmode=verify-full',
+            'verify-full' => ';sslmode=verify-full',
+            // Unknown names omit the suffix and inherit libpq's default;
+            // the ssl-mode vocabulary is validated per-driver elsewhere.
+            'tls' => '',
+        ];
+
+        foreach ($cases as $mode => $expected) {
+            $this->assertSame(
+                $expected,
+                $translate->invoke(null, $mode),
+                'pgsql sslmode translation for ' . var_export($mode, true),
+            );
+        }
+    }
+
+    /** A pgsql config with no sslMode at all keeps the plain DSN (constructor path). */
+    public function testPgsqlWithoutSslModeOmitsSuffix(): void
+    {
+        $config = ConnectionConfig::new(
+            driver: 'pgsql',
+            host: 'localhost',
+            port: 5432,
+            user: 'u',
+            pass: '',
+            dbname: 'd',
+            sslMode: '',
+        );
+
+        $this->assertSame('pgsql:host=localhost;port=5432;dbname=d', $config->dsn);
     }
 
     public function testCreateWithDefaultSslMode(): void
