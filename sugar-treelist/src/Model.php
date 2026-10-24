@@ -391,11 +391,16 @@ final class Model
 
     /**
      * Add an item to the list.
+     *
+     * The id is minted on the clone inside mutate(), never on the receiver —
+     * otherwise a forked call would silently advance the base model's counter
+     * (breaking the "instances are immutable" contract) and desync its id
+     * stream from later forks. Sibling forks of one base legitimately re-mint
+     * the same id; ids are per-instance identity only (see class docblock).
      */
     public function addItem(\Stringable $value): self
     {
-        $id = $this->idCounter++;
-        return $this->mutate(fn($m) => $m->items[] = new Item($value, $id));
+        return $this->mutate(fn($m) => $m->items[] = new Item($value, $m->idCounter++));
     }
 
     /**
@@ -460,12 +465,6 @@ final class Model
      *
      * Cursor relocation uses O(1) identity map (Item::$id) rather than
      * O(n) object-identity foreach after the sort.
-     *
-     * ## CancellationToken support (intended API — requires sugar-async)
-     * When sugar-async is installed, this method will accept an optional
-     * `?CancellationToken $token = null` parameter. The token is checked
-     * after the usort completes and before the identity map is built.
-     * If cancelled, throws `SugarCraft\Async\OperationCancelledException`.
      */
     public function sort(): self
     {
@@ -648,12 +647,6 @@ final class Model
      *
      * @return list<string> Visible lines
      * @throws \RuntimeException If the viewport has zero dimensions or the list is empty.
-     *
-     * ## CancellationToken support (intended API — requires sugar-async)
-     * When sugar-async is installed, this method will accept an optional
-     * `?CancellationToken $token = null` parameter. The token is checked
-     * at loop boundaries ($token?->isCancelled()). If cancelled, throws
-     * `SugarCraft\Async\OperationCancelledException`.
      */
     public function lines(): array
     {
@@ -986,6 +979,11 @@ final class Model
         if ($style === '') {
             return '';
         }
+        // Lax by design: trim() also swallows stray [, ] and m spellings
+        // ("m1;3", "[;1"), so those parse as the same SGR parameters. That is
+        // cosmetic acceptance, never injection — anything beyond [0-9;] that
+        // survives the trim is rejected below, which is what the README's
+        // "reject non-SGR escapes" promise rests on.
         $codes = \trim($style, "\e\x1b[]m");
         if (\preg_match('/^[0-9;]*$/', $codes) !== 1) {
             throw new \InvalidArgumentException(

@@ -28,12 +28,6 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * match() keeps sugar-treelist's own \Stringable-item contract and input-order
  * tiebreak — it is intentionally NOT SmithWatermanMatcher::matchAll(), whose
  * haystack-ascending tiebreak would reorder equal-score items.
- *
- * ## CancellationToken support (intended API — requires sugar-async)
- * When sugar-async cancellation is wired in, match() will accept an optional
- * `?CancellationToken $token = null` parameter. Scoring is batched
- * (e.g., 100 candidates per futureTick) via loop()->futureTick().
- * If cancelled, throws `SugarCraft\Async\OperationCancelledException`.
  */
 final class FuzzyMatch
 {
