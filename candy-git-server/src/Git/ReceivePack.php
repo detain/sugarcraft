@@ -66,12 +66,14 @@ final class ReceivePack
      */
     public function advertiseRefs(array $refs): void
     {
-        // Send capabilities
-        $caps = 'report-status|report-status-v2 delete-refs side-band-64k';
+        // Capability list rides the first ref packet after the NUL,
+        // space-separated (git 2.43 receive-pack advertisement shape; the
+        // old 'report-status|...'-with-space-after-NUL form was invented).
+        $caps = 'report-status report-status-v2 delete-refs side-band-64k';
         $firstRef = \key($refs) ?? 'refs/heads/main';
         $firstHash = \current($refs) ?: \str_repeat('0', 40);
 
-        $this->writePacket("{$firstHash} {$firstRef}\x00 {$caps}");
+        $this->writePacket("{$firstHash} {$firstRef}\x00{$caps}");
 
         foreach ($refs as $ref => $hash) {
             if ($ref === $firstRef) continue;
@@ -174,18 +176,10 @@ final class ReceivePack
     }
 
     /**
-     * Write a pkt-line.
+     * Write a pkt-line through the shared codec.
      */
     private function writePacket(string $data): void
     {
-        if ($data === '') {
-            \fwrite(\STDOUT, "0000");
-            return;
-        }
-        $len = \strlen($data) + 4;
-        $hex = \str_pad(\dechex($len), 4, '0', \STR_PAD_LEFT);
-        $bin = \hex2bin($hex);
-        \fwrite(\STDOUT, $bin !== false ? $bin : $hex . "\n");
-        \fwrite(\STDOUT, $data . "\n");
+        \fwrite(\STDOUT, PktLine::encode($data));
     }
 }

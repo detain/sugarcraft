@@ -127,7 +127,14 @@ final class GitDaemonAsyncTest extends TestCase
 
         // Ref advertisement pkt-line + flush, then the daemon closes (no wants).
         $this->assertStringContainsString("{$head} refs/heads/main", $response);
-        $this->assertStringContainsString("\x00\x00\x00\x00", $response);
+        // FLIP 2026-10-24 (r1024/githttp, owner ruling 1b): this pin used to
+        // require the daemon's binary pack('N',0) flush (\x00\x00\x00\x00) —
+        // a wire shape no git client accepts. The daemon now frames through
+        // the shared PktLine codec, so the flush is the ASCII 0000 pkt.
+        // Daemon transport behavior is otherwise unchanged (still refused
+        // in cmdServe); framing correctness is the whole point of the flip.
+        $this->assertStringContainsString("0000", $response);
+        $this->assertStringNotContainsString("\x00\x00\x00\x00", $response);
 
         // Tear down so nothing leaks into other tests.
         $daemon->shutdown();

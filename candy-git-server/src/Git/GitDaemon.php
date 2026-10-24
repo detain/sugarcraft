@@ -1020,20 +1020,13 @@ final class GitDaemon
     }
 
     /**
-     * Write a pkt-line to socket.
+     * Write a pkt-line to socket through the shared codec.
      *
      * @param \Socket|resource $socket
      */
     private function writePacket($socket, string $data): void
     {
-        if ($data === '') {
-            $this->writeRaw($socket, \pack('N', 0));
-            return;
-        }
-
-        $len = \strlen($data) + 4;
-        $packet = \pack('N', $len) . $data . "\n";
-        $this->writeRaw($socket, $packet);
+        $this->writeRaw($socket, PktLine::encode($data));
     }
 
     /**

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer\HttpSmartProtocol;
 
 use SugarCraft\GitServer\{AccessControl, Config, Repo, Stats, User};
-use SugarCraft\GitServer\Git\{UploadPack, ReceivePack};
+use SugarCraft\GitServer\Git\{PktLine, ReceivePack, UploadPack};
 use SugarCraft\GitServer\LFS\LFSHandler;
 
 /**
@@ -757,7 +757,7 @@ final class Server
     }
 
     /**
-     * Encode array of lines as Git pkt-line format.
+     * Encode array of lines as Git pkt-line format through the shared codec.
      *
      * @param list<string> $lines
      */
@@ -765,19 +765,7 @@ final class Server
     {
         $result = '';
         foreach ($lines as $line) {
-            if ($line === '') {
-                // Flush packet
-                $result .= "0000";
-            } else {
-                $len = \strlen($line) + 4;
-                $hex = \str_pad(\dechex($len), 4, '0', \STR_PAD_LEFT);
-                $pktLen = \hex2bin($hex);
-                if ($pktLen === false) {
-                    throw new \RuntimeException('Invalid pkt-line length: ' . $hex);
-                }
-                $result .= $pktLen;
-                $result .= $line . "\n";
-            }
+            $result .= PktLine::encode($line);
         }
         return $result;
     }

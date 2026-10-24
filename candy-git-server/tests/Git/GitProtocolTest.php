@@ -120,50 +120,51 @@ final class GitProtocolTest extends TestCase
     }
 
     /**
-     * These pins record the encoder's ACTUAL framing, which is broken as a
-     * wire format (docs-review-1023 C2): a spec pkt-line prefix is four
-     * ASCII hex digits, but hex2bin() here writes the two raw bytes of the
-     * length, every payload gains a stray "\n" the spec does not allow, and
-     * the flush packet is ASCII while the payload frames are binary — the
-     * encoders are self-inconsistent. They flip LOUDLY the day the framing
-     * is fixed to spec; that fix must rewrite them deliberately, never
-     * silently. (docs-fix-1023 lane N4 truthful-stub ruling: framing fix is
-     * part of the protocol implementation and stays owner-gated.)
+     * FLIPPED 2026-10-24 (r1024/githttp, owner ruling 1b): the framing fix
+     * landed. These pins used to record the ACTUAL broken framing of the
+     * four ad-hoc encoders (docs-review-1023 C2: binary length bytes,
+     * stray newlines, pipe-joined capabilities) as deliberately planted
+     * anti-regression landmines, waiting for the day a real fix rewrote
+     * them. That day: every emitter now routes through the single
+     * \SugarCraft\GitServer\Git\PktLine codec, and these two tests pin
+     * the SPEC shape byte-exactly (four lowercase ASCII hex length prefix,
+     * payload verbatim, flush-pkt "0000", NUL immediately followed by
+     * space-separated capabilities per git 2.43's own receive-pack
+     * advertisement).
      */
-    public function testAdvertiseRefsEmptyCaseFramesBinaryLengthNotAsciiHex(): void
+    public function testAdvertiseRefsEmptyCaseFramesAsciiHexLengthAndFlushPacket(): void
     {
         $out = $this->advertiseProbe('empty');
 
-        $caps = 'report-status|report-status-v2 delete-refs side-band-64k';
-        $payload = \str_repeat('0', 40) . ' refs/heads/main' . "\x00 " . $caps;
-        $framed = \pack('n', \strlen($payload) + 4) . $payload . "\n" . '0000';
+        $caps = 'report-status report-status-v2 delete-refs side-band-64k';
+        $payload = \str_repeat('0', 40) . ' refs/heads/main' . "\x00" . $caps;
+        $framed = \sprintf('%04x', \strlen($payload) + 4) . $payload . '0000';
 
-        $this->assertSame($framed, $out, 'empty-ref advertisement is byte-exact to the current binary-length encoder');
-        // The defect itself, pinned: the first four bytes are NOT the
-        // spec-correct ASCII hex length prefix.
-        $this->assertNotSame(\sprintf('%04x', \strlen($payload) + 4), \substr($out, 0, 4));
-        // Self-inconsistency pinned: ASCII flush after binary-framed payload.
+        $this->assertSame($framed, $out, 'empty-ref advertisement is byte-exact spec pkt-line framing');
+        // The prefix is four ASCII hex digits - the very property the old
+        // binary encoder violated.
+        $this->assertSame(\sprintf('%04x', \strlen($payload) + 4), \substr($out, 0, 4));
         $this->assertSame('0000', \substr($out, -4));
     }
 
-    public function testAdvertiseRefsMultipleRefsEachPacketGetsBinaryFrameAndStrayNewline(): void
+    public function testAdvertiseRefsMultipleRefsRideTheirOwnPacketsWithoutStrayNewlines(): void
     {
         $out = $this->advertiseProbe('three');
 
-        $caps = 'report-status|report-status-v2 delete-refs side-band-64k';
-        $first = \str_repeat('a', 40) . ' refs/heads/master' . "\x00 " . $caps;
+        $caps = 'report-status report-status-v2 delete-refs side-band-64k';
+        $first = \str_repeat('a', 40) . ' refs/heads/master' . "\x00" . $caps;
         $second = \str_repeat('b', 40) . ' refs/heads/feature';
         $third = \str_repeat('c', 40) . ' refs/tags/v1.0';
 
-        $expected = \pack('n', \strlen($first) + 4) . $first . "\n"
-            . \pack('n', \strlen($second) + 4) . $second . "\n"
-            . \pack('n', \strlen($third) + 4) . $third . "\n"
+        $expected = \sprintf('%04x', \strlen($first) + 4) . $first
+            . \sprintf('%04x', \strlen($second) + 4) . $second
+            . \sprintf('%04x', \strlen($third) + 4) . $third
             . '0000';
 
-        $this->assertSame($expected, $out, 'three-ref advertisement is byte-exact to the current encoder');
+        $this->assertSame($expected, $out, 'three-ref advertisement is byte-exact through the shared codec');
         // The header ref rides the FIRST packet with its capabilities, and
-        // the loop must not duplicate it — pinned by payload count:
-        $this->assertSame(3, \substr_count($out, "\n"), 'one stray newline per payload packet, none per flush');
+        // payloads carry no bytes the encoder invented:
+        $this->assertSame(0, \substr_count($out, "\n"), 'no stray newlines - the encoder adds exactly the hex prefix');
     }
 
     // -------------------------------------------------------------------------

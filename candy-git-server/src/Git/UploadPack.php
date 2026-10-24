@@ -134,11 +134,17 @@ final class UploadPack
 
     /**
      * Send the refs advertisement to the client.
+     *
+     * advertiseRefs() keeps its plain-line shape (that is its in-process
+     * contract, pinned by GitProtocolTest); on the wire each line rides its
+     * own packet, the trailing empty entry becomes the flush via the codec's
+     * empty-payload-means-flush convention.
      */
     private function sendRefs(): void
     {
-        $packet = $this->advertiseRefs();
-        $this->writePacket($packet);
+        foreach (\explode("\n", $this->advertiseRefs()) as $line) {
+            $this->writePacket($line);
+        }
     }
 
     /**
@@ -194,14 +200,10 @@ final class UploadPack
     }
 
     /**
-     * Write a pkt-line (Git wire protocol).
+     * Write a pkt-line (Git wire protocol) through the shared codec.
      */
     private function writePacket(string $data): void
     {
-        $len = \strlen($data) + 4;  // 4 bytes for length prefix
-        $hex = \dechex($len);
-        $hex = \str_pad($hex, 4, '0', \STR_PAD_LEFT);
-        \fwrite(\STDOUT, \hex2bin($hex) ?: $hex . "\n");
-        \fwrite(\STDOUT, $data . "\n");
+        \fwrite(\STDOUT, PktLine::encode($data));
     }
 }
