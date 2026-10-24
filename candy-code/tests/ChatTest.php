@@ -1899,7 +1899,7 @@ final class ChatTest extends TestCase
      * Standalone fake WorkflowEngine for testing.
      *
      * Provides stub implementations of the 5 public methods that Chat's
-     * workflow handlers call: run, pause, resume, getStatus, listWorkflows.
+     * workflow handlers call: run, pause, resume, status, listWorkflows.
      * This is a simple test double — NOT extending WorkflowEngine — so that
      * WorkflowEngine can remain final without scope creep into Chat.php's test.
      */
@@ -1940,10 +1940,10 @@ final class ChatTest extends TestCase
                 throw new \SugarCraft\Code\Workflows\WorkflowNotFoundException('Not found');
             }
 
-            public function getStatus(string $workflowId): \SugarCraft\Code\Workflows\WorkflowStatus
+            public function status(string $workflowId): \SugarCraft\Code\Workflows\WorkflowStatus
             {
-                if (isset($this->stubs['getStatus'])) {
-                    return $this->stubs['getStatus'];
+                if (isset($this->stubs['status'])) {
+                    return $this->stubs['status'];
                 }
                 throw new \SugarCraft\Code\Workflows\WorkflowNotRunningException('Not found');
             }

@@ -230,7 +230,7 @@ final class BackgroundEvents
         );
         foreach ($this->schedules->firedNames() as $name) {
             $sessionId = $this->schedules->busySession($name);
-            $session = $sessionId === null ? null : $this->supervisor->getSession($sessionId);
+            $session = $sessionId === null ? null : $this->supervisor->session($sessionId);
             if ($session === null || $session->isSettled()) {
                 $this->schedules->clearFired($name);
             }
@@ -246,11 +246,11 @@ final class BackgroundEvents
      */
     public function sessions(): array
     {
-        $sessions = $this->supervisor->getActiveSessions();
+        $sessions = $this->supervisor->activeSessions();
         foreach (\array_keys($this->reported) as $id) {
             $id = (string) $id;
             if (!isset($sessions[$id])) {
-                $session = $this->supervisor->getSession($id);
+                $session = $this->supervisor->session($id);
                 if ($session !== null) {
                     $sessions[$id] = $session;
                 }
@@ -477,7 +477,7 @@ final class BackgroundEvents
             // timed-out with its window — nobody is polling an answer any more.
             return ['status' => 'unknown'];
         }
-        $session = $this->supervisor->getSession($bgId);
+        $session = $this->supervisor->session($bgId);
         if ($session === null || $session->isSettled()) {
             return ['status' => 'unknown'];
         }

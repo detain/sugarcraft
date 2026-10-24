@@ -88,7 +88,7 @@ final class SessionSwitch
             return null;
         }
 
-        $row = $store->getSession($sessionId);
+        $row = $store->session($sessionId);
         $stored = \is_array($row) ? (string) ($row['name'] ?? '') : '';
 
         return $stored !== '' ? $stored : null;
@@ -102,7 +102,7 @@ final class SessionSwitch
         SessionStore|EnhancedSessionStore|null $store,
         string $sessionId,
     ): ?TitleSource {
-        $row = $store?->getSession($sessionId);
+        $row = $store?->session($sessionId);
 
         return \is_array($row) ? TitleSource::fromStored($row['title_source'] ?? null) : null;
     }

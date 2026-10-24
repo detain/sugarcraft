@@ -206,7 +206,7 @@ final class App implements Model
          * one size sugar-core's Program dispatches at startup AND again on
          * every SIGWINCH resize. Null until the first WindowSizeMsg arrives
          * (or for an App built directly in a test, never), in which case
-         * {@see TuiRenderer::getTerminalSize()}'s own detection is the
+         * {@see TuiRenderer::terminalSize()}'s own detection is the
          * fallback. The shell renderer MUST be handed these rather than
          * querying the terminal itself: that query is cached in a static that
          * is never invalidated, so it would keep drawing the chrome at the
@@ -1121,7 +1121,7 @@ final class App implements Model
 
         return [
             'id' => $id,
-            'name' => $state?->name ?? $this->agentViewName ?? $attach?->name ?? $this->chat->agentManager()?->getSubAgent($id)?->agent->name ?? $id,
+            'name' => $state?->name ?? $this->agentViewName ?? $attach?->name ?? $this->chat->agentManager()?->subAgent($id)?->agent->name ?? $id,
             'state' => $state,
             'rows' => [...$this->agentViewRows, ...$this->agentViewSentRows($id)],
             // P-D3: what the composer's placeholder names — the broadcast's
@@ -1634,7 +1634,7 @@ final class App implements Model
      */
     private function videoPlayerCells(): array
     {
-        $size = TuiRenderer::getTerminalSize();
+        $size = TuiRenderer::terminalSize();
         $cols = $this->cols ?? (int) ($size['cols'] ?? 80);
         $rows = $this->rows ?? (int) ($size['rows'] ?? 24);
 
@@ -2668,7 +2668,7 @@ final class App implements Model
         return static function () use ($store): null {
             try {
                 \SugarCraft\Code\Agents\AgentManager::pruneSessionArtifacts(
-                    static fn (string $sessionId): bool => $store->getSession($sessionId) !== null,
+                    static fn (string $sessionId): bool => $store->session($sessionId) !== null,
                 );
             } catch (\Throwable) {
                 // Best effort — see above.
@@ -3878,7 +3878,7 @@ final class App implements Model
      */
     private static function settingsEditorYields(KeyMsg $msg): bool
     {
-        return MenuBar::getActiveMenu() > 0
+        return MenuBar::activeMenu() > 0
             || $msg->type === KeyType::F10
             || ($msg->type === KeyType::Char && ($msg->rune === "\x03" || ($msg->ctrl && $msg->rune === 'c')));
     }

@@ -173,10 +173,10 @@ final readonly class GitCommandHandlers
         $staged = $this->gitStaged($path);
 
         $output = [
-            'branch' => $branch->getOutputOrNull(),
-            'remote' => $remote->getOutputOrNull(),
-            'tags' => $tags->getOutputOrNull(),
-            'hasStagedChanges' => !empty($staged->getOutputOrNull()),
+            'branch' => $branch->outputOrNull(),
+            'remote' => $remote->outputOrNull(),
+            'tags' => $tags->outputOrNull(),
+            'hasStagedChanges' => !empty($staged->outputOrNull()),
         ];
 
         return GitOperationResult::success(

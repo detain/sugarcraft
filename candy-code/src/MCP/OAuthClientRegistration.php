@@ -228,7 +228,7 @@ final class OAuthClientRegistration
      * returned `refreshToken` is `''` when the server omitted one, which is
      * legal for authorization-code grants. The caller of a refresh-less entry
      * serves the access token until it expires and then re-runs the browser
-     * login; {@see getValidAuth()} honours that in both arms, rather than
+     * login; {@see validAuth()} honours that in both arms, rather than
      * calling refresh with an empty token and failing deep in the wire.
      *
      * The secret rides the form body (client_secret_post). Registration
@@ -280,7 +280,7 @@ final class OAuthClientRegistration
         return [
             'accessToken' => $accessToken,
             // An omitted refresh_token is stored as '' — the honest shape of
-            // "this entry cannot refresh", which getValidAuth() reads as a
+            // "this entry cannot refresh", which validAuth() reads as a
             // guard rather than as a token to send.
             'refreshToken' => $data['refresh_token'] ?? '',
             'expiresIn' => $expiresIn,
@@ -403,7 +403,7 @@ final class OAuthClientRegistration
      * @throws \RuntimeException When the entry is expired and cannot be renewed
      *                           without the user, or a refresh fails
      */
-    public function getValidAuth(string $serverUrl, string $tokenUrl): ?AuthEntry
+    public function validAuth(string $serverUrl, string $tokenUrl): ?AuthEntry
     {
         $authData = $this->loadAuth();
         $entry = $authData[$serverUrl] ?? null;
@@ -468,10 +468,19 @@ final class OAuthClientRegistration
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::validAuth()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getValidAuth(string $serverUrl, string $tokenUrl): ?AuthEntry { return $this->validAuth($serverUrl, $tokenUrl); }
+
+    /**
      * E695: the server-keyed read path for request-time attachment.
      *
      * Loads the stored entry for a server URL and hands it to
-     * {@see getValidAuth()} using the token endpoint that entry PERSISTS — so a caller holding only the server URL (an
+     * {@see validAuth()} using the token endpoint that entry PERSISTS — so a caller holding only the server URL (an
      * {@see HttpMcpServer} composing its request headers) gets the refresh
      * behavior for free, and a rotated token is written back through
      * {@see refreshGuarded()}'s locked save path.
@@ -495,7 +504,7 @@ final class OAuthClientRegistration
             return $entry;
         }
 
-        return $this->getValidAuth($serverUrl, $entry->tokenUrl);
+        return $this->validAuth($serverUrl, $entry->tokenUrl);
     }
 
     /**
@@ -510,7 +519,7 @@ final class OAuthClientRegistration
      *
      * WHY this is no longer on the token path (audit MCP-8): an update
      * re-describes the client, it never issues an access token, so it cannot
-     * revive an expired login — {@see getValidAuth()} asks for a new login
+     * revive an expired login — {@see validAuth()} asks for a new login
      * instead. It stays a public operation for changing a registration (say,
      * new redirect URIs), and it touches only the registration fields of the
      * stored row: the tokens on it are carried through as they are on disk.

@@ -752,10 +752,19 @@ final class AgentManager
     /**
      * Get a subagent by ID.
      */
-    public function getSubAgent(string $id): ?SubAgent
+    public function subAgent(string $id): ?SubAgent
     {
         return $this->subAgents[$id] ?? null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::subAgent()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSubAgent(string $id): ?SubAgent { return $this->subAgent($id); }
 
     /**
      * Every run this manager knows of — spawned here or mirrored from a
@@ -998,7 +1007,7 @@ final class AgentManager
      */
     public function executeSubAgent(string $id): \Generator
     {
-        $subAgent = $this->getSubAgent($id);
+        $subAgent = $this->subAgent($id);
         if ($subAgent === null) {
             throw new \RuntimeException("SubAgent not found: $id");
         }
@@ -2464,7 +2473,7 @@ final class AgentManager
      */
     public function stopSubAgent(string $id): void
     {
-        $subAgent = $this->getSubAgent($id);
+        $subAgent = $this->subAgent($id);
         if ($subAgent === null) {
             return;
         }
@@ -2562,10 +2571,19 @@ final class AgentManager
     /**
      * Get the team manager instance.
      */
-    public function getTeamManager(): ?TeamManager
+    public function teamManager(): ?TeamManager
     {
         return $this->teamManager;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::teamManager()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTeamManager(): ?TeamManager { return $this->teamManager(); }
 
     /**
      * Create a new team and register it.
@@ -2591,14 +2609,23 @@ final class AgentManager
      *
      * @throws \RuntimeException When no team manager is set
      */
-    public function getTeam(string $teamId): ?Team
+    public function team(string $teamId): ?Team
     {
         if ($this->teamManager === null) {
             throw new \RuntimeException('TeamManager has not been set on AgentManager');
         }
 
-        return $this->teamManager->getTeam($teamId);
+        return $this->teamManager->team($teamId);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::team()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTeam(string $teamId): ?Team { return $this->team($teamId); }
 
     /**
      * Check whether a team exists (is registered).
@@ -2634,14 +2661,23 @@ final class AgentManager
      * @return Team[]
      * @throws \RuntimeException When no team manager is set
      */
-    public function getTeams(): array
+    public function teams(): array
     {
         if ($this->teamManager === null) {
             throw new \RuntimeException('TeamManager has not been set on AgentManager');
         }
 
-        return $this->teamManager->getTeams();
+        return $this->teamManager->teams();
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::teams()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTeams(): array { return $this->teams(); }
 
     /**
      * Return the number of currently registered teams.

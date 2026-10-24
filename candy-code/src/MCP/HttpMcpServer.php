@@ -456,7 +456,7 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
      * @param array<string,mixed> $arguments
      * @return array<mixed> the raw `result` of the reply
      */
-    public function getPrompt(string $name, array $arguments = []): array
+    public function prompt(string $name, array $arguments = []): array
     {
         // The empty-arguments object law already enforced for `tools/call`:
         // SDK servers reject `"arguments": []`, and only the empty PHP array
@@ -471,6 +471,15 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
             ),
         );
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::prompt()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getPrompt(string $name, array $arguments = []): array { return $this->prompt($name, $arguments); }
 
     /**
      * Walk a paginated provider list to its end — the ISS-093(b) law applied
@@ -929,7 +938,7 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
      *
      * WHY PER-REQUEST and not snapshotted at construction: {@see
      * OAuthClientRegistration::validAuthFor()} consults {@see
-     * OAuthClientRegistration::getValidAuth()}, which REFRESHES a token inside
+     * OAuthClientRegistration::validAuth()}, which REFRESHES a token inside
      * its expiry buffer and persists the rotation through the store's existing
      * save path. A launch-time snapshot would freeze the first token and send
      * an expired bearer for the rest of the session — the exact inert-store

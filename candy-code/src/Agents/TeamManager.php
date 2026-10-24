@@ -168,7 +168,7 @@ final class TeamManager
      *
      * @return Team[]
      */
-    public function getTeams(): array
+    public function teams(): array
     {
         $this->refresh();
 
@@ -181,10 +181,19 @@ final class TeamManager
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::teams()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTeams(): array { return $this->teams(); }
+
+    /**
      * Fetch a team by its ID — re-reading the registry when this process has
      * not seen it, so a team another process created is found.
      */
-    public function getTeam(string $teamId): ?Team
+    public function team(string $teamId): ?Team
     {
         if (!isset($this->meta[$teamId])) {
             $this->refresh();
@@ -194,9 +203,18 @@ final class TeamManager
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::team()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTeam(string $teamId): ?Team { return $this->team($teamId); }
+
+    /**
      * Fetch the config for a given team.
      */
-    public function getTeamConfig(string $teamId): ?TeamConfig
+    public function teamConfig(string $teamId): ?TeamConfig
     {
         if (!isset($this->meta[$teamId])) {
             $this->refresh();
@@ -204,6 +222,15 @@ final class TeamManager
 
         return $this->teamConfigs[$teamId] ?? null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::teamConfig()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTeamConfig(string $teamId): ?TeamConfig { return $this->teamConfig($teamId); }
 
     /**
      * Return the number of currently registered teams.
@@ -244,12 +271,12 @@ final class TeamManager
     public function handleTeammateIdle(string $teamId, string $teammateId, ?int $ownerPid = null, ?string &$refusal = null): ?string
     {
         $refusal = null;
-        $team = $this->getTeam($teamId);
+        $team = $this->team($teamId);
         if ($team === null) {
             return null;
         }
 
-        $taskList = $team->getTaskList();
+        $taskList = $team->taskList();
 
         $hookResult = $taskList->dispatchTeammateIdle($teamId, $teammateId);
         if ($hookResult->isBlock()) {
@@ -265,7 +292,7 @@ final class TeamManager
             return null;
         }
 
-        foreach ($taskList->getUnblockedTasks($teammateId) as $task) {
+        foreach ($taskList->unblockedTasks($teammateId) as $task) {
             if ($taskList->claimTask($task->id, $teammateId, null, $ownerPid)) {
                 return $task->id;
             }
@@ -281,7 +308,7 @@ final class TeamManager
      */
     public function autoAssigns(string $teamId): bool
     {
-        return $this->getTeamConfig($teamId)?->autoAssignTasks ?? true;
+        return $this->teamConfig($teamId)?->autoAssignTasks ?? true;
     }
 
     /**
@@ -300,7 +327,7 @@ final class TeamManager
      */
     public function overdueSeconds(string $teamId, Task $task, ?\DateTimeImmutable $now = null): ?int
     {
-        $limit = $this->getTeamConfig($teamId)?->defaultTimeoutSeconds ?? 0;
+        $limit = $this->teamConfig($teamId)?->defaultTimeoutSeconds ?? 0;
         if ($limit <= 0 || $task->status !== TaskStatus::InProgress || $task->claimedAt === null) {
             return null;
         }

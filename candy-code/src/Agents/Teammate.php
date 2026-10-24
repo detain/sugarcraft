@@ -36,7 +36,7 @@ final readonly class Teammate
      * method: inboxes are stored at ~/.candy-code/teams/{teamId}/inboxes/{teammateId}/
      * following the append-only JSON-lines format described in the mailbox spec.
      */
-    public function getInboxPath(): string
+    public function inboxPath(): string
     {
         $base = HomeDirectory::path();
 
@@ -53,6 +53,15 @@ final readonly class Teammate
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::inboxPath()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getInboxPath(): string { return $this->inboxPath(); }
+
+    /**
      * Returns the current operational status of this teammate.
      *
      * There is no upstream analogue for this accessor. Since status tracking
@@ -60,10 +69,19 @@ final readonly class Teammate
      * this returns a default Idle status. Runtime status is tracked by the
      * team's aggregate, not on the teammate entity itself.
      */
-    public function getStatus(): TeammateStatus
+    public function status(): TeammateStatus
     {
         return TeammateStatus::Idle;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::status()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getStatus(): TeammateStatus { return $this->status(); }
 
     /**
      * Returns a new Teammate instance with the given worktree path associated.

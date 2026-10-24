@@ -1893,7 +1893,7 @@ final class Renderer
         // $chat->rows() (sourced from WindowSizeMsg - the size sugar-core's
         // Program actually dispatches, live, on every resize) is the
         // authoritative value here - NOT a second, independent
-        // TuiRenderer::getTerminalSize() query. That second query has its
+        // TuiRenderer::terminalSize() query. That second query has its
         // own statically-cached, never-invalidated detection of the SAME
         // terminal that can silently disagree with what Program itself
         // knows (and never learns about a live resize either), which

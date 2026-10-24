@@ -198,7 +198,7 @@ final class WorkflowLivePaneTest extends TestCase
                 throw new \RuntimeException('not used');
             }
 
-            public function getStatus(string $workflowId): WorkflowStatus
+            public function status(string $workflowId): WorkflowStatus
             {
                 return WorkflowStatus::Completed;
             }

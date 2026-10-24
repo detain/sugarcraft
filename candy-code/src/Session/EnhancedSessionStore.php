@@ -51,7 +51,7 @@ final class EnhancedSessionStore
 
             // Share the same PDO connection for enhanced tables.
             // Both stores use the same SQLite database file.
-            $this->pdo = $this->sessionStore->getPdo();
+            $this->pdo = $this->sessionStore->pdo();
 
             $this->initEnhancedSchema();
             $this->searchIndex = SessionSearchIndex::create($this->pdo, $ftsModule);
@@ -159,15 +159,33 @@ final class EnhancedSessionStore
         return $this->sessionStore->createChildSession($parentId, $kind, $agent, $parentCallId, $provider, $model, $name);
     }
 
-    public function getSession(string $id): ?array
+    public function session(string $id): ?array
     {
-        return $this->sessionStore->getSession($id);
+        return $this->sessionStore->session($id);
     }
 
-    public function getSessionByName(string $name): ?array
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::session()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSession(string $id): ?array { return $this->session($id); }
+
+    public function sessionByName(string $name): ?array
     {
-        return $this->sessionStore->getSessionByName($name);
+        return $this->sessionStore->sessionByName($name);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::sessionByName()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSessionByName(string $name): ?array { return $this->sessionByName($name); }
 
     /** @see SessionStore::renameSession() */
     public function renameSession(string $id, string $name, TitleSource $source = TitleSource::User): bool
@@ -516,10 +534,19 @@ final class EnhancedSessionStore
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function getMessages(string $sessionId): array
+    public function messages(string $sessionId): array
     {
-        return $this->sessionStore->getMessages($sessionId);
+        return $this->sessionStore->messages($sessionId);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::messages()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getMessages(string $sessionId): array { return $this->messages($sessionId); }
 
     public function addToolCall(string $sessionId, int $messageId, array $toolCall): void
     {
@@ -741,7 +768,7 @@ final class EnhancedSessionStore
      * Index allocation was `SELECT MAX("index")+1` then `INSERT` with nothing
      * tying the two together, so two processes saving into one session could
      * both take the same index (audit SES-3). With duplicates,
-     * `getCheckpoint()` returned whichever row SQLite met first and
+     * `checkpoint()` returned whichever row SQLite met first and
      * `restoreCheckpoint()`'s `"index" >= ?` deleted both. The allocation is
      * now inside `BEGIN IMMEDIATE` ({@see saveCheckpoint()}); this index is
      * the schema-level guarantee behind it.
@@ -855,7 +882,7 @@ final class EnhancedSessionStore
     /**
      * Get enhanced metadata for a session.
      */
-    public function getSessionMeta(string $sessionId): ?SessionMeta
+    public function sessionMeta(string $sessionId): ?SessionMeta
     {
         $stmt = $this->pdo->prepare('
             SELECT * FROM session_meta WHERE session_id = ?
@@ -879,6 +906,15 @@ final class EnhancedSessionStore
                 ->setTimezone(new \DateTimeZone(date_default_timezone_get())),
         );
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::sessionMeta()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSessionMeta(string $sessionId): ?SessionMeta { return $this->sessionMeta($sessionId); }
 
     /**
      * Save enhanced metadata for a session.
@@ -1927,7 +1963,7 @@ final class EnhancedSessionStore
         // 15b-21). It also makes the save atomic: a failure part-way leaves
         // the previous transcript and no stray blobs.
         $this->writeTransaction(function () use ($sessionId, $messages): void {
-            if ($this->sessionStore->getSession($sessionId) === null) {
+            if ($this->sessionStore->session($sessionId) === null) {
                 $this->sessionStore->createSession($sessionId, 'candy-code', 'unknown');
             }
 
@@ -2291,7 +2327,7 @@ final class EnhancedSessionStore
         $tsMs ??= (int) floor(microtime(true) * 1000);
 
         return $this->writeTransaction(function () use ($sessionId, $type, $encoded, $tsMs, $retain): int {
-            if ($this->sessionStore->getSession($sessionId) === null) {
+            if ($this->sessionStore->session($sessionId) === null) {
                 $this->sessionStore->createSession($sessionId, 'candy-code', 'unknown');
             }
 
@@ -2397,7 +2433,7 @@ final class EnhancedSessionStore
 
         try {
             $this->writeTransaction(function () use ($sessionId, $usage, $model): void {
-                if ($this->sessionStore->getSession($sessionId) === null) {
+                if ($this->sessionStore->session($sessionId) === null) {
                     $this->sessionStore->createSession($sessionId, 'candy-code', 'unknown');
                 }
 
@@ -2847,7 +2883,7 @@ final class EnhancedSessionStore
      * @param int $index The checkpoint index
      * @return array|null The checkpoint state data, or null if not found
      */
-    public function getCheckpoint(string $sessionId, int $index): ?array
+    public function checkpoint(string $sessionId, int $index): ?array
     {
         $stmt = $this->pdo->prepare('
             SELECT state_data FROM checkpoints WHERE session_id = ? AND "index" = ? AND undone = 0
@@ -2866,6 +2902,15 @@ final class EnhancedSessionStore
 
         return $this->decodeCheckpoint((string) $row['state_data']);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::checkpoint()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getCheckpoint(string $sessionId, int $index): ?array { return $this->checkpoint($sessionId, $index); }
 
     /**
      * List recent live checkpoints for a session, newest first. Rows on the
@@ -2925,7 +2970,7 @@ final class EnhancedSessionStore
         // Read and mark under one write lock, so another writer cannot add a
         // checkpoint between the read and the update.
         $state = $this->writeTransaction(function () use ($sessionId, $index, $redoTip, &$tipIndex): ?array {
-            $state = $this->getCheckpoint($sessionId, $index);
+            $state = $this->checkpoint($sessionId, $index);
             if ($state === null) {
                 return null;
             }

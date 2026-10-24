@@ -61,10 +61,19 @@ final class MultiplexerSplitPane
      *
      * @return MultiplexerType The detected multiplexer type.
      */
-    public function getMultiplexerType(): MultiplexerType
+    public function multiplexerType(): MultiplexerType
     {
         return $this->detectedType;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::multiplexerType()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getMultiplexerType(): MultiplexerType { return $this->multiplexerType(); }
 
     /**
      * Render a split layout, delegating to the multiplexer when active.

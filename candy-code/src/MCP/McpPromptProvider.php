@@ -38,5 +38,5 @@ interface McpPromptProvider
      *        already enforced for `tools/call`)
      * @return array<mixed> the raw `result` of the reply
      */
-    public function getPrompt(string $name, array $arguments = []): array;
+    public function prompt(string $name, array $arguments = []): array;
 }

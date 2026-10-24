@@ -233,10 +233,19 @@ final class SkillManager
      *
      * @return array<Skill>
      */
-    public function getSkillsForTask(string $task): array
+    public function skillsForTask(string $task): array
     {
         return $this->registry->findForPrompt($task);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::skillsForTask()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSkillsForTask(string $task): array { return $this->skillsForTask($task); }
 
     /**
      * Get skills matching file paths.
@@ -244,10 +253,19 @@ final class SkillManager
      * @param array<string> $paths
      * @return array<Skill>
      */
-    public function getSkillsForPaths(array $paths): array
+    public function skillsForPaths(array $paths): array
     {
-        return $this->registry->getForPaths($paths);
+        return $this->registry->forPaths($paths);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::skillsForPaths()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSkillsForPaths(array $paths): array { return $this->skillsForPaths($paths); }
 
     /**
      * Apply skills to an app.
@@ -306,10 +324,19 @@ final class SkillManager
      *
      * @return array<Skill>
      */
-    public function getUserInvocable(): array
+    public function userInvocable(): array
     {
         return $this->registry->getUserInvocable();
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::userInvocable()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getUserInvocable(): array { return $this->userInvocable(); }
 
     /**
      * Disable skills listed in config.

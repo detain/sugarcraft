@@ -171,7 +171,7 @@ trait HandlesSessionSurface
             // Record the settled status as already announced, so the next
             // background poll does not repeat it as "is now stopped".
             $statuses = $this->backgroundStatuses;
-            $settled = $this->backgroundSupervisor?->getSession($msg->sessionId);
+            $settled = $this->backgroundSupervisor?->session($msg->sessionId);
             if ($settled !== null) {
                 $statuses[$msg->sessionId] = $settled->status->value;
             }

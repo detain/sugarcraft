@@ -121,7 +121,7 @@ final class SessionHub
     {
         $sessionId ??= bin2hex(random_bytes(8));
         $store = $this->workspace->sessionStore;
-        if ($store !== null && $store->getSession($sessionId) === null) {
+        if ($store !== null && $store->session($sessionId) === null) {
             $store->createSession($sessionId, $provider, $model, name: $name, cwd: $this->workspace->root);
         }
 

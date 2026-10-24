@@ -275,7 +275,7 @@ final class ServerContext
         }
 
         $store = $this->hub->workspace()->sessionStore;
-        if ($store !== null && $store->getSession($sessionId) === null) {
+        if ($store !== null && $store->session($sessionId) === null) {
             throw RpcError::notFound(\sprintf('no session %s', $sessionId), 'session_not_found');
         }
 
@@ -347,7 +347,7 @@ final class ServerContext
      */
     public function summaryOf(string $sessionId): array
     {
-        $row = $this->hub->workspace()->sessionStore?->getSession($sessionId) ?? ['id' => $sessionId];
+        $row = $this->hub->workspace()->sessionStore?->session($sessionId) ?? ['id' => $sessionId];
 
         return $this->summary($row);
     }

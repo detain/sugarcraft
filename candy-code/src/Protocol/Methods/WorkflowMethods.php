@@ -137,7 +137,7 @@ final class WorkflowMethods
         $engine = self::engine($call);
         $workflowId = self::workflowId($params);
         try {
-            $status = $engine->getStatus($workflowId)->value;
+            $status = $engine->status($workflowId)->value;
         } catch (WorkflowNotRunningException $e) {
             throw RpcError::notFound($e->getMessage(), 'workflow_not_found');
         }
@@ -271,7 +271,7 @@ final class WorkflowMethods
     private static function statusOf(WorkflowEngineInterface $engine, string $workflowId): string
     {
         try {
-            return $engine->getStatus($workflowId)->value;
+            return $engine->status($workflowId)->value;
         } catch (\Throwable) {
             return WorkflowStatus::Paused->value;
         }

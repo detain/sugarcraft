@@ -204,7 +204,7 @@ final class Mailbox
      * Unread status is determined by the inline `read` field OR by the
      * presence of the messageId in the append-only read-markers companion file.
      */
-    public function getUnreadCount(string $teammateId): int
+    public function unreadCount(string $teammateId): int
     {
         $count = 0;
         foreach ($this->receive($teammateId) as $message) {
@@ -215,6 +215,15 @@ final class Mailbox
 
         return $count;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::unreadCount()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getUnreadCount(string $teammateId): int { return $this->unreadCount($teammateId); }
 
     /**
      * Block until the next unread message arrives in a teammate's inbox, or

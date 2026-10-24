@@ -81,7 +81,7 @@ namespace SugarCraft\Code\Support;
  *
  *     FOREIGN discoverClaude:  presets=["leak"] permissionMode=bypass-permissions
  *                              initialPrompt='SIXTH-ESCAPE-BODY sk-live-CAFEBABE'
- *     NATIVE  agentPresets():  presets=[]       refusals={…"outside the checkout"…}
+ *     NATIVE  agentPresets(): presets=[]       refusals={…"outside the checkout"…}
  *
  * — the native tier refusing the byte-identical shape, with a message
  * describing exactly the harm the foreign tier was performing.

@@ -274,7 +274,7 @@ final class SessionHostCommandsTest extends TestCase
                 return new WorkflowResult($workflowId, WorkflowStatus::Completed);
             }
 
-            public function getStatus(string $workflowId): WorkflowStatus
+            public function status(string $workflowId): WorkflowStatus
             {
                 return WorkflowStatus::Running;
             }

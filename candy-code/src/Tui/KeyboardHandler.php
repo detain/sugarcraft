@@ -390,7 +390,7 @@ final class KeyboardHandler
      */
     private static function shellOwnsKeyboard(App $app): bool
     {
-        return MenuBar::getActiveMenu() > 0
+        return MenuBar::activeMenu() > 0
             || $app->pane === Pane::Agents
             || ($app->pane === Pane::Skills && $app->skillPickerOptions !== [])
             || $app->settingsEditor !== null
@@ -545,7 +545,7 @@ final class KeyboardHandler
 
         // The open Agent View (P-C2) — below the strip, which has the keyboard
         // first while it is focused, and only with no menu open over it.
-        if ($app->pane === Pane::Chat && $app->agentViewTarget !== null && MenuBar::getActiveMenu() === 0) {
+        if ($app->pane === Pane::Chat && $app->agentViewTarget !== null && MenuBar::activeMenu() === 0) {
             $result = $this->handleOpenAgentViewKey($key, $app);
             if ($result !== null) {
                 return $result;
@@ -588,7 +588,7 @@ final class KeyboardHandler
         // generic pane navigation below because that block claimed
         // left/right/h/l unconditionally, so a menu could never be navigated
         // even once something opened it.
-        $currentMenu = MenuBar::getActiveMenu();
+        $currentMenu = MenuBar::activeMenu();
         if ($currentMenu > 0) {
             $result = MenuBar::handleKey($key, $currentMenu);
             // Persist the index handleKey() navigated to -- it is a pure
@@ -788,7 +788,7 @@ final class KeyboardHandler
     private static function agentStripKey(KeyMsg $msg, App $app): ?string
     {
         $chat = $app->chat;
-        if ($app->pane !== Pane::Chat || $chat === null || $app->settingsEditor !== null || $app->mediaForm !== null || MenuBar::getActiveMenu() > 0
+        if ($app->pane !== Pane::Chat || $chat === null || $app->settingsEditor !== null || $app->mediaForm !== null || MenuBar::activeMenu() > 0
             || $chat->pendingPermission() !== null || $chat->keyHelp() !== null
             || $chat->palette() !== null || $chat->sessionPicker() !== null || $chat->dirPicker() !== null) {
             return null;
@@ -881,7 +881,7 @@ final class KeyboardHandler
     {
         $chat = $app->chat;
         if ($app->agentViewTarget === null || $app->pane !== Pane::Chat || $chat === null
-            || $app->agentStripFocus !== null || $app->settingsEditor !== null || $app->mediaForm !== null || MenuBar::getActiveMenu() > 0
+            || $app->agentStripFocus !== null || $app->settingsEditor !== null || $app->mediaForm !== null || MenuBar::activeMenu() > 0
             || $chat->pendingPermission() !== null || $chat->keyHelp() !== null
             || $chat->palette() !== null || $chat->sessionPicker() !== null || $chat->dirPicker() !== null || $chat->titleEditor() !== null) {
             return null;

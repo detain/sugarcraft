@@ -4045,7 +4045,7 @@ public static function pinPromptHistoryPath(?string $path): void
             // If anything else minted this row between the launch and the
             // first prompt (a backfilling save, a hand of the same id), the
             // row exists and that writer's metadata stands.
-            if ($store->getSession($id) !== null) {
+            if ($store->session($id) !== null) {
                 return;
             }
             $store->createSession($id, $provider, $model, null, null, $cwd, $branch);
@@ -9084,7 +9084,7 @@ public static function useMaxCost(?string $maxCost): void
         if ($prune) {
             try {
                 \SugarCraft\Code\Agents\AgentManager::pruneSessionArtifacts(
-                    static fn (string $sessionId): bool => $store->getSession($sessionId) !== null,
+                    static fn (string $sessionId): bool => $store->session($sessionId) !== null,
                     self::configDir(),
                 );
             } catch (\Throwable) {

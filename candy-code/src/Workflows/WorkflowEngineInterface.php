@@ -31,7 +31,7 @@ interface WorkflowEngineInterface
     /** @param CancellationToken|null $cancellation as {@see run()} */
     public function resume(string $workflowId, ?CancellationToken $cancellation = null): WorkflowResult;
 
-    public function getStatus(string $workflowId): WorkflowStatus;
+    public function status(string $workflowId): WorkflowStatus;
 
     public function listWorkflows(): array;
 }

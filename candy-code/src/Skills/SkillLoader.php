@@ -675,7 +675,7 @@ final class SkillLoader
      *   - disableModelInvocation: bool
      *   - userInvocable: bool
      *   - context: 'thread' or 'fork' (context-fork mode)
-     *   - paths: glob patterns for path-based auto-scoping (SkillRegistry::getForPaths())
+     *   - paths: glob patterns for path-based auto-scoping (SkillRegistry::forPaths())
      *   - sourcePath: absolute path to SKILL.md
      *
      * paths comes from frontmatter (already parsed above), so surfacing it

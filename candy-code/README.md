@@ -2488,6 +2488,84 @@ final class MyProvider implements ProviderInterface
 }
 ```
 
+## Accessor deprecation (2026-10-24)
+
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"),
+ruling 3b), the 2026-10-24 remediation pass renamed 55 public `get*()` accessors
+across 27 classes to their bare twins. The legacy names remain as one-line BC
+forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` — they will be
+removed in candy-code v2.0.0. Internal call sites in `src/` were switched to the
+bare forms in the same pass.
+
+Own interfaces were rewritten outright (every implementer is in-tree):
+`McpPromptProvider::getPrompt()` → `prompt()` and
+`WorkflowEngineInterface::getStatus()` → `status()`. Documented exceptions that
+keep their `get` prefix: `SkillRegistry::getUserInvocable()` — the bare name
+`userInvocable` is taken by the by-name lookup `userInvocable(string $name): ?Skill`
+(an honest carve beats a forced rename) — and `Server\Listener::getAddress()`,
+which implements the vendor `React\Socket\ServerInterface` contract. Private
+helpers (`getTaskWithoutLock()`, `getPauseFilePath()`, `getExecutor()` on
+`ProcessExecutor`, `getAutoInvocable()`, `getRetiredUploadKey()`) are not public
+API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant.
+
+| Namespace | Class | Deprecated | Use instead |
+|-----------|-------|------------|-------------|
+| `Agents` | `AgentManager` | `getSubAgent()` | `subAgent()` |
+| `Agents` | `AgentManager` | `getTeam()` | `team()` |
+| `Agents` | `AgentManager` | `getTeamManager()` | `teamManager()` |
+| `Agents` | `AgentManager` | `getTeams()` | `teams()` |
+| `Agents` | `AgentWorkerPool` | `getActiveCount()` | `activeCount()` |
+| `Agents` | `AgentWorkerPool` | `getExecutor()` | `executor()` |
+| `Agents` | `AgentWorkerPool` | `getQueueSize()` | `queueSize()` |
+| `Background` | `BackgroundSupervisor` | `getActiveSessions()` | `activeSessions()` |
+| `Background` | `BackgroundSupervisor` | `getSession()` | `session()` |
+| `Background` | `BackgroundSupervisor` | `getStallWarnings()` | `stallWarnings()` |
+| `Root` | `Chat` | `getTools()` | `tools()` |
+| `Session` | `EnhancedSessionStore` | `getCheckpoint()` | `checkpoint()` |
+| `Session` | `EnhancedSessionStore` | `getMessages()` | `messages()` |
+| `Session` | `EnhancedSessionStore` | `getSession()` | `session()` |
+| `Session` | `EnhancedSessionStore` | `getSessionByName()` | `sessionByName()` |
+| `Session` | `EnhancedSessionStore` | `getSessionMeta()` | `sessionMeta()` |
+| `MCP` | `GitOperationResult` | `getOutputOrNull()` | `outputOrNull()` |
+| `Hooks` | `HookRegistry` | `getForEvent()` | `forEvent()` |
+| `MCP` | `HttpMcpServer` | `getPrompt()` | `prompt()` |
+| `Agents` | `Mailbox` | `getUnreadCount()` | `unreadCount()` |
+| `MCP` | `McpAuthStore` | `getServerStatus()` | `serverStatus()` |
+| `MCP` | `McpClient` | `getPrompt()` | `prompt()` |
+| `Tui\\Components` | `MenuBar` | `getActiveItem()` | `activeItem()` |
+| `Tui\\Components` | `MenuBar` | `getActiveMenu()` | `activeMenu()` |
+| `Tui\\Components` | `MenuBar` | `getMenuItems()` | `menuItems()` |
+| `Tui` | `MultiplexerSplitPane` | `getMultiplexerType()` | `multiplexerType()` |
+| `MCP` | `OAuthClientRegistration` | `getValidAuth()` | `validAuth()` |
+| `Tui` | `Renderer` | `getTerminalSize()` | `terminalSize()` |
+| `Session` | `SessionStore` | `getMessages()` | `messages()` |
+| `Session` | `SessionStore` | `getPdo()` | `pdo()` |
+| `Session` | `SessionStore` | `getSession()` | `session()` |
+| `Session` | `SessionStore` | `getSessionByName()` | `sessionByName()` |
+| `Skills` | `SkillManager` | `getSkillsForPaths()` | `skillsForPaths()` |
+| `Skills` | `SkillManager` | `getSkillsForTask()` | `skillsForTask()` |
+| `Skills` | `SkillManager` | `getUserInvocable()` | `userInvocable()` |
+| `Skills` | `SkillRegistry` | `getForPaths()` | `forPaths()` |
+| `MCP` | `SseMcpServer` | `getPrompt()` | `prompt()` |
+| `Tui` | `StallDetector` | `getStallWarnings()` | `stallWarnings()` |
+| `MCP` | `StdioMcpServer` | `getPrompt()` | `prompt()` |
+| `Agents` | `TaskList` | `getPendingTasks()` | `pendingTasks()` |
+| `Agents` | `TaskList` | `getTask()` | `task()` |
+| `Agents` | `TaskList` | `getTasksByStatus()` | `tasksByStatus()` |
+| `Agents` | `TaskList` | `getTasksForTeammate()` | `tasksForTeammate()` |
+| `Agents` | `TaskList` | `getUnblockedTasks()` | `unblockedTasks()` |
+| `Agents` | `Team` | `getMailbox()` | `mailbox()` |
+| `Agents` | `Team` | `getTaskList()` | `taskList()` |
+| `Agents` | `Team` | `getTeammate()` | `teammate()` |
+| `Agents` | `Team` | `getTeammates()` | `teammates()` |
+| `Agents` | `TeamManager` | `getTeam()` | `team()` |
+| `Agents` | `TeamManager` | `getTeamConfig()` | `teamConfig()` |
+| `Agents` | `TeamManager` | `getTeams()` | `teams()` |
+| `Agents` | `Teammate` | `getInboxPath()` | `inboxPath()` |
+| `Agents` | `Teammate` | `getStatus()` | `status()` |
+| `Workflows` | `WorkflowEngine` | `getStatus()` | `status()` |
+| `Agents` | `WorktreeManager` | `getWorktreePath()` | `worktreePath()` |
+
 ## Tests
 
 ```bash

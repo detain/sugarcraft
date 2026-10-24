@@ -38,7 +38,7 @@ final class SessionResolver
             return [];
         }
 
-        $row = $store->getSession($target) ?? $store->getSessionByName($target);
+        $row = $store->session($target) ?? $store->sessionByName($target);
         if (\is_array($row)) {
             return [SessionRow::fromArray($row)];
         }

@@ -301,7 +301,7 @@ final class SessionStore
         }
 
         return $this->immediateTransaction(function () use ($parentId, $kind, $agent, $parentCallId, $provider, $model, $name): string {
-            $parent = $this->getSession($parentId);
+            $parent = $this->session($parentId);
             if ($parent === null) {
                 throw new \InvalidArgumentException("Session not found: {$parentId}");
             }
@@ -329,12 +329,21 @@ final class SessionStore
         });
     }
 
-    public function getSession(string $id): ?array
+    public function session(string $id): ?array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM sessions WHERE id = ?');
         $stmt->execute([$id]);
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::session()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSession(string $id): ?array { return $this->session($id); }
 
     /**
      * The session carrying $name, or null.
@@ -347,7 +356,7 @@ final class SessionStore
      * from. The most recently used row is the one a user typing the name
      * means; rowid breaks the one-second `updated_at` tie deterministically.
      */
-    public function getSessionByName(string $name): ?array
+    public function sessionByName(string $name): ?array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM sessions WHERE name = ? ORDER BY updated_at DESC, rowid DESC LIMIT 1');
         $stmt->execute([$name]);
@@ -356,6 +365,15 @@ final class SessionStore
 
         return $row ?: null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::sessionByName()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSessionByName(string $name): ?array { return $this->sessionByName($name); }
 
     /**
      * Name $id and record who named it; true when the row was renamed.
@@ -745,7 +763,7 @@ final class SessionStore
 
     private function forkSessionRows(string $id, SessionKind $kind): string
     {
-        $session = $this->getSession($id);
+        $session = $this->session($id);
         if ($session === null) {
             throw new \InvalidArgumentException("Session not found: {$id}");
         }
@@ -779,7 +797,7 @@ final class SessionStore
 
         // Copy all messages from original session to new session
         // Build a map of old message_id => new message_id for tool_calls copying
-        $messages = $this->getMessages($id);
+        $messages = $this->messages($id);
         $oldToNewMessageId = [];
         foreach ($messages as $msg) {
             $oldMessageId = (int) $msg['id'];
@@ -867,7 +885,7 @@ final class SessionStore
      * of one per autocommitted INSERT (audit 15b-21).
      *
      * @internal shared with {@see EnhancedSessionStore}, which writes its own
-     *           tables through {@see getPdo()} and needs the same transaction
+     *           tables through {@see pdo()} and needs the same transaction
      *           to span a {@see forkSession()} call.
      *
      * @template T
@@ -883,7 +901,7 @@ final class SessionStore
         // around SessionStore::forkSession()) issued a second BEGIN and died
         // "cannot start a transaction within a transaction", and the failure
         // path skipped its ROLLBACK. inTransaction() still covers a
-        // beginTransaction() some other caller of getPdo() opened.
+        // beginTransaction() some other caller of pdo() opened.
         if ($this->transactionDepth > 0 || $this->pdo->inTransaction()) {
             return $work();
         }
@@ -1136,7 +1154,7 @@ final class SessionStore
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function getMessages(string $sessionId): array
+    public function messages(string $sessionId): array
     {
         // `created_at` has one-second resolution, so messages added in the
         // same second — every row a forkSession() copies — tie on it; the
@@ -1153,6 +1171,15 @@ final class SessionStore
             return $msg;
         }, $messages);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::messages()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getMessages(string $sessionId): array { return $this->messages($sessionId); }
 
     public function addToolCall(string $sessionId, int $messageId, array $toolCall): void
     {
@@ -1358,10 +1385,19 @@ final class SessionStore
      *           public methods; {@see EnhancedSessionStore} only ever uses
      *           this handle for its own tables.
      */
-    public function getPdo(): PDO
+    public function pdo(): PDO
     {
         return $this->pdo;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::pdo()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getPdo(): PDO { return $this->pdo(); }
 
     /**
      * The database file this store is open on — see

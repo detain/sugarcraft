@@ -3423,7 +3423,7 @@ final class DocFigureProseDriftTest extends TestCase
         }
         sort($wrappers);
         self::assertSame(
-            ['findSkillsForTask', 'getSkillsForTask'],
+            ['findSkillsForTask', 'skillsForTask'],
             $wrappers,
             'findForPrompt() gained or lost a caller — the page says its only callers are exactly the two wrappers',
         );
@@ -4133,12 +4133,12 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('validAuthFor($this->url)', $httpSource, 'the request path no longer consults the store by server URL — the page exact-URL key claim is unfounded');
         self::assertTrue(
             method_exists(\SugarCraft\Code\MCP\OAuthClientRegistration::class, 'validAuthFor'),
-            'validAuthFor vanished — the page names getValidAuth as the refresh leg it rides',
+            'validAuthFor vanished — the page names validAuth as the refresh leg it rides',
         );
         self::assertStringContainsString(
-            'getValidAuth(',
+            'return $this->validAuth(',
             self::sourceOf('MCP/OAuthClientRegistration.php'),
-            'the store stopped delegating to getValidAuth — the page refresh-before-attach sentence drifts',
+            'the store stopped delegating to validAuth — the page refresh-before-attach sentence drifts',
         );
         self::assertSame(
             1,

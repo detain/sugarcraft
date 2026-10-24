@@ -449,7 +449,7 @@ final class WorkflowCommand implements HostCommand
             // flight and stops before the next — its report lands later, as
             // `paused`, through the run's own fiber.
             try {
-                $live = $engine->getStatus($workflowId) === WorkflowStatus::Running;
+                $live = $engine->status($workflowId) === WorkflowStatus::Running;
             } catch (\Throwable) {
                 $live = false;
             }
@@ -517,7 +517,7 @@ final class WorkflowCommand implements HostCommand
         }
 
         try {
-            $status = $engine->getStatus($workflowId);
+            $status = $engine->status($workflowId);
 
             return self::respond($inputText, Lang::t('host.workflow.status', ['id' => $workflowId, 'status' => $status->value]));
         } catch (\Throwable $e) {

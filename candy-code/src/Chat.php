@@ -835,7 +835,7 @@ final class Chat implements Model
          * again on every SIGWINCH resize (see Program::installSignalHandlers()).
          * Null until the first WindowSizeMsg arrives (or for a Chat built
          * directly in a test, never); {@see rows()}/{@see cols()} fall back
-         * to {@see TuiRenderer::getTerminalSize()}'s own detection in that
+         * to {@see TuiRenderer::terminalSize()}'s own detection in that
          * case. Renderer MUST read this instead of querying terminal size
          * itself - a second, independent, statically-cached size source
          * (which is what caused #1403's fix to not fully land: it clipped
@@ -9106,10 +9106,19 @@ final class Chat implements Model
     /**
      * @return array<string, callable>
      */
-    public function getTools(): array
+    public function tools(): array
     {
         return $this->tools;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::tools()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTools(): array { return $this->tools(); }
 
     /**
      * The Agent View composer's send (roadmap P-D2, Appendix P §5.3): the
@@ -17242,7 +17251,7 @@ final class Chat implements Model
         if ($this->sessionStore === null || $this->currentSessionId === null) {
             $line = Lang::t('chat.pin.no_session');
         } else {
-            $pinned = (bool) ($this->sessionStore->getSession($this->currentSessionId)['pinned'] ?? false);
+            $pinned = (bool) ($this->sessionStore->session($this->currentSessionId)['pinned'] ?? false);
             $this->sessionStore->setPinned($this->currentSessionId, !$pinned);
             $line = Lang::t($pinned ? 'chat.pin.unpinned' : 'chat.pin.pinned');
         }
@@ -18392,14 +18401,14 @@ final class Chat implements Model
         [$scheduleNotices, $scheduleQueued] = $this->pumpSchedules(time());
 
         $statuses = [];
-        foreach ($supervisor->getActiveSessions() as $id => $session) {
+        foreach ($supervisor->activeSessions() as $id => $session) {
             $statuses[$id] = $session->status->value;
         }
         foreach (array_keys($this->backgroundStatuses) as $id) {
             if (isset($statuses[$id])) {
                 continue;
             }
-            $session = $supervisor->getSession($id);
+            $session = $supervisor->session($id);
             if ($session !== null) {
                 $statuses[$id] = $session->status->value;
             }
@@ -18412,7 +18421,7 @@ final class Chat implements Model
             if ($previous === $status) {
                 continue;
             }
-            $session = $supervisor->getSession($id);
+            $session = $supervisor->session($id);
             $name = $session?->name ?? $id;
             // A session re-adopted at launch (roadmap 4.3-3) was not started
             // by this run: "is now running" read as if it had just begun.
@@ -18527,7 +18536,7 @@ final class Chat implements Model
             // twice, per pump.
             foreach ($registry->firedNames() as $name) {
                 $sessionId = $registry->busySession($name);
-                $session = $sessionId === null ? null : $supervisor->getSession($sessionId);
+                $session = $sessionId === null ? null : $supervisor->session($sessionId);
                 if ($session === null || $session->isSettled()) {
                     $registry->clearFired($name);
                 }
@@ -18631,19 +18640,19 @@ final class Chat implements Model
 
     /**
      * Real terminal row count, from the last {@see WindowSizeMsg} this Chat
-     * received - falls back to {@see TuiRenderer::getTerminalSize()}'s own
+     * received - falls back to {@see TuiRenderer::terminalSize()}'s own
      * detection only when no WindowSizeMsg has arrived yet (a Chat built
      * directly, e.g. in a test, without going through a real Program).
      */
     public function rows(): int
     {
-        return $this->rows ?? TuiRenderer::getTerminalSize()['rows'];
+        return $this->rows ?? TuiRenderer::terminalSize()['rows'];
     }
 
     /** @see rows() */
     public function cols(): int
     {
-        return $this->cols ?? TuiRenderer::getTerminalSize()['cols'];
+        return $this->cols ?? TuiRenderer::terminalSize()['cols'];
     }
 
     /**

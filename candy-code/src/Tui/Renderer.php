@@ -146,7 +146,7 @@ final class Renderer
         // one — invariant 2 on {@see renderView()}, which is why the size is
         // threaded here at all.
         if ($cols <= 0 || $rows <= 0) {
-            $size = self::getTerminalSize();
+            $size = self::terminalSize();
             $cols = $cols > 0 ? $cols : $size['cols'];
             $rows = $rows > 0 ? $rows : $size['rows'];
         }
@@ -210,7 +210,7 @@ final class Renderer
 
         if ($multiplexer->isActive()) {
             if ($cols <= 0 || $rows <= 0) {
-                $size = self::getTerminalSize();
+                $size = self::terminalSize();
                 $cols = $cols > 0 ? $cols : $size['cols'];
                 $rows = $rows > 0 ? $rows : $size['rows'];
             }
@@ -247,7 +247,7 @@ final class Renderer
         }
     }
 
-    public static function getTerminalSize(): array
+    public static function terminalSize(): array
     {
         if (self::$terminalSize !== null) {
             return self::$terminalSize;
@@ -266,6 +266,15 @@ final class Renderer
         self::$terminalSize = ['rows' => 60, 'cols' => 200];
         return self::$terminalSize;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::terminalSize()} instead. REMOVED-IN: 2.0.0.
+     */
+    public static function getTerminalSize(): array { return self::terminalSize(); }
 
     public static function resetSizeCache(): void
     {
@@ -597,7 +606,7 @@ final class Renderer
         self::applyAmbientColorProfile();
 
         if ($cols === null || $rows === null || $cols <= 0 || $rows <= 0) {
-            $size = self::getTerminalSize();
+            $size = self::terminalSize();
             $cols = ($cols !== null && $cols > 0) ? $cols : $size['cols'];
             $rows = ($rows !== null && $rows > 0) ? $rows : $size['rows'];
         }

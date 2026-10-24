@@ -94,10 +94,19 @@ final class HookRegistry
         return $this->hooks[$event][$name] ?? null;
     }
 
-    public function getForEvent(string $event): array
+    public function forEvent(string $event): array
     {
         return array_values($this->hooks[$event] ?? []);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::forEvent()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getForEvent(string $event): array { return $this->forEvent($event); }
 
     /**
      * A reserved name is silently ignored here rather than refused: unlike
@@ -184,7 +193,7 @@ final class HookRegistry
         $matches = [];
         $last = [];
 
-        foreach ($this->getForEvent($event) as $hook) {
+        foreach ($this->forEvent($event) as $hook) {
             if ($this->isDisabled($hook->name())) {
                 continue;
             }

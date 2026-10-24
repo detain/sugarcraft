@@ -45,7 +45,7 @@ use SugarCraft\Code\Support\ToolIpcFiles;
  * the command cannot be run where it is painted; the value therefore has to be
  * produced on the update path and read on the render path, and `Renderer` is a
  * static-only class holding no `Chat`-independent state of its own. The same
- * shape {@see \SugarCraft\Code\Tui\Renderer::getTerminalSize()} uses for the
+ * shape {@see \SugarCraft\Code\Tui\Renderer::terminalSize()} uses for the
  * size cache, including its {@see reset()} counterpart so a test can put the
  * process back the way it found it.
  *

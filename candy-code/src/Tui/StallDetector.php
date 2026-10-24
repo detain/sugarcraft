@@ -120,7 +120,7 @@ final class StallDetector
      *
      * @return array<string, StallWarning>
      */
-    public function getStallWarnings(): array
+    public function stallWarnings(): array
     {
         $warnings = [];
         $now = new \DateTimeImmutable();
@@ -138,6 +138,15 @@ final class StallDetector
 
         return $warnings;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::stallWarnings()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getStallWarnings(): array { return $this->stallWarnings(); }
 
     /**
      * Calculate the current approximate token rate for an agent in tokens/second.

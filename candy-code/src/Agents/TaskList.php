@@ -411,7 +411,7 @@ final class TaskList
      *
      * @return Task[]
      */
-    public function getPendingTasks(): array
+    public function pendingTasks(): array
     {
         $result = $this->db()->query(
             "SELECT * FROM tasks WHERE status = 'pending' ORDER BY created_at ASC"
@@ -421,9 +421,18 @@ final class TaskList
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::pendingTasks()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getPendingTasks(): array { return $this->pendingTasks(); }
+
+    /**
      * Fetch a single task by ID.
      */
-    public function getTask(string $taskId): ?Task
+    public function task(string $taskId): ?Task
     {
         $stmt = $this->db()->prepare('SELECT * FROM tasks WHERE id = :id');
         $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
@@ -436,11 +445,20 @@ final class TaskList
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::task()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTask(string $taskId): ?Task { return $this->task($taskId); }
+
+    /**
      * Fetch all tasks with a given status.
      *
      * @return Task[]
      */
-    public function getTasksByStatus(TaskStatus $status): array
+    public function tasksByStatus(TaskStatus $status): array
     {
         $stmt = $this->db()->prepare('SELECT * FROM tasks WHERE status = :status ORDER BY created_at ASC');
         $stmt->bindValue(':status', $status->value, \SQLITE3_TEXT);
@@ -453,11 +471,20 @@ final class TaskList
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::tasksByStatus()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTasksByStatus(TaskStatus $status): array { return $this->tasksByStatus($status); }
+
+    /**
      * Fetch all tasks assigned to a specific teammate.
      *
      * @return Task[]
      */
-    public function getTasksForTeammate(string $teammateId): array
+    public function tasksForTeammate(string $teammateId): array
     {
         $stmt = $this->db()->prepare('SELECT * FROM tasks WHERE assigned_to = :assigned_to ORDER BY created_at ASC');
         $stmt->bindValue(':assigned_to', $teammateId, \SQLITE3_TEXT);
@@ -468,6 +495,15 @@ final class TaskList
 
         return $tasks;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::tasksForTeammate()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTasksForTeammate(string $teammateId): array { return $this->tasksForTeammate($teammateId); }
 
     // -------------------------------------------------------------------------
     // Claiming — atomic via per-task flock
@@ -736,9 +772,9 @@ final class TaskList
      *
      * @return Task[]
      */
-    public function getUnblockedTasks(string $teammateId): array
+    public function unblockedTasks(string $teammateId): array
     {
-        $allPending = $this->getPendingTasks();
+        $allPending = $this->pendingTasks();
 
         return array_values(array_filter(
             $allPending,
@@ -753,6 +789,15 @@ final class TaskList
             }
         ));
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::unblockedTasks()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getUnblockedTasks(string $teammateId): array { return $this->unblockedTasks($teammateId); }
 
     // -------------------------------------------------------------------------
     // Helpers

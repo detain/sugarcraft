@@ -80,7 +80,7 @@ final class McpAuthStore
     /**
      * Get the auth status for a specific server.
      */
-    public function getServerStatus(string $serverUrl): ?ServerAuthStatus
+    public function serverStatus(string $serverUrl): ?ServerAuthStatus
     {
         $authData = $this->oauth->loadAuth();
         $entry = $authData[$serverUrl] ?? null;
@@ -97,6 +97,15 @@ final class McpAuthStore
             scopes: $entry->scopes,
         );
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::serverStatus()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getServerStatus(string $serverUrl): ?ServerAuthStatus { return $this->serverStatus($serverUrl); }
 
     /**
      * Remove stored credentials for a given server.

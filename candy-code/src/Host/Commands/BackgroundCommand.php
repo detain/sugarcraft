@@ -188,7 +188,7 @@ final class BackgroundCommand implements HostCommand
     public static function stopThunk(?BackgroundSupervisor $supervisor, string $sessionId): \Closure
     {
         return static function () use ($supervisor, $sessionId): PromiseInterface {
-            $name = $supervisor?->getSession($sessionId)?->name;
+            $name = $supervisor?->session($sessionId)?->name;
             try {
                 $outcome = $supervisor === null
                     ? BackgroundStopOutcome::CouldNotStop
@@ -214,7 +214,7 @@ final class BackgroundCommand implements HostCommand
         }
 
         $id = $m[1];
-        if ($supervisor->getSession($id) !== null || preg_match(BackgroundSupervisor::SESSION_ID_PATTERN, $id) === 1) {
+        if ($supervisor->session($id) !== null || preg_match(BackgroundSupervisor::SESSION_ID_PATTERN, $id) === 1) {
             return $id;
         }
 
@@ -225,7 +225,7 @@ final class BackgroundCommand implements HostCommand
     public static function stopUsage(BackgroundSupervisor $supervisor): string
     {
         $active = [];
-        foreach ($supervisor->getActiveSessions() as $id => $session) {
+        foreach ($supervisor->activeSessions() as $id => $session) {
             $active[] = "{$id} ('{$session->name}')";
         }
 

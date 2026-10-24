@@ -50,7 +50,7 @@ final class StatusHostCommand implements HostCommand
         $engine = $context->backend instanceof EngineBackend ? $context->backend : null;
         $row = $context->sessionId === null || $context->sessionStore === null
             ? null
-            : $context->sessionStore->getSession($context->sessionId);
+            : $context->sessionStore->session($context->sessionId);
 
         $store = $context->sessionStore;
         $ledger = $store instanceof EnhancedSessionStore && $context->sessionId !== null

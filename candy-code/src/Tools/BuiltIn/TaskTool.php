@@ -2294,7 +2294,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         }
         if (\is_string($kept) && $kept !== '') {
             try {
-                $path = $manager->getWorktreePath($kept);
+                $path = $manager->worktreePath($kept);
                 if (is_dir($path)) {
                     return [['id' => $kept, 'path' => $path], ''];
                 }

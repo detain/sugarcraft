@@ -230,7 +230,7 @@ final class TranscriptStore
         }
 
         try {
-            $meta = $this->store->getSessionMeta($sessionId);
+            $meta = $this->store->sessionMeta($sessionId);
         } catch (\Throwable) {
             return null;
         }
@@ -251,7 +251,7 @@ final class TranscriptStore
         }
 
         try {
-            $meta = $this->store->getSessionMeta($sessionId) ?? SessionMeta::new($sessionId);
+            $meta = $this->store->sessionMeta($sessionId) ?? SessionMeta::new($sessionId);
             $this->store->saveSessionMeta(
                 $meta->withTasks($todos->toArray())->withLastActivity(new \DateTimeImmutable()),
             );

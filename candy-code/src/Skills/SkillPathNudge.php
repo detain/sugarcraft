@@ -8,7 +8,7 @@ namespace SugarCraft\Code\Skills;
  * Session-lifetime tracker that turns a skill's `paths:` frontmatter into a
  * live auto-scoping signal (crush_feat.md section 7 E4).
  *
- * Before this, `paths:` was static metadata: {@see SkillRegistry::getForPaths()}
+ * Before this, `paths:` was static metadata: {@see SkillRegistry::forPaths()}
  * was correct and unit-tested but had no production caller, so a skill scoped
  * to `**\/*.php` never announced itself when the agent actually opened a PHP
  * file. Read/Edit/Glob now hand every path they resolve to this tracker, and it
@@ -241,7 +241,7 @@ final class SkillPathNudge
         // Collected before anything is marked, because the COUNT of what did
         // not fit is part of the result and cannot be known mid-loop.
         $pending = [];
-        foreach ($this->registry->getForPaths($paths) as $skill) {
+        foreach ($this->registry->forPaths($paths) as $skill) {
             if (isset($this->announced[$skill->name]) || isset($pending[$skill->name])) {
                 continue;
             }

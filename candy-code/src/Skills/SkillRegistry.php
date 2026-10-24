@@ -378,7 +378,7 @@ final class SkillRegistry
      * Find skills matching a prompt.
      *
      * DELIBERATELY NOT WIRED — closed at P7.S4 with the measured number. Its two
-     * callers, `SkillManager::getSkillsForTask()` and `App::findSkillsForTask()`,
+     * callers, `SkillManager::skillsForTask()` and `App::findSkillsForTask()`,
      * have no production call site, and the matcher it leans on
      * ({@see Skill::matchesPrompt()}) measures 0.162 precision on the shipped
      * corpus (whole-word maxes 0.214; 96% boundary false-fire). Wiring it as-is
@@ -426,6 +426,9 @@ final class SkillRegistry
 
     /**
      * Get user-invokable skills.
+     *
+     * DOCUMENTED ERA EXCEPTION: the bare `userInvocable` name is taken by the
+     * by-name lookup below, so this list accessor keeps its `get` prefix.
      *
      * @return array<Skill>
      */
@@ -500,7 +503,7 @@ final class SkillRegistry
      * Register a skill from a manifest array (e.g., from SkillLoader::loadSkillManifest).
      *
      * paths must come through from the manifest -- it drives path-based
-     * auto-scoping (getForPaths()) and, unlike content, is cheap frontmatter
+     * auto-scoping (forPaths()) and, unlike content, is cheap frontmatter
      * data the Stage-1 manifest already carries; hardcoding it to [] here
      * would silently break every path-scoped skill loaded via the lazy
      * manifest path (crush_feat.md section 7 E3/E4).
@@ -546,7 +549,7 @@ final class SkillRegistry
      * @param array<string> $paths
      * @return array<Skill>
      */
-    public function getForPaths(array $paths): array
+    public function forPaths(array $paths): array
     {
         $matches = [];
 
@@ -576,6 +579,15 @@ final class SkillRegistry
 
         return $matches;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::forPaths()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getForPaths(array $paths): array { return $this->forPaths($paths); }
 
     /**
      * Does one `paths:` frontmatter glob claim one file path?

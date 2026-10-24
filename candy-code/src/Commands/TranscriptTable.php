@@ -61,7 +61,7 @@ use SugarCraft\Style\Table\Table;
  * {@see \SugarCraft\Code\Chat::withSize()}, whose own docblock says the
  * shell "hands the pane's inner geometry down through here"), and
  * {@see \SugarCraft\Code\Chat::cols()} reads it with a
- * {@see \SugarCraft\Code\Tui\Renderer::getTerminalSize()} fallback.
+ * {@see \SugarCraft\Code\Tui\Renderer::terminalSize()} fallback.
  * Both commands already hold the `Chat` — it is `execute()`'s first parameter.
  * {@see \SugarCraft\Code\Chat::handleHelpCommand()} has derived a layout budget
  * from exactly that field for as long as it has existed. So the budgets below

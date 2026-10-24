@@ -295,17 +295,26 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     /**
      * Get a session by ID, or null if not found.
      */
-    public function getSession(string $sessionId): ?BackgroundSession
+    public function session(string $sessionId): ?BackgroundSession
     {
         return $this->sessions[$sessionId] ?? null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::session()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSession(string $sessionId): ?BackgroundSession { return $this->session($sessionId); }
 
     /**
      * Return all active (non-terminal) sessions.
      *
      * @return array<string, BackgroundSession>
      */
-    public function getActiveSessions(): array
+    public function activeSessions(): array
     {
         $active = [];
         foreach ($this->sessions as $id => $session) {
@@ -315,6 +324,15 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         }
         return $active;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::activeSessions()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getActiveSessions(): array { return $this->activeSessions(); }
 
     /**
      * The permission-relay channel of a session (ISS-004): the `.ask` file a
@@ -2489,10 +2507,19 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
      *
      * @return array<string, StallWarning>
      */
-    public function getStallWarnings(): array
+    public function stallWarnings(): array
     {
-        return $this->stallDetector->getStallWarnings();
+        return $this->stallDetector->stallWarnings();
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::stallWarnings()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getStallWarnings(): array { return $this->stallWarnings(); }
 
     // =========================================================================
     // SessionNotificationInterface Implementation

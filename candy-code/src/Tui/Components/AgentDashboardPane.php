@@ -123,7 +123,7 @@ final class AgentDashboardPane
      * finished this turn (projected mirrors, cleared at the next dispatch)
      * and timed-out sessions, which the supervisor still counts as active.
      * Every other finished worker drops out — local runs once terminal, and
-     * `BackgroundSupervisor::getActiveSessions()` skips Completed/Failed/
+     * `BackgroundSupervisor::activeSessions()` skips Completed/Failed/
      * Stopped sessions. A finished-session history would need a retention
      * list on the supervisor.
      *
@@ -146,9 +146,9 @@ final class AgentDashboardPane
             // the dashboard quadratic in session count for one identical map.
             // It is pure in-memory arithmetic over StallDetector's snapshots
             // (no I/O, no query), which is what makes it safe on a render path.
-            $warnings = $supervisor->getStallWarnings();
+            $warnings = $supervisor->stallWarnings();
 
-            foreach ($supervisor->getActiveSessions() as $session) {
+            foreach ($supervisor->activeSessions() as $session) {
                 // Keyed by session id because that is the key
                 // BackgroundSupervisor::onSessionStreaming() tracks under.
                 $entries[] = self::sessionEntry($session, $warnings[$session->id] ?? null);
@@ -593,7 +593,7 @@ final class AgentDashboardPane
      * A background session's display state, with a byte-bounded output tail.
      *
      * $stall is the session's entry from {@see
-     * \SugarCraft\Code\Background\BackgroundSupervisor::getStallWarnings()},
+     * \SugarCraft\Code\Background\BackgroundSupervisor::stallWarnings()},
      * or null when it is not stalling. Passing it is what makes
      * {@see AgentOutputPane}'s stall branch reachable at all: that pane has
      * always rendered an amber border and a warning line for a non-null

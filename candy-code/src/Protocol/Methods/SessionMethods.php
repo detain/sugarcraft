@@ -169,7 +169,7 @@ final class SessionMethods
         $sessionId = self::sessionId($params);
         $name = \trim($params->string('name', 256));
         $store = $call->server->hub()->workspace()->sessionStore;
-        if ($store === null || $store->getSession($sessionId) === null) {
+        if ($store === null || $store->session($sessionId) === null) {
             throw RpcError::notFound(\sprintf('no session %s', $sessionId), 'session_not_found');
         }
         if ($name === '' || !$store->renameSession($sessionId, $name)) {
@@ -187,7 +187,7 @@ final class SessionMethods
         }
         $sessionId = self::sessionId($params);
         $store = $call->server->hub()->workspace()->sessionStore;
-        if ($store === null || $store->getSession($sessionId) === null) {
+        if ($store === null || $store->session($sessionId) === null) {
             throw RpcError::notFound(\sprintf('no session %s', $sessionId), 'session_not_found');
         }
         // The fork copies what is SAVED: fold whatever the running turn
@@ -221,7 +221,7 @@ final class SessionMethods
         $sessionId = self::sessionId($params);
         $hub = $call->server->hub();
         $store = $hub->workspace()->sessionStore;
-        if ($store === null || $store->getSession($sessionId) === null) {
+        if ($store === null || $store->session($sessionId) === null) {
             throw RpcError::notFound(\sprintf('no session %s', $sessionId), 'session_not_found');
         }
         if ($hub->isOpen($sessionId) && !$hub->close($sessionId, $params->bool('force'))) {
@@ -244,7 +244,7 @@ final class SessionMethods
             $rows = $host->history();
         } else {
             $workspace = $call->server->hub()->workspace();
-            if ($workspace->sessionStore === null || $workspace->sessionStore->getSession($sessionId) === null) {
+            if ($workspace->sessionStore === null || $workspace->sessionStore->session($sessionId) === null) {
                 throw RpcError::notFound(\sprintf('no session %s', $sessionId), 'session_not_found');
             }
             $rows = SessionHost::transcriptsFor($workspace)->load($sessionId);
@@ -276,7 +276,7 @@ final class SessionMethods
             $rows = $host->history();
         } else {
             $workspace = $hub->workspace();
-            if ($workspace->sessionStore === null || $workspace->sessionStore->getSession($sessionId) === null) {
+            if ($workspace->sessionStore === null || $workspace->sessionStore->session($sessionId) === null) {
                 throw RpcError::notFound(\sprintf('no session %s', $sessionId), 'session_not_found');
             }
             $rows = SessionHost::transcriptsFor($workspace)->load($sessionId);

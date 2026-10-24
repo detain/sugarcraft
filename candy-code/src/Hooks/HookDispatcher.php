@@ -147,7 +147,7 @@ final class HookDispatcher
      */
     public function dispatch(HookEvent $event, HookContext $context): HookDispatchResult
     {
-        if ($this->registry->getForEvent($event->value) === []) {
+        if ($this->registry->forEvent($event->value) === []) {
             return HookDispatchResult::allow($event, $context, 'no hooks registered');
         }
 
@@ -233,7 +233,7 @@ final class HookDispatcher
         $rewritten = null;
         $fixedPoint = null;
 
-        foreach ($this->registry->getForEvent($event->value) as $hook) {
+        foreach ($this->registry->forEvent($event->value) as $hook) {
             if ($this->registry->isDisabled($hook->name())) {
                 continue;
             }

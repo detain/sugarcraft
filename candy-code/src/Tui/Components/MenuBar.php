@@ -414,20 +414,38 @@ final class MenuBar
      * The dropdown's zero-based row cursor. Exposed so the shell can assert
      * on (and a renderer can highlight) the row Enter would select.
      */
-    public static function getActiveItem(): int
+    public static function activeItem(): int
     {
         return self::$activeItem;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::activeItem()} instead. REMOVED-IN: 2.0.0.
+     */
+    public static function getActiveItem(): int { return self::activeItem(); }
 
     /**
      * The rows of one menu, or [] when no such menu exists.
      *
      * @return list<string>
      */
-    public static function getMenuItems(string $menuName): array
+    public static function menuItems(string $menuName): array
     {
         return self::menus()[$menuName] ?? [];
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::menuItems()} instead. REMOVED-IN: 2.0.0.
+     */
+    public static function getMenuItems(string $menuName): array { return self::menuItems($menuName); }
 
     public static function closeMenu(): int
     {
@@ -439,10 +457,19 @@ final class MenuBar
     /**
      * Get the currently active menu index.
      */
-    public static function getActiveMenu(): int
+    public static function activeMenu(): int
     {
         return self::$activeMenu;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::activeMenu()} instead. REMOVED-IN: 2.0.0.
+     */
+    public static function getActiveMenu(): int { return self::activeMenu(); }
 
     /**
      * Open the menu bar at $index (1-based), or close it if that menu is

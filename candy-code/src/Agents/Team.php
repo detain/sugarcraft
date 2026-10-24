@@ -51,18 +51,36 @@ final class Team
     /**
      * @return Teammate[]
      */
-    public function getTeammates(): array
+    public function teammates(): array
     {
         return array_values($this->teammates);
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::teammates()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTeammates(): array { return $this->teammates(); }
+
+    /**
      * Get a teammate by their ID.
      */
-    public function getTeammate(string $id): ?Teammate
+    public function teammate(string $id): ?Teammate
     {
         return $this->teammates[$id] ?? null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::teammate()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTeammate(string $id): ?Teammate { return $this->teammate($id); }
 
     /**
      * Add a teammate to this team.
@@ -169,15 +187,33 @@ final class Team
         return true;
     }
 
-    public function getTaskList(): TaskList
+    public function taskList(): TaskList
     {
         return $this->taskList;
     }
 
-    public function getMailbox(): Mailbox
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::taskList()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTaskList(): TaskList { return $this->taskList(); }
+
+    public function mailbox(): Mailbox
     {
         return $this->mailbox;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::mailbox()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getMailbox(): Mailbox { return $this->mailbox(); }
 
     private function basePath(): string
     {

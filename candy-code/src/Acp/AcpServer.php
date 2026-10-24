@@ -318,7 +318,7 @@ final class AcpServer
         $session = $this->sessions[$id] ?? null;
         if ($session === null) {
             $store = $hub->workspace()->sessionStore;
-            if ($store !== null && $store->getSession($id) === null) {
+            if ($store !== null && $store->session($id) === null) {
                 throw RpcError::notFound(\sprintf('no session %s', $id), 'session_not_found');
             }
             try {

@@ -309,7 +309,7 @@ final class AgentsWorkflowMethodsTest extends TestCase
                 return new WorkflowResult($workflowId, WorkflowStatus::Completed);
             }
 
-            public function getStatus(string $workflowId): WorkflowStatus
+            public function status(string $workflowId): WorkflowStatus
             {
                 return $this->finished[$workflowId]
                     ?? throw new \SugarCraft\Code\Workflows\WorkflowNotRunningException('no run ' . $workflowId);

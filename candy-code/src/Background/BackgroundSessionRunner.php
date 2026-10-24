@@ -809,7 +809,7 @@ final class BackgroundSessionRunner
      */
     private function openFork(EnhancedSessionStore $store): array
     {
-        if ($store->getSession($this->forkedSessionId) === null) {
+        if ($store->session($this->forkedSessionId) === null) {
             throw new \RuntimeException('it is not in the session store');
         }
 

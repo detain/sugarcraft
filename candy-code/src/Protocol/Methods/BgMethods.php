@@ -199,7 +199,7 @@ final class BgMethods
 
     private static function session(CallContext $call, string $bgId): BackgroundSession
     {
-        return self::events($call)->supervisor()->getSession($bgId)
+        return self::events($call)->supervisor()->session($bgId)
             ?? throw RpcError::notFound(\sprintf('no background session %s', $bgId), 'bg_not_found');
     }
 

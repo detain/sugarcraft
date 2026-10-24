@@ -109,8 +109,17 @@ final readonly class GitOperationResult
      *
      * @return mixed
      */
-    public function getOutputOrNull(): mixed
+    public function outputOrNull(): mixed
     {
         return $this->success ? $this->output : null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::outputOrNull()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getOutputOrNull(): mixed { return $this->outputOrNull(); }
 }

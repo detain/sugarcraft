@@ -80,7 +80,7 @@ final class McpPromptCommandsTest extends TestCase
             }
 
             /** @return array<mixed> */
-            public function getPrompt(string $name, array $arguments = []): array
+            public function prompt(string $name, array $arguments = []): array
             {
                 return ['messages' => []];
             }
@@ -127,7 +127,7 @@ final class McpPromptCommandsTest extends TestCase
                 ];
             }
 
-            public function getPrompt(string $name, array $arguments = []): array
+            public function prompt(string $name, array $arguments = []): array
             {
                 return ['messages' => []];
             }
@@ -218,7 +218,7 @@ final class McpPromptCommandsTest extends TestCase
                 ]];
             }
 
-            public function getPrompt(string $name, array $arguments = []): array
+            public function prompt(string $name, array $arguments = []): array
             {
                 $this->sink = $arguments;
 
@@ -355,7 +355,7 @@ final class McpPromptCommandsTest extends TestCase
                 return $this->rows;
             }
 
-            public function getPrompt(string $name, array $arguments = []): array
+            public function prompt(string $name, array $arguments = []): array
             {
                 if ($this->throwsGet) {
                     throw new \RuntimeException('no such prompt');
@@ -405,7 +405,7 @@ final class McpPromptCommandsTest extends TestCase
                 return [['name' => 'p', 'description' => 'p']];
             }
 
-            public function getPrompt(string $name, array $arguments = []): array
+            public function prompt(string $name, array $arguments = []): array
             {
                 return ['messages' => $this->rows];
             }

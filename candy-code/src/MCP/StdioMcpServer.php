@@ -312,7 +312,7 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
      * @param array<string,mixed> $arguments
      * @return array<mixed> the raw `result` of the reply
      */
-    public function getPrompt(string $name, array $arguments = []): array
+    public function prompt(string $name, array $arguments = []): array
     {
         return $this->requireProviderResult('prompts/get', $this->transport->request(
             'prompts/get',
@@ -320,6 +320,15 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
             $this->providerDeadline(),
         ));
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::prompt()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getPrompt(string $name, array $arguments = []): array { return $this->prompt($name, $arguments); }
 
     /**
      * One provider exchange's worth of bound, on the library's absolute

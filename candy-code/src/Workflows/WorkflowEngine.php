@@ -206,7 +206,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * {@see $runKeysById} maps BOTH distinct run IDs onto it. Measured
      * consequence: `/workflow pause <run-A-id>` — the exact id the transcript
      * printed for run A — writes a pause file recording run B's workflowId
-     * and B's stage results, `getStatus()` answers identically for both ids,
+     * and B's stage results, `status()` answers identically for both ids,
      * and run A becomes unreachable by any identifier at all. The interrupt
      * handler calls `rememberResult()` with the same key and collides the same
      * way.
@@ -778,7 +778,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * completed", and totals are what the run as a whole did (AUDIT WF-2: the
      * paused half's tokens and cost used to vanish from the totals). Because
      * it is absolute, it is also remembered ({@see rememberResult()}) under
-     * the pause file's name, so a later {@see pause()} or {@see getStatus()}
+     * the pause file's name, so a later {@see pause()} or {@see status()}
      * of the resumed run answers for the resumed run rather than for the one
      * it was resumed from.
      *
@@ -961,7 +961,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @return WorkflowStatus
      * @throws WorkflowNotRunningException When this engine has no live or remembered run and no pause file exists.
      */
-    public function getStatus(string $workflowId): WorkflowStatus
+    public function status(string $workflowId): WorkflowStatus
     {
         $token = $this->liveRunFor($workflowId);
         if ($token !== null) {
@@ -999,6 +999,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
             );
         }
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::status()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getStatus(string $workflowId): WorkflowStatus { return $this->status($workflowId); }
 
     /**
      * Build the filesystem path to a workflow's pause file.
@@ -2305,10 +2314,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // Create a fresh pool scoped to this parallel stage so that workflow-level
         // settings (maxConcurrent, stopOnFirstFailure) do not mutate the shared
         // $this->pool instance. The pool's executor is preserved from $this->pool
-        // via getExecutor() so that custom executors (e.g., test mocks) are honoured.
+        // via executor() so that custom executors (e.g., test mocks) are honoured.
         //
         // workerProvider() is carried across for the same reason and was NOT,
-        // until this line existed. getExecutor() is null for a pool that builds
+        // until this line existed. executor() is null for a pool that builds
         // its own executor, so a stage pool reconstructed from one silently
         // reverted to a default executor with no provider — and a default
         // executor without a provider REFUSES rather than answering
@@ -2322,7 +2331,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // silently applies to sequential stages only.
         $pool = new AgentWorkerPool(
             maxConcurrent: $workflow->maxConcurrent,
-            executor: $this->pool->getExecutor(),
+            executor: $this->pool->executor(),
             workerProvider: $this->pool->workerProvider(),
             forkedExecutor: $this->pool->forkedExecutor(),
         );

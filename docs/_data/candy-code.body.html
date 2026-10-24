@@ -62,7 +62,7 @@ candy-code -p "audit this" --output-format json | jq -r .result</code></pre>
 <tr><td>HookManager</td><td>preToolUse(HookContext): HookResult</td><td>Gate a tool call — allow / deny / modify / ask</td></tr>
 <tr><td>HookManager</td><td>resolveAsk(ask, approved, feedback)</td><td>Settle an answered ASK into a final allow or deny</td></tr>
 <tr><td>SkillRegistry</td><td>findForPrompt(prompt): array</td><td>Match discovered <code>SKILL.md</code> files to the current turn</td></tr>
-<tr><td>SkillRegistry</td><td>getForPaths(paths): array</td><td>Path-scoped skills for files a tool just touched</td></tr>
+<tr><td>SkillRegistry</td><td>forPaths(paths): array</td><td>Path-scoped skills for files a tool just touched</td></tr>
 <tr><td>SkillRegistry</td><td>isAutoInvocable(name), isUserInvocable(name), isContextFork(name)</td><td>Frontmatter flag enforcement, not decoration</td></tr>
 <tr><td>AgentPreset</td><td>__construct(name, description, tools, model, permissionMode, skills, mcpServers, …)</td><td>Readonly sub-agent descriptor — model, tool allow/deny, skills, MCP allowlist, effort, isolation</td></tr>
 <tr><td>McpClient</td><td>startServers(), stopServers()</td><td>Launch / tear down the configured stdio + HTTP MCP servers</td></tr>

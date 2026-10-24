@@ -200,7 +200,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             if (!self::validId($teamId)) {
                 return self::error('`team` must name a team (letters, digits, - and _, at most 64)');
             }
-            $team = $teams->getTeam($teamId);
+            $team = $teams->team($teamId);
             if ($team === null) {
                 return self::error(sprintf('no team "%s"; `list` without `team` names the teams there are', $teamId));
             }
@@ -275,12 +275,12 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             return self::error('`add` needs a `title` and the task\'s `prompt`');
         }
 
-        $list = $team->getTaskList();
+        $list = $team->taskList();
         $blockers = self::ids($args, 'blocked_by');
         if ($blockers === null) {
             return self::error('`blocked_by` must be a list of task ids');
         }
-        $missing = array_values(array_filter($blockers, static fn (string $id): bool => $list->getTask($id) === null));
+        $missing = array_values(array_filter($blockers, static fn (string $id): bool => $list->task($id) === null));
         if ($missing !== []) {
             return self::error('no task ' . implode(', ', $missing) . ' in team "' . $team->id . '"');
         }
@@ -318,16 +318,16 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
 
     private function depend(Team $team, array $args): ToolResult
     {
-        $list = $team->getTaskList();
+        $list = $team->taskList();
         $taskId = self::str($args, 'task');
-        if ($list->getTask($taskId) === null) {
+        if ($list->task($taskId) === null) {
             return self::error('`depend` needs the `task` that waits; no task "' . $taskId . '"');
         }
         $blockers = self::ids($args, 'blocked_by');
         if ($blockers === null || $blockers === []) {
             return self::error('`depend` needs `blocked_by`, the ids the task waits on');
         }
-        $missing = array_values(array_filter($blockers, static fn (string $id): bool => $list->getTask($id) === null));
+        $missing = array_values(array_filter($blockers, static fn (string $id): bool => $list->task($id) === null));
         if ($missing !== []) {
             return self::error('no task ' . implode(', ', $missing) . ' in team "' . $team->id . '"');
         }
@@ -349,9 +349,9 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
     private function listTeams(TeamManager $teams): ToolResult
     {
         $lines = [];
-        foreach ($teams->getTeams() as $team) {
+        foreach ($teams->teams() as $team) {
             $counts = [];
-            foreach (self::allTasks($team->getTaskList()) as $task) {
+            foreach (self::allTasks($team->taskList()) as $task) {
                 $counts[$task->status->value] = ($counts[$task->status->value] ?? 0) + 1;
             }
             ksort($counts);
@@ -367,7 +367,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
 
     private function listTasks(TeamManager $teams, Team $team): ToolResult
     {
-        $list = $team->getTaskList();
+        $list = $team->taskList();
         $recovered = $this->recover($list);
         $tasks = self::allTasks($list);
 
@@ -389,16 +389,16 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             return self::error('`claim` needs the `teammate` claiming (letters, digits, - and _)');
         }
 
-        $list = $team->getTaskList();
+        $list = $team->taskList();
         $recovered = $this->recover($list);
 
         $working = [];
-        foreach ($list->getTasksByStatus(TaskStatus::InProgress) as $task) {
+        foreach ($list->tasksByStatus(TaskStatus::InProgress) as $task) {
             if ($task->assignedTo !== null) {
                 $working[$task->assignedTo] = true;
             }
         }
-        $max = $teams->getTeamConfig($team->id)?->maxTeammates ?? $team->maxTeammates;
+        $max = $teams->teamConfig($team->id)?->maxTeammates ?? $team->maxTeammates;
         if ($max !== null && !isset($working[$teammate]) && $teammate !== $team->leadAgentId && \count($working) >= $max) {
             return self::error($recovered . sprintf(
                 '%d teammates are already working in team "%s", its limit; wait for one to complete',
@@ -429,7 +429,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             return self::ok($recovered . self::claimed($list, $claimed));
         }
 
-        $task = $list->getTask($taskId);
+        $task = $list->task($taskId);
         if ($task === null) {
             return self::error($recovered . 'no task "' . $taskId . '"');
         }
@@ -446,7 +446,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
 
     private function finish(Team $team, array $args, string $action): ToolResult
     {
-        $list = $team->getTaskList();
+        $list = $team->taskList();
         [$task, $refusal, $revision] = $this->ownedTask($list, $args, $action);
         if ($task === null) {
             return self::error((string) $refusal);
@@ -473,11 +473,11 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
         if ($result === '') {
             return self::error('`complete` needs the `result`');
         }
-        $before = array_map(static fn (Task $t): string => $t->id, $list->getUnblockedTasks(''));
+        $before = array_map(static fn (Task $t): string => $t->id, $list->unblockedTasks(''));
         if (!$list->completeTask($task->id, $result, $revision)) {
             return self::error(self::movedUnder($list, $task->id, $revision, 'complete'));
         }
-        $now = array_map(static fn (Task $t): string => $t->id, $list->getUnblockedTasks(''));
+        $now = array_map(static fn (Task $t): string => $t->id, $list->unblockedTasks(''));
         $freed = array_values(array_diff($now, $before));
 
         return self::ok(sprintf(
@@ -489,10 +489,10 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
 
     private function release(TeamManager $teams, Team $team, array $args): ToolResult
     {
-        $list = $team->getTaskList();
+        $list = $team->taskList();
         $teammate = self::str($args, 'teammate');
         $taskId = self::str($args, 'task');
-        $task = $list->getTask($taskId);
+        $task = $list->task($taskId);
         if ($task === null) {
             return self::error('no task "' . $taskId . '"');
         }
@@ -538,12 +538,12 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
         if (!self::validId($from) || !self::validId($to) || $text === '') {
             return self::error('`message` needs `teammate` (the sender), `to` and `text`');
         }
-        $peers = $teams->getTeamConfig($team->id)?->allowPeerMessaging ?? true;
+        $peers = $teams->teamConfig($team->id)?->allowPeerMessaging ?? true;
         if (!$peers && $from !== $team->leadAgentId && $to !== $team->leadAgentId) {
             return self::error(sprintf('team "%s" routes every message through its lead "%s"', $team->id, $team->leadAgentId));
         }
 
-        $team->getMailbox()->send($from, $to, new TeamMessage(
+        $team->mailbox()->send($from, $to, new TeamMessage(
             id: bin2hex(random_bytes(8)),
             fromTeammateId: $from,
             toTeammateId: $to,
@@ -562,7 +562,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             return self::error('`inbox` needs the `teammate` whose messages to read');
         }
 
-        $mailbox = $team->getMailbox();
+        $mailbox = $team->mailbox();
         $lines = [];
         foreach ($mailbox->receive($teammate) as $message) {
             if ($message->read) {
@@ -600,7 +600,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
         // reads then shows up as a revision the write no longer matches,
         // instead of an ownership check passed on the row before it.
         $current = (int) $list->revision($taskId);
-        $task = $list->getTask($taskId);
+        $task = $list->task($taskId);
         if ($task === null) {
             return [null, sprintf('`%s` needs the claimed `task`; no task "%s"', $action, $taskId), 0];
         }
@@ -684,7 +684,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
 
     private static function nothingToClaim(TaskList $list): string
     {
-        $pending = $list->getPendingTasks();
+        $pending = $list->pendingTasks();
         if ($pending === []) {
             return 'Nothing to claim: no task is pending.';
         }
@@ -755,7 +755,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
     {
         return array_values(array_filter(
             $task->dependsOn,
-            static fn (string $id): bool => $list->getTask($id)?->status !== TaskStatus::Completed,
+            static fn (string $id): bool => $list->task($id)?->status !== TaskStatus::Completed,
         ));
     }
 
@@ -777,7 +777,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
     {
         $tasks = [];
         foreach (TaskStatus::cases() as $status) {
-            array_push($tasks, ...$list->getTasksByStatus($status));
+            array_push($tasks, ...$list->tasksByStatus($status));
         }
         usort($tasks, static fn (Task $a, Task $b): int => [self::ordinal($a->id), $a->createdAt] <=> [self::ordinal($b->id), $b->createdAt]);
 
@@ -801,7 +801,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
 
     private static function taskOf(TaskList $list, string $taskId): Task
     {
-        return $list->getTask($taskId) ?? throw new \RuntimeException('task ' . $taskId . ' vanished');
+        return $list->task($taskId) ?? throw new \RuntimeException('task ' . $taskId . ' vanished');
     }
 
     /** A span of seconds as the model reads it: `45s`, `12 min`, `3 h`. */

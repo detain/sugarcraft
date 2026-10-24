@@ -1032,7 +1032,7 @@ final class McpClient
      * @return array<mixed> the raw `result` — untrusted server bytes, the
      *         surface fences them (PromptFence), this method does not
      */
-    public function getPrompt(string $serverName, string $name, array $arguments = []): array
+    public function prompt(string $serverName, string $name, array $arguments = []): array
     {
         $server = $this->servers[$serverName] ?? null;
 
@@ -1050,8 +1050,17 @@ final class McpClient
 
         $this->pumpStderr(); // E677, see listTools()
 
-        return $server->getPrompt($name, $arguments);
+        return $server->prompt($name, $arguments);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::prompt()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getPrompt(string $serverName, string $name, array $arguments = []): array { return $this->prompt($serverName, $name, $arguments); }
 
     /**
      * The launch-time surface pass: resource SIZES and prompt ROWS for every

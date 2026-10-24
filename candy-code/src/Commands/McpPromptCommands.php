@@ -139,7 +139,7 @@ final class McpPromptCommands
             if ($client === null) {
                 return null;
             }
-            $result = $client->getPrompt($marker['server'], $marker['prompt'], self::argumentMap($marker['arguments'], $arguments));
+            $result = $client->prompt($marker['server'], $marker['prompt'], self::argumentMap($marker['arguments'], $arguments));
         } catch (\Throwable) {
             return null;
         }

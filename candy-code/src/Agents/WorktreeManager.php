@@ -404,7 +404,7 @@ final class WorktreeManager
      * @return string The absolute path to the agent's worktree directory.
      * @throws \RuntimeException When the worktree does not exist.
      */
-    public function getWorktreePath(string $agentId): string
+    public function worktreePath(string $agentId): string
     {
         // Fresh from disk: the tree may have been created by another process
         // (a forked turn child) since this instance loaded the registry.
@@ -417,6 +417,15 @@ final class WorktreeManager
 
         return $this->expandedBasePath . '/' . $agentId;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::worktreePath()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getWorktreePath(string $agentId): string { return $this->worktreePath($agentId); }
 
     /**
      * List all managed worktrees.
