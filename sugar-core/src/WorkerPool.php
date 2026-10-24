@@ -32,7 +32,7 @@ use SugarCraft\Core\Msg\WorkerResultMsg;
  * Child lifetime is owned by the pool: {@see stop()} — which the destructor
  * also runs — closes each worker's stdin, waits a bounded grace, escalates
  * SIGTERM→SIGKILL, and reaps, so a wedged task can delay shutdown by seconds
- * but never forever, and no worker outlives the pool (E716).
+ * but never forever, and no worker outlives the pool.
  */
 final class WorkerPool
 {
@@ -127,7 +127,7 @@ final class WorkerPool
      * Every job that has not settled yet — running or queued — is REJECTED
      * with a RuntimeException naming the pool stop. Silently dropping the
      * pending promises would leave dispatch() callers awaiting a result that
-     * can never arrive (E716: fail loud, never hang).
+     * can never arrive — fail loud, never hang.
      */
     public function stop(): void
     {
@@ -286,7 +286,7 @@ final class WorkerPool
             // ("Serialization of 'Closure' is not allowed"). Catching only
             // \Error let that escape dispatch() synchronously with the job's
             // Deferred already parked in $pending — a promise nobody could
-            // ever settle (E716: fail loud, never hang).
+            // ever settle — fail loud, never hang.
             //
             // The WORKER is healthy — nothing reached its stdin — so this is
             // a job failure, not a worker death: reject through resolveJob(),
@@ -308,7 +308,7 @@ final class WorkerPool
         // has already handed the payload to the kernel unless the pipe broke —
         // and a broken pipe is exactly what the next poll tick's feof(stdout)
         // catches, rejecting this job through the death path. Checking fflush's
-        // bool here would only race the same condition twice (E716 triage).
+        // bool here would only race the same condition twice.
         @fflush($worker->stdin);
     }
 
@@ -504,7 +504,7 @@ PHP;
         // cannot hold any registration and the pre-guard cast was a silent
         // no-op. The guard is prophylaxis: it forecloses fd-keyed/custom
         // LoopInterface implementations and closed-resource-ID-reuse shapes
-        // where the collision WOULD be live (E716).
+        // where the collision WOULD be live.
         if ($worker->stderr !== null && is_resource($worker->stderr)) {
             $this->loop->removeReadStream($worker->stderr);
         }
@@ -523,7 +523,7 @@ PHP;
             // its read loop hits EOF and exits. A worker wedged INSIDE a task
             // never notices, so bound the wait and escalate; without this the
             // bare proc_close() handed the event loop (or PHP shutdown via
-            // __destruct) to whoever the task was, forever (E716).
+            // __destruct) to whoever the task was, forever.
             $this->reapBounded($worker->process);
             proc_close($worker->process);
         }

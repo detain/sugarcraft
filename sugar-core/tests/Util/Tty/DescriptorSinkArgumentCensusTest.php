@@ -580,11 +580,10 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         // merely tolerated -- it is the shape the whole family should be
         // moving toward, and the reason it cannot everywhere is that the
         // ioctl and termios sinks take `int` only.
-        'sugar-log/src/Log.php::posix_isatty(\STDERR)' => [
-            DescriptorSinkScanner::STREAM_CONSTANT,
-            'CORRECT. The resource, not a cast of it. Not named in E368\'s carve-out list -- '
-            . 'found by re-deriving the population with the corrected instrument.',
-        ],
+        // (sugar-log/src/Log.php used to be rostered here: its panic-path tty check
+        // was rewritten to `is_resource(\STDERR) && stream_isatty(\STDERR)` -- core
+        // PHP, not a posix/FFI sink -- so the site left the census population
+        // entirely; retiring this row on 2026-10-23.)
         'sugar-colorprofile/src/Probe/TerminalProbe.php::posix_isatty(STDOUT)' => [
             DescriptorSinkScanner::STREAM_CONSTANT,
             'CORRECT, and an E368 carve-out: the resource, no cast.',

@@ -63,7 +63,7 @@ final class Ansi
     public const CHARSET_UK           = 'A'; // UK Latin-1 (0x23 = £)
     public const CHARSET_NO_BREAK_SPACE = 'U'; // ISO Latin-1, 0xA0 renders as space
 
-    // DECSIXEL repeat-run limits (F-09): runs of 1..3 stay bare literals, a
+    // DECSIXEL repeat-run limits: runs of 1..3 stay bare literals, a
     // single `!N` token may carry at most 255, longer runs split into
     // repeated `!255` chunks (chafa/internal/chafa-sixel-renderer.c:218-251).
     public const SIXEL_RLE_LITERAL_LIMIT = 4;
@@ -121,7 +121,8 @@ final class Ansi
     /**
      * SGR parameter spelling for a 256-palette foreground pen ("38;5;N").
      *
-     * A-01 dedup home: the three post-S2.2 attribute-run idioms keep their
+     * Single-spelling home: the three attribute-run idioms across the
+     * monorepo keep their
      * own run/pen POLICIES — {@see \SugarCraft\CellBuffer\Buffer::toAnsi()}
      * coalesces a finished grid, sugar-image's OutputOptimizer streams
      * per-channel pen deltas, and the helpers below emit full sequences —
@@ -1111,7 +1112,7 @@ final class Ansi
      *
      * Mirrors charmbracelet/x/ansi. Iterm2Renderer.
      *
-     * F-13: the payload format is signalled by the `type` argument —
+     * The payload format is signalled by the `type` argument —
      * absent means PNG (the protocol default), `type=tiff` selects the
      * uncompressed-TIFF container emitted by
      * {@see \SugarCraft\Image\Codec\TiffUncompressed}.
@@ -1138,7 +1139,7 @@ final class Ansi
         if (isset($opts['preserveAspectRatio'])) {
             $args[] = 'preserveAspectRatio=' . ($opts['preserveAspectRatio'] ? '1' : '0');
         }
-        // F-13: only emitted when explicitly set, so PNG transmissions (the
+        // Only emitted when explicitly set, so PNG transmissions (the
         // absent case) keep their historical byte-exact envelope.
         if (isset($opts['type'])) {
             $args[] = 'type=' . $opts['type'];
@@ -1347,7 +1348,7 @@ final class Ansi
     /**
      * Encode one Sixel data-byte run with the DECSIXEL repeat rules.
      *
-     * F-09 shared home: a sixel data byte is `bits + 63` (printable 63-126);
+     * Shared home: a sixel data byte is `bits + 63` (printable 63-126);
      * counts of 4..254 ride as `!count byte`, runs of 255 or more split into
      * repeated `!255` chunks plus the remainder, and runs of 1..3 stay bare
      * literals — mirroring chafa's `format_schar_reps`
@@ -1402,7 +1403,7 @@ final class Ansi
      * represent the six rows: bit 0 = top row of the band, bit 5 = bottom.
      * The byte value is the palette index ORed with 0x3F (63).
      *
-     * Repeat runs go through {@see sixelRle()} (F-09 shared home), so the
+     * Repeat runs go through {@see sixelRle()} (the shared home), so the
      * `!255` chunking rule has exactly one implementation tree-wide.
      *
      * Mirrors charmbracelet/x/ansi. SixelRenderer.

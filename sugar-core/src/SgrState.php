@@ -14,19 +14,19 @@ use SugarCraft\Core\Util\Token;
  * resume a partial-line repaint with the correct styling.
  *
  * Mirrors the subset of SGR codes commonly emitted by SugarCraft /
- * Sprinkles. CSI parameters outside this surface (38;5;n / 38;2;r;g;b
+ * Style. CSI parameters outside this surface (38;5;n / 38;2;r;g;b
  * for fg, 48 variants for bg, etc.) are captured as literal SGR
  * substrings so they round-trip cleanly.
  *
- * E50 adds OBSERVED state for the two styles the row-wise prefix could
- * previously lose: SGR 58 (underline colour) and OSC 8 hyperlinks. Read
+ * The class OBSERVES the two styles a row-wise prefix could lose:
+ * SGR 58 (underline colour) and OSC 8 hyperlinks. Read
  * it via {@see underlineColor()}, {@see linkUri()} and
  * {@see linkId()}; feed a full token stream through {@see apply()}.
  *
- * E667 moves the ROW-BOUNDARY contract here: {@see rowOpen()} and
+ * The ROW-BOUNDARY contract lives here: {@see rowOpen()} and
  * {@see rowClose()} are the balance bytes candy-code's
  * Renderer::balanceSgr() used to compute with a private URI tracker, so
- * the seam E50 filed is now closed and this class is the single home of
+ * this class is the single home of
  * the contract. {@see toPrefix()} itself stays byte-frozen — the extra
  * bytes ride only on the row-boundary methods, so every existing
  * prefix snapshot holds.
@@ -81,7 +81,7 @@ final class SgrState
                     $this->strike = false; $this->faint = false; $this->blink = false;
                     $this->reverse = false; $this->conceal = false;
                     $this->fg = ''; $this->bg = '';
-                    // E50: a reset also ends the underline colour AND an
+                    // A reset also ends the underline colour AND an
                     // open OSC 8 link — `Ansi::reset()` closing the row is
                     // exactly where the old class leaked the hyperlink.
                     $this->underlineColor = '';
@@ -179,7 +179,7 @@ final class SgrState
      * row-boundary re-open/close of {@see rowOpen()} / {@see rowClose()},
      * never into {@see toPrefix()} itself.
      *
-     * Delta vs the pre-E667 `Renderer::balanceSgr()` tracker, on the
+     * Delta vs the `Renderer::balanceSgr()` tracker this class replaced, on the
      * MALFORMED two-field body `8;URI` (the spec's params field omitted):
      * the old tracker split the body and read index 2 with `?? ''`, so a
      * two-field OSC landed in the empty-URI branch and was never tracked —
@@ -243,7 +243,8 @@ final class SgrState
      * Returns `''` when the state is already the default (nothing to
      * emit).
      *
-     * Deliberately unchanged by E50 and by E667: underline colour and
+     * Deliberately unchanged as the observed state and the row-boundary
+     * contract were added: underline colour and
      * links are tracked but not re-emitted here — the row-boundary
      * bytes ride on {@see rowOpen()} / {@see rowClose()}, so every
      * existing prefix snapshot holds.
@@ -300,7 +301,7 @@ final class SgrState
      * row re-establishes the styling carried in from earlier rows: the SGR
      * prefix plus an OSC 8 re-open while a hyperlink is still open.
      *
-     * E667 — this is the contract candy-code's Renderer::balanceSgr()
+     * This is the contract candy-code's Renderer::balanceSgr()
      * used to compute with a private URI tracker; the row-boundary half
      * of the balance now lives here, next to the state it emits.
      *
@@ -321,7 +322,7 @@ final class SgrState
      * terminal — only the empty-URI OSC does).
      *
      * A row carrying a reset ENDS the observed link here, matching the
-     * E50 accessor semantics pinned by sugar-core's own suite; candy-code
+     * reset-ends-link accessor semantics pinned by sugar-core's own suite; candy-code
      * measures its goldens to hold byte-identical under the delegation
      * (no pinned row opens a link, resets mid-row, and ends inside the
      * label).
