@@ -100,7 +100,7 @@ inside the sequence it closed; an abandoned `ESC O` leaves the text behind it
 alone; and a sequence the stream cut short still arrives, as a `truncated …`
 segment carrying its raw bytes.
 
-Ten deviations from exact byte equality are known, and each is pinned by a
+Eleven deviations from exact byte equality are known, and each is pinned by a
 named test rather than hidden — anything *else* that loses a byte is a bug:
 
 1. An OSC is re-emitted with a BEL terminator (`ESC ] … BEL`) even when the input
@@ -123,14 +123,17 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
    `ESC]0;a<EOT>b BEL` re-emits as `ESC]0;ab BEL`. The same byte does survive in a
    DCS, SOS, PM or APC payload. (4–6:
    `testIgnoredControlBytesAndParserCapsArriveAsTheParserRewroteThem`)
-7. An illegal parameter byte (`-`, CAN, SUB) cancels the sequence and discards the
-   bytes collected so far: `ESC[31;-2mX` reaches the segmenter as only `mX` — no
-   segment is invented for a sequence that never dispatched. The one exception is a
+7. An illegal parameter byte (`-`), and CAN/SUB while the parser sits in a
+   control-sequence state (a CSI state, or a DCS prelude before its final
+   byte), cancels the sequence and discards the bytes collected so far:
+   `ESC[31;-2mX` reaches the segmenter as only `mX` — no segment is invented
+   for a sequence that never dispatched. The one exception is a
    cancelled prelude followed by a truncated tail: the tail reports the raw bytes
    still in flight, so it replays the cancelled prelude too (`ESC[31;-2m` +
    `ESC[3` arrives as one 11-byte `truncated CSI`). That over-reports rather than
    under-reports, and CAN does not leak because its `execute` callback flushes the
-   byte window while an illegal byte leaves no callback at all.
+   byte window while an illegal byte leaves no callback at all. A CAN/SUB inside a
+   *string payload* state is item 11, not this one.
    (`testCancelledSequenceIsLostExactlyAsTheParserLosesIt`)
 8. A truncated UTF-8 rune at end of stream is dropped, because that is not an
    escape-sequence state for `Parser::flush()` to report.
@@ -156,8 +159,18 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
     it ignores, and a synthesised U+FFFD would be indistinguishable from a
     legitimately sent one).
     (`testMidStreamInvalidUtf8BytesAreDroppedExactlyAsTheParserDropsThem`)
+11. CAN/SUB inside a **string payload** state — an OSC body, a DCS body after its
+   final byte, or an SOS/PM/APC string — terminates that sequence: the payload
+   collected so far is dispatched (so it reaches this handler as a segment, unlike
+   item 7's vanished sequence) and the cancel byte itself is consumed as the
+   terminator, never echoed. `ESC]0;a CAN b BEL` therefore arrives as a truncated
+   `ESC]0;a BEL` segment, the text `b`, and the ground-state BEL echo — the CAN
+   byte appears nowhere in the report. Since sugar-ansi-parser `35dda61c0`
+   (2026-10-23); before it the entire in-flight sequence vanished instead — one
+   more byte accounted for, one byte (the cancel) still not.
+   (`testCancelByteInsideStringStateDispatchesTheTruncatedPayload`)
 
-The first two are this inspector's own re-emission choices. Items 3–8 and 10 are
+The first two are this inspector's own re-emission choices. Items 3–8, 10 and 11 are
 sugar-ansi-parser rewriting or dropping the bytes before this lib ever sees a dispatch — recorded in
 `CALIBER_LEARNINGS.md`, and each transformation is byte-identical to the behaviour
 before this contract was written, so they are fidelity items for sugar-ansi-parser, not

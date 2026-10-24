@@ -24,7 +24,12 @@ use SugarCraft\AnsiParser\Parser\State;
  * pins one by one: the BEL/ST spelling, the lossy DCS prelude rebuild,
  * sugar-ansi-parser's parameter-count, parameter-value and string-size caps, the C0
  * bytes it ignores inside an OSC payload, the sequence it cancels on an illegal
- * parameter byte or on CAN/SUB (so nothing of it reaches this handler), a
+ * parameter byte or on CAN/SUB while the parser is in a control-sequence state
+ * (nothing of the sequence reaches this handler then; the cancel byte itself
+ * arrives as an Execute echo), CAN/SUB arriving inside a string payload state —
+ * OSC, DCS after its final byte, SOS, PM, APC — where the sequence now reaches
+ * this handler truncated at the cancel byte and the cancel byte is consumed
+ * un-echoed as the terminator (sugar-ansi-parser 35dda61c0; README deviation 11), a
  * truncated UTF-8 rune at end of stream, which is not an escape-sequence state
  * for `Parser::flush()` to report, and an invalid UTF-8 byte mid-stream, which
  * the parser's UTF-8 window rejects without ever calling back into a handler
@@ -411,7 +416,14 @@ final class AnsiHandler implements Handler
 
         $fullPayload = $intermediateStr . $prefixStr . $paramsStr . $data;
         $rawBytes = "\x1bP{$fullPayload}\x1b\\";
-        $this->segments[] = new SequenceSegment($rawBytes, Inspector::describeDcs($fullPayload, $final));
+        // 2026-10-23 (r1024/inspect): classify from the parser's true dispatch
+        // fields via the shared sugar-ansi-parser Codec\Dcs decoder instead of
+        // re-peeling the payload string — a sixel body that begins with '$'
+        // is sixel, not a DECRQSS request, and only the fields can say so.
+        $this->segments[] = new SequenceSegment(
+            $rawBytes,
+            Inspector::describeDcsParts($final, $params, $prefix, $intermediate, $data, $fullPayload),
+        );
 
         $this->awaitingStringTerminator = true;
         $this->inFlightBytes = '';

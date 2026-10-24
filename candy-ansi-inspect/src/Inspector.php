@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\AnsiInspect;
 
+use SugarCraft\AnsiParser\Codec\Dcs;
+
 /**
  * Walk a string of mixed text + ANSI escape sequences and split it into
  * {@see Segment}s. The decoder labels SGR codes (foreground, background,
@@ -416,48 +418,96 @@ final class Inspector
         return 'OSC ' . self::sanitizeLabelBytes($payload);
     }
 
-    /** Decode DCS payloads — XTVERSION reply, DECRQSS, DECRPSS, sixel. */
+    /**
+     * Decode DCS payloads — XTVERSION reply, DECRQSS, DECRPSS, sixel, tmux
+     * passthrough.
+     *
+     * Compatibility shim for callers that hold only the concatenated payload
+     * string. Classification now lives in sugar-ansi-parser's shared
+     * {@see Dcs} decoder ({@see describeDcsParts()}); this entry point peels
+     * the prelude bytes back off the payload before delegating. Callers that
+     * have the parser's real dispatch fields MUST prefer
+     * {@see describeDcsParts()}: the peel cannot distinguish a leading '$'
+     * that was a DECRQSS intermediate from sixel data that merely begins
+     * with '$', and cannot recover parameter slots at all.
+     *
+     * 2026-10-23 (r1024/inspect): migrated onto the shared decoder. The
+     * hand-rolled branch list that lived here classified only four shapes,
+     * checked the '$' sixel/DECRQSS pair in payload order (so `ESC P $ q …`
+     * DECRQSS requests were labelled "sixel image"), and had no notion of
+     * tmux passthrough or of the final-byte dispatch that streaming sixel
+     * now really performs.
+     */
     public static function describeDcs(string $payload, int $final = 0): string
     {
-        // XTVERSION reply: DCS P >| version ST
-        // sugar-ansi-parser parser interprets: '>' as intermediate, '|' as final, 'version' as data
-        // So payload = '>version' and final = '|'
-        // Payload bytes are attacker-controlled: sanitize like OSC/APC labels so a
-        // captured reply can't inject control bytes into the inspector's own output.
-        if (chr($final) === '|' && str_starts_with($payload, '>')) {
-            return 'terminal version (XTVERSION reply): ' . self::sanitizeLabelBytes(substr($payload, 1));
-        }
-        // For StreamingInspector (old byte-loop) or when final is not available,
-        // the payload may contain the full sequence including intermediate+final
-        if (str_starts_with($payload, '>|')) {
+        // Legacy byte-loop shape: the whole '>|' introducer sits inside the
+        // payload and no final byte was ever threaded through.
+        if ($final === 0 && str_starts_with($payload, '>|')) {
             return 'terminal version (XTVERSION reply): ' . self::sanitizeLabelBytes(substr($payload, 2));
         }
-        // sixel: DCS P q data ST
-        // The 'q' is consumed as final byte, data starts directly with sixel pixels.
-        // NOTE: streaming sixel (Step 9) currently calls describeDcs($payload) with
-        // no $final — after Step 9 $final will be threaded through, restoring sixel
-        // detection for streaming.  The str_contains 'sixel' check was dropped as
-        // unreliable (real sixel data never contains the literal ASCII "sixel").
-        if ($final === ord('q')) {
-            return 'sixel image (' . strlen($payload) . ' bytes)';
-        }
-        // DECRPSS reply: sugar-ansi-parser parses '1$r0$p' as:
-        // - final='r' (first final byte in 0x40-0x7E range), data='0$p'
-        // - payload='$$1;0' from intermediate+prefix+params
-        // Produce semantic: 'DECRPSS reply 1$r0$p'
-        if (chr($final) === 'r' && str_starts_with($payload, '$$')) {
-            $params = explode(';', substr($payload, 2));
-            if (count($params) >= 2) {
-                return 'DECRPSS reply ' . self::sanitizeLabelBytes($params[0]) . '$r' . self::sanitizeLabelBytes($params[1]) . '$p';
+        // Legacy synthetic DECRPSS shape: '$$request;reply' carried both
+        // operands inside the payload because no parameter array existed.
+        // Real dispatch wires reach DECRPSS through describeDcsParts() with
+        // the true params slot; this leg only serves direct payload callers.
+        if ($final === ord('r') && str_starts_with($payload, '$$')) {
+            $operands = explode(';', substr($payload, 2));
+            if (count($operands) >= 2) {
+                return 'DECRPSS reply ' . self::sanitizeLabelBytes($operands[0]) . '$r' . self::sanitizeLabelBytes($operands[1]) . '$p';
             }
         }
-        // Unknown DCS: reconstruct full sequence including final byte. The final byte
-        // is a parser-validated terminator (0x40-0x7E); only the data payload is
-        // attacker-controlled, so route it through the same label sanitizer as OSC/APC.
-        if ($final !== 0) {
-            return 'DCS ' . chr($final) . self::sanitizeLabelBytes($payload);
+
+        // Peel the prelude in the order AnsiHandler::dcsDispatch() builds it:
+        // intermediate byte (0x20-0x2F) first, then private-marker prefix
+        // (0x3C-0x3F). Anything else is payload data.
+        $intermediate = 0;
+        $prefix = 0;
+        $data = $payload;
+        if ($data !== '' && (($byte = ord($data[0])) >= 0x20) && $byte <= 0x2F) {
+            $intermediate = $byte;
+            $data = substr($data, 1);
         }
-        return 'DCS ' . self::sanitizeLabelBytes($payload);
+        if ($data !== '' && (($byte = ord($data[0])) >= 0x3C) && $byte <= 0x3F) {
+            $prefix = $byte;
+            $data = substr($data, 1);
+        }
+
+        return self::describeDcsParts($final, [], $prefix, $intermediate, $data, $payload);
+    }
+
+    /**
+     * Classify a DCS body from the parser's true dispatch fields using the
+     * shared {@see Dcs} decoder, rendering the label in this inspector's
+     * house spelling: attacker-controlled payload bytes go through
+     * {@see sanitizeLabelBytes()} (named C0/C1 tokens), the same discipline
+     * as the OSC/APC labels, so a captured reply can't inject control bytes
+     * into the inspector's own output.
+     *
+     * $rawPayload, when given, is the concatenated prelude+parameter+data
+     * string the handler rebuilds raw bytes from; the generic fallback
+     * echoes it so parameter and intermediate bytes never vanish from an
+     * unclassified DCS label. Sixel/tmux byte counts measure the true data
+     * payload, not the prelude.
+     */
+    public static function describeDcsParts(
+        int $final,
+        array $params,
+        int $prefix,
+        int $intermediate,
+        string $data,
+        string $rawPayload = '',
+    ): string {
+        $echo = $rawPayload !== '' ? $rawPayload : $data;
+
+        return match (Dcs::parse($final, $params, $prefix, $intermediate, $data)->kind()) {
+            Dcs::KIND_XTVERSION => 'terminal version (XTVERSION reply): ' . self::sanitizeLabelBytes($data),
+            Dcs::KIND_SIXEL => 'sixel image (' . strlen($data) . ' bytes)',
+            Dcs::KIND_DECRQSS => 'DECRQSS request ' . self::sanitizeLabelBytes($data),
+            Dcs::KIND_DECRPSS => 'DECRPSS reply '
+                . self::sanitizeLabelBytes((string) ($params[0] ?? -1)) . '$r' . self::sanitizeLabelBytes($data),
+            Dcs::KIND_TMUX => 'tmux passthrough (' . strlen($data) . ' bytes)',
+            Dcs::KIND_TRUNCATED => 'DCS truncated (no final byte; ' . strlen($echo) . ' bytes collected)',
+            default => 'DCS ' . chr($final) . self::sanitizeLabelBytes($echo),
+        };
     }
 
     /** Decode APC payloads — CandyZone markers, kitty graphics. */ // @rename-keep legacy wire token / historical log

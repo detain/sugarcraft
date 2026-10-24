@@ -186,8 +186,14 @@ final class InspectorTest extends TestCase
      */
     public function testDcsPayloadSanitizesControlBytes(): void
     {
-        // Unknown-DCS fallback branch (no final byte) — raw payload interpolation.
-        $out = Inspector::describeDcs("evil\x1bpayload\x07");
+        // Unknown-DCS fallback branch — raw payload interpolation.
+        // 2026-10-23 (r1024/inspect): this probe used to call describeDcs()
+        // with NO final byte, a shape the migrated decoder classifies as a
+        // truncated DCS whose label never echoes the payload — the ESC/BEL
+        // contains would have tested nothing. Repointed to the generic
+        // final-byte leg, which still interpolates the payload through the
+        // sanitizer.
+        $out = Inspector::describeDcs("evil\x1bpayload\x07", ord('x'));
         $this->assertStringNotContainsString("\x1b", $out);
         $this->assertStringNotContainsString("\x07", $out);
         $this->assertStringContainsString('ESC', $out);
@@ -532,15 +538,18 @@ final class InspectorTest extends TestCase
 
     public function testDcsDecrpssReply(): void
     {
-        // Note: sugar-ansi-parser parses DCS per VT100 spec - 'r' and 'p' are final bytes,
-        // '1' and '0' are params, '$' is intermediate. The sequence 1$r0$p is two
-        // DECRPSS commands but the parser only captures the last final byte.
-        // New semantic output reflects this structural interpretation.
+        // 2026-10-23 (r1024/inspect): describeDcs() migrated onto the shared
+        // Codec\Dcs decoder, which sees the TRUE fields of these sequences
+        // (intermediate '$', final 'r', params slot) instead of only the
+        // rebuilt payload string. Both cases are now classified as DECRPSS
+        // replies and labelled with their reply shape - strictly more
+        // truthful than the old generic 'DCS r<payload>' fallthrough, so the
+        // needles flip in-step.
         $seg = Inspector::parse("\x1bP1" . '$r0' . '$p' . "\x1b\\")[0];
-        $this->assertStringContainsString('DCS r', $seg->describe());
+        $this->assertStringContainsString('DECRPSS reply 1$r0$p', $seg->describe());
 
         $seg = Inspector::parse("\x1bP0" . '$r1' . '$r' . "\x1b\\")[0];
-        $this->assertStringContainsString('DCS r', $seg->describe());
+        $this->assertStringContainsString('DECRPSS reply 0$r1$r', $seg->describe());
     }
 
     public function testDcsSixel(): void
@@ -729,6 +738,57 @@ final class InspectorTest extends TestCase
         // DCS with final 'q' byte must claim sixel.
         $desc = Inspector::describeDcs('', ord('q'));
         $this->assertStringContainsString('sixel image', $desc);
+    }
+
+    public function testDcsDecrqssRequestIsNotMislabelledSixel(): void
+    {
+        // 2026-10-23 (r1024/inspect): DECRQSS is 'DCS $ q <params> ST' -
+        // '$' intermediate, 'q' final, request riding in the data. The old
+        // hand-rolled classifier looked only at final=='q' and claimed the
+        // whole thing as a sixel image. The migrated Codec\Dcs classifier
+        // checks the intermediate too.
+        $seg = Inspector::parse("\x1bP" . '$q1;0' . "\x1b\\")[0];
+        $this->assertStringContainsString('DECRQSS request 1;0', $seg->describe());
+    }
+
+    public function testDcsTmuxPassthrough(): void
+    {
+        // 2026-10-23 (r1024/inspect): tmux passthrough DCS (final 't',
+        // data starting 'mux;') gets its own label from the shared decoder.
+        $seg = Inspector::parse("\x1bPtmux;xterm\x1b\\")[0];
+        $this->assertStringContainsString('tmux passthrough (9 bytes)', $seg->describe());
+    }
+
+    public function testDcsSixelDataStartingWithDollarStaysSixel(): void
+    {
+        // 2026-10-23 (r1024/inspect): production DCS dispatch hands the
+        // decoder the true parsed fields, so a sixel whose DATA happens to
+        // begin '$' is not mistaken for DECRQSS - the intermediate is the
+        // discriminator, not the first payload byte.
+        $seg = Inspector::parse("\x1bPq" . '$abc' . "\x1b\\")[0];
+        $desc = $seg->describe();
+        $this->assertStringContainsString('sixel image (4 bytes)', $desc);
+        $this->assertStringNotContainsString('DECRQSS', $desc);
+    }
+
+    public function testDcsShimPeelsPreludeForLegacyCallers(): void
+    {
+        // 2026-10-23 (r1024/inspect): describeDcs($payload, $final) is a
+        // compatibility shim - with only the rebuilt prelude+data string it
+        // heuristically peels leading intermediate/prefix bytes. A direct
+        // '$'-leading call therefore classifies as DECRQSS; documented
+        // limitation of the shim, production callers use describeDcsParts().
+        $desc = Inspector::describeDcs('$abc', ord('q'));
+        $this->assertStringContainsString('DECRQSS request abc', $desc);
+    }
+
+    public function testDcsTruncatedDirectCallNamesTheFamily(): void
+    {
+        // 2026-10-23 (r1024/inspect): final byte 0 on the shared decoder
+        // means 'no final byte seen' - a truncated DCS - so the label says
+        // so instead of pretending the payload was a complete sequence.
+        $desc = Inspector::describeDcs('collected');
+        $this->assertStringContainsString('DCS truncated (no final byte;', $desc);
     }
 
     // --- Step 5: OSC/APC control-byte sanitization in describe labels ---

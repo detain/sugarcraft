@@ -789,6 +789,50 @@ final class ByteFidelityTest extends TestCase
         }
     }
 
+    public function testCancelByteInsideStringStateDispatchesTheTruncatedPayload(): void
+    {
+        // 2026-10-23 (r1024/inspect, README deviation 11): sugar-ansi-parser
+        // commit 35dda61c0 moved CAN/SUB inside the *string* states (OSC,
+        // DCS-passthrough, SOS/PM/APC) from silently dropping the whole
+        // sequence to dispatching the payload collected so far. The cancel
+        // byte itself is CONSUMED - it never appears in a segment - which
+        // is the asymmetry against the control-sequence states above: a
+        // CAN in a CSI prelude or a DCS prelude is executable and echoes
+        // as its own C0 segment (last case). The OSC raw keeps the
+        // handler's BEL normalization; nothing else moved.
+        $cases = [
+            // CAN mid-OSC: truncated payload dispatches, cancel vanishes.
+            "\x1b]0;a\x18b\x07" => ["\x1b]0;a\x07", 'b', "\x07"],
+            // CAN mid-DCS-data: same shape, ST terminator re-emitted.
+            "\x1bP q data\x18tail\x1b\\" => ["\x1bP  data\x1b\\", 'tail', "\x1b\\"],
+            // SUB mid-SOS: same shape with the other cancel byte.
+            "\x1bXabc\x1ad\x1b\\" => ["\x1bXabc\x1b\\", 'd', "\x1b\\"],
+            // OSC cut by SUB with no terminator at all: the dispatch at
+            // cancel re-arms the BEL normalization, then 'b' lands in Ground.
+            "\x1b]0;a\x1ab" => ["\x1b]0;a\x07", 'b'],
+            // Contrast (deviation 7, unmoved): CAN in the DCS *prelude* -
+            // a control-sequence state - still echoes and discards.
+            "\x1bP\x18x\x1b\\" => ["\x18", 'x', "\x1b\\"],
+        ];
+
+        $stringStateCases = array_slice($cases, 0, 4, preserve_keys: true);
+        foreach ($cases as $input => $expected) {
+            $segments = Inspector::parse($input);
+
+            $this->assertSame(
+                $expected,
+                array_map(static fn($segment): string => $segment->raw(), $segments),
+                bin2hex($input),
+            );
+        }
+
+        foreach ($stringStateCases as $input => $expected) {
+            $concat = implode('', $expected);
+            $this->assertStringNotContainsString("\x18", $concat, bin2hex($input));
+            $this->assertStringNotContainsString("\x1a", $concat, bin2hex($input));
+        }
+    }
+
     public function testTruncatedUtf8TailIsDroppedExactlyAsTheParserDropsIt(): void
     {
         // The one byte loss left in the contract, pinned so that a future fix is a
