@@ -16,7 +16,7 @@ use SugarCraft\Video\Source\Probe;
  *     open() accepts the request headers; a .gif URL is still decoded by
  *     ffmpeg, not by the in-process GIF reader)
  *   - Else if source ends with .gif (case-insensitive) → GifDecoder
- *   - Else if source is a LOCAL animated WebP (E-05.2) → AnimatedWebpDecoder
+ *   - Else if source is a LOCAL animated WebP → AnimatedWebpDecoder
  *     (ffmpeg cannot read WebP animation at all — it skips ANMF — so the old
  *     ffmpeg route showed one silent base frame; the sniff is a header-only
  *     container walk, and a still .webp never enters this branch, keeping its
@@ -57,7 +57,7 @@ final class DecoderFactory
         } elseif ($isGif) {
             $decoder = new GifDecoder($cellPxW, $cellPxH);
         } elseif (self::isLocalAnimatedWebp($source)) {
-            // E-05.2: animated WebP is a GD/container job, never an ffmpeg one.
+            // Animated WebP is a GD/container job, never an ffmpeg one.
             // The decoder's open() raises the loud refusal when GD lacks WebP
             // — silently handing the file to ffmpeg would show one base frame.
             $decoder = new AnimatedWebpDecoder($cellPxW, $cellPxH);

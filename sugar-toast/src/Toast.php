@@ -17,15 +17,13 @@ use SugarCraft\Core\Util\Width;
  * Floating alert notification renderer.
  *
  * Renders one or more toast alerts (error/warning/info/success) at a fixed
- * screen position, composited over a background view.
+ * screen position, composited over a background view. Stacked/queued alerts
+ * are bounded by maxConcurrent + the Overflow strategy; runnable demos live
+ * in examples/ (basic.php, types.php).
  *
- * Port of DaltonSW/bubbleup.
+ * Design antecedent: DaltonSW/bubbleup.
  *
  * @see https://github.com/daltonsw/bubbleup
- *
- * Findings verified:
- * - Finding 9: Stacked/queued toasts via maxConcurrent + Overflow (already implemented)
- * - Finding 10: examples/ directory exists (basic.php, types.php)
  */
 final class Toast
 {
@@ -196,8 +194,17 @@ final class Toast
     /**
      * Add an alert to the queue. Returns a new Toast instance.
      *
-     * If $expiresAt is provided, it overrides the configured duration.
+     * If $expiresAt is provided, it overrides the configured duration; when it
+     * is left null the alert INHERITS withDuration() — a null $expiresAt is
+     * "use the default", not "never expire". For a persistent alert keep the
+     * toast's duration unset (the default, or withDuration(null)), or call
+     * cancelAlert() on a queued alert.
      * Accepts a ToastType or a string type name (case-insensitive).
+     *
+     * The message text is app-supplied: inline SGR sequences in it are honoured
+     * as styling (re-encoded through the cell grid), but raw control bytes can
+     * never reach the output — see README "Security & trust boundary" and
+     * docs/TRUST-BOUNDARY.md §1 for the host-side Sanitize contract.
      *
      * When maxConcurrent is set and the queue would exceed it, applies
      * the configured overflow strategy (DropOldest, DropNewest, or Enqueue).
@@ -219,7 +226,6 @@ final class Toast
             $alert = $alert->withExpiry($clone->duration);
         }
 
-        // Finding 9: Stacked/queued toasts — verified via maxConcurrent + Overflow enum
         $clone->queue = $this->appendBounded($clone->queue, $alert);
         return $clone;
     }
@@ -551,12 +557,12 @@ final class Toast
         $bgLines = $this->splitLines($background);
         $bgRowCount = \count($bgLines);
 
-        // Layout ONCE (audit M3): each box is rendered straight to its Buffer
-        // and its height feeds both the frame growth and the placement pass,
-        // so the two passes can no longer disagree about the coordinate
-        // system — the old sizing pass handed yOffset() the PREVIOUS
-        // cumulative height minus the alert height, which pushed every
-        // bottom-anchored toast below the emitted frame.
+        // Layout ONCE: each box is rendered straight to its Buffer and its
+        // height feeds both the frame growth and the placement pass, so the
+        // two passes can no longer disagree about the coordinate system —
+        // the old sizing pass handed yOffset() the PREVIOUS cumulative height
+        // minus the alert height, which pushed every bottom-anchored toast
+        // below the emitted frame.
         $boxes = [];
         $stackHeight = 0;
         foreach ($active as $alert) {
@@ -565,10 +571,10 @@ final class Toast
             $stackHeight += $box->height();
         }
 
-        // The frame is the VIEWPORT canvas, not the box width (audit C2):
-        // every background column survives; only the alert box is capped at
-        // maxWidth (via renderAlert's $capWidth), and top-stacked alerts may
-        // grow the frame downward.
+        // The frame is the VIEWPORT canvas, not the box width: every
+        // background column survives; only the alert box is capped at maxWidth
+        // (via renderAlert's $capWidth), and top-stacked alerts may grow the
+        // frame downward.
         $frameWidth = max(1, $viewportWidth);
         $contentHeight = max(max($bgRowCount, $viewportHeight), $stackHeight);
 
@@ -580,9 +586,9 @@ final class Toast
         // downward from it, bottom/middle stack upward against it), and the
         // box's REAL width is passed to xOffset so centre/right offsets become
         // non-zero — the old code always measured the full-canvas buffer,
-        // collapsing xOffset to 0 and making 6 of the 9 positions identical
-        // (audit M4). The region spans exactly the box, so nothing right of a
-        // narrow box is overwritten with blanks (audit M5).
+        // collapsing xOffset to 0 and making 6 of the 9 positions identical.
+        // The region spans exactly the box, so nothing right of a narrow box
+        // is overwritten with blanks.
         $stackedBefore = 0;
         foreach ($boxes as $box) {
             $x = max(0, $this->position->xOffset($box->width(), $frameWidth));
@@ -621,9 +627,9 @@ final class Toast
      */
     private function renderAlert(Alert $alert, int $capWidth): string
     {
-        // Finding 10 / Item 3.1: null message renders as empty string — the
-        // width probe must coalesce too, or Width::string(null) fatals on a
-        // strict_types path before the `?? ''` guard further down ever runs.
+        // Null message renders as empty string — the width probe coalesces it
+        // too, because under strict_types Width::string(null) would fatal
+        // before any `?? ''` in the same statement could rescue it.
         $width = $this->resolveWidth(Width::string($alert->message ?? ''), $capWidth);
         $icon  = $alert->type->icon($this->symbols);
         $color = $alert->type->color();
@@ -644,7 +650,7 @@ final class Toast
 
         // Header line: coloured icon + first slice of the message, padded
         // to the inner cell width (Width::* are ANSI- and multibyte-aware).
-        // Finding 10 / Item 3.1: null message renders as empty string — never "null"
+        // Null message renders as empty string — never "null".
         $iconCells = Width::string($prefix);
         $headerWrap = $this->wordWrap($alert->message ?? '', \max(1, $inner - $iconCells));
         $firstWord  = \array_shift($headerWrap) ?? '';
@@ -677,13 +683,13 @@ final class Toast
      *
      * Parses the ANSI-encoded string from renderAlert() to extract SGR
      * sequences and builds cells with proper Buffer Style objects, so
-     * toAnsi() produces correct styled output. Mirrors charmbracelet/bubbleup's
+     * toAnsi() produces correct styled output. Mirrors DaltonSW/bubbleup's
      * alert rendering pipeline.
      *
      * @param int $capWidth Ceiling from the render canvas (min of maxWidth is
      *                      applied inside resolveWidth); the returned buffer's
      *                      width equals the box's own cell width — never the
-     *                      canvas — so View() blits precisely the box (audit M5).
+     *                      canvas — so view() blits precisely the box.
      */
     private function renderAlertToBuffer(Alert $alert, int $capWidth): Buffer
     {
@@ -804,10 +810,10 @@ final class Toast
                     }
                 }
                 $seq = \substr($s, $i + 2, $j - $i - 3);
-                // Cumulative fold (audit M7): a sequence mutates only the
-                // facets it names — styles survive across sequences on the
-                // same run of cells, and a sugar-cellbuffer-emitted `\e[0;…m`
-                // preamble resets then rebuilds instead of erasing everything.
+                // Cumulative fold: a sequence mutates only the facets it names
+                // — styles survive across sequences on the same run of cells,
+                // and a sugar-cellbuffer-emitted `\e[0;…m` preamble resets then
+                // rebuilds instead of erasing everything.
                 $currentStyle = $this->applySgr($currentStyle, $seq);
                 $i = $j;
                 continue;
@@ -840,12 +846,12 @@ final class Toast
      * Extract the next UTF-8 grapheme cluster from string $s at position $i.
      *
      * Delegates to sugar-core's canonical {@see Width::nextCluster()}. This
-     * used to be the sanctioned verbatim fork (@c5cce07d7, kept because the
-     * core splitter was private); the duplicated body is deleted now that
-     * core promotes it to a public entry point, so both invalid-UTF-8 guards
-     * (ICU position rejection + continuation-byte validation) live in exactly
-     * one place. The malformed-walk pins reach the guards through this seam:
-     * the call-site contract is unchanged (same return shape, byte-for-byte
+     * used to be a sanctioned verbatim fork (kept because the core splitter
+     * was private); the duplicated body is deleted now that core promotes it
+     * to a public entry point, so both invalid-UTF-8 guards (ICU position
+     * rejection + continuation-byte validation) live in exactly one place.
+     * The malformed-walk pins reach the guards through this seam: the
+     * call-site contract is unchanged (same return shape, byte-for-byte
      * reproduction of malformed input, always advances by >= 1 byte).
      */
     private function nextCluster(string $s, int $i): string
@@ -867,7 +873,7 @@ final class Toast
 
     /**
      * Fold one SGR parameter list onto an existing style with terminal-facet
-     * semantics (audit M7): every code mutates only the facet it names.
+     * semantics: every code mutates only the facet it names.
      *
      * The old decoder REPLACED the whole style per sequence and understood
      * only fg-16/bold/reset, so 256-colour (`38;5;n`), truecolour
@@ -1031,14 +1037,14 @@ final class Toast
     /**
      * Display width of one grapheme cluster in cells: 0, 1, or 2.
      *
-     * Delegates to sugar-core's canonical {@see Width} oracle (audit M8) — the
-     * old local fork measured emoji (U+1F300+) and other EAW-wide ranges as
-     * 1 cell, desynchronising box padding from every other SugarCraft
-     * renderer (a padded row then overflowed its own border by one cell).
-     * Two grid-specific divergences stay deliberate and documented: a TAB
-     * occupies ONE spacer cell (Width charges E69's TAB_WIDTH = 4, which a
-     * fixed cell grid cannot represent), and the result is clamped into the
-     * Cell contract's 0–2 so a multi-cell cluster can never blow the grid.
+     * Delegates to sugar-core's canonical {@see Width} oracle — the old local
+     * fork measured emoji (U+1F300+) and other EAW-wide ranges as 1 cell,
+     * desynchronising box padding from every other SugarCraft renderer (a
+     * padded row then overflowed its own border by one cell). Two
+     * grid-specific divergences stay deliberate and documented: a TAB occupies
+     * ONE spacer cell (Width charges TAB_WIDTH = 4, which a fixed cell grid
+     * cannot represent), and the result is clamped into the Cell contract's
+     * 0–2 so a multi-cell cluster can never blow the grid.
      */
     private function graphemeWidth(string $g): int
     {
@@ -1071,7 +1077,7 @@ final class Toast
     /**
      * Box width for a message of $messageLen display cells, capped by BOTH
      * maxWidth and the render canvas ($capWidth) — a box may never exceed the
-     * frame it is blitted onto (audit C2).
+     * frame it is blitted onto.
      */
     private function resolveWidth(int $messageLen, int $capWidth): int
     {

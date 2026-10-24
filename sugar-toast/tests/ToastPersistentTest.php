@@ -69,6 +69,31 @@ final class ToastPersistentTest extends TestCase
         $this->assertStringContainsString('background', $result);
     }
 
+    public function testNullExpiresAtInheritsConfiguredDuration(): void
+    {
+        // A null $expiresAt means "use the default", NOT "never expire":
+        // with a duration configured, the queued alert must carry an expiry.
+        $t = Toast::new(50)
+            ->withDuration(5.0)
+            ->alert(ToastType::Info, 'inherits five seconds', null);
+
+        $queue = $this->getQueue($t);
+        $this->assertNotNull($queue[0]->expiresAt);
+        $this->assertGreaterThan(\microtime(true), $queue[0]->expiresAt ?? 0.0);
+    }
+
+    public function testDurationlessToastLeavesAlertWithoutExpiry(): void
+    {
+        // The genuine persistent path: no duration configured and no
+        // per-call expiry — the alert carries nothing to expire on.
+        $t = Toast::new(50)
+            ->withDuration(null)
+            ->alert(ToastType::Info, 'stays until dismissed', null);
+
+        $queue = $this->getQueue($t);
+        $this->assertNull($queue[0]->expiresAt);
+    }
+
     // Helper to access private queue
     private function getQueue(Toast $t): array
     {

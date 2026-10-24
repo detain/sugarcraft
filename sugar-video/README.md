@@ -224,6 +224,43 @@ program already owns, so the measurement is injected. Callers that never
 `Player::open()`'s own default), and `cellPx()` returns `null` until one is
 supplied — a non-positive dimension throws `InvalidArgumentException`.
 
+## Subtitles
+
+Subtitles are WebVTT text that paints beneath the frame during playback. Attach
+a track to a `Reel` and it flows through to the player untouched:
+
+```php
+use SugarCraft\Video\Reel;
+
+// The .vtt is read and parsed when play()/toPlayer() builds the Player; an
+// unreadable path simply means "no subtitles" rather than a fatal.
+Reel::open('clip.mp4')
+    ->withSubtitles('clip.vtt')
+    ->play();
+```
+
+**Format support.** `WebVtt::parse()` accepts standard WebVTT and is lenient
+enough to read most `.srt` files directly: numeric cue indices and `,`
+millisecond separators are tolerated, `NOTE`/`STYLE`/`REGION` blocks are
+skipped, inline tags (`<i>`, `<c>`, cues' `<c.class>`) are stripped, and HTML
+entities are decoded. Cue identifiers and cue settings lines
+(`position:`, `align:` …) are parsed away but not honoured — the renderer owns
+placement. A track over `WebVtt::MAX_CUES` (10,000) cues is truncated to that
+bound.
+
+**Where they paint.** In every rendering mode the active cue for the current
+video time is appended as one caption line directly below the frame,
+left-aligned, truncated or space-padded to the player's cell width (the
+one-line-per-row invariant). Cue lookup is a binary search on the timeline
+(`WebVtt::cueAt()`), so adding a track does not slow the per-frame path. There
+is no keyboard shortcut: the toggle is attaching (or not attaching) the track
+at open time.
+
+Hosts that want their own placement can skip the integration entirely — parse
+the track with `WebVtt::parse()` and hand the object to
+`Player::open(subtitles:)`, or query `cueAt()` yourself and compose the text
+into your own view.
+
 ## Keyboard controls
 
 | Key | Action |
@@ -238,6 +275,7 @@ supplied — a non-positive dimension throws `InvalidArgumentException`.
 | `q` / `Esc` | Quit |
 | `resize` | Terminal resize (SIGWINCH) re-scales video automatically |
 | `loop` | Loop is set at open time via `Reel::new()->withLoop(true)->play()` (no keyboard shortcut) |
+| `subtitles` | Attached at open time via `Reel::withSubtitles()` (no keyboard shortcut) |
 
 ## Architecture
 
@@ -304,7 +342,7 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 
 - **GIF playback fills the terminal in HalfBlock mode** (each cell = 2 source rows). In text modes (ascii/ansi256/truecolor) the GIF renders at its native pixel dimensions without 2× vertical scaling.
 
-- **Sixel encoding is pure PHP (no external accelerator).** `sixel` mode encodes through sugar-image's `SixelRenderer`; the former preference for an external `chafa` binary on PATH was retired in W10 (§4.15 item 2, the decision that line reserved after `candy-image` shipped as the chafa frontend). Frames are decoded at full cell-resolution pixels, so the pure-PHP encoder needs no upscaling and the DCS output is protocol-identical; the trade-off is PHP time per large sixel frame, and no child process is ever spawned from the video render path.
+- **Sixel encoding is pure PHP (no external accelerator).** `sixel` mode encodes through sugar-image's `SixelRenderer`; the former preference for an external `chafa` binary on PATH was retired once `candy-image` shipped as the chafa frontend, leaving sugar-image as the single sixel encoder in the ecosystem. Frames are decoded at full cell-resolution pixels, so the pure-PHP encoder needs no upscaling and the DCS output is protocol-identical; the trade-off is PHP time per large sixel frame, and no child process is ever spawned from the video render path.
 
 - **Seek is fast, slightly less frame-exact (keyframe snap).** `seekToSeconds()`
   uses ffmpeg *input* seeking (`-ss` placed before `-i`), which decodes from the

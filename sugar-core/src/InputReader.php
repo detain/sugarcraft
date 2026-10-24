@@ -34,10 +34,11 @@ use SugarCraft\Core\Util\Sanitize;
  * sequences are buffered across calls so split reads (common with stdin)
  * still produce correct keys.
  *
- * Phase-3 round 1 covers: printable ASCII, control characters
+ * Coverage: printable ASCII, control characters
  * (Ctrl+A‒Z, Tab, Enter, Backspace, Escape, Space), Alt-prefixed keys
- * (ESC + char), and the 4 arrow CSIs. Function keys, mouse, and the
- * Kitty keyboard protocol arrive in a follow-up.
+ * (ESC + char), the arrow and tilde function CSIs, SGR mouse reports,
+ * and the Kitty keyboard protocol (CSI-u plus its PUA function-key
+ * encodings).
  */
 final class InputReader
 {

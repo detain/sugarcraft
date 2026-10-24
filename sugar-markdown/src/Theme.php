@@ -81,7 +81,7 @@ final class Theme
         /** Cells the thematic-break glyph repeats across. Default 40. */
         public readonly int $horizontalRuleLength = 40,
 
-        // ---- table substyles (audit #9 wrap-up) ----
+        // ---- table substyles ----
         /** Style applied to GFM-table header cells. Default null = inherit `bold`. */
         public readonly ?Style $tableHeader    = null,
         /** Style applied to body-row cells. Default null = no styling. */

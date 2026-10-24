@@ -25,9 +25,9 @@ sugar-treelist — a tree-list view component for terminal UIs, for PHP 8.3+. Re
 - **`Stringable` items** — any PHP object with `__toString()` or `Stringable` works as a list item
 - **`StringItem` adapter** — wrap plain strings as list items without a class
 - **`LessFunc` / `EqualsFunc`** — plug-in sorting and equality comparison
-- **Fuzzy matching** — `FuzzyMatch` scores candidates via Smith-Waterman local alignment
+- **Fuzzy matching** — `FuzzyMatch` scores candidates by delegating to sugar-fuzzy's `SmithWatermanMatcher` (SSOT — see [Deprecation & delegation](#deprecation--delegation))
 - **Filter state machine** — `withFilterFn()` / `withoutFilter()` with `FilterState` enum tracking (unfiltered / filtering)
-- **Pure rendering** — outputs ANSI-styled strings; integrate with any TUI framework
+- **Delta rendering** — `view()` emits a full frame first, then buffer diffs against the previous frame; `resetPreviousFrame()` forces a repaint; integrates with any TUI framework (see [Buffer diffing](#buffer-diffing))
 
 ## Install
 
@@ -40,7 +40,9 @@ composer require sugarcraft/sugar-treelist
 ```php
 use SugarCraft\TreeList\{Model, StringItem, DefaultPrefixer, DefaultSuffixer};
 
-// Fluent setters RETURN NEW Models — rebind (or chain); instances are immutable.
+// Fluent setters RETURN NEW Models — rebind (or chain); instances are immutable
+// as far as data goes — but view()/resetPreviousFrame() mutate the delta-render
+// frame memo in place (see Buffer diffing).
 $model = Model::new()->setWidth(80)->setHeight(24);
 $model = $model->addItem(new StringItem('First item'));
 $model = $model->addItem(new StringItem('Second item'));
@@ -123,7 +125,8 @@ Attach a filter function to narrow the visible items. The model tracks filter st
 ```php
 use SugarCraft\TreeList\{Model, StringItem, FilterState};
 
-// Start with a list (rebind each step — the model is immutable)
+// Start with a list (rebind each step — setters return new Models;
+// only the delta-render frame memo is mutated in place by view())
 $model = Model::new()->setWidth(80)->setHeight(24);
 foreach (['apple', 'banana', 'cherry', 'apricot', 'blueberry'] as $f) {
     $model = $model->addItem(new StringItem($f));
@@ -153,7 +156,12 @@ Filter state transitions:
 
 ## Fuzzy Matching
 
-`FuzzyMatch` implements Smith-Waterman local alignment to rank candidates by relevance to a query string. It is memory-efficient (two-row DP matrix) and penalizes gaps and mismatches while rewarding consecutive character matches:
+`FuzzyMatch` ranks candidates by Smith-Waterman local-alignment score. It is a
+thin delegating shim: the DP core lives in sugar-fuzzy's `SmithWatermanMatcher`
+(SSOT), and this class keeps sugar-treelist's own public contract —
+`\Stringable` items and input-order tiebreak on equal scores (intentionally
+*not* `SmithWatermanMatcher::matchAll()`, whose haystack-ascending tiebreak
+would reorder equal-score items):
 
 ```php
 use SugarCraft\TreeList\FuzzyMatch;
@@ -176,13 +184,39 @@ $results = $matcher->match('sep', $items);
 // Returns [ [StringItem('September'), 19], ... ] sorted by score descending
 ```
 
+**Candidate cap (DoS guard):** sugar-fuzzy caps input lengths
+(`SmithWatermanMatcher::DEFAULT_MAX_QUERY_LENGTH` /
+`DEFAULT_MAX_CANDIDATE_LENGTH`). Over-cap input is aligned on its **prefix**
+on the same score scale as every other item, so a very long candidate ranks
+consistently with short ones. The trade-off: **text that exists only past the
+candidate cap is not searched.**
+
+## Deprecation & delegation
+
+This lib is a façade over [sugar-fuzzy](https://github.com/detain/sugarcraft-sugar-fuzzy)
+for fuzzy scoring (reciprocally documented in sugar-fuzzy's README):
+
+- `SugarCraft\TreeList\ScoringProfile` is a **`@deprecated` `class_alias`** to
+  sugar-fuzzy's `SugarCraft\Fuzzy\ScoringProfile` — the single source of truth.
+  It is aliased, not subclassed, so `new FuzzyMatch(ScoringProfile::strict())`
+  hands the SSOT matcher an instance it accepts natively.
+- `SugarCraft\TreeList\FuzzyMatch` is a **thin delegating shim** over
+  `SmithWatermanMatcher` (keeping sugar-treelist's own `\Stringable`-item
+  contract and input-order tiebreak, plus the prefix-alignment cap behaviour
+  documented above).
+
+**New code should depend on `SugarCraft\Fuzzy\*` directly** and use
+`sugar-fuzzy`'s `SmithWatermanMatcher` / `ScoringProfile`; the re-exports here
+exist only for back-compat.
+
 ## Buffer diffing
 
 The `Model::view()` maintains a `?Buffer $previousFrame` across renders. On each render it
 builds the current Buffer, computes `current->diff(previous)` (from
 [sugar-cellbuffer](https://github.com/detain/sugarcraft-sugar-cellbuffer)), and emits only
 the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces
-`previousFrame` for the next render.
+`previousFrame` for the next render. `resetPreviousFrame()` clears the stored frame,
+forcing the next `view()` to emit a full repaint (window resize, cursor-position-lost).
 
 **SSH bandwidth + flicker win:** a one-character change in an 80×24 viewport
 produces ~8 bytes of delta ops instead of ~1 940 bytes for a full repaint.

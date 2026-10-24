@@ -26,8 +26,9 @@ use SugarCraft\Video\Decode\RgbFrame;
  *     — no per-pixel PHP work, the terminal does the scaling. Full resolution,
  *     essentially free per frame.
  *   - **Sixel**: the pure-PHP {@see SixelRenderer} — this path spawns no
- *     external binary (the former external-encoder preference was retired in
- *     W10, §4.15 item 2; see the README for the capability note).
+ *     external binary (the former external-encoder preference was retired
+ *     once `candy-image` shipped as the chafa frontend; see the README for
+ *     the capability note).
  *
  * The cell footprint is recovered from the frame's pixel size and the cell pixel
  * geometry, so a renderer that wants cells (all of them) gets the right count.

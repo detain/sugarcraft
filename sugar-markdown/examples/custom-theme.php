@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Custom theme — reach into Theme's constructor to swap individual
  * Style slots, then feed the theme to a Renderer.
  *
- *   $ php examples/custom-renderer.php
+ *   $ php examples/custom-theme.php
  */
 
 require __DIR__ . '/../vendor/autoload.php';

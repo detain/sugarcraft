@@ -20,11 +20,12 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 - **9 positions**: TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight
 - **4 alert types**: Error, Warning, Info, Success — each with distinct styling
 - **Dynamic width**: fixed or auto-sizing between minWidth and maxWidth
-- **Symbol sets**: NerdFont (icons), Unicode (boxed), ASCII (plain text)
+- **Symbol sets**: NerdFont (icons), Unicode (symbols), Ascii (plain text)
 - **Auto-dismiss**: duration-based expiry support
 - **Multiple alerts**: queue of toasts rendered in order
 - **Progress toasts**: inline progress bar (0–100%) beneath the message body
 - **Action buttons**: `[Label]` buttons attached to an alert with closure callbacks
+- **Styled alerts**: per-alert background/foreground/border colour overrides
 - **History log**: immutable, bounded record of dismissed alerts (default cap 100)
 - **Pure renderer**: outputs ANSI strings; works with any TUI framework
 
@@ -121,12 +122,18 @@ When the cap is reached, the configured `Overflow` strategy determines behaviour
 
 
 
-By default, alerts inherit `withDuration()` for auto-dismiss timing. Pass
-`null` as the `$expiresAt` argument to `alert()` to create a persistent alert
-that never expires automatically:
+By default, alerts inherit `withDuration()` for auto-dismiss timing. A `null`
+`$expiresAt` means "use the default", not "never expire" — to get a persistent
+alert that never expires automatically, keep the toast's duration unset (the
+default, or `withDuration(null)`) so queued alerts inherit nothing:
 
 ```php
-$toast = $toast->alert(ToastType::Info, 'Connected', null);  // never expires
+$toast = Toast::new(50)->withPosition(Position::TopRight);  // no duration set
+$toast = $toast->alert(ToastType::Info, 'Connected');       // never expires
+
+// Per-alert escape hatch from an inherited expiry:
+$alert = (new Alert(ToastType::Info, 'Connected'))->withoutExpiry();
+$toast = $toast->push($alert);
 ```
 
 Persistent alerts never expire, so `pruneExpired()` cannot remove them — take
@@ -244,10 +251,11 @@ progress value (0.0–1.0) is clamped automatically.
 
 
 
-Attach clickable buttons to an alert via `Alert::withActions()`:
+Attach clickable buttons to an alert. Either build an `Alert` and enqueue it
+with `push()`, or pass `actions:` to `alert()` directly:
 
 ```php
-use SugarCraft\Toast\{Action, Toast, ToastType};
+use SugarCraft\Toast\{Action, Alert, Toast, ToastType};
 
 $action = Action::new('Retry', function (): void {
     // reconnect logic here
@@ -255,13 +263,33 @@ $action = Action::new('Retry', function (): void {
 
 $alert = (new Alert(ToastType::Error, 'Connection lost'))
     ->withActions([$action]);
+$toast  = $toast->push($alert);
 
+// Equivalent shorthand:
 $toast = $toast->alert(ToastType::Error, 'Connection lost', actions: [$action]);
 ```
 
+The library renders the `[Label]` buttons; dispatching them is the host's job.
 `Action` is a value object with `readonly string $label` and
 `readonly \Closure(): void $callback`. When the action is triggered, invoke
 `$action->callback()` directly in your key/mouse handler.
+
+## Styled Alerts
+
+Each alert accepts explicit background, foreground, and border colours,
+falling back to the type's default palette when unset (`null`):
+
+```php
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Toast\{Alert, Toast, ToastType};
+
+$alert = (new Alert(ToastType::Success, 'Deployed'))
+    ->withBackgroundColor(Color::hex('#1a2f23'))
+    ->withForegroundColor(Color::hex('#9ece6a'))
+    ->withBorderColor(Color::hex('#9ece6a'));
+
+$toast = $toast->push($alert);
+```
 
 ## History Log
 
@@ -301,20 +329,25 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 | `->withDuration(?float $seconds)` | Auto-dismiss after N seconds; `null` disables |
 | `->withMaxWidth(int)` | Maximum alert width in cells |
 | `->withMinWidth(int)` | Minimum alert width in cells |
-| `->withSymbolSet(SymbolSet)` | NerdFont, Unicode, or ASCII symbols |
+| `->withSymbolSet(SymbolSet)` | NerdFont, Unicode, or Ascii symbols |
 | `->withAllowEscToClose(bool)` | Preference flag the host reads to decide if Escape dismisses (the renderer does not handle input) |
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
 | `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded) |
-| `->alert(ToastType\|string, string, ?float $expiresAt)` | Add alert (string type = case-insensitive) |
-| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt)` | Add alert with progress bar (0.0–1.0) |
+| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`) |
+| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null)` | Add alert with progress bar (0.0–1.0) |
+| `->push(Alert $alert): self` | Enqueue a pre-built `Alert` (styled/actioned) |
+| `->cancelAlert(int $index): self` | Make a queued alert persistent (never auto-dismisses) |
+| `->extendAlert(int $index, float $additionalSeconds): self` | Push one alert's expiry later |
+| `->extendAll(float $additionalSeconds): self` | Push every expiring alert's expiry later |
+| `->allowEscToClose(): bool` | Read the Escape-dismiss preference flag (host consumes it; the renderer handles no input) |
 | `->error/warning/info/success(string)` | Convenience alert helpers |
 | `->hasActiveAlert(): bool` | True if non-expired alerts queued |
 | `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds) of an auto-dismissing alert, or `null` |
 | `->secondsUntilNextExpiry(): ?float` | Delay until the next expiry, clamped `>= 0.0`, or `null` — schedule one prune tick |
 | `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` moves live alerts to history (rendering stops until `clear()`, which also resets the flag) |
 | `->history(): list<Alert>` | Return all dismissed alerts |
-| `->view(string $background, int $w, int $h): string` | Render toast layer over background (the legacy `View()` spelling is a deprecated alias) |
+| `->view(string $background, int $w, int $h): string` | Render toast layer over background (the legacy `View()` call sites keep resolving via PHP's case-insensitive method dispatch — there is no alias method) |
 
 | Class | Method | Description |
 |-------|--------|-------------|
@@ -322,19 +355,31 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 | `Alert` | `withActions(list<Action>)` | Attach action buttons |
 | `Alert` | `isExpired(): bool` | Check expiry |
 | `Alert` | `withExpiry(float $duration)` | Set expiry from now |
+| `Alert` | `withoutExpiry()` | Make this alert persistent (never auto-dismisses) |
+| `Alert` | `withCancelledExpiry()` | Clear the expiry (used by `Toast::cancelAlert()`) |
+| `Alert` | `withExtendedExpiry(float)` | Move the expiry later by N seconds |
+| `Alert` | `withBackgroundColor(?Color)` | Override box background (`null` = type default) |
+| `Alert` | `withForegroundColor(?Color)` | Override text colour (`null` = type default) |
+| `Alert` | `withBorderColor(?Color)` | Override border colour (`null` = type default) |
 | `Action` | `new(string $label, \Closure(): void $callback)` | Factory |
 | `Action` | `->label: non-empty-string` | Button label (readonly) |
 | `Action` | `->callback: \Closure(): void` | Callback (readonly) |
 | `HistoryLog` | `push(Alert, ?int $limit = null): self` | Append alert, evicting oldest past `$limit`; new log |
 | `HistoryLog` | `all(): list<Alert>` | Return all entries |
 | `HistoryLog` | `count(): int` | Entry count |
+| `Position` | `xOffset(int $alertWidth, int $viewportWidth): int` | X offset of a box in a viewport (left edge 0, center floored, right flush) |
+| `Position` | `yOffset(int $alertHeight, int $viewportHeight, int $stackedHeightBefore = 0): int` | Y offset; top families stack downward from the top, bottom and middle families stack upward against `$stackedHeightBefore`, clamped to row 0 on short viewports |
+| `ToastType` | `nerdIcon(): string` | NerdFont icon symbol for the type |
+| `ToastType` | `unicodeIcon(): string` | Unicode symbol (✖ ⚠ ℹ ✔) — fallback when no NerdFont |
+| `ToastType` | `asciiPrefix(): string` | Plain ASCII prefix (`[E]` `[W]` `[I]` `[S]`) |
+| `ToastType` | `color(): string` | ANSI SGR color code for the type's icon (31/33/34/32) |
 
 | Enum | Cases |
 |-------|-------|
 | `Position` | TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight |
 | `ToastType` | Error, Warning, Info, Success |
 | `Overflow` | DropOldest, DropNewest, Enqueue |
-| `SymbolSet` | NerdFont, Unicode, ASCII |
+| `SymbolSet` | NerdFont, Unicode, Ascii |
 
 ## Shared foundations
 
@@ -350,6 +395,32 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 
 
   snapshot tests via `assertGoldenAnsi()` pin canonical queue layouts.
+
+## Security & trust boundary
+
+Toast content is app-supplied — and in a TUI the terminal is a sink. `view()`
+renders alert text through the sugar-cellbuffer grid and re-encodes it, so the
+output stream contains only the SGR sequences the renderer itself emits:
+
+- **Control bytes can't escape**: raw ESC payloads, OSC hyperlinks (`\e]8;;…\e\\`)
+  and BEL in a message are never forwarded — the output carries no OSC, no BEL,
+  and no escape sequence the library did not build from a parsed style. A
+  forged `\e[2J` inside a message survives only as styled cells.
+- **Inline SGR in a message is honoured as styling** (bold/colour etc. are
+  re-encoded through the grid). Treat that as a feature boundary: if the text
+  is attacker-authored, sanitise before enqueueing —
+  `SugarCraft\Core\Util\Sanitize::untrusted()` (or `untrustedForDisplay()`)
+  strips the markup you do not want interpreted.
+- **PUA zone sentinels are ordinary printable text here**: the U+E000/U+E001
+  markers that sugar-mouse overlay plumbing uses pass through the grid like any
+  other glyph — a message containing forged markers WILL carry them into the
+  composed frame. Hosts that parse zone markers from rendered output must run
+  `Sanitize::untrustedForMarkedFrames()` on attacker-authored text BEFORE
+  enqueueing it.
+
+The full fleet-wide contract lives in
+[`docs/TRUST-BOUNDARY.md`](../docs/TRUST-BOUNDARY.md)
+— §1 "the terminal is a sink".
 
 ## License
 

@@ -14,7 +14,7 @@ use SugarCraft\Core\Model;
  * Provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals, and
  * assertViewIdempotent for deterministic regression testing of terminal output.
  *
- * @see Mirrors charmbracelet/bubbletea — snapshot testing pattern from issue #1654
+ * First-party harness — no 1:1 Go counterpart (see docs/MATCHUPS.md).
  */
 final class Assertions
 {
@@ -25,8 +25,7 @@ final class Assertions
      * calls must yield identical output, and the call must not mutate the
      * model. This underpins the render invariants the diff renderer relies
      * on — a view() that changed between frames for the same state would
-     * desync the terminal. Intended as a reusable check for W13 render-
-     * purity coverage across libs.
+     * desync the terminal. Intended as a reusable render-purity check across libs.
      *
      * The model-unchanged check uses a shallow clone, so mutation of a
      * nested object reachable by reference is not detected — the primary
@@ -56,12 +55,15 @@ final class Assertions
     /**
      * Assert that $actual matches the golden file at $goldenPath.
      *
-     * If UPDATE_GOLDENS=1 is set in the environment and the golden
-     * file does not exist, it is automatically created with $actual
-     * as the baseline.
+     * Comparison is BYTE-EXACT: no SGR stripping, no line-1 header skip
+     * (machine-stamped golden headers are a sugar-dash convention — its
+     * own comparator strips them; this harness does not, so a golden here
+     * must be byte-stable across machines).
      *
-     * If the golden file exists and differs, a diff is shown with
-     * ESC sequences printed as readable \x1b[...]m notation.
+     * UPDATE_GOLDENS=1 is CREATE-ONLY: when the golden is missing it is
+     * written from $actual; an EXISTING golden that differs still fails
+     * and is never rewritten. Delete the file (or the fixtures dir) to
+     * re-baseline deliberately.
      *
      * @param string $goldenPath Path to the golden file
      * @param string $actual     Current output bytes to assert
@@ -97,7 +99,11 @@ final class Assertions
      * highlighting mismatches with row/col coordinates.
      *
      * The $expected format is a 2-D array of cell data:
-     *   $expected[row][col] = ['rune' => 'a', 'style' => $style, ...]
+     *   $expected[row][col] = ['rune' => 'a', 'width' => 2]
+     *
+     * Only 'rune' and 'width' are compared; other keys (a 'style' entry,
+     * for instance) are accepted but ignored, and a null cell skips the
+     * position entirely.
      *
      * @param array<int, array<int, array<string, mixed>>> $expected 2-D cell array
      * @param Buffer                                          $actual   Buffer to compare

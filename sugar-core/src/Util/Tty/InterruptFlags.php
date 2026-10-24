@@ -116,8 +116,8 @@ final class InterruptFlags
         // Empty or zero byte means no interrupt. The @ is INERT on PHP 8:
         // shmop_read is typed `string` and THROWS ValueError for out-of-range
         // reads, so there is no false return to guard (the historic comment
-        // claimed one — stale from the pre-8.0 resource era; corrected during
-        // the E716 triage, measured live on PHP 8.3.6). Offset/size here are
+        // claimed one — stale from the pre-8.0 resource era; corrected in a
+        // PHP 8.3.6 remeasurement). Offset/size here are
         // constants inside a 1-byte segment, so the throw is unreachable.
         if (strlen($raw) === 0 || $raw === "\x00") {
             return false;

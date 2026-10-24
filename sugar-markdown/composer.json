@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-markdown",
-    "description": "PHP port of charmbracelet/glamour \u2014 Markdown \u2192 ANSI renderer with word-wrap, OSC 8 hyperlinks, syntax highlighting, and 8 stock themes (ansi/plain/dark/light/notty/dracula/tokyo-night/pink).",
+    "description": "PHP port of charmbracelet/glamour \u2014 Markdown \u2192 ANSI renderer with word-wrap, OSC 8 hyperlinks, syntax highlighting, and 9 stock themes (ansi/plain/dark/light/notty/dracula/tokyo-night/pink/ascii).",
     "type": "library",
     "license": "MIT",
     "keywords": [

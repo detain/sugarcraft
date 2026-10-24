@@ -79,6 +79,10 @@ final class FuzzerTest extends TestCase
             $term->feed($patterns[$i % count($patterns)]);
         }
         $term->flush();
+        // Fuzz-and-survive sentinel: the assertions of this test are "no
+        // exception and no hang" across the 200-feed hostile pattern stream —
+        // reaching this line IS the pass condition (docs-fix-1023 N1: kept
+        // explicit so the green assert count is read as intentional).
         $this->assertTrue(true);
     }
 

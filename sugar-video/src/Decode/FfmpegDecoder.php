@@ -62,7 +62,6 @@ use SugarCraft\Video\Support\FfmpegCommandBuilder;
  * stream URL, bypassing any transcode). For URL sources the http/https protocol
  * reconnect options are passed so a momentary drop does not abort playback.
  *
- * @see video_plan.md lines 79-82
  * @implements Decoder
  */
 final class FfmpegDecoder implements Decoder

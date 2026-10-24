@@ -16,16 +16,22 @@
 
 ![demo](.vhs/spinners.gif)
 
-sugar-widgets — 17 TUI components for PHP 8.3+: 9 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch) and 8 deprecated alias re-exports from `sugarcraft/sugar-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
+sugar-widgets — TUI components for PHP 8.3+: 9 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch), 8 deprecated alias re-exports from `sugarcraft/sugar-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), and two btop-derived render helpers (`Input\TextEdit`, `Menu\OptionRow`) — including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
 
 ```sh
 composer require sugarcraft/sugar-widgets
 ```
 
-> `TextInput`, `TextArea`, and `Help` expose short-form aliases for the
-> most-used setters: `placeholder` / `charLimit` / `width` / `height` /
-> `prompt` / `validator` / `styles` / `separator` / `ellipsis`. The
-> `with*` long forms still work side-by-side.
+> The most-used setters have short-form aliases, per class:
+> `TextInput` — `placeholder` / `prompt` / `charLimit` / `width` /
+> `validator` / `styles`; `TextArea` — `placeholder` / `charLimit` /
+> `width` / `height` / `prompt` / `validator`; `Help` — `width` /
+> `styles` / `separator` / `ellipsis`. The `with*` long forms still work
+> side-by-side.
+
+> `Help::getStyles()` and `Help::getWidth()` are deprecated BC accessors —
+> the house convention is bare accessors. Read the promoted readonly
+> `styles` / `maxWidth` properties instead.
 
 ## Components
 

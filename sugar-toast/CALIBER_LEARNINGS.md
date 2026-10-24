@@ -30,7 +30,8 @@ sugar-datepicker, and sugar-table:
 
 
    `SugarCraft\Core\I18n\T`. Bakes the library namespace (`'toast'`) into
-   every key. Mirrors the candy-ssh-launcher/calendar/table facade pattern.
+   every key. Mirrors the candy-ssh-launcher/sugar-datepicker/sugar-table
+   facade pattern.
    Registers the namespace + lang dir on every call (safe; `T::register`
    is idempotent).
 
@@ -57,10 +58,11 @@ sugar-datepicker, and sugar-table:
 
 6. **`sugar-core` dep** — the `T` class lives in `sugar-core`, so every
 
-
-
-   i18n lib needs `sugarcraft/sugar-core: dev-master` in `require` plus a
-   path-repo entry in `repositories`.
+   i18n lib needs `sugarcraft/sugar-core: dev-master` in `require` ONLY —
+   never a per-lib `repositories[]` path repo (a published lib's `../<dep>`
+   entry is a hard fatal in a split-repo clone; CI injects the path-repo
+   closure, `tools/check-path-repos.php --no-lib-path-repos` guards the
+   committed tree).
 
 ---
 
@@ -133,7 +135,7 @@ the strategy when a new alert would exceed the cap:
 
 
 `DropOldest` is the default so the queue is always bounded by the most recent
-$N` alerts.
+`$N` alerts.
 
 ---
 
@@ -182,12 +184,13 @@ $action->callback();
 
 `HistoryLog` is an immutable collection of `Alert` entries representing every
 toast dismissed via `Toast::dismiss()`. It is constructed with a private
-`list<Alert> $entries` and exposes `push(Alert): self` (returns a new log
-with the alert appended), `all(): list<Alert>`, and `count(): int`. The
+`list<Alert> $entries` and exposes `push(Alert, ?int $limit = null): self`
+(returns a new log with the alert appended, evicting oldest past `$limit`),
+`all(): list<Alert>`, and `count(): int`. The
 immutable pattern means `Toast::$historyLog` is replaced with a new log
 instance on every `dismiss()` call — prior instances remain valid for inspection
 or undo stacks. The `Toast` instance itself is also immutable (clone+mutate),
-so `getHistory()` on a given `Toast` always reflects only the dismissals that
+so `history()` on a given `Toast` always reflects only the dismissals that
 occurred on that instance's lineage.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
@@ -261,7 +264,7 @@ toasts. Each toast is rendered into a sub-`Buffer`, then composited into
 the screen `Buffer` at its positioned cell. Call `Buffer::toAnsi()` only at
 the outermost `view()` entry point.
 
-Source: step-34 ai/widget-shared
+Source: the sugar-widgets shared-foundations adoption.
 
 ---
 

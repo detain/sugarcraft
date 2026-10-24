@@ -476,7 +476,7 @@ final class Reel
             throw new \InvalidArgumentException(Lang::t('player.no_source_for_embedding'));
         }
 
-        // Resolve auto-mode to the best available mode at runtime (F3).
+        // Resolve auto-mode to the best available mode at runtime.
         $resolvedMode = $this->mode ?? RendererFactory::autoMode();
 
         // Parse the subtitle track if a subtitle file was configured.
@@ -526,7 +526,7 @@ final class Reel
             $path = Synthetic::generate();
         }
 
-        // Resolve auto-mode to the best available mode at runtime (F3).
+        // Resolve auto-mode to the best available mode at runtime.
         $resolvedMode = $this->mode ?? RendererFactory::autoMode();
 
         // Parse the subtitle track if a subtitle file was configured.

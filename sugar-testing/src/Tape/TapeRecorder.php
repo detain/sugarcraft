@@ -27,7 +27,7 @@ use SugarCraft\Testing\Lang;
  *   Type "q"
  *   Enter
  *
- * @see Mirrors charmbracelet/bubbletea — cassette recording pattern (issue #1654)
+ * First-party harness — no 1:1 Go counterpart (see docs/MATCHUPS.md).
  */
 final class TapeRecorder
 {

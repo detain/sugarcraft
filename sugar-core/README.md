@@ -66,6 +66,68 @@ final class Counter implements Model
 - `react/event-loop` ^1.6 (Composer)
 - Windows 10 version 1809+ (for `ENABLE_VIRTUAL_TERMINAL_PROCESSING`)
 
+## Environment variables
+
+Every environment variable sugar-core reads, who reads it, and what
+happens when it is unset. Apps may of course read their own; this is the
+library's full surface.
+
+| Variable | Read by | When unset |
+| --- | --- | --- |
+| `TERM` | `Util\ColorProfile::detect()` | falls through to the `Ascii` tier |
+| `COLORTERM` | `Util\ColorProfile::detect()` | no early TrueColor bail |
+| `TERM_PROGRAM` | `Util\ColorProfile::detect()`, `Util\Tty\EnvDetect` (mintty), `Util\Clipboard` (backend plan) | no known-terminal match |
+| `NO_COLOR` | `Util\ColorProfile::detect()` | colour stays enabled |
+| `CLICOLOR_FORCE` | `Util\ColorProfile::detect()` | no force (truthy = non-empty, not `0`, not `false`) |
+| `FORCE_COLOR` | `Util\ColorProfile::detect()` | no force |
+| `WT_SESSION` | `Util\ColorProfile::detect()` | not Windows Terminal |
+| `CI` | `Util\ColorProfile::detect()` | not treated as CI |
+| `GITHUB_ACTIONS` | `Util\ColorProfile::detect()` | not treated as CI |
+| `GITLAB_CI` | `Util\ColorProfile::detect()` | not treated as CI |
+| `BUILDKITE` | `Util\ColorProfile::detect()` | not treated as CI |
+| `WSL_DISTRO_NAME` | `Util\Tty\EnvDetect` (WSL id), `Util\Open` (opener choice) | not WSL by this signal |
+| `WSL_INTEROP` | `Util\Tty\EnvDetect` (WSL id), `Util\Open` (opener choice) | not WSL by this signal |
+| `MSYSTEM` | `Util\Tty\EnvDetect` (MSYS2 id) | not MSYS2 |
+| `MINTTY_SHORTCUT` | `Util\Tty\EnvDetect` (mintty id) | not mintty by this signal |
+| `OSTYPE` | `Util\Tty\EnvDetect` (`cygwin` id) | not Cygwin |
+| `PATH` | `Util\Executable\Locator` (the search path `locate()` walks, after any `$extraPath` argument) | empty — nothing is found unless the caller passed `$extraPath` |
+| `PATHEXT` | `Util\Executable\Locator` (Windows extensions; POSIX never reads it) | `DEFAULT_WINDOWS_EXTENSIONS` = `.COM`, `.EXE`, `.BAT`, `.CMD` |
+| `COLUMNS` | `Util\Tty\PosixBackend` (size fallback when stdout is not a tty) | ignored (read as 0) — next fallback wins |
+| `LINES` | `Util\Tty\PosixBackend` (same shape as `COLUMNS`) | ignored (read as 0) — next fallback wins |
+| `HOME` | `WorkerPool` (worker environment seed) | `/tmp` |
+| `VISUAL` | `Util\Editor` (discovery: explicit override → `VISUAL` → `EDITOR` → platform default) | falls to `EDITOR` |
+| `EDITOR` | `Util\Editor` | falls to the platform default editor |
+| `LC_ALL` | `I18n\T::detect()` (chain `LC_ALL` → `LC_MESSAGES` → `LANG`; `$_SERVER` first, then `getenv()`) | falls to `LC_MESSAGES` |
+| `LC_MESSAGES` | `I18n\T::detect()` | falls to `LANG` |
+| `LANG` | `I18n\T::detect()` | locale `en` |
+| `TMUX` | `Util\Clipboard` (backend plan) | not inside tmux |
+| `DISPLAY` | `Util\Clipboard` (X11 backend plan) | no X11 clipboard candidate |
+| `WAYLAND_DISPLAY` | `Util\Clipboard` (Wayland backend plan) | no Wayland clipboard candidate |
+
+### Color-profile detection order
+
+`ColorProfile::detect()` decides in exactly this order (the docblock on
+the enum carries the same list; both are derived from the code):
+
+1. `CLICOLOR_FORCE` or `FORCE_COLOR` truthy counts as a terminal;
+   otherwise, when a stdout resource is passed and it is **not** a tty →
+   `NoTty` (so `NO_COLOR` on a pipe yields `NoTty`, never escape bytes).
+2. `TERM=dumb` → `NoTty` unless forced.
+3. `NO_COLOR` truthy → `Ascii` (decoration kept, per no-color.org) — it
+   outranks the force variables because it is consulted first.
+4. Forced (`CLICOLOR_FORCE`/`FORCE_COLOR`) → `TrueColor`.
+5. `COLORTERM` = `truecolor` or `24bit` → `TrueColor`.
+6. Known `TERM_PROGRAM` values → the matched tier (iTerm/WezTerm/VS Code/
+   Kitty/alacritty/Ghostty/Hyper → `TrueColor`; Apple_Terminal →
+   `Ansi256`).
+7. `WT_SESSION` set → `TrueColor`.
+8. `TERM` contains `truecolor` or `direct` → `TrueColor`; contains `256`
+   → `Ansi256`; contains `color` or equals `xterm`/`screen`/`tmux` →
+   `Ansi`.
+9. Any CI variable truthy (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`,
+   `BUILDKITE`) → `Ansi`.
+10. Fallback → `Ascii`.
+
 ## Architecture
 
 - **`Model`** — your app implements `init()`, `update(Msg)`, `view()`, `subscriptions()`.
@@ -219,7 +281,7 @@ final class App implements Model, \SugarCraft\Core\ScreenStackCapable
 ## Status
 
 - **Foundation utilities**: 🟢 complete.
-- **Runtime**: 🟢 Program loop, mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, full function-key set including F13–F63 and the Kitty PUA range, the cell-diff "cursed" renderer (synchronized output 2026 + unicode mode 2027), inline-mode rendering, declarative `View` struct, plus the Cmd surface (`Suspend` / `Interrupt` / `Resume` / `Exec` / `Sequence` / `Every` / `Printf` / `Raw` / `wait` / `kill` / `releaseTerminal` / `restoreTerminal`).
+- **Runtime**: 🟢 Program loop, mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, full function-key set including F13–F63 and the Kitty PUA range, the cell-diff "cursed" renderer (synchronized output 2026 + unicode mode 2027), inline-mode rendering, declarative `View` struct, plus the Cmd surface (`Suspend` / `Interrupt` / `Exec` / `Sequence` / `Every` / `Printf` / `Raw` and more — a resume is deliberately not a Cmd: SIGCONT dispatches a `ResumeMsg` from the runtime) and the Program control methods (`wait` / `kill` / `releaseTerminal` / `restoreTerminal`).
 - **Terminal recovery**: 🟢 `setupTerminal()` arms a one-shot shutdown backstop. `run()`'s `finally` restores the terminal on every path it can see; a `die()`, `exit()` or zend bailout that skips pending `finally` blocks still lands on the registered shutdown function, so the library that entered the alt screen is the library that leaves it and consumers do not need to re-invent a `bin` guard. The hook holds a `WeakReference` and compares the install pid at fire time — finished Programs are never pinned alive by the shutdown queue, and a forked child exiting never releases the parent's terminal.
 
 
@@ -460,7 +522,7 @@ Other gotchas:
   in a Cmd that emits a Msg when it finishes.
 - **Test the Model in isolation.** Drive `update()` with scripted
   Msgs in PHPUnit; the runtime is irrelevant for state-machine
-  testing. (See `sugar-core/tests/Model/` for the pattern.)
+  testing. (See `sugar-core/tests/ProgramTest.php` for the pattern.)
 - **Profile with `--bail`.** If a render is slow, the cell-diff
   renderer skips unchanged regions — make sure your `view()` is
   deterministic so the diff stays cheap.

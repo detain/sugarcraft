@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Markdown\Render;
 
 /**
- * Pull-agnostic section-splitting state machine for the E736 7.3 streaming
+ * Pull-agnostic section-splitting state machine for the streaming
  * family ({@see \SugarCraft\Markdown\Renderer::stream()} and
  * {@see \SugarCraft\Markdown\Writer}, both through {@see SectionStream}).
  *
@@ -21,9 +21,10 @@ namespace SugarCraft\Markdown\Render;
  *  - preceded by a blank line, and not directly following a blockquote,
  *    indented-code, or table row (the defensive refusals published by
  *    stream()), or
- *  - on the line straight after a closing code fence (audit 15b-31: a reply
- *    that puts its headings right under its code blocks had no boundary at
- *    all, so a long one re-rendered whole on every frame).
+ *  - on the line straight after a closing code fence — an early audit
+ *    caught a reply that puts its headings right under its code blocks
+ *    having no boundary at all, so a long one re-rendered whole on every
+ *    frame.
  *
  * A heading after a list item is a boundary: a column-0 heading behind a
  * blank line cannot continue an item (its content is indented past the
@@ -94,7 +95,7 @@ final class SectionScanner
      *
      * When that last line is itself a boundary heading, the section it
      * closes and the heading are returned together. Rendering two sections
-     * as one is always lawful, and dropping the first was audit 15b-31:
+     * as one is always lawful, and dropping the first was an early-audit bug:
      * `stream(["Intro\n\n# F"])` used to yield only the heading.
      */
     public function finish(): ?string

@@ -233,32 +233,29 @@ final class ProgramSimulatorTest extends TestCase
         $this->assertSame(1, $finalModel->count());
     }
 
-    public function testDefaultRunnerDoesNotExecuteCmds(): void
+    public function testCaptureOnlyModeDoesNotExecuteCmds(): void
     {
-        // Use withRealCmdRunner(false) to opt into capture-only (safe) mode.
-        // With this option set, cmds are captured but NOT executed, so
-        // side-effecting closures never run.
-        $sideEffectCalled = false;
-        $model = new CounterModel(0);
+        // withRealCmdRunner(false) opts into capture-only mode: cmds are
+        // collected for inspection but the closures never run, so the
+        // side-effecting init cmd of CmdProducingCounterModel must leave
+        // count untouched. (Renamed and given a real cmd by docs-fix-1023:
+        // the old form used CounterModel, whose init() returns null, so it
+        // proved nothing either way.)
+        $model = new CmdProducingCounterModel(0);
         $program = new Program($model);
 
         $sim = ProgramSimulator::for($program)
             ->withRealCmdRunner(false)  // Capture-only mode
-            ->withFakeCmdRunner(
-                static function ($cmd) use (&$sideEffectCalled): ?\SugarCraft\Core\Msg {
-                    // The cmd itself has a side effect we'd detect.
-                    // But in capture-only mode, the cmd should NOT be executed.
-                    return null;
-                }
-            );
+            ->withFakeCmdRunner(static fn (): ?\SugarCraft\Core\Msg => null);
 
         $result = $sim->run();
 
-        // The side-effecting closure was never called because we used
-        // capture-only mode. The counter should remain at initial value.
-        /** @var CounterModel $finalModel */
+        /** @var CmdProducingCounterModel $finalModel */
         $finalModel = $result->model;
+        // The side-effecting closure was never called in capture-only mode.
         $this->assertSame(0, $finalModel->count());
+        // But the cmd was still captured for inspection.
+        $this->assertCount(1, $result->cmds);
     }
 
     public function testEmptyQueueRunReturnsResultWithInitialModel(): void
@@ -332,31 +329,26 @@ final class ProgramSimulatorTest extends TestCase
 
     public function testWithRealCmdRunnerTrueExecutesCmds(): void
     {
-        // Test that withRealCmdRunner(true) actually executes cmds.
-        // This is explicit "execute mode" which is the default but we test
-        // the explicit true case.
-        $sideEffect = 0;
-        $model = new class(0) implements Model {
-            private int $count;
-            public function __construct(int $initial) { $this->count = $initial; }
-            public function count(): int { return $this->count; }
-            public function init(): ?\Closure { return null; }
-            public function update(Msg $msg): array {
-                return [new self($this->count + 1), static fn () => null];
-            }
-            public function view(): string|View { return "Count: {$this->count}\n"; }
-            public function subscriptions(): ?\SugarCraft\Core\Subscriptions { return null; }
-        };
+        // Explicit execute mode (the default). A fake runner alone does NOT
+        // suppress execution — the real Cmd closure still runs for its side
+        // effects (docs-fix-1023 cured this test: it used a null-init model
+        // and asserted only assertIsArray, pinning nothing). With
+        // CmdProducingCounterModel the side effect is observable: init's
+        // closure increments count, so count 0 → 1 proves execution.
+        $model = new CmdProducingCounterModel(0);
         $program = new Program($model);
 
         $sim = ProgramSimulator::for($program)
             ->withRealCmdRunner(true)
             ->withFakeCmdRunner(static fn ($cmd) => null);
 
-        // Even with fakeRunner, executeCmds=true should have executed the cmd.
-        // But since fakeRunner returns null, no additional message is produced.
+        // Even with fakeRunner, executeCmds=true executes the cmd; fakeRunner
+        // returns null so no extra message is injected.
         $result = $sim->run();
 
-        $this->assertIsArray($result->cmds);
+        /** @var CmdProducingCounterModel $finalModel */
+        $finalModel = $result->model;
+        $this->assertSame(1, $finalModel->count());
+        $this->assertCount(1, $result->cmds);
     }
 }

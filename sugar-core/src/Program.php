@@ -158,8 +158,9 @@ final class Program
      * Wrap a {@see Model} with runtime options.
      *
      * The default {@see ProgramOptions} hits sane defaults: STDIN /
-     * STDOUT, alt-screen on, raw mode on, mouse off, signal handlers
-     * installed. Override per-field for inline mode, custom streams,
+     * STDOUT, alt-screen OFF (inline mode — pass `useAltScreen: true`
+     * to enter it), raw mode on, mouse off, signal handlers
+     * installed. Override per-field for custom streams,
      * or to wire a non-default {@see Loop}.
      */
     public function __construct(

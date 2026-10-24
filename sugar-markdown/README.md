@@ -31,7 +31,11 @@ composer require sugarcraft/sugar-markdown
 
 ## Quickstart
 
-```php
+The example below embeds a fenced code block inside its Markdown sample,
+so the snippet itself is fenced with tildes — four backticks would
+truncate the heredoc on GitHub too:
+
+~~~~php
 use SugarCraft\Markdown\Renderer;
 
 echo (new Renderer())->render(<<<MD
@@ -48,7 +52,7 @@ A few **bold** and _italic_ words, with `inline code` and a
 echo "hello world";
 ```
 MD);
-```
+~~~~
 
 ## Themes
 
@@ -60,6 +64,7 @@ use SugarCraft\Markdown\{Renderer, Theme};
 new Renderer(Theme::ansi());        // default colourful
 new Renderer(Theme::plain());       // no SGR
 new Renderer(Theme::notty());       // alias for plain — non-TTY fallback
+new Renderer(Theme::ascii());       // monochrome bold/italic/underline, no colour
 new Renderer(Theme::dark());        // dark-bg optimised
 new Renderer(Theme::light());       // light-bg optimised
 new Renderer(Theme::dracula());     // #282a36 / #ff79c6 palette
@@ -67,11 +72,14 @@ new Renderer(Theme::tokyoNight());  // #1a1b26 / #7aa2f7
 new Renderer(Theme::pink());        // playful sweet palette
 ```
 
-Custom JSON theme:
+Custom JSON theme (`Theme::fromJson($path)` reads the same JSON from a
+file; `fromJsonString()` takes it inline):
 
 ```php
-$theme = Theme::fromJson('./themes/my-theme.json');
-echo (new Renderer($theme))->render($markdown);
+use SugarCraft\Markdown\{Renderer, Theme};
+
+$theme = Theme::fromJsonString('{"heading1":{"foreground":"#ff5f87","bold":true}}');
+echo (new Renderer($theme))->render("# Styled\n");
 ```
 
 JSON shape: an object keyed by element name (`heading1`, `paragraph`,
@@ -86,16 +94,78 @@ value carries `foreground` / `background` (hex / `ansi:N` /
 ## Word-wrap + OSC 8 hyperlinks
 
 ```php
+use SugarCraft\Markdown\{Renderer, Theme};
+
 $renderer = (new Renderer(Theme::dark()))
     ->withWordWrap(80)
     ->withHyperlinks(true);
 
-echo $renderer->render($markdown);
+echo $renderer->render("# Word wrap\n");
 ```
 
 `withHyperlinks(true)` (default) wraps every `[text](url)` in
 `OSC 8 ; ; URL ST text OSC 8 ; ; ST` so terminals that support it
 render real clickable links. Falls back to `text (url)` when off.
+
+### Link safety
+
+Only the OSC-8 envelope is actionable; the `(url)` suffix is plain
+text. A refused scheme — `javascript:`, `data:`, `vbscript:` — never
+opens an OSC-8 target, so a hostile document cannot execute code
+through a click: the link text and its `(url)` suffix still render,
+visible and inert. Every other scheme passes to the terminal's opener
+**unfiltered** — treat non-`http(s)` / `mailto` targets the way you
+would treat a raw terminal. Control bytes (C0, DEL, ESC, BEL) are
+stripped from every URL unconditionally. Numeric-entity
+scheme spellings (e.g. `&#006A;avascript:`) reach the terminal as
+literal entities — destinations are never entity-decoded — so their
+emitted target is inert and forms no scheme.
+
+`withSanitize(false)` relaxes only the general text pipeline, for
+trusted input where control characters must survive: raw HTML blocks
+and inline HTML stay control-stripped regardless of the flag, and URL
+stripping is likewise always on. See the fleet-wide trust model in
+[docs/TRUST-BOUNDARY.md](../docs/TRUST-BOUNDARY.md).
+
+## Streaming
+
+`Renderer::stream()` consumes Markdown chunk by chunk and yields
+styled ANSI as each top-level section is proven complete — so bytes
+can reach the terminal while the tail of the document is still
+arriving. Chunk boundaries never influence output: for every split of
+the same input bytes, `implode('', iterator_to_array($renderer->stream($chunks)))`
+equals `$renderer->render($bytes)` byte for byte.
+
+```php
+use SugarCraft\Markdown\{Renderer, Theme};
+
+$renderer = (new Renderer(Theme::dark()))->withWordWrap(80);
+foreach ($renderer->stream(["# Heading\n\n", "Paragraph **now**.\n"]) as $chunk) {
+    echo $chunk; // the heading is on screen while the tail is still arriving
+}
+```
+
+`Writer` is the push-side twin: `Writer::toPath($renderer, $path)` or
+`Writer::toStream($renderer, $resource)` accept chunks through
+`feed()` and write every completed section through the sink
+immediately, one flush per section. `close()` renders the final
+section and finishes; the writer is single-use and `feed()` after
+`close()` throws. Renderers whose theme configures document-scope
+post-processing (`documentMargin`, `documentIndent`, block
+prefix/suffix) or that run `withPreservedNewLines(true)` buffer the
+whole document and emit once at the end — `$renderer->defersStreaming()`
+reports which regime applies. `Renderer::writer($sink)`,
+`Renderer::renderSection()` and `StreamSink` are the same family's
+lower-level parts.
+
+```php
+use SugarCraft\Markdown\{Renderer, Writer};
+
+$writer = Writer::toStream(new Renderer(), STDOUT);
+$writer->feed("# Live\n\n");
+$writer->feed("first section proven\n");
+$writer->close();
+```
 
 ## What it renders
 
@@ -104,8 +174,10 @@ render real clickable links. Falls back to `text (url)` when off.
   PHP / JS / TS / JSON / Python / Go / Bash / SQL), indented code.
 - Bullet + ordered + nested lists.
 - Block quotes (▎-prefixed).
-- GFM tables (rendered via `Sprinkles\Table` with rounded border).
+- GFM tables (rounded border, via the sugar-style table renderer
+  `SugarCraft\Style\Table\Table`).
 - Task lists (`☑` / `☐`).
+- Definition lists (`term` / indented `: description`).
 - Links (with OSC 8 hyperlinks), autolinks, images (alt + url).
 - HTML blocks + inline HTML — pass through with theme styling.
 - Thematic breaks.
@@ -117,7 +189,7 @@ Build one with the constructor and feed it to `new Renderer($theme)`:
 
 ```php
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Markdown\Theme;
+use SugarCraft\Markdown\{Renderer, Theme};
 use SugarCraft\Style\Style;
 
 $theme = new Theme(
@@ -149,7 +221,7 @@ $theme = new Theme(
     horizontalRuleLength: 60,
 );
 
-echo (new Renderer($theme))->render($markdown);
+echo (new Renderer($theme))->render("# Custom\n");
 ```
 
 The full slot reference (left-to-right reading the constructor):
@@ -184,7 +256,9 @@ GLAMOUR_STYLE=tokyo-night php examples/render.php
 ## Renderer options
 
 ```php
-new Renderer($theme)
+use SugarCraft\Markdown\{Renderer, Theme};
+
+$renderer = (new Renderer(Theme::dark()))
     ->withWordWrap(80)               // wrap paragraphs / blockquotes / lists
     ->withHyperlinks(true)           // emit OSC 8 link envelopes
     ->withBaseURL('https://docs.example.com/')  // prefix relative links
@@ -193,6 +267,8 @@ new Renderer($theme)
     ->withPreservedNewLines(true)    // keep source blank-line runs between blocks
     ->withStandardStyle('dracula')   // re-pick the stock theme
     ->withEmoji(true);               // expand `:smile:` shortcodes
+
+echo $renderer->render("Hello :wave:\n");
 ```
 
 With emoji on, 1,842 codes resolve: the full 1,837-entry GitHub

@@ -23,8 +23,8 @@ use SugarCraft\Testing\Lang;
  * pixel), `32` (RGBA) or `100` (PNG), defaulting to `32` — and transmission
  * compression travels on the separate `o` key (`o=z` = zlib), while `z` itself
  * means the image z-index. SugarCraft's producers once misspelled compression
- * as `f=1`; the M2 fix (round LL) landed the spec spelling on BOTH sides at
- * once — sugar-image's `KittyOptions::withCompression(1)` now emits
+ * as `f=1`; the graphics audit fix landed the spec spelling on BOTH sides
+ * at once — sugar-image's `KittyOptions::withCompression(1)` now emits
  * `f=100,o=z`, and this decoder inflates only on `o=z`, accepting nothing
  * else. `f=12` is additionally accepted as a second PNG spelling so a capture
  * written by tooling that uses it still round-trips (nothing in this monorepo

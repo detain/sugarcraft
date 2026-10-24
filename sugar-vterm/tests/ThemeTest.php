@@ -247,11 +247,52 @@ final class ThemeTest extends TestCase
     {
         $v1 = Themes::v1();
         $this->assertIsArray($v1);
-        $this->assertArrayHasKey('TokyoNight', $v1);
-        $this->assertArrayHasKey('TokyoNightLight', $v1);
-        $this->assertArrayHasKey('TokyoNightStorm', $v1);
-        $this->assertCount(3, $v1);
+        // docs-fix-1023 M3: Dracula and SolarizedDark carry complete palettes
+        // (SSOT-pinned by the factory tests above), so they are registered
+        // v1-ready themes — the README table's "✅ v1" claim depends on this
+        // roster, see testReadmeThemeRowsMatchTheV1Roster.
+        $this->assertSame(
+            ['TokyoNight', 'TokyoNightLight', 'TokyoNightStorm', 'Dracula', 'SolarizedDark'],
+            array_keys($v1),
+        );
         $this->assertSame('TokyoNight', array_key_first($v1));
+    }
+
+    public function testV1RosterIsTheWholeCatalog(): void
+    {
+        // Every bundled theme resolves all 256 slots, so the v1 roster must
+        // not lag the catalog: a future theme that is NOT v1-ready needs both
+        // a real (stub) implementation here AND a README row that stops
+        // claiming "✅ v1" — this pin forces the contradiction into the open.
+        $this->assertSame(array_keys(Themes::all()), array_keys(Themes::v1()));
+    }
+
+    public function testEveryV1ThemeResolvesTheFull256SlotPalette(): void
+    {
+        foreach (Themes::v1() as $name => $theme) {
+            for ($index = 0; $index < 256; $index++) {
+                $this->assertIsInt(
+                    $theme->color($index),
+                    "v1 theme {$name} failed to resolve palette slot {$index}",
+                );
+            }
+        }
+    }
+
+    public function testReadmeThemeRowsMatchTheV1Roster(): void
+    {
+        $readme = (string) file_get_contents(dirname(__DIR__) . '/README.md');
+        $rows   = [];
+        if (preg_match_all('/^\| `([A-Za-z]+)` \| (✅ v1|❌ [^|]*) \|/m', $readme, $rows) < 1) {
+            $this->fail('no theme status rows found in README.md — the table shape changed');
+        }
+        $claimed = [];
+        foreach ($rows[1] as $i => $name) {
+            if (trim($rows[2][$i]) === '✅ v1') {
+                $claimed[] = $name;
+            }
+        }
+        $this->assertSame(array_keys(Themes::v1()), $claimed);
     }
 
     public function testThemesCatalogTokyoNightFirst(): void

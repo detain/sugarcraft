@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-toast",
-    "description": "PHP port of DaltonSW/bubbleup \u2014 floating alert notification component for terminal UIs. Supports error/warning/info/success alerts at 6 screen positions, dynamic width, NerdFont/Unicode/ASCII symbols, auto-dismiss timers.",
+    "description": "PHP port of DaltonSW/bubbleup \u2014 floating alert notification component for terminal UIs. Supports error/warning/info/success alerts at 9 screen positions, dynamic width, NerdFont/Unicode/Ascii symbols, auto-dismiss timers.",
     "type": "library",
     "license": "MIT",
     "keywords": [

@@ -61,14 +61,23 @@ $cursor = $vt->cursor();
 echo "cursor at {$cursor->row},{$cursor->col}\n";
 ```
 
+> **Captured-stream gotcha (ONLCR).** A real terminal writes line breaks as
+> `\r\n` because the tty layer (ONLCR) expands each `\n` on output. Feeding
+> the emulator a raw `\n` reproduces exact VT semantics — the cursor moves
+> down one row *without* resetting the column — so text captured with bare
+> LFs (files, pipes, hand-written fixtures) stacks diagonally and the cell
+> grid false-diffs against what a human saw on screen. Normalize `\n` to
+> `\r\n` (collapsing existing `\r\n` first) before `feed()` when the source
+> is not a tty capture.
+
 ## Architecture
 
 | Layer | Class | Role |
 |---|---|---|
 | Facade | `Terminal\Terminal` | Owns a Parser + ScreenHandler; `feed()` drives bytes in |
-| Parser | `Parser\Parser` | VT500 state machine — Paul-Williams algorithm, handles partial input, parses subparameters (`:) |
-| Handler | `Parser\CsiHandler` | CSI sequence handler contract — Phase 1c implementation fills in CUP/SGR/ED/EL/DECSET/DECRST/DECSTBM/TBC |
-| Handler | `Parser\OscHandler` | OSC sequence handler contract — Phase 1c implementation fills in title/hyperlink |
+| Parser | `AnsiParser\Parser\Parser` | VT500 state machine (owned by **sugar-ansi-parser**; consumed via `src/Terminal/Terminal.php`) — Paul-Williams algorithm, handles partial input, parses subparameters (`:`) |
+| Handler | `AnsiParser\Parser\CsiHandler` | CSI sequence handler contract (owned by sugar-ansi-parser) — vterm's `Parser\CsiHandlerImpl` implements it |
+| Handler | `AnsiParser\Parser\OscHandler` | OSC sequence handler contract (owned by sugar-ansi-parser) — vterm's `Parser\OscHandlerImpl` implements it |
 | Handler | `Handler\ScreenHandler` | Dispatches parser actions to Buffer / Cursor / Sgr / Mode |
 | Screen | `Screen\Screen` | Immutable snapshot — read current grid after feeding bytes |
 | Buffer | `Buffer\Buffer` | Cell grid — `rows × cols` of styled grapheme cells |
@@ -87,8 +96,8 @@ sugar-vterm ships **two** Terminal entry-points for distinct use cases:
 
 | Class | Use case | Methods |
 |-------|----------|---------|
-| `SugarCraft\Vterm\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `new(cols, rows, ?scrollbackSize)`, `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()`, `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
-| `SugarCraft\Vterm\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self`, `snapshot(?time): Snapshot`, `cursor(): Cursor`, `grid(): Buffer`, `windowTitle(): string`. |
+| `SugarCraft\Vterm\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `new(cols, rows, ?scrollbackSize)`, `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond, ?cancellation): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()`, `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
+| `SugarCraft\Vterm\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self`, `snapshot(?time): Snapshot`, `cursor(): Cursor`, `grid(): Buffer`, `windowTitle(): string`, `isWrapPending(): bool`. `enableAltScreen()`/`disableAltScreen()` exist for interface parity but ALWAYS throw `\LogicException` — alt-screen machinery lives only on the full `Terminal\Terminal`. |
 
 ```php
 use SugarCraft\Vterm\Terminal;       // root — renderer path
@@ -157,14 +166,21 @@ Each handler translates parser actions into handler state mutations:
 
 ```php
 use SugarCraft\Vterm\Snapshot;
+use SugarCraft\Vterm\Terminal;
+
+$terminal = Terminal::new(cols: 80, rows: 24)->feed("hello\r\n");
 
 $snap = Snapshot::of($terminal, time: 1.234);  // captures grid + cursor
 $snap->grid;     // Buffer
 $snap->cursor;   // Cursor
 $snap->time;     // float — virtual playback time
 
-$snap->equals($other);          // grid + cursor only (used by FrameDedup)
-$snap->equalsWithTime($other);  // grid + cursor + time (strict reproducibility)
+$replay = Snapshot::of($terminal, time: 1.234);
+$shifted = Snapshot::of($terminal, time: 9.999);
+
+$snap->equals($replay);          // true  — grid + cursor match (used by FrameDedup)
+$snap->equalsWithTime($replay);  // true  — grid + cursor + time match (strict reproducibility)
+$snap->equalsWithTime($shifted); // false — same screen, different time
 ```
 
 `Snapshot::equals()` is the dedup signal used by candy-vcr's
@@ -173,21 +189,30 @@ encoding.
 
 ## Parser state machine
 
-`Parser\Parser` is a Paul Williams VT500 state machine
+The VT500 state machine is **not** in this package — it is owned by
+[sugar-ansi-parser](../sugar-ansi-parser/) as
+`SugarCraft\AnsiParser\Parser\Parser`, a Paul Williams machine
 ([reference](https://vt100.net/emu/dec_ansi_parser)) that drives a
-`Parser\Handler` interface with parsed actions.
+`AnsiParser\Parser\Handler` interface with parsed actions. sugar-vterm
+consumes it directly — both `Terminal\Terminal` and the root `Terminal`
+import `SugarCraft\AnsiParser\Parser\Parser` by `use` statement
+(`src/Terminal/Terminal.php`, `src/Terminal.php`) and feed it the same
+byte chunks; what lives here is the screen-side
+handler layer that the parser drives.
 
-| Component | Role |
-|-----------|------|
-| `Parser\State` | Enum of parser states: `Ground`, `Escape`, `CsiEntry`, `CsiParam`, `CsiIntermediate`, `CsiIgnore`, `DcsEntry`, `OscString`, etc. |
-| `Parser\Action` | Enum of dispatch actions: `Print`, `Execute`, `CsiDispatch`, `EscDispatch`, `OscDispatch`, `DcsDispatch`, `Hook`, `Put`, `Unhook`. |
-| `Parser\Transitions` | Static transition table — `(state, byte) → (action, next_state)`. |
-| `Parser\Handler` | The contract the parser drives — implementations: `HandlerAdapter` (wraps CSI + OSC sub-handlers), `DebugHandler` (dumps every action). |
-| `Parser\CsiHandler` | CSI dispatch contract — `printable`, `cuu`/`cud`/`cuf`/`cub`, `cup`, `sgr`, `ed`/`el`, `decset`/`decrst`, `decstbm`, `tbc`, `cht`/`cbt`, `gridRows`. |
-| `Parser\OscHandler` | OSC dispatch contract — `title`, `hyperlink`. |
-| `Parser\CsiHandlerImpl` | Default CSI handler used by the root `Terminal` renderer path. |
-| `Parser\OscHandlerImpl` | Default OSC handler — tracks last window title. |
-| `Parser\HandlerAdapter` | Glue that wires `CsiHandler` + `OscHandler` into a single `Handler` for the parser. |
+| Component | Owner | Role |
+|-----------|-------|------|
+| `AnsiParser\Parser\State` | sugar-ansi-parser | Enum of parser states: `Ground`, `Escape`, `CsiEntry`, `CsiParam`, `CsiIntermediate`, `CsiIgnore`, `DcsEntry`, `OscString`, etc. |
+| `AnsiParser\Parser\Action` | sugar-ansi-parser | Enum of dispatch actions: `Print`, `Execute`, `CsiDispatch`, `EscDispatch`, `OscDispatch`, `DcsDispatch`, `Hook`, `Put`, `Unhook`. |
+| `AnsiParser\Parser\Transitions` | sugar-ansi-parser | Static transition table — `(state, byte) → (action, next_state)`. |
+| `AnsiParser\Parser\Handler` | sugar-ansi-parser | The contract the parser drives. |
+| `AnsiParser\Parser\CsiHandler` | sugar-ansi-parser | CSI dispatch contract — `printable`, `cuu`/`cud`/`cuf`/`cub`, `cup`, `sgr`, `ed`/`el`, `decset`/`decrst`, `decstbm`, `tbc`, `cht`/`cbt`, `gridRows`. |
+| `AnsiParser\Parser\OscHandler` | sugar-ansi-parser | OSC dispatch contract — `title`, `hyperlink`. |
+| `AnsiParser\Parser\HandlerAdapter` | sugar-ansi-parser | Glue that wires `CsiHandler` + `OscHandler` into a single `Handler` for the parser. |
+| `Parser\CsiHandlerImpl` | sugar-vterm | Default CSI handler used by the root `Terminal` renderer path. |
+| `Parser\OscHandlerImpl` | sugar-vterm | Default OSC handler — tracks last window title. |
+| `Parser\DebugHandler` | sugar-vterm | Local debug sink that dumps every parsed action. |
+| `Parser\RendererHandler` | sugar-vterm | Screen-writing handler for the renderer path. |
 
 Partial input is supported — feed any byte boundary and the parser
 state persists across `feed()` calls. Subparameter colons
@@ -306,10 +331,16 @@ backgrounds — the erased area retains its visual background rather than going
 black.
 
 ```php
+use SugarCraft\Vterm\Color\Color;  // color value object
+use SugarCraft\Vterm\Terminal\Terminal;
+
 $vt = Terminal::create(cols: 80, rows: 24);
 $vt->feed("\x1b[48;5;196m\x1b[?12h");  // red background + BCE on
 $vt->feed("\x1b[2J");                   // erase screen — cells carry red bg
-echo $vt->screen()->cell(0, 0)->background()?->toInt(); // 196
+
+$bg = $vt->screen()->cell(0, 0)->background();  // ?Color on the erased cell
+echo $bg->value, "\n";                  // 196 — palette slot ($bg->kind is 2 = indexed-256)
+echo Color::truecolor(255, 0, 0)->red(), "\n"; // 255 — truecolor splits via red()/green()/blue()
 ```
 
 BCE state is tracked via the `Sgr` object's background color — the pen
@@ -320,13 +351,18 @@ must be set before the erase sequence for the background to carry through.
 After feeding bytes, snapshot the screen and compare:
 
 ```php
+use SugarCraft\Vterm\Terminal\Terminal;
+
+$vt = Terminal::create(cols: 80, rows: 24);
+$vt->feed("before\r\n");
 $before = $vt->screen();
-$vt->feed($moreBytes);
+
+$vt->feed("after\r\n");
 $after  = $vt->screen();
 
 foreach ($before->diff($after) as $change) {
-    [$row, $col, $prev, $next] = $change;
-    echo "{$row},{$col}: '{$prev->grapheme}' → '{$next->grapheme}'\n";
+    // Each change is ['row' => int, 'col' => int, 'prev' => Cell, 'next' => Cell].
+    echo "{$change['row']},{$change['col']}: '{$change['prev']->grapheme}' → '{$change['next']->grapheme}'\n";
 }
 ```
 
@@ -337,6 +373,10 @@ automatically wraps to the next line when a character is printed at the
 rightmost column. The `Mode` object exposes this as:
 
 ```php
+use SugarCraft\Vterm\Terminal\Terminal;
+
+$vt = Terminal::create(cols: 80, rows: 24);
+
 // Query the current state.
 $mode = $vt->mode();
 var_dump($mode->autoWrap);  // bool
@@ -394,6 +434,13 @@ auto-wrap at the bottom of a region), rows pushed off the top are stored
 in a ring-buffer `Scrollback`. Access it via:
 
 ```php
+use SugarCraft\Vterm\Terminal\Terminal;
+
+$vt = Terminal::create(cols: 80, rows: 4);
+foreach (range(1, 6) as $n) {
+    $vt->feed("line $n\r\n");  // rows 5 and 6 push two rows off the top
+}
+
 $screen = $vt->screen();
 $scrollback = $screen->scrollback();
 
@@ -407,6 +454,8 @@ The default capacity is 1000 rows. Configure it at construction or
 retrospectively:
 
 ```php
+use SugarCraft\Vterm\Terminal\Terminal;
+
 // Set at construction.
 $vt = Terminal::new(cols: 80, rows: 24, scrollbackSize: 5000);
 
@@ -417,10 +466,14 @@ $vt = $vt->withScrollbackSize(5000);
 Available `Scrollback` accessors:
 
 ```php
-$scrollback->count()    // int — rows currently stored
-$scrollback->maxSize()  // int — configured capacity
-$scrollback->at($n)     // array<int, Cell>|null — row offset N from oldest
-$scrollback->all()       // array<int, array<int, Cell>> — all rows oldest→newest
+use SugarCraft\Vterm\Terminal\Terminal;
+
+$scrollback = Terminal::create(cols: 80, rows: 24)->screen()->scrollback();
+
+$scrollback->count();     // int — rows currently stored
+$scrollback->maxSize();   // int — configured capacity
+$scrollback->at(0);       // array<int, Cell>|null — row offset N from oldest
+$scrollback->all();       // array<int, array<int, Cell>> — all rows oldest→newest
 ```
 
 The scrollback is consumed by `ScreenHandler`'s scroll-up and scroll-down
@@ -434,6 +487,10 @@ relative to the absolute screen origin or to the scroll region defined by
 DECSTBM. The `Mode` object exposes this as:
 
 ```php
+use SugarCraft\Vterm\Terminal\Terminal;
+
+$vt = Terminal::create(cols: 80, rows: 24);
+
 $mode = $vt->mode();
 var_dump($mode->originMode);  // bool
 
@@ -455,8 +512,10 @@ together and keeps equal across every rebuild of the cursor. `Mode` exposes the
 value as an integer:
 
 ```php
-use SugarCraft\Vterm\Mode\Mode;
 use SugarCraft\Vterm\CursorShape;
+use SugarCraft\Vterm\Terminal\Terminal;
+
+$vt = Terminal::create(cols: 80, rows: 24);
 
 $mode = $vt->mode();
 var_dump($mode->cursorShape);  // int (0–6)
@@ -495,8 +554,13 @@ the terminal records focus-in (`CSI I`) and focus-out (`CSI O`) events.
 The `Mode` object tracks the reporting flag:
 
 ```php
+use SugarCraft\Vterm\Terminal\Terminal;
+
+$vt = Terminal::create(cols: 80, rows: 24);
+$vt->feed("\x1b[?1004h");  // start reporting focus in/out
+
 $mode = $vt->mode();
-var_dump($mode->reportFocusEvents);  // bool
+var_dump($mode->reportFocusEvents);  // bool — true under mode 1004
 
 $tracking = $mode->withReportFocusEvents(true);
 ```
@@ -520,10 +584,13 @@ an event loop.
   its combining marks render as a single composed grapheme in one column:
 
 ```php
+use SugarCraft\Vterm\Terminal\Terminal;
+
+$vt = Terminal::create(cols: 80, rows: 24);
 $vt->feed("\x1b[31me\xcc\x81");  // 'e' + combining acute accent → 'é'
 $cell = $vt->screen()->cell(0, 0);
-echo $cell->grapheme;   // 'e'
-echo $cell->combining;  // "\xcc\x81" — attach to grapheme for full cluster
+echo $cell->grapheme, "\n";   // 'e'
+echo $cell->combining, "\n";  // "\xcc\x81" — attach to grapheme for full cluster
 ```
 
 `Cell::$combining` is a plain string; `$cell->withCombining($mark)` appends
@@ -545,12 +612,17 @@ screen updates from being visible to the user, matching xterm's batched
 update behavior.
 
 ```php
-$mode = $vt->mode();
-var_dump($mode->syncUpdate);  // bool
+use SugarCraft\Vterm\Terminal\Terminal;
 
-$vt->feed("\x1b[?2026h");    // enter sync-update mode
-$vt->feed("\x1b[31mA\x1b[0m"); // queued, not yet visible
-$vt->feed("\x1b[?2026l");    // flush → both cells appear together
+$vt = Terminal::create(cols: 80, rows: 24);
+
+$mode = $vt->mode();
+var_dump($mode->syncUpdate);  // bool — false until DEC 2026 is set
+
+$vt->feed("\x1b[?2026h");       // enter sync-update mode
+$vt->feed("\x1b[31mA\x1b[0m");  // queued, not yet visible
+$vt->feed("\x1b[?2026l");       // flush → both cells appear together
+var_dump($vt->screen()->cell(0, 0)->grapheme);  // 'A'
 ```
 
 Mutations are queued in `ScreenHandler::$pendingMutations` and flushed by
@@ -566,25 +638,26 @@ and combining-char attachments are both eligible for queued writes.
 use SugarCraft\Vterm\Theme;
 use SugarCraft\Vterm\Themes;
 
-// Tokyo Night — the only theme used in the monorepo's 277 .tape files
+// Tokyo Night — the standard theme of the monorepo's 305 .tape demo files
 $theme = Theme::tokyoNight();
 
 // Index into the 256-color palette
 $red = $theme->color(1);       // 0xf7768e
 
 // Resolve RGB components from a 256-color index
-$rgb = Theme::rgb(196);        // [255, 85, 85]
+$rgb = Theme::rgb(196);        // [255, 0, 0]
 
 // Map ANSI 0-15 slot to its 256-color index
 $idx = Theme::fgIndex(1);        // 1 (Ansi1 → index 1)
 
-// V1-ready themes
+// V1-ready themes — every bundled theme carries a complete palette,
+// so v1() currently lists the same five themes as all()
 foreach (Themes::v1() as $name => $theme) {
     echo "$name\n";
 }
-// TokyoNight, TokyoNightLight, TokyoNightStorm
+// TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark
 
-// All themes (including deferred stubs)
+// All themes in the catalog
 foreach (Themes::all() as $name => $theme) {
     echo "$name\n";
 }
@@ -595,7 +668,7 @@ Available themes:
 
 | Theme | Status | Description |
 |---|---|---|
-| `TokyoNight` | ✅ v1 | Dark theme — used in all 277 monorepo tapes |
+| `TokyoNight` | ✅ v1 | Dark theme — the standard of the 305 monorepo tapes |
 | `TokyoNightLight` | ✅ v1 | Light variant of TokyoNight |
 | `TokyoNightStorm` | ✅ v1 | Storm variant of TokyoNight |
 | `Dracula` | ✅ v1 | Full Dracula palette |
@@ -628,7 +701,7 @@ Each subdirectory of `src/` owns a small piece of VT state:
 | `Cursor\Cursor` | Position + visibility + shape + saved-state. | `withRow($r)`, `withCol($c)`, `withVisible($v)`, `withShape($s)`, `save()`, `restore()`, `equals()`. |
 | `Sgr\Sgr` | Pen state (fg, bg, attrs bitfield, underline style). | `empty()`, `withBold/Italic/Underline/Strikethrough/Blink/Reverse/Dim/Hidden($v)`, `withUnderlineStyle($style)`, `withForeground(?$color)`, `withBackground(?$color)`, `equals()`. |
 | `Sgr\UnderlineStyle` | Enum: `None`/`Single`/`Double`/`Curly`/`Dotted`/`Dashed`. | `fromInt()`, `value`. |
-| `Mode\Mode` | DEC private modes. | `withAltScreen/AltScreenVariant/CursorVisible/MouseSgr/MouseHighlights/MouseAny/MouseCellMotion/MouseExtended/BracketedPaste/SyncUpdate/AutoWrap/OriginMode/CursorShape/ReportFocusEvents`, `isAltScreen()`, `equals()`. |
+| `Mode\Mode` | DEC private modes. | `withAltScreen/AltScreenVariant/CursorVisible/MouseEncoding/MouseHighlights/MouseAny/MouseCellMotion/MouseExtended/BracketedPaste/SyncUpdate/AutoWrap/OriginMode/CursorShape/ReportFocusEvents`, `isAltScreen()`, `isMouseReporting()`, `equals()`. |
 | `Hyperlink\Hyperlink` | OSC 8 URI + id state. | `fromRaw($id, $uri)`, `equals()`. |
 | `Msg\FocusInMsg` / `FocusOutMsg` | Focus event records — accumulated on `ScreenHandler::$focusEvents` when DEC mode `1004` is set. | Plain DTOs. |
 | `Color\Color` | Color value object — palette index or truecolor RGB. | `default()`, `indexed16($i)`, `indexed256($i)`, `truecolor($r,$g,$b)`, `fromInt($kind,$v)`, `red()`, `green()`, `blue()`, `equals()`. |

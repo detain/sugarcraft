@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Markdown;
 
 /**
- * Write-through byte sink for the E736 7.3 streaming family
+ * Write-through byte sink for the streaming family
  * ({@see Writer}, {@see Renderer::writer()}).
  *
  * Two factories, two ownership regimes:
@@ -18,8 +18,8 @@ namespace SugarCraft\Markdown;
  * Door law (fail fast, before any rendering work): construction validates
  * the target. A path door fires when the parent directory is missing or
  * unwritable, when an existing file is unwritable, or when the open itself
- * fails anyway — the `@` + `=== false` net behind the probe is the r83-s2
- * idiom keeping the probe→read race silent-but-fatal rather than
+ * fails anyway — the `@` + `=== false` net behind the probe keeps the
+ * probe→read race silent-but-fatal rather than
  * warning-emitting (failOnWarning era).
  *
  * Write-through flush law: every {@see write()} lands its bytes in the

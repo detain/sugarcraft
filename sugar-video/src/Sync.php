@@ -16,8 +16,7 @@ namespace SugarCraft\Video;
  * more than 2 frames, those frames are discarded to catch up.
  *
  * No single upstream — the wall-clock pacing + frame-skip-resync approach is
- * drawn from maxcurzi/tplay and joelibaceta/video-to-ascii (see video_plan.md
- * lines 94-96).
+ * drawn from maxcurzi/tplay and joelibaceta/video-to-ascii.
  */
 final class Sync
 {

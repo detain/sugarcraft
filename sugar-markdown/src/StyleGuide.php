@@ -8,7 +8,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Style\Style;
 
 /**
- * Parser + producer for Glamour STYLE JSON documents (E736 sugar-markdown 7.1).
+ * Parser + producer for Glamour STYLE JSON documents.
  *
  * Mirrors charmbracelet/glamour's style-file schema: a top-level object of
  * element blocks (`document`, `h1`…`h6`, `paragraph`, `block_quote`,

@@ -214,6 +214,44 @@ final class ModelTest extends TestCase
         $this->assertSame(1, $m->length());
     }
 
+    public function testAddItemMintsIdsOnTheCloneNeverTheReceiver(): void
+    {
+        $counter = new \ReflectionProperty(Model::class, 'idCounter');
+        $items = new \ReflectionProperty(Model::class, 'items');
+
+        // Mixed addItem/addItems chain on one model: every id in the list
+        // stays unique and the stream keeps counting from the fork point.
+        $m1 = $this->model->addItem(new StringItem('A'));
+        $m2 = $m1->addItems(new StringItem('B'), new StringItem('C'));
+        $m3 = $m2->addItem(new StringItem('D'));
+        $ids = \array_map(
+            static fn($item): int => $item->id,
+            $items->getValue($m3)
+        );
+        $this->assertSame([0, 1, 2, 3], $ids);
+
+        // Adversarial sibling fork (m2): two addItem calls on the SAME base.
+        // The pre-fix `$id = $this->idCounter++` read the receiver's counter
+        // and left it silently advanced; the base must emerge untouched.
+        $base = $this->model->addItems(new StringItem('S1'), new StringItem('S2'));
+        $before = $counter->getValue($base);
+        $x = $base->addItem(new StringItem('X'));
+        $y = $base->addItem(new StringItem('Y'));
+        $this->assertSame($before, $counter->getValue($base), 'addItem mutated the receiver counter');
+        // Each fork's own stream is well-formed: base ids 0,1 plus one new id.
+        foreach ([$x, $y] as $fork) {
+            $forkIds = \array_map(
+                static fn($item): int => $item->id,
+                $items->getValue($fork)
+            );
+            $this->assertSame([0, 1, 2], $forkIds);
+        }
+        // Ids are per-instance identity (class docblock): siblings may
+        // re-mint the same id; no supported API merges forks, so a single
+        // model never sees a duplicate.
+        $this->assertNotSame($x, $y);
+    }
+
     // -------------------------------------------------------------------------
     // Filter tests
     // -------------------------------------------------------------------------

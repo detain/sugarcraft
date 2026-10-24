@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarVideo — SugarCraft</title>
-<meta name="description" content="SugarVideo: Terminal video player — mp4/gif → ascii/ansi256/truecolor/half-block/sixel/kitty/iTerm2.">
+<meta name="description" content="SugarVideo: Terminal video player — mp4/gif/webm/webp → ascii/ansi256/truecolor/half- & quarter-block/sixel/kitty/iTerm2, with WebVTT subtitles.">
 <meta property="og:title" content="SugarVideo — SugarCraft">
-<meta property="og:description" content="Terminal video player — mp4/gif → ascii/ansi256/truecolor/half-block/sixel/kitty/iTerm2.">
+<meta property="og:description" content="Terminal video player — mp4/gif/webm/webp → ascii/ansi256/truecolor/half- & quarter-block/sixel/kitty/iTerm2, with WebVTT subtitles.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-video.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-video.html">
 <meta property="og:type" content="website">
@@ -43,10 +43,13 @@
           <span class="tag-chip accent">inspired by Go tools</span>
           <span class="tag-chip">mp4</span>
           <span class="tag-chip">gif</span>
+          <span class="tag-chip">webm</span>
+          <span class="tag-chip">webp</span>
           <span class="tag-chip">ascii</span>
           <span class="tag-chip">sixel</span>
           <span class="tag-chip">kitty</span>
           <span class="tag-chip">iterm2</span>
+          <span class="tag-chip">subtitles</span>
           <span class="tag-chip">ffmpeg</span>
           <span class="tag-chip">ext-gd</span>
         </div>
@@ -54,7 +57,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-video"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-video" alt="SugarVideo code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Terminal video player — plays <code>mp4</code>, <code>gif</code>, <code>avi</code>, <code>webm</code> on the fly, rendering each frame as ASCII, ANSI 256-color, truecolor half-blocks, or via modern graphics protocols (sixel / kitty / iTerm2).</p>
+    <p class="lede" style="margin-top: 28px;">Terminal video player — plays <code>mp4</code>, <code>gif</code>, <code>avi</code>, <code>webm</code>, animated <code>webp</code> on the fly, rendering each frame as ASCII, ANSI 256-color, truecolor half-/quarter-blocks, or via modern graphics protocols (sixel / kitty / iTerm2), with WebVTT subtitle overlays.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-video</code></pre>
@@ -62,9 +65,9 @@
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell">php examples/play.php video.mp4           # play a video
 php examples/play.php                    # synthetic test pattern (no file needed)</code></pre>
-    <pre class="code"><code class="language-php">// Programmatic:
+    <pre class="code"><code class="language-php">// Programmatic (mode auto-detects terminal capability):
 use SugarCraft\Video\Player;
-$player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // decodes video through ffmpeg
+$player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm decode through ffmpeg
 (new \SugarCraft\Core\Program($player))-&gt;run();</code></pre>
 
     <h3 style="margin-top: 32px;">Rendering modes</h3>
@@ -74,9 +77,11 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // decodes video t
     <tr><td>ansi256</td><td>256-color cube + grey ramp</td><td>256-color</td></tr>
     <tr><td>truecolor</td><td>24-bit RGB truecolor</td><td>24-bit color</td></tr>
     <tr><td>halfblock</td><td>24-bit &#x2580; half-blocks, 2x vertical resolution</td><td>24-bit color</td></tr>
+    <tr><td>quarterblock</td><td>24-bit quarter-block characters, 2x2 sub-cell resolution</td><td>24-bit color</td></tr>
     <tr><td>sixel</td><td>Sixel raster graphics protocol (DEC)</td><td>Sixel-capable</td></tr>
-    <tr><td>kitty</td><td>Kitty graphics protocol (DCS APC)</td><td>Kitty-compatible</td></tr>
+    <tr><td>kitty</td><td>Kitty graphics protocol (APC)</td><td>Kitty-compatible</td></tr>
     <tr><td>iterm2</td><td>iTerm2 inline image (OSC 1337)</td><td>iTerm2 / WezTerm</td></tr>
+    <tr><td>auto</td><td>Probe terminal, pick best available (the default)</td><td>&#x2014;</td></tr>
     </table>
 
     <h3 style="margin-top: 32px;">Keyboard controls</h3>
@@ -91,16 +96,20 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // decodes video t
     <tr><td>m</td><td>Cycle to next rendering mode</td></tr>
     <tr><td>q / Esc</td><td>Quit</td></tr>
     <tr><td>resize</td><td>Terminal resize (SIGWINCH) re-scales video automatically</td></tr>
+    <tr><td>loop</td><td>Loop is set at open time via <code>Reel::new()-&gt;withLoop(true)-&gt;play()</code> (no keyboard shortcut)</td></tr>
+    <tr><td>subtitles</td><td>Attached at open time via <code>Reel::withSubtitles()</code> (no keyboard shortcut)</td></tr>
     </table>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Multi-format decode</strong><span>ffmpeg for mp4/avi/webm, pure-PHP + ext-gd for GIF. No external deps beyond ffmpeg for video files.</span></div>
-      <div class="feature"><strong>7 rendering modes</strong><span>ascii, ansi256, truecolor, half-block, sixel, kitty, iTerm2 — auto-detects terminal capability and picks the best available.</span></div>
+      <div class="feature"><strong>Multi-format decode</strong><span>ffmpeg for mp4/avi/webm, pure-PHP + ext-gd for GIF and animated WebP (a RIFF container walk with per-frame GD decode). No external deps beyond the ffmpeg binaries for the video containers.</span></div>
+      <div class="feature"><strong>8 rendering modes + auto</strong><span>ascii, ansi256, truecolor, half-block, quarter-block, sixel, kitty, iTerm2 &#8212; <code>Player::open()</code> and <code>Reel</code> default to probing the terminal and picking the best available.</span></div>
       <div class="feature"><strong>Auto terminal resize</strong><span>SIGWINCH handler re-scales video to fit the new terminal dimensions without restarting playback.</span></div>
-      <div class="feature"><strong>Seek + speed control</strong><span>Keyboard-driven seek (arrows, 0-9) and speed control ([ / ]) with frame-skip resync.</span></div>
-      <div class="feature"><strong>Audio companion</strong><span>AudioPlayer shells out to ffplay or mpv as the audio master clock; degrades gracefully when no audio track is present.</span></div>
-      <div class="feature"><strong>Loop playback</strong><span>Reel::new()->withLoop(true)->play() loops from end back to start automatically.</span></div>
+      <div class="feature"><strong>Seek + speed control</strong><span>Keyboard-driven seek (arrows, 0-9) and speed control ([ / ]) with frame-skip resync; ffmpeg input seeking (<code>-ss</code> before <code>-i</code>) for instant jumps on long streams.</span></div>
+      <div class="feature"><strong>WebVTT subtitles</strong><span><code>Reel::withSubtitles('clip.vtt')</code> parses WebVTT (lenient enough for most SRT files) and paints the active cue as one caption line under the frame in every mode.</span></div>
+      <div class="feature"><strong>Audio companion</strong><span>AudioPlayer shells out to ffplay or mpv as the audio master clock; pausing terminates and re-spawns the companion so no silent zombie burns CPU, and degrades gracefully when no audio track is present.</span></div>
+      <div class="feature"><strong>Remote sources with headers</strong><span><code>Reel::openUrl()</code> forwards an SSRF guard (host allowlist, credentials in the URL refused) and rides request headers onto ffmpeg for signed CDN URLs; audio re-presents the same headers.</span></div>
+      <div class="feature"><strong>Loop playback</strong><span>Reel::new()-&gt;withLoop(true)-&gt;play() loops from end back to start automatically.</span></div>
       <div class="feature"><strong>Delta repaint</strong><span>Only changed cells are re-rendered each frame, dramatically reducing output for static scenes.</span></div>
       <div class="feature"><strong>SGR run-length coalescing</strong><span>AsciiRenderer emits color SGR codes only on color transitions (~60% output reduction for typical frames).</span></div>
     </div>
@@ -119,15 +128,25 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // decodes video t
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Reel</td><td>::open(path)</td><td>Open a video file</td></tr>
+<tr><td>Reel</td><td>::openUrl(url, headers, allowedHosts)</td><td>Open a remote stream behind the SSRF guard</td></tr>
 <tr><td>Reel</td><td>::new()</td><td>Create unbound player (synthetic test pattern)</td></tr>
 <tr><td>Reel</td><td>withMode(Mode)</td><td>Set rendering mode</td></tr>
 <tr><td>Reel</td><td>withSize(cols, rows)</td><td>Set terminal cell dimensions</td></tr>
 <tr><td>Reel</td><td>withFps(?float)</td><td>FPS override (null = auto-detect)</td></tr>
 <tr><td>Reel</td><td>withLoop(bool)</td><td>Enable/disable loop</td></tr>
+<tr><td>Reel</td><td>withRamp(name)</td><td>Select the ascii/ansi256 luminance ramp (minimal, standard, dense)</td></tr>
+<tr><td>Reel</td><td>withSubtitles(path)</td><td>Attach a WebVTT (or lenient SRT) caption track</td></tr>
+<tr><td>Reel</td><td>withHeaders(headers)</td><td>Attach/replace request headers for remote sources</td></tr>
+<tr><td>Reel</td><td>withAllowedHosts(hosts)</td><td>Pin the remote host allowlist</td></tr>
+<tr><td>Reel</td><td>withCellPx(w, h)</td><td>Tell the player the terminal cell pixel size (graphics modes rasterise at cols&#183;w &#215; rows&#183;h)</td></tr>
+<tr><td>Reel</td><td>toPlayer()</td><td>Build the Player (paused, ffmpeg child already spawned)</td></tr>
 <tr><td>Reel</td><td>play()</td><td>Run the player</td></tr>
-<tr><td>Player</td><td>::open(videoPath, cellsW, cellsH, ?fpsOverride, Mode, loop, ramp, …)</td><td>Open a video source</td></tr>
-<tr><td>Player</td><td>::openForTest(decoder, fps, totalFrames, cellsW, cellsH, …)</td><td>Open with injected decoder for testing</td></tr>
-<tr><td>Synthetic</td><td>::generate(path, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream (one header and global palette, NETSCAPE2.0 loop, a GCE on every frame and a local palette on each frame after the first, one trailer), so decoders read every frame; a 1×1 GIF without ext-gd</td></tr>
+<tr><td>Player</td><td>::open(videoPath, cellsW, cellsH, ?fpsOverride, ?Mode, loop, ramp, cellPxW, cellPxH, subtitles, headers, frameBudgetMs)</td><td>Open a video source; a null <code>Mode</code> auto-detects terminal capability (the default)</td></tr>
+<tr><td>Player</td><td>::fromDecoder(decoder, cellsW, cellsH, fps, mode, &#x2026;)</td><td>Mount playback over any injected Decoder (server-transcoded streams, test doubles)</td></tr>
+<tr><td>Player</td><td>::openForTest(decoder, fps, totalFrames, cellsW, cellsH, &#x2026;)</td><td>Deprecated alias of ::fromDecoder() for HalfBlock test wiring</td></tr>
+<tr><td>WebVtt</td><td>::parse(text)</td><td>Parse a WebVTT (lenient SRT) track into cues; bounded at MAX_CUES</td></tr>
+<tr><td>WebVtt</td><td>cueAt(seconds)</td><td>Binary-search the active caption for a timeline position</td></tr>
+<tr><td>Synthetic</td><td>::generate(path, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream (one header and global palette, NETSCAPE2.0 loop, a GCE on every frame and a local palette on each frame after the first, one trailer), so decoders read every frame; a 1&#215;1 GIF without ext-gd</td></tr>
 <tr><td>LumaRamp</td><td>::char(luma, ramp)</td><td>Map 0-255 luminance to character</td></tr>
 <tr><td>LumaRamp</td><td>::compute(r, g, b)</td><td>Compute BT.601 luma from RGB</td></tr>
 </table>

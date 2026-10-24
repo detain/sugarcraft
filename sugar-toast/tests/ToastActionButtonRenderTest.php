@@ -7,7 +7,18 @@ namespace SugarCraft\Toast\Tests;
 use SugarCraft\Toast\{Action, Alert, Position, Toast, ToastType};
 use PHPUnit\Framework\TestCase;
 
-final class ToastAnimationTest extends TestCase
+/**
+ * Pins that action buttons render inside the toast box: an Alert carrying
+ * actions is injected into the live queue (reflection seam mirroring what
+ * push()/alert(actions:) install) and view() must paint each `[Label]`.
+ *
+ * The upper-case `View()` spellings here are deliberate: they double as
+ * coverage for PHP's case-insensitive method dispatch, which keeps the
+ * legacy sugar-dashboard/candy-sql call sites resolving to `view()`.
+ * There is no animation surface in this lib — the file is named for what
+ * it actually pins.
+ */
+final class ToastActionButtonRenderTest extends TestCase
 {
     public function testActionButtonsRenderedInToast(): void
     {
@@ -18,7 +29,7 @@ final class ToastAnimationTest extends TestCase
             ->withPosition(Position::TopLeft)
             ->alert(ToastType::Info, 'msg');
 
-        // Manually set alert with actions in queue
+        // Replace the queue entry with the action-carrying twin.
         $queueProperty = (new \ReflectionClass($t))->getProperty('queue');
         $queueProperty->setAccessible(true);
         $queueProperty->setValue($t, [$alert]);

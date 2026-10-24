@@ -26,7 +26,7 @@ use SugarCraft\Testing\Lang;
  *
  *   ScriptedInput::new()
  *       ->key('a')
- *       ->key('Enter')
+ *       ->enter()
  *       ->ticks(5)
  *       ->resize(80, 24)
  *       ->key('q')
@@ -39,8 +39,17 @@ use SugarCraft\Testing\Lang;
  * runtime would deliver (bracketed-paste envelope, chunking past
  * {@see InputReader::MAX_PASTE_BYTES}, sanitized payload, stale-paste close).
  *
+ * Symbolic vs wire-shaped input — the arrow-key contract:
+ * {@see arrow()} (and {@see key()}/{@see namedKey()}) build SYMBOLIC messages
+ * (e.g. KeyType::Down) the way a decoded keyboard press arrives. {@see bytes()}
+ * carries the REAL wire form, arrow keys as CSI sequences such as ESC [ C.
+ * Do not paste a literal '→' (U+2192) glyph expecting it to act as an arrow:
+ * a UTF-8 glyph is plain text — it takes the paste/IME path and decodes as
+ * character input, never as KeyType::Down. A PTY harness driving a program
+ * must send the ESC [ C bytes, not the glyph.
+ *
  * @readonly
- * @see Mirrors charmbracelet/bubbletea — scripted input pattern (issue #1654)
+ * First-party harness — no 1:1 Go counterpart (see docs/MATCHUPS.md).
  */
 final readonly class ScriptedInput
 {

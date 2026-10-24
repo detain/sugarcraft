@@ -14,7 +14,6 @@ return [
     'tape.write_failed' => 'Failed to write tape file: {path}',
 
     // ProgramSimulator errors
-    'simulator.no_model_property' => 'Program has no model property to extract',
     'simulator.cmd_loop_overflow' => 'Cmd message loop exceeded {max} cycles',
 
     // Graphics decoders (SugarCraft\Testing\Graphics)
@@ -28,7 +27,7 @@ return [
     'graphics.sixel.missing_dcs_header' => 'Sixel stream is missing its DCS header (ESC P)',
     'graphics.sixel.unterminated' => 'Sixel stream is missing its ST terminator (ESC \\)',
     'graphics.sixel.missing_introducer_q' => 'Sixel DCS is missing the "q" color-space introducer',
-    'graphics.sixel.missing_raster_declaration' => 'Sixel stream is missing the " raster size declaration',
+    'graphics.sixel.missing_raster_declaration' => 'Sixel stream is missing its raster size declaration (")',
     'graphics.sixel.bad_raster' => 'Sixel raster declaration has a non-positive width or height',
     'graphics.sixel.bad_color_introducer' => 'Sixel color introducer (#) is malformed (bad register number or truncated color)',
     'graphics.sixel.unknown_color_space' => 'Sixel color space model {model} is not supported (expected RGB)',

@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Themes — render the same Markdown under all 8 built-in themes.
+ * Themes — render the same Markdown under each colourful stock theme
+ * (plain / notty / ascii are styling variants, not colour palettes).
  *
  *   php examples/themes.php
  */
