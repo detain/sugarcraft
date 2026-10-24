@@ -110,9 +110,11 @@ export interface SessionState {
   spentUsd: number
   /**
    * WEB-5 billing parity: the server billed this session's model with no
-   * price on file, so `spentUsd` is a LOWER BOUND, not an exact bill (the
-   * `unpricedModel` bit the snapshot carries — a parallel server lane owns
-   * emitting it, so the read is defensive: absent is not unpriced).
+   * price on file, so `spentUsd` is a LOWER BOUND, not an exact bill. The
+   * snapshot carries the bit as `spendUnpriced`, present only when true
+   * (SES-1: `SessionSnapshot::shape()` emits it exactly that way). Wire-
+   * truth key flip 2026-10-23 — the reader used to chase an `unpricedModel`
+   * key no server lane ever emitted; absent stays priced.
    */
   unpriced: boolean
   permissionMode: PermissionMode | null
@@ -263,9 +265,10 @@ export function applySnapshot(state: SessionState, snapshot: SessionSnapshot): v
   state.status = snapshot.status
   state.turnId = snapshot.turnId ?? null
   state.spentUsd = snapshot.spentUsd ?? 0
-  // Defensive until the generated type carries the bit (parallel server lane):
-  // any snapshot payload value that is not exactly `true` means priced.
-  state.unpriced = (snapshot as unknown as { unpricedModel?: unknown }).unpricedModel === true
+  // The wire key is `spendUnpriced` and the server sends it only when set
+  // (generated.ts does not type it yet — the schema predates SES-1; seam
+  // filed docs-fix-1023 N1). Any other payload value means priced.
+  state.unpriced = (snapshot as unknown as { spendUnpriced?: unknown }).spendUnpriced === true
   state.permissionMode = snapshot.permissionMode ?? null
   state.queue = [...snapshot.queue]
   state.asks = [...snapshot.pendingAsks]

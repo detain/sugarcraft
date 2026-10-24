@@ -29,9 +29,12 @@ PHP users get the UI from `composer require` alone and never need Node.
 ## Install
 
 ```sh
-composer require sugarcraft/candy-code-web
+composer require sugarcraft/candy-code-web:@dev
 ```
 
+The package carries no release tags yet, so the dev-stability suffix is
+required: Packagist offers only `dev-master`, which a default
+`minimum-stability: stable` project refuses without it.
 `candy-code` lists this package under `suggest`, not `require`, so headless
 installs stay lean.
 
@@ -97,7 +100,8 @@ documents the protocol and the UI).
   tries make up the ladder; when it runs out the tab stops retrying and says
   the server is gone — the same verdict `candy-code attach` reaches after its
   exhausted ladder (SERVER.md) — with *Try again* to spend a fresh one.
-- **Side panels** (the *panels* button): **Agents** — the
+- **Side panels** (the *panels* button — ten, per the `PANELS` registry in
+  `src-web/stores/agents/panels.ts`): **Agents** — the
   session's delegated runs as a live tree, also under each `Task` card, each
   opening into an agent view with the run's own transcript, a box to message it
   (or continue it once finished) and pause / resume / cancel, plus
@@ -106,7 +110,15 @@ documents the protocol and the UI).
   agent's todo list, live; **Background** — `/bg` sessions with output, stop
   and *send to this session*; **Workflows** — run one, and the session's
   `/workflow` and `Workflow` tool runs; **Memory** — notes per scope, search,
-  add, edit, delete.
+  add, edit, delete; **Rules** — the permission policy in the open (mode and
+  its source, allow/ask/deny rules, grants picked up as the session ran;
+  read-only — the dials live in the status bar and settings); **Catalog** —
+  every agent this server can delegate a run as, with model, provider and
+  mode; **Changes** — the workspace's uncommitted files with per-file diffs;
+  **Context** — what the next request is built from, as structure rather
+  than `/context`'s text, plus the directory-trust prompt; **Generate** —
+  the media-generation form and live job surface (shown only when the
+  server says it can generate).
 - **Command palette** (Ctrl+K / ⌘K): sessions, slash commands, panels, new
   session, theme.
 - **Settings** (the *settings* link in the top bar): a form generated from
@@ -114,6 +126,33 @@ documents the protocol and the UI).
   shared file, each value's
   provenance, env and flag locks, apply-mode badges — with a diff preview of
   the file before anything is saved (`settings.preview`, then `settings.set`).
+
+- **Security notes**: every untrusted string — model and tool text, server
+  paths and reasons — renders as data, never markup (raw HTML off in
+  `markdown-it`, then DOMPurify with the html profile only; server-supplied
+  panels interpolate with `{{ }}`). One disclosure a reader should know:
+  sign-in stores the **login secret in `localStorage`** (key
+  `candy-code-web:login-secret`, origin-scoped, shared across tabs) so
+  reloads and new tabs re-mint tickets without another sign-in; anything
+  that can execute script on this origin — or a shared browser profile —
+  can read it until site data is cleared, and no UI control clears it
+  today. Keep the host page's script surface clean and treat browser
+  storage as holding a credential.
+
+### Deployment hardening
+
+The bundle ships **no Content-Security-Policy**: neither `index.html` nor
+`candy-code serve` sets one, and the sanitising above is the only injection
+line of defence. A deployment that wants belt-and-braces should have its
+front proxy send a header along the lines of
+
+```
+Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; base-uri 'none'; form-action 'self'
+```
+
+(`connect-src` covers the same-origin `/api` calls and the `/ws` socket;
+`data:` and `blob:` are needed by pasted images and fetched media; prefer
+pinning `connect-src` to the exact origin.)
 
 ## Developing the UI
 
@@ -144,13 +183,15 @@ src-web/
               reducer in reducer.ts), approvals, layout, settings (theme,
               notifications), settings/ (the settings form: fields,
               serverSettings), agents/ (agent tree, todos, background,
-              workflows, memory, panels)
+              workflows, memory, the ten-panel drawer state)
   components/ SessionSidebar, Transcript (virtualised), TranscriptItem,
               MessageMarkdown, ReasoningFold, ToolCard, DiffView,
               PermissionCard, Composer, QueueStrip, StatusBar,
               ConnectionBanner; grid/ (tabs, tiles), approvals/ (drawer),
               settings/ (SettingsView, fields, preview), agents/ (tree,
-              agent view), panels/ (side panels, command palette)
+              agent view), panels/ (the side-panel drawer — todo, background,
+              workflows, memory, rules, changes, context, generate — and the
+              command palette; the Agents and Catalog views live under agents/)
   lib/        markdown, diff, format, highlight (lazy)
   views/      DashboardView, SessionView, LoginView
 ```

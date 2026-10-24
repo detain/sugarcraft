@@ -41,12 +41,17 @@ const canWrite = computed(() => connection.scopes.includes('write'))
 
 /**
  * WEB-5 billing parity: a bg row is unpriced when its daemon's model has no
- * price on file — `costUsd` is then a lower bound, not a bill. The bit rides
- * the row from a parallel server lane, so the read is defensive: absent is
- * priced, and a priced run that has spent nothing stays off the meta line.
+ * price on file — `costUsd` is then a lower bound, not a bill. The bit
+ * shares the snapshot's SES-1 wire law: key `spendUnpriced`, present only
+ * when true (wire-truth key flip 2026-10-23; the read used to chase an
+ * `unpricedModel` key nothing ever emitted). Honest gap: the server's
+ * `BackgroundEvents::summary()` does not emit `spendUnpriced` yet, so today
+ * every row reads priced and this branch stays dark until that server lane
+ * lands (seam filed, docs-fix-1023 N1). A priced run that has spent nothing
+ * stays off the meta line.
  */
 function isUnpriced(session: BackgroundSession): boolean {
-  return (session as unknown as { unpricedModel?: unknown }).unpricedModel === true
+  return (session as unknown as { spendUnpriced?: unknown }).spendUnpriced === true
 }
 
 async function act(action: () => Promise<unknown>): Promise<void> {

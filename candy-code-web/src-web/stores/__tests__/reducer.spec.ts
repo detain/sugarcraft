@@ -277,17 +277,24 @@ describe('reducer: snapshot', () => {
       sessionId: 's1', status: 'idle', lastSeq: 0, pendingAsks: [], queue: [],
       messages: [], spentUsd: 3.25,
     }
-    // Absent (the field rides a parallel server lane's payload): priced.
+    // Wire truth (SES-1, key flip 2026-10-23): the server sends
+    // `spendUnpriced` only when set — absent is priced.
     const absent = createState('s1')
     applySnapshot(absent, base)
     expect(absent.unpriced).toBe(false)
     // Present and true: unpriced — and a later priced snapshot clears it.
     const flagged = createState('s1')
-    applySnapshot(flagged, { ...base, unpricedModel: true } as SessionSnapshot)
+    applySnapshot(flagged, { ...base, spendUnpriced: true } as SessionSnapshot)
     expect(flagged.unpriced).toBe(true)
     expect(flagged.spentUsd).toBe(3.25)
     applySnapshot(flagged, base)
     expect(flagged.unpriced).toBe(false)
+    // The key no server ever emitted (the fabricated fixture this pin
+    // replaces) must NOT light the bit: the reader follows the wire, not
+    // memory. Reverting the key above reddens exactly this leg.
+    const legacy = createState('s1')
+    applySnapshot(legacy, { ...base, unpricedModel: true } as SessionSnapshot)
+    expect(legacy.unpriced).toBe(false)
   })
 
   it('a refused row keeps its denial', () => {

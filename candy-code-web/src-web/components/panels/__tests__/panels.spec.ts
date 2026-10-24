@@ -83,7 +83,15 @@ describe('BackgroundPanel', () => {
     await wire.connect(() => useBackgroundStore())
     await wire.answer('bg.list', {
       items: [
-        { bgId: 'b1', name: 'bound', task: 'x', status: 'completed', createdAt: '2026-10-17 00:00:01', outputBytes: 0, adopted: false, costUsd: 0, unpricedModel: true },
+        // Wire truth (2026-10-23 key flip): the bit shares the snapshot's
+        // SES-1 law — key `spendUnpriced`, present only when true. The
+        // `legacy` row carries the fabricated key nothing ever emitted and
+        // must render priced; the panel read follows the wire, not memory.
+        // Honest gap: BackgroundEvents::summary() does not emit the bit yet
+        // (seam filed docs-fix-1023 N1) — this pins the render contract for
+        // when that server lane lands.
+        { bgId: 'b1', name: 'bound', task: 'x', status: 'completed', createdAt: '2026-10-17 00:00:01', outputBytes: 0, adopted: false, costUsd: 0, spendUnpriced: true },
+        { bgId: 'b0', name: 'legacy', task: 'w', status: 'completed', createdAt: '2026-10-17 00:00:04', outputBytes: 0, adopted: false, costUsd: 0, unpricedModel: true },
         { bgId: 'b2', name: 'exact', task: 'y', status: 'completed', createdAt: '2026-10-17 00:00:02', outputBytes: 0, adopted: false, costUsd: 2.5 },
         { bgId: 'b3', name: 'silent', task: 'z', status: 'completed', createdAt: '2026-10-17 00:00:03', outputBytes: 0, adopted: false, costUsd: 0 },
       ],
@@ -95,9 +103,10 @@ describe('BackgroundPanel', () => {
       if (!row) throw new Error(`no row for ${name}`)
       return row.text()
     }
-    // The bit rides the row (parallel server lane); absent is priced, so the
-    // two priced rows keep the old law: exact figure, or nothing at zero.
+    // Absent (or off-wire) is priced, so the priced rows keep the old law:
+    // exact figure, or nothing at zero.
     expect(rowFor('bound')).toContain('≥$0.00')
+    expect(rowFor('legacy')).not.toContain('$')
     expect(rowFor('exact')).toContain('$2.50')
     expect(rowFor('silent')).not.toContain('$')
   })
