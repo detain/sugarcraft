@@ -628,6 +628,10 @@ final class Table
     /**
      * Check if a row on the current page is currently expanded.
      *
+     * Page-indexed predicate, not a property accessor: there is no bare
+     * accessor here for it to duplicate, and `isExpanded` keeps the
+     * sentence-reading bool name (ruling 3b era keeper).
+     *
      * @param int $rowIndex The 0-based row index relative to the current page
      * @throws \OutOfBoundsException If the index is invalid for the current page
      */

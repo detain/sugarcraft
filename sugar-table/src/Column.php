@@ -34,7 +34,7 @@ final class Column
     /** Column-level ANSI style. */
     public readonly string $style;
 
-    /** Column width specification (Fixed/Percent/Dynamic/Content). */
+    /** Column width specification (Fixed/Percent/Dynamic/Content/Flex). */
     public readonly ColumnWidth $columnWidth;
 
     /** Percentage value (0-100) when columnWidth is Percent. */

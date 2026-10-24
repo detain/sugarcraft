@@ -31,6 +31,11 @@ final class RowData
     /**
      * Get a cell value by column key.
      *
+     * Keyed map lookup, not a `getProp()` property accessor: the single-word
+     * `get`/`has` verbs are the fleet's lookup vocabulary (`Form::get`,
+     * `LruMap::get`) and stay bare-accessor-law compliant as ruled keepers
+     * (ruling 3b era note; pinned by tests/BareAccessorEraTest.php).
+     *
      * @return mixed|null  null if key not present
      */
     public function get(string $key): mixed
@@ -40,6 +45,9 @@ final class RowData
 
     /**
      * Check if a key is present in this row.
+     *
+     * Key-presence predicate over the map (ruled keeper — see
+     * {@see self::get()}); not a twin of a bare accessor.
      */
     public function has(string $key): bool
     {

@@ -71,7 +71,7 @@ $table = Table::fromColumns([
     ])
     -&gt;withPageSize(25);
 
-echo $table-&gt;view();</code></pre>
+echo $table-&gt;View();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -87,6 +87,9 @@ echo $table-&gt;view();</code></pre>
             <div class="feature"><strong>Border styling</strong><span>withBorder(Border) — 8 border families from \SugarCraft\Style\Border.</span></div>
             <div class="feature"><strong>Multi-line rows</strong><span>withMultilineMode(bool) — rows expand to max cell height.</span></div>
     </div>
+
+    <h3 style="margin-top: 32px;">Accessors</h3>
+    <p>Property reads are bare: public <code>readonly</code> state (<code>$column-&gt;style</code>, <code>$row-&gt;data</code>, <code>$cell-&gt;value</code>) or bare methods (<code>Table::Rows()</code>, <code>scrollY()</code>). No <code>getFoo()</code>-form accessor ships in this lib — under the get*-era ruling (2026-10-24) there was nothing here to deprecate; <code>RowData::get()</code>/<code>::has()</code> and <code>Table::isExpanded()</code> stay ruled as keyed lookups and predicates, pinned by <code>tests/BareAccessorEraTest.php</code>.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
@@ -108,7 +111,7 @@ echo $table-&gt;view();</code></pre>
 <tr><td>Table</td><td>withViewportHeight(n)</td><td>Render only n visible rows (viewport virtualization)</td></tr>
 <tr><td>Table</td><td>withScrollY(n)</td><td>Set vertical scroll offset (row number)</td></tr>
 <tr><td>Table</td><td>scrollY()</td><td>Get current scroll offset</td></tr>
-<tr><td>Table</td><td>view()</td><td>Render the table to string</td></tr>
+<tr><td>Table</td><td>View()</td><td>Render the table to string</td></tr>
 <tr><td>Table</td><td>computeColumnWidths(total)</td><td>Compute actual widths from ColumnWidth enum values</td></tr>
 <tr><td>Table</td><td>withBorder(border)</td><td>Set border family (Border::normal/rounded/thick/double/block/ascii/hidden/markdownBorder)</td></tr>
 <tr><td>Table</td><td>withBorderStyle(ansiStyle)</td><td>Apply ANSI SGR style to default border</td></tr>
@@ -119,8 +122,9 @@ echo $table-&gt;view();</code></pre>
 <tr><td>Column</td><td>withWrapMode(mode)</td><td>Set WrapMode::None|WordWrap|Character</td></tr>
 <tr><td>Row</td><td>new(rowData)</td><td>Create a row from RowData</td></tr>
 <tr><td>RowData</td><td>from(array)</td><td>Create from key-value array</td></tr>
+<tr><td>RowData</td><td>get(key) / has(key) / all() / with(key, value)</td><td>Keyed map lookup, presence test, full map, immutable set (ruling-3b keepers — not getFoo()-form accessors)</td></tr>
 <tr><td>StyledCell</td><td>new(value, style)</td><td>Create styled cell with ANSI style</td></tr>
-<tr><td>ColumnWidth</td><td>enum</td><td>Fixed | Percent | Dynamic | Content</td></tr>
+<tr><td>ColumnWidth</td><td>enum</td><td>Fixed | Percent | Dynamic | Content | Flex</td></tr>
 <tr><td>WrapMode</td><td>enum</td><td>None | WordWrap | Character</td></tr>
 </table>
   </div>

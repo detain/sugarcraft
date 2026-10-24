@@ -3,6 +3,17 @@
 Accumulated patterns and anti-patterns from development sessions.
 Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not edit manually.
 
+- **[law:bare-accessor-era]** sugar-table ships ZERO `getFoo()`-form public
+  accessors (owner ruling 3b audit 2026-10-24 — the pre-era "getStyle()
+  25-file rename" row counts repo-wide `getStyle` SITES, all in
+  sugar-dashboard/sugar-widgets/sugar-forms' own classes; no `getStyle()` ever
+  existed in this lib). Property reads ride public readonly state or bare
+  methods. Ruled keepers — keyed `RowData::get($key)`/`RowData::has($key)`
+  (fleet lookup vocabulary) and the `Table::isExpanded($rowIndex)` predicate —
+  are pinned with a README tie by `tests/BareAccessorEraTest.php`; a new
+  `getFoo()` accessor, a removed keeper, or roster/README drift goes red.
+  Fleet-wide: legacy `get*()` BC forwarders remove no earlier than v2.0.0.
+
 - **[pattern:sugar-table]** i18n via `SugarCraft\Table\Lang::t()`. Each library
   carries its own thin `Lang` facade (e.g. `src/Lang.php`) that wraps
   `SugarCraft\Core\I18n\T` with the library namespace baked in. Translation files

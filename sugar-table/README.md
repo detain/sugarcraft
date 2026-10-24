@@ -889,6 +889,35 @@ $t = $t->withPage(2);
 $t->isExpanded(5);   // depends on whether that row was expanded on page 2
 ```
 
+## Accessors
+
+_The get*-accessor era (owner ruling 3b, dated 2026-10-24; legacy `get*()`
+forwarders across the fleet remove no earlier than v2.0.0)._
+
+sugar-table ships **zero** `getFoo()`-form property accessors — this lib paid
+that debt before the window opened (the pre-era audit row "getStyle()
+25-file rename" counts repo-wide `getStyle` **sites**, all of them other
+libraries' own classes; no `getStyle()` ever existed here). Property reads
+ride public `readonly` state (`$column->style`, `$column->width`,
+`$row->data`, `$cell->value`) or bare methods (`Table::Columns()`,
+`Table::CurrentRow()`, `Table::scrollY()`). Nothing in this lib carries a
+`@deprecated` accessor or awaits the v2.0 removal line.
+
+Three methods keep get/has/is vocabulary by ruling, because none is a
+property accessor:
+
+- `RowData::get($key)` and `RowData::has($key)` — keyed map lookup and
+  key-presence test; the fleet's single-word lookup vocabulary
+  (compare `Form::get()` in sugar-forms, `LruMap::get()` in sugar-core).
+- `Table::isExpanded($rowIndex)` — a page-indexed predicate query, named to
+  read as a sentence; deprecation candidates are `has`/`is` twins that only
+  duplicate a bare accessor, and there is no bare accessor for it to
+  duplicate.
+
+`tests/BareAccessorEraTest.php` fails closed if a `getFoo()` accessor is
+ever shipped here again, if a keeper above disappears without a ruling, or
+if this list and the roster in that test drift apart.
+
 ## Shared foundations
 
 
