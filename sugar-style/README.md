@@ -368,7 +368,7 @@ use SugarCraft\Style\Style;
 
 Style::setDefaultProfile(ColorProfile::Ansi256); // everything after is 256-colour
 Style::setDefaultProfile(null);                    // back to TrueColor
-$was = Style::getDefaultProfile();                  // read what is in force
+$was = Style::defaultProfile();                     // read what is in force
 ```
 
 Because the setting leaks across object boundaries, **tests must save and
@@ -378,7 +378,7 @@ restore it** around any change:
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Style\Style;
 
-$had = Style::getDefaultProfile();
+$had = Style::defaultProfile();
 Style::setDefaultProfile(ColorProfile::Ascii);
 // …assertions…
 Style::setDefaultProfile($had); // always, e.g. in tearDown
@@ -707,14 +707,36 @@ memoization removes is the `getenv()` decision, not the allocation
 (measured: `SolverFactory::fromEnvironment()` ~350 ns/op after, ~470
 ns/op with a per-call `getenv()`, dev box 2026-10).
 
+## Accessor era (2026-10-24)
+
+The fleet-wide bare-accessor sweep landed two renames in sugar-style —
+reads whose bare names were free, each keeping a one-line deprecated
+forwarder marked `REMOVED-IN: 2.0.0`:
+
+- the static ambient read `getDefaultProfile()` → `defaultProfile()`
+  (the `setDefaultProfile()` write keeps its name; no bare slot collided)
+- `Style::borderSides()` joins the bare family; `getBorderSides()` is its
+  deprecated alias.
+
+`Border::getTitles()` already delegated to the bare `titles()` accessor
+before this era and stays as found. The remaining **31 accessors are
+owner-pending**: for each one the bare twin (think `foreground()`,
+`width()`, `caps()`) is a live fluent setter, and PHP admits one method
+per name — renaming either side is a vocabulary ruling, not a mechanical
+sweep. The blocked Bar getters carry an in-source NOTE, `Style.php`
+frames the family in its NAMING EXCEPTION paragraph, and the full roster
+with per-method evidence lives in `tests/BareAccessorEraTest.php`.
+Existing callers keep compiling through the deprecated aliases.
+
 ## Test
 
 ```sh
 cd sugar-style && composer install && vendor/bin/phpunit
 ```
 
-Suite at the docs-fix-1023 close: 928 tests, 3,011 assertions, 0 failures
-(cited figure is a point-in-time measurement, not a live-pinned number).
+Suite at the 2026-10-24 accessor-era close: 966 tests, 3,275 assertions, 0
+failures (cited figure is a point-in-time measurement, not a live-pinned
+number).
 
 ## Demos
 

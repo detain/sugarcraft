@@ -152,26 +152,61 @@ final class HelpBar
         return $this->entries;
     }
 
+    /**
+     * NOTE (accessor era, 2026-10-24): this getKeySeparator() read cannot lose its
+     * get* prefix — the bare keySeparator() slot is the fluent setter defined
+     * above, and PHP admits one method per name. Dropping either side needs
+     * a vocabulary ruling; treated as owner-pending and rostered in
+     * tests/BareAccessorEraTest.php until one lands.
+     */
     public function getKeySeparator(): string
     {
         return $this->keySeparator;
     }
 
+    /**
+     * NOTE (accessor era, 2026-10-24): this getSeparator() read cannot lose its
+     * get* prefix — the bare separator() slot is the fluent setter defined
+     * above, and PHP admits one method per name. Dropping either side needs
+     * a vocabulary ruling; treated as owner-pending and rostered in
+     * tests/BareAccessorEraTest.php until one lands.
+     */
     public function getSeparator(): string
     {
         return $this->separator;
     }
 
+    /**
+     * NOTE (accessor era, 2026-10-24): this getKeyStyle() read cannot lose its
+     * get* prefix — the bare keyStyle() slot is the fluent setter defined
+     * above, and PHP admits one method per name. Dropping either side needs
+     * a vocabulary ruling; treated as owner-pending and rostered in
+     * tests/BareAccessorEraTest.php until one lands.
+     */
     public function getKeyStyle(): ?Style
     {
         return $this->keyStyle;
     }
 
+    /**
+     * NOTE (accessor era, 2026-10-24): this getLabelStyle() read cannot lose its
+     * get* prefix — the bare labelStyle() slot is the fluent setter defined
+     * above, and PHP admits one method per name. Dropping either side needs
+     * a vocabulary ruling; treated as owner-pending and rostered in
+     * tests/BareAccessorEraTest.php until one lands.
+     */
     public function getLabelStyle(): ?Style
     {
         return $this->labelStyle;
     }
 
+    /**
+     * NOTE (accessor era, 2026-10-24): this getWidth() read cannot lose its
+     * get* prefix — the bare width() slot is the fluent setter defined
+     * above, and PHP admits one method per name. Dropping either side needs
+     * a vocabulary ruling; treated as owner-pending and rostered in
+     * tests/BareAccessorEraTest.php until one lands.
+     */
     public function getWidth(): ?int
     {
         return $this->width;

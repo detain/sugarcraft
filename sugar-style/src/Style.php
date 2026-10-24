@@ -28,7 +28,7 @@ use SugarCraft\Core\Util\Width;
  * PROCESS-AMBIENT WARNING: {@see setDefaultProfile()} writes a process-global
  * mutable static consulted by every later {@see new()}. It is a
  * host-application startup knob, not a per-widget setting — test suites that
- * touch it must restore it (the sibling {@see getDefaultProfile()} read makes
+ * touch it must restore it (the sibling {@see defaultProfile()} read makes
  * the save/restore pair trivial). Everything else on this class is immutable.
  *
  * NAMING EXCEPTION: this class is the fleet's one exemption from the
@@ -41,8 +41,12 @@ use SugarCraft\Core\Util\Width;
  * aliases precisely because neither could be a `with`-suffixed variant of
  * the other, and a bare `width()` getter would collide with the bare
  * `width()` setter — hence `getWidth()`. Upstream lipgloss gives the same
- * rationale for its `GetX` family. Do not copy this spelling into new
- * SugarCraft classes.
+ * rationale for its `GetX` family. Two reads whose bare slots never
+ * collided (`defaultProfile()`, `borderSides()`) went bare in the 2026-10
+ * accessor era; every remaining `get*` on this class is blocked by a live
+ * fluent setter of the same bare name and stays prefix-spelled pending an
+ * owner vocabulary ruling (rostered in tests/BareAccessorEraTest.php).
+ * Do not copy this spelling into new SugarCraft classes.
  */
 final class Style
 {
@@ -145,9 +149,21 @@ final class Style
     }
 
     /** The ambient profile currently in force, or `null` when none was negotiated. */
-    public static function getDefaultProfile(): ?ColorProfile
+    public static function defaultProfile(): ?ColorProfile
     {
         return self::$defaultProfile;
+    }
+
+    /**
+     * Prefix-spelled alias of {@see self::defaultProfile()} from the
+     * lipgloss-era naming; the bare slot never collided (the static property
+     * and a method name are separate namespaces).
+     *
+     * @deprecated since the 2026-10 accessor era; use {@see self::defaultProfile()}. REMOVED-IN: 2.0.0
+     */
+    public static function getDefaultProfile(): ?ColorProfile
+    {
+        return self::defaultProfile();
     }
 
     public static function new(): self
@@ -716,7 +732,13 @@ final class Style
     /** @return array{int,int,int,int} */
     public function getMargin(): array { return $this->margin; }
     /** @return array{bool,bool,bool,bool} */
-    public function getBorderSides(): array { return $this->borderSides; }
+    public function borderSides(): array { return $this->borderSides; }
+
+    /**
+     * @deprecated since the 2026-10 accessor era; use {@see self::borderSides()}. REMOVED-IN: 2.0.0
+     * @return array{bool,bool,bool,bool}
+     */
+    public function getBorderSides(): array { return $this->borderSides(); }
 
     public function isSet(string $prop): bool { return isset($this->propsSet[$prop]); }
 

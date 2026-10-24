@@ -175,27 +175,63 @@ final class StatusBar
         return $this->right;
     }
 
+    /**
+     * NOTE (accessor era, 2026-10-24): this getSeparator() read cannot lose its
+     * get* prefix — the bare separator() slot is the fluent setter defined
+     * above, and PHP admits one method per name. Dropping either side needs
+     * a vocabulary ruling; treated as owner-pending and rostered in
+     * tests/BareAccessorEraTest.php until one lands.
+     */
     public function getSeparator(): string
     {
         return $this->separator;
     }
 
+    /**
+     * NOTE (accessor era, 2026-10-24): this getWidth() read cannot lose its
+     * get* prefix — the bare width() slot is the fluent setter defined
+     * above, and PHP admits one method per name. Dropping either side needs
+     * a vocabulary ruling; treated as owner-pending and rostered in
+     * tests/BareAccessorEraTest.php until one lands.
+     */
     public function getWidth(): ?int
     {
         return $this->width;
     }
 
+    /**
+     * NOTE (accessor era, 2026-10-24): this getStyle() read cannot lose its
+     * get* prefix — the bare style() slot is the fluent setter defined
+     * above, and PHP admits one method per name. Dropping either side needs
+     * a vocabulary ruling; treated as owner-pending and rostered in
+     * tests/BareAccessorEraTest.php until one lands.
+     */
     public function getStyle(): ?Style
     {
         return $this->style;
     }
 
-    /** @return array{0:string,1:string} [leftCap, rightCap] */
+    /**
+     * NOTE (accessor era, 2026-10-24): this getCaps() read cannot lose its
+     * get* prefix — the bare caps() slot is the fluent setter defined
+     * above, and PHP admits one method per name. Dropping either side needs
+     * a vocabulary ruling; treated as owner-pending and rostered in
+     * tests/BareAccessorEraTest.php until one lands.
+     *
+     * @return array{0:string,1:string} [leftCap, rightCap]
+     */
     public function getCaps(): array
     {
         return [$this->leftCap, $this->rightCap];
     }
 
+    /**
+     * NOTE (accessor era, 2026-10-24): this getFillChar() read cannot lose its
+     * get* prefix — the bare fillChar() slot is the fluent setter defined
+     * above, and PHP admits one method per name. Dropping either side needs
+     * a vocabulary ruling; treated as owner-pending and rostered in
+     * tests/BareAccessorEraTest.php until one lands.
+     */
     public function getFillChar(): string
     {
         return $this->fillChar;
