@@ -5,7 +5,7 @@ existed the surface was documented piecemeal — three variables in
 `./bin/candy-code --help`, one more in the README's "Mouse" section, two more
 only in PHP docblocks, and the rest discoverable only by `grep`.
 
-Two groups are listed separately because they behave differently:
+Four groups are listed separately because they behave differently:
 
 - **App variables** (`CANDY_CODE_*`) configure CandyCode itself. Every one is
   optional; each row gives the behaviour when it is unset.
@@ -15,6 +15,9 @@ Two groups are listed separately because they behave differently:
   as the vendor SDKs spell them.
 - **Claude Code variables** are Claude Code's own relocation switches, read
   only by `/memory import claude` so it finds the memory Claude Code wrote.
+- **Terminal colour variables** are ambient color variables consulted via the
+  foundation palette — read by `sugar-core`'s `ColorProfile::detect()`, not by
+  `src/` directly. See [Terminal colour variables](#terminal-colour-variables).
 
 Environment variables are the highest-precedence configuration tier: they win
 over a choice persisted to `~/.candy-code/config.json` — written by the Ctrl+P
@@ -303,6 +306,28 @@ everything else — so leaving the placeholder unset is the recommended state,
 not a fallback to the OpenAI-only strategy.
 
 ---
+
+## Terminal colour variables
+
+Ambient color variables consulted via the foundation palette — read by
+sugar-core's `ColorProfile::detect()` (called from `Renderer::applyAmbientColorProfile()`
+once per launch), not from `candy-code/src/`, so they name no `CANDY_CODE_*`
+prefix and the `EnvRosterDrift` scanner cannot see them. They gate the colour
+depth of **every** `Style` the process mints afterwards:
+
+| Variable | Used for |
+|----------|----------|
+| `NO_COLOR` | Colour off, decoration kept. When truthy the profile becomes `Ascii` — bold, faint and italic still ship, `38;2;…` sweeps never do — per [no-color.org](https://no-color.org). It outranks the two force variables below. Truthy means non-empty, not `0`, not `false`. |
+| `FORCE_COLOR` | The escape-anyways switch. When truthy the ladder returns `TrueColor`, and a non-tty or `TERM=dumb` destination is treated as a terminal rather than silenced. |
+| `CLICOLOR_FORCE` | The libcli-family spelling of the same switch as `FORCE_COLOR`; either one truthy forces the same way. |
+
+Plain `CLICOLOR` (the libcli "disable colour without unsetting it" switch, no
+`_FORCE`) is deliberately **not** consulted: this ladder reads only the three
+variables above for colour decisions. `TERM`, `TERM_PROGRAM`, `COLORTERM`,
+`WT_SESSION` and the CI-family variables ride the same ladder as capability
+hints, but `TERM` and `TERM_PROGRAM` keep their own rows in the
+[OS variables](#os-variables) table, where their multiplexer and dumb-terminal
+meanings are described.
 
 ## OS variables
 

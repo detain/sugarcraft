@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Config;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Tests\Config\Support\DocumentParagraphs;
 use SugarCraft\Code\Tests\Config\Support\EnvReadScanner;
+use SugarCraft\Core\Util\ColorProfile;
 
 /**
  * `docs/ENVIRONMENT.md` OPENS WITH "EVERY ENVIRONMENT VARIABLE CANDY_CODE
@@ -82,6 +83,24 @@ use SugarCraft\Code\Tests\Config\Support\EnvReadScanner;
  * no lib outside `candy-code/` mentions the prefix at all — and scanning
  * siblings from here would fail in a split-repo clone, where they are Packagist
  * copies rather than a monorepo path away.
+ *
+ * THE CARVE-OUT THIS CLASS CANNOT SEE, AND HOW IT IS CLOSED ANYWAY: the oracle
+ * follows READS INSIDE `candy-code/src` only, so an environment variable that
+ * `src/` never names is structurally invisible to it — and yet the page opens
+ * with "every environment variable". That is exactly the shape of the terminal
+ * colour family: `NO_COLOR`, `FORCE_COLOR` and `CLICOLOR_FORCE` are consulted by
+ * `sugar-core`'s `ColorProfile::detect()`, which `src/Tui/Renderer.php` hands
+ * the whole environment snapshot at launch, so no `getenv()` call anywhere in
+ * this package names them. Widening the scanner to sibling sources is NOT the
+ * remedy (the split-repo problem above). Instead the colour family lives in a
+ * manual roster, `AMBIENT_COLOR_ROSTER`, policed inside
+ * {@see testTheOsEnvironmentRosterIsPinnedInBothDirections()} by the same three
+ * legs the OS roster uses (pinned⊆documented, documented⊆pinned, and a liveness
+ * check that each pinned name is still a quoted env key in the real
+ * `ColorProfile::detect()` source, resolved through reflection so it works from
+ * a vendor copy as well as from a monorepo path). Plain `CLICOLOR` joins
+ * neither the roster nor the table, and the absence is pinned too: the page
+ * states it is not consulted, and the colour source is asserted not to read it.
  *
  * @internal
  */
@@ -1372,6 +1391,19 @@ final class EnvRosterDriftTest extends TestCase
         'DISPLAY', 'WAYLAND_DISPLAY', 'CDPATH', 'TMPDIR',
     ];
 
+    /**
+     * THE CARVE-OUT ROSTER: variables the launch reads through the foundation
+     * palette rather than through `src/`, so the token scan above cannot see
+     * them (see the class doc-block). Pinned against the page's "Terminal
+     * colour variables" table by the same legs, plus a liveness check against
+     * the real `ColorProfile::detect()` source.
+     *
+     * @var list<string>
+     */
+    private const AMBIENT_COLOR_ROSTER = [
+        'CLICOLOR_FORCE', 'FORCE_COLOR', 'NO_COLOR',
+    ];
+
     public function testTheOsEnvironmentRosterIsPinnedInBothDirections(): void
     {
         $pinned = self::OS_ENV_ROSTER;
@@ -1403,6 +1435,53 @@ final class EnvRosterDriftTest extends TestCase
             $unseen,
             'pinned OS variables with no quoted literal anywhere in src/ — the reads moved, '
             . 'renamed, or died; the table rows are now promises nothing keeps',
+        );
+
+        // ── the carve-out legs: colour variables consulted OUTSIDE src/ ────
+        //
+        // The same three legs, against the page's "Terminal colour variables"
+        // table and the palette source that actually reads them — the class
+        // doc-block explains why the scanner cannot reach this family itself.
+        $colourPinned = self::AMBIENT_COLOR_ROSTER;
+        sort($colourPinned);
+        $colourDocumented = $this->colourTableNames();
+
+        $this->assertSame(
+            [],
+            array_values(array_diff($colourPinned, $colourDocumented)),
+            'the pinned colour roster names a variable docs/ENVIRONMENT.md no longer tabulates — '
+            . 'the page lost a row it promised, or the roster needs the same judgment the rows do',
+        );
+        $this->assertSame(
+            [],
+            array_values(array_diff($colourDocumented, $colourPinned)),
+            'docs/ENVIRONMENT.md tabulates a terminal colour variable the pinned roster does not carry — '
+            . 'add it to AMBIENT_COLOR_ROSTER deliberately, not silently',
+        );
+
+        $palette = (new \ReflectionMethod(ColorProfile::class, 'detect'))->getFileName();
+        $this->assertIsString(
+            $palette,
+            'the palette source cannot be resolved — the colour liveness leg below would measure nothing',
+        );
+        $colourSource = (string) file_get_contents($palette);
+        $unlive = [];
+        foreach ($colourPinned as $name) {
+            if (!str_contains($colourSource, "'" . $name . "'")) {
+                $unlive[] = $name;
+            }
+        }
+        $this->assertSame(
+            [],
+            $unlive,
+            'pinned colour variables with no quoted env key in the palette source — it stopped '
+            . 'consulting them, and the page still tells readers to set them',
+        );
+        $this->assertSame(
+            0,
+            substr_count($colourSource, "'CLICOLOR'"),
+            'docs/ENVIRONMENT.md says plain CLICOLOR is deliberately not consulted — the palette now '
+            . 'reads it, so the page sentence and this roster need the same judgment',
         );
     }
 
@@ -1559,6 +1638,47 @@ final class EnvRosterDriftTest extends TestCase
         $list = array_keys($names);
         sort($list);
         $this->assertGreaterThan(10, \count($list), 'the OS-table scrape found almost nothing — table syntax changed and this oracle compares against an empty-ish set');
+
+        return $list;
+    }
+
+    /**
+     * First-column backticked upper-case names in the page's "Terminal colour
+     * variables" table — the carve-out section {@see osTableNames()} cannot
+     * reach — bounded to that section exactly the same way, so a description
+     * cell naming another variable cannot vote in this census.
+     *
+     * @return list<string>
+     */
+    private function colourTableNames(): array
+    {
+        $page = self::read(self::ENVIRONMENT_DOC);
+        $start = strpos($page, "## Terminal colour variables\n");
+        $this->assertNotFalse($start, 'the "Terminal colour variables" section heading moved — this oracle is now blind');
+        $rest = substr($page, $start);
+        $end = strpos(substr($rest, 3), "\n## ");
+        $section = $end === false ? $rest : substr($rest, 0, $end + 3);
+
+        $names = [];
+        foreach (explode("\n", $section) as $line) {
+            if (preg_match('/^\|\s*(.+?)\s\|/', $line, $cell) !== 1) {
+                continue;
+            }
+            if (preg_match_all('/`([A-Z][A-Z0-9_]*)`/', $cell[1], $found) >= 1) {
+                foreach ($found[1] as $name) {
+                    $names[$name] = true;
+                }
+            }
+        }
+
+        $list = array_keys($names);
+        sort($list);
+        $this->assertGreaterThan(
+            2,
+            \count($list),
+            'the colour-table scrape found almost nothing — table syntax changed and this oracle '
+            . 'compares against an empty-ish set',
+        );
 
         return $list;
     }
