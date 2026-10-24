@@ -2494,7 +2494,7 @@ final class MyProvider implements ProviderInterface
 cd candy-code && composer install && vendor/bin/phpunit
 ```
 
-**25,412 tests / 606,569 assertions, 0 failures, 3 skipped** — the whole of
+**25,423 tests / 606,820 assertions, 0 failures, 3 skipped** — the whole of
 `candy-code/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
 in 22m51s (measured 2026-10-18). The two skips are expected and rostered: one
