@@ -36,8 +36,15 @@ final class PktLine
     /** Size of the ASCII-hex length prefix, included in every packet length. */
     public const HEADER_BYTES = 4;
 
-    /** Largest total packet size on the wire (0xFFFF per the spec cap). */
-    public const MAX_PACKET_BYTES = 0xFFFF;
+    /**
+     * Largest total packet size on the wire — the spec's 65520-byte cap
+     * (0xFFF0), header included. r1024/githttp2 review MINOR-2 cure: this
+     * was 0xFFFF, which neither the class's own docblock rule nor git
+     * (LARGE_PACKET_MAX = 65520) sanctions; both encode and decode now
+     * enforce the spec value, and the dated pins that recorded the old
+     * permissive cap were flipped in the same step.
+     */
+    public const MAX_PACKET_BYTES = 65520;
 
     /** Largest payload {@see self::encode()} will frame. */
     public const MAX_PAYLOAD_BYTES = self::MAX_PACKET_BYTES - self::HEADER_BYTES;
@@ -120,6 +127,12 @@ final class PktLine
             }
             if ($length < self::HEADER_BYTES) {
                 throw new \RuntimeException('reserved or invalid pkt-line length ' . $header . ' (0001-0003 packets are response-side markers)');
+            }
+            if ($length > self::MAX_PACKET_BYTES) {
+                // Spec side-band of tolerance: git itself refuses packets
+                // over the 65520-byte cap, and so do we — an oversized
+                // length is malformed framing, not a big packet.
+                throw new \RuntimeException('oversized pkt-line length ' . $header . ' (cap ' . self::MAX_PACKET_BYTES . ')');
             }
 
             if ($total - $offset < $length) {

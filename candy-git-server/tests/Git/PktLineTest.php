@@ -81,17 +81,42 @@ final class PktLineTest extends TestCase
 
     public function testEncodeRefusesPayloadOverThePacketCap(): void
     {
+        // Flipped 2026-10-24 (r1024/githttp2, review MINOR-2): the cap was
+        // pinned at 65535 (0xFFFF), which contradicted this class's own
+        // docblock rule and git's LARGE_PACKET_MAX. The spec value 65520 is
+        // now enforced on BOTH sides; this pin records the refusal shape
+        // under the enforced cap, not whatever the code happens to do.
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('exceeds the 65535-byte packet cap');
+        $this->expectExceptionMessage('exceeds the 65520-byte packet cap');
 
         PktLine::encode(\str_repeat('x', PktLine::MAX_PAYLOAD_BYTES + 1));
     }
 
     public function testEncodeAcceptsPayloadExactlyAtTheCap(): void
     {
+        // 65516-byte payload + 4 prefix bytes == the spec's 65520 total.
+        // (2026-10-24 flip, same step as the cap: previously pinned 'ffff'.)
         $encoded = PktLine::encode(\str_repeat('x', PktLine::MAX_PAYLOAD_BYTES));
 
-        self::assertSame('ffff', substr($encoded, 0, 4));
+        self::assertSame('fff0', substr($encoded, 0, 4));
+        self::assertSame(65520, \hexdec(substr($encoded, 0, 4)));
+    }
+
+    public function testDecodeRefusesOversizedPacketLengths(): void
+    {
+        // r1024/githttp2: decode-side spec enforcement — 65521 total is
+        // malformed framing, exactly like a reserved or binary length.
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('oversized pkt-line length fff1');
+
+        PktLine::decode('fff1' . \str_repeat('x', 65517));
+    }
+
+    public function testDecodeAcceptsPacketExactlyAtTheSpecCap(): void
+    {
+        $bytes = PktLine::encode(\str_repeat('x', 65516));
+
+        self::assertSame([\str_repeat('x', 65516)], PktLine::decode($bytes));
     }
 
     public function testDecodeRoundTripsEncoderOutput(): void
