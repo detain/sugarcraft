@@ -92,9 +92,11 @@ final class AccessorDeprecationTest extends TestCase
     }
 
     /**
-     * Census leg: discovery-first scan of src/ must find exactly the
-     * forwarders under test — no marked get* accessor drifts in, and the
-     * swept names must not reappear unmarked elsewhere.
+     * Census leg: discovery-first scan of src/ finds exactly the MARKED
+     * forwarders — a marked get* outside the tested pairs, or a tested
+     * pair whose mark drifted away, reddens this leg. An unmarked get*
+     * addition is out of scope for this scan; the inverse leg that
+     * accuses unmarked accessors exists only on sugar-dashboard.
      */
     public function testTheSrcCensusFindsExactlyTheTestedPairs(): void
     {
