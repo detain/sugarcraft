@@ -11,14 +11,15 @@ use SugarCraft\Toast\{Position, Toast, ToastType};
  * Naming-convention pins from the 2026-09-30 audit (LOW: View()/getHistory()
  * broke the project's bare-accessor / lowercase-renderer conventions).
  *
- * `View()` survives ONLY as a deprecated delegating shim — sugar-dashboard and
- * candy-sql call it across the library boundary, so it must keep answering
- * byte-identically until those callers migrate. `getHistory()` had no
- * cross-library consumer and was renamed outright, no alias.
+ * There is no `View()` method — the README states the real mechanism: PHP
+ * method dispatch is case-insensitive, so the legacy `View()` call sites in
+ * sugar-dashboard and candy-sql resolve directly to `view()`, with no alias
+ * that could drift. `getHistory()` had no cross-library consumer and was
+ * renamed to `history()` outright, no alias.
  */
 final class ToastNamingTest extends TestCase
 {
-    public function testDeprecatedViewAliasAnswersByteIdentically(): void
+    public function testLegacyViewCallSiteResolvesToViewByteIdentically(): void
     {
         $t = Toast::new(50)
             ->withPosition(Position::MiddleRight)
@@ -28,7 +29,7 @@ final class ToastNamingTest extends TestCase
         $this->assertSame(
             $t->view($bg, 80, 24),
             $t->View($bg, 80, 24),
-            'the deprecated View() shim must not drift from view()',
+            'PHP dispatch is case-insensitive — the legacy View() call site resolves directly to view()',
         );
     }
 

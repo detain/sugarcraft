@@ -367,6 +367,12 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 | `HistoryLog` | `push(Alert, ?int $limit = null): self` | Append alert, evicting oldest past `$limit`; new log |
 | `HistoryLog` | `all(): list<Alert>` | Return all entries |
 | `HistoryLog` | `count(): int` | Entry count |
+| `Position` | `xOffset(int $alertWidth, int $viewportWidth): int` | X offset of a box in a viewport (left edge 0, center floored, right flush) |
+| `Position` | `yOffset(int $alertHeight, int $viewportHeight, int $stackedHeightBefore = 0): int` | Y offset; top families stack downward from the top, bottom and middle families stack upward against `$stackedHeightBefore`, clamped to row 0 on short viewports |
+| `ToastType` | `nerdIcon(): string` | NerdFont icon symbol for the type |
+| `ToastType` | `unicodeIcon(): string` | Unicode symbol (✖ ⚠ ℹ ✔) — fallback when no NerdFont |
+| `ToastType` | `asciiPrefix(): string` | Plain ASCII prefix (`[E]` `[W]` `[I]` `[S]`) |
+| `ToastType` | `color(): string` | ANSI SGR color code for the type's icon (31/33/34/32) |
 
 | Enum | Cases |
 |-------|-------|
