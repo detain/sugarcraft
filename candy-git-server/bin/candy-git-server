@@ -8,6 +8,7 @@ declare(strict_types=1);
  *
  * Usage:
  *   candy-git-server serve [--config path]        Refuses: server assembly not implemented
+ *   candy-git-server serve --http --repo-root DIR  Smart-HTTP READ listener (phase 1; --http-port N)
  *   candy-git-server init                          Initialize a new data directory
  *   candy-git-server user add <username>           Add a user
  *   candy-git-server user key <username> <keyfile> Add an SSH key
@@ -17,8 +18,10 @@ declare(strict_types=1);
  *
  * PHP port of the charmbracelet/soft-serve Go project; the binary was
  * named `soft-serve` before the 2026-10 rename to candy-git-server.
- * STATUS: scaffold — the library pieces are shipped, but `serve` refuses
- * until the server assembly lands (see README "Known gaps"). // @rename-keep
+ * STATUS: scaffold for ssh/daemon transports — bare `serve` still refuses
+ * (assembly not implemented); `serve --http` starts the real smart-HTTP
+ * READ listener (phase 1, r1024/githttp; push answers 501). See README
+ * "Known gaps". // @rename-keep
  */
 
 namespace SugarCraft\GitServer\Bin;
@@ -126,12 +129,136 @@ function cmdServe(array $args): int
     // exist and are individually tested; nobody has wired them into a
     // running host. Inventory: README "Known gaps — must fix before any
     // server wiring".
+    //
+    // Exception (r1024/githttp, owner ruling 1b): the explicit --http flag
+    // assembles ONLY the smart-HTTP read listener, which is now real. The
+    // bare refusal below stays byte-identical for every other invocation —
+    // ssh/git-daemon listeners and push remain unwired scaffold.
+    if (\in_array('--http', $args, true)) {
+        return cmdServeHttp($args);
+    }
+
     \fwrite(
         \STDERR,
         "candy-git-server: 'serve' refuses to start — server assembly is not implemented; see docs (status: scaffold).\n"
     );
 
     return 1;
+}
+
+/**
+ * serve --http --repo-root DIR [--http-port N] [--http-host H] [--config path]
+ *
+ * Phase 1 of the smart-HTTP transport: a READ-only listener (info/refs
+ * advertisement + upload-pack negotiation) over the synchronous router.
+ * Anonymous reads are allowed only for public repos; private repos answer
+ * 403. Push (git-receive-pack POST) answers 501.
+ *
+ * Exit codes: 1 flag error (missing --repo-root / bad port) or bind failure,
+ * 0 after a signal shutdown (SIGINT/SIGTERM when pcntl is loaded).
+ */
+function cmdServeHttp(array $args): int
+{
+    $repoRoot = null;
+    $port = 23232;
+    $host = '127.0.0.1';
+    $configPath = null;
+
+    for ($i = 0; $i < \count($args); $i++) {
+        $arg = $args[$i];
+        $flagNames = ['--repo-root', '--http-port', '--http-host', '--config'];
+        $value = null;
+        if (\in_array($arg, $flagNames, true)) {
+            $value = $args[$i + 1] ?? null;
+            if ($value === null || \str_starts_with($value, '--')) {
+                \fwrite(\STDERR, "candy-git-server: {$arg} requires a value\n");
+                return 1;
+            }
+            $i++;
+        } else {
+            $eq = \strpos($arg, '=');
+            if ($eq === false || !\in_array(\substr($arg, 0, $eq), $flagNames, true)) {
+                continue; // unknown flags are ignored — the refusal path's honesty floor
+            }
+            $value = \substr($arg, $eq + 1);
+            $arg = \substr($arg, 0, $eq);
+        }
+        if ($arg === '--repo-root') {
+            $repoRoot = (string) $value;
+        } elseif ($arg === '--http-port') {
+            $port = (int) $value;
+        } elseif ($arg === '--http-host') {
+            $host = (string) $value;
+        } elseif ($arg === '--config') {
+            $configPath = (string) $value;
+        }
+    }
+
+    if ($repoRoot === null) {
+        \fwrite(\STDERR, "candy-git-server: serve --http requires --repo-root DIR (the directory whose subdirectories are served)\n");
+        return 1;
+    }
+    if (!\is_dir($repoRoot)) {
+        \fwrite(\STDERR, "candy-git-server: --repo-root is not a directory: {$repoRoot}\n");
+        return 1;
+    }
+    if ($port < 0 || $port > 65535) {
+        \fwrite(\STDERR, "candy-git-server: --http-port out of range: {$port}\n");
+        return 1;
+    }
+
+    $config = $configPath !== null
+        ? \SugarCraft\GitServer\Config::load($configPath)
+        : \SugarCraft\GitServer\Config::fromDefaults();
+
+    $server = new \SugarCraft\GitServer\HttpSmartProtocol\Server($config);
+    $served = 0;
+    foreach ((array) \scandir($repoRoot) as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+        $dir = $repoRoot . '/' . $entry;
+        if (!\is_dir($dir)) {
+            continue;
+        }
+        // Bare repo (HEAD + objects) directly, or a normal repo whose .git is bare.
+        if (\is_file($dir . '/HEAD') && \is_dir($dir . '/objects')) {
+            $server->registerRepo(\SugarCraft\GitServer\Repo::new($entry, $dir));
+            $served++;
+        } elseif (\is_file($dir . '/.git/HEAD') && \is_dir($dir . '/.git/objects')) {
+            $server->registerRepo(\SugarCraft\GitServer\Repo::new($entry, $dir . '/.git'));
+            $served++;
+        }
+    }
+
+    $listener = new \SugarCraft\GitServer\HttpSmartProtocol\HttpListener($server, $host, $port);
+    try {
+        $listener->start();
+    } catch (\RuntimeException $e) {
+        \fwrite(\STDERR, 'candy-git-server: ' . $e->getMessage() . "\n");
+        return 1;
+    }
+    \fwrite(\STDOUT, 'candy-git-server: smart-HTTP read listener on '
+        . (string) $listener->listenAddress() . " ({$served} repos; push and ssh/daemon transports are not implemented)\n");
+
+    // Graceful stop when signals are available; without pcntl the process
+    // dies on the terminal's SIGINT default, which is still truthful.
+    if (\function_exists('pcntl_signal')) {
+        $stop = static function () use ($listener): void {
+            $listener->stop();
+            \React\EventLoop\Loop::stop();
+        };
+        \pcntl_signal(2, $stop);
+        \pcntl_signal(15, $stop);
+        // react/event-loop invokes pending signal handlers between ticks when
+        // pcntl is loaded; SIGTERM defaults to 15, SIGINT to 2 — literals on
+        // purpose (no ext-pcntl constant assumptions in bin).
+    }
+
+    \React\EventLoop\Loop::get()->run();
+    $listener->stop();
+
+    return 0;
 }
 
 function cmdInit(array $args): int
