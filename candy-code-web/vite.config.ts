@@ -57,5 +57,7 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     include: ['src-web/**/*.spec.ts'],
+    // House law: serial vitest — file-parallel races (shared-fs probes, audioLaw-style); also serializes bare `vitest run`.
+    fileParallelism: false,
   },
 })
