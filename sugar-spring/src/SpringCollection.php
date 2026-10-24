@@ -217,8 +217,15 @@ final class SpringCollection
     /**
      * Get the target for a specific spring.
      */
-    public function getTarget(string $id): float
+    public function target(string $id): float
     {
         return $this->targets[$id];
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor convention; kept only as a BC forwarder. Use {@see self::target()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTarget(string $id): float { return $this->target($id); }
 }

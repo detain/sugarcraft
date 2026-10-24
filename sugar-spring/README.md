@@ -296,7 +296,7 @@ for ($frame = 0; $frame < 120; $frame++) {
 echo sprintf("menu=%.2f panel=%.2f\n", $group->get('menu'), $group->get('panel'));
 ```
 
-Read with `get($id)` / `all()` / `getTarget($id)` / `has($id)`. The
+Read with `get($id)` / `all()` / `target($id)` / `has($id)`. The
 earlier in-place `add()` / `remove()` / `setTarget()` mutators are
 **deprecated** shims that emit `E_USER_DEPRECATED` and will be dropped;
 migrate to the `with*()` forms above (the shims mutate the receiver and
@@ -400,7 +400,7 @@ using the Newton-Raphson algorithm from the W3C CSS Easing spec.
   `withSpring($id, Spring, $pos, $vel, $target)` / `without($id)` /
   `withTarget($id, $target)` / `tick(): self` (new collection; positions
   map via `all()`) / `get($id): float` / `has($id): bool` /
-  `all(): array<string,float>` / `getTarget($id): float`. The in-place
+  `all(): array<string,float>` / `target($id): float`. The in-place
   `add()` / `remove()` / `setTarget()` mutators are deprecated
   `E_USER_DEPRECATED` shims slated for removal — use the `with*()` forms.
 - **`SpringPreset`** — `Gentle` / `Wobbly` / `Stiff` / `Slow` / `Molasses`.
@@ -464,6 +464,16 @@ UPDATE_GOLDENS=1 vendor/bin/phpunit
 ### Particle field
 
 ![particle](.vhs/particle.gif)
+
+## Accessor deprecation (2026-10-24)
+
+Per the house bare-accessor convention (*"Bare accessors (no* `get`*")*, ruling 3b), `SpringCollection::getTarget()` was renamed to its bare twin `target($id)` — the slot was unclaimed and the getter now mirrors the collection's existing bare `get()` / `all()` / `has()` readers. The fluent `withTarget()` builder and the deprecated in-place `setTarget()` shim are untouched; a bare `target()` coexists with both cleanly. The legacy spelling stays a byte-identical one-line BC forwarder marked `@deprecated` with `REMOVED-IN: 2.0.0`; it will be removed in sugar-spring v2.0.0.
+
+| Namespace | Class | Deprecated | Use instead |
+|-----------|-------|------------|-------------|
+| `Spring` | `SpringCollection` | `getTarget()` | `target()` |
+
+`tests/AccessorDeprecationTest.php` pins BC identity on a live collection (seeded spring, after retarget, original untouched), the forwarder shape (single return line + markers), a discovery-first `src/` census with an inverse leg that reddens any unmarked public `get*()`, and the README table agreement. `tick()` reads `$this->targets` directly, so there were no internal call sites to switch; the existing `SpringCollectionTest` needles stay green through the forwarder.
 
 ## Credits & inspiration
 
