@@ -298,7 +298,7 @@ final class DashboardModel implements Model
 
         // Ctrl-T → toggle between dark and light themes
         if ($msg->ctrl && $msg->type === KeyType::Char && $msg->rune === 't') {
-            $this->theme = $this->theme->getName() === 'dark'
+            $this->theme = $this->theme->name() === 'dark'
                 ? Theme::light()
                 : Theme::dark();
             return true;
@@ -319,7 +319,7 @@ final class DashboardModel implements Model
         // Arrow keys — cycle through panels (Up/Down both cycle; Left/Right both cycle)
         // This gives users multiple ways to navigate.
         if (in_array($msg->type, [KeyType::Up, KeyType::Down, KeyType::Left, KeyType::Right], true)) {
-            $focused = $this->focus->getFocusedId();
+            $focused = $this->focus->focusedId();
             if ($focused === null) {
                 $this->focus = $this->focus->focusNext();
             } else {

@@ -21,15 +21,33 @@ final class Cell
         return new self(value: $value, format: $format);
     }
 
-    public function getValue(): mixed
+    public function value(): mixed
     {
         return $this->value;
     }
 
-    public function getFormat(): ?string
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::value()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getValue(): mixed { return $this->value(); }
+
+    public function format(): ?string
     {
         return $this->format;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::format()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getFormat(): ?string { return $this->format(); }
 
     public function toString(): string
     {

@@ -125,20 +125,47 @@ final class Node implements Item
         return $this->address !== '';
     }
 
-    public function getAddress(): string
+    public function address(): string
     {
         return $this->address;
     }
 
-    public function getWidth(): int
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::address()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getAddress(): string { return $this->address(); }
+
+    public function width(): int
     {
         return $this->width;
     }
 
-    public function getHeight(): int
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::width()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getWidth(): int { return $this->width(); }
+
+    public function height(): int
     {
         return $this->height;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::height()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getHeight(): int { return $this->height(); }
 
     public function isVerticalStacked(): bool
     {

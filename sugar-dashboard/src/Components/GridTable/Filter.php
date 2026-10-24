@@ -31,15 +31,33 @@ final class Filter
     /**
      * @return array<string, string>
      */
-    public function getFilters(): array
+    public function filters(): array
     {
         return $this->filters;
     }
 
-    public function getFilter(string $column): ?string
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::filters()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getFilters(): array { return $this->filters(); }
+
+    public function filter(string $column): ?string
     {
         return $this->filters[$column] ?? null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::filter()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getFilter(string $column): ?string { return $this->filter($column); }
 
     public function hasFilter(string $column): bool
     {

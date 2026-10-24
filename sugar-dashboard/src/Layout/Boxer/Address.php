@@ -33,7 +33,7 @@ final class Address
         return $this->value;
     }
 
-    public function getParent(): ?self
+    public function parent(): ?self
     {
         $parts = explode('.', $this->value);
         if (count($parts) <= 1) {
@@ -42,6 +42,15 @@ final class Address
         array_pop($parts);
         return new self(implode('.', $parts));
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::parent()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getParent(): ?self { return $this->parent(); }
 
     public function getChild(int $index): self
     {

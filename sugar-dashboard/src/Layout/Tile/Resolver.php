@@ -295,7 +295,7 @@ final class Resolver
         int $totalFixedWidth = 0,
         int $totalFixedHeight = 0,
     ): array {
-        $size = $tile->getSize();
+        $size = $tile->size();
 
         if ($direction === Direction::Horizontal) {
             $tileWidth = self::decideWidth($size, $availableWidth, $totalFixedWidth);

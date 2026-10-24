@@ -78,7 +78,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array<int, array{label: string, icon?: string, shortcut?: string, action?: string}>
      */
-    public function getFilteredCommands(): array
+    public function filteredCommands(): array
     {
         if ($this->query === '') {
             return $this->commands;
@@ -98,11 +98,20 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::filteredCommands()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getFilteredCommands(): array { return $this->filteredCommands(); }
+
+    /**
      * Render the command palette component.
      */
     public function render(): string
     {
-        $filtered = $this->getFilteredCommands();
+        $filtered = $this->filteredCommands();
 
         if (empty($filtered)) {
             return $this->renderEmpty();
@@ -268,7 +277,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function getInnerSize(): array
     {
-        $filtered = $this->getFilteredCommands();
+        $filtered = $this->filteredCommands();
 
         // Calculate max width needed
         $maxWidth = 15; // Minimum width
@@ -319,7 +328,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withSelectedIndex(int $index): self
     {
-        $filtered = $this->getFilteredCommands();
+        $filtered = $this->filteredCommands();
         $maxIndex = max(0, count($filtered) - 1);
 
         return new self(

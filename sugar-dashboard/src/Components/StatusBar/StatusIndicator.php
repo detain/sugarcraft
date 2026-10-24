@@ -120,7 +120,7 @@ final class StatusIndicator implements \SugarCraft\Dashboard\Foundation\SizedIte
      */
     public function render(): string
     {
-        $symbol = $this->getSymbol();
+        $symbol = $this->symbol();
         $color = $this->color;
 
         if ($color === null) {
@@ -149,7 +149,7 @@ final class StatusIndicator implements \SugarCraft\Dashboard\Foundation\SizedIte
     /**
      * Get the symbol character for the indicator.
      */
-    public function getSymbol(): string
+    public function symbol(): string
     {
         $symbols = [
             self::Online => '●',
@@ -169,12 +169,30 @@ final class StatusIndicator implements \SugarCraft\Dashboard\Foundation\SizedIte
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::symbol()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSymbol(): string { return $this->symbol(); }
+
+    /**
      * Get the current status type.
      */
-    public function getStatus(): string
+    public function status(): string
     {
         return $this->status;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::status()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getStatus(): string { return $this->status(); }
 
     /**
      * Calculate the natural dimensions of this indicator.

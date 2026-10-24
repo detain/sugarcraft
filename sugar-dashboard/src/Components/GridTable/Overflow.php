@@ -33,13 +33,31 @@ final class Overflow
         return new self(horizontal: OverflowMode::Ellipsis, vertical: OverflowMode::Ellipsis);
     }
 
-    public function getHorizontal(): OverflowMode
+    public function horizontal(): OverflowMode
     {
         return $this->horizontal;
     }
 
-    public function getVertical(): OverflowMode
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::horizontal()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getHorizontal(): OverflowMode { return $this->horizontal(); }
+
+    public function vertical(): OverflowMode
     {
         return $this->vertical;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::vertical()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getVertical(): OverflowMode { return $this->vertical(); }
 }

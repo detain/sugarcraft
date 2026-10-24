@@ -68,10 +68,19 @@ abstract class BaseModule implements Module
      *
      * @return array<string, mixed>
      */
-    public function getState(): array
+    public function state(): array
     {
         return $this->state;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::state()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getState(): array { return $this->state(); }
 
     /**
      * Create a clone of this module with the given state merged in.

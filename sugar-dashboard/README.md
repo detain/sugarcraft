@@ -50,7 +50,7 @@ composer require sugarcraft/sugar-dashboard
 | Type | Description | Key Methods |
 |------|-------------|-------------|
 | `Cell` | Single terminal cell (rune + Style) — sugar-dashboard SSOT, distinct from `\SugarCraft\Vterm\Cell\Cell` | |
-| `Buffer` | Cell grid buffer for drawing — sugar-dashboard SSOT, distinct from `\SugarCraft\Vterm\Buffer\Buffer` | `getCell(x,y)`, `setCell(x,y,Cell)`, `fill(rect,Cell)` |
+| `Buffer` | Cell grid buffer for drawing — sugar-dashboard SSOT, distinct from `\SugarCraft\Vterm\Buffer\Buffer` | `cell(x,y)`, `setCell(x,y,Cell)`, `fill(rect,Cell)` |
 | `Rect` | Rectangle geometry (rectmath bounds model: minX/minY/maxX/maxY) — distinct from `\SugarCraft\Core\Rect` (offset+size model) | `contains()`, `intersect()`, `dx()`, `dy()` |
 | `Style` | Terminal styling (inline foreground/background Color slots) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Style` (padding/margin/borders) | `fg()`, `bg()`, `bold()`, etc. |
 | `StyleParser` | Parses `[text](fg:red,bg:blue)` into Dash Cell arrays — sugar-dashboard SSOT, NOT drop-in compatible with `\SugarCraft\Style\StyleParser` | |
@@ -792,6 +792,98 @@ The `examples/` directory contains standalone demo files that showcase individua
 | `dashboard-devtools.php` | Devtools components demo |
 | `dashboard-layout.php` | Layout containers demo |
 | `dual-sample-graph.php` | btop-style `DualSampleGraph` in all three families (braille / block / tty), inverted + underlay graphs, and position-coloured `Meter` bars |
+
+## Accessor deprecation (2026-10-24)
+
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, 81 `get*()` accessors across 38 classes were renamed to their bare twins. The legacy names remain as byte-identical BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock — they will be removed in sugar-dashboard v2.0.0.
+
+Out of scope (protocol members and non-violations, unchanged): `SizedItem::getInnerSize()` (188 implementations), `Drawable::getRect()` and its implementations, the `TreeProvider` protocol (`getRoots/getChildren/getNode/getDepth/getTotalValue`), and `Address::getChild()` (the bare name `child()` is already taken by the static factory `Address::child()`). Boolean `is*()`/`has*()` predicates are convention-compliant and stay as-is.
+
+Internal call sites in `src/` and `examples/` were switched to the bare forms in the same commit.
+
+| Namespace | Class | Deprecated | Use instead |
+|-----------|-------|------------|-------------|
+| `Components\Calendar` | `HeatmapCalendar` | `getAverageValue()` | `averageValue()` |
+| `Components\Calendar` | `HeatmapCalendar` | `getDataDimensions()` | `dataDimensions()` |
+| `Components\Card` | `Diff` | `getStats()` | `stats()` |
+| `Components\Feedback` | `LoadingText` | `getCurrentFrame()` | `currentFrame()` |
+| `Components\Feedback` | `LoadingText` | `getFrameAt()` | `frameAt()` |
+| `Components\Feedback` | `LoadingText` | `getInterval()` | `interval()` |
+| `Components\Feedback` | `LoadingText` | `getStyle()` | `style()` |
+| `Components\Feedback` | `Spinner` | `getCurrentFrame()` | `currentFrame()` |
+| `Components\Feedback` | `Spinner` | `getFrameAt()` | `frameAt()` |
+| `Components\Feedback` | `Spinner` | `getFrameCount()` | `frameCount()` |
+| `Components\Form` | `CommandPalette` | `getFilteredCommands()` | `filteredCommands()` |
+| `Components\Form` | `Cursor` | `getCursorChar()` | `cursorChar()` |
+| `Components\Form` | `Editor` | `getContent()` | `content()` |
+| `Components\Form` | `Editor` | `getCursorPosition()` | `cursorPosition()` |
+| `Components\Form` | `Editor` | `getLine()` | `line()` |
+| `Components\Form` | `Editor` | `getLineCount()` | `lineCount()` |
+| `Components\GridTable` | `Cell` | `getFormat()` | `format()` |
+| `Components\GridTable` | `Cell` | `getValue()` | `value()` |
+| `Components\GridTable` | `Filter` | `getFilter()` | `filter()` |
+| `Components\GridTable` | `Filter` | `getFilters()` | `filters()` |
+| `Components\GridTable` | `Footer` | `getSummaryColumns()` | `summaryColumns()` |
+| `Components\GridTable` | `GridTable` | `getFilterText()` | `filterText()` |
+| `Components\GridTable` | `GridTable` | `getFrozenColumns()` | `frozenColumns()` |
+| `Components\GridTable` | `GridTable` | `getHeight()` | `height()` |
+| `Components\GridTable` | `GridTable` | `getPagination()` | `pagination()` |
+| `Components\GridTable` | `GridTable` | `getSortState()` | `sortState()` |
+| `Components\GridTable` | `GridTable` | `getWidth()` | `width()` |
+| `Components\GridTable` | `Header` | `getColumns()` | `columns()` |
+| `Components\GridTable` | `Header` | `getSortedColumn()` | `sortedColumn()` |
+| `Components\GridTable` | `Overflow` | `getHorizontal()` | `horizontal()` |
+| `Components\GridTable` | `Overflow` | `getVertical()` | `vertical()` |
+| `Components\GridTable` | `Scrolling` | `getRowHeight()` | `rowHeight()` |
+| `Components\GridTable` | `Scrolling` | `getTotalHeight()` | `totalHeight()` |
+| `Components\GridTable` | `Scrolling` | `getVisibleRows()` | `visibleRows()` |
+| `Components\GridTable` | `Sort` | `getColumn()` | `column()` |
+| `Components\GridTable` | `Sort` | `getDirection()` | `direction()` |
+| `Components\Media` | `Video` | `getProgressWidth()` | `progressWidth()` |
+| `Components\StatusBar` | `StatusIndicator` | `getStatus()` | `status()` |
+| `Components\StatusBar` | `StatusIndicator` | `getSymbol()` | `symbol()` |
+| `Components\System` | `LogViewer` | `getEntryCount()` | `entryCount()` |
+| `Components\System` | `Stopwatch` | `getElapsedMilliseconds()` | `elapsedMilliseconds()` |
+| `Components\System` | `Stopwatch` | `getElapsedSeconds()` | `elapsedSeconds()` |
+| `Components\System` | `Terminal` | `getHistory()` | `history()` |
+| `Components\System` | `Terminal` | `getInput()` | `input()` |
+| `Components\System` | `Terminal` | `getOutput()` | `output()` |
+| `Components\System` | `Terminal` | `getPrompt()` | `prompt()` |
+| `Components\System` | `Timer` | `getRemainingSeconds()` | `remainingSeconds()` |
+| `Components\Tree` | `BranchStyle` | `getConnectorChar()` | `connectorChar()` |
+| `Components\Tree` | `BranchStyle` | `getEndConnectorChar()` | `endConnectorChar()` |
+| `Components\Tree` | `BranchStyle` | `getLineChar()` | `lineChar()` |
+| `Components\Tree` | `DrilldownTree` | `getBreadcrumbItems()` | `breadcrumbItems()` |
+| `Components\Tree` | `DrilldownTree` | `getNavigationStack()` | `navigationStack()` |
+| `Components\Tree` | `UMLClass` | `getAttributes()` | `attributes()` |
+| `Components\Tree` | `UMLClass` | `getMethods()` | `methods()` |
+| `Components\Tree` | `UMLClass` | `getTemplateParams()` | `templateParams()` |
+| `Foundation` | `Buffer` | `getCell()` | `cell()` |
+| `Foundation` | `Theme` | `getName()` | `name()` |
+| `Keys` | `KeyMap` | `getRegisteredKeys()` | `registeredKeys()` |
+| `Layout` | `FocusManager` | `getFocusedId()` | `focusedId()` |
+| `Layout\Boxer` | `Address` | `getParent()` | `parent()` |
+| `Layout\Boxer` | `Boxer` | `getHeight()` | `height()` |
+| `Layout\Boxer` | `Boxer` | `getItem()` | `item()` |
+| `Layout\Boxer` | `Boxer` | `getModelMap()` | `modelMap()` |
+| `Layout\Boxer` | `Boxer` | `getRoot()` | `root()` |
+| `Layout\Boxer` | `Boxer` | `getWidth()` | `width()` |
+| `Layout\Boxer` | `Node` | `getAddress()` | `address()` |
+| `Layout\Boxer` | `Node` | `getHeight()` | `height()` |
+| `Layout\Boxer` | `Node` | `getWidth()` | `width()` |
+| `Layout\Tile` | `BaseTile` | `getName()` | `name()` |
+| `Layout\Tile` | `BaseTile` | `getSize()` | `size()` |
+| `Layout\Tile` | `Tile` | `getContent()` | `content()` |
+| `Layout\Tile` | `Tile` | `getParent()` | `parent()` |
+| `Module` | `BaseModule` | `getState()` | `state()` |
+| `Plot\Braille` | `BrailleCanvas` | `getCell()` | `cell()` |
+| `Plot\Braille` | `BrailleCanvas` | `getPixelSize()` | `pixelSize()` |
+| `Plot\Canvas` | `Canvas` | `getPixel()` | `pixel()` |
+| `Plot\Chart` | `Heatmap` | `getDataDimensions()` | `dataDimensions()` |
+| `Plot\Chart` | `Heatmap` | `getMaxValue()` | `maxValue()` |
+| `Plot\Chart` | `Heatmap` | `getMinValue()` | `minValue()` |
+| `Plot\Chart` | `OHLCPoint` | `getBodySize()` | `bodySize()` |
+| `Plot\Chart` | `OHLCPoint` | `getRange()` | `range()` |
 
 ## License
 

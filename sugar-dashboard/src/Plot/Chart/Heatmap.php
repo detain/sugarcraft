@@ -212,7 +212,7 @@ final class Heatmap implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [rows, cols]
      */
-    public function getDataDimensions(): array
+    public function dataDimensions(): array
     {
         if (empty($this->data)) {
             return [0, 0];
@@ -221,9 +221,18 @@ final class Heatmap implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::dataDimensions()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getDataDimensions(): array { return $this->dataDimensions(); }
+
+    /**
      * Get the minimum value in the data.
      */
-    public function getMinValue(): float
+    public function minValue(): float
     {
         $min = PHP_FLOAT_MAX;
         foreach ($this->data as $row) {
@@ -235,9 +244,18 @@ final class Heatmap implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::minValue()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getMinValue(): float { return $this->minValue(); }
+
+    /**
      * Get the maximum value in the data.
      */
-    public function getMaxValue(): float
+    public function maxValue(): float
     {
         $max = PHP_FLOAT_MIN;
         foreach ($this->data as $row) {
@@ -247,6 +265,15 @@ final class Heatmap implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
         return $max === PHP_FLOAT_MIN ? 0.0 : $max;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::maxValue()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getMaxValue(): float { return $this->maxValue(); }
 
     // ─── Withers ──────────────────────────────────────────────────
 

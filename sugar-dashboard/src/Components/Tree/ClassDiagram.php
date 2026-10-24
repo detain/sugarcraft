@@ -290,8 +290,8 @@ final class ClassDiagram implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         // Template parameters
-        if (!empty($class->getTemplateParams())) {
-            $nameLine .= '⟨' . implode(', ', $class->getTemplateParams()) . '⟩ ';
+        if (!empty($class->templateParams())) {
+            $nameLine .= '⟨' . implode(', ', $class->templateParams()) . '⟩ ';
         }
 
         $nameLine .= $class->name;
@@ -315,10 +315,10 @@ final class ClassDiagram implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result .= '├' . str_repeat('─', $innerWidth) . '┤' . "\n";
 
         // Attributes section
-        if (empty($class->getAttributes())) {
+        if (empty($class->attributes())) {
             $result .= '│' . str_pad('(+ no attributes)', $innerWidth) . '│' . "\n";
         } else {
-            foreach ($class->getAttributes() as $attr) {
+            foreach ($class->attributes() as $attr) {
                 $attrStr = $this->showVisibility ? $attr->render() : $attr->name;
                 $result .= '│' . str_pad(mb_substr($attrStr, 0, $innerWidth), $innerWidth) . '│' . "\n";
             }
@@ -328,10 +328,10 @@ final class ClassDiagram implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result .= '├' . str_repeat('─', $innerWidth) . '┤' . "\n";
 
         // Methods section
-        if (empty($class->getMethods())) {
+        if (empty($class->methods())) {
             $result .= '│' . str_pad('(+ no methods)', $innerWidth) . '│' . "\n";
         } else {
-            foreach ($class->getMethods() as $method) {
+            foreach ($class->methods() as $method) {
                 $methodStr = ($this->showVisibility ? $method->visibility->value : '') . $method->name . '()';
                 if ($this->showTypes && $method->type !== '') {
                     $methodStr .= ': ' . $method->type;

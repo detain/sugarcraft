@@ -239,7 +239,7 @@ final class Diff implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{added: int, removed: int, unchanged: int}
      */
-    public function getStats(): array
+    public function stats(): array
     {
         $diff = $this->computeDiff();
         $stats = ['added' => 0, 'removed' => 0, 'unchanged' => 0];
@@ -256,6 +256,15 @@ final class Diff implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         return $stats;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::stats()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getStats(): array { return $this->stats(); }
 
     // ─── Withers ──────────────────────────────────────────────────
 

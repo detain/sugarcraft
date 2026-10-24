@@ -21,15 +21,33 @@ class BaseTile implements Item, SizedItem
         protected readonly Size $size = new Size(),
     ) {}
 
-    public function getName(): string
+    public function name(): string
     {
         return $this->name;
     }
 
-    public function getSize(): Size
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::name()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getName(): string { return $this->name(); }
+
+    public function size(): Size
     {
         return $this->size;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::size()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSize(): Size { return $this->size(); }
 
     public function setSize(int $width, int $height): Sizer
     {

@@ -25,20 +25,38 @@ final class Header
     /**
      * @return array<Column>
      */
-    public function getColumns(): array
+    public function columns(): array
     {
         return $this->columns;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::columns()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getColumns(): array { return $this->columns(); }
 
     public function hasSortIndicators(): bool
     {
         return $this->showSortIndicators;
     }
 
-    public function getSortedColumn(): ?string
+    public function sortedColumn(): ?string
     {
         return $this->sortedColumn;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::sortedColumn()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSortedColumn(): ?string { return $this->sortedColumn(); }
 
     public function render(): string
     {

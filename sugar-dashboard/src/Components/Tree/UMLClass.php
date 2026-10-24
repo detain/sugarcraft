@@ -64,28 +64,55 @@ final class UMLClass
      *
      * @return list<ClassMember>
      */
-    public function getAttributes(): array
+    public function attributes(): array
     {
         return $this->attributes;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::attributes()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getAttributes(): array { return $this->attributes(); }
 
     /**
      * Get all methods.
      *
      * @return list<ClassMember>
      */
-    public function getMethods(): array
+    public function methods(): array
     {
         return $this->methods;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::methods()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getMethods(): array { return $this->methods(); }
 
     /**
      * Get all template parameters.
      *
      * @return list<string>
      */
-    public function getTemplateParams(): array
+    public function templateParams(): array
     {
         return $this->templateParams;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::templateParams()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTemplateParams(): array { return $this->templateParams(); }
 }

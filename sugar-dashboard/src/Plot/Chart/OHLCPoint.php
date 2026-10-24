@@ -32,13 +32,31 @@ final readonly class OHLCPoint
         return $this->close >= $this->open;
     }
 
-    public function getRange(): float
+    public function range(): float
     {
         return $this->high - $this->low;
     }
 
-    public function getBodySize(): float
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::range()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getRange(): float { return $this->range(); }
+
+    public function bodySize(): float
     {
         return abs($this->close - $this->open);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::bodySize()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getBodySize(): float { return $this->bodySize(); }
 }

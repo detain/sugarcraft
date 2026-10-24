@@ -152,7 +152,7 @@ final class Boxer implements Item, Sizer
             $node = $this->findNode($this->root, $addrStr);
             $newModelMap[$addrStr] = $item;
             if ($item instanceof Sizer && $node !== null) {
-                $newModelMap[$addrStr] = $item->setSize($node->getWidth(), $node->getHeight());
+                $newModelMap[$addrStr] = $item->setSize($node->width(), $node->height());
             }
         }
 
@@ -164,7 +164,7 @@ final class Boxer implements Item, Sizer
      */
     private function findNode(Node $root, string $address): ?Node
     {
-        if ($root->getAddress() === $address) {
+        if ($root->address() === $address) {
             return $root;
         }
 
@@ -204,36 +204,81 @@ final class Boxer implements Item, Sizer
 
     // ─── Accessors ─────────────────────────────────────────────────
 
-    public function getRoot(): Node
+    public function root(): Node
     {
         return $this->root;
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::root()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getRoot(): Node { return $this->root(); }
+
+    /**
      * @return array<string, Item>
      */
-    public function getModelMap(): array
+    public function modelMap(): array
     {
         return $this->modelMap;
     }
 
-    public function getWidth(): int
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::modelMap()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getModelMap(): array { return $this->modelMap(); }
+
+    public function width(): int
     {
         return $this->width;
     }
 
-    public function getHeight(): int
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::width()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getWidth(): int { return $this->width(); }
+
+    public function height(): int
     {
         return $this->height;
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::height()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getHeight(): int { return $this->height(); }
+
+    /**
      * Get the item at a given address.
      */
-    public function getItem(string $address): ?Item
+    public function item(string $address): ?Item
     {
         return $this->modelMap[$address] ?? null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::item()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getItem(string $address): ?Item { return $this->item($address); }
 
     /**
      * Get the node at a given address.

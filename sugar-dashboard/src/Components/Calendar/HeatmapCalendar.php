@@ -304,13 +304,22 @@ final class HeatmapCalendar implements \SugarCraft\Dashboard\Foundation\SizedIte
      *
      * @return array{0:int,1:int} [weeks, daysPerWeek]
      */
-    public function getDataDimensions(): array
+    public function dataDimensions(): array
     {
         if (empty($this->data)) {
             return [0, 0];
         }
         return [count($this->data), count($this->data[0] ?? [])];
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::dataDimensions()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getDataDimensions(): array { return $this->dataDimensions(); }
 
     /**
      * Get the total value across all cells.
@@ -329,7 +338,7 @@ final class HeatmapCalendar implements \SugarCraft\Dashboard\Foundation\SizedIte
     /**
      * Get the average value across all cells.
      */
-    public function getAverageValue(): float
+    public function averageValue(): float
     {
         $count = 0;
         $total = 0.0;
@@ -341,6 +350,15 @@ final class HeatmapCalendar implements \SugarCraft\Dashboard\Foundation\SizedIte
         }
         return $count > 0 ? $total / $count : 0.0;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::averageValue()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getAverageValue(): float { return $this->averageValue(); }
 
     // ─── Withers ──────────────────────────────────────────────────
 

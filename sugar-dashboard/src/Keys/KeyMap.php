@@ -171,10 +171,19 @@ final class KeyMap implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return list<string>
      */
-    public function getRegisteredKeys(): array
+    public function registeredKeys(): array
     {
         return array_keys(array_filter($this->actions));
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::registeredKeys()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getRegisteredKeys(): array { return $this->registeredKeys(); }
 
     /**
      * Check if any global actions are registered.

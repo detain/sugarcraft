@@ -219,13 +219,22 @@ final class BrailleCanvas implements SizedItem
     /**
      * Get accumulated bits for a cell.
      */
-    public function getCell(int $cellX, int $cellY): int
+    public function cell(int $cellX, int $cellY): int
     {
         if ($cellX < 0 || $cellY < 0 || $cellX >= $this->cellWidth || $cellY >= $this->cellHeight) {
             return 0;
         }
         return $this->cells[$cellY][$cellX];
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::cell()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getCell(int $cellX, int $cellY): int { return $this->cell($cellX, $cellY); }
 
     /**
      * Iterate over all cells that have dots set.
@@ -325,8 +334,17 @@ final class BrailleCanvas implements SizedItem
         return [$this->cellWidth, $this->cellHeight];
     }
 
-    public function getPixelSize(): array
+    public function pixelSize(): array
     {
         return [$this->pixelWidth, $this->pixelHeight];
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::pixelSize()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getPixelSize(): array { return $this->pixelSize(); }
 }

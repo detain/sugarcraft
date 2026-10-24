@@ -253,10 +253,19 @@ final class LogViewer implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the number of entries.
      */
-    public function getEntryCount(): int
+    public function entryCount(): int
     {
         return count($this->entries);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::entryCount()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getEntryCount(): int { return $this->entryCount(); }
 
     // ─── Withers ──────────────────────────────────────────────────
 

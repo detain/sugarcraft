@@ -22,10 +22,19 @@ final class Tile extends BaseTile
         parent::__construct($name, $size);
     }
 
-    public function getParent(): ?TileLayout
+    public function parent(): ?TileLayout
     {
         return $this->parent;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::parent()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getParent(): ?TileLayout { return $this->parent(); }
 
     public function setParent(?TileLayout $parent): void
     {
@@ -42,10 +51,19 @@ final class Tile extends BaseTile
         return $this->size->minSizeFit;
     }
 
-    public function getContent(): ?Item
+    public function content(): ?Item
     {
         return $this->content;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::content()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getContent(): ?Item { return $this->content(); }
 
     public function render(): string
     {

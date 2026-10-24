@@ -88,7 +88,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the prompt string.
      */
-    public function getPrompt(): string
+    public function prompt(): string
     {
         if ($this->customPrompt !== null) {
             return $this->customPrompt;
@@ -97,32 +97,68 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::prompt()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getPrompt(): string { return $this->prompt(); }
+
+    /**
      * Get the current input.
      */
-    public function getInput(): string
+    public function input(): string
     {
         return $this->currentInput;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::input()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getInput(): string { return $this->input(); }
 
     /**
      * Get the command history.
      *
      * @return list<string>
      */
-    public function getHistory(): array
+    public function history(): array
     {
         return $this->history;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::history()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getHistory(): array { return $this->history(); }
 
     /**
      * Get the output lines.
      *
      * @return list<string>
      */
-    public function getOutput(): array
+    public function output(): array
     {
         return $this->output;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::output()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getOutput(): array { return $this->output(); }
 
     /**
      * Type a command into the terminal.
@@ -153,7 +189,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Add to output with prompt
         if ($clone->showPrompt) {
-            $clone->output[] = $clone->getPrompt() . $clone->currentInput;
+            $clone->output[] = $clone->prompt() . $clone->currentInput;
         } else {
             $clone->output[] = $clone->currentInput;
         }
@@ -325,7 +361,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
             $result .= $v;
 
-            $prompt = $this->getPrompt();
+            $prompt = $this->prompt();
             $promptWidth = $this->calculateDisplayWidth($prompt);
 
             // Prompt

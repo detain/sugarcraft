@@ -78,10 +78,19 @@ final class FocusManager
         return $this->focusedId === (string) $id && ($this->focusMap[(string) $id] ?? false);
     }
 
-    public function getFocusedId(): ?string
+    public function focusedId(): ?string
     {
         return $this->focusedId;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::focusedId()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getFocusedId(): ?string { return $this->focusedId(); }
 
     public function focusNext(): self
     {

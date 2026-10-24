@@ -55,7 +55,7 @@ final class Buffer implements Drawable, SizedItem
      * @return Cell The cell at the coordinates
      * @throws \OutOfBoundsException If coordinates are out of bounds
      */
-    public function getCell(int $x, int $y): Cell
+    public function cell(int $x, int $y): Cell
     {
         if ($x < 0 || $y < 0 || $x >= $this->width || $y >= $this->height) {
             throw new \OutOfBoundsException("Coordinates ($x, $y) are out of bounds");
@@ -63,6 +63,15 @@ final class Buffer implements Drawable, SizedItem
 
         return $this->grid[$y][$x] ?? new Cell(' ', new Style());
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::cell()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getCell(int $x, int $y): Cell { return $this->cell($x, $y); }
 
     /**
      * Set a cell at the given coordinates (wither).

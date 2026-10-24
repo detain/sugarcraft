@@ -67,8 +67,8 @@ final class TileLayout implements Item, SizedItem
         $hinters = [];
 
         foreach ($this->tiles as $tile) {
-            $size = $tile->getSize();
-            $content = $tile->getContent();
+            $size = $tile->size();
+            $content = $tile->content();
             $hinters[] = $content instanceof SizeHinter ? $content : null;
 
             if ($this->direction === Direction::Horizontal) {
@@ -161,9 +161,9 @@ final class TileLayout implements Item, SizedItem
         foreach ($this->tiles as $index => $tile) {
             if ($horizontal) {
                 $tileW = $sizes[$index] ?? 0;
-                $tileH = $tile->getSize()->fixedHeight ?? $h;
+                $tileH = $tile->size()->fixedHeight ?? $h;
             } else {
-                $tileW = $tile->getSize()->fixedWidth ?? $w;
+                $tileW = $tile->size()->fixedWidth ?? $w;
                 $tileH = $sizes[$index] ?? 0;
             }
 
@@ -236,13 +236,13 @@ final class TileLayout implements Item, SizedItem
     {
         $themedTiles = [];
         foreach ($this->tiles as $tile) {
-            $content = $tile->getContent();
+            $content = $tile->content();
             if ($content instanceof Drawable) {
                 $themedContent = $content->withTheme($theme);
                 // Reconstruct tile with themed content - need to build new Tile
                 $themedTile = new Tile(
-                    name: $tile instanceof \SugarCraft\Dashboard\Layout\Tile\BaseTile ? $tile->getName() : '',
-                    size: $tile instanceof \SugarCraft\Dashboard\Layout\Tile\BaseTile ? $tile->getSize() : new Size(),
+                    name: $tile instanceof \SugarCraft\Dashboard\Layout\Tile\BaseTile ? $tile->name() : '',
+                    size: $tile instanceof \SugarCraft\Dashboard\Layout\Tile\BaseTile ? $tile->size() : new Size(),
                     content: $themedContent,
                 );
                 $themedTiles[] = $themedTile;

@@ -125,7 +125,7 @@ final class BranchStyle
     /**
      * Get the line character(s) for this branch style.
      */
-    public function getLineChar(): string
+    public function lineChar(): string
     {
         return match ($this->pattern) {
             BranchPattern::Solid => '─',
@@ -136,9 +136,18 @@ final class BranchStyle
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::lineChar()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getLineChar(): string { return $this->lineChar(); }
+
+    /**
      * Get the connector character for this branch style.
      */
-    public function getConnectorChar(): string
+    public function connectorChar(): string
     {
         return match ($this->pattern) {
             BranchPattern::Solid => '├',
@@ -149,9 +158,18 @@ final class BranchStyle
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::connectorChar()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getConnectorChar(): string { return $this->connectorChar(); }
+
+    /**
      * Get the end connector character for this branch style.
      */
-    public function getEndConnectorChar(): string
+    public function endConnectorChar(): string
     {
         return match ($this->pattern) {
             BranchPattern::Solid => '└',
@@ -160,4 +178,13 @@ final class BranchStyle
             BranchPattern::Double => '╚',
         };
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::endConnectorChar()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getEndConnectorChar(): string { return $this->endConnectorChar(); }
 }

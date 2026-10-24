@@ -64,7 +64,7 @@ final class Spinner implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function render(): string
     {
-        $frame = $this->getCurrentFrame();
+        $frame = $this->currentFrame();
         $output = $frame;
 
         if ($this->message !== '') {
@@ -81,7 +81,7 @@ final class Spinner implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the current frame character.
      */
-    public function getCurrentFrame(): string
+    public function currentFrame(): string
     {
         if ($this->frames === []) {
             return '';
@@ -98,9 +98,18 @@ final class Spinner implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::currentFrame()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getCurrentFrame(): string { return $this->currentFrame(); }
+
+    /**
      * Get the frame at a specific index (for testing/ deterministic output).
      */
-    public function getFrameAt(int $index): string
+    public function frameAt(int $index): string
     {
         if ($this->frames === []) {
             return '';
@@ -113,6 +122,15 @@ final class Spinner implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         return $this->frames[$index];
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::frameAt()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getFrameAt(int $index): string { return $this->frameAt($index); }
 
     /**
      * Calculate the natural dimensions of this spinner.
@@ -131,10 +149,19 @@ final class Spinner implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the number of frames in the spinner.
      */
-    public function getFrameCount(): int
+    public function frameCount(): int
     {
         return count($this->frames);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::frameCount()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getFrameCount(): int { return $this->frameCount(); }
 
     // ─── Withers ──────────────────────────────────────────────────
 

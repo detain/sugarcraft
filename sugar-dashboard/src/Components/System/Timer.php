@@ -113,10 +113,19 @@ final class Timer implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the remaining seconds.
      */
-    public function getRemainingSeconds(): int
+    public function remainingSeconds(): int
     {
         return max(0, $this->totalSeconds - $this->elapsedSeconds);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::remainingSeconds()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getRemainingSeconds(): int { return $this->remainingSeconds(); }
 
     /**
      * Check if timer has expired.

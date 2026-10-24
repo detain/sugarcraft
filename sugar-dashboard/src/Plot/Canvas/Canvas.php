@@ -130,13 +130,22 @@ final class Canvas implements SizedItem
     /**
      * Get a pixel character at the given coordinates.
      */
-    public function getPixel(int $x, int $y): ?string
+    public function pixel(int $x, int $y): ?string
     {
         if ($x < 0 || $y < 0 || $x >= $this->widthConstraint || $y >= $this->heightConstraint) {
             return null;
         }
         return $this->pixels[$y][$x];
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::pixel()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getPixel(int $x, int $y): ?string { return $this->pixel($x, $y); }
 
     /**
      * Draw a horizontal line.

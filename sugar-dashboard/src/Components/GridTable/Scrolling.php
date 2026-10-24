@@ -32,20 +32,47 @@ final class Scrolling
         return $this->enabled;
     }
 
-    public function getVisibleRows(): int
+    public function visibleRows(): int
     {
         return $this->visibleRows;
     }
 
-    public function getRowHeight(): int
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::visibleRows()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getVisibleRows(): int { return $this->visibleRows(); }
+
+    public function rowHeight(): int
     {
         return $this->rowHeight;
     }
 
-    public function getTotalHeight(): int
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::rowHeight()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getRowHeight(): int { return $this->rowHeight(); }
+
+    public function totalHeight(): int
     {
         return $this->visibleRows * $this->rowHeight;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::totalHeight()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTotalHeight(): int { return $this->totalHeight(); }
 
     public function withEnabled(bool $enabled): self
     {

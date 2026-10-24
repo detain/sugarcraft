@@ -109,15 +109,24 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the content as a string.
      */
-    public function getContent(): string
+    public function content(): string
     {
         return implode("\n", $this->lines);
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::content()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getContent(): string { return $this->content(); }
+
+    /**
      * Get a specific line.
      */
-    public function getLine(int $index): string
+    public function line(int $index): string
     {
         if ($index < 0 || $index >= count($this->lines)) {
             return '';
@@ -126,22 +135,49 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::line()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getLine(int $index): string { return $this->line($index); }
+
+    /**
      * Get the number of lines.
      */
-    public function getLineCount(): int
+    public function lineCount(): int
     {
         return count($this->lines);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::lineCount()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getLineCount(): int { return $this->lineCount(); }
 
     /**
      * Get the cursor position.
      *
      * @return array{0:int,1:int} [x, y]
      */
-    public function getCursorPosition(): array
+    public function cursorPosition(): array
     {
         return [$this->cursorX, $this->cursorY];
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::cursorPosition()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getCursorPosition(): array { return $this->cursorPosition(); }
 
     /**
      * Set the allocated dimensions for this editor.
@@ -458,7 +494,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function withLineNumbers(bool $show): self
     {
         return new self(
-            content: $this->getContent(),
+            content: $this->content(),
             showLineNumbers: $show,
             wordWrap: $this->wordWrap,
             readOnly: $this->readOnly,
@@ -480,7 +516,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function withWordWrap(bool $wrap): self
     {
         return new self(
-            content: $this->getContent(),
+            content: $this->content(),
             showLineNumbers: $this->showLineNumbers,
             wordWrap: $wrap,
             readOnly: $this->readOnly,
@@ -502,7 +538,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function withReadOnly(bool $readOnly): self
     {
         return new self(
-            content: $this->getContent(),
+            content: $this->content(),
             showLineNumbers: $this->showLineNumbers,
             wordWrap: $this->wordWrap,
             readOnly: $readOnly,
@@ -524,7 +560,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function withShowCursor(bool $show): self
     {
         return new self(
-            content: $this->getContent(),
+            content: $this->content(),
             showLineNumbers: $this->showLineNumbers,
             wordWrap: $this->wordWrap,
             readOnly: $this->readOnly,
@@ -546,7 +582,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function withTextColor(?Color $color): self
     {
         return new self(
-            content: $this->getContent(),
+            content: $this->content(),
             showLineNumbers: $this->showLineNumbers,
             wordWrap: $this->wordWrap,
             readOnly: $this->readOnly,
@@ -568,7 +604,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function withStyle(string $style): self
     {
         return new self(
-            content: $this->getContent(),
+            content: $this->content(),
             showLineNumbers: $this->showLineNumbers,
             wordWrap: $this->wordWrap,
             readOnly: $this->readOnly,

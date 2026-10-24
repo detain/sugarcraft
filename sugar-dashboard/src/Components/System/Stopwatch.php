@@ -118,18 +118,36 @@ final class Stopwatch implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the elapsed time in seconds.
      */
-    public function getElapsedSeconds(): int
+    public function elapsedSeconds(): int
     {
         return (int) floor($this->elapsedMilliseconds / 1000);
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::elapsedSeconds()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getElapsedSeconds(): int { return $this->elapsedSeconds(); }
+
+    /**
      * Get the elapsed milliseconds.
      */
-    public function getElapsedMilliseconds(): int
+    public function elapsedMilliseconds(): int
     {
         return $this->elapsedMilliseconds;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::elapsedMilliseconds()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getElapsedMilliseconds(): int { return $this->elapsedMilliseconds(); }
 
     // ─── Withers ──────────────────────────────────────────────────
 

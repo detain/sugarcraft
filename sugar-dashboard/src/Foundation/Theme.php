@@ -146,10 +146,19 @@ final class Theme
     /**
      * Get the theme name.
      */
-    public function getName(): string
+    public function name(): string
     {
         return $this->name;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::name()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getName(): string { return $this->name(); }
 
     /**
      * Get the foreground color.

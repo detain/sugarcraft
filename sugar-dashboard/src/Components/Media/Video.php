@@ -73,11 +73,20 @@ final class Video implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the progress bar width.
      */
-    public function getProgressWidth(): int
+    public function progressWidth(): int
     {
         $useWidth = $this->width ?? 60;
         return $useWidth - 4; // Account for borders
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::progressWidth()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getProgressWidth(): int { return $this->progressWidth(); }
 
     /**
      * Render the video player as a string.

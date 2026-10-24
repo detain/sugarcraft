@@ -183,17 +183,26 @@ final class DrilldownTree implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return list<string>
      */
-    public function getNavigationStack(): array
+    public function navigationStack(): array
     {
         return $this->navigationStack;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::navigationStack()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getNavigationStack(): array { return $this->navigationStack(); }
 
     /**
      * Get breadcrumb items from the navigation stack.
      *
      * @return list<string>
      */
-    public function getBreadcrumbItems(): array
+    public function breadcrumbItems(): array
     {
         if (empty($this->navigationStack)) {
             return [$this->root->label];
@@ -208,6 +217,15 @@ final class DrilldownTree implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
         return $items;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::breadcrumbItems()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getBreadcrumbItems(): array { return $this->breadcrumbItems(); }
 
     /**
      * Find a node by its ID in the tree.
@@ -249,7 +267,7 @@ final class DrilldownTree implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Render breadcrumb if navigation stack is not empty
         if (!empty($this->navigationStack)) {
-            $breadcrumbItems = $this->getBreadcrumbItems();
+            $breadcrumbItems = $this->breadcrumbItems();
             $breadcrumb = Breadcrumb::new($breadcrumbItems);
             $breadcrumb = $breadcrumb->withSeparator('›');
             $breadcrumbStr = $breadcrumb->setSize($useWidth - 2, 1)->render();

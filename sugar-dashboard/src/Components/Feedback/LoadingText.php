@@ -66,7 +66,7 @@ final class LoadingText implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function render(): string
     {
-        $frame = $this->getCurrentFrame();
+        $frame = $this->currentFrame();
         $output = $this->text . $frame;
 
         if ($this->color !== null) {
@@ -79,7 +79,7 @@ final class LoadingText implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the current animation frame based on time.
      */
-    public function getCurrentFrame(): string
+    public function currentFrame(): string
     {
         $tick = (int) (microtime(true) * 1000 / $this->interval);
 
@@ -91,6 +91,15 @@ final class LoadingText implements \SugarCraft\Dashboard\Foundation\SizedItem
             default => $this->getDotsFrame($tick),
         };
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::currentFrame()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getCurrentFrame(): string { return $this->currentFrame(); }
 
     /**
      * Get dots animation frame.
@@ -132,7 +141,7 @@ final class LoadingText implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the frame at a specific index (for deterministic testing).
      */
-    public function getFrameAt(int $index): string
+    public function frameAt(int $index): string
     {
         $tick = $index;
 
@@ -144,6 +153,15 @@ final class LoadingText implements \SugarCraft\Dashboard\Foundation\SizedItem
             default => $this->getDotsFrame($tick),
         };
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::frameAt()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getFrameAt(int $index): string { return $this->frameAt($index); }
 
     /**
      * Calculate the natural dimensions of this loading text.
@@ -176,18 +194,36 @@ final class LoadingText implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the animation style.
      */
-    public function getStyle(): string
+    public function style(): string
     {
         return $this->style;
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::style()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getStyle(): string { return $this->style(); }
+
+    /**
      * Get the animation interval in milliseconds.
      */
-    public function getInterval(): int
+    public function interval(): int
     {
         return $this->interval;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::interval()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getInterval(): int { return $this->interval(); }
 
     // ─── Withers ──────────────────────────────────────────────────
 

@@ -29,10 +29,19 @@ final class Footer
     /**
      * @return array<string, string>|null
      */
-    public function getSummaryColumns(): ?array
+    public function summaryColumns(): ?array
     {
         return $this->summaryColumns;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::summaryColumns()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSummaryColumns(): ?array { return $this->summaryColumns(); }
 
     public function shouldShowRowCount(): bool
     {

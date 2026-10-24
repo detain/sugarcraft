@@ -78,18 +78,36 @@ final class GridTable implements Item, Sizer
     /**
      * Get current width.
      */
-    public function getWidth(): ?int
+    public function width(): ?int
     {
         return $this->width;
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::width()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getWidth(): ?int { return $this->width(); }
+
+    /**
      * Get current height.
      */
-    public function getHeight(): ?int
+    public function height(): ?int
     {
         return $this->height;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::height()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getHeight(): ?int { return $this->height(); }
 
     // ═══════════════════════════════════════════════════════════════
     // Fluent withers
@@ -653,23 +671,59 @@ final class GridTable implements Item, Sizer
     // State accessors
     // ═══════════════════════════════════════════════════════════════
 
-    public function getSortState(): SortState
+    public function sortState(): SortState
     {
         return $this->sortState;
     }
 
-    public function getFilterText(): string
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::sortState()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getSortState(): SortState { return $this->sortState(); }
+
+    public function filterText(): string
     {
         return $this->filterText;
     }
 
-    public function getPagination(): Pagination
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::filterText()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getFilterText(): string { return $this->filterText(); }
+
+    public function pagination(): Pagination
     {
         return $this->pagination;
     }
 
-    public function getFrozenColumns(): int
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::pagination()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getPagination(): Pagination { return $this->pagination(); }
+
+    public function frozenColumns(): int
     {
         return $this->frozenColumns;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::frozenColumns()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getFrozenColumns(): int { return $this->frozenColumns(); }
 }

@@ -73,7 +73,7 @@ final class Cursor implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the cursor character based on the current style.
      */
-    public function getCursorChar(): string
+    public function cursorChar(): string
     {
         return match ($this->style) {
             self::Block => '█',
@@ -84,6 +84,15 @@ final class Cursor implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::cursorChar()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getCursorChar(): string { return $this->cursorChar(); }
+
+    /**
      * Render the cursor character.
      */
     public function render(): string
@@ -92,7 +101,7 @@ final class Cursor implements \SugarCraft\Dashboard\Foundation\SizedItem
             return '';
         }
 
-        $cursor = $this->getCursorChar();
+        $cursor = $this->cursorChar();
 
         if ($this->color !== null) {
             return $this->color->toFg(ColorProfile::TrueColor) . $cursor . Ansi::reset();
