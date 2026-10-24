@@ -289,6 +289,14 @@ final class BackgroundEvents
             'completedAt' => $session->completedAt?->format(\DATE_ATOM),
             'tokensUsed' => $session->tokensUsed,
             'costUsd' => $session->costUsd,
+            // S1 (docs-fix-1023): the spend figure's companion bit, on the
+            // SAME present-only-when-true law {@see SessionSnapshot::shape()}
+            // states for the transcript snapshot — a priced row serialises
+            // byte-for-byte as before, and a client reads
+            // `row['spendUnpriced'] ?? false` tolerantly. Without it the
+            // web's background panel could never mark a bg cost as the
+            // lower bound it is.
+            ...($session->spendUnpriced ? ['spendUnpriced' => true] : []),
             'error' => $session->error,
             'outputBytes' => \strlen($session->output),
             'forkedSessionId' => $session->forkedSessionId(),

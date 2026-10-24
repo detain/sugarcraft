@@ -1401,7 +1401,7 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
         // cost, because nothing ever set them.
         $usage = self::lastUsage($buffer);
         if ($usage !== null) {
-            $session = $session->withUsage($usage['tokens'], $usage['cost']);
+            $session = $session->withUsage($usage['tokens'], $usage['cost'], $usage['unpriced']);
         }
 
         // A `stopped` outcome is its own terminal state (audit BG-1): the user
@@ -1526,9 +1526,11 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
     /**
      * The figures in the last `[session:usage]` record
      * ({@see BackgroundSessionRunner::USAGE_RECORD}), or null when the daemon
-     * wrote none — a failed turn, or a backend that reports no usage.
+     * wrote none — a failed turn, or a backend that reports no usage. The
+     * `unpriced` leg is false for a record that never carried the flag, so a
+     * pre-S1 daemon's buffer keeps settling exactly as it did.
      *
-     * @return array{tokens: int, cost: float}|null
+     * @return array{tokens: int, cost: float, unpriced: bool}|null
      */
     private static function lastUsage(string $buffer): ?array
     {
@@ -1538,7 +1540,7 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
                 continue;
             }
             if (preg_match('/\btokens=(\d+)\b.*\bcost=(\d+(?:\.\d+)?)\b/', $line, $m) === 1) {
-                $usage = ['tokens' => (int) $m[1], 'cost' => (float) $m[2]];
+                $usage = ['tokens' => (int) $m[1], 'cost' => (float) $m[2], 'unpriced' => \str_contains($line, ' unpriced=1')];
             }
         }
 

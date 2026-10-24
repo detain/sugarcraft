@@ -110,9 +110,47 @@ final class BgReconnectAtBootTest extends TestCase
         self::assertSame(['completed'], \array_column($listed['items'], 'status'), 'a settled session is still listed');
     }
 
-    public function testBootHappensOnceAndOnlyForThisRoot(): void
+    /**
+     * S1 (docs-fix-1023): the ≥ law crosses the daemon handoff. A planted
+     * buffer whose usage record carries `unpriced=1` settles into rows whose
+     * `spendUnpriced` is true; a record without the flag serialises exactly
+     * as it always did — no key, present-only-when-true, the very law
+     * {@see SessionSnapshot::shape()} states for the transcript snapshot.
+     */
+    public function testTheSpendTruthOfAReapedDaemonRidesEverySummaryOfIt(): void
     {
         $supervisor = new BackgroundSupervisor(tempRoot: $this->tempRoot);
+        $fixture = $this->fixture($supervisor);
+        $priced = 'sess_20261004120001_0000ee01';
+        $bound = 'sess_20261004120001_0000ee02';
+        $this->plantRecord($priced, $fixture->root, "priced answer\n[session:usage] tokens=1000 cost=0.050000\n[session:task:complete]\n");
+        $this->plantRecord($bound, $fixture->root, "bound answer\n[session:usage] tokens=800 cost=0.000000 unpriced=1\n[session:task:complete]\n");
+        $fixture->dispatcher->start();
+        $client = $fixture->client();
+
+        self::assertSame(4, $fixture->context->background()->poll(), 'two settled daemons, started and completed each');
+        foreach ($client->events() as $event) {
+            $this->assertEventFits($event);
+        }
+
+        $completed = [];
+        foreach ($client->events('bg.completed') as $event) {
+            $completed[$event['data']['bgId']] = $event['data'];
+        }
+        self::assertArrayNotHasKey('spendUnpriced', $completed[$priced], 'a priced completion serialises byte-for-byte as before');
+        self::assertTrue($completed[$bound]['spendUnpriced'], 'the bound bit rides the event the panel reads');
+
+        $rows = [];
+        foreach ($this->checked($client, 'bg.list')['items'] as $row) {
+            $rows[$row['bgId']] = $row;
+        }
+        self::assertArrayNotHasKey('spendUnpriced', $rows[$priced]);
+        self::assertTrue($rows[$bound]['spendUnpriced'], 'and it rides the list row as the same truth');
+        self::assertSame(0.0, $rows[$bound]['costUsd'], 'the figure stays the honest lower bound it always was');
+    }
+
+    public function testBootHappensOnceAndOnlyForThisRoot(): void
+    {        $supervisor = new BackgroundSupervisor(tempRoot: $this->tempRoot);
         $fixture = $this->fixture($supervisor);
         $this->plantRecord('sess_20261004120000_0000aaaa', $fixture->root . '/elsewhere', "x\n[session:task:completed]\n");
 

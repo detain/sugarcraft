@@ -67,6 +67,15 @@ final class BackgroundSession
     /** @var float Estimated cost in USD */
     public float $costUsd = 0.0;
 
+    /**
+     * True when at least one billed call of the turn arrived from a model
+     * with no rate on file, so {@see $costUsd} is a LOWER BOUND, not a bill
+     * (the SES-1 ≥ law, {@see \SugarCraft\Code\Host\SessionSnapshot::$spendUnpriced}
+     * — the same companion bit, so a priced and an unpriced run can never
+     * present the same figure with the same meaning).
+     */
+    public bool $spendUnpriced = false;
+
     /** @var \DateTimeImmutable|null When the session finished */
     public ?\DateTimeImmutable $completedAt = null;
 
@@ -99,15 +108,19 @@ final class BackgroundSession
     }
 
     /**
-     * The same session with what its turn cost: $tokens consumed and $costUsd
-     * spent, as the daemon reported them ({@see BackgroundSessionRunner::USAGE_RECORD}).
-     * Negative figures are clamped to zero.
+     * The same session with what its turn cost: $tokens consumed, $costUsd
+     * spent, and — when the daemon's record said so — whether that figure is
+     * a lower bound ($spendUnpriced), all as reported by
+     * {@see BackgroundSessionRunner::USAGE_RECORD}. Negative figures are
+     * clamped to zero; the bound bit is taken as delivered, there being no
+     * magnitude to clamp it against.
      */
-    public function withUsage(int $tokens, float $costUsd): self
+    public function withUsage(int $tokens, float $costUsd, bool $spendUnpriced = false): self
     {
         $next = $this->mutate($this->status, $this->output);
         $next->tokensUsed = max(0, $tokens);
         $next->costUsd = max(0.0, $costUsd);
+        $next->spendUnpriced = $spendUnpriced;
 
         return $next;
     }
@@ -155,6 +168,7 @@ final class BackgroundSession
         // for no time and failed for no reason.
         $clone->tokensUsed = $this->tokensUsed;
         $clone->costUsd = $this->costUsd;
+        $clone->spendUnpriced = $this->spendUnpriced;
         $clone->completedAt = $this->completedAt;
         $clone->error = $this->error;
 

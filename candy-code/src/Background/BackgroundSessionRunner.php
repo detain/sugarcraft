@@ -129,8 +129,11 @@ final class BackgroundSessionRunner
 
     /**
      * Record prefix for what a completed turn cost:
-     * `[session:usage] tokens=<int> cost=<usd>`, written once, just before
-     * the completion record.
+     * `[session:usage] tokens=<int> cost=<usd>[ unpriced=1]`, written once,
+     * just before the completion record. The trailing flag rides the SES-1
+     * ≥ law across the handoff — present only when the turn's {@see Usage}
+     * named a model with no price on file, so a priced run's line stays
+     * byte-for-byte what it was and readers predate the flag.
      *
      * {@see BackgroundSupervisor} reads the last one when it reaps the
      * session, which is what puts tokens and cost on the `/bg` result's stats
@@ -620,7 +623,7 @@ final class BackgroundSessionRunner
         $this->saveFork($fork, [$user, $message]);
         $usage = $steps ?? $message->usage;
         if ($usage !== null) {
-            $this->log(sprintf('%s tokens=%d cost=%.6F', self::USAGE_RECORD, $usage->totalTokens, $usage->costUsd));
+            $this->log(sprintf('%s tokens=%d cost=%.6F%s', self::USAGE_RECORD, $usage->totalTokens, $usage->costUsd, $usage->unpricedModel !== null ? ' unpriced=1' : ''));
         }
         $this->log('[session:task:complete]');
 
@@ -776,7 +779,7 @@ final class BackgroundSessionRunner
         }
         $usage = $result->usage();
         if ($usage !== null) {
-            $this->log(sprintf('%s tokens=%d cost=%.6F', self::USAGE_RECORD, $usage->totalTokens, $usage->costUsd));
+            $this->log(sprintf('%s tokens=%d cost=%.6F%s', self::USAGE_RECORD, $usage->totalTokens, $usage->costUsd, $usage->unpricedModel !== null ? ' unpriced=1' : ''));
         }
         if ($result->isError()) {
             $reason = \preg_replace('/^Error: Task refused — /u', '', \strtok($content, "\n") ?: $content);

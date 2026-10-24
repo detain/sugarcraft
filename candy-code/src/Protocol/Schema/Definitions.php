@@ -98,6 +98,11 @@ final class Definitions
                 'hasMoreOlder' => Schema::boolean()->describe('Paged snapshots: older rows exist; ask session.get with beforeIndex = oldestIndex.'),
                 'queued' => Schema::arrayOf(Schema::string()),
                 'spentUsd' => Schema::number(0),
+                // The snapshot side of the same SES-1 ≥ law (docs-fix-1023
+                // S2): SessionSnapshot has emitted this key since the SES-1
+                // weld while the schema never named it — a typed client could
+                // not see the bit. Present only when true.
+                'spendUnpriced' => Schema::boolean()->describe('True only when the session billed a model with no price on file; spentUsd is then a lower bound. Absent means priced.'),
                 'lastSeq' => Schema::integer(0),
                 'permissionMode' => Schema::ref(self::PERMISSION_MODE)->nullable(),
                 'pendingAsks' => Schema::arrayOf(Schema::ref(self::PENDING_ASK)),
@@ -167,6 +172,11 @@ final class Definitions
                 'completedAt' => Schema::string()->nullable(),
                 'tokensUsed' => Schema::integer(0),
                 'costUsd' => Schema::number(0),
+                // SES-1 ≥ law on the bg row: present ONLY when the daemon
+                // billed an unpriced model, so costUsd is a lower bound
+                // ({@see SessionSnapshot::shape()} carries the same bit on
+                // the snapshot); absent means priced.
+                'spendUnpriced' => Schema::boolean()->describe('True only when the session\'s model had no price on file; absent means the cost is an exact bill.'),
                 'error' => Schema::string()->nullable(),
                 'outputBytes' => Schema::integer(0)->describe('bg.output reads the output itself, from an offset.'),
                 'forkedSessionId' => Schema::string()->nullable()->describe('The stored session a /fork session continues; null for /bg.'),

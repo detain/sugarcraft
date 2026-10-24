@@ -342,4 +342,37 @@ final class BackgroundSessionTest extends TestCase
         $this->assertSame('S1', $arr['name']);
         $this->assertSame('pending', $arr['status']);
     }
+
+    public function testTheSpendTruthOfTheTurnRidesEveryMoveOfTheSession(): void
+    {
+        $agent = new Agent(
+            name: 'test-agent',
+            description: 'Test agent',
+            prompt: '',
+            model: 'test-model',
+            provider: 'test',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+        $session = new BackgroundSession(
+            id: 's1',
+            name: 'S1',
+            agent: $agent,
+            task: 't',
+            workingDirectory: '/tmp',
+        );
+
+        $this->assertFalse($session->spendUnpriced, 'a fresh session has billed nothing at all');
+
+        $priced = $session->withUsage(1200, 0.25);
+        $this->assertFalse($priced->spendUnpriced, 'the two-argument move is the priced world: the figure is a bill');
+
+        $bound = $session->withUsage(800, 0.0, true);
+        $this->assertTrue($bound->spendUnpriced, 'the daemon said the model had no price on file');
+        $this->assertTrue($bound->withStatus(BackgroundSessionStatus::Completed)->spendUnpriced, 'the bound bit survives the settle move, exactly like the figures do');
+        $this->assertTrue($bound->withOutput('x')->spendUnpriced, 'and the output move');
+        $this->assertTrue($bound->withError('later')->spendUnpriced, 'and the error move');
+    }
 }

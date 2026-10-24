@@ -95,6 +95,10 @@
                     "type": "number",
                     "minimum": 0
                 },
+                "spendUnpriced": {
+                    "type": "boolean",
+                    "description": "True only when the session's model had no price on file; absent means the cost is an exact bill."
+                },
                 "error": {
                     "type": [
                         "string",
@@ -912,6 +916,10 @@
                 "spentUsd": {
                     "type": "number",
                     "minimum": 0
+                },
+                "spendUnpriced": {
+                    "type": "boolean",
+                    "description": "True only when the session billed a model with no price on file; spentUsd is then a lower bound. Absent means priced."
                 },
                 "lastSeq": {
                     "type": "integer",
