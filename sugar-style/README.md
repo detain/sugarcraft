@@ -713,20 +713,73 @@ The fleet-wide bare-accessor sweep landed two renames in sugar-style —
 reads whose bare names were free, each keeping a one-line deprecated
 forwarder marked `REMOVED-IN: 2.0.0`:
 
-- the static ambient read `getDefaultProfile()` → `defaultProfile()`
-  (the `setDefaultProfile()` write keeps its name; no bare slot collided)
-- `Style::borderSides()` joins the bare family; `getBorderSides()` is its
-  deprecated alias.
+| legacy read (kept as deprecated forwarder) | canonical bare read |
+| --- | --- |
+| `getDefaultProfile()` (static ambient read) | `defaultProfile()` — the `setDefaultProfile()` write keeps its name; no bare slot collided |
+| `getBorderSides()` | `Style::borderSides()` |
 
 `Border::getTitles()` already delegated to the bare `titles()` accessor
-before this era and stays as found. The remaining **31 accessors are
-owner-pending**: for each one the bare twin (think `foreground()`,
-`width()`, `caps()`) is a live fluent setter, and PHP admits one method
-per name — renaming either side is a vocabulary ruling, not a mechanical
-sweep. The blocked Bar getters carry an in-source NOTE, `Style.php`
-frames the family in its NAMING EXCEPTION paragraph, and the full roster
-with per-method evidence lives in `tests/BareAccessorEraTest.php`.
-Existing callers keep compiling through the deprecated aliases.
+before this era and stays as found. Existing callers keep compiling
+through the deprecated aliases.
+
+### Exceptions — the 31 setter-blocked reads
+
+The remaining **31 accessors are permanent legal exceptions** (owner
+ruling 2026-10-24): for each one the bare twin is a live fluent setter,
+and PHP admits one method per name — so the `get*` spelling is the
+canonical permanent name of the read, neither renamed nor deprecated.
+Every exception carries a one-sentence docblock naming its colliding
+setter, and `tests/BareAccessorEraTest.php` rosters all 31 with
+per-method setter evidence (the discovery walk, sentinel fixture,
+staleness arms, BC identity, and this section's tally are pinned by it).
+`Style.php` additionally frames the family in its class-level NAMING
+EXCEPTION paragraph.
+
+`Style.php` (21) — each read is blocked by its same-named fluent setter:
+
+| read | colliding setter |
+| --- | --- |
+| `getUnderlineColor()` | `underlineColor(?Color $c): self` |
+| `getUnderlineStyle()` | `underlineStyle(UnderlineStyle $style): self` |
+| `getPaddingChar()` | `paddingChar(string $char): self` |
+| `getMarginChar()` | `marginChar(string $char): self` |
+| `getHyperlink()` | `hyperlink(string $url, string $id = ''): self` |
+| `getForeground()` | `foreground(?Color $c): self` |
+| `getBackground()` | `background(?Color $c): self` |
+| `getWidth()` | `width(?int $w): self` |
+| `getHeight()` | `height(?int $h): self` |
+| `getMaxWidth()` | `maxWidth(?int $w): self` |
+| `getMaxHeight()` | `maxHeight(?int $h): self` |
+| `getAlign()` | `align(Align $h): self` |
+| `getVerticalAlign()` | `verticalAlign(VAlign $v): self` |
+| `getBorder()` | `border(?Border $b, bool ...$sides): self` |
+| `getBorderForeground()` | `borderForeground(?Color $c): self` |
+| `getBorderBackground()` | `borderBackground(?Color $c): self` |
+| `getColorProfile()` | `colorProfile(ColorProfile $p): self` |
+| `getTabWidth()` | `tabWidth(int $w): self` |
+| `getMarginBackground()` | `marginBackground(?Color $c): self` |
+| `getPadding()` | `padding(int ...$sides): self` |
+| `getMargin()` | `margin(int ...$sides): self` |
+
+`HelpBar` (5):
+
+| read | colliding setter |
+| --- | --- |
+| `getKeySeparator()` | `keySeparator(string $separator): self` |
+| `getSeparator()` | `separator(string $separator): self` |
+| `getKeyStyle()` | `keyStyle(?Style $style): self` |
+| `getLabelStyle()` | `labelStyle(?Style $style): self` |
+| `getWidth()` | `width(?int $width): self` |
+
+`StatusBar` (5):
+
+| read | colliding setter |
+| --- | --- |
+| `getSeparator()` | `separator(string $separator): self` |
+| `getWidth()` | `width(?int $width): self` |
+| `getStyle()` | `style(?Style $style): self` |
+| `getCaps()` | `caps(string $left, string $right): self` |
+| `getFillChar()` | `fillChar(string $char): self` |
 
 ## Test
 
@@ -734,9 +787,9 @@ Existing callers keep compiling through the deprecated aliases.
 cd sugar-style && composer install && vendor/bin/phpunit
 ```
 
-Suite at the 2026-10-24 accessor-era close: 966 tests, 3,275 assertions, 0
-failures (cited figure is a point-in-time measurement, not a live-pinned
-number).
+Suite at the 2026-10-24 accessor-era and setter-collider-exceptions close:
+966 tests, 3,358 assertions, 0 failures (cited figure is a point-in-time
+measurement, not a live-pinned number).
 
 ## Demos
 

@@ -153,11 +153,9 @@ final class HelpBar
     }
 
     /**
-     * NOTE (accessor era, 2026-10-24): this getKeySeparator() read cannot lose its
-     * get* prefix — the bare keySeparator() slot is the fluent setter defined
-     * above, and PHP admits one method per name. Dropping either side needs
-     * a vocabulary ruling; treated as owner-pending and rostered in
-     * tests/BareAccessorEraTest.php until one lands.
+     * Legal exception (owner ruling 2026-10-24): the bare name keySeparator() is the
+     * fluent setter keySeparator(string $separator): self, so this getKeySeparator()
+     * read keeps its get* prefix permanently.
      */
     public function getKeySeparator(): string
     {
@@ -165,11 +163,9 @@ final class HelpBar
     }
 
     /**
-     * NOTE (accessor era, 2026-10-24): this getSeparator() read cannot lose its
-     * get* prefix — the bare separator() slot is the fluent setter defined
-     * above, and PHP admits one method per name. Dropping either side needs
-     * a vocabulary ruling; treated as owner-pending and rostered in
-     * tests/BareAccessorEraTest.php until one lands.
+     * Legal exception (owner ruling 2026-10-24): the bare name separator() is the fluent
+     * setter separator(string $separator): self, so this getSeparator() read keeps its
+     * get* prefix permanently.
      */
     public function getSeparator(): string
     {
@@ -177,11 +173,9 @@ final class HelpBar
     }
 
     /**
-     * NOTE (accessor era, 2026-10-24): this getKeyStyle() read cannot lose its
-     * get* prefix — the bare keyStyle() slot is the fluent setter defined
-     * above, and PHP admits one method per name. Dropping either side needs
-     * a vocabulary ruling; treated as owner-pending and rostered in
-     * tests/BareAccessorEraTest.php until one lands.
+     * Legal exception (owner ruling 2026-10-24): the bare name keyStyle() is the fluent
+     * setter keyStyle(?Style $style): self, so this getKeyStyle() read keeps its get*
+     * prefix permanently.
      */
     public function getKeyStyle(): ?Style
     {
@@ -189,11 +183,9 @@ final class HelpBar
     }
 
     /**
-     * NOTE (accessor era, 2026-10-24): this getLabelStyle() read cannot lose its
-     * get* prefix — the bare labelStyle() slot is the fluent setter defined
-     * above, and PHP admits one method per name. Dropping either side needs
-     * a vocabulary ruling; treated as owner-pending and rostered in
-     * tests/BareAccessorEraTest.php until one lands.
+     * Legal exception (owner ruling 2026-10-24): the bare name labelStyle() is the
+     * fluent setter labelStyle(?Style $style): self, so this getLabelStyle() read keeps
+     * its get* prefix permanently.
      */
     public function getLabelStyle(): ?Style
     {
@@ -201,11 +193,9 @@ final class HelpBar
     }
 
     /**
-     * NOTE (accessor era, 2026-10-24): this getWidth() read cannot lose its
-     * get* prefix — the bare width() slot is the fluent setter defined
-     * above, and PHP admits one method per name. Dropping either side needs
-     * a vocabulary ruling; treated as owner-pending and rostered in
-     * tests/BareAccessorEraTest.php until one lands.
+     * Legal exception (owner ruling 2026-10-24): the bare name width() is the fluent
+     * setter width(?int $width): self, so this getWidth() read keeps its get* prefix
+     * permanently.
      */
     public function getWidth(): ?int
     {

@@ -21,13 +21,14 @@ use SugarCraft\Style\Style;
  *    REMOVED-IN: 2.0.0;
  *  - 1 predates the era (LEGACY_ALIASES): Border::getTitles already
  *    delegates to titles() and is @deprecated without a REMOVED-IN marker;
- *  - 31 are NAME-BLOCKED (OWNER_PENDING_COLLIDERS): the bare twin is a live
- *    fluent setter — PHP admits one method per name, so renaming either
- *    side is a vocabulary decision, not a mechanical sweep. Each row is
- *    owner-pending; the HelpBar/StatusBar ten additionally carry an
- *    in-source NOTE docblock, and Style.php is deliberately untouched
- *    beyond its class-level paragraph (its colliders must stay NOTE-free —
- *    a planted note means the roster below is stale).
+ *  - 31 are documented LEGAL EXCEPTIONS (COLLIDER_EXCEPTIONS): the bare
+ *    twin is a live fluent setter — PHP admits one method per name — and
+ *    under the owner ruling of 2026-10-24 the get* spelling is their
+ *    PERMANENT accessor name, not a deprecation candidate. Each collider
+ *    carries the canonical exception sentence in its own docblock plus a
+ *    roster row below; Style.php's class-level paragraph frames the same
+ *    family, and its colliders are walked per-method exactly like the
+ *    Bar ones (an absent or reworded sentence reddens the guard).
  *
  * The discovery leg walks src/ and fails closed on any get* without a
  * disposition (new accessor) or any roster row no longer on disk (stale).
@@ -49,46 +50,46 @@ final class BareAccessorEraTest extends TestCase
     ];
 
     /**
-     * Accessors whose bare twin is a live fluent setter. Value rows:
-     * [bare, expectation, evidence] — expectation is 'note' for the Bar
-     * files (in-source owner-pending NOTE planted) and 'silent' for
-     * Style.php (colliding getters must stay untouched).
-     *
-     * owner-pending: awaiting the owner vocabulary ruling on get-prefix
-     * families name-blocked by bare fluent setters (the W-G3 exception).
+     * Accessors whose bare twin is a live fluent setter — settled by the
+     * owner ruling of 2026-10-24 as permanent legal exceptions: the get*
+     * spelling is their canonical name, so they are neither renamed nor
+     * deprecated. Value rows: [bare, disposition, evidence] — disposition
+     * is 'exception' for every collider (each carries the canonical
+     * exception sentence in its own docblock) and evidence is the
+     * accessor's declaration line in the current source.
      */
-    private const OWNER_PENDING_COLLIDERS = [
-        'Style::getUnderlineColor'    => ['underlineColor', 'silent', 'Style.php:179'],
-        'Style::getUnderlineStyle'    => ['underlineStyle', 'silent', 'Style.php:194'],
-        'Style::getPaddingChar'       => ['paddingChar', 'silent', 'Style.php:207'],
-        'Style::getMarginChar'        => ['marginChar', 'silent', 'Style.php:219'],
-        'Style::getHyperlink'         => ['hyperlink', 'silent', 'Style.php:504'],
-        'Style::getForeground'        => ['foreground', 'silent', 'Style.php:228'],
-        'Style::getBackground'        => ['background', 'silent', 'Style.php:230'],
-        'Style::getWidth'             => ['width', 'silent', 'Style.php:419'],
-        'Style::getHeight'            => ['height', 'silent', 'Style.php:427'],
-        'Style::getMaxWidth'          => ['maxWidth', 'silent', 'Style.php:440'],
-        'Style::getMaxHeight'         => ['maxHeight', 'silent', 'Style.php:452'],
-        'Style::getAlign'             => ['align', 'silent', 'Style.php:557'],
-        'Style::getVerticalAlign'     => ['verticalAlign', 'silent', 'Style.php:558'],
-        'Style::getBorder'            => ['border', 'silent', 'Style.php:568'],
-        'Style::getBorderForeground'  => ['borderForeground', 'silent', 'Style.php:589'],
-        'Style::getBorderBackground'  => ['borderBackground', 'silent', 'Style.php:590'],
-        'Style::getColorProfile'      => ['colorProfile', 'silent', 'Style.php:677'],
-        'Style::getTabWidth'          => ['tabWidth', 'silent', 'Style.php:535'],
-        'Style::getMarginBackground'  => ['marginBackground', 'silent', 'Style.php:475'],
-        'Style::getPadding'           => ['padding', 'silent', 'Style.php:394'],
-        'Style::getMargin'            => ['margin', 'silent', 'Style.php:404'],
-        'HelpBar::getKeySeparator'    => ['keySeparator', 'note', 'HelpBar.php:103'],
-        'HelpBar::getSeparator'       => ['separator', 'note', 'HelpBar.php:109'],
-        'HelpBar::getKeyStyle'        => ['keyStyle', 'note', 'HelpBar.php:115'],
-        'HelpBar::getLabelStyle'      => ['labelStyle', 'note', 'HelpBar.php:121'],
-        'HelpBar::getWidth'           => ['width', 'note', 'HelpBar.php:127'],
-        'StatusBar::getSeparator'     => ['separator', 'note', 'StatusBar.php:111'],
-        'StatusBar::getWidth'         => ['width', 'note', 'StatusBar.php:120'],
-        'StatusBar::getStyle'         => ['style', 'note', 'StatusBar.php:129'],
-        'StatusBar::getCaps'          => ['caps', 'note', 'StatusBar.php:135'],
-        'StatusBar::getFillChar'      => ['fillChar', 'note', 'StatusBar.php:141'],
+    private const COLLIDER_EXCEPTIONS = [
+        'Style::getUnderlineColor'=> ['underlineColor', 'exception', 'Style.php:208'],
+        'Style::getUnderlineStyle'=> ['underlineStyle', 'exception', 'Style.php:229'],
+        'Style::getPaddingChar'   => ['paddingChar', 'exception', 'Style.php:248'],
+        'Style::getMarginChar'    => ['marginChar', 'exception', 'Style.php:266'],
+        'Style::getHyperlink'     => ['hyperlink', 'exception', 'Style.php:565'],
+        'Style::getForeground'    => ['foreground', 'exception', 'Style.php:740'],
+        'Style::getBackground'    => ['background', 'exception', 'Style.php:746'],
+        'Style::getWidth'         => ['width', 'exception', 'Style.php:762'],
+        'Style::getHeight'        => ['height', 'exception', 'Style.php:768'],
+        'Style::getMaxWidth'      => ['maxWidth', 'exception', 'Style.php:774'],
+        'Style::getMaxHeight'     => ['maxHeight', 'exception', 'Style.php:780'],
+        'Style::getAlign'         => ['align', 'exception', 'Style.php:786'],
+        'Style::getVerticalAlign' => ['verticalAlign', 'exception', 'Style.php:792'],
+        'Style::getBorder'        => ['border', 'exception', 'Style.php:798'],
+        'Style::getBorderForeground'=> ['borderForeground', 'exception', 'Style.php:804'],
+        'Style::getBorderBackground'=> ['borderBackground', 'exception', 'Style.php:810'],
+        'Style::getColorProfile'  => ['colorProfile', 'exception', 'Style.php:816'],
+        'Style::getTabWidth'      => ['tabWidth', 'exception', 'Style.php:823'],
+        'Style::getMarginBackground'=> ['marginBackground', 'exception', 'Style.php:829'],
+        'Style::getPadding'       => ['padding', 'exception', 'Style.php:838'],
+        'Style::getMargin'        => ['margin', 'exception', 'Style.php:846'],
+        'HelpBar::getKeySeparator'=> ['keySeparator', 'exception', 'HelpBar.php:160'],
+        'HelpBar::getSeparator'   => ['separator', 'exception', 'HelpBar.php:170'],
+        'HelpBar::getKeyStyle'    => ['keyStyle', 'exception', 'HelpBar.php:180'],
+        'HelpBar::getLabelStyle'  => ['labelStyle', 'exception', 'HelpBar.php:190'],
+        'HelpBar::getWidth'       => ['width', 'exception', 'HelpBar.php:200'],
+        'StatusBar::getSeparator' => ['separator', 'exception', 'StatusBar.php:183'],
+        'StatusBar::getWidth'     => ['width', 'exception', 'StatusBar.php:193'],
+        'StatusBar::getStyle'     => ['style', 'exception', 'StatusBar.php:203'],
+        'StatusBar::getCaps'      => ['caps', 'exception', 'StatusBar.php:215'],
+        'StatusBar::getFillChar'  => ['fillChar', 'exception', 'StatusBar.php:225'],
     ];
 
     public function testEveryPublicGetAccessorCarriesAKnownDisposition(): void
@@ -97,7 +98,7 @@ final class BareAccessorEraTest extends TestCase
         $rostered = array_merge(
             array_keys(self::ERA_PAIRS),
             array_keys(self::LEGACY_ALIASES),
-            array_keys(self::OWNER_PENDING_COLLIDERS),
+            array_keys(self::COLLIDER_EXCEPTIONS),
         );
         sort($found);
         sort($rostered);
@@ -138,21 +139,21 @@ final class BareAccessorEraTest extends TestCase
     /**
      * @return iterable<string, array{0:string, 1:array{0:string,1:string,2:string}}>
      */
-    public static function ownerPendingColliderProvider(): iterable
+    public static function colliderExceptionProvider(): iterable
     {
-        foreach (self::OWNER_PENDING_COLLIDERS as $legacy => $row) {
+        foreach (self::COLLIDER_EXCEPTIONS as $legacy => $row) {
             yield $legacy => [$legacy, $row];
         }
     }
 
     /**
-     * @dataProvider ownerPendingColliderProvider
+     * @dataProvider colliderExceptionProvider
      */
-    public function testEachOwnerPendingColliderIsStillBlockedByItsBareSetter(
+    public function testEachColliderExceptionIsPermanentAndStillBlockedByItsBareSetter(
         string $legacy,
         array $row
     ): void {
-        [$bare, $expectation, $evidence] = $row;
+        [$bare, $disposition, $evidence] = $row;
         [$short, $method] = explode('::', $legacy);
         $class = self::classNamed($short);
         $reflection = new \ReflectionClass($class);
@@ -163,7 +164,7 @@ final class BareAccessorEraTest extends TestCase
         );
         self::assertTrue(
             $reflection->hasMethod($bare),
-            "{$legacy} is no longer blocked — its bare {$bare}() vanished; the vocabulary ruling landed? Update the roster.",
+            "{$legacy} is no longer blocked — its bare {$bare}() vanished, so the exception no longer applies; re-derive the roster",
         );
         $setter = $reflection->getMethod($bare);
         self::assertGreaterThanOrEqual(1, $setter->getNumberOfParameters(), "{$bare}() must still be a setter");
@@ -171,29 +172,42 @@ final class BareAccessorEraTest extends TestCase
         self::assertStringNotContainsString(
             '@deprecated',
             (string) self::docblockOf($reflection->getMethod($method)),
-            "{$legacy} is LIVE API pending the ruling — it must not carry a deprecation",
+            "{$legacy} is a permanent exception under the ruling — it must not carry a deprecation",
         );
 
-        // The NOTE must sit in THIS method's own docblock — a 700-char source
-        // window leaks the neighbouring getter's NOTE and hides deletions.
+        // The exception sentence must sit in THIS method's own docblock — a
+        // 700-char source window leaks the neighbouring getter's wording
+        // and hides deletions. Phrase checks flatten whitespace so the
+        // sentence may wrap freely inside the docblock.
         $ownDocblock = (string) self::docblockOf($reflection->getMethod($method));
-        if ($expectation === 'note') {
+        $ownSentences = (string) preg_replace(
+            ['/^[ \t]*\**[ \t]*/m', '/\s+/u'],
+            ['', ' '],
+            $ownDocblock,
+        );
+        if ($disposition === 'exception') {
             self::assertStringContainsString(
-                'owner-pending',
-                $ownDocblock,
-                "collider {$legacy} lost its in-source NOTE (renamed or reworded without re-deriving)",
+                'Legal exception (owner ruling 2026-10-24)',
+                $ownSentences,
+                "collider {$legacy} lost its canonical exception sentence (renamed or reworded without re-deriving)",
             );
             self::assertStringContainsString(
                 "this {$method}() read",
-                $ownDocblock,
-                "the NOTE adjacent to {$legacy} does not speak about {$legacy} itself",
+                $ownSentences,
+                "the exception sentence adjacent to {$legacy} does not speak about {$legacy} itself",
             );
-        } else {
+            self::assertStringContainsString(
+                "bare name {$bare}()",
+                $ownSentences,
+                "the exception sentence adjacent to {$legacy} does not name its colliding setter {$bare}()",
+            );
             self::assertStringNotContainsString(
                 'owner-pending',
-                $ownDocblock,
-                "Style.php colliders stay untouched until the owner ruling; a planted NOTE at {$legacy} means the roster must flip",
+                $ownSentences,
+                "{$legacy} is settled permanent API — pending-ruling wording must never return",
             );
+        } else {
+            self::fail("roster status '{$disposition}' at {$legacy} is not a known disposition");
         }
     }
 
@@ -324,7 +338,7 @@ final class BareAccessorEraTest extends TestCase
         self::assertStringContainsString('defaultProfile()', $flat);
         self::assertStringContainsString('borderSides()', $flat);
         self::assertStringContainsString(
-            count(self::OWNER_PENDING_COLLIDERS) . ' accessors are owner-pending',
+            count(self::COLLIDER_EXCEPTIONS) . ' accessors are permanent legal exceptions',
             (string) $flat,
             'the README collider tally drifted from the roster',
         );

@@ -176,11 +176,9 @@ final class StatusBar
     }
 
     /**
-     * NOTE (accessor era, 2026-10-24): this getSeparator() read cannot lose its
-     * get* prefix — the bare separator() slot is the fluent setter defined
-     * above, and PHP admits one method per name. Dropping either side needs
-     * a vocabulary ruling; treated as owner-pending and rostered in
-     * tests/BareAccessorEraTest.php until one lands.
+     * Legal exception (owner ruling 2026-10-24): the bare name separator() is the fluent
+     * setter separator(string $separator): self, so this getSeparator() read keeps its
+     * get* prefix permanently.
      */
     public function getSeparator(): string
     {
@@ -188,11 +186,9 @@ final class StatusBar
     }
 
     /**
-     * NOTE (accessor era, 2026-10-24): this getWidth() read cannot lose its
-     * get* prefix — the bare width() slot is the fluent setter defined
-     * above, and PHP admits one method per name. Dropping either side needs
-     * a vocabulary ruling; treated as owner-pending and rostered in
-     * tests/BareAccessorEraTest.php until one lands.
+     * Legal exception (owner ruling 2026-10-24): the bare name width() is the fluent
+     * setter width(?int $width): self, so this getWidth() read keeps its get* prefix
+     * permanently.
      */
     public function getWidth(): ?int
     {
@@ -200,11 +196,9 @@ final class StatusBar
     }
 
     /**
-     * NOTE (accessor era, 2026-10-24): this getStyle() read cannot lose its
-     * get* prefix — the bare style() slot is the fluent setter defined
-     * above, and PHP admits one method per name. Dropping either side needs
-     * a vocabulary ruling; treated as owner-pending and rostered in
-     * tests/BareAccessorEraTest.php until one lands.
+     * Legal exception (owner ruling 2026-10-24): the bare name style() is the fluent
+     * setter style(?Style $style): self, so this getStyle() read keeps its get* prefix
+     * permanently.
      */
     public function getStyle(): ?Style
     {
@@ -212,11 +206,9 @@ final class StatusBar
     }
 
     /**
-     * NOTE (accessor era, 2026-10-24): this getCaps() read cannot lose its
-     * get* prefix — the bare caps() slot is the fluent setter defined
-     * above, and PHP admits one method per name. Dropping either side needs
-     * a vocabulary ruling; treated as owner-pending and rostered in
-     * tests/BareAccessorEraTest.php until one lands.
+     * Legal exception (owner ruling 2026-10-24): the bare name caps() is the fluent
+     * setter caps(string $left, string $right): self, so this getCaps() read keeps its
+     * get* prefix permanently.
      *
      * @return array{0:string,1:string} [leftCap, rightCap]
      */
@@ -226,11 +218,9 @@ final class StatusBar
     }
 
     /**
-     * NOTE (accessor era, 2026-10-24): this getFillChar() read cannot lose its
-     * get* prefix — the bare fillChar() slot is the fluent setter defined
-     * above, and PHP admits one method per name. Dropping either side needs
-     * a vocabulary ruling; treated as owner-pending and rostered in
-     * tests/BareAccessorEraTest.php until one lands.
+     * Legal exception (owner ruling 2026-10-24): the bare name fillChar() is the fluent
+     * setter fillChar(string $char): self, so this getFillChar() read keeps its get*
+     * prefix permanently.
      */
     public function getFillChar(): string
     {

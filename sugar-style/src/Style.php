@@ -43,9 +43,10 @@ use SugarCraft\Core\Util\Width;
  * `width()` setter — hence `getWidth()`. Upstream lipgloss gives the same
  * rationale for its `GetX` family. Two reads whose bare slots never
  * collided (`defaultProfile()`, `borderSides()`) went bare in the 2026-10
- * accessor era; every remaining `get*` on this class is blocked by a live
- * fluent setter of the same bare name and stays prefix-spelled pending an
- * owner vocabulary ruling (rostered in tests/BareAccessorEraTest.php).
+ * accessor era; every remaining `get*` on this class is a permanent legal
+ * exception under the owner ruling of 2026-10-24: its bare name belongs to
+ * a live fluent setter, so the `get*` spelling is the canonical read (each
+ * carries an exception docblock and a roster row in tests/BareAccessorEraTest.php).
  * Do not copy this spelling into new SugarCraft classes.
  */
 final class Style
@@ -197,7 +198,13 @@ final class Style
         return $this->with(underlineColor: $c, underlineColorSet: true, propsAdded: ['underlineColor']);
     }
 
-    /** Underline color (SGR 58), or null when default. */
+    /**
+     * Underline color (SGR 58), or null when default.
+     *
+     * Legal exception (owner ruling 2026-10-24): the bare name underlineColor() is the
+     * fluent setter underlineColor(?Color $c): self, so this getUnderlineColor() read
+     * keeps its get* prefix permanently.
+     */
     public function getUnderlineColor(): ?Color { return $this->underlineColor; }
 
     /**
@@ -212,7 +219,13 @@ final class Style
         return $this->with(underlineStyle: $style, propsAdded: ['underlineStyle']);
     }
 
-    /** Underline shape (single / double / curly / dotted / dashed / none). */
+    /**
+     * Underline shape (single / double / curly / dotted / dashed / none).
+     *
+     * Legal exception (owner ruling 2026-10-24): the bare name underlineStyle() is the
+     * fluent setter underlineStyle(UnderlineStyle $style): self, so this
+     * getUnderlineStyle() read keeps its get* prefix permanently.
+     */
     public function getUnderlineStyle(): UnderlineStyle { return $this->underlineStyle; }
 
     /**
@@ -225,7 +238,13 @@ final class Style
         return $this->with(paddingChar: $char, propsAdded: ['paddingChar']);
     }
 
-    /** Glyph used to fill padding cells (default `' '`). */
+    /**
+     * Glyph used to fill padding cells (default `' '`).
+     *
+     * Legal exception (owner ruling 2026-10-24): the bare name paddingChar() is the
+     * fluent setter paddingChar(string $char): self, so this getPaddingChar() read keeps
+     * its get* prefix permanently.
+     */
     public function getPaddingChar(): string { return $this->paddingChar; }
 
     /**
@@ -237,7 +256,13 @@ final class Style
         return $this->with(marginChar: $char, propsAdded: ['marginChar']);
     }
 
-    /** Glyph used to fill margin cells (default `' '`). */
+    /**
+     * Glyph used to fill margin cells (default `' '`).
+     *
+     * Legal exception (owner ruling 2026-10-24): the bare name marginChar() is the
+     * fluent setter marginChar(string $char): self, so this getMarginChar() read keeps
+     * its get* prefix permanently.
+     */
     public function getMarginChar(): string { return $this->marginChar; }
 
     /** Set the foreground color. Pass null to clear (no SGR emitted). */
@@ -530,7 +555,13 @@ final class Style
         );
     }
 
-    /** Currently-set hyperlink target, or null if unset. */
+    /**
+     * Currently-set hyperlink target, or null if unset.
+     *
+     * Legal exception (owner ruling 2026-10-24): the bare name hyperlink() is the fluent
+     * setter hyperlink(string $url, string $id = ''): self, so this getHyperlink() read
+     * keeps its get* prefix permanently.
+     */
     public function getHyperlink(): ?string
     {
         return $this->hyperlink;
@@ -701,7 +732,17 @@ final class Style
     // `Style.GetForeground()` / `GetWidth()` / `GetPadding()` family, which
     // prefixes for the same reason.
 
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name foreground() is the
+     * fluent setter foreground(?Color $c): self, so this getForeground() read keeps its
+     * get* prefix permanently.
+     */
     public function getForeground(): ?Color   { return $this->fg; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name background() is the
+     * fluent setter background(?Color $c): self, so this getBackground() read keeps its
+     * get* prefix permanently.
+     */
     public function getBackground(): ?Color   { return $this->bg; }
     public function isBold(): bool             { return $this->bold; }
     public function isItalic(): bool           { return $this->italic; }
@@ -713,23 +754,95 @@ final class Style
     public function isReverse(): bool          { return $this->reverse; }
     public function isOverline(): bool         { return $this->overline; }
     public function isInvisible(): bool        { return $this->invisible; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name width() is the fluent
+     * setter width(?int $w): self, so this getWidth() read keeps its get* prefix
+     * permanently.
+     */
     public function getWidth(): ?int           { return $this->width; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name height() is the fluent
+     * setter height(?int $h): self, so this getHeight() read keeps its get* prefix
+     * permanently.
+     */
     public function getHeight(): ?int          { return $this->height; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name maxWidth() is the fluent
+     * setter maxWidth(?int $w): self, so this getMaxWidth() read keeps its get* prefix
+     * permanently.
+     */
     public function getMaxWidth(): ?int        { return $this->maxWidth; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name maxHeight() is the fluent
+     * setter maxHeight(?int $h): self, so this getMaxHeight() read keeps its get* prefix
+     * permanently.
+     */
     public function getMaxHeight(): ?int       { return $this->maxHeight; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name align() is the fluent
+     * setter align(Align $h): self, so this getAlign() read keeps its get* prefix
+     * permanently.
+     */
     public function getAlign(): Align          { return $this->alignH; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name verticalAlign() is the
+     * fluent setter verticalAlign(VAlign $v): self, so this getVerticalAlign() read
+     * keeps its get* prefix permanently.
+     */
     public function getVerticalAlign(): VAlign { return $this->alignV; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name border() is the fluent
+     * setter border(?Border $b, bool ...$sides): self, so this getBorder() read keeps
+     * its get* prefix permanently.
+     */
     public function getBorder(): ?Border       { return $this->border; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name borderForeground() is the
+     * fluent setter borderForeground(?Color $c): self, so this getBorderForeground()
+     * read keeps its get* prefix permanently.
+     */
     public function getBorderForeground(): ?Color { return $this->borderFg; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name borderBackground() is the
+     * fluent setter borderBackground(?Color $c): self, so this getBorderBackground()
+     * read keeps its get* prefix permanently.
+     */
     public function getBorderBackground(): ?Color { return $this->borderBg; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name colorProfile() is the
+     * fluent setter colorProfile(ColorProfile $p): self, so this getColorProfile() read
+     * keeps its get* prefix permanently.
+     */
     public function getColorProfile(): ColorProfile { return $this->profile; }
     public function isInline(): bool           { return $this->inline; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name tabWidth() is the fluent
+     * setter tabWidth(int $w): self, so this getTabWidth() read keeps its get* prefix
+     * permanently.
+     */
     public function getTabWidth(): int         { return $this->tabWidth; }
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name marginBackground() is the
+     * fluent setter marginBackground(?Color $c): self, so this getMarginBackground()
+     * read keeps its get* prefix permanently.
+     */
     public function getMarginBackground(): ?Color { return $this->marginBg; }
 
-    /** @return array{int,int,int,int} */
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name padding() is the fluent
+     * setter padding(int ...$sides): self, so this getPadding() read keeps its get*
+     * prefix permanently.
+     *
+     * @return array{int,int,int,int}
+     */
     public function getPadding(): array { return $this->padding; }
-    /** @return array{int,int,int,int} */
+    /**
+     * Legal exception (owner ruling 2026-10-24): the bare name margin() is the fluent
+     * setter margin(int ...$sides): self, so this getMargin() read keeps its get* prefix
+     * permanently.
+     *
+     * @return array{int,int,int,int}
+     */
     public function getMargin(): array { return $this->margin; }
     /** @return array{bool,bool,bool,bool} */
     public function borderSides(): array { return $this->borderSides; }
