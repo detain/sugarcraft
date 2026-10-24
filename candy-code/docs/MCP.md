@@ -743,7 +743,7 @@ would be deferred, but its `eager: true` opts it back in.
 
 ## Server auth (`/mcp`)
 
-`src/Commands/McpAuthCommand.php` is a separate, in-chat surface with four
+`src/Commands/McpAuthCommand.php` is a separate, in-chat surface with five
 sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`:
 
 ```
@@ -751,6 +751,7 @@ sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`:
 /mcp add <server> [registration-url] [token-url] trigger OAuth registration
 /mcp remove <server>                             drop stored credentials
 /mcp login <server>                              fork a real login into a background child
+/mcp reconnect                                   restart servers admitted this launch
 ```
 
 This store maps **server URLs to auth entries**. It is independent of

@@ -3715,6 +3715,29 @@ final class DocFigureProseDriftTest extends TestCase
             'the doctor verdict sentence reworded while the closure above still answers — re-pin with the prose',
         );
 
+        // docs-fix-1023 m3: docs/TROUBLESHOOTING.md headlines the doctor's
+        // total ("fifteen checks; exits 1 if any FAILs") and nothing pinned
+        // the count. The probe labels are the top-level keys of the array
+        // doctorProbes() returns; the word for the count and the page's
+        // numeral flip together.
+        preg_match_all("/^            '(.+?)' => static/m", $probeText, $probeLabels);
+        $doctorWords = [
+            'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
+            'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17,
+        ];
+        self::assertGreaterThan(0, \count($probeLabels[1]), 'the probe-label scrape sees none of doctorProbes()\'s rows — the pin below measures nothing');
+        $doctorWord = array_search(\count($probeLabels[1]), $doctorWords, true);
+        self::assertIsString(
+            $doctorWord,
+            'doctorProbes() changed size to a number with no word in $doctorWords — add the word and flip the page numeral in docs/TROUBLESHOOTING.md with it',
+        );
+        $troubleshooting = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/TROUBLESHOOTING.md');
+        self::assertSame(
+            1,
+            preg_match('/#' . preg_quote(' ' . $doctorWord . ' checks; exits 1 if any FAILs', '/') . '/', $troubleshooting),
+            'docs/TROUBLESHOOTING.md no longer headlines the doctor with its live check count — flip the numeral with doctorProbes()',
+        );
+
         $permissions = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/PERMISSIONS.md');
         self::assertSame(
             1,
@@ -4002,7 +4025,7 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
-     * E686 tranche-9 (AZ): the commands surface — /mcp's three sub-commands
+     * E686 tranche-9 (AZ): the commands surface — /mcp's five sub-commands
      * against the command's own match, the eight help-listed subcommands
      * against ParsedArgs::SUBCOMMANDS (the second-class-in-file ParsedArgs is
      * touched through ArgvParser, per the lane-be autoload law), the server
@@ -4019,19 +4042,19 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/with four\s+sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`/', $mcp),
+            preg_match('/with five\s+sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`/', $mcp),
             'the /mcp lead-in no longer states its count with both backing classes',
         );
         $authSource = self::sourceOf('Commands/McpAuthCommand.php');
         $execute = self::bodyExcerpt($authSource, 'execute', 1200);
-        preg_match_all("/'(list|add|remove|login)' =>/", $execute, $subs);
-        self::assertCount($wordNumbers['four'], $subs[1], 'the /mcp match arms changed — the page fence and this count move together');
-        // VIS-3 grew a fifth arm (reconnect) deliberately OUTSIDE the fenced
-        // four — the page fence enumerates only the store-auth verbs. When w3d
-        // lands the page's fifth verb, this pin and the fence move together.
-        self::assertStringContainsString("'reconnect' =>", $execute, 'the /mcp reconnect arm left the command — the usage line still advertises it');
-        preg_match_all('/^\/mcp (list|add|remove|login)\b/m', $raw, $fence);
-        self::assertSame(['list', 'add', 'remove', 'login'], $fence[1], 'the page fence no longer lists the four commands in code order');
+        preg_match_all("/'(list|add|remove|login|reconnect)' =>/", $execute, $subs);
+        self::assertSame(['list', 'add', 'remove', 'login', 'reconnect'], $subs[1], 'the /mcp match arms changed — the page fence and this order pin move together');
+        // VIS-3b grew the fifth arm (reconnect) and the page fence carries it
+        // since the docs-fix-1023 wave — the lead-in's count, the fenced rows
+        // and the match arms are one roster pinned in both directions.
+        self::assertStringContainsString("'reconnect' =>", $execute, 'the /mcp reconnect arm left the command — the page fence still advertises it');
+        preg_match_all('/^\/mcp (list|add|remove|login|reconnect)\b/m', $raw, $fence);
+        self::assertSame(['list', 'add', 'remove', 'login', 'reconnect'], $fence[1], 'the page fence no longer lists the five commands in code order');
         // The message is catalogue text since audit 15b-14: the source routes the
         // key, and the English the key resolves to enumerates the roster.
         self::assertStringContainsString("Lang::t('cmd.mcp-auth.unknown'", $authSource, 'the unknown-sub-command arm stopped printing its message');
