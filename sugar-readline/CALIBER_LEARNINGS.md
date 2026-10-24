@@ -64,3 +64,6 @@ Using terminfo for terminal capability queries would require FFI bindings to the
 
 ### Integration with Ncurses (Finding 16)
 Using ncurses for lower-level terminal control would similarly require FFI bindings and significant architectural changes to the Readline loop.
+
+## 2026-10-24 — Accessor-deprecation era (bare twins, ruling 3b)
+- **[pattern:accessor-deprecation-era]** `getPrevious()`/`getNext()` on the history family were renamed to the bare twins `previous()`/`next()`, **with the interface**: `HistoryInterface` declares only the bare pair. PHP forbids interface method bodies (the default-method RFC was withdrawn), so the legacy names could not ride the contract — they live as one-line `@deprecated` BC forwarders marked `REMOVED-IN: 2.0.0` on `InMemoryHistory` (and therefore on `FileHistory` by inheritance). Navigation is stateful, so `tests/AccessorDeprecationTest.php` pins BC through full walks in both spellings (returns + position advance), forwarder shape, the interface contract, a discovery-first `src/` census, and the README table — a third deprecation without all rows goes red. `FileHistory`'s destructor flushes on teardown: scope the object in a closure so it rewrites the file *before* temp-file cleanup unlinks it.

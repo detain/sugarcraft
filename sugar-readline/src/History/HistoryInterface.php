@@ -6,6 +6,12 @@ namespace SugarCraft\Readline\History;
 
 /**
  * Contracts for readline history navigation.
+ *
+ * Accessor-deprecation era (2026-10-24, ruling 3b): the legacy
+ * `getPrevious()`/`getNext()` spellings left this contract — the bare
+ * {@see self::previous()}/{@see self::next()} pair is canonical.
+ * {@see InMemoryHistory} (and so FileHistory by inheritance) keeps the
+ * old names as `@deprecated` BC forwarders until v2.0.0.
  */
 interface HistoryInterface
 {
@@ -22,13 +28,13 @@ interface HistoryInterface
      * Return the previous history entry and advance the navigation position.
      * Returns null when there is no previous entry.
      */
-    public function getPrevious(): ?string;
+    public function previous(): ?string;
 
     /**
      * Return the next history entry and advance the navigation position.
      * Returns null when there is no next entry (we are at the "live" buffer).
      */
-    public function getNext(): ?string;
+    public function next(): ?string;
 
     /**
      * Reset the navigation position to "live" (no entry selected, position = -1).
@@ -43,7 +49,7 @@ interface HistoryInterface
     /**
      * Incrementally search history for an entry containing $query.
      *
-     * Read-only: does not disturb the getPrevious()/getNext() navigation
+     * Read-only: does not disturb the previous()/next() navigation
      * position, so incremental search and arrow-key navigation can coexist.
      *
      * @param string $query     Substring to match; '' matches any entry.

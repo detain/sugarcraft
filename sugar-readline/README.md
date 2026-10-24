@@ -312,6 +312,17 @@ Each prompt is a state machine with three states: pending, submitted, aborted.
 - `isSubmitted()` / `isAborted()` report status; `currentValue()` (Confirmation) and `selectedValue()` (Selection) reflect the current cursor regardless of submission state.
 - True end-of-input: when `Readline` owns the stdin pump and the stream reaches EOF after the decoder drains, `run()` returns the prompt in its current state — neither submitted nor aborted. Injected drivers report EOF and "nothing yet" identically, so they cannot trigger this exit; end those loops by submitting, aborting, or `stop()`.
 
+## Accessor deprecation (2026-10-24)
+
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, the history navigation pair `getPrevious()`/`getNext()` was renamed to its bare twins `previous()`/`next()`, with the whole family moved together with the interface: `HistoryInterface` now declares only the bare pair (PHP forbids interface method bodies, so the legacy spellings could not ride the contract as default forwarders). `InMemoryHistory` — and `FileHistory` by inheritance — keep the old names as byte-identical one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock — they will be removed in sugar-readline v2.0.0.
+
+| Namespace | Class | Deprecated | Use instead |
+|-----------|-------|------------|-------------|
+| `History` | `InMemoryHistory` | `getPrevious()` | `previous()` |
+| `History` | `InMemoryHistory` | `getNext()` | `next()` |
+
+Navigation is stateful (each call advances the position cursor), so `tests/AccessorDeprecationTest.php` pins the BC legs as full walks through both spellings, plus forwarder shape, an interface-contract leg, a discovery-first `src/` census, and the README table agreement. Internal call sites in `src/` were switched to the bare forms in the same commit.
+
 ## License
 
 MIT

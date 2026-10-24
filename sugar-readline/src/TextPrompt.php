@@ -415,7 +415,7 @@ final class TextPrompt
         // Clone history so each TextPrompt instance has independent navigation state.
         if ($clone->history !== null) {
             $clone->history = clone $clone->history;
-            // Reset history object's position so getPrevious() fetches from newest.
+            // Reset history object's position so previous() fetches from newest.
             $clone->history->reset();
         }
 
@@ -425,14 +425,14 @@ final class TextPrompt
                 if ($clone->buffer !== '') {
                     $clone->_bufferBeforeHistory = $clone->buffer;
                 }
-                $entry = $clone->history->getPrevious();
+                $entry = $clone->history->previous();
                 if ($entry !== null) {
                     $clone->_historyPosition = 0;
                     $clone->buffer = $entry;
                     $clone->cursor = self::charCount($entry);
                 }
             } else {
-                $entry = $clone->history->getPrevious();
+                $entry = $clone->history->previous();
                 if ($entry !== null) {
                     $clone->_historyPosition++;
                     $clone->buffer = $entry;
@@ -445,7 +445,7 @@ final class TextPrompt
                 // Already at live buffer — nothing to navigate.
                 return $clone;
             }
-            $entry = $clone->history->getNext();
+            $entry = $clone->history->next();
             if ($entry === null) {
                 // Exhausted history; restore saved buffer.
                 $clone->buffer = $clone->_bufferBeforeHistory ?? '';
@@ -914,7 +914,7 @@ final class TextPrompt
         $history->reset();
 
         while (true) {
-            $entry = $history->getPrevious();
+            $entry = $history->previous();
             if ($entry === null) {
                 break;
             }

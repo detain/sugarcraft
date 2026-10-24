@@ -8,8 +8,8 @@ namespace SugarCraft\Readline\History;
  * In-memory history store for readline session.
  *
  * Entries are stored newest-first: index 0 = most recent, index N = oldest.
- * Position -1 means "live buffer" (no entry selected).  getPrevious() moves
- * deeper into history (toward older entries); getNext() moves back toward the
+ * Position -1 means "live buffer" (no entry selected).  previous() moves
+ * deeper into history (toward older entries); next() moves back toward the
  * live buffer.  push() prepends to the array (newest-first), then resets
  * position to -1.
  */
@@ -64,7 +64,7 @@ class InMemoryHistory implements HistoryInterface
         return $clone;
     }
 
-    public function getPrevious(): ?string
+    public function previous(): ?string
     {
         // Are there entries beyond the current position?
         if ($this->position < \count($this->history) - 1) {
@@ -74,7 +74,7 @@ class InMemoryHistory implements HistoryInterface
         return null; // exhausted
     }
 
-    public function getNext(): ?string
+    public function next(): ?string
     {
         if ($this->position === -1) {
             return null; // already at live buffer
@@ -85,6 +85,24 @@ class InMemoryHistory implements HistoryInterface
         }
         return $this->history[$this->position];
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::previous()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getPrevious(): ?string { return $this->previous(); }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::next()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getNext(): ?string { return $this->next(); }
 
     public function search(string $query, int $fromIndex, int $direction): ?array
     {
