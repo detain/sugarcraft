@@ -240,6 +240,26 @@ final class CheckDocsAssetsTest extends TestCase
     }
 
     /**
+     * The trigger leg counts, not just greps: a decoy `id="search-trigger"`
+     * planted outside the nav (so the affordance still reads "present" to a
+     * substring check) must redden — ids are unique by definition and search.js
+     * binds the first, stranding the second as broken chrome.
+     */
+    public function testAPlantedSecondSearchTriggerOnAChromePageIsNamed(): void
+    {
+        $root = $this->makeCleanFixture();
+        $this->put("$root/docs/lib/alpha.html", str_replace(
+            '</body>',
+            '<button id="search-trigger" class="decoy" type="button">Decoy</button></body>',
+            (string) file_get_contents("$root/docs/lib/alpha.html"),
+        ));
+
+        $findings = $this->filter($root, 'carries 2 search trigger elements (expected exactly 1)');
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('docs/lib/alpha.html', $findings[0]);
+    }
+
+    /**
      * Negative control for the affordance leg's scoping: a redirect stub (no
      * nav chrome at all) must NOT be demanded — legs keyed on "page has nav"
      * skip it, so the 52 stubs never false-fire the 62-page chrome contract.

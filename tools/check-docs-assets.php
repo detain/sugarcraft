@@ -26,7 +26,9 @@ declare(strict_types=1);
  *     tools/gen-docs.php), so the leg is green by construction — its job is to
  *     catch a generator regression or a hand-edit before pages.yml publishes.
  *  f) the search affordance on chrome-bearing detail pages: a page that carries
- *     the shared nav must also carry the visible trigger (`id="search-trigger"`),
+ *     the shared nav must also carry EXACTLY ONE visible trigger
+ *     (`id="search-trigger"` — HTML ids are unique by definition, so a planted
+ *     decoy outside the nav that doubles the id is broken chrome, not affordance),
  *     the modal DOM (`id="search-modal"`) and the `search.js` include. Redirect
  *     stubs (no nav) are out of scope — they render no chrome at all.
  *
@@ -100,10 +102,14 @@ final class CheckDocsAssets
 
     /**
      * (f) chrome-bearing detail pages carry the complete search affordance:
-     * the visible trigger button, the modal DOM it opens, and the script that
-     * binds them. Scope is keyed on the shared nav (`<div class="nav-links">`)
-     * so the 52 redirect stubs — which ship no chrome by design — are excluded
-     * without a name-based special case.
+     * exactly one visible trigger button, the modal DOM it opens, and the
+     * script that binds them. The trigger is counted, not merely present —
+     * mirroring the crutch leg's exactly-one semantics — because a second
+     * `id="search-trigger"` anywhere on the page (decoy or duplicated chrome)
+     * satisfies a substring check while breaking the id-uniqueness contract
+     * search.js relies on. Scope is keyed on the shared nav
+     * (`<div class="nav-links">`) so the 52 redirect stubs — which ship no
+     * chrome by design — are excluded without a name-based special case.
      *
      * @return list<string>
      */
@@ -115,10 +121,15 @@ final class CheckDocsAssets
             if (!str_contains($html, '<div class="nav-links">')) {
                 continue;
             }
+            $triggers = substr_count($html, 'id="search-trigger"');
+            if ($triggers !== 1) {
+                $findings[] = $triggers === 0
+                    ? 'chrome: ' . self::relative($root, $file) . ' has no search trigger (id="search-trigger")'
+                    : 'chrome: ' . self::relative($root, $file) . ' carries ' . $triggers . ' search trigger elements (expected exactly 1)';
+            }
             foreach ([
-                'search trigger (id="search-trigger")' => 'id="search-trigger"',
-                'search modal (id="search-modal")'     => 'id="search-modal"',
-                'search script (../js/search.js)'       => 'src="../js/search.js"',
+                'search modal (id="search-modal")' => 'id="search-modal"',
+                'search script (../js/search.js)'  => 'src="../js/search.js"',
             ] as $what => $needle) {
                 if (!str_contains($html, $needle)) {
                     $findings[] = 'chrome: ' . self::relative($root, $file) . ' has no ' . $what;
