@@ -8,7 +8,7 @@ declare(strict_types=1);
  * Walks every examples/*.php, runs it at 80x24 and 120x40 dimensions,
  * and writes the captured stdout to tests/golden/<dim>/<name>.golden.
  *
- * Usage: php tools/generate-goldens.php [--dimensions 80x24,120x40]
+ * Usage: php tools/generate-goldens.php
  *
  * Environment:
  *   DRY_RUN=1   — print what would be generated without writing files

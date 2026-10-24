@@ -62,6 +62,24 @@ use SugarCraft\Dashboard\Modules\System\{SystemModule, RefreshMsg as SystemRefre
 use SugarCraft\Dashboard\Modules\Weather\{WeatherModule as RealWeatherModule, TickMsg as WeatherTickMsg, WttrInClient};
 
 /**
+ * Read an env var regardless of `variables_order`: PHP's default GPCS build
+ * populates only $_SERVER/$_ENV when it includes E, and some hardened php.ini
+ * configs drop it entirely — $_ENV would then read empty and silently ignore
+ * the variable. Check the superglobal first, fall back to getenv().
+ */
+function dashboardLiveEnv(string $name, string $default): string
+{
+    $fromSuper = (string) ($_ENV[$name] ?? '');
+    if ($fromSuper !== '') {
+        return $fromSuper;
+    }
+
+    $fromGetenv = getenv($name);
+
+    return $fromGetenv !== false && $fromGetenv !== '' ? $fromGetenv : $default;
+}
+
+/**
  * Module contract — mirrors Core\Model but scoped to a single dashboard panel.
  *
  * Each module is an independent Elm-style component: init() returns an
@@ -353,7 +371,7 @@ final class DashboardModel implements Model
         $boxer = Boxer::tree($root, $items);
         // Width can be overridden via COLUMNS env var for responsive testing.
         // Convention: 80 = narrow (collapses to single column), 120 = wide.
-        $columns = (int) ($_ENV['COLUMNS'] ?? 120);
+        $columns = (int) dashboardLiveEnv('COLUMNS', '120');
         $boxer = $boxer->setSize($columns, 30);
 
         // Apply theme to boxer for theme propagation to children
@@ -440,7 +458,7 @@ final class FocusedPanel implements \SugarCraft\Dashboard\Foundation\Item
     }
 
     // Weather location: WEATHER_LOCATION env var or auto-detect via IP.
-    $weatherLocation = $_ENV['WEATHER_LOCATION'] ?? 'auto';
+    $weatherLocation = dashboardLiveEnv('WEATHER_LOCATION', 'auto');
 
     // Build the program. useAltScreen=true gives us a clean slate.
     // catchInterrupts=true lets Ctrl-C trigger InterruptMsg.
@@ -457,7 +475,7 @@ final class FocusedPanel implements \SugarCraft\Dashboard\Foundation\Item
     $program = new Program($model, $options);
 
     echo "\n";
-    $cols = (int) ($_ENV['COLUMNS'] ?? 120);
+    $cols = (int) dashboardLiveEnv('COLUMNS', '120');
     $mode = $cols < 90 ? 'NARROW (single-column)' : 'WIDE (multi-column)';
     echo " ╔══════════════════════════════════════════════════════════╗\n";
     echo " ║  SugarDashboard Interactive Dashboard                       ║\n";

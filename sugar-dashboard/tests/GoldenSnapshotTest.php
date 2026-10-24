@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Dashboard\Tests\Golden;
+namespace SugarCraft\Dashboard\Tests;
 
 use PHPUnit\Framework\Error\Warning;
 use PHPUnit\Framework\TestCase;
@@ -21,9 +21,9 @@ use PHPUnit\Framework\TestCase;
 final class GoldenSnapshotTest extends TestCase
 {
     // Fixtures live at sugar-dashboard/tests/golden/ (written by tools/generate-goldens.php);
-    // examples live at sugar-dashboard/examples/. Both are two/one levels up from tests/Golden/.
-    private const GOLDEN_ROOT = __DIR__ . '/../golden';
-    private const EXAMPLES_DIR = __DIR__ . '/../../examples';
+    // examples live at sugar-dashboard/examples/. Both are adjacent/one level up from tests/.
+    private const GOLDEN_ROOT = __DIR__ . '/golden';
+    private const EXAMPLES_DIR = __DIR__ . '/../examples';
 
     /** @var bool Whether to regenerate goldens instead of comparing */
     private static bool $regenerate = false;

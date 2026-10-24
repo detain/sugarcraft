@@ -42,7 +42,6 @@ final class ExternalModule implements LegacyModule
     /** fread() granularity inside a {@see self::STDERR_DRAIN_BYTES_PER_ROUND} round. */
     private const STDERR_DRAIN_CHUNK_BYTES = 8192;
 
-    private array $state = [];
     private int $interval = 0;
 
     /** @var resource|null */

@@ -103,6 +103,29 @@ final class GenericModuleTest extends TestCase
     }
 
     /**
+     * A child that writes once and then hangs must not hang the tick.
+     * The read pump stops at the wall budget, the TERM→KILL ladder retires
+     * the child, and whatever arrived so far is still displayed. If the
+     * bound or the ladder is removed this waits out the child's whole
+     * 30-second sleep and the elapsed assertion reddens.
+     */
+    public function testHungArgvChildIsBoundedAndItsPartialOutputSurvives(): void
+    {
+        $module = new GenericModule([
+            \PHP_BINARY,
+            '-r',
+            'echo "partial\\n"; flush(); sleep(30);',
+        ]);
+
+        $start = hrtime(true);
+        [$nextModule] = $module->update(new TickMsg());
+        $elapsedSeconds = (hrtime(true) - $start) / 1_000_000_000;
+
+        $this->assertLessThan(15.0, $elapsedSeconds, 'runArgv must bound the child, not wait it out');
+        $this->assertStringContainsString('partial', $nextModule->view());
+    }
+
+    /**
      * This test deliberately drives the proc_open-FAILURE path: PHP itself emits
      * `proc_open(): posix_spawn() failed` at GenericModule.php:98, and the code
      * under test is expected to swallow it and return 'Command failed'. The

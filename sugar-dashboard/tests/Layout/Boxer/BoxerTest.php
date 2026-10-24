@@ -246,56 +246,59 @@ final class BoxerTest extends TestCase
 
     public function testPersistAndRestoreState(): void
     {
-        $persistence = $this->createMock(\SugarCraft\Dashboard\State\Persistence::class);
-        $persistence->expects($this->once())
-            ->method('save')
-            ->with('/tmp/test-path', ['collapsedAddresses' => ['0', '1']]);
+        // Persistence is final — the real save/load round-trip IS the pin.
+        $dir = self::stateSandbox();
+        try {
+            $path = $dir . '/boxer-state.json';
+            $persistence = new \SugarCraft\Dashboard\State\Persistence();
 
-        $persistence->expects($this->once())
-            ->method('load')
-            ->with('/tmp/test-path')
-            ->willReturn(['collapsedAddresses' => ['0', '1']]);
+            $boxer = Boxer::leaf('0', new class implements Item {
+                public function render(): string { return 'x'; }
+            });
 
-        $boxer = Boxer::leaf('0', new class implements Item {
-            public function render(): string { return 'x'; }
-        });
+            $boxer->persistState($persistence, $path, ['0', '1']);
+            $this->assertFileExists($path);
 
-        $boxer->persistState($persistence, '/tmp/test-path', ['0', '1']);
-
-        $restored = $boxer->restoreState($persistence, '/tmp/test-path');
-        $this->assertSame(['0', '1'], $restored);
+            $restored = $boxer->restoreState($persistence, $path);
+            $this->assertSame(['0', '1'], $restored);
+        } finally {
+            self::removeStateSandbox($dir);
+        }
     }
 
     public function testRestoreStateWithNoData(): void
     {
-        $persistence = $this->createMock(\SugarCraft\Dashboard\State\Persistence::class);
-        $persistence->expects($this->once())
-            ->method('load')
-            ->with('/tmp/nonexistent')
-            ->willReturn(null);
+        $dir = self::stateSandbox();
+        try {
+            $persistence = new \SugarCraft\Dashboard\State\Persistence();
+            $boxer = Boxer::leaf('0', new class implements Item {
+                public function render(): string { return 'x'; }
+            });
 
-        $boxer = Boxer::leaf('0', new class implements Item {
-            public function render(): string { return 'x'; }
-        });
-
-        $restored = $boxer->restoreState($persistence, '/tmp/nonexistent');
-        $this->assertSame([], $restored);
+            $restored = $boxer->restoreState($persistence, $dir . '/nonexistent.json');
+            $this->assertSame([], $restored);
+        } finally {
+            self::removeStateSandbox($dir);
+        }
     }
 
     public function testRestoreStateWithMissingKey(): void
     {
-        $persistence = $this->createMock(\SugarCraft\Dashboard\State\Persistence::class);
-        $persistence->expects($this->once())
-            ->method('load')
-            ->with('/tmp/test')
-            ->willReturn(['other' => 'data']);
+        $dir = self::stateSandbox();
+        try {
+            $path = $dir . '/boxer-state.json';
+            $persistence = new \SugarCraft\Dashboard\State\Persistence();
+            $persistence->save($path, ['other' => 'data']);
 
-        $boxer = Boxer::leaf('0', new class implements Item {
-            public function render(): string { return 'x'; }
-        });
+            $boxer = Boxer::leaf('0', new class implements Item {
+                public function render(): string { return 'x'; }
+            });
 
-        $restored = $boxer->restoreState($persistence, '/tmp/test');
-        $this->assertSame([], $restored);
+            $restored = $boxer->restoreState($persistence, $path);
+            $this->assertSame([], $restored);
+        } finally {
+            self::removeStateSandbox($dir);
+        }
     }
 
     public function testGetWidth(): void
@@ -314,5 +317,24 @@ final class BoxerTest extends TestCase
         })->setSize(100, 50);
 
         $this->assertSame(50, $boxer->getHeight());
+    }
+    private static function stateSandbox(): string
+    {
+        $dir = sys_get_temp_dir() . '/dash-state-' . bin2hex(random_bytes(4));
+        if (!mkdir($dir, 0700)) {
+            throw new \RuntimeException('could not create state sandbox');
+        }
+
+        return $dir;
+    }
+
+    private static function removeStateSandbox(string $dir): void
+    {
+        foreach ((array) scandir($dir) as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                @unlink($dir . '/' . $entry);
+            }
+        }
+        @rmdir($dir);
     }
 }

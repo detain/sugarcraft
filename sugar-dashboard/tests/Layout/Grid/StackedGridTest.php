@@ -97,87 +97,84 @@ final class StackedGridTest extends TestCase
 
     public function testPersistStateSavesCollapsedAddresses(): void
     {
-        $grid = new StackedGrid();
-        $persistence = $this->createMock(Persistence::class);
+        // Persistence is final — the real save/load round-trip IS the pin.
+        $dir = self::stateSandbox();
+        try {
+            $path = $dir . '/grid-state.json';
+            $persistence = new Persistence();
 
-        $persistence->expects($this->once())
-            ->method('save')
-            ->with(
-                '/path/to/state',
-                $this->callback(function($data) {
-                    return isset($data['collapsedAddresses'])
-                        && $data['collapsedAddresses'] === ['address1', 'address2'];
-                })
+            (new StackedGrid())->persistState($persistence, $path, ['address1', 'address2']);
+
+            $this->assertSame(
+                ['collapsedAddresses' => ['address1', 'address2']],
+                $persistence->load($path),
             );
-
-        $grid->persistState($persistence, '/path/to/state', ['address1', 'address2']);
+        } finally {
+            self::removeStateSandbox($dir);
+        }
     }
 
     public function testPersistStateWithEmptyCollapsedAddresses(): void
     {
-        $grid = new StackedGrid();
-        $persistence = $this->createMock(Persistence::class);
+        $dir = self::stateSandbox();
+        try {
+            $path = $dir . '/grid-state.json';
+            $persistence = new Persistence();
 
-        $persistence->expects($this->once())
-            ->method('save')
-            ->with(
-                '/path/to/state',
-                $this->callback(function($data) {
-                    return $data['collapsedAddresses'] === [];
-                })
-            );
+            (new StackedGrid())->persistState($persistence, $path, []);
 
-        $grid->persistState($persistence, '/path/to/state', []);
+            $this->assertSame(['collapsedAddresses' => []], $persistence->load($path));
+        } finally {
+            self::removeStateSandbox($dir);
+        }
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // restoreState
-    // ═══════════════════════════════════════════════════════════════
 
     public function testRestoreStateReturnsCollapsedAddresses(): void
     {
-        $grid = new StackedGrid();
-        $persistence = $this->createMock(Persistence::class);
+        $dir = self::stateSandbox();
+        try {
+            $path = $dir . '/grid-state.json';
+            $persistence = new Persistence();
+            $persistence->save($path, ['collapsedAddresses' => ['addr1', 'addr2']]);
 
-        $persistence->expects($this->once())
-            ->method('load')
-            ->with('/path/to/state')
-            ->willReturn(['collapsedAddresses' => ['addr1', 'addr2']]);
+            $addresses = (new StackedGrid())->restoreState($persistence, $path);
 
-        $addresses = $grid->restoreState($persistence, '/path/to/state');
-
-        $this->assertSame(['addr1', 'addr2'], $addresses);
+            $this->assertSame(['addr1', 'addr2'], $addresses);
+        } finally {
+            self::removeStateSandbox($dir);
+        }
     }
 
     public function testRestoreStateWithNullDataReturnsEmptyArray(): void
     {
-        $grid = new StackedGrid();
-        $persistence = $this->createMock(Persistence::class);
+        $dir = self::stateSandbox();
+        try {
+            $persistence = new Persistence();
 
-        $persistence->expects($this->once())
-            ->method('load')
-            ->with('/path/to/state')
-            ->willReturn(null);
+            $addresses = (new StackedGrid())->restoreState($persistence, $dir . '/nonexistent.json');
 
-        $addresses = $grid->restoreState($persistence, '/path/to/state');
-
-        $this->assertSame([], $addresses);
+            $this->assertSame([], $addresses);
+        } finally {
+            self::removeStateSandbox($dir);
+        }
     }
 
     public function testRestoreStateWithMissingKeyReturnsEmptyArray(): void
     {
-        $grid = new StackedGrid();
-        $persistence = $this->createMock(Persistence::class);
+        $dir = self::stateSandbox();
+        try {
+            $path = $dir . '/grid-state.json';
+            $persistence = new Persistence();
+            $persistence->save($path, ['other' => 'data']);
 
-        $persistence->expects($this->once())
-            ->method('load')
-            ->with('/path/to/state')
-            ->willReturn(['other' => 'data']);
+            $addresses = (new StackedGrid())->restoreState($persistence, $path);
 
-        $addresses = $grid->restoreState($persistence, '/path/to/state');
-
-        $this->assertSame([], $addresses);
+            $this->assertSame([], $addresses);
+        } finally {
+            self::removeStateSandbox($dir);
+        }
     }
+
 
     // ═══════════════════════════════════════════════════════════════
     // withTheme
@@ -252,4 +249,25 @@ final class StackedGridTest extends TestCase
         $rendered = $grid->render();
         $this->assertIsString($rendered);
     }
+
+    private static function stateSandbox(): string
+    {
+        $dir = sys_get_temp_dir() . '/dash-state-' . bin2hex(random_bytes(4));
+        if (!mkdir($dir, 0700)) {
+            throw new \RuntimeException('could not create state sandbox');
+        }
+
+        return $dir;
+    }
+
+    private static function removeStateSandbox(string $dir): void
+    {
+        foreach ((array) scandir($dir) as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                @unlink($dir . '/' . $entry);
+            }
+        }
+        @rmdir($dir);
+    }
+
 }
