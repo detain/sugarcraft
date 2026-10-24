@@ -102,7 +102,17 @@ final class StepPressureCheckTest extends TestCase
         // adds on top tips the second one over.
         $provider = self::provider($calls, $seen, $events, window: 8_000, basePrompt: 6_000);
 
-        EngineBackend::new($provider, 'm')->withTools([self::probe(4_000)])->withMaxSteps(5)
+        // withWrapUpAt(0): the 4.7-2 wrap-up guard is OFF for this test ON
+        // PURPOSE. What is pinned here is the StepStarted pressure VERDICT,
+        // and the guard judges the same figures against a percent threshold
+        // computed from the SAME tiny 8k window. And withRoot(sys_get_temp_dir())
+        // roots the turn away from THIS checkout: without it the harness
+        // `<turn-context>` row rides `git status` and the live unstaged diff
+        // of the runner's tree (MEASURED: 916 B in a clean checkout, 9 KB once
+        // an unrelated working-tree diff sat under it), which inflates step 1's
+        // estimate — an inherited environment, never a verdict change. The
+        // guard and the ambient row are each pinned where their subject is.
+        EngineBackend::new($provider, 'm')->withTools([self::probe(4_000)])->withMaxSteps(5)->withWrapUpAt(0)->withRoot(sys_get_temp_dir())
             ->completeTranscript([new UserMessage('go')], onStep: static function (object $e) use (&$events): void {
                 if ($e instanceof StepStarted) {
                     $events[] = $e;
