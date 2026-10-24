@@ -185,9 +185,10 @@ final class RendererFactoryTest extends TestCase
 
     /**
      * Regression for F3. RendererFactory::autoMode() must return a Mode enum
-     * case (not null, not a renderer) so Reel::play() can pass it to
-     * Player::open() which requires an explicit Mode — the auto-detected mode
-     * was previously only used internally by auto() and never surfaced.
+     * case (not null, not a renderer) so Reel::play() can resolve the
+     * auto-detected Mode once and hand Player::open() the concrete case it
+     * threads into the decoder and renderer — the auto-detected mode was
+     * previously only used internally by auto() and never surfaced.
      *
      * @testdox autoMode() returns a Mode enum case
      */

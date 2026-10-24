@@ -43,6 +43,10 @@
         "phpunit/phpunit": "^10.5",
         "sugarcraft/sugar-testing": "dev-master"
     },
+    "suggest": {
+        "ext-gd": "Required for .gif playback and animated .webp decoding (the pure-PHP routes; no ffmpeg needed). mp4/avi/webm need the ffmpeg and ffprobe binaries on $PATH — a runtime toolchain, not a Composer package.",
+        "ext-mbstring": "Used by the WebVTT subtitle parser for UTF-8-safe cue truncation in the caption overlay."
+    },
     "autoload": {
         "psr-4": {
             "SugarCraft\\Video\\": "src/"

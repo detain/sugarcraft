@@ -153,11 +153,17 @@ final class Player implements Model
      * Probes the video to get FPS and dimensions, creates the appropriate
      * decoder, and returns a Player in the paused state at frame 0.
      *
+     * Leaving $mode unset auto-detects the terminal's best rendering mode —
+     * the same ladder {@see Reel::play()} resolves through, so both entry
+     * points answer identically (single source: {@see RendererFactory::autoMode()}).
+     *
      * @param string     $videoPath    Path to the video file (mp4, gif, avi, etc.)
      * @param int       $cellsW       Target terminal cell width
      * @param int       $cellsH       Target terminal cell height
      * @param float|null $fpsOverride FPS override (null = auto from probe)
-     * @param Mode       $mode         Rendering mode (decoder resolution matches it)
+     * @param Mode|null  $mode         Rendering mode (decoder resolution matches it);
+     *                                null (default) = probe the terminal and pick the
+     *                                best available mode
      * @param bool       $loop         Restart from the beginning at end-of-stream instead of stopping
      * @param string     $ramp         Luma ramp name: 'minimal', 'standard', 'dense'
      * @param int        $cellPxW      Pixel width of a terminal cell — graphics modes decode at
@@ -169,9 +175,21 @@ final class Player implements Model
      * @param float        $frameBudgetMs Wall-clock budget (ms) for one tick's catch-up
      *                            decode before it defers the rest to the next tick
      *                            (0 = unbounded, the pre-budget behaviour)
+     * @param (callable():Mode)|null $autoModeChooser Test seam consulted ONLY when
+     *                            $mode is null: supplies the resolved auto-mode
+     *                            without probing the live terminal, so the default
+     *                            path stays hermetic under hostile CI environments
+     *                            (TERM/COLORTERM churn). Default null = resolve via
+     *                            {@see RendererFactory::autoMode()}.
      */
-    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, Mode $mode = Mode::HalfBlock, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20, ?WebVtt $subtitles = null, array $headers = [], float $frameBudgetMs = 0.0): self
+    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, ?Mode $mode = null, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20, ?WebVtt $subtitles = null, array $headers = [], float $frameBudgetMs = 0.0, ?\Closure $autoModeChooser = null): self
     {
+        // Null mode = auto-detect, resolved once here at the boundary so every
+        // downstream consumer (decoder geometry, renderer, mode cycling) trusts
+        // a concrete Mode. The chooser is the hermetic test seam; production
+        // callers leave it null and get the live probe.
+        $mode ??= $autoModeChooser !== null ? $autoModeChooser() : RendererFactory::autoMode();
+
         $source = VideoSource::probe($videoPath);
 
         // FPS from probe, default 24 if not available. Use override when set.
@@ -781,7 +799,7 @@ final class Player implements Model
         }
 
         // m : cycle rendering mode through ONLY the modes the terminal supports.
-        // Build the cycle dynamically based on Mosaic::diagnose() capabilities (F2 tail).
+        // Build the cycle dynamically based on Mosaic::diagnose() capabilities.
         if ($msg->type === KeyType::Char && $msg->rune === 'm') {
             // Always present: text modes.
             $textModes = [Mode::Ascii, Mode::Ansi256, Mode::TrueColor, Mode::HalfBlock, Mode::QuarterBlock];
@@ -811,7 +829,7 @@ final class Player implements Model
             // Rebuild the decoder ONLY when the new mode needs a different decode
             // geometry — the frames already in hand are exactly what an
             // equal-geometry mode renders, so re-spawning ffmpeg and decoding
-            // forward to the current playhead (finding #13) would be pure churn.
+            // forward to the current playhead would be pure churn.
             if (self::decodeGeometry($nextMode) === self::decodeGeometry($this->mode)) {
                 return [$this->mutate([
                     'mode' => $nextMode,
@@ -837,7 +855,7 @@ final class Player implements Model
      * The decode geometry a rendering mode demands from its source, as an
      * opaque comparable signature.
      *
-     * WHY this is the right reuse key (finding #13): a decoder consults the mode
+     * WHY this is the right reuse key: a decoder consults the mode
      * for exactly three things — `isGraphics()` (rawvideo rgb24 vs a PNG
      * image2pipe), `colsPerCell()` and `rowsPerCell()` (the pixel size of one
      * source cell). `FfmpegDecoder::open()` and `GifDecoder::open()` derive
@@ -891,8 +909,8 @@ final class Player implements Model
             $out = $this->frameToBuffer($frame, $this->mode)->toAnsi();
         }
 
-        // Subtitle overlay: append a centered caption line at the bottom when
-        // a subtitle cue is active for the current videoTime.
+        // Subtitle overlay: append a left-aligned caption line (padded to the
+        // cell width) below the frame when a cue is active for videoTime.
         if ($this->subtitles !== null) {
             $caption = $this->subtitles->cueAt($this->videoTime);
             if ($caption !== null) {

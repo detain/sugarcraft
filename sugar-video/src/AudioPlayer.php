@@ -13,7 +13,7 @@ use SugarCraft\Video\Support\FfmpegCommandBuilder;
  * Audio playback subprocess wrapper for video files.
  *
  * Spawns ffplay (`-nodisp -autoexit`) or mpv (`--no-video`) as a video-less
- * audio companion. Per the v1 design (video_plan.md lines 36-38) the audio
+ * audio companion. By design the audio
  * is not a position-reporting master clock — ffplay exposes no playhead — so
  * instead the Player starts audio and resets its own wall clock at the same
  * instant, then paces video off that clock with frame-skip resync. pause()/

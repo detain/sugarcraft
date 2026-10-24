@@ -12,7 +12,7 @@ use SugarCraft\Video\Render\Mode;
 /**
  * Decoder implementation that wraps sugar-animation's pure-PHP GIF decoder.
  *
- * Uses AnimationDecoder::decodeBytes() (E-07/E-11) to get a stream of
+ * Uses AnimationDecoder::decodeBytes() to get a stream of
  * AnimationFrame objects over bytes captured ONCE at open, then converts each
  * frame's cell grid to an RgbFrame:
  *   - AnimationFrame::$cells is list<list<array{0:int,1:int,2:int}|null>>
@@ -22,14 +22,13 @@ use SugarCraft\Video\Render\Mode;
  *     same pixel resolution as FfmpegDecoder for the given mode (HalfBlock packs
  *     2 source rows per cell → cellsH * 2; the 1-row modes → cellsH).
  *
- * @see video_plan.md lines 175-180
  * @implements Decoder
  */
 final class GifDecoder implements Decoder
 {
     /**
      * Byte ceiling for the open-time GIF capture, mirroring sugar-image's
-     * `ImageSource::MAX_BYTES` (E-11): the whole point of holding the bytes
+     * `ImageSource::MAX_BYTES`: the whole point of holding the bytes
      * is that no LATER read can surprise us with more, so the ceiling must
      * fire at the first (and only) read.
      */
@@ -38,7 +37,7 @@ final class GifDecoder implements Decoder
     /**
      * `st_mode` masks used by {@see readBoundedBytes()} to prove the source
      * is a regular file at every check, mirroring the constants
-     * sugar-image's round-4 hardened ingress uses (same S_IFmt/S_IFREG pair).
+     * sugar-image's hardened ingress uses (same S_IFmt/S_IFREG pair).
      */
     private const STAT_TYPE_MASK = 0170000;
     private const STAT_REGULAR_BIT = 0100000;
@@ -51,11 +50,11 @@ final class GifDecoder implements Decoder
     private int $cellsH = 0;
 
     /**
-     * The container bytes captured at open (E-11). Every decode this object
+     * The container bytes captured at open. Every decode this object
      * performs — open, re-hydrate, reopen — runs over THIS buffer, never over
      * the caller's path again: a file swapped beneath a live player used to
      * change frame counts and dimensions mid-playback, the exact cross-open
-     * TOCTOU sugar-image hardened against in round 4. Survives close() by
+     * TOCTOU sugar-image hardened against. Survives close() by
      * design (bounded by MAX_SOURCE_BYTES, released with the object); a fresh
      * open of a DIFFERENT source replaces it.
      */
@@ -64,7 +63,7 @@ final class GifDecoder implements Decoder
     private string $bytesSource = '';
 
     /**
-     * E-02: total playthroughs AUTHORED by the NETSCAPE2.0 loop extension of
+     * Total playthroughs AUTHORED by the NETSCAPE2.0 loop extension of
      * the captured bytes (libnsgif normalisation: raw 0 and no-extension both
      * mean infinite = null; raw N means N+1). null while unopened or when the
      * stream is unauthored. Read via {@see loopCount()}; it is pure file
@@ -110,7 +109,7 @@ final class GifDecoder implements Decoder
      * (cellsW·cellPxW × cellsH·cellPxH) so the image protocols get real detail —
      * the raw frame is handed to {@see GraphicsRenderer}, which encodes it once.
      *
-     * @see GifDecoder::reopen() for the E-11 bytes-ingress note on re-decodes.
+     * @see GifDecoder::reopen() for the single-capture note on re-decodes.
      */
     public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
@@ -126,7 +125,7 @@ final class GifDecoder implements Decoder
             ]));
         }
 
-        // E-11/E-07: the source is read EXACTLY ONCE, here, bounded by
+        // Single-capture law: the source is read EXACTLY ONCE, here, bounded by
         // MAX_SOURCE_BYTES. From this point on every decode in this object's
         // lifetime — including reopen() — runs over $this->bytes, never over
         // $source again, so no later mutation of the file can change what
@@ -142,7 +141,7 @@ final class GifDecoder implements Decoder
      * Rebuild the frame list from the bytes already captured at open.
      *
      * Split out of {@see open()} so reopen() of the SAME source can refresh
-     * the playback state without touching the filesystem again (E-11). The
+     * the playback state without touching the filesystem again. The
      * header-drop notice belongs to the callers — they still have $source.
      */
     private function hydrate(int $cellsW, int $cellsH, float $fps, ?Mode $mode, float $startSec): void
@@ -158,9 +157,9 @@ final class GifDecoder implements Decoder
 
         // Decode the GIF using sugar-animation's pure-PHP decoder, at the resolution the
         // render mode needs: graphics modes decode at the source's own pixel size so the
-        // resident grid is loss-free and the single resample lands at use time (E-11);
+        // resident grid is loss-free and the single resample lands at use time;
         // the text modes scale the cell grid by their source-pixels-per-cell packing.
-        // E-07: the decode runs over the captured bytes, not the path.
+        // The decode runs over the captured bytes, not the path.
         if ($mode?->isGraphics() ?? false) {
             $this->targetW = max(1, $cellsW * $this->cellPxW);
             $this->targetH = max(1, $cellsH * $this->cellPxH);
@@ -171,7 +170,7 @@ final class GifDecoder implements Decoder
             [$decodeW, $decodeH] = [$cellsW * ($mode?->colsPerCell() ?? 1), $cellsH * ($mode?->rowsPerCell() ?? 2)];
         }
 
-        // A3b guard: sugar-animation documents RuntimeException, but an older vendored
+        // Defensive guard: sugar-animation documents RuntimeException, but an older vendored
         // copy (or a new crafted-header shape) could still leak a raw ValueError
         // from imagecreatetruecolor(). Reel's decoder contract is RuntimeException
         // (see FfmpegDecoder), so translate narrowly instead of letting the
@@ -182,8 +181,8 @@ final class GifDecoder implements Decoder
             throw new \RuntimeException("GIF decode failed: {$e->getMessage()}", 0, $e);
         }
 
-        // E-02: the authored loop count, read from the SAME audited bytes as
-        // the frames (never a second open — E-11 law) and re-derived on every
+        // The authored loop count, read from the SAME audited bytes as
+        // the frames (never a second open — the single-capture law) and re-derived on every
         // hydrate, so open, mid-play re-hydrate and same-source reopen all
         // report the truth of the one capture. loopCount() throws only on a
         // bad signature, which the successful decode above has already ruled
@@ -194,7 +193,7 @@ final class GifDecoder implements Decoder
         // the cursor to the frame at $startSec (clamped). GIF timing is per-frame,
         // so this uses the caller's nominal fps as an approximation.
         //
-        // E-11: the clamp is symmetric. The old upper bound was count(), which put
+        // The seek clamp is symmetric. The old upper bound was count(), which put
         // any seek that reached or rounded past the last frame one slot BEYOND it —
         // next() hit EOF at once and the Player's loop wrapped to frame 0, so a
         // late-time seek visibly jumped to START. Landing on the LAST frame is the
@@ -219,14 +218,14 @@ final class GifDecoder implements Decoder
     }
 
     /**
-     * E-02: the playthrough count authored into the GIF's NETSCAPE2.0 loop
+     * The playthrough count authored into the GIF's NETSCAPE2.0 loop
      * extension, normalised by sugar-animation's {@see AnimationDecoder::loopCount()}
      * — null means infinite (no extension present, or the raw-0 "loop forever"
      * value; libnsgif's gif.c:862-871 reading), an integer N >= 2 means N
      * total plays (raw values spell EXTRA repeats, so a total of 1 is not
      * reachable from authored bytes — see {@see playOnce()}). null also answers
      * before any open(); after close() it keeps reporting the last audited
-     * capture, because $bytes outlives close() by design (E-11).
+     * capture, because $bytes outlives close() by design.
      *
      * This is FILE STATE, not playback policy: sugar-video's own looping is
      * the Player's engine-side `loop` flag (restart at EOF), which this
@@ -238,7 +237,7 @@ final class GifDecoder implements Decoder
     }
 
     /**
-     * E-02: true only when the bytes explicitly author exactly one
+     * True only when the bytes explicitly author exactly one
      * playthrough. Unreachable from a valid NETSCAPE extension (raw 0 =
      * forever, raw N > 0 = N+1 totals, so 1 is never produced — libnsgif
      * documents "the only way to play the animation once is not to have this
@@ -265,7 +264,7 @@ final class GifDecoder implements Decoder
      * source pixel per cell, so 384k cells would have been a multi-second,
      * multi-gigabyte way to fail instead of an instant one.
      *
-     * E-11 (taken at W11): the grid is the SOURCE'S OWN SIZE, never a
+     * Single-resample design: the grid is the SOURCE'S OWN SIZE, never a
      * box-derived intermediate. The old rule shrank the pixel box by
      * `min(srcW/targetW, srcH/targetH)` — so a 120×60 GIF presented into an
      * 80×24 cell box decoded at 100×60, a 1.2× horizontal squeeze baked in by
@@ -278,7 +277,7 @@ final class GifDecoder implements Decoder
      * Asking for exactly the screen size makes sugar-animation's
      * `sampleCanvas()` a 1:1 pixel copy (every cell's source span collapses
      * to one pixel), so the resident cell grid IS the composited frame — same
-     * indexed representation, same MAX_CELLS residency envelope E-12 keeps,
+     * indexed representation, same MAX_CELLS residency envelope,
      * just no invented aspect. The one and only resample then happens at use
      * time in true-colour space, current frame only, in {@see upscaleToTarget()}.
      *
@@ -292,7 +291,7 @@ final class GifDecoder implements Decoder
      */
     private function graphicsDecodeGrid(string $bytes, int $targetW, int $targetH): array
     {
-        // E-11: dimensions come from the captured bytes' logical screen
+        // Dimensions come from the captured bytes' logical screen
         // descriptor, not @getimagesize($path) — the path must stay dead after
         // the one open-time capture.
         [$srcW, $srcH] = self::gifScreenDims($bytes);
@@ -353,7 +352,7 @@ final class GifDecoder implements Decoder
 
     /**
      * Read the whole file, once, under the same hard gates sugar-image's
-     * round-4 hardening applies (E-11): the path is opened exactly one time,
+     * hardening applies: the path is opened exactly one time,
      * the entry must be a regular file at BOTH the stat and the post-open
      * fstat (a swap between the two is a TOCTOU plant).
      *
@@ -448,13 +447,13 @@ final class GifDecoder implements Decoder
      * the per-pixel PHP loop the resample exists to avoid. It is also exactly
      * what {@see FfmpegDecoder} already hands the same renderer.
      *
-     * E-11 SINGLE-RESAMPLE DESIGN (taken at W11): because the decode grid is
+     * SINGLE-RESAMPLE DESIGN: because the decode grid is
      * the source's own pixel size, the cells arriving here ARE 1:1 composited
      * source pixels, and this method is the one lossy step between container
      * and presentation. The true-colour rebuild + resample below is the
      * transient per-frame RGBA pass: it materializes ONLY the current frame,
      * inside these braces, and every GD allocation is destroyed before
-     * returning — the resident form stays the indexed cell grid, so E-12's
+     * returning — the resident form stays the indexed cell grid, so the
      * ban on holding N × W × H × 4 for the playback lifetime is untouched
      * (decode-time capture via {@see AnimationFrame::rgbaBytes()} was ruled
      * out for exactly that reason: hydrate() holds every frame eagerly).
@@ -573,7 +572,7 @@ final class GifDecoder implements Decoder
      * @inheritDoc
      *
      * Drops the decoded frames and rewinds the cursor. The captured bytes are
-     * KEPT on purpose (E-11): a reopen of the same source must be able to
+     * KEPT on purpose: a reopen of the same source must be able to
      * re-hydrate without re-reading the path, and the buffer is already
      * bounded by {@see MAX_SOURCE_BYTES} — it is released when this object
      * dies, or replaced when a DIFFERENT source is opened.
@@ -589,11 +588,11 @@ final class GifDecoder implements Decoder
      *
      * Closes and re-hydrates the decoder with the given parameters.
      *
-     * E-11 (IMPLEMENTED, S6.3): the historical bug was that open()/reopen()
+     * Single-capture ingress: the historical bug was that open()/reopen()
      * re-read the PATH on every call, so a file mutated between open and
      * reopen was re-decoded with different frame counts or dimensions
-     * mid-playback — the cross-open TOCTOU sugar-image hardened against in
-     * round 4. It never landed here. It lands now: the bytes are captured
+     * mid-playback — the cross-open TOCTOU sugar-image hardened against. It
+     * never landed here. It lands now: the bytes are captured
      * once in {@see open()} and a reopen of the SAME source re-hydrates from
      * that capture without touching the filesystem again. Reopening a
      * DIFFERENT source takes the fresh-capture path (a legit playlist hop).

@@ -22,7 +22,6 @@ use SugarCraft\Video\Render\Color;
  *
  * Luminance (BT.601) is computed by callers via LumaRamp::compute().
  *
- * @see video_plan.md lines 79-82
  */
 final readonly class RgbFrame
 {

@@ -8,9 +8,9 @@ use SugarCraft\Video\Lang;
 use SugarCraft\Video\Render\Mode;
 
 /**
- * E-05.2: animated WebP decoder — pure PHP + GD, no subprocess.
+ * Animated WebP decoder — pure PHP + GD, no subprocess.
  *
- * WHY NOT FFMPEG (the plan's first candidate, refuted by measurement on this
+ * WHY NOT FFMPEG (refuted by measurement on this
  * tree's host): ffmpeg's webp demuxer AND its native webp decoder both skip
  * ANMF chunks outright — `ffmpeg -i anim.webp -f image2pipe -vcodec png -`
  * exits "image data not found" (or yields only a base canvas frame when the
@@ -22,8 +22,8 @@ use SugarCraft\Video\Render\Mode;
  * with GD decoding each frame's embedded still bitstream. No child process
  * is spawned at all: the bounded-reap/roster machinery of the ffmpeg
  * decoders is simply not needed here, and playback works on hosts without
- * ffmpeg — the refusal→decode flip E-05.2 asked for, one dependency richer
- * for nothing.
+ * ffmpeg — a route that decodes where the old code refused to, one
+ * dependency richer for nothing.
  *
  * HOW IT WORKS: the container is parsed once at open() — every ANMF chunk
  * carries a complete still-WebP chunk sequence (VP8/VP8L, optional ALPH) in
@@ -147,7 +147,7 @@ final class AnimatedWebpDecoder implements Decoder
      *
      * Reads ONLY chunk headers (fseek-walks chunk bodies) and stops at the
      * first positive signal — a VP8X with the animation flag, or any ANMF
-     * chunk (the sugar-image E-05.1 detector shape, kept equivalent so both
+     * chunk (the sugar-image webp-detector shape, kept equivalent so both
      * halves of the ecosystem agree on what "animated" means). Truncated or
      * non-WebP input answers false: the caller then routes as before and the
      * ordinary loud failure happens downstream. Never decodes anything.
@@ -281,7 +281,7 @@ final class AnimatedWebpDecoder implements Decoder
 
         // Container-truth seek: walk cumulative durations to the frame that
         // owns $startSec; a seek past the end lands on the LAST frame
-        // (GifDecoder E-11 polarity — jumping to START on a late seek is the
+        // (GifDecoder's single-capture seek polarity — jumping to START on a late seek is the
         // visible bug the symmetric clamp avoids).
         if ($startSec > 0.0 && $this->delaysMs !== []) {
             $targetMs = $startSec * 1000.0;
