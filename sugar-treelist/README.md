@@ -40,7 +40,9 @@ composer require sugarcraft/sugar-treelist
 ```php
 use SugarCraft\TreeList\{Model, StringItem, DefaultPrefixer, DefaultSuffixer};
 
-// Fluent setters RETURN NEW Models — rebind (or chain); instances are immutable.
+// Fluent setters RETURN NEW Models — rebind (or chain); instances are immutable
+// as far as data goes — but view()/resetPreviousFrame() mutate the delta-render
+// frame memo in place (see Buffer diffing).
 $model = Model::new()->setWidth(80)->setHeight(24);
 $model = $model->addItem(new StringItem('First item'));
 $model = $model->addItem(new StringItem('Second item'));
@@ -123,7 +125,8 @@ Attach a filter function to narrow the visible items. The model tracks filter st
 ```php
 use SugarCraft\TreeList\{Model, StringItem, FilterState};
 
-// Start with a list (rebind each step — the model is immutable)
+// Start with a list (rebind each step — setters return new Models;
+// only the delta-render frame memo is mutated in place by view())
 $model = Model::new()->setWidth(80)->setHeight(24);
 foreach (['apple', 'banana', 'cherry', 'apricot', 'blueberry'] as $f) {
     $model = $model->addItem(new StringItem($f));

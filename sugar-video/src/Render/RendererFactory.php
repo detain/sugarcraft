@@ -17,7 +17,7 @@ use SugarCraft\ColorProfile\Probe\Capability;
  * auto() picks the best available rendering mode by probing terminal
  * capabilities (sixel > kitty > iterm2) then falling back to
  * color-profile detection (TrueColor > Ansi256 > Ascii). The text-cell
- * TrueColor rung is F-06 symbol-gated: HalfBlock draws Unicode blocks,
+ * TrueColor rung is symbol-gated: HalfBlock draws Unicode blocks,
  * and a terminal whose table row says blocks are unsafe (TERM=linux
  * console, cmd.exe — chicle's LINUX_CONSOLE_SYMS/WIN_TERMINAL_SYMS rows)
  * steps down to the Ansi256 rung, whose grayscale ramp is pure ASCII.
@@ -34,13 +34,13 @@ final class RendererFactory
      *  1. Sixel if Mosaic::diagnose() reports sixel support
      *  2. Kitty if Mosaic::diagnose() reports kitty support
      *  3. Iterm2 if Mosaic::diagnose() reports iterm2 support
-     *  4. TrueColor profile → HalfBlock, F-06-gated on safe block glyphs;
+     *  4. TrueColor profile → HalfBlock, gated on safe block glyphs;
      *     on an ASCII-only seat the rung steps down to Ansi256
      *  5. Ansi256 profile → Ansi256
      *  6. Default → Ascii
      *
      * This is the mode-picking logic extracted so Reel::play() can resolve
-     * the auto-detected Mode and pass it to Player::open() (F3).
+     * the auto-detected Mode and pass it to Player::open().
      */
     public static function autoMode(): Mode
     {
@@ -56,7 +56,7 @@ final class RendererFactory
     }
 
     /**
-     * F-06: the pure decision behind autoMode() — resolved inputs in, Mode
+     * The pure decision behind autoMode() — resolved inputs in, Mode
      * out, no probing. autoMode() collects the live signals (capability
      * report, color profile, and the PURE TermDb table consult — no tty, no
      * exec, matching the ladder's own "no invented detection" rule); tests
@@ -85,7 +85,7 @@ final class RendererFactory
             if ($info->symbolIsSafe(TermInfo::SYMBOL_BLOCK)) {
                 return Mode::HalfBlock;
             }
-            // F-06 fall-through: block glyphs would mojibake; keep color,
+            // Fall-through: block glyphs would mojibake; keep color,
             // drop to the text-cell tier one rung down.
             return Mode::Ansi256;
         }
