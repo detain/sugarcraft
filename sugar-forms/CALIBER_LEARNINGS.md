@@ -58,7 +58,7 @@ sugar-forms TextInput + TextArea (TUI-3B: vertical CursorUp/CursorDown motion
 and character-wise visual selection ride the same shared vocabulary),
 sugar-readline ViMode, sugar-forms (via class_alias),
 sugar-widgets (via class_alias). Add new bindings to VimAction enum + VimKeyHandler
-so all consumers benefit. Mirrors: `docs/repo_map_step_24.md`.
+so all consumers benefit. Mirrors: `docs/old/repo_map_step_24.md`.
 
 Note (TUI-3B, campaign R4 pending): the visual-LINE mode's pinned
 j→CursorLeft/k→CursorRight direction is NOT flipped by the new vertical
@@ -69,7 +69,7 @@ line-wise direction stays an open owner ruling (findings/plan_sugar-forms.md
 Anti-pattern: Do NOT add new vim keybindings to per-lib branching logic.
 Always add to `VimAction` enum + `VimKeyHandler` so all 4 libs benefit.
 
-- **[pattern:async-suggestions:cancel]** Use `CancellationToken` for any user-cancellable async op. ReactPHP loop is shared — accept `LoopInterface`, don't construct. When implementing debounced async suggestions (e.g. `withAsyncSuggestions`), store a `CancellationSource` on the model and call `cancel()` on the previous source before scheduling a new timer, so rapid keystrokes only fire one fetch. The pattern: `$previous?->cancel(); $next = $next->withPendingAsyncCancellation(CancellationSource::new());`. Mirrors: `docs/repo_map_update.md §23.4`.
+- **[pattern:async-suggestions:cancel]** Use `CancellationToken` for any user-cancellable async op. ReactPHP loop is shared — accept `LoopInterface`, don't construct. When implementing debounced async suggestions (e.g. `withAsyncSuggestions`), store a `CancellationSource` on the model and call `cancel()` on the previous source before scheduling a new timer, so rapid keystrokes only fire one fetch. The pattern: `$previous?->cancel(); $next = $next->withPendingAsyncCancellation(CancellationSource::new());`. Mirrors: `docs/old/repo_map_update.md §23.4`.
 
 - **[pattern:mouse-zone-drag:slider]** crush_media W3.2 added Slider mouse-drag with ZERO new composer
   requires: it types `SugarCraft\Core\Msg\MouseMsg` directly (sugar-core is already required). Two doors:
@@ -102,4 +102,4 @@ Always add to `VimAction` enum + `VimKeyHandler` so all 4 libs benefit.
 - **[pattern:async-suggestions-debounce]** `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` on Input/Select uses `React\EventLoop\Loop::addTimer()` for debouncing, `React\Async\defer()` for async fetch wrapping, and dispatches `SugarCraft\Core\Msg\SuggestionsReadyMsg` when results arrive. The 150 ms default balances responsiveness against API call volume.
 - **[pattern:validator-short-form-methods]** Input field exposes short-form validator chains (`required()`, `email()`, `minlength(int)`, `maxlength(int)`) that delegate to `withValidator(new ValidatorType(...))`. This reduces boilerplate from `Input::new('x')->withValidator(new Required())->withValidator(new Email())` to `Input::new('x')->required()->email()`.
 - **[pattern:fuzzy-alias-repoint-with-back-compat]** The `Fuzzy\FuzzyMatcher` class was repointed to delegate to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` (the sugar-fuzzy implementation) with a back-compat shim kept at the old FQN so existing call sites resolve unchanged. When repointing a class_alias, always verify the oldFQN is still loadable and add a dedicated alias-resolution test to catch accidental breakage.
-- **[anti-pattern:vim-keybindings-per-lib]** Do NOT add new vim keybindings to per-lib branching logic. Vim mode is handled by `sugar-forms/src/Vim/VimKeyHandler` (shared). Always add new bindings to `VimAction` enum + `VimKeyHandler` so sugar-widgets, sugar-forms, and sugar-readline all benefit at once. Mirrors: `docs/repo_map_step_24.md`.
+- **[anti-pattern:vim-keybindings-per-lib]** Do NOT add new vim keybindings to per-lib branching logic. Vim mode is handled by `sugar-forms/src/Vim/VimKeyHandler` (shared). Always add new bindings to `VimAction` enum + `VimKeyHandler` so sugar-widgets, sugar-forms, and sugar-readline all benefit at once. Mirrors: `docs/old/repo_map_step_24.md`.

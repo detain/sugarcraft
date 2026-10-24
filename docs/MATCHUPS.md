@@ -62,7 +62,7 @@ ships as `App\` — called out in the table below.
 | **SugarInput** (`sugar-input/`) | 🟢 ready | Terminal escape sequence decoder — legacy keys (incl. xterm modified forms `CSI number;mods ~`), Kitty keyboard protocol event frames `CSI code;mods u` (the `CSI ?…u` shape is the flags reply family), SGR 1006/1016 + urxvt 1015 + X10 mouse, focus events, bracketed paste. Unblocks sugar-readline production use. |
 | **SugarTreelist** (`sugar-treelist/`) | 🟢 ready | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
 | **SugarPanels** (`sugar-panels/`) | 🟢 ready | Box-drawing layout engine — H/V panel composition with weighted sizing, borders, and nested grids. |
-| **SugarOverlay** (`sugar-overlay/`) | 🟢 ready | Terminal overlay compositor — composites Veil overlays with backdrop dimming, z-stack ordering, positioning, and click-outside hit-testing; untrusted-content sweep at the stack boundary. |
+| **SugarOverlay** (`sugar-overlay/`) | 🟢 ready | Terminal overlay compositor — composites Veil overlays with backdrop dimming, z-stack ordering, positioning, and click-outside hit-testing; opt-in `Veil::withUntrustedContent()` at the veil boundary. |
 | **SugarNavstack** (`sugar-navstack/`) | 🟢 ready | Navigation breadcrumbs — mutable NavStack with explicit push/pop, width-aware breadcrumbs, and substring filter. |
 | **SugarDashboard** (`sugar-dashboard/`) | 🟢 ready | Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more. |
 | **SugarQuickpick** (`sugar-quickpick/`) | 🟢 ready | Fuzzy finder overlay — renders over your app's view string while the background keeps updating; type to filter, arrow keys to select, Enter to confirm. |

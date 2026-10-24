@@ -585,7 +585,7 @@ standard. Both methods return `array<string, Theme>`.
 Use `assertGoldenAnsi` for any new `render()` test. Fixture files live
 in `tests/fixtures/` with a `.golden` extension. Re-record goldens with
 `UPDATE_GOLDENS=1 vendor/bin/phpunit` after intentional output changes.
-Mirrors: `docs/repo_map_step_28.md`.
+Mirrors: `docs/old/repo_map_step_28.md`.
 
 
 ## Async input surface (finding #29)

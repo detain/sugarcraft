@@ -97,8 +97,10 @@ abstract class MyAsyncAuth extends AsyncMiddleware
 
 `handleAsync()` returning a promise that resolves allows the chain to
 continue to `$next`; rejecting the promise short-circuits the chain.
-`await()` (called internally) enforces a 30-second timeout to prevent
-async middleware from hanging indefinitely.
+`handle()` is a pure adapter — the promise is settled at the single
+settle point in the transport stack walk (`DispatchesMiddlewareStack`
+via `PromiseAwait::settle()`), which enforces a 30-second timeout to
+prevent async middleware from hanging indefinitely.
 
 ### Transport interface
 
@@ -193,7 +195,8 @@ Pass a custom handler to `InProcessTransport`:
 ```php
 use SugarCraft\SshServer\Transport\InProcessTransport;
 
-$transport = new InProcessTransport($ptySystem, new MyCustomChannelHandler());
+$transport = new InProcessTransport($ptySystem);
+$transport->setChannelHandler(new MyCustomChannelHandler());
 Server::new()->withTransport($transport)->serve();
 ```
 

@@ -312,7 +312,7 @@ timing rounding) before relaxing the test.
 Use `assertGoldenAnsi` for any new `render()` test. Fixture files live
 in `tests/fixtures/` with a `.golden` extension. Re-record goldens with
 `UPDATE_GOLDENS=1 vendor/bin/phpunit` after intentional output changes.
-Mirrors: `docs/repo_map_step_28.md`.
+Mirrors: `docs/old/repo_map_step_28.md`.
 
 ## Phase 6 audit findings (2026-07-01)
 

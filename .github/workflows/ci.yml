@@ -439,8 +439,9 @@ jobs:
       # flagship app. FAILS ONLY ON HIGH/CRITICAL advisories — low/medium are
       # ignored by severity so the gate stays actionable instead of rotting
       # into rerun-noise. `composer install` with no committed lock writes a
-      # fresh lock on the runner, and audit reads exactly that (there is no
-      # committed composer.lock in this repo by policy).
+      # fresh lock on the runner, and audit reads exactly that (per-lib
+      # composer.lock files are banned by policy; only the root umbrella
+      # composer.lock is committed).
       #
       # ACCEPTED-ADVISORY MECHANISM: `composer audit` has no --ignore=ID flag;
       # per-advisory exemptions live in the manifest as config.audit.ignore.
