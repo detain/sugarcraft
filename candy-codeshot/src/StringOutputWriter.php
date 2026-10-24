@@ -25,8 +25,17 @@ final class StringOutputWriter implements OutputWriter
     /**
      * Return the accumulated output as a string.
      */
-    public function getResult(): string
+    public function result(): string
     {
         return $this->buffer;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::result()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getResult(): string { return $this->result(); }
 }

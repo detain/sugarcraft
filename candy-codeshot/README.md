@@ -240,6 +240,16 @@ Build a custom theme via the `Theme` constructor — set background / foreground
 cd candy-codeshot && composer install && vendor/bin/phpunit
 ```
 
+## Accessor deprecation (2026-10-24)
+
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, `StringOutputWriter::getResult()` was renamed to its bare twin `result()` — unclaimed on the class, and deliberately not lifted onto the `OutputWriter` interface, because `FileOutputWriter` has no accumulated string to hand back; `result()` is this implementation's surface. The legacy spelling stays a byte-identical one-line BC forwarder marked `@deprecated` with `REMOVED-IN: 2.0.0`; it will be removed in candy-codeshot v2.0.0.
+
+| Namespace | Class | Deprecated | Use instead |
+|-----------|-------|------------|-------------|
+| `CodeShot` | `StringOutputWriter` | `getResult()` | `result()` |
+
+`tests/AccessorDeprecationTest.php` pins BC identity on a live writer (empty buffer, after writes, after flush), the forwarder shape (single return line + markers), a discovery-first `src/` census with an inverse leg that reddens any unmarked public `get*()`, and the README table agreement. The bundled renderers never call the writer, so there were no internal call sites to switch; the existing `StringOutputWriterTest` needles stay green through the forwarder.
+
 ## Credits & inspiration
 
 Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
