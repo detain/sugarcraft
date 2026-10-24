@@ -3,6 +3,8 @@
 `candy-vcr` provides extension points for custom recording behaviour,
 sanitisation, metadata injection, and custom message serialisation.
 
+See also the operational counterpart: [Hub Admin Guide](../admin/candy-vcr.md).
+
 ---
 
 ## Extension points
@@ -13,9 +15,9 @@ The `Format` interface (`SugarCraft\Vcr\Format\Format`) is the primary
 extension point for cassette serialization:
 
 ```php
-use SugarCraft\Vcr\Format\Format;
 use SugarCraft\Vcr\Cassette;
 
+// The real SugarCraft\Vcr\Format\Format interface, spelled out:
 interface Format
 {
     public function write(Cassette $cassette, string $path): void;
@@ -56,6 +58,12 @@ $result = $player
     );
 ```
 
+> **Path note:** `/tmp/session.cas` is illustrative. Long-running recorders
+> should write cassettes to a durable, private directory: `systemd-tmpfiles`
+> (enabled by default on most distros) reaps stale `/tmp` entries mid-run,
+> and a fixed world-visible temp name collides between concurrent users.
+> Cassettes are written `0600` by `Recorder::open()` regardless of umask.
+
 `withIdleTrim(?float $seconds)` is a fluent setter — it returns a new
 `Player` instance with the idle-gap threshold set. Pass `null` to disable
 trimming. The threshold can also be passed directly to `play()` via
@@ -67,16 +75,22 @@ Hooks intercept and transform events during recording. They implement
 `SugarCraft\Vcr\Hook\Hook`:
 
 ```php
-use SugarCraft\Vcr\Hook\Hook;
+use SugarCraft\Vcr\Event;
 
+// The real SugarCraft\Vcr\Hook\Hook interface, spelled out:
 interface Hook
 {
-    public function process(string $kind, array $event): array;
+    /** Called before an event is written to the cassette. */
+    public function beforeSave(Event $event): ?Event;
+
+    /** Called after an event has been written (fire-and-forget). */
+    public function afterCapture(Event $event): void;
 }
 ```
 
-`process()` receives the event kind and a mutable event array. Return the
-(eventually transformed) array to continue; throw to suppress the event.
+`beforeSave()` returns a (potentially modified) `Event` to continue, or
+`null` to skip writing that event entirely. `afterCapture()` is
+fire-and-forget — throwing there does not affect the recording.
 
 **Built-in hooks:**
 

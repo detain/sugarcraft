@@ -4,6 +4,8 @@
 CLI tool (`vendor/bin/candy-vcr record`) and is suitable for capturing
 session replays for bug repro, regression testing, and demo capture.
 
+See also the extension-point counterpart: [Developer Guide](../dev/candy-vcr.md).
+
 ---
 
 ## Operational concerns

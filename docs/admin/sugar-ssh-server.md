@@ -5,6 +5,8 @@ daemon invoked by `sshd` via `ForceCommand` — each SSH connection forks a
 fresh PHP supervisor process that runs the middleware stack and, under
 `InProcessTransport`, spawns a sugar-pty subprocess.
 
+See also the extension-point counterpart: [Developer Guide](../dev/sugar-ssh-server.md).
+
 ---
 
 ## Operational concerns
@@ -123,9 +125,12 @@ of config/credential-as-code surface is documented in
 **Example — composing PasswordAuth + KeyboardInteractive:**
 
 ```php
+use SugarCraft\SshServer\Middleware\Auth\AuthMethods;
 use SugarCraft\SshServer\Middleware\Auth\PasswordAuth;
 use SugarCraft\SshServer\Middleware\Auth\KeyboardInteractive;
-use SugarCraft\SshServer\Middleware\Auth\AuthMethods;
+use SugarCraft\SshServer\Middleware\Spawn;
+use SugarCraft\SshServer\Server;
+use SugarCraft\SshServer\Session;
 
 Server::new()
     ->use(new AuthMethods(['password', 'keyboard-interactive']))
@@ -133,7 +138,10 @@ Server::new()
     ->use(new KeyboardInteractive([
         ['prompt' => 'OTP: ', 'echo' => false],
     ], fn ($responses) => verifyTotp($responses[0])))
-    ->use(new Spawn(...))
+    ->use(new Spawn(fn (Session $s) => [
+        'cmd' => ['/bin/bash', '-l'],
+        'env' => ['TERM' => $s->term, 'USER' => $s->user],
+    ]))
     ->serve();
 ```
 

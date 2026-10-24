@@ -3,6 +3,8 @@
 `sugar-ssh-server` provides extension points for custom middleware, custom
 transports, and custom session factories.
 
+See also the operational counterpart: [Hub Admin Guide](../admin/sugar-ssh-server.md).
+
 ---
 
 ## Extension points
@@ -13,9 +15,11 @@ All middleware implement `SugarCraft\SshServer\Middleware`:
 
 ```php
 use SugarCraft\SshServer\Context;
-use SugarCraft\SshServer\Middleware;
 use SugarCraft\SshServer\Session;
 
+// The real SugarCraft\SshServer\Middleware interface, spelled out
+// (handle() declares no return type: sync middleware returns void,
+// async middleware returns a \React\Promise\PromiseInterface):
 interface Middleware
 {
     /**
@@ -25,7 +29,7 @@ interface Middleware
      *                           to pass control down the chain; omit to
      *                           short-circuit as a terminal middleware
      */
-    public function handle(Context $ctx, Session $session, callable $next): void;
+    public function handle(Context $ctx, Session $session, callable $next);
 }
 ```
 
@@ -131,12 +135,21 @@ injected into `Spawn` and `Keepalive` middleware at stack-walk time so
 those middleware don't need to be transport-aware:
 
 ```php
-use SugarCraft\SshServer\Transport\ChildSpawner;
+use SugarCraft\SshServer\Session;
 
+// The real SugarCraft\SshServer\Transport\ChildSpawner interface, spelled out:
 interface ChildSpawner
 {
-    public function runChild(Session $session, array $cmd, ?array $env): void;
-    public function setKeepaliveCallback(callable $cb): void;
+    /**
+     * Spawn $cmd inside a fresh PTY and pump bytes until the child exits.
+     *
+     * @param list<string>              $cmd
+     * @param array<string,string>|null $env  null inherits parent env
+     */
+    public function runChild(Session $session, array $cmd, ?array $env = null): int;
+
+    /** Forward a signal to the live child (no-op if no child is running). */
+    public function signalChild(int $signal): void;
 }
 ```
 
@@ -149,7 +162,6 @@ to customise channel-level behaviour — replacing PTY allocation, signal
 delivery, shell spawning, etc.
 
 ```php
-use SugarCraft\SshServer\Channel\ChannelHandler;
 use SugarCraft\SshServer\Channel\Msg\PtyReqMsg;
 use SugarCraft\SshServer\Channel\Msg\WindowChangeMsg;
 use SugarCraft\SshServer\Channel\Msg\ShellMsg;
@@ -159,6 +171,7 @@ use SugarCraft\SshServer\Channel\Msg\EnvMsg;
 use SugarCraft\SshServer\Channel\Msg\BreakMsg;
 use SugarCraft\SshServer\Session;
 
+// The real SugarCraft\SshServer\Channel\ChannelHandler interface, spelled out:
 interface ChannelHandler
 {
     public function handlePtyReq(PtyReqMsg $msg, Session $session): void;
@@ -238,19 +251,31 @@ and passed to `Transport::run()`. Each middleware may:
 3. **Short-circuit** — return without calling `$next` to stop the chain
 
 ```php
-public function handle(Context $ctx, Session $session, callable $next): void
+use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware;
+use SugarCraft\SshServer\Session;
+
+final class MyMiddleware implements Middleware
 {
-    if ($ctx->done()) {
-        // Context was cancelled or deadline passed — abort
-        return;
+    public function handle(Context $ctx, Session $session, callable $next): void
+    {
+        if ($ctx->done()) {
+            // Context was cancelled or deadline passed — abort
+            return;
+        }
+
+        // Derive a context with a request ID and 5-second deadline
+        $derived = $ctx
+            ->withValue('requestId', $this->generateId())
+            ->withDeadline(new \DateTimeImmutable('+5 seconds'));
+
+        $next($derived, $session);
     }
 
-    // Derive a context with a request ID and 5-second deadline
-    $derived = $ctx
-        ->withValue('requestId', $this->generateId())
-        ->withDeadline(new \DateTimeImmutable('+5 seconds'));
-
-    $next($derived, $session);
+    private function generateId(): string
+    {
+        return uniqid('', true);
+    }
 }
 ```
 
@@ -281,14 +306,21 @@ anomaly detection, rate-limiting per session ID) reads these fields after
 `withProtocolMetadata()` has been called by the transport.
 
 ```php
-public function handle(Context $ctx, Session $session, callable $next): void
+use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware;
+use SugarCraft\SshServer\Session;
+
+final class ProtocolAuditMiddleware implements Middleware
 {
-    // sessionId / authMethod are null before withProtocolMetadata() is called
-    if ($session->sessionId !== null) {
-        $ctx = $ctx->withValue('session.id', $session->sessionId);
-        $ctx = $ctx->withValue('session.auth_method', $session->authMethod);
+    public function handle(Context $ctx, Session $session, callable $next): void
+    {
+        // sessionId / authMethod are null before withProtocolMetadata() is called
+        if ($session->sessionId !== null) {
+            $ctx = $ctx->withValue('session.id', $session->sessionId);
+            $ctx = $ctx->withValue('session.auth_method', $session->authMethod);
+        }
+        $next($ctx, $session);
     }
-    $next($ctx, $session);
 }
 ```
 
@@ -318,8 +350,21 @@ $this->assertTrue($called);
 and calling `serve()` with a synthetic `Session`:
 
 ```php
+use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware\Logger;
 use SugarCraft\SshServer\Server;
-use SugarCraft\SshServer\Transport\InMemoryTransport; // your test double
+use SugarCraft\SshServer\Session;
+use SugarCraft\SshServer\Transport;
+
+// Your in-memory test double implements the shipped Transport interface.
+// The production transports are InProcessTransport and HostSshdTransport.
+final class InMemoryTransport implements Transport
+{
+    public function run(Context $ctx, Session $session, array $stack): int
+    {
+        return 0; // replay canned exchanges instead of spawning a child
+    }
+}
 
 $server = Server::new()
     ->withTransport(new InMemoryTransport())
@@ -358,16 +403,24 @@ The `Middleware\Auth\*` classes provide pluggable SSH authentication:
 use SugarCraft\SshServer\Middleware\Auth\AuthMethods;
 use SugarCraft\SshServer\Middleware\Auth\PasswordAuth;
 use SugarCraft\SshServer\Middleware\Auth\KeyboardInteractive;
+use SugarCraft\SshServer\Middleware\Spawn;
+use SugarCraft\SshServer\Server;
+use SugarCraft\SshServer\Session;
 
 $server = Server::new()
     // Declare what the server accepts — runs early, before any credential checks
     ->use(new AuthMethods(['publickey', 'password', 'keyboard-interactive']))
     // AuthMethods stores the list in Context so downstream middleware can read it
     ->use(new PasswordAuth(fn ($user, $pw) => verify($user, $pw)))
+    // KeyboardInteractive takes its prompt definitions and a response validator
     ->use(new KeyboardInteractive([
         ['prompt' => 'OTP Code: ', 'echo' => false],
     ], fn ($responses) => verifyTotp($responses[0])))
-    ->use(new Spawn(...));
+    // Spawn is terminal: the factory maps the Session to the command + env
+    ->use(new Spawn(fn (Session $s) => [
+        'cmd' => ['/bin/bash', '-l'],
+        'env' => ['TERM' => $s->term, 'USER' => $s->user],
+    ]));
 ```
 
 **Note:** `AuthMethods` writes to STDOUT and `KeyboardInteractive` reads from STDIN — these are the only middleware that perform I/O before the terminal middleware. Both are safe under either transport, but be aware that in `InProcessTransport` STDIN is the sshd PTY slave (not the caller's terminal) so this I/O is connection-scoped.

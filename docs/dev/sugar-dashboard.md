@@ -13,17 +13,22 @@ The `Module` interface extends `SugarCraft\Core\Model`, aligning with
 the MVC-style Model–Update–View architecture used throughout SugarCraft:
 
 ```php
-use SugarCraft\Dashboard\Module\Module;
-use SugarCraft\Core\Msg;
-
-interface Module extends Model
+// The real SugarCraft\Dashboard\Module\Module interface adds only
+// name() and minSize() on top of \SugarCraft\Core\Model (init/update/
+// view/subscriptions); the signatures are spelled out here for reference:
+interface Module extends \SugarCraft\Core\Model
 {
     public function name(): string;
-    public function init(): ?\Closure;             // invoked once; may return startup Cmd
-    public function update(Msg $msg): array{0: Module, 1: ?\Closure};  // returns [nextModule, ?Cmd]
-    public function view(): string;
-    public function minSize(): array{0: int, 1: int}; // [width, height]
+
+    /** @return array{0: int, 1: int} [width, height] */
+    public function minSize(): array;
 }
+
+// Inherited from \SugarCraft\Core\Model:
+//   public function init(): ?\Closure;
+//   public function update(\SugarCraft\Core\Msg $msg): array;  // [nextModule, ?Cmd]
+//   public function view(): string|\SugarCraft\Core\View;
+//   public function subscriptions(): ?\SugarCraft\Core\Subscriptions;
 ```
 
 **Update return type:** `update(Msg): array{0:Module,1:?Cmd}` — PHP lacks
@@ -84,13 +89,15 @@ $state = $this->getState(); // array<string, mixed>
 avoid breaking third-party modules. New code should implement `Module`.
 
 ```php
+// The real SugarCraft\Dashboard\Module\LegacyModule interface:
 interface LegacyModule
 {
     public function name(): string;
-    public function init(): array;              // returns metadata array
+    public function init(): array;              // @return array<string, mixed> metadata (name, minSize, interval)
     public function update(array $state): array;
     public function view(array $state, int $width, int $height): string;
-    public function minSize(): array{0: int, 1: int};
+    /** @return array{0: int, 1: int} [width, height] */
+    public function minSize(): array;
 }
 ```
 
@@ -387,7 +394,11 @@ $grid->setSize(140, 24);  // wide → two columns side-by-side
 Override the collapse threshold by passing a second argument:
 
 ```php
-if (Breakpoint::narrow($width, threshold: 100)) { ... }
+use SugarCraft\Dashboard\Layout\Breakpoint;
+
+if (Breakpoint::narrow($width, threshold: 100)) {
+    // collapse to a single column
+}
 ```
 
 ---
@@ -434,13 +445,20 @@ that delegate to `Persistence`:
 | `Boxer` | `persistState(Persistence, path, collapsedAddresses)`, `restoreState(Persistence, path): array` |
 | `StackedGrid` | `persistState(Persistence, path, collapsedAddresses)`, `restoreState(Persistence, path): array` |
 
+The fixed `/tmp/dash-*.json` paths in the examples below are for
+readability only. In real use write state under a directory your own
+application owns — a fixed name in world-writable `/tmp` collides between
+concurrent users and processes (mix in a per-session token such as
+`uniqid()` if you must keep a temp path).
+
 #### FocusManager example
 
 ```php
 use SugarCraft\Dashboard\Layout\FocusManager;
 use SugarCraft\Dashboard\State\Persistence;
 
-$fm = FocusManager::new($addresses);
+$fm = new FocusManager();
+$fm = $fm->register('panel-1')->register('panel-2');
 
 // Persist current focus state
 $persistence = new Persistence();
@@ -453,8 +471,7 @@ $fm = $fm->restoreState($persistence, '/tmp/dash-focus.json');
 #### StackedGrid example
 
 ```php
-use SugarCraft\Dashboard\Layout\StackedGrid;
-use SugarCraft\Dashboard\Layout\Options;
+use SugarCraft\Dashboard\Layout\Grid\{StackedGrid, Options};
 use SugarCraft\Dashboard\State\Persistence;
 
 $grid = new StackedGrid(new Options(fitScreen: true));
@@ -475,10 +492,11 @@ $state = $grid->restoreState($persistence, '/tmp/dash-layout.json');
 #### Boxer example
 
 ```php
-use SugarCraft\Dashboard\Layout\Boxer\Boxer;
+use SugarCraft\Dashboard\Layout\Boxer\{Boxer, Node};
 use SugarCraft\Dashboard\State\Persistence;
 
-$boxer = Boxer::new()->withNode($rootNode);
+$rootNode = Node::horizontal(Node::leaf('/root/panel-1'), Node::leaf('/root/panel-2'));
+$boxer = Boxer::tree($rootNode);
 
 $persistence = new Persistence();
 
@@ -534,10 +552,16 @@ For the `Registry`, call `Registry::reset()` in test teardown to avoid
 cross-test pollution:
 
 ```php
-protected function tearDown(): void
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Dashboard\Registry\Registry;
+
+final class RegistryIsolationTest extends TestCase
 {
-    Registry::reset();
-    parent::tearDown();
+    protected function tearDown(): void
+    {
+        Registry::reset();
+        parent::tearDown();
+    }
 }
 ```
 
@@ -605,14 +629,26 @@ of the `Module` + `Core\Model` + `Program` stack. It wires together:
 correct module:
 
 ```php
-private function msgToAddress(Msg $msg): ?string
+use SugarCraft\Core\Msg;
+use SugarCraft\Dashboard\Modules\Clock\TickMsg as ClockTickMsg;
+use SugarCraft\Dashboard\Modules\System\RefreshMsg as SystemRefreshMsg;
+use SugarCraft\Dashboard\Modules\Weather\TickMsg as WeatherTickMsg;
+
+final class DashboardModel
 {
-    return match (true) {
-        $msg instanceof ClockTickMsg => '0',
-        $msg instanceof SystemRefreshMsg => '1',
-        $msg instanceof WeatherTickMsg => '2',
-        default => null,  // broadcast to all
-    };
+    /**
+     * Map a Msg type to the address of the module that handles it.
+     * Returns null if the msg should be broadcast to all modules.
+     */
+    private function msgToAddress(Msg $msg): ?string
+    {
+        return match (true) {
+            $msg instanceof ClockTickMsg => '0',
+            $msg instanceof SystemRefreshMsg => '1',
+            $msg instanceof WeatherTickMsg => '2',
+            default => null,  // broadcast to all
+        };
+    }
 }
 ```
 
