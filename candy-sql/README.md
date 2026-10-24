@@ -182,7 +182,7 @@ Digit `4` selects **Debug** (a Management-section page); digit `8` selects **Per
 | `HistoryStoreInterface` | Persistence interface for admin status history: `save(StatusSnapshot)`, `query(DateTimeImmutable $since, DateTimeImmutable $until): list<StatusSnapshot>`, `count()`, `prune(DateTimeImmutable $before): int`, `close()`. |
 | `SqliteHistoryStore` | `HistoryStoreInterface` via SQLite with WAL mode. Schema: `history(id INTEGER PRIMARY KEY, ts REAL, recorded_at TEXT, variables TEXT)` — `variables` is the JSON-encoded status-variable map. A freshly created store is owner-only (dir 0700 / file 0600). |
 | `HistoryRecorder` | Passive recorder implementing `StatusSnapshotProviderInterface`. `record(StatusSnapshot)` persists one snapshot; `recordFromProvider()` pulls from an attached provider; `pruneOlderThan($cutoff)` delegates to the store. It writes only when told — no active recording, no coupling to the UI. Records server metrics (`StatusSnapshot`), not SQL query text. |
-| `HistoryQuery` | Read-side helpers over a store: `query(float $sinceTs, float $untilTs): list<StatusSnapshot>`, `querySince(float $sinceTs)`, `getRate(string $variable, float $sinceTs, float $untilTs): ?float` (per-second delta of one status variable across two snapshots; `null` when fewer than two rows are available). |
+| `HistoryQuery` | Read-side helpers over a store: `query(float $sinceTs, float $untilTs): list<StatusSnapshot>`, `querySince(float $sinceTs)`, `rate(string $variable, float $sinceTs, float $untilTs): ?float` (per-second delta of one status variable across two snapshots; `null` when fewer than two rows are available). |
 
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
 
@@ -304,7 +304,7 @@ Available providers:
 - **`MysqlExplainProvider`** — `EXPLAIN` formatted rows with tag/parent/detail/indent
 - **`PostgresExplainProvider`** — `EXPLAIN (ANALYZE, FORMAT JSON)`, parses JSON structure for tree hierarchy
 
-> **EXPLAIN safety guard** — `ConnectionDetailTabs::getExplain()` (Connections page, MDL detail tab, key `[3]`) will not run `EXPLAIN` on a thread's query unless it is a single `SELECT` statement. Multi-statement queries (containing `;`) and any non-SELECT statement (INSERT/UPDATE/DELETE/DROP/etc.) are rejected before execution. This prevents accidental execution of write/cleanup statements when inspecting a thread's current query. Returns `null` when the query is ineligible or explain fails.
+> **EXPLAIN safety guard** — `ConnectionDetailTabs::explain()` (Connections page, MDL detail tab, key `[3]`) will not run `EXPLAIN` on a thread's query unless it is a single `SELECT` statement. Multi-statement queries (containing `;`) and any non-SELECT statement (INSERT/UPDATE/DELETE/DROP/etc.) are rejected before execution. This prevents accidental execution of write/cleanup statements when inspecting a thread's current query. Returns `null` when the query is ineligible or explain fails.
 
 ## Admin providers
 
@@ -641,7 +641,7 @@ $recorder->record(new \SugarCraft\Sql\Admin\StatusSnapshot(['Queries' => '4242']
 // Read historical patterns
 $query     = new HistoryQuery($store);
 $snapshots = $query->querySince(microtime(true) - 3600.0);
-$qps        = $query->getRate('Queries', microtime(true) - 3600.0, microtime(true)); // ?float per-second
+$qps        = $query->rate('Queries', microtime(true) - 3600.0, microtime(true)); // ?float per-second
 
 // Pruning is manual
 $removed = $store->prune(new DateTimeImmutable('-30 days'));
@@ -652,6 +652,46 @@ foreach (glob($historyPath . '*') ?: [] as $residue) {  // db + WAL/SHM files
 }
 unset($snapshots, $qps, $removed);
 ```
+
+## Accessor deprecation (2026-10-24)
+
+The house convention is bare accessors (`$user->name()`, never `$user->getName()`).
+The public `get`-prefixed accessors below were renamed to their bare twins and the
+old names remain available as one-line BC forwarders, each carrying a
+`@deprecated` docblock marked `REMOVED-IN: 2.0.0`. New code must call the bare
+name; the forwarders exist so pre-2.0 callers keep working unchanged.
+
+| Namespace | Class | Deprecated | Use instead |
+| --- | --- | --- | --- |
+| `Admin` | `AdminQueryCache` | `getStatusVariables()` | `statusVariables()` |
+| `Admin` | `AdminQueryCache` | `getServerVariables()` | `serverVariables()` |
+| `Admin` | `QueryLogger` | `getEntries()` | `entries()` |
+| `Admin` | `QueryLogger` | `getDisplayLines()` | `displayLines()` |
+| `Admin` | `StatusSnapshot` | `getInt()` | `int()` |
+| `Admin` | `StatusSnapshot` | `getFloat()` | `float()` |
+| `Admin\Connections` | `ConnectionsPage` | `getTable()` | `table()` |
+| `Admin\Connections` | `ConnectionDetailTabs` | `getDetails()` | `details()` |
+| `Admin\Connections` | `ConnectionDetailTabs` | `getAttributes()` | `attributes()` |
+| `Admin\Connections` | `ConnectionDetailTabs` | `getMdlLocks()` | `mdlLocks()` |
+| `Admin\Connections` | `ConnectionDetailTabs` | `getThreadStack()` | `threadStack()` |
+| `Admin\Connections` | `ConnectionDetailTabs` | `getExplain()` | `explain()` |
+| `Admin\History` | `HistoryQuery` | `getRate()` | `rate()` |
+| `Admin\PerfSchema` | `SetupActors` | `getChangeType()` | `changeType()` |
+| `Admin\PerfSchema` | `SetupObjects` | `getChangeType()` | `changeType()` |
+| `Admin\PerfSchema` | `SetupTimers` | `getChangeType()` | `changeType()` |
+| `Admin\Variables` | `VariableEditor` | `getEditPreview()` | `editPreview()` |
+| `Db` | `ReconnectException` | `getOriginal()` | `original()` |
+| `Explain` | `MysqlExplainProvider` | `getDriverName()` | `driverName()` |
+| `Explain` | `PostgresExplainProvider` | `getDriverName()` | `driverName()` |
+| `Explain` | `SqliteExplainProvider` | `getDriverName()` | `driverName()` |
+| `(root)` | `Renderer` | `getTerminalSize()` | `terminalSize()` |
+
+The 20th census member, `Explain\ExplainProviderInterface::getDriverName()`, is an
+interface declaration, not a class accessor: it was renamed to `driverName()`
+outright (no forwarder is possible on an interface, and the repo-wide consumer
+census found no implementations outside the lib — the three providers above are
+its only implementors). `tests/AccessorDeprecationTest.php` pins every row, the
+src census, and the table's agreement with it.
 
 ## Known limitations
 

@@ -163,10 +163,19 @@ final readonly class SetupObjects
     /**
      * Get the type of change this object has.
      */
-    public function getChangeType(): string
+    public function changeType(): string
     {
         return $this->changeType;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::changeType()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getChangeType(): string { return $this->changeType(); }
 
     /**
      * Check if this applies to all schemas.

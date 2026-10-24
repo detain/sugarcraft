@@ -152,7 +152,7 @@ final class DashboardPage extends PageBase
         // content column; Renderer::adminContentWidth() is the single source of
         // truth for that width (shared with Renderer::adminPane()), so the two
         // can no longer drift apart.
-        $size = Renderer::getTerminalSize();
+        $size = Renderer::terminalSize();
         $width = Renderer::adminContentWidth($size['cols']);
         $height = max(12, $size['rows'] - 4);
 
@@ -195,7 +195,7 @@ final class DashboardPage extends PageBase
     {
         $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Recent Queries');
 
-        $entries = QueryLogger::getEntries();
+        $entries = QueryLogger::entries();
         if ($entries === []) {
             $muted = Style::new()->foreground(Color::ansi(8))->render('  (no queries yet)');
             return $title . "\n" . $muted;

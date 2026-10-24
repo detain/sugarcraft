@@ -63,7 +63,7 @@ final class Renderer
      *
      * @return array{rows:int, cols:int}
      */
-    public static function getTerminalSize(): array
+    public static function terminalSize(): array
     {
         if (self::$terminalSize !== null) {
             return self::$terminalSize;
@@ -90,6 +90,15 @@ final class Renderer
         self::$terminalSize = ['rows' => 60, 'cols' => 200];
         return self::$terminalSize;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::terminalSize()} instead. REMOVED-IN: 2.0.0.
+     */
+    public static function getTerminalSize(): array { return self::terminalSize(); }
 
     /**
      * Reset the cached terminal size (call when the terminal may have resized).
@@ -123,7 +132,7 @@ final class Renderer
 
     public static function render(App $a): string
     {
-        $size = self::getTerminalSize();
+        $size = self::terminalSize();
         $cols = $size['cols'];
 
         // Admin pane uses a left sidebar layout instead of the 3-pane browser

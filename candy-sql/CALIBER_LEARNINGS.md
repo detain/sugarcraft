@@ -448,3 +448,21 @@ added — nothing needed it.
   with that exception; direct `->cancel()` on a promise always runs its
   canceller regardless of `requiredCancelRequests` (only then()-children go
   through the counter).
+
+## 2026-10-24 — get*-era accessor sweep (owner ruling 3b)
+
+- The public `get`-prefixed accessors in `src/` were renamed to bare twins with
+  one-line `@deprecated ... REMOVED-IN: 2.0.0` BC forwarders; the interface
+  member `ExplainProviderInterface::getDriverName()` was renamed outright
+  (forwarders are impossible on interfaces; no external implementors).
+- The fleet census pattern `public function get*` misses `public static function
+  get*` — the era actually swept 22 members (QueryLogger::getEntries /
+  getDisplayLines and Renderer::getTerminalSize rode the static form). The
+  inverse discovery leg in `tests/AccessorDeprecationTest.php` is the shape of
+  truth for future lanes: it walks every `get[A-Z]` T_FUNCTION and exempts only
+  markers, non-public visibility, interface declarations, and protocol-bound
+  class_implements members.
+- Tests calling the legacy names were deliberately left un-flipped: they are the
+  accidental runtime proof that the forwarders behave byte-identically;
+  `tests/AccessorDeprecationTest.php` pins twins, markers, census, and the
+  README table agreement.

@@ -191,7 +191,7 @@ final class AdminQueryCache
      *
      * @return array<string, string>|null
      */
-    public function getStatusVariables(): ?array
+    public function statusVariables(): ?array
     {
         $key = 'status';
         if (!array_key_exists($key, $this->results)) {
@@ -208,11 +208,20 @@ final class AdminQueryCache
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::statusVariables()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getStatusVariables(): ?array { return $this->statusVariables(); }
+
+    /**
      * Get cached server variables from the last async fetch.
      *
      * @return array<string, string>|null
      */
-    public function getServerVariables(): ?array
+    public function serverVariables(): ?array
     {
         $key = 'server';
         if (!array_key_exists($key, $this->results)) {
@@ -227,4 +236,13 @@ final class AdminQueryCache
         $result = $this->results[$key];
         return is_array($result) ? $result : null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::serverVariables()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getServerVariables(): ?array { return $this->serverVariables(); }
 }

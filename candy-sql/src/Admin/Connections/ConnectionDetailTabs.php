@@ -34,7 +34,7 @@ final class ConnectionDetailTabs
      *
      * @return array<string, scalar>|null Thread info or null if not found
      */
-    public function getDetails(int|string $processId): ?array
+    public function details(int|string $processId): ?array
     {
         $sql = <<<'SQL'
 SELECT
@@ -70,11 +70,20 @@ SQL;
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::details()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getDetails(int|string $processId): ?array { return $this->details($processId); }
+
+    /**
      * Tab: session connect attributes for a processlist ID.
      *
      * @return array<string, scalar>|null Attributes or null if not accessible
      */
-    public function getAttributes(int|string $processId): ?array
+    public function attributes(int|string $processId): ?array
     {
         $sql = <<<'SQL'
 SELECT
@@ -117,6 +126,15 @@ SQL;
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::attributes()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getAttributes(int|string $processId): ?array { return $this->attributes($processId); }
+
+    /**
      * Tab: metadata locks held by a processlist ID.
      *
      * Uses information_schema.metadata_lock_info (MySQL 5.7+) or
@@ -124,7 +142,7 @@ SQL;
      *
      * @return list<array<string, scalar>>|null Lock list or null if not accessible
      */
-    public function getMdlLocks(int|string $processId): ?array
+    public function mdlLocks(int|string $processId): ?array
     {
         $locks = $this->fetchMdlFromPslocks($processId);
         if ($locks !== null) {
@@ -135,11 +153,20 @@ SQL;
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::mdlLocks()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getMdlLocks(int|string $processId): ?array { return $this->mdlLocks($processId); }
+
+    /**
      * Get thread stack dump via sys.ps_thread_stack().
      *
      * @return string|null Stack trace or null if not accessible
      */
-    public function getThreadStack(int|string $processId): ?string
+    public function threadStack(int|string $processId): ?string
     {
         $sql = "SELECT sys.ps_thread_stack(?, '') AS stack";
 
@@ -160,6 +187,15 @@ SQL;
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::threadStack()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getThreadStack(int|string $processId): ?string { return $this->threadStack($processId); }
+
+    /**
      * Get EXPLAIN output for a thread's current query.
      *
      * Only executes EXPLAIN on a single, simple SELECT statement. Rejects
@@ -168,10 +204,10 @@ SQL;
      *
      * @return list<array<string, mixed>>|null EXPLAIN results or null if unavailable
      */
-    public function getExplain(int|string $processId): ?array
+    public function explain(int|string $processId): ?array
     {
         // First get the current query from the thread
-        $details = $this->getDetails($processId);
+        $details = $this->details($processId);
         if ($details === null || ($details['info'] ?? '') === '') {
             return null;
         }
@@ -198,6 +234,15 @@ SQL;
             return null;
         }
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::explain()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getExplain(int|string $processId): ?array { return $this->explain($processId); }
 
     /**
      * Returns true only if the query is a single SELECT safe to EXPLAIN.

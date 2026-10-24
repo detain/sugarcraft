@@ -22,9 +22,9 @@ interface ExplainProviderInterface
     public function explain(string $sql): array;
 
     /**
-     * Get the driver name this provider handles.
+     * The driver name this provider handles.
      *
      * @return string Driver name ('sqlite', 'mysql', 'pgsql')
      */
-    public function getDriverName(): string;
+    public function driverName(): string;
 }

@@ -31,20 +31,38 @@ final readonly class StatusSnapshot
     /**
      * Get a variable as int, or null if not present or not numeric.
      */
-    public function getInt(string $key): ?int
+    public function int(string $key): ?int
     {
         $v = $this->variables[$key] ?? null;
         return $v !== null && is_numeric($v) ? (int) $v : null;
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::int()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getInt(string $key): ?int { return $this->int($key); }
+
+    /**
      * Get a variable as float, or null if not present or not numeric.
      */
-    public function getFloat(string $key): ?float
+    public function float(string $key): ?float
     {
         $v = $this->variables[$key] ?? null;
         return $v !== null && is_numeric($v) ? (float) $v : null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::float()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getFloat(string $key): ?float { return $this->float($key); }
 
     /**
      * Check if a variable exists in this snapshot.

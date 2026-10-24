@@ -242,7 +242,7 @@ final class VariableEditor
      * @param string $mode SET mode: 'global', 'persist', or 'persist_only'
      * @return string The SET statement preview
      */
-    public function getEditPreview(string $variableName, string $newValue, string $mode = 'global'): string
+    public function editPreview(string $variableName, string $newValue, string $mode = 'global'): string
     {
         $escapedName = '`' . \str_replace('`', '``', $variableName) . '`';
         $keyword = match ($mode) {
@@ -258,6 +258,15 @@ final class VariableEditor
 
         return "{$keyword} {$escapedName} = {$displayValue}";
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::editPreview()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getEditPreview(string $variableName, string $newValue, string $mode = 'global'): string { return $this->editPreview($variableName, $newValue, $mode); }
 
     /**
      * Check if a variable is editable per its metadata.

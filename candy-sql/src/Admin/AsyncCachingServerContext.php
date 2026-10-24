@@ -71,7 +71,7 @@ final class AsyncCachingServerContext implements ServerContextInterface
         // VARIABLES against a remote server can take seconds (it froze the whole
         // UI). The data arrives shortly via the async admin tick, which fetches
         // and caches it; until then the page shows its loading/empty state.
-        return $this->cache()->getServerVariables() ?? [];
+        return $this->cache()->serverVariables() ?? [];
     }
 
     /** @return array<string, string> */
@@ -83,7 +83,7 @@ final class AsyncCachingServerContext implements ServerContextInterface
         }
         // Cold miss → [] (never a synchronous query on the render path; see
         // serverVariables() above). The async admin tick fills the cache.
-        return $this->cache()->getStatusVariables() ?? [];
+        return $this->cache()->statusVariables() ?? [];
     }
 
     /**
@@ -238,13 +238,13 @@ final class AsyncCachingServerContext implements ServerContextInterface
      */
     public function refreshFromLiveCache(): void
     {
-        $status = $this->cache()->getStatusVariables();
+        $status = $this->cache()->statusVariables();
         if ($status !== null && $status !== []) {
             $this->cachedStatusVars = $status;
             $this->statusVarsAdoptedAt = microtime(true);
         }
 
-        $server = $this->cache()->getServerVariables();
+        $server = $this->cache()->serverVariables();
         if ($server !== null && $server !== []) {
             $this->cachedServerVars = $server;
         }

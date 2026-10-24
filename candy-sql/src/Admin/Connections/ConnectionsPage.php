@@ -91,10 +91,19 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      *
      * @return Table
      */
-    public function getTable(): Table
+    public function table(): Table
     {
         return $this->buildTable($this->filteredProcesslist());
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::table()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTable(): Table { return $this->table(); }
 
     /**
      * Get connection counters.
@@ -472,7 +481,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         }
 
         $lines[] = '';
-        $lines[] = $this->getTable()->View();
+        $lines[] = $this->table()->View();
         $lines[] = $this->renderKeyHints();
 
         return implode("\n", $lines);

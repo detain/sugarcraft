@@ -880,7 +880,7 @@ final class VariablesPage extends PageBase implements RowNavigable
 
             // Generate the correct SQL preview using the editor's preview method
             $preview = $this->editor !== null
-                ? $this->editor->getEditPreview($varName, $newValue, $persistMode)
+                ? $this->editor->editPreview($varName, $newValue, $persistMode)
                 : "SET {$modeLabel} `{$varName}` = ?";
 
             $lines[] = Style::new()->foreground(Color::hex('#22d3ee'))->render("  {$preview}");

@@ -9,7 +9,7 @@ namespace SugarCraft\Sql\Admin;
  *
  * Collects log entries with timestamp, query type, SQL, row count,
  * and optional error message. Entries are stored in a static array
- * and can be retrieved via getEntries().
+ * and can be retrieved via entries().
  *
  * For production, entries would be shown in a debug pane or overlay.
  */
@@ -82,10 +82,19 @@ final class QueryLogger
      *
      * @return list<array{timestamp: float, type: string, sql: string, rows: int, error: string|null}>
      */
-    public static function getEntries(): array
+    public static function entries(): array
     {
         return self::$entries;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::entries()} instead. REMOVED-IN: 2.0.0.
+     */
+    public static function getEntries(): array { return self::entries(); }
 
     /**
      * Clear all log entries.
@@ -100,7 +109,7 @@ final class QueryLogger
      *
      * @return list<string>
      */
-    public static function getDisplayLines(): array
+    public static function displayLines(): array
     {
         $lines = [];
         foreach (self::$entries as $entry) {
@@ -114,4 +123,13 @@ final class QueryLogger
         }
         return $lines;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::displayLines()} instead. REMOVED-IN: 2.0.0.
+     */
+    public static function getDisplayLines(): array { return self::displayLines(); }
 }

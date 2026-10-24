@@ -40,10 +40,19 @@ final class MysqlExplainProvider implements ExplainProviderInterface
         return $this->parseJsonExplain($result);
     }
 
-    public function getDriverName(): string
+    public function driverName(): string
     {
         return 'mysql';
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::driverName()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getDriverName(): string { return $this->driverName(); }
 
     /**
      * Parse EXPLAIN FORMAT=JSON output into flat detail rows.

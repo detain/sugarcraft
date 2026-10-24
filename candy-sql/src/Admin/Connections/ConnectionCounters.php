@@ -38,14 +38,14 @@ final class ConnectionCounters
     public static function fromSnapshot(StatusSnapshot $snapshot, int $maxConnections = 151): self
     {
         return new self(
-            threadsConnected: $snapshot->getInt('Threads_connected') ?? 0,
-            threadsRunning: $snapshot->getInt('Threads_running') ?? 0,
-            threadsCached: $snapshot->getInt('Threads_cached') ?? 0,
-            threadsCreated: $snapshot->getInt('Threads_created') ?? 0,
-            connections: $snapshot->getInt('Connections') ?? 0,
+            threadsConnected: $snapshot->int('Threads_connected') ?? 0,
+            threadsRunning: $snapshot->int('Threads_running') ?? 0,
+            threadsCached: $snapshot->int('Threads_cached') ?? 0,
+            threadsCreated: $snapshot->int('Threads_created') ?? 0,
+            connections: $snapshot->int('Connections') ?? 0,
             maxConnections: $maxConnections,
-            abortedClients: $snapshot->getInt('Aborted_clients') ?? 0,
-            abortedConnects: $snapshot->getInt('Aborted_connects') ?? 0,
+            abortedClients: $snapshot->int('Aborted_clients') ?? 0,
+            abortedConnects: $snapshot->int('Aborted_connects') ?? 0,
             connectionErrorsTotal: self::sumConnectionErrors($snapshot),
             connectionErrorsMax: 0,
             snapshot: $snapshot,

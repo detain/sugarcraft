@@ -34,7 +34,7 @@ final class BorderFrame
         // One size lookup so the frame matches the dimensions the content was
         // rendered at; fall back to the Renderer's modern-terminal default.
         try {
-            $size = \SugarCraft\Sql\Renderer::getTerminalSize();
+            $size = \SugarCraft\Sql\Renderer::terminalSize();
             $width = $size['cols'];
             $height = $size['rows'];
         } catch (\Throwable) {

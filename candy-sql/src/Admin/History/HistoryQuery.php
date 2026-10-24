@@ -73,7 +73,7 @@ final class HistoryQuery
      * Returns null if the variable is absent from either boundary snapshot,
      * if either value is non-numeric, or if the time range is zero.
      */
-    public function getRate(string $variable, float $sinceTs, float $untilTs): ?float
+    public function rate(string $variable, float $sinceTs, float $untilTs): ?float
     {
         $snapshots = $this->query($sinceTs, $untilTs);
 
@@ -84,8 +84,8 @@ final class HistoryQuery
         $first = $snapshots[0];
         $last = $snapshots[\count($snapshots) - 1];
 
-        $firstVal = $first->getFloat($variable);
-        $lastVal = $last->getFloat($variable);
+        $firstVal = $first->float($variable);
+        $lastVal = $last->float($variable);
 
         if ($firstVal === null || $lastVal === null) {
             return null;
@@ -103,4 +103,13 @@ final class HistoryQuery
 
         return $delta / $elapsed;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::rate()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getRate(string $variable, float $sinceTs, float $untilTs): ?float { return $this->rate($variable, $sinceTs, $untilTs); }
 }

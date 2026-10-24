@@ -208,7 +208,7 @@ final class CommitPlanner
         $statements = [];
 
         foreach ($this->actors as $actor) {
-            $changeType = $actor->getChangeType();
+            $changeType = $actor->changeType();
 
             switch ($changeType) {
                 case 'insert':
@@ -267,7 +267,7 @@ final class CommitPlanner
         $statements = [];
 
         foreach ($this->objects as $object) {
-            $changeType = $object->getChangeType();
+            $changeType = $object->changeType();
 
             switch ($changeType) {
                 case 'insert':

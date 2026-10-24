@@ -179,7 +179,7 @@ final class ServerStatusPage extends PageBase
         // whatever the terminal leaves beside the info panels, so graphs never
         // push the layout past the viewport.
         $column = $this->column ?? MetricsColumn::forContext($this->context, $this->sampler);
-        $size = Renderer::getTerminalSize();
+        $size = Renderer::terminalSize();
         $leftWidth = 0;
         foreach (explode("\n", $leftPanel) as $line) {
             $leftWidth = max($leftWidth, Width::of($line));

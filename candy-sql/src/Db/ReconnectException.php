@@ -26,8 +26,17 @@ final class ReconnectException extends \RuntimeException
     /**
      * Get the original PDO exception that triggered the reconnect attempt.
      */
-    public function getOriginal(): \PDOException
+    public function original(): \PDOException
     {
         return $this->original;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::original()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getOriginal(): \PDOException { return $this->original(); }
 }

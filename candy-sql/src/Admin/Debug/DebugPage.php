@@ -67,7 +67,7 @@ final class DebugPage extends PageBase implements RowNavigable
      */
     protected function build(): string
     {
-        $entries = QueryLogger::getEntries();
+        $entries = QueryLogger::entries();
 
         $lines = [];
         $lines[] = $this->renderHeader();
@@ -123,7 +123,7 @@ final class DebugPage extends PageBase implements RowNavigable
      */
     private function withNavigateDown(): self
     {
-        $entries = QueryLogger::getEntries();
+        $entries = QueryLogger::entries();
         $maxIndex = \count($entries) - 1;
 
         $clone = clone $this;
@@ -176,7 +176,7 @@ final class DebugPage extends PageBase implements RowNavigable
 
     private function renderHeader(): string
     {
-        $entryCount = \count(QueryLogger::getEntries());
+        $entryCount = \count(QueryLogger::entries());
         $title = Style::new()->bold()->foreground(Color::hex('#f59e0b'))->render('Debug Log');
 
         $counter = Style::new()->foreground(Color::hex('#6b7280'))->render(" ({$entryCount} entries)");
