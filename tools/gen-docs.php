@@ -6,11 +6,13 @@ declare(strict_types=1);
  * tools/gen-docs.php — single-source generator for the per-library detail
  * pages under docs/lib/<slug>.html.
  *
- * The 58 detail pages share one chrome (head meta, nav, footer, search
+ * The 62 detail pages share one chrome (head meta, nav, footer, search
  * widget) that used to be hand-maintained per page — the root cause of a
  * class of broken-link / 404 / stale-icon bugs. This tool derives all of
  * that chrome from a single source of truth (docs/MATCHUPS.md + the slug)
  * and merges it with the genuinely hand-authored per-lib body content.
+ * It also regenerates docs/js/search-index.json from the same data store,
+ * so the search widget can never serve a stale package list.
  *
  * It also OWNS the homepage's library/app counts: on every default run it patches
  * docs/index.html so the ~8 count tokens (meta/og/JSON-LD descriptions, hero prose,
@@ -234,13 +236,35 @@ if (is_file($index)) {
     }
 }
 
+// Search index (docs-fix-1023 G4): docs/js/search-index.json is generated from
+// the same data store the pages come from, so search can never describe a
+// package the site no longer ships (the hand-rolled file had rotted to 46/62
+// entries with pre-rework prose baked in). Schema is search.js's contract:
+// {name, slug, category, description, url}, one compact object per line.
+$searchPath = $docs . '/js/search-index.json';
+$searchJson = build_search_index($slugs, $types, $dataDir);
+if ($mode === '--check') {
+    $currentSearch = is_file($searchPath) ? (string) file_get_contents($searchPath) : '';
+    if ($currentSearch !== $searchJson) {
+        fwrite(STDERR, "drift: js/search-index.json differs from generated output\n");
+        $drift++;
+    }
+} else {
+    if (!is_dir(dirname($searchPath)) && !mkdir(dirname($searchPath), 0777, true) && !is_dir(dirname($searchPath))) {
+        fwrite(STDERR, "cannot create " . dirname($searchPath) . "\n");
+        exit(1);
+    }
+    file_put_contents($searchPath, $searchJson);
+    $written++;
+}
+
 if ($mode === '--check') {
     if ($drift > 0) {
         fwrite(STDERR, "$drift page(s) out of sync — run: php tools/gen-docs.php\n");
         exit(1);
     }
     $stubClause = $stubs === [] ? '' : ' + ' . count($stubs) . ' redirect stubs';
-    fwrite(STDOUT, "ok: all " . count($slugs) . " pages" . $stubClause . " + index.html counts match generated output\n");
+    fwrite(STDOUT, "ok: all " . count($slugs) . " pages" . $stubClause . " + index.html counts + search index match generated output\n");
     exit(0);
 }
 
@@ -810,4 +834,39 @@ function data_slugs(string $dataDir): array
     $slugs = array_map(static fn ($f) => basename($f, '.json'), $files);
     sort($slugs);
     return $slugs;
+}
+
+/**
+ * Build docs/js/search-index.json — the search widget's data. Derived from the
+ * same docs/_data store the pages are generated from, one compact object per
+ * line: {name, slug, category, description, url}. Field names are search.js's
+ * contract. Slugs without a MATCHUPS row are skipped, exactly as in the page
+ * loop (they render no page, so they must not appear in search).
+ *
+ * @param list<string> $slugs
+ * @param array<string, string> $types
+ */
+function build_search_index(array $slugs, array $types, string $dataDir): string
+{
+    $entries = [];
+    foreach ($slugs as $slug) {
+        if (!isset($types[$slug])) {
+            continue;
+        }
+        $meta = json_decode((string) file_get_contents("$dataDir/$slug.json"), true, 512, JSON_THROW_ON_ERROR);
+        $entries[] = [
+            'name'        => (string) ($meta['displayName'] ?? $meta['title'] ?? $slug),
+            'slug'        => $slug,
+            'category'    => $types[$slug],
+            'description' => (string) ($meta['ogDescription'] ?? $meta['tagline'] ?? $meta['description'] ?? ''),
+            'url'         => "lib/$slug.html",
+        ];
+    }
+
+    $lines = [];
+    foreach ($entries as $entry) {
+        $lines[] = '  ' . json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    }
+
+    return "[\n" . implode(",\n", $lines) . "\n]\n";
 }
