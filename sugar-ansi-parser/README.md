@@ -9,7 +9,7 @@ ECMA-48 VT500 ANSI parser state machine — the shared byte-stream interpreter e
 
 ## Status
 
-🟢 Working. The VT500 state machine plus the abstract `Handler`, `CsiHandler`, and `OscHandler` boundaries live here and are the shared source of truth for downstream consumers (`sugar-vterm`, `candy-ansi-inspect`, `sugar-quickpick`, `candy-codeshot`, `sugar-pty`, `candy-vcr`). `CsiHandler` covers the **renderer's working CSI set** — CUU/CUD/CUF/CUB, CUP/HVP, SGR, ED/EL, DECSTBM, DECSET/DECRST, TBC, CBT/CHT, SU/SD, IL/DL, ICH/DCH, REP, SCO save/restore, CR/LF — deliberately not every ECMA-48 final: HPA (`G`), VPA (`d`), EDCH (`X`), DSR (`n`), SCUSR (`SP q`) and DA (`c`) have no method and `HandlerAdapter` drops them silently. That set is what `sugar-vterm` implements directly instead of forking its own parser. The `src/Codec/` decoders are the canonical extraction home for inspector-grade sequence semantics but have **no external consumers yet** — see [Decoders](#decoders-codec). Note that sugar-vterm keeps near-copies of two sink classes (`Vterm\Parser\DebugHandler`, `Vterm\Parser\OscHandlerImpl`); the shared truth here is the state machine and the interfaces, and those copies are a known drift surface.
+🟢 Working. The VT500 state machine plus the abstract `Handler`, `CsiHandler`, and `OscHandler` boundaries live here and are the shared source of truth for downstream consumers (`sugar-vterm`, `candy-ansi-inspect`, `sugar-quickpick`, `candy-codeshot`, `sugar-pty`, `candy-vcr`). `CsiHandler` covers the **renderer's working CSI set** — CUU/CUD/CUF/CUB, CUP/HVP, SGR, ED/EL, DECSTBM, DECSET/DECRST, TBC, CBT/CHT, SU/SD, IL/DL, ICH/DCH, REP, SCO save/restore, CR/LF — deliberately not every ECMA-48 final: HPA (`G`), VPA (`d`), EDCH (`X`), DSR (`n`), SCUSR (`SP q`) and DA (`c`) have no method and `HandlerAdapter` drops them silently. That set is what `sugar-vterm` implements directly instead of forking its own parser. The `src/Codec/` decoders are the canonical extraction home for inspector-grade sequence semantics; `candy-ansi-inspect` already consumes the DCS one — see [Decoders](#decoders-codec). Note that sugar-vterm keeps near-copies of two sink classes (`Vterm\Parser\DebugHandler`, `Vterm\Parser\OscHandlerImpl`); the shared truth here is the state machine and the interfaces, and those copies are a known drift surface.
 
 ## Quickstart
 
@@ -171,13 +171,13 @@ before any terminal label (`describe()`).
 | `Iterm1337` | `Iterm1337::parse(string $oscData)` (the `oscDispatch()` payload) and `Iterm1337::fromDcs(int $final, string $data)` for the tmux `ESC P tmux; …` envelope | OSC 1337 `File=name=…;size=…;inline=1:‹base64›` plus the control forms; `command()`, `isFile()`, `isPop()`, `args()`, `arg()`, `name()`, `declaredSize()`, `inline()`, `width()`, `height()`, `preserveAspectRatio()`, `type()`, `payloadBase64()`, `payloadLength()`, `estimatedBytes()`, `malformed()` (never throws — malformed input is recorded, parsed fields still exposed), `describe()` |
 | `KittyApc` | `KittyApc::parse(string $apcData)` (the `sosPmApcDispatch()` payload with `kind === 'apc'`; a frame must open with `G`) | kitty graphics frames `G key=value,…;payload`: `action()`, `imageId()`, `format()`, `control()`, `get()`, `sourceWidth()`/`sourceHeight()`, `columns()`/`rows()`, `x()`/`y()`/`z()`, `more()`, `isChunked()`, `width()`, `height()`, `payload()`, `payloadSize()`, `describe()` |
 
-**Consumer status, honestly measured at this release:** nothing outside this
-library's own `tests/Codec/` imports the Codec namespace yet. In particular
-`candy-ansi-inspect` still carries these branches inline
-(`Inspector::describeDcs()` and the byte-count-only kitty label); migrating
-it onto the codecs is an open seam, not a landed change. The classes are
-public API and the canonical home for this decoding, and the inspect-side
-adoption is tracked as such.
+**Consumer status, honestly measured at this release:** `candy-ansi-inspect`
+imports `Codec\Dcs` — its `Inspector::describeDcsParts()` classifies DCS
+through the shared decoder (`Inspector::describeDcs()` remains only as a
+payload-string compatibility shim). The remaining adoption seam is the
+byte-count-only kitty label, which still lives inline in the inspector. The
+classes are public API and the canonical home for this decoding, and the
+inspect-side adoption is tracked as such.
 
 ## Packages
 
