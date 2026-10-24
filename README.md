@@ -21,6 +21,8 @@ composer-installable and requires PHP 8.3+; the interactive stack — runtime,
 components, and apps — runs async on a ReactPHP event loop.
 
 🌐 **Website:** [sugarcraft.github.io](https://sugarcraft.github.io/) — library matrix, quickstart, comparison page.
+📖 **New here?** [Getting started](docs/GETTING-STARTED.md) — a finished binary, a first app, or a chart in five minutes.
+📚 **Vocabulary:** [Glossary](docs/GLOSSARY.md) — every term this README uses, defined with its source file.
 
 ```sh
 composer require sugarcraft/sugarcraft        # umbrella metapackage — every library
