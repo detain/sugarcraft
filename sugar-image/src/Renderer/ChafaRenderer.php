@@ -11,7 +11,9 @@ use SugarCraft\Image\Lang;
  * Chafa graphics renderer — invokes the chafa command-line tool.
  *
  * Chafa is a command-line image-to-terminal converter that supports
- * true-color, transparency, and various output formats.
+ * true-color, transparency, and various output formats. The binary is
+ * located by {@see ChafaBinary} — a fixed absolute roster or an
+ * explicit operator override; a bare PATH `chafa` is never executed.
  */
 final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
 {
@@ -93,8 +95,11 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     ) {}
 
     /**
-     * Whether the `chafa` binary is on PATH. Probed once per process (the result
-     * is memoised) so a per-frame video render does not spawn a probe each frame.
+     * Whether a gate-passing `chafa` binary resolves and answers
+     * `--version`. Resolution is the {@see ChafaBinary} roster/override
+     * choke — a bare PATH `chafa` is deliberately NOT executed. Probed
+     * once per process (the result is memoised) so a per-frame video
+     * render does not spawn a probe each frame.
      */
     public static function available(): bool
     {
@@ -102,8 +107,13 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             return self::$available;
         }
 
+        $binary = ChafaBinary::path();
+        if ($binary === null) {
+            return self::$available = false;
+        }
+
         $proc = @proc_open(
-            ['chafa', '--version'],
+            [$binary, '--version'],
             [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
         );
@@ -132,8 +142,16 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     {
         $effectiveHeight = $this->prepareRender($image, $width, $height);
 
+        // Resolved once up front: argv[0] is an absolute, gate-passing
+        // path (never a bare `chafa` left to the OS PATH search —
+        // {@see ChafaBinary}). When nothing resolves we skip the spawn
+        // and ride the exact same `proc_open() === false` settle the
+        // missing-binary path has always taken: scratch file written,
+        // stderr sink created, not_found thrown, sink released.
+        $binary = ChafaBinary::path();
+
         $size = "{$width}x{$effectiveHeight}";
-        $cmd = ['chafa', '--size=' . $size];
+        $cmd = [$binary ?? '', '--size=' . $size];
         if ($this->format !== null) {
             $cmd[] = '--format=' . $this->format;
         }
@@ -154,7 +172,10 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
         }
 
         $descriptorSpec = [1 => ['pipe', 'w'], 2 => ['file', $errPath, 'w']];
-        $process = @proc_open($cmd, $descriptorSpec, $pipes);
+        // An unresolved binary must NEVER reach proc_open with a bare
+        // 'chafa' argv[0]: false here is the deliberate, gated stand-in
+        // for the spawn that the OS is no longer allowed to make.
+        $process = $binary === null ? false : @proc_open($cmd, $descriptorSpec, $pipes);
 
         try {
             if ($process === false) {
@@ -376,7 +397,9 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
-     * Reset the memoised availability check.
+     * Reset the memoised availability check AND the memoised binary
+     * resolution, so a later call re-reads {@see ChafaBinary::ENV_OVERRIDE}
+     * and re-scans the roster.
      *
      * For long-running CLI tools that may install chafa after startup,
      * call this to force a fresh probe rather than relying on the
@@ -385,6 +408,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     public static function reset(): void
     {
         self::$available = null;
+        ChafaBinary::reset();
     }
 
     public function supportsAlpha(): bool

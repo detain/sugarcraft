@@ -299,6 +299,11 @@ final class Mosaic
      * ```
      *
      * @param string ...$options  Chafa CLI options
+     *
+     * The chafa binary itself is located by {@see ChafaRenderer}'s gated
+     * discovery ({@see \SugarCraft\Image\Renderer\ChafaBinary}): absolute
+     * roster or explicit SUGAR_IMAGE_CHAFA override — never a bare PATH
+     * lookup. Unresolved means the tier degrades like a missing install.
      */
     public static function chafa(string ...$options): self
     {

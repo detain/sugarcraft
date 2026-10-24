@@ -6,6 +6,7 @@ namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Renderer\ChafaBinary;
 use SugarCraft\Image\Renderer\ChafaRenderer;
 
 /**
@@ -14,7 +15,9 @@ use SugarCraft\Image\Renderer\ChafaRenderer;
  * an unimplemented design note; see its docblock).
  *
  * The posture being pinned is child ACCOUNTING end-to-end against a fake
- * chafa planted on PATH:
+ * chafa armed through the explicit {@see ChafaBinary::ENV_OVERRIDE}
+ * (binary discovery is roster-or-override since rulings-1024 4b — the
+ * rogue-PATH shapes live in tests/Renderer/ChafaBinaryTest.php):
  *
  *  - render() drains stdout to EOF, maps a non-zero exit to a typed
  *    failure, and leaves NO live or zombie child behind (proc_close reaps);
@@ -41,7 +44,7 @@ final class ChafaRendererChildTest extends TestCase
     /** 1x1 red GIF, base64 — same fixture the sibling ChafaRendererTest uses. */
     private const GIF_B64 = 'R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==';
 
-    private ?string $pathBackup = null;
+    private ?string $overrideBackup = null;
 
     /** @var list<string> temp dirs/files to remove in tearDown */
     private array $cleanup = [];
@@ -50,9 +53,11 @@ final class ChafaRendererChildTest extends TestCase
 
     protected function tearDown(): void
     {
-        if ($this->pathBackup !== null) {
-            putenv('PATH=' . $this->pathBackup);
-            $this->pathBackup = null;
+        if ($this->overrideBackup !== null) {
+            putenv(ChafaBinary::ENV_OVERRIDE . '=' . $this->overrideBackup);
+            $this->overrideBackup = null;
+        } else {
+            putenv(ChafaBinary::ENV_OVERRIDE);
         }
         putenv('FAKE_CHAFA_MODE');
         if ($this->fakePidFile !== null && is_file($this->fakePidFile)) {
@@ -122,7 +127,7 @@ final class ChafaRendererChildTest extends TestCase
         $this->plantFakeChafa();
 
         ChafaRenderer::reset();
-        $this->assertTrue(ChafaRenderer::available(), 'a chafa on PATH must probe available');
+        $this->assertTrue(ChafaRenderer::available(), 'an armed chafa must probe available');
         $this->assertChildReaped();
     }
 
@@ -227,8 +232,9 @@ final class ChafaRendererChildTest extends TestCase
     // ---------------------------------------------------------------------
 
     /**
-     * Put an executable fake `chafa` first on PATH, publishing its pid to a
-     * file so every test can prove the parent actually reaped it.
+     * Write an executable fake `chafa` into a private dir and arm it as
+     * the SUGAR_IMAGE_CHAFA override (absolute path), publishing its pid
+     * to a file so every test can prove the parent actually reaped it.
      */
     private function plantFakeChafa(): void
     {
@@ -269,8 +275,15 @@ SH;
         $this->fakePidFile = $dir . '/child.pid';
         putenv('FAKE_CHAFA_PIDFILE=' . $this->fakePidFile);
 
-        $this->pathBackup = (string) getenv('PATH');
-        putenv('PATH=' . $dir . PATH_SEPARATOR . $this->pathBackup);
+        // ChafaBinary hardening (rulings-1024 4b): a bare `chafa` on
+        // PATH is deliberately NOT executed any more — the fake is
+        // armed the way an operator arms a real chafa outside the
+        // roster, via the explicit SUGAR_IMAGE_CHAFA override. The old
+        // PATH-prepend was the hijack shape this gate exists to refuse
+        // (pinned negatively in tests/Renderer/ChafaBinaryTest.php).
+        $armed = getenv(ChafaBinary::ENV_OVERRIDE);
+        $this->overrideBackup = $armed === false ? null : $armed;
+        putenv(ChafaBinary::ENV_OVERRIDE . '=' . $fake);
     }
 
     private function source(): ImageSource

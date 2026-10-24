@@ -6,6 +6,7 @@ namespace SugarCraft\Image\Tests\Renderer;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Renderer\ChafaBinary;
 use SugarCraft\Image\Renderer\ChafaRenderer;
 
 /**
@@ -15,8 +16,10 @@ use SugarCraft\Image\Renderer\ChafaRenderer;
  * Before D-07 the chafa child inherited this process's fd 2: its diagnostics
  * scribbled over the live TUI frame and the failure reason was thrown away
  * behind a reasonless "exit code N". The pins here prove the containment
- * end-to-end against a fake chafa planted on PATH (the binary is absent on
- * CI — the established harness of ChafaRendererChildTest, mirrored here):
+ * end-to-end against a fake chafa armed through the explicit
+ * {@see ChafaBinary::ENV_OVERRIDE} (the binary is absent on CI — the
+ * established harness of ChafaRendererChildTest, mirrored here; PATH
+ * planting is dead doctrine, pinned negatively in ChafaBinaryTest):
  *
  *  - a child that spews to stderr and exits 1 -> the exception names the
  *    stderr sentence, and the CALLER's own stderr (captured to a file at
@@ -55,7 +58,7 @@ final class ChafaRendererStderrTest extends TestCase
     /** Sentence the spew fake routes to stderr — exactly chafa's own wording. */
     private const SPOOL_SENTENCE = 'chafa: Source image dimensions 4096x4096 exceed maximum (256Mpx).';
 
-    private ?string $pathBackup = null;
+    private ?string $overrideBackup = null;
 
     /** @var list<string> temp dirs/files to remove in tearDown */
     private array $cleanup = [];
@@ -64,9 +67,11 @@ final class ChafaRendererStderrTest extends TestCase
 
     protected function tearDown(): void
     {
-        if ($this->pathBackup !== null) {
-            putenv('PATH=' . $this->pathBackup);
-            $this->pathBackup = null;
+        if ($this->overrideBackup !== null) {
+            putenv(ChafaBinary::ENV_OVERRIDE . '=' . $this->overrideBackup);
+            $this->overrideBackup = null;
+        } else {
+            putenv(ChafaBinary::ENV_OVERRIDE);
         }
         putenv('FAKE_CHAFA_MODE');
         putenv('FAKE_CHAFA_PIDFILE');
@@ -322,7 +327,8 @@ final class ChafaRendererStderrTest extends TestCase
     }
 
     /**
-     * Put an executable fake `chafa` first on PATH, publishing its pid to a
+     * Write an executable fake `chafa` and arm it as the explicit
+     * SUGAR_IMAGE_CHAFA override (absolute path), publishing its pid to a
      * file so every test can prove the parent actually reaped it. Modes are
      * selected by FAKE_CHAFA_MODE, mirroring the sibling child harness.
      */
@@ -387,8 +393,9 @@ SH;
         $this->fakePidFile = $dir . '/child.pid';
         putenv('FAKE_CHAFA_PIDFILE=' . $this->fakePidFile);
 
-        $this->pathBackup = (string) getenv('PATH');
-        putenv('PATH=' . $dir . PATH_SEPARATOR . $this->pathBackup);
+        $armed = getenv(ChafaBinary::ENV_OVERRIDE);
+        $this->overrideBackup = $armed === false ? null : $armed;
+        putenv(ChafaBinary::ENV_OVERRIDE . '=' . $fake);
     }
 
     private function source(): ImageSource

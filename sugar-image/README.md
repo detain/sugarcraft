@@ -113,6 +113,31 @@ Decoding untrusted images is budgeted — the caps are live constants on
 | `FLIP_MAX_TOTAL_CELLS` (private) | 400,000 cells | animated-GIF aggregate budget: frames × per-frame pixels — stops a bomb whose every single frame is individually in-budget |
 | `MAX_RIFF_CHUNKS` (private) | 64 | the pure-PHP WebP RIFF walk bails out of a chunk flood instead of iterating forever |
 
+## Chafa binary discovery
+
+The chafa tier is the only place sugar-image executes an external
+program, and the binary is chosen through a strict gate — the
+`sugar-colorprofile` `InfocmpBinary` precedent applied to chafa
+(`src/Renderer/ChafaBinary.php`). A bare `chafa` argv[0] is never
+spawned, so a rogue `chafa` sitting earlier on PATH is never executed:
+
+1. **Operator override** `SUGAR_IMAGE_CHAFA` (configuration is trusted
+   input — naming a binary is consent to run it): an absolute path is
+   used only when it is a file and executable, and a broken absolute
+   override is REFUSED rather than silently substituted; a bare name
+   authorises the PATH lookup for that one explicit value, scanning
+   absolute PATH entries only (relative entries are the classic hijack
+   door and are skipped).
+2. Otherwise a **fixed roster** of absolute candidates —
+   `/usr/bin/chafa`, `/usr/local/bin/chafa`, `/opt/homebrew/bin/chafa` —
+   each gated on `is_file() && is_executable()`.
+3. When nothing resolves, the tier degrades **exactly** as the missing
+   binary always did: `ChafaRenderer::available()` answers `false` and
+   `render()` throws the same `chafa.not_found` failure.
+
+`ChafaRenderer::reset()` re-arms both memos for long-running processes
+that install or override the binary mid-session.
+
 ## Remote images
 
 Load images straight from a URL. `fromUrl()` is synchronous (PHP stream

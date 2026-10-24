@@ -43,6 +43,11 @@ final class GraphicsEmitterSeparationTest extends TestCase
         'KittyRenderer.php',
         'Iterm2Renderer.php',
         'ChafaRenderer.php',
+        // The gated chafa binary locator (rulings-1024 4b) — pure
+        // selection logic: resolves an absolute roster-or-override path
+        // and probes `--version`; it emits no graphics and touches no
+        // frame, so it must stay apart from the mosaic emitters.
+        'ChafaBinary.php',
         'OrderedTexture.php',
         'Renderer.php',
         'IncrementalRenderer.php',
