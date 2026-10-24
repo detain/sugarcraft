@@ -30,7 +30,7 @@ enum ToastType: string
     }
 
     /**
-     * Unicode boxed symbol for this type (fallback when no NerdFont).
+     * Unicode symbol for this type (✖ ⚠ ℹ ✔ — fallback when no NerdFont).
      */
     public function unicodeIcon(): string
     {
