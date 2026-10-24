@@ -1,6 +1,6 @@
 [
   {"name":"CandyAnsiInspect","slug":"candy-ansi-inspect","category":"app","description":"ANSI escape-sequence inspector.","url":"lib/candy-ansi-inspect.html"},
-  {"name":"CandyCode","slug":"candy-code","category":"app","description":"Terminal AI coding agent — seven LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions.","url":"lib/candy-code.html"},
+  {"name":"CandyCode","slug":"candy-code","category":"app","description":"Terminal AI coding agent — nine LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions.","url":"lib/candy-code.html"},
   {"name":"CandyCodeWeb","slug":"candy-code-web","category":"app","description":"The browser face of candy-code's server mode — Vite + Vue 3 + TypeScript + Pinia, shipped pre-built through Composer.","url":"lib/candy-code-web.html"},
   {"name":"CandyCodeshot","slug":"candy-codeshot","category":"app","description":"Code → SVG screenshot generator.","url":"lib/candy-codeshot.html"},
   {"name":"CandyCodetime","slug":"candy-codetime","category":"app","description":"Privacy-first coding-time tracker.","url":"lib/candy-codetime.html"},
@@ -46,7 +46,7 @@
   {"name":"SugarMetrics","slug":"sugar-metrics","category":"library","description":"Counters, gauges, and histograms for PHP apps — Prometheus/StatsD/JSON backends, plus SSH session middleware for SugarSshServer.","url":"lib/sugar-metrics.html"},
   {"name":"SugarMouse","slug":"sugar-mouse","category":"library","description":"Mouse support for terminal UIs — mark rendered output with invisible zones, then hit-test where clicks land.","url":"lib/sugar-mouse.html"},
   {"name":"SugarNavstack","slug":"sugar-navstack","category":"library","description":"Navigation breadcrumbs for terminal UIs.","url":"lib/sugar-navstack.html"},
-  {"name":"SugarOverlay","slug":"sugar-overlay","category":"library","description":"Overlay layer for terminal apps — dimmed modal overlays with slide/fade animation and click-outside dismissal.","url":"lib/sugar-overlay.html"},
+  {"name":"SugarOverlay","slug":"sugar-overlay","category":"library","description":"Modal/overlay compositing for terminal UIs — foreground content over a background at any position with cell offsets, backdrop dimming, animated transitions, border chrome and click-zone hit-testing.","url":"lib/sugar-overlay.html"},
   {"name":"SugarPanels","slug":"sugar-panels","category":"library","description":"Box-drawing layout engine for terminal UIs.","url":"lib/sugar-panels.html"},
   {"name":"SugarPty","slug":"sugar-pty","category":"library","description":"Pseudo-terminal primitive — spawn child processes wired to a controlled PTY, with resize forwarding and non-blocking I/O.","url":"lib/sugar-pty.html"},
   {"name":"SugarQuickpick","slug":"sugar-quickpick","category":"library","description":"Fuzzy finder overlay for terminal UIs.","url":"lib/sugar-quickpick.html"},
@@ -58,7 +58,7 @@
   {"name":"SugarTesting","slug":"sugar-testing","category":"library","description":"ProgramSimulator drives a Program with scripted input; captures model/view/cmds. Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals. TapeRecorder emits VHS .tape files.","url":"lib/sugar-testing.html"},
   {"name":"SugarToast","slug":"sugar-toast","category":"library","description":"Floating notification overlays.","url":"lib/sugar-toast.html"},
   {"name":"SugarTreelist","slug":"sugar-treelist","category":"library","description":"Tree / list view with box-drawing prefixes + cursor nav.","url":"lib/sugar-treelist.html"},
-  {"name":"SugarVideo","slug":"sugar-video","category":"library","description":"Terminal video player — mp4/gif → ascii/ansi256/truecolor/half-block/sixel/kitty/iTerm2.","url":"lib/sugar-video.html"},
+  {"name":"SugarVideo","slug":"sugar-video","category":"library","description":"Terminal video player — mp4/gif/webm/webp → ascii/ansi256/truecolor/half- & quarter-block/sixel/kitty/iTerm2, with WebVTT subtitles.","url":"lib/sugar-video.html"},
   {"name":"SugarVterm","slug":"sugar-vterm","category":"library","description":"In-memory virtual terminal emulator. ANSI byte stream → cell grid + cursor + mode state.","url":"lib/sugar-vterm.html"},
   {"name":"SugarWidgets","slug":"sugar-widgets","category":"library","description":"A collection of ready-made TUI components — inputs, tables, spinners, progress bars, and more.","url":"lib/sugar-widgets.html"}
 ]
