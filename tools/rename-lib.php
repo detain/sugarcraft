@@ -684,8 +684,8 @@ final class RenameLib
     /**
      * @param array<string, mixed> $d
      * @param bool $pathContext C.2 names underscore-JOINED files as rename
-     *        targets (`findings/plan_<old>.md`, `docs/repo_map/sugarcraft_<old>.md`,
-     *        `docs/repo_map/update_sugarcraft_<old>.md`). Inside a path SEGMENT the
+     *        targets (`findings/plan_<old>.md`, `docs/old/repo_map/sugarcraft_<old>.md`,
+     *        `docs/old/repo_map/update_sugarcraft_<old>.md`). Inside a path SEGMENT the
      *        underscore is a filename separator, not a word character, so the
      *        lookbehind relaxes to alphanumerics only. Content rules (C.1) stay
      *        strict — `_` there is a word character and `$a_<old>` style glue must
