@@ -120,7 +120,10 @@ final class GenericModule extends BaseModule
             return 'Command failed';
         }
 
-        $process = proc_open(
+        // @ is honest suppression here, not evasion: a missing binary makes
+        // proc_open() raise an E_WARNING and return false, and the guarded
+        // false path below is the designed outcome, not an unhandled state.
+        $process = @proc_open(
             $argv,
             [
                 0 => ['pipe', 'r'],
