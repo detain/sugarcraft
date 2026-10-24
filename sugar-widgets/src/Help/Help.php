@@ -52,7 +52,14 @@ final class Help
         return $this->copy(styles: $styles, stylesSet: true);
     }
 
-    /** Read-only accessor; the bare name `styles()` is taken by the fluent setter below. */
+    /**
+     * Read-only accessor; the bare name `styles()` is taken by the fluent
+     * setter below.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC alias for external callers of this
+     *     public façade. Read the promoted readonly `styles` property.
+     */
     public function getStyles(): ?Styles { return $this->styles; }
 
     public function withSeparator(string $s): self
@@ -84,7 +91,14 @@ final class Help
         return $this->copy(maxWidth: $cells);
     }
 
-    /** Read-only accessor for the configured max width; the bare name `width()` is the setter above. */
+    /**
+     * Read-only accessor for the configured max width; the bare name
+     * `width()` is the setter above.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC alias for external callers of this
+     *     public façade. Read the promoted readonly `maxWidth` property.
+     */
     public function getWidth(): int { return $this->maxWidth; }
 
     /** Truncation glyph appended when the short row exceeds {@see $maxWidth}. */

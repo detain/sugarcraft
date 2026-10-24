@@ -18,9 +18,10 @@ use PHPUnit\Framework\TestCase;
  * The behaviour of those classes is exercised by sugar-forms' own suites
  * against the canonical impl. Re-running byte-identical copies here would be
  * zero incremental coverage, double CI cost, and a silent-drift hazard, so the
- * duplicated suites were deleted (workstream W17). What remains worth asserting
- * is that every alias still resolves to the expected canonical class — that is
- * this file's job.
+ * duplicated suites were deleted per the façade law — an alias re-export
+ * ships a smoke-test, not a copy of the canonical behaviour suites. What
+ * remains worth asserting is that every alias still resolves to the
+ * expected canonical class — that is this file's job.
  *
  * The map below is exhaustive over `grep -r "class_alias(" sugar-widgets/src`.
  * Add a row whenever a new façade alias is introduced.
