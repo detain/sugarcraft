@@ -177,7 +177,7 @@ The longest pole. sugar-vterm is its own self-contained foundation lib; the rend
 - `CassetteHeader` carrying cols/rows (from `Set Width`/`Set Height` translated through font metrics), theme name, env map, fps.
 - A timed stream of `Event` objects matching `candy-vcr/src/Event.php`. `Type "abc"` expands to three KeyMsg events spaced at `TypingSpeed` ms. `Enter` is a single CR event. `Sleep 1s` is a timing-only event that advances the clock without input.
 
-**Regression corpus:** the 841 existing `.tape` files in the monorepo. Parse-coverage target: 100%. Any directive that fails to parse becomes a tracked gap.
+**Regression corpus:** the 305 existing `.tape` files in the monorepo. Parse-coverage target: 100%. Any directive that fails to parse becomes a tracked gap.
 
 **Test plan:**
 - Unit tests per directive.
@@ -287,7 +287,7 @@ Add `render-batch <dir>` command that processes every `*.tape` under a directory
 
 ## §5. Performance budget
 
-**Target:** ≤30 min wall-clock for the full 841-tape render (matches the ceiling of the `vhs` binary in CI).
+**Target:** ≤30 min wall-clock for the full 305-tape render (matches the ceiling of the `vhs` binary in CI).
 
 **Per-tape estimates (informed; will be measured during Phase 0 and Phase 4):**
 
@@ -299,9 +299,9 @@ Add `render-batch <dir>` command that processes every `*.tape` under a directory
 | Rasterize 50 frames at 800×480, glyph cache warm | 500 ms – 2 s | Dominated by glyph blits |
 | GIF encode via ffmpeg + palettegen | 500 ms – 2 s | Two-pass palette overhead |
 | **Per-tape total** | **1–5 s** | |
-| 841 tapes serial | 14–70 min | Borderline |
+| 305 tapes serial | 5–25 min | Within budget |
 
-**Parallelization saves it:** the existing CI matrix shards by lib (sugar-dashboard gets 4×). At ~15 effective shards, 841/15 ≈ 56 tapes per shard × 5 s ≈ 5 min — well inside the budget.
+**Parallelization saves it:** the existing CI matrix shards by lib (sugar-dashboard gets 4×). At ~15 effective shards, 305/15 ≈ 20 tapes per shard × 5 s ≈ 1.5 min — well inside the budget.
 
 ---
 
@@ -312,7 +312,7 @@ Add `render-batch <dir>` command that processes every `*.tape` under a directory
 | CSI parser hot loop in pure PHP | sugar-vterm Parser | Profile after Phase 1; convert inner state machine to a switch-table; consider memoizing common SGR-only sequences. |
 | Glyph rendering dominates rasterization | Raster/Rasterizer | The `Glyphs` cache **is** the mitigation — without it, expect 10× slower. Measure cache hit rate; aim for >95% on typical tapes. |
 | ffmpeg `palettegen` runs per-frame by default | Encode/FfmpegGifEncoder | Use `palettegen=stats_mode=diff` once globally with `paletteuse=dither=bayer:bayer_scale=5`. |
-| PHP startup overhead × 841 tapes | CLI invocation | `render-batch` command processes a whole directory in one PHP process. |
+| PHP startup overhead × 305 tapes | CLI invocation | `render-batch` command processes a whole directory in one PHP process. |
 | Frame dedup defeated by cursor blink or animation | Render/FrameDedup | Cap blink rate to 1Hz; document that animated demos won't dedup well. |
 | Memory growth from accumulated snapshots | Render/FrameStream | Iterator-based; never hold more than 2 snapshots (current + previous) in memory. |
 | Temp PNG disk write/read for ffmpeg pipe | Encode/FfmpegGifEncoder | If disk I/O bites, pipe PNGs to ffmpeg stdin via `proc_open` instead of temp files. |
@@ -324,7 +324,7 @@ Performance work is gated on real numbers from Phase 0 and Phase 4 benchmarks, n
 
 ## §7. Tape directive coverage matrix (target for v1)
 
-| Directive | Usage in 841 monorepo tapes | v1 status | Behavior |
+| Directive | Usage in 305 monorepo tapes | v1 status | Behavior |
 |---|---|---|---|
 | `Output <path>` | every tape | ✅ supported | Write GIF to path |
 | `Set FontSize <n>` | 266 | ✅ supported | Scales cell metrics linearly |
