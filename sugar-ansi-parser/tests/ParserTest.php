@@ -667,21 +667,24 @@ final class ParserTest extends TestCase
         $this->assertSame('2;Title', $oscs[0]['detail']);
     }
 
-    public function testCancelledOscDoesNotBleedIntoNextSequence(): void
+    public function testCancelledOscDispatchesTruncatedThenReenteredOsc(): void
     {
         $handler = new DebugHandler();
         $parser  = new Parser($handler);
 
-        // CAN cancels the in-flight OSC (execute-only edge, no Clear in the
-        // table); the following C1 OSC must dispatch with ONLY its own payload.
-        // Before the start() buffer reset landed this dispatched "ab" —
-        // charmbracelet/x/ansi dispatches "b".
+        // CAN cancels the in-flight OSC, but fidelity says the truncated
+        // payload dispatches first (a cancelled string never vanishes);
+        // the following C1 OSC then dispatches with ONLY its own payload.
+        // The CAN byte is consumed as the terminator — no execute echo —
+        // and nothing of "a" bleeds into "b".
         $parser->feed("\x1b]a\x18");
         $parser->feed("\x9db\x9c");
 
         $oscs = $handler->filter('osc');
-        $this->assertCount(1, $oscs, 'Only the re-entered OSC should dispatch');
-        $this->assertSame('b', $oscs[0]['detail'], 'Cancelled payload must not bleed');
+        $this->assertCount(2, $oscs, 'Cancelled OSC dispatches truncated, re-entered OSC dispatches after');
+        $this->assertSame('a', $oscs[0]['detail'], 'Truncated payload must surface, not vanish');
+        $this->assertSame('b', $oscs[1]['detail'], 'Cancelled payload must not bleed');
+        $this->assertSame([], $handler->filter('execute'), 'The CAN byte is consumed, never echoed');
     }
 
     /**

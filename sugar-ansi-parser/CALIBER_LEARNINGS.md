@@ -86,3 +86,23 @@ supplies its own `CsiHandler` implementation. So both files were deleted.
   link, exposed via `hyperlinkUri()`/`hyperlinkId()`), and `OscHandlerImplTest`
   asserts that behaviour for real. Precision matters here: the two `*Impl`
   files diverged in #1262 — CSI stayed inert, OSC gained behaviour.
+## 2026-10-23 — docs-fix-1023/N7: CAN/SUB inside a string state dispatches, never vanishes
+
+The transition table mapped CAN/SUB (0x18/0x1A) in OscString, DcsString and
+the SOS/PM/APC states to `None → Ground`; combined with the abort-clear leg
+in `Parser::advance()` this **dropped the whole in-flight sequence** — no
+segment, no C0 echo, consumer sees nothing. That broke the fidelity contract
+(`candy-ansi-inspect` builds its closed-list re-emission on every byte
+landing in exactly one listed segment) and contradicted the lib's own docs.
+
+Fix: those rows now carry `Dispatch → Ground`. Cancel is a **terminator
+like ST/BEL** — `dispatch()` is unconditional, so an empty payload dispatches
+`''` exactly as `ESC ] 0x9C` does today; the CAN/SUB byte itself is consumed
+(never echoed — unlike CAN inside a CSI, which executes and echoes). The
+abort-clear leg in `advance()` stays as defense-in-depth with a truth-rewritten
+comment. No new truncated-flag channel was invented for OSC/SOS/PM/APC;
+`Dcs::$isTruncated` remains only the `final === 0` sentinel. Pins:
+`StringCancelFidelityTest`, flipped `DcsTruncationTest` CAN leg, flipped
+`ParserTest` cancelled-OSC bleed test (now asserts truncated-then-clean,
+anti-bleed intent preserved). This is a deliberate, documented deviation
+from charmbracelet/x — recorded in the `Transitions` class docblock tweak list.

@@ -21,7 +21,8 @@ use SugarCraft\AnsiParser\Parser\Parser;
  *   bytes are the caller's tail, which is how candy-ansi-inspect reports a
  *   truncated prelude);
  * - a DCS still in its prelude at end-of-stream is likewise aborted;
- * - CAN/SUB inside the body drops the payload without dispatching;
+ * - CAN/SUB inside the body dispatches the payload collected so far, then
+ *   aborts to Ground (the cancel byte is consumed as the terminator);
  * - the VT500 DcsEntry quirk (control bytes 0x08-0x0D, or a tmux-quirk ESC,
  *   going straight into the payload) dispatches with the `final === 0`
  *   no-final-byte sentinel.
@@ -80,14 +81,18 @@ final class DcsTruncationTest extends TestCase
         self::assertSame(109, $csi[0]['detail']['final']);
     }
 
-    public function testCanInsideTheBodyDropsThePayloadWithoutDispatching(): void
+    public function testCanInsideTheBodyDispatchesThePayloadBeforeAborting(): void
     {
         $handler = new DebugHandler();
         $parser = new Parser($handler);
 
         $parser->parseComplete("\x1bP0;1;0qABC\x18");
 
-        self::assertCount(0, $handler->filter('dcs'));
+        $dcs = $handler->filter('dcs');
+        self::assertCount(1, $dcs, 'A cancelled DCS must dispatch what it collected, not vanish');
+        self::assertSame(0x71, $dcs[0]['detail']['final'], 'final byte is the q');
+        self::assertSame('ABC', $dcs[0]['detail']['data'], 'truncated body surfaces');
+        self::assertSame([], $handler->filter('execute'), 'the CAN byte is consumed, never echoed');
     }
 
     public function testStTerminatesTheDcsBeforeTheTrailingEscDispatch(): void

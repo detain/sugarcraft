@@ -16,7 +16,11 @@ namespace SugarCraft\AnsiParser\Parser;
  * Mirrors charmbracelet/x/ansi/parser.GenerateTransitionTable() — same
  * tweaks: a Utf8 state is added; OSC/DCS string ranges extend to 0xFF;
  * ':' (0x3A) is a sub-parameter separator; SOS/PM/APC dispatch; DEL
- * executes in Ground; ST C1 (0x9C) is dispatched not ignored.
+ * executes in Ground; ST C1 (0x9C) is dispatched not ignored; and CAN/SUB
+ * inside a string state DISPATCH the payload collected so far before
+ * aborting to Ground (the cancel byte itself is consumed, not echoed) —
+ * a cancelled string must not vanish unlisted, see the fidelity note at
+ * the rows below.
  *
  * @see https://github.com/charmbracelet/x/blob/main/ansi/parser/transition_table.go
  */
@@ -174,7 +178,12 @@ final class Transitions
             $set($state, 0x9F, Action::Start->value, $AS);
             $set($state, 0x1B, Action::Dispatch->value, $E);
             $set($state, 0x9C, Action::Dispatch->value, $G);
-            $setMany($state, [0x18, 0x1A], Action::None->value, $G);
+            // Fidelity: CAN/SUB cancel the string but the bytes already
+            // Put are dispatched first, matching the ESC-abort and flush()
+            // edges (a cancelled string never vanishes unlisted). The
+            // cancel byte itself is consumed as the terminator; see the
+            // OscString rows for the full note.
+            $setMany($state, [0x18, 0x1A], Action::Dispatch->value, $G);
         }
 
         // DcsEntry
@@ -218,7 +227,12 @@ final class Transitions
         $setRange($DS, 0x80, 0xFF, Action::Put->value, $DS);
         $set($DS, 0x1B, Action::Dispatch->value, $E);
         $set($DS, 0x9C, Action::Dispatch->value, $G);
-        $setMany($DS, [0x18, 0x1A], Action::None->value, $G);
+        // Fidelity: CAN/SUB dispatch the DCS body collected so far, then
+        // abort to Ground (cancel byte consumed, no echo) — same shape as
+        // the OSC rows below; DCS is fixed together with OSC/SOS/PM/APC
+        // because the pre-fix house treatment was identical (silent drop),
+        // and consistency across the five string states is the contract.
+        $setMany($DS, [0x18, 0x1A], Action::Dispatch->value, $G);
 
         // CsiParam
         $setRange($CP, 0x00, 0x17, Action::Execute->value, $CP);
@@ -258,7 +272,21 @@ final class Transitions
         $set($OS, 0x1B, Action::Dispatch->value, $E);
         $set($OS, 0x07, Action::Dispatch->value, $G);
         $set($OS, 0x9C, Action::Dispatch->value, $G);
-        $setMany($OS, [0x18, 0x1A], Action::None->value, $G);
+        // FULL NOTE (the SOS/PM/APC and DcsString rows above share this
+        // shape): upstream charmbracelet/x maps CAN/SUB in a string state
+        // to None -> Ground, discarding the collected payload — the whole
+        // in-flight sequence then vanishes: no segment dispatched, no C0
+        // echo, the consumer sees nothing at all. That breaks this lib's
+        // fidelity contract (every byte lands in exactly one listed
+        // segment), so cancel dispatches what the string collected SO FAR
+        // and then honors the cancel: the CAN/SUB byte is consumed as the
+        // terminator (never echoed), the state lands in Ground, and any
+        // ST that follows arrives in Ground where the anywhere-table makes
+        // it a plain Execute echo — no double dispatch. Truncation is
+        // honest as a shape: there is no separate truncated flag for
+        // OSC/SOS/PM/APC (Dcs::$isTruncated marks only the no-final-byte
+        // edge), and we do not invent one.
+        $setMany($OS, [0x18, 0x1A], Action::Dispatch->value, $G);
 
         return $t;
     }

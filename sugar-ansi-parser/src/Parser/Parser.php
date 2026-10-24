@@ -364,15 +364,18 @@ final class Parser
         if ($next === State::Escape && $action !== Action::Clear) {
             $this->clear();
         }
-        // A string sequence ABORTED to Ground — CAN/SUB or an Execute-class C1
-        // — exits on a table edge carrying neither Dispatch nor Clear, so its
-        // payload would otherwise sit in the buffer and bleed into whatever
-        // sequence starts next (`ESC ] a CAN` then `0x9D b 0x9C` must dispatch
-        // "b", matching charmbracelet/x/ansi; the start()-clears-buffer shape
-        // of this fix was rejected because a mid-string C1 re-introducer MUST
-        // keep the bytes collected before it — pinned downstream by sugar-vterm,
-        // CALIBER 2026-05-30 step-20, and here by
-        // ParserTest::testC1ReintroducerPreservesStringPayload).
+        // Defense-in-depth: a string sequence that reaches Ground on a table
+        // edge carrying NEITHER Dispatch NOR Clear would leave its payload in
+        // the buffer to bleed into whatever sequence starts next. No such edge
+        // exists today — CAN/SUB carry Dispatch since the fidelity fix (they
+        // emit the truncated payload instead of vanishing), every C1 from a
+        // string state is Put-covered or dispatches, and only 0x9C/0x07/ESC
+        // leave a string (each dispatching) — but a future table row must not
+        // be able to reopen the bleed silently, so the guard stays. (The
+        // start()-clears-buffer shape of the original bleed fix was rejected
+        // because a mid-string C1 re-introducer MUST keep the bytes collected
+        // before it — pinned downstream by sugar-vterm, CALIBER 2026-05-30
+        // step-20, and here by ParserTest::testC1ReintroducerPreservesStringPayload.)
         if ($next === State::Ground
             && \in_array($from, self::STRING_STATES, true)
             && $action !== Action::Dispatch

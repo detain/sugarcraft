@@ -113,8 +113,13 @@ The transition table is generated once as a 4096-byte string — 16 rows ×
 256 codes indexed `state << 8 | byte`; 15 rows hold live states and row 15 is
 padding for the 4-bit state mask — with each entry packing
 `(action << 4) | nextState` into one byte. Anywhere-rules: CAN/SUB (0x18 /
-0x1A) execute and abort in-flight strings (their payload is dropped, never
-bled forward); `ESC` clears and re-syncs, dispatching the interrupted string
+0x1A) execute and abort in-flight escape/CSI sequences; **inside a string
+state** they dispatch the payload collected so far before aborting to Ground
+— a cancelled OSC/DCS/SOS/PM/APC never vanishes unlisted (fidelity contract;
+the cancel byte itself is consumed as the terminator, not echoed; the DCS
+body carries no truncated flag beyond the `final === 0` no-final-byte
+sentinel);
+`ESC` clears and re-syncs, dispatching the interrupted string
 so `ESC \` is a terminator rather than a lost byte; a *different-type* C1
 introducer mid-string discards the stale payload (title-injection bleed
 guard) while a same-type one deliberately keeps it. Bytes with no mapped
