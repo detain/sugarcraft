@@ -10,10 +10,35 @@ $autoloadCandidates = [
     __DIR__ . '/../../../autoload.php',      // installed under vendor/bin
     __DIR__ . '/../../vendor/autoload.php',  // monorepo dev
 ];
-foreach ($autoloadCandidates as $autoload) {
-    if (file_exists($autoload)) {
-        require $autoload;
-        break;
+
+// DST-1 (guard shape ported from candy-code/candy-top, measured on PHP 8.3.6):
+// when `php candy-mdview.phar` runs, THIS file is the archive's stub and
+// Phar::running() answers '' here; a bare '/x.phar/entry' path fails
+// file_exists()/require for every caller, so both archive identities are
+// addressed the only way that works, as a phar:// URI. Inside an archive the
+// archive's own vendor is the EXCLUSIVE root — the candidate ORDER below is
+// deliberately left byte-untouched (its sequence is itself a pinned shape);
+// the archive arm simply runs before it and returns, so composer mode keeps
+// every candidate position and message exactly as it was.
+$archive = \Phar::running(false) !== ''
+    ? 'phar://' . \Phar::running(false)
+    : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+if ($archive !== '') {
+    $path = $archive . '/vendor/autoload.php';
+    if (!is_file($path)) {
+        // A phar without its own vendor/ is a build defect, not a fallback
+        // case: booting from an outside vendor would run code the frozen
+        // archive does not contain. Fail loud.
+        fwrite(STDERR, "candy-mdview: the archive has no vendor/autoload.php — the phar was built without a packaged vendor.\n");
+        exit(1);
+    }
+    require $path;
+} else {
+    foreach ($autoloadCandidates as $autoload) {
+        if (file_exists($autoload)) {
+            require $autoload;
+            break;
+        }
     }
 }
 
