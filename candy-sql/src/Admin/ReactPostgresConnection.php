@@ -53,9 +53,15 @@ final class ReactPostgresConnection implements AsyncConnection
 {
     /**
      * The libpq sslmode spellings PgAsync accepts as its `tls` parameter.
-     * Local (not vendor-coupled) list: an unrecognised value would throw
-     * inside the vendor constructor, so unknown modes are defensively
-     * omitted and inherit PgAsync's 'prefer' default.
+     * Local (not vendor-coupled) list, and more load-bearing than a
+     * vendor-coupling guard: the vendor check (voryx/pgasync
+     * src/PgAsync/Connection.php ~:181) validates
+     * in_array($this->tls, self::TLS_MODE_LIST_FULL) against the
+     * PRE-ASSIGNMENT 'prefer' default, not the incoming $parameters['tls'],
+     * so an unrecognised value never throws upstream — it is assigned
+     * verbatim and behaves silently (prefer-like). This list is therefore
+     * the only thing deciding which modes reach the wire; unknown modes are
+     * defensively omitted.
      */
     private const PGSQL_TLS_MODES = ['disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'];
 
