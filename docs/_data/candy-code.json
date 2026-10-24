@@ -1,8 +1,8 @@
 {
     "title": "CandyCode — SugarCraft",
-    "description": "CandyCode: Terminal AI coding agent — seven LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions.",
+    "description": "CandyCode: Terminal AI coding agent — nine LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions.",
     "ogTitle": "CandyCode — SugarCraft",
-    "ogDescription": "Terminal AI coding agent — seven LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions.",
+    "ogDescription": "Terminal AI coding agent — nine LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions.",
     "emoji": "🤖",
     "displayName": "CandyCode",
     "tagline": "Terminal AI coding agent",

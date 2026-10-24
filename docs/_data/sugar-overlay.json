@@ -1,8 +1,8 @@
 {
     "title": "SugarOverlay — SugarCraft",
-    "description": "SugarOverlay: Overlay layer for terminal apps — dimmed modal overlays with slide/fade animation and click-outside dismissal.",
+    "description": "SugarOverlay: Modal/overlay compositing for terminal UIs — foreground content over a background at any position with cell offsets, backdrop dimming, animated transitions, border chrome and click-zone hit-testing.",
     "ogTitle": "SugarOverlay — SugarCraft",
-    "ogDescription": "Overlay layer for terminal apps — dimmed modal overlays with slide/fade animation and click-outside dismissal.",
+    "ogDescription": "Modal/overlay compositing for terminal UIs — foreground content over a background at any position with cell offsets, backdrop dimming, animated transitions, border chrome and click-zone hit-testing.",
     "emoji": "",
     "displayName": "SugarOverlay",
     "tagline": "Terminal overlay compositor",

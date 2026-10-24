@@ -81,7 +81,8 @@
 # Escape     Exit search mode · clear selection (outside prompts)
 # t          Duplicate current tab
 # Ctrl+w     Close current tab
-# Ctrl+Tab   Cycle to next tab
+# Ctrl+Tab   Cycle to next tab — terminals that report modified Tab
+# Ctrl+PgUp  Next tab · Ctrl+PgDn  Previous tab (always work)
 # u / Ctrl+z Undo last operation</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
@@ -94,7 +95,7 @@
       <div class="feature"><strong>Delete-with-confirm</strong><span><code>d</code> stages, <code>y</code> commits — protects against fat-finger deletes.</span></div>
       <div class="feature"><strong>Injectable FS</strong><span><code>FsLister</code> closure — swap for a fixture lister in unit tests with no tmp dirs.</span></div>
       <div class="feature"><strong>Live search</strong><span><code>/</code> enters search mode; type to filter, <code>↑↓</code> navigate, Enter opens.</span></div>
-      <div class="feature"><strong>Tab management</strong><span><code>t</code> duplicates tab, <code>Ctrl+Tab</code> cycles, <code>Ctrl+w</code> closes.</span></div>
+      <div class="feature"><strong>Tab management</strong><span><code>t</code> duplicates tab, <code>Ctrl+Tab</code> cycles (terminals that report modified Tab; <code>Ctrl+PgUp</code>/<code>Ctrl+PgDn</code> always work), <code>Ctrl+w</code> closes.</span></div>
       <div class="feature"><strong>Undo</strong><span><code>u</code> or <code>Ctrl+z</code> restores last delete / move / rename.</span></div>
     </div>
 
@@ -151,7 +152,7 @@
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/tabs.gif" alt="Tabs">
                 <h3>Tab management</h3>
-                <span class="demo-caption">t duplicates, Ctrl+Tab cycles, Ctrl+w closes.</span>
+                <span class="demo-caption">t duplicates, Ctrl+Tab (or Ctrl+PgUp/PgDn) cycles, Ctrl+w closes.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/sort-cycle.gif" alt="Sort cycle">
