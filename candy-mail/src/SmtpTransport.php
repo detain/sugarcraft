@@ -519,7 +519,7 @@ final class SmtpTransport implements Transport
     {
         $lines = [];
         foreach ($attachments as $att) {
-            $content = $att->getContent();
+            $content = $att->content();
             $encoded = \chunk_split(\base64_encode($content), 76, "\n");
 
             // RFC 2045 quoted-string: CRLF is refused at Attachment construction

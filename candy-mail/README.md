@@ -200,6 +200,16 @@ cd candy-mail && vendor/bin/phpunit -c phpunit.xml
 308 tests, 1,125 assertions (PHP 8.3, PHPUnit 10.5). The suite includes fork-based
 loopback fake-server tests for the SMTP conversation; no external network is ever dialled.
 
+## Accessor deprecation (2026-10-24)
+
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, `Attachment::getContent()` was renamed to its bare twin `content()` — the method slot was unclaimed (no `withContent` setter exists; the public readonly `$content` property names the raw backing field, not a callable, and PHP keeps property and method namespaces distinct). The legacy spelling stays a byte-identical one-line BC forwarder marked `@deprecated` with `REMOVED-IN: 2.0.0`; it will be removed in candy-mail v2.0.0.
+
+| Namespace | Class | Deprecated | Use instead |
+|-----------|-------|------------|-------------|
+| `Mail` | `Attachment` | `getContent()` | `content()` |
+
+Note the distinction the rename preserves: the readonly property `$content` is the raw nullable backing field, while `content()` resolves the bytes (including the defense-in-depth path re-read). `tests/AccessorDeprecationTest.php` pins BC identity on live objects from both factories, the property/method distinction, the forwarder shape, a discovery-first `src/` census with an inverse leg that reddens any unmarked public `get*()`, and the README table agreement. Internal call sites in `src/` (`SmtpTransport`, `ResendTransport`) were switched to the bare form in the same commit.
+
 ## License
 
 MIT

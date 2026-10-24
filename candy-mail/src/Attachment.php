@@ -95,13 +95,17 @@ final class Attachment
     /**
      * Get the raw content bytes.
      *
+     * Distinct from the public readonly `$content` property: the property
+     * is the raw (nullable) backing field, while this method resolves the
+     * bytes — including the defense-in-depth path re-read below.
+     *
      * Every public factory reads eagerly, so `$content` is normally already
      * set; the path re-read below is defense-in-depth for a future factory
      * that defers the read, not a behavior reachable through today's API.
      *
      * @throws \RuntimeException if the path is set but the file cannot be read
      */
-    public function getContent(): string
+    public function content(): string
     {
         if ($this->content !== null) {
             return $this->content;
@@ -118,6 +122,15 @@ final class Attachment
         }
         return '';
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::content()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getContent(): string { return $this->content(); }
 
     /**
      * Create a copy with an updated cid (for inline embedding).

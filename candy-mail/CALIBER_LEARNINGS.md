@@ -41,3 +41,6 @@ explicitly and fall back to the real env. getenv() returns `false` when the
 name is absent — hence the `?:` guard for the empty-string case. The original "behavior varies across PHP versions" note
 referred to this split lookup, not to any version inconsistency in getenv().
 Source: findings/plan_candy-mail.md Item 4.7
+
+## 2026-10-24 — Accessor-deprecation era (bare twins, ruling 3b)
+- **[pattern:accessor-deprecation-era]** `Attachment::getContent()` was renamed to its bare twin `content()`, kept as a one-line `@deprecated` BC forwarder marked `REMOVED-IN: 2.0.0` until candy-mail v2.0.0. The brief's "withContent exists as setter" premise was FALSE on disk — no `withContent` anywhere in the lib; the real near-collision is the public readonly `$content` property, which PHP keeps in a distinct namespace from the method. The two spellings are NOT synonyms and the era pinned it as its own leg: `$att->content` is the raw nullable backing field, `$att->content()` resolves bytes (eager set + defense-in-depth path re-read). `tests/AccessorDeprecationTest.php` owns the census + inverse leg + README table; a sixth get* without those rows goes red.

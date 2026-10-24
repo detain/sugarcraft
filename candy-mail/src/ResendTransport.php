@@ -157,7 +157,7 @@ final class ResendTransport implements Transport
         foreach ($email->attachments as $att) {
             $resendAtts[] = [
                 'filename' => $att->filename,
-                'content'  => \base64_encode($att->getContent()),
+                'content'  => \base64_encode($att->content()),
             ];
         }
         if ($resendAtts !== []) {
