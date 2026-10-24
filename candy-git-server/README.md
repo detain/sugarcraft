@@ -52,7 +52,8 @@ the live listener. Nothing forks.
   binary-framed emitters
 - `Git\StatelessRpc` — spawns the real `git upload-pack/receive-pack
   --stateless-rpc` children the HTTP read path delegates to (bounded
-  drain, cap refusal, TERM→KILL reap per spawn)
+  stdin write + bounded drain on one deadline, cap refusal, TERM→KILL
+  reap per spawn)
 - `Git\UploadPack`, `Git\ReceivePack` — in-process clone/push command
   handlers for the daemon/CGI shapes (framing now goes through the codec;
   the daemon's own dialect still deviates — see Known gaps)
@@ -462,11 +463,11 @@ why those phases still carry the scaffold label.
    codec in r1024/githttp; these dialect gaps remain.
 3. **Plaintext password comparison**: `User::$password` stores the raw
    string and is compared with `hash_equals` — no hashing
-   (`HttpSmartProtocol/Server.php:714`, `User.php`). The phase-1 read
+   (`HttpSmartProtocol/Server.php:716`, `User.php`). The phase-1 read
    path ships no new credential surface; fixing this is phase-2 push
    groundwork.
 4. **Proxy HMAC replayable**: the signature covers only the username — no
-   timestamp, nonce, or request binding (`HttpSmartProtocol/Server.php:780-790`).
+   timestamp, nonce, or request binding (`HttpSmartProtocol/Server.php:782-792`).
 5. **403 without `WWW-Authenticate`**: private repos answer 403 with no
    challenge header, so git clients never prompt for credentials
    (`HttpSmartProtocol/Server.php:246`, `:281`) — live behavior of the
