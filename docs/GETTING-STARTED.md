@@ -147,7 +147,7 @@ places — READMEs use `vendor/bin/…` and `./bin/…` for different ones:
   and honoured by [`sugar-spring`](../sugar-spring/src/Spring.php): springs
   snap straight to their target instead of animating.
 - **`NO_COLOR`**: color depth is detected fleet-wide by
-  [`sugar-core`'s `ColorProfile::detect()`](../sugar-core/src/Program.php)
+  [`sugar-core`'s `ColorProfile::detect()`](../sugar-core/src/Util/ColorProfile.php)
   (TERM / `COLORTERM` / `NO_COLOR` / CI probes) and announced to every
   program as a `ColorProfileMsg`; the full precedence ladder is documented
   in the [sugar-colorprofile

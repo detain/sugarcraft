@@ -31,7 +31,7 @@ Whether `Ctrl+Tab`, `Ctrl+Enter`, or Alt+letter ever reach an app as
 *themselves* is a terminal question, not an app question:
 
 - **Kitty progressive keyboard protocol** (`CSI >1u` flags, disambiguate
-  mode) — negotiated by apps like candy-code and candy-top at startup;
+  mode) — negotiated by apps like candy-code and candy-files at startup;
   support it or not, terminals either send the chord or send nothing new.
 - **xterm `modifyOtherKeys`** — the older fallback for the same problem.
 - Both (and the legacy encodings) are decoded in

@@ -24,7 +24,7 @@ glossary](../candy-code/docs/GLOSSARY.md) covers the agent-app vocabulary
 | **cell-diff** | The renderer keeps the previous frame as a grid of cells and writes only the characters that changed. `sugar-cellbuffer`'s `Buffer::diff()` is the shared engine. |
 | **"cursed" cell-diff mode** | sugar-core's opt-in raw-line diffing mode — the historic lipgloss term for byte-level (not cell-level) frame differencing: cheaper, but only correct when every row is rewritten exactly. See the sugar-core README row ("opt-in cursed cell-diff mode"). |
 | **rune** | One user-perceived character in one grid cell (may be several bytes / codepoints: an emoji, a combining sequence). [`sugar-cellbuffer/src/Cell.php`](../sugar-cellbuffer/src/Cell.php) stores `rune`/style/link/width. |
-| **braille chart** | An 8-dot Braille cell (`⣀`-shaped glyphs, U+2800 block) used as a 2×4-pixel plotting cell — line graphs in text. Produced by [`sugar-charts/src/Sparkline/Sparkline.php`](../sugar-charts/src/Sparkline/Sparkline.php) and the charts `Canvas`; candy-top's CPU graphs are these, hence "braille graphs, btop-compatible". |
+| **braille chart** | An 8-dot Braille cell (`⣀`-shaped glyphs, U+2800 block) used as a 2×4-pixel plotting cell — line graphs in text. Produced by [`sugar-charts/src/Sparkline/Sparkline.php`](../sugar-charts/src/Sparkline/Sparkline.php) and the charts [`Canvas`](../sugar-charts/src/Canvas/Canvas.php)/[`BrailleGrid`](../sugar-charts/src/Canvas/BrailleGrid.php); candy-top's CPU graphs are these, hence "braille graphs, btop-compatible". |
 | **luminance ramp** | Grayscale block glyphs (`░▒▓█`) chosen by pixel brightness — the fallback way to show an image or GIF where truecolor or graphics protocols are unavailable (`sugar-animation`, `candy-gifview`, sugar-image's ANSI tier). |
 | **half block** | The `▄`/`▀` glyphs; sugar-image's always-available ANSI tier paints one image row per two such half-cells. |
 
@@ -32,7 +32,7 @@ glossary](../candy-code/docs/GLOSSARY.md) covers the agent-app vocabulary
 
 | Term | Meaning |
 |---|---|
-| **Kitty progressive keyboard protocol** | A graphics-protocol-era keyboard extension (`CSI >1u` flags) that reports every key + modifier combination unambiguously, and lets apps "disambiguate" chords. Decoded by [`sugar-input`](../sugar-input/); negotiated by candy-top/candy-code on startup. |
+| **Kitty progressive keyboard protocol** | A graphics-protocol-era keyboard extension (`CSI >1u` flags) that reports every key + modifier combination unambiguously, and lets apps "disambiguate" chords. Decoded by [`sugar-input`](../sugar-input/); negotiated on startup by apps such as candy-code and candy-files. |
 | **xterm modifyOtherKeys** | xterm's older alternative for reporting chords as `CSI 27;modifier;keysym ~`. Also decoded by `sugar-input`. |
 | **X10 mouse** | The 1984 DEC VT52-era mouse report (`ESC [ M` + 3 bytes) — button press only, coordinates capped to 223 columns. `sugar-input`'s mouse decoders read it. |
 | **urxvt mouse** | The rxvt-unicode extension adding drag/motion reports to the X10 encoding. |
@@ -62,10 +62,10 @@ Tea). The words, per [`sugar-core`](../sugar-core/src/Model.php):
 
 | Term | Meaning |
 |---|---|
-| **Style** | An immutable set-and-render description — bold, colors, underline — as a `SugarCraft\Style\Style` value object ([`sugar-style/src/Style.php`](../sugar-style/src/Style.php)); `with*()` methods clone. Never "the Sprinkles Style" — that package no longer exists. |
+| **Style** | An immutable set-and-render description — bold, colors, underline — as a `SugarCraft\Style\Style` value object ([`sugar-style/src/Style.php`](../sugar-style/src/Style.php)); its setters keep lipgloss's bare names (`bold()`, `fg()`) and still return a new instance via a private `with()` — sugar-style is the documented naming exception, so the `with*()` spelling belongs to the other value-object families. Never "the Sprinkles Style" — that package no longer exists. |
 | **theme** | A *named, loadable collection* of style choices — a file on disk you select (candy-top ships btop-compatible theme files; sugar-style's [`Theme.php`](../sugar-style/src/Theme.php) is the programmatic kind: `Theme::ansi()`). |
 | **palette** | The *in-memory set* of colors resolved for one render — [`sugar-style/src/Palette.php`](../sugar-style/src/Palette.php) (and `sugar-colorprofile`'s tiered palettes). A theme selects a palette; the palette is what styles index into. |
-| **ColorProfile** | The terminal's color *depth* — Ansi16/Ansi256/TrueColor — detected once at startup from TERM/`COLORTERM`/`NO_COLOR`/CI env by [`sugar-core`'s `Util\ColorProfile::detect()`](../sugar-core/src/Program.php) and dispatched as a [`ColorProfileMsg`](../sugar-core/src/Msg/ColorProfileMsg.php); apps may then pick different palettes per tier. |
+| **ColorProfile** | The terminal's color *depth* — Ansi16/Ansi256/TrueColor — detected once at startup from TERM/`COLORTERM`/`NO_COLOR`/CI env by [`sugar-core`'s `Util\ColorProfile::detect()`](../sugar-core/src/Util/ColorProfile.php) and dispatched as a [`ColorProfileMsg`](../sugar-core/src/Msg/ColorProfileMsg.php); apps may then pick different palettes per tier. |
 | **NO_COLOR** | The community convention: set `NO_COLOR` to any non-empty value and programs drop color. Honored fleet-wide via core detection plus per-app config; see [KEYMAPS.md](KEYMAPS.md#color-and-reduced-motion-env) for the app-by-app caveat. |
 
 ## Layout words: pane vs panel vs box
