@@ -4,6 +4,29 @@
 declare(strict_types=1);
 
 (static function () {
+    // DST-1 (guard shape ported from candy-code/candy-top, measured on PHP
+    // 8.3.6): when `php candy-sql.phar` runs, THIS file is the archive's stub
+    // and Phar::running() answers '' here; a bare '/x.phar/entry' path fails
+    // is_file()/require for every caller. The stub names itself in __FILE__;
+    // a require-from-inside names the archive in Phar::running(). Both are
+    // addressed the only way that works, as a phar:// URI, and the archive's
+    // own vendor becomes the EXCLUSIVE root (a stray vendor beside the phar
+    // must never boot the app from outside the frozen archive). Composer
+    // mode: both identities are empty and the candidates below are untouched.
+    $archive = \Phar::running(false) !== ''
+        ? 'phar://' . \Phar::running(false)
+        : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+    if ($archive !== '') {
+        $path = $archive . '/vendor/autoload.php';
+        if (!is_file($path)) {
+            fwrite(STDERR, "candy-sql: the archive has no vendor/autoload.php — the phar was built without a packaged vendor.\n");
+            exit(1);
+        }
+        require $path;
+
+        return;
+    }
+
     foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
         $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
         if (is_file($path)) {
@@ -28,6 +51,7 @@ use SugarCraft\Sql\Db\MysqlDatabase;
 use SugarCraft\Sql\Db\PostgresDatabase;
 use SugarCraft\Sql\Db\SqliteDatabase;
 use SugarCraft\Sql\Lang;
+use SugarCraft\Sql\Version;
 
 $argv = $argv ?? [];
 
@@ -90,10 +114,10 @@ function handleGlobalFlags(array $argv): ?int
     }
 
     if ($hasVersion) {
-        $version = \Composer\InstalledVersions::isInstalled('sugarcraft/candy-sql')
-            ? \Composer\InstalledVersions::getPrettyVersion('sugarcraft/candy-sql')
-            : 'dev';
-        fwrite(STDOUT, "candy-sql {$version}\n");
+        // Phar-aware (DST-1): inside an archive the stamped build metadata
+        // wins; in composer mode the answer stays the installed package's own
+        // Composer metadata (the 14a7e605a contract) — never a frozen literal.
+        fwrite(STDOUT, 'candy-sql ' . Version::current() . "\n");
         return 0;
     }
 

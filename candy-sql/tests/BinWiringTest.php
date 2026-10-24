@@ -46,10 +46,20 @@ final class BinWiringTest extends TestCase
 
     public function testVersionComesFromComposerMetadata(): void
     {
+        // 14a7e605a's law, kept through the phar fusion (DST-1): the answer
+        // tracks the installed package through Composer, never a hardcoded
+        // literal. The resolution now lives behind Version (the phar
+        // precedence demanded a single fused seam), so the token pin follows
+        // it — plus the bin must delegate, and no literal may resurface in
+        // either file.
         $src = self::binSource();
+        $versionSrc = \file_get_contents(__DIR__ . '/../src/Version.php');
+        \assert(\is_string($versionSrc), 'the version resolver must be readable');
 
-        $this->assertStringContainsString('InstalledVersions::getPrettyVersion', $src);
+        $this->assertStringContainsString('Version::current()', $src);
+        $this->assertStringContainsString('InstalledVersions::getPrettyVersion', $versionSrc);
         $this->assertStringNotContainsString('"candy-sql 1.0.0"', $src);
+        $this->assertStringNotContainsString('1.0.0', $versionSrc);
     }
 
     public function testLauncherIsNotNamespaced(): void
