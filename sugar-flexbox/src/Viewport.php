@@ -291,8 +291,26 @@ final readonly class Viewport
         return new self($this->inner->setHeight($height), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
     }
 
-    public function getWidth(): int  { return $this->inner->getWidth(); }
-    public function getHeight(): int { return $this->inner->getHeight(); }
+    public function width(): int  { return $this->inner->getWidth(); }
+    public function height(): int { return $this->inner->getHeight(); }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::width()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getWidth(): int { return $this->width(); }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::height()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getHeight(): int { return $this->height(); }
 
     // ---- offset --------------------------------------------------------
 

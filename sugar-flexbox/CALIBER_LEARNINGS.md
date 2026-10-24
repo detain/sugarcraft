@@ -67,3 +67,6 @@ Creates approximately 5,000 entries for a 100×50 character buffer. This is nece
 ### Viewport scroll defaults
 
 `Viewport::scrollLeft(int $n = 1)` and `Viewport::scrollRight(int $n = 1)` default to 1 (not 0) for consistency with other navigation methods like `lineUp()` and `lineDown()`. A default of 0 would make no-argument calls a no-op.
+
+## 2026-10-24 — Accessor-deprecation era (bare twins, ruling 3b)
+- **[pattern:accessor-deprecation-era]** `Viewport::getWidth()`/`getHeight()` were renamed to the bare twins `width()`/`height()` (unclaimed — the mutators are `setWidth()`/`setHeight()`, no fluent collision), the legacy names kept as one-line `@deprecated` BC forwarders marked `REMOVED-IN: 2.0.0`; zero behavior change, zero removals this era. The bare twins still delegate through the wrapped widgets viewport's own `getWidth()`/`getHeight()` — the sugar-forms class behind that alias is a separate era (owner judgment pending), do not "fix" it from this lib. `tests/AccessorDeprecationTest.php` pins the era from four directions: live-object BC identity, forwarder shape, a discovery-first `src/` census, and the README table — a third deprecation without all rows goes red.
