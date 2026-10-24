@@ -63,7 +63,7 @@ final class Entry
      *
      * expires_at is an epoch integer (post-D4 schema). Rows still holding a
      * legacy DATE_ATOM string are parsed by instant so pre-migration reads
-     * and getRaw() keep working; a future rewrite of the column happens on
+     * and raw() keep working; a future rewrite of the column happens on
      * Database open.
      *
      * @param array{key:string,value:string,binary:int,created:string,modified:string,expires_at?:int|string|null} $row

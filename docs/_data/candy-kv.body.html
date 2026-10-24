@@ -47,7 +47,7 @@ $skate-&gt;listDatabases();                    // ['default', 'passwords']</code
 <tr><td>Store</td><td>set(key, value, bool $binary = false, ?int $ttlSeconds = null) / setWithTtl(key, value, ttl)</td><td>Write a key; <code>key@db</code> routes to a named database</td></tr>
 <tr><td>Store</td><td>get(key, fallback = '') / entry(key)</td><td>Read a value, or the full Entry</td></tr>
 <tr><td>Store</td><td>list(?pattern, ?dbName, reverse, mode, delimiter) / fuzzyFilter(query)</td><td>Glob or fuzzy listing</td></tr>
-<tr><td>Store</td><td>delete(key) / setFile(key, path) / getFile(key, path)</td><td>Delete; binary values from and to files</td></tr>
+<tr><td>Store</td><td>delete(key) / setFile(key, path) / saveTo(key, path)</td><td>Delete; binary values from and to files</td></tr>
 <tr><td>Store</td><td>listDatabases() / deleteDatabase(name) / transaction(dbName, callable)</td><td>Database management</td></tr>
 <tr><td>Database</td><td>__construct(path, name) / get / set / delete / list / count / deleteMany / transaction</td><td>One SQLite database</td></tr>
 <tr><td>Entry</td><td>key, value, binary, createdAt, modifiedAt, expiresAt / isExpired()</td><td>A stored value</td></tr>

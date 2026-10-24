@@ -166,7 +166,7 @@ would collide with the reserved metadata shapes (`_ttl`, `_binary`,
 
 The CLI covers `set`, `get`, `list`, `delete`, `list-dbs`, `import` and
 `export`. Everything else is library-only: `Store::count()`, `entry()`,
-`getRaw()`, `setWithTtl()`, `transaction()`, `fuzzyFilter()` and
+`raw()`, `setWithTtl()`, `transaction()`, `fuzzyFilter()` and
 `deleteDatabase()` have no CLI verbs by design — the binary stays a thin
 front for the everyday loop. Key-bearing commands route to a named database
 through the `key@dbname` suffix; `list` alone always scans the default
@@ -188,7 +188,7 @@ an explicit database name argument.
 | `list(?string $pattern = null, ?string $dbName = null, bool $reverse = false, string $mode = 'all', string $delimiter = "\t")` | Lazy generator — `Entry` objects, or formatted `string` lines with `$mode` `'keys'`/`'values'` |
 | `delete(string $key): int` | Exact key or glob; returns entries removed |
 | `setFile(string $key, string $filePath): Entry` | Store file contents as a binary entry |
-| `getFile(string $key, string $filePath): bool` | Write a (binary) entry to disk |
+| `saveTo(string $key, string $filePath): bool` | Write a (binary) entry to disk |
 | `fuzzyFilter(string $query, ?string $dbName = null): array` | Live Smith-Waterman scored key search (sugar-fuzzy), best match first |
 | `listDatabases(): array` | Database names in the data dir (`settings` is reserved — see note in `Database::listDatabases()`) |
 | `deleteDatabase(string $dbName): bool` | Closes the handle, unlinks `<db>.db` + WAL/SHM sidecars |
@@ -201,9 +201,9 @@ an explicit database name argument.
 entries), `binary`, `createdAt`/`modifiedAt` (`DateTimeImmutable`, display
 timestamps only), `expiresAt` (`?DateTimeImmutable`), `isExpired()`, and
 `rawValue()` which base64-decodes when `binary` is set.
-`Database` is the single-file layer behind a store name: `get/getRaw/set/
+`Database` is the single-file layer behind a store name: `get/raw/set/
 delete/deleteMany/list/allKeys/count/transaction/close` — `count(?pattern)`
-counts live entries, `getRaw()` skips the expiry filter.
+counts live entries, `raw()` skips the expiry filter.
 
 ## Privacy & file modes
 
@@ -238,6 +238,17 @@ that is unavailable — it never writes into the install tree.
 ## Shared foundations
 
 candy-kv uses [sugar-fuzzy](https://github.com/detain/sugarcraft#sugar-fuzzy) for Smith-Waterman scored matching: `Store::fuzzyFilter()` is a live API that ranks keys against a free-text query. Glob-to-SQLite `LIKE` pattern filtering remains the active filter path for `list`/`delete`.
+
+## Accessor deprecation (2026-10-24)
+
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, two names were swept. `Database::getRaw()` became its bare twin `raw()` — `raw` was unclaimed on the class (the store verbs `get`/`set`/`list` are the canonical vocabulary, no `raw` among them). `Store::getFile()` became `saveTo()`: the operation writes store data out to disk, so a direction verb is the era-correct name; the bare candidates `export()` and `saveTo()` were checked, and `saveTo()` won because the package's own CLI already owns an `export` command (whole-database dump) and a per-entry `Store::export()` would blur that vocabulary. The store-side mutator `setFile()` keeps its name — it is the file form of the canonical `set()` verb. The legacy spellings stay byte-identical one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock; they will be removed in candy-kv v2.0.0.
+
+| Namespace | Class | Deprecated | Use instead |
+|-----------|-------|------------|-------------|
+| `Kv` | `Database` | `getRaw()` | `raw()` |
+| `Kv` | `Store` | `getFile()` | `saveTo()` |
+
+`tests/AccessorDeprecationTest.php` pins each BC leg on live objects (entry equality through `getRaw()`/`raw()` including the missing-key path; identical bool and landed bytes through `getFile()`/`saveTo()` on a hit and a miss), the forwarder shape (single return line + markers), a discovery-first `src/` census with an inverse leg that reddens any unmarked public `get*()`, and the README table agreement. Internal call sites in `src/` and `examples/` were switched to the bare forms in the same commit. The CLI `get` command is unrelated to the accessor rule and stays.
 
 ## License
 

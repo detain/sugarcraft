@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Exercises:
  * - Store::set(binary: true) to store raw bytes
  * - Entry::rawValue() to decode it
- * - Store::setFile() / getFile()
+ * - Store::setFile() / saveTo()
  */
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -33,7 +33,7 @@ echo "File stored, size: " . strlen($imgData) . " bytes\n";
 
 // Retrieve
 $outPath = $tmp . '/retrieved.bin';
-$store->getFile('image:avatar', $outPath);
+$store->saveTo('image:avatar', $outPath);
 
 $retrieved = file_get_contents($outPath);
 echo "Retrieved size: " . strlen($retrieved) . " bytes\n";

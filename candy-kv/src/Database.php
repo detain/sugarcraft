@@ -200,7 +200,7 @@ final class Database
      * Get a single entry by key, bypassing TTL / expiry filter.
      * Returns null if not found.
      */
-    public function getRaw(string $key): ?Entry
+    public function raw(string $key): ?Entry
     {
         $stmt = $this->db->prepare(
             'SELECT key, value, binary, created, modified, expires_at FROM entries WHERE key = :key'
@@ -213,6 +213,15 @@ final class Database
 
         return $row ? Entry::fromRow($row) : null;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::raw()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getRaw(string $key): ?Entry { return $this->raw($key); }
 
     /**
      * Set a value, creating or overwriting the entry.
