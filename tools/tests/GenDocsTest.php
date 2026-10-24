@@ -528,6 +528,138 @@ final class GenDocsTest extends TestCase
     }
 
     // -----------------------------------------------------------------
+    // Page chrome guarantees (ruling 9a: onerror crutch + search trigger)
+    // -----------------------------------------------------------------
+
+    /**
+     * The injection-side guarantee, on the page level: every demo-GIF img that
+     * reaches a generated page carries EXACTLY ONE onerror crutch — added when
+     * absent, left byte-untouched when the body already carries one (the
+     * sugar-dashboard case: 140 hand-authored crutches the generator must never
+     * double), and demanded of no other img (the icon PNG proves the src
+     * qualification, not a blanket attr sprinkler).
+     */
+    public function testDemoGifImgsGainExactlyOneCrutchAndAlreadyCrutchedImgsGainNone(): void
+    {
+        $root = $this->makeFixtureRoot();
+        $crutch = 'onerror="this.parentElement.style.display=\'none\'"';
+        \file_put_contents("$root/docs/_data/fixture-alpha.body.html",
+            '<p class="lede" style="margin-top: 28px;">Chrome fixture.</p>' . "\n"
+            . '<figure><img src="https://raw.githubusercontent.com/detain/sugarcraft/master/fixture-alpha/.vhs/demo.gif" alt="demo"></figure>' . "\n"
+            . '<figure><img src="https://raw.githubusercontent.com/detain/sugarcraft/master/fixture-alpha/.vhs/pre.gif" alt="pre" onerror="custom-crutch-kept"></figure>' . "\n"
+            . '<figure><img src="../img/icons/fixture-alpha.png" alt="icon"></figure>' . "\n");
+
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $page = $this->page($root, 'fixture-alpha');
+
+        // Bare gif: the exact tag as the generator emits it — crutch once, last.
+        $this->assertStringContainsString(
+            '<img src="https://raw.githubusercontent.com/detain/sugarcraft/master/fixture-alpha/.vhs/demo.gif" alt="demo" ' . $crutch . '>',
+            $page
+        );
+        $this->assertSame(1, substr_count($page, $crutch), 'standard crutch appears exactly once on the page');
+        // Pre-crutched gif: custom bytes survive verbatim, nothing appended.
+        $this->assertStringContainsString(
+            '<img src="https://raw.githubusercontent.com/detain/sugarcraft/master/fixture-alpha/.vhs/pre.gif" alt="pre" onerror="custom-crutch-kept">',
+            $page
+        );
+        // Non-gif img: no crutch was demanded.
+        $this->assertStringContainsString('<img src="../img/icons/fixture-alpha.png" alt="icon">', $page);
+    }
+
+    /**
+     * The whole affordance exists on every generated page — trigger, modal and
+     * script in one DOM the guarded search.js can light up — the trigger
+     * adjacent to the nav (8-space indent aligning it with the link siblings),
+     * and a second run is byte-identical with still-exactly-one trigger: the
+     * guarantee is idempotent across regenerations, not just within a page.
+     */
+    public function testGeneratedPagesCarryTheFullSearchAffordanceExactlyOnceAndSurviveARerunByteStable(): void
+    {
+        $root = $this->makeFixtureRoot();
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $page = $this->page($root, 'fixture-alpha');
+
+        $anchorPos = strpos($page, '<div class="nav-links">');
+        $this->assertNotFalse($anchorPos);
+        $this->assertSame(
+            "\n        <button",
+            substr($page, $anchorPos + strlen('<div class="nav-links">'), 16),
+            'the trigger must be the nav\'s first child'
+        );
+        $this->assertSame(1, substr_count($page, 'id="search-trigger"'));
+        $this->assertStringContainsString('id="search-modal"', $page);
+        $this->assertStringContainsString('src="../js/search.js"', $page);
+
+        $this->runScript($root);
+        $again = $this->page($root, 'fixture-alpha');
+        $this->assertSame($page, $again, 'regeneration must be byte-stable');
+        $this->assertSame(1, substr_count($again, 'id="search-trigger"'), 'no double-injection across runs');
+    }
+
+    /**
+     * The sugar-core case made structural: a page whose head legitimately
+     * diverges stores a prefixOverride — and the override path must NOT be a
+     * guarantee bypass. The fixture simulates the real at-rest shape (an
+     * override authored before the trigger existed, so its nav has none): the
+     * generator must inject the trigger into an overridden prefix exactly once,
+     * and the extract round trip must stay clean.
+     */
+    public function testAPrefixOverriddenPageStillGainsItsTriggerExactlyOnce(): void
+    {
+        $root = $this->makeFixtureRoot();
+        $this->runScript($root);
+
+        // Diverge the head, extract → prefixOverride lands in the JSON...
+        $path = "$root/docs/lib/fixture-alpha.html";
+        \file_put_contents($path, \str_replace(
+            '<meta name="twitter:card" content="summary_large_image">',
+            '<meta name="twitter:card" content="summary_large_image">' . "\n" . '<meta name="twitter:image" content="https://example.invalid/x.png">',
+            (string) \file_get_contents($path)
+        ));
+        $e = $this->runScript($root, ['--extract']);
+        $this->assertSame(0, $e['exit'], $e['output']);
+
+        // ...and strip the trigger back OUT of the stored override, which is
+        // precisely the state the real sugar-core.json sat in before this lane.
+        $jsonPath = "$root/docs/_data/fixture-alpha.json";
+        $meta = \json_decode((string) \file_get_contents($jsonPath), true, 512, \JSON_THROW_ON_ERROR);
+        $this->assertArrayHasKey('prefixOverride', $meta);
+        $meta['prefixOverride'] = \preg_replace(
+            '/\n +<button id="search-trigger".*?<\/button>/s',
+            '',
+            $meta['prefixOverride'],
+            1,
+            $stripped
+        );
+        $this->assertSame(1, $stripped, 'the round-tripped override must carry the trigger before stripping');
+        $this->assertStringNotContainsString('id="search-trigger"', $meta['prefixOverride']);
+        \file_put_contents(
+            $jsonPath,
+            \json_encode($meta, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) . "\n"
+        );
+
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $page = $this->page($root, 'fixture-alpha');
+        $this->assertSame(1, substr_count($page, 'id="search-trigger"'), 'override path is not a guarantee bypass');
+        $this->assertStringContainsString('<meta name="twitter:image"', $page, 'the divergence itself survives');
+
+        // Fixed point: extracting over a guaranteed page re-homes the trigger
+        // into the override (it is now part of that page's prefix), and the
+        // next generation is byte-identical — the guarantee is a no-op there,
+        // so the page never oscillates.
+        $first = $page;
+        $this->runScript($root, ['--extract']);
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $this->assertSame($first, $this->page($root, 'fixture-alpha'));
+        $this->assertSame(1, substr_count($this->page($root, 'fixture-alpha'), 'id="search-trigger"'));
+    }
+
+    // -----------------------------------------------------------------
     // Redirect stubs (rename plan step 2.3)
     // -----------------------------------------------------------------
 

@@ -21,6 +21,10 @@
 <nav class="nav"><div class="nav-inner">
     <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
     <div class="nav-links">
+        <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
+            <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <span>Search</span>
+        </button>
         <a href="../#libraries">Libraries</a>
         <a href="../#apps">Apps</a>
         <a href="../#demos">Demos</a>
@@ -118,17 +122,17 @@ $table = (new Table())
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/flexbox.gif" alt="FlexBox row + column">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/flexbox.gif" alt="FlexBox row + column" onerror="this.parentElement.style.display='none'">
                 <h3>FlexBox row + column</h3>
                 <span class="demo-caption">Ratio 1:2:1 row + column with gap=1.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/sort-filter.gif" alt="Sort + filter table">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/sort-filter.gif" alt="Sort + filter table" onerror="this.parentElement.style.display='none'">
                 <h3>Sort + filter table</h3>
                 <span class="demo-caption">Sortable + filterable table with per-column align.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/table.gif" alt="Static table">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/table.gif" alt="Static table" onerror="this.parentElement.style.display='none'">
                 <h3>Static table</h3>
                 <span class="demo-caption">Static table render with zebra rows.</span>
             </div>

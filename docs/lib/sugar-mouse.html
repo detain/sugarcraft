@@ -21,6 +21,10 @@
 <nav class="nav"><div class="nav-inner">
     <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
     <div class="nav-links">
+        <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
+            <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <span>Search</span>
+        </button>
         <a href="../#libraries">Libraries</a>
         <a href="../#apps">Apps</a>
         <a href="../#demos">Demos</a>
@@ -207,17 +211,17 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($mouseMsg)) {
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-buttons.gif" alt="Two clickable buttons">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-buttons.gif" alt="Two clickable buttons" onerror="this.parentElement.style.display='none'">
                 <h3>Two clickable buttons</h3>
                 <span class="demo-caption">Zone bounding boxes around rendered buttons via Manager::mark()/scan().</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-list-default.gif" alt="List with zones">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-list-default.gif" alt="List with zones" onerror="this.parentElement.style.display='none'">
                 <h3>List with zones</h3>
                 <span class="demo-caption">Wrapping every list row in a Zone for click targeting.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-nested.gif" alt="Nested components">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-nested.gif" alt="Nested components" onerror="this.parentElement.style.display='none'">
                 <h3>Nested components</h3>
                 <span class="demo-caption">Zones composed across nested rendered components.</span>
             </div>

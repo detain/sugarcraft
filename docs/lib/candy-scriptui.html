@@ -21,6 +21,10 @@
 <nav class="nav"><div class="nav-inner">
     <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
     <div class="nav-links">
+        <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
+            <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <span>Search</span>
+        </button>
         <a href="../#libraries">Libraries</a>
         <a href="../#apps">Apps</a>
         <a href="../#demos">Demos</a>
@@ -185,67 +189,67 @@ $app-&gt;run();                 // mycmd --format yaml  →  format=yaml</code><
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/choose.gif" alt="choose">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/choose.gif" alt="choose" onerror="this.parentElement.style.display='none'">
                 <h3>choose</h3>
                 <span class="demo-caption">Pick one item from a list.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/confirm.gif" alt="confirm">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/confirm.gif" alt="confirm" onerror="this.parentElement.style.display='none'">
                 <h3>confirm</h3>
                 <span class="demo-caption">Yes/no with exit-code semantics.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/input.gif" alt="input">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/input.gif" alt="input" onerror="this.parentElement.style.display='none'">
                 <h3>input</h3>
                 <span class="demo-caption">Read a single line.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/write.gif" alt="write">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/write.gif" alt="write" onerror="this.parentElement.style.display='none'">
                 <h3>write</h3>
                 <span class="demo-caption">Multi-line text editor.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/file.gif" alt="file">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/file.gif" alt="file" onerror="this.parentElement.style.display='none'">
                 <h3>file</h3>
                 <span class="demo-caption">Pick a file path.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/filter.gif" alt="filter">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/filter.gif" alt="filter" onerror="this.parentElement.style.display='none'">
                 <h3>filter</h3>
                 <span class="demo-caption">Fuzzy filter over stdin.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/format.gif" alt="format">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/format.gif" alt="format" onerror="this.parentElement.style.display='none'">
                 <h3>format</h3>
                 <span class="demo-caption">Render Markdown via SugarMarkdown.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/style.gif" alt="style">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/style.gif" alt="style" onerror="this.parentElement.style.display='none'">
                 <h3>style</h3>
                 <span class="demo-caption">Apply foreground / bold to argv.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/table.gif" alt="table">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/table.gif" alt="table" onerror="this.parentElement.style.display='none'">
                 <h3>table</h3>
                 <span class="demo-caption">Render CSV with rounded borders.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/pager.gif" alt="pager">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/pager.gif" alt="pager" onerror="this.parentElement.style.display='none'">
                 <h3>pager</h3>
                 <span class="demo-caption">Scroll long input.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/log.gif" alt="log">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/log.gif" alt="log" onerror="this.parentElement.style.display='none'">
                 <h3>log</h3>
                 <span class="demo-caption">Leveled logging output.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/spin.gif" alt="spin">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/spin.gif" alt="spin" onerror="this.parentElement.style.display='none'">
                 <h3>spin</h3>
                 <span class="demo-caption">Spinner while running a command.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/join.gif" alt="join">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-scriptui/.vhs/join.gif" alt="join" onerror="this.parentElement.style.display='none'">
                 <h3>join</h3>
                 <span class="demo-caption">Concatenate styled chunks.</span>
             </div>

@@ -21,6 +21,10 @@
 <nav class="nav"><div class="nav-inner">
     <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
     <div class="nav-links">
+        <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
+            <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <span>Search</span>
+        </button>
         <a href="../#libraries">Libraries</a>
         <a href="../#apps">Apps</a>
         <a href="../#demos">Demos</a>
@@ -119,7 +123,7 @@ $frames = Decoder::decode('cat.gif', cellsW: 80, cellsH: 30);
         <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-animation/.vhs/play.gif" alt="Play">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-animation/.vhs/play.gif" alt="Play" onerror="this.parentElement.style.display='none'">
                 <h3>Play</h3>
                 <span class="demo-caption">Synthetic gif decoded + rendered through both presets.</span>
             </div>

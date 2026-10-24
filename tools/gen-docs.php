@@ -59,7 +59,14 @@ declare(strict_types=1);
  *
  * The generator applies these normalizations uniformly (they are the ONLY intended diffs
  * versus the previous hand-maintained pages):
- *   - drops the onerror="" icon-hiding crutch (every slug now has a real icon);
+ *   - drops the onerror="" icon-hiding crutch from the shared chrome (every slug now
+ *             has a real icon), while GUARANTEEING exactly one onerror fallback crutch on
+ *             every demo-GIF <img> anywhere on the page — idempotent PER TAG: a body that
+ *             already ships its own onerror (sugar-dashboard's 140 hand-authored crutches)
+ *             is left byte-identical, so no _data edit is ever needed to stay honest;
+ *   - guarantees the visible #search-trigger button once in the shared nav, including
+ *             pages whose chrome arrives through prefixOverride — every chrome-bearing page
+ *             therefore carries the full search affordance (trigger + modal + script);
  *   - rewrites github.com/sugarcraft/<slug> tree/main + blob/main links to /master;
  *   - normalizes every "port of" chip label to owner/repo form derived from the URL;
  *   - fixes the breadcrumb type (library vs app) per MATCHUPS and adds the "N libraries/apps" count;
@@ -69,6 +76,26 @@ declare(strict_types=1);
  */
 
 const SLUG_RE = '[a-z0-9]+(?:-[a-z0-9]+)+';
+
+/**
+ * The standard demo-GIF fallback crutch: a tape that 404s or fails to decode
+ * hides its whole figure block (caption included) instead of leaving a broken
+ * image icon. This is the exact form sugar-dashboard's body already hand-ships,
+ * adopted as the fleet standard so injection onto the other pages is uniform.
+ */
+const DEMO_GIF_ONERROR = 'onerror="this.parentElement.style.display=\'none\'"';
+
+/**
+ * The visible search chip injected into the shared nav — markup identical to
+ * the homepage's (docs-fix-1023 G8), so the same search.css rules and the same
+ * guarded binding in search.js apply. The first line is unindented by
+ * contract: the injector appends it after a fixed 8-space run.
+ */
+const SEARCH_TRIGGER_BUTTON =
+    '<button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">' . "\n" .
+    '            <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>' . "\n" .
+    '            <span>Search</span>' . "\n" .
+    '        </button>';
 
 /**
  * The usage text, WITH the environment block that ToolsEnvRosterTest checks.
@@ -523,7 +550,10 @@ function extract_one(string $slug, string $html): array
     $secPos = strpos($html, '<section class="section">');
     if ($secPos !== false) {
         $actualPrefix = rtrim(substr($html, 0, $secPos));
-        $stdPrefix    = build_prefix($slug, $title, $desc, $ogT, $ogD);
+        // Compare against the STANDARD prefix as generation would emit it —
+        // including the guaranteed search trigger — or every regenerated page
+        // would look divergent and gain a needless prefixOverride.
+        $stdPrefix    = guarantee_search_trigger(build_prefix($slug, $title, $desc, $ogT, $ogD));
         if (strip_indent($actualPrefix) !== strip_indent($stdPrefix)) {
             $meta['prefixOverride'] = $actualPrefix;
         }
@@ -570,7 +600,7 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
 
     $footer = build_footer($slug, (string) $meta['phpVersion']);
 
-    return $prefix
+    $page = $prefix
         . "\n\n<section class=\"section\">\n  <div class=\"container\">\n    "
         . $breadcrumb . "\n\n"
         . "    <div class=\"detail-header\">\n"
@@ -587,6 +617,12 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
         . '    ' . $content . "\n\n"
         . $footer . "\n\n"
         . search_tail() . "\n";
+
+    // The two chrome guarantees run over the ASSEMBLED page, not the template:
+    // they see the body's imgs and they see an overridden prefix's nav, so one
+    // rule set covers standard and divergent chrome alike (both are idempotent,
+    // so pages that already comply pass through byte-identical).
+    return guarantee_demo_gif_onerror(guarantee_search_trigger($page));
 }
 
 function build_prefix(string $slug, string $title, string $desc, string $ogTitle, string $ogDesc): string
@@ -668,6 +704,67 @@ function search_tail(): string
         </body>
         </html>
         HTML;
+}
+
+
+/**
+ * Guarantee the search affordance's visible half on every assembled page.
+ *
+ * The modal DOM and the search.js include already live in search_tail(); the
+ * trigger button was the missing third. Detection is presence of the element
+ * id, so the pass is idempotent and it also covers prefixes that arrive
+ * through prefixOverride — an overridden nav without a button gains exactly
+ * one, an overridden nav that already carries one is untouched. Pages with no
+ * shared nav at all (redirect stubs) are never passed through here.
+ */
+function guarantee_search_trigger(string $page): string
+{
+    if (str_contains($page, 'id="search-trigger"')) {
+        return $page;
+    }
+    $anchor = '<div class="nav-links">';
+    $pos    = strpos($page, $anchor);
+    if ($pos === false) {
+        return $page;
+    }
+
+    return substr_replace($page, $anchor . "\n        " . SEARCH_TRIGGER_BUTTON, $pos, strlen($anchor));
+}
+
+/**
+ * Guarantee that every demo-GIF <img> on the assembled page carries exactly
+ * one onerror attribute.
+ *
+ * WHY INJECTION-SIDE AND IDEMPOTENT: the 62 hand-authored bodies under
+ * docs/_data are the content source of truth and stay untouched; the guard is
+ * the generator, not a fleet-wide _data edit. Detection is PER TAG — any
+ * existing onerror= attribute (not merely the canonical string) satisfies the
+ * rule, so sugar-dashboard's 140 hand-authored crutches pass through
+ * byte-identical instead of doubling. A tag qualifies as a demo GIF when its
+ * src path (query and fragment stripped, case-insensitively) ends in .gif —
+ * the two "gif" near-misses in shared chrome (the candy-gifview icon PNG and
+ * its Codecov SVG badge) cannot false-fire because neither src ends in .gif.
+ */
+function guarantee_demo_gif_onerror(string $html): string
+{
+    $guaranteed = preg_replace_callback(
+        '~<img\b[^>]*>~i',
+        static function (array $m): string {
+            if (preg_match('~\bsrc="([^"]*)"~i', $m[0], $src) !== 1) {
+                return $m[0];
+            }
+            $path = strtolower((string) (preg_split('/[?#]/', $src[1], 2)[0] ?? ''));
+            if (!str_ends_with($path, '.gif') || preg_match('~\bonerror\s*=~i', $m[0]) === 1) {
+                return $m[0];
+            }
+            $close = str_ends_with($m[0], '/>') ? '/>' : '>';
+
+            return substr($m[0], 0, -strlen($close)) . ' ' . DEMO_GIF_ONERROR . $close;
+        },
+        $html
+    );
+
+    return (string) $guaranteed;
 }
 
 // ---------------------------------------------------------------------------
