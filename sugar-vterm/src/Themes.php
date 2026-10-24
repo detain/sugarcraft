@@ -26,7 +26,11 @@ final class Themes
     }
 
     /**
-     * Returns only the v1-ready themes (TokyoNight first, others as stubs).
+     * Returns the v1-ready themes (TokyoNight first).
+     *
+     * Every bundled theme carries a complete 16-slot ANSI palette plus the
+     * shared extended palette, so the v1 roster is today identical to
+     * {@see self::all()} — pinned by ThemeTest against the README table.
      *
      * @return array<string, Theme>
      */
@@ -36,6 +40,8 @@ final class Themes
             'TokyoNight' => Theme::tokyoNight(),
             'TokyoNightLight' => Theme::tokyoNightLight(),
             'TokyoNightStorm' => Theme::tokyoNightStorm(),
+            'Dracula' => Theme::dracula(),
+            'SolarizedDark' => Theme::solarizedDark(),
         ];
     }
 }
