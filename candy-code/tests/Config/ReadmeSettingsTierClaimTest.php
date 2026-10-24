@@ -68,6 +68,13 @@ final class ReadmeSettingsTierClaimTest extends TestCase
      */
     private const COUNTEREXAMPLE_GLOB = '[!B]*';
 
+    /**
+     * The heading that opens the one body section allowed to say
+     * "deprecation" without the quote marker, earned by the 2026-10-24
+     * get* accessor era (see the deprecation-appears test for the why).
+     */
+    private const ACCESSOR_SECTION_HEADING = '## Accessor deprecation (2026-10-24)';
+
     private string $tmpDir = '';
 
     protected function setUp(): void
@@ -519,7 +526,7 @@ final class ReadmeSettingsTierClaimTest extends TestCase
      * 2000-character window are slack in front of the retraction, and any
      * restored occurrence inside that slack simply inherits the retraction's own
      * counterexample. The window, not the mutation, was wrong — the same defect
-     * {@see testTheWordDeprecatedAppearsInTheReadmeOnlyInsideTheQuoteThatRetractsIt()}
+     * {@see testTheWordDeprecatedAppearsInTheReadmeOnlyInsideTheQuoteThatRetractsItOrTheAccessorSection()}
      * already had to solve, and it is solved the same way: the sentence may
      * appear only on a `>` line. Body prose is what a reader skims and believes;
      * a block quote is visibly an aside about a sentence that used to be there.
@@ -692,10 +699,11 @@ final class ReadmeSettingsTierClaimTest extends TestCase
 
     /**
      * THE PROSE. The word "deprecated" appears in README.md only inside the
-     * block quote that RETRACTS it — a structural rule rather than a
-     * proximity one, and the structure is the whole point: body prose is what
-     * a reader skims and believes, a `>` quote is visibly an aside about a
-     * sentence that used to be there.
+     * block quote that RETRACTS it, or inside the one body section that
+     * earned an exemption on 2026-10-24 ({@see ACCESSOR_SECTION_HEADING}) —
+     * a structural rule rather than a proximity one, and the structure is
+     * the whole point: body prose is what a reader skims and believes, a
+     * `>` quote is visibly an aside about a sentence that used to be there.
      *
      * A PROXIMITY RULE WAS TRIED FIRST AND IS RECORDED HERE BECAUSE IT
      * SURVIVED ITS MUTATION. The first cut asked that every occurrence of
@@ -706,19 +714,44 @@ final class ReadmeSettingsTierClaimTest extends TestCase
      * signal", about an entirely different key. The window, not the mutation,
      * was wrong: any window wide enough to reach this file's own retraction is
      * wide enough to reach a `not` that has nothing to do with it.
+     *
+     * THE ACCESSOR CARVE-OUT (2026-10-24, rulings-1024). The get accessor
+     * era renamed 55 public getters to bare twins and marked the legacy
+     * names `@deprecated` with `REMOVED-IN: 2.0.0`; the README's "## Accessor
+     * deprecation (2026-10-24)" section records that promise, and unlike the
+     * retracted config.json sentence this one is TRUE — the forwarders exist
+     * in src/ and carry the marker. Truth is exactly what body prose is for,
+     * so the section is lawful without the quote marker, scoped
+     * heading-to-heading and fail-closed three ways: a line inside it that
+     * ALSO names `config.json` still offends (that name's story belongs to
+     * the retraction alone); the exempted lines are counted and a section
+     * that no longer carries any reddens — a carve-out for a vanished truth
+     * must die with it, not swallow whatever body prose reuses the heading;
+     * renaming or deleting the heading drops its real deprecation prose
+     * back into the offender list.
      */
-    public function testTheWordDeprecatedAppearsInTheReadmeOnlyInsideTheQuoteThatRetractsIt(): void
+    public function testTheWordDeprecatedAppearsInTheReadmeOnlyInsideTheQuoteThatRetractsItOrTheAccessorSection(): void
     {
         $lines = explode("\n", $this->readme());
 
         $offenders = [];
         $quoted = 0;
+        $accessorLines = 0;
+        $inAccessorSection = false;
         foreach ($lines as $number => $line) {
+            if (str_starts_with($line, '## ')) {
+                $inAccessorSection = str_starts_with($line, self::ACCESSOR_SECTION_HEADING);
+            }
             if (stripos($line, 'deprecat') === false) {
                 continue;
             }
             if (str_starts_with(ltrim($line), '>')) {
                 ++$quoted;
+
+                continue;
+            }
+            if ($inAccessorSection && stripos($line, 'config.json') === false) {
+                ++$accessorLines;
 
                 continue;
             }
@@ -728,13 +761,21 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         self::assertSame(
             [],
             $offenders,
-            'README.md uses "deprecated" outside the retraction quote; `config.json` is the OLDER of the '
-            . 'two settings-file names, not a deprecated one, and it is the only one the CLI ever writes',
+            'README.md uses "deprecated" outside the retraction quote and outside the accessor-era '
+            . 'section; `config.json` is the OLDER of the two settings-file names, not a deprecated '
+            . 'one, and it is the only one the CLI ever writes',
         );
         self::assertGreaterThan(
             0,
             $quoted,
             'the retraction quote is gone; it records what this section used to claim and why it was wrong',
+        );
+        self::assertGreaterThan(
+            0,
+            $accessorLines,
+            'the accessor-era carve-out exempted nothing — the section it names carries no deprecation '
+            . 'prose any more, so the exemption must be deleted with it rather than left to swallow '
+            . 'whatever body prose comes next',
         );
     }
 
