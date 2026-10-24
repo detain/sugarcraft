@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-git-server",
-    "description": "Self-hostable Git server over SSH, Git daemon, and HTTP. Supports user management via SSH public keys, repo access control (public/private), collaborators, on-demand repo creation, Git LFS, and an SSH-accessible TUI for browsing repos/files/commits. Modeled on the charmbracelet/soft-serve Go project.",
+    "description": "Scaffold library pieces for a self-hostable Git server: config, repo, user/access-control, git-daemon, smart-HTTP, ForceCommand SSH-gate and LFS classes, each individually tested. No assembled server ships yet — the serve command refuses; see README 'Known gaps'. Modeled on the charmbracelet/soft-serve Go project.",
     "type": "project",
     "license": "MIT",
     "keywords": [

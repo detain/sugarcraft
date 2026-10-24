@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyGitServer — SugarCraft</title>
-<meta name="description" content="CandyGitServer: Self-hostable Git server over SSH + Git + HTTP.">
+<meta name="description" content="CandyGitServer: scaffold library pieces for a self-hostable Git server (SSH gate, Git daemon, smart-HTTP, LFS classes); no assembled server ships yet.">
 <meta property="og:title" content="CandyGitServer — SugarCraft">
-<meta property="og:description" content="Self-hostable Git server over SSH + Git + HTTP.">
+<meta property="og:description" content="Scaffold library pieces for a self-hostable Git server; no assembled server ships yet.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-git-server.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-git-server.html">
 <meta property="og:type" content="website">
@@ -38,7 +38,7 @@
       <img class="detail-icon" src="../img/icons/candy-git-server.png" alt="CandyGitServer">
       <div>
         <h2>CandyGitServer</h2>
-        <p class="detail-sub">Self-hostable Git server over SSH + Git + HTTP</p>
+        <p class="detail-sub">Git server building blocks (status: scaffold)</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/soft-serve" style="color: inherit;">charmbracelet/soft-serve</a></span>
           <span class="tag-chip">git</span><span class="tag-chip">server</span><span class="tag-chip">ssh</span><span class="tag-chip">self-hosted</span>
@@ -47,7 +47,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-git-server"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-git-server" alt="CandyGitServer code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Self-hostable Git server scaffold — config-driven users, repos, access control and optional LFS, with a working Git (git://) daemon; the SSH and HTTP front ends are class-complete but not yet wired into <code>serve</code>.</p>
+    <p class="lede" style="margin-top: 28px;"><strong>Status: scaffold.</strong> Library building blocks for a self-hostable Git server — config, repo, users, access control, git-daemon, smart-HTTP, SSH-gate and LFS classes, each individually tested. No assembled server ships: the <code>serve</code> command refuses with a non-zero exit and nothing binds a port. See the README &quot;Known gaps&quot; inventory.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-git-server</code></pre>
@@ -72,16 +72,16 @@ $acl-&gt;canWrite(User::new('alice'), $repo);   // true  (collaborator)
 $acl-&gt;canWrite(User::new('bob'), $repo);     // false
 $acl-&gt;canRead(null, $repo);                  // true  (public repo, anonymous read)
 
-// Serve it over git:// (blocks; serveAsync() runs on a ReactPHP loop instead)
+// Library surface (not assembled): a future host would drive the daemon
+// like this — the serve() method exists; no shipped entrypoint calls it.
 $daemon = new GitDaemon($config);
-$daemon-&gt;registerRepo($repo);
-$daemon-&gt;serve();</code></pre>
+$daemon-&gt;registerRepo($repo);</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>SSH front end</strong><span><code>SSHServer</code> authenticates users by public key and dispatches git upload-pack / receive-pack and the browse commands for each connection it is handed.</span></div>
-      <div class="feature"><strong>Git daemon</strong><span><code>GitDaemon</code> serves the git:// protocol, blocking with <code>serve()</code> or on a ReactPHP loop with <code>serveAsync()</code>.</span></div>
-      <div class="feature"><strong>HTTP smart protocol</strong><span><code>HttpSmartProtocol\Server</code> handles smart-HTTP clone/fetch/push, with Basic auth when required.</span></div>
+      <div class="feature"><strong>SSH front end (class)</strong><span><code>SSHServer</code> authenticates users by public key and dispatches git upload-pack / receive-pack for the single request a host sshd <code>ForceCommand</code> hands it. No SSH wire protocol, no shipped entrypoint.</span></div>
+      <div class="feature"><strong>Git daemon (class)</strong><span><code>GitDaemon</code> implements a git:// daemon surface — blocking <code>serve()</code> or ReactPHP <code>serveAsync()</code>; its wire framing deviates from spec (see README Known gaps) and nothing constructs it yet.</span></div>
+      <div class="feature"><strong>HTTP smart protocol (class)</strong><span><code>HttpSmartProtocol\Server</code> routes smart-HTTP clone/fetch/push and LFS requests when a host feeds it; security gaps are inventoried before it may be wired.</span></div>
       <div class="feature"><strong>Access control</strong><span><code>AccessControl</code> answers read / write / admin for a user (or anonymous) against a repo's visibility and collaborators.</span></div>
       <div class="feature"><strong>LFS support</strong><span>Git LFS over HTTP through <code>LFSHandler</code> and a pluggable storage backend.</span></div>
       <div class="feature"><strong>Config file</strong><span>YAML server configuration via <code>Config::load()</code>, or env + defaults via <code>Config::fromDefaults()</code>.</span></div>

@@ -9,58 +9,104 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-git-server)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-git-server)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-git-server?label=packagist)](https://packagist.org/packages/sugarcraft/candy-git-server)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 # CandyGitServer
 
-candy-git-server — a self-hostable Git server for the command line, for PHP 8.3+.
+candy-git-server — **status: scaffold.** Library building blocks for a
+self-hostable Git server, for PHP 8.3+. No assembled server ships yet.
 
 ## Overview
 
-CandyGitServer is a self-hostable Git server you run on a VPS or machine. Users authenticate via SSH public keys and can:
+This package is a PHP port of pieces of the charmbracelet/soft-serve Go
+project. The domain classes are real and individually tested, but **the
+server assembly that would bind sockets and accept git traffic has not
+been written**:
 
-- **Browse** repos, files, and commits via a terminal TUI over SSH
-- **Clone** repos over SSH (`git clone ssh://user@host/repo`), HTTP, or Git protocol
-- **Push** to create repos on demand
-- **Collaborate** via per-repo access control with SSH public keys
-- **Use Git LFS** for large file storage
+```console
+$ candy-git-server serve
+candy-git-server: 'serve' refuses to start — server assembly is not
+implemented; see docs (status: scaffold).
+$ echo $?
+1
+```
 
-## Architecture
+The command refuses loudly (non-zero exit, honest stderr) rather than
+printing a startup banner while serving nothing — so no deploy script can
+mistake the scaffold for a running server. `--daemon` and `--pid-file` are
+refused the same way; nothing forks.
+
+**What is implemented (as classes, not as a running service):**
+
+- `Config` — YAML config loader (symfony/yaml) with typed accessors
+- `Repo` — bare-repository model: init (Git at `<path>/.git`), refs,
+  branches/tags, file reads, mirror metadata, visibility
+- `User`, `AccessControl`, `Visibility` — user model, per-repo permission
+  checks, visibility enum (no persistence layer — see Known gaps)
+- `Git\UploadPack`, `Git\ReceivePack` — clone/fetch and push command
+  handlers (packets currently mis-framed — see Known gaps)
+- `Git\GitDaemon` — socket daemon class with PID file + signal handling
+  (class-complete, but its protocol dialect deviates from spec and no
+  shipped entrypoint constructs it)
+- `HttpSmartProtocol\Server` — request router for the Git smart-HTTP and
+  LFS batch APIs (class-level; several security gaps before wiring)
+- `SSH\SSHServer` — a `ForceCommand`-style git-shell gate for host sshd
+  (parses one `git-upload-pack`/`git-receive-pack` request and dispatches;
+  does **not** implement the SSH wire protocol)
+- `LFS\LFSHandler` + `LocalStorageBackend` — LFS batch API + object store
+- `Jobs\Schedule`, `Jobs\MirrorPuller` — `@every`/alias schedules and
+  mirror-pull job logic
+- `Stats`, `StatsServer` — counters + JSON stats endpoint class
+- `Support\PromisePool`, `Support\Version` — bounded-concurrency helper,
+  phar build-stamp resolver
+- `bin/candy-git-server` — CLI: `serve` (refuses), `init` (writes a
+  config skeleton), `repo create|list|info` (works against the local
+  data dir), `user` subcommands (in-memory only — nothing persists),
+  `help`, `version`
+
+**What does not exist:** any TUI (there is no terminal UI of any kind), any
+listener on `:23231`/`:23232`/`:9418`, user storage, `git clone/push`
+end-to-end flows, LFS serving (no host wires the HTTP server).
+`Clipboard/Osc52.php` is a standalone OSC 52 encoder with zero consumers —
+it was written for a TUI that was never built.
+
+## Architecture (actual files)
 
 ```
 candy-git-server/
-├── bin/candy-git-server                Entry point (serve command)
+├── bin/candy-git-server            CLI entry (serve refuses; repo/init work)
 ├── src/
-│   ├── Config.php                YAML config loader (symfony/yaml)
-│   ├── Repo.php                  Bare Git repo (init, access, metadata)
-│   ├── Visibility.php            Repo visibility enum (public/collaborator-only/private)
-│   ├── User.php                  SSH public key auth + user model
-│   ├── AccessControl.php         Permissions (admin/read/write)
-│   ├── Stats.php                 Counters (connections, packs, LFS)
-│   ├── StatsServer.php           JSON stats endpoint on stats.listen_addr
-│   ├── Lang.php                 i18n strings
+│   ├── Config.php                  YAML config loader (symfony/yaml)
+│   ├── Repo.php                    Bare Git repo (init at <path>/.git, refs, metadata)
+│   ├── Visibility.php              Repo visibility enum (public/collaborator-only/private)
+│   ├── User.php                    User model + SSH public-key matching (no persistence)
+│   ├── AccessControl.php           Permissions (admin/read/write)
+│   ├── Stats.php                   Counters (connections, packs, LFS)
+│   ├── StatsServer.php             JSON stats endpoint class (needs a host to start it)
+│   ├── Lang.php                    i18n strings
 │   ├── Jobs/
-│   │   ├── Schedule.php         "@every 10m"-style job schedules
-│   │   └── MirrorPuller.php     Mirror-pull background job
+│   │   ├── Schedule.php            "@every 10m"-style job schedules
+│   │   └── MirrorPuller.php        Mirror-pull background job
 │   ├── SSH/
-│   │   ├── SSHServer.php        libssh2-based SSH server
-│   │   ├── Auth.php             Public key authentication
-│   │   └── Commands.php         git-upload-pack / git-receive-pack
+│   │   └── SSHServer.php           ForceCommand git-shell gate (no SSH wire protocol)
 │   ├── Git/
-│   │   ├── GitDaemon.php        Real daemon with socket connections, PID file, signal handling
-│   │   ├── UploadPack.php       git-upload-pack (clone/fetch)
-│   │   └── ReceivePack.php      git-receive-pack (push)
+│   │   ├── GitDaemon.php           Socket daemon class (un-assembled; see Known gaps)
+│   │   ├── UploadPack.php          git-upload-pack (clone/fetch)
+│   │   └── ReceivePack.php         git-receive-pack (push)
 │   ├── HttpSmartProtocol/
-│   │   └── Server.php           HTTP smart protocol server (git-over-HTTP)
+│   │   └── Server.php              Smart-HTTP + LFS request router (class-level)
 │   ├── Clipboard/
-│   │   └── Osc52.php            OSC 52 clipboard handler
-│   └── LFS/
-│       ├── LFSHandler.php       Git LFS batch API
-│       ├── LocalStorageBackend.php
-│       └── LFSStorageBackendInterface.php
-├── cmd/
-│   └── serve.php                 Serve command implementation
+│   │   └── Osc52.php               OSC 52 encoder (orphan: no TUI consumes it)
+│   ├── LFS/
+│   │   ├── LFSHandler.php          Git LFS batch API
+│   │   ├── LocalStorageBackend.php aa/bb/oid object store
+│   │   └── LFSStorageBackendInterface.php
+│   └── Support/
+│       ├── PromisePool.php         Bounded-concurrency helper
+│       └── Version.php             Phar build-stamp resolver
+├── examples/                       config.php, repo.php (library usage)
+├── tools/build-phar.php            phar build script
 └── tests/
 ```
 
@@ -72,7 +118,10 @@ composer install
 
 ## Configuration
 
-Create `config.yaml` in your data directory:
+Create `config.yaml` in your data directory (`candy-git-server init`
+emits a skeleton). Note: several keys below are parsed but not yet
+consumed by any shipped code path (`db`, `ssh.idle_timeout` — see Known
+gaps); the listening addresses describe what a future assembly would use.
 
 ```yaml
 name: "My Git Server"
@@ -87,9 +136,6 @@ http:
   listen_addr: ":23232"
   public_url: "http://localhost:23232"
   max_pack_bytes: 268435456
-db:
-  driver: "sqlite"
-  data_source: "candy-git-server.db"
 lfs:
   enabled: true
 jobs:
@@ -105,105 +151,82 @@ addresses like `":23232"` and schedules like `"@every 10m"`.
 
 ## Run
 
-```bash
-# Set admin SSH key (your public key)
-export CANDY_GIT_SERVER_INITIAL_ADMIN_KEYS="ssh-ed25519 AAAA... user@host"
-
-# Start the server
-CANDY_GIT_SERVER_DATA_PATH=/var/lib/candy-git-server composer serve
-```
-
-## SSH Access
+Nothing to run yet — `serve` refuses with exit 1 (see Overview). The CLI
+pieces that do work operate on the local data directory:
 
 ```bash
-# Connect to TUI
-ssh -p 23231 user@your-server
-
-# Clone a repo
-git clone ssh://user@your-server:23231/repo-name
-
-# Browse repo tree
-ssh -p 23231 user@your-server repo tree repo-name
-
-# View a file with syntax highlighting
-ssh -p 23231 user@your-server repo blob repo-name path/to/file.php -c -l
+candy-git-server init /var/lib/candy-git-server   # writes config skeleton + dirs
+candy-git-server repo create myrepo /var/lib/candy-git-server   # creates myrepo/.git bare
+candy-git-server repo list /var/lib/candy-git-server
+candy-git-server repo info myrepo /var/lib/candy-git-server
 ```
+
+`repo create` prints no clone URL on purpose: nothing listens for git
+traffic yet. `CANDY_GIT_SERVER_INITIAL_ADMIN_KEYS` is **not** read by any
+code (it appears only in a stale `init` next-steps string) — see Known gaps.
+
+## SSH Access (not shipped)
+
+No SSH server is wired. `SSH\SSHServer` is a `ForceCommand`-style
+git-shell gate: it parses a single
+`git-upload-pack`/`git-receive-pack <repo>` request, validates the repo name
+and the provided SSH public key against a `User`, and dispatches to
+`Git\UploadPack`/`Git\ReceivePack`. It does not implement the SSH wire
+protocol — it expects to run under the host's OpenSSH daemon via
+`ForceCommand`, which is a deployment step nobody has shipped here.
 
 ### See also — SSH middleware (sugar-ssh-server)
-
-`SSH\SSHServer` is a `ForceCommand`-style git-shell gate: it parses a single
-`git-upload-pack`/`git-receive-pack <repo>` request, validates the repo name,
-and dispatches to `Git\UploadPack`/`Git\ReceivePack`. It does not implement the
-SSH wire protocol — it expects to run under the host's OpenSSH daemon via
-`ForceCommand`.
 
 For a general SSH middleware/session framework (middleware chain, `ForceCommand`
 supervisor, `Session`, transports), see the sibling
 [`sugar-ssh-server`](../sugar-ssh-server). Both run under host sshd; neither implements the
 SSH wire protocol itself. Their auth models differ deliberately: candy-git-server
-does its own SSH public-key auth (`SSH\Auth` + `User`), while sugar-ssh-server trusts
+does its own SSH public-key matching (`SSH\SSHServer` + `User`), while sugar-ssh-server trusts
 sshd and allowlists by username + key fingerprint.
 
-## HTTP Smart Protocol
+## HTTP Smart Protocol (class-level, not reachable)
 
-CandyGitServer supports Git clone/fetch/push over HTTP using the smart protocol (not the dumb HTTP transport).
+`HttpSmartProtocol\Server` routes the Git smart-HTTP flow and the LFS batch
+API when a host constructs and feeds it requests:
 
-```bash
-# Clone over HTTP
-git clone http://user@your-server:23232/repo-name.git
+1. Client GETs `/repo.git/info/refs?service=git-upload-pack` — ref advertisement
+2. Client POSTs `/repo.git/git-upload-pack` — pack exchange for fetch/clone
+3. For push: Client POSTs `/repo.git/git-receive-pack` — pack + status
 
-# Authenticate with Basic auth (when required)
-git clone http://username:token@your-server:23232/repo-name.git
-```
+No shipped entrypoint starts an HTTP listener, so `git clone http://…`
+does not work today. When a host wires it: authentication uses HTTP Basic
+auth or the `X-CandyGitServer-User` header — the header path additionally
+requires `user_trust_mode`, `trusted_proxies` and `auth_secret` to be
+configured (Server.php), otherwise the header is ignored. Note also the
+Known gaps items on password storage, `isActive`, anonymous
+receive-pack advertisement, and the 403-without-challenge shape — these
+must be fixed **before** any wiring.
 
-The smart protocol flow:
-1. Client GETs `/repo.git/info/refs?service=git-upload-pack` — receives ref advertisement
-2. Client POSTs `/repo.git/git-upload-pack` — exchanges pack data for fetch/clone
-3. For push: Client POSTs `/repo.git/git-receive-pack` — sends pack and receives status
+## Git Protocol (daemon class only — not assembled)
 
-Authentication uses HTTP Basic auth or the `X-CandyGitServer-User` header.
+`Git\GitDaemon` is a class, not a service: nothing in the shipped CLI or
+composer scripts constructs it, and its wire behavior deviates from the
+git-daemon spec (Known gaps). The descriptions below document the class
+surface for whoever wires it, not a promise of working `git://` clones.
 
-## Git Protocol (Daemon Mode)
-
-CandyGitServer can run as a real background daemon serving Git clone/fetch/push over the native Git protocol on port 9418.
-
-```bash
-# Start as a daemon (forks to background, writes PID file)
-CANDY_GIT_SERVER_DATA_PATH=/var/lib/candy-git-server composer serve --daemon --pid-file /var/run/candy-git-server-git.pid
-
-# Run in foreground (shows banner and repo list, stays attached)
-CANDY_GIT_SERVER_DATA_PATH=/var/lib/candy-git-server composer serve
-```
-
-**Daemon mode behavior:**
-- Uses `pcntl_fork()` to detach and become a session leader
+**Class behavior:**
+- Uses `pcntl_fork()` to detach and become a session leader (`serve()`'s
+  `--daemon`-style argument path)
 - Listens on `git.listen_addr` from `config.yaml` (default `:9418`)
-- Writes PID to `--pid-file` (or `<data_path>/git-daemon.pid` by default)
-- Handles `SIGTERM`, `SIGINT`, and `SIGHUP` for graceful shutdown
+- Writes PID to the given file (or a caller-chosen default)
+- Handles `SIGTERM`, `SIGINT` (graceful shutdown) and `SIGHUP`
 - Cleans up PID file and closes all connections on exit
 
 **Signal handling:**
 - `SIGTERM` / `SIGINT` — graceful shutdown (closes connections, removes PID file)
-- `SIGHUP` — reload configuration (restarts the daemon)
+- `SIGHUP` — **also shutdown** (GitDaemon.php:1156-1158: all three signals
+  route to the same `handleSignal()`; config reload is not implemented)
 
-**Clone over Git protocol:**
-```bash
-# Anonymous clone (for public repos)
-git clone git://your-server:9418/repo-name
+### Async daemon mode (ReactPHP, opt-in, library-level)
 
-# The git protocol is stateless; access is controlled per-repo (public/private)
-```
-
-The Git protocol supports:
-- `git-upload-pack` — clone and fetch (read access)
-- `git-receive-pack` — push (write access, requires collaborator permission)
-
-### Async daemon mode (ReactPHP, opt-in)
-
-The daemon is dual-mode. `serve()` runs the classic blocking
-`socket_select()` loop (the default shown above). `serveAsync()` is the
-opt-in [ReactPHP](https://reactphp.org/) path: connections are accepted
-and read through the event loop, so a host application can run the Git
+`serve()` runs a classic blocking `socket_select()` loop. `serveAsync()` is
+the opt-in [ReactPHP](https://reactphp.org/) path: connections are accepted
+and read through the event loop, so a host application could run the Git
 daemon alongside timers, HTTP servers, and other sockets on one loop.
 
 ```php
@@ -238,10 +261,12 @@ storage inspection is still synchronous file I/O inside its loop tick —
 the async path bounds *scheduling*, it does not make `file_get_contents`
 asynchronous.
 
-## Git LFS over HTTP
+## Git LFS over HTTP (class-level)
 
-The smart-HTTP server speaks the [Git LFS batch API](https://github.com/git-lfs/git-lfs/blob/main/docs/api/batch.md)
-plus basic object transfer when `lfs.enabled` is true:
+The smart-HTTP router implements the [Git LFS batch API](https://github.com/git-lfs/git-lfs/blob/main/docs/api/batch.md)
+plus basic object transfer when `lfs.enabled` is true (reachable only once
+a host wires `HttpSmartProtocol\Server`; repo keys use the `.git`-suffixed
+form):
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -258,6 +283,8 @@ Rules enforced at the HTTP boundary:
   (Basic or `X-CandyGitServer-User`) as the pack endpoints.
 - Uploads are capped by `http.max_pack_bytes` (413 when exceeded) and the
   body's SHA-256 must match the OID (422 on mismatch).
+- TLS keys in config are refused at load (`config.tls_not_supported`) —
+  HTTPS termination is out of scope for the class.
 
 Objects are stored via `LFS\LocalStorageBackend` under `<data_path>/lfs/`
 using the standard `aa/bb/oid` fan-out layout.
@@ -290,12 +317,13 @@ schedule accepts `@every <duration>` with Go-style durations (`30s`,
 `10m`, `8h`, `1h30m`) and the aliases `@hourly`, `@daily`, `@midnight`,
 `@weekly`, `@monthly`, `@yearly` — full cron expressions are not
 supported and throw. Failed pulls are logged and re-attempted on the
-next interval.
+next interval. As with everything server-shaped, no scheduler host ships:
+you call `runOnce()` (cron) or `attach()` (your loop).
 
-## Stats endpoint
+## Stats endpoint (class-level)
 
-When `stats.listen_addr` is configured, `StatsServer` serves the shared
-`Stats` counters as JSON:
+`StatsServer` serves the shared `Stats` counters as JSON when a host
+starts it on `stats.listen_addr`:
 
 ```php
 use SugarCraft\GitServer\StatsServer;
@@ -307,11 +335,11 @@ $stats->start($loop);                // ReactPHP loop only
 ```console
 $ curl -s localhost:23233/stats
 {"uptime_seconds":42.1,"connections":7,"pack_uploads":1,"pack_downloads":4,
- "lfs_batch_requests":2,"lfs_object_downloads":2,"lfs_object_uploads":1}
+  "lfs_batch_requests":2,"lfs_object_downloads":2,"lfs_object_uploads":1}
 ```
 
-Counters are recorded by the Git daemon (both modes), the smart-HTTP
-server, and the LFS handler into the shared `Stats::getInstance()`
+Counters are recorded by the Git daemon class (both modes), the smart-HTTP
+class, and the LFS handler into the shared `Stats::getInstance()`
 (injectable per-object via `setStats()` for tests/hosts). The stats
 server itself runs only on a ReactPHP loop — there is deliberately no
 blocking mode, since a blocking stats listener would starve the servers
@@ -320,14 +348,10 @@ loop simply don't get a stats endpoint.
 
 ## OSC 52 Clipboard
 
-The TUI supports clipboard operations via OSC 52 (Operating System Command 52). This enables:
-- Copying repo URLs, file content, or commit hashes from the TUI to the system clipboard
-- Reading clipboard content into the TUI (e.g., for pasting)
-
-Supported selections:
-- `c` — system clipboard (default)
-- `p` — primary selection (X11)
-- `s` — secondary selection
+`Clipboard/Osc52.php` is a standalone OSC 52 escape-sequence encoder
+(system/primary/secondary selections). **No TUI consumes it** — there is
+no terminal interface in this package. The class is kept because a future
+front end would want it; it does nothing today.
 
 ## Repo Permissions
 
@@ -349,11 +373,80 @@ $repo->isPublic;           // false (BC readonly property)
 $repo->isVisiblePublic();  // false
 ```
 
-Collaborators are added by an admin via SSH public key.
+Collaborator lists live on the `Repo` object in memory. There is **no
+storage layer**: the CLI's `user add`/`user key` commands construct
+throwaway objects and persist nothing (`user list` always reports empty),
+and a host must re-supply users on every run until a store exists
+(Known gaps).
+
+## Known gaps — must fix before any server wiring
+
+Non-exhaustive inventory from the docs-review-1023 audit (line numbers as
+of this commit). None of these paths is reachable from the shipped CLI
+today — `serve` refuses — which is precisely why the package is labeled
+scaffold.
+
+1. **Server assembly absent.** Nothing constructs `GitDaemon`/`SSHServer`/
+   `HttpSmartProtocol\Server` into a running host; the old `serve` command
+   simulated success (banner + exit 0). Now refuses (docs-fix-1023 N4).
+2. **pkt-line framing is binary, not spec ASCII-hex** — every emitted
+   advertisement is malformed to real git clients, and the flush packet is
+   ASCII while payloads are binary (self-inconsistent):
+   `Git/GitDaemon.php:1030` + `:1035`, `HttpSmartProtocol/Server.php:773-774`,
+   `Git/ReceivePack.php:187`, `Git/UploadPack.php:204`. Byte-exact pins in
+   `tests/Git/GitProtocolTest.php` deliberately record the broken framing;
+   the fix must rewrite them.
+3. **git-daemon dialect deviates from spec**: bare request line without
+   the pkt-framed host/user delimiter (`Git/GitDaemon.php:574`), no
+   side-band multiplexing or want/have depth negotiation, capabilities
+   joined with `|` in places where the spec uses NUL/space separators.
+4. **Plaintext password comparison**: `User::$password` stores the raw
+   string and is compared with `hash_equals` — no hashing
+   (`HttpSmartProtocol/Server.php:821`, `User.php`).
+5. **HTTP auth path skips `isActive`**: `getUserFromHeaders` returns the
+   user found by Basic/header auth without the deactivated check the SSH
+   path performs (`HttpSmartProtocol/Server.php:806-833` vs
+   `SSH/SSHServer.php:86`).
+6. **Anonymous receive-pack advertisement**: `info/refs?service=git-receive-pack`
+   is answered without the `canRead` gate applied to upload-pack
+   (`HttpSmartProtocol/Server.php:216-247`).
+7. **Proxy HMAC replayable**: the signature covers only the username — no
+   timestamp, nonce, or request binding (`HttpSmartProtocol/Server.php:886`).
+8. **403 without `WWW-Authenticate`**: private repos answer 403 with no
+   challenge header, so git clients never prompt for credentials
+   (`HttpSmartProtocol/Server.php:242`, `:279`, `:353`).
+9. **Async receive-pack race**: the loop can dispatch a push before the
+   pack body has arrived, yielding `unpack no packfile received`
+   (`Git/GitDaemon.php:423-425`, `:846-850`).
+10. **`SIGHUP` shuts down instead of reloading** — all three signals share
+    one handler (`Git/GitDaemon.php:1156-1158`).
+11. **No user/repo persistence at all**: `user add`/`user key` discard
+    their objects (bin CLI, `cmdUserAdd`/`cmdUserKey`), `db.driver`/
+    `db.data_source` config is parsed but consumed nowhere, and
+    `CANDY_GIT_SERVER_INITIAL_ADMIN_KEYS` is read by no code (it survives
+    only in a stale `init` hint, `lang/en.php` `cli.next_step_3`).
+12. **Extension reality mismatch**: the daemon uses ext-sockets
+    (`Git/GitDaemon.php:1085-1100`) without declaring `ext-sockets`
+    (composer.json requires only json/openssl/ssh2), and `ext-ssh2` is
+    declared but has zero call sites (vestigial).
+13. **`AccessControl::allowAnonymousRead()` is hardcoded `true`** with no
+    config knob (`AccessControl.php:78-81`).
+14. **`User::keysMatch` requires the comment field to match verbatim**
+    (whitespace-normalized) — a key offered without its stored comment
+    fails; fail-closed but surprising (`User.php:208-213`).
+15. **`max_connections` kicks the oldest client silently** — no warning,
+    no error packet (`Git/GitDaemon.php:350-354`).
+16. **`composer serve --daemon …` flags are intercepted by composer**;
+    use `php bin/candy-git-server …` directly once a server exists.
+17. **Stale CLI strings**: `help` and the `init` next-step lines still
+    describe a starting server; per the i18n law they cannot be fixed in
+    one locale, so all 16 files must be touched together (deferred).
 
 ## Shared foundations
 
-candy-git-server uses [sugar-async](https://github.com/detain/sugarcraft/tree/master/sugar-async) for graceful shutdown via subscriptions on Git daemon connections.
+The sugar-async `Subscriptions` machinery is wired into `GitDaemon` for
+graceful shutdown registration (present and tested at class level; it
+becomes load-bearing only once a host runs the daemon).
 
 ## License
 
@@ -361,4 +454,4 @@ MIT
 
 ## Credits & inspiration
 
-Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem (soft-serve); SugarCraft is developed as a native PHP project.

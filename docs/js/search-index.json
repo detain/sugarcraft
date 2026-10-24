@@ -8,7 +8,7 @@
   {"name":"CandyFlappy","slug":"candy-flappy","category":"app","description":"Flappy-Bird in your terminal.","url":"lib/candy-flappy.html"},
   {"name":"CandyGifView","slug":"candy-gifview","category":"app","description":"Terminal GIF viewer CLI on top of sugar-animation.","url":"lib/candy-gifview.html"},
   {"name":"CandyGit","slug":"candy-git","category":"app","description":"Terminal git client.","url":"lib/candy-git.html"},
-  {"name":"CandyGitServer","slug":"candy-git-server","category":"app","description":"Self-hostable Git server over SSH + Git + HTTP.","url":"lib/candy-git-server.html"},
+  {"name":"CandyGitServer","slug":"candy-git-server","category":"app","description":"Scaffold library pieces for a self-hostable Git server; no assembled server ships yet.","url":"lib/candy-git-server.html"},
   {"name":"CandyImage","slug":"candy-image","category":"app","description":"File in, best-protocol image out: auto/sixel/kitty/iterm2/half/quarter/ascii/symbols formats, cell sizing, and --dump-detect.","url":"lib/candy-image.html"},
   {"name":"CandyKv","slug":"candy-kv","category":"app","description":"Persistent key/value store — multiple databases, binary data, glob filtering.","url":"lib/candy-kv.html"},
   {"name":"CandyMail","slug":"candy-mail","category":"app","description":"Email sending — SMTP, API transports, attachments.","url":"lib/candy-mail.html"},
