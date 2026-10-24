@@ -11,6 +11,7 @@ use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
@@ -218,6 +219,8 @@ final class App implements Model
         private readonly int $logoEpoch = 0,
         /** Wall time the current art was armed — frames advance from here (per-open animation start). */
         private readonly float $logoStartedAt = 0.0,
+        /** Ambient profile from sugar-core's {@see ColorProfileMsg}; null = not yet received. */
+        private readonly ?ColorProfile $ambient = null,
     ) {
         $this->overlays = $overlays ?? OverlayStack::new();
         $this->themes = $themes ?? self::systemThemes();
@@ -308,6 +311,29 @@ final class App implements Model
     }
 
     /**
+     * The profile actually painted: {@see profileFor()} decides the depth
+     * from the config, but the ambient answer sugar-core's detection ladder
+     * hands in through {@see ColorProfileMsg} VETOES it when the terminal
+     * declared itself colourless — `NO_COLOR` resolves to `Ascii`, `TERM=dumb`
+     * to `NoTty`, and an unrecognised terminal falls back to `Ascii` (all
+     * three are capability denials, not tier guesses). Any other ambient tier
+     * (Ansi/Ansi256/TrueColor — including the `FORCE_COLOR` /
+     * `CLICOLOR_FORCE` rescue, which the ladder reports as `TrueColor`)
+     * leaves the config depth standing: the environment may refuse colour,
+     * never choose its depth. Ambient null (no message yet — a direct
+     * start() in tests, or a frame before the pre-init dispatch lands)
+     * behaves exactly as the pure config derivation always did.
+     */
+    private static function resolveProfile(Config $config, ?ColorProfile $ambient): ColorProfile
+    {
+        if ($ambient === ColorProfile::NoTty || $ambient === ColorProfile::Ascii) {
+            return $ambient;
+        }
+
+        return self::profileFor($config);
+    }
+
+    /**
      * The Program options bin/candy-top runs with: alt screen, 20 fps and
      * btop's mouse reporting — `?1002h` button-event tracking + `?1006h`
      * SGR (Term::mouse_on, sugar-core CellMotion) unless disable_mouse.
@@ -363,6 +389,37 @@ final class App implements Model
 
             // btop repaints everything once on a resize, menu or not.
             return [$next->settledBackdrop(true), $cmd];
+        }
+        if ($msg instanceof ColorProfileMsg) {
+            // Core dispatches this once at startup (and again if a future
+            // query reports a downgrade). The stored ambient must survive
+            // every later mutate() — overlay repaints, applyConfig and
+            // theme cycles all rebuild or reuse the Ink from here.
+            $profile = self::resolveProfile($this->config, $msg->profile);
+            $next = $this->mutate(ambient: $msg->profile, ambientSet: true);
+            if ($profile === $this->ink->profile()) {
+                return [$next, null];
+            }
+
+            // The depth tag follows the profile, exactly as in applyConfig():
+            // re-pick the logo art, reset its frame/epoch so a superseded
+            // chain retires itself, and re-arm only if the new art animates
+            // under an already-open logo menu.
+            $logo = Logo::pick($profile);
+            $armLogoTick = $logo !== null && $logo->isAnimated() && $next->logoOverlayOpen();
+
+            return [
+                $next->mutate(
+                    ink: Ink::new($this->ink->palette(), $profile),
+                    logoArt: $logo,
+                    logoArtSet: true,
+                    logoFrame: 0,
+                    logoArmed: $armLogoTick,
+                    logoEpoch: $this->logoEpoch + 1,
+                    logoStartedAt: $next->now ?? microtime(true),
+                )->settledBackdrop(true),
+                $armLogoTick ? $next->logoTick() : null,
+            ];
         }
         if ($msg instanceof ClockTickMsg) {
             $delay = max(0.01, 1.0 - fmod($msg->time, 1.0));
@@ -857,8 +914,8 @@ final class App implements Model
         $periodChanged = $config->updateMs() !== $this->config->updateMs();
         // Laid-out boxes: entering / leaving the VM dashboard hides / shows boxes.
         $before = VmsMode::effective($this->config->shownBoxes());
-        $profile = self::profileFor($config);
-        $ink = $profile !== self::profileFor($this->config) ? Ink::new($this->ink->palette(), $profile) : null;
+        $profile = self::resolveProfile($config, $this->ambient);
+        $ink = $profile !== self::resolveProfile($this->config, $this->ambient) ? Ink::new($this->ink->palette(), $profile) : null;
         // The depth tag follows the profile, so a tty_mode/truecolor flip
         // re-picks the logo at the new depth: frame 0, a fresh epoch (the old
         // chain retires itself), and a re-arm only if the new art animates
@@ -1770,6 +1827,8 @@ final class App implements Model
         ?bool $logoArmed = null,
         ?int $logoEpoch = null,
         ?float $logoStartedAt = null,
+        ?ColorProfile $ambient = null,
+        bool $ambientSet = false,
     ): self {
         return new self(
             $config ?? $this->config,
@@ -1798,6 +1857,7 @@ final class App implements Model
             $logoArmed ?? $this->logoArmed,
             $logoEpoch ?? $this->logoEpoch,
             $logoStartedAt ?? $this->logoStartedAt,
+            $ambientSet ? $ambient : $this->ambient,
         );
     }
 }
