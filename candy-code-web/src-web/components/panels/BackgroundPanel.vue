@@ -44,11 +44,11 @@ const canWrite = computed(() => connection.scopes.includes('write'))
  * price on file — `costUsd` is then a lower bound, not a bill. The bit
  * shares the snapshot's SES-1 wire law: key `spendUnpriced`, present only
  * when true (wire-truth key flip 2026-10-23; the read used to chase an
- * `unpricedModel` key nothing ever emitted). Honest gap: the server's
- * `BackgroundEvents::summary()` does not emit `spendUnpriced` yet, so today
- * every row reads priced and this branch stays dark until that server lane
- * lands (seam filed, docs-fix-1023 N1). A priced run that has spent nothing
- * stays off the meta line.
+ * `unpricedModel` key nothing ever emitted). The server carries the bit on
+ * every bg summary row as of the SES-1 weld: `BackgroundEvents::summary()`
+ * emits it present-only-when-true (docs-fix-1023 codeserver S1, fused ahead
+ * of this lane), so an unpriced bg run lights this branch. A priced run
+ * that has spent nothing stays off the meta line.
  */
 function isUnpriced(session: BackgroundSession): boolean {
   return (session as unknown as { spendUnpriced?: unknown }).spendUnpriced === true
