@@ -12,8 +12,12 @@ use SugarCraft\Core\Util\AtomicJsonFile;
  * Delegates the durable-state save/load to sugar-core's AtomicJsonFile
  * (tmp+flock+rename SSOT) so a reader never observes a partially-written file,
  * while keeping this class's `{version, data}` wrapper as the on-disk shape.
+ *
+ * Writes are published 0600 (directories this call creates derive 0700):
+ * panel state can name layouts and locations, and there is no audience on a
+ * multi-user box that should read them.
  */
-class Persistence
+final class Persistence
 {
     /**
      * Save state atomically: write to temp file then rename to target.
@@ -24,10 +28,12 @@ class Persistence
      */
     public function save(string $path, array $data): void
     {
-        AtomicJsonFile::new($path)->write([
-            'version' => 1,
-            'data' => $data,
-        ]);
+        AtomicJsonFile::new($path)
+            ->withPermissions(0600)
+            ->write([
+                'version' => 1,
+                'data' => $data,
+            ]);
     }
 
     /**
@@ -39,7 +45,7 @@ class Persistence
      */
     public function load(string $path): ?array
     {
-        $file = AtomicJsonFile::new($path);
+        $file = AtomicJsonFile::new($path)->withPermissions(0600);
         if (!$file->exists()) {
             return null;
         }

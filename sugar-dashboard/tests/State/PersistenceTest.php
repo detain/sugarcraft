@@ -124,6 +124,13 @@ final class PersistenceTest extends TestCase
     /**
      * Regression: the atomic tmp+rename write must leave no temp artifacts
      * behind, even across an overwrite.
+     *
+     * The contentless lock sidecar (`.<basename>.lock`) is deliberately NOT a
+     * temp artifact: sugar-core AtomicJsonFile never deletes it (a delete-on-
+     * release path lets a racing writer open the same inode and defeat the
+     * lock), so this assertion carves the sidecar pattern out and still bans
+     * every tmp residue (`.<basename>.tmp.<hex>`). The sidecar's own 0600 mode
+     * is pinned below.
      */
     public function testSaveLeavesNoLeftoverTempFiles(): void
     {
@@ -132,8 +139,44 @@ final class PersistenceTest extends TestCase
         $this->persistence->save($path, ['k' => 'v1']);
         $this->persistence->save($path, ['k' => 'v2']);
 
-        $files = array_values(array_diff(scandir($this->tmpDir), ['.', '..']));
-        $this->assertSame(['notemp.json'], $files, 'atomic save must leave no temp artifacts');
+        $all = array_values(array_diff(scandir($this->tmpDir), ['.', '..']));
+
+        // Keep the sidecar carve to the exact sanctioned shape — a dot-prefixed
+        // `*.lock` file; everything else (notably any `.tmp.*` artifact) must
+        // still be absent.
+        $artifacts = array_values(array_filter(
+            $all,
+            static fn (string $name): bool => !preg_match('/^\.[^\/]+\.lock$/', $name),
+        ));
+        $this->assertSame(['notemp.json'], $artifacts, 'atomic save must leave no temp artifacts');
+
+        // The sidecar is present, contentless, and private (0600).
+        $sidecar = $this->tmpDir . '/.notemp.json.lock';
+        $this->assertFileExists($sidecar);
+        $this->assertSame('', file_get_contents($sidecar));
+        if (PHP_OS_FAMILY !== 'Windows') {
+            $this->assertSame(0600, fileperms($sidecar) & 0777);
+        }
+    }
+
+    /**
+     * PII pin: panel/tab state can name locations and layouts, so save()
+     * publishes private bits — the payload at 0600 and any directory this
+     * call creates at the derived 0700 (each read class earns that class's
+     * execute bit), mirroring the weather cache's discipline.
+     */
+    public function testSavePublishesPrivateModesForFileAndCreatedDir(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('POSIX permission bits are not honoured on Windows');
+        }
+
+        $path = $this->tmpDir . '/privdir/state.json';
+        $this->persistence->save($path, ['mode' => 'private']);
+
+        $this->assertSame(0600, fileperms($path) & 0777);
+        $this->assertSame(0600, fileperms($this->tmpDir . '/privdir/.state.json.lock') & 0777);
+        $this->assertSame(0700, fileperms($this->tmpDir . '/privdir') & 0777);
     }
 
     /**

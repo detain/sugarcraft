@@ -1,6 +1,6 @@
 # SugarCraft\Dashboard
 
-sugar-dashboard — a comprehensive TUI component library for PHP 8.3+. Provides 200+ components organized into 13 namespaces for building rich terminal user interfaces.
+sugar-dashboard — a comprehensive TUI component library for PHP 8.3+. Provides 200+ components organized into 12 namespaces for building rich terminal user interfaces.
 
 ## Installation
 
@@ -55,7 +55,7 @@ composer require sugarcraft/sugar-dashboard
 | `Style` | Terminal styling (inline foreground/background Color slots) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Style` (padding/margin/borders) | `fg()`, `bg()`, `bold()`, etc. |
 | `StyleParser` | Parses `[text](fg:red,bg:blue)` into Dash Cell arrays — sugar-dashboard SSOT, NOT drop-in compatible with `\SugarCraft\Style\StyleParser` | |
 | `Color` | Backward-compat alias for `\SugarCraft\Core\Util\Color` (true duplicate, replaced by `class_alias` shim — prefer Core import in new code) | |
-| `Theme` | Pre-defined theme palettes (10 colour slots + helpers) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Theme` (13 slots, readonly only) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
+| `Theme` | Pre-defined theme palettes (10 colour slots + helpers) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Theme` (13 slots, readonly properties, immutable `with*()` builders, no render helpers) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
 
 > **Dual-SSOT note.** Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `sugar-style`/`sugar-core`/`sugar-vterm`. The two families have distinct design lineages and the API shapes diverge. Only `Color` was a true duplicate and is now a `class_alias` to `\SugarCraft\Core\Util\Color`. See `CALIBER_LEARNINGS.md` entries `[pattern:dual-foundation-ssot]`, `[pattern:dual-style-ssot]`, `[pattern:dual-theme-ssot]`, `[pattern:dual-rect-models]`, `[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]`.
 
@@ -612,7 +612,16 @@ foreach ($procs as $row => $p) {
 | Type | Description | Key Methods |
 |------|-------------|-------------|
 | `State` | Application state diagram | |
-| `Persistence` | Atomic tmp+rename state save/load | `save(path, data)`, `load(path): ?array` |
+| `Persistence` | Atomic JSON state save/load (final; delegates to sugar-core `AtomicJsonFile`) | `save(path, data)`, `load(path): ?array` |
+
+> **Privacy:** state and cache writes publish private files — both `Persistence` and
+> `WeatherModule` use `AtomicJsonFile::withPermissions(0600)`, and directories they
+> create are derived to `0700`. The weather cache at `~/.cache/sugar-dashboard/weather.json`
+> holds your location data (explicit `--location` value or IP-derived city) and is
+> world-readable never. An `AtomicJsonFile` write also leaves a contentless
+> `.<basename>.lock` sidecar (mode 0600) beside the file: it is the cross-process
+> write lock and is deliberately **never deleted** — removing it re-opens the race
+> it exists to close.
 
 > **Note:** `TransitionType`, `StateNode`, `StateTransition`, and `StateMachine` moved to `Components\Tree\` namespace (PSR-4 one-class-per-file). The `State\*` classes are retained as `@internal` backward-compatibility re-exports via `class_alias`.
 
@@ -661,9 +670,26 @@ foreach ($procs as $row => $p) {
 | `ExternalModule` | Wraps binary into Module interface |
 | `Discovery` | Plugin discovery from filesystem |
 
+> **Plugin lifecycle (what a plugin author owes).** `ExternalModule` spawns the
+> binary with `proc_open` and speaks line-delimited JSON over stdin/stdout. Each
+> reply must arrive within 5 s on the same line it was requested on, one line at
+> a time, capped at 1 MiB per line — a plugin that answers late, answers twice,
+> or floods is disabled for the session rather than silently retried. Teardown is
+> bounded: closing the three pipes gives a well-behaved plugin its graceful EOF
+> exit, a 2 s polite poll follows, then the shared TERM → grace-poll → KILL →
+> reap ladder (sugar-core `BoundedShutdown`) runs, so a wedged plugin binary can
+> never outlive the dashboard that started it.
+
 ## Modules Namespace (Built-in Modules)
 
 All built-in modules extend `BaseModule` and use `withState()` for immutable state updates.
+
+> **Requirements & environment.** `SystemModule`, `UptimeModule` and friends read
+> Linux interfaces — `/proc/stat`, `/proc/meminfo`, `/proc/cpuinfo`, disk stats —
+> and degrade to empty output on other kernels rather than failing. GPU rows are
+> queried through `nvidia-smi` only when that binary is present (memoized probe),
+> so non-NVIDIA machines pay nothing. `WeatherModule` reaches `wttr.in` over the
+> network and falls back to its cache (and to stale cache) when offline.
 
 | Type | Description |
 |------|-------------|
@@ -671,7 +697,7 @@ All built-in modules extend `BaseModule` and use `withState()` for immutable sta
 | `System\SystemModule` | CPU/mem/disk stats |
 | `Uptime\UptimeModule` | System uptime |
 | `Greeting\GreetingModule` | Time-of-day greeting |
-| `Generic\GenericModule` | Arbitrary shell command runner |
+| `Generic\GenericModule` | Arbitrary command runner — string commands go to the shell (trusted-input contract); array argv runs without a shell, bounded by a kill ladder |
 | `Weather\WeatherModule` | Live weather from wttr.in + 30min cache + stale fallback |
 | `Weather\WttrInClient` | wttr.in J1 JSON API client implementing `HttpClient` |
 | `Weather\HttpClient` | Interface for weather fetch — allows test doubles |

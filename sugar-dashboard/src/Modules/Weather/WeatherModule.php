@@ -145,7 +145,7 @@ class WeatherModule extends BaseModule
 
     private function loadCache(): ?WeatherSnapshot
     {
-        $file = AtomicJsonFile::new($this->cachePath());
+        $file = AtomicJsonFile::new($this->cachePath())->withPermissions(0600);
         if (!$file->exists()) {
             return null;
         }
@@ -162,14 +162,24 @@ class WeatherModule extends BaseModule
     private function saveCache(WeatherSnapshot $snapshot): void
     {
         // Cache write is best-effort: a full disk / permission error must not
-        // abort a successful fetch, so failures are swallowed.
+        // abort a successful fetch, so failures are swallowed. The payload
+        // carries location data, so it publishes 0600 (created dirs derive
+        // 0700) rather than inheriting the process umask's guess.
         try {
-            AtomicJsonFile::new($this->cachePath())->write($snapshot->toArray());
+            AtomicJsonFile::new($this->cachePath())
+                ->withPermissions(0600)
+                ->write($snapshot->toArray());
         } catch (\Throwable) {
             // ignore — stale/missing cache is acceptable
         }
     }
 
+    /**
+     * Cache file location. Protected as a TEST SEAM only — the suite
+     * subclasses this class to redirect the cache into a per-test temp home
+     * (see tests/Modules/Weather/WeatherModuleTest.php); it is not an
+     * extension point for consumers.
+     */
     protected function cachePath(): string
     {
         // getenv('HOME') is more portable than $_SERVER['HOME'] across CGI/FastCGI

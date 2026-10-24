@@ -27,12 +27,18 @@ final class WeatherModuleTest extends TestCase
 
     private function removeDirectory(string $dir): void
     {
-        $cacheFile = $dir . '/.cache/sugar-dashboard/weather.json';
-        if (is_file($cacheFile)) {
-            @unlink($cacheFile);
-        }
-        if (is_dir($dir . '/.cache/sugar-dashboard')) {
-            @rmdir($dir . '/.cache/sugar-dashboard');
+        // Sweep every file in the cache dir, not just weather.json: the
+        // contentless lock sidecar (`.weather.json.lock`) is permanent by
+        // design in sugar-core's AtomicJsonFile and would otherwise block the
+        // rmdir chain and leak the temp home.
+        $cacheSubdir = $dir . '/.cache/sugar-dashboard';
+        if (is_dir($cacheSubdir)) {
+            foreach ((array) scandir($cacheSubdir) as $entry) {
+                if (is_string($entry) && $entry !== '.' && $entry !== '..' && is_file($cacheSubdir . '/' . $entry)) {
+                    @unlink($cacheSubdir . '/' . $entry);
+                }
+            }
+            @rmdir($cacheSubdir);
         }
         if (is_dir($dir . '/.cache')) {
             @rmdir($dir . '/.cache');
@@ -194,6 +200,13 @@ final class WeatherModuleTest extends TestCase
      * Regression: the weather cache now round-trips through sugar-core's
      * AtomicJsonFile — saveCache() must produce a file loadCache() can read
      * back, and the atomic tmp+rename must leave no temp artifacts behind.
+     *
+     * The contentless lock sidecar (`.weather.json.lock`) is deliberately NOT
+     * a temp artifact: AtomicJsonFile never deletes it — a delete-on-release
+     * path lets a racing writer reopen the same inode and defeat the lock
+     * (sugar-core AtomicJsonFile law). This assertion therefore carves the
+     * sanctioned `^\.[^/]+\.lock$` shape out and still bans every tmp residue
+     * (`.<basename>.tmp.<hex>`).
      */
     public function testCacheRoundTripThroughAtomicFileLeavesNoTemp(): void
     {
@@ -210,14 +223,53 @@ final class WeatherModuleTest extends TestCase
         $this->invokePrivate($module, 'saveCache', [$snapshot]);
 
         $cacheSubdir = $this->cacheDir . '/.cache/sugar-dashboard';
-        $files = array_values(array_diff(scandir($cacheSubdir), ['.', '..']));
-        $this->assertSame(['weather.json'], $files, 'atomic cache write must leave no temp artifacts');
+        $all = array_values(array_diff(scandir($cacheSubdir), ['.', '..']));
+        $artifacts = array_values(array_filter(
+            $all,
+            static fn (string $name): bool => !preg_match('/^\.[^\/]+\.lock$/', $name),
+        ));
+        $this->assertSame(['weather.json'], $artifacts, 'atomic cache write must leave no temp artifacts');
+        $this->assertFileExists($cacheSubdir . '/.weather.json.lock');
 
         $loaded = $this->invokePrivate($module, 'loadCache', []);
         $this->assertInstanceOf(WeatherSnapshot::class, $loaded);
         $this->assertSame(18.5, $loaded->tempC);
         $this->assertSame('Foggy', $loaded->condition);
         $this->assertSame('RoundTripCity', $loaded->location);
+    }
+
+    /**
+     * PII pin: the weather cache holds location data, so the payload, its lock
+     * sidecar, and every directory this save creates are published private —
+     * file 0600 (AtomicJsonFile::withPermissions) with the derived 0700 dir
+     * mode (each read class earns that class's execute bit).
+     */
+    public function testSaveCachePublishesPrivateModesForFileSidecarAndCreatedDirs(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('POSIX permission bits are not honoured on Windows');
+        }
+
+        $snapshot = new WeatherSnapshot(
+            7.0,
+            'Windy',
+            'ModeCity',
+            new \DateTimeImmutable('2020-02-02T00:00:00+00:00'),
+        );
+
+        $client = $this->createMock(HttpClient::class);
+        $module = new TestableWeatherModule($client, 'auto', $this->cacheDir);
+
+        $this->invokePrivate($module, 'saveCache', [$snapshot]);
+
+        $this->assertSame(
+            0600,
+            fileperms($this->cacheDir . '/.cache/sugar-dashboard/weather.json') & 0777,
+            'the location-carrying cache payload must not be world-readable',
+        );
+        $this->assertSame(0600, fileperms($this->cacheDir . '/.cache/sugar-dashboard/.weather.json.lock') & 0777);
+        $this->assertSame(0700, fileperms($this->cacheDir . '/.cache/sugar-dashboard') & 0777);
+        $this->assertSame(0700, fileperms($this->cacheDir . '/.cache') & 0777);
     }
 
     /**
