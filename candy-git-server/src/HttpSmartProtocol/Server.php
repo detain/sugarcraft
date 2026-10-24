@@ -284,7 +284,8 @@ final class Server
 
         // Delegate the whole negotiation to the real binary through the
         // argv-array stateless-rpc pump (StatelessRpc owns the E721
-        // request-scoped reap: bounded drain, stderr to null, TERM->KILL).
+        // request-scoped reap: bounded write + bounded drain on one
+        // deadline, stderr to null, TERM->KILL).
         $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
         $packData = StatelessRpc::negotiate('git-upload-pack', $repo->path(), $body, $maxBytes);
         if ($packData === null) {

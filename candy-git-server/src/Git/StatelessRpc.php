@@ -17,11 +17,11 @@ namespace SugarCraft\GitServer\Git;
  * this package), never client input.
  *
  * Child-lifetime discipline (E721 / ChafaRenderer pattern): every spawn
- * function carries its own request-scoped reap — a bounded drain with a
- * wall-clock deadline, stderr drained to null so the child can never block
- * on a full error pipe, and on any undrained outcome a TERM that escalates
- * to KILL after a short grace, then proc_close. No git child outlives the
- * call that spawned it.
+ * function carries its own request-scoped reap — a bounded stdin write and
+ * a bounded drain sharing ONE wall-clock deadline, stderr drained to null
+ * so the child can never block on a full error pipe, and on any undrained
+ * outcome a TERM that escalates to KILL after a short grace, then
+ * proc_close. No git child outlives the call that spawned it.
  *
  * Ground truth (PktLineTest + SmartHttp*Test, git 2.43):
  *  - `--stateless-rpc --advertise-refs` writes the bare advertisement
@@ -166,14 +166,19 @@ final class StatelessRpc
             throw new \RuntimeException('failed to start git ' . $binary . ' --stateless-rpc');
         }
 
-        // E721 request-scoped reap — same ladder as advertise(): the write
-        // may itself block on a wedged child, so the deadline covers write +
-        // drain together and every undrained outcome escalates TERM→KILL.
-        $bytes = null;
+        // E721 request-scoped reap — same ladder as advertise(): ONE
+        // NEGOTIATE_DEADLINE_SECONDS budget now covers write + drain
+        // together (r1024/githttp2, review MINOR-1) — writeBounded() feeds
+        // stdin only as fast as a consuming child takes it and stops at the
+        // deadline; the drain below gets whatever the write left over. A
+        // child that never reads is refused and escalated TERM→KILL by the
+        // finally, never frozen mid-fwrite.
+        $bytes    = null;
+        $deadline = \microtime(true) + self::NEGOTIATE_DEADLINE_SECONDS;
         try {
-            \fwrite($pipes[0], $stdin);
+            self::writeBounded($pipes[0], $stdin, $deadline);
             \fclose($pipes[0]);
-            $bytes = self::drainBounded($proc, $pipes[1], $pipes[2], self::NEGOTIATE_DEADLINE_SECONDS, $maxBytes);
+            $bytes = self::drainBounded($proc, $pipes[1], $pipes[2], $deadline - \microtime(true), $maxBytes);
         } finally {
             if ($bytes === null) {
                 @\proc_terminate($proc);
@@ -218,6 +223,39 @@ final class StatelessRpc
         }
 
         return \implode('', \array_map(static fn (?string $p): string => PktLine::encode((string) $p), $packets));
+    }
+
+    /**
+     * Feed $bytes to a (non-blocking) child stdin pipe until the whole body
+     * is accepted or the absolute wall-clock $deadlineMono passes — never a
+     * bare fwrite that could freeze the single-loop server on a child that
+     * stops consuming (r1024/githttp2, review MINOR-1).
+     *
+     * @param resource $stream
+     * @throws \RuntimeException when the child did not take the whole body in time
+     */
+    private static function writeBounded($stream, string $bytes, float $deadlineMono): void
+    {
+        \stream_set_blocking($stream, false);
+
+        $offset = 0;
+        $total  = \strlen($bytes);
+        while ($offset < $total) {
+            $written = @\fwrite($stream, \substr($bytes, $offset));
+            if ($written === false) {
+                throw new \RuntimeException('stateless-rpc stdin closed by the child');
+            }
+            if ($written > 0) {
+                $offset += $written;
+                continue;
+            }
+            if (\microtime(true) >= $deadlineMono) {
+                throw new \RuntimeException('stateless-rpc stdin write stalled past the deadline');
+            }
+            $read = $except = null;
+            $write = [$stream];
+            @\stream_select($read, $write, $except, 0, 100_000); // 100 ms tick
+        }
     }
 
     /**
