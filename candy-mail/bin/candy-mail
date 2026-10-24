@@ -20,7 +20,33 @@ declare(strict_types=1);
  */
 namespace SugarCraft\Mail;
 
-require __DIR__ . '/../vendor/autoload.php';
+// DST-1 (guard shape ported from candy-code/candy-top, measured on PHP 8.3.6):
+// when `php candy-mail.phar` runs, THIS file is the archive's stub and the
+// process is NOT inside the archive — Phar::running() answers '' in exactly
+// this context, and a bare '/x.phar/entry' path fails is_file()/require for
+// every caller. Two identities therefore cover the two phar shapes: the stub
+// names itself in __FILE__, and a require-from-inside names the archive in
+// Phar::running(). Both are addressed the only way that works, as a phar://
+// URI. The archive's own vendor is then the ONLY root — a stray vendor beside
+// (or above) a downloaded phar must never boot the app with code from outside
+// the frozen archive — so the plain `../vendor` require below runs only when
+// no archive identity exists. In every composer-mode checkout Phar::running()
+// is '' and __FILE__ is not a .phar, so that require is byte-untouched.
+$archive = hostArchiveFrom(\Phar::running(false), __FILE__);
+if ($archive !== '') {
+    $path = 'phar://' . $archive . '/vendor/autoload.php';
+    if (!is_file($path)) {
+        // A phar without its own vendor/ is a build defect, not a fallback
+        // case: booting from an outside vendor would run code the frozen
+        // archive does not contain — the exact lie this guard exists to
+        // prevent. Fail loud.
+        \fwrite(\STDERR, "candy-mail: the archive has no vendor/autoload.php — the phar was built without a packaged vendor.\n");
+        exit(1);
+    }
+    require $path;
+} else {
+    require __DIR__ . '/../vendor/autoload.php';
+}
 
 use SugarCraft\Mail\{Email, Lang, Mailer, ResendTransport, SmtpTransport};
 
@@ -330,11 +356,65 @@ function buildTransport(): Transport
 }
 
 /**
- * Package version for --version, resolved from Composer metadata when the
- * library (or its host app) was installed by Composer; 'dev' otherwise.
+ * The three archive identities, first answer wins (measured on PHP 8.3.6
+ * while porting the candy-code DST-1 guard): {@see \Phar::running()} names
+ * the archive for any script executing from inside it; in the stub region of
+ * a directly executed archive it answers '' and the archive is named by
+ * `__FILE__` ending in `.phar`; a `phar://`-prefixed `__FILE__` covers the
+ * shape where this file was required from inside the archive. Pure function
+ * of its inputs so the law is testable without minting an archive.
+ */
+function hostArchiveFrom(string $running, string $file): string
+{
+    if ($running !== '') {
+        return $running;
+    }
+
+    if (str_starts_with($file, 'phar://')) {
+        return preg_match('#^phar://(.+\.phar)(?:/|$)#', $file, $m) === 1 ? $m[1] : '';
+    }
+
+    return str_ends_with($file, '.phar') ? $file : '';
+}
+
+/** The real-filesystem path of the phar hosting this install, or ''. */
+function hostArchive(): string
+{
+    return hostArchiveFrom(\Phar::running(false), __FILE__);
+}
+
+/**
+ * Package version for --version, phar-aware (DST-1 program, phf lane).
+ *
+ * Inside an archive the build manifest written by tools/build-phar.php is the
+ * AUTHORITY and wins outright: the packaged vendor/composer/installed.php is
+ * FROZEN at build time, so InstalledVersions would keep answering the build
+ * root's pretty_version (`dev-master`) for the entire life of the artifact —
+ * the exact frozen-dev-master lie candy-code's DST-1 pinned. A bare
+ * `dev-build` stamp is working-tree noise (no release tag was reachable at
+ * build time) and falls through, fail-closed, like candy-code's
+ * Version::fromPharMetadata(). Outside an archive nothing is consulted and
+ * the Composer-metadata resolution below answers, byte-unchanged composer
+ * behaviour: from the library's own install when present, else the host
+ * app's root package, else 'dev'.
  */
 function cliVersion(): string
 {
+    $archive = hostArchive();
+    if ($archive !== '') {
+        try {
+            $metadata = (new \Phar($archive))->getMetadata();
+        } catch (\Throwable) {
+            $metadata = null;
+        }
+        if (is_array($metadata)) {
+            $stamp = $metadata['version'] ?? null;
+            if (is_string($stamp) && trim($stamp) !== '' && trim($stamp) !== 'dev-build') {
+                return trim($stamp);
+            }
+        }
+    }
+
     if (!\class_exists(\Composer\InstalledVersions::class)) {
         return 'dev';
     }

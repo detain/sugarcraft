@@ -197,7 +197,7 @@ mid-flight cancellation would require an async transport (documented in
 cd candy-mail && vendor/bin/phpunit -c phpunit.xml
 ```
 
-302 tests, 1,094 assertions (PHP 8.3, PHPUnit 10.5). The suite includes fork-based
+308 tests, 1,125 assertions (PHP 8.3, PHPUnit 10.5). The suite includes fork-based
 loopback fake-server tests for the SMTP conversation; no external network is ever dialled.
 
 ## License
