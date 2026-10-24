@@ -54,7 +54,12 @@ final class User
 
     public function withActive(bool $v = true): self
     {
-        return new self($this->username, $v, $this->isActive, $this->password, $this->authorizedKeys);
+        // Positional-truth fix (r1024/githttp): the constructor order is
+        // (username, isAdmin, isActive, password, keys) — this setter used to
+        // write $v into the isAdmin slot, so 'deactivating' a user stripped
+        // admin and left the account ACTIVE. A trust gate on isActive cannot
+        // exist while this flips the wrong field.
+        return new self($this->username, $this->isAdmin, $v, $this->password, $this->authorizedKeys);
     }
 
     public function withPassword(?string $password): self
