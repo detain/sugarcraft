@@ -92,8 +92,8 @@ final class ProbeReportValidationTest extends TestCase
         $this->assertStringContainsString('/bin/infocmp', $helper);
 
         // The admission RULE is part of the single-sniff law: this gate
-        // and sugar-image's Renderer\ChafaBinary roster gate (rulings-1024
-        // 4b) are the same class of candidate — a fixed roster of absolute
+        // and sugar-image's Renderer\ChafaBinary roster gate are the same
+        // class of candidate — a fixed roster of absolute
         // paths — and both admit on is_file() AND is_executable(). The
         // functional answer cannot pin this on a normal box (every real
         // /usr/bin/infocmp is executable, so an is_file-only drift answers

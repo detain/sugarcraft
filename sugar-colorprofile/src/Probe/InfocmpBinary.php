@@ -11,8 +11,8 @@ namespace SugarCraft\ColorProfile\Probe;
  * same two-path sniff; they now all delegate here so the answer to
  * "where is infocmp?" cannot drift between call sites. The admission
  * rule itself — `is_file() && is_executable()` — is shared by design
- * with sugar-image's `Renderer\ChafaBinary` roster gate (rulings-1024
- * 4b): both locate the same class of candidate, a fixed roster of
+ * with sugar-image's `Renderer\ChafaBinary` roster gate: both locate
+ * the same class of candidate, a fixed roster of
  * absolute paths, so the same two-part gate decides them and neither
  * may loosen toward `is_file()` alone without the other following in
  * the same change.
