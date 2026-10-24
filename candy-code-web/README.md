@@ -135,24 +135,41 @@ documents the protocol and the UI).
   `candy-code-web:login-secret`, origin-scoped, shared across tabs) so
   reloads and new tabs re-mint tickets without another sign-in; anything
   that can execute script on this origin — or a shared browser profile —
-  can read it until site data is cleared, and no UI control clears it
-  today. Keep the host page's script surface clean and treat browser
-  storage as holding a credential.
+  can read it for as long as it sits there — the exposure is at-rest
+  persistence while signed in. Sign-out clears it (`logout()` deletes the
+  key, and any 401 from the server clears it the same way), so until then
+  keep the host page's script surface clean and treat browser storage as
+  holding a credential.
 
 ### Deployment hardening
 
-The bundle ships **no Content-Security-Policy**: neither `index.html` nor
-`candy-code serve` sets one, and the sanitising above is the only injection
-line of defence. A deployment that wants belt-and-braces should have its
-front proxy send a header along the lines of
+`candy-code serve` already ships a **Content-Security-Policy** (alongside
+`nosniff`, `Referrer-Policy: no-referrer`, frame denial, and same-origin
+COOP/CORP): `Responses::SECURITY_HEADERS` is applied by `secured()` to
+every response — the static UI bundle and share pages included — except
+the WebSocket 101 handshake, whose headers belong to RFC 6455. The shipped
+policy is
 
 ```
-Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; base-uri 'none'; form-action 'self'
+default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'
 ```
 
-(`connect-src` covers the same-origin `/api` calls and the `/ws` socket;
-`data:` and `blob:` are needed by pasted images and fetched media; prefer
-pinning `connect-src` to the exact origin.)
+The carve-outs are deliberate: `connect-src 'self'` covers both the
+same-origin `/api` calls and the `/ws` socket (CSP3 counts a same-origin
+`ws:` as `self`, so the socket needs no wider admission); `data:` and
+`blob:` feed pasted images and `media.fetch` bytes rendered through
+same-origin object URLs; `'unsafe-inline'` in `style-src` is what inline
+theming costs. The sanitising above stays the primary injection defence —
+CSP is the net under it.
+
+A deployment wanting tighter can have its front proxy send a stricter
+policy on top: browsers intersect multiple `Content-Security-Policy`
+headers, so additions only ever narrow the default. Typical wins are
+pinning `connect-src` to the exact `https://host` origin, or moving the
+bundled styles to fetched files and dropping `'unsafe-inline'`. Do not
+widen any directive from the shipped default — in particular `ws:`/`wss:`
+generals are unnecessary (the socket already passes) and would admit
+cross-origin sockets the app never uses.
 
 ## Developing the UI
 
