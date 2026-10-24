@@ -29,6 +29,8 @@ export interface BackgroundSession {
   completedAt?: string | null
   tokensUsed?: number
   costUsd?: number
+  /** True only when the session's model had no price on file; absent means the cost is an exact bill. */
+  spendUnpriced?: boolean
   error?: string | null
   /** bg.output reads the output itself, from an offset. */
   outputBytes: number
@@ -46,7 +48,7 @@ export interface ContextSources {
     bytes: number
     tier: "project" | "personal"
   })[] | null
-  /** Every note of both stores across all scopes, the `memory.list` grouping rule (repo rows first, ISS-020). */
+  /** Every note of both stores across all scopes, the `memory.list` grouping rule (repo rows first). */
   memorySections: MemoryEntry[]
   /** The skills registry, as the prompt listing sees it. */
   skills: {
@@ -56,7 +58,7 @@ export interface ContextSources {
     /** False when the `disabledSkills` setting withheld it. */
     enabled: boolean
   }[]
-  /** The `.mcp.json` declaration as `candy-code mcp list` reads it (ISS-091 census), minus per-entry details. */
+  /** The `.mcp.json` declaration as `candy-code mcp list` reads it, minus per-entry details. */
   mcp: {
     /** The config-level verdict of the read-never-run census (`Bootstrap::mcpServerInventory`): trusted, refused, or absent. Nothing is started to answer this. */
     status: string
@@ -186,7 +188,7 @@ export interface MemoryEntry {
   content: string
   createdAt?: string
   modifiedAt?: string
-  /** Which store holds the note: the repository's .candy-code/memory/ or the home directory (ISS-020). */
+  /** Which store holds the note: the repository's .candy-code/memory/ or the home directory. */
   source: "home" | "repo"
 }
 
@@ -226,7 +228,7 @@ export interface SessionSnapshot {
   turnId?: string
   /** Transcript rows, as they are saved; a paged snapshot carries only its window. */
   messages: Record<string, unknown>[]
-  /** Paged snapshots (ISS-058): every row the session holds. */
+  /** Paged snapshots: every row the session holds. */
   totalMessages?: number
   /** Paged snapshots: index of the first carried row in the full history; appending never shifts it. */
   oldestIndex?: number
@@ -234,6 +236,8 @@ export interface SessionSnapshot {
   hasMoreOlder?: boolean
   queued?: string[]
   spentUsd?: number
+  /** True only when the session billed a model with no price on file; spentUsd is then a lower bound. Absent means priced. */
+  spendUnpriced?: boolean
   lastSeq: number
   permissionMode?: PermissionMode | null
   pendingAsks: PendingAsk[]
@@ -838,7 +842,7 @@ export interface Methods {
       caps?: string[]
       /** sessionId => the last seq the client holds */
       resume?: Record<string, number>
-      /** Page a resumed session's reset snapshot to this many newest rows (ISS-058). */
+      /** Page a resumed session's reset snapshot to this many newest rows. */
       snapshotLimit?: number
     }
     result: {
@@ -1064,7 +1068,7 @@ export interface Methods {
       permissionMode: PermissionMode
     }
   }
-  /** Publish an HTML snapshot of a session as a self-hosted share page at /s/{token} (SES-3). */
+  /** Publish an HTML snapshot of a session as a self-hosted share page at /s/{token}. */
   "session.share": {
     params: {
       sessionId: SessionId
@@ -1537,7 +1541,7 @@ export interface Events {
     content: string
     createdAt?: number
   }
-  /** A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and, since ISS-004, a background session's relayed question, named by its background id and answered the same way. Since WEB-3b a third shape joins the arm: a project-trust prompt (kind "trust") discovered by a context.sources measurement, answered by `context.trust` and not by `permission.respond`. */
+  /** A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and a background session's relayed question, named by its background id and answered the same way. A third shape joins the arm: a project-trust prompt (kind "trust") discovered by a context.sources measurement, answered by `context.trust` and not by `permission.respond`. */
   "permission.asked": {
     askId: string
     toolCallId: string
