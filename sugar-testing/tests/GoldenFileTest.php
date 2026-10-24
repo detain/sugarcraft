@@ -160,18 +160,34 @@ final class GoldenFileTest extends TestCase
 
     public function testSaveFailsOnUnwritablePath(): void
     {
-        // Attempting to save to a path where file_put_contents would fail
-        // should throw a RuntimeException.
-        // On Unix, /dev/full simulates disk full; on Windows we test with
-        // a read-only directory path.
-        if (is_dir('/dev/full')) {
-            $this->expectException(\RuntimeException::class);
-            $this->expectExceptionMessageMatches('/write_failed/');
-            GoldenFile::save('/dev/full/test.golden', 'content');
-        } else {
-            // Skip on platforms without /dev/full
+        // A write that cannot land must throw the typed RuntimeException.
+        // /dev/full is the honest disk-full oracle: open succeeds, every
+        // write fails with ENOSPC. It is a CHARACTER DEVICE — neither
+        // is_file() nor is_dir() is true for it (the pre-fix guard used
+        // is_dir('/dev/full'), always false, so this test skipped on every
+        // platform and pinned nothing — docs-fix-1023). file_exists() is
+        // the type-agnostic probe.
+        if (!file_exists('/dev/full') || !is_writable('/dev/full')) {
             $this->markTestSkipped('/dev/full not available on this platform');
         }
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/Failed to write golden file/');
+
+        GoldenFile::save('/dev/full', 'content');
+    }
+
+    public function testSaveEmptyContentWritesZeroByteGolden(): void
+    {
+        // An empty golden is legal (a renderer that emits nothing must be
+        // able to pin that). The pre-fix save() treated a 0-byte write as
+        // failure ($result === 0), so this threw a false write_failed —
+        // cured by the strlen check (docs-fix-1023).
+        GoldenFile::save($this->tmpFile, '');
+
+        $this->assertFileExists($this->tmpFile);
+        $this->assertSame(0, filesize($this->tmpFile));
+        $this->assertSame('', GoldenFile::load($this->tmpFile));
     }
 
     public function testResolveHandlesAbsolutePathAsRelative(): void

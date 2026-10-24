@@ -226,4 +226,70 @@ final class AssertionsTest extends TestCase
         $this->expectExceptionMessageMatches('/not idempotent/');
         Assertions::assertViewIdempotent($model);
     }
+
+    public function testAssertViewIdempotentFailsWhenViewMutatesTheModel(): void
+    {
+        // The second arm: output stays byte-identical (idempotence passes)
+        // but view() mutates hidden state — the shallow-clone comparison
+        // must catch it. (docs-fix-1023: this arm had no failing pin.)
+        $model = new class implements Model {
+            private int $calls = 0;
+
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+
+            public function update(Msg $msg): array
+            {
+                return [$this, null];
+            }
+
+            public function view(): string
+            {
+                // Idempotent output, mutating call — hidden state churn.
+                $this->calls++;
+
+                return 'stable';
+            }
+
+            public function subscriptions(): ?Subscriptions
+            {
+                return null;
+            }
+        };
+
+        $this->expectException(\PHPUnit\Framework\AssertionFailedError::class);
+        $this->expectExceptionMessageMatches('/mutated the model/');
+        Assertions::assertViewIdempotent($model);
+    }
+
+    public function testAssertGoldenAnsiWithUpdateFlagStillFailsOnMismatchAndKeepsGolden(): void
+    {
+        // UPDATE_GOLDENS=1 is CREATE-ONLY: an existing golden that differs
+        // must still fail and must NOT be rewritten — re-baselining is a
+        // deliberate delete, never a side effect of a normal run.
+        $goldenPath = $this->fixturesDir . '/sticky.golden';
+        GoldenFile::save($goldenPath, "\x1b[1;31mOriginal\x1b[0m");
+
+        $oldEnv = getenv('UPDATE_GOLDENS');
+        putenv('UPDATE_GOLDENS=1');
+
+        try {
+            $this->expectException(\PHPUnit\Framework\AssertionFailedError::class);
+            $this->expectExceptionMessageMatches('/mismatch/');
+            Assertions::assertGoldenAnsi($goldenPath, "\x1b[1;33mDifferent\x1b[0m");
+        } finally {
+            if ($oldEnv === false) {
+                putenv('UPDATE_GOLDENS');
+            } else {
+                putenv("UPDATE_GOLDENS={$oldEnv}");
+            }
+            $this->assertSame(
+                "\x1b[1;31mOriginal\x1b[0m",
+                GoldenFile::load($goldenPath),
+                'UPDATE_GOLDENS must never overwrite an existing golden'
+            );
+        }
+    }
 }

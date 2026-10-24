@@ -13,7 +13,7 @@ use SugarCraft\Testing\Lang;
  * They use the `.golden` extension convention and live under
  * a `tests/fixtures/` directory relative to the test file.
  *
- * @see Mirrors charmbracelet/bubbletea — golden file pattern (issue #1654)
+ * First-party harness — no 1:1 Go counterpart (see docs/MATCHUPS.md).
  */
 final class GoldenFile
 {
@@ -37,7 +37,11 @@ final class GoldenFile
     /**
      * Save content to a golden file.
      *
-     * Creates parent directories if they don't exist.
+     * Creates parent directories if they don't exist. Empty content is a
+     * legal golden (a renderer that outputs nothing must be able to pin
+     * that) — success is measured as a full write of strlen($content)
+     * bytes, so a 0-byte payload passes and a short write to a failing
+     * device still throws.
      *
      * @param string $path    Absolute or relative path to the golden file
      * @param string $content The bytes to write
@@ -50,9 +54,11 @@ final class GoldenFile
             \mkdir($dir, 0755, true);
         }
 
-        $result = file_put_contents($path, $content);
+        // '@' fronts the checked-false shape: a failed write raises an E_WARNING
+        // (which failOnWarning would trip) before we can raise the typed error.
+        $result = @\file_put_contents($path, $content);
 
-        if ($result === false || $result === 0) {
+        if ($result !== \strlen($content)) {
             throw new \RuntimeException(Lang::t('golden.write_failed', ['path' => $path]));
         }
     }

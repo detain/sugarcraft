@@ -18,7 +18,7 @@ use SugarCraft\Testing\Lang;
  * colour used before it is defined, or a run that overflows the declared raster
  * all raise {@see MalformedGraphicsException} rather than guessing.
  *
- * Mirrors charmbracelet/sugar-image SixelRenderer (inverse).
+ * Parse-side mirror (inverse) of sugarcraft/sugar-image's SixelRenderer.
  */
 final class SixelStream
 {

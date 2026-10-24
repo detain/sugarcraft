@@ -10,9 +10,10 @@ use SugarCraft\Testing\Lang;
 /**
  * Tests for the Lang translation facade.
  *
- * These would have caught the fatal visibility violation in Step 1.
- *
- * @see Mirrors charmbracelet/bubbletea — i18n facade pattern
+ * The load smoke-test guards the class against the visibility mismatch
+ * between SugarCraft\Testing\Lang and its core base; the known-key test
+ * guards actual translation (with placeholder interpolation) — a facade
+ * that only ever fell back to raw keys would pass a load test alone.
  */
 final class LangTest extends TestCase
 {
@@ -38,12 +39,10 @@ final class LangTest extends TestCase
 
     public function testLangReturnsKnownKeyValue(): void
     {
-        // After Step 11, lang/en.php has real entries. A known key should
-        // return its English translation rather than the raw key.
-        // This test is conditional on Step 11 having populated en.php.
-        $result = Lang::t('nonexistent.key');
+        // A key present in lang/en.php must return its translation — not the
+        // raw key — with {placeholder} tokens substituted from the params.
+        $result = Lang::t('input.invalid_arrow', ['dir' => 'left']);
 
-        // The fallback behavior returns the raw namespaced key for unknown keys.
-        $this->assertSame('testing.nonexistent.key', $result);
+        $this->assertSame('Invalid arrow direction: left', $result);
     }
 }

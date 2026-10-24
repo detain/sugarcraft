@@ -13,7 +13,6 @@ use PHPUnit\Framework\Assert;
  * and the concatenated view() output across steps for golden-file assertion.
  *
  * @readonly
- * @see Mirrors charmbracelet/bubbletea — TestResult value object (issue #1654)
  */
 final readonly class TestResult
 {

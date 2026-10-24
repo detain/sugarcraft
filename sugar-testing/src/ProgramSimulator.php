@@ -17,11 +17,10 @@ use SugarCraft\Core\Program;
  * init(), update(), and view() in sequence — without touching real
  * stdin/stdout or installing signal handlers.
  *
- * The fake-cmd runner hook lets tests intercept commands that would
- * otherwise have side-effects (exec, clipboard, etc.) and either skip
- * them or return controlled message sequences.
+ * The fake-cmd runner hook lets tests decide the message injected for each
+ * command; to skip the commands' side effects entirely, also opt out of
+ * execution with {@see withRealCmdRunner(false)}.
  *
- * @see Mirrors charmbracelet/bubbletea — pioneering what issue #1654 never shipped
  * @see Assertions::assertGoldenAnsi() for snapshot assertions
  */
 final class ProgramSimulator
@@ -88,10 +87,14 @@ final class ProgramSimulator
     }
 
     /**
-     * Replace the cmd-runner with a fake that captures instead of executing.
+     * Install a fake runner that decides the message injected for each Cmd.
      *
      * The supplied closure receives each captured Cmd (\Closure) and may
-     * return a Msg to inject, or null to skip.
+     * return a Msg to inject, or null to skip. Naming caveat discovered by
+     * audit (docs-fix-1023): the fake does NOT stop execution by itself —
+     * the real Cmd closure still runs for its side effects under the
+     * default execute mode. Pair with {@see withRealCmdRunner(false}) for
+     * capture-without-executing determinism.
      *
      * @param \Closure(\Closure): ?Msg $runner
      * @return $this

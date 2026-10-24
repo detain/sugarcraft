@@ -17,7 +17,7 @@ use SugarCraft\Testing\Lang;
  * The width/height arguments are character-cell counts (matching sugar-image's
  * default sizing), exposed as {@see cellsWidth()} / {@see cellsHeight()}.
  *
- * Mirrors charmbracelet/sugar-image Iterm2Renderer (inverse).
+ * Parse-side mirror (inverse) of sugarcraft/sugar-image's Iterm2Renderer.
  */
 final class Iterm2Stream
 {

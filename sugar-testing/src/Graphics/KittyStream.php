@@ -25,7 +25,7 @@ use SugarCraft\Testing\Lang;
  * `o=z`) yields the sender's bytes byte-for-byte. Multi-image streams
  * yield one {@see KittyImage} per transmit.
  *
- * Mirrors charmbracelet/sugar-image KittyRenderer (inverse).
+ * Parse-side mirror (inverse) of sugarcraft/sugar-image's KittyRenderer.
  */
 final class KittyStream
 {
