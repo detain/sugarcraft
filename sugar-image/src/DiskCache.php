@@ -158,6 +158,8 @@ final class DiskCache
     /**
      * Return the cached value for the key, computing and storing it on a miss.
      *
+     * Ruling 3b keeper (2026-10-24): get* here is cache store vocabulary — the get()/put() read/write verb pair (KV family), not a state accessor.
+     *
      * @param callable(): string $compute  Produces the value when absent.
      */
     public function getOrCompute(string $key, callable $compute): string
