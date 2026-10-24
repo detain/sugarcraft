@@ -655,8 +655,11 @@ final class App implements Model
      * The mode is fixed for the life of the connection (the config is
      * immutable), so this predicate is constant once built — safe to branch
      * at subscription-declaration time, unlike the per-tick throttle decision
-     * documented in subscriptions(). PostgreSQL keeps its own TLS story via
-     * the DSN (README “PostgreSQL SSL”) and is deliberately not gated here.
+     * documented in subscriptions(). PostgreSQL is never gated: its async
+     * connector carries TLS natively — {@see ReactPostgresConnection} threads
+     * the DSN's libpq sslmode into PgAsync's `tls` parameter, which refuses
+     * plaintext when a required mode cannot be negotiated (class docblock
+     * there records the verify-ca parity caveat).
      */
     private function asyncTransportRefusedByTls(): bool
     {

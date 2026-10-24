@@ -33,10 +33,32 @@ use SugarCraft\Async\CancellationToken;
  * the timer fires), so a cancelled or timed-out statement actually stops
  * executing on the server. No extra side-channel is needed here.
  *
+ * TLS: unlike the react/mysql connector (which takes only a plaintext
+ * mysql:// URI), PgAsync carries a real TLS story — the libpq `sslmode`
+ * that {@see \SugarCraft\Sql\Db\ConnectionConfig} bakes into every pgsql
+ * DSN is threaded through to PgAsync's own `tls` parameter here. In the
+ * required modes (require/verify-ca/verify-full) PgAsync refuses the
+ * connection outright when the server declines SSLRequest rather than
+ * silently downgrading to plaintext. One upstream parity caveat:
+ * pgasync's verify-ca sets verify_peer=false/allow_self_signed=true, so
+ * it means "encrypted, CA-chain NOT verified" — weaker than libpq's
+ * verify-ca; only verify-full gets certificate verification. Note also
+ * that pgsql `require` matches libpq semantics (encrypt, no cert check)
+ * — unlike the MySQL table in {@see \SugarCraft\Sql\Db\MysqlDatabase},
+ * where require escalates to system-store verification.
+ *
  * @see https://github.com/voryx/PgAsync
  */
 final class ReactPostgresConnection implements AsyncConnection
 {
+    /**
+     * The libpq sslmode spellings PgAsync accepts as its `tls` parameter.
+     * Local (not vendor-coupled) list: an unrecognised value would throw
+     * inside the vendor constructor, so unknown modes are defensively
+     * omitted and inherit PgAsync's 'prefer' default.
+     */
+    private const PGSQL_TLS_MODES = ['disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'];
+
     private Client $client;
     private LoopInterface $loop;
 
@@ -92,6 +114,10 @@ final class ReactPostgresConnection implements AsyncConnection
      *
      * PgAsync requires both 'user' and 'database'; host/port have built-in
      * defaults but we pass them explicitly from the DSN when present.
+     * The DSN's libpq `sslmode` (added by ConnectionConfig::buildDsn for
+     * pgsql, so its spelling is already normalised) rides as the `tls`
+     * parameter — see the class docblock for the required-mode and
+     * verify-ca parity semantics.
      *
      * @return array<string,mixed>
      */
@@ -107,6 +133,11 @@ final class ReactPostgresConnection implements AsyncConnection
 
         if ($password !== '') {
             $params['password'] = $password;
+        }
+
+        $sslMode = $this->extractDsnValue($dsn, 'sslmode');
+        if ($sslMode !== null && in_array($sslMode, self::PGSQL_TLS_MODES, true)) {
+            $params['tls'] = $sslMode;
         }
 
         return $params;
