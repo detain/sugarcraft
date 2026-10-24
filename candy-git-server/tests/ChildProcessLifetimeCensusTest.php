@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\StreamSelectLoop;
 use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\Git\GitDaemon;
+use SugarCraft\GitServer\Git\StatelessRpc;
 use SugarCraft\GitServer\Git\UploadPack;
 use SugarCraft\GitServer\HttpSmartProtocol\Server;
 use SugarCraft\GitServer\Repo;
@@ -27,6 +28,7 @@ use SugarCraft\GitServer\User;
  * censuses its own descendants and reports on stderr.
  *
  * @covers \SugarCraft\GitServer\Git\GitDaemon
+ * @covers \SugarCraft\GitServer\Git\StatelessRpc
  * @covers \SugarCraft\GitServer\Git\UploadPack
  * @covers \SugarCraft\GitServer\HttpSmartProtocol\Server
  */
@@ -41,8 +43,9 @@ final class ChildProcessLifetimeCensusTest extends TestCase
     /** Every proc_open site the E721 census accounted for, by file. */
     private const SPAWN_SITES_BY_FILE = [
         'Git/GitDaemon.php' => 2,          // sendPack(), unpackObjects()
+        'Git/StatelessRpc.php' => 2,       // advertise(), negotiate() (smart-HTTP children)
         'Git/UploadPack.php' => 1,         // sendPack()
-        'HttpSmartProtocol/Server.php' => 3, // two live handlers + dormant generatePackData
+        'HttpSmartProtocol/Server.php' => 1, // dormant generatePackData only (r1024/githttp: live children moved to StatelessRpc)
     ];
 
     private string $tmpDir;
@@ -356,11 +359,15 @@ final class ChildProcessLifetimeCensusTest extends TestCase
         $this->assertNoLiveChildren('after handleUploadPack returned');
     }
 
-    public function testHttpReceivePackRequestReapsWithinScope(): void
+    /**
+     * FLIPPED 2026-10-24 (r1024/githttp, owner ruling 1b): POST
+     * git-receive-pack is a phase-2 refusal (501) and spawns nothing through
+     * the router anymore. The refusal itself is pinned here; the receive-pack
+     * CHILD-LIFETIME story moves to the direct StatelessRpc::negotiate() arm
+     * below, so the shared code path stays census-honest for when push lands.
+     */
+    public function testHttpPostReceivePackRefusesWithoutSpawning(): void
     {
-        // Anonymous canWrite() is fail-closed false, so the route would 403
-        // BEFORE spawning; an admin Basic-auth header carries the request to
-        // the real child path. Marker proves the spawn; census proves reap.
         $repo = $this->createGitRepo('http-recv');
         $marker = $this->tmpDir . '/recv-spawned';
         $this->withFakeGitOnPath('echo ok > ' . \escapeshellarg($marker) . '; cat >/dev/null');
@@ -377,9 +384,28 @@ final class ChildProcessLifetimeCensusTest extends TestCase
             "junk-not-a-negotiation\n"
         );
 
-        self::assertSame(200, $response['status']);
+        self::assertSame(501, $response['status']);
+        self::assertStringContainsString('phase 2', $response['body']);
+        self::assertFileDoesNotExist($marker, 'the phase-2 refusal must not spawn a receive-pack child');
+        $this->assertNoLiveChildren('after the 501 refusal');
+    }
+
+    public function testStatelessRpcNegotiateReapsReceivePackChildren(): void
+    {
+        // Same request-scoped contract, exercised DIRECTLY on the shared
+        // spawn path (push delegation is the phase-2 consumer).
+        $repo = $this->createGitRepo('rpc-recv');
+        $marker = $this->tmpDir . '/rpc-recv-spawned';
+        $this->withFakeGitOnPath('echo ok > ' . \escapeshellarg($marker) . '; cat >/dev/null');
+
+        $start = \hrtime(true);
+        $out = StatelessRpc::negotiate('git-receive-pack', $repo->path(), "junk\n", 1024);
+        $elapsedSeconds = (\hrtime(true) - $start) / 1e9;
+
+        self::assertNotNull($out);
+        self::assertLessThan(self::BOUNDED_TEARDOWN_CEILING_SECONDS, $elapsedSeconds);
         self::assertFileExists($marker, 'receive-pack child never spawned — the census would be vacuous');
-        $this->assertNoLiveChildren('after handleReceivePack returned');
+        $this->assertNoLiveChildren('after StatelessRpc::negotiate returned');
     }
 
     public function testHttpCappedOverflowTerminatesTheChildBounded(): void

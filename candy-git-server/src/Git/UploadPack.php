@@ -156,8 +156,9 @@ final class UploadPack
     {
         if ($wants === []) return;
 
-        $repoPath = \escapeshellarg($this->repo->path());
-        $cmd = "git -C {$repoPath} pack-objects --stdout --revs 2>/dev/null";
+        // House law: argv arrays, never a shell string — the repo path is
+        // trusted config but the spawn takes no shell either way.
+        $cmd = ['git', '-C', $this->repo->path(), 'pack-objects', '--stdout', '--revs'];
 
         $desc = [
             0 => ['pipe', 'r'],

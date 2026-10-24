@@ -173,6 +173,9 @@ final class ServerTest extends TestCase
     // Content-Type tests
     // -------------------------------------------------------------------------
 
+    // FLIPPED 2026-10-24 (r1024/githttp, owner ruling 1b): the header value
+    // was '...-advisory' — a typo git's client rejects. Spec value is
+    // '...-advertisement' (verified against git 2.43 http-backend traffic).
     public function testHandleRequestSetsCorrectContentTypeForUploadPack(): void
     {
         $result = $this->server->handleRequest(
@@ -183,11 +186,16 @@ final class ServerTest extends TestCase
             ''
         );
 
-        $this->assertSame('application/x-git-upload-pack-advisory', $result['headers']['Content-Type']);
+        $this->assertSame('application/x-git-upload-pack-advertisement', $result['headers']['Content-Type']);
     }
 
-    public function testHandleRequestSetsCorrectContentTypeForReceivePack(): void
+    public function testReceivePackAdvertisementRefusesAnonymousBeforeAnyBytes(): void
     {
+        // FLIPPED 2026-10-24 (r1024/githttp): the old arm asserted an
+        // anonymous 200 with '-advisory' CT — that was the M3 defect (the
+        // receive-pack advertisement bypassed every gate). canWrite() is
+        // fail-closed false for anonymous callers even on a public repo, so
+        // the route now answers 403 BEFORE building any advertisement.
         $result = $this->server->handleRequest(
             'GET',
             '/testrepo.git/info/refs',
@@ -196,7 +204,28 @@ final class ServerTest extends TestCase
             ''
         );
 
-        $this->assertSame('application/x-git-receive-pack-advisory', $result['headers']['Content-Type']);
+        $this->assertSame(403, $result['status']);
+        $this->assertStringNotContainsString('refs/', $result['body']);
+    }
+
+    public function testReceivePackAdvertisementServesAnAdminOverBasicAuth(): void
+    {
+        $this->server->registerUser(User::new('pusher')->withAdmin(true)->withPassword('pushpass'));
+
+        $result = $this->server->handleRequest(
+            'GET',
+            '/testrepo.git/info/refs',
+            'service=git-receive-pack',
+            ['Authorization' => 'Basic ' . \base64_encode('pusher:pushpass')],
+            ''
+        );
+
+        $this->assertSame(200, $result['status']);
+        $this->assertSame('application/x-git-receive-pack-advertisement', $result['headers']['Content-Type']);
+        // testrepo.git is EMPTY here — git answers with the capabilities^{}
+        // fake-head packet (ground truth vs git receive-pack --advertise-refs).
+        $this->assertStringContainsString('capabilities^{}', $result['body']);
+        $this->assertStringContainsString('report-status', $result['body']);
     }
 
     // -------------------------------------------------------------------------
@@ -219,6 +248,9 @@ final class ServerTest extends TestCase
 
     public function testHandleRequestRoutesToGitReceivePack(): void
     {
+        // FLIPPED 2026-10-24 (r1024/githttp, owner ruling 1b): POST
+        // git-receive-pack is a loud phase-2 refusal (501), not a pass to the
+        // access layer — push stays unwired while the read path lands.
         $result = $this->server->handleRequest(
             'POST',
             '/testrepo.git/git-receive-pack',
@@ -227,8 +259,8 @@ final class ServerTest extends TestCase
             ''
         );
 
-        // Will fail access denied but routing works
-        $this->assertArrayHasKey('status', $result);
+        $this->assertSame(501, $result['status']);
+        $this->assertStringContainsString('phase 2', $result['body']);
     }
 
     public function testHandleRequestReturns404ForUnknownAction(): void
@@ -314,7 +346,10 @@ final class ServerTest extends TestCase
         $this->assertSame("\x30\x30\x30\x30", \substr($result['body'], -4));
     }
 
-    public function testHandleRequestReturnsChunkedTransferEncoding(): void
+    // FLIPPED 2026-10-24 (r1024/githttp): the old arm pinned
+    // 'Transfer-Encoding: chunked' on a fully-buffered body — the header was
+    // a lie (no chunked framing follows it). Honest shape: Content-Length.
+    public function testBufferedResponsesCarryContentLengthNotChunked(): void
     {
         $result = $this->server->handleRequest(
             'GET',
@@ -324,7 +359,8 @@ final class ServerTest extends TestCase
             ''
         );
 
-        $this->assertSame('chunked', $result['headers']['Transfer-Encoding']);
+        $this->assertSame((string) \strlen($result['body']), $result['headers']['Content-Length']);
+        $this->assertArrayNotHasKey('Transfer-Encoding', $result['headers']);
     }
 
     // -------------------------------------------------------------------------

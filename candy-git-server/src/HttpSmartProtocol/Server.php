@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer\HttpSmartProtocol;
 
 use SugarCraft\GitServer\{AccessControl, Config, Repo, Stats, User};
-use SugarCraft\GitServer\Git\{PktLine, ReceivePack, UploadPack};
+use SugarCraft\GitServer\Git\{PktLine, ReceivePack, StatelessRpc, UploadPack};
 use SugarCraft\GitServer\LFS\LFSHandler;
 
 /**
@@ -20,11 +20,12 @@ use SugarCraft\GitServer\LFS\LFSHandler;
  * 2. Client POSTs /git-upload-pack with wants           → exchanges pack data
  * 3. For push: Client POSTs /git-receive-pack          → sends pack, receives status
  *
- * CHILD-PROCESS LIFETIME (E721): every `git` child is REQUEST-scoped — the
- * `proc_open` sites in handleUploadPack()/handleReceivePack()/
- * generatePackData() terminate any child whose capped buffer did not consume
- * the whole stream and release pipes + handle in a `finally`, so nothing
- * outlives the synchronous handleRequest() call that spawned it. All
+ * CHILD-PROCESS LIFETIME (E721): the live smart-HTTP children are spawned
+ * inside Git\StatelessRpc (advertise + negotiate), whose bounded read +
+ * TERM/KILL escalation ladder releases pipes and handle in a `finally` per
+ * spawn site. This class keeps exactly one further `proc_open` — the DORMANT
+ * generatePackData() shortcut, no callers, carrying the same reap shape — so
+ * nothing outlives the synchronous handleRequest() call that reached it. All
  * `exec()` helpers (Repo metadata reads) wait for their child by definition.
  * There is no daemon object here to stop: the host application owns the
  * socket, and a request never returns while it has a live child.
@@ -202,7 +203,7 @@ final class Server
 
         // Handle receive-pack request
         if ($actionPart === 'git-receive-pack') {
-            return $this->handleReceivePack($headers, $body);
+            return $this->handleReceivePack();
         }
 
         return $this->errorResponse(404, 'Not found');
@@ -233,25 +234,26 @@ final class Server
             return $this->errorResponse(404, 'Repository not found');
         }
 
-        // Check read access for upload-pack, write for receive-pack
-        // Note: Both services allow anonymous access to info/refs - auth
-        // happens during the actual pack exchange, not the ref advertisement.
+        // Gate BEFORE any advertisement byte leaves the process (M3 cure,
+        // r1024/githttp owner ruling 1b): the old code refused upload-pack
+        // only and openly admitted the receive-pack bypass, leaking private
+        // repo ref names. Read advertisement rides canRead, push advertisement
+        // rides canWrite — an anonymous client learns nothing it may not use.
         $ac = AccessControl::getInstance();
+        $user = $this->getUserFromHeaders($headers);
         if ($service === 'git-upload-pack') {
-            if (!$ac->canRead($this->getUserFromHeaders($headers), $repo)) {
+            if (!$ac->canRead($user, $repo)) {
                 return $this->errorResponse(403, 'Access denied');
             }
-        } else {
-            // receive-pack info/refs is publicly accessible for ref discovery.
-            // Actual push operation (POST) requires canWrite() auth.
+        } elseif (!$ac->canWrite($user, $repo)) {
+            return $this->errorResponse(403, 'Access denied');
         }
 
         // Build the advertisement packet
         $advertisement = $this->buildRefAdvertisement($repo, $service);
 
-        $this->responseHeaders['Content-Type'] = 'application/x-' . $service . '-advisory';
+        $this->responseHeaders['Content-Type'] = 'application/x-' . $service . '-advertisement';
         $this->responseHeaders['Cache-Control'] = 'no-cache';
-        $this->responseHeaders['Transfer-Encoding'] = 'chunked';
         $this->body = $advertisement;
 
         return $this->finalizeResponse();
@@ -279,127 +281,33 @@ final class Server
             return $this->errorResponse(403, 'Access denied');
         }
 
-        // Set up for streaming response
-        $this->responseHeaders['Content-Type'] = 'application/x-git-upload-pack-result';
-        $this->responseHeaders['Transfer-Encoding'] = 'chunked';
-
-        // Delegate to git upload-pack --stateless-rpc for correct protocol handling
-        $repoPath = \escapeshellarg($repo->path());
-        $cmd = "git -C {$repoPath} upload-pack --stateless-rpc .";
-
-        $desc = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-        /** @var resource|false $proc */
-        $proc = \proc_open($cmd, $desc, $pipes);
-        if ($proc === false) {
-            return $this->errorResponse(500, 'Failed to start upload-pack');
-        }
-
-        // E721: request-scoped reap. A capped read that overflowed leaves the
-        // child alive with output still flowing, so the finally terminates
-        // unless the buffer consumed the whole stream; pipes and handle are
-        // released on every path, so no git child outlives handleRequest().
-        $packData = null;
-        try {
-            // Write request body to stdin
-            \fwrite($pipes[0], $body);
-            \fclose($pipes[0]);
-
-            // Read response into buffer (with size cap)
-            $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
-            $packData = $this->readCapped($pipes[1], $maxBytes);
-        } finally {
-            if ($packData === null) {
-                @\proc_terminate($proc);
-            }
-            foreach ($pipes as $pipe) {
-                if (\is_resource($pipe)) {
-                    \fclose($pipe);
-                }
-            }
-            \proc_close($proc);
-        }
+        // Delegate the whole negotiation to the real binary through the
+        // argv-array stateless-rpc pump (StatelessRpc owns the E721
+        // request-scoped reap: bounded drain, stderr to null, TERM->KILL).
+        $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
+        $packData = StatelessRpc::negotiate('git-upload-pack', $repo->path(), $body, $maxBytes);
         if ($packData === null) {
             return $this->errorResponse(413, 'Packfile too large');
         }
 
         $this->stats()->recordPackDownload();
+        $this->responseHeaders['Content-Type'] = 'application/x-git-upload-pack-result';
         $this->body = $packData;
         return $this->finalizeResponse();
     }
 
     /**
-     * Handle POST /{repo}/git-receive-pack
-     *
-     * The client sends a packfile containing the objects to push.
+     * Handle POST /{repo}/git-receive-pack — phase-2 refusal (owner ruling
+     * 1b, r1024/githttp): phase 1 ships the smart-HTTP READ path only.
+     * Push needs receive-pack negotiation plus ref-update hardening that
+     * belong to their own lane; until then this answers 501 loudly instead
+     * of pretending to work. The receive-pack ADVERTISEMENT (info/refs
+     * ?service=git-receive-pack) is gated and served, so a future phase-2
+     * flips this one handler back on without touching the wire plumbing.
      */
-    private function handleReceivePack(array $headers, string $body): array
+    private function handleReceivePack(): array
     {
-        $repoName = $this->extractRepoName();
-        if ($repoName === null) {
-            return $this->errorResponse(404, 'Repository not found');
-        }
-
-        $repo = $this->findRepo($repoName);
-        if ($repo === null) {
-            return $this->errorResponse(404, 'Repository not found');
-        }
-
-        $ac = AccessControl::getInstance();
-        if (!$ac->canWrite($this->getUserFromHeaders($headers), $repo)) {
-            return $this->errorResponse(403, 'Access denied');
-        }
-
-        // Set up for streaming response
-        $this->responseHeaders['Content-Type'] = 'application/x-git-receive-pack-result';
-        $this->responseHeaders['Transfer-Encoding'] = 'chunked';
-
-        // Delegate to git receive-pack --stateless-rpc for correct protocol handling
-        $repoPath = \escapeshellarg($repo->path());
-        $cmd = "git -C {$repoPath} receive-pack --stateless-rpc .";
-
-        $desc = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-        /** @var resource|false $proc */
-        $proc = \proc_open($cmd, $desc, $pipes);
-        if ($proc === false) {
-            return $this->errorResponse(500, 'Failed to start receive-pack');
-        }
-
-        // E721: request-scoped reap — see handleUploadPack() for the shape.
-        $packData = null;
-        try {
-            // Write request body (commands + packfile) to stdin
-            \fwrite($pipes[0], $body);
-            \fclose($pipes[0]);
-
-            // Read response (with memory cap to prevent OOM on large packfiles)
-            $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
-            $packData = $this->readCapped($pipes[1], $maxBytes);
-        } finally {
-            if ($packData === null) {
-                @\proc_terminate($proc);
-            }
-            foreach ($pipes as $pipe) {
-                if (\is_resource($pipe)) {
-                    \fclose($pipe);
-                }
-            }
-            \proc_close($proc);
-        }
-        if ($packData === null) {
-            return $this->errorResponse(413, 'Packfile too large');
-        }
-
-        $this->stats()->recordPackUpload();
-        $this->body = $packData;
-        return $this->finalizeResponse();
+        return $this->errorResponse(501, 'receive-pack (push) is phase 2; this server speaks the read path only');
     }
 
     // -------------------------------------------------------------------------
@@ -625,40 +533,48 @@ final class Server
      */
     private function findRepo(string $name): ?Repo
     {
-        return $this->repos[$name] ?? null;
+        $repo = $this->repos[$name] ?? null;
+        if ($repo !== null) {
+            return $repo;
+        }
+
+        // Clients append '.git' to clone URLs (and tolerate it omitted);
+        // hosts register under whichever name they scanned. Resolve the
+        // other spelling before declaring 404 (r1024/githttp).
+        if (\str_ends_with($name, '.git')) {
+            return $this->repos[\substr($name, 0, -4)] ?? null;
+        }
+
+        return $this->repos[$name . '.git'] ?? null;
     }
 
     /**
-     * Build ref advertisement packet.
+     * Build the smart-HTTP advertisement: the http transport's service
+     * header packet and its flush, then git's OWN advertisement bytes
+     * verbatim (StatelessRpc::advertise). The old shape self-encoded
+     * Repo::refs() without capabilities — a pkt-line stream git clients
+     * reject. Delegating means the ref list, the NUL-joined capability
+     * line and the symref/agent announcements are exactly what the
+     * installed git binary itself would serve.
      */
     private function buildRefAdvertisement(Repo $repo, string $service): string
     {
-        $lines = [];
-        $lines[] = '# service=' . $service;
-        $lines[] = '';  // flush packet
-
-        // Get refs
-        $refs = $repo->refs();
-        foreach ($refs as $ref => $hash) {
-            $lines[] = "{$hash} {$ref}";
-        }
-
-        if ($refs === []) {
-            // Empty repo - still need a flush
-            $lines[] = '';
-        }
-
-        return $this->encodePktLines($lines);
+        return PktLine::encode("# service={$service}\n")
+            . PktLine::flush()
+            . StatelessRpc::advertise($service, $repo->path());
     }
 
     /**
      * Generate pack data for upload-pack.
      *
      * DORMANT (E721 census): this private helper has no callers — the live
-     * upload-pack route delegates to `git upload-pack --stateless-rpc` in
-     * handleUploadPack(). It is kept, carries the same request-scoped reap as
-     * its live siblings, and if it is ever re-wired it inherits that
-     * contract; removal was not taken under the dormant-code stop rule.
+     * upload-pack route delegates the whole negotiation to
+     * StatelessRpc::negotiate() (a real `git upload-pack --stateless-rpc`
+     * child), which subsumes this pack-objects shortcut. It is kept, carries
+     * the same request-scoped reap as its live siblings, and if it is ever
+     * re-wired it inherits that contract; removal was not taken under the
+     * dormant-code stop rule. Its spawn moved to an argv array with the
+     * others (house law: no shell strings around git).
      */
     private function generatePackData(Repo $repo, string $requestBody): string
     {
@@ -669,8 +585,7 @@ final class Server
             return '';
         }
 
-        $repoPath = \escapeshellarg($repo->path());
-        $cmd = "git -C {$repoPath} pack-objects --stdout --revs 2>/dev/null";
+        $cmd = ['git', '-C', $repo->path(), 'pack-objects', '--stdout', '--revs'];
 
         $desc = [
             0 => ['pipe', 'r'],
@@ -757,20 +672,6 @@ final class Server
     }
 
     /**
-     * Encode array of lines as Git pkt-line format through the shared codec.
-     *
-     * @param list<string> $lines
-     */
-    private function encodePktLines(array $lines): string
-    {
-        $result = '';
-        foreach ($lines as $line) {
-            $result .= PktLine::encode($line);
-        }
-        return $result;
-    }
-
-    /**
      * Parse a query string into key-value pairs.
      *
      * @return array<string, string>
@@ -793,9 +694,13 @@ final class Server
      */
     private function getUserFromHeaders(array $headers): ?User
     {
+        // HTTP header names are case-insensitive on the wire (git sends
+        // lowercase); canonicalize once at the trust boundary (r1024/githttp).
+        $headers = \array_change_key_case($headers, \CASE_LOWER);
+
         // Check Basic auth
-        if (isset($headers['Authorization'])) {
-            $auth = $headers['Authorization'];
+        if (isset($headers['authorization'])) {
+            $auth = $headers['authorization'];
             if (\str_starts_with($auth, 'Basic ')) {
                 $credentials = \base64_decode(\substr($auth, 6));
                 if ($credentials !== false) {
@@ -807,6 +712,12 @@ final class Server
                         if ($user === null) return null;
                         // Verify password — reject null/empty passwords (deny auth bypass)
                         if ($user->password === null || !\hash_equals($user->password, $password)) {
+                            return null;
+                        }
+                        // A deactivated account authenticates to nothing
+                        // (gap #5 cure, r1024/githttp): credentials out,
+                        // identity null — the request proceeds as anonymous.
+                        if (!$user->isActive) {
                             return null;
                         }
                         return $user;
@@ -837,7 +748,8 @@ final class Server
      */
     private function resolveTrustedUser(array $headers, ?string $peerIp): ?User
     {
-        $username = $headers['X-CandyGitServer-User'] ?? null;
+        $headers = \array_change_key_case($headers, \CASE_LOWER);
+        $username = $headers['x-candygitserver-user'] ?? null;
         if (!\is_string($username) || $username === '') {
             return null;
         }
@@ -853,7 +765,9 @@ final class Server
             return null;
         }
 
-        return $this->users[$username] ?? null;
+        $user = $this->users[$username] ?? null;
+
+        return $user !== null && $user->isActive ? $user : null;
     }
 
     /**
@@ -866,7 +780,8 @@ final class Server
     private function verifyUserToken(string $username, array $headers): bool
     {
         $secret = $this->config->authSecret;
-        $sig = $headers['X-CandyGitServer-User-Sig'] ?? '';
+        $headers = \array_change_key_case($headers, \CASE_LOWER);
+        $sig = $headers['x-candygitserver-user-sig'] ?? '';
         if ($secret === '' || !\is_string($sig) || $sig === '') {
             return false;
         }
@@ -986,6 +901,13 @@ final class Server
      */
     private function finalizeResponse(): array
     {
+        // Buffered responses are honest about their size: no handler sets
+        // chunked framing (the old Transfer-Encoding header was a lie — the
+        // listener never chunked anything). finalize owns the truth.
+        if (!isset($this->responseHeaders['Content-Length'])) {
+            $this->responseHeaders['Content-Length'] = (string) \strlen($this->body);
+        }
+
         return [
             'status' => $this->statusCode,
             'headers' => $this->responseHeaders,
