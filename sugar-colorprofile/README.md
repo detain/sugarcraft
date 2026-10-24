@@ -275,6 +275,36 @@ Beyond the env ladder above, the library exposes a richer capability surface:
 | `GOOGLE_CLOUD_SHELL=true` | TrueColor |
 | `TMUX` / `STY` | re-anchor to the base TERM before grading |
 
+## Deprecation: StandardColors mutable statics
+
+_Dated 2026-10-24 (owner ruling 2b)._
+
+The **16** `public static Color` properties on `StandardColors` (`$black` …
+`$brightWhite`) are now **deprecated** as a *writable* surface. They are
+process-global mutables: an assignment anywhere rewrites the value for every
+reader, and nothing pins them against reassignment.
+
+**Nothing changes today.** The properties keep working byte-for-byte — reads,
+writes, and every current consumer behave exactly as before. They are removed
+in favor of an immutable, constant-backed equivalent at the next major
+(`REMOVED-IN: 2.0.0`). Until then this is a deprecation *window*: migrate now,
+no rush, no breakage.
+
+Use the non-mutating read API instead (not deprecated):
+
+| Instead of | Use |
+| --- | --- |
+| `StandardColors::$red` | `StandardColors::fromIndex(1)` or `StandardColors::all()[1]` |
+| `StandardColors::$brightBlack` | `StandardColors::fromIndex(8)` |
+| enumerating the palette | `StandardColors::all()` (indexed 0–15) · `StandardColors::catalog()` (names) |
+| a private/global override table | build your own `array` from `all()` — the `Color` values are immutable, so a local array is already isolated |
+| constructing fresh standard colors | the pure factories `Color::ansi(N)`, `Color::true(r,g,b)` |
+
+`fromIndex(int)` is bounds-checked and throws `OutOfBoundsException` outside
+`0..15`. A structural test pins both halves of the window: every deprecated
+property is still a live writable static (no accidental neuter), and the
+**16**-property count here matches the code.
+
 ## License
 
 MIT
