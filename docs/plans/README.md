@@ -5,9 +5,8 @@ slice of the [charmbracelet/x](https://github.com/charmbracelet/x)
 experimental tree. Drafted 2026-05-07 as a follow-up to the breakdown
 in [`UPSTREAM_OPPORTUNITIES.md`](./UPSTREAM_OPPORTUNITIES.md).
 
-> **Running a plan with another chat app?**
-> See [`EXECUTE_PROMPT.md`](./EXECUTE_PROMPT.md) (to execute a plan)
-> or one of the `AUDIT_*_PROMPT.md` files (to run an audit). Each is a
+> **Running an audit with another chat app?**
+> See one of the `AUDIT_*_PROMPT.md` files (to run an audit). Each is a
 > copy-paste-ready prompt template that briefs the target agent on the
 > repo, the conventions, and how to ship one slice at a time. Every
 > prompt also enforces the **commit-author rule**:
@@ -19,26 +18,28 @@ in [`UPSTREAM_OPPORTUNITIES.md`](./UPSTREAM_OPPORTUNITIES.md).
 
 | Prompt | Scope | Output |
 |---|---|---|
-| [`EXECUTE_PROMPT.md`](./EXECUTE_PROMPT.md) | Run any of the plans below, one slice at a time | code PRs |
 | [`AUDIT_DOCS_PROMPT.md`](./AUDIT_DOCS_PROMPT.md) | PHPDoc + READMEs + cross-cutting docs | doc PRs per lib |
 | [`AUDIT_TESTS_PROMPT.md`](./AUDIT_TESTS_PROMPT.md) | green PHPUnit suites + coverage + CI workflows | test PRs per lib + workflow PRs |
 | [`AUDIT_WEBSITE_PROMPT.md`](./AUDIT_WEBSITE_PROMPT.md) | `docs/` site completeness + accessibility + SEO + perf | website PRs |
 | [`AUDIT_QUALITY_PROMPT.md`](./AUDIT_QUALITY_PROMPT.md) | anti-patterns, dead code, security, perf | bug/cleanup PRs per lib + category |
 | [`AUDIT_UPSTREAM_PROMPT.md`](./AUDIT_UPSTREAM_PROMPT.md) | scan upstream Charmbracelet repos for missing features | `UPSTREAM_OPPORTUNITIES.md` updates |
 
+*(archived 2026-10 — this table formerly led with an `EXECUTE_PROMPT.md`
+row; that prompt file was removed from the tree in commit `2518128ae`
+("removing older files") and no live replacement exists.)*
+
 ## Plans
 
 | Plan | Upstream | Lib / location | Effort | Status |
 |---|---|---|---|---|
 | [x-windows](./x-windows.md) | `x/windows` | `sugar-core` (Windows backend) | 4-5 d | drafted |
-| [x-exp-open](./x-exp-open.md) | `x/exp/open` | `sugar-core/Util/Open.php` | 2-3 h | drafted |
-| [x-editor](./x-editor.md) | `x/editor` | `sugar-core/Util/Editor.php` + `sugar-widgets/TextArea` | half day | drafted |
-| [x-ansi](./x-ansi.md) | `x/ansi` | `sugar-core/Util/Ansi.php` (rolling) | rolling | drafted |
-| [x-mosaic](./x-mosaic.md) | `x/mosaic` + `blacktop/go-termimg` + `ratatui/ratatui-image` | new lib `sugar-image` | 5 d (v1) + 5 d (v1.5) | drafted |
-| [x-vt](./x-vt.md) | `x/vt` | new lib `sugar-vterm` | 1-2 w | drafted |
-| [x-vcr](./x-vcr.md) | `x/vcr` | new lib `candy-vcr` | 3-5 d | drafted |
-| [x-xpty](./x-xpty.md) | `x/xpty` | new lib `sugar-pty` (Linux/macOS) | 4-6 d | drafted |
-| [ratatui-widget-mining](./ratatui-widget-mining.md) | `ratatui/ratatui` (mined, not ported) | individual feature additions across sugar-style / sugar-widgets / sugar-cli / sugar-log | ~9 d total | drafted |
+
+*(archived 2026-10 — the 2026-05-07 wave drafted eight further plan
+files — `x-exp-open`, `x-editor`, `x-ansi`, `x-mosaic`, `x-vt`, `x-vcr`,
+`x-xpty`, `ratatui-widget-mining` — since removed from the tree in
+commit `2518128ae` ("removing older files"); their index rows are
+dropped here. The sections below still name them, as they record the
+dependency and sequencing history of the wave as drafted.)*
 
 ## Skipped (no plan)
 
@@ -48,7 +49,7 @@ in [`UPSTREAM_OPPORTUNITIES.md`](./UPSTREAM_OPPORTUNITIES.md).
 | `x/wcwidth` | Already absorbed in `sugar-core/Util/Width.php`. |
 | `x/input` | Already absorbed in `sugar-core/InputReader.php`. |
 | `x/term` | Already absorbed in `sugar-core/Util/Tty.php` (POSIX side). Windows side covered by [x-windows](./x-windows.md). |
-| `ratatui/ratatui` | Architectural mismatch (immediate-mode vs SugarCraft's Elm architecture). Individual widget + layout ideas mined into [ratatui-widget-mining](./ratatui-widget-mining.md) instead. |
+| `ratatui/ratatui` | Architectural mismatch (immediate-mode vs SugarCraft's Elm architecture). Individual widget + layout ideas mined into the `ratatui-widget-mining` plan *(archived 2026-10 — file no longer in tree)* instead. |
 | `blacktop/go-termimg` | Same domain as `x/mosaic` (already planned). Best ideas (dithering, font-size CSI, tmux passthrough, scaling modes, Kitty z-index) folded into `x-mosaic` v1.5. |
 | `ratatui/ratatui-image` | Same domain as `x/mosaic`. Best ideas (Picker pattern, two-tier API, async resize) folded into `x-mosaic` v1 + v1.5. |
 
