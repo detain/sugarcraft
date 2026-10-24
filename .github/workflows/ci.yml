@@ -297,6 +297,8 @@ jobs:
           coverage: none
       - name: Verify docs/lib pages match their generator
         run: php tools/gen-docs.php --check
+      - name: Verify docs site asset references (icons, demo GIFs, local links)
+        run: php tools/check-docs-assets.php
 
   # Guard against SugarCraft-org doc links pinned to the pre-flip default branch.
   # The org default branch moved main→master (see CONTRIBUTING.md "flip every
