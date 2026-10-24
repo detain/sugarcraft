@@ -6,6 +6,7 @@ namespace SugarCraft\Dashboard\Tests\Output;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Output\RenderBar;
 
 /**
@@ -136,5 +137,63 @@ final class RenderBarTest extends TestCase
     {
         $result = RenderBar::renderSegmented(0.5, 5, Color::hex('#0000FF'));
         $this->assertStringContainsString("\x1b", $result);
+    }
+
+    /**
+     * NO_COLOR must strip the color layer entirely: the detected profile
+     * routes through ColorProfile::detect() (Ascii under NO_COLOR), whose
+     * toFg() answers '' — so a coloured bar renders as plain blocks with no
+     * escape bytes at all, not even a lone reset.
+     */
+    public function testNoColorStripsEveryEscapeFromRender(): void
+    {
+        $prior = getenv('NO_COLOR');
+        putenv('NO_COLOR=1');
+        try {
+            $plain = RenderBar::render(
+                1.0,
+                5,
+                '█',
+                '░',
+                Color::hex('#FF0000'),
+                Color::hex('#00FF00'),
+            );
+            $this->assertSame(str_repeat('█', 5), $plain);
+            $this->assertStringNotContainsString("\x1b", $plain);
+
+            $segmented = RenderBar::renderSegmented(0.5, 5, Color::hex('#0000FF'));
+            $this->assertStringNotContainsString("\x1b", $segmented);
+        } finally {
+            putenv($prior === false ? 'NO_COLOR' : 'NO_COLOR=' . $prior);
+        }
+    }
+
+    /**
+     * The default-parameter route IS the detection: calling without a
+     * profile must equal calling with the explicitly detected one, under
+     * whatever environment the suite runs in.
+     */
+    public function testDefaultProfileIsTheDetectedProfile(): void
+    {
+        $detected = ColorProfile::detect();
+
+        $this->assertSame(
+            RenderBar::render(0.5, 4, '█', '░', Color::hex('#FF0000'), null, $detected),
+            RenderBar::render(0.5, 4, '█', '░', Color::hex('#FF0000')),
+        );
+        $this->assertSame(
+            RenderBar::renderSegmented(0.5, 4, Color::hex('#0000FF'), $detected),
+            RenderBar::renderSegmented(0.5, 4, Color::hex('#0000FF')),
+        );
+    }
+
+    /**
+     * An explicit profile still wins over detection — TrueColor pins the
+     * 24-bit SGR bytes regardless of the ambient terminal.
+     */
+    public function testExplicitTrueColorProfileStillEmits24Bit(): void
+    {
+        $result = RenderBar::renderSegmented(0.5, 4, Color::hex('#0000FF'), ColorProfile::TrueColor);
+        $this->assertStringContainsString('38;2;', $result);
     }
 }

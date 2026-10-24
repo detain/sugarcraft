@@ -267,17 +267,30 @@ final class Theme
 
     /**
      * Get the ANSI escape sequence for the foreground color.
+     *
+     * With no explicit tier the escape is emitted for the terminal's DETECTED
+     * capability (`ColorProfile::detect()`), not a hardcoded TrueColor — the
+     * same choke `Plot\Braille\DualSampleGraph::render()` uses, so `NO_COLOR`
+     * downgrades the theme colors to plain text instead of this helper
+     * overriding the user's request. On a COLORTERM=truecolor terminal the
+     * detected tier IS TrueColor and the bytes are unchanged.
      */
-    public function fg(ColorProfile $profile = ColorProfile::TrueColor): string
+    public function fg(?ColorProfile $profile = null): string
     {
+        $profile ??= ColorProfile::detect();
+
         return $this->foreground->toFg($profile);
     }
 
     /**
      * Get the ANSI escape sequence for the background color.
+     *
+     * Null follows the detected capability per {@see fg()}.
      */
-    public function bg(ColorProfile $profile = ColorProfile::TrueColor): string
+    public function bg(?ColorProfile $profile = null): string
     {
+        $profile ??= ColorProfile::detect();
+
         return $this->background->toBg($profile);
     }
 

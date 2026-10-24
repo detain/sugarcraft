@@ -24,6 +24,10 @@ final class RenderBar
      * @param string $empty Character for empty portion
      * @param Color|null $filledColor Color for filled portion
      * @param Color|null $emptyColor Color for empty portion
+     * @param ColorProfile|null $profile Colour tier to emit for; null follows
+     *        the terminal's detected capability via `ColorProfile::detect()`
+     *        — the same choke the Plot renderers use, so NO_COLOR strips the
+     *        escapes instead of this helper overriding the user's setting.
      * @return string Rendered bar
      */
     public static function render(
@@ -33,35 +37,41 @@ final class RenderBar
         string $empty = '░',
         ?Color $filledColor = null,
         ?Color $emptyColor = null,
+        ?ColorProfile $profile = null,
     ): string {
         if ($width <= 0) {
             return '';
         }
 
+        $profile ??= ColorProfile::detect();
         $percentage = max(0.0, min(1.0, $percentage));
         $filledWidth = (int) round($percentage * $width);
         $emptyWidth = $width - $filledWidth;
 
         $result = '';
 
-        // Add filled portion with color
+        // Add filled portion with color; when the profile carries no colour
+        // (NO_COLOR ⇒ Ascii, where toFg() answers '') emit neither the open
+        // nor its reset — a lone SGR 0 would contradict the user's request.
         if ($filledWidth > 0) {
-            if ($filledColor !== null) {
-                $result .= $filledColor->toFg(ColorProfile::TrueColor);
+            $open = $filledColor !== null ? $filledColor->toFg($profile) : '';
+            if ($open !== '') {
+                $result .= $open;
             }
             $result .= str_repeat($filled, $filledWidth);
-            if ($filledColor !== null) {
+            if ($open !== '') {
                 $result .= "\x1b[0m";
             }
         }
 
         // Add empty portion with color
         if ($emptyWidth > 0) {
-            if ($emptyColor !== null) {
-                $result .= $emptyColor->toFg(ColorProfile::TrueColor);
+            $open = $emptyColor !== null ? $emptyColor->toFg($profile) : '';
+            if ($open !== '') {
+                $result .= $open;
             }
             $result .= str_repeat($empty, $emptyWidth);
-            if ($emptyColor !== null) {
+            if ($open !== '') {
                 $result .= "\x1b[0m";
             }
         }
@@ -80,16 +90,21 @@ final class RenderBar
      * @param float $percentage 0.0 to 1.0
      * @param int $width Total width in cells
      * @param Color|null $color Color for the bar
+     * @param ColorProfile|null $profile Colour tier to emit for; null follows
+     *        the terminal's detected capability via `ColorProfile::detect()`.
      * @return string Rendered bar
      */
     public static function renderSegmented(
         float $percentage,
         int $width,
         ?Color $color = null,
+        ?ColorProfile $profile = null,
     ): string {
         if ($width <= 0) {
             return '';
         }
+
+        $profile ??= ColorProfile::detect();
 
         $percentage = max(0.0, min(1.0, $percentage));
         $blocks = ['░', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
@@ -97,8 +112,10 @@ final class RenderBar
         $fullBlocks = (int) floor($percentage * $width * 8);
         $result = '';
 
-        if ($color !== null) {
-            $result .= $color->toFg(ColorProfile::TrueColor);
+        // Same open/reset pairing law as render(): no colour tier, no SGR bytes.
+        $open = $color !== null ? $color->toFg($profile) : '';
+        if ($open !== '') {
+            $result .= $open;
         }
 
         for ($i = 0; $i < $width; $i++) {
@@ -106,7 +123,7 @@ final class RenderBar
             $result .= $blocks[$blockIndex];
         }
 
-        if ($color !== null) {
+        if ($open !== '') {
             $result .= "\x1b[0m";
         }
 

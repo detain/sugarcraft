@@ -55,7 +55,7 @@ composer require sugarcraft/sugar-dashboard
 | `Style` | Terminal styling (inline foreground/background Color slots) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Style` (padding/margin/borders) | `fg()`, `bg()`, `bold()`, etc. |
 | `StyleParser` | Parses `[text](fg:red,bg:blue)` into Dash Cell arrays — sugar-dashboard SSOT, NOT drop-in compatible with `\SugarCraft\Style\StyleParser` | |
 | `Color` | Backward-compat alias for `\SugarCraft\Core\Util\Color` (true duplicate, replaced by `class_alias` shim — prefer Core import in new code) | |
-| `Theme` | Pre-defined theme palettes (10 colour slots + helpers) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Theme` (13 slots, readonly properties, immutable `with*()` builders, no render helpers) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
+| `Theme` | Pre-defined theme palettes (10 colour slots + helpers; `fg()`/`bg()` emit at the detected capability, `NO_COLOR` → empty string) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Theme` (13 slots, readonly properties, immutable `with*()` builders, no render helpers) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
 
 > **Dual-SSOT note.** Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `sugar-style`/`sugar-core`/`sugar-vterm`. The two families have distinct design lineages and the API shapes diverge. Only `Color` was a true duplicate and is now a `class_alias` to `\SugarCraft\Core\Util\Color`. See `CALIBER_LEARNINGS.md` entries `[pattern:dual-foundation-ssot]`, `[pattern:dual-style-ssot]`, `[pattern:dual-theme-ssot]`, `[pattern:dual-rect-models]`, `[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]`.
 
@@ -638,7 +638,7 @@ foreach ($procs as $row => $p) {
 | Type | Description | Key Methods |
 |------|-------------|-------------|
 | `Truncate` | String truncation with ANSI awareness |
-| `RenderBar` | Bar rendering helper |
+| `RenderBar` | Bar rendering helper — colour follows the detected terminal capability (`?ColorProfile` parameter; `NO_COLOR` strips every escape) |
 | `WrapCells` | Cell-aware text wrapping |
 
 ## Module Namespace (Module Interface)
