@@ -16,12 +16,12 @@ tests — use fixtures.
   ProgramSimulator's message dispatch, model update, and view capture.
 
 ### 2026-05-28 — ProgramSimulator drives tea programs via scripted input
-Pattern: Use `ProgramSimulator::for($program)->send(...)->run()` to drive TEA programs deterministically without real I/O. Chain multiple `->send()` calls for complex input sequences. Override `withFakeCmdRunner()` to intercept side-effecting commands.
+Pattern: Use `ProgramSimulator::for($program)->send(...)->run()` to drive TEA programs deterministically without real I/O. Chain multiple `->send()` calls for complex input sequences. Set `withFakeCmdRunner()` to decide the message injected per Cmd — it does NOT stop execution; add `withRealCmdRunner(false)` for capture-only (truth-flipped 2026-10-23, docs-fix-1023).
 Anti-pattern: Don't introduce real stdin/stdout in self-tests — use memory streams and fixtures instead.
 Source: step-04 ai/sugar-testing-new
 
 ### 2026-05-28 — assertGoldenAnsi auto-creates golden files when UPDATE_GOLDENS=1
-Pattern: First run with `UPDATE_GOLDENS=1` to scaffold a `.golden` fixture; subsequent runs assert byte-exact match. Golden files live in `tests/fixtures/`.
+Pattern: First run with `UPDATE_GOLDENS=1` to scaffold a `.golden` fixture; subsequent runs assert byte-exact match. The flag is CREATE-ONLY — a mismatching existing golden still fails and is never rewritten (delete to re-baseline). Golden files live in `tests/fixtures/`.
 Anti-pattern: Don't commit golden files that capture non-deterministic output (timestamps, entropy).
 Source: step-04 ai/sugar-testing-new
 

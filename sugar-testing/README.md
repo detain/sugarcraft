@@ -14,28 +14,32 @@ simulation.
 
 - **`ProgramSimulator`** — drives a `Program` with scripted input, captures model/view/cmds
 - **`ScriptedInput`** — fluent builder for message sequences (`->key('q')->enter()`)
-- **Snapshot assertions** — `assertGoldenAnsi`, `assertCellGrid`, `assertAnsiEquals`
-- **`GoldenFile`** — load/save helper for `.golden` fixture files
+- **Snapshot assertions** — `assertGoldenAnsi`, `assertCellGrid`, `assertAnsiEquals`, `assertViewIdempotent`
+- **`GoldenFile`** — load/save helper for `.golden` fixture files (`resolve()` refuses traversal outside the base directory)
+- **`Graphics\`** — inline-image stream assertions (`KittyStream`, `Iterm2Stream`, `SixelStream`, `PixelGrid`, `Mode`, `MalformedGraphicsException`) — consumed by sugar-image
+- **`LoopPin`** — pins the shared ReactPHP loop to `StreamSelectLoop` so safety timers keep their real deadlines (see below)
 - **`TapeRecorder`** — emits VHS-compatible `.tape` files for demo rendering
 
 ## Quickstart
 
 ```php
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Testing\ProgramSimulator;
 use SugarCraft\Testing\Input\ScriptedInput;
 use SugarCraft\Testing\Snapshot\Assertions;
 
-// Build a scripted session and run the simulator.
-$sim = ProgramSimulator::for($program)
+// Build a scripted session and run the simulator; run() returns a TestResult.
+$result = ProgramSimulator::for($program)
     ->send(new KeyMsg(KeyType::Char, 'a'))
     ->send(new KeyMsg(KeyType::Enter))
     ->run();
 
 // Assert the view output matches the golden file.
-Assertions::assertGoldenAnsi(__DIR__ . '/fixtures/counter.golden', $sim->view);
+Assertions::assertGoldenAnsi(__DIR__ . '/fixtures/counter.golden', $result->view);
 
 // Inspect the final model state.
-$counter = $sim->model; // CounterModel with updated count
+$counter = $result->model; // CounterModel with updated count
 ```
 
 ## Requirements
@@ -61,14 +65,19 @@ $sim = ProgramSimulator::for($program);
 // Enqueue messages (fluent).
 $sim->send(new KeyMsg(...))->send(new KeyMsg(...));
 
-// Override the cmd runner to capture instead of executing side effects.
+// Provide the fake runner that decides the injected message for each Cmd;
+// the REAL Cmd closures still execute for their side effects (counters,
+// files, sockets) unless you also call withRealCmdRunner(false).
 $sim->withFakeCmdRunner(fn($cmd) => null);
+
+// Capture-only mode: cmds are collected in $result->cmds and never executed.
+$sim->withRealCmdRunner(false);
 
 // Run the session and get the result.
 $result = $sim->run();
 echo $result->view;   // Last view() output
 echo $result->model;  // Final model state
- echo $result->output; // Concatenated view() output across steps
+echo $result->output; // Concatenated view() output across steps
 ```
 
 ### Assertions
@@ -82,7 +91,56 @@ Assertions::assertCellGrid($expected2DArray, $buffer);
 
 // Byte-exact ANSI comparison with readable diff on failure.
 Assertions::assertAnsiEquals("\x1b[1;32mHello\x1b[0m", $actual);
+
+// Render purity: view() must be idempotent and must not mutate the model.
+Assertions::assertViewIdempotent($model);
 ```
+
+Golden comparison is BYTE-EXACT — no SGR stripping and no line-1 header skip
+(machine-stamped golden headers are a sugar-dash convention, handled by that
+lib's own comparator). A golden here must be byte-stable across machines.
+`UPDATE_GOLDENS=1` is CREATE-ONLY: it writes a missing golden, but an existing
+golden that differs still fails and is never rewritten — delete the file to
+re-baseline deliberately.
+
+### GoldenFile
+
+```php
+// Load (null when missing) / save; save creates parent dirs and accepts an
+// empty golden (0 bytes is a legal pin for a silent renderer).
+$expected = GoldenFile::load('/abs/path/tests/fixtures/view.golden');
+GoldenFile::save('/abs/path/tests/fixtures/view.golden', $actual);
+
+// Fixtures-relative path builder with a traversal guard: the result is
+// anchored at <baseDir>/fixtures and anything escaping it throws.
+$path = GoldenFile::resolve(__DIR__, 'view.golden');
+```
+
+### Graphics stream assertions
+
+`SugarCraft\Testing\Graphics\*` decodes the three inline-image protocols back
+into structured images so tests can assert on what a renderer transmitted —
+the parse-side mirror (inverse) of sugar-image's renderers (used by its
+suite):
+
+```php
+use SugarCraft\Testing\Graphics\{GraphicsAssertions, Iterm2Stream, KittyStream, Mode, SixelStream};
+
+// Decode into an inspectable stream object with typed accessors.
+$kitty  = KittyStream::decode($bytes)->image();   // png(), cols(), rows(), id()…
+$sixel  = SixelStream::decode($bytes);            // grid(): PixelGrid, palette()
+$iterm  = Iterm2Stream::decode($bytes);           // payload(), png(), params()
+$mode   = Mode::detect($bytes);                   // which protocol it introduces
+
+// One-shot assertions over a raw stream:
+GraphicsAssertions::assertRendersTo($bytes, Mode::Kitty, $expectedGrid, tolerance: 0);
+GraphicsAssertions::assertInlineImageDimensions($bytes, Mode::Sixel, 64, 32);
+GraphicsAssertions::assertProtocolRoundTrip($bytes, Mode::Iterm2);
+```
+
+Pixel materialisation goes through GD; tests that need pixels skip where
+ext-gd is absent. Malformed streams raise `MalformedGraphicsException` with a
+precise reason (bad parameter, missing introducer, unterminated payload…).
 
 ### ScriptedInput
 
@@ -96,6 +154,14 @@ $input = ScriptedInput::new()
     ->key('q')
     ->build();
 ```
+
+Symbolic builders (`key()`, `arrow()`, `enter()`, …) produce the DECODED message
+a keyboard press becomes — `arrow('down')` is a `KeyType::Down` message, not bytes.
+`bytes()` carries the real WIRE form instead (arrow keys as `ESC [ C`). Never script
+an arrow as the literal `→` glyph: a UTF-8 arrow is plain text — it takes the
+paste/IME path and decodes as character input, never as `KeyType::Down`. (A PTY
+harness driving a program from outside must send the `ESC [ C` bytes for the same
+reason.)
 
 Terminal-shaped input is decoded by sugar-core's real `InputReader` — the parser
 `Program` reads stdin with — so a script sees what the live runtime delivers:

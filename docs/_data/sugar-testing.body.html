@@ -23,13 +23,13 @@ foreach ($script-&gt;build() as $msg) {
 $result = $sim-&gt;run();                         // TestResult: model, view, cmds, output
 
 Assertions::assertGoldenAnsi(__DIR__ . '/fixtures/counter.golden', $result-&gt;view);
-echo "Final count: " . $result-&gt;model-&gt;count;</code></pre>
+echo "Final count: " . echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
 
     <h3 style="margin-top: 32px;">ProgramSimulator</h3>
     <div class="feature-grid">
       <div class="feature"><strong>for(Model|Program)</strong><span>Factory: wrap a Program, or a bare Model in a default Program, for deterministic testing.</span></div>
       <div class="feature"><strong>send(Msg)</strong><span>Fluent message enqueue — chain multiple sends.</span></div>
-      <div class="feature"><strong>withFakeCmdRunner()</strong><span>Intercept commands instead of executing them.</span></div>
+      <div class="feature"><strong>withFakeCmdRunner()</strong><span>Decide the message injected for each Cmd; the real closure still runs unless you also call withRealCmdRunner(false).</span></div>
       <div class="feature"><strong>run()</strong><span>Drain the queue, return TestResult with model/view/cmds/output. Subscription output is delivered right after the message that triggered it, none is dropped, and run() can be called again.</span></div>
     </div>
 
@@ -43,7 +43,7 @@ echo "Final count: " . $result-&gt;model-&gt;count;</code></pre>
 
     <h3 style="margin-top: 32px;">Assertions</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>assertGoldenAnsi</strong><span>Snapshot test — auto-creates golden on UPDATE_GOLDENS=1.</span></div>
+      <div class="feature"><strong>assertGoldenAnsi</strong><span>Byte-exact snapshot test — UPDATE_GOLDENS=1 creates a missing golden (create-only; a mismatch never rewrites).</span></div>
       <div class="feature"><strong>assertCellGrid</strong><span>Cell-by-cell diff for Buffer-based renderers.</span></div>
       <div class="feature"><strong>assertAnsiEquals</strong><span>Byte-exact ANSI comparison with readable ESC diff.</span></div>
     </div>
@@ -80,7 +80,7 @@ echo "Final count: " . $result-&gt;model-&gt;count;</code></pre>
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>ProgramSimulator</td><td>for(Model|Program): self</td><td>Factory: wrap a Program or a bare Model</td></tr>
 <tr><td>ProgramSimulator</td><td>send(Msg): self</td><td>Fluent message enqueue</td></tr>
-<tr><td>ProgramSimulator</td><td>withFakeCmdRunner(callable): self</td><td>Intercept commands</td></tr>
+<tr><td>ProgramSimulator</td><td>withFakeCmdRunner(callable): self</td><td>Per-Cmd injected-message hook (execution unchanged)</td></tr>
 <tr><td>ProgramSimulator</td><td>run(): TestResult</td><td>Drain queue, return result</td></tr>
 <tr><td>ScriptedInput</td><td>new() / key() / namedKey() / enter() / paste(string) / bytes(string ...$reads) / withSanitizePaste(bool) / build()</td><td>Scripted terminal input</td></tr>
 <tr><td>TestResult</td><td>model: object</td><td>Final model after all messages</td></tr>
