@@ -19,6 +19,16 @@ declare(strict_types=1);
  *     so an `href="lib/other.html"` inside a body resolves to `lib/lib/…` and
  *     404s (the sibling-page convention is a bare `other.html`).
  *  d) the homepage VHS-demos stat numeral vs the count of `.vhs/*.gif` files.
+ *  e) demo-GIF imgs on the generated detail pages losing their onerror crutch
+ *     (or being hand-doubled) — every `<img>` whose src path ends in `.gif` on
+ *     a `docs/lib/*.html` page must carry EXACTLY ONE `onerror=` attribute.
+ *     The generator guarantees this (`guarantee_demo_gif_onerror`,
+ *     tools/gen-docs.php), so the leg is green by construction — its job is to
+ *     catch a generator regression or a hand-edit before pages.yml publishes.
+ *  f) the search affordance on chrome-bearing detail pages: a page that carries
+ *     the shared nav must also carry the visible trigger (`id="search-trigger"`),
+ *     the modal DOM (`id="search-modal"`) and the `search.js` include. Redirect
+ *     stubs (no nav) are out of scope — they render no chrome at all.
  *
  * Existence for (b)/(d) is measured on the filesystem: the CI job runs on a
  * fresh checkout, so a tracked file IS a file on disk, and this avoids
@@ -46,7 +56,77 @@ final class CheckDocsAssets
             self::demoGifRefs($root),
             self::localLinks($root),
             self::vhsStat($root),
+            self::demoGifCrutches($root),
+            self::searchAffordance($root),
         );
+    }
+
+    /**
+     * (e) every demo-GIF <img> on a generated detail page carries exactly one
+     * onerror fallback crutch. Qualification mirrors the generator exactly: a
+     * tag is a demo GIF when its src path (query/fragment stripped, lowercase)
+     * ends in .gif — so chrome near-misses (icon PNGs, Codecov SVGs, a slug
+     * NAMED gifview) can never false-fire, and non-gif imgs are nobody's
+     * business. "Exactly one" covers both directions: the 122 crutches the
+     * generator injects AND sugar-dashboard's 140 hand-authored ones must not
+     * be doubled, and an injected one must not go missing.
+     *
+     * @return list<string>
+     */
+    public static function demoGifCrutches(string $root): array
+    {
+        $findings = [];
+        foreach (glob("$root/docs/lib/*.html") ?: [] as $file) {
+            $html = (string) file_get_contents($file);
+            preg_match_all('~<img\b[^>]*>~i', $html, $tags);
+            foreach ($tags[0] as $tag) {
+                if (preg_match('~\bsrc="([^"]*)"~i', $tag, $src) !== 1) {
+                    continue;
+                }
+                $path = strtolower((string) (preg_split('/[?#]/', $src[1], 2)[0] ?? ''));
+                if (!str_ends_with($path, '.gif')) {
+                    continue;
+                }
+                $n = preg_match_all('~\bonerror\s*=~i', $tag);
+                if ($n !== 1) {
+                    $findings[] = 'chrome: ' . self::relative($root, $file)
+                        . ' gif img src="' . $src[1] . '" carries ' . $n . ' onerror attribute(s) (expected exactly 1)';
+                }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * (f) chrome-bearing detail pages carry the complete search affordance:
+     * the visible trigger button, the modal DOM it opens, and the script that
+     * binds them. Scope is keyed on the shared nav (`<div class="nav-links">`)
+     * so the 52 redirect stubs — which ship no chrome by design — are excluded
+     * without a name-based special case.
+     *
+     * @return list<string>
+     */
+    public static function searchAffordance(string $root): array
+    {
+        $findings = [];
+        foreach (glob("$root/docs/lib/*.html") ?: [] as $file) {
+            $html = (string) file_get_contents($file);
+            if (!str_contains($html, '<div class="nav-links">')) {
+                continue;
+            }
+            foreach ([
+                'search trigger (id="search-trigger")' => 'id="search-trigger"',
+                'search modal (id="search-modal")'     => 'id="search-modal"',
+                'search script (../js/search.js)'       => 'src="../js/search.js"',
+            ] as $what => $needle) {
+                if (!str_contains($html, $needle)) {
+                    $findings[] = 'chrome: ' . self::relative($root, $file) . ' has no ' . $what;
+                }
+            }
+        }
+
+        return $findings;
     }
 
     /**
@@ -238,6 +318,6 @@ if (PHP_SAPI === 'cli' && realpath((string) ($argv[0] ?? '')) === realpath(__FIL
         exit(1);
     }
 
-    fwrite(STDOUT, "ok: icons, demo GIFs, local links and the VHS stat are all in sync\n");
+    fwrite(STDOUT, "ok: icons, demo GIFs, local links, the VHS stat and page chrome are all in sync\n");
     exit(0);
 }

@@ -32,6 +32,9 @@ final class CheckDocsAssetsTest extends TestCase
 
     private const RAW = 'https://raw.githubusercontent.com/detain/sugarcraft/master/';
 
+    /** The exact crutch string the generator's DEMO_GIF_ONERROR guarantees. */
+    private const GIF_CRUTCH = 'onerror="this.parentElement.style.display=\'none\'"';
+
     /** 1×1 transparent PNG (base64), reused for every placeholder asset. */
     private const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M+wAAQAAv9uwSUNAAAAAElFTkSuQmCC';
 
@@ -167,6 +170,89 @@ final class CheckDocsAssetsTest extends TestCase
         $this->assertSame('css/style.css', \CheckDocsAssets::localTarget('css/style.css'));
     }
 
+    public function testAGifImgMissingItsCrutchOnALibPageIsNamed(): void
+    {
+        $root = $this->makeCleanFixture();
+        $this->put("$root/docs/lib/alpha.html", str_replace(
+            ' ' . self::GIF_CRUTCH,
+            '',
+            (string) file_get_contents("$root/docs/lib/alpha.html"),
+        ));
+
+        $findings = \CheckDocsAssets::derive($root);
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('docs/lib/alpha.html gif img', $findings[0]);
+        $this->assertStringContainsString('carries 0 onerror attribute(s)', $findings[0]);
+    }
+
+    public function testADoubledGifCrutchOnALibPageIsNamed(): void
+    {
+        $root = $this->makeCleanFixture();
+        $this->put("$root/docs/lib/alpha.html", str_replace(
+            self::GIF_CRUTCH,
+            self::GIF_CRUTCH . ' ' . self::GIF_CRUTCH,
+            (string) file_get_contents("$root/docs/lib/alpha.html"),
+        ));
+
+        $findings = \CheckDocsAssets::derive($root);
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('carries 2 onerror attribute(s)', $findings[0]);
+    }
+
+    /**
+     * The qualification mirror of the generator: a gif src that is uppercase
+     * or carries a query string is still a demo GIF (the crutch leg fires), and
+     * once crutched it falls silent — while non-gif imgs (the icon PNG in the
+     * clean fixture) are never demanded. Without the query/case arm, a
+     * lower-casing, query-stripping regression would look identical on the
+     * bare `.gif` fixture shape.
+     */
+    public function testGifQualificationFollowsSrcPathNotSpelling(): void
+    {
+        $root = $this->makeCleanFixture();
+        $this->put("$root/docs/lib/alpha.html", str_replace(
+            '</body>',
+            '<img src="https://example.com/x.GIF?v=1#s" alt=""></body>',
+            (string) file_get_contents("$root/docs/lib/alpha.html"),
+        ));
+
+        $this->assertCount(1, $this->filter($root, 'gif img src="https://example.com/x.GIF?v=1#s" carries 0'));
+    }
+
+    public function testAChromePageMissingAnySearchAffordancePartIsNamed(): void
+    {
+        foreach ([
+            '<button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">Search</button>' => 'no search trigger',
+            '<div id="search-modal" class="search-modal" aria-hidden="true"></div>' => 'no search modal',
+            '<script src="../js/search.js" defer></script>' => 'no search script',
+        ] as $fragment => $expectation) {
+            $root = $this->makeCleanFixture();
+            $this->put("$root/docs/lib/alpha.html", str_replace(
+                $fragment,
+                '',
+                (string) file_get_contents("$root/docs/lib/alpha.html"),
+            ));
+
+            $findings = \CheckDocsAssets::derive($root);
+            $this->assertCount(1, $findings, "removing [$expectation] must produce exactly one finding");
+            $this->assertStringContainsString('docs/lib/alpha.html has ' . $expectation, $findings[0]);
+        }
+    }
+
+    /**
+     * Negative control for the affordance leg's scoping: a redirect stub (no
+     * nav chrome at all) must NOT be demanded — legs keyed on "page has nav"
+     * skip it, so the 52 stubs never false-fire the 62-page chrome contract.
+     */
+    public function testAChromelessRedirectStubIsOutOfAffordanceScope(): void
+    {
+        $root = $this->makeCleanFixture();
+        $this->put("$root/docs/lib/beta.html", '<!doctype html><html lang="en"><head>'
+            . "<title>Moved: beta is now alpha</title>\n</head><body><p>moved</p></body></html>\n");
+
+        $this->assertSame([], \CheckDocsAssets::derive($root));
+    }
+
     private static function png(): string
     {
         $bytes = base64_decode(self::PNG_B64, true);
@@ -209,9 +295,22 @@ final class CheckDocsAssetsTest extends TestCase
             . '<img loading="lazy" src="https://sugarcraft.invalid/static/chrome.gif" alt="">'
             . '<img src="' . self::RAW . 'alpha/.vhs/d.gif" alt="">'
             . '</body></html>');
+        // A chrome-bearing detail page, mirroring the shape the generator
+        // guarantees: shared nav with the search trigger, the modal DOM, a
+        // crutched demo-GIF img and the search.js include. The search.css/js
+        // and index assets it references exist so the local-links leg stays
+        // green and the new legs' clean-fixture arm is not vacuous.
+        $this->put("$root/docs/css/search.css", '/* fixture */');
+        $this->put("$root/docs/js/search.js", '/* fixture */');
+        $this->put("$root/docs/js/search-index.json", '[]');
         $this->put("$root/docs/lib/alpha.html", '<html><body>'
+            . '<nav><div class="nav-links">'
+            . '<button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">Search</button>'
+            . '<a href="../index.html">home</a></div></nav>'
             . '<img src="../img/icons/alpha.png" alt="">'
-            . '<a href="../index.html">home</a>'
+            . '<img src="' . self::RAW . 'alpha/.vhs/d.gif" alt="demo" ' . self::GIF_CRUTCH . '>'
+            . '<div id="search-modal" class="search-modal" aria-hidden="true"></div>'
+            . '<script src="../js/search.js" defer></script>'
             . '</body></html>');
 
         return $root;
