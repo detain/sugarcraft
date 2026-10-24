@@ -6,7 +6,7 @@
     <title>SugarCraft — terminal UIs for PHP</title>
     <meta name="description" content="SugarCraft — 40 libraries and 22 apps (62 packages) for building beautiful terminal UIs in PHP. MVC-style Model–Update–View runtime, declarative styling, charts, forms, SSH-served apps. Composer-installable. PHP 8.3+. Async on ReactPHP.">
     <meta property="og:title" content="SugarCraft — terminal UIs for PHP">
-    <meta property="og:description" content="40 libraries and 22 apps for building beautiful terminal UIs in PHP. Composer-installable, fiber-driven, async on ReactPHP.">
+    <meta property="og:description" content="40 libraries and 22 apps for building beautiful terminal UIs in PHP. Composer-installable, async on ReactPHP.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sugarcraft.github.io/">
     <meta property="og:image" content="https://sugarcraft.github.io/img/social-preview.png">
@@ -68,7 +68,7 @@
             libraries and twenty-two apps (sixty-two packages total). MVC-style
             Model–Update–View runtime, declarative styling, animation, charts,
             forms, SSH-served apps, telemetry, file managers, an AI chat shell.
-            Composer-installable, PHP 8.3+, fibers, async on ReactPHP.
+            Composer-installable, PHP 8.3+, async on ReactPHP.
         </p>
 
         <div class="cta-row">
@@ -88,8 +88,8 @@
         <div class="stats">
             <div class="stat"><span class="num">40</span><span class="label">libraries</span></div>
             <div class="stat"><span class="num">22</span><span class="label">apps</span></div>
-            <div class="stat"><span class="num">281</span><span class="label">VHS demos</span></div>
-            <div class="stat"><span class="num">PHP 8.3+</span><span class="label">fibers / ReactPHP</span></div>
+            <div class="stat"><span class="num">289</span><span class="label">VHS demos</span></div>
+            <div class="stat"><span class="num">PHP 8.3+</span><span class="label">async / ReactPHP</span></div>
             <div class="stat"><span class="num">MIT</span><span class="label">licensed</span></div>
         </div>
     </div>
@@ -217,9 +217,6 @@
             </a>
 
             <a class="lib-card" href="lib/sugar-cellbuffer.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-cellbuffer/.vhs/demo.gif" alt="">
-                </div>
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/sugar-cellbuffer.png" alt="" aria-hidden="true">
                     <h3>SugarCellbuffer</h3>
@@ -251,7 +248,7 @@
 
             <a class="lib-card" href="lib/sugar-mouse.html">
                 <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/buttons.gif" alt="">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-buttons.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/sugar-mouse.png" alt="" aria-hidden="true">
@@ -416,7 +413,7 @@
 
             <a class="lib-card" href="lib/sugar-vterm.html">
                 <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-vterm/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-vterm/.vhs/snapshot-demo.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/sugar-vterm.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
@@ -427,9 +424,6 @@
             </a>
 
             <a class="lib-card" href="lib/sugar-pty.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-pty/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
-                </div>
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/sugar-pty.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarPty</h3>
@@ -469,15 +463,12 @@
             </a>
 
             <a class="lib-card" href="lib/sugar-constraints.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-constraints/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
-                </div>
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/sugar-constraints.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarConstraints</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-constraints">GitHub →</span>
                 </div>
-                <p class="summary">Constraint-based layout solver — Cassowary simplex + greedy 5-phase fallback. LayoutSolver interface; swap solvers without touching call-sites.</p>
+                <p class="summary">Constraint-based layout solver — a deterministic greedy solver (GreedySolver) behind a one-method LayoutSolver interface; the deprecated CassowarySolver name delegates to it. Swap strategies without touching call-sites.</p>
             </a>
 
             <a class="lib-card" href="lib/sugar-panels.html">
@@ -635,9 +626,6 @@
             </a>
 
             <a class="lib-card" href="lib/sugar-testing.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-testing/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
-                </div>
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/sugar-testing.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarTesting</h3>
@@ -746,9 +734,6 @@
             </a>
 
             <a class="lib-card" href="lib/candy-mail.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mail/.vhs/showcase.gif" alt="">
-                </div>
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/candy-mail.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyMail</h3>
@@ -758,9 +743,6 @@
             </a>
 
             <a class="lib-card" href="lib/candy-git-server.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-git-server/.vhs/config.gif" alt="">
-                </div>
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/candy-git-server.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyGitServer</h3>
@@ -802,7 +784,7 @@
                     <h3>CandyCode</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-code">GitHub →</span>
                 </div>
-                <p class="summary">TUI AI coding agent. 7 providers (OpenAI, Anthropic, Claude Code, SGLang, Bedrock, Vertex, custom), built-in tools, skills, hooks, sub-agents, MCP, and SQLite session history.</p>
+                <p class="summary">TUI AI coding agent. Nine providers (OpenAI, Anthropic, Claude Code, Codex, Gemini, SGLang, Bedrock, Vertex, custom), built-in tools, skills, hooks, sub-agents, MCP, and SQLite session history.</p>
             </a>
 
             <a class="lib-card" href="lib/candy-code-web.html">
@@ -815,9 +797,6 @@
             </a>
 
             <a class="lib-card" href="lib/candy-vcr.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-vcr/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
-                </div>
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/candy-vcr.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyVcr</h3>
@@ -839,9 +818,6 @@
             </a>
 
             <a class="lib-card" href="lib/candy-sql.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-sql/.vhs/play.gif" alt="">
-                </div>
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/candy-sql.png" alt="" aria-hidden="true">
                     <h3>CandySql</h3>
@@ -883,18 +859,15 @@
                     <h3>CandyGifView</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-gifview">GitHub →</span>
                 </div>
-                <p class="summary">Terminal GIF + .ansi-art viewer CLI — sizes to the viewport, plays in the alternate screen (24-bit blocks or luminance ramp) on top of sugar-animation. Port of gifterm.</p>
+                <p class="summary">Terminal GIF viewer CLI — sizes to the viewport, plays in the alternate screen (24-bit blocks or luminance ramp) on top of sugar-animation. Antecedent: gifterm.</p>
             </a>
             <a class="lib-card" href="lib/candy-image.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-image/.vhs/candy-image.gif" alt="">
-                </div>
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/candy-image.png" alt="" aria-hidden="true">
                     <h3>CandyImage</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-image">GitHub →</span>
                 </div>
-                <p class="summary">Terminal image viewer CLI — the F-18 chafa-independent front end over sugar-image: protocol auto-detection, sixel/kitty/iterm2/half/quarter/ascii formats, cell sizing, and a --dump-detect that answers "why is my image blank?".</p>
+                <p class="summary">Terminal image viewer CLI — the chafa-independent front end over sugar-image: protocol auto-detection, sixel/kitty/iterm2/half/quarter/ascii formats, cell sizing, and a --dump-detect that answers "why is my image blank?".</p>
             </a>
 
             <a class="lib-card" href="lib/candy-top.html">
@@ -993,12 +966,12 @@
             <div class="pillar">
                 <div class="icon">⚡</div>
                 <h3>Async-first</h3>
-                <p>ReactPHP event loop under the hood. Cmds run as fibers; the render thread never blocks on I/O.</p>
+                <p>ReactPHP event loop under the hood. Cmds are closures dispatched on the loop; the render thread never blocks on I/O.</p>
             </div>
             <div class="pillar">
                 <div class="icon">📐</div>
                 <h3>Immutable values</h3>
-                <p>Every Model, Style, Border, Theme is a readonly DTO. <code>with*()</code> returns a new instance — no hidden mutations.</p>
+                <p>Immutable value objects across the fleet — <code>with*()</code> returns a new instance. sugar-style carries a documented naming exception (bare bold()/fg() builders over a private with()).</p>
             </div>
             <div class="pillar">
                 <div class="icon">🧪</div>
@@ -1008,7 +981,7 @@
             <div class="pillar">
                 <div class="icon">🎨</div>
                 <h3>One styling vocabulary</h3>
-                <p>Every package speaks <code>Sprinkles\Style</code>. Mix SugarMarkdown output into a SugarWidgets Viewport, wrap that with a SugarStyle Border — they all compose.</p>
+                <p>Every package speaks <code>SugarCraft\Style\Style</code>. Mix SugarMarkdown output into a SugarWidgets Viewport, wrap that with a SugarStyle Border — they all compose.</p>
             </div>
             <div class="pillar">
                 <div class="icon">🔐</div>
@@ -1029,7 +1002,7 @@
         <h2>See them run.</h2>
         <p class="lede">
             VHS-recorded GIFs of every interactive demo, regenerated on every
-            push that touches the corresponding source. Two-hundred-eighty-one demos
+            push that touches the corresponding source. Two-hundred-eighty-nine demos
             in total — these are the headliners; click into any library page for
             its full set.
         </p>
@@ -1124,11 +1097,6 @@
                 <h3>CandyGit</h3>
                 <span class="demo-caption">Three-pane git TUI</span>
             </a>
-            <a class="demo-card" href="lib/candy-sql.html">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-sql/.vhs/play.gif" alt="CandySql SQLite browser">
-                <h3>CandySql</h3>
-                <span class="demo-caption">SQLite browser TUI</span>
-            </a>
             <a class="demo-card" href="lib/candy-codetime.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-codetime/.vhs/dashboard.gif" alt="CandyCodetime time tracker">
                 <h3>CandyCodetime</h3>
@@ -1185,7 +1153,7 @@
                 <span class="demo-caption">Terminal color-profile detection</span>
             </a>
             <a class="demo-card" href="lib/sugar-mouse.html">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/buttons.gif" alt="SugarMouse">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-buttons.gif" alt="SugarMouse">
                 <h3>SugarMouse</h3>
                 <span class="demo-caption">Mouse-zone tracking on rendered buttons</span>
             </a>
@@ -1269,7 +1237,7 @@
                     <td class="no">—</td>
                 </tr>
                 <tr>
-                    <td>Async event loop (fibers + ReactPHP)</td>
+                    <td>Async event loop (ReactPHP)</td>
                     <td class="yes">✓</td>
                     <td class="no">partial</td>
                     <td class="no">—</td>

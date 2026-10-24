@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">The chafa-independent terminal image viewer: point <code>candy-image</code> at a PNG/GIF/JPEG and it detects your terminal, picks the best protocol — <code>sixel</code>, <code>kitty</code>, <code>iTerm2</code>, half/quarter blocks, an ANSI character ramp, or the chafa symbol engine — and writes the rendered bytes to stdout. All capability stays in <a href="lib/sugar-image.html">sugar-image</a>; this app is composition only.</p>
+<p class="lede" style="margin-top: 28px;">The chafa-independent terminal image viewer: point <code>candy-image</code> at a PNG/GIF/JPEG and it detects your terminal, picks the best protocol — <code>sixel</code>, <code>kitty</code>, <code>iTerm2</code>, half/quarter blocks, an ANSI character ramp, or the chafa symbol engine — and writes the rendered bytes to stdout. All capability stays in <a href="sugar-image.html">sugar-image</a>; this app is composition only.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-image</code></pre>
@@ -25,7 +25,7 @@ candy-image --animate clip.gif            # sugar-animation playback</code></pre
       <li><a href="https://github.com/sugarcraft/candy-image">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-image/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-image/tree/main/examples">Runnable examples</a></li>
-      <li>Detection + render engine: <a href="lib/sugar-image.html">sugarcraft/sugar-image</a>; animation playback: <a href="lib/sugar-animation.html">sugarcraft/sugar-animation</a>.</li>
+      <li>Detection + render engine: <a href="sugar-image.html">sugarcraft/sugar-image</a>; animation playback: <a href="sugar-animation.html">sugarcraft/sugar-animation</a>.</li>
       <li>The CLI surface was sparked by <a href="https://github.com/hpjansson/chafa">chafa</a> (C); SugarCraft is a native PHP project — this is a composition-only viewer, not a port.</li>
     </ul>
 
@@ -41,16 +41,3 @@ candy-image --animate clip.gif            # sugar-animation playback</code></pre
   </div>
 </section>
 
-<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
-    <div class="container">
-        <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
-        <div class="demo-grid">
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-image/.vhs/candy-image.gif" alt="Render">
-                <h3>Render</h3>
-                <span class="demo-caption">Synthetic PNG through the quarter-block format, then the --dump-detect report.</span>
-            </div>
-        </div>
-    </div>
-</section>

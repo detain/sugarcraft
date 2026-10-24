@@ -23,7 +23,7 @@ foreach ($script-&gt;build() as $msg) {
 $result = $sim-&gt;run();                         // TestResult: model, view, cmds, output
 
 Assertions::assertGoldenAnsi(__DIR__ . '/fixtures/counter.golden', $result-&gt;view);
-echo "Final count: " . echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
+echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
 
     <h3 style="margin-top: 32px;">ProgramSimulator</h3>
     <div class="feature-grid">
