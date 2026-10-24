@@ -42,8 +42,11 @@ use SugarCraft\Forms\Viewport\Viewport;
  *    bare twin is a live fluent setter (title()/nextLabel()/width()/
  *    height()/styles()) — PHP admits one method per name — or, for
  *    RadioPills and the interface itself, the contract binding keeps the
- *    family prefix-spelled. Each carries an in-source NOTE (accessor era)
- *    and must NOT be silently renamed or "fixed".
+ *    family prefix-spelled. The per-exception legs assert the in-source
+ *    NOTE (accessor era) and that the bare twin is still a live setter;
+ *    the bidirectional census leg names any roster row that leaves the
+ *    source. A rename or "fix" therefore fails this guard loudly — the
+ *    NOTE text itself documents why the get* spelling is kept.
  *
  * Legs: bidirectional census==roster discovery (with a sentinel fixture
  * proving the walk is not blind), marked-set equality (stripping a marker
