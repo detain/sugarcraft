@@ -12,10 +12,34 @@ $autoloadCandidates = [
     __DIR__ . '/../../../autoload.php',      // installed under vendor/bin
     __DIR__ . '/../../vendor/autoload.php',  // monorepo dev
 ];
-foreach ($autoloadCandidates as $autoload) {
-    if (file_exists($autoload)) {
-        require $autoload;
-        break;
+
+// DST-1 (guard shape ported from candy-code/candy-top, measured on PHP 8.3.6):
+// when `php candy-scriptui.phar` runs, THIS file is the archive's stub and
+// Phar::running() answers '' in exactly that context, while a bare
+// '/x.phar/entry' path fails is_file()/require for every caller. Two identities
+// cover the two phar shapes — the stub names itself in __FILE__, a
+// require-from-inside names the archive in Phar::running() — and both are
+// addressed the only way that works: a phar:// URI. Inside an archive the
+// packaged vendor is the EXCLUSIVE root (a stray vendor beside the phar must
+// never boot code the frozen archive does not contain), so the candidate walk
+// below is skipped entirely; in every composer-mode checkout both identities
+// are '' and the walk is byte-untouched.
+$archive = \Phar::running(false) !== ''
+    ? 'phar://' . \Phar::running(false)
+    : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+if ($archive !== '') {
+    $pharAutoload = $archive . '/vendor/autoload.php';
+    if (!is_file($pharAutoload)) {
+        \fwrite(\STDERR, "candy-scriptui: the archive has no vendor/autoload.php — the phar was built without a packaged vendor.\n");
+        exit(1);
+    }
+    require $pharAutoload;
+} else {
+    foreach ($autoloadCandidates as $autoload) {
+        if (file_exists($autoload)) {
+            require $autoload;
+            break;
+        }
     }
 }
 // Pre-rename env compatibility (plan_rename.md R4.5): CANDYSHELL_* was this app's // @rename-keep

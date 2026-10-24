@@ -37,6 +37,13 @@ final class Application extends SymfonyApplication
     private const ENV_PREFIX = 'CANDY_SCRIPTUI_';
 
     /**
+     * Sentinel stamp written by tools/build-phar.php when `git describe` found
+     * no reachable scriptui tag. versionString() refuses it as a version —
+     * working-tree noise must not masquerade as a release identity.
+     */
+    public const WORKING_TREE_STAMP = 'dev-build';
+
+    /**
      * The PRIVATE property on {@see \Symfony\Component\Console\Input\ArgvInput}
      * that holds the raw token stream. {@see applyEnvVarFallbackToInput()}
      * reflects into it to prepend env-backed value options so they survive
@@ -59,7 +66,7 @@ final class Application extends SymfonyApplication
 
     public function __construct()
     {
-        parent::__construct('candy-scriptui', $this->versionFromComposer());
+        parent::__construct('candy-scriptui', self::versionString());
         $this->addCommands([
             new StyleCommand(),
             new ChooseCommand(),
@@ -83,7 +90,19 @@ final class Application extends SymfonyApplication
      */
     public function versionFromComposer(): string
     {
-        $json = $this->findRootComposerJson();
+        return self::readComposerVersion();
+    }
+
+    /**
+     * Instance-free core of {@see versionFromComposer()} — the walk reads only
+     * compile-time `__DIR__`, so the phar-aware dispatcher can reach it without
+     * constructing an Application (which would re-enter the constructor's own
+     * versionString() call). The public shape above is byte-preserved for
+     * EnvVarFallbackTest's contract.
+     */
+    private static function readComposerVersion(): string
+    {
+        $json = self::findRootComposerJson();
         if ($json === null) {
             return '0.0.0';
         }
@@ -92,11 +111,70 @@ final class Application extends SymfonyApplication
     }
 
     /**
+     * The version this install reports, phar-aware (DST-1 lineage).
+     *
+     * The old answer walked up from `__DIR__` looking for a composer.json with
+     * a non-empty version field. That walk cannot succeed inside a phar: the
+     * archive ships bin/, src/, lang/ and vendor/ only (tools/build-phar.php),
+     * and even when a composer.json WAS near, a packaged one would be the
+     * build root's — frozen, lying `dev-master`. So under an archive the
+     * manifest stamp written at build time is the ONLY truth, and it wins;
+     * `dev-build` names working-tree noise rather than a version and falls
+     * through fail-closed, exactly like candy-code's Version::fromPharMetadata().
+     * Outside an archive the dispatcher answers whatever versionFromComposer()
+     * answers — byte-identical to the pre-phar contract (pinned by
+     * EnvVarFallbackTest): in a monorepo checkout the walk reaches the root
+     * composer.json, and inside an archive it would land on `0.0.0` because
+     * the phar ships no composer.json at all (the dead answer the stamp
+     * overrides).
+     */
+    public static function versionString(): string
+    {
+        $archive = self::hostArchive();
+        if ($archive !== '') {
+            try {
+                $metadata = (new \Phar($archive))->getMetadata();
+            } catch (\Throwable) {
+                $metadata = null;
+            }
+            if (is_array($metadata)) {
+                $stamp = $metadata['version'] ?? null;
+                if (is_string($stamp) && trim($stamp) !== '' && trim($stamp) !== self::WORKING_TREE_STAMP) {
+                    return trim($stamp);
+                }
+            }
+        }
+
+        return self::readComposerVersion();
+    }
+
+    /**
+     * The real-filesystem path of the phar archive hosting this install, or ''
+     * when this code is not running from an archive (same measured 3-arm law as
+     * the bin guards: Phar::running() inside the archive, a `phar://` __FILE__
+     * prefix, a self-naming `.phar` __FILE__; composer mode is always '').
+     */
+    public static function hostArchive(): string
+    {
+        $running = \Phar::running(false);
+        if ($running !== '') {
+            return $running;
+        }
+
+        $self = __FILE__;
+        if (str_starts_with($self, 'phar://')) {
+            return preg_match('#^phar://(.+\.phar)(?:/|$)#', $self, $m) === 1 ? $m[1] : '';
+        }
+
+        return str_ends_with($self, '.phar') ? $self : '';
+    }
+
+    /**
      * Finds the root composer.json and returns its decoded JSON.
      *
      * @return array<string, mixed>|null Decoded composer.json, or null if not found.
      */
-    private function findRootComposerJson(): ?array
+    private static function findRootComposerJson(): ?array
     {
         $dir = __DIR__;
         while ($dir !== dirname($dir)) {
