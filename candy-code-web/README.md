@@ -240,6 +240,22 @@ question and diff, a rejected call, a queued prompt, Stop, `/clear` through
 mid-turn, a dropped socket resuming from its cursor, and a server restart.
 `PHP_BINARY` and `CANDY_CODE_BIN` override where PHP and the server are.
 
+## Accessor naming (2026-10-24)
+
+The monorepo's bare-accessor convention (no `get*()` wrappers for state that
+is already readable) applies to this package's own surface too — and a census
+of `src-web/` found it already holds: Pinia setup stores expose plain state and
+computed refs, classes use ES `get` accessors, and `defineExpose` surfaces are
+verbs (`focus`, `jumpToEnd`). The `getX()` names that remain here are external
+contracts, not ours to rename: DOM/Web API methods (`getAsFile`, `getItem`,
+`getRandomValues`, `getAttribute`), TanStack Virtual options (`getScrollElement`,
+`getItemKey`, `getVirtualItems`, `getTotalSize`), and Pinia internals
+(`getActivePinia`). TypeScript has no PHP-style name collision (a `getX()` can
+coexist with `x()`), so this side never needed deprecate-and-alias forwarders;
+it needs the opposite discipline — do not mint `getFoo()` twins for state a
+computed or property already reads, and keep any future rename UI-local: wire
+field names mirror `docs/protocol/` and are server-owned truth.
+
 ## Tests
 
 ```sh
