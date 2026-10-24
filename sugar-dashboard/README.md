@@ -795,9 +795,9 @@ The `examples/` directory contains standalone demo files that showcase individua
 
 ## Accessor deprecation (2026-10-24)
 
-Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, 81 `get*()` accessors across 38 classes were renamed to their bare twins. The legacy names remain as byte-identical BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock — they will be removed in sugar-dashboard v2.0.0.
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, 89 `get*()` accessors across 41 classes were renamed to their bare twins (the 2026-10-24 remediation pass added 8 whose names collide with `TreeProvider` members on classes that do not implement that interface). The legacy names remain as byte-identical BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock — they will be removed in sugar-dashboard v2.0.0.
 
-Out of scope (protocol members and non-violations, unchanged): `SizedItem::getInnerSize()` (188 implementations), `Drawable::getRect()` and its implementations, the `TreeProvider` protocol (`getRoots/getChildren/getNode/getDepth/getTotalValue`), and `Address::getChild()` (the bare name `child()` is already taken by the static factory `Address::child()`). Boolean `is*()`/`has*()` predicates are convention-compliant and stay as-is.
+Out of scope (protocol members only, unchanged): `SizedItem::getInnerSize()` (the `SizedItem` interface and its 187 implementations), `Drawable::getRect()` (protocol) and its implementations, and the `TreeProvider` quintet (`getRoots/getChildren/getNode/getDepth/getTotalValue`) — protocol-bound exactly on `ArrayTreeProvider`, the single class implementing that interface; the same names on classes that do **not** implement `TreeProvider` are violations, not protocol members, and the remediation pass swept them (`Boxer::getNode`, `Node::getChildren`, the `PartitionSegment` and `DendrogramNode` `getTotalValue`/`getDepth` pairs, `SunburstSegment::getTotalValue`, `HeatmapCalendar::getTotalValue`). `Address::getChild()` is a documented carve-out: the bare name `child()` is taken by the static factory `Address::child(self, int)` — an honest carve beats a forced rename. Boolean `is*()`/`has*()` predicates are convention-compliant and stay as-is. External consumers (`candy-sql`, `candy-top`, `sugar-charts`) do import sugar-dashboard classes (`Gauge`, `Badge`, `Card`, `BrailleCanvas`, and more); no external call site reaches a renamed accessor, and the BC forwarders carry any such call until v2.0.0.
 
 Internal call sites in `src/` and `examples/` were switched to the bare forms in the same commit.
 
@@ -805,6 +805,7 @@ Internal call sites in `src/` and `examples/` were switched to the bare forms in
 |-----------|-------|------------|-------------|
 | `Components\Calendar` | `HeatmapCalendar` | `getAverageValue()` | `averageValue()` |
 | `Components\Calendar` | `HeatmapCalendar` | `getDataDimensions()` | `dataDimensions()` |
+| `Components\Calendar` | `HeatmapCalendar` | `getTotalValue()` | `totalValue()` |
 | `Components\Card` | `Diff` | `getStats()` | `stats()` |
 | `Components\Feedback` | `LoadingText` | `getCurrentFrame()` | `currentFrame()` |
 | `Components\Feedback` | `LoadingText` | `getFrameAt()` | `frameAt()` |
@@ -853,8 +854,11 @@ Internal call sites in `src/` and `examples/` were switched to the bare forms in
 | `Components\Tree` | `BranchStyle` | `getConnectorChar()` | `connectorChar()` |
 | `Components\Tree` | `BranchStyle` | `getEndConnectorChar()` | `endConnectorChar()` |
 | `Components\Tree` | `BranchStyle` | `getLineChar()` | `lineChar()` |
+| `Components\Tree` | `DendrogramNode` | `getDepth()` | `depth()` |
+| `Components\Tree` | `DendrogramNode` | `getTotalValue()` | `totalValue()` |
 | `Components\Tree` | `DrilldownTree` | `getBreadcrumbItems()` | `breadcrumbItems()` |
 | `Components\Tree` | `DrilldownTree` | `getNavigationStack()` | `navigationStack()` |
+| `Components\Tree` | `SunburstSegment` | `getTotalValue()` | `totalValue()` |
 | `Components\Tree` | `UMLClass` | `getAttributes()` | `attributes()` |
 | `Components\Tree` | `UMLClass` | `getMethods()` | `methods()` |
 | `Components\Tree` | `UMLClass` | `getTemplateParams()` | `templateParams()` |
@@ -866,9 +870,11 @@ Internal call sites in `src/` and `examples/` were switched to the bare forms in
 | `Layout\Boxer` | `Boxer` | `getHeight()` | `height()` |
 | `Layout\Boxer` | `Boxer` | `getItem()` | `item()` |
 | `Layout\Boxer` | `Boxer` | `getModelMap()` | `modelMap()` |
+| `Layout\Boxer` | `Boxer` | `getNode()` | `node()` |
 | `Layout\Boxer` | `Boxer` | `getRoot()` | `root()` |
 | `Layout\Boxer` | `Boxer` | `getWidth()` | `width()` |
 | `Layout\Boxer` | `Node` | `getAddress()` | `address()` |
+| `Layout\Boxer` | `Node` | `getChildren()` | `children()` |
 | `Layout\Boxer` | `Node` | `getHeight()` | `height()` |
 | `Layout\Boxer` | `Node` | `getWidth()` | `width()` |
 | `Layout\Tile` | `BaseTile` | `getName()` | `name()` |
@@ -884,6 +890,8 @@ Internal call sites in `src/` and `examples/` were switched to the bare forms in
 | `Plot\Chart` | `Heatmap` | `getMinValue()` | `minValue()` |
 | `Plot\Chart` | `OHLCPoint` | `getBodySize()` | `bodySize()` |
 | `Plot\Chart` | `OHLCPoint` | `getRange()` | `range()` |
+| `Plot\Chart` | `PartitionSegment` | `getDepth()` | `depth()` |
+| `Plot\Chart` | `PartitionSegment` | `getTotalValue()` | `totalValue()` |
 
 ## License
 

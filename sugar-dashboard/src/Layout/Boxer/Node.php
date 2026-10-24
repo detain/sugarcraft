@@ -115,10 +115,19 @@ final class Node implements Item
     /**
      * @return list<Node>
      */
-    public function getChildren(): array
+    public function children(): array
     {
         return $this->children;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::children()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getChildren(): array { return $this->children(); }
 
     public function isLeaf(): bool
     {

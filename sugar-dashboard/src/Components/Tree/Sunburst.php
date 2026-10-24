@@ -180,7 +180,7 @@ final class Sunburst implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Calculate total value
         $totalValue = 0.0;
         foreach ($this->segments as $segment) {
-            $totalValue += $segment->getTotalValue();
+            $totalValue += $segment->totalValue();
         }
 
         if ($totalValue <= 0) {
@@ -288,7 +288,7 @@ final class Sunburst implements \SugarCraft\Dashboard\Foundation\SizedItem
                     $inSegment = false;
 
                     foreach ($this->segments as $segment) {
-                        $proportion = $segment->getTotalValue() / $totalValue;
+                        $proportion = $segment->totalValue() / $totalValue;
                         $segmentRadius = intval($proportion * $maxRadius);
 
                         if ($distance <= $segmentRadius && $distance > intval($centerDiameter / 2)) {

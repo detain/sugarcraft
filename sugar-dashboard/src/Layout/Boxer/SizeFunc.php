@@ -26,7 +26,7 @@ final class SizeFunc
      */
     public static function even(Node $node, int $totalSize): array
     {
-        $childCount = count($node->getChildren());
+        $childCount = count($node->children());
         if ($childCount === 0) {
             return [];
         }

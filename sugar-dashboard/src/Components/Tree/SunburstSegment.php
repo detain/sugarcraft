@@ -49,12 +49,21 @@ final class SunburstSegment
     /**
      * Calculate total value including children.
      */
-    public function getTotalValue(): float
+    public function totalValue(): float
     {
         $total = $this->value;
         foreach ($this->children as $child) {
-            $total += $child->getTotalValue();
+            $total += $child->totalValue();
         }
         return $total;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::totalValue()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTotalValue(): float { return $this->totalValue(); }
 }

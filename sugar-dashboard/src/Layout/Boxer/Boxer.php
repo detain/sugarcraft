@@ -168,7 +168,7 @@ final class Boxer implements Item, Sizer
             return $root;
         }
 
-        foreach ($root->getChildren() as $child) {
+        foreach ($root->children() as $child) {
             $found = $this->findNode($child, $address);
             if ($found !== null) {
                 return $found;
@@ -283,10 +283,19 @@ final class Boxer implements Item, Sizer
     /**
      * Get the node at a given address.
      */
-    public function getNode(string $address): ?Node
+    public function node(string $address): ?Node
     {
         return $this->findNode($this->root, $address);
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::node()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getNode(string $address): ?Node { return $this->node($address); }
 
     // ─── Persistence ─────────────────────────────────────────────
 

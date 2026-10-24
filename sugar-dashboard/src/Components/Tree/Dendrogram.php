@@ -190,7 +190,7 @@ final class Dendrogram implements \SugarCraft\Dashboard\Foundation\SizedItem
         $chartWidth = $width - 4;
 
         // Calculate tree layout
-        $depth = $this->root->getDepth();
+        $depth = $this->root->depth();
         $levelHeight = max(2, intval($chartHeight / max(1, $depth)));
 
         // Render tree from top to bottom

@@ -35,21 +35,39 @@ final class PartitionSegment
         return $clone;
     }
 
-    public function getTotalValue(): float
+    public function totalValue(): float
     {
         $total = $this->value;
         foreach ($this->children as $child) {
-            $total += $child->getTotalValue();
+            $total += $child->totalValue();
         }
         return $total;
     }
 
-    public function getDepth(): int
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::totalValue()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTotalValue(): float { return $this->totalValue(); }
+
+    public function depth(): int
     {
         $maxChildDepth = 0;
         foreach ($this->children as $child) {
-            $maxChildDepth = max($maxChildDepth, $child->getDepth());
+            $maxChildDepth = max($maxChildDepth, $child->depth());
         }
         return 1 + $maxChildDepth;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::depth()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getDepth(): int { return $this->depth(); }
 }

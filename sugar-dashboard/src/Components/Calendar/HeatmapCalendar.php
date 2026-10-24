@@ -324,7 +324,7 @@ final class HeatmapCalendar implements \SugarCraft\Dashboard\Foundation\SizedIte
     /**
      * Get the total value across all cells.
      */
-    public function getTotalValue(): float
+    public function totalValue(): float
     {
         $total = 0.0;
         foreach ($this->data as $week) {
@@ -334,6 +334,15 @@ final class HeatmapCalendar implements \SugarCraft\Dashboard\Foundation\SizedIte
         }
         return $total;
     }
+
+    /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *     convention; kept only as a BC forwarder. Use
+     *     {@see self::totalValue()} instead. REMOVED-IN: 2.0.0.
+     */
+    public function getTotalValue(): float { return $this->totalValue(); }
 
     /**
      * Get the average value across all cells.

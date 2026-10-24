@@ -26,7 +26,9 @@ use SugarCraft\Dashboard\Components\System\Stopwatch;
 use SugarCraft\Dashboard\Components\System\Terminal;
 use SugarCraft\Dashboard\Components\System\Timer;
 use SugarCraft\Dashboard\Components\Tree\BranchStyle;
+use SugarCraft\Dashboard\Components\Tree\DendrogramNode;
 use SugarCraft\Dashboard\Components\Tree\DrilldownTree;
+use SugarCraft\Dashboard\Components\Tree\SunburstSegment;
 use SugarCraft\Dashboard\Components\Tree\UMLClass;
 use SugarCraft\Dashboard\Foundation\Buffer;
 use SugarCraft\Dashboard\Foundation\Theme;
@@ -42,6 +44,7 @@ use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Dashboard\Plot\Canvas\Canvas;
 use SugarCraft\Dashboard\Plot\Chart\Heatmap;
 use SugarCraft\Dashboard\Plot\Chart\OHLCPoint;
+use SugarCraft\Dashboard\Plot\Chart\PartitionSegment;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -57,6 +60,15 @@ use PHPUnit\Framework\TestCase;
 final class AccessorDeprecationTest extends TestCase
 {
     private const MARKER = 'REMOVED-IN: 2.0.0';
+
+    /**
+     * Names that stay get*() by construction: the bare name is taken
+     * by a different member. Address::child(self, int) is the static
+     * factory, so the getter cannot move there.
+     */
+    private const NAMED_CARVE_OUTS = [
+        'Address::getChild',
+    ];
 
     /**
      * @return array<string, array{0: class-string, 1: string, 2: string, 3: list<mixed>}>
@@ -145,6 +157,14 @@ final class AccessorDeprecationTest extends TestCase
             'Heatmap::getMinValue' => [Heatmap::class, 'getMinValue', 'minValue', []],
             'OHLCPoint::getBodySize' => [OHLCPoint::class, 'getBodySize', 'bodySize', []],
             'OHLCPoint::getRange' => [OHLCPoint::class, 'getRange', 'range', []],
+            'HeatmapCalendar::getTotalValue' => [HeatmapCalendar::class, 'getTotalValue', 'totalValue', []],
+            'DendrogramNode::getDepth' => [DendrogramNode::class, 'getDepth', 'depth', []],
+            'DendrogramNode::getTotalValue' => [DendrogramNode::class, 'getTotalValue', 'totalValue', []],
+            'SunburstSegment::getTotalValue' => [SunburstSegment::class, 'getTotalValue', 'totalValue', []],
+            'Boxer::getNode' => [Boxer::class, 'getNode', 'node', ['0']],
+            'Node::getChildren' => [Node::class, 'getChildren', 'children', []],
+            'PartitionSegment::getDepth' => [PartitionSegment::class, 'getDepth', 'depth', []],
+            'PartitionSegment::getTotalValue' => [PartitionSegment::class, 'getTotalValue', 'totalValue', []],
         ];
     }
 
@@ -183,6 +203,9 @@ final class AccessorDeprecationTest extends TestCase
             BrailleCanvas::class => new BrailleCanvas(8, 8),
             Heatmap::class => new Heatmap([[1, 2], [3, 4]]),
             OHLCPoint::class => new OHLCPoint('x', 1.0, 2.0, 0.5, 1.5),
+            PartitionSegment::class => new PartitionSegment('a', 'A', 10.0),
+            DendrogramNode::class => new DendrogramNode('a', 'A', 10.0),
+            SunburstSegment::class => new SunburstSegment('a', 'A', 10.0),
             BaseTile::class => new BaseTile('t'),
             Tile::class => new Tile('t'),
             Canvas::class => new Canvas(),
@@ -244,7 +267,7 @@ final class AccessorDeprecationTest extends TestCase
     /**
      * Census legs: discovery-first scan of src/ must find exactly the
      * pairs under test, and the README Accessor-deprecation table must
-     * list the same 81 renames (nothing added, nothing dropped).
+     * list the same 89 renames (nothing added, nothing dropped).
      */
     public function testTheSrcCensusFindsExactlyTheTestedPairs(): void
     {
@@ -294,7 +317,7 @@ final class AccessorDeprecationTest extends TestCase
         sort($found);
         sort($expected);
         $this->assertSame($expected, $found, 'src/ census drifted from the tested pairs');
-        $this->assertCount(81, $found);
+        $this->assertCount(89, $found);
     }
 
     public function testTheReadmeTableAgreesWithTheSrcCensus(): void
@@ -312,7 +335,7 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(81, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
+        $this->assertCount(89, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
         $tabled = [];
         foreach ($rows as $row) {
             $tabled[$row['class'] . '::' . $row['legacy']] = $row['bare'];
@@ -322,6 +345,123 @@ final class AccessorDeprecationTest extends TestCase
             $this->assertArrayHasKey($short . '::' . $legacy, $tabled);
             $this->assertSame($bare, $tabled[$short . '::' . $legacy]);
         }
+    }
+
+    /**
+     * Discovery leg (inverse census): every public get*() in src/ must
+     * be a MARKED forwarder, an interface declaration itself, a
+     * protocol implementation (an implemented interface declares the
+     * same name), or a named carve-out. An unmarked public getFoo()
+     * anywhere makes this red — the era cannot silently re-grow, and
+     * a name shared with TreeProvider no longer excuses a class that
+     * does not implement it.
+     */
+    public function testNoPublicGetAccessorEscapesTheSweep(): void
+    {
+        $violations = [];
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__) . '/src'));
+        foreach ($iterator as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+            $tokens = \PhpToken::tokenize(file_get_contents($file->getPathname()));
+            $count = \count($tokens);
+            $namespace = '';
+            $inInterface = false;
+            $className = '';
+            for ($i = 0; $i < $count; $i++) {
+                $token = $tokens[$i];
+                if ($token->id === T_NAMESPACE) {
+                    for ($j = $i + 1; $j < $count; $j++) {
+                        if ($tokens[$j]->is([T_WHITESPACE])) {
+                            continue;
+                        }
+                        if ($tokens[$j]->id === T_STRING || $tokens[$j]->id === T_NAME_QUALIFIED) {
+                            $namespace = $tokens[$j]->text;
+                        }
+                        break;
+                    }
+                    continue;
+                }
+                if ($token->is([T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM])) {
+                    for ($j = $i + 1; $j < $count; $j++) {
+                        if ($tokens[$j]->is([T_WHITESPACE])) {
+                            continue;
+                        }
+                        if ($tokens[$j]->id === T_STRING) {
+                            $inInterface = $token->id === T_INTERFACE;
+                            $className = $tokens[$j]->text;
+                        }
+                        break;
+                    }
+                    continue;
+                }
+                if ($token->id !== T_FUNCTION) {
+                    continue;
+                }
+                $name = '';
+                for ($j = $i + 1; $j < $count; $j++) {
+                    if ($tokens[$j]->is([T_WHITESPACE])) {
+                        continue;
+                    }
+                    $name = $tokens[$j]->text;
+                    break;
+                }
+                if (preg_match('/^get[A-Z]/', $name) !== 1) {
+                    continue;
+                }
+                $private = false;
+                $doc = null;
+                for ($k = $i - 1; $k >= 0; $k--) {
+                    $before = $tokens[$k];
+                    if (
+                        $before->is([T_WHITESPACE])
+                        || $before->is([T_PUBLIC, T_STATIC, T_FINAL, T_ABSTRACT])
+                        || (\defined('T_READONLY') && $before->id === T_READONLY)
+                    ) {
+                        continue;
+                    }
+                    if ($before->is([T_PRIVATE, T_PROTECTED])) {
+                        $private = true;
+                        break;
+                    }
+                    if ($before->id === T_DOC_COMMENT) {
+                        $doc = $before->text;
+                    }
+                    break;
+                }
+                if ($private) {
+                    continue;
+                }
+                $key = basename($file->getFilename(), '.php') . '::' . $name;
+                if ($doc !== null && str_contains($doc, self::MARKER)) {
+                    continue;
+                }
+                if ($inInterface) {
+                    continue;
+                }
+                if ($className !== '') {
+                    $fqcn = ($namespace !== '' ? $namespace . '\\' : '') . $className;
+                    if (\class_exists($fqcn)) {
+                        $protocolBound = false;
+                        foreach (\class_implements($fqcn) as $interface) {
+                            if (\interface_exists($interface) && \method_exists($interface, $name)) {
+                                $protocolBound = true;
+                                break;
+                            }
+                        }
+                        if ($protocolBound) {
+                            continue;
+                        }
+                    }
+                }
+                if (\in_array($key, self::NAMED_CARVE_OUTS, true)) {
+                    continue;
+                }
+                $violations[] = $file->getPathname() . ':' . $token->line . ' ' . $key;
+            }
+        }
+        $this->assertSame([], $violations, 'public get*() accessors escaped the deprecation sweep');
     }
 }
 

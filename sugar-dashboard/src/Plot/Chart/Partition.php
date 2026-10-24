@@ -180,7 +180,7 @@ final class Partition implements \SugarCraft\Dashboard\Foundation\SizedItem
         $chartWidth = $width - 4;
 
         // Calculate total value
-        $totalValue = $this->root->getTotalValue();
+        $totalValue = $this->root->totalValue();
         if ($totalValue <= 0) {
             $totalValue = 1.0;
         }
@@ -232,7 +232,7 @@ final class Partition implements \SugarCraft\Dashboard\Foundation\SizedItem
         $color = $segment->color ?? $segmentColor;
 
         // Calculate proportional width
-        $proportion = $segment->getTotalValue() / max(1, $parentTotal);
+        $proportion = $segment->totalValue() / max(1, $parentTotal);
         $segmentWidth = max(2, intval($proportion * $width));
 
         if ($segmentWidth < 2) {
@@ -280,7 +280,7 @@ final class Partition implements \SugarCraft\Dashboard\Foundation\SizedItem
             $remainingWidth = $segmentWidth - 2;
 
             foreach ($segment->children as $child) {
-                $childProportion = $child->getTotalValue() / max(1, $segment->getTotalValue());
+                $childProportion = $child->totalValue() / max(1, $segment->totalValue());
                 $childWidth = max(2, intval($childProportion * $remainingWidth));
 
                 $this->renderHorizontalSegment(
@@ -290,7 +290,7 @@ final class Partition implements \SugarCraft\Dashboard\Foundation\SizedItem
                     $childWidth,
                     $y + 1,
                     $height - 2,
-                    $segment->getTotalValue(),
+                    $segment->totalValue(),
                     $segmentColor,
                     $borderColor,
                     $textColor,
@@ -325,7 +325,7 @@ final class Partition implements \SugarCraft\Dashboard\Foundation\SizedItem
         $chartWidth = $width - 4;
 
         // Calculate total value
-        $totalValue = $this->root->getTotalValue();
+        $totalValue = $this->root->totalValue();
         if ($totalValue <= 0) {
             $totalValue = 1.0;
         }
@@ -434,7 +434,7 @@ final class Partition implements \SugarCraft\Dashboard\Foundation\SizedItem
                     $y + 1,
                     $actualChildWidth,
                     $childAreaHeight,
-                    $segment->getTotalValue(),
+                    $segment->totalValue(),
                     $segmentColor,
                     $borderColor,
                     $textColor,
