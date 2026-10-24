@@ -448,8 +448,21 @@ final class Select implements \SugarCraft\Forms\Field
     }
 
     public function isFocused(): bool         { return $this->list->focused; }
+    /**
+     * NOTE (accessor era, 2026-10-24): this getTitle() read cannot lose its
+     * get* prefix — the bare title() slot is a live fluent setter defined
+     * above, and PHP admits one method per name. Treated as the documented
+     * legal exception (sugar-style precedent); owner-pending and rostered in
+     * tests/AccessorDeprecationTest.php until a vocabulary ruling lands.
+     */
     public function getTitle(): string        { return $this->resolveTitle($this->title); }
-    public function getDescription(): string  { return $this->resolveDescription($this->description); }
+    /** Static description, same shape as {@see getTitle()}. */
+    public function description(): string  { return $this->resolveDescription($this->description); }
+    /**
+     * @deprecated Use the bare {@see self::description()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getDescription(): string { return $this->description(); }
 
     /**
      * Select carries no validator surface, so it can never hold an error:
@@ -463,7 +476,12 @@ final class Select implements \SugarCraft\Forms\Field
      * replace both — until then Form::validateAll() passing a Select
      * through untouched is intended, not a silent skip.
      */
-    public function getError(): ?string       { return null; }
+    public function error(): ?string       { return null; }
+    /**
+     * @deprecated Use the bare {@see self::error()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getError(): ?string { return $this->error(); }
     public function revalidate(): Field       { return $this; }
     public function skippable(): bool         { return false; }
 

@@ -429,7 +429,7 @@ final class Form implements Model
             }
             $rf = $f->revalidate();
             $revalidated[$i] = $rf;
-            if ($firstErrorIdx === null && $rf->getError() !== null && $rf->getError() !== '') {
+            if ($firstErrorIdx === null && $rf->error() !== null && $rf->error() !== '') {
                 $firstErrorIdx = $i;
             }
         }
@@ -508,7 +508,7 @@ final class Form implements Model
         }
         $title = $field->getTitle();
         $value = self::coerceString($field->value()) ?? '';
-        $err   = $field->getError();
+        $err   = $field->error();
         $line  = $title === '' ? $value : ($title . ': ' . $value);
         return $err !== null ? $line . "\n! " . $err : $line;
     }
@@ -767,13 +767,19 @@ final class Form implements Model
      * imploded with `, ` to mirror huh's `GetString`. Returns `$default`
      * on missing key or values that don't coerce sensibly.
      */
-    public function getString(string $key, string $default = ''): string
+    public function string(string $key, string $default = ''): string
     {
         return self::coerceString($this->get($key)) ?? $default;
     }
 
     /**
-     * The string coercion shared by {@see getString()} and the accessible
+     * @deprecated Use the bare {@see self::string()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getString(string $key, string $default = ''): string { return $this->string($key, $default); }
+
+    /**
+     * The string coercion shared by {@see string()} and the accessible
      * view: scalars cast, bools spell `true`/`false`, arrays (MultiSelect)
      * implode with `, ` as huh's `GetString` does. Null when the value has
      * no sensible string form (null, non-stringable objects).
@@ -805,7 +811,7 @@ final class Form implements Model
      * Int accessor — coerces numeric values via `(int) $v`. Strings
      * that aren't numeric return `$default`.
      */
-    public function getInt(string $key, int $default = 0): int
+    public function int(string $key, int $default = 0): int
     {
         $v = $this->get($key);
         if (is_int($v)) {
@@ -824,10 +830,16 @@ final class Form implements Model
     }
 
     /**
+     * @deprecated Use the bare {@see self::int()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getInt(string $key, int $default = 0): int { return $this->int($key, $default); }
+
+    /**
      * Bool accessor — true / false / "true" / "false" / "yes" / "no" /
      * "1" / "0" / 1 / 0. Anything else returns `$default`.
      */
-    public function getBool(string $key, bool $default = false): bool
+    public function bool(string $key, bool $default = false): bool
     {
         $v = $this->get($key);
         if (is_bool($v)) {
@@ -848,13 +860,19 @@ final class Form implements Model
     }
 
     /**
+     * @deprecated Use the bare {@see self::bool()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getBool(string $key, bool $default = false): bool { return $this->bool($key, $default); }
+
+    /**
      * Array accessor — returns a list when the underlying value is an
      * array (multi-select); a single-element list when the value is
      * a non-empty scalar; an empty list otherwise.
      *
      * @return list<mixed>
      */
-    public function getArray(string $key): array
+    public function array(string $key): array
     {
         $v = $this->get($key);
         if (is_array($v)) {
@@ -865,6 +883,12 @@ final class Form implements Model
         }
         return [$v];
     }
+
+    /**
+     * @deprecated Use the bare {@see self::array()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getArray(string $key): array { return $this->array($key); }
 
     /** True after the last interactive field's Enter — `values()` is final. */
     public function isSubmitted(): bool { return $this->submitted; }
@@ -878,12 +902,11 @@ final class Form implements Model
     }
 
     /**
-     * Alias for {@see focusedField()} matching huh's `GetFocusedField`.
+     * @deprecated Use the bare {@see self::focusedField()} read; the alias
+     *             for huh's `GetFocusedField` (accessor era, 2026-10-24).
+     *             REMOVED-IN: 2.0.0
      */
-    public function getFocusedField(): ?Field
-    {
-        return $this->focusedField();
-    }
+    public function getFocusedField(): ?Field { return $this->focusedField(); }
 
     /**
      * Move focus to the field with the given key (E736 5.3, round 89).
@@ -987,7 +1010,7 @@ final class Form implements Model
                     continue;
                 }
                 $accumulated[$f->key()] = $f->value();
-                $err = $f->getError();
+                $err = $f->error();
                 if ($err !== null && $err !== '') {
                     $out[$f->key()] = $err;
                 }
@@ -1039,7 +1062,7 @@ final class Form implements Model
                 $accumulated[$f->key()] = $f->value();
                 // revalidate() forces validators/constraints to run even on
                 // untouched fields; the recomputed field is query-only.
-                $err = $f->revalidate()->getError();
+                $err = $f->revalidate()->error();
                 if ($err !== null && $err !== '') {
                     $out[$f->key()] = $err;
                 }
@@ -1088,7 +1111,7 @@ final class Form implements Model
                 }
                 // Synchronous field: identical recompute to validateAll(); a
                 // throwing validator propagates synchronously, never swallowed.
-                $err       = $f->revalidate()->getError();
+                $err       = $f->revalidate()->error();
                 $promises[$f->key()] = \React\Promise\resolve($err !== null && $err !== '' ? $err : null);
             }
         }

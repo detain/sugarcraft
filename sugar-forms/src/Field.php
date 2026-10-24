@@ -51,13 +51,37 @@ interface Field
     /** True while this field currently holds keyboard focus. */
     public function isFocused(): bool;
 
-    /** Static title (the `*Func` form is resolved separately at view time). */
+    /**
+     * Static title (the `*Func` form is resolved separately at view time).
+     *
+     * NOTE (accessor era, 2026-10-24): this getTitle() read cannot
+     * lose its get* prefix — the bare title() slot is a live fluent setter
+     * (`title(string $title): self`) on eleven of the twelve implementing
+     * fields, and PHP admits one method per name, so the interface cannot
+     * bind a bare read the classes cannot spell. Treated as the documented
+     * legal exception (sugar-style precedent); rostered in
+     * tests/AccessorDeprecationTest.php pending the owner vocabulary ruling.
+     */
     public function getTitle(): string;
 
     /** Static description, same shape as {@see getTitle()}. */
-    public function getDescription(): string;
+    public function description(): string;
 
     /** Latest validator error, or null when the value passes validation. */
+    public function error(): ?string;
+
+    /**
+     * @deprecated Use the bare {@see self::description()} read; one-line
+     *             back-compat contract member (accessor era, 2026-10-24).
+     *             REMOVED-IN: 2.0.0
+     */
+    public function getDescription(): string;
+
+    /**
+     * @deprecated Use the bare {@see self::error()} read; one-line
+     *             back-compat contract member (accessor era, 2026-10-24).
+     *             REMOVED-IN: 2.0.0
+     */
     public function getError(): ?string;
 
     /** Notes / separators / hidden fields skip Tab navigation. */

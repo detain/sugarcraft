@@ -58,7 +58,7 @@ trait HasAsyncValidation
      */
     public function validateAsync(): PromiseInterface
     {
-        $sync = $this->revalidate()->getError();
+        $sync = $this->revalidate()->error();
         if ($sync !== null && $sync !== '') {
             return \React\Promise\resolve($sync);
         }

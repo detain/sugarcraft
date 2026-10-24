@@ -311,6 +311,61 @@ The legacy `SugarCraft\Forms\Fuzzy\FuzzyMatcher` (step-07 back-compat shim)
 remains as a deprecated alias — it delegates to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`
 with no behavioural divergence.
 
+## Accessor deprecation (2026-10-24)
+
+The house accessor era (sugar-style precedent) renames bare reads off the
+`get*` prefix. In sugar-forms, 34 reads were renamed to bare twins with a
+one-line `@deprecated` forwarder (each marked `REMOVED-IN: 2.0.0`) riding the
+old name; 19 name-blocked reads keep their `get*` prefix as documented legal
+exceptions because the bare slot is a live fluent setter (or the `Field`
+contract itself binds the name) — PHP admits one method per name.
+
+The `Field` interface carries two abstract contract members through the same
+era: `getDescription()` and `getError()` are now `@deprecated` contract
+members whose canonical spelling is `description()` / `error()`. `getTitle()`
+is an interface-level exception: eleven of the twelve implementing fields
+bind the bare `title(string $title): self` setter, so the interface cannot
+adopt a bare read. Renamed class-level pairs:
+
+| Legacy read | Bare read |
+| --- | --- |
+| `Color::getDescription()` | `description()` |
+| `Color::getError()` | `error()` |
+| `Confirm::getDescription()` | `description()` |
+| `Confirm::getError()` | `error()` |
+| `Date::getDescription()` | `description()` |
+| `Date::getError()` | `error()` |
+| `FilePicker::getDescription()` | `description()` |
+| `FilePicker::getError()` | `error()` |
+| `Input::getDescription()` | `description()` |
+| `Input::getError()` | `error()` |
+| `MultiSelect::getDescription()` | `description()` |
+| `MultiSelect::getError()` | `error()` |
+| `Note::getDescription()` | `description()` |
+| `Note::getError()` | `error()` |
+| `NumberField::getDescription()` | `description()` |
+| `NumberField::getError()` | `error()` |
+| `RadioPills::getDescription()` | `description()` |
+| `RadioPills::getError()` | `error()` |
+| `Select::getDescription()` | `description()` |
+| `Select::getError()` | `error()` |
+| `Slider::getDescription()` | `description()` |
+| `Slider::getError()` | `error()` |
+| `Text::getDescription()` | `description()` |
+| `Text::getError()` | `error()` |
+| `Form::getArray()` | `array()` |
+| `Form::getBool()` | `bool()` |
+| `Form::getFocusedField()` | `focusedField()` |
+| `Form::getInt()` | `int()` |
+| `Form::getString()` | `string()` |
+| `TextArea::getRowOffset()` | `rowOffset()` |
+| `Viewport::getHeight()` | `height()` |
+| `Viewport::getWidth()` | `width()` |
+
+Roster and shapes are pinned by `tests/AccessorDeprecationTest.php` (census,
+markers, forwarder delegation, BC identity, and the exception list with its
+collision reasons).
+
 ## Dependencies
 
 - `sugarcraft/sugar-core` — Model–Update–View TUI runtime

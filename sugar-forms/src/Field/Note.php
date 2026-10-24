@@ -86,11 +86,25 @@ final class Note implements \SugarCraft\Forms\Field
     public function next(bool $on = true): self   { return $this->withNext($on); }
     public function nextLabel(string $l): self    { return $this->withNextLabel($l); }
 
-    /** Resolved button label (post-default). */
+    /**
+     * NOTE (accessor era, 2026-10-24): this getNextLabel() read cannot lose its
+     * get* prefix — the bare nextLabel() slot is a live fluent setter defined
+     * above, and PHP admits one method per name. Treated as the documented
+     * legal exception (sugar-style precedent); owner-pending and rostered in
+     * tests/AccessorDeprecationTest.php until a vocabulary ruling lands.
+     * — Resolved button label (post-default).
+     */
     public function getNextLabel(): string { return $this->nextLabel; }
     /** True when the Next button is rendered & participates in nav. */
     public function isNext(): bool { return $this->next; }
-    /** Configured row budget; 0 means natural height. */
+    /**
+     * NOTE (accessor era, 2026-10-24): this getHeight() read cannot lose its
+     * get* prefix — the bare height() slot is a live fluent setter defined
+     * above, and PHP admits one method per name. Treated as the documented
+     * legal exception (sugar-style precedent); owner-pending and rostered in
+     * tests/AccessorDeprecationTest.php until a vocabulary ruling lands.
+     * — Configured row budget; 0 means natural height.
+     */
     public function getHeight(): int { return $this->height; }
 
     public function key(): string         { return $this->key; }
@@ -125,9 +139,28 @@ final class Note implements \SugarCraft\Forms\Field
     }
 
     public function isFocused(): bool         { return $this->focused; }
+    /**
+     * NOTE (accessor era, 2026-10-24): this getTitle() read cannot lose its
+     * get* prefix — the bare title() slot is a live fluent setter defined
+     * above, and PHP admits one method per name. Treated as the documented
+     * legal exception (sugar-style precedent); owner-pending and rostered in
+     * tests/AccessorDeprecationTest.php until a vocabulary ruling lands.
+     */
     public function getTitle(): string        { return $this->resolveTitle($this->title); }
-    public function getDescription(): string  { return $this->resolveDescription($this->description); }
-    public function getError(): ?string       { return null; }
+    /** Static description, same shape as {@see getTitle()}. */
+    public function description(): string { return $this->resolveDescription($this->description); }
+    /**
+     * @deprecated Use the bare {@see self::description()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getDescription(): string { return $this->description(); }
+    /** Latest validator error, or null when the value passes validation. */
+    public function error(): ?string { return null; }
+    /**
+     * @deprecated Use the bare {@see self::error()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getError(): ?string { return $this->error(); }
     public function revalidate(): Field        { return $this; }
 
     public function skippable(): bool         { return !$this->next; }

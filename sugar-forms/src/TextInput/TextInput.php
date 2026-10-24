@@ -587,7 +587,14 @@ final class TextInput implements Model
     public function withPlaceholder(string $p): self { return $this->mutate(placeholder: $p); }
     public function withPrompt(string $p): self      { return $this->mutate(prompt: $p); }
 
-    /** Configured display width. 0 = no cap. Mirrors Bubbles' `Width()`. */
+    /**
+     * NOTE (accessor era, 2026-10-24): this getWidth() read cannot lose its
+     * get* prefix — the bare width() slot is a live fluent setter defined
+     * above, and PHP admits one method per name. Treated as the documented
+     * legal exception (sugar-style precedent); owner-pending and rostered in
+     * tests/AccessorDeprecationTest.php until a vocabulary ruling lands.
+     * — Configured display width. 0 = no cap. Mirrors Bubbles' `Width()`.
+     */
     public function getWidth(): int  { return $this->width; }
 
     /** Cursor position (0-based char index). Mirrors Bubbles' `Position()`. */
@@ -619,6 +626,13 @@ final class TextInput implements Model
         return $this->mutate(styles: $styles, stylesSet: true);
     }
 
+    /**
+     * NOTE (accessor era, 2026-10-24): this getStyles() read cannot lose its
+     * get* prefix — the bare styles() slot is a live fluent setter defined
+     * above, and PHP admits one method per name. Treated as the documented
+     * legal exception (sugar-style precedent); owner-pending and rostered in
+     * tests/AccessorDeprecationTest.php until a vocabulary ruling lands.
+     */
     public function getStyles(): ?Styles { return $this->styles; }
 
     /**

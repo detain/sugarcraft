@@ -1230,10 +1230,24 @@ final class TextArea implements Model
         return Width::string(mb_substr($line, 0, $this->col, 'UTF-8'));
     }
 
-    /** Configured visible width in cells (0 = unbounded). */
+    /**
+     * NOTE (accessor era, 2026-10-24): this getWidth() read cannot lose its
+     * get* prefix — the bare width() slot is a live fluent setter defined
+     * above, and PHP admits one method per name. Treated as the documented
+     * legal exception (sugar-style precedent); owner-pending and rostered in
+     * tests/AccessorDeprecationTest.php until a vocabulary ruling lands.
+     * — Configured visible width in cells (0 = unbounded).
+     */
     public function getWidth(): int { return $this->width; }
 
-    /** Configured visible height in rows (0 = unbounded). */
+    /**
+     * NOTE (accessor era, 2026-10-24): this getHeight() read cannot lose its
+     * get* prefix — the bare height() slot is a live fluent setter defined
+     * above, and PHP admits one method per name. Treated as the documented
+     * legal exception (sugar-style precedent); owner-pending and rostered in
+     * tests/AccessorDeprecationTest.php until a vocabulary ruling lands.
+     * — Configured visible height in rows (0 = unbounded).
+     */
     public function getHeight(): int { return $this->height; }
 
     /**
@@ -1241,10 +1255,11 @@ final class TextArea implements Model
      * Follows the caret automatically: every edit/navigation snapshot pans it
      * so the cursor row stays inside the {@see effectiveHeight()} window.
      *
-     * @deprecated Use the bare {@see rowOffset()} accessor (E736 F4, house
-     *             no-get rule); kept for back-compat, delegates identically.
+     * @deprecated Use the bare {@see self::rowOffset()} accessor (E736 F4, house
+     *             no-get rule); kept for back-compat, delegates identically
+     *             (accessor era, 2026-10-24). REMOVED-IN: 2.0.0
      */
-    public function getRowOffset(): int { return $this->rowOffset; }
+    public function getRowOffset(): int { return $this->rowOffset(); }
 
     /**
      * Bare scroll-offset accessor (E736 F4). The get-form on the property

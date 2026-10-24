@@ -141,7 +141,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Form</td><td>new(Field ...$fields)</td><td>Create a single-group form with fields</td></tr>
 <tr><td>Form</td><td>groups(Group ...$groups)</td><td>Create a multi-page form</td></tr>
-<tr><td>Form</td><td>values() / getString() / getInt() / getBool() / getArray()</td><td>Submitted values of visible fields; hidden fields and hidden groups are excluded</td></tr>
+<tr><td>Form</td><td>values() / string() / int() / bool() / array()</td><td>Submitted values of visible fields; hidden fields and hidden groups are excluded (legacy <code>getString()</code> &amp; friends are deprecated forwarders, removed in 2.0.0)</td></tr>
 <tr><td>Form</td><td>getValue(name)</td><td>Get field value after submit</td></tr>
 <tr><td>Form</td><td>validateAll()</td><td>Run all field validators, return [fieldKey => errorMessage]</td></tr>
 <tr><td>Form</td><td>withErrorSummary(bool)</td><td>Show all errors at once on submit failure</td></tr>

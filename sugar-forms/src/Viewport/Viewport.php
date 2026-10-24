@@ -300,9 +300,20 @@ final class Viewport implements Model
     }
 
     /** Read-only accessor for the configured visible width (cells). */
-    public function getWidth(): int  { return $this->width; }
+    public function width(): int  { return $this->width; }
     /** Read-only accessor for the configured visible height (rows). */
-    public function getHeight(): int { return $this->height; }
+    public function height(): int { return $this->height; }
+
+    /**
+     * @deprecated Use the bare {@see self::width()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getWidth(): int { return $this->width(); }
+    /**
+     * @deprecated Use the bare {@see self::height()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getHeight(): int { return $this->height(); }
 
     /** Direct seek to `$offset`. Clamped to `[0, maxOffset]`. */
     public function setYOffset(int $offset): self

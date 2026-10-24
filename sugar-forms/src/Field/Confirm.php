@@ -173,19 +173,29 @@ final class Confirm implements \SugarCraft\Forms\Field
     }
 
     public function isFocused(): bool         { return $this->focused; }
+    /**
+     * NOTE (accessor era, 2026-10-24): this getTitle() read cannot lose its
+     * get* prefix — the bare title() slot is a live fluent setter defined
+     * above, and PHP admits one method per name. Treated as the documented
+     * legal exception (sugar-style precedent); owner-pending and rostered in
+     * tests/AccessorDeprecationTest.php until a vocabulary ruling lands.
+     */
     public function getTitle(): string        { return $this->resolveTitle($this->title); }
-    public function getDescription(): string  { return $this->resolveDescription($this->description); }
-    public function getError(): ?string       { return $this->error; }
+    public function description(): string { return $this->resolveDescription($this->description); }
+    /**
+     * @deprecated Use the bare {@see self::description()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getDescription(): string { return $this->description(); }
+    public function error(): ?string { return $this->error; }
+    /**
+     * @deprecated Use the bare {@see self::error()} read (accessor era,
+     *             2026-10-24). REMOVED-IN: 2.0.0
+     */
+    public function getError(): ?string { return $this->error(); }
     public function skippable(): bool         { return false; }
     public function consumes(Msg $msg): bool  { return false; }
 
-    // Bare accessors (E736 F4, house no-get rule). The get-forms above are
-    // the Field interface contract — consumed by Form and every renderer —
-    // so they stay authoritative; these delegate for callers holding a
-    // concrete Confirm. `title()` is NOT mirrored: that bare name is the
-    // setter alias above, so read the title via getTitle().
-    public function description(): string { return $this->getDescription(); }
-    public function error(): ?string      { return $this->getError(); }
 
     private function mutate(
         ?bool $value = null,
