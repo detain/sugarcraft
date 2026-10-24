@@ -405,17 +405,17 @@ final class CounterTest extends TestCase
         $this->assertNull($cmd);
     }
 
-    public function testAltEscapeDoesNotQuit(): void
+    public function testAltEscapeStillQuits(): void
     {
-        // Alt+Escape is not a quit combination (Escape alone quits)
+        // shouldQuit() matches Escape regardless of modifiers, so Alt+Escape quits
         [$next, $cmd] = (new Counter(5))->update(new KeyMsg(KeyType::Escape, '', alt: true));
         $this->assertSame(5, $next->n, 'alt+escape should not change count');
         $this->assertNotNull($cmd, 'alt+escape still triggers quit via escape');
     }
 
-    public function testShiftEscapeDoesNotQuit(): void
+    public function testShiftEscapeStillQuits(): void
     {
-        // Shift+Escape is not a quit combination
+        // same Escape arm, other modifier — Shift+Escape quits too
         [$next, $cmd] = (new Counter(5))->update(new KeyMsg(KeyType::Escape, '', shift: true));
         $this->assertSame(5, $next->n);
         $this->assertNotNull($cmd, 'escape alone still triggers quit');

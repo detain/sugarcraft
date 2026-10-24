@@ -9,15 +9,15 @@ Terminal escape sequence decoder for keyboard (legacy + Kitty progressive keyboa
 `sugar-input` is the missing input layer for SugarCraft — it decodes raw TTY bytes into structured `Event` objects that programs can switch on. It handles:
 
 - **Plain ASCII keys** — letters, digits, punctuation, control codes
-- **Legacy escape sequences** — F1–F12, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape, Backtab (`CSI Z`)
-- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press)
+- **Legacy escape sequences** — F1–F12, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape, Backtab (`CSI Z`) — including the MODIFIED numbered-key family `CSI number ; modifier ~` that terminals really emit: xterm/alacritty terminfo ship `kDC=\E[3;2~` (Shift+Delete) and wezterm ships `kf34=\E[21;5~` (Ctrl+F10), so `3;5~` decodes as Ctrl+Delete rather than vanishing
+- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press). On release the key name gains the `Release` prefix and its first letter is upper-cased: a released `a` arrives as `ReleaseA`
 - **xterm modifyOtherKeys** — wrapped keys `CSI 27 ; mods ; keysym ~`, so a modified key with no dedicated sequence is told apart from a plain press
 - **Application keypad (DECKPAM)** — SS3 `ESC O p..y` (digits), `Ol` (decimal), `Om` (minus), `OM` (enter)
 - **SGR mouse 1006 / 1016** — press, release, drag, and scroll (incl. horizontal wheel) with modifier support (`CSI < b ; x ; y M|m`); 1016 is byte-identical to 1006 so a stateless decoder reports its coordinate field verbatim
 - **urxvt mouse 1015** — `CSI b ; x ; y M` decimal reports (no `<` introducer, so it never collides with 1006)
 - **X10 mouse** — `CSI M` three-byte compressed reports (mode 1000), not printable-key spam
 - **Focus events** — DECSET 1004 via `CSI I` / `CSI O`
-- **Bracketed paste** — `CSI 200 ~` … `CSI 201 ~` with 1 MiB safety cap
+- **Bracketed paste** — `CSI 200 ~` … `CSI 201 ~` with 1 MiB safety cap (a paste over the cap force-closes as a `PasteEvent` with `truncated` set; see [Bracketed paste](#bracketed-paste))
 - **Terminal replies** — DA1/DA2, DSR/CPR, XTWINOPS, kitty flags, DECRPM and OSC/DCS strings are drained as `TerminalReplyEvent` — never buffered, never mis-parsed as keys (see below)
 
 ## Quickstart
@@ -65,9 +65,13 @@ $events = $decoder->decode($bytes);
 // Get unconsumed remainder after decode()
 $remainder = $decoder->remainder();
 
-// Clear the partial-sequence buffer
+// Clear the partial-sequence buffer (and both counters)
 $decoder->reset();
 ```
+
+Feature groups toggle through `EscapeDecoderOptions`: `enableKitty`,
+`enableFocus`, `enablePaste`, `enableMouse` (all on by default) and the opt-in
+`deferTrailingEscape` (see [Deferred trailing escape](#deferred-trailing-escape-opt-in)).
 
 ### InputDriver
 
@@ -78,16 +82,45 @@ interface InputDriver {
 }
 ```
 
+### Input drivers
+
+| Driver | Reads | Notes |
+|---|---|---|
+| `StreamInputDriver` | any readable stream (e.g. `STDIN`) | Non-blocking by contract: it takes over the stream's blocking flag on construction and restores the previous value in `__destruct`. Each `read()` pulls at most 8192 bytes through the internal `EscapeDecoder`; on EOF it first drains whatever the decoder still holds, and a read that produced no events re-reads once so buffered partials cannot stall the loop. |
+| `ReactInputDriver` | a `React\Stream\ReadableStreamInterface` | Attaches to `data` and feeds the same decoder. `isReadable()` follows React's contract (`true` until the stream closes, not "bytes pending"); `pause()` defers emission — already-buffered events flush on `resume()`. Incoming chunks are sliced at 8192 bytes (`MAX_CHUNK_SIZE`) with a lone-trailing-`ESC` carry law so a boundary can never split a sequence's escape byte from its params. `pipe()` forwards the RAW byte stream, not events. |
+| `SignalResizeDriver` | `SIGWINCH` | The production producer of `ResizeEvent`. Construction is side-effect free; the install is opt-in via `arm()`, which registers a weak-map fan-out `pcntl_signal` handler, enables `pcntl_async_signals()`, and probes current dimensions through `tput cols`/`tput lines` (capability name validated before the shell-out — see the gate in `SignalResizeDriver::CAPABILITY_PATTERN`). `read()` returns a `ResizeEvent` only after a SIGWINCH arrived. |
+
+### Bracketed paste
+
+A paste larger than `PasteEvent::MAX_SIZE` (1 MiB) force-closes: the emitted
+`PasteEvent` carries `content` clipped to the cap, `truncated` set, and
+`truncationNotice()` — a localized one-liner suitable for showing the user why
+their paste looks short. The held-back tail of a split `CSI 201 ~` marker stays
+in `remainder()` and is never re-surfaced as its own event.
+
+Recovery lever: if the terminal ever loses the paste-END marker (an aborted
+paste), every following keystroke is absorbed into the open paste until the 1 MiB
+cap force-closes it. Calling `$decoder->reset()` (or `StreamInputDriver`
+teardown with a fresh decoder) discards the open episode immediately — that is
+the documented way back, no restart required.
+
 ## Event types
 
 | Event | Key fields |
 |---|---|
 | `KeyEvent` | `key`, `modifiers`, `raw` |
-| `MouseEvent` | `x`, `y`, `button`, `action`, `modifiers` |
+| `MouseEvent` | `x`, `y`, `button`, `action`, `modifiers` — `button` is 0/1/2 for left/middle/right press-drag-release; scroll steps report 96 (up), 97 (down), 98 (left/wire 66), 99 (right/wire 67) |
 | `FocusEvent` | `gained` |
-| `PasteEvent` | `content` |
-| `ResizeEvent` | `cols`, `rows` |
+| `PasteEvent` | `content`, `truncated`, `truncationNotice()` |
+| `ResizeEvent` | `cols`, `rows` — produced by `SignalResizeDriver` (see [Input drivers](#input-drivers)) |
 | `TerminalReplyEvent` | `family`, `params`, `raw`, `body`, `truncated` |
+
+Control characters surface as `KeyEvent` pairing the lowercase letter with the
+Ctrl modifier — 0x01 arrives as key `a` with `modifiers` carrying Ctrl. The
+bytes with no letter to pair with — NUL (0x00) and the four separators
+0x1C–0x1F (FS/GS/RS/US) — carry the RAW byte itself as the key name, so
+`match ($event->key)` arms test for `"\0"` / `"\x1c"`…`"\x1f"` rather than an
+invented mnemonic.
 
 ## Terminal replies — drained, not dropped
 
@@ -103,7 +136,7 @@ surfaces it as a `TerminalReplyEvent`:
 |---|---|---|
 | `device-attributes` | `CSI ? Pm c` / `CSI > Pm c` | DA1 / DA2 reply |
 | `cursor-position` | `CSI row ; col R` | DSR/CPR report (never a phantom `F3`) |
-| `dsr-status` | `CSI 0 n` | DSR "is terminal OK" reply |
+| `dsr-status` | `CSI 0 n` / `CSI 3 n` (any `CSI … n` final drains) | DSR ok / not-ok reply — every `n`-final frame is drained so an echoed query can never mis-parse as a key |
 | `window-report` | `CSI Pm t` | XTWINOPS geometry/resize report |
 | `kitty-flags` | `CSI ? flags u` (incl. bare `CSI ? u`) | kitty keyboard flags query/reply |
 | `mode-report` | `CSI ? mode ; status $ y` (public `CSI mode ; status $ y` too) | DECRPM mode report |
@@ -177,9 +210,47 @@ guard is load-bearing.) Caveat: with the option on, a deferred `ESC` followed
 by a plain byte in the *next* chunk still merges into `Alt+char`; flush before
 resolving an Escape-only keystroke.
 
-## Key constants (KeyModifier)
+## Modifiers (KeyModifier)
 
-`Shift`, `Ctrl`, `Alt`, `Super`, `Hyper`, `Meta`, `CapsLock`, `NumLock` — combine with bitwise OR.
+Modifiers arrive **on events** — you read them; you do not build masks (the
+constructor is private):
+
+```php
+if ($event->modifiers->includes(KeyModifier::CTRL)) { /* ... */ }
+$event->modifiers->value(); // the underlying bitmask, for caching/comparison
+```
+
+The constants `SHIFT`, `ALT`, `CTRL`, `META`, `SUPER`, `HYPER` (plus
+`CAPS_LOCK`, `NUM_LOCK`) document the wire bit layout the decoders map from:
+`KeyModifier::fromKittyInt()` reads kitty bits 0–5, `fromXtermParam()` converts
+the legacy `1 + bitmask` field, `fromSgrMouse()` extracts mouse-report bits.
+`CAPS_LOCK`/`NUM_LOCK` are declared for spec completeness but are unreachable
+from the wire forms decoded today. `all()` covers Shift+Alt+Ctrl only — the
+bits the legacy CSI forms can express — and the named factories (`none()`,
+`alt()`, `ctrl()`, `shift()`, `altShift()`, `ctrlShift()`, `altCtrl()`) exist
+for producers and tests, not as a public combining API.
+
+## Security: decoded content is untrusted
+
+Everything this library emits is attacker-writable input. A terminal's input
+buffer is not only fingers on keys: any process with permission can write bytes
+into the pts slave, a remote `tmux send-keys` session injects keystrokes, and a
+paste's own content is whatever the clipboard held. Treat key names,
+`PasteEvent::content`, `TerminalReplyEvent::body` / `params`, and every `raw`
+field as hostile bytes:
+
+- Never echo decoded content straight back to the terminal — a crafted paste
+  or reply body can carry further escape sequences and command your renderer.
+- Never interpolate it into shell commands, paths, or logs without your own
+  quoting and redaction discipline.
+- The fleet's private-use-area arena (zone sentinels U+E000/U+E001 and the
+  image-marker block from U+E002) passes through decoding byte-identical — a
+  hostile paste can forge marker bytes. Frame-marked composites should sweep
+  with candy-core `Sanitize::untrustedForMarkedFrames()` before rendering.
+
+The decoder's own caps (partial sequence, 1 MiB paste, 1 KiB/64 KiB string
+replies) contain parser resource use; they do not make the content trustworthy.
+The fleet-wide contract lives in [`docs/TRUST-BOUNDARY.md`](../docs/TRUST-BOUNDARY.md).
 
 ## License
 

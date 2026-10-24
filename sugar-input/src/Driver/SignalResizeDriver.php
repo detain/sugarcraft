@@ -49,7 +49,7 @@ final class SignalResizeDriver implements InputDriver
      * else is a malformed name — or an injection attempt riding a future
      * caller — and never reaches a shell.
      *
-     * E715: this gate, plus escapeshellarg() on the validated name, is
+     * This gate, plus escapeshellarg() on the validated name, is
      * defense-in-depth for the shell_exec() in getTput(). The gate parses;
      * the quoting stays even though a passing name needs none, so a later
      * regex relaxation cannot silently un-defend the shell-out.

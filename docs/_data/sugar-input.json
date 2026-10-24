@@ -1,11 +1,11 @@
 {
     "title": "SugarCraft — SugarInput",
-    "description": "SugarInput: Terminal escape sequence decoder — keys, Kitty keyboard protocol, SGR 1006 mouse, focus, bracketed paste. The input layer PHP TUIs have been missing.",
+    "description": "SugarInput: Terminal escape sequence decoder — legacy keys (incl. modified xterm forms), Kitty keyboard protocol, SGR 1006/1016 + urxvt 1015 + X10 mouse, focus events, bracketed paste. The input layer PHP TUIs have been missing.",
     "ogTitle": "SugarCraft — SugarInput",
-    "ogDescription": "EscapeDecoder consumes raw TTY bytes and emits typed Events. Supports legacy keys, Kitty keyboard protocol, SGR 1006 mouse, focus events, and bracketed paste. Original for PHP TUIs.",
+    "ogDescription": "EscapeDecoder consumes raw TTY bytes and emits typed Events. Supports legacy keys, Kitty keyboard protocol, xterm modifyOtherKeys, SGR 1006/1016, urxvt 1015 and X10 mouse, focus events, and bracketed paste. Native PHP — decoding semantics follow charmbracelet/bubbletea.",
     "emoji": "🍬",
     "displayName": "SugarInput",
     "tagline": "Terminal escape sequence decoder",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">original — no 1:1 Go counterpart</span>\n          <span class=\"tag-chip\">input</span>\n          <span class=\"tag-chip\">foundation-package</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">native PHP — semantics follow bubbletea input</span>\n          <span class=\"tag-chip\">input</span>\n          <span class=\"tag-chip\">foundation-package</span>"
 }

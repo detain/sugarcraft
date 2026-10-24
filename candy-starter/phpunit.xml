@@ -4,10 +4,9 @@
          bootstrap="vendor/autoload.php"
          colors="true"
          failOnWarning="true"
-
          cacheDirectory=".phpunit.cache">
     <testsuites>
-        <testsuite name="CandyTemplate">
+        <testsuite name="CandyStarter">
             <directory>tests</directory>
         </testsuite>
     </testsuites>

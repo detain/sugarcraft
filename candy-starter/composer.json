@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-starter",
-    "description": "Skeleton repo for bootstrapping a SugarCraft TUI app \u2014 `composer create-project sugarcraft/candy-starter my-app`. Ships a runnable counter Model wired through Program, plus a docs-as-code walkthrough that maps every file to the concept it demonstrates.",
+    "description": "Skeleton repo for bootstrapping a SugarCraft TUI app \u2014 `composer create-project sugarcraft/candy-starter my-app`. Ships a runnable counter Model wired through Program, plus a docs-as-code walkthrough that maps each shipped file to the concept it demonstrates.",
     "type": "project",
     "license": "MIT",
     "keywords": [

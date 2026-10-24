@@ -986,9 +986,36 @@ final class EscapeDecoder
             ];
         }
 
-        // Numbered function keys and special keys: 1~, 2~, 3~, 15~, etc.
-        if (preg_match('/^(\d+)~$/', $seq, $m)) {
+        // Numbered function keys and special keys — plain (`15~`) and the
+        // MODIFIED xterm form `CSI number ; modifier ~` (`3;5~` Ctrl+Delete,
+        // `21;5~` Ctrl+F10, `3;2~` Shift+Delete). The two-parameter shape is
+        // terminfo-standard, not invented: the xterm-256color and alacritty
+        // entries ship kDC=\E[3;2~, and wezterm ships kf34=\E[21;5~. The form is
+        // unmistakable at this point in the dispatch: the modifyOtherKeys wrap
+        // (`27;mods;keysym ~`) has THREE params and is decoded above, and a
+        // number absent from both tables (a stray `200~`/`201~` paste marker
+        // with a modifier riding along, unmapped `7~`/`8~`) still falls through
+        // to the counted drop.
+        // @see ECMA-48 — CSI parameter bytes 0x30-0x3F, one final byte 0x40-0x7E.
+        // @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html —
+        //      modified function keys under `modifyFunctionKeys` ("CSI number ;
+        //      modifier ~" for the legacy numbered-key family).
+        if (preg_match('/^(\d+)(?:;(\d+))?~$/', $seq, $m)) {
             $num = (int) $m[1];
+
+            // The modifier field is 1 + the bitmask (same wire law as the
+            // `1;mod<final>` arrow branch above). ";1" is an explicit
+            // no-modifier the arrow family leaves undecoded too, and ";0" would
+            // de-base to -1 and fabricate every bit (see the modifyOtherKeys
+            // guard) — both are refused, fail-fast, as counted drops.
+            $modifiers = KeyModifier::none();
+            if (isset($m[2]) && $m[2] !== '') {
+                $modRaw = (int) $m[2];
+                if ($modRaw <= 1) {
+                    return $this->dropUnknown($rest);
+                }
+                $modifiers = KeyModifier::fromXtermParam($modRaw);
+            }
 
             $specialKeys = [
                 1 => 'Home', 2 => 'Insert', 3 => 'Delete', 4 => 'End',
@@ -997,7 +1024,7 @@ final class EscapeDecoder
 
             if (isset($specialKeys[$num])) {
                 return [
-                    'events' => [new KeyEvent($specialKeys[$num], KeyModifier::none(), "\x1b[" . $seq)],
+                    'events' => [new KeyEvent($specialKeys[$num], $modifiers, "\x1b[" . $seq)],
                     'remaining' => $rest,
                 ];
             }
@@ -1014,7 +1041,7 @@ final class EscapeDecoder
 
             if (isset($fKeys[$num])) {
                 return [
-                    'events' => [new KeyEvent($fKeys[$num], KeyModifier::none(), "\x1b[" . $seq)],
+                    'events' => [new KeyEvent($fKeys[$num], $modifiers, "\x1b[" . $seq)],
                     'remaining' => $rest,
                 ];
             }

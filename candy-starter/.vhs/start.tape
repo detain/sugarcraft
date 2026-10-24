@@ -1,5 +1,7 @@
 # VHS tape — counter app from the bootstrap skeleton.
-# Render with: `vhs candy-starter/.vhs/start.tape`
+# Render with: `cd candy-starter && vhs .vhs/start.tape` (the tape's
+# Output path and `Type "./bin/start"` are both relative to the lib dir;
+# CI sets working-directory accordingly).
 Output .vhs/start.gif
 
 Set FontSize 16
