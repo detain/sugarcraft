@@ -22,7 +22,7 @@ echo $model->view();
             <div class="feature"><strong>Cursor navigation</strong><span>Up / Down / Home / End movement with viewport tracking.</span></div>
             <div class="feature"><strong>Word-wrap</strong><span>Auto-wrap long items to terminal width.</span></div>
             <div class="feature"><strong>Filter state machine</strong><span>withFilterFn() / withoutFilter() with FilterState enum (unfiltered / filtering).</span></div>
-            <div class="feature"><strong>Fuzzy matching</strong><span>Smith-Waterman local alignment scorer — scores and ranks candidates.</span></div>
+            <div class="feature"><strong>Fuzzy matching</strong><span>FuzzyMatch delegates scoring to sugar-fuzzy's SmithWatermanMatcher (SSOT); over-cap candidates are aligned on their prefix.</span></div>
             
     </div>
 
@@ -52,8 +52,9 @@ echo $model->view();
 <tr><td>Model</td><td>filterState()</td><td>Current FilterState (unfiltered / filtering)</td></tr>
 <tr><td>FilterState</td><td>unfiltered</td><td>No filter active</td></tr>
 <tr><td>FilterState</td><td>filtering</td><td>Filter function set and applied</td></tr>
-<tr><td>FuzzyMatch</td><td>score(query, candidate)</td><td>Smith-Waterman alignment score (int, higher = better)</td></tr>
+<tr><td>FuzzyMatch</td><td>score(query, candidate)</td><td>Smith-Waterman alignment score via the sugar-fuzzy SSOT (int, higher = better)</td></tr>
 <tr><td>FuzzyMatch</td><td>match(query, list&lt;\Stringable&gt;)</td><td>Filter and rank items by score; returns list of [item, score] pairs</td></tr>
+<tr><td>ScoringProfile</td><td>canonical() / strict() / lenient()</td><td>@deprecated class_alias of SugarCraft\Fuzzy\ScoringProfile (sugar-fuzzy is the SSOT); new code depends on sugar-fuzzy directly</td></tr>
 <tr><td>Item</td><td>value</td><td>The underlying \Stringable</td></tr>
 <tr><td>StringItem</td><td>new(string)</td><td>Wrap a plain string as a list item</td></tr>
 </table>
