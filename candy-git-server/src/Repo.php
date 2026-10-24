@@ -149,7 +149,12 @@ final class Repo
     // -------------------------------------------------------------------------
 
     /**
-     * Initialize a bare Git repository at $path.
+     * Initialize a bare Git repository layout under $path: the Git itself
+     * lives at $path/.git, matching exists() and every discovery gate
+     * (bin repo list/info, GitDaemon::findRepoByPath, SSHServer). Before
+     * this fix `git init --bare` made $path itself the bare repo, so a
+     * freshly created repository was invisible to every gate that looks
+     * for $path/.git (docs-fix-1023 lane N4).
      *
      * @throws \RuntimeException If git is not available or init fails
      */
@@ -166,25 +171,25 @@ final class Repo
         if (!\is_dir($gitDir)) {
             $out = [];
             $rc  = 0;
-            $path = \escapeshellarg($this->path);
-            \exec("git -C {$path} init --bare 2>&1", $out, $rc);
+            $escapedGitDir = \escapeshellarg($gitDir);
+            \exec("git init --bare {$escapedGitDir} 2>&1", $out, $rc);
             if ($rc !== 0) {
                 throw new \RuntimeException(Lang::t('repo.git_init_failed', ['output' => \implode("\n", $out)]));
             }
 
             // Group-writable objects so pushes work when server workers run
             // under different users sharing a group (soft-serve parity).
-            \exec("git -C {$path} config core.sharedRepository umask 2>&1", $out, $rc);
+            \exec("git -C {$escapedGitDir} config core.sharedRepository umask 2>&1", $out, $rc);
         }
 
         // Set description
-        \file_put_contents($this->path . '/description', $this->description ?: 'Unnamed repository');
+        \file_put_contents($gitDir . '/description', $this->description ?: 'Unnamed repository');
 
         // Disable anonymous push
-        \file_put_contents($this->path . '/git-daemon-export-ok', '');
+        \file_put_contents($gitDir . '/git-daemon-export-ok', '');
 
         // Set hooks dir (shared)
-        $hooksSrc = $this->path . '/hooks';
+        $hooksSrc = $gitDir . '/hooks';
         if (!\file_exists($hooksSrc) && !\is_link($hooksSrc)) {
             // A missing hooks dir is survivable (git falls back to no hooks),
             // but hiding the failure makes "why don't my hooks run?" undebuggable.

@@ -77,10 +77,29 @@ final class RepoTest extends TestCase
 
     // -------------------------------------------------------------------------
     // Git operations tests
-    // Note: Repo::init() uses git init without -C flag, so git commands run
-    // in the current working directory, not in $this->path.
-    // Only test non-git-dependent functionality.
     // -------------------------------------------------------------------------
+
+    /**
+     * M1 cure (docs-fix-1023 lane N4): init() used to make $path itself the
+     * bare repo while exists() and every discovery gate looked for
+     * $path/.git — a freshly created repository was invisible to its own
+     * creator. This roundtrip pins the layout agreement.
+     */
+    public function testInitProducesLayoutVisibleToExistsAndDiscovery(): void
+    {
+        $path = $this->tmpDir . '/fresh-created';
+        $r = Repo::new('fresh', $path)->withDescription('roundtrip')->init();
+
+        $this->assertTrue($r->exists(), 'init() must satisfy exists(): bare Git at $path/.git');
+        $this->assertTrue(is_dir($path . '/.git'));
+        // The metadata writes land INSIDE the Git dir now, not beside it.
+        $this->assertTrue(is_file($path . '/.git/description'));
+        $this->assertStringContainsString('roundtrip', (string) file_get_contents($path . '/.git/description'));
+        $this->assertTrue(is_file($path . '/.git/git-daemon-export-ok'));
+        $this->assertTrue(is_dir($path . '/.git/hooks'));
+        // Real git commands run against $path (git -C path works on this layout).
+        $this->assertSame([], $r->branches());
+    }
 
     public function testExistsReturnsFalseWhenNotInitialized(): void
     {

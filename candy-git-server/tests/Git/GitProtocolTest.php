@@ -72,44 +72,98 @@ final class GitProtocolTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // ReceivePack advertiseRefs tests - test via reflection
+    // ReceivePack advertiseRefs framing — byte pins via bounded php child
+    // (advertiseRefs writes through fwrite(STDOUT), which no in-process
+    // output buffer can capture).
     // -------------------------------------------------------------------------
 
-    public function testAdvertiseRefsWithEmptyRefsDoesNotThrow(): void
+    /**
+     * Run ReceivePack::advertiseRefs() in a bounded php child and return its
+     * raw stdout bytes. House probe pattern (see ChildProcessLifetimeCensusTest).
+     */
+    private function advertiseProbe(string $mode): string
     {
-        $repoPath = $this->initGitRepo();
-        $repo = Repo::new('test', $repoPath);
-        $rp = new ReceivePack($repo);
+        $script = <<<'PHP'
+            <?php
+            require $argv[1];
+            $refs = match ($argv[2]) {
+                'empty' => [],
+                default => [
+                    'refs/heads/master'  => str_repeat('a', 40),
+                    'refs/heads/feature' => str_repeat('b', 40),
+                    'refs/tags/v1.0'     => str_repeat('c', 40),
+                ],
+            };
+            $repo = \SugarCraft\GitServer\Repo::new('probe', $argv[3]);
+            (new \SugarCraft\GitServer\Git\ReceivePack($repo))->advertiseRefs($refs);
+            PHP;
 
-        // Use reflection to access private method
-        $refMethod = (new \ReflectionClass($rp))->getMethod('advertiseRefs');
-        $refMethod->setAccessible(true);
+        $file = $this->tmpDir . '/advertise-probe.php';
+        $this->assertNotFalse(\file_put_contents($file, $script));
+        $autoload = \realpath(__DIR__ . '/../../vendor/autoload.php');
+        $this->assertNotFalse($autoload);
 
-        // With empty refs, it should use 'refs/heads/main' as default and not throw
-        $refMethod->invoke($rp, []);
+        $proc = \proc_open(
+            ['timeout', '-s', 'KILL', '15', \PHP_BINARY, $file, $autoload, $mode, $this->tmpDir],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes
+        );
+        $this->assertIsResource($proc);
+        $stdout = \stream_get_contents($pipes[1]);
+        \fclose($pipes[1]);
+        $stderr = \stream_get_contents($pipes[2]);
+        \fclose($pipes[2]);
+        $rc = \proc_close($proc);
+        $this->assertSame(0, $rc, 'advertisement probe must exit 0; stderr: ' . (string) $stderr);
 
-        $this->assertTrue(true); // Assertion to avoid risky test warning
+        return (string) $stdout;
     }
 
-    public function testAdvertiseRefsWithMultipleRefs(): void
+    /**
+     * These pins record the encoder's ACTUAL framing, which is broken as a
+     * wire format (docs-review-1023 C2): a spec pkt-line prefix is four
+     * ASCII hex digits, but hex2bin() here writes the two raw bytes of the
+     * length, every payload gains a stray "\n" the spec does not allow, and
+     * the flush packet is ASCII while the payload frames are binary — the
+     * encoders are self-inconsistent. They flip LOUDLY the day the framing
+     * is fixed to spec; that fix must rewrite them deliberately, never
+     * silently. (docs-fix-1023 lane N4 truthful-stub ruling: framing fix is
+     * part of the protocol implementation and stays owner-gated.)
+     */
+    public function testAdvertiseRefsEmptyCaseFramesBinaryLengthNotAsciiHex(): void
     {
-        $repoPath = $this->initGitRepo();
-        $repo = Repo::new('test', $repoPath);
-        $rp = new ReceivePack($repo);
+        $out = $this->advertiseProbe('empty');
 
-        $refs = [
-            'refs/heads/master' => \str_repeat('a', 40),
-            'refs/heads/feature' => \str_repeat('b', 40),
-            'refs/tags/v1.0' => \str_repeat('c', 40),
-        ];
+        $caps = 'report-status|report-status-v2 delete-refs side-band-64k';
+        $payload = \str_repeat('0', 40) . ' refs/heads/main' . "\x00 " . $caps;
+        $framed = \pack('n', \strlen($payload) + 4) . $payload . "\n" . '0000';
 
-        // Use reflection to access private method
-        $refMethod = (new \ReflectionClass($rp))->getMethod('advertiseRefs');
-        $refMethod->setAccessible(true);
+        $this->assertSame($framed, $out, 'empty-ref advertisement is byte-exact to the current binary-length encoder');
+        // The defect itself, pinned: the first four bytes are NOT the
+        // spec-correct ASCII hex length prefix.
+        $this->assertNotSame(\sprintf('%04x', \strlen($payload) + 4), \substr($out, 0, 4));
+        // Self-inconsistency pinned: ASCII flush after binary-framed payload.
+        $this->assertSame('0000', \substr($out, -4));
+    }
 
-        // Should not throw
-        $refMethod->invoke($rp, $refs);
-        $this->assertTrue(true);
+    public function testAdvertiseRefsMultipleRefsEachPacketGetsBinaryFrameAndStrayNewline(): void
+    {
+        $out = $this->advertiseProbe('three');
+
+        $caps = 'report-status|report-status-v2 delete-refs side-band-64k';
+        $first = \str_repeat('a', 40) . ' refs/heads/master' . "\x00 " . $caps;
+        $second = \str_repeat('b', 40) . ' refs/heads/feature';
+        $third = \str_repeat('c', 40) . ' refs/tags/v1.0';
+
+        $expected = \pack('n', \strlen($first) + 4) . $first . "\n"
+            . \pack('n', \strlen($second) + 4) . $second . "\n"
+            . \pack('n', \strlen($third) + 4) . $third . "\n"
+            . '0000';
+
+        $this->assertSame($expected, $out, 'three-ref advertisement is byte-exact to the current encoder');
+        // The header ref rides the FIRST packet with its capabilities, and
+        // the loop must not duplicate it — pinned by payload count:
+        $this->assertSame(3, \substr_count($out, "\n"), 'one stray newline per payload packet, none per flush');
     }
 
     // -------------------------------------------------------------------------

@@ -7,7 +7,7 @@ declare(strict_types=1);
  * CandyGitServer — Self-hostable Git Server
  *
  * Usage:
- *   candy-git-server serve [--config path]        Start the server
+ *   candy-git-server serve [--config path]        Refuses: server assembly not implemented
  *   candy-git-server init                          Initialize a new data directory
  *   candy-git-server user add <username>           Add a user
  *   candy-git-server user key <username> <keyfile> Add an SSH key
@@ -15,8 +15,10 @@ declare(strict_types=1);
  *   candy-git-server repo create <name>            Create a repo
  *   candy-git-server help                          Show this help
  *
- * Drop-in PHP port of the charmbracelet/soft-serve Go project; the binary was
- * named `soft-serve` before the 2026-10 rename to candy-git-server. // @rename-keep
+ * PHP port of the charmbracelet/soft-serve Go project; the binary was
+ * named `soft-serve` before the 2026-10 rename to candy-git-server.
+ * STATUS: scaffold — the library pieces are shipped, but `serve` refuses
+ * until the server assembly lands (see README "Known gaps"). // @rename-keep
  */
 
 namespace SugarCraft\GitServer\Bin;
@@ -49,7 +51,7 @@ namespace SugarCraft\GitServer\Bin;
     exit(1);
 })();
 
-use SugarCraft\GitServer\{AccessControl, Config, Git\GitDaemon, Lang, Repo, SSH\SSHServer, User};
+use SugarCraft\GitServer\{Config, Lang, Repo, User};
 
 // Pre-rename env compatibility (plan_rename.md R4.5): CANDY_SERVE_DATA_PATH was // @rename-keep
 // this app's data-dir var before the 2026-10 rename. Import any old-prefix
@@ -112,100 +114,24 @@ function main(array $argv): int
 
 function cmdServe(array $args): int
 {
-    $configPath = null;
-    $daemonMode = false;
-    $pidFile = '';
+    // Truthful-stub law (docs-fix-1023 lane N4): the server assembly that
+    // binds the ssh/http/git listeners and dispatches protocol handlers was
+    // never written. The old body printed a startup banner, listed repos,
+    // and exited 0 without accepting a single connection — indistinguishable
+    // from success to a deploy script, which is how a scaffold becomes a
+    // silently-broken "production" server. Refuse loudly (non-zero exit,
+    // stderr, no banner) until the wiring lands; --daemon and --pid-file are
+    // refused the same way because nothing forks or binds here. The class
+    // pieces (Config, Repo, GitDaemon, HttpSmartProtocol\Server, SSHServer)
+    // exist and are individually tested; nobody has wired them into a
+    // running host. Inventory: README "Known gaps — must fix before any
+    // server wiring".
+    \fwrite(
+        \STDERR,
+        "candy-git-server: 'serve' refuses to start — server assembly is not implemented; see docs (status: scaffold).\n"
+    );
 
-    for ($i = 0; $i < \count($args); $i++) {
-        $arg = $args[$i];
-        if ($arg === '--config' && isset($args[$i + 1])) {
-            $configPath = $args[++$i];
-        } elseif ($arg === '--daemon') {
-            $daemonMode = true;
-        } elseif ($arg === '--pid-file' && isset($args[$i + 1])) {
-            $pidFile = $args[++$i];
-        }
-    }
-
-    $config = $configPath !== null
-        ? Config::load($configPath)
-        : Config::fromDefaults();
-
-    $ac = AccessControl::getInstance();
-
-    echo Lang::t('cli.banner', ['version' => displayVersion()]) . "\n";
-    echo Lang::t('cli.config_summary', [
-        'data_path' => $config->dataPath,
-        'ssh_addr'  => $config->sshListenAddr,
-        'http_addr' => $config->httpListenAddr,
-        'git_addr'  => $config->gitListenAddr,
-    ]) . "\n";
-
-    if (!$daemonMode) {
-        echo "\n" . Lang::t('cli.starting_servers') . "\n";
-        echo Lang::t('cli.note_ssh2_required') . "\n";
-        echo Lang::t('cli.note_run_init') . "\n\n";
-
-        // List registered repos
-        $dataPath = $config->dataPath;
-        $reposPath = $dataPath . '/repositories';
-
-        echo Lang::t('cli.repos_header') . "\n";
-        if (\is_dir($reposPath)) {
-            foreach (\scandir($reposPath) as $entry) {
-                if ($entry === '.' || $entry === '..') continue;
-                $repoPath = $reposPath . '/' . $entry;
-                if (\is_dir($repoPath . '/.git')) {
-                    echo Lang::t('cli.repo_listing_entry', ['name' => $entry]) . "\n";
-                }
-            }
-        }
-
-        echo "\n" . Lang::t('cli.note_not_a_daemon') . "\n";
-        echo Lang::t('cli.note_http_help') . "\n";
-        echo Lang::t('cli.note_ssh_help') . "\n";
-
-        return 0;
-    }
-
-    // Daemon mode: fork and run the git daemon in child process
-    if (\function_exists('pcntl_fork')) {
-        $pid = \pcntl_fork();
-        if ($pid === -1) {
-            \fwrite(\STDERR, "Failed to fork daemon process\n");
-            return 1;
-        }
-        if ($pid !== 0) {
-            // Parent exits, child continues
-            return 0;
-        }
-        // Child: become session leader
-        if (\function_exists('posix_setsid')) {
-            \posix_setsid();
-        }
-    }
-
-    $gitDaemon = new GitDaemon($config);
-
-    // Register repos from filesystem
-    $reposPath = $config->reposPath();
-    if (\is_dir($reposPath)) {
-        foreach (\scandir($reposPath) as $entry) {
-            if ($entry === '.' || $entry === '..') continue;
-            $repoPath = $reposPath . '/' . $entry;
-            if (\is_dir($repoPath . '/.git')) {
-                $repo = Repo::new($entry, $repoPath);
-                $gitDaemon->registerRepo($repo);
-            }
-        }
-    }
-
-    // Use default PID file location if not specified
-    if ($pidFile === '') {
-        $pidFile = $config->dataPath . '/git-daemon.pid';
-    }
-
-    return $gitDaemon->serve($pidFile);
+    return 1;
 }
 
 function cmdInit(array $args): int
@@ -377,7 +303,11 @@ function cmdRepoCreate(array $args): int
     $repo = Repo::new($name, $path)->withPublic(true)->init();
 
     echo Lang::t('cli.repo_created', ['name' => $name, 'path' => $path]) . "\n";
-    echo Lang::t('cli.repo_clone_url', ['name' => $name]) . "\n";
+    // No clone URL is printed: nothing listens for git traffic yet, and a
+    // "Clone URL: ssh://…" line invites users to believe the repo is
+    // reachable (docs-fix-1023 lane N4; i18n law — raw string, all 16
+    // locales stay untouched and the cli.repo_clone_url key goes unused).
+    echo "Note: no server listens for this repository yet (status: scaffold); see README \"Known gaps\".\n";
 
     return 0;
 }
