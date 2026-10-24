@@ -11,9 +11,10 @@ use SugarCraft\GitServer\LFS\LFSHandler;
 /**
  * HTTP server that speaks the Git smart protocol.
  *
- * Handles Git clone/fetch/push over HTTP/1.1 using the smart protocol
- * (not the dumb HTTP transport). Supports both git-upload-pack and
- * git-receive-pack via POST requests.
+ * Handles Git clone/fetch over HTTP/1.1 using the smart protocol (not
+ * the dumb HTTP transport). git-upload-pack is served end to end;
+ * git-receive-pack POSTs answer a 501 phase-2 refusal (owner ruling 1b)
+ * while its advertisement stays gated behind canWrite for the push phase.
  *
  * Smart HTTP protocol flow:
  * 1. Client GETs /info/refs?service=git-upload-pack  → advertises refs
