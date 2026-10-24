@@ -187,6 +187,43 @@ final class ChafaBinaryTest extends TestCase
         $this->assertFalse(ChafaRenderer::available());
     }
 
+    /**
+     * STRUCTURAL no-fallback pin. The functional test above is host-
+     * conditional: on a roster-less box (no chafa at any CANDIDATES path)
+     * a mutated refusal that FELL THROUGH to the roster loop would still
+     * answer null, and the substitution defect survives green. This pin
+     * reads the shape of resolve()'s body instead of its answer, so the
+     * law "a refused absolute override returns before any roster walk"
+     * reddens on every host: the refusal is one return statement ending
+     * in a literal `: null;`, and between it and the roster `foreach`
+     * only the override guard's closing brace may stand.
+     */
+    public function testTheRefusedOverrideStructurallyCannotReachTheRosterLoop(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Renderer/ChafaBinary.php');
+
+        $refusal = '/return str_starts_with\(\$override, \'\/\'\) && self::usable\(\$override\)\s*\?\s*\$override\s*:\s*null;/';
+        $this->assertSame(
+            1,
+            preg_match($refusal, $src, $m, PREG_OFFSET_CAPTURE),
+            'the refused absolute override must be a single return ending in a literal null — never a fall-through to the roster',
+        );
+        $refusalEnd = $m[0][1] + \strlen($m[0][0]);
+
+        $roster = strpos($src, 'foreach (self::CANDIDATES');
+        $this->assertIsInt($roster, 'the roster walk must still exist after the override guard');
+        $this->assertLessThan(
+            $roster,
+            $refusalEnd,
+            'the refusal return must precede the roster foreach — control reaches CANDIDATES only when no override was set',
+        );
+        $this->assertMatchesRegularExpression(
+            '/^\s*\}\s*$/',
+            substr($src, $refusalEnd, $roster - $refusalEnd),
+            'nothing may be wired between the refusal return and the roster walk — the early return is the arm\'s last word',
+        );
+    }
+
     public function testRelativePathOverrideIsRefused(): void
     {
         putenv(ChafaBinary::ENV_OVERRIDE . '=./chafa');
