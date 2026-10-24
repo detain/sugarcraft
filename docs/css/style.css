@@ -152,6 +152,40 @@ code, pre, .mono {
     background: var(--line);
 }
 
+/* The Search chip is a real <button> — it styles like its neighbouring nav
+   links but survives every media query: the mobile nav must keep a visible
+   search trigger (docs-fix-1023 G8; the modal was keyboard-only before). */
+.search-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--ink-2);
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+}
+
+.search-trigger:hover {
+    color: var(--ink);
+    background: var(--line);
+}
+
+.search-trigger:focus-visible {
+    outline: 3px solid var(--grape);
+    outline-offset: 2px;
+}
+
+.search-trigger-icon {
+    width: 15px;
+    height: 15px;
+    flex: none;
+}
+
 /* ── Hero ──────────────────────────────────────────────────────── */
 .hero {
     position: relative;
@@ -259,6 +293,16 @@ code, pre, .mono {
 
 @media (prefers-reduced-motion) {
     .glyph { animation: none; }
+    /* Site-wide blanket (G8): collapse transitions, keyframe animations and
+       smooth scrolling to instant. Honest limit: animated GIF previews are
+       <img> content and no browser can halt them — the demos section of the
+       homepage carries a plain-word note instead. */
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 /* ── Library grid ──────────────────────────────────────────────── */
@@ -425,6 +469,13 @@ code, pre, .mono {
 }
 
 /* ── Demo gallery ──────────────────────────────────────────────── */
+.motion-note {
+    margin: 14px 0 0 0;
+    max-width: 78ch;
+    font-size: 0.9rem;
+    color: var(--ink-2);
+}
+
 .demo-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -851,8 +902,12 @@ pre.code .num  { color: #fcd5b4; }
 
 /* ── Responsive ────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-    .nav-links a:not(.btn) { display: none; }
-    .nav-links a.btn { display: inline-flex; }
+    /* The nav no longer deletes its own links (G8): the brand keeps its row,
+       the chips — starting with the always-visible Search trigger — flow full
+       width underneath. No link is hidden any more at phone widths. */
+    .nav-inner { flex-wrap: wrap; gap: 8px 16px; padding: 10px 16px; }
+    .nav-links { flex-basis: 100%; margin-left: 0; flex-wrap: wrap; justify-content: flex-start; row-gap: 6px; column-gap: 8px; }
+    .nav-links a, .search-trigger { font-size: 0.85rem; padding: 5px 10px; }
     .section { padding: 64px 0; }
     .hero { padding: 64px 0 48px 0; }
     .quickstart { padding: 22px; }

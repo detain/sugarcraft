@@ -45,6 +45,10 @@
     <div class="nav-inner">
         <a class="brand" href="./"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
         <div class="nav-links">
+            <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
+                <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <span>Search</span>
+            </button>
             <a href="#libraries">Libraries</a>
             <a href="#apps">Apps</a>
             <a href="#demos">Demos</a>
@@ -1009,6 +1013,14 @@
             push that touches the corresponding source. Two-hundred-eighty-nine demos
             in total — these are the headliners; click into any library page for
             its full set.
+        </p>
+        <p class="motion-note">
+            Accessibility note: the previews are looping GIF recordings. A
+            reduced-motion preference stops this site's own transitions and
+            animations, but browsers cannot pause an animated
+            <code>&lt;img&gt;</code> — the TUIs themselves honour
+            <code>REDUCE_MOTION</code> / <code>PREFERS_REDUCED_MOTION</code>
+            where supported (sugar-spring, sugar-colorprofile).
         </p>
         <div class="demo-grid">
             <a class="demo-card" href="lib/sugar-core.html">

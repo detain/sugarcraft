@@ -190,6 +190,10 @@
     modal.classList.remove('is-open');
     modal.setAttribute('aria-hidden', 'true');
     input.blur();
+    /* Return focus to the visible trigger when one exists (G8). */
+    if (trigger) {
+      trigger.focus();
+    }
   }
 
   /* ── Keyboard handler ───────────────────────────────────────────── */
@@ -254,6 +258,15 @@
       });
     }, 150);
   });
+
+  /* ── Trigger button ───────────────────────────────────────────── */
+  /* A visible <button id="search-trigger"> (docs-fix-1023 G8) makes the modal
+     reachable on touch screens; the "/" and Ctrl-K chords stay as they were.
+     Generated lib pages may not carry the button yet; guard, never assume. */
+  var trigger = document.getElementById('search-trigger');
+  if (trigger) {
+    trigger.addEventListener('click', openModal);
+  }
 
   /* ── Click backdrop to close ────────────────────────────────────── */
   var backdrop = modal.querySelector('.search-backdrop');
