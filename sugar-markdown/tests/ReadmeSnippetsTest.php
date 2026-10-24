@@ -152,6 +152,18 @@ final class ReadmeSnippetsTest extends TestCase
     }
 
     /**
+     * The README's table cite must stay canonical: the phantom Sprinkles
+     * namespace the 2026-10 docs review caught must never regrow, and the
+     * class the README names must actually exist.
+     */
+    public function testTheTableNamespaceCiteIsCanonicalNotPhantom(): void
+    {
+        self::assertFalse(class_exists('SugarCraft\Markdown\Sprinkles\Table'));
+        self::assertFalse(class_exists('SugarCraft\Sprinkles\Table\Table'));
+        self::assertTrue(class_exists('SugarCraft\Style\Table\Table'));
+    }
+
+    /**
      * @param list<string> $args
      * @return array{0:int, 1:string} [exit status, captured stderr]
      */

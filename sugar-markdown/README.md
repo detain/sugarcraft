@@ -116,7 +116,10 @@ through a click: the link text and its `(url)` suffix still render,
 visible and inert. Every other scheme passes to the terminal's opener
 **unfiltered** — treat non-`http(s)` / `mailto` targets the way you
 would treat a raw terminal. Control bytes (C0, DEL, ESC, BEL) are
-stripped from every URL unconditionally.
+stripped from every URL unconditionally. Numeric-entity
+scheme spellings (e.g. `&#006A;avascript:`) reach the terminal as
+literal entities — destinations are never entity-decoded — so their
+emitted target is inert and forms no scheme.
 
 `withSanitize(false)` relaxes only the general text pipeline, for
 trusted input where control characters must survive: raw HTML blocks

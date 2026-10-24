@@ -79,6 +79,19 @@ final class LinkSafetyTest extends TestCase
         $this->assertStringNotContainsString(self::OSC8_OPEN, $out);
     }
 
+    /**
+     * Pins the README's claim: the renderer never entity-decodes link
+     * destinations, so a numeric-entity scheme spelling reaches the
+     * terminal as literal text - inert, and never a live javascript:.
+     */
+    public function testANumericEntitySpellingStaysLiteralAndInert(): void
+    {
+        $rendered = (new Renderer())->render("[click](&#006A;avascript:alert(1))\n");
+
+        self::assertStringNotContainsString(self::OSC8_OPEN . "javascript:", $rendered);
+        self::assertStringContainsString('&#006A;avascript:alert(1)', $rendered);
+    }
+
     public function testRefusalSurvivesAConfiguredBaseURL(): void
     {
         // An absolute refused target must not be laundered by the base-url
