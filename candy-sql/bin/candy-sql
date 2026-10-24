@@ -79,6 +79,19 @@ if ($historyPath !== null) {
     $historyRecorder = new HistoryRecorder(new SqliteHistoryStore($historyPath));
 }
 
+// One-time loud notice BEFORE the alt screen swallows the shell: a
+// TLS-verifying ssl-mode refuses the plaintext-capable React transport,
+// so admin live-refresh stands down and queries run synchronously
+// (App::asyncTransportRefusedByTls(); the in-app status line keeps the
+// state visible for the whole session).
+if ($database instanceof MysqlDatabase && MysqlDatabase::requiresVerifiedTls($database->sslMode())) {
+    fwrite(STDERR, sprintf(
+        "candy-sql: ssl-mode '%s' demands verified TLS — the ReactPHP admin transport cannot honour it,"
+        . " so admin live-refresh is DISABLED and queries/table loads run synchronously over the TLS connection.\n",
+        $database->sslMode(),
+    ));
+}
+
 (new Program(
     App::start($database, $flavor, $historyRecorder),
     new ProgramOptions(useAltScreen: true),
@@ -175,7 +188,10 @@ OPTIONS
     --driver must be one of: sqlite, mysql, pgsql
     --ssl-mode defaults to "prefer" for MySQL. "require" and "verify_*" enforce
     TLS with server-certificate verification; CA trust must be configured
-    server-side or via my.cnf (see README).
+    server-side or via my.cnf (see README). In those verified modes the
+    plaintext-capable ReactPHP transport is refused — queries run
+    synchronously over the TLS connection and admin live-refresh is disabled
+    (a startup notice and the in-app status line say so).
     Prefer CANDY_SQL_PASS over --pass= to keep the password out of the
     process command line (visible in ps).
 

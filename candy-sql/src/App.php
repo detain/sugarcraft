@@ -40,6 +40,7 @@ use SugarCraft\Sql\Admin\Variables\VariableEditor;
 use SugarCraft\Sql\Admin\Variables\VariablesPage;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\MysqlDatabase;
 use SugarCraft\Sql\Db\PreviewQuery;
 use SugarCraft\Sql\App\AdminState;
 use SugarCraft\Sql\App\AppBuilder;
@@ -99,20 +100,35 @@ final class App implements Model
      * @param HistoryRecorder|null $historyRecorder When set, admin polls append
      *     snapshots to the history store (wired by bin/candy-sql; the matching
      *     fluent path is AppBuilder::withHistoryDbPath()).
+     * @param string|null $sslMode MySQL ssl-mode carried into ConnectionState
+     *     for the async-transport TLS gate ({@see App::asyncTransportRefusedByTls()}).
+     *     Null (production) derives it from a real MysqlDatabase handle; any
+     *     other connection carries ''. An explicit string is the test seam —
+     *     MysqlDatabase is final with a private constructor, so doubles cannot
+     *     report a mode on their own.
      */
     public static function start(
         DatabaseInterface $db,
         Flavor $flavor = Flavor::Sqlite,
         ?HistoryRecorder $historyRecorder = null,
+        ?string $sslMode = null,
     ): self {
+        $sslMode ??= ($db instanceof MysqlDatabase ? $db->sslMode() : '');
         $tables = $db->tables();
         $a = new self(
-            ConnectionState::new($db, $flavor),
+            ConnectionState::new($db, $flavor, null, $sslMode),
             BrowseState::new()->withTables($tables),
             admin: new AdminState(historyRecorder: $historyRecorder),
         );
         if ($tables !== []) {
             $a = $a->loadTable($tables[0]);
+        }
+        if ($a->asyncTransportRefusedByTls()) {
+            // Standing status line so the disabled refresh is visible in-app,
+            // not just in the launcher's one-time stderr notice.
+            $a = $a->mutate([
+                'ui' => $a->ui->withStatus('admin live-refresh disabled — TLS-verified ssl-mode (sync transport only)'),
+            ]);
         }
         return $a;
     }
@@ -472,8 +488,11 @@ final class App implements Model
         }
 
         // SQLite runs synchronously — a local file cannot freeze the event loop
-        // and there is no React driver for it.
-        if (!$this->isAsyncFlavor()) {
+        // and there is no React driver for it. A TLS-verified MySQL-family
+        // connection runs synchronously too: the React mysql:// transport
+        // cannot carry TLS, so the sync PDO session (which can) is the only
+        // honest path — see asyncTransportRefusedByTls().
+        if (!$this->asyncTransportAvailable()) {
             // Run synchronously and return without a pending command.
             // runQuery() handles null-safety and error state internally.
             $updated = $this->runQuery();
@@ -588,7 +607,7 @@ final class App implements Model
      */
     private function beginLoadTable(string $name): array
     {
-        if (!$this->isAsyncFlavor()) {
+        if (!$this->asyncTransportAvailable()) {
             return [$this->loadTable($name), null];
         }
         $loading = $this->mutate([
@@ -614,6 +633,51 @@ final class App implements Model
             Flavor::MySQL, Flavor::MariaDB, Flavor::Percona, Flavor::Postgres => true,
             Flavor::Sqlite => false,
         };
+    }
+
+    /**
+     * TLS gate: whether the ReactPHP async transport must NOT be used for
+     * this connection.
+     *
+     * ReactMysqlConnection dials a `mysql://` URI that carries no TLS
+     * material, while MysqlDatabase::sslDriverOptions() treats require /
+     * verify_ca / verify_identity as a DEMAND for a verified TLS session.
+     * Running background or user queries on the async transport under those
+     * modes would negotiate plaintext on a connection whose owner asked for
+     * verification — a silent security downgrade the caller cannot see.
+     * So for MySQL-family flavors in a verified mode the app refuses the
+     * async transport outright: queries and table browse fall back to the
+     * synchronous TLS-speaking PDO connection ({@see asyncTransportAvailable()}),
+     * and the admin live-refresh stands down ({@see subscriptions()} and
+     * createAdminFetchPromise()), announced by a one-time launcher notice
+     * (bin/candy-sql) plus a standing status line (App::start()).
+     *
+     * The mode is fixed for the life of the connection (the config is
+     * immutable), so this predicate is constant once built — safe to branch
+     * at subscription-declaration time, unlike the per-tick throttle decision
+     * documented in subscriptions(). PostgreSQL keeps its own TLS story via
+     * the DSN (README “PostgreSQL SSL”) and is deliberately not gated here.
+     */
+    private function asyncTransportRefusedByTls(): bool
+    {
+        return match ($this->connection->flavor) {
+            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona
+                => MysqlDatabase::requiresVerifiedTls($this->connection->sslMode),
+            default => false,
+        };
+    }
+
+    /**
+     * Async transport available for this connection: an async-capable flavor
+     * whose TLS demand the React transport can honour. The single door all
+     * dialing call sites consult (beginRunQuery, beginLoadTable) — the three
+     * ReactMysqlConnection/ReactPostgresConnection construction sites live
+     * behind promises minted only through these two entry points and the
+     * admin fetch, which refuses internally.
+     */
+    private function asyncTransportAvailable(): bool
+    {
+        return $this->isAsyncFlavor() && !$this->asyncTransportRefusedByTls();
     }
 
     /**
@@ -931,6 +995,15 @@ final class App implements Model
             return null;
         }
 
+        // TLS gate: no admin fetch can run on the refused transport, so the
+        // tick itself stands down. Declaration-time is safe HERE (unlike the
+        // throttle decision below): the ssl-mode is immutable for the life of
+        // the connection, so this branch cannot need to change its mind
+        // across ticks within one pane visit.
+        if ($this->asyncTransportRefusedByTls()) {
+            return null;
+        }
+
         // ONE stable declaration while the Admin pane is open. The throttle
         // decision (full fetch vs. pending-drain vs. silence) is made per-fire
         // inside update()'s AdminTickMsg arm, NOT here: Program::reconcileSubscriptions()
@@ -983,6 +1056,16 @@ final class App implements Model
      */
     private function createAdminFetchPromise(?HistoryRecorder $recorder = null, bool $drainOnly = false): \React\Promise\PromiseInterface
     {
+        // TLS gate: under a verified ssl-mode the React transport cannot
+        // honour the connection's TLS demand, so the admin refresh stands
+        // down BEFORE any context/connection resolution — the refusal must
+        // be the reason nothing dials, not a side effect of a failed lookup.
+        // Same resolve-shape as the null-context arm: the full fetch settles
+        // empty (clears loading, stamps lastFetchAt), a drain settles null.
+        if ($this->asyncTransportRefusedByTls()) {
+            return \React\Promise\resolve($drainOnly ? null : new AdminDataLoadedMsg([], [], microtime(true)));
+        }
+
         // Wrap entire async flow in try-catch to ensure we ALWAYS return a promise.
         // This prevents synchronous exceptions from causing unhandled promise rejections.
         try {

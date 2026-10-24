@@ -9,6 +9,7 @@ use SugarCraft\Sql\Admin\History\HistoryRecorder;
 use SugarCraft\Sql\Admin\History\SqliteHistoryStore;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\MysqlDatabase;
 use SugarCraft\Sql\Pane;
 use SugarCraft\Sql\ResultTable;
 
@@ -47,6 +48,7 @@ final class AppBuilder
     private array $queryHistory = [];
     private array $queryFavorites = [];
     private ?string $historyDbPath = null;
+    private ?string $sslMode = null;
 
     public function withDb(DatabaseInterface $db): self
     {
@@ -157,6 +159,18 @@ final class AppBuilder
         return $clone;
     }
 
+    /**
+     * Override the MySQL ssl-mode carried into ConnectionState. Unset, the
+     * builder derives it from a real MysqlDatabase handle (mirroring
+     * {@see \SugarCraft\Sql\App::start()}); a non-MySQL db carries ''.
+     */
+    public function withSslMode(?string $sslMode): self
+    {
+        $clone = clone $this;
+        $clone->sslMode = $sslMode;
+        return $clone;
+    }
+
     public function build(): \SugarCraft\Sql\App
     {
         if ($this->db === null) {
@@ -169,10 +183,13 @@ final class AppBuilder
             $historyRecorder = new HistoryRecorder($store);
         }
 
+        $sslMode = $this->sslMode
+            ?? ($this->db instanceof MysqlDatabase ? $this->db->sslMode() : '');
+
         // The builder keeps its flat with*() surface for callers; the App
         // constructor itself takes cohesive state value objects (plan 3.3).
         return new \SugarCraft\Sql\App(
-            ConnectionState::new($this->db, $this->flavor),
+            ConnectionState::new($this->db, $this->flavor, null, $sslMode),
             new BrowseState(
                 tables: $this->tables,
                 tableCursor: $this->tableCursor,

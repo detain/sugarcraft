@@ -22,18 +22,25 @@ final class ConnectionState
         public readonly DatabaseInterface $db,
         public readonly Flavor $flavor = Flavor::Sqlite,
         public readonly ?ServerContextInterface $serverContext = null,
+        public readonly string $sslMode = '',
     ) {}
 
     public static function new(
         DatabaseInterface $db,
         Flavor $flavor = Flavor::Sqlite,
         ?ServerContextInterface $serverContext = null,
+        string $sslMode = '',
     ): self {
-        return new self($db, $flavor, $serverContext);
+        return new self($db, $flavor, $serverContext, $sslMode);
     }
 
     public function withServerContext(?ServerContextInterface $serverContext): self
     {
         return $this->mutate(['serverContext' => $serverContext]);
+    }
+
+    public function withSslMode(string $sslMode): self
+    {
+        return $this->mutate(['sslMode' => $sslMode]);
     }
 }

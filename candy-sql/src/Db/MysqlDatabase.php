@@ -70,11 +70,8 @@ final class MysqlDatabase implements DatabaseInterface
      */
     private static function sslDriverOptions(string $sslMode): array
     {
-        if ($sslMode === '' || strcasecmp($sslMode, 'disable') === 0) {
-            return [];
-        }
-
-        return match (strtolower(str_replace('-', '_', $sslMode))) {
+        return match (self::normalizedSslMode($sslMode)) {
+            '' => [],
             'allow', 'prefer', 'preferred' => [
                 \PDO::MYSQL_ATTR_SSL_CA => null,
                 \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
@@ -87,6 +84,44 @@ final class MysqlDatabase implements DatabaseInterface
                 'Unknown MySQL ssl-mode: ' . $sslMode,
             ),
         };
+    }
+
+    /**
+     * Whether an ssl-mode DEMANDS a verified TLS connection on the sync PDO
+     * path — the same table {@see self::sslDriverOptions()} honours, read as
+     * a security contract instead of a driver-options map.
+     *
+     * Consumers that cannot honour the demand on their own transport (the
+     * ReactPHP admin path dials a `mysql://` URI with no TLS material) must
+     * refuse it, never silently downgrade to plaintext: an unverified async
+     * fetch on a connection whose owner asked for verification defeats the
+     * whole point of the mode. Unknown spellings throw exactly like
+     * sslDriverOptions() — one table, one rejection, no drift between them.
+     */
+    public static function requiresVerifiedTls(string $sslMode): bool
+    {
+        return match (self::normalizedSslMode($sslMode)) {
+            'require', 'required', 'verify_ca', 'verify_identity' => true,
+            '', 'allow', 'prefer', 'preferred' => false,
+            default => throw new \InvalidArgumentException(
+                'Unknown MySQL ssl-mode: ' . $sslMode,
+            ),
+        };
+    }
+
+    /**
+     * Canonical ssl-mode key: '' for plaintext-by-agreement (empty or
+     * 'disable', any case), else lowercase with hyphens folded to
+     * underscores, so formatting variants can never fall through to a
+     * different arm than the caller meant.
+     */
+    private static function normalizedSslMode(string $sslMode): string
+    {
+        if ($sslMode === '' || strcasecmp($sslMode, 'disable') === 0) {
+            return '';
+        }
+
+        return strtolower(str_replace('-', '_', $sslMode));
     }
 
     /** @return list<string> */
@@ -390,6 +425,16 @@ final class MysqlDatabase implements DatabaseInterface
     public function password(): string
     {
         return $this->connectionConfig?->pass ?? '';
+    }
+
+    /**
+     * The ssl-mode this connection was opened with ('' before connect()).
+     * App reads it to decide whether the async transport must stand down —
+     * see {@see self::requiresVerifiedTls()}.
+     */
+    public function sslMode(): string
+    {
+        return $this->connectionConfig?->sslMode ?? '';
     }
 
 }

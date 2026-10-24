@@ -47,8 +47,10 @@ bin/candy-sql app.sqlite --history=/var/tmp/my-history.db
 Supported drivers are `sqlite`, `mysql` and `pgsql` (`ConnectionFactory::SUPPORTED_DRIVERS`); anything else — including
 `sqlsrv://` DSNs — throws at parse time.
 
-`App::start($db, Flavor $flavor = Flavor::Sqlite, ?HistoryRecorder $historyRecorder = null)` accepts an optional
-`$flavor` override and an optional history recorder (the launcher builds one itself — see Query History).
+`App::start($db, Flavor $flavor = Flavor::Sqlite, ?HistoryRecorder $historyRecorder = null, ?string $sslMode = null)` accepts an
+optional `$flavor` override, an optional history recorder (the launcher builds one itself — see Query History), and an optional
+`$sslMode` override: unset, the MySQL ssl-mode is derived from a real `MysqlDatabase` handle to feed the TLS gate (see MySQL SSL
+above); the explicit string exists as a test seam because `MysqlDatabase` is final with a private constructor.
 
 ## Keys
 
@@ -238,7 +240,7 @@ driver://[user][:pass]@host[:port]/dbname[?query]
 > | `require` / `required` / `verify_ca` / `verify_identity` | TLS enforced with `SSL_VERIFY_SERVER_CERT=true`. Because no client CA is configured, verification runs against the server's system CA trust store. |
 > | anything else | Rejected with `RuntimeException: Unknown MySQL ssl-mode`. |
 >
-> **Async caveat** — the ReactPHP admin path (`ReactMysqlConnection`) builds a `mysql://` URI that carries no TLS material at all: `--ssl-mode` only protects the synchronous PDO connection; background status/processlist fetches stay plaintext on that transport.
+> **Async policy (TLS gate)** — the ReactPHP transport (`ReactMysqlConnection`) builds a `mysql://` URI that carries no TLS material. Rather than let `--ssl-mode=require`/`verify_*` silently run background status/processlist fetches over plaintext, the app **refuses that transport** in any TLS-verifying mode (one predicate, `MysqlDatabase::requiresVerifiedTls()`, mirroring the sync-path table above): queries and table loads fall back to the synchronous TLS-speaking PDO connection, the admin live-refresh tick stands down, and both a one-time launcher notice (stderr, before the alt screen) and a standing in-app status line say so. The plaintext-by-agreement modes (empty / `disable` / `allow` / `prefer` / `preferred`) keep the async path exactly as before — opportunistic TLS there is the mode the caller chose.
 
 > **PostgreSQL SSL** — the `sslmode=` DSN parameter is appended for pgsql connections when `sslMode` is set (`disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full`; MySQL-flavoured spellings `required`/`verify_identity`/`verify_full` map onto it). Unknown or empty values omit the parameter and inherit libpq's default (`prefer`).
 
