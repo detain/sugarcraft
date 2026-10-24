@@ -115,6 +115,32 @@ final class SmartHttpCloneTest extends TestCase
         self::assertSame("world\n", \file_get_contents($clonePath . '/b.txt'));
     }
 
+    public function testCloneOfAPackExceedingTheSocketBuffersIsByteExact(): void
+    {
+        // r1024/githttp2 (review MAJOR-1): a one-shot fwrite on the
+        // non-blocking client socket handed the kernel AT MOST one send
+        // window (~3 MB measured on this box) and fclose ate the rest — the
+        // clone died with curl 18 "transfer closed with N bytes remaining".
+        // An 8 MiB INCOMPRESSIBLE blob puts the pack well past every kernel
+        // buffer, so the write loop has to iterate for this to pass.
+        $blob = \random_bytes(8 * 1024 * 1024);
+        \file_put_contents($this->workPath . '/big.bin', $blob);
+        $this->git(['-C', $this->workPath, 'add', 'big.bin']);
+        $this->git(['-C', $this->workPath, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'big']);
+        $this->git(['-C', $this->workPath, 'push', '-q', $this->barePath, 'main']);
+
+        $clonePath = $this->tmpDir . '/big-clone';
+        [$rc, , $err] = $this->runChild(
+            ['git', 'clone', $this->baseUrl() . '/fixture.git', $clonePath]
+        );
+        self::assertSame(0, $rc, 'clone of an over-one-buffer pack failed: ' . $err);
+        self::assertSame(
+            \md5($blob),
+            \md5((string) \file_get_contents($clonePath . '/big.bin')),
+            'clone content diverged byte-wise from the served blob'
+        );
+    }
+
     public function testCloneOfAPrivateRepoRefusesAnonymousCredentials(): void
     {
         $secret = $this->tmpDir . '/secret.git';

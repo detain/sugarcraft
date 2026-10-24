@@ -11,9 +11,11 @@ use React\EventLoop\LoopInterface;
  * The socket half of smart HTTP: accepts TCP connections, buffers complete
  * HTTP/1.1 requests (Content-Length or chunked bodies — git's own client
  * POSTs its negotiation chunked), hands them to the synchronous router
- * {@see Server::handleRequest()}, and writes the buffered response back
- * before closing. One request per connection: every response carries
- * `Connection: close`, matching the router's own header.
+ * {@see Server::handleRequest()}, and writes the buffered response back in
+ * full — a bounded drain that keeps feeding a non-blocking socket until the
+ * kernel window empties repeatedly or the client stalls — before closing.
+ * One request per connection: every response carries `Connection: close`,
+ * matching the router's own header.
  *
  * Built on the react/event-loop stream watch the StatsServer already uses
  * (same accept/read/close discipline, same loopback-default floor) — the
@@ -30,6 +32,14 @@ final class HttpListener
 
     /** Total request body cap — the router caps packs tighter; this is the socket-level guard. */
     private const MAX_BODY_BYTES = 33554432; // 32 MiB
+
+    /**
+     * How long a response write may make ZERO progress on a client socket
+     * before the listener gives up on that client (r1024/githttp2, review
+     * MAJOR-1 cure). Progress resets the window, so a slow-but-alive reader
+     * is never cut off; a wedged one holds one stalled write for this long.
+     */
+    private const WRITE_STALL_SECONDS = 10.0;
 
     /** @var array<int, array{stream: resource, buffer: string}> */
     private array $clients = [];
@@ -292,7 +302,54 @@ final class HttpListener
             $wire .= "{$name}: {$value}\r\n";
         }
         $wire .= "\r\n" . $result['body'];
-        @\fwrite($client, $wire);
+        // r1024/githttp2 (review MAJOR-1): the socket is non-blocking, so a
+        // bare fwrite hands the kernel AT MOST one send-buffer of bytes and
+        // the rest of the response would be silently lost on close — real
+        // `git clone` of any repo whose pack exceeds the kernel buffers died
+        // with curl 18 "transfer closed with N bytes remaining". writeAll()
+        // keeps feeding the socket until it is drained or the client stalls.
+        self::writeAll($client, $wire);
+    }
+
+    /**
+     * Push $bytes through a non-blocking stream, retrying every partial
+     * accept until the whole payload is handed to the kernel — or until the
+     * client makes zero progress for $stallSeconds, or the socket errors.
+     * Returns the byte count actually written (== strlen($bytes) on
+     * success); the caller's close path is identical either way because a
+     * half-delivered response is already protocol-dead to the client.
+     *
+     * @param resource $stream
+     */
+    private static function writeAll($stream, string $bytes, ?float $stallSeconds = null): int
+    {
+        $stall  = $stallSeconds ?? self::WRITE_STALL_SECONDS;
+        $total  = \strlen($bytes);
+        $offset = 0;
+        $giveUp = \microtime(true) + $stall;
+
+        while ($offset < $total) {
+            $written = @\fwrite($stream, \substr($bytes, $offset));
+            if ($written === false) {
+                return $offset; // socket error / reset by peer
+            }
+            if ($written > 0) {
+                $offset += $written;
+                $giveUp = \microtime(true) + $stall; // progress re-arms the window
+                continue;
+            }
+            if (\microtime(true) >= $giveUp) {
+                return $offset; // wedged client: buffer full, zero progress past the grace
+            }
+            // 0-byte accept: kernel buffer full (or EINTR-ish moment). Wait
+            // for writability in short ticks so the stall deadline stays
+            // authoritative even if the socket never turns writable.
+            $read = $except = null;
+            $write = [$stream];
+            @\stream_select($read, $write, $except, 0, 100_000); // 100 ms tick
+        }
+
+        return $offset;
     }
 
     /** @param resource $client */
@@ -311,7 +368,10 @@ final class HttpListener
     private function writeStatus($client, int $status, string $reason): void
     {
         $body = "{$status} {$reason}\n";
-        @\fwrite($client, "HTTP/1.1 {$status} {$reason}\r\n"
+        // Same full-buffer drain as dispatch(): small bodies almost always
+        // fit one kernel window, but "almost" is what the MAJOR-1 e2e proved
+        // unprovable from the inside.
+        self::writeAll($client, "HTTP/1.1 {$status} {$reason}\r\n"
             . "Content-Type: text/plain\r\n"
             . 'Content-Length: ' . \strlen($body) . "\r\n"
             . "Connection: close\r\n"
