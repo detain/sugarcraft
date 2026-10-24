@@ -16,9 +16,9 @@ use SugarCraft\AnsiParser\Parser\Parser;
  * consumed as the terminator, never echoed; the parser lands in Ground.
  *
  * The DCS-body leg is pinned in DcsTruncationTest; CAN/SUB inside CSI
- * params keep their Execute echo (the survival shape this fix mirrors
- * nothing — it is the untouched premise, pinned by TransitionsTest's
- * Ground rows and downstream sugar-vterm).
+ * params keep their Execute echo — that cancel path is untouched by this
+ * fix (its premise, not its model), pinned by TransitionsTest's Ground
+ * rows and downstream sugar-vterm.
  */
 final class StringCancelFidelityTest extends TestCase
 {
@@ -124,6 +124,7 @@ final class StringCancelFidelityTest extends TestCase
         $parser->feed("\x1b]a\x18\x1b[1;2H");
 
         $oscs = $handler->filter('osc');
+        self::assertCount(1, $oscs, 'The cancelled string dispatched once before the following CSI');
         self::assertSame('a', $oscs[0]['detail']);
         $csis = $handler->filter('csi');
         self::assertCount(1, $csis, 'The sequence after a cancelled string parses in Ground');
