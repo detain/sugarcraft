@@ -19,8 +19,8 @@ use SugarCraft\ColorProfile\Lang;
  *
  * DEPRECATION WINDOW (opened 2026-10-24, owner ruling 2b): every writable
  * public static property below is @deprecated. They keep working
- * byte-identically — reads and writes are untouched — until the next major,
- * where REMOVED-IN: 2.0.0 replaces the mutable properties with an immutable,
+ * byte-identically — reads and writes are untouched — and are replaced, no
+ * earlier than 2.0.0 (tagged REMOVED-IN: 2.0.0), by an immutable,
  * constant-backed equivalent. The blessed NON-MUTATING read surface is
  * already here and is NOT deprecated: all() (indexed 0–15),
  * fromIndex(int) (bounds-checked, throws OutOfBoundsException), and

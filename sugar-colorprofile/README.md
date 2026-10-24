@@ -286,9 +286,9 @@ reader, and nothing pins them against reassignment.
 
 **Nothing changes today.** The properties keep working byte-for-byte — reads,
 writes, and every current consumer behave exactly as before. They are removed
-in favor of an immutable, constant-backed equivalent at the next major
-(`REMOVED-IN: 2.0.0`). Until then this is a deprecation *window*: migrate now,
-no rush, no breakage.
+in favor of an immutable, constant-backed equivalent no earlier than 2.0.0
+(each tagged `REMOVED-IN: 2.0.0`). Until then this is a deprecation *window*:
+migrate now, no rush, no breakage.
 
 Use the non-mutating read API instead (not deprecated):
 
