@@ -442,10 +442,13 @@ final class TextArea implements Model
     /**
      * Resolve a visual-mode operator against the live selection (TUI-3A).
      *
-     * Delete splices the span out and parks the caret at its start
-     * ({@see deleteSelection()}'s own contract); yank leaves the buffer
-     * untouched and raises `Cmd::setClipboard` exactly like Ctrl+C — the
-     * OSC 52 → RawMsg channel, never a direct write (TEA law). The yanked
+     * Both operators park the caret at the span START — the rule
+     * {@see deleteSelection()} already enforces for delete, mirrored for the
+     * yank so the two exit identically to vim (backwards drags normalize
+     * first, so it is always the top-left corner). Delete splices the span
+     * out; yank leaves the buffer untouched and raises
+     * `Cmd::setClipboard` exactly like Ctrl+C — the OSC 52 → RawMsg channel,
+     * never a direct write (TEA law). The yanked
      * text deliberately does NOT land in any host paste register: the
      * widget owns none, and reaching across the layer boundary is the
      * host's job (see ComposerVim's class docblock for the candy-code
@@ -457,13 +460,17 @@ final class TextArea implements Model
      */
     private function vimOperateSelection(bool $delete): array
     {
-        $text = $this->selectedText();
-        if ($text === '') {
+        $span = $this->normalizedSelection();
+        if ($span === null) {
             return [$this, null];
         }
+        [$r0, $c0] = $span;
 
         if (!$delete) {
-            return [$this->clearSelection()->mutate(vimState: VimState::Normal), Cmd::setClipboard($text)];
+            return [
+                $this->moveCursor($r0, $c0)->clearSelection()->mutate(vimState: VimState::Normal),
+                Cmd::setClipboard($this->selectedText()),
+            ];
         }
 
         return [$this->deleteSelection()->mutate(vimState: VimState::Normal), null];

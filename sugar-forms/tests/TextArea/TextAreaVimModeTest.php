@@ -602,6 +602,28 @@ final class TextAreaVimModeTest extends TestCase
         $this->assertSame('hello world', $t->value());
         $this->assertFalse($t->hasSelection());
         $this->assertSame(VimState::Normal, $t->vimState);
+        // rev-vim MINOR-1: yank exits at the span START, mirroring d's
+        // deleteSelection caret law — not at the caret the drag left behind.
+        $this->assertSame(0, $t->row);
+        $this->assertSame(0, $t->col);
+    }
+
+    public function testVisualYankBackwardsDragParksCaretAtNormalizedStart(): void
+    {
+        // Backwards polarity of the same cure: anchor (0,5), caret dragged
+        // left to (0,3) — the span normalizes to [3,5) ('lo'), and after y
+        // the caret must sit at the top-left corner (0,3), not at either
+        // drag end's stale position.
+        $t = $this->vimArea(['hello world'])->setCursor(0, 5);
+        $t = $this->key($t, 'v');
+        $t = $this->key($t, 'h');
+        $t = $this->key($t, 'h');
+        [$t, $cmd] = $this->keyWithCmd($t, 'y');
+        $this->assertNotNull($cmd);
+        $this->assertSame("\x1b]52;c;" . base64_encode('lo') . "\x07", $cmd()->bytes);
+        $this->assertSame(0, $t->row);
+        $this->assertSame(3, $t->col);
+        $this->assertSame(VimState::Normal, $t->vimState);
     }
 
     public function testVisualOperatorsOnEmptySpanAreSilentBeepsStayingInVisual(): void
