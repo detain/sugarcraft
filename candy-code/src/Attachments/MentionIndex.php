@@ -42,7 +42,9 @@ use SugarCraft\Fuzzy\ScoringProfile;
  * proof and its ASCII/profile preconditions live at {@see self::scored()}).
  * When the contained-basename bucket alone cannot fill the stored window,
  * the leftover candidates run the real matcher up to
- * {@see self::MAX_SCORED_CANDIDATES} best-possible-score first, and paths
+ * {@see self::MAX_SCORED_CANDIDATES} best-possible-score first — within a
+ * tier the budget is consumed in listing order, so a row past the cap is
+ * dropped by position, not by merit — and paths
  * whose bytes break the ASCII/length assumptions the proof rests on ALWAYS
  * run the matcher. SECOND, each memo entry stores at most
  * {@see self::RANK_MEMO_TOP_ROWS} rows — a prefix of the ranking — not the

@@ -332,6 +332,44 @@ final class MentionIndexTest extends TestCase
     }
 
     /**
+     * The two fail-open doors of TUI-1, pinned at their source. The profile
+     * gate is only consultable end-to-end through the matcher's canonical
+     * profile, which passes it by definition — so the ceiling helper is
+     * probed directly: a softened adjacency or a positive gap price must
+     * refuse the exact-score model, and the caller's null handoff is
+     * structural (strict types, so any use of a refused ceiling fatals
+     * loudly instead of mis-ranking). The flood door is reachable through
+     * scored() itself: past the matcher budget of unscreenable paths the
+     * screen hands the whole job to the legacy walk, row for row.
+     */
+    public function testTheFailOpenDoorsRefuseTheFastPathWhenTheirPreconditionsBreak(): void
+    {
+        $gate = new \ReflectionMethod(MentionIndex::class, 'contiguousCoverScore');
+
+        $this->assertSame(19, $gate->invoke(null, ScoringProfile::canonical(), 3), 'canonical width 3 covers at 3+5+3+5+3');
+        $this->assertNull($gate->invoke(null, new ScoringProfile(3, -3, -5, -1, 0), 3), 'no adjacency bonus: the 3L contract dies, fail open');
+        $this->assertNull($gate->invoke(null, new ScoringProfile(3, -3, 1, -1, 5), 3), 'a priced gap breaks the ceilings, fail open');
+
+        $files = [];
+        for ($i = 0; $i < 102; $i++) {
+            $files[] = sprintf('w/fxx%04d.php', $i);
+        }
+        for ($i = 0; $i < 801; $i++) {
+            $files[] = sprintf('w/féx%dx.php', $i);
+        }
+        $lower = \array_map(
+            static fn (string $p): ?string => \preg_match('/[\x80-\xFF]/', $p) ? null : \strtolower($p),
+            $files,
+        );
+
+        $scored = new \ReflectionMethod(MentionIndex::class, 'scored');
+        $rows = $scored->invokeArgs(null, ['fxx', $files, $lower]);
+
+        $this->assertCount(903, $rows, 'every candidate survives the flood walk');
+        $this->assertSame($this->legacyWalkRank('fxx', $files), $rows, 'under flood the screen IS the legacy walk');
+    }
+
+    /**
      * The legacy walk, frozen here on purpose: the point of the pins above
      * is that the production fast path agrees with what the UNBOUNDED
      * implementation did, and a copy that calls production to build the
