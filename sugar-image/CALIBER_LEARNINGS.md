@@ -398,3 +398,20 @@ kept as design rationale for what shipped._
   row sums to 1.0 only with 0.0722). We fixed upstream; DO NOT copy the 0.144
   value back in the name of byte parity (B-15 / NTC-1 ruling: adopt upstream
   technique, refuse upstream typos).
+- **[gotcha:e12-pixel-cap-law]** E-12 (chafa campaign): the eager pixel caps
+  are load-bearing and KEPT — raising one requires measurement, and only
+  after E-01's decode clamp (W1). The law behind them: the RESIDENT form of
+  an animated stream stays an indexed cell grid under a cell ceiling
+  (sugar-animation's `Decoder::MAX_CELLS`, echoed here by
+  `ImageSource::FLIP_MAX_CELLS`), never N × W × H × 4 RGBA bytes held for
+  the playback lifetime. The ban is on residency, not on conversion: a
+  transient single-frame true-colour pass at USE time is E-12-clean — the
+  sugar-video `GifDecoder::upscaleToTarget()` shape materialises only the
+  current frame inside its braces and destroys every GD allocation before
+  returning, so the resident form stays the indexed cell grid. Decode-time
+  capture via `AnimationFrame::rgbaBytes()` was ruled out for exactly that
+  reason (`hydrate()` holds every frame eagerly). Corollary, the
+  single-resample rule: decode at the source's own pixel size so the
+  resident grid IS the 1:1 composited frame, and spend the one lossy
+  resample at use time in true-colour space — two lossy resamples with an
+  invented aspect in the middle is the double-loss this law closes.
