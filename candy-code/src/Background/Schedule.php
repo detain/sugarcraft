@@ -95,8 +95,13 @@ final class Schedule
             throw new \InvalidArgumentException("Schedule '{$name}' carries no prompt to run.");
         }
         // The mode is NORMALISED here, at the boundary, so nothing downstream
-        // re-validates it or trusts a file: an unknown spelling becomes the
-        // floor, and the registry surfaces that as a named row error at load.
+        // re-validates it or trusts a file: an unknown spelling silently
+        // becomes the floor. Nothing announces the coercion — the registry
+        // records load errors only for what fromArray() refuses outright (a
+        // non-string spelling throws); a floored row never surfaces as a
+        // named row error, so a typo'd mode simply runs as DontAsk.
+        // Announcing the floor is a ScheduleRegistry-side follow-up (it owns
+        // the loadErrors channel), deliberately not widened here.
         $mode = $permissionMode === null
             ? self::DEFAULT_PERMISSION_MODE->value
             : (PermissionMode::tryFrom($permissionMode) !== null ? $permissionMode : self::DEFAULT_PERMISSION_MODE->value);
