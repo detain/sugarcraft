@@ -71,7 +71,12 @@ final class ChildLifetimesToolTest extends TestCase
         $this->assertStringContainsString('0 problems', $out);
         $this->assertStringContainsString('9 findings', $out);
         // Frozen literal: counts every @proc_open site tree-wide — flip it in the SAME commit that adds a site.
-        $this->assertStringContainsString('31 proc_open sites', $out);
+        // 31 -> 33 landed with 0bcc4346b (candy-git-server smart-HTTP read path):
+        // StatelessRpc::advertise()/negotiate() minted two sites (each walked twice
+        // under the lib's nested psr-4 prefixes, +4) while Server.php shed its
+        // handleUploadPack()/handleReceivePack() bodies (-2). Net +2 over the pin
+        // 6aef01a8d froze at 31.
+        $this->assertStringContainsString('33 proc_open sites', $out);
     }
 
     /**
