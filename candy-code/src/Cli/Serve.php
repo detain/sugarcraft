@@ -645,6 +645,13 @@ final class Serve
                     try {
                         $reloaded = $server->reloadToken();
                     } catch (\RuntimeException) {
+                        // Two causes reach this guard: the token file itself
+                        // could not be read (the shape the answer names), or —
+                        // since WEB-6's fail-closed revocation — the rotation's
+                        // revokeAll could not land its revocation on disk nor
+                        // discard the durable copy. Either way the client is
+                        // told it may not trust the reload; the answer text
+                        // stays single-purpose bytes.
                         $connection->end((string) \json_encode(['ok' => false, 'error' => 'the token file could not be read'], \JSON_UNESCAPED_SLASHES) . "\n");
 
                         return;

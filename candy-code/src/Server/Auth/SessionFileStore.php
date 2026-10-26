@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Server\Auth;
 
 use SugarCraft\Code\Server\ErrorLog;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\PrivateRetainedDir;
 
 /**
@@ -92,7 +93,7 @@ final class SessionFileStore
             static fn (): string => $tokens->dir() . '/' . self::FILE,
             static fn (): string => \hash('sha256', $tokens->token()),
             $clock ?? static fn (): float => \microtime(true),
-            $log ?? static function (string $line): void { \error_log($line); },
+            $log ?? static function (string $line): void { Log::raw($line); },
         );
     }
 

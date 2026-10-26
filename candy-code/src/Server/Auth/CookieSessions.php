@@ -162,8 +162,11 @@ final class CookieSessions
      * stays readable while refusing both write and delete — does the store
      * fail LOUD: the next boot would resurrect the rows, and a promise that
      * silently became false is the one state authentication may not ship.
-     * {@see AuthContext::reloadToken()}'s caller already guards the throw;
-     * the logout route turns it into its 500.
+     * The throw escapes outward: {@see AuthContext::reloadToken()}'s control
+     * socket caller already guards it into an `ok:false` answer, while the
+     * logout route has no error responder in `src/Server` — there the failed
+     * revocation kills the request's connection unanswered, loud by absence
+     * of a lie, which is the point.
      */
     private function revocationStands(): void
     {
