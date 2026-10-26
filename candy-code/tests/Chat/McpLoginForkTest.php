@@ -13,6 +13,7 @@ use SugarCraft\Code\App\McpLoginProgressMsg;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Support\McpLoginFork;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tests\Support\SourceFileWalkTrait;
 
 /**
  * Roadmap MCP-5: in-TUI `/mcp login <server>` forks the CLI's loopback
@@ -23,6 +24,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 final class McpLoginForkTest extends TestCase
 {
     use HomeSandboxTrait;
+    use SourceFileWalkTrait;
 
     private string $sandbox = '';
 
@@ -208,5 +210,56 @@ final class McpLoginForkTest extends TestCase
         self::assertNull($cmd, 'the guide is a terminal answer, not a poll chain');
         $joined = \implode("\n", \array_map(static fn (Message $m): string => $m->content, $next->history));
         self::assertStringContainsString('candy-code mcp auth login <server>', $joined, 'the bare form still routes to the host guidance rows');
+    }
+
+    /**
+     * f3 (plan-verify-1026b, MCP-5 follow-through): the pre-fix docblock
+     * called releaseAll "Test and process-teardown hygiene" while nothing
+     * outside this file's own test tearDown had ever called it — a claim
+     * with no caller behind it. The docblock now states the truth: the
+     * method is test hygiene only, and the real hygiene for a login child
+     * that outlives the TUI is the detached finish plus OAuthLoopbackFlow's
+     * 300-second self-exit, collision-free because the child's loopback
+     * bind is to port 0. These legs pin the sentence shape AND the two
+     * source facts it leans on, so either moving reddens the doc-sync.
+     */
+    public function testReleaseAllDocblockDeclaresTestOnlyHygieneAndItsFactsHold(): void
+    {
+        $package = \dirname(__DIR__, 2);
+        $fork = file_get_contents($package . '/src/Support/McpLoginFork.php');
+        $oauth = file_get_contents($package . '/src/MCP/OAuthLoopbackFlow.php');
+        self::assertIsString($fork, 'the fork class source must be readable for this pin');
+        self::assertIsString($oauth, 'the OAuth flow source must be readable for this pin');
+
+        $flatFork = (string) preg_replace('/\s+/', ' ', $fork);
+        self::assertSame(1, substr_count($flatFork, 'TEST HYGIENE ONLY'), 'the docblock names the method test-only');
+        self::assertSame(0, substr_count($flatFork, 'Test and process-teardown hygiene'), 'the pre-fix lie must not return');
+
+        self::assertSame(1, substr_count($oauth, "'tcp://127.0.0.1:0'"), 'the loopback bind is to port 0, so a survivor cannot block the next login bind');
+        self::assertSame(1, substr_count($oauth, 'DEFAULT_TIMEOUT_SECONDS = 300.0'), 'the self-exit bound that reaps a survivor is still 300 s');
+    }
+
+    /**
+     * Census half of the same claim: releaseAll has exactly one production
+     * non-caller — none. A future lane that WIRES a call site flips this
+     * red on purpose: quitting would then abort in-flight logins, which is
+     * a product decision that must re-derive the docblock in the same
+     * commit, not an edit that slips past silently.
+     */
+    public function testNoProductionCodeCallsReleaseAll(): void
+    {
+        $callers = [];
+        foreach (self::everySourceFileIn(\dirname(__DIR__, 2), ['src', 'bin']) as $relative => $path) {
+            if ($relative === 'src/Support/McpLoginFork.php') {
+                continue; // the declaration itself; call sites live elsewhere
+            }
+            $text = file_get_contents($path);
+            self::assertIsString($text, $relative . ' must be readable for this census');
+            if (str_contains($text, 'releaseAll')) {
+                $callers[] = $relative;
+            }
+        }
+
+        self::assertSame([], $callers, 'releaseAll() has no production caller — wiring one re-opens the quit-aborts-login decision and the docblock together');
     }
 }

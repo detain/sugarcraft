@@ -146,8 +146,16 @@ final class McpLoginFork
      * There is no TERM-then-KILL ladder here — the wait is bounded not by an
      * escalation rung but by the child's own deadline (OAuthLoopbackFlow
      * self-exits after its 300-second budget no matter what signal it sees).
-     * Test and process-teardown hygiene, never the login path itself — a
-     * child left holding the loopback port would poison the next login.
+     * TEST HYGIENE ONLY, and nothing on the quit path calls it — by design:
+     * a login still running when the TUI exits is deliberately left to
+     * finish. The child's loopback bind is to port 0 (OAuthLoopbackFlow),
+     * so a survivor cannot block the next login's bind, and a grant stored
+     * after the parent is gone still attaches at the NEXT launch, exactly
+     * as the done beat announces. That self-exit, not a shutdown rung here,
+     * is the process hygiene; the zero-production-caller census is pinned
+     * in the fork's own test, so wiring a call site is a product change
+     * (quit would abort in-flight logins) that must re-derive this
+     * paragraph in the same commit.
      */
     public static function releaseAll(): void
     {

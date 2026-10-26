@@ -235,16 +235,18 @@ final class DescriptorInheritanceGuardTest extends TestCase
 
         // W5 MCP OAuth login helper. This one IS long-lived by design: the
         // child is parked in self::$slots[$server] and polled non-blocking
-        // from beat(). Death is accounted at both terminals — beat() reaps a
-        // gone child with proc_close (McpLoginFork.php:131) and teardown()
-        // SIGTERMs then reaps every live slot. The spec names fds 0-2
+        // from poll(). Death is accounted at both slot terminals — poll()
+        // reaps a gone child with proc_close, and releaseAll() SIGTERMs and
+        // reaps every live slot at test teardown (TEST HYGIENE ONLY — after
+        // a TUI quit nobody calls it; the survivor self-exits on
+        // OAuthLoopbackFlow's 300-second budget). The spec names fds 0-2
         // (0 a /dev/null file sink, 1/2 the slot's own pipes), so what this
         // row licenses is the inherited-fd half: fds >= 3 the host held at
         // spawn ride into the child for the slot's lifetime.
         'Support/McpLoginFork.php::arm' => [
             'count' => 1,
-            'reason' => 'async MCP OAuth login child held in self::$slots, reaped by beat() on '
-                . 'exit and by teardown(); inherited-fd >=3 exposure for the slot lifetime',
+            'reason' => 'async MCP OAuth login child held in self::$slots, reaped by poll() on '
+                . 'exit and by releaseAll() at test teardown; inherited-fd >=3 exposure for the slot lifetime',
         ],
     ];
 
