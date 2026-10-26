@@ -145,7 +145,9 @@ final class McpLoginFork
      * Tear every live slot down: SIGTERM, then a blocking proc_close reap.
      * There is no TERM-then-KILL ladder here — the wait is bounded not by an
      * escalation rung but by the child's own deadline (OAuthLoopbackFlow
-     * self-exits after its 300-second budget no matter what signal it sees).
+     * self-exits after its wait budget — 300 s by default, or the explicit
+     * --timeout the login line passed through arm() — no matter what signal
+     * it sees).
      * TEST HYGIENE ONLY, and nothing on the quit path calls it — by design:
      * a login still running when the TUI exits is deliberately left to
      * finish. The child's loopback bind is to port 0 (OAuthLoopbackFlow),
