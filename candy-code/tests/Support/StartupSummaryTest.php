@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Providers\ReportsServedModel;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Support\StartupSummary;
 use SugarCraft\Code\Theme;
@@ -352,6 +355,44 @@ final class StartupSummaryTest extends TestCase
 
         StartupSummary::clearCacheForTesting();
         $this->assertSame($first, StartupSummary::render($chat), 're-derivation is deterministic, facts included');
+    }
+
+    /**
+     * M-C (plan-verify-1026b): the served model is text a REMOTE SERVER chose,
+     * and the summary embeds it into the header row AND the memo key. The
+     * status bar has always folded this same value through its one-line choke
+     * (`Renderer::modelIndicator()` via `oneLine()`); the summary now shares
+     * that exact boundary, so a hostile /v1/models answer cannot paint an
+     * escape sequence, forge a U+E000/U+E001 click zone, or split the header
+     * row — and cannot poison the memo every idle tick re-paints.
+     */
+    public function testAHostileServedModelIsSanitisedBeforeTheFrameAndTheMemo(): void
+    {
+        $provider = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, ReportsServedModel::class]);
+        $provider->method('name')->willReturn('sglang');
+        $provider->method('servedModel')->willReturn("evil\e[31m\u{E000}zone\u{E001}\x07\nid");
+        $provider->method('contextWindow')->willReturn(100_000);
+
+        $chat = (new Chat(backend: EngineBackend::new($provider, 'static-default-id')))->withSize(120, 30);
+        $out = StartupSummary::render($chat);
+
+        $this->assertStringNotContainsString("\e[31m", $out, 'the injected SGR must not ride the startup frame');
+        $this->assertStringNotContainsString("\u{E000}", $out, 'a forged zone sentinel must not reach the frame');
+        $this->assertStringNotContainsString("\x07", $out, 'the BEL must not survive into the frame');
+        $this->assertStringNotContainsString('static-default-id', $out, 'the served id wins, same rule as the bar');
+        // The canonical fold's exact output — the shape the bar's own hostile
+        // pin expects for the identical input (StatusBarModelAndReadOnlyTest).
+        $this->assertStringContainsString(' · evilzone id', $out, 'the id survives as one sanitised segment');
+
+        // The header stays ONE row: strip the faint SGR and the fold's tail
+        // must still close it — a smuggled LF would break the row before
+        // 'id' and the raw ESC/sentinel bytes would sit in between.
+        $header = (string) preg_replace('/\e\[[0-9;]*m/', '', explode("\n", $out)[0]);
+        $this->assertStringEndsWith('evilzone id', $header, 'no break inside the id may split the header row');
+
+        // The memo stores under the sanitised fact: a re-render of the same
+        // chat is byte-identical, so the poisoned raw never resurfaces.
+        $this->assertSame($out, StartupSummary::render($chat), 'the memo carries the sanitised frame');
     }
 
     public function testTheEmptyAgentViewTranscriptKeepsThePlaceholder(): void

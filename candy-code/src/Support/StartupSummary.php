@@ -13,8 +13,10 @@ use SugarCraft\Code\Context\ProjectMemoryWriter;
 use SugarCraft\Code\Skills\SkillLoader;
 use SugarCraft\Code\Skills\SkillManager;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Tui\Components\PaneLabel;
 use SugarCraft\Code\Workspace\GitRunner;
 use SugarCraft\Code\Lang;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Style\Style;
 
 /**
@@ -216,6 +218,12 @@ final class StartupSummary
      * bar's model segment reads (served model wins, the configured one is the
      * fallback, and a backend that is not the engine reports neither).
      *
+     * The served id is a string a REMOTE SERVER chose, so — exactly as
+     * `Renderer::modelIndicator()` does before it paints the bar — it enters
+     * the fact bag through the one-line choke {@see oneLine()}: the memo key,
+     * the painted header row, and every later embed of this fact carry only
+     * the sanitised form, never the raw wire bytes.
+     *
      * @return array{0: ?string, 1: ?string}
      */
     private static function providerAndModel(Chat $chat): array
@@ -226,10 +234,25 @@ final class StartupSummary
                 return [null, null];
             }
 
-            return [$backend->provider()->name(), $backend->servedModel() ?? $backend->model()];
+            $model = $backend->servedModel() ?? $backend->model();
+
+            return [$backend->provider()->name(), self::oneLine($model)];
         });
 
         return $fact ?? [null, null];
+    }
+
+    /**
+     * The same one-line choke the status bar applies to this very value
+     * (`Renderer::oneLine()`): sugar-core's audited ANSI/CR sweep and
+     * zone-sentinel strip, then the fold to a single row. A provider id must
+     * never smuggle an escape, a control byte, a break, or a forged
+     * U+E000/U+E001 pair into the startup frame — or into the memo that
+     * re-paints it every idle tick.
+     */
+    private static function oneLine(string $text): string
+    {
+        return PaneLabel::of(Sanitize::stripZoneSentinels(Sanitize::untrustedForDisplay($text)));
     }
 
     /** The `git branch --show-current` read — EnvironmentBlock's precedent. */
