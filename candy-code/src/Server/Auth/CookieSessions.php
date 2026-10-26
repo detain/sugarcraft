@@ -20,6 +20,10 @@ namespace SugarCraft\Code\Server\Auth;
  * {@see new()} stays the memory-only shape the pre-WEB-6 docblock described.
  * The residual risk that the file is still authentication state (a written row
  * authenticates) is disclosed where the file is defined, {@see SessionFileStore}.
+ * REVOCATION IS FAIL-CLOSED against that file: where an ordinary write may
+ * degrade to memory-only, a revocation whose write failed discards the durable
+ * copy rather than let its rows resurrect at the next boot
+ * ({@see SessionFileStore::discard()}).
  */
 final class CookieSessions
 {
@@ -59,14 +63,15 @@ final class CookieSessions
      * $tokens' state directory, valid only while that token is.
      *
      * @param (\Closure(): float)|null $clock
+     * @param (\Closure(string): void)|null $log one-line repair log for the file store
      */
-    public static function persisted(TokenStore $tokens, ?\Closure $clock = null): self
+    public static function persisted(TokenStore $tokens, ?\Closure $clock = null, ?\Closure $log = null): self
     {
         $clock ??= static fn (): float => \microtime(true);
 
         return new self(
             ExpiringSecrets::new(self::LIFETIME_SECONDS, $clock, 256),
-            SessionFileStore::forTokenStore($tokens, $clock),
+            SessionFileStore::forTokenStore($tokens, $clock, $log),
             $clock,
         );
     }
@@ -97,7 +102,7 @@ final class CookieSessions
     {
         $this->boot();
         $this->sessions->revoke($id);
-        $this->flush();
+        $this->revocationStands();
     }
 
     /** Sign every browser out: the token their sign-in was checked against is gone. */
@@ -105,7 +110,7 @@ final class CookieSessions
     {
         $this->boot();
         $this->sessions->revokeAll();
-        $this->flush();
+        $this->revocationStands();
     }
 
     public function count(): int
@@ -133,13 +138,45 @@ final class CookieSessions
         $this->lastFlush = ($this->clock)();
     }
 
-    /** Push the live rows to disk and re-arm the slide throttle. */
-    private function flush(): void
+    /** Push the live rows to disk; answers whether the disk holds them, and only re-arms the slide throttle when it does. */
+    private function flush(): bool
     {
         if ($this->file === null) {
+            return true;
+        }
+        if (!$this->file->persist($this->sessions->export())) {
+            return false;
+        }
+        $this->lastFlush = ($this->clock)();
+
+        return true;
+    }
+
+    /**
+     * A revocation may not silently ride over a restart. When the write that
+     * would drop the revoked rows fails, the durable copy is DISCARDED —
+     * {@see SessionFileStore::discard()} — so the next boot imports nothing
+     * and nothing revoked can come back; the cost lands on the conservative
+     * side (live sessions sign out at restart, an availability loss, never a
+     * resurrected credential). Only when even the discard fails — a copy that
+     * stays readable while refusing both write and delete — does the store
+     * fail LOUD: the next boot would resurrect the rows, and a promise that
+     * silently became false is the one state authentication may not ship.
+     * {@see AuthContext::reloadToken()}'s caller already guards the throw;
+     * the logout route turns it into its 500.
+     */
+    private function revocationStands(): void
+    {
+        if ($this->file === null || $this->flush()) {
             return;
         }
-        $this->file->persist($this->sessions->export());
-        $this->lastFlush = ($this->clock)();
+        if ($this->file->discard()) {
+            return;
+        }
+
+        throw new \RuntimeException(
+            'a session revocation could not be written to the durable copy, and that copy could be neither discarded nor unreadable;'
+            . ' leaving it would resurrect the revoked rows on the next restart, so revocation fails loudly instead'
+        );
     }
 }

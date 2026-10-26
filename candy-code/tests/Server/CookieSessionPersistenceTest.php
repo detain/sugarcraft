@@ -15,7 +15,10 @@ use SugarCraft\Code\Server\Auth\TokenStore;
  * touching the disk. The file holds `sha256(id) => expiresAt` rows bound to a
  * fingerprint of the owner token; the pins here walk the whole contract —
  * restart round-trip, hash-not-plaintext census, prune-on-boot landing on
- * disk, the slide-write throttle, write-through revokes, token rotation
+ * disk, the slide-write throttle, write-through revokes — including their
+ * fail-closed half (a revoke whose write failed discards the durable copy
+ * rather than resurrect the row; a stranded crash-leftover partial is cleared
+ * and retried, a young one is left alone), token rotation
  * across a restart, and the fail-open degradation for an unusable state dir.
  *
  * Hermetic by construction: every store points at a fresh 0700 temp dir or at
@@ -121,6 +124,136 @@ final class CookieSessionPersistenceTest extends TestCase
         self::assertSame([], $rows['sessions']);
     }
 
+    public function testASuccessfulRevokeStillKeepsTheKeptRowsLiveAcrossARestart(): void
+    {
+        // The fail-closed pair's happy polarity: a revoke whose write SUCCEEDED
+        // must not touch the durable copy beyond dropping the revoked row.
+        $store = CookieSessions::persisted(TokenStore::new($this->w2gDir), fn (): float => $this->w2gNow);
+        $kept = $store->open();
+        $dropped = $store->open();
+        $store->revoke($dropped);
+
+        $after = CookieSessions::persisted(TokenStore::new($this->w2gDir), fn (): float => $this->w2gNow);
+        self::assertTrue($after->validate($kept), 'a healthy revoke may not sign the kept browsers out');
+        self::assertFalse($after->validate($dropped));
+    }
+
+    public function testAStrandedPartialIsClearedAndDurabilityRecovers(): void
+    {
+        // WEB-6 A hard shape: a crash mid-write leaves sessions.json.partial,
+        // the shared write discipline refuses it forever, and every later
+        // boot silently persists nothing. A provably-dead leftover at exactly
+        // that name must be cleared (logged) and the write retried.
+        $store = CookieSessions::persisted(TokenStore::new($this->w2gDir), fn (): float => $this->w2gNow);
+        $first = $store->open();
+
+        $this->w2gPlantPartial('{"sessions":{}}-half-written', 7_200);
+
+        $lines = [];
+        $next = CookieSessions::persisted(
+            TokenStore::new($this->w2gDir),
+            fn (): float => $this->w2gNow,
+            static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+        );
+        $second = $next->open();
+
+        self::assertFalse(
+            \file_exists($this->w2gDir . '/' . SessionFileStore::FILE . '.partial'),
+            'the stranded leftover survived the write that refused it',
+        );
+        self::assertCount(1, $lines, 'clearing a stranded partial is a fail-loud repair');
+        self::assertStringContainsString('stranded', $lines[0]);
+
+        $bytes = $this->w2gFileBytes();
+        self::assertStringContainsString(\hash('sha256', $first), $bytes);
+        self::assertStringContainsString(\hash('sha256', $second), $bytes, 'durability stayed dead behind the leftover');
+
+        $restarted = CookieSessions::persisted(TokenStore::new($this->w2gDir), fn (): float => $this->w2gNow);
+        self::assertTrue($restarted->validate($first));
+        self::assertTrue($restarted->validate($second));
+    }
+
+    public function testAYoungPartialIsALiveWriterAndStaysPut(): void
+    {
+        // The sweep's other polarity: a fresh `sessions.json.partial` is some
+        // writer IN FLIGHT, not a stranding — clearing it would corrupt a
+        // concurrent write. The failed write degrades quietly, as before.
+        $store = CookieSessions::persisted(TokenStore::new($this->w2gDir), fn (): float => $this->w2gNow);
+        $first = $store->open();
+        $bytesBefore = $this->w2gFileBytes();
+
+        $this->w2gPlantPartial('in-flight-bytes', 5);
+
+        $next = CookieSessions::persisted(TokenStore::new($this->w2gDir), fn (): float => $this->w2gNow);
+        $second = $next->open();
+
+        self::assertTrue(\file_exists($this->w2gDir . '/' . SessionFileStore::FILE . '.partial'));
+        self::assertSame($bytesBefore, $this->w2gFileBytes(), 'the young leftover must not be touched, nor the write forced');
+        self::assertTrue($next->validate($second), 'in memory the session is still live');
+        self::assertTrue($next->validate($first));
+    }
+
+    public function testARevocationThatCannotBeWrittenDiscardsTheFileInsteadOfResurrecting(): void
+    {
+        // WEB-6 B the resurrection shape, pre-fix: revoke() -> persist() fails
+        // and is swallowed -> the stale file still holds the revoked row ->
+        // the next boot imports it back. Fail-closed instead: the durable copy
+        // is discarded (all rows sign out at restart — the conservative
+        // availability cost), and the revocation stands.
+        $store = CookieSessions::persisted(TokenStore::new($this->w2gDir), fn (): float => $this->w2gNow);
+        $kept = $store->open();
+        $doomed = $store->open();
+
+        $this->w2gPlantPartial('in-flight-bytes', 5); // blocks every later write, is never cleared
+
+        $lines = [];
+        $durable = CookieSessions::persisted(
+            TokenStore::new($this->w2gDir),
+            fn (): float => $this->w2gNow,
+            static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+        );
+        $durable->revoke($doomed); // must NOT throw: the discard is a legal landing
+
+        self::assertFalse(
+            @\file_exists($this->w2gDir . '/' . SessionFileStore::FILE) && \is_file($this->w2gDir . '/' . SessionFileStore::FILE),
+            'the copy that could not take the revocation must not remain importable',
+        );
+        self::assertSame([], $this->w2gRowHashes());
+        self::assertNotEmpty($lines, 'discarding the durable copy is a fail-loud repair');
+        self::assertStringContainsString('discarded', $lines[0]);
+
+        $after = CookieSessions::persisted(TokenStore::new($this->w2gDir), fn (): float => $this->w2gNow);
+        self::assertFalse($after->validate($doomed), 'a revoked row may not ride over a restart');
+        self::assertFalse($after->validate($kept), 'the conservative side of the choice: everyone restarts signed out');
+    }
+
+    public function testARevocationThatCanNeitherBeWrittenNorDiscardedFailsLoudly(): void
+    {
+        // The last resort: a durable copy that refuses the write AND the
+        // unlink (here: a directory sitting on the file name — uid-agnostic).
+        // Silent swallowing would resurrect the rows; the store raises.
+        self::assertTrue(\mkdir($this->w2gDir . '/' . SessionFileStore::FILE));
+
+        $store = CookieSessions::persisted(TokenStore::new($this->w2gDir), fn (): float => $this->w2gNow);
+        $cookie = $store->open(); // a failed courtesy write on open may not throw
+
+        $raised = false;
+        try {
+            $store->revoke($cookie);
+        } catch (\RuntimeException $failure) {
+            $raised = true;
+            self::assertStringContainsString('resurrect', $failure->getMessage());
+        }
+        self::assertTrue($raised, 'revocation with no legal landing must fail loudly');
+        self::assertFalse($store->validate($cookie), 'the in-memory revocation stands regardless');
+
+        @\rmdir($this->w2gDir . '/' . SessionFileStore::FILE);
+    }
+
     public function testATokenRotatedWhileTheServerWasDownSignsTheCookiesOut(): void
     {
         $store = CookieSessions::persisted(TokenStore::new($this->w2gDir), fn (): float => $this->w2gNow);
@@ -176,5 +309,14 @@ final class CookieSessionPersistenceTest extends TestCase
         }
 
         return $bytes;
+    }
+
+    /** Plant a `sessions.json.partial` aged $ageSeconds, as a crash mid-write would. */
+    private function w2gPlantPartial(string $bytes, int $ageSeconds): void
+    {
+        $path = $this->w2gDir . '/' . SessionFileStore::FILE . '.partial';
+        self::assertNotFalse(\file_put_contents($path, $bytes));
+        $stamp = \time() - $ageSeconds;
+        self::assertTrue(@\touch($path, $stamp));
     }
 }

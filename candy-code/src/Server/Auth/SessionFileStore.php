@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Server\Auth;
 
+use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Support\PrivateRetainedDir;
 
 /**
@@ -29,15 +30,40 @@ use SugarCraft\Code\Support\PrivateRetainedDir;
  * in {@see TokenStore::rotate()} ("every cookie minted from the old one stops
  * authenticating") survives a restart, not just a live reload.
  *
- * BEST EFFORT BY DESIGN. A state directory that cannot be verified, a file
- * that cannot be parsed, a write that fails: each costs only durability,
- * never the request. The store degrades to its pre-WEB-6 shape — memory-only,
- * restart signs out — rather than failing authentication open OR closed on an
- * I/O accident.
+ * BEST EFFORT BY DESIGN — WITH ONE FAIL-CLOSED EXCEPTION. A state directory
+ * that cannot be verified, a file that cannot be parsed, a write that fails:
+ * each costs only durability, never the request. The store degrades to its
+ * pre-WEB-6 shape — memory-only, restart signs out — rather than failing
+ * authentication open OR closed on an I/O accident. The exception is
+ * revocation: {@see CookieSessions} may not let a revoked row ride over a
+ * restart because the write that should have dropped it was swallowed, so the
+ * revocation path escalates through {@see discard()} (and, failing THAT,
+ * loudly). Durability lost is a courtesy; durability lying is a defect.
+ *
+ * STRANDED PARTIALS ARE CLEARED, NOT TOLERATED FOREVER. A hard kill between
+ * {@see PrivateRetainedDir::write()}'s lstat and its rename leaves
+ * `sessions.json.partial`, and the shared write discipline refuses to
+ * overwrite it — which, with the swallow above, would silently kill durability
+ * for every later boot. So a write that fails tries once to clear a partial
+ * that is provably a leftover (regular file, our uid, older than
+ * {@see PARTIAL_STRANDED_MIN_AGE_SECONDS}) and retries; anything else at that
+ * name — a fresh writer's in-flight file, a link, a plant — stays, and the
+ * failure degrades as before.
  */
 final class SessionFileStore
 {
     public const FILE = 'sessions.json';
+
+    /**
+     * How old `sessions.json.partial` must be before a failed write removes it
+     * as a stranding. The hold time of a LIVE write is milliseconds (a few KB
+     * through `file_put_contents` and a `rename`), so a minute is already
+     * orders of magnitude past any in-flight file — while the alternative
+     * (AtomicFileWriter's hour) would strand durability for an hour after
+     * every crash-restart, which for a file that silently gates ALL future
+     * writes is not a stray dotfile but a dead feature.
+     */
+    public const PARTIAL_STRANDED_MIN_AGE_SECONDS = 60;
 
     private const KEY_ROWS = 'sessions';
 
@@ -45,20 +71,28 @@ final class SessionFileStore
 
     private const LABEL = 'server state';
 
-    /** @param (\Closure(): string) $pathResolver the file path, throwing RuntimeException when the dir is unusable @param (\Closure(): string) $fingerprintProvider @param (\Closure(): float) $clock */
+    /**
+     * @param (\Closure(): string) $pathResolver the file path, throwing RuntimeException when the dir is unusable
+     * @param (\Closure(): string) $fingerprintProvider
+     * @param (\Closure(): float) $clock
+     * @param (\Closure(string): void) $log one-line sink for repairs that the request never sees
+     */
     private function __construct(
         private readonly \Closure $pathResolver,
         private readonly \Closure $fingerprintProvider,
         private readonly \Closure $clock,
+        private readonly \Closure $log,
     ) {
     }
 
-    public static function forTokenStore(TokenStore $tokens, ?\Closure $clock = null): self
+    /** @param (\Closure(): float)|null $clock @param (\Closure(string): void)|null $log */
+    public static function forTokenStore(TokenStore $tokens, ?\Closure $clock = null, ?\Closure $log = null): self
     {
         return new self(
             static fn (): string => $tokens->dir() . '/' . self::FILE,
             static fn (): string => \hash('sha256', $tokens->token()),
             $clock ?? static fn (): float => \microtime(true),
+            $log ?? static function (string $line): void { \error_log($line); },
         );
     }
 
@@ -108,27 +142,130 @@ final class SessionFileStore
     }
 
     /**
-     * Publish $rows (in {@see ExpiringSecrets::export()} shape). Swallows the
-     * RuntimeExceptions of an unusable state directory: durability is a
-     * courtesy, and the server has been authenticating out of memory alone
-     * until today.
+     * Publish $rows (in {@see ExpiringSecrets::export()} shape) and answer
+     * whether the disk now actually holds them. Swallows the RuntimeExceptions
+     * of an unusable state directory: durability is a courtesy, and the server
+     * has been authenticating out of memory alone until today. WHAT THE ANSWER
+     * IS FOR: a caller whose write carries a revocation may not treat "false"
+     * as courtesy — see {@see discard()}.
      *
      * @param array<string, float> $rows
      */
-    public function persist(array $rows): void
+    public function persist(array $rows): bool
     {
         try {
-            $path = ($this->pathResolver)();
+            $dir = \dirname(($this->pathResolver)());
             $encoded = \json_encode([
                 self::KEY_ROWS => $rows,
                 self::KEY_FINGERPRINT => ($this->fingerprintProvider)(),
             ], \JSON_UNESCAPED_SLASHES | \JSON_PRESERVE_ZERO_FRACTION);
             if ($encoded === false) {
-                return;
+                return false;
             }
-            PrivateRetainedDir::write(\dirname($path), self::FILE, $encoded . "\n", self::LABEL);
         } catch (\RuntimeException) {
-            // Fail open toward memory-only: see the class docblock.
+            return false;
+        }
+
+        $text = $encoded . "\n";
+
+        try {
+            PrivateRetainedDir::write($dir, self::FILE, $text, self::LABEL);
+
+            return true;
+        } catch (\RuntimeException $failure) {
+            if (!$this->clearStrandedPartial($dir, $failure)) {
+                return false;
+            }
+        }
+
+        try {
+            PrivateRetainedDir::write($dir, self::FILE, $text, self::LABEL);
+
+            return true;
+        } catch (\RuntimeException) {
+            return false;
+        }
+    }
+
+    /**
+     * Make the durable copy UNIMPORTABLE: delete it. A revocation that could
+     * not be written must still stand after a restart, and with no readable
+     * file {@see load()} imports nothing — every live session then rides over
+     * the restart unsigned-out, which is the conservative direction (an
+     * availability cost, never a revoked row resurrected). True when nothing
+     * the loader could import remains: unlinked now, never there, or behind a
+     * directory the reader could not even resolve a path inside.
+     */
+    public function discard(): bool
+    {
+        try {
+            $path = ($this->pathResolver)();
+        } catch (\RuntimeException) {
+            return true;
+        }
+
+        if (@\unlink($path)) {
+            $this->logLine('session durability discarded: the durable copy was removed so a revocation that failed to persist cannot resurrect rows on restart');
+
+            return true;
+        }
+
+        clearstatcache(true, $path);
+
+        return @\lstat($path) === false;
+    }
+
+    /**
+     * Whether a refused write was caused by a stranded partial this store may
+     * lawfully remove — and if so, remove it and let the caller retry. The
+     * gates are AtomicFileWriter's orphan-rule (regular file, our uid,
+     * a real age; a future mtime reads as too young, never as ancient)
+     * narrowed to ONE name: this store's own intermediate. Anything else that
+     * stands at that name — a link, a plant, a foreign owner, a live writer's
+     * in-flight file — is refused the way {@see PrivateRetainedDir::write()}
+     * refused it.
+     */
+    private function clearStrandedPartial(string $dir, \RuntimeException $failure): bool
+    {
+        $partial = $dir . '/' . self::FILE . PrivateRetainedDir::PARTIAL_SUFFIX;
+        clearstatcache(true, $partial);
+        $stat = @\lstat($partial);
+
+        if ($stat === false) {
+            return true;
+        }
+
+        if (((int) $stat['mode'] & 0o170000) !== 0o100000) {
+            return false;
+        }
+
+        $uid = \function_exists('posix_geteuid') ? \posix_geteuid() : null;
+
+        if ($uid !== null && (int) $stat['uid'] !== $uid) {
+            return false;
+        }
+
+        if (time() - (int) $stat['mtime'] < self::PARTIAL_STRANDED_MIN_AGE_SECONDS) {
+            return false;
+        }
+
+        if (!@\unlink($partial)) {
+            return false;
+        }
+
+        $this->logLine('stranded session partial cleared (the write is retried): '
+            . ErrorLog::line($failure, 'session durability'));
+
+        return true;
+    }
+
+    /** One line to the log seam; a seam that throws may not eat the write path. */
+    private function logLine(string $line): void
+    {
+        try {
+            ($this->log)($line);
+        } catch (\Throwable) {
+            // the log is the record of the repair, not the repair itself
         }
     }
 
