@@ -1247,8 +1247,13 @@ final class Bootstrap
         $sessionName = $opened['name'];
 
         // OBS-1: the OTLP event sink, dark unless the launch environment
-        // names an OTLP endpoint. Serves both `chat` and `serve` because
-        // serve builds its Chat through this same funnel.
+        // names an OTLP endpoint. This call site is the ONLY sink wiring
+        // in the program: `serve` does not build its sessions through it
+        // — they run on `Host\SessionHost`, which carries no sink at all
+        // — so a serve process exports NOTHING even with an endpoint set.
+        // The gap is recorded honestly as OBS-02 in COMPARISON.md; wiring
+        // serve telemetry is an owner-gated product decision, so nothing
+        // here may quietly grow toward it.
         $eventSink = self::observabilitySink();
 
         $chat = new Chat(
@@ -1267,8 +1272,9 @@ final class Bootstrap
             // SES-1: a resumed session's spend does not restart at $0.00 —
             // the durable usage_records rollup reseeds the tracker at THE
             // chat-construction seam both `--continue` and `--resume` pass
-            // through (serve builds its Chat elsewhere and gets a fresh zero
-            // per its own contract). A fresh session has no rows, so the
+            // through (serve runs no Chat at all — `Host\SessionHost` adopts
+            // the same ledger at its own SES-1b seam, per its own contract).
+            // A fresh session has no rows, so the
             // accessor answers null and Chat's `?? new TokenTracker()`
             // fallback keeps byte-identical launch semantics.
             tokenTracker: $sessionStore instanceof EnhancedSessionStore

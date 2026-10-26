@@ -12,6 +12,14 @@ use PHPUnit\Framework\TestCase;
  * the production construction threads the sink, the build seam is dark by
  * default with a bounded shutdown flush, and the whole feature still owes
  * zero open-telemetry packages.
+ *
+ * These are CHAT-path pins by design: the sink is wired at the single
+ * `Bootstrap::chat()` construction site, and `serve` runs no Chat (its
+ * sessions live on `Host\SessionHost`, which carries no sink), so a serve
+ * process exports nothing today — the gap is the OBS-02 row of
+ * COMPARISON.md and wiring it is an owner-gated product decision. Nothing
+ * here asserts serve coverage; if serve ever grows a sink, that wiring
+ * needs its own pin, not a rewording of these.
  */
 final class ObservabilityWiringTest extends TestCase
 {
@@ -39,7 +47,7 @@ final class ObservabilityWiringTest extends TestCase
         $this->assertStringContainsString('private readonly EventSink $eventSink = new NullEventSink(),', $chat, 'a Chat nobody configures is dark by the parameter default');
 
         $bootstrap = self::read(self::BOOTSTRAP_SOURCE);
-        $this->assertStringContainsString('eventSink: $eventSink,', $bootstrap, 'chat() threads the built sink into the single funnel serve shares');
+        $this->assertStringContainsString('eventSink: $eventSink,', $bootstrap, 'chat() threads the built sink — the ONLY wiring site: serve builds no Chat at all and exports nothing (OBS-02 in COMPARISON.md)');
         $seam = self::methodBody($bootstrap, 'public static function observabilitySink');
         $this->assertStringContainsString('OtelConfig::sinkFromEnvironment(', $seam, 'the production seam runs through the single OtelConfig gate');
         $this->assertSame(0, substr_count($seam, 'exportsEvents'), 'the seam holds no second copy of the dark decision — F2 unification');

@@ -189,16 +189,18 @@ long-lived server process started before any fold happened.
 
 ## OpenTelemetry export variables
 
-Read by `OtelConfig::fromEnvironment()` when the launch builds its Chat —
-typed spans over the session's own event DTOs (`src/Events/*`) exported as
-OTLP/HTTP-JSON to a collector. The exporter is hand-rolled on the existing
-Guzzle dependency: no `open-telemetry/*` packages join a terminal tree.
+Read by `OtelConfig::fromEnvironment()` when the chat funnel
+(`Bootstrap::chat()` — its one live caller is the TUI launch) builds its
+`Chat` — typed spans over the session's own event DTOs
+(`src/Events/*`) exported as OTLP/HTTP-JSON to a collector. The exporter
+is hand-rolled on the existing Guzzle dependency: no
+`open-telemetry/*` packages join a terminal tree.
 Export is **dark by default**: with no endpoint below, `Chat` carries a
 `NullEventSink`, nothing is built, and no code path performs I/O.
 
 | Variable | Default when unset | Description |
 |----------|--------------------|-------------|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset — event export is entirely off | Base URL of an OTLP/HTTP collector, e.g. `http://localhost:4318`. Presence is the ONLY switch; an empty or whitespace value counts as unset. Spans post to `<endpoint>/v1/traces`: one `chat.turn` INTERNAL span per model step, opened by the step's `StepStarted` and closed by its `UsageUpdated` (or a `SpendCapBreached`), carrying token/cost totals and tool-activity attributes. Attributes are identifiers, counters and costs — never payload: no prompts, no tool arguments, no tool output, no media frames. The per-request bound is `CANDY_CODE_OTEL_TIMEOUT`; batching is `CANDY_CODE_OTEL_BATCH_SIZE`; the shutdown flush is bounded and best-effort. Unpriced models export their cost as `0.0` PLUS a `candy_code.model.unpriced` attribute naming the model, so a dashboard never mistakes "not priced" for "free". Serve-mode sessions export the same way (they run the same `Chat`). |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset — event export is entirely off | Base URL of an OTLP/HTTP collector, e.g. `http://localhost:4318`. Presence is the ONLY switch; an empty or whitespace value counts as unset. Spans post to `<endpoint>/v1/traces`: one `chat.turn` INTERNAL span per model step, opened by the step's `StepStarted` and closed by its `UsageUpdated` (or a `SpendCapBreached`), carrying token/cost totals and tool-activity attributes. Attributes are identifiers, counters and costs — never payload: no prompts, no tool arguments, no tool output, no media frames. The per-request bound is `CANDY_CODE_OTEL_TIMEOUT`; batching is `CANDY_CODE_OTEL_BATCH_SIZE`; the shutdown flush is bounded and best-effort. Unpriced models export their cost as `0.0` PLUS a `candy_code.model.unpriced` attribute naming the model, so a dashboard never mistakes "not priced" for "free". **Chat-path only:** the sink is wired at the single `Bootstrap::chat()` construction site. `serve` runs no `Chat` — its sessions live on `Host\SessionHost`, which carries no sink — and a headless `-p` run builds no `Chat` either (by design, see its class docblock), so neither exports anything even with an endpoint set. The gap is tracked as OBS-02 in `COMPARISON.md`; wiring the other hosts is an owner-gated product decision. |
 | `OTEL_EXPORTER_OTLP_HEADERS` | unset — no extra headers | Comma-separated `key=value` pairs added to every export POST (the OTel-conventional auth/collection-header variable, e.g. `Authorization=Bearer …`). Pairs without `=` or with an empty key are dropped; the rest are sent verbatim. |
 
 ---
