@@ -25,7 +25,9 @@ use SugarCraft\Code\Background\ScheduleRegistry;
  * `mcp.json` landed on — so there is no `add` verb here to duplicate the
  * grammar of a JSON file in a command parser. A corrupt file or a corrupt ROW
  * never crashes the launch; both are listed loudly here, and the good rows
- * keep firing.
+ * keep firing. A row whose permission mode the floor coerced keeps firing
+ * too, announced beside itself as a note — the coercion is loud, never
+ * silent.
  *
  * `enable`/`disable`/`delete` on a PERSISTED row write schedules.json back
  * through the registry before answering, so the change survives the session;
@@ -65,9 +67,9 @@ final class SchedulesCommand implements HostCommand
     }
 
     /**
-     * The `list` body: one line per row (file or loop), then the load
-     * refusals, so a hand-edit mistake reads HERE rather than only in the
-     * absence of a fire.
+     * The `list` body: one line per row (file or loop), then the load notes
+     * — refusals and coerced permission modes alike — so a hand-edit mistake
+     * reads HERE rather than only in the absence of a fire.
      */
     public static function listing(ScheduleRegistry $registry): string
     {

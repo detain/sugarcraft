@@ -86,6 +86,48 @@ final class ScheduleRegistryTest extends TestCase
         $this->assertStringContainsString('Bad Name', $registry->loadErrors()[0]);
     }
 
+    /**
+     * AUT-1 follow-through (plan-verify-1026b f4): a row whose spelled
+     * permission mode this build does not know still LOADS on the floor (the
+     * permission-floor contract), but the coercion must never be silent —
+     * {@see ScheduleRegistry::load()} records a named note beside the row.
+     * The two negative legs matter just as hard: a real spelling rides
+     * unchanged (ownership posture) and an absent mode is the documented
+     * default, not a coercion, so neither may add a note.
+     */
+    public function testACoercedModeSpellingLoadsOnTheFloorYetIsAnnouncedByName(): void
+    {
+        file_put_contents($this->path, json_encode([
+            'version' => 1,
+            'schedules' => [
+                ['name' => 'typo', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'acceptEdits'],
+                ['name' => 'spelled-floor', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'dont-ask'],
+                ['name' => 'named-real', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'plan'],
+                ['name' => 'minimal', 'every' => 60, 'prompt' => 'p'],
+            ],
+        ]));
+        $registry = ScheduleRegistry::atPath($this->path);
+        $registry->load();
+
+        $this->assertSame(
+            ['typo', 'spelled-floor', 'named-real', 'minimal'],
+            array_map(static fn (Schedule $r): string => $r->name, $registry->all()),
+            'a coercible row is never dropped for its bad spelling — only its mode is floored',
+        );
+        $this->assertSame('dont-ask', $registry->get('typo')?->permissionMode, 'the floor decides behavior, as ever');
+        $this->assertSame('plan', $registry->get('named-real')?->permissionMode);
+
+        $notes = $registry->loadErrors();
+        $this->assertCount(1, $notes, 'exactly the coerced spelling is announced; a real spelling and a documented default stay silent');
+        $this->assertStringContainsString("'typo'", $notes[0], 'the note names the row');
+        $this->assertStringContainsString('"acceptEdits"', $notes[0], 'and the spelling that was refused');
+        $this->assertStringContainsString('is not one of', $notes[0], 'naming what could be spelled instead');
+        $this->assertStringContainsString('loaded', $notes[0], 'the note must say the row loaded — the neutral header relies on it');
+
+        $registry->load();
+        $this->assertCount(1, $registry->loadErrors(), 'a reload re-derives the notes, never accumulates a pile');
+    }
+
     public function testAnUnknownFileVersionRefusesToLoadRatherThanHalfTrusting(): void
     {
         file_put_contents($this->path, json_encode(['version' => 2, 'schedules' => [['name' => 'x', 'every' => 60, 'prompt' => 'p']]]));

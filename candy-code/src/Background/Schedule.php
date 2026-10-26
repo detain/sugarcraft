@@ -35,7 +35,10 @@ use SugarCraft\Code\Permissions\PermissionMode;
  * loudly by the daemon's console approver instead of blocking on a question
  * nobody is there to read (the `HeadlessPermissionPrompt` polarity). A real
  * mode spelled by the operator's own hand-edited file rides unchanged —
- * ownership posture, the same one the user-scope `mcp.json` landed on.
+ * ownership posture, the same one the user-scope `mcp.json` landed on. The
+ * one override this floor does make (an unknown spelling) is announced by
+ * name at load through {@see ScheduleRegistry::loadErrors()}; it is never a
+ * silent rewrite of what the operator asked for.
  */
 final class Schedule
 {
@@ -96,12 +99,14 @@ final class Schedule
         }
         // The mode is NORMALISED here, at the boundary, so nothing downstream
         // re-validates it or trusts a file: an unknown spelling silently
-        // becomes the floor. Nothing announces the coercion — the registry
-        // records load errors only for what fromArray() refuses outright (a
-        // non-string spelling throws); a floored row never surfaces as a
-        // named row error, so a typo'd mode simply runs as DontAsk.
-        // Announcing the floor is a ScheduleRegistry-side follow-up (it owns
-        // the loadErrors channel), deliberately not widened here.
+        // becomes the floor. The silence is LOCAL to this constructor: because
+        // the coercion changes what the operator spelled, a file row whose
+        // spelled mode differs from the settled one is announced by name at
+        // load in ScheduleRegistry::load() (which owns the loadErrors
+        // channel, read by `/schedules`). An ABSENT mode is not a coercion —
+        // the format documents the floor as its default — and a real mode
+        // spelled by the operator's own hand-edited file rides unchanged;
+        // neither adds a note.
         $mode = $permissionMode === null
             ? self::DEFAULT_PERMISSION_MODE->value
             : (PermissionMode::tryFrom($permissionMode) !== null ? $permissionMode : self::DEFAULT_PERMISSION_MODE->value);

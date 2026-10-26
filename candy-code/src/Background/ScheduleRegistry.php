@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Background;
 
 use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\PrivateDir;
 
@@ -61,8 +62,11 @@ use SugarCraft\Code\Support\PrivateDir;
  *
  * Corrupt input never crashes a launch: a malformed FILE is recorded whole in
  * {@see loadErrors()} and the roster starts empty; a malformed ROW is skipped
- * by name and its siblings keep running. `/schedules` surfaces both loudly,
- * which is where a human will see them.
+ * by name and its siblings keep running; a ROW that spells its permission
+ * mode in a shape this build does not know loads on the floor — and its
+ * coercion is recorded in {@see loadErrors()} too, a note beside the row,
+ * never a silent override. `/schedules` surfaces all of it loudly, which is
+ * where a human will see it.
  */
 final class ScheduleRegistry
 {
@@ -104,7 +108,10 @@ final class ScheduleRegistry
     /** schedule name => background session id of the run still in flight. */
     private array $fired = [];
 
-    /** Names this registry refused to load, already formatted for a human row. */
+    /**
+     * Human-formatted load notes: refusals this registry acted on, plus rows
+     * that LOADED yet whose spelled permission mode the floor overrode.
+     */
     private array $loadErrors = [];
 
     /** content digest of the last read (or write), so a reload only follows real bytes. */
@@ -174,7 +181,7 @@ final class ScheduleRegistry
         return false;
     }
 
-    /** @return list<string> human-formatted load refusals, oldest first */
+    /** @return list<string> human-formatted load notes (refusals and coerced modes), oldest first */
     public function loadErrors(): array
     {
         return $this->loadErrors;
@@ -518,9 +525,10 @@ final class ScheduleRegistry
     }
 
     /**
-     * Read schedules.json. Never throws: every failure mode becomes a named
-     * entry in {@see loadErrors()} with the roster (re)built from whatever is
-     * trustworthy.
+     * Read schedules.json. Never throws: every failure mode — and every
+     * permission-mode coercion, which is a note beside a row that still
+     * loaded — becomes a named entry in {@see loadErrors()}, with the roster
+     * (re)built from whatever is trustworthy.
      */
     public function load(): void
     {
@@ -574,6 +582,21 @@ final class ScheduleRegistry
                 $this->loadErrors[] = "schedule '{$row->name}' appears twice; the later row was skipped.";
 
                 continue;
+            }
+            // AUT-1 follow-through: the floor lives in Schedule's constructor,
+            // and the registry owns this channel, so the ANNOUNCE lands here —
+            // never silently. A spelled mode that does not equal what the row
+            // settled to is the one shape the floor coerces (an unknown string
+            // becomes `dont-ask`); an ABSENT mode is the documented default the
+            // format teaches and a real spelling rides unchanged, so neither
+            // may add noise. `is_string` keeps an explicit JSON null on the
+            // silent side beside the absent field. The row still loads and
+            // fires on the floor — this is a note, not a refusal, which is why
+            // the listing header reads "notes" rather than naming refusals.
+            $spelled = $raw['permissionMode'] ?? null;
+            if (is_string($spelled) && $spelled !== $row->permissionMode) {
+                $known = implode(', ', array_map(static fn (PermissionMode $m): string => $m->value, PermissionMode::cases()));
+                $this->loadErrors[] = "schedule '{$row->name}': permission mode \"{$spelled}\" is not one of: {$known}; the row loaded and runs as the floor \"{$row->permissionMode}\".";
             }
             $this->rows[$row->name] = $row;
         }

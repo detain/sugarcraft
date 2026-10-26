@@ -164,8 +164,27 @@ final class LoopSchedulesCommandTest extends TestCase
         $fresh = ScheduleRegistry::atPath($path);
         self::assertTrue($fresh->reloadIfChanged());
         $listing = self::lastRow((new SchedulesCommand())->run($this->context($fresh), '/schedules'));
-        self::assertStringContainsString('Not loaded from', $listing, 'the refused document is announced');
+        self::assertStringContainsString('Load notes from', $listing, 'the refused document is announced');
         self::assertStringContainsString('version 99', $listing, 'by name, not silently');
+    }
+
+    public function testListingSurfacesACoercedModeBesideTheRowThatLoaded(): void
+    {
+        $path = $this->root . '/schedules.json';
+        file_put_contents($path, json_encode([
+            'version' => 1,
+            'schedules' => [
+                ['name' => 'typo', 'every' => 60, 'prompt' => 'check build', 'permissionMode' => 'approve'],
+            ],
+        ]));
+        $registry = ScheduleRegistry::atPath($path);
+        $registry->load();
+
+        $listing = self::lastRow((new SchedulesCommand())->run($this->context($registry), '/schedules'));
+        self::assertStringContainsString('typo — every', $listing, 'the row LISTS (it loaded on the floor) — announce, never drop');
+        self::assertStringContainsString('"approve"', $listing, 'the refused spelling is named on the human surface');
+        self::assertStringContainsString('is not one of', $listing);
+        self::assertStringContainsString('Load notes from', $listing, 'notes cover refusals and coercions alike');
     }
 
     public function testReadOnlyJudgementIsVerbShaped(): void
