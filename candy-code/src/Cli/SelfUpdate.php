@@ -68,6 +68,15 @@ use SugarCraft\Code\Support\Version;
  * over the phar — consuming it in the rename, so the restore is one-shot by
  * construction and touches no network.
  *
+ * WINDOWS CAVEAT (DST-3). On NT, renaming over the image a live process is
+ * executing from fails while that process runs — so on Windows the LAST leg
+ * of the sequence above is the one that dies, and it dies LOUD: the temp is
+ * deleted, the preserved `.old` copy and the untouched running phar remain
+ * exactly as they were, `rename_failed` goes to stderr, and the verb exits
+ * 1. There is no silent half-swap to recover from. Updating a Windows
+ * install stays a manual file replace until someone rules a relaunch dance;
+ * the fail-loud leg is the documented answer, not a defect to route around.
+ *
  * TRUST MODEL, HONESTLY — TWO STATES. Both the phar and its sidecar come
  * from the same origin (GitHub release assets, over TLS). Keyless state (a
  * build whose {@see SelfUpdate::PUBLIC_KEY_BASE64} is the empty string —

@@ -453,6 +453,14 @@ final class SelfUpdateTest extends TestCase
         \chmod($this->livePharPath(), 0o600);
         self::assertSame(NonInteractive::EXIT_FAILURE, $pharRefusal);
         self::assertStringContainsString('is not writable', $this->errorText());
+
+        // DST-3: the Windows residual of the same "target refuses the swap"
+        // family is documented, not silently unhandled — renaming over a
+        // live image fails on NT and the class must say the last leg dies
+        // LOUD rather than leaving readers hunting for a half-swap.
+        $doc = (string) (new \ReflectionClass(SelfUpdate::class))->getDocComment();
+        self::assertStringContainsString('WINDOWS CAVEAT', $doc, 'the class docblock lost its Windows active-image caveat — the final rename() leg fails loud on NT and the file must document it');
+        self::assertStringContainsString('rename_failed', $doc, 'the caveat no longer names the refusal the Windows leg emits');
     }
 
     public function testAnEmptyDownloadRefusesLikeAMismatch(): void
