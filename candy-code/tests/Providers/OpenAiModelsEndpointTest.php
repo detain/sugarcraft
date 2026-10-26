@@ -212,6 +212,7 @@ final class OpenAiModelsEndpointTest extends TestCase
             "\x1bP1;2qdevice-control\x1b\\tail"                 => 'tail',
             "a\x07b"                                            => 'ab',
             "two\r\nlines"                                      => 'two lines',
+            "gpt-4o\r\nnewline"                                 => 'gpt-4o newline',
             "nul\x00del\x7fb"                                   => 'nuldelb',
             "plain-model-v2"                                    => 'plain-model-v2',
             "Qwen/Qwen3.8-Flash-Next"                           => 'Qwen/Qwen3.8-Flash-Next',

@@ -27,9 +27,13 @@ use SugarCraft\Code\Tui\Components\PaneLabel;
  * lists this file among its metadata-read exemptions by name.
  *
  * The remote server is UNTRUSTED input: {@see decode()} sweeps every id
- * through {@see PaneLabel::of()} so no escape or control byte from the wire
- * ever reaches the palette rows or the `models all` table (see the method's
- * CONTAINMENT note for why the choke sits at ingest rather than at paint).
+ * through {@see PaneLabel::of()}, so no raw escape or control byte from
+ * the `/v1/models` wire reaches the palette rows or the `models all`
+ * table (see the method's CONTAINMENT note for why the choke sits at
+ * ingest rather than at paint). The community-table tier of the same
+ * lists is swept at its own source, {@see ModelMetadata::candidates()}:
+ * a JSON `\u001b`-escaped control byte is well-formed, so only the raw
+ * form is refused by the parse.
  *
  * This is a SugarCraft architecture class, not a port: no
  * `Mirrors charmbracelet/...` citation attaches to it.
@@ -103,9 +107,11 @@ final class OpenAiModelsEndpoint
      * memoises is what keeps the highlight indices {@see \SugarCraft\Fuzzy\Highlighter}
      * later computes aligned with the label actually painted — sanitising at
      * paint time would desynchronise the matched-character runs. Model ids
-     * carry no legitimate control or whitespace bytes, so honest entries
-     * round-trip byte-identical; a sweep that empties a row drops it like
-     * any other unusable id.
+     * are conventionally control- and space-free, so honest entries
+     * round-trip byte-identical; a relay that does name a model with
+     * spacing still lists, it simply folds to one row like any other
+     * label, and only a sweep that empties a row drops it, like any other
+     * unusable id.
      *
      * @return list<string>|null
      */

@@ -9,6 +9,7 @@ use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Tui\Components\PaneLabel;
 
 /**
  * Context windows and per-token prices for models this package has no table
@@ -365,6 +366,18 @@ final class ModelMetadata
      * are price fallbacks, not selectable models. The result is sorted
      * for stable palette order and capped at $limit rows when given.
      *
+     * CONTAINMENT (fx/palette-sec review MINOR-1): every entry passes
+     * {@see PaneLabel::of()} before it is offered. The table's keys are
+     * remote wire bytes — the download is parsed by {@see json_decode()},
+     * and a JSON *escape* (`\u001b`) is well-formed where a raw control
+     * byte is not, so a poisoned database could otherwise ship an OSC-8
+     * id straight into the palette rows and the `models all` print loop
+     * (the endpoint tier is swept at {@see OpenAiModelsEndpoint::decode()},
+     * this is the table twin). Honest ids contain no control or spacing
+     * bytes, so they round-trip byte-identical; the fold may surface a
+     * whitespace between a stripped prefix and its remainder, and an id
+     * that sweeps to nothing is dropped like any unusable row.
+     *
      * @return list<string>
      */
     public function candidates(?string $providerHint = null, int $limit = 0): array
@@ -387,7 +400,11 @@ final class ModelMetadata
                 continue;
             }
 
-            $label = (string) $model;
+            $label = PaneLabel::of((string) $model);
+            if ($label === '') {
+                continue;
+            }
+
             if ($hint !== null && str_contains($label, '/')) {
                 $native = self::nativeAlias($label, $hint);
                 if ($native === null) {

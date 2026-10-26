@@ -155,6 +155,29 @@ final class ModelCatalogTest extends TestCase
     }
 
     /**
+     * fx/palette-sec review MINOR-1: the LiteLLM table is remote download
+     * bytes, and a JSON `\u001b`-escaped control byte is WELL-FORMED (only
+     * the raw byte is refused by the parse — the same escape form the
+     * endpoint tier's pins use). A poisoned database could otherwise ship
+     * an OSC-8 id straight into the palette rows and `models all` via the
+     * same raw paint path. The table twin of the ingest sweep lives in
+     * {@see ModelMetadata::candidates()}; an id that sweeps to nothing
+     * falls, and honest ids round-trip byte-identical.
+     */
+    public function testTheLitellmTierSweepsEscapedControlBytesFromTableKeys(): void
+    {
+        $hostile = json_decode('{"openai/\\u001b]8;;https://evil\\u0007hostile-table-row":{"litellm_provider":"openai","max_input_tokens":1000},"gpt-4o\\r\\n":{"litellm_provider":"openai","max_input_tokens":1000},"\\u001b[31m":{"litellm_provider":"openai","max_input_tokens":1000}}', true);
+        self::assertIsArray($hostile, 'the escaped form is valid JSON — json_decode delivers live control bytes');
+
+        $rows = ModelCatalog::litellm('openai', ModelMetadata::fromTable($hostile));
+
+        self::assertSame(['gpt-4o', 'hostile-table-row'], $rows, 'the OSC-8 payload sweeps to its visible label, the trailing-CRLF key trims to the honest id, the pure-escape row falls; sorted order');
+        foreach ($rows as $row) {
+            self::assertSame(0, preg_match('/[\x00-\x08\x0b-\x1f\x7f]/', $row), 'no litellm-tier row reaches merge() with a control byte');
+        }
+    }
+
+    /**
      * PRV-1 (MAJOR-1): the palette's merged rows are what Chat persists and
      * the transport wires — with a family-filtered LiteLLM tier they are all
      * native endpoint ids, deduped against the bare and configured rows.
