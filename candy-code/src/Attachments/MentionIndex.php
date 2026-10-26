@@ -132,16 +132,19 @@ final class MentionIndex
         }
 
         $memoKey = $root . "\0" . $partial;
-        if (isset(self::$rankMemo[$memoKey])) {
+        if ($limit <= self::RANK_MEMO_TOP_ROWS && isset(self::$rankMemo[$memoKey])) {
             return array_slice(self::$rankMemo[$memoKey], 0, $limit);
         }
 
         $scored = self::scored($partial, $files, self::lowered($root));
 
         if ($limit > self::RANK_MEMO_TOP_ROWS) {
-            // A caller wider than the stored window sees the straight slice
-            // and leaves the memo untouched — nothing in-tree asks for more
-            // than RANK_MEMO_TOP_ROWS (fs.search tops out at exactly it).
+            // A caller wider than the stored window sees a fresh full slice
+            // and leaves the memo untouched in BOTH directions — it cannot
+            // trust a window-shaped entry to fill a wider order, and nothing
+            // in-tree asks for more than RANK_MEMO_TOP_ROWS anyway (fs.search
+            // tops out at exactly it; the windowed flood branch above already
+            // bounds what a fresh call can even return).
             return array_slice($scored, 0, $limit);
         }
 
@@ -461,7 +464,12 @@ final class MentionIndex
     private static function ordered(array $rows): array
     {
         usort($rows, static function (array $a, array $b): int {
-            return [$b['score'], strlen($a['path']), $a['path']] <=> [$b['score'], strlen($b['path']), $b['path']];
+            // TUI-1 round 2: the upstream spelling compared $b's score on
+            // BOTH sides, so the score leg was a tautology and the popup
+            // silently ordered by path length. The docblock above — and the
+            // whole windowed fast path below, which prunes provably lower
+            // rows — requires score-major; repair it in the open.
+            return [$b['score'], strlen($a['path']), $a['path']] <=> [$a['score'], strlen($b['path']), $b['path']];
         });
 
         return $rows;
