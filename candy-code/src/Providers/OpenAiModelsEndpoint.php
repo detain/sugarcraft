@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Providers;
 
 use GuzzleHttp\HandlerStack;
 use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
+use SugarCraft\Code\Tui\Components\PaneLabel;
 
 /**
  * PRV-1 (§6.5): one bounded `GET {root}/v1/models` against an
@@ -24,6 +25,11 @@ use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
  * a one-request metadata read, not an LLM call
  * ({@see Concerns\HttpClientDefaults}), so `ProviderConnectTimeoutTest`
  * lists this file among its metadata-read exemptions by name.
+ *
+ * The remote server is UNTRUSTED input: {@see decode()} sweeps every id
+ * through {@see PaneLabel::of()} so no escape or control byte from the wire
+ * ever reaches the palette rows or the `models all` table (see the method's
+ * CONTAINMENT note for why the choke sits at ingest rather than at paint).
  *
  * This is a SugarCraft architecture class, not a port: no
  * `Mirrors charmbracelet/...` citation attaches to it.
@@ -86,6 +92,21 @@ final class OpenAiModelsEndpoint
      * rows — is the same "unknown" as a failed transport, never a partial
      * catalog presented as a complete one.
      *
+     * CONTAINMENT (plan-reverify-1026 fx/palette-sec): every id is swept
+     * through {@see PaneLabel::of()} HERE, at the single point a remote
+     * server's bytes enter the process, not at each paint site. Both
+     * consumers — the Ctrl+P model palette (via {@see ModelCatalog}) and the
+     * `models all` table/JSON — read this list, and the palette paints row
+     * bodies raw: an unswept id carrying OSC-8 or SGR would ride the wire
+     * verbatim (a hostile configured endpoint could then forge hyperlinks
+     * or repaint the frame). Sweeping before {@see ModelCatalog::prefetch()}
+     * memoises is what keeps the highlight indices {@see \SugarCraft\Fuzzy\Highlighter}
+     * later computes aligned with the label actually painted — sanitising at
+     * paint time would desynchronise the matched-character runs. Model ids
+     * carry no legitimate control or whitespace bytes, so honest entries
+     * round-trip byte-identical; a sweep that empties a row drops it like
+     * any other unusable id.
+     *
      * @return list<string>|null
      */
     public static function decode(string $body): ?array
@@ -99,8 +120,13 @@ final class OpenAiModelsEndpoint
 
         $ids = [];
         foreach ($decoded['data'] as $row) {
-            if (\is_array($row) && isset($row['id']) && \is_string($row['id']) && $row['id'] !== '') {
-                $ids[] = $row['id'];
+            if (!\is_array($row) || !isset($row['id']) || !\is_string($row['id']) || $row['id'] === '') {
+                continue;
+            }
+
+            $label = PaneLabel::of($row['id']);
+            if ($label !== '') {
+                $ids[] = $label;
             }
         }
 
