@@ -7130,16 +7130,22 @@ final class DocFigureProseDriftTest extends TestCase
             $page,
             'MCP.md dropped the dated parity qualification — @mcp: mentions still refuse on the serve/headless scanners',
         );
-        self::assertStringNotContainsString(
-            'withMcpReader',
-            self::sourceOf('Cli/NonInteractive.php'),
-            'the headless scanner armed an MCP reader without re-wording the page\'s dated parity sentence',
-        );
-        self::assertStringNotContainsString(
-            'withMcpReader',
-            self::sourceOf('Host/SessionHost.php'),
-            'the serve scanner armed an MCP reader without re-wording the page\'s dated parity sentence',
-        );
+        // rev-misc MINOR-1 cure: the absence legs pin BOTH wiring
+        // vocabularies. A headless parity change arms the reader directly on
+        // the ContextMentions chain ('withMcpReader'); a serve parity change
+        // flows the provider through TurnController's $mcpProvider parameter
+        // and never spells the arm-token inside SessionHost at all. Either
+        // token landing in either file without the page re-word reddens.
+        foreach (['Cli/NonInteractive.php', 'Host/SessionHost.php'] as $parityFile) {
+            $paritySource = self::sourceOf($parityFile);
+            foreach (['mcpProvider', 'withMcpReader'] as $wiringToken) {
+                self::assertStringNotContainsString(
+                    $wiringToken,
+                    $paritySource,
+                    $parityFile . ' gained MCP-mention wiring (' . $wiringToken . ') without re-wording the page\'s dated parity sentence',
+                );
+            }
+        }
         self::assertStringContainsString(
             'withMcpReader(',
             self::sourceOf('Host/TurnController.php'),
