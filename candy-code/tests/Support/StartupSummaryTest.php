@@ -13,6 +13,7 @@ use SugarCraft\Code\Providers\ReportsServedModel;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Support\StartupSummary;
 use SugarCraft\Code\Theme;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Image\ImageLayer;
 
 /**
@@ -392,6 +393,64 @@ final class StartupSummaryTest extends TestCase
 
         // The memo stores under the sanitised fact: a re-render of the same
         // chat is byte-identical, so the poisoned raw never resurfaces.
+        $this->assertSame($out, StartupSummary::render($chat), 'the memo carries the sanitised frame');
+    }
+
+    /**
+     * MINOR-1 (rev-2 on bdc8a85fb): the sibling pin above feeds WELL-FORMED
+     * UTF-8, so PaneLabel::of() takes its /u branch, where the \p{C} class
+     * sweeps U+E000/U+E001 (Co) all by itself — deleting oneLine()'s
+     * stripZoneSentinels() leg would still leave that pin green on its
+     * sentinel legs. The strip is load-bearing on the branch that pin never
+     * reaches: malformed bytes arriving at of() make the /u pattern bail, and
+     * the byte-wise fallback sweep knows only the ASCII control/space classes
+     * — the sentinels' UTF-8 spellings (EE 80 80 / EE 80 81) are outside it,
+     * so ONLY the str_replace-based stripZoneSentinels() removes them.
+     *
+     * Fixture law (measured, not guessed): the invalid pair is a lead byte
+     * riding an ASCII byte — genuinely malformed, yet invisible to every
+     * upstream sweep, so it survives to of() and forces the fallback; the raw
+     * ESC rides directly before the first sentinel and is consumed as a lone
+     * escape by the display sweep (its absence is pinned too, and its removal
+     * must not re-well-form the string — the lead byte keeps that job); the
+     * sentinel spellings stay clear of every byte-deleting leg so the strip
+     * can match them byte-for-byte.
+     */
+    public function testAMalformedServedModelStillLosesItsForgedZoneSentinels(): void
+    {
+        $hostile = 'srv' . "\xC3" . "\x28" . "\x1B" . Sanitize::ZONE_SENTINEL_OPEN . 'zone' . Sanitize::ZONE_SENTINEL_CLOSE . 'id';
+
+        $provider = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, ReportsServedModel::class]);
+        $provider->method('name')->willReturn('sglang');
+        $provider->method('servedModel')->willReturn($hostile);
+        $provider->method('contextWindow')->willReturn(100_000);
+
+        $chat = (new Chat(backend: EngineBackend::new($provider, 'static-default-id')))->withSize(120, 30);
+        $out = StartupSummary::render($chat);
+
+        $this->assertStringNotContainsString(Sanitize::ZONE_SENTINEL_OPEN, $out, 'byte-wise fallback cannot see the sentinel bytes as characters — only the strip leg can erase them');
+        $this->assertStringNotContainsString(Sanitize::ZONE_SENTINEL_CLOSE, $out, 'the closing sentinel must not ride the frame either');
+        $this->assertStringNotContainsString('static-default-id', $out, 'the served id wins, same rule as the bar');
+
+        // The frame paints its own faint SGR (ESC-led), so the ESC leg is
+        // judged on the unstyled block: strip every SGR sequence and no
+        // escape byte may remain — the injected lone ESC had to die inside
+        // the display sweep, not merely be re-styled.
+        $plain = (string) preg_replace('/\e\[[0-9;]*m/', '', $out);
+        $this->assertStringNotContainsString("\x1B", $plain, 'beyond the frame\'s own SGR styling, no escape byte may survive the choke');
+
+        // Digest of the CURRENT sanitised byte output — the malformed lead
+        // byte stays as inert junk and no leg repairs or replaces it, which is
+        // the disclosed behaviour this pin freezes: if the choke ever learns
+        // repair (U+FFFD substitution, byte-wise PUA sweep), this goes red on
+        // purpose so the new output is re-judged.
+        $sanitised = 'srv' . chr(0xC3) . '(zoneid';
+        $this->assertStringContainsString($sanitised, $out, 'the malformed id survives as exactly these sanitised bytes');
+
+        // One logical header row even though the fold ran byte-wise.
+        $header = (string) preg_replace('/\e\[[0-9;]*m/', '', explode("\n", $out)[0]);
+        $this->assertStringEndsWith($sanitised, $header, 'the byte-wise fold must still close the header with the id');
+
         $this->assertSame($out, StartupSummary::render($chat), 'the memo carries the sanitised frame');
     }
 
