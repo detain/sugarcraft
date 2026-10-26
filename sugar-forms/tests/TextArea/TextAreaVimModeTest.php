@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\PasteMsg;
+use SugarCraft\Core\RawMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Forms\Vim\VimState;
@@ -524,6 +525,99 @@ final class TextAreaVimModeTest extends TestCase
         $t = $this->key($t, 'w');
         $t = $this->key($t, 'x', ctrl: true);
         $this->assertSame('me', $t->value());
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Visual operators — TUI-3A: d/x delete and y copies the selection
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testVisualDeleteOperatorKillsSpanToNormalMode(): void
+    {
+        // 'v' anchors at the caret, 'l l l l' extends to col 4 — the span
+        // is 'hell' (caret-exclusive end, the same model the reverse-video
+        // render and Ctrl+C use). d splices it out, parks the caret at the
+        // span start, clears the anchor and exits to Normal like vim.
+        $t = $this->vimArea(['hello world'])->setCursor(0, 0);
+        $t = $this->key($t, 'v');
+        $t = $this->key($t, 'l');
+        $t = $this->key($t, 'l');
+        $t = $this->key($t, 'l');
+        $t = $this->key($t, 'l');
+        $t = $this->key($t, 'd');
+        $this->assertSame('o world', $t->value());
+        $this->assertSame(0, $t->row);
+        $this->assertSame(0, $t->col);
+        $this->assertFalse($t->hasSelection());
+        $this->assertSame(VimState::Normal, $t->vimState);
+    }
+
+    public function testVisualXOperatorIsTheDeleteSelectionKeystroke(): void
+    {
+        // vim folds x into d INSIDE a selection (normal-mode x stays
+        // single-char DeleteChar — pinned by the TUI-3B suite above).
+        $t = $this->vimArea(['hello world'])->setCursor(0, 0);
+        $t = $this->key($t, 'v');
+        $t = $this->key($t, 'l');
+        $t = $this->key($t, 'l');
+        $t = $this->key($t, 'x');
+        $this->assertSame('llo world', $t->value());
+        $this->assertSame(VimState::Normal, $t->vimState);
+    }
+
+    public function testVisualBackwardsAndMultiRowSpanDeletesAcrossRows(): void
+    {
+        // Backwards drag: caret moved above the anchor — normalizedSelection
+        // folds the order, d deletes the same span a forwards drag would:
+        // rows 0..2 merge at [(0,2),(2,2)] → 'aa' + 'ccc'[2:] = 'aac'.
+        $t = $this->vimArea(["aa\nbbb\nccc"])->setCursor(2, 2);
+        $t = $this->key($t, 'v');
+        $t = $this->key($t, 'k');
+        $t = $this->key($t, 'k');
+        [$t, $cmd] = $this->keyWithCmd($t, 'd');
+        $this->assertNull($cmd); // delete is buffer-local, raises no Cmd
+        $this->assertSame('aac', $t->value());
+        $this->assertSame(0, $t->row);
+        $this->assertSame(2, $t->col);
+        $this->assertSame(VimState::Normal, $t->vimState);
+    }
+
+    public function testVisualYankOperatorCopiesSpanViaOsc52CmdToNormalMode(): void
+    {
+        // y rides the widget's existing clipboard channel — Cmd::setClipboard
+        // (OSC 52 → RawMsg), byte-identical to what Ctrl+C raises — and the
+        // buffer stays untouched. The mode exits; the register that candy-code
+        // ComposerVim keeps for p/P is NOT fed (documented seam: a widget
+        // owns no host register).
+        $t = $this->vimArea(['hello world'])->setCursor(0, 0);
+        $t = $this->key($t, 'v');
+        $t = $this->key($t, 'l');
+        $t = $this->key($t, 'l');
+        $t = $this->key($t, 'l');
+        $t = $this->key($t, 'l');
+        [$t, $cmd] = $this->keyWithCmd($t, 'y');
+        $this->assertNotNull($cmd);
+        $msg = $cmd();
+        $this->assertInstanceOf(RawMsg::class, $msg);
+        $this->assertSame("\x1b]52;c;" . base64_encode('hell') . "\x07", $msg->bytes);
+        $this->assertSame('hello world', $t->value());
+        $this->assertFalse($t->hasSelection());
+        $this->assertSame(VimState::Normal, $t->vimState);
+    }
+
+    public function testVisualOperatorsOnEmptySpanAreSilentBeepsStayingInVisual(): void
+    {
+        // v alone = zero-width anchor at the caret = no span. vim beeps and
+        // stays; both operators must cost the buffer nothing, raise nothing
+        // and — critically — must NOT exit the mode, so the user can extend
+        // and retry. Same silent no-op law as copy/cut on an empty selection.
+        foreach (['d', 'x', 'y'] as $rune) {
+            $t = $this->vimArea(['stay put'])->setCursor(0, 0);
+            $t = $this->key($t, 'v');
+            [$t, $cmd] = $this->keyWithCmd($t, $rune);
+            $this->assertNull($cmd, "operator {$rune} raised a Cmd on an empty span");
+            $this->assertSame('stay put', $t->value());
+            $this->assertSame(VimState::Visual, $t->vimState);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════

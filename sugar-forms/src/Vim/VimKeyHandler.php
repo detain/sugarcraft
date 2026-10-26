@@ -190,6 +190,11 @@ final class VimKeyHandler
 
     /**
      * Handle a key in Visual mode.
+     *
+     * Motions extend the selection; the TUI-3A operators act on it:
+     * `d` (and `x` — vim folds them inside a selection) delete the span,
+     * `y` copies it to the terminal clipboard. Both leave Visual for
+     * Normal, executed by the consumer.
      */
     private static function handleVisualMode(string $keyLower, int $features, bool $ctrl): ?VimAction
     {
@@ -213,6 +218,12 @@ final class VimKeyHandler
                 'b' => VimAction::CursorWordBackward,
                 '0' => VimAction::CursorLineStart,
                 '$' => VimAction::CursorLineEnd,
+
+                // Operators over the live span (TUI-3A).
+                'd' => VimAction::DeleteSelection,
+                'x' => VimAction::DeleteSelection, // vim: x == d inside a selection
+                'y' => VimAction::YankSelection,
+
                 default => VimAction::NoOp,
             };
         }

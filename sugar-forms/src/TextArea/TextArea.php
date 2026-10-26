@@ -51,8 +51,12 @@ use SugarCraft\Core\Util\Width;
  * bindings still win first, Insert mode preserves this widget's built-in
  * editing verbatim, and the multi-line buffer adds what the single-line
  * consumer could not: vertical motion (`j`/`k` via `VimAction::CursorDown`/
- * `CursorUp`) and character-wise visual selection (`v` anchors a selection,
- * motion extends it, Escape cancels). Visual-LINE entry stays un-wired here:
+ * `CursorUp`), character-wise visual selection (`v` anchors a selection,
+ * motion extends it, Escape cancels) and the visual operators over that
+ * span — `d`/`x` delete it, `y` copies it to the terminal clipboard
+ * through the same OSC 52 Cmd channel as Ctrl+C (TUI-3A). A visual yank
+ * feeds the clipboard, not any host paste register — the widget owns
+ * none. Visual-LINE entry stays un-wired here:
  * its pinned j/k direction is an open owner ruling (E736 plan 3.2 / campaign
  * R4) and this port deliberately does not pre-empt it.
  */
@@ -366,10 +370,11 @@ final class TextArea implements Model
 
     /**
      * Execute a {@see VimAction} on this model — the consumer side of the
-     * shared handler vocabulary. Unhandled actions (the pending-operator and
-     * clipboard family) fall through untouched, exactly as in TextInput:
-     * this port adds vertical motion and visual selection, not a new
-     * operator engine.
+     * shared handler vocabulary. Unhandled actions (the pending-operator
+     * and clipboard family — the two-keystroke dd/yy/p grammar) fall
+     * through untouched, exactly as in TextInput: this port owns the mode
+     * machine, single-key motions, the visual selection and the operators
+     * over that selection (TUI-3A) — not a pending-key operator engine.
      *
      * @return array{0:Model, 1:?\Closure}
      */
@@ -420,9 +425,48 @@ final class TextArea implements Model
             VimAction::DeleteChar
                 => [$this->vimDeleteChar(), null],
 
+            // Visual operators (TUI-3A): d/x kill the selected span, y copies
+            // it through the same Cmd::setClipboard channel as Ctrl+C. Both
+            // clear the anchor and return to Normal, as vim does.
+            VimAction::DeleteSelection
+                => $this->vimOperateSelection(delete: true),
+
+            VimAction::YankSelection
+                => $this->vimOperateSelection(delete: false),
+
             default
                 => [$this, null],
         };
+    }
+
+    /**
+     * Resolve a visual-mode operator against the live selection (TUI-3A).
+     *
+     * Delete splices the span out and parks the caret at its start
+     * ({@see deleteSelection()}'s own contract); yank leaves the buffer
+     * untouched and raises `Cmd::setClipboard` exactly like Ctrl+C — the
+     * OSC 52 → RawMsg channel, never a direct write (TEA law). The yanked
+     * text deliberately does NOT land in any host paste register: the
+     * widget owns none, and reaching across the layer boundary is the
+     * host's job (see ComposerVim's class docblock for the candy-code
+     * side of this seam). An operator pressed on an empty span does
+     * nothing and stays in Visual — vim's beep-and-stay, the same
+     * empty-selection silent no-op law the clipboard copy/cut pins.
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function vimOperateSelection(bool $delete): array
+    {
+        $text = $this->selectedText();
+        if ($text === '') {
+            return [$this, null];
+        }
+
+        if (!$delete) {
+            return [$this->clearSelection()->mutate(vimState: VimState::Normal), Cmd::setClipboard($text)];
+        }
+
+        return [$this->deleteSelection()->mutate(vimState: VimState::Normal), null];
     }
 
     /**

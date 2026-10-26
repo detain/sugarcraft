@@ -17,12 +17,21 @@ use SugarCraft\Forms\TextArea\TextArea;
  * h j k l w b 0 $ x, v/V visual selection and the insert-mode passthrough are
  * all resolved INSIDE the widget, and this class never duplicates one of them.
  * What the widget deliberately does NOT own — per its own consumeVimAction
- * docblock, "the pending-operator and clipboard family … fall through
- * untouched" — is the two-keystroke operator grammar: `dd`, `dw`, `yy`, `p`.
+ * docblock, the "pending-operator and clipboard family" of two-keystroke
+ * NORMAL-mode grammar (`dd`, `dw`, `yy`, `p`) falls through untouched.
+ * What it DOES own since TUI-3A: the visual selection and the operators
+ * over it — inside a live selection `d`/`x` delete the span (caret lands
+ * at its start) and `y` copies it through the widget's own
+ * `Cmd::setClipboard` → OSC 52 channel. That visual yank deliberately
+ * does NOT feed THIS class's register — the widget owns no register and
+ * must not reach into the host's; `p`/`P` therefore paste only what the
+ * NORMAL-mode operators stored. Bridging clipboard→register is the
+ * host's decision, recorded as a seam rather than silently widened.
  * That grammar spans keystrokes, and its natural home is the host that also
  * owns the draft's meaning (submitting, popups, the queue), which is Chat.
- * So the split is: lib = mode machine + single-key motions; app = operator
- * state + register. This class is that app-side half, kept PURE — every entry
+ * So the split is: lib = mode machine + single-key motions + visual
+ * operators; app = pending-operator state + register. This class is that
+ * app-side half, kept PURE — every entry
  * point takes the widget and returns a new one; nothing here reads a setting,
  * a clock or a file.
  *
@@ -40,7 +49,13 @@ use SugarCraft\Forms\TextArea\TextArea;
  * state the same way `o` does, after a delete, for one more keystroke of
  * ambiguity), text objects (`di"`), and the named registers. The plan's
  * minimum key set — i a I A o O Esc h j k l w b e 0 $ x dd D v V d y — plus
- * the paste that makes `y` observable (`p`/`P`) is the contract, and an
+ * the paste that makes `y` observable (`p`/`P`) is the contract. In this
+ * set `v`/`V` open the character-wise selection in the widget (V arrives
+ * lower-cased and aliases v — line-wise entry awaits the E736 3.2 / R4
+ * owner ruling), and `d`/`y` mean two different things by state: inside a
+ * live selection they are the widget's span operators (delete / OSC-52
+ * copy, TUI-3A), while in NORMAL they arm THIS class's pending grammar
+ * whose kill/yank lands in the register that `p`/`P` paste. An
  * unbound continuation is a BEEP: the pending operator cancels and the key
  * is swallowed, exactly like the lib's own "beep (no-op) on anything it
  * declines to translate".

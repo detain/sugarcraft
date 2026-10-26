@@ -70,6 +70,23 @@ enum VimAction: string
     /** Yank a resolved text object (vim yi'/ya]/yaw...). */
     case YankTextObject = 'yank-text-object';
 
+    /**
+     * Delete the live visual selection (vim `v`+`d`, and `v`+`x` — in vim
+     * the two are the same keystroke inside a selection) and return to
+     * Normal, caret parked at the span start (TUI-3A). Consumers without a
+     * text buffer leave it unconsumed, the same additive-vocabulary law
+     * {@see self::CursorUp} documents.
+     */
+    case DeleteSelection = 'delete-selection';
+
+    /**
+     * Copy the live visual selection to the terminal clipboard (vim `v`+`y`)
+     * and return to Normal (TUI-3A). Raised through the consumer's own
+     * clipboard channel — for TextArea that is `Cmd::setClipboard`
+     * (OSC 52), never a direct write.
+     */
+    case YankSelection = 'yank-selection';
+
     /** Paste the most recently yanked text after cursor (vim p). */
     case Paste = 'paste';
 

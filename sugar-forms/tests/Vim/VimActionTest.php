@@ -151,6 +151,16 @@ final class VimActionTest extends TestCase
         $this->assertSame('noop', VimAction::NoOp->value);
     }
 
+    public function testDeleteSelectionCaseExists(): void
+    {
+        $this->assertSame('delete-selection', VimAction::DeleteSelection->value);
+    }
+
+    public function testYankSelectionCaseExists(): void
+    {
+        $this->assertSame('yank-selection', VimAction::YankSelection->value);
+    }
+
     // =========================================================================
     // All cases are distinct
     // =========================================================================
@@ -158,10 +168,10 @@ final class VimActionTest extends TestCase
     public function testAllCasesAreDistinct(): void
     {
         $cases = VimAction::cases();
-        $this->assertCount(27, $cases);
+        $this->assertCount(29, $cases);
 
         $values = array_map(static fn(VimAction $c): string => $c->value, $cases);
-        $this->assertCount(27, array_unique($values));
+        $this->assertCount(29, array_unique($values));
     }
 
     // =========================================================================

@@ -171,7 +171,31 @@ final class VimKeyHandlerTest extends TestCase
 
     public function testVisualModeNoOpForUnrecognizedKey(): void
     {
-        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('x', VimState::Visual));
+        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('z', VimState::Visual));
+    }
+
+    public function testVisualModeOperatorsResolveToSelectionActions(): void
+    {
+        // TUI-3A: the visual operators are vocabulary, not NoOps — d kills
+        // the span, y copies it; x joins d the way vim folds them inside a
+        // selection (pre-TUI-3A this whole arm was the silent hole the
+        // ComposerVim contract docblock pretended away).
+        $this->assertSame(VimAction::DeleteSelection, VimKeyHandler::handle('d', VimState::Visual));
+        $this->assertSame(VimAction::YankSelection,   VimKeyHandler::handle('y', VimState::Visual));
+        $this->assertSame(VimAction::DeleteSelection, VimKeyHandler::handle('x', VimState::Visual));
+    }
+
+    public function testVisualModeOperatorsAreCtrlSwallowedAndVisualLineStaysPending(): void
+    {
+        // Ctrl+d/y are no operator material in visual (the ctrl guard).
+        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('d', VimState::Visual, VimKeyHandler::FEAT_ALL, true));
+        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('y', VimState::Visual, VimKeyHandler::FEAT_ALL, true));
+        // Visual-LINE deliberately ships no operator mapping yet: no widget
+        // in this tree enters that state (V aliases to character-wise v —
+        // E736 3.2 / R4 owner ruling pending), and its list-family motion
+        // vocabulary has no text span to operate on. d/y stay a beep.
+        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('d', VimState::VisualLine));
+        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('y', VimState::VisualLine));
     }
 
     // =========================================================================
