@@ -2574,7 +2574,7 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 cd candy-code && composer install && vendor/bin/phpunit
 ```
 
-**25,531 tests / 608,326 assertions, 0 failures, 3 skipped** — the whole of
+**25,537 tests / 609,443 assertions, 0 failures, 3 skipped** — the whole of
 `candy-code/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
 in 22m51s (measured 2026-10-18). The two skips are expected and rostered: one
