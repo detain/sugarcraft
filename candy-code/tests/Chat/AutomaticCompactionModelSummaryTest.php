@@ -1640,6 +1640,51 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
     }
 
     /**
+     * SES-1 round 2, both polarities AT THE CALL SITES (the service-level
+     * floor/ceiling spellings have their own parity pins; what had none was
+     * that Chat actually PASSES its tracker's flag). An unpriced-billed
+     * session must read "≥$" in both cap refusals — the same bound /budget
+     * prints for the same spend — and the priced session beside it keeps the
+     * bare "$" the CAP_SENTENCE pins above demand. Passing the flag
+     * unconditionally, or never, goes red against one of the two.
+     */
+    public function testBothCapRefusalsCarryTheTrackersFloorMarker(): void
+    {
+        $unpriced = new TokenTracker();
+        $unpriced->addTotalUsage(1_000, 5.0);
+        $unpriced->noteUnpricedUsage();
+        $summarizer = $this->generousSummarizer();
+        $capped = $this->chat(self::compactablePairs(), $summarizer, $main, $unpriced, 1.0);
+
+        $capNotice = null;
+        $parked = (new \ReflectionMethod(Chat::class, 'scheduleParkedCompaction'))
+            ->invokeArgs($capped, ['what changed in the router?', 80_000, 88_000, &$capNotice]);
+        $this->assertNull($parked, 'the tier still declines the model route');
+        $this->assertNotNull($capNotice, 'fixture: the parked gate names the cap');
+        $this->assertStringStartsWith(
+            'Spend cap reached (≥$5.0000 of $1.0000)',
+            (string) $capNotice,
+            'the parked refusal carries the floor marker, where /budget carries it',
+        );
+
+        [$answered, $cmd] = $this->submit($this->withDraft($capped, '/compact'));
+        $this->assertNull($cmd, '/compact answered on the spot, as its priced twin did');
+        $sibling = null;
+        foreach ($answered->history as $message) {
+            if (str_starts_with($message->content, 'Spend cap reached')) {
+                $sibling = $message->content;
+            }
+        }
+        $this->assertNotNull($sibling, 'fixture: /compact says it out loud');
+        $this->assertStringStartsWith(
+            'Spend cap reached (≥$5.0000 of $1.0000)',
+            $sibling,
+            'and the /compact route carries the same floor marker',
+        );
+        $this->assertSame(0, $summarizer->calls, 'neither route asked the model');
+    }
+
+    /**
      * Backlog §E32, first polarity: the token armed at park time is the one the
      * double-Escape arm flips. The existing cancel tests assert what the CANCELLED
      * SESSION looks like — latch released, turn never dispatched — which a session

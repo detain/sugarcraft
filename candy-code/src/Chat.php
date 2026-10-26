@@ -13540,7 +13540,14 @@ final class Chat implements Model
             // downgrade to the heuristic is indistinguishable from having no
             // provider at all — and the user set the ceiling that caused it, so
             // they are the one person who can lift it.
-            $capNotice = $this->compactionService()->compactCommandCapNotice($this->spentUsd(), (float) $this->maxCostUsd);
+            $capNotice = $this->compactionService()->compactCommandCapNotice(
+                $this->spentUsd(),
+                (float) $this->maxCostUsd,
+                // SES-1 (≥ law): a session that billed an unpriced model has a
+                // FLOOR, not a total — /budget says "≥$", and the cap refusal
+                // must not quietly drop the floor marker the ledger declared.
+                $this->tokenTracker->hasUnpricedUsage(),
+            );
 
             return $this->scheduleHookGatedCompaction($inputText, $capNotice)
                 ?? $this->compactNow($inputText, $this->history, [], $capNotice);
@@ -13818,7 +13825,12 @@ final class Chat implements Model
             // Dormant from submit() today - see the docblock. The turn is not
             // refused here: only the model was withheld, and the heuristic rewrite
             // the caller goes on to do is still owed the prompt.
-            $capNotice = $this->compactionService()->parkedTurnCapNotice($this->spentUsd(), (float) $this->maxCostUsd);
+            $capNotice = $this->compactionService()->parkedTurnCapNotice(
+                $this->spentUsd(),
+                (float) $this->maxCostUsd,
+                // SES-1 (≥ law): same floor marker the /budget line prints.
+                $this->tokenTracker->hasUnpricedUsage(),
+            );
 
             return null;
         }
