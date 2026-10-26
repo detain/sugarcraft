@@ -1587,10 +1587,12 @@ $provider = $factory->create(['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}
 |-----------------|---------------|------------------------------------------------------------------|
 | OpenAI          | `openai`      | `openai-php/client`; function calling, embeddings, cost table    |
 | Anthropic       | `anthropic`   | `x-api-key` + `anthropic-version` auth, native Messages API (`POST <base>/v1/messages`) with `tool_use` blocks and prompt caching — see below |
-| Claude Code CLI | `claude-code` | drives the `claude` binary headless; native cost; JSON schema    |
+| Claude Code CLI | `claude-code` | drives the `claude` binary headless; native cost; no JSON-schema   |
 | SGLang          | `sglang`      | OpenAI-compatible self-hosted endpoints (Guzzle)                 |
 | AWS Bedrock     | `bedrock`     | Converse API via `aws/aws-sdk-php`; per-model pricing            |
 | GCP Vertex      | `vertex`      | `claude-*` via `/v1/messages` + `gemini-*` via `generateContent` (native SDK) |
+| Gemini          | `gemini`      | native `generateContent` wire via API key                        |
+| Codex           | `codex`       | ChatGPT subscription OAuth (`candy-code login codex`, PKCE fork) |
 | Custom          | `custom`      | any OpenAI-compatible HTTP endpoint                              |
 | Echo            | —             | `EchoProvider`: offline, echoes the last turn; default + tests   |
 
