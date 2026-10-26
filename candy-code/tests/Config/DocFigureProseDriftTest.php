@@ -7120,6 +7120,32 @@ final class DocFigureProseDriftTest extends TestCase
         // One-line refusals are the only refusal shape the leg emits.
         self::assertGreaterThanOrEqual(4, substr_count($mcpBody, "'@%s was not attached: "), 'the leg gained a refusal that is not the one-line notice the page promises');
 
+        // Dated parity qualification (plan-reverify fx/misc, 2026-10-26): the
+        // page states that only the TUI arms the MCP reader, and the absence
+        // legs below keep that sentence honest — a parity ruling that wires
+        // the serve/headless scanners MUST re-word the page in the same
+        // commit, or this arm reddens on the stale qualification.
+        self::assertStringContainsString(
+            'TUI-only for now',
+            $page,
+            'MCP.md dropped the dated parity qualification — @mcp: mentions still refuse on the serve/headless scanners',
+        );
+        self::assertStringNotContainsString(
+            'withMcpReader',
+            self::sourceOf('Cli/NonInteractive.php'),
+            'the headless scanner armed an MCP reader without re-wording the page\'s dated parity sentence',
+        );
+        self::assertStringNotContainsString(
+            'withMcpReader',
+            self::sourceOf('Host/SessionHost.php'),
+            'the serve scanner armed an MCP reader without re-wording the page\'s dated parity sentence',
+        );
+        self::assertStringContainsString(
+            'withMcpReader(',
+            self::sourceOf('Host/TurnController.php'),
+            'the ONE arming site moved out of TurnController — the page\'s TUI-only sentence must follow',
+        );
+
         // The resources tail: page backtick-shape ← lang English ← panel call.
         $dot = "\u{00B7}";
         self::assertStringContainsString('` ' . $dot . ' N resources`', $page, 'MCP.md no longer shows the resources suffix in its resolved shape');

@@ -830,6 +830,12 @@ mention at all — it reads as a file path. Resolution happens at submit
 time, bounded like every other keyword leg, and a resolved mention rides
 the resumed transcript as a saved attachment.
 
+TUI-only for now (dated 2026-10-26): a `serve` session and a headless `-p`
+run build their mention scanner without the MCP reader, so the same form
+there meets the one-line refusal even while servers are running. Parity
+wiring for those surfaces is an open product ruling; until it lands, every
+other sentence in this section describes the TUI turn path.
+
 The bytes are untrusted. A fetched resource is attached inside the same
 framed context block other fetched content uses, opening with a header
 that names the server and the resource and tells the model to treat it as
