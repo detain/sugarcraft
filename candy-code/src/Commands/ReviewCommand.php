@@ -23,6 +23,16 @@ namespace SugarCraft\Code\Commands;
  * code it is judging conflates the roles, and the permission modes should not
  * have to be the thing standing between `/review` and an unwanted Write.
  *
+ * UNTRUSTED BY CONSTRUCTION (GIT-1): the attached diff is repository content,
+ * and repository content feeds the LLM here exactly as a Read result would.
+ * An adversarial repo — the fork you are reviewing is the case, not the
+ * exception — can embed instructions in its own diff text hoping the
+ * reviewing agent obeys them instead of judging them. The REPORT, DO NOT
+ * EDIT mandate above is the prompt-side answer to that injection and the
+ * permission mode is the action-side one; the doctrine page is the
+ * prompt-injection section of docs/CI.md (GIT-2). Same trust posture as
+ * every other attachment: data to review, never instructions to follow.
+ *
  * A command that STARTS A TURN — see Chat::handleReviewCommand(); it belongs
  * to no read-only roster. Both spellings are SugarCraft architecture types,
  * not ports: charmbracelet/crush has no `/review`; the idea is Claude Code's.

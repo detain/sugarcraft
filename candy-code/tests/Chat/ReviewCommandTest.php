@@ -123,6 +123,13 @@ final class ReviewCommandTest extends TestCase
         self::assertStringContainsString('Report, do not edit', ReviewCommand::SECURITY_PROMPT);
         self::assertStringEndsWith('%s', rtrim(ReviewCommand::REVIEW_PROMPT));
         self::assertStringEndsWith('%s', rtrim(ReviewCommand::SECURITY_PROMPT));
+
+        // GIT-1: the mandate's other half — the class itself must document
+        // the injection threat the mandate answers, so a reader of the
+        // command sees the trust posture without visiting docs/CI.md.
+        $doc = (string) (new \ReflectionClass(ReviewCommand::class))->getDocComment();
+        self::assertStringContainsString('UNTRUSTED BY CONSTRUCTION', $doc, 'the class docblock lost its trust-boundary sentence — reviewing an adversarial repo feeds the LLM untrusted diff text and the file must say so (GIT-1)');
+        self::assertStringContainsString('prompt-injection section of docs/CI.md', $doc, 'the trust sentence no longer routes to the doctrine page (GIT-2)');
     }
 
     public function testIsDiffRefAgreesWithTheScannerPattern(): void
