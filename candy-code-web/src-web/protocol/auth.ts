@@ -16,6 +16,8 @@
  * URLs resolve against the document's base, so the UI also works mounted
  * under a path behind a reverse proxy.
  */
+import { clearPromptHistory } from '../stores/promptHistory'
+
 export class AuthError extends Error {
   readonly status: number
   readonly kind: string
@@ -128,11 +130,18 @@ export async function ticket(fetchImpl: Fetch = fetch): Promise<string> {
   return json.ticket
 }
 
+/**
+ * End the session: the server revokes the cookie, and this browser keeps
+ * nothing behind — the login secret goes, and so does the prompt history
+ * ring (`stores/promptHistory.ts`), the one per-viewer record of what was
+ * typed here. Other conveniences (draft, layout, theme) stay.
+ */
 export async function logout(fetchImpl: Fetch = fetch): Promise<void> {
   try {
     await post(fetchImpl, 'logout', {})
   } finally {
     clearLoginSecret()
+    clearPromptHistory()
   }
 }
 

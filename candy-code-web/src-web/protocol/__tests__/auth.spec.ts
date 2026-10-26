@@ -8,6 +8,7 @@ import {
   storedLoginSecret,
   ticket,
 } from '../auth'
+import { writeJson } from '../../stores/storage'
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -81,5 +82,27 @@ describe('login secret (ISS-007 web half)', () => {
     const broken = responder(() => json(500, { error: { kind: 'boom', message: 'boom' } }))
     await expect(logout(broken.fetchImpl)).rejects.toBeInstanceOf(AuthError)
     expect(storedLoginSecret()).toBeNull()
+  })
+})
+
+describe('sign-out sweeps the browser (WEB-6 C)', () => {
+  it('logout clears the prompt-history ring, even when the server call fails', async () => {
+    writeJson('promptHistory', ['what the viewer typed'])
+    expect(localStorage.getItem('candy-code-web:promptHistory')).not.toBeNull()
+
+    // The finally-branch is the whole point: an unreachable or angry server
+    // must not leave the typed prompts behind either.
+    const broken = responder(() => {
+      throw new TypeError('unreachable')
+    })
+    await expect(logout(broken.fetchImpl)).rejects.toBeInstanceOf(AuthError)
+    expect(localStorage.getItem('candy-code-web:promptHistory')).toBeNull()
+  })
+
+  it('a successful logout clears it too', async () => {
+    writeJson('promptHistory', ['one more'])
+    const { fetchImpl } = responder(() => json(200, { ok: true }))
+    await logout(fetchImpl)
+    expect(localStorage.getItem('candy-code-web:promptHistory')).toBeNull()
   })
 })

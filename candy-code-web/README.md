@@ -139,7 +139,12 @@ documents the protocol and the UI).
   persistence while signed in. Sign-out clears it (`logout()` deletes the
   key, and any 401 from the server clears it the same way), so until then
   keep the host page's script surface clean and treat browser storage as
-  holding a credential.
+  holding a credential. A second, gentler disclosure: the composer keeps
+  your typed prompts in a local ring (`localStorage` key
+  `candy-code-web:promptHistory`, capped at 50, this origin only, never
+  sent anywhere beyond the server that answered those very prompts) —
+  sign-out clears that key, and `clearPromptHistory()` in
+  `src-web/stores/promptHistory.ts` clears it any time without signing out.
 
 ### Deployment hardening
 

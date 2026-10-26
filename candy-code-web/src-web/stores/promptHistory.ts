@@ -6,7 +6,7 @@
  * an empty prompt. A viewer whose storage is blocked simply has no history;
  * nothing else in the UI changes.
  */
-import { readJson, writeJson } from './storage'
+import { readJson, removeJson, writeJson } from './storage'
 
 /** How far back the ring reaches; the oldest entry falls off the tail. */
 export const PROMPT_HISTORY_CAP = 50
@@ -33,4 +33,14 @@ export function pushPromptHistory(history: string[], prompt: string): string[] {
   const next = [text, ...history].slice(0, PROMPT_HISTORY_CAP)
   writeJson(KEY, next)
   return next
+}
+
+/**
+ * Erase the stored ring (the in-memory copy callers hold is untouched).
+ * What the viewer typed stays on this browser in `candy-code-web:promptHistory`
+ * until it is cleared — sign-out clears it, and it was never sent anywhere
+ * except the server that answered those very prompts.
+ */
+export function clearPromptHistory(): void {
+  removeJson(KEY)
 }

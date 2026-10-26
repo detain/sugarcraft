@@ -24,3 +24,12 @@ export function writeJson(key: string, value: unknown): void {
     // storage full or blocked: a convenience lost, nothing more
   }
 }
+
+/** Drop a stored key entirely — the way out for anything a viewer recorded. */
+export function removeJson(key: string): void {
+  try {
+    globalThis.localStorage?.removeItem(PREFIX + key)
+  } catch {
+    // nothing to clear if storage is blocked
+  }
+}

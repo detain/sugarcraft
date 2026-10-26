@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { PROMPT_HISTORY_CAP, loadPromptHistory, pushPromptHistory } from '../promptHistory'
+import { PROMPT_HISTORY_CAP, clearPromptHistory, loadPromptHistory, pushPromptHistory } from '../promptHistory'
 import { readJson, writeJson } from '../storage'
 
 describe('prompt history ring (WEB-5a-i)', () => {
@@ -60,5 +60,18 @@ describe('prompt history ring (WEB-5a-i)', () => {
   it('readJson round-trips the very key the ring wrote (the wrapper is the storage)', () => {
     pushPromptHistory([], 'round trip')
     expect(readJson<string[]>('promptHistory', [])).toEqual(['round trip'])
+  })
+
+  it('clearPromptHistory erases the key, not just the view of it', () => {
+    pushPromptHistory(loadPromptHistory(), 'a typed prompt')
+    expect(localStorage.getItem('candy-code-web:promptHistory')).not.toBeNull()
+
+    clearPromptHistory()
+
+    expect(localStorage.getItem('candy-code-web:promptHistory')).toBeNull()
+    expect(loadPromptHistory()).toEqual([])
+    // And the ring still works afterwards: clearing is not disabling.
+    expect(pushPromptHistory(loadPromptHistory(), 'after clear')).toEqual(['after clear'])
+    expect(loadPromptHistory()).toEqual(['after clear'])
   })
 })
