@@ -482,11 +482,17 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 'Background/BackgroundSessionRunner.php',
                 // NOT Agent readers: the schedule row owns its OWN recorded
                 // `permissionMode` field (the AUT-1 permission floor — a cron
-                // never re-reads the live session's mode), and ScheduleSpawner
-                // passes that row value through. The needle is shape-matched,
-                // so both files land on the roster even though neither touches
-                // `Agent::$permissionMode`.
+                // never re-reads the live session's mode). ScheduleSpawner
+                // passes that row value through, and ScheduleRegistry reads it
+                // only to ANNOUNCE the coercion: it compares the mode a row
+                // spelled against what the row settled to on the floor and
+                // records a load note when they differ, so an untrusted
+                // spelling is named as refused rather than ever honored (the
+                // floor itself lives in Schedule's constructor, above). The
+                // needle is shape-matched, so all three files land on the
+                // roster even though none touches `Agent::$permissionMode`.
                 'Background/Schedule.php',
+                'Background/ScheduleRegistry.php',
                 'Background/ScheduleSpawner.php',
                 // NOT an Agent reader: Chat applies a slash command's
                 // SetPermissionMode effect (`/permissions mode …`) through
