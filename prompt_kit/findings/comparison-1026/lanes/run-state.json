@@ -59,7 +59,8 @@
     "P-TABS.h",
     "C-TOOL-7.a",
     "C-SES-6.a",
-    "C-EXT-2.a"
+    "C-EXT-2.a",
+    "C-SES-9.c"
   ],
   "inflight": {
     "P-AGENT.a": {
@@ -100,14 +101,6 @@
       "worktree": "/home/sites/cc-cmp-C-SES-9.a",
       "branch": "cc/C-SES-9.a",
       "session": "ses_e81de68e3ffeTCMIl2N6p6wepf",
-      "note": "cut from c2477fe71; deps linked"
-    },
-    "C-SES-9.c": {
-      "stage": "build",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SES-9.c",
-      "branch": "cc/C-SES-9.c",
-      "session": "ses_e81de68d4ffe4oos6Cwx9Mkfv8",
       "note": "cut from c2477fe71; deps linked"
     },
     "P-CTX.g": {
@@ -277,6 +270,14 @@
       "pick": "d0a0ce626",
       "note": "SelfUpdateTest glob pair foreign-red CLOSED \u2014 remove from allowed-red list in future briefs",
       "gates": "TreeWideGuardRoster|DuplicatedTestHelperDrift 31T/3538A OK; five-guard 133T/15654A pair-only (2F, staleness)"
+    },
+    "C-SES-9.c": {
+      "master": "5badf6d2f",
+      "pick": "d5b5bd078",
+      "cure": "c8469c77d (PharCompatTest realpath paragraph truth-flip per REVIEW-1 MINOR)",
+      "note": "evidence completion weld",
+      "gates": "AgentPresetRegistry|Phar merged-tree 114T/610A/1S OK (builder lane-base 112T/587A; +2T/+23A = C-SES-6.a PharCompatTest pins riding master); check-child-lifetimes rc0 (33 sites/9 accounted); five-guard 133T/15654A pair-only",
+      "durations_owed": "none"
     }
   },
   "carries": [
@@ -301,6 +302,7 @@
     "C-TOOL-7.a FINDING (MAJOR, weld-time): ReadPathCensusTest::testTheCensusIsDerivedFromSrcAndFullyClassified RED \u2014 Background/BackgroundShellRegistry.php|scandir roster 2 vs live 4 (sweep sinks :548 + :568 un-armed, \u00a71.8 in-step law). Fixer owed; proven not-foreign (2==2 green at 85afa9f90) and not-C-EXT-2.a (its SkillLoader DirectoryIterator row satisfied).",
     "C-EXT-2.a welded-partial: picks 376e9d0f1+39e523d36 + cure 7a8bb5cf6 on master; \u00a74 mark + evidence commit HELD, welded stays 58 (NOT 59); branch/worktree kept; durations row owed for tests/Tools/BuiltIn/SkillToolAssetTest.php (13 methods).",
     "2026-10-27: origin/master mirrors local (owner-side sync incl push of our picks + CI .vhs gif re-renders); 3 merge commits in master (316b36acf/eb20c154e/8c7f6b4f2) carry ZERO code delta \u2014 accepted, recorded; NEVER pull/push from lanes",
-    "C-EXT-2.a: SkillPromptLine.php:104 dirname falsehood \u2014 closeout fix (report-only seam, pick stays on master)"
+    "C-EXT-2.a: SkillPromptLine.php:104 dirname falsehood \u2014 closeout fix (report-only seam, pick stays on master)",
+    "C-SES-9.c report-only seam: under a phar install the bundled trio is still NOT rostered (agentPresetTiers never injects the package dir; list() glob wrapper-dead) \u2014 tier-injection leg belongs to a later C-SES-9 step"
   ]
 }
