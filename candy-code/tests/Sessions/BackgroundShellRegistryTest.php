@@ -550,6 +550,125 @@ final class BackgroundShellRegistryTest extends TestCase
         }
     }
 
+    public function testTwoLaunchesKeepSeparateShellDirs(): void
+    {
+        // SHL-1-P3/P4: Bootstrap::backgroundShells mints the directory as
+        // 'launch-<pid>' through the ONE constructor every caller shares,
+        // and the corpse sweep reaches sibling directories from the outside:
+        // a crashed launch's tree is dead weight once its pid can no longer
+        // answer and the retention passed — but only then. Every gate gets
+        // a plant: directory shape, dead, fresh, live, name.
+        $home = \sys_get_temp_dir() . '/w2d-two-' . \getmypid() . '-' . \bin2hex(\random_bytes(3));
+        $shells = $home . '/.candy-code/shells';
+        $projectRoot = $home . '/project';
+        \mkdir($projectRoot, 0o700, true);
+        $previousHome = \getenv('HOME');
+        $previousServerHome = $_SERVER['HOME'] ?? null;
+        \putenv('HOME=' . $home);
+        $_SERVER['HOME'] = $home; // twin spelling (OneSidedHomeSandbox doctrine)
+
+        $buckets = new \ReflectionProperty(LaunchContext::class, 'shellRegistries');
+        $armed = new \ReflectionProperty(LaunchContext::class, 'shellsShutdownRegistered');
+        $buckets->setAccessible(true);
+        $armed->setAccessible(true);
+        $priorBuckets = $buckets->getValue(null);
+        $priorArmed = $armed->getValue(null);
+        $buckets->setValue(null, []);
+        $armed->setValue(null, false);
+
+        $registry = null;
+
+        try {
+            $registry = Bootstrap::backgroundShells($projectRoot);
+            $first = $registry->start('printf two-launches', 'dir shape');
+            self::assertTrue($first['ok'], (string) ($first['error'] ?? ''));
+            $idA = (string) $first['shell']['id'];
+            self::assertStringContainsString(
+                '/launch-' . \getmypid() . '/',
+                (string) $registry->status($idA)['stdoutPath'],
+                'the one constructor scopes the directory to THIS launch pid — two launches sharing a home never share a sweep or cross ids',
+            );
+
+            $pidMax = (int) @\file_get_contents('/proc/sys/kernel/pid_max');
+            $dead = $pidMax > 4096 ? $pidMax - 4 : 2147483000;
+            self::assertFalse(@\posix_kill($dead, 0), 'the test needs a pid no process can hold on this host');
+            $live = \posix_getppid();
+            self::assertTrue(@\posix_kill($live, 0), 'the sibling stand-in for a live launch must answer');
+            $ancient = \time() - BackgroundShellRegistry::CORPSE_RETENTION_SECONDS - 600;
+
+            $dirFor = static function (string $name) use ($shells): string {
+                $dir = $shells . '/' . $name;
+                \mkdir($dir, 0o700);
+
+                return $dir;
+            };
+            $deadDir = $dirFor('launch-' . $dead);
+            \file_put_contents($deadDir . '/sh-deadbeef.out', 'planted');
+            \touch($deadDir . '/sh-deadbeef.out', $ancient);
+            \file_put_contents($deadDir . '/notes.txt', 'not even shell-shaped');
+            \touch($deadDir . '/notes.txt', $ancient);
+            \touch($deadDir, $ancient);
+
+            $liveDir = $dirFor('launch-' . $live);
+            \file_put_contents($liveDir . '/sh-cafebabe.out', 'planted');
+            \touch($liveDir . '/sh-cafebabe.out', $ancient);
+            \touch($liveDir, $ancient);
+
+            $strayDir = $dirFor('launch-notapid');
+            \file_put_contents($strayDir . '/sh-feedface.out', 'planted');
+            \touch($strayDir . '/sh-feedface.out', $ancient);
+            \touch($strayDir, $ancient);
+
+            $freshDir = $dirFor('launch-' . ($dead - 1));
+            \file_put_contents($freshDir . '/sh-80085abc.out', 'still recent');
+            \touch($freshDir, $ancient); // old directory, young bytes
+
+            $sessionDir = $dirFor('session');
+            \file_put_contents($sessionDir . '/sh-de110a5.out', 'planted');
+            \touch($sessionDir . '/sh-de110a5.out', $ancient);
+            \touch($sessionDir, $ancient);
+
+            \file_put_contents($shells . '/loose.log', 'never a directory');
+            \touch($shells . '/loose.log', $ancient);
+
+            $second = $registry->start('printf sweep-two', 'sweep trigger');
+            self::assertTrue($second['ok'], (string) ($second['error'] ?? ''));
+            $idB = (string) $second['shell']['id'];
+
+            self::assertFalse(\is_dir($deadDir), 'a dead launch directory past the retention must not outlive the next sweep — files and the directory itself');
+            self::assertTrue(\is_dir($liveDir), 'a live launch directory is never swept, whatever its age');
+            self::assertTrue(\is_dir($strayDir), 'directories the sweep cannot name as a launch pid are not its business');
+            self::assertTrue(\is_dir($freshDir) && \file_exists($freshDir . '/sh-80085abc.out'), 'a dead launch with fresh bytes keeps every one of them');
+            self::assertTrue(\is_dir($sessionDir), 'a non-launch folder name is not a launch directory');
+            self::assertTrue(\file_exists($shells . '/loose.log'), 'the sibling pass never removes plain files');
+
+            self::assertTrue(
+                $this->waitFor(
+                    $registry,
+                    static fn (BackgroundShellRegistry $r): bool => ($r->status($idA)['state'] ?? '') === 'finished'
+                        && ($r->status($idB)['state'] ?? '') === 'finished',
+                    15.0,
+                ),
+                'the probe shells never settled',
+            );
+            self::assertStringContainsString('two-launches', (string) $registry->read($idA)['stdout']);
+        } finally {
+            Bootstrap::stopBackgroundShells();
+            $buckets->setValue(null, $priorBuckets);
+            $armed->setValue(null, $priorArmed);
+            if ($previousHome === false) {
+                \putenv('HOME');
+            } else {
+                \putenv('HOME=' . $previousHome);
+            }
+            if ($previousServerHome === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $previousServerHome;
+            }
+        }
+    }
+
     public function testTheSizeCapFellsAFloodingShellAndTheRecordNamesTheCause(): void
     {
         $registry = $this->registry();
