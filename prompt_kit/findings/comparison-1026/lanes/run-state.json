@@ -35,7 +35,8 @@
     "C-WEB-1.a",
     "C-WEB-1.d",
     "C-SEC-3.a",
-    "C-PRV-1.a"
+    "C-PRV-1.a",
+    "C-SEC-4.b"
   ],
   "inflight": {
     "P-TABS.d": {
@@ -48,15 +49,6 @@
       "reviewer": "ses_e82938b84",
       "weld_note": "no regen; gates Bootstrap|Launch|TabChat 1067T/6104A + Session|Chat 3314T/26727A (1F foreign RemoteBackend disclose); NEW TabChatFactoryTest durations; roster/drift guard set run (TEST-touching picks!)",
       "note": "r2 CLEAN. WELD queue 5th: plain picks 068b6f48e+8ff7a2b33 (base 30d4f91cb era, master moved — expect clean, [hot:bootstrap:chat] holder free); NO regen (verify diff has no Protocol/web files); gates --filter TabChatFactory|Bootstrap|Launch expect 1067T/6104A + 1F foreign RemoteBackend reproduce-at-base disclose-only + five-guard pair-only; NEW tests/Cli/TabChatFactoryTest.php DURATIONS duty; extraction purity r1-verified 12 hunks; evidence 4 files"
-    },
-    "C-SEC-4.b": {
-      "stage": "clean",
-      "round": 4,
-      "worktree": "/home/sites/cc-cmp-C-SEC-4.b",
-      "branch": "cc/C-SEC-4.b",
-      "tip": "b8966c024",
-      "note": "weld fix LANDED 54094cf58 (tests-only +34/-7: :93 4-key root provenance pin per ruling + reply() helper curing bare-request already_resolved leg; mutation 1F; GatewayTrustRouting 2T/30A OK, ContextTrustPrompt 12T/74A, pair-only 25,746). SECOND WELDER CALL QUEUED behind C-SEC-3.a (one-welder): cherry-pick 54094cf58, re-run GatewayTrustRouting|ContextTrustPrompt + ProtocolSchemaDrift pair + vitest serial trust specs quick, evidence commit lanes/C-SEC-4.b/{BRIEF,REPORT,REVIEW-1,REVIEW-2}.md (+WELD-FINDING.md stage optional) + run-state ->37... actually 36 after C-SEC-3.a=35; §4 mark ✅ 8f625725a UNSTAGED (picks already landed 8f625725a+0fd50b209+593e5d769); cherry proof; prune.",
-      "session": null
     },
     "P-IMG.b": {
       "stage": "clean",
@@ -85,24 +77,40 @@
       "round": 1,
       "worktree": "/home/sites/cc-cmp-P-CTX.d",
       "branch": "cc/P-CTX.d",
-      "session": "ses_e82819d2dffeAtY6rF2CLNtVWa",
-      "note": "died harness-error zero-disk @683, resumed disk-grounded @686"
+      "session": "(fresh-cut-next)",
+      "note": "resumed session DIED AGAIN harness-error @774@ with disk ZERO (branch tip==base, porcelain 0, 21 calls were read-only) => FRESH CUT per C-PRV-1.a precedent"
     },
     "P-TABS.a": {
-      "stage": "fix",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-P-TABS.a",
       "branch": "cc/P-TABS.a",
-      "session": "(fixer-next)",
-      "note": "r1 FINDINGS 1 MINOR (AgentColor.php:17-18 docblock token enumeration truth-lie; fix-now comment-only) +2 NIT (import order cosmetic; unpinned API legs=consumer-step carry P-TABS.g/P-AGENT.b). REVIEW-1.md persisted. fix on tip 758d4f4ab then r2 review->weld. NEW tests Window x4 durations."
+      "session": "ses_e82668c7effe2ucgSRKiRkvu2e",
+      "note": "r2 CLEAN persisted REVIEW-2.md (fix a09f7b4c5 scope verified). WELD: picks 758d4f4ab+a09f7b4c5 base 6f42f3325, regen no-op (window kit), gates Window 287T-class + TuiLang|LangParity + five-guard pair-only (TreeWideGuardRoster 2F foreign disclosed); DUR x4 Window tests; evidence BRIEF/REPORT/REVIEW-1/REVIEW-2."
     },
     "P-MENU.a": {
-      "stage": "review",
+      "stage": "clean",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-P-MENU.a",
       "branch": "cc/P-MENU.a",
       "session": "ses_e82692a3effeybkwNl58kOBasc",
-      "note": "build 6606dbc5d verified (base 3ee78848c, +1883/0 all-new Tui/Menu kit + 3 tests + 4 goldens, detain/0 trailers). Gates carried 208T/2730A, pair-only 25,828. DUR x3 Menu tests. r1 reviewer running (static fallback)."
+      "note": "r1 CLEAN persisted REVIEW-1.md; 3 NITs carries. WELD: pick 6606dbc5d base 3ee78848c, regen no-op, gates --filter Menu 208T/2730A + one-type-per-file RC=0 + five-guard pair-only; DUR x3 MenuCursorTest/MenuCascadeTest/MenuTreeTest; evidence BRIEF/REPORT/REVIEW-1 + run-state."
+    },
+    "C-SEC-3.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SEC-3.b",
+      "branch": "cc/C-SEC-3.b",
+      "session": "ses_e82689574ffespBwgE8RUGijG4",
+      "note": "W3 cut ffe7b910d. OWNER RULING MADE (sec 6.1 Third-party !cmd): two user-tier Frozen list keys trustedBundleCommands+mcpPromptShell; foreign row = keep today tier-gate behavior, fix COMMANDS.md:28. Files: CommandShellPosture+TurnController+PermissionSettings+LayeredSettings(gen block)+lang settings.*+SETTINGS.md+README :1255+COMMANDS.md; tests modify x2, no new files expected. TrustKey roster camelCase check in-step."
+    },
+    "P-CTX.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-P-CTX.b",
+      "branch": "cc/P-CTX.b",
+      "session": "ses_e8266c658ffewL4febJi57CF1H",
+      "note": "entry RESTORED — lost again by welder run-state round-trip (5f740e62a-era file copy); builder live, worktree verified on disk @805@"
     }
   },
   "blocked": [],
@@ -111,7 +119,8 @@
     1
   ],
   "wave_loops": {
-    "1": "closed r2 CLEAN"
+    "1": "closed r2 CLEAN",
+    "2": "r1 CLEAN static; gates owed by lead post six-lane welder; close then"
   },
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "weld_notes": {
@@ -144,6 +153,10 @@
       "gates": "McpPrompt|TurnController|CommandShell 112T/553A OK exact; refusal family 83T/1342A OK exact; DocFigureProseDriftTest 91T/3906A OK (+12A master-era arms, green); five-guard 133T/15470A only-red staleness pair (pinned 25,537 vs live 25,79x — closeout re-pin); TreeWideGuardRoster 2F PRE-EXISTING SelfUpdateTest glob (a8ead9976 C-SES-5.b, disclosed, not cured); DuplicatedTestHelperDrift green; MCP.md+lang auto-merge content-verified keep-both (C-MCP-1.b Deferred+foreign-spelling intact, lane refusal rows+2 keys live)",
       "durations_owed": "NEW candy-code tests/Commands/CommandShellPostureTest.php + tests/Host/TurnControllerBundleShellTest.php — LIST ONLY, durations.tsv is closeout duty"
     },
-    "C-PRV-1.a": "WELDED 2026-10-27 master e55b78f22+ffe7b910d (picks of 30fddc88a+0a5ad3c99, clean auto-merge lang/en.php+Chat.php, zero conflicts, patch-ids identical). Regen no-op (command/tool/settings docs all up to date; no Protocol/web files in picks). Merged gates: Effort|BedrockProvider 189T/504A OK; Codex|ClaudeCode 221T/746A OK; OpenAIProvider 89T/204A OK (filter broader than lane-suffix form); SettingsSchemaDocDrift 19T/179A; five-guard 133T/15479A F2=staleness pair only (25,537 pinned vs 25,827 live - closeout re-pin carries +290 incl foreign); TreeWideGuardRoster|DuplicatedTestHelperDrift 31T F2 = disclosed foreign SelfUpdateTest glob carrier. DURATIONS duty: candy-code/tests/Providers/EffortGateTest.php. §4 mark ✅ e55b78f22 left UNSTAGED. Cherry proof both '-'; worktree+branch pruned. => W2 step fully welded."
-  }
+    "C-PRV-1.a": "WELDED 2026-10-27 master e55b78f22+ffe7b910d (picks of 30fddc88a+0a5ad3c99, clean auto-merge lang/en.php+Chat.php, zero conflicts, patch-ids identical). Regen no-op (command/tool/settings docs all up to date; no Protocol/web files in picks). Merged gates: Effort|BedrockProvider 189T/504A OK; Codex|ClaudeCode 221T/746A OK; OpenAIProvider 89T/204A OK (filter broader than lane-suffix form); SettingsSchemaDocDrift 19T/179A; five-guard 133T/15479A F2=staleness pair only (25,537 pinned vs 25,827 live - closeout re-pin carries +290 incl foreign); TreeWideGuardRoster|DuplicatedTestHelperDrift 31T F2 = disclosed foreign SelfUpdateTest glob carrier. DURATIONS duty: candy-code/tests/Providers/EffortGateTest.php. §4 mark ✅ e55b78f22 left UNSTAGED. Cherry proof both '-'; worktree+branch pruned. => W2 step fully welded.",
+    "C-SEC-4.b": "WELDED 2026-10-27 master 40d19f15f (cherry-pick of weld fix 54094cf58 atop already-landed picks 8f625725a+0fd50b209+regen 593e5d769). Gates: GatewayTrustRouting 2T/30A OK, ContextTrustPrompt 12T/74A OK, ProtocolSchemaDrift|ServerProtocolDocumentationDrift 12T/332A OK, gen-protocol-schema --check up-to-date, dist clean (build ran at regen). five-guard 133T/15479A F2 staleness pair only. vitest N/A this pick (tests-only, name-only shows 1 file). Durations duty: GatewayTrustRoutingTest.php (landed earlier pick - closeout row)."
+  },
+  "carries": [
+    "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty"
+  ]
 }

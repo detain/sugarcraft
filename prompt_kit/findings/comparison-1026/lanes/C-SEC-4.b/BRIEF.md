@@ -1,0 +1,34 @@
+### C-SEC-4.b — `context.trust` routable, failed writes surfaced, prompt discoverable
+- item: C-SEC-4 (sources: WEB-3-P1, WEB-3-P2, WEB-3-P3, p2-miss "WEB-3 trust prompt discovery")
+- kind: fix · MAJOR · effort M
+- approach:
+  - P1 root cause: the `context.trust` params (`MethodSchemas.php:413-418`) carry no `sessionId`. `Gateway::routeOf()` (`src/Server/Workspace/Gateway.php:289-298`) therefore sends the call to the primary process. The prompt was minted in a workspace-host child (`TrustAsks` is per-process static, :37-41), so every non-primary root gets `ask_not_found` and the prompt loops forever.
+  - P1 fix: make `sessionId` required. The gateway then routes it like `permission.respond`, with no Gateway change. `TrustAsks::settle()` also verifies that the ask's root equals the session's workspace root.
+  - P2 root cause: `TrustAsks::settle()` :124-131 drops `$report['error']` and settles `granted, persisted:false`.
+  - P2 fix: when `remember === 'user'` and the write fails, throw `RpcError` `trust_write_failed` (carrying the report error) and leave the record `asked`.
+  - P3 root cause: the prompt is minted only by `context.sources`, which runs only when the Context panel mounts.
+  - P3 fix: `session.subscribe` runs the cheap MCP census (`Bootstrap::mcpServerInventory($root)['status']`) and calls `TrustAsks::discover()`. The web store holds a `pendingTrust` independent of `sources`; it currently drops events while `sources === null` (`contextSources.ts:86-97`). `StatusBar` shows a badge that opens the Context panel.
+- files.create: `candy-code/tests/Server/GatewayTrustRoutingTest.php`, `candy-code-web/src-web/stores/__tests__/contextTrustRouting.spec.ts`, `candy-code-web/src-web/components/__tests__/statusBarTrustBadge.spec.ts`
+- files.modify:
+  - `candy-code/src/Protocol/Schema/MethodSchemas.php` (`context.trust` params and error description)
+  - `candy-code/src/Protocol/Methods/ContextMethods.php` (`trust`)
+  - `candy-code/src/Protocol/Methods/SessionMethods.php` (`subscribe` discovery)
+  - `candy-code/src/Protocol/TrustAsks.php` (`settle` root check and write-failure arm)
+  - `candy-code/lang/en.php` (`server.trust.write_failed`)
+  - `candy-code/docs/protocol/candy-code.v1.schema.json`, `candy-code/docs/SERVER.md`, `candy-code-web/src-web/protocol/generated.ts` (regenerated)
+  - `candy-code-web/src-web/stores/contextSources.ts` (`respondTrust` sends `sessionId`, `pendingTrust`, event filter)
+  - `candy-code-web/src-web/components/panels/ContextPanel.vue` (render `trust_write_failed`)
+  - `candy-code-web/src-web/components/StatusBar.vue` (badge)
+- tests:
+  - The new `GatewayTrustRoutingTest`: mint through `context.sources` on a non-primary root via the gateway, answer `context.trust`, and expect `granted`.
+  - modify `candy-code/tests/Protocol/ContextTrustPromptTest.php`:
+    - an unwritable user config keeps the record `asked` and admits a second answer;
+    - subscribing on an untrusted root emits exactly one trust `permission.asked`.
+  - modify `candy-code-web/src-web/stores/__tests__/contextSources.spec.ts`: the request carries `sessionId`.
+- docs/guards: protocol gen checks; `ServerProtocolDocumentationDriftTest`; the SERVER.md error-kind roster (new `trust_write_failed`). Web dist rebuild.
+- serialized: [protocol] [hot:candy-code/src/Protocol/TrustAsks.php] [hot:candy-code-web/src-web/components/panels/ContextPanel.vue] [hot:candy-code-web/src-web/stores/contextSources.ts] [hot:candy-code-web/src-web/components/StatusBar.vue] [hot:candy-code-web/dist] [lang:server.trust.]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: `sessionId` becomes required on `context.trust`. That is a wire break for any older client, but the committed dist is rebuilt in the same lane.
+

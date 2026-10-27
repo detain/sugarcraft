@@ -1,0 +1,7 @@
+# C-SEC-4.b round 2 — VERDICT: CLEAN (static; php/node/shell denied — figures carried from fixer log + r1, welder re-owns)
+- r1 MAJOR fixed exactly: contextTrustRouting.spec.ts :70 respondTrust('reject','session'), :76 wire pin remember:'session'; TrustRemember non-nullable (contextSources.ts:87) accepts literal; TS2345 gone; all 8 repo-wide respondTrust call sites pass typed pairs; no remember:null pin survives.
+- Fix commit b8966c024 content: only the spec changed, zero production edits; chain base→ee24cbcde→b8966c024; committer detain both.
+- TS2554 shapes (statusBar.spec.ts :160/:169, reducer.spec.ts) OUTSIDE declared 15-file set — untouched-claim consistent; base-exact recompute owed to welder glance.
+- TS2353 contextSources.ts:94 = stale trio at tip (§1.8 restore honored) — WELD REGEN (gen-protocol-schema + npm gen:protocol + dist) resolves both TS2353 legs.
+- Cumulative axes hold: lang server.trust.write_failed under lane prefix (:1146); SERVER.md :403 hand-row; NEW GatewayTrustRoutingTest.php (real fork-gateway test) + 2 specs clean §1.9; C-WEB-1.a zero overlap; §6 none.
+- Welder duties: regen trio+dist commit, re-run vitest serial (incl contextTrustRouting.spec + statusBar/reducer specs — if TS2554-class failures surface, reproduce at pre-pick checkout + disclose foreign per law), GatewayTrustRoutingTest phpunit filter, five-guard pair-only, tree-clean glance. Durations: NEW GatewayTrustRoutingTest.php + the 2 NEW specs are vitest (no phpunit rows) — list phpunit one only.
