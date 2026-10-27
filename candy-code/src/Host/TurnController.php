@@ -15,7 +15,9 @@ use SugarCraft\Code\Backend\QueueMode;
 use SugarCraft\Code\Backend\SocketSteerInbox;
 use SugarCraft\Code\CommandParser;
 use SugarCraft\Code\Commands\BangShell;
+use SugarCraft\Code\Commands\CommandShellPosture;
 use SugarCraft\Code\Commands\CommandSpec;
+use SugarCraft\Code\Commands\ShellProvenance;
 use SugarCraft\Code\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Hooks\HookContext;
@@ -497,16 +499,22 @@ final class TurnController
      *
      * TWO CHECKS, IN THIS ORDER, and the order is the substantive decision:
      *
-     * 1. THE TIER. A `project`-tier file came out of a `git clone`, and running
-     *    a shell out of it needs $projectCommandsTrusted — the operator having
-     *    named this root under `trustedProjectCommands`. An `mcp`-tier body was
-     *    fetched over a wire from a third-party server and carries the SAME
-     *    repository-authored posture (MCP-2), refused by its own sentence so
-     *    each provenance's author can see which gate closed it. `user` is the
-     *    operator's own file; `null` was built in PHP by an in-process caller.
+     * 1. THE POSTURE. {@see CommandShellPosture::of()} reads the row's
+     *    (tier, source) and answers WHOSE shell this is. A `Repo` row came out
+     *    of a `git clone`, and running a shell out of it needs
+     *    $projectCommandsTrusted — the operator having named this root under
+     *    `trustedProjectCommands`. The two third-party postures — an `Mcp`
+     *    body fetched over a wire, and a `Bundle` row whatever tier it
+     *    installed under — are REFUSED outright, before trust is even asked:
+     *    the project-trust list vouches for this checkout's own files, and a
+     *    stranger's text is not one of them (C-SEC-3, plan_comparison §6;
+     *    C-SEC-3.b is the planned per-origin opt-in). `Operator` is the
+     *    user's own file or a spec an in-process caller built; foreign rows
+     *    keep today's tier answer, which the table routes to these same two
+     *    cases.
      * 2. THE GATE, and only then, because {@see PermissionGate::evaluate()}
-     *    MUTATES Auto mode's circuit-breaker counters, and a command refused by
-     *    the tier rule never really ran.
+     *    MUTATES Auto mode's circuit-breaker counters, and a command refused
+     *    by posture never really ran.
      *
      * ONLY `Deny` REFUSES; an `Ask` proceeds: expansion has no prompt to show,
      * and {@see PermissionGate::refuses()} forbids turning "would have asked"
@@ -525,29 +533,34 @@ final class TurnController
         ?PermissionGate $gate,
         ?\Closure $onGateEvaluated = null,
     ): ?string {
-        if ($spec->tier === 'project' && !$projectCommandsTrusted) {
+        $posture = CommandShellPosture::of($spec);
+
+        // C-SEC-3 (plan_comparison §6): the two third-party postures are
+        // refused outright, before trust and before the gate. Each keeps its
+        // own sentence so the author who can fix it — the server's, or the
+        // bundle's — can see which posture closed, and neither sentence names
+        // `trustedProjectCommands` as the unlock, because for these rows no
+        // local grant unlocks anything.
+        if ($posture === ShellProvenance::Mcp) {
+            return Lang::t('host.command_shell.mcp_refused', [
+                'command' => CommandSpec::abbreviateForm($command),
+                'name' => $spec->name,
+            ]);
+        }
+
+        if ($posture === ShellProvenance::Bundle) {
+            return Lang::t('host.command_shell.bundle_refused', [
+                'command' => CommandSpec::abbreviateForm($command),
+                'name' => $spec->name,
+            ]);
+        }
+
+        if ($posture === ShellProvenance::Repo && !$projectCommandsTrusted) {
             return sprintf(
                 '[!`%s` was not run: /%s came from this project\'s .candy-code/commands, which arrives '
                 . 'with the repository, and a command file from a checkout may only run a shell if you have '
                 . 'listed this project under "trustedProjectCommands" in ~/.candy-code/config.json — the '
                 . 'rest of the command file was sent.]',
-                CommandSpec::abbreviateForm($command),
-                $spec->name,
-            );
-        }
-
-        // MCP-2 (plan_comparison §3): an MCP prompt's body arrived over a wire
-        // from a third-party server, so it carries the repository-authored
-        // posture — the SAME gate as a project-tier file, and the same one
-        // sentence about why. Keeping the legs separate (rather than matching
-        // a tier set) is what pins that the two provenances are judged by the
-        // two authors who can each fix them.
-        if ($spec->tier === \SugarCraft\Code\Commands\McpPromptCommands::TIER && !$projectCommandsTrusted) {
-            return sprintf(
-                '[!`%s` was not run: /%s is an MCP prompt fetched from a server, which arrives '
-                . 'over the wire, and a fetched prompt body may only run a shell if you have '
-                . 'listed this project under "trustedProjectCommands" in ~/.candy-code/config.json — the '
-                . 'rest of the prompt was sent.]',
                 CommandSpec::abbreviateForm($command),
                 $spec->name,
             );
@@ -581,12 +594,14 @@ final class TurnController
      *
      * True for an MCP prompt placeholder whatever its (not yet fetched) body
      * holds — `prompts/get` is network IO and belongs off the update path for
-     * the same reason a shell form does (MCP-2). Otherwise true only when
+     * the same reason a shell form does (MCP-2). False for a refused posture
+     * that has nothing but shell forms to offer — a `Bundle` row forks for no
+     * shell its expansion may not run (C-SEC-3). Otherwise true only when
      * every one of these holds, so every other expansion stays
      * synchronous and byte-identical: $text names a file whose body has a
      * `` !`…` `` form; that form could actually reach a shell (an untrusted
      * project-tier body has every one refused by {@see refuseCommandShell()}'s
-     * first check, so forking it would buy nothing); no expansion for this
+     * posture check, so forking it would buy nothing); no expansion for this
      * exact line is already in hand ($resolvedText, the re-entry); and this
      * build can fork.
      *
@@ -608,17 +623,27 @@ final class TurnController
         }
         [$spec] = $command;
 
+        $posture = CommandShellPosture::of($spec);
+
         // An MCP prompt always forks: its `prompts/get` exchange is network IO
         // that rides the server's existing per-call bound, and IO that can
         // block belongs off the update path exactly as a shell form does
         // (audit 15b-20's argument, new instance — no `hasShellSubstitution()`
-        // can see a body that has not been fetched yet).
-        if ($spec->tier === \SugarCraft\Code\Commands\McpPromptCommands::TIER) {
+        // can see a body that has not been fetched yet). The fetched body
+        // then has every shell form refused by posture — the fork is for the
+        // fetch, never for the stranger's shell (C-SEC-3).
+        if ($posture === ShellProvenance::Mcp) {
             return true;
         }
 
+        // A row whose shell forms are all refused never forks on their
+        // account: the child would only run the same refusal off-thread.
+        if ($posture->refusesShell()) {
+            return false;
+        }
+
         return $spec->hasShellSubstitution()
-            && !($spec->tier === 'project' && !$projectCommandsTrusted);
+            && !($posture === ShellProvenance::Repo && !$projectCommandsTrusted);
     }
 
     /**

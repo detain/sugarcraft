@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\McpPromptCommands;
+use SugarCraft\Code\Host\TurnController;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\MCP\McpPromptProvider;
 use SugarCraft\Code\MCP\McpResourceProvider;
@@ -304,6 +305,33 @@ final class McpPromptCommandsTest extends TestCase
 
         self::assertSame(['dup', 'only-mcp', 'only-disk'], array_keys($merged));
         self::assertSame('project', $merged['dup']->tier, 'a command file always wins its name against a server');
+    }
+
+    /**
+     * C-SEC-3 (plan_comparison §6): the WHOLE production chain — a body
+     * fetched by `prompts/get`, materialized at submission, expanded through
+     * the directive with the project TRUSTED — still refuses the stranger's
+     * shell form and sends its sentence in its place. The command's own
+     * output would read `ran-here`; seeing the printf source inside a refusal
+     * instead of its result is what this pin discriminates.
+     */
+    public function testAFetchedShellFormIsRefusedAtExpansionAndNeverRuns(): void
+    {
+        $server = $this->fetchingServer([['role' => 'user', 'content' => ['type' => 'text', 'text' => 'head !`printf ran-%s here` tail']]]);
+        $placeholder = McpPromptCommands::specs($this->providerFor(['srv' => $server]))['mcp__srv__p'] ?? null;
+        self::assertNotNull($placeholder);
+        $materialized = McpPromptCommands::materialize($placeholder, '', $this->providerFor(['srv' => $server]));
+        self::assertInstanceOf(CommandSpec::class, $materialized);
+
+        $turns = TurnController::new();
+        $directive = $turns->commandDirective($materialized, sys_get_temp_dir(), true, null);
+        $expanded = $turns->expandCustomCommand($materialized, '', $directive);
+
+        self::assertIsString($expanded);
+        self::assertStringNotContainsString('ran-here', $expanded, 'the stranger\'s shell ran — C-SEC-3 refuses every shell form of a fetched body whatever the project trusts');
+        self::assertStringContainsString('is an MCP prompt fetched from a server', $expanded, 'the body expanded without the mcp refusal sentence');
+        self::assertStringContainsString('printf ran-', $expanded, 'the refusal does not echo the command the body carried');
+        self::assertStringContainsString('head', $expanded, 'the rest of the prompt was not sent, contrary to the page');
     }
 
     // ── fixtures ────────────────────────────────────────────────────────

@@ -58,8 +58,9 @@ precedence seat**: a plain `.claude/skills`, `.claude/commands` or
   their own colour token so a bundled skill is never mistaken for a native
   one.
 - **Slash commands** (`commands/<name>.md`) ride the foreign-command
-  discovery that already backs `.claude/commands` — same frontmatter, same
-  `$ARGUMENTS` and `!`-expansion rules, see [COMMANDS.md](COMMANDS.md).
+  discovery that already backs `.claude/commands` — same frontmatter and
+  `$ARGUMENTS` rules; the `` !`cmd` `` form expands to a refusal instead of a
+  shell, see the declined surfaces below and [COMMANDS.md](COMMANDS.md).
 - **Agent presets** (`agents/<name>.md`) register like any other foreign
   preset; the file format is the Claude one by definition. A bundle preset
   loses a name collision to any plain foreign directory, then to the project
@@ -69,11 +70,11 @@ Everything the [precedence section of SKILLS.md](SKILLS.md) says about
 shadowing applies per-surface; the bundle badge is how you tell which side of
 a shadow you are looking at.
 
-## The two declined surfaces
+## The declined surfaces
 
-A bundle may ship things candy-code will not run. Both declines fire **once
-per session at launch**, naming the bundles affected, as ordinary system
-rows in the transcript:
+A bundle may ship things candy-code will not run. The first two declines fire
+**once per session at launch**, naming the bundles affected, as ordinary
+system rows in the transcript:
 
 - **Hooks.** `hooks/` content is never registered. Lifecycle hooks execute
   arbitrary programs at every session event; the hooks that do run are
@@ -89,7 +90,13 @@ rows in the transcript:
   ```
 
   which prints a config block and writes nothing, exactly as it does for any
-  other foreign MCP file. If those surfaces are unacceptable to you, the
+  other foreign MCP file.
+- **Shell forms.** A `` !`cmd` `` inside a bundle's command file is refused at
+  expansion — in the transcript, not by a launch notice. The tier the bundle
+  happens to install under decides nothing, and `trustedProjectCommands` does
+  not unlock it either (C-SEC-3; the [COMMANDS.md](COMMANDS.md) tier table
+  carries the row). A per-origin opt-in is the planned follow-up. If those
+  surfaces are unacceptable to you, the
   bundle is a stranger; deleting its directory takes it all back.
 
 ## Installing and listing

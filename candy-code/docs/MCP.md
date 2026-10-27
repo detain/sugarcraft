@@ -888,9 +888,11 @@ nothing: the line returns to the input with a refusal notice instead of
 sending an empty turn. Positional arguments on the command line map onto
 the prompt's declared arguments in order, required first.
 
-A fetched prompt body is repository-authored posture, not user intent:
-its inline shell forms run only when the project is listed under
-`trustedProjectCommands`, exactly as for a project command file, and the
+A fetched prompt body is third-party text, not user intent: its inline
+shell forms are refused outright, whatever this project trusts — a
+`trustedProjectCommands` entry vouches for the checkout's own files, and a
+body fetched over the wire is not one of them (a per-origin opt-in for this
+refusal is the planned follow-up). The rest of the prompt is sent, and the
 transcript records the `mcp` tier so the reader knows where the
 instruction came from.
 

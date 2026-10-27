@@ -37,11 +37,14 @@ use SugarCraft\Code\Tools\McpToolBridge;
  * construction, and the launcher who wrote a command file never has a server
  * shadow it.
  *
- * TRUST: the materialized spec keeps {@see TIER}, so `` !`…` `` forms inside a
- * fetched body pass the same gate a cloned repository's command files do —
- * `trustedProjectCommands` or refusal (see
- * {@see \SugarCraft\Code\Host\TurnController::refuseCommandShell()}). A server
- * is third-party text by the same argument a `git clone` is.
+ * TRUST: the materialized spec keeps {@see TIER}, and the shell-posture table
+ * ({@see CommandShellPosture}) reads that tier as third-party: `` !`…` ``
+ * forms inside a fetched body are REFUSED outright, whatever
+ * `trustedProjectCommands` lists — a grant that vouches for this checkout's
+ * own files says nothing about a body fetched over the wire (C-SEC-3, see
+ * {@see \SugarCraft\Code\Host\TurnController::refuseCommandShell()}). A
+ * server is third-party text by a stronger argument than the `git clone` a
+ * project file arrives by: the operator never chose this server's bytes.
  */
 final class McpPromptCommands
 {

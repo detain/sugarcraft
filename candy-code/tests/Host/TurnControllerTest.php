@@ -160,15 +160,18 @@ final class TurnControllerTest extends TestCase
     }
 
     /**
-     * MCP-2 (plan_comparison §3): a fetched prompt body carries the same shell
-     * posture as a cloned repository's command file — but its refusal names
-     * its own provenance and never the word `trustedProjectCommands`' file
-     * sentence, because the operator who can fix THIS one is the server's,
-     * reached through the same trust key. And an mcp-tier row FORKS whatever
-     * its (not yet fetched) body holds: the `prompts/get` exchange is IO and
-     * belongs off the update path for the audit 15b-20 reason.
+     * MCP-2 minted the mcp-tier sentence; C-SEC-3 (plan_comparison §6) hardened
+     * it into a refusal no grant unlocks: a fetched prompt body is text that
+     * arrived over the wire, so its shell forms are refused outright — the
+     * trust key that vouches for this checkout's own files vouches for nothing
+     * here, and the refusal never reaches the gate either way. The sentence
+     * still names its own provenance, never the project-file sentence, because
+     * the operator who can fix it is the server's. And an mcp-tier row FORKS
+     * whatever its (not yet fetched) body holds: the `prompts/get` exchange is
+     * IO and belongs off the update path for the audit 15b-20 reason — the
+     * fork is for the fetch, never for the stranger's shell.
      */
-    public function testAMcpPromptShellFormNeedsTheSameTrustAndAlwaysForksTheFetch(): void
+    public function testAMcpPromptShellFormIsRefusedWhateverTheProjectTrustsAndAlwaysForksTheFetch(): void
     {
         $turns = TurnController::new();
         $prompt = CommandSpec::new('mcp__srv__p', 'd', 'MCP', template: 'run', tier: 'mcp');
@@ -182,10 +185,10 @@ final class TurnControllerTest extends TestCase
         self::assertNotNull($refusal);
         self::assertStringContainsString('is an MCP prompt fetched from a server', $refusal);
         self::assertStringNotContainsString('came from this project', $refusal, 'the two provenances keep their own sentences');
-        self::assertSame([], $asked, 'a tier refusal never moves the gate');
+        self::assertSame([], $asked, 'a posture refusal never moves the gate');
 
-        self::assertNull($turns->refuseCommandShell($prompt, 'make test', true, $gate, $record), 'the same key that trusts project files trusts fetched bodies');
-        self::assertSame(['make test'], $asked);
+        self::assertNotNull($turns->refuseCommandShell($prompt, 'make test', true, $gate, $record), 'C-SEC-3: project trust vouches for the checkout\'s own files, not for a body fetched over the wire');
+        self::assertSame([], $asked, 'the refusal lands before the gate, trusted project or not');
 
         self::assertTrue(
             $turns->customCommandMustFork('/mcp__srv__p now', ['mcp__srv__p' => $prompt], null, true),

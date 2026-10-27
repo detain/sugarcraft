@@ -7241,9 +7241,12 @@ final class DocFigureProseDriftTest extends TestCase
             }
         }
         self::assertIsString($fork, 'customCommandMustFork() vanished');
-        self::assertStringContainsString('McpPromptCommands::TIER', (string) $fork, 'the tier arm left the fork decision — a fetched body could fork on its shell forms alone');
+        self::assertStringContainsString('ShellProvenance::Mcp', (string) $fork, 'the mcp posture arm left the fork decision — a fetched body could stop forking on its shell forms alone');
+        $posture = self::sourceOf('Commands/CommandShellPosture.php');
+        self::assertStringContainsString('McpPromptCommands::TIER', $posture, 'the posture table no longer derives Mcp from the tier the roster stamps — the fork and refusal legs would read a provenance nothing writes');
         self::assertIsString($refuse, 'refuseCommandShell() vanished');
-        self::assertStringContainsString('fetched from a server', $refuse, 'the mcp-tier trust sentence left the refusal — the page promise about trustedProjectCommands lost its enforcer');
+        self::assertStringContainsString('host.command_shell.mcp_refused', $refuse, 'the mcp posture leg left the refusal — the page promise that a fetched body is refused whatever this project trusts lost its enforcer');
+        self::assertStringContainsString('is an MCP prompt fetched from a server', self::englishCatalogue()['host.command_shell.mcp_refused'], 'the lang catalogue sentence the page paraphrases no longer names the wire origin the refusal states');
         self::assertStringContainsString('`trustedProjectCommands`', $page, 'MCP.md no longer names the grant a fetched shell needs');
 
         // No separate clock: the shaping file sleeps and arms nothing.

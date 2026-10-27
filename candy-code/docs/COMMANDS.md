@@ -25,6 +25,8 @@ Three tiers, merged by name, later overriding earlier
 | built-in | `CommandRegistry::all()` | n/a, they are PHP |
 | user | `~/.candy-code/commands/*.md` | yes |
 | project | `<root>/.candy-code/commands/*.md` | **only if this root is trusted** |
+| bundle | a plugin bundle's `commands/*.md` ([PLUGINS.md](PLUGINS.md)) | **never — refused whatever tier the bundle installed under** |
+| mcp | a fetched `prompts/get` body ([MCP.md](MCP.md)) | **never — refused whatever this project trusts** |
 | foreign | the other tools' trees (below) | never — imports run no shell |
 
 The foreign floor is what INT-3 added: `~/.claude/commands`,
