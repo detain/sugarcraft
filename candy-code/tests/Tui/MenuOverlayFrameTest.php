@@ -19,8 +19,12 @@ use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Code\Tui\Settings\OpenSettingsMsg;
 use SugarCraft\Code\Tui\Settings\SettingsSources;
 use SugarCraft\Code\Tui\VideoPlayer\VideoPlayerScreen;
+use SugarCraft\Code\Tests\Support\VideoPlayerScriptedDecoder;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Msg\TickMsg;
+use SugarCraft\Video\Player;
 use SugarCraft\Video\Render\Mode;
 
 /**
@@ -47,6 +51,7 @@ use SugarCraft\Video\Render\Mode;
 final class MenuOverlayFrameTest extends TestCase
 {
     private const VARS = ['CANDY_CODE_DISABLE_MOUSE', 'CANDY_CODE_DISABLE_MOUSE_CLICKS'];
+    private const CLIP = '/media/sess/clip.mp4';
 
     protected function setUp(): void
     {
@@ -129,6 +134,100 @@ final class MenuOverlayFrameTest extends TestCase
             self::assertSame($paintedRow, $zone->startRow, $surface . ': zone row vs painted row for "' . $label . '"');
             self::assertStringContainsString('│ ' . $label, (string) ($lines[$zone->startRow - 1] ?? ''), $surface . ': zone ' . $zone->id . ' must sit on a row the panel actually painted');
         }
+    }
+
+    /**
+     * The graphics leg of the headline law (P-MENU.c review MINOR, post-weld
+     * cure): where {@see VideoPlayerScreen::clipsLines()} is false the video
+     * frame path refuses paint AND mark together — box glyphs never splice
+     * into kitty/sixel/iterm2 protocol bytes, and no dropdown row registers
+     * a click zone over a picture the frame did not paint. The refusals are
+     * the two guards in {@see TuiRenderer::renderVideoPlayer()}: the
+     * `if ($cellGrid)` around overlayMenu (paint leg) and the `: null` arm
+     * of the panelTop ternary (mark leg — scanChrome builds marks from the
+     * panel kit, not from the painted frame, so the ternary alone decides
+     * them).
+     *
+     * Three live states of a graphics screen are pinned, because the splice
+     * budget makes each guard observable on a different one: the preparing
+     * placeholder and the failed card are multi-row text frames where a
+     * removed paint guard splices a visible `┌` border; the ready screen is
+     * ONE logical protocol write whose two-row frame leaves a removed paint
+     * guard only the `│ …` continuation row — still spliced into the blob's
+     * row band — to corrupt; and the four-row failed card is the height at
+     * which a removed panelTop refusal actually registers a menuitem zone.
+     * The shorter frames bury every label row, which is exactly why the
+     * shared paint⇔mark provider test could not carry this leg: with all
+     * items unpainted it stays green on a deleted ternary.
+     *
+     * Control: the same shell with a CLIPPING mode splices its border, so
+     * the refusals above name the mode, not a dead harness. (The control
+     * marks no zones for the same budget reason — the provider test pins
+     * paint⇔mark there.)
+     */
+    public function testTheGraphicsLegRefusesToPaintAndMarkTogether(): void
+    {
+        $app = $this->bandApp('chat');
+
+        foreach ($this->graphicsScreens() as $label => $screen) {
+            MenuBar::closeMenu();
+            MenuBar::openMenu(1);
+            TuiRenderer::chromeScanner()->clear();
+
+            self::assertFalse($screen->clipsLines(), $label . ': graphics modes are the refusal premise');
+            self::assertNotEmpty(
+                MenuBar::panels($app->withVideoPlayer($screen), 120, 1),
+                $label . ': a panel exists to be refused — the menu is genuinely open',
+            );
+
+            $plain = Ansi::strip(TuiRenderer::renderView($app->withVideoPlayer($screen), 120, 30)->body);
+
+            self::assertStringNotContainsString('┌', $plain, $label . ': no border row may splice into protocol bytes');
+            self::assertStringNotContainsString('│ …', $plain, $label . ': no overflow row may splice into protocol bytes either');
+            self::assertSame(
+                [],
+                TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_ITEM_ZONE_PREFIX),
+                $label . ': the graphics leg must not mark rows it did not paint',
+            );
+
+            $screen->stop();
+        }
+
+        MenuBar::closeMenu();
+        MenuBar::openMenu(1);
+        TuiRenderer::chromeScanner()->clear();
+        $control = Ansi::strip(TuiRenderer::renderView(
+            $app->withVideoPlayer(VideoPlayerScreen::preparing(self::CLIP, Mode::HalfBlock)),
+            120,
+            30,
+        )->body);
+        self::assertStringContainsString('┌', $control, 'control: the text leg splices — the refusal is the mode');
+    }
+
+    /**
+     * The three states a graphics (non-clipping) video screen takes on the
+     * live path: the async-build placeholder, the answered player with a
+     * real encoded kitty blob (scripted, child-free decoder — never
+     * ffmpeg, per VideoPlayerScreenTest), and the error card.
+     *
+     * @return array<string, VideoPlayerScreen>
+     */
+    private function graphicsScreens(): array
+    {
+        $frames = [];
+        for ($i = 0; $i < 4; $i++) {
+            $tint = chr(40 + $i * 30);
+            $frames[] = new RgbFrame(str_repeat($tint, 80 * 60 * 3), 80, 60, null);
+        }
+
+        $player = Player::fromDecoder(new VideoPlayerScriptedDecoder($frames), 8, 3, 10.0, Mode::Kitty, 4, self::CLIP, paused: false);
+        [$ready] = VideoPlayerScreen::ready(self::CLIP, $player, Mode::Kitty)->update(new TickMsg());
+
+        return [
+            'preparing' => VideoPlayerScreen::preparing(self::CLIP, Mode::Kitty),
+            'ready' => $ready,
+            'failed' => VideoPlayerScreen::failed(self::CLIP, 'ffprobe is dead', Mode::Kitty),
+        ];
     }
 
     /**
