@@ -367,6 +367,8 @@ export interface Methods {
         provider?: string
         permissionMode?: PermissionMode
         active?: boolean
+        /** The preset's `color:` vocabulary resolved through the same AgentColor law the TUI strip follows, as a `#rrggbb` hex against the server's default theme; omitted when the preset names no colour or names one that does not resolve legibly. */
+        color?: string
       }[]
     }
   }
@@ -377,6 +379,8 @@ export interface Methods {
       /** A delegated run's id, as its `subagent.*` events name it. */
       agentId: string
       text: string
+      /** steer (the default): delivered at the run's next step boundary, the current step's tool calls all running first; interrupt: delivered there too, but the step's sequential calls that have not started are skipped, so the run reads the message before doing more work on a plan it may change. Omitted on a FINISHED run — its follow-up conversation carries no step to steer. */
+      mode?: "steer" | "interrupt"
       /** A retry with the same key gets the original answer (5 min). */
       idempotencyKey?: string
     }
