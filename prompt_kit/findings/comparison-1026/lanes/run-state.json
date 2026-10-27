@@ -14,7 +14,8 @@
     "C-SES-3.c",
     "C-AGT-2.c",
     "C-SES-3.b",
-    "C-SES-5.a"
+    "C-SES-5.a",
+    "C-SES-2.a"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -38,34 +39,45 @@
       "branch": "cc/C-PRV-1.a",
       "session": null
     },
-    "C-SES-2.a": {
-      "stage": "review",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SES-2.a",
-      "branch": "cc/C-SES-2.a",
-      "session": null,
-      "note": "tip 94e9b7385 base 7949cc23d, 3 files no new test file"
-    },
     "C-EXT-1.b": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-EXT-1.b",
       "branch": "cc/C-EXT-1.b",
-      "session": null
+      "session": null,
+      "note": "tip 09a76e8c6 base 351726864; builder recovered via 3 continues"
     },
     "C-MCP-1.b": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-MCP-1.b",
       "branch": "cc/C-MCP-1.b",
-      "session": null
+      "session": null,
+      "note": "tip af1eb01e6 base 351726864; NEW McpCallHookParityTest durations duty"
     },
     "C-PRV-1.c": {
-      "stage": "build",
-      "round": 1,
+      "stage": "clean",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-PRV-1.c",
       "branch": "cc/C-PRV-1.c",
-      "session": "ses_e83f43977ffem15bxJb6HGiMeu"
+      "session": null,
+      "note": "r1 CLEAN after lead adjudication disproved reviewer MAJOR/MINOR on disk; welder ses_e83def1dc running"
+    },
+    "C-SES-5.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SES-5.b",
+      "branch": "cc/C-SES-5.b",
+      "session": "ses_e83dea32d",
+      "note": "base 85be78e05 (C-SES-2.a pick era)"
+    },
+    "C-CTX-1.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-CTX-1.b",
+      "branch": "cc/C-CTX-1.b",
+      "session": "ses_e83dea32c",
+      "note": "base 85be78e05 (C-SES-2.a pick era)"
     }
   },
   "blocked": [],
