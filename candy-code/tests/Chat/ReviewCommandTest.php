@@ -14,6 +14,7 @@ use SugarCraft\Code\Commands\ReviewCommand;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Workspace\GitRunner;
 
 /**
  * Roadmap GIT-1: `/review [ref]` and `/security-review [ref]` send canned
@@ -88,6 +89,7 @@ final class ReviewCommandTest extends TestCase
      */
     private function reviewRepoWithTwoCommits(): string
     {
+        $this->requireGit();
         $root = $this->sandbox . '/repo-' . bin2hex(random_bytes(4));
         mkdir($root, 0o777, true);
         $this->runReviewGit($root, 'init', '-q');
@@ -103,6 +105,7 @@ final class ReviewCommandTest extends TestCase
     /** One commit, no remote — `@{u}` cannot resolve here. */
     private function reviewRepoWithOneCommitNoRemote(): string
     {
+        $this->requireGit();
         $root = $this->sandbox . '/solo-' . bin2hex(random_bytes(4));
         mkdir($root, 0o777, true);
         $this->runReviewGit($root, 'init', '-q');
@@ -119,6 +122,7 @@ final class ReviewCommandTest extends TestCase
      */
     private function reviewRepoWithUpstream(): string
     {
+        $this->requireGit();
         $base = $this->sandbox . '/up-' . bin2hex(random_bytes(4));
         mkdir($base . '/remote', 0o777, true);
         mkdir($base . '/work', 0o777, true);
@@ -145,6 +149,13 @@ final class ReviewCommandTest extends TestCase
         }
         exec($command . ' 2>&1', $output, $status);
         self::assertSame(0, $status, 'git ' . implode(' ', $args) . ": " . implode("\n", $output));
+    }
+
+    private function requireGit(): void
+    {
+        if (!GitRunner::available()) {
+            self::markTestSkipped('git is not on PATH');
+        }
     }
 
     /** @return list<string> */

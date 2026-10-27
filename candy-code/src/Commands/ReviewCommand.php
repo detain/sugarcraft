@@ -9,8 +9,8 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Workspace\GitRunner;
 
 /**
- * The `/review [ref]` and `/security-review [ref]` commands (GIT-1): canned
- * review prompts, dispatched as ordinary turns the way {@see InitCommand} is.
+ * The `/review [<tree-ish>]` and `/security-review [<ref>]` commands (GIT-1):
+ * canned review prompts, dispatched as ordinary turns the way {@see InitCommand} is.
  *
  * NOT A DIFF GENERATOR. The prompt ends in the `@diff` mention — `@diff:<ref>`
  * when the command names a revision — and the mention scanner attaches the
@@ -144,6 +144,15 @@ final class ReviewCommand
             ->withTimeout(ContextMentions::DIFF_TIMEOUT_SECONDS)
             ->capture(4096, 'rev-parse', '--verify', $ref . '^{tree}');
 
+        // A spent capture budget (`capture()` reports it as exitCode 124 +
+        // `timedOut`, not as a resolution) answers with the SAME bad-ref row
+        // as a genuine non-zero `rev-parse`, deliberately: the gate's
+        // question is "may this ref carry a billed turn", and an UNVERIFIED
+        // ref fails that question exactly like an unresolvable one —
+        // fail-closed. Naming the timeout in its own row would need a new
+        // `cmd.review.*` key and a second refusal shape no test can reach
+        // without a five-second wall-clock; the transcript answer stays
+        // honest in the direction that matters (no turn was billed).
         return $resolved['timedOut'] || $resolved['exitCode'] !== 0
             ? Lang::t('cmd.review.bad-ref', ['ref' => $ref])
             : null;
