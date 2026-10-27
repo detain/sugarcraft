@@ -1722,9 +1722,10 @@ final class Bootstrap
      * a row another process holds opens read-only exactly as at launch); a
      * named session with no row and an unnamed tab both mint LAZILY, under
      * the given id or a fresh one — the ISS-102 shape, so an empty tab leaves
-     * no record behind.
+     * no record behind. A named session whose row ALREADY exists carries no
+     * mint to return, so the key is simply absent there.
      *
-     * @return array{id: string, name: ?string, history: list<\SugarCraft\Code\Message>, picker: bool, mint: ?\Closure}
+     * @return array{id: string, name: ?string, history: list<\SugarCraft\Code\Message>, picker: bool, mint?: ?\Closure}
      */
     private static function openTabSession(SessionStore|EnhancedSessionStore $store, ?string $sessionId): array
     {
