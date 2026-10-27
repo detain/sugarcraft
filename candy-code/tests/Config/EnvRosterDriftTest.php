@@ -1279,6 +1279,42 @@ final class EnvRosterDriftTest extends TestCase
     }
 
     /**
+     * A build-time name is rostered in prose, never in a table row.
+     *
+     * `CANDY_CODE_REF` is consumed by the image build (the `Dockerfile`'s
+     * `ARG` — the C-SES-5.d cache-bust) and never read by the binary, so the
+     * app table must NOT carry it:
+     * {@see testEveryVariableTheEnvironmentPageTabulatesIsOneTheCodeReads()}
+     * reddens any tabulated name nothing reads. The page's prose is the one
+     * sanctioned surface for such a name. The W5 wave review's defect was the
+     * name living on `docs/DOCKER.md` — a mention surface — instead; that
+     * page now defers to the roster, which the two tests above would re-red
+     * if the spelling moved back, and THIS test holds the roster half up:
+     * delete the prose section and the name would be documented nowhere a
+     * reader of this page can find.
+     */
+    public function testTheBuildTimeImageArgumentIsRosteredOnThePageInProse(): void
+    {
+        $page = self::read(self::ENVIRONMENT_DOC);
+
+        self::assertStringContainsString(
+            'CANDY_CODE_REF',
+            $page,
+            'docs/ENVIRONMENT.md no longer names the build-time image argument — this page is '
+            . 'the only surface sanctioned to roster a CANDY_CODE_* name the binary never reads, '
+            . 'so dropping it strands the Dockerfile ARG with no discussion anywhere',
+        );
+
+        self::assertNotContains(
+            'CANDY_CODE_REF',
+            $this->tabulatedNames(),
+            'the build-time name moved into a table row — the table is oracle-enforced to carry '
+            . 'exactly the variables src/ reads, so a row here is the wrong tool by this '
+            . 'class\'s own rule',
+        );
+    }
+
+    /**
      * THE MENTION SURFACES ARE REALLY BEING READ.
      *
      * A guard has to live outside the thing it guards. If the glob in

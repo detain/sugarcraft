@@ -348,6 +348,20 @@ Read for their standard meanings, not as CandyCode settings:
 | `CDPATH` | Permission defense, read by `Permissions\LeadingCd::landsInside()`. A relative path argument can land outside the project through a shell that changes directory via `CDPATH`, so when `CDPATH` is set and non-empty the checker refuses to vouch for a non-explicit relative path at all. Unsetting it is not required — the check degrades to conservative refusal, not to a hole. |
 | `TMPDIR` | Sandbox temp normalisation. `Tools\Sandbox\Bubblewrap` reads it to decide what to bind or recreate inside the jail (a `$TMPDIR` under `/tmp` rides the private tmpfs; elsewhere it is bound writable when it exists). Note `sys_get_temp_dir()` does **not** consult a `putenv`'d `TMPDIR` — only the process-environment value seen at startup does — so a test that fiddles with it in-process is not moving the sandbox's view. |
 
+## Build-time image arguments
+
+`CANDY_CODE_REF` is the exception this page's opening sentence cannot cover: it
+is a name the **image build** consumes and the running binary never reads. The
+`Dockerfile` declares it as `ARG CANDY_CODE_REF=local` and echoes it inside the
+`RUN` that installs the app, which ties that layer's cache key to a per-run
+value so a CI build can never ship a cached feed snapshot frozen behind an
+otherwise-constant instruction (see [`DOCKER.md`](DOCKER.md)). The reference the
+stream actually resolved is recorded into `/opt/candy-code/BUILD-REF` inside the
+image. Setting it in a runtime environment does nothing at all, so it earns no
+row in the app table above — that table is oracle-enforced to carry exactly the
+variables `src/` reads, and this page's prose is the sanctioned place to roster
+the build-time name.
+
 ## See also
 
 - [`SETTINGS.md`](SETTINGS.md) — the settings files these variables outrank,

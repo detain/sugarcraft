@@ -33,8 +33,10 @@ for that push, because a push-triggered build raced the sync and could resolve
 yesterday's feed state of the very commit it was tagged with.
 
 Even so, the feed can lag; the image no longer hides it. The build passes a
-per-run `CANDY_CODE_REF=<sha>-<run id>` build argument that the
-create-project layer consumes, which defeats the otherwise-constant instruction
+per-run `<sha>-<run id>` source-ref build argument that the
+create-project layer consumes (its name is rostered, with the truth that the
+binary never reads it, in
+[`ENVIRONMENT.md`](ENVIRONMENT.md#build-time-image-arguments)), which defeats the otherwise-constant instruction
 text under the workflow's `type=gha` cache (a cached layer shipped a frozen
 snapshot of the feed, silently, on every build). After the install the same
 layer records the reference the stream actually resolved into
@@ -149,9 +151,10 @@ docker build -t candy-code:local candy-code/
 The build context is the `candy-code/` directory; the Dockerfile COPYs only
 the entrypoint script and pulls the rest from Packagist, so a dirty working
 tree cannot leak into an image built from this definition. The
-`CANDY_CODE_REF` build argument defaults to `local`, so a plain build needs no
-`--build-arg`; passing a per-build value is what makes CI builds uncachable
-against each other.
+source-ref build argument (named in
+[`ENVIRONMENT.md`](ENVIRONMENT.md#build-time-image-arguments)) defaults to
+`local`, so a plain build needs no `--build-arg`; passing a per-build value is
+what makes CI builds uncachable against each other.
 
 ## Launch notices in the log
 
