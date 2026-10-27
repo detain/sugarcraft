@@ -1,0 +1,33 @@
+### C-SEC-2.b — Server-computed diff on `permission.asked`
+- item: C-SEC-2 (sources: GAP-EDT-03, WEB-5-P4)
+- kind: fix · CRITICAL · effort M
+- approach:
+  - The TUI already shows the real file diff. `Renderer.php:7258-7263` dispatches to `Edit/Write/ApplyPatch::previewDiff($root, $args)`. The web computes its own snippet diff instead, and shows ApplyPatch only as raw JSON.
+  - New `AskDiffPreview::for(tool, args, root)`: the same three-way dispatch, plus the raw-patch fallback, confined to the session root (null outside it) and capped (the previews' own omitted-note beyond the cap).
+  - `PendingAsk::describe()` (`src/Backend/PendingAsk.php:110-142`) adds `diff`. `fromFrame()` decodes it into a new trailing `?string $diff` ctor arg. `EngineBackend::completeAsyncBlocking()` (:5653) passes `$this->root` to `describe()`, as `ChildChannel` (:267) already does with its root.
+  - `TranscriptProjector::askData()` (:472-487) and `SessionFeed::askSummary()` (:363-376) emit `diff`. `Definitions::PENDING_ASK` gains an optional `diff`.
+  - `PermissionCard` prefers `ask.diff`, which has real file line numbers, over `askDiffPreview()`. The 2.a raw-arguments block stays.
+- files.create: `candy-code/src/Permissions/AskDiffPreview.php`
+- files.modify:
+  - `candy-code/src/Backend/PendingAsk.php` (`describe`, `fromFrame`, ctor)
+  - `candy-code/src/Backend/EngineBackend.php` (`completeAsyncBlocking` describe call)
+  - `candy-code/src/Host/TranscriptProjector.php` (`askData`)
+  - `candy-code/src/Protocol/SessionFeed.php` (`askSummary`)
+  - `candy-code/src/Protocol/Schema/Definitions.php` (`PENDING_ASK`)
+  - `candy-code/docs/protocol/candy-code.v1.schema.json`, `candy-code/docs/SERVER.md`, `candy-code-web/src-web/protocol/generated.ts` (regenerated)
+  - `candy-code-web/src-web/components/PermissionCard.vue` (prefer `ask.diff`)
+  - `candy-code-web/src-web/lib/lineDiff.ts` (a counts-from-unified-text helper for a server diff)
+- tests:
+  - create `candy-code/tests/Permissions/AskDiffPreviewTest.php`: all three tools, a path outside the root gives null, and the cap.
+  - create `candy-code/tests/Host/PermissionAskDiffEventTest.php`: a served Edit ask with `edits[]` carries the full multi-hunk `diff` on `permission.asked` and in `permission.pending`.
+  - create `candy-code/tests/Permissions/PendingAskDiffTest.php`: describe → fromFrame round-trip.
+  - modify `candy-code-web/src-web/components/__tests__/permissionCardDiff.spec.ts` (from 2.a): a server `diff` wins.
+- docs/guards: `scripts/gen-protocol-schema.php --check`, `npm run gen:protocol -- --check`, `ServerProtocolDocumentationDriftTest`, `ProtocolSchemaDriftTest`. Web dist rebuild.
+- serialized: [protocol] [hot:candy-code/src/Backend/EngineBackend.php] [hot:candy-code/src/Host/TranscriptProjector.php] [hot:candy-code-web/src-web/components/PermissionCard.vue] [hot:candy-code-web/dist]
+- deps: C-SEC-2.a
+- phase: normal
+- ruling: none
+- risks:
+  - `permission.requested` rows are recorded in the session event log, so the diff is persisted. Keep the cap small (≈32 KiB).
+  - Confine the preview to the root, or a read-scope web viewer sees context lines of an out-of-root file the model asked to edit.
+

@@ -1,93 +1,101 @@
 {
-  "welded": [
-    "C-SEC-2.a",
-    "C-TOOL-1.c",
-    "C-AGT-1.c",
-    "C-SES-3.a",
-    "C-TOOL-1.a",
-    "C-EXT-1.a",
-    "C-SEC-1.a",
-    "C-MCP-1.a",
-    "C-AGT-2.a",
-    "C-AGT-1.a",
-    "C-SES-4.a",
-    "C-SES-3.c",
-    "C-AGT-2.c",
-    "C-SES-3.b",
-    "C-SES-5.a",
-    "C-SES-2.a",
-    "C-PRV-1.c",
-    "C-MCP-1.b",
-    "C-EXT-1.b",
-    "C-SES-5.b",
-    "C-CTX-1.b",
-    "C-SES-2.c",
-    "C-SES-1.a",
-    "C-WEB-1.c",
-    "C-TOOL-1.b"
-  ],
-  "inflight": {
-    "C-SEC-2.b": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SEC-2.b",
-      "branch": "cc/C-SEC-2.b",
-      "session": null,
-      "note": "r1 CLEAN tip 9b6c8c19d base 4f657c755; WELD = pick + regen trio (php gen-protocol-schema --write + npm gen:protocol) + npm build dist, commit regenerated files, then merged gates AskDiffPreview|PendingAsk|PermissionAskDiff|PermissionCard ~45T/454A + vitest serial card specs + five-guard pair-only; PathJail additive accepted (MINOR judged necessary); NEW 3 test files durations duty (13/5/2 methods)"
-    },
-    "C-SEC-3.a": {
-      "stage": "build",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SEC-3.a",
-      "branch": "cc/C-SEC-3.a",
-      "session": "ses_e84274411ffewFZNgcHphKfC6h"
-    },
-    "C-PRV-1.a": {
-      "stage": "build",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-PRV-1.a",
-      "branch": "cc/C-PRV-1.a",
-      "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
-    },
-    "C-SES-2.b": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-SES-2.b",
-      "branch": "cc/C-SES-2.b",
-      "session": null,
-      "note": "r2 CLEAN tip c7b7c17e3 base 50ec2e702; weld re-runs Session family 1726T/15114A + five-guard pair-only; goldens rode r1 commit; durations duty SessionPickerDebouncedSearchTest"
-    },
-    "C-SES-5.d": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-SES-5.d",
-      "branch": "cc/C-SES-5.d",
-      "session": null,
-      "note": "r2 CLEAN tip 1ff716b92 base fd4f36875; weld re-runs tools/tests battery"
-    },
-    "C-SEC-4.a": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SEC-4.a",
-      "branch": "cc/C-SEC-4.a",
-      "session": null,
-      "note": "r1 CLEAN tip 1c50da86b base fffeceaec; weld gates 95T/441A + five-guard pair-only; optional NIT docblock-order weld-absorbable; NEW ServedProjectCommandTrustTest 4T durations duty"
-    },
-    "P-CTX.a": {
-      "stage": "build",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-P-CTX.a",
-      "branch": "cc/P-CTX.a",
-      "session": "ses_e83ab9b05ffeiGxLfyPZSdubu0"
-    }
+ "welded": [
+  "C-SEC-2.a",
+  "C-TOOL-1.c",
+  "C-AGT-1.c",
+  "C-SES-3.a",
+  "C-TOOL-1.a",
+  "C-EXT-1.a",
+  "C-SEC-1.a",
+  "C-MCP-1.a",
+  "C-AGT-2.a",
+  "C-AGT-1.a",
+  "C-SES-4.a",
+  "C-SES-3.c",
+  "C-AGT-2.c",
+  "C-SES-3.b",
+  "C-SES-5.a",
+  "C-SES-2.a",
+  "C-PRV-1.c",
+  "C-MCP-1.b",
+  "C-EXT-1.b",
+  "C-SES-5.b",
+  "C-CTX-1.b",
+  "C-SES-2.c",
+  "C-SES-1.a",
+  "C-WEB-1.c",
+  "C-TOOL-1.b",
+  "C-SEC-2.b"
+ ],
+ "inflight": {
+  "C-SEC-3.a": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-SEC-3.a",
+   "branch": "cc/C-SEC-3.a",
+   "session": "ses_e84274411ffewFZNgcHphKfC6h"
   },
-  "blocked": [],
-  "extra_agents": 1,
-  "waves_closed": [
-    1
-  ],
-  "wave_loops": {
-    "1": "closed r2 CLEAN"
+  "C-PRV-1.a": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-PRV-1.a",
+   "branch": "cc/C-PRV-1.a",
+   "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
   },
-  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg"
+  "C-SES-2.b": {
+   "stage": "clean",
+   "round": 2,
+   "worktree": "/home/sites/cc-cmp-C-SES-2.b",
+   "branch": "cc/C-SES-2.b",
+   "session": null,
+   "note": "r2 CLEAN tip c7b7c17e3 base 50ec2e702; weld re-runs Session family 1726T/15114A + five-guard pair-only; goldens rode r1 commit; durations duty SessionPickerDebouncedSearchTest"
+  },
+  "C-SES-5.d": {
+   "stage": "clean",
+   "round": 2,
+   "worktree": "/home/sites/cc-cmp-C-SES-5.d",
+   "branch": "cc/C-SES-5.d",
+   "session": null,
+   "note": "r2 CLEAN tip 1ff716b92 base fd4f36875; weld re-runs tools/tests battery"
+  },
+  "C-SEC-4.a": {
+   "stage": "clean",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-SEC-4.a",
+   "branch": "cc/C-SEC-4.a",
+   "session": null,
+   "note": "r1 CLEAN tip 1c50da86b base fffeceaec; weld gates 95T/441A + five-guard pair-only; optional NIT docblock-order weld-absorbable; NEW ServedProjectCommandTrustTest 4T durations duty"
+  },
+  "P-CTX.a": {
+   "stage": "clean",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-P-CTX.a",
+   "branch": "cc/P-CTX.a",
+   "session": null,
+   "note": "r1 CLEAN tip 06a8352ed base 4e3535ed4; WELD gates re-run --filter Context 1815T/7425A + five-guard pair-only; NEW ContextCategoriesTest durations duty; 3 NITs non-blocking; regen no-op expected (no Protocol/web touched)"
+  },
+  "P-TABS.b": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-P-TABS.b",
+   "branch": "cc/P-TABS.b",
+   "session": "ses_e82bfb652ffebETDv9D7jwlpET"
+  },
+  "P-TABS.d": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-P-TABS.d",
+   "branch": "cc/P-TABS.d",
+   "session": "ses_e82bfb651ffeITeZC6TxecHG9w"
+  }
+ },
+ "blocked": [],
+ "extra_agents": 1,
+ "waves_closed": [
+  1
+ ],
+ "wave_loops": {
+  "1": "closed r2 CLEAN"
+ },
+ "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg"
 }
