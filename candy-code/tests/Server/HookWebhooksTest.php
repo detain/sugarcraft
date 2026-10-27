@@ -27,6 +27,12 @@ use SugarCraft\Code\Server\ServerConfig;
  * Time is an injected closure clock: the lockout and rate windows are checked
  * at access time (no timers exist — E646), so these tests advance "now" and
  * never sleep.
+ *
+ * AUT-6-P3 adds the two halves pinned at the end of the rate story: the rate
+ * window is charged per address AND per hook OVERALL (N sources must not
+ * combine into N times the configured rate on one hook), and the fence escape
+ * runs inside the handler's try, so a PCRE failure on a hostile body answers
+ * the generic 503 instead of throwing out of the route.
  */
 final class HookWebhooksTest extends TestCase
 {
@@ -178,6 +184,81 @@ final class HookWebhooksTest extends TestCase
 
         $this->now += HookWebhooks::WINDOW_SECONDS + 1.0;
         self::assertStringStartsWith('HTTP/1.1 200', $this->request('POST', '/api/hooks/deploy', 'x-candy-code-hook: ' . self::SECRET));
+    }
+
+    /**
+     * AUT-6-P3: the per-address window alone let a fleet of sources combine
+     * into N times the configured rate on ONE hook. The overall window is
+     * keyed by the bare hook name (its grammar has no `|`, so the two key
+     * shapes cannot collide) and charged at the same rate: after the single
+     * admission from the first address, a SECOND address is refused even
+     * though its own window is untouched — and once refused, neither window
+     * is charged for it.
+     */
+    public function testTheGlobalRateWindowCapsTheHookAcrossAddresses(): void
+    {
+        $handler = HookWebhooks::new(
+            ['deploy' => ['secret' => self::SECRET, 'prompt' => 'P', 'permissionMode' => null, 'rate' => 1]],
+            $this->run,
+            function (): float {
+                return $this->now;
+            },
+        );
+        $request = static fn (): HttpRequest => new HttpRequest(
+            'POST',
+            'http://127.0.0.1/api/hooks/deploy',
+            ['x-candy-code-hook' => self::SECRET],
+            'x',
+        );
+
+        self::assertSame(200, $handler->handle($request(), 'deploy', '10.0.0.1')->getStatusCode());
+        self::assertCount(1, $this->deliveries);
+
+        $second = $handler->handle($request(), 'deploy', '10.0.0.2');
+        self::assertSame(429, $second->getStatusCode(), 'the hook overall is over its rate even from a fresh address');
+        self::assertSame((string) HookWebhooks::WINDOW_SECONDS, (string) $second->getHeaderLine('Retry-After'), 'over the rate is over it, whichever window filled');
+        self::assertCount(1, $this->deliveries, 'the refused delivery consumes no budget anywhere');
+
+        $this->now += HookWebhooks::WINDOW_SECONDS + 1.0;
+        self::assertSame(200, $handler->handle($request(), 'deploy', '10.0.0.2')->getStatusCode(), 'the window passes; the hook admits again');
+        self::assertCount(2, $this->deliveries);
+    }
+
+    /**
+     * AUT-6-P3: PromptFence::escape() throws on a PCRE failure, and a hostile
+     * body CAN drive one — with the backtrack budget at zero, escaping a
+     * long fence-tagged body is the proven throw shape (measured on this
+     * box). That throw must land INSIDE the handler's try: the answer is the
+     * generic service refusal, no session starts, and nothing of PCRE's
+     * wording (let alone the body) reaches the client.
+     */
+    public function testAFailedEscapeAnswersTheGenericRefusalNotAThrow(): void
+    {
+        $handler = HookWebhooks::new(
+            ['deploy' => ['secret' => self::SECRET, 'prompt' => 'Look at {{payload}} now', 'permissionMode' => null, 'rate' => 5]],
+            $this->run,
+            function (): float {
+                return $this->now;
+            },
+        );
+        $request = new HttpRequest(
+            'POST',
+            'http://127.0.0.1/api/hooks/deploy',
+            ['x-candy-code-hook' => self::SECRET],
+            \str_repeat('<env>', 5000),
+        );
+
+        $previous = \ini_set('pcre.backtrack_limit', '0');
+        try {
+            $answer = $handler->handle($request, 'deploy', '127.0.0.1');
+        } finally {
+            \ini_set('pcre.backtrack_limit', (string) $previous);
+        }
+
+        self::assertSame(503, $answer->getStatusCode());
+        self::assertStringContainsString('"kind":"hook_unavailable"', (string) $answer->getBody());
+        self::assertStringNotContainsString('<env>', (string) $answer->getBody(), 'the body stays out of the answer');
+        self::assertSame([], $this->deliveries, 'a delivery the escape could not build never reaches the session door');
     }
 
     public function testAGetIsRefusedWithTheMethodAdvice(): void

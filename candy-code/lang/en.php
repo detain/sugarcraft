@@ -3378,7 +3378,7 @@ TXT,
     'settings.webSearchEndpoint.help' => 'Search URL of a SearXNG instance you trust (`https://searx.example.org/search`); every WebSearch query is sent there.',
     'settings.webSearchMaxResults.help' => 'Results one WebSearch digest lists, each a title, URL and snippet.',
     'settings.webSearchTimeoutSeconds.help' => 'Seconds one search request may take.',
-    'settings.webhooks.help' => 'Map of hook name to {secret, prompt, permissionMode?, rate?}; POST /api/hooks/{name} then splices the body (escaped as untrusted) into the prompt and starts a background session. Empty (default) mounts nothing. Bypass-class permission modes are refused for hooks at launch.',
+    'settings.webhooks.help' => 'Map of hook name to {secret, prompt, permissionMode?, rate?}; POST /api/hooks/{name} then splices the body (escaped as untrusted) into the prompt and starts a background session. Empty (default) mounts nothing. rate is N deliveries per minute per address, and per hook overall. bypass-permissions is refused for hooks at launch; a mode-less hook runs in the stricter of the server mode and default.',
     // --- end settings help ---
 
     // --- begin tui.window (P-TABS.a) ---

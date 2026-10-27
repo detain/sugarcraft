@@ -567,9 +567,13 @@ final class ServerConfig
      * Whether this mode answers every permission ask without asking anyone
      * (AUT-6 MINOR-1 names the pair: `bypass-permissions`, `dont-ask`). One
      * spelling for the question, asked at the launch door
-     * ({@see admitsPermissionMode()}), at the hook-config refusal
-     * ({@see webhooksValue()}) and at the hook-inheritance clamp below — three
-     * sites that must agree about which two cases they mean.
+     * ({@see admitsPermissionMode()}) and at the schedule-row mode refusal
+     * ({@see \SugarCraft\Code\Background\Schedule}) — two sites that must
+     * agree about which two cases they mean. The hook doors ask NARROWER
+     * questions since C-AGT-7.c: {@see hookRefusesMode()} for the configured
+     * row and {@see hookPermissionModeFallback()} for the inherited mode,
+     * because `dont-ask` answers an ask by REFUSING it — unattended is
+     * exactly the posture it is safe in.
      */
     public static function answersAsksWithoutAHuman(PermissionMode $mode): bool
     {
@@ -577,23 +581,48 @@ final class ServerConfig
     }
 
     /**
-     * The mode an unmodeled webhook runs in (AUT-6 MINOR-1).
+     * Whether a webhook row may name this mode (AUT-6-P2). This is NOT
+     * {@see answersAsksWithoutAHuman()}'s question: what endangers a turn
+     * nobody is watching is the mode that answers every permission ask YES —
+     * `bypass-permissions`, and it alone. `dont-ask` answers every ask by
+     * REFUSING it (it denies everything but reads), so a row naming it asks
+     * for the strictest posture a turn can run; refusing that row taught
+     * operators to omit the field instead — into the inheritance path below,
+     * which until this step widened a dont-ask server's hooks to `default`.
+     */
+    public static function hookRefusesMode(PermissionMode $mode): bool
+    {
+        return $mode->isBypass();
+    }
+
+    /**
+     * The mode an unmodeled webhook runs in (AUT-6 MINOR-1, clamped per
+     * AUT-6-P2).
      *
      * A hook row that names no `permissionMode` inherits the server's, so the
      * server's mode can reach an unattended turn WITHOUT ever passing the
      * per-hook refusal in {@see webhooksValue()}. That refusal says a webhook
-     * must not run bypass-class because no one is there to answer an ask, and
-     * the inherited case is the same posture by the same reasoning: the
+     * must not run bypass because no one is there to answer an ask, and the
+     * inherited case is the same posture by the same reasoning: the
      * operator's `--allow-bypass` was a promise about sessions a human drives,
      * not about turns an inbound HTTP request starts. So the inheritance clamp
-     * is to the Default family — a bypass-class or dont-ask server lands the
-     * hook in `default`, whose asks the daemon's no-terminal approver refuses.
+     * is the STRICTER of the server's mode and `default` (ordered by
+     * {@see PermissionMode::strictness()}): `bypass-permissions`, `auto` and
+     * `accept-edits` servers all land the hook on `default`, where every write
+     * must be allowed first, while servers already stricter than `default`
+     * (`plan`, `dont-ask`) keep their own mode — flattening THOSE to
+     * `default` was the widening this step removes.
+     *
+     * And the asks `default` makes are not dead letters: the Serve.php hook
+     * route spawns with `permissionAskTimeout` (the
+     * `server.askTimeoutSeconds` window), so a clamped hook's ask DOES reach
+     * the approvals relay and a human watching the server can answer it;
+     * unanswered, it expires as a refusal. The clamp's promise is only that
+     * no inbound request runs a write nothing allowed and nobody approved.
      */
     public function hookPermissionModeFallback(): string
     {
-        return self::answersAsksWithoutAHuman($this->permissionMode)
-            ? PermissionMode::Default->value
-            : $this->permissionMode->value;
+        return $this->permissionMode->stricterOf(PermissionMode::Default)->value;
     }
 
     /**
@@ -698,9 +727,11 @@ final class ServerConfig
      *   encoding games on `/api/hooks/`),
      * - the secret is the ONLY credential the route has; below
      *   {@see MIN_HOOK_SECRET_BYTES} it is guessable entropy,
-     * - a bypass-class `permissionMode` (bypass-permissions, dont-ask) is
-     *   refused unconditionally — even under `--allow-bypass`, whose promise
-     *   is about a HUMAN's client sessions. A webhook is nobody watching:
+     * - a `permissionMode` of `bypass-permissions` is refused
+     *   unconditionally — even under `--allow-bypass`, whose promise
+     *   is about a HUMAN's client sessions ({@see hookRefusesMode()} asks
+     *   exactly that narrower question; `dont-ask` is ACCEPTED because it
+     *   never asks — it refuses). A webhook is nobody watching:
      *   remote input, headless agent, no one to answer an ask. That is the
      *   restrictive floor this feature ships behind,
      * - the prompt is the injection surface; it must exist (a hook with no
@@ -750,7 +781,7 @@ final class ServerConfig
                     ));
                 }
                 $mode = PermissionMode::tryFrom($modeKey);
-                if ($mode !== null && self::answersAsksWithoutAHuman($mode)) {
+                if ($mode !== null && self::hookRefusesMode($mode)) {
                     throw new ServerConfigException(\sprintf(
                         'webhook "%s": permission mode "%s" is refused for hooks even with --allow-bypass — a webhook runs unattended, with no one to answer a permission ask',
                         $name,

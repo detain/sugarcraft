@@ -33,11 +33,15 @@ use SugarCraft\Code\Server\ServerConfig;
  *   operator's configured prompt at `{{payload}}` (or appended below a plain
  *   label when the prompt names no placeholder — deliberately NOT a forged
  *   XML boundary, which escaping would not neutralise).
- * - **Rate is per hook and address**, pruned on access; no timers exist here
+ * - **Rate is per address, and per hook overall** (AUT-6-P3: counted on the
+ *   address window ALONE, a fleet of sources combined into N times the
+ *   configured rate on one hook), pruned on access; no timers exist here
  *   (E646: ceilings bound requests, not due-checks).
- * - **Bypass-class permission modes cannot be configured at all** — that
- *   floor is enforced at launch ({@see \SugarCraft\Code\Server\ServerConfig::webhooksValue()});
- *   a webhook has no human to answer a permission ask.
+ * - **`bypass-permissions` cannot be configured at all** — that
+ *   floor is enforced at launch ({@see \SugarCraft\Code\Server\ServerConfig::webhooksValue()},
+ *   asking {@see \SugarCraft\Code\Server\ServerConfig::hookRefusesMode()});
+ *   a webhook has no human to answer a permission ask, and bypass answers it
+ *   YES. `dont-ask` IS allowed, because it answers the same ask by REFUSING.
  *
  * The spawned turn goes through the SAME door `bg.spawn` uses (the server
  * context's background events), so session caps, draining and the event feed
@@ -59,10 +63,10 @@ final class HookWebhooks
     /** Sliding window the per-hook rate counts inside. */
     public const WINDOW_SECONDS = 60;
 
-    /** Distinct `hook|address` keys tracked; the stalest are dropped beyond this. */
+    /** Distinct `hook|address` and `hook` (overall) keys tracked; the stalest are dropped beyond this. */
     private const CAPACITY = 4096;
 
-    /** @var array<string, list<float>> accepted-delivery times per `hook|address` */
+    /** @var array<string, list<float>> accepted-delivery times per window key */
     private array $accepted = [];
 
     /**
@@ -121,8 +125,12 @@ final class HookWebhooks
             return Responses::error(401, 'unauthorized', 'the webhook secret is not valid');
         }
 
-        if (!$this->admit($key, $hook['rate'])) {
-            return Responses::error(429, 'rate_limited', 'this hook is over its delivery rate from this address', ['Retry-After' => (string) self::WINDOW_SECONDS]);
+        // Two windows are charged per delivery: this address's, and the hook's
+        // OVERALL one keyed by the bare name. The name grammar (webhooksValue:
+        // no `|` in a hook name) keeps the bare-name key uncollidable with the
+        // `hook|address` keys in the same map.
+        if (!$this->admit($key, $name, $hook['rate'])) {
+            return Responses::error(429, 'rate_limited', 'this hook is over its delivery rate, per address or per hook overall', ['Retry-After' => (string) self::WINDOW_SECONDS]);
         }
 
         // The body arrives whole but NOT truthfully: RequestBodyBufferMiddleware
@@ -140,16 +148,24 @@ final class HookWebhooks
             || ('' === $body && ($declared > 0 || 'chunked' === \strtolower($request->getHeaderLine('transfer-encoding'))))) {
             return Responses::error(413, 'payload_too_large', 'the webhook body is larger than the server accepts');
         }
-        $prompt = \str_contains($hook['prompt'], self::PAYLOAD_PLACEHOLDER)
-            ? \str_replace(self::PAYLOAD_PLACEHOLDER, PromptFence::escape($body), $hook['prompt'])
-            : $hook['prompt'] . self::UNTRUSTED_LABEL . PromptFence::escape($body);
-
         try {
+            // The splice runs INSIDE the try (AUT-6-P3): PromptFence::escape()
+            // throws on a PCRE failure (backtrack/recursion limit on a
+            // pathological body), and that is a delivery the handler refused
+            // to build, not a server bug to expose — it answers with the same
+            // generic 503 as a failing $run, and the cause never reaches the
+            // client.
+            $prompt = \str_contains($hook['prompt'], self::PAYLOAD_PLACEHOLDER)
+                ? \str_replace(self::PAYLOAD_PLACEHOLDER, PromptFence::escape($body), $hook['prompt'])
+                : $hook['prompt'] . self::UNTRUSTED_LABEL . PromptFence::escape($body);
             $summary = ($this->run)($name, $hook, $prompt);
         } catch (\Throwable) {
-            // The cause reaches the server log inside $run (ISS-057: whoever
-            // hides it from the client owes it to the sink); the client learns
-            // only that delivery was refused.
+            // A $run failure's cause reaches the server log inside $run
+            // (ISS-057: whoever hides it from the client owes it to the sink —
+            // Serve.php's closure logs its own). An escape failure's cause is
+            // PCRE's own message, which names nothing private, and this class
+            // holds no sink. Either way the client learns only that delivery
+            // was refused.
             return Responses::error(503, 'hook_unavailable', 'the webhook could not start a session');
         }
 
@@ -157,28 +173,36 @@ final class HookWebhooks
     }
 
     /**
-     * Count this accepted delivery against $key's window; false when it is one
-     * over. Prune-on-access like {@see RateLimiter} — time moves only when
-     * someone asks.
+     * Count this accepted delivery against BOTH windows — the per-address one
+     * ($key) and the per-hook-overall one ($name) — at the same configured
+     * rate; false when either is one over, and then neither is charged: a
+     * refused delivery consumes no budget anywhere. Prune-on-access like
+     * {@see RateLimiter} — time moves only when someone asks.
      */
-    private function admit(string $key, int $perMinute): bool
+    private function admit(string $key, string $name, int $perMinute): bool
     {
         $now = ($this->clock)();
-        $recent = \array_values(\array_filter(
-            $this->accepted[$key] ?? [],
-            static fn (float $at): bool => $at > $now - self::WINDOW_SECONDS,
-        ));
+        $windows = [];
+        foreach ([$key, $name] as $window) {
+            $recent = \array_values(\array_filter(
+                $this->accepted[$window] ?? [],
+                static fn (float $at): bool => $at > $now - self::WINDOW_SECONDS,
+            ));
 
-        if (\count($recent) >= $perMinute) {
-            unset($this->accepted[$key]);
-            $this->accepted[$key] = $recent;
+            if (\count($recent) >= $perMinute) {
+                unset($this->accepted[$window]);
+                $this->accepted[$window] = $recent;
 
-            return false;
+                return false;
+            }
+            $windows[$window] = $recent;
         }
 
-        $recent[] = $now;
-        unset($this->accepted[$key]);
-        $this->accepted[$key] = $recent;
+        foreach ($windows as $window => $recent) {
+            $recent[] = $now;
+            unset($this->accepted[$window]);
+            $this->accepted[$window] = $recent;
+        }
         if (\count($this->accepted) > self::CAPACITY) {
             \array_shift($this->accepted);
         }

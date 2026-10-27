@@ -10,25 +10,31 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Server\ServerConfig;
 
 /**
- * AUT-6: the mode a webhook inherits when its row names none.
+ * AUT-6: the mode a webhook inherits when its row names none, and the
+ * AUT-6-P2 clamp from C-AGT-7.c.
  *
- * THE FLOOR, stated once and shared by its three callers. `bypass-permissions`
- * and `dont-ask` answer every permission ask without asking anyone, so
- * {@see ServerConfig::webhooksValue()} refuses them on a hook row "even with
+ * THE FLOOR, stated once and shared by its callers. `bypass-permissions`
+ * answers every permission ask YES without asking anyone, so
+ * {@see ServerConfig::webhooksValue()} refuses it on a hook row "even with
  * --allow-bypass" — a webhook is started by an inbound HTTP request, with no
- * human on the other end to answer. That refusal is only worth what its
- * INHERITED case is worth: a row that names no mode used to fall back through
- * `admitsPermissionMode()`, which admits the bypass class whenever the server
- * was launched with `--allow-bypass`. So `serve --allow-bypass
- * --permission-mode bypass-permissions` handed whoever holds the hook secret a
- * fully unattended bypass turn — the exact posture the refusal says a webhook
- * can never have. {@see ServerConfig::hookPermissionModeFallback()} clamps the
- * inheritance to the Default family instead, whatever the server runs in.
+ * human on the other end to answer. `dont-ask` answers the same ask by
+ * REFUSING, so it is not refused: unattended is exactly the posture it is
+ * safe in, and refusing the row that names it only taught operators to omit
+ * the field — into the inheritance path, which is the other half of this
+ * step. {@see ServerConfig::hookPermissionModeFallback()} clamps the
+ * inheritance to the STRICTER of the server's mode and `default`: a
+ * `bypass-permissions`, `auto` or `accept-edits` server lands mode-less hooks
+ * on `default` (whose asks reach the approvals relay inside the
+ * `server.askTimeoutSeconds` window), while a server already stricter than
+ * `default` — `plan`, `dont-ask` — keeps its own mode. The old clamp
+ * flattened every server to the `default` family, which WIDENED a dont-ask
+ * server's hooks: the strictest row a human could name was refused at the
+ * door, then handed to an inbound request anyway in a looser mode.
  *
- * The polarities are pinned in both directions: a bypass-class server must not
- * leak its mode to a hook, and an ordinary server must still pass its mode
- * through untouched — a clamp that flattened every mode to `default` would
- * satisfy the red and break the operator's setup just as loudly.
+ * The polarities are pinned in both directions: a bypass server must not leak
+ * its mode to a hook, and a stricter server must not be relaxed by the clamp —
+ * a clamp that flattened every mode to `default` would satisfy the red and
+ * break the operator's setup just as loudly.
  */
 final class ServerConfigHookModeInheritanceTest extends TestCase
 {
@@ -51,11 +57,17 @@ final class ServerConfigHookModeInheritanceTest extends TestCase
         self::assertSame(PermissionMode::Default->value, $config->hookPermissionModeFallback());
     }
 
-    public function testADontAskServerDoesNotHandDontAskToAModelessHook(): void
+    /**
+     * The AUT-6-P2 flip: a dont-ask server's mode-less hooks STAY dont-ask.
+     * The server was launched in the strictest posture on purpose; handing
+     * its inbound-triggered turns the looser `default` — where an ask can be
+     * ANSWERED, by a human on the relay — was the widening this step removes.
+     */
+    public function testADontAskServerKeepsDontAskForAModelessHook(): void
     {
         $config = ServerConfig::resolve(['--allow-bypass' => true], [], [], '/state', 'dont-ask');
 
-        self::assertSame(PermissionMode::Default->value, $config->hookPermissionModeFallback());
+        self::assertSame(PermissionMode::DontAsk->value, $config->hookPermissionModeFallback());
     }
 
     /**
@@ -72,8 +84,8 @@ final class ServerConfigHookModeInheritanceTest extends TestCase
     }
 
     /** @param array<string, string|true> $flags */
-    #[DataProvider('ordinaryServerModesInheritThemselves')]
-    public function testAModelessHookInheritsANonBypassServerMode(array $flags, string $mode, string $expected): void
+    #[DataProvider('serverModesClampedToStricterOfDefault')]
+    public function testAModelessHookInheritsTheStricterOfServerModeOrDefault(array $flags, string $mode, string $expected): void
     {
         $config = ServerConfig::resolve($flags, [], [], '/state', $mode);
 
@@ -81,12 +93,43 @@ final class ServerConfigHookModeInheritanceTest extends TestCase
     }
 
     /** @return array<string, array{0: array<string, string|true>, 1: string, 2: string}> */
-    public static function ordinaryServerModesInheritThemselves(): array
+    public static function serverModesClampedToStricterOfDefault(): array
+    {
+        // Every mode looser than `default` lands there; every mode already at
+        // or stricter than `default` survives the clamp untouched. Both cases
+        // run with and without `--allow-bypass` — the clamp is about the MODE.
+        $clampedTo = [
+            PermissionMode::Default->value => PermissionMode::Default->value,
+            PermissionMode::AcceptEdits->value => PermissionMode::Default->value,
+            PermissionMode::Auto->value => PermissionMode::Default->value,
+            PermissionMode::Plan->value => PermissionMode::Plan->value,
+        ];
+        $cases = [];
+        foreach ($clampedTo as $mode => $expected) {
+            $cases[$mode . ' without allow-bypass'] = [[], $mode, $expected];
+            $cases[$mode . ' with allow-bypass'] = [['--allow-bypass' => true], $mode, $expected];
+        }
+
+        return $cases;
+    }
+
+    /**
+     * The per-row door (AUT-6-P2): bypass ALONE is refused on a hook row; the
+     * other five — dont-ask included — pass, because dont-ask answers an ask
+     * by refusing it and so endangers nothing a human would have to catch.
+     */
+    #[DataProvider('allPermissionModes')]
+    public function testTheHookRowDoorRefusesBypassAlone(PermissionMode $mode): void
+    {
+        self::assertSame($mode === PermissionMode::BypassPermissions, ServerConfig::hookRefusesMode($mode), $mode->value);
+    }
+
+    /** @return array<string, array{0: PermissionMode}> */
+    public static function allPermissionModes(): array
     {
         $cases = [];
-        foreach ([PermissionMode::Default, PermissionMode::AcceptEdits, PermissionMode::Plan, PermissionMode::Auto] as $mode) {
-            $cases[$mode->value . ' without allow-bypass'] = [[], $mode->value, $mode->value];
-            $cases[$mode->value . ' with allow-bypass'] = [['--allow-bypass' => true], $mode->value, $mode->value];
+        foreach (PermissionMode::cases() as $mode) {
+            $cases[$mode->value] = [$mode];
         }
 
         return $cases;

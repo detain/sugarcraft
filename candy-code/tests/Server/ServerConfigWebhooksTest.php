@@ -18,9 +18,11 @@ use SugarCraft\Code\Server\ServerConfigException;
  * The floors pinned here: routeable names, a secret long enough to be a
  * credential, a prompt (the body is spliced INTO it; with no prompt the payload
  * would BE the instruction), the per-minute rate bounds, unknown fields, and —
- * the restrictive permission floor — bypass-class modes refused even under
- * `--allow-bypass`, because a webhook is an unattended session and the promise
- * of allow-bypass was made about a human's client sessions.
+ * the restrictive permission floor — `bypass-permissions` refused even under
+ * `--allow-bypass`, because a webhook is an unattended session and bypass
+ * answers every permission ask YES with nobody asked (AUT-6-P2 narrowed the
+ * door to bypass alone: `dont-ask` answers the same ask by REFUSING, so it is
+ * the accepted strictest row).
  */
 final class ServerConfigWebhooksTest extends TestCase
 {
@@ -90,11 +92,17 @@ final class ServerConfigWebhooksTest extends TestCase
         self::assertSame(2, $refusals, 'both the flag route and the config route carry the refusal');
     }
 
-    public function testTheDontAskModeCarriesTheSameRefusal(): void
+    /**
+     * The AUT-6-P2 flip: `dont-ask` is the strictest row an operator can name
+     * — it never asks, it refuses — so it is ACCEPTED where the old door
+     * refused it. Refusing it taught omission of the field, and omission
+     * inherits, which is the path the widened clamp used to loosen.
+     */
+    public function testADontAskModeIsAcceptedAsTheStrictestRow(): void
     {
-        $this->expectException(ServerConfigException::class);
-        $this->expectExceptionMessage('webhook "h": permission mode "dont-ask" is refused for hooks');
-        ServerConfig::webhooksValue(['h' => ['secret' => \str_repeat(self::SECRET, 32), 'prompt' => 'p', 'permissionMode' => 'dont-ask']]);
+        $hooks = ServerConfig::webhooksValue(['h' => ['secret' => \str_repeat(self::SECRET, 32), 'prompt' => 'p', 'permissionMode' => 'dont-ask']]);
+
+        self::assertSame(PermissionMode::DontAsk, $hooks['h']['permissionMode']);
     }
 
     /** @return array<string, array{array<string, mixed>, string}> */
