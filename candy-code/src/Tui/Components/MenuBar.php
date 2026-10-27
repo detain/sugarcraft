@@ -100,6 +100,7 @@ final class MenuBar
         Pane::Agents,
         Pane::Settings,
         Pane::Todo,
+        Pane::Context,
     ];
 
     /**

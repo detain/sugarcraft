@@ -29,6 +29,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Context\CompactorConfig;
+use SugarCraft\Code\Context\ContextCategory;
 use SugarCraft\Code\Context\EnvironmentBlock;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulesState;
@@ -54,6 +55,7 @@ use SugarCraft\Code\Tui\Commands\NewSessionCmd;
 use SugarCraft\Code\Tui\Commands\ProviderSelectCmd;
 use SugarCraft\Code\Tui\Commands\SourceSkillCmd;
 use SugarCraft\Code\Tui\Components\AgentDashboardPane;
+use SugarCraft\Code\Tui\Components\ContextPane;
 use SugarCraft\Code\Tui\Components\FilesPane;
 use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Components\MenuSelectedMsg;
@@ -526,6 +528,18 @@ final class App implements Model
          * (P-TABS.e). Rides every mutate.
          */
         public readonly ?\Closure $tabFactory = null,
+        /**
+         * P-CTX.e: whether the docked Context box shows its per-category
+         * rows or only the summary line. View state, not persisted — like
+         * the Tools pane's row cursor it rides every mutate and resets with
+         * the process.
+         */
+        public readonly bool $contextPaneExpanded = false,
+        /**
+         * P-CTX.e: the category whose sub-rows the expanded box is showing,
+         * null for the flat category list.
+         */
+        public readonly ?ContextCategory $contextDrill = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -581,6 +595,32 @@ final class App implements Model
     public function withPane(Pane $v): self
     {
         return $this->mutate(pane: $v);
+    }
+
+    /**
+     * P-CTX.e: flip the Context box between summary and category rows.
+     * Collapsing drops the drill too — the sub-rows live inside the
+     * expanded body, and a drill that survives its own container would
+     * resurrect on the next expand pointing at a row that was never shown.
+     */
+    public function contextPaneToggle(): self
+    {
+        $expand = !$this->contextPaneExpanded;
+
+        return $this->mutate(
+            contextPaneExpanded: $expand,
+            contextDrill: $expand ? $this->contextDrill : null,
+        );
+    }
+
+    /**
+     * P-CTX.e: show one category's sub-rows (null returns to the flat list);
+     * drilling implies expanding, the same containment the collapse rule
+     * enforces from the other side.
+     */
+    public function contextPaneDrill(?ContextCategory $v): self
+    {
+        return $this->mutate(contextPaneExpanded: true, contextDrill: $v);
     }
 
     public function withError(?string $v): self
@@ -2130,7 +2170,17 @@ final class App implements Model
      * (CL-2 FIX 1). Attachments ride the Files pane; there is no dedicated
      * attachments surface to add here.
      */
-    private const AUTO_ENABLE_PANES = [Pane::Todo, Pane::Agents, Pane::Tools, Pane::Files];
+    private const AUTO_ENABLE_PANES = [Pane::Todo, Pane::Agents, Pane::Tools, Pane::Files, Pane::Context];
+
+    /**
+     * The frame width from which the Context pane may auto-dock (plan §6.1
+     * ruling for P-CTX.e): the box earns its right-of-pane columns only on a
+     * genuinely wide terminal, and the narrower the frame the earlier
+     * {@see AUTO_DOCK_MIN_CHAT_COLS} refuses it anyway — this gate is the
+     * explicit "wide terminals only", and an unknown (null) width skips like
+     * the chat-readability guard's stand-down, retried at the next resize.
+     */
+    public const AUTO_DOCK_CONTEXT_MIN_COLS = 120;
 
     /**
      * ISS-049: the auto-show never starves the center. Before an automatic
@@ -2183,6 +2233,12 @@ final class App implements Model
             Pane::Agents => AgentDashboardPane::entries($this) !== [],
             Pane::Tools => ToolsPane::hasCalls($this),
             Pane::Files => FilesPane::hasFiles($this),
+            // P-CTX.e: "activity" is a settled measurement in hand — the
+            // first reply's snapshot — plus the wide-terminal gate the §6.1
+            // ruling attaches. Before either, the box would only advertise
+            // "measuring…" in a column the user never asked for.
+            Pane::Context => ($this->cols ?? 0) >= self::AUTO_DOCK_CONTEXT_MIN_COLS
+                && ContextPane::heldCategories($this) !== null,
             default => false,
         };
         if (!$hasActivity) {
@@ -2749,13 +2805,21 @@ final class App implements Model
             $msg instanceof ClipboardImagePastedMsg && $this->mediaForm !== null => $this->pasteIntoMediaForm($msg),
             $msg instanceof UserInputMsg,
             $msg instanceof SelectPaneMsg,
-            $msg instanceof DockPaneMsg,
             $msg instanceof LayoutResetMsg,
             $msg instanceof ToolResultMsg,
             $msg instanceof ErrorMsg,
             $msg instanceof StatusMsg,
             $msg instanceof OpenSkillPickerMsg,
             $msg instanceof SelectSkillMsg => self::withoutEngineCmd($this->dispatch($msg)),
+            // P-CTX.e: the docking entry point rides OUTSIDE withoutEngineCmd.
+            // Its toggle arm is the only producer of a live second slot — the
+            // one fresh-dock context measurement — and an engine Cmd was never
+            // what the old swallow guarded here (every other arm returned
+            // null); nulling it again would silently drop the measurement on
+            // the meter, tab and slash-command paths alike. `SelectPaneMsg`
+            // extends this message but stays swallowed above: it is a focus
+            // chooser, not a docking mutation, and never carries the closure.
+            $msg instanceof DockPaneMsg => $this->applyDockCommand($msg),
             // A click on an `agent:` zone in the chat (P-B3), the picker's
             // sub-agent row, and the open view's own tail tick (P-C2).
             $msg instanceof \SugarCraft\Code\App\OpenAgentViewMsg => [$this->openAgentView($msg->agentId, $msg->childSessionId, $msg->name), null],
@@ -3454,6 +3518,7 @@ final class App implements Model
                     null,
                 ],
                 Pane::Agents->value => [$this->toggleAgentExpanded($key), null],
+                Pane::Context->value => $this->dispatchContextRow($key),
                 default => [$this, null],
             };
         }
@@ -3495,10 +3560,71 @@ final class App implements Model
             $wasDocked = $this->isDocked($pane);
             $next = $this->togglePaneDocking($pane);
 
-            return [$wasDocked ? $next : $next->withPane($pane), null];
+            return [
+                $wasDocked ? $next : $next->withPane($pane),
+                $this->contextMeasureOnDock($pane, $wasDocked),
+            ];
         }
 
         return [$this, null];
+    }
+
+    /**
+     * The Context box's side rows (P-CTX.e) — one per body line the keyed
+     * layout stamped. The summary line and a category row toggle the box's
+     * two view states; the `dump prompt` row runs the same
+     * `/context --raw` the slash surface offers, through the one
+     * {@see Chat::runCommand()} funnel so the dump and a typed command are
+     * indistinguishable downstream.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function dispatchContextRow(string $key): array
+    {
+        if ($key === ContextPane::TOGGLE_KEY) {
+            return [$this->contextPaneToggle(), null];
+        }
+
+        if ($key === ContextPane::DUMP_KEY) {
+            $chat = $this->chat;
+            if ($chat === null) {
+                return [$this, null];
+            }
+
+            [$next, $cmd] = $chat->runCommand('/context --raw');
+
+            return [$this->withChat($next)->autoEnablePanes(), $cmd];
+        }
+
+        if (str_starts_with($key, ContextPane::ROW_KEY_PREFIX)) {
+            $category = ContextCategory::tryFrom(substr($key, strlen(ContextPane::ROW_KEY_PREFIX)));
+            if ($category === null) {
+                return [$this, null];
+            }
+
+            // A second click on the drilled row undrills it — rows toggle,
+            // like every other side-row surface.
+            return [$this->contextPaneDrill(
+                $this->contextDrill === $category ? null : $category,
+            ), null];
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * The one docking-time measurement hook (P-CTX.e). An unmeasured box
+     * reads "measuring…" forever unless the first dock asks for a figure,
+     * so docking Context — by tab, menu row, status meter or command —
+     * schedules {@see Chat::measureContextCmd()} the same way a settled
+     * turn does. Undocking and every other pane stay silent: the promise
+     * the closure carries assembles one prompt and costs nothing else.
+     */
+    private function contextMeasureOnDock(Pane $pane, bool $wasDocked): ?\Closure
+    {
+        return $pane === Pane::Context && !$wasDocked
+            ? $this->chat?->measureContextCmd()
+            : null;
     }
 
     /**
@@ -4251,8 +4377,12 @@ final class App implements Model
         }
 
         $key = $this->isDocked($pane) ? 'tui.app.pane_undocked' : 'tui.app.pane_docked';
+        $wasDocked = $this->isDocked($pane);
 
-        return [$this->togglePaneDocking($pane)->withStatus(Lang::t($key, ['pane' => $pane->label()])), null];
+        return [
+            $this->togglePaneDocking($pane)->withStatus(Lang::t($key, ['pane' => $pane->label()])),
+            $this->contextMeasureOnDock($pane, $wasDocked),
+        ];
     }
 
     /**
@@ -4921,6 +5051,8 @@ final class App implements Model
             agentPaused: array_key_exists('agentPaused', $changes) ? $changes['agentPaused'] : $this->agentPaused,
             paneAutoShow: array_key_exists('paneAutoShow', $changes) ? $changes['paneAutoShow'] : $this->paneAutoShow,
             tabFactory: array_key_exists('tabFactory', $changes) ? $changes['tabFactory'] : $this->tabFactory,
+            contextPaneExpanded: array_key_exists('contextPaneExpanded', $changes) ? $changes['contextPaneExpanded'] : $this->contextPaneExpanded,
+            contextDrill: array_key_exists('contextDrill', $changes) ? $changes['contextDrill'] : $this->contextDrill,
         );
     }
 }

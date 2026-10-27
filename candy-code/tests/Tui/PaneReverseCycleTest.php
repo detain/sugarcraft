@@ -171,7 +171,8 @@ final class PaneReverseCycleTest extends TestCase
      */
     public function testPreviousWalksTheStripInReverseAndWraps(): void
     {
-        $this->assertSame(Pane::Todo, Pane::Chat->previous());
+        $this->assertSame(Pane::Context, Pane::Chat->previous());
+        $this->assertSame(Pane::Todo, Pane::Context->previous());
         $this->assertSame(Pane::Settings, Pane::Todo->previous());
         $this->assertSame(Pane::Agents, Pane::Settings->previous());
         $this->assertSame(Pane::Skills, Pane::Agents->previous());

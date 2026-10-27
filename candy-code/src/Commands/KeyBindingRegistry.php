@@ -82,6 +82,11 @@ final class KeyBindingRegistry
     public const CONTEXT_SKILLS = 'Skill picker';
     /** Keys the full-band settings view (`/settings`) answers while it is open. */
     public const CONTEXT_SETTINGS = 'Settings view';
+    /**
+     * The docked Context box (P-CTX.e). A ROUTING key like every
+     * `CONTEXT_*` value — the reference heading is its lang translation.
+     */
+    public const CONTEXT_CONTEXT_PANE = 'Context pane';
     /** Keys of the image-generation form frame — its launch chord and its own keys. */
     public const CONTEXT_MEDIA = 'Media form';
     /** Keys the F10 menu bar answers while it is open. */
@@ -108,6 +113,7 @@ final class KeyBindingRegistry
             ...self::agentStrip(),
             ...self::agentTranscript(),
             ...self::skills(),
+            ...self::contextPane(),
             ...self::settings(),
             ...self::media(),
             ...self::menu(),
@@ -176,6 +182,7 @@ final class KeyBindingRegistry
             self::CONTEXT_AGENT_TRANSCRIPT => Lang::t('keys.context.agent-transcript'),
             self::CONTEXT_SKILLS => Lang::t('keys.context.skills'),
             self::CONTEXT_SETTINGS => Lang::t('keys.context.settings'),
+            self::CONTEXT_CONTEXT_PANE => Lang::t('keys.context.context-pane'),
             self::CONTEXT_MEDIA => Lang::t('keys.context.media'),
             self::CONTEXT_MENU => Lang::t('keys.context.menu'),
             self::CONTEXT_MOUSE => Lang::t('keys.context.mouse'),
@@ -1255,6 +1262,26 @@ final class KeyBindingRegistry
     }
 
     /**
+     * The docked Context box (P-CTX.e). Enter and Space share one ladder
+     * forward — collapsed expands, the flat list drills into Messages, a
+     * drilled row undrills — and Escape and Left step back down it. The
+     * ladder's state decides which beat a press is, so each row names its
+     * own beat rather than one ambiguous "toggle" row.
+     *
+     * @return list<KeyBinding>
+     */
+    private static function contextPane(): array
+    {
+        $c = self::CONTEXT_CONTEXT_PANE;
+
+        return [
+            KeyBinding::new('contextPane.expand', 'Enter / Space', Lang::t('keys.contextPane.expand'), $c),
+            KeyBinding::new('contextPane.drill', 'Enter / Space', Lang::t('keys.contextPane.drill'), $c),
+            KeyBinding::new('contextPane.back', 'Esc / ←', Lang::t('keys.contextPane.back'), $c),
+        ];
+    }
+
+    /**
      * The settings view (roadmap N-P1). Read-only in this phase, so there is no
      * save or reset key — and decision D7 keeps Ctrl+S / Ctrl+R off it in any
      * case, because both are shell chords already (`shell.skills`, the picker).
@@ -1352,6 +1379,7 @@ final class KeyBindingRegistry
             KeyBinding::new('mouse.palette-row', 'Click row', Lang::t('keys.mouse.palette-row'), $c),
             KeyBinding::new('mouse.session-action', 'Click ✎ ★ ✕', Lang::t('keys.mouse.session-action'), $c),
             KeyBinding::new('mouse.agent', 'Click agent', Lang::t('keys.mouse.agent'), $c),
+            KeyBinding::new('mouse.context-meter', 'Click meter', Lang::t('keys.mouse.context-meter'), $c),
         ];
     }
 }

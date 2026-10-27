@@ -8,6 +8,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\App\SelectSkillMsg;
+use SugarCraft\Code\Context\ContextCategory;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tui\Commands\CancelAgentCmd;
@@ -254,6 +255,24 @@ final class KeyboardHandler
         // open menu, the Agents dashboard or the skill picker keeps it.
         if ($msg->type === KeyType::Tab && $msg->shift && !$msg->ctrl && !$msg->alt) {
             return true;
+        }
+
+        // P-CTX.e: with the Context pane focused, Space joins Enter as the
+        // box's expander and Left joins Escape as the back-out key — the
+        // same pairing the Agents dashboard already claims at its own row
+        // keys. Claimed only on the focused-and-docked predicate the handler
+        // arm below matches; every other keystroke still belongs to the chat.
+        if ($app->pane === Pane::Context && $app->isDocked(Pane::Context)
+            && !$msg->ctrl && !$msg->alt && !$msg->shift) {
+            if ($msg->type === KeyType::Space) {
+                return true;
+            }
+            if ($msg->type === KeyType::Char && $msg->rune === ' ') {
+                return true;
+            }
+            if ($msg->type === KeyType::Left) {
+                return true;
+            }
         }
 
         // Enter is the palette door from a dockable non-Chat pane while the
@@ -615,6 +634,17 @@ final class KeyboardHandler
             }
         }
 
+        // The docked Context box answers its own two-beat before the palette
+        // door: Enter/Space expand, then drill, then undrill; Esc/← walk back
+        // the same ladder. claims() admitted exactly these keys; everything
+        // else the arm declines keeps falling through unchanged.
+        if ($app->pane === Pane::Context && $app->isDocked(Pane::Context)) {
+            $result = $this->handleContextPaneKey($key, $app);
+            if ($result !== null) {
+                return $result;
+            }
+        }
+
         // Enter on a docked pane with nothing drafted opens the palette --
         // the change door for the read-only surfaces (claims() admitted the
         // key on exactly this predicate; the agent view and the skill picker
@@ -644,6 +674,50 @@ final class KeyboardHandler
         }
 
         return [$app, null];
+    }
+
+    /**
+     * The docked Context box's two-beat (P-CTX.e). Enter and Space walk the
+     * ladder forward — collapse, then the flat category list, then one
+     * category's sub-rows — and Escape and Left walk it back one step.
+     *
+     * At the ladder's foot Escape returns null so the generic arm below
+     * reclaims focus for Chat, exactly as it does for every other docked
+     * pane; Left at the foot is consumed as a no-op — it is the box's own
+     * back key, not a column gesture, and must not leak into handleNavigation
+     * now that claims() admits it.
+     *
+     * @return array{0: App, 1: ?\Closure}|null
+     */
+    private function handleContextPaneKey(string $key, App $app): ?array
+    {
+        if ($key === 'enter' || $key === 'space' || $key === ' ') {
+            if (!$app->contextPaneExpanded) {
+                return [$app->contextPaneToggle(), null];
+            }
+            if ($app->contextDrill !== null) {
+                return [$app->contextPaneDrill(null), null];
+            }
+
+            // Messages is the drill anchor: the only category whose sub-rows
+            // exist in every measured session (the transcript itself), so the
+            // beat always has somewhere to go — a first category could be an
+            // empty one, and Enter that does nothing is a dead key.
+            return [$app->contextPaneDrill(ContextCategory::Messages), null];
+        }
+
+        if ($key === 'escape' || $key === 'left') {
+            if ($app->contextDrill !== null) {
+                return [$app->contextPaneDrill(null), null];
+            }
+            if ($app->contextPaneExpanded) {
+                return [$app->contextPaneToggle(), null];
+            }
+
+            return $key === 'escape' ? null : [$app, null];
+        }
+
+        return null;
     }
 
     /**

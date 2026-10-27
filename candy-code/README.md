@@ -389,8 +389,11 @@ never land on the clipboard.
 
 ### Pane docking
 
-Six panes dock — **Files** and **Tools** to the left, **Skills**, **Agents**,
-**Settings** and **Todo** to the right — and the chat owns whatever is left over. The
+Seven panes dock — **Files** and **Tools** to the left, **Skills**, **Agents**,
+**Settings**, **Todo** and **Context** to the right — and the chat owns whatever is left over.
+On a wide terminal the **Context** box offers itself once: after the first reply's
+measurement settles it docks at ≥120 columns (never at the chat's readable width's
+expense); close it by hand and the offer is spent for good. The
 menu bar's right end carries a tab for chat plus each dockable pane, and the
 tab tells you the whole state at a glance: muted when the pane is undocked,
 full foreground when it is docked, bold-underlined when it also holds focus.
@@ -683,7 +686,11 @@ section with a `▣ Compressed b3 · <topic> · −41K +2.4K` row, the status ba
 what the ledger takes out (`−52K pruned`), and `/decompress b3` /
 `/recompress b3` send the section in full again or restore the summary. Token figures are script-weighted estimates (`~`); the cache
 figures are the provider's own. A part a backend cannot report — a command backend assembles no
-prompt of its own — prints as "not measured", never as zero. It is read-only,
+prompt of its own — prints as "not measured", never as zero. The same breakdown
+lives in the docked **Context** pane: clicking the status bar's meter docks or
+undocks the box, `Enter`/`Space` opens it and drills into the Messages rows,
+`Esc`/`←` backs out, and its last row dumps the raw prompt the way
+`/context --raw` does. It is read-only,
 local and calls no model.
 
 Typing `/` opens a live popup of the matches, which fuzzy-ranks as you type

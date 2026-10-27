@@ -6,7 +6,11 @@ namespace SugarCraft\Code\Tui\Components;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\Chat;
+use SugarCraft\Code\Context\ContextCategories;
 use SugarCraft\Code\Context\ContextCategory;
+use SugarCraft\Code\Host\TurnRunner;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Util\TokenCount;
@@ -285,5 +289,94 @@ final class ContextPane
         }
 
         return rtrim(rtrim(number_format($bytes / 1024, 1), '0'), '.') . ' KB';
+    }
+
+    /**
+     * The docked box for $a's shell state — P-CTX.e's adapter, the same
+     * shape the sibling panes take at the renderPane() arm.
+     *
+     * @return array{0: string, 1: list<?string>}
+     */
+    public static function layout(App $a, int $width, int $rows): array
+    {
+        return self::layoutModel(self::model($a), $a->theme(), $width, $rows);
+    }
+
+    /**
+     * The model for $a: the last settled measurement (or null before the
+     * first), the live token totals, and the shell's expand/drill state.
+     */
+    public static function model(App $a): ContextPaneModel
+    {
+        $chat = $a->chat;
+        $freed = $chat?->contextLedgerView()?->freedTokens();
+
+        return new ContextPaneModel(
+            categories: self::heldCategories($a),
+            historyTokens: $chat?->contextTokens() ?? 0,
+            window: $chat?->contextTokenLimit() ?? 0,
+            expanded: $a->contextPaneExpanded,
+            drill: $a->contextDrill,
+            stale: $chat?->inFlight ?? false,
+            cachePercent: self::cachePercent($chat),
+            // Zero freed means nothing has been pruned — the model reads
+            // null as "no pruning measured", the same honesty the class
+            // doc demands of unmeasured figures.
+            prunedTokens: ($freed === null || $freed === 0) ? null : $freed,
+        );
+    }
+
+    /**
+     * The measurement held for $a's session, read the way
+     * {@see TodoPane::todos()} reads its list: the session host's runner
+     * first, nothing else as fallback — an unmeasured box says so.
+     */
+    public static function heldCategories(App $a): ?ContextCategories
+    {
+        $chat = $a->chat;
+        $runner = $chat?->workspace()?->service(TurnRunner::class);
+        if ($runner instanceof TurnRunner) {
+            return $runner->heldContext($chat?->currentSessionId() ?? $a->sessionId);
+        }
+
+        return null;
+    }
+
+    /**
+     * The cache-hit percent on the box's total line — the newest usable
+     * report, by the same rule (and the same OpenAI-shaped fallback) as
+     * {@see \SugarCraft\Code\Renderer::cacheIndicator()} on the status bar.
+     * Kept to the percent alone: the box has no room for the age suffix,
+     * and the bar beside it already spends the columns on it.
+     */
+    private static function cachePercent(?Chat $chat): ?int
+    {
+        if ($chat === null) {
+            return null;
+        }
+
+        $history = $chat->history;
+        for ($i = count($history) - 1; $i >= 0; --$i) {
+            $usage = $history[$i]->usage;
+            if ($usage === null) {
+                continue;
+            }
+
+            $prompt = $usage->promptTokens();
+            if ($prompt === null
+                && $usage->cacheCreationTokens === null
+                && $usage->cacheReadTokens !== null
+                && $usage->inputTokens !== null
+            ) {
+                $prompt = $usage->cacheReadTokens + $usage->inputTokens;
+            }
+            if ($prompt === null || $prompt <= 0) {
+                continue;
+            }
+
+            return (int) round($usage->cacheReadTokens / $prompt * 100);
+        }
+
+        return null;
     }
 }

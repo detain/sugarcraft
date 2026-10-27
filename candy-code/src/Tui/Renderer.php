@@ -20,6 +20,7 @@ use SugarCraft\Code\Providers\ReportsServedModel;
 use SugarCraft\Code\Renderer as LiveRenderer;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\Components\ChatPane;
+use SugarCraft\Code\Tui\Components\ContextPane;
 use SugarCraft\Code\Tui\Components\InputPane;
 use SugarCraft\Code\Tui\Components\SkillsPane;
 use SugarCraft\Code\Tui\Components\AgentDashboardPane;
@@ -2125,7 +2126,7 @@ final class Renderer
     }
 
     /**
-     * Paint one sidebar pane at the given box size. The six component
+     * Paint one sidebar pane at the given box size. The seven component
      * renderers share this signature; anything else has no sidebar form and
      * paints nothing.
      */
@@ -2140,6 +2141,10 @@ final class Renderer
             Pane::Settings => SettingsPane::render($a, $width, $rows),
             Pane::Agents => self::keyed($pane, AgentsPane::layout($a, $width, $rows)),
             Pane::Todo => TodoPane::render($a, $width, $rows),
+            // P-CTX.e: keyed like Tools and Agents — the layout hands back a
+            // click key per body row (category / toggle / dump) and no scroll
+            // slot, which keyed() already reads as a zero maximum.
+            Pane::Context => self::keyed($pane, ContextPane::layout($a, $width, $rows)),
             default => '',
         };
     }

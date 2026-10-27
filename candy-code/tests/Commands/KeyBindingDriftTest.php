@@ -290,7 +290,7 @@ final class KeyBindingDriftTest extends TestCase
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
      * near-misses probed, because eight `*.move` rows describe arrow movement
-     * (twenty-one rows carry an arrow GLYPH in their label; both counts are asserted
+     * (twenty-two rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -526,9 +526,9 @@ final class KeyBindingDriftTest extends TestCase
             . implode(', ', $move),
         );
         $this->assertCount(
-            21,
+            22,
             $arrowLabelled,
-            'KEYISH\'s docblock says twenty-one rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says twenty-two rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
@@ -2023,6 +2023,40 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertSame([], $app->skillPickerOptions);
                 $this->assertSame(Pane::Chat, $app->pane);
             },
+            // ── Context pane (P-CTX.e) ───────────────────────────────────
+            // The focused+docked Context pane's own keys. claim() asserts the
+            // shell CLAIMS the key, so a row whose rune quietly stops reaching
+            // KeyboardHandler::handleContextPaneKey reddens here as well.
+            'contextPane.expand' => function (array $k): void {
+                foreach ($k as $key) {
+                    [$app] = $this->claim($key, $this->dockedContextApp());
+                    $this->assertTrue(
+                        $app->contextPaneExpanded,
+                        "'{$key->string()}' must open the collapsed box",
+                    );
+                }
+            },
+            'contextPane.drill' => function (array $k): void {
+                $open = $this->dockedContextApp()->contextPaneToggle();
+                foreach ($k as $key) {
+                    [$app] = $this->claim($key, $open);
+                    $this->assertSame(
+                        \SugarCraft\Code\Context\ContextCategory::Messages,
+                        $app->contextDrill,
+                        "'{$key->string()}' must drill the open box into its Messages rows",
+                    );
+                }
+            },
+            'contextPane.back' => function (array $k): void {
+                $drilled = $this->dockedContextApp()->contextPaneDrill(
+                    \SugarCraft\Code\Context\ContextCategory::Messages,
+                );
+                foreach ($k as $key) {
+                    [$app] = $this->claim($key, $drilled);
+                    $this->assertNull($app->contextDrill, "'{$key->string()}' must back out of the drill");
+                    $this->assertTrue($app->contextPaneExpanded, "'{$key->string()}' backs to the rows, not past them");
+                }
+            },
 
             // ── Settings view (N-P1) ─────────────────────────────────────
             // Driven through App::update(), which hands the open view every
@@ -2374,6 +2408,22 @@ final class KeyBindingDriftTest extends TestCase
                     'clicking a row must RUN it, not merely highlight it',
                 );
             },
+            // P-CTX.e: the status-bar context meter is a click zone; a press-
+            // release pair on it docks the Context pane through the same
+            // DockPaneMsg the shell's one docking entry point consumes.
+            'mouse.context-meter' => function (): void {
+                $chat = $this->chat([Message::user('meter')]);
+                Renderer::render($chat);
+                $zone = Renderer::scanner()->get(Renderer::CTXMETER_ZONE);
+                $this->assertInstanceOf(Zone::class, $zone, 'the status-bar meter is a click zone');
+
+                [$pressed] = $chat->update(new MouseClickMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Press));
+                [, $cmd] = $pressed->update(new MouseReleaseMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Release));
+                $this->assertInstanceOf(\Closure::class, $cmd);
+
+                [$app] = $this->app()->withChat($chat)->update($cmd());
+                $this->assertTrue($app->isDocked(Pane::Context), 'the meter click docks the Context pane');
+            },
         ];
     }
 
@@ -2692,6 +2742,21 @@ final class KeyBindingDriftTest extends TestCase
     private function app(): App
     {
         return App::new($this->provider, 'test-model');
+    }
+
+    /**
+     * An App with the Context pane docked on the right and FOCUSED (P-CTX.e)
+     * — the state the context-pane key rows describe.
+     */
+    private function dockedContextApp(): App
+    {
+        $dock = \SugarCraft\Constraints\Dock\DockLayout::new('chat')
+            ->withSlotAdded(\SugarCraft\Constraints\Dock\Side::Right, 'context');
+
+        return $this->app()
+            ->withChat($this->chat([Message::user('context rows')]))
+            ->withDock($dock)
+            ->withPane(Pane::Context);
     }
 
     /**
@@ -3113,6 +3178,7 @@ final class KeyBindingDriftTest extends TestCase
         'mouse.palette-row',
         'mouse.session-action',
         'mouse.agent',
+        'mouse.context-meter',
     ];
 
     /**

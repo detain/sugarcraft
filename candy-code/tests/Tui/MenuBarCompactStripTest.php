@@ -18,7 +18,7 @@ use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 
 /**
  * Roadmap 3.C remainder: below about a hundred columns the full pane-tab strip
- * (`[icon Label]` × 7 since the Todo tab) left no room for a single menu and
+ * (`[icon Label]` × 8 since the Context tab) left no room for a single menu and
  * then ran off the edge. The strip now shrinks to icons, then drops the
  * indicator's prefix ({@see MenuBar::render()}).
  */
@@ -43,6 +43,7 @@ final class MenuBarCompactStripTest extends TestCase
         foreach ([null, 120] as $cols) {
             $bar = $this->plain(MenuBar::render($app, $cols));
             self::assertStringContainsString('[' . Pane::Todo->icon() . ' Todo]', $bar);
+            self::assertStringContainsString('[' . Pane::Context->icon() . ' Context]', $bar);
             self::assertStringContainsString('Currently: Chat', $bar);
         }
     }
@@ -54,7 +55,7 @@ final class MenuBarCompactStripTest extends TestCase
         $bar = $this->plain(MenuBar::render($app, 100));
 
         self::assertStringNotContainsString('Files]', $bar);
-        foreach ([Pane::Chat, Pane::Files, Pane::Tools, Pane::Skills, Pane::Agents, Pane::Settings, Pane::Todo] as $pane) {
+        foreach ([Pane::Chat, Pane::Files, Pane::Tools, Pane::Skills, Pane::Agents, Pane::Settings, Pane::Todo, Pane::Context] as $pane) {
             self::assertStringContainsString('[' . $pane->icon() . ']', $bar, "{$pane->label()} keeps its tab");
         }
         self::assertStringEndsWith('Currently: Files', $bar, 'the indicator still names the focused pane');
@@ -92,7 +93,7 @@ final class MenuBarCompactStripTest extends TestCase
         foreach ([90, 40] as $cols) {
             $marked = MenuBar::renderMarked($app, $cols);
             self::assertSame(MenuBar::render($app, $cols), (string) preg_replace('/\x{E000}\/?[A-Za-z0-9._:-]*\x{E001}/u', '', $marked));
-            self::assertSame(7, preg_match_all('/\x{E000}' . MenuBar::PANE_TAB_ZONE_PREFIX . '/u', $marked), "{$cols} columns: one zone per tab");
+            self::assertSame(8, preg_match_all('/\x{E000}' . MenuBar::PANE_TAB_ZONE_PREFIX . '/u', $marked), "{$cols} columns: one zone per tab");
         }
     }
 

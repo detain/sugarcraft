@@ -6575,6 +6575,16 @@ final class Chat implements Model
             return $this->selectSessionRow(substr($zoneId, strlen($rowPrefix)));
         }
 
+        // P-CTX.e: the status bar's context meter. A click toggles the
+        // Context pane's dock — the mouse twin of the `context:` menu row
+        // and `/pane toggle context`. Answered with a DockPaneMsg rather
+        // than a direct dock mutation so App::applyDockCommand stays the
+        // one writer of the dock state.
+        if ($zoneId === Renderer::CTXMETER_ZONE) {
+            return [$this, static fn (): \SugarCraft\Code\App\DockPaneMsg
+                => new \SugarCraft\Code\App\DockPaneMsg('toggle', Pane::Context->value)];
+        }
+
         return [$this, null];
     }
 

@@ -804,6 +804,15 @@ final class Renderer
     public const SIDE_ROW_ZONE_PREFIX = 'siderow:';
 
     /**
+     * The status bar's context segment (P-CTX.e). Clicking the meter docks
+     * or undocks the Context pane — `Chat::handlePointer` answers the zone
+     * with a DockPaneMsg, so the shell's one docking entry point stays the
+     * single writer of the dock. Like every bar zone it rides the mark
+     * machinery and is dropped, unclickable, if the bar is backstop-cut.
+     */
+    public const CTXMETER_ZONE = 'ctxmeter';
+
+    /**
      * One open or close zone sentinel as {@see \SugarCraft\Mouse\Mark} emits it,
      * matched byte-wise against Mark's id charset (plus the closing `/`).
      */
@@ -2405,6 +2414,7 @@ final class Renderer
             - Width::of($separator)
             - $scrollReserve;
         $context = self::contextIndicator($chat, $room);
+        $context = Chat::mouseClicksEnabled() ? Mark::zone(self::CTXMETER_ZONE, $context) : $context;
         $bar = $context . $separator . $processing;
 
         // The spend readout goes in third, against whatever the two mandatory

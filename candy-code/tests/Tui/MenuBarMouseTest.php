@@ -113,13 +113,14 @@ final class MenuBarMouseTest extends TestCase
 
     public function testEveryPaintedMenuTitleGetsItsOwnZone(): void
     {
-        // 120 columns since the pane icons joined the tab strip: the icons
-        // cost the strip one extra column each, and the budget drops MENU
-        // NAMES first, which would silently shrink this test to one title.
-        $frame = TuiRenderer::renderView($this->app(), 120, 30)->body;
+        // 128 columns since the Context tab joined the strip: every tab
+        // costs the budget one more group, and the budget drops MENU NAMES
+        // first, which would silently shrink this test to one title at the
+        // 120 columns the seven-tab strip used to fit.
+        $frame = TuiRenderer::renderView($this->app(), 128, 30)->body;
 
         $marked = TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_TITLE_ZONE_PREFIX);
-        self::assertGreaterThan(1, count($marked), 'the bar draws more than one menu at 120 columns');
+        self::assertGreaterThan(1, count($marked), 'the bar draws more than one menu at 128 columns');
 
         foreach ($marked as $id => $zone) {
             $index = (int) substr($id, strlen(MenuBar::MENU_TITLE_ZONE_PREFIX));
@@ -143,10 +144,10 @@ final class MenuBarMouseTest extends TestCase
     public function testAClickWhereAMenuTitleIsPaintedOpensThatMenu(): void
     {
         $app = $this->app();
-        // 120 columns, like every frame in this file: the icons widened the
-        // tab strip, and since the Todo tab joined it (roadmap 3.C) a 100-column
-        // bar has no room left for even the first menu name.
-        $frame = TuiRenderer::renderView($app, 120, 30)->body;
+        // 128 columns: the eight-tab strip needs that much before the third
+        // menu name is painted (the Todo tab took it past 100, the Context tab
+        // past 120); below that the budget drops menu names first.
+        $frame = TuiRenderer::renderView($app, 128, 30)->body;
         [$col, $row] = $this->locate($frame, $this->menuName(2));
 
         [$app] = $this->click($app, $col, $row);
