@@ -217,7 +217,7 @@ carried onto the `Agent` row and read by nothing after that:
 | `memory` | **Inert.** Carried; no memory tier is selected by it. |
 | `background` | Live: runs the delegation as a background session; the call's own `background` wins (see [What you can actually do with a preset today](#what-you-can-actually-do-with-a-preset-today)). |
 | `isolation` | Live: `worktree` runs the delegation (and a `/bg` session run as this agent) in a git worktree of its own; see [Teams and worktrees](#teams-and-worktrees). |
-| `color` | **Inert.** Carried; no surface renders it. |
+| `color` | Live: the agents strip, the Agent View header and activity line, and the dashboard row paint a run whose preset declared a colour this theme renders legibly. |
 
 The **Inert** rows are `FrontmatterKeyAudit::INERT`, which
 `InertFrontmatterDocumentationDriftTest` holds this table to, so the change

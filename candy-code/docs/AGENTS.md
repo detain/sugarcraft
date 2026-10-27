@@ -198,7 +198,10 @@ live. A background run has no live line; its result arrives as a message.
 ### The agents strip
 
 While runs are live, one row above the input box lists them, plus finished
-ones for 30 seconds: `agents: ⠋ explore · ✗ reviewer   (alt+↓)`.
+ones for 30 seconds: `agents: ⠋ explore · ✗ reviewer   (alt+↓)`. A run whose
+preset declared a `color` that the theme renders legibly is painted in it (the
+strip chip, the activity line, the Agent View header, and its dashboard row);
+everything else keeps the status colour.
 
 | Key | Does |
 |---|---|

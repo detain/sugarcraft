@@ -204,9 +204,11 @@ final class FrontmatterKeyAuditTest extends TestCase
         $presets = $registry->list();
 
         self::assertArrayHasKey('rev', $presets, 'an ignored key never refuses the preset');
+        // `color` is NOT reported: it went live with P-AGENT.a (the strip, the
+        // header, the activity line and the dashboard row render it). `colour`
+        // stays unknown and still suggests the live spelling.
         self::assertSame(
             ['rev' => [
-                '`color` is not acted on',
                 '`colour` is not an agent preset field (did you mean `color`?)',
             ]],
             $registry->ignoredFrontmatter(),

@@ -99,8 +99,11 @@ final class FrontmatterKeyAudit
      * - agent preset: `Task` honours `model`, `effort` and (narrow-only)
      *   `permissionMode` since roadmap 4.1, `background` since 4.3-2, and
      *   `isolation` since 4.9 (a worktree run, `/bg` too)
-     *   ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}); `memory` and
-     *   `color` are carried onto the roster row and read by nothing.
+     *   ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}); `memory` is
+     *   carried onto the roster row and read by nothing. `color` went LIVE
+     *   with P-AGENT.a: the agents strip, the Agent View header and activity
+     *   line, and the dashboard row paint a run whose preset declared a
+     *   colour this theme renders legibly.
      * - skill: no tool-scoping code reads `allowed-tools`/`disallowed-tools`;
      *   `model` is read only by `App::dispatchSkill()`, which has no
      *   production caller; `effort` is read by nothing; `context: fork` has no
@@ -121,7 +124,6 @@ final class FrontmatterKeyAudit
     public const INERT = [
         self::AGENT => [
             'memory' => [],
-            'color' => [],
         ],
         self::SKILL => [
             'allowed-tools' => [],
