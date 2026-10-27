@@ -9,7 +9,8 @@
     "C-SEC-1.a",
     "C-MCP-1.a",
     "C-AGT-2.a",
-    "C-AGT-1.a"
+    "C-AGT-1.a",
+    "C-SES-4.a"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -34,11 +35,12 @@
       "session": null
     },
     "C-SES-3.b": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SES-3.b",
       "branch": "cc/C-SES-3.b",
-      "session": "ses_e841b9937ffebSihQx02MjfnN2"
+      "session": null,
+      "note": "tip ce3637073 base 7949cc23d; NEW tests/Host/ShareHostCommandBufferTest.php for durations gate duty"
     },
     "C-SES-2.a": {
       "stage": "build",
@@ -48,23 +50,33 @@
       "session": "ses_e841b992fffeYG5E2v3ZOThtPD"
     },
     "C-SES-3.c": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SES-3.c",
       "branch": "cc/C-SES-3.c",
-      "session": null
+      "session": null,
+      "note": "tip 37235db0c base 2e1efc430"
     },
-    "C-SES-4.a": {
+    "C-SES-5.a": {
       "stage": "build",
       "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SES-4.a",
-      "branch": "cc/C-SES-4.a",
+      "worktree": "/home/sites/cc-cmp-C-SES-5.a",
+      "branch": "cc/C-SES-5.a",
+      "session": null
+    },
+    "C-AGT-2.c": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-AGT-2.c",
+      "branch": "cc/C-AGT-2.c",
       "session": null
     }
   },
   "blocked": [],
-  "extra_agents": 0,
+  "extra_agents": 1,
   "waves_closed": [],
-  "wave_loops": {},
+  "wave_loops": {
+    "1": "review r1 running"
+  },
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg"
 }
