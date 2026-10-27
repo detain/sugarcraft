@@ -3,23 +3,64 @@ description: Fresh, read-only reviewer for a whole welded wave of plan_compariso
 mode: subagent
 temperature: 0.1
 permission:
-  edit: deny
-  write: deny
+  edit:
+    "*": deny
+    "prompt_kit/findings/comparison-1026/*": allow
+    "prompt_kit/findings/comparison-1026/**": allow
+  write:
+    "*": deny
+    "prompt_kit/findings/comparison-1026/*": allow
+    "prompt_kit/findings/comparison-1026/**": allow
+    "/tmp/opencode/*": allow
+    "/tmp/opencode/**": allow
   bash:
     "*": deny
+    "cd *": allow
+    "pwd": allow
+    "true": allow
+    "false": allow
+    "echo*": allow
+    "test *": allow
+    "[ *": allow
+    "which *": allow
+    "realpath *": allow
+    "stat *": allow
+    "file *": allow
+    "ls *": allow
+    "find *": allow
+    "cat *": allow
+    "head*": allow
+    "tail*": allow
+    "wc*": allow
+    "sort *": allow
+    "uniq *": allow
+    "cut *": allow
+    "tr *": allow
+    "awk *": allow
+    "grep *": allow
+    "rg *": allow
+    "sed -n *": allow
+    "git -C *": allow
+    "git status*": allow
     "git diff*": allow
     "git log*": allow
     "git show*": allow
-    "git status*": allow
+    "git blame*": allow
+    "git branch*": allow
     "git rev-parse*": allow
-    "rg *": allow
-    "grep *": allow
-    "ls *": allow
-    "cat *": allow
-    "sed -n *": allow
+    "git cherry*": allow
+    "git merge-base*": allow
+    "git cat-file*": allow
+    "git ls-files*": allow
+    "git worktree list*": allow
     "php -l *": allow
-    "vendor/bin/phpunit *": allow
+    "php -v*": allow
+    "vendor/bin/phpunit*": allow
+    "*/vendor/bin/phpunit*": allow
+    "env -u LINES -u COLUMNS vendor/bin/phpunit *": allow
     "npx vitest run *": allow
+    "*/node_modules/.bin/vitest run *": allow
+    "env -u LINES -u COLUMNS npx vitest run *": allow
     "php scripts/gen-protocol-schema.php --check*": allow
     "php tools/gen-command-docs.php --check*": allow
     "php tools/gen-tool-docs.php --check*": allow

@@ -2,10 +2,33 @@
 description: Top-level driver for plan_comparison.md (candy-code comparison plan, 328 steps) — respawns the rolling run lead until every step is welded, asks the owner the LATE rulings, then runs the closeout gate; never edits code itself
 mode: primary
 permission:
-  edit: deny
-  write: deny
+  edit:
+    "*": deny
+    "prompt_kit/findings/comparison-1026/*": allow
+    "prompt_kit/findings/comparison-1026/**": allow
+  write:
+    "*": deny
+    "prompt_kit/findings/comparison-1026/*": allow
+    "prompt_kit/findings/comparison-1026/**": allow
+    "/tmp/opencode/*": allow
+    "/tmp/opencode/**": allow
   bash:
     "*": deny
+    "cd *": allow
+    "pwd": allow
+    "true": allow
+    "false": allow
+    "echo*": allow
+    "test *": allow
+    "head*": allow
+    "tail*": allow
+    "wc*": allow
+    "sort *": allow
+    "uniq *": allow
+    "cut *": allow
+    "awk *": allow
+    "find *": allow
+    "which *": allow
     "git status*": allow
     "git log*": allow
     "git diff*": allow
