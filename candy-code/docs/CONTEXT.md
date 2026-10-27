@@ -142,7 +142,12 @@ there: they are spliced in and your prompt goes out at once. They are used
 only while they still describe the conversation — a `/rewind`, `/clear`,
 session switch or another compaction discards them — and when there is no
 usable one yet, the tier parks your prompt until the summaries arrive. The
-request runs off the render loop, so nothing freezes.
+request runs off the render loop, so nothing freezes. The ahead-of-need
+request and the dispatch-time one are the same call — the TUI's
+`Chat::buildSummarizationRequest()`, and on the served path
+`SessionHost::requestAheadOfNeed()`, which runs exactly the request the next
+dispatch would have asked through that shared gate — so splice, fingerprint
+and billing never see two sources and the session never pays twice.
 
 **State, not narrative.** A summary is a structured session-state block
 (`Context\Compaction\StateSummaryTemplate`): goal, constraints, progress

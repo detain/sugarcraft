@@ -6051,10 +6051,13 @@ final class Runtime
             return;
         }
 
-        RuntimeNoticeSink::record('💭 ' . Lang::t('chat.memory.recalled_notice', [
-            'count' => $count,
-            'notes' => $count === 1 ? 'note' : 'notes',
-        ]));
+        // VIS-6-P1: the number-grammar is chosen at the call site through
+        // the key (the house `.one`/`.many` shape), never as an English
+        // word injected into the translated sentence as a parameter.
+        RuntimeNoticeSink::record('💭 ' . Lang::t(
+            $count === 1 ? 'chat.memory.recalled_notice.one' : 'chat.memory.recalled_notice.many',
+            ['count' => $count],
+        ));
     }
 
     /**

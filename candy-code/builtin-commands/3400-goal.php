@@ -14,9 +14,11 @@ use SugarCraft\Code\Palette\PaletteAction;
 //
 // WEB-2: GoalHostCommand serves status/set/clear whole (the state is the
 // transcript marker) and sends the FIRST round through the host's submit
-// route. The continuation loop still rides the TUI's turn settle, which a
-// headless host does not run — the served row says so instead of letting the
-// silence read as progress; wiring the judge loop server-side is a follow-up.
+// route. W7a-3 wired the continuation loop on the served path too: the host
+// runs the judge on its own turn settle through the shared GoalLoop table
+// (SessionHost::scheduleGoalJudge()), so a served session keeps the agent at
+// work until the goal is met, the budget is spent, or a stop fires — the
+// same decision table the TUI's 3.D-3 loop reads, so the two cannot drift.
 return BuiltInCommand::new(CommandSpec::new(
     'goal',
     Lang::t('cmd.goal.description'),

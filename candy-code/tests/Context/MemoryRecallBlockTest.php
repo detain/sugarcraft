@@ -13,6 +13,7 @@ use SugarCraft\Code\Context\TurnContextBlock;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Messages\UserMessage;
@@ -301,6 +302,39 @@ final class MemoryRecallBlockTest extends TestCase
         } finally {
             RuntimeNoticeSink::reset();
         }
+    }
+
+    /**
+     * VIS-6-P1: the row's number grammar is a CHOICE OF KEY, not an English
+     * word smuggled into the sentence as a parameter — a `{notes}`-style
+     * carrier would force every locale to ship English plurals inside the
+     * translated string. The catalog therefore holds exactly `.one` and
+     * `.many`, each carrying the count as a figure, and the bare key is gone
+     * (its presence would be a second door for the row to speak through).
+     */
+    public function testTheRecallRowChoosesOneOrManyKeysAndInjectsNoEnglishPlural(): void
+    {
+        $catalog = require \dirname(__DIR__, 2) . '/lang/en.php';
+        self::assertIsArray($catalog);
+
+        self::assertArrayNotHasKey('chat.memory.recalled_notice', $catalog, 'the plural-injected spelling must not come back');
+        foreach (['one', 'many'] as $form) {
+            $line = $catalog['chat.memory.recalled_notice.' . $form] ?? null;
+            self::assertIsString($line, 'the recall row needs a chat.memory.recalled_notice.' . $form . ' key');
+            self::assertStringContainsString('{count}', $line, 'the count rides as a figure, never as a spelled word choice');
+            self::assertStringNotContainsString('{notes}', $line, 'no English plural parameter may enter the translated sentence');
+        }
+
+        // And the call site picks between them: the shipped row for two
+        // notes pluralises through the .many key (byte-identical English).
+        self::assertSame(
+            'Recalled 2 notes for this turn',
+            Lang::t('chat.memory.recalled_notice.many', ['count' => 2]),
+        );
+        self::assertSame(
+            'Recalled 1 note for this turn',
+            Lang::t('chat.memory.recalled_notice.one', ['count' => 1]),
+        );
     }
 
     /**
