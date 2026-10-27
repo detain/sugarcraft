@@ -723,11 +723,13 @@ YAML;
 
     public function testTheAuditStillSoundsForPresetsOutsideThePackage(): void
     {
+        // C-AGT-3.b retired the preset's last inert key, so the sounding now
+        // rides the unknown half: a key this format does not know at all.
         file_put_contents($this->tempDir . '/loud.md', <<<'YAML'
 ---
 name: loud
-description: A preset declaring an inert key
-memory: project
+description: A preset declaring a key this build does not know
+enable: false
 ---
 # loud
 YAML);
@@ -737,7 +739,7 @@ YAML);
 
         $ignored = $registry->ignoredFrontmatter();
         $this->assertArrayHasKey('loud', $ignored);
-        $this->assertStringContainsString('memory', implode(' ', $ignored['loud']));
+        $this->assertStringContainsString('enable', implode(' ', $ignored['loud']));
     }
 
     /**

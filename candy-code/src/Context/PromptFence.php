@@ -168,6 +168,15 @@ final class PromptFence
      * byte inside the system prompt must not be able to spell them either; each
      * class still neutralises its own name in its own payload as well.
      *
+     * `agent-memory` is the twelfth entry (C-AGT-3.b): the fence around one
+     * agent's per-store note index inside a delegated child's prompt
+     * ({@see \SugarCraft\Code\Context\MemoryBlock::agentIndex()}). Its body is
+     * agent-written bytes — a note that quotes a fetched document included —
+     * so the closer must defang even where the tag is never forged in the
+     * parent prompt; the roster is what escape() refuses to trust, not what a
+     * given splice plants. It joins at zero golden bytes: the fence renders
+     * only in delegated prompts, which the goldens do not hold.
+     *
      * @var list<string>
      */
     private const TAGS = [
@@ -182,6 +191,7 @@ final class PromptFence
         'available-skills',
         'turn-context',
         'system-notice',
+        'agent-memory',
     ];
 
     /**

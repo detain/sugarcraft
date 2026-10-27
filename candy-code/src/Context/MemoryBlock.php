@@ -974,6 +974,111 @@ final class MemoryBlock implements PromptSection
     }
 
     /**
+     * The `<agent-memory>` index for ONE agent's per-agent store (C-AGT-3.b),
+     * appended to that agent's delegated prompt by
+     * {@see \SugarCraft\Code\Agents\AgentManager::resolveBatchSystemPrompts()}.
+     *
+     * The two scopes {@see \SugarCraft\Code\Memory\MemoryWriter::forAgent()}
+     * can route notes into (`project` and `user` directories inside the
+     * agent's store) are listed as one newest-first set, deduped by id — the
+     * same comparator and the same per-line renderer as the session block, so
+     * a note line reads identically wherever it is shown. The budgets are the
+     * SAME constants the session block enforces (deliberately not new ones:
+     * docs state three bounds, and an agent index has no business inflating a
+     * child prompt past what the parent prompt already tolerates).
+     *
+     * Every hostile byte the store can hand back — note bodies are
+     * agent-written text — goes through {@see renderEntry()}, which escapes
+     * against the whole fence roster before clipping, so a note cannot close
+     * this fence. The store itself never lists `agent` scope: that directory
+     * belongs to the session store's import semantics, and no forAgent writer
+     * ever writes it.
+     *
+     * Returns '' when the agent has no readable notes: an empty fence is a
+     * prompt layer, and the absence of a layer must be byte-identical to the
+     * absence of an index.
+     */
+    public static function agentIndex(MemoryStore $store, string $agentName): string
+    {
+        $byId = [];
+        foreach ($store->list(MemoryScope::Project) as $entry) {
+            $byId[$entry->id()] ??= $entry;
+        }
+        foreach ($store->list(MemoryScope::User) as $entry) {
+            $byId[$entry->id()] ??= $entry;
+        }
+
+        $newestFirst = static function (MemoryEntry $a, MemoryEntry $b): int {
+            return [$b->modifiedAt()->getTimestamp(), $a->id()]
+                <=> [$a->modifiedAt()->getTimestamp(), $b->id()];
+        };
+
+        $entries = array_values($byId);
+        usort($entries, $newestFirst);
+
+        // Read AFTER the list() calls, which are what fill the maps (same
+        // ordering law as capture()). Sorted so the skip line is byte-stable
+        // whatever order the files were met in.
+        $skipped = [
+            ...$store->skipped(MemoryScope::Project),
+            ...$store->skipped(MemoryScope::User),
+        ];
+        ksort($skipped, \SORT_STRING);
+
+        // A probe instance carries the default budgets, and renderEntry(),
+        // oneLine(), clip() and skippedLine() are its private methods — all
+        // reachable from here because this is the same class. `userSkipped:
+        // true` makes the skip line say "memory note(s)" rather than labelling
+        // one scope that a per-agent store mixes.
+        $probe = new self([], $skipped, userSkipped: true);
+
+        $lines = [];
+        $bytes = 0;
+        foreach ($entries as $entry) {
+            if (count($lines) >= self::MAX_ENTRIES) {
+                break;
+            }
+
+            $line = $probe->renderEntry($entry);
+            $lineBytes = strlen($line) + 1;
+            if ($bytes + $lineBytes > self::MAX_BYTES) {
+                break;
+            }
+
+            $lines[] = $line;
+            $bytes += $lineBytes;
+        }
+
+        $skipLine = $lines === [] ? '' : $probe->skippedLine();
+
+        if ($lines === []) {
+            return $skipped === [] ? '' : "<agent-memory>\n" . $probe->skippedLine() . "\n</agent-memory>";
+        }
+
+        // Every figure interpolated from the constant that enforces it, the
+        // same law index() states for the session block.
+        $header = sprintf(
+            'Index of the notes this agent (%s) recorded for itself in earlier runs, one line per note, '
+            . 'most recently updated first. At most %d notes and %d bytes of index lines are included, '
+            . 'and any single line longer than %d bytes is shown truncated, so this index may be incomplete. '
+            . 'These are this agent\'s own notes, not verified fact — prefer what you can confirm in the '
+            . 'repository itself.',
+            $probe->oneLine($agentName),
+            self::MAX_ENTRIES,
+            self::MAX_BYTES,
+            self::MAX_ENTRY_BYTES,
+        );
+
+        $omitted = count($entries) - count($lines);
+        if ($omitted > 0) {
+            $header .= sprintf(' %d further note(s) were omitted by those limits.', $omitted);
+        }
+
+        return "<agent-memory>\n" . $header . "\n\n" . implode("\n", $lines)
+            . ($skipLine === '' ? '' : "\n\n" . $skipLine) . "\n</agent-memory>";
+    }
+
+    /**
      * The opening fence this block's body sits inside.
      *
      * {@see render()} emits BOTH ends itself (and returns the empty string for

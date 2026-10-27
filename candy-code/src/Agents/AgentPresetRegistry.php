@@ -624,7 +624,7 @@ final class AgentPresetRegistry
             maxTurns: isset($data['maxTurns']) ? (int) $data['maxTurns'] : null,
             skills: self::nameList($data, 'skills', $filePath),
             mcpServers: self::nameList($data, 'mcpServers', $filePath),
-            memory: $this->parseMemoryScope(self::stringField($data, 'memory', $filePath) ?? 'user'),
+            memory: self::parseMemoryScope(self::stringField($data, 'memory', $filePath), $filePath),
             background: (bool) ($data['background'] ?? false),
             effort: self::parseEffort(self::stringField($data, 'effort', $filePath), $filePath),
             isolation: self::parseIsolation(self::stringField($data, 'isolation', $filePath), $filePath),
@@ -764,15 +764,16 @@ final class AgentPresetRegistry
      * {@see EnumSpelling::resolve()} is the sibling reader's camel-to-kebab
      * retry, extracted so both readers share one answer.
      *
-     * THE THREE FIELDS A DELEGATED RUN ACTS ON REFUSE AN UNKNOWN SPELLING
-     * (roadmap 4.1-1). `permissionMode` and `effort` change what `Task` does,
-     * and `isolation` will (4.9), so a typo there is no longer a harmless
-     * no-op: `effort: maximum` silently becoming `medium` — or `permissionMode:
-     * plna` silently becoming the session's mode — is a preset that does
-     * something its author did not write. The refusal names the file, the
-     * field and the accepted values, and {@see list()} turns it into a
-     * one-file skip the launch reports. `memory` still falls back: nothing
-     * reads it yet, and the launch audit names a value it ignores.
+     * THE FOUR FIELDS A DELEGATED RUN ACTS ON REFUSE AN UNKNOWN SPELLING
+     * (roadmap 4.1-1, the fourth added by C-AGT-3.b). `permissionMode` and
+     * `effort` change what `Task` does, `isolation` will (4.9), and `memory`
+     * selects the per-agent store its notes and index use, so a typo there is
+     * no longer a harmless no-op: `effort: maximum` silently becoming
+     * `medium` — or `permissionMode: plna` silently becoming the session's
+     * mode, or `memory: projet` silently becoming no store at all — is a
+     * preset that does something its author did not write. The refusal names
+     * the file, the field and the accepted values, and {@see list()} turns it
+     * into a one-file skip the launch reports.
      *
      * @throws \InvalidArgumentException for a declared value no case spells
      */
@@ -781,9 +782,16 @@ final class AgentPresetRegistry
         return $value === null ? PermissionMode::Default : self::declaredCase(PermissionMode::class, 'permissionMode', $value, $filePath);
     }
 
-    private function parseMemoryScope(string $value): MemoryScope
+    /**
+     * Null when the file declares no memory tier — the agent then has no
+     * per-agent store at all (see {@see \SugarCraft\Code\Memory\AgentMemory}
+     * and {@see AgentPreset}); a declared tier must spell a real case.
+     *
+     * @throws \InvalidArgumentException for a declared value no case spells
+     */
+    private static function parseMemoryScope(?string $value, string $filePath): ?MemoryScope
     {
-        return EnumSpelling::resolve(MemoryScope::class, $value) ?? MemoryScope::User;
+        return $value === null ? null : self::declaredCase(MemoryScope::class, 'memory', $value, $filePath);
     }
 
     /**

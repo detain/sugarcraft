@@ -20,6 +20,12 @@ use SugarCraft\Code\Skills\SkillSource;
  * run sends the declared effort with its requests, and an implied `medium`
  * would override the provider's own per-model default for every preset that
  * never asked for one.
+ *
+ * `$memory` is null when the file declares none, and null means no agent
+ * memory at all (C-AGT-3.b): an implied `user` tier would give every preset
+ * in the tree a private store, an index layer in its child prompts, and a
+ * `Memory` grant none of them asked for. The tier a file does declare selects
+ * where that agent's own notes live — see {@see \SugarCraft\Code\Memory\AgentMemory}.
  */
 final class AgentPreset
 {
@@ -33,7 +39,7 @@ final class AgentPreset
         public readonly ?int $maxTurns = null,
         public readonly array $skills = [],
         public readonly array $mcpServers = [],
-        public readonly MemoryScope $memory = MemoryScope::User,
+        public readonly ?MemoryScope $memory = null,
         public readonly bool $background = false,
         public readonly ?Effort $effort = null,
         public readonly ?Isolation $isolation = null,

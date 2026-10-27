@@ -601,7 +601,10 @@ final class ForeignAgentPresetRegistry
             maxTurns: isset($data['maxTurns']) ? (int) $data['maxTurns'] : null,
             skills: $this->importNameList($data['skills'] ?? null, 'claude', $agentName, 'skills'),
             mcpServers: $this->importNameList($data['mcpServers'] ?? null, 'claude', $agentName, 'mcpServers'),
-            memory: $this->enum(MemoryScope::class, $data['memory'] ?? null) ?? MemoryScope::User,
+            // Lenient like every other foreign field: an absent or unknown
+            // tier reads as null — no per-agent store — never a refusal,
+            // because a foreign file is not this project's to reject (C-AGT-3.b).
+            memory: $this->enum(MemoryScope::class, $data['memory'] ?? null),
             background: $this->strictFlag($data['background'] ?? null, 'claude', $agentName, 'background'),
             effort: $this->enum(Effort::class, $data['effort'] ?? null),
             isolation: $this->enum(Isolation::class, $data['isolation'] ?? null),

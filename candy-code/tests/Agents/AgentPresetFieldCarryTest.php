@@ -142,9 +142,10 @@ final class AgentPresetFieldCarryTest extends TestCase
     }
 
     /**
-     * `isolation` is the only nullable enum in the set, and null is a
-     * distinct state from {@see Isolation::None} on the preset. Pin it apart
-     * so a `?? Isolation::None` fallback cannot creep in.
+     * `isolation` and (since C-AGT-3.b) `memory` are nullable enums on the
+     * row, and null is a distinct state from {@see Isolation::None} — and from
+     * every memory tier — on the preset. Pin them apart so a
+     * `?? Isolation::None` or `?? MemoryScope::User` fallback cannot creep in.
      */
     public function testFromPresetKeepsANullIsolationDistinctFromNone(): void
     {
@@ -362,7 +363,7 @@ final class AgentPresetFieldCarryTest extends TestCase
         $this->assertSame(PermissionMode::Default, $agent->permissionMode);
         $this->assertNull($agent->maxTurns);
         $this->assertNull($agent->isolation);
-        $this->assertSame(MemoryScope::User, $agent->memory);
+        $this->assertNull($agent->memory, 'C-AGT-3.b: no stored tier is no store at all, not the user tier');
         $this->assertNull($agent->effort, 'no effort is the provider default, not medium (4.1-1)');
         $this->assertSame(SkillSource::Native, $agent->source);
     }
@@ -389,7 +390,7 @@ final class AgentPresetFieldCarryTest extends TestCase
         $this->assertSame(PermissionMode::Default, $agent->permissionMode);
         $this->assertNull($agent->effort);
         $this->assertNull($agent->isolation);
-        $this->assertSame(MemoryScope::User, $agent->memory);
+        $this->assertNull($agent->memory, 'an unknown tier decodes to no store (C-AGT-3.b)');
         $this->assertSame(SkillSource::Native, $agent->source);
     }
 

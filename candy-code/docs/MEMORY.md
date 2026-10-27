@@ -261,7 +261,12 @@ too, so a note the model saves lands exactly where the user's would: a
 host one, otherwise the home store (and the reply says so). An id resolves in
 the repository store first, the same precedence the prompt's index gives a
 shared id, so `view`, `str_replace` and `delete` reach the note the index
-shows. The tool cannot write `agent` scope; that scope is for imports.
+shows. The tool cannot write `agent` scope; that scope is for imports. Inside a
+delegation whose preset declares `memory:` the writer is re-bound before any of
+this applies (`MemoryWriter::forAgent()`, C-AGT-3.b): every action then reads
+and writes that agent's own store — nothing the session, the repository or
+another agent can see — and the tool is granted automatically with the
+declaration.
 
 The tool is **no-ask** in the permission gate: it is allowed in every mode,
 `plan` and `dont-ask` included, because it writes only the memory directories
@@ -275,6 +280,9 @@ The store has three scopes — `user`, `project` and `agent`. (The enum spells t
 third `MemoryScope::Local`; `MemoryStore::normalizeScope()` maps it onto the
 `agent` directory, per the naming note above.) They are three storage tiers and
 two prompt tiers: **`user` and `project` reach the prompt; `agent` never does.**
+That claim is about the session store; an agent whose preset declares `memory:`
+folds a different store — its own — into the delegated run's prompt, covered by
+[Per-agent memory](#per-agent-memory-memory) below.
 
 `Runtime::buildSystemPrompt()` folds in a `MemoryBlock`
 (`src/Context/MemoryBlock.php`), captured once per **session** through
@@ -492,7 +500,8 @@ So `MemoryBlock::renderEntry()` runs every assembled note line through
 `PromptFence::escape()` before the per-entry clip. `PromptFence` is the single
 authority owning the prompt's fence-tag roster — `env`, `project-memory`,
 `repo-map`, `project-instructions`, `system-reminder`, `user-rules`,
-`prior-summary`, `harness-injected`, `available-skills`, `turn-context`, `system-notice` — and its `escape()` rewrites only the leading
+`prior-summary`, `harness-injected`, `available-skills`, `turn-context`, `system-notice`,
+`agent-memory` — and its `escape()` rewrites only the leading
 `<` of a recognised open/close tag to `&lt;`. A tag carrying attributes counts,
 however it is spelled — `<system-reminder priority="high">`, an attribute list broken
 across lines, an opener with no `>` at all — because a model reads each as the
@@ -554,6 +563,50 @@ replaces `~/.claude`, and while it is set `CLAUDE_CODE_PROJECT_DIR_NAME` replace
 [`ENVIRONMENT.md`](ENVIRONMENT.md#claude-code-variables) tabulates. A relative,
 world-writable or foreign-owned `CLAUDE_CONFIG_DIR` is refused, like the derived
 home, and the refusal is named in the reply.
+
+---
+
+## Per-agent memory (`memory:`)
+
+An agent preset can declare `memory: user`, `memory: project` or
+`memory: local` — the field selects a note store of the agent's own
+(`src/Memory/AgentMemory.php`, C-AGT-3.b). Without the key the agent has no
+store at all: no index rides its prompt and no note of its own is kept.
+
+The three spellings are three homes for one layout,
+`<base>/.candy-code/agent-memory[-local]/<agent>/<scope>/<id>.md`:
+
+- `user` — under the resolved home (`~/.candy-code/agent-memory/<agent>/`),
+  shared by every checkout on the machine;
+- `project` — under the project root the run sees, the sibling of
+  `ProjectMemoryWriter`'s tracked repo store, so notes describing the code
+  ride commits with it;
+- `local` — under the project root too, in `agent-memory-local/`, into which
+  the tool plants a `*`-only `.gitignore` the first time: these are the
+  agent's private working notes and they never ride a commit.
+
+`<agent>` is the preset name carried through the store's note-id grammar
+(unsafe characters replaced, length capped, the index stem refused), so two
+agents never share a directory and a hostile preset name cannot escape the
+base. The tiers hold the same `project`/`user` scope directories the `Memory`
+tool writes; the agent-scope directory of a session store stays what it was.
+
+Two live paths read the declaration:
+
+- **the index.** When a delegation's preset declares `memory:` and the store
+  holds notes, `AgentManager` appends a fenced `<agent-memory>` index of them
+  to the child prompt — the same one-line-per-note shape, budgets and escape
+  law as `<project-memory>` (`MemoryBlock::agentIndex()`). A store with no
+  notes adds zero bytes, and the fold only reads: prompt assembly never
+  creates a directory.
+- **the tool.** The `Memory` tool inside such a delegation is re-bound to the
+  agent store, and granted automatically when the roster did not name it. A
+  preset that writes `Memory` into `disallowedTools` does not get it back
+  through that side door.
+
+An old background-session record whose frame carries `memory` as the `user`
+tier (where an earlier build defaulted one) simply opens a fresh, empty store
+of its own — nothing reaches its prompt until a note exists.
 
 ---
 
@@ -858,6 +911,7 @@ transcript notice the first time it happens.
 ├── memory/.dream-<key>.json  the dream pass's throttle and journal cursor
 ├── memory/.compaction-journal-<key>.jsonl  every model-written compaction summary
 ├── memory/.git/       the memory history (`/memory log`, `/memory restore`)
+├── agent-memory/<agent>/<scope>/  per-agent stores, `user` tier (this file)
 ├── cache/embeddings.sqlite  memory-recall vectors (derived; safe to delete)
 ├── agents/*.md        agent presets            → AGENTS_AUTHORING.md
 ├── skills/*/SKILL.md  skills                   → SKILLS.md

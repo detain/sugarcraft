@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Agents;
 
 use SugarCraft\Code\Commands\ShareCommand;
+use SugarCraft\Code\Context\MemoryBlock;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Events\SubAgentActivity;
+use SugarCraft\Code\Memory\AgentMemory;
 use SugarCraft\McpClient\McpRouter;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionGate;
@@ -2312,7 +2314,11 @@ final class AgentManager
      * the session's fenced `<available-skills>` layer is appended to every
      * member after its bodies (silent ones too, it being a capability layer
      * rather than a declaration), which for an empty registry renders '' and
-     * leaves this method's bytes exactly what they were. The null-map answer
+     * leaves this method's bytes exactly what they were — and, since
+     * C-AGT-3.b, with the member's own `<agent-memory>` index appended just
+     * under the listing whenever its preset declares a `memory:` tier and the
+     * store has notes to list. A non-empty memory index counts as a
+     * declaration exactly as the listing does. The null-map answer
      * moves with it: null now means "nothing declared anything AND nothing
      * there was to list", the only case where forwarding the shared prompt
      * verbatim loses no layer.
@@ -2351,13 +2357,25 @@ final class AgentManager
             // verbatim-forward pins keep green.
             $section = $this->skillListingSection($agent->agent);
 
+            // C-AGT-3.b: the member's OWN per-agent note index, declared by
+            // its preset's `memory:` tier. Like the listing it counts as a
+            // declaration when non-empty — forwarding the shared prompt
+            // verbatim would drop the very layer it exists to deliver — and
+            // it renders '' (never a stub fence) for an agent with no tier,
+            // no store yet, or no readable notes, so a preset that declares
+            // nothing keeps byte-identical prompts.
+            $index = $agent->agent->memory === null ? '' : $this->agentMemoryIndex($agent->agent);
+
             if ($agent->agent->prompt === '' && $agent->agent->skillNames === []) {
-                if ($section === '') {
+                if ($section === '' && $index === '') {
                     $prompts[$agent->id] = $sharedPrompt;
                     continue;
                 }
 
-                $prompts[$agent->id] = self::appendPromptLayer($sharedPrompt ?? '', $section);
+                $prompts[$agent->id] = self::appendPromptLayer(
+                    self::appendPromptLayer($sharedPrompt ?? '', $index),
+                    $section,
+                );
                 $anyDeclared = true;
                 continue;
             }
@@ -2380,10 +2398,13 @@ final class AgentManager
                 $own .= $skill->systemPromptContribution();
             }
 
-            // Bodies first, listing last: the layer's own mandate text reads
-            // as an index over what follows it in the same prompt only if the
-            // granted bodies are already above — and the exclusion set makes
-            // the two halves disjoint anyway (see skillListingSection()).
+            // Bodies first, memory index next, listing last (C-AGT-3.b): the
+            // layer's own mandate text reads as an index over what follows it
+            // in the same prompt only if the granted bodies are already above
+            // — and the exclusion set makes the two halves disjoint anyway
+            // (see skillListingSection()). The agent's own store sits between:
+            // it is the agent's history, not a capability the session lists.
+            $own = self::appendPromptLayer($own, $index);
             $own = self::appendPromptLayer($own, $section);
 
             $prompts[$agent->id] = ($sharedPrompt === null || $sharedPrompt === '')
@@ -2428,6 +2449,35 @@ final class AgentManager
         return SkillListingSection::render(
             (new SkillMatcher())->listForPrompt($this->skillRegistry, $agent->skillNames),
         );
+    }
+
+    /**
+     * The fenced `<agent-memory>` index for one member whose preset declared
+     * a `memory:` tier (C-AGT-3.b), or '' when there is nothing to list.
+     *
+     * FAILS OPEN, and that is the difference from the skill bodies above. A
+     * granted-but-missing skill makes the prompt LIE about a body it will
+     * never deliver, so the batch is refused; an agent's own note store is
+     * additive history — its absence leaves a child that simply has no notes
+     * yet, which is the honest state on a fresh checkout, an unreadable home,
+     * or a tier whose directory was never created. The read path never
+     * creates anything (AgentMemory's reader law), and no disk or permission
+     * fault on the way to an optional layer may kill a delegation that was
+     * otherwise accepted.
+     */
+    private function agentMemoryIndex(Agent $agent): string
+    {
+        try {
+            $store = AgentMemory::readStore(
+                $agent->memory,
+                $agent->name,
+                $agent->environmentRoot ?? (string) getcwd(),
+            );
+        } catch (\Throwable) {
+            return '';
+        }
+
+        return $store === null ? '' : MemoryBlock::agentIndex($store, $agent->name);
     }
 
     /**

@@ -23,6 +23,9 @@ use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\SystemMessage;
 use SugarCraft\Code\Messages\UserMessage;
+use SugarCraft\Code\Memory\MemoryWriter;
+use SugarCraft\Code\Permissions\PermissionAction;
+use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Support\ParentProcessGuard;
 use SugarCraft\Code\Support\SiblingSpendLedger;
 use SugarCraft\Code\Providers\CompleteRequest;
@@ -1340,10 +1343,19 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // only the runs it delegates in turn. `Subagents` and
         // `InterruptAgent` stay with the session's agent: a delegating run
         // waits on its nested runs, so it has no running child to manage.
+        // C-AGT-3.b: `memory:` on the preset makes this run's `Memory` tool
+        // write the agent's OWN store, not the session's. The store is keyed by
+        // the agent's name and the preset's tier, resolved against the root the
+        // run itself sees (its environment root, falling back to the working
+        // directory the session was started in).
+        $agentMemory = $subAgent->agent->memory;
+        $memoryRoot = $subAgent->agent->environmentRoot ?? (string) getcwd();
         $tools = [];
         foreach ($granted ?? $engine->tools() as $tool) {
             if ($tool instanceof SendMessageTool) {
                 $tools[] = $tool->asChildOf($subAgent->id, $this->parentAgentId ?? SendMessageTool::MAIN, $scope);
+            } elseif ($tool instanceof MemoryTool && $agentMemory !== null) {
+                $tools[] = $tool->withWriter(MemoryWriter::forAgent($subAgent->agent->name, $agentMemory, $memoryRoot));
             } elseif (!$tool instanceof DelegatesToEngine) {
                 $tools[] = $tool;
             } elseif ($tool instanceof self && $childDepth < $this->maxDelegationDepth) {
@@ -1351,6 +1363,17 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     ->withDelegationLimits($this->maxDelegationDepth, $this->maxConcurrentAgents)
                     ->mutate(['slotRoot' => $this->slotRoot]);
             }
+        }
+        // C-AGT-3.b: declaring `memory:` also grants the tool. A roster that
+        // named its tools never carried `Memory` unless it asked, so without
+        // this the preset's own store would have an index going in and no way
+        // to write anything back. The grant honours the deny floor the manager
+        // applies to declared rosters: a preset that wrote `Memory` into
+        // `disallowedTools` does not get it back through the side door. A
+        // denial scoped with arguments is not a floor here — it gates at the
+        // call, exactly as {@see AgentManager::resolveGrantedTools()} leaves it.
+        if ($agentMemory !== null && !self::carriesMemoryTool($tools) && !self::memoryToolDenied($subAgent->agent)) {
+            $tools[] = new MemoryTool(MemoryWriter::forAgent($subAgent->agent->name, $agentMemory, $memoryRoot));
         }
         // ISS-065 (full fix): the roster above — granted by the manager or
         // inherited from this engine — is made of the session's tool
@@ -2245,6 +2268,50 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             usage: $spent,
         );
         // @endregion finish
+    }
+
+    /**
+     * C-AGT-3.b: whether the roster already carries a `Memory` tool — either
+     * the session's instance the loop re-bound, or (before any re-bind could
+     * apply) one the granted roster named itself. The auto-grant adds exactly
+     * one instance and only when none is present, so a run never holds two
+     * memories.
+     *
+     * @param list<Tool> $tools
+     */
+    private static function carriesMemoryTool(array $tools): bool
+    {
+        foreach ($tools as $tool) {
+            if ($tool instanceof MemoryTool) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * C-AGT-3.b: the deny floor for the `Memory` auto-grant, derived the same
+     * way {@see AgentManager::resolveGrantedTools()} reads `disallowedTools`:
+     * a denial without an argument pattern that names the tool by its exact or
+     * wildcard name denies it; a scoped denial is left to the per-call gate.
+     * Without this, a preset that both declares `memory:` and writes `Memory`
+     * into `disallowedTools` would have the manager filter the tool out of its
+     * granted roster only for the auto-grant to hand it back — and with the
+     * engine's own tool set passing through unfiltered when the preset named no
+     * tools, the silent-roster case would carry it anyway.
+     */
+    private static function memoryToolDenied(Agent $agent): bool
+    {
+        foreach ($agent->disallowedTools as $denial) {
+            $rule = new PermissionRule((string) $denial, PermissionAction::Deny);
+            if ($rule->argumentPattern() === null
+                && PermissionRule::matchesToolName($rule->toolNamePattern(), MemoryTool::NAME)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

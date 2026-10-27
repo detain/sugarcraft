@@ -23,7 +23,10 @@ use SugarCraft\Code\Tools\ToolResult;
  *
  * Every write goes through {@see MemoryWriter}, the same router `/memory add`
  * uses, so a note the model saves lands exactly where the user's would and an
- * id resolves to the copy the prompt's index shows.
+ * id resolves to the copy the prompt's index shows. Inside a delegation whose
+ * preset declares `memory:`, {@see TaskTool} re-binds this tool's writer with
+ * {@see MemoryWriter::forAgent()} through {@see withWriter()} — same
+ * behaviour, different store: the agent's own (C-AGT-3.b).
  *
  * PERMISSION CLASS: no-ask. `view` and `recall` read; `save`, `str_replace` and
  * `delete` write only the memory directories the harness owns (the home store
@@ -51,6 +54,18 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog
     public static function fromCatalog(ToolBuildContext $context): self
     {
         return new self($context->memory);
+    }
+
+    /**
+     * A copy of this tool bound to another writer (C-AGT-3.b). TaskTool uses
+     * it to re-point a delegation's `Memory` at the per-agent store its
+     * preset's `memory:` tier selects; the tool's behaviour is otherwise the
+     * writer's, so the re-bind changes where notes land, nothing the model
+     * sees.
+     */
+    public function withWriter(?MemoryWriter $writer): self
+    {
+        return new self($writer);
     }
 
     public function name(): string

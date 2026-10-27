@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Memory;
 
+use SugarCraft\Code\Agents\MemoryScope;
 use SugarCraft\Code\Context\ProjectMemoryWriter;
 
 /**
@@ -53,6 +54,26 @@ final class MemoryWriter
     public static function new(MemoryStore|\Closure $home, string $root): self
     {
         return new self($home instanceof MemoryStore ? static fn (): MemoryStore => $home : $home, $root);
+    }
+
+    /**
+     * A writer bound to ONE agent's per-agent store (C-AGT-3.b), used by
+     * {@see \SugarCraft\Code\Tools\BuiltIn\MemoryTool} inside a delegation
+     * whose preset declares `memory:`.
+     *
+     * The project root is deliberately '': there is no repository store here,
+     * so every scope a note carries — including `project`, the tool's default
+     * — routes to the agent's own store (its `<scope>` directory inside it).
+     * A delegated run cannot reach the session's home store or the checkout's
+     * repo store through this writer, and the agent's notes cannot leak into
+     * either; the index the child prompt shows is the index of this store.
+     */
+    public static function forAgent(string $agentName, MemoryScope $scope, string $projectRoot): self
+    {
+        return new self(
+            static fn (): ?MemoryStore => AgentMemory::storeFor($scope, $agentName, $projectRoot, create: true),
+            '',
+        );
     }
 
     /** The home store, or null when it cannot be opened. */

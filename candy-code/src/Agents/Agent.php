@@ -36,7 +36,10 @@ final readonly class Agent
      *    the delegation a background session unless the call says otherwise;
      *    `$isolation` (`worktree`) runs it, and a `/bg` session run as this
      *    agent, in a git worktree of its own ({@see SubAgent::$isolation}).
-     *    `memory` and `color` are still read by nothing.
+     *    `memory` selects the agent's own per-agent memory store (C-AGT-3.b):
+     *    its note index rides the child prompt and the `Memory` tool in a
+     *    delegation binds to it; `color` is read by the agents strip and the
+     *    dashboard (P-AGENT.a).
      *  - What they buy is that the value has somewhere to put them. Before
      *    this, a consumer that wanted a registered agent's `maxTurns` had to
      *    go back to the registry and re-read the preset, which is only
@@ -101,7 +104,7 @@ final readonly class Agent
         public PermissionMode $permissionMode = PermissionMode::Default,
         public ?int $maxTurns = null,
         public array $mcpServers = [],
-        public MemoryScope $memory = MemoryScope::User,
+        public ?MemoryScope $memory = null,
         public bool $background = false,
         public ?Effort $effort = null,
         public ?Isolation $isolation = null,
@@ -173,7 +176,13 @@ final readonly class Agent
                 : PermissionMode::Default,
             maxTurns: isset($data['max_turns']) ? (int) $data['max_turns'] : null,
             mcpServers: $data['mcp_servers'] ?? [],
-            memory: MemoryScope::tryFrom((string) ($data['memory'] ?? '')) ?? MemoryScope::User,
+            // Null, not User, for an absent or unknown value: no agent store
+            // is a real state (C-AGT-3.b). Frames written by earlier builds
+            // carry 'user' explicitly, so a suspended run resumed across this
+            // change restores the USER tier — disclosed in AgentMemory: that
+            // store starts empty, so the resume gains an empty option, not
+            // someone else's notes.
+            memory: MemoryScope::tryFrom((string) ($data['memory'] ?? '')),
             background: $data['background'] ?? false,
             // Null, not Medium, for an absent or unknown value: no effort is a
             // real state (the provider's own default), see the constructor.
@@ -338,11 +347,13 @@ final readonly class Agent
      *
      * The ten preset-derived fields ARE present, in snake_case like their
      * neighbours and with their enums flattened to `->value`, so the array
-     * stays JSON-encodable. `isolation` is the one nullable enum, so it is
-     * `?->value` and writes `null` rather than a sentinel string — `null` is
-     * a distinct state from {@see Isolation::None} on {@see AgentPreset}, and
-     * collapsing the two here would make the round trip lossy in the one
-     * place it is easiest not to notice.
+     * stays JSON-encodable. `memory`, `effort` and `isolation` are the
+     * nullable enums, so they are `?->value` and write `null` rather than a
+     * sentinel string — `null` is a distinct state on {@see AgentPreset}
+     * (`null` memory means the agent has no per-agent store at all, `null`
+     * isolation is not {@see Isolation::None}), and collapsing the two here
+     * would make the round trip lossy in the one place it is easiest not to
+     * notice.
      */
     public function toArray(): array
     {
@@ -360,7 +371,7 @@ final readonly class Agent
             'permission_mode' => $this->permissionMode->value,
             'max_turns' => $this->maxTurns,
             'mcp_servers' => $this->mcpServers,
-            'memory' => $this->memory->value,
+            'memory' => $this->memory?->value,
             'background' => $this->background,
             'effort' => $this->effort?->value,
             'isolation' => $this->isolation?->value,

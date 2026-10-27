@@ -131,14 +131,16 @@ final class AgentPresetTest extends TestCase
         $this->assertSame([], $preset->mcpServers);
     }
 
-    public function testDefaultMemoryIsUser(): void
+    public function testDefaultMemoryIsNone(): void
     {
         $preset = new AgentPreset(
             name: 'default-memory-test',
             description: 'Test default memory scope',
         );
 
-        $this->assertSame(MemoryScope::User, $preset->memory);
+        // C-AGT-3.b: absent is not the user tier any more — no declaration
+        // means the agent has no per-agent store at all.
+        $this->assertNull($preset->memory);
     }
 
     public function testDefaultBackgroundIsFalse(): void

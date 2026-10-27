@@ -18,8 +18,8 @@ use SugarCraft\Code\Tui\Components\PaneLabel;
  *  - an INERT key: parsed, typed, carried on the value object, and consumed by
  *    nothing on a live path. `context: fork` on a skill was documented in the
  *    README as running the skill in an isolated sub-agent; no production code
- *    dispatches it. A preset's `color:` rides onto the roster row and no
- *    surface renders it.
+ *    dispatches it. A skill's `effort:` rides onto the roster row and no live
+ *    path applies it.
  *  - an UNKNOWN key: a typo (`permisionMode`, `keyword`, `enable: false`) or
  *    another tool's field. The typo is the dangerous one — a rule written
  *    `enable: false` stays enabled — and nothing said so.
@@ -96,14 +96,16 @@ final class FrontmatterKeyAudit
      * of those is not reported: `model: inherit` and `context: thread` ask for
      * exactly what happens.
      *
-     * - agent preset: `Task` honours `model`, `effort` and (narrow-only)
-     *   `permissionMode` since roadmap 4.1, `background` since 4.3-2, and
-     *   `isolation` since 4.9 (a worktree run, `/bg` too)
-     *   ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}); `memory` is
-     *   carried onto the roster row and read by nothing. `color` went LIVE
-     *   with P-AGENT.a: the agents strip, the Agent View header and activity
-     *   line, and the dashboard row paint a run whose preset declared a
-     *   colour this theme renders legibly.
+     * - agent preset: no key is inert here any more. `Task` honours `model`,
+     *   `effort` and (narrow-only) `permissionMode` since roadmap 4.1,
+     *   `background` since 4.3-2, and `isolation` since 4.9 (a worktree run,
+     *   `/bg` too) ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}); `color`
+     *   went LIVE with P-AGENT.a: the agents strip, the Agent View header and
+     *   activity line, and the dashboard row paint a run whose preset declared a
+     *   colour this theme renders legibly; and `memory` went LIVE with
+     *   C-AGT-3.b: it selects the agent's own note store, that store's index is
+     *   appended to the delegated prompt, and the `Memory` tool in a delegation
+     *   is re-bound to write that store (and granted when absent).
      * - skill: no tool-scoping code reads `allowed-tools`/`disallowed-tools`;
      *   `model` is read only by `App::dispatchSkill()`, which has no
      *   production caller; `effort` is read by nothing; `context: fork` has no
@@ -122,9 +124,7 @@ final class FrontmatterKeyAudit
      * @var array<string, array<string, list<string>>>
      */
     public const INERT = [
-        self::AGENT => [
-            'memory' => [],
-        ],
+        self::AGENT => [],
         self::SKILL => [
             'allowed-tools' => [],
             'disallowed-tools' => [],

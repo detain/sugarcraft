@@ -323,7 +323,7 @@ final class ForeignAgentPresetRegistryTest extends TestCase
 
         $this->assertSame(PermissionMode::Default, $preset->permissionMode);
         $this->assertNull($preset->effort, 'an unspellable effort is no effort, never an implied medium (4.1-1)');
-        $this->assertSame(MemoryScope::User, $preset->memory);
+        $this->assertNull($preset->memory, 'C-AGT-3.b: an unspellable tier is no store at all, never an implied user one');
         $this->assertNull($preset->isolation);
     }
 

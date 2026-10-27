@@ -203,8 +203,8 @@ omitting the row.
 Reaching the roster is not the same as changing what a delegated run does.
 `Task` runs every sub-agent on the session's provider and under the session's
 permission gate (`TaskTool`); its model and reasoning effort are the agent's,
-its permission mode can only narrow the session's, and several fields are
-carried onto the `Agent` row and read by nothing after that:
+its permission mode can only narrow the session's, and every field below
+reaches a live path:
 
 | Field | Effect today |
 |---|---|
@@ -214,18 +214,19 @@ carried onto the `Agent` row and read by nothing after that:
 | `model` | Live: see [Which model a delegation runs on](#which-model-a-delegation-runs-on). |
 | `effort` | Live: sent with every request of the run as its reasoning effort (`sglang` only; ignored with a note elsewhere). |
 | `permissionMode` | Live, narrow-only: when stricter than the session's mode, a second gate judges every call ([`PERMISSIONS.md`](PERMISSIONS.md#a-sub-agents-mode)). |
-| `memory` | **Inert.** Carried; no memory tier is selected by it. |
+| `memory` | Live: selects the agent's own note store (C-AGT-3.b) — that tier's index is appended to the delegated prompt, and the `Memory` tool in the run writes that store (granted automatically when declared). Without the key the agent has no store at all. |
 | `background` | Live: runs the delegation as a background session; the call's own `background` wins (see [What you can actually do with a preset today](#what-you-can-actually-do-with-a-preset-today)). |
 | `isolation` | Live: `worktree` runs the delegation (and a `/bg` session run as this agent) in a git worktree of its own; see [Teams and worktrees](#teams-and-worktrees). |
 | `color` | Live: the agents strip, the Agent View header and activity line, and the dashboard row paint a run whose preset declared a colour this theme renders legibly. |
 
-The **Inert** rows are `FrontmatterKeyAudit::INERT`, which
-`InertFrontmatterDocumentationDriftTest` holds this table to, so the change
-that honours one of them deletes its entry there and this row together. A
-preset that sets an inert field to anything but its no-op value — or declares
-a key outside this table, such as a misspelt `permisionMode` — is still
-loaded, and the launch names it in one aggregated row (stderr and transcript)
-with a did-you-mean for a near miss.
+As of C-AGT-3.b this table has no **Inert** rows left:
+`FrontmatterKeyAudit::INERT` names no agent preset key, and
+`InertFrontmatterDocumentationDriftTest` pins that equality against this table
+in both directions, so a step that let a preset field go silent again would add
+its entry there and mark this row together. A preset that declares a key
+outside this table, such as a misspelt `permisionMode`, is still loaded, and
+the launch names it in one aggregated row (stderr and transcript) with a
+did-you-mean for a near miss.
 
 ### Which model a delegation runs on
 
