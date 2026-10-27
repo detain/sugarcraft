@@ -1,0 +1,12 @@
+# C-SEC-3.a REVIEW-1 (round 1, tip e34bd1835)
+
+[Persisted verbatim from reviewer reply — sandbox denied writes/php; gates not re-run here.]
+
+Sandbox denies writes to the repo evidence dir — full review text follows for lead persistence to `prompt_kit/findings/comparison-1026/lanes/C-SEC-3.a/REVIEW-1.md`.
+
+VERDICT: CLEAN (0C/0M; gates not re-runnable — no php/vendor in sandbox, weld must re-run: new pair 12T/33A, 83T/1342A family, DocFigure 91T, five-guard staleness-pair-only)
+- Verified: 13 files = brief list exactly; fail-closed provenance (tier hard-coded `McpPromptCommands::TIER` in spec()+materialize(), server bytes can't forge; Bundle badge only via `bundleDirs`; directive-less `expandTemplate` self-refuses CommandSpec.php:622; `CommandShellPostureTest.php:103` roster pin `['Bundle','Mcp']` catches new enum cases); refusal lands before trust and before `$onGateEvaluated` (no gate mutation); Mcp forks for fetch, refused postures never fork; project sentence hunk byte-untouched (git show); PLUGINS.md churn is §1.8 in-step doc-truth (heading "two declined surfaces" falsified by this step), not creep; lang keys used exactly at their sites; one commit, %ae=%ce=detain@interserver.net, zero Co-Authored; REPORT lists both NEW test files (durations duty) and the staleness pair.
+- [NIT step-local] candy-code/tests/Commands/McpPromptCommandsTest.php:331 — assert contains `'printf ran-'` but message reads "the refusal does not echo the command the body carried" (asserts the opposite polarity; the real discriminator is source-vs-`ran-here` output). Fix message to "refusal names the form it declined".
+- [MINOR step-local] candy-code/docs/MCP.md:879 — trailing clause "and the transcript records the `mcp` tier so the reader knows where the instruction came from" is stale from the trust-era paragraph (the tier is registry-side; no transcript row for a refused body). Trim/reword in this step.
+- [MINOR out-of-scope→C-SEC-3.b] candy-code/docs/COMMANDS.md:22 — "Three tiers" heading and foreign row "never — imports run no shell" contradict the now-5-row table (foreign is tier-judged, pinned `CommandShellPostureTest.php:70`); §6 assigns both to 3.b, disclosed in REPORT:26 — leave.
+- [NIT] REPORT.md:7 — "byte-identical for the refusal-inventory pin" overstates: nothing tree-wide pins the project sentence string (grep: only src occurrence); byte-identity holds via the untouched hunk, not a test.

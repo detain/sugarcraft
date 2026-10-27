@@ -1,0 +1,33 @@
+### C-SEC-3.a — One provenance-aware `!cmd` gate (refuse MCP and bundle shell forms)
+- item: C-SEC-3 (sources: PLG-1-P2, MCP-2-P1, p1 Summary theme, p1-miss "unified third-party shell posture")
+- kind: fix · MAJOR · effort M
+- approach:
+  - Root cause: `TurnController::refuseCommandShell()` (`candy-code/src/Host/TurnController.php:521-575`) gates only the `project` tier (:528) and the `mcp` tier (:545-554), and both legs check only `trustedProjectCommands`. After that, an `Ask` verdict proceeds unprompted (:567-575).
+  - MCP leg: a remote server's `prompts/get` body runs a shell under a grant meant for the repo's own files. This is pinned as intended at `tests/Host/TurnControllerTest.php:186`.
+  - Bundle leg: `ForeignCommandDiscovery::bundleDirs()` (:146-152) stamps bundle rows `$bundle->tier`, which is `user` for `~/.candy-code/bundles`, so git-installed bundle commands run `!cmd` unprompted.
+  - Fix: a `CommandShellPosture` table maps `(tier, source)` to a `ShellProvenance` case:
+    - operator (user tier): gate only;
+    - repo (project tier): `trustedProjectCommands`, then the gate;
+    - third-party (MCP prompt body, or any `SkillSource::Bundle` row whatever its tier): refused, with a Lang notice, before the gate is evaluated.
+  - `refuseCommandShell()` and `customCommandMustFork()` read the table. A bundle body whose only shell forms are refused no longer forks; an MCP placeholder still forks, for its fetch.
+  - Foreign rows keep today's behaviour in this step (the tier decides). C-SEC-3.b rules on them.
+- files.create: `candy-code/src/Commands/CommandShellPosture.php`, `candy-code/src/Commands/ShellProvenance.php` (enum, one type per file)
+- files.modify:
+  - `candy-code/src/Host/TurnController.php` (`refuseCommandShell`, `customCommandMustFork`)
+  - `candy-code/src/Commands/McpPromptCommands.php` (TRUST docblock :40-44)
+  - `candy-code/lang/en.php` (`host.command_shell.mcp_refused`, `host.command_shell.bundle_refused`)
+  - `candy-code/docs/COMMANDS.md` (tier table :23-28: add the bundle and MCP rows)
+  - `candy-code/docs/MCP.md` (prompts section ~:875)
+  - `candy-code/docs/PLUGINS.md` (bundle command shell forms join the declined surfaces)
+- tests:
+  - create `candy-code/tests/Commands/CommandShellPostureTest.php`: the full table, including a project-tier bundle row.
+  - create `candy-code/tests/Host/TurnControllerBundleShellTest.php`: a bundle command's `!` form is refused and the gate is never evaluated.
+  - modify `candy-code/tests/Host/TurnControllerTest.php:186`: refused even with trust = true.
+  - modify `candy-code/tests/Commands/McpPromptCommandsTest.php`: a fetched body with `` !`echo pwned` `` never reaches the fork, and the refusal text is in the sent prompt.
+- docs/guards: grep `candy-code/tests/Config/` for pins on the COMMANDS.md tier table, MCP.md :875-876 and the PLUGINS.md declined list (DocFigureProseDriftTest family). Move any that fire in this step. No drift-guarded roster changes.
+- serialized: [hot:candy-code/src/Host/TurnController.php] [lang:host.command_shell.] [docs:COMMANDS.md] [docs:MCP.md] [docs:PLUGINS.md]
+- deps: none. C-EXT-4 and C-MCP-2 should depend on this step.
+- phase: normal
+- ruling: none
+- risks: users with Claude Code plugins whose commands rely on `!` lose those forms until C-SEC-3.b gives them a per-bundle opt-in. The refusal notice must name the path to the opt-in once it exists.
+
