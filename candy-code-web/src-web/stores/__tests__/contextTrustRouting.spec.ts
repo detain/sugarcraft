@@ -67,13 +67,13 @@ describe('contextSources trust routing (C-SEC-4)', () => {
     const store = useContextSourcesStore()
     wire.event(null, 'permission.asked', { ...TRUST }, false)
 
-    const settled = store.respondTrust('reject', null)
+    const settled = store.respondTrust('reject', 'session')
     await flushPromises()
     expect(wire.sent('context.trust').at(-1)?.params).toEqual({
       sessionId: 's1',
       askId: 'trust-9f0e1d2c3',
       decision: 'reject',
-      remember: null,
+      remember: 'session',
     })
     await wire.answer('context.trust', { askId: 'trust-9f0e1d2c3', status: 'rejected', persisted: false })
     await expect(settled).resolves.toBe(true)
