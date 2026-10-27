@@ -16,7 +16,8 @@
     "C-SES-3.b",
     "C-SES-5.a",
     "C-SES-2.a",
-    "C-PRV-1.c"
+    "C-PRV-1.c",
+    "C-MCP-1.b"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -41,20 +42,12 @@
       "session": null
     },
     "C-EXT-1.b": {
-      "stage": "review",
-      "round": 1,
+      "stage": "fix",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-EXT-1.b",
       "branch": "cc/C-EXT-1.b",
-      "session": null,
-      "note": "tip 09a76e8c6 base 351726864; builder recovered via 3 continues"
-    },
-    "C-MCP-1.b": {
-      "stage": "review",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-MCP-1.b",
-      "branch": "cc/C-MCP-1.b",
-      "session": null,
-      "note": "tip af1eb01e6 base 351726864; NEW McpCallHookParityTest durations duty"
+      "session": "ses_e83db374bfferPNQmWWJmZLlnQ",
+      "note": "r1 0C/0M/2MINOR(1 step-local double-count, DOCKER.md DOC-ROW weld-absorb)/4NIT"
     },
     "C-SES-5.b": {
       "stage": "build",
@@ -62,7 +55,7 @@
       "worktree": "/home/sites/cc-cmp-C-SES-5.b",
       "branch": "cc/C-SES-5.b",
       "session": "ses_e83dea32d",
-      "note": "base 85be78e05 (C-SES-2.a pick era)"
+      "note": "phantom DONE #4 caught (fake SHA 01f32247b, zero disk); resumed same session with grounding order"
     },
     "C-CTX-1.b": {
       "stage": "build",
@@ -70,7 +63,26 @@
       "worktree": "/home/sites/cc-cmp-C-CTX-1.b",
       "branch": "cc/C-CTX-1.b",
       "session": "ses_e83dea32c",
-      "note": "base 85be78e05 (C-SES-2.a pick era)"
+      "note": "builder blank-death #1, zero disk; resumed same session"
+    },
+    "C-SES-2.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SES-2.b",
+      "branch": "cc/C-SES-2.b",
+      "session": "ses_e83db374cffeLBzipP6vdRrrW6"
+    },
+    "C-SES-2.c": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SES-2.c",
+      "branch": "cc/C-SES-2.c",
+      "session": "ses_e83d9644bffeR4eTGqSn05sHVn"
+    },
+    "C-PRV-1.c": {
+      "stage": "welded-postcure-pending",
+      "round": 1,
+      "note": "welded e6d225f68; master cure owed: Subcommands.php:1044 docblock overstatement (REVIEW-1.md item 2) + add REVIEW-1.md to evidence"
     }
   },
   "blocked": [],
