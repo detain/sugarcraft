@@ -230,7 +230,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-1.a`
 
-#### C-TOOL-1.c — Format hook skips failed edits, never blesses stale
+#### ✅ 8aa2acada C-TOOL-1.c — Format hook skips failed edits, never blesses stale
 - **Item:** C-TOOL-1 (sources: EDT-1-P1) · fix · MAJOR · effort S
 - **What:** Root cause `candy-code/src/Hooks/BuiltIn/PostEditFormatHook.php` execute() (:97-120). It formats failed edits too ("exactly as the lint hook reasons") and then calls `$this->ledger?->record($abs, null)`, which stores the CURRENT …
 - **Files — create:** none

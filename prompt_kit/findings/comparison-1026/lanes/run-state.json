@@ -1,5 +1,7 @@
 {
-  "welded": [],
+  "welded": [
+    "C-SEC-2.a"
+  ],
   "inflight": {
     "C-SEC-1.a": {
       "stage": "build",
@@ -7,14 +9,6 @@
       "worktree": "/home/sites/cc-cmp-C-SEC-1.a",
       "branch": "cc/C-SEC-1.a",
       "session": "ses_e843e87f2ffeznP0AaNcfY7WQ4"
-    },
-    "C-SEC-2.a": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SEC-2.a",
-      "branch": "cc/C-SEC-2.a",
-      "session": "ses_e84381c24ffeKtXrV8H7vwF3ts",
-      "review_session": "ses_e84368906ffefbtpvQ1NJB45ri"
     },
     "C-TOOL-1.a": {
       "stage": "build",
@@ -31,7 +25,7 @@
       "session": "ses_e843e87e3ffegHZdQOFe0a3WBH"
     },
     "C-TOOL-1.c": {
-      "stage": "review",
+      "stage": "clean",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-TOOL-1.c",
       "branch": "cc/C-TOOL-1.c",
@@ -66,11 +60,11 @@
       "session": "ses_e8433fec9ffe15lytLrU1hzaZK"
     },
     "C-AGT-2.a": {
-      "stage": "build",
-      "round": 0,
+      "stage": "review",
+      "round": 1,
       "worktree": "/home/sites/cc-cmp-C-AGT-2.a",
       "branch": "cc/C-AGT-2.a",
-      "session": "ses_e843e87caffeBK5UE2IjJ6qtmj"
+      "session": "ses_e842fa051ffeTBJ91qR0YdeMAK"
     }
   },
   "blocked": [],
