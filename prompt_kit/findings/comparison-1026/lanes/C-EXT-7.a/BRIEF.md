@@ -1,0 +1,21 @@
+### C-EXT-7.a — `/hooks` reads the live chain; bundle decline notices see Claude manifest keys
+- item: C-EXT-7 (sources: VIS-3-P2, PLG-1-P4; VIS-4-P1 is closed in C-EXT-5.b)
+- kind: fix · MINOR/NIT · effort S
+- approach:
+  - **VIS-3-P2.** `HooksHostCommand.php:30` calls `Bootstrap::hooks()`, which re-runs `installSecretEnvAllowlist` (:5830), `lspClient` (:5869) and `TeamManager::useLaunchHooks` (:5983). That makes the "read-only" `/hooks` command a launch-chain rebuild with process-global side effects.
+    - Fix: inspect `$context->workspace?->hooks`, the launch `HookManager` built in `Bootstrap::workspace()` and reachable from both the TUI and SessionHost CommandContext.
+    - A null workspace reports "not measured: no launch hook chain" and rebuilds nothing.
+  - **PLG-1-P4.** `Bundle.php:173-187` `mcpFile()` reads only the `mcp` key, and `declared()` (:235-257) drops non-string values. A Claude `plugin.json` with an inline `hooks` object or `mcpServers` therefore loads with no decline notice.
+    - Fix: `hooksPaths()` includes the manifest path when `hooks` is a non-empty non-path value.
+    - `mcpFile()` reads `mcpServers`. A string is a path. An inline object returns the manifest path, which is where the servers are declared.
+    - The Bootstrap notices at :2296-2318 then fire unchanged.
+- files.create: none
+- files.modify: `candy-code/src/Host/Commands/HooksHostCommand.php` (`run`), `candy-code/src/Bundles/Bundle.php` (`mcpFile`, `hooksPaths`, docblock), `candy-code/lang/en.php` (`cmd.hooks.*` one key), `candy-code/docs/PLUGINS.md` ("The two declined surfaces")
+- tests: create `candy-code/tests/Host/Commands/HooksHostCommandLiveChainTest.php` (reads the workspace manager; `Bootstrap::hooks()` is never called; null workspace gives "not measured"). Modify `candy-code/tests/Bundles/BundleDeclinedSurfacesTest.php` (an inline `hooks` object and a `mcpServers` string or object are both declared).
+- docs/guards: PLUGINS.md only.
+- serialized: [docs:PLUGINS.md] [lang:cmd.hooks.]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: an embedder with no workspace loses the `/hooks` table. That is intended: no rebuild.
+
