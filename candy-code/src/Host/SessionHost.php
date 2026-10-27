@@ -185,6 +185,29 @@ final class SessionHost
      */
     private ?Backend $sessionBackend = null;
 
+    /**
+     * C-WEB-1.a: the `{provider, model}` pair a served `/model` switched to,
+     * recorded beside the {@see self::$sessionBackend} it built. Null while
+     * the session still runs the launch row's pair. The store row is never
+     * rewritten by a served switch — W7a-2's law keeps the provider axis
+     * unpersisted on both surfaces — so a summary read from the row alone
+     * would keep naming the pair the web's picker already replaced.
+     *
+     * @var null|array{provider: string, model: string}
+     */
+    private ?array $modelOverride = null;
+
+    /**
+     * C-WEB-1.a: hears "this session's summary just changed" from the lanes
+     * that change it without a status transition — a served `/model` or
+     * `/rename`. The server's feed binds it while a session is followed and
+     * clears it with the feed; where nothing binds it (the terminal) nothing
+     * extra is announced, exactly as before.
+     *
+     * @var (\Closure(): void)|null
+     */
+    private ?\Closure $onSummaryChanged = null;
+
     /** @var array<string, CommandSpec> */
     private readonly array $customCommands;
 
@@ -382,6 +405,31 @@ final class SessionHost
                 $listener($event);
             }
         });
+    }
+
+    /**
+     * C-WEB-1.a: the `{provider, model}` pair this session's served `/model`
+     * switched to, or null while it still runs the launch row's pair. Lives
+     * for exactly as long as {@see self::$sessionBackend} does — the host
+     * dies, the override dies with it, and the next open resolves the saved
+     * choice through the launch's own layers.
+     *
+     * @return null|array{provider: string, model: string}
+     */
+    public function modelOverride(): ?array
+    {
+        return $this->modelOverride;
+    }
+
+    /**
+     * C-WEB-1.a: bind (or pass null to clear) the hook that hears a summary
+     * change with no status transition behind it — {@see self::$onSummaryChanged}.
+     *
+     * @param (\Closure(): void)|null $hook
+     */
+    public function onSummaryChanged(?\Closure $hook): void
+    {
+        $this->onSummaryChanged = $hook;
     }
 
     /** The session's durable event log, or null when its store keeps none. */
@@ -1320,6 +1368,11 @@ final class SessionHost
         // marker, turn, exactly the order the TUI's `withInputBuf(...)->submit()`
         // route produces.
         $queuedPrompt = '';
+        // C-WEB-1.a: a served `/model` or `/rename` changes what the session
+        // summary says without changing its status, so the feed's status lane
+        // never announces it; this flag carries the one announcement the
+        // bound hook owes.
+        $summaryChanged = false;
         foreach ($result->effects as $effect) {
             switch ($effect->kind) {
                 case CommandEffectKind::ClearTranscript:
@@ -1353,6 +1406,17 @@ final class SessionHost
                     $built = $effect->modelBackend();
                     if ($built !== null) {
                         $this->sessionBackend = $built;
+                        // C-WEB-1.a: the names ride beside the backend. A
+                        // provider-only switch names no model on the wire;
+                        // the model the built engine resolved IS the one the
+                        // session now runs, so the override carries that
+                        // truth instead of blanking what the web reads.
+                        $named = $effect->modelName();
+                        if ($named === '' && $built instanceof EngineBackend) {
+                            $named = $built->model();
+                        }
+                        $this->modelOverride = ['provider' => $effect->modelProvider(), 'model' => $named];
+                        $summaryChanged = true;
                     }
                     break;
 
@@ -1364,8 +1428,15 @@ final class SessionHost
                     $queuedPrompt = $effect->promptText();
                     break;
 
-                case CommandEffectKind::SwitchSession:
                 case CommandEffectKind::RenameSession:
+                    // C-WEB-1.a: the rename is already in the store (the host
+                    // keeps no title in memory), but a served rename changed
+                    // nothing the web's sidebar could hear — the summary only
+                    // re-announced on a status transition. Flag it here.
+                    $summaryChanged = true;
+                    break;
+
+                case CommandEffectKind::SwitchSession:
                 case CommandEffectKind::OpenTitleEditor:
                     break;
             }
@@ -1375,6 +1446,14 @@ final class SessionHost
         $this->save();
         foreach ($result->rows as $row) {
             $this->announceTranscriptRow($row);
+        }
+
+        // C-WEB-1.a: announced AFTER the command's own transcript rows — the
+        // stream a client reads stays in the order the transcript settled —
+        // and only once, however many summary-changing effects one command
+        // carried.
+        if ($summaryChanged && $this->onSummaryChanged !== null) {
+            ($this->onSummaryChanged)();
         }
 
         if ($queuedPrompt !== '') {

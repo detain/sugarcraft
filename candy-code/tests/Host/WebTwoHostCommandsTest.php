@@ -215,6 +215,43 @@ final class WebTwoHostCommandsTest extends TestCase
     }
 
     /**
+     * C-WEB-1.a: a second served `/model` REPLACES the recorded override —
+     * the pair the summary overlays is always the newest switch, never the
+     * first. The override is the web picker's truth while the session lives;
+     * a stale first choice would misname the model answering.
+     */
+    public function testTheModelOverrideTracksTheNewestSwitch(): void
+    {
+        $host = $this->host(backendFactory: static fn (string $provider): \SugarCraft\Code\Backend
+            => EngineBackend::new(new ScriptedProvider([]), 'launch-' . $provider));
+
+        self::assertNull($host->modelOverride(), 'no switch, no override');
+
+        $host->runCommand('model', 'openai gpt-first');
+        self::assertSame(['provider' => 'openai', 'model' => 'gpt-first'], $host->modelOverride());
+
+        $host->runCommand('model', 'openai gpt-second');
+        self::assertSame(['provider' => 'openai', 'model' => 'gpt-second'], $host->modelOverride(),
+            'the override is the newest choice, not the first one kept alive');
+    }
+
+    /**
+     * C-WEB-1.a: a provider-only switch (`/model <provider>`, no model named)
+     * records the model the built engine actually resolved, rather than
+     * blanking the pair the web reads.
+     */
+    public function testAProviderOnlySwitchRecordsTheEnginesResolvedModel(): void
+    {
+        $host = $this->host(backendFactory: static fn (string $provider): \SugarCraft\Code\Backend
+            => EngineBackend::new(new ScriptedProvider([]), 'launch-' . $provider));
+
+        $host->runCommand('model', 'openai');
+
+        self::assertSame(['provider' => 'openai', 'model' => 'launch-openai'], $host->modelOverride(),
+            "the engine's own model fills the pair when the wire named none");
+    }
+
+    /**
      * W7a-2: the RebindsModel door is gone — the native engine takes a model
      * by label — so the only loud refusal left is the native one: a backend
      * that is not an engine has no model to switch.

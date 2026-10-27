@@ -70,7 +70,7 @@ final class EventType
         SessionEvent::SPEND_CAP_BREACHED => [true, self::SCOPE_SESSION, 'The session spend cap stopped the turn.'],
         SessionEvent::COMPACTION_COMPLETED => [true, self::SCOPE_SESSION, 'The history was compacted before a turn.'],
         self::SESSION_CREATED => [false, self::SCOPE_SERVER, 'A session was created.'],
-        self::SESSION_UPDATED => [false, self::SCOPE_SERVER, 'A session was renamed, its mode changed, or its status changed (idle, busy, waiting_permission).'],
+        self::SESSION_UPDATED => [false, self::SCOPE_SERVER, 'A session was renamed, its mode changed, its model changed, or its status changed (idle, busy, waiting_permission). A served `/model` or `/rename` reaches every client through this arm, not only the status lane.'],
         self::SESSION_DELETED => [false, self::SCOPE_SERVER, 'A session was deleted.'],
         self::PERMISSION_ASKED => [false, self::SCOPE_SERVER, 'A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and a background session\'s relayed question, named by its background id and answered the same way. A third shape joins the arm: a project-trust prompt (kind "trust") discovered by a context.sources measurement, answered by `context.trust` and not by `permission.respond`.'],
         self::PERMISSION_SETTLED => [false, self::SCOPE_SERVER, 'A question was answered or cancelled (permission.resolved for every client) — a background session\'s relayed question included, cancelled when its session settled unanswered.'],

@@ -302,6 +302,17 @@ final class ServerContext
             $host->setPermissionMode($this->config->permissionMode);
         }
 
+        // C-WEB-1.a: a served `/model` or `/rename` changes what the session
+        // summary reports without a status transition, so the feed's status
+        // lane never announces it. Bind the host's summary-change hook to the
+        // same server-scope broadcast a rename already rides from
+        // `session.rename` — bound HERE, wherever the feed attaches, so a host
+        // the hub re-opened (a fresh object for a session id the feed held) is
+        // never left silent again.
+        $host->onSummaryChanged(function () use ($sessionId): void {
+            $this->broadcast(EventEnvelope::server(EventType::SESSION_UPDATED, $this->summaryOf($sessionId)));
+        });
+
         return $this->feeds[$sessionId] = SessionFeed::attach(
             $host,
             $this->loop,
@@ -329,12 +340,19 @@ final class ServerContext
     {
         $id = (string) ($row['id'] ?? '');
         $host = $this->hub->get($id);
+        // C-WEB-1.a: a served `/model` rewires the live session and never
+        // touches the store row (W7a-2 keeps the provider axis unpersisted on
+        // both surfaces), so the OPEN host's override names what is actually
+        // answering; a closed host has no override, and the row is the whole
+        // truth again — next launch resolves the saved choice through the
+        // launch's own layers, exactly as the terminal's does.
+        $override = $host?->modelOverride();
 
         return [
             'id' => $id,
             'name' => $row['name'] ?? null,
-            'provider' => $row['provider'] ?? null,
-            'model' => $row['model'] ?? null,
+            'provider' => ($override['provider'] ?? '') !== '' ? $override['provider'] : ($row['provider'] ?? null),
+            'model' => ($override['model'] ?? '') !== '' ? $override['model'] : ($row['model'] ?? null),
             'kind' => $row['kind'] ?? null,
             'parentId' => $row['parent_id'] ?? null,
             'createdAt' => $row['created_at'] ?? null,
@@ -420,6 +438,10 @@ final class ServerContext
     {
         ($this->feeds[$sessionId] ?? null)?->detach();
         unset($this->feeds[$sessionId]);
+        // C-WEB-1.a: the summary hook lives exactly as long as the feed that
+        // bound it — a host released from following announces nothing, the
+        // same silence its missing status lane keeps.
+        $this->hub->get($sessionId)?->onSummaryChanged(null);
     }
 
     /** Detach every feed (the server is stopping). */
