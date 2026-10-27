@@ -136,6 +136,35 @@ export interface ContextSources {
         to: number
       } | null
     } | null
+    /** The `/context` `By category` block (roadmap P-CTX.a / P-CTX.f): every measured token attributed by owner. Summing law — all rows except `autocompact-buffer` and `free-space` equal `window` less the reservation and what is left; content + buffer + free-space is the window. */
+    categories?: ({
+      /** The {@see \SugarCraft\Code\Context\ContextCategory} case value — stable vocabulary; `label` is the translated display name. */
+      key: string
+      label: string
+      /** Estimated tokens billed to this category, null when not measured — never a fabricated zero. */
+      tokens: number | null
+      /** `tokens` as a whole percent of `window`; null exactly when `tokens` is. */
+      share: number | null
+      sub: ({
+        /** Server name, document path, or `#<index> <role>` for a message row. */
+        label: string
+        tokens: number | null
+        /** Set instead of `tokens` for instruction documents — priced by size, bodies never. */
+        bytes: number | null
+        /** True when the document came from the personal tier. */
+        personal: boolean
+        /** Replaces the figures with the reason there are none (the never-sent MCP instructions row). */
+        note: string | null
+      })[]
+    })[]
+    /** The autocompact reservation — room between where background compaction fires and the window end; 0 when compaction is off, null when this session reports no compaction config. */
+    buffer?: number | null
+    /** The `mcp__<server>__*` bridges grouped per server — the MCP half of `toolTokens`, measured in the same single pass; null when the tool list is unknown. */
+    mcpServers?: {
+      name: string
+      count: number
+      tokens: number
+    }[] | null
   }
 }
 

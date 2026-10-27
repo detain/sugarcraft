@@ -563,6 +563,126 @@
                             "required": [
                                 "breaks"
                             ]
+                        },
+                        "categories": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "key": {
+                                        "type": "string",
+                                        "description": "The {@see \\SugarCraft\\Code\\Context\\ContextCategory} case value — stable vocabulary; `label` is the translated display name."
+                                    },
+                                    "label": {
+                                        "type": "string"
+                                    },
+                                    "tokens": {
+                                        "type": [
+                                            "integer",
+                                            "null"
+                                        ],
+                                        "minimum": 0,
+                                        "description": "Estimated tokens billed to this category, null when not measured — never a fabricated zero."
+                                    },
+                                    "share": {
+                                        "type": [
+                                            "integer",
+                                            "null"
+                                        ],
+                                        "minimum": 0,
+                                        "description": "`tokens` as a whole percent of `window`; null exactly when `tokens` is."
+                                    },
+                                    "sub": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "label": {
+                                                    "type": "string",
+                                                    "description": "Server name, document path, or `#<index> <role>` for a message row."
+                                                },
+                                                "tokens": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ],
+                                                    "minimum": 0
+                                                },
+                                                "bytes": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ],
+                                                    "minimum": 0,
+                                                    "description": "Set instead of `tokens` for instruction documents — priced by size, bodies never."
+                                                },
+                                                "personal": {
+                                                    "type": "boolean",
+                                                    "description": "True when the document came from the personal tier."
+                                                },
+                                                "note": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "description": "Replaces the figures with the reason there are none (the never-sent MCP instructions row)."
+                                                }
+                                            },
+                                            "required": [
+                                                "label",
+                                                "tokens",
+                                                "bytes",
+                                                "personal",
+                                                "note"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "required": [
+                                    "key",
+                                    "label",
+                                    "tokens",
+                                    "share",
+                                    "sub"
+                                ]
+                            },
+                            "description": "The `/context` `By category` block (roadmap P-CTX.a / P-CTX.f): every measured token attributed by owner. Summing law — all rows except `autocompact-buffer` and `free-space` equal `window` less the reservation and what is left; content + buffer + free-space is the window."
+                        },
+                        "buffer": {
+                            "type": [
+                                "integer",
+                                "null"
+                            ],
+                            "minimum": 0,
+                            "description": "The autocompact reservation — room between where background compaction fires and the window end; 0 when compaction is off, null when this session reports no compaction config."
+                        },
+                        "mcpServers": {
+                            "type": [
+                                "array",
+                                "null"
+                            ],
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "count": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                    },
+                                    "tokens": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                    }
+                                },
+                                "required": [
+                                    "name",
+                                    "count",
+                                    "tokens"
+                                ]
+                            },
+                            "description": "The `mcp__<server>__*` bridges grouped per server — the MCP half of `toolTokens`, measured in the same single pass; null when the tool list is unknown."
                         }
                     },
                     "required": [
