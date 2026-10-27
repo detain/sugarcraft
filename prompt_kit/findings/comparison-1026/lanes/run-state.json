@@ -64,18 +64,10 @@
     "P-CTX.g",
     "C-SES-9.a",
     "C-AGT-2.b",
-    "C-AGT-7.a"
+    "C-AGT-7.a",
+    "P-AGENT.a"
   ],
   "inflight": {
-    "P-AGENT.a": {
-      "stage": "fix",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-P-AGENT.a",
-      "branch": "cc/P-AGENT.a",
-      "session": "ses_e81ad84b9ffeXmijE8Hdxk9UlM",
-      "tip": "ba9dd8539",
-      "note": "fixer on r1 MAJOR (workspace seed reflection pin) + MINOR doc orphan + REPORT +15"
-    },
     "P-CTX.e": {
       "stage": "build",
       "round": 1,
@@ -280,6 +272,14 @@
       "regen": "no-op (cmd/tool/settings --check up to date; docs/SCHEDULES.md is hand-truth, not a generated region)",
       "gates": "RuntimeNoticeSinkDelivery 25T/5606A OK (+4A vs lane 5602 claim = merged-tree drift, disclosed); Schedule 118T/535A/1F — sole red DreamPassTest.php:288 REPRODUCED at pre-pick 40ce5f1cc (foreign, allowed); ForeignAgentPresetWiring 17T/57A exact; five-guard 133T/15661A pair-only; check-child-lifetimes rc0 (spawn timeout threading accounted)",
       "durations_owed": "none (no new test files)"
+    },
+    "P-AGENT.a": {
+      "master": "953c01c9e+b9a13b038+db73a8ca3+abf89a0a1+a3610a2fe",
+      "picks": "9900a17a5->953c01c9e, e3ca80eac->b9a13b038, 5cbde5bad->db73a8ca3, ba9dd8539->abf89a0a1, 5d78ddb7b->a3610a2fe, zero conflicts (Bootstrap auto-merged)",
+      "regen": "no-op (cmd/tool/settings --check up to date; derived doc pins landed in-step per §1.8)",
+      "gates": "AgentLive|AgentColor|AgentStrip|StatusBar|Workspace 268T/12422A OK EXACT; ShellContrast 14T/2408A OK EXACT (size-cache pin holds post-merge); Inert|Frontmatter 182T/759A OK EXACT; five-guard 133T/15675A pair-only (2F both inside ReadmeSuiteFigureDrift; live 26,0xx climbing — closeout re-pin)",
+      "durations_owed": "candy-code/tests/Agents/Live/AgentLiveSessionScopeTest.php + candy-code/tests/Tui/AgentColorPaintTest.php",
+      "reviews": "r1 4 findings -> fix 5d78ddb7b (stage review r2 ses_e81a6d5e6ffeO5PdDIJbvSufoY per lead) -> r2 CLEAN"
     }
   },
   "carries": [

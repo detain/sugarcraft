@@ -1,0 +1,24 @@
+### P-AGENT.a — Live-agent registry: session scope + preset colour (k1-dorm#3)
+- item: P-AGENT-ATTACH + P-SESSION-TABS (sources: k1-dorm#3, GAP-SES-12)
+- kind: dormant-wire · effort M
+- approach:
+  - **Session scope.** `AgentLiveRegistry` is ONE workspace service (`src/Cli/Bootstrap.php:1893`), and `apply()` (`src/Agents/Live/AgentLiveRegistry.php:125`) keeps no session. With several hosted Chats, tab A's strip would list tab B's runs.
+    - `SubAgentActivity` already carries `$parentSessionId` (P-C1). `AgentLiveState::fromActivity` keeps it.
+    - Add `AgentLiveRegistry::forSession(?string)` (null = all, for the serve and legacy readers), plus `AgentStrip::itemsFor($live, $dismissed, ?string $sessionId)` beside the unchanged `items()`. The renderer call-site switch lands in P-TABS.g.
+  - **Colour.** The preset `color:` key is parsed and read by nothing (`src/Support/FrontmatterKeyAudit.php:120-123`, `INERT[AGENT]['color']`).
+    - Seed the registry with a name→colour resolver at `workspace()`: `AgentLiveRegistry::new()->withColorResolver(fn ($n) => $agentManager->get($n)?->color)`. `AgentLiveState::$color` is set at fold.
+    - `AgentStrip`, `AgentViewHeader`, `AgentActivityLine` and `AgentDashboardPane` paint the run's name and dot through `AgentColor` (P-TABS.a; if that has not landed, a private copy of the resolve table is refused, so the dep is real).
+    - Drop `color` from INERT, keeping `memory`.
+- files.create: none
+- files.modify: `candy-code/src/Agents/Live/AgentLiveState.php`, `candy-code/src/Agents/Live/AgentLiveRegistry.php`, `candy-code/src/Tui/AgentStrip.php`, `candy-code/src/Tui/AgentViewHeader.php`, `candy-code/src/Tui/AgentActivityLine.php`, `candy-code/src/Tui/Components/AgentDashboardPane.php`, `candy-code/src/Support/FrontmatterKeyAudit.php` (INERT), `candy-code/src/Cli/Bootstrap.php` (`workspace()`, :1893), `candy-code/docs/AGENTS_AUTHORING.md` (field table `color` row), `candy-code/docs/AGENTS.md` (strip/header colour sentence)
+- tests:
+  - create `candy-code/tests/Agents/Live/AgentLiveSessionScopeTest.php` (two sessions' runs; `forSession` filters; null = all);
+  - create `candy-code/tests/Tui/AgentColorPaintTest.php` (the strip, header and dashboard use the preset colour; an invalid colour falls back to the status token);
+  - modify `candy-code/tests/Agents/Live/AgentLiveRegistryTest.php`, `candy-code/tests/Tui/AgentStripTest.php`, `candy-code/tests/Support/FrontmatterKeyAuditTest.php`.
+- docs/guards: `docs/AGENTS_AUTHORING.md` `| Field | Effect today |` table, moved in-step with `tests/Config/InertFrontmatterDocumentationDriftTest.php`; `docs/AGENTS.md`
+- serialized: [bootstrap:workspace] [docs:AGENTS_AUTHORING.md] [docs:AGENTS.md]
+- deps: P-TABS.a (AgentColor)
+- phase: normal
+- ruling: none
+- risks: the session filter must stay off for serve (SessionHost readers pass null) or the web agent tree empties. The test covers the null path.
+
