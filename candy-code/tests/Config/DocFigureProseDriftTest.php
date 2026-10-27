@@ -7187,9 +7187,11 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('a prompt called `deploy app`', $page, 'the page example pair was reworded out from under this pin');
         self::assertStringContainsString('`' . $sample . '`', $page, 'MCP.md example no longer matches what the sanitizer produces');
 
-        // The tier constant and the page's tier word.
-        self::assertSame('mcp', \SugarCraft\Code\Commands\McpPromptCommands::TIER, 'the tier word moved — page and transcript badge move with it');
-        self::assertStringContainsString('records the `mcp` tier', $page, 'MCP.md stopped promising the tier badge');
+        // The tier constant — a registry-side stamp: CommandShellPosture
+        // reads it and the slash-menu popup badges rows with it (review
+        // round 1: NOT the transcript; a refused body has no tier row).
+        self::assertSame('mcp', \SugarCraft\Code\Commands\McpPromptCommands::TIER, 'the tier word moved — the posture table and the popup badge read it');
+        self::assertStringContainsString('names the wire as where the text', $page, 'MCP.md stopped promising that the refusal names the fetched body\'s origin');
 
         // The ONE precedence decision: specs() feeds the merge, the disk
         // rows are its second argument, and the merge body keeps the order

@@ -893,8 +893,8 @@ shell forms are refused outright, whatever this project trusts — a
 `trustedProjectCommands` entry vouches for the checkout's own files, and a
 body fetched over the wire is not one of them (a per-origin opt-in for this
 refusal is the planned follow-up). The rest of the prompt is sent, and the
-transcript records the `mcp` tier so the reader knows where the
-instruction came from.
+notice left in a refused form's place names the wire as where the text
+came from.
 
 ## Serving MCP
 

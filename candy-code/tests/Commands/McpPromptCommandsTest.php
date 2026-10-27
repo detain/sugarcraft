@@ -330,7 +330,7 @@ final class McpPromptCommandsTest extends TestCase
         self::assertIsString($expanded);
         self::assertStringNotContainsString('ran-here', $expanded, 'the stranger\'s shell ran — C-SEC-3 refuses every shell form of a fetched body whatever the project trusts');
         self::assertStringContainsString('is an MCP prompt fetched from a server', $expanded, 'the body expanded without the mcp refusal sentence');
-        self::assertStringContainsString('printf ran-', $expanded, 'the refusal does not echo the command the body carried');
+        self::assertStringContainsString('printf ran-', $expanded, 'the refusal does not name the form it declined — the discriminator this leg pins is the declined form in the notice, not its output');
         self::assertStringContainsString('head', $expanded, 'the rest of the prompt was not sent, contrary to the page');
     }
 
