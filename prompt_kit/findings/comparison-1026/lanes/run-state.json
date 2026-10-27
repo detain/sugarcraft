@@ -74,7 +74,8 @@
   "P-TABS.c",
   "P-TABS.d",
   "P-TABS.h",
-  "C-SEC-5.a"
+  "C-SEC-5.a",
+  "C-SES-5.c"
  ],
  "inflight": {
   "C-AGT-3.b": {
@@ -101,21 +102,13 @@
    "session": "closed",
    "note": "r2 CLEAN gates RUN (26 passed). FROZEN pre-weld: chain a617e2746+3ce8946f5; welder rebuilds dist; vitest serial trio + vue-tsc foreign-6; §4 unstaged; evidence 4 files; prune."
   },
-  "C-SES-5.c": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-SES-5.c",
-   "branch": "cc/C-SES-5.c",
-   "session": "closed",
-   "note": "r1 CLEAN static. FROZEN pre-weld: pick 205766e13 (checksum-before-sign + .phar.sha256.sig + phar-dev verify rewrite); tools battery 489T-class; no candy-code DUR; §4 unstaged; evidence 3 files; prune."
-  },
   "P-AGENT.d": {
-   "stage": "fix",
+   "stage": "clean",
    "round": 2,
    "worktree": "/home/sites/cc-cmp-P-AGENT.d",
    "branch": "cc/P-AGENT.d",
    "session": "closed",
-   "note": "r1 FINDINGS (1 MAJOR one-shot toggle + 2 MINOR doc-truth) FIXED at b98125b2b (parent 0504a19a6); vitest 215 green; OWNER FREEZE before r2 reviewer dispatch — R2 REVIEW OWED, then weld w/ dist."
+   "note": "r2 CLEAN with gates RUN (27 files/215 vitest; vue-tsc 6 foreign TS2554 only). REVIEW-2.md collected from /tmp/opencode/cc-cmp/ to lanes. WELD queued behind running batch welder: picks 0504a19a6+b98125b2b (base e36d86d84-era), npm build dist commit-if-changed, vitest re-run, §4 unstaged, evidence 4 files (BRIEF/REPORT/REVIEW-1/REVIEW-2). Carries: NIT Ctrl+Enter-stale-arm-clear leg unpinned (later micro: arm, Ctrl+Enter, assert aria-pressed false); r1 queued-count NIT open; reviewer /tmp probe file leftover harmless."
   },
   "C-WEB-3.d": {
    "stage": "clean",
@@ -378,6 +371,13 @@
    "regen": "no-op (gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0; no Protocol/ touch, no schema/web)",
    "gates": "ProjectTrust|BootstrapProjectTrustGrant 22T/80A OK; TrustKey|DocFigure 109T/4502A OK; StderrEmitter|SettingsWriter|ReadPathCensus 177T/26008A OK; five-guard 133T/15735A pair-only (pinned 25,537 vs live 26,141 - closeout re-pin)",
    "durations_owed": "NEW candy-code tests/Config/Trust/ProjectTrustCensusTest.php + tests/Cli/BootstrapProjectTrustGrantTest.php - DUR rows for the gate: ProjectTrustCensusTest.php + BootstrapProjectTrustGrantTest.php (LIST ONLY, durations.tsv is closeout duty)"
+  },
+  "C-SES-5.c": {
+   "master": "cb6c27275",
+   "pick": "6ab223f36 (205766e13), zero conflicts, workflows-only (3 files: phar-dev.yml, release-app-phar.yml, release-phar.yml); cure commit cb6c27275 narrows phar-dev.yml:319 verify-note to the self-update apps (reviewer NIT taken)",
+   "regen": "none (workflows-only, per brief)",
+   "gates": "tools battery 489T/2578A OK (pre- and post-cure) incl WorkflowRunInterpolation 3T/134A executing on merged tree; five-guard 133T/15735A pair-only (pinned 25,537 vs live 26,141 - closeout re-pin)",
+   "durations_owed": "none - tools-side only, no new candy-code *Test.php"
   }
  },
  "carries": [
