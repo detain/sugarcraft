@@ -39,8 +39,9 @@ use SugarCraft\Code\Support\Version;
  * releases whose tag starts with {@see Version::TAG_PREFIX}, that carry BOTH
  * required assets (`candy-code.phar` and `candy-code.phar.sha256`), and
  * highest by {@see Version::compare()} — the newest CANDY-CODE release, not
- * the newest release. The signature asset (`candy-code.phar.minisig`) is
- * OPTIONAL at selection: whether it is REQUIRED is a fact about the
+ * the newest release. The signature assets (`candy-code.phar.sha256.sig`, or
+ * the legacy `candy-code.phar.minisig`) are OPTIONAL at selection: whether
+ * one is REQUIRED is a fact about the
  * pinned-key state, not about the release, and the two must not be
  * conflated.
  *
@@ -68,7 +69,10 @@ use SugarCraft\Code\Support\Version;
  * OWN DIRECTORY (a rename only exchanges atoms inside one filesystem), its
  * sha256 is computed over the finished file and compared with
  * `hash_equals()`. If a signing key is pinned (see TRUST MODEL below) the
- * detached signature leg runs next, against those same temp bytes. Every
+ * detached signature leg runs next: on the stream-safe path it signs the
+ * sidecar body, so the phar bytes never enter memory; only the legacy
+ * one-cycle fallback signs those bytes directly, and that leg raises the
+ * memory limit for its own duration. Every
  * download leg — list, sidecar, phar, signature — judges HTTP status: with
  * the client's `http_errors` off, a 404 arrives as a plain response, and a
  * leg that read only the body would install GitHub's JSON error document as
@@ -103,8 +107,8 @@ use SugarCraft\Code\Support\Version;
  * controls the release can replace the sidecar in the same breath. The
  * residual is named: trust in the GitHub account that owns the repo.
  * Pinned state (THE SHIPPED ONE since 2026-10-20 — the owner action in the
- * constant's docblock is done): a release whose `candy-code.phar.minisig`
- * is ABSENT, or does not verify against the pinned Ed25519 key, is REFUSED
+ * constant's docblock is done): a release whose signature assets are ABSENT,
+ * or do not verify against the pinned Ed25519 key, is REFUSED
  * LOUDLY — the sha256 sidecar alone no longer gates the swap, and an
  * attacker who owns the release stream can no longer sign their own poisoned
  * bytes. The pinned key can be rotated by shipping a new phar; until that
@@ -176,19 +180,38 @@ final class SelfUpdate
     public const SIDECAR_ASSET = 'candy-code.phar.sha256';
 
     /**
-     * The detached-signature asset ({@see verifyDetached} consumes it).
-     * Base64 of a 64-byte Ed25519 signature over the phar bytes, the
-     * minisign public-key flavour of "sign the artifact" without shipping a
-     * parser for minisign's key-id framing — sodium is the smallest path in
-     * the standard library that verifies a detached signature.
+     * The LEGACY detached-signature asset ({@see verifyDetached} consumes
+     * it). Base64 of a 64-byte Ed25519 signature over the RAW PHAR BYTES —
+     * which forces the verifying leg to hold the whole artifact in memory,
+     * fatal under a small memory_limit for a ~119 MB phar. Accepted for one
+     * further release cycle through the raise-limit fallback in
+     * {@see verifySignature()}; {@see SIDECAR_SIGNATURE_ASSET} replaces it.
+     * Both file names borrow minisign's vocabulary, but neither carries
+     * minisign's key-id framing: these are raw sodium signatures in base64,
+     * and sodium is the smallest path in the standard library that verifies
+     * a detached signature.
      */
     public const SIGNATURE_ASSET = 'candy-code.phar.minisig';
+
+    /**
+     * The stream-safe detached-signature asset: base64 of a 64-byte Ed25519
+     * signature over the BODY OF THE SIDECAR ({@see SIDECAR_ASSET}'s text),
+     * not over the phar bytes. Verifying it costs one small fetch and one
+     * {@see verifyDetached} over a few dozen bytes — the phar itself never
+     * enters memory; the temp file's digest was already established by the
+     * streaming {@see \hash_file()} gate, and a signature over the sidecar
+     * transitively signs those bytes. Same pinned key, same raw-sodium
+     * base64 shape as the legacy asset.
+     */
+    public const SIDECAR_SIGNATURE_ASSET = 'candy-code.phar.sha256.sig';
 
     /**
      * PINNED 2026-10-20 (the owner action below is complete): this is the
      * public half of the release-signing Ed25519 keypair; the secret half
      * lives as the repository secret SUGARCRAFT_SIGNING_KEY, which the
-     * release workflows' signing steps read to emit the minisig asset. The
+     * release workflows' signing steps read to emit the signature assets —
+     * the stream-safe {@see SIDECAR_SIGNATURE_ASSET} and, through one further
+     * release cycle, the legacy {@see SIGNATURE_ASSET}. The
      * secret is sugarcraft-wide by design — one owner keypair signs the
      * phars of candy-code, candy-top, and future app releases; each app
      * still verifies against its own pinned copy of THIS public half.
@@ -263,6 +286,16 @@ final class SelfUpdate
     private const CONNECT_TIMEOUT_SECONDS = 5.0;
 
     private const READ_TIMEOUT_SECONDS = 60.0;
+
+    /**
+     * The legacy raw-bytes signature leg must hold the whole phar in memory
+     * to verify it; this is the slack added over the file's own size when
+     * the leg needs its memory_limit raised for the duration (the current
+     * runtime, allocator overhead, and the signature/key copies all live
+     * inside it). {@see SIDECAR_SIGNATURE_ASSET} removes the need entirely;
+     * the constant rides out the legacy asset's last release cycle.
+     */
+    private const LEGACY_SIG_HEADROOM_BYTES = 67108864;
 
     /**
      * Test-only stand-in for STDERR so the suite can read the report lines;
@@ -524,7 +557,7 @@ final class SelfUpdate
             if ($allowUnsigned) {
                 self::stderr(Lang::t('cli.selfupdate.unsigned_allowed'));
             } else {
-                $refusal = self::verifySignature($http, $release, $temp, $key);
+                $refusal = self::verifySignature($http, $release, $temp, $key, $sidecarBody);
                 if ($refusal !== null) {
                     self::forget($temp);
                     self::stderr($refusal);
@@ -641,14 +674,14 @@ final class SelfUpdate
      *
      * Pure over the decoded JSON so the selection rules — prefix, draft and
      * prerelease skipping, the two-asset requirement, numeric ordering — are
-     * pinned directly, independently of any transport. The signature URL is
+     * pinned directly, independently of any transport. The signature URLs are
      * REPORTED (`''` when absent) but never REQUIRED here: keyless releases
      * stay selectable in keyless state, and requiring the asset is the
      * pinned-key leg's decision at swap time.
      *
      * @param array<array-key, mixed> $releases
      *
-     * @return array{version: string, pharUrl: string, sidecarUrl: string, sigUrl: string}|null
+     * @return array{version: string, pharUrl: string, sidecarUrl: string, sigUrl: string, sigSidecarUrl: string}|null
      */
     public static function selectRelease(array $releases): ?array
     {
@@ -694,7 +727,7 @@ final class SelfUpdate
      *
      * @param array<array-key, mixed> $releases
      *
-     * @return array{version: string, pharUrl: string, sidecarUrl: string, sigUrl: string, commitish: string}|null
+     * @return array{version: string, pharUrl: string, sidecarUrl: string, sigUrl: string, sigSidecarUrl: string, commitish: string}|null
      */
     public static function selectDevRelease(array $releases): ?array
     {
@@ -740,7 +773,7 @@ final class SelfUpdate
      * full target_commitish. A mismatch is not "behind": the rolling
      * channel answers now or not-yet, never older.
      *
-     * @param array{version: string, pharUrl: string, sidecarUrl: string, sigUrl: string, commitish: string} $release
+     * @param array{version: string, pharUrl: string, sidecarUrl: string, sigUrl: string, sigSidecarUrl: string, commitish: string} $release
      *
      * @return array{0: ?int, 1: string}
      */
@@ -757,16 +790,19 @@ final class SelfUpdate
     }
 
     /**
-     * The asset triple of one release entry: the two required download
-     * routes plus the signature route ('' when absent — required only by
-     * the pinned-key leg, never by selection). Null when either required
+     * The asset quartet of one release entry: the two required download
+     * routes plus the two signature routes ('' when absent — required only
+     * by the pinned-key leg, never by selection; the sidecar signature
+     * {@see SIDECAR_SIGNATURE_ASSET} is preferred, the raw-bytes
+     * {@see SIGNATURE_ASSET} is its legacy fallback for one release cycle).
+     * Null when either required
      * asset is missing or the entry is not shaped like an asset list. The
      * ONE walk both channels read (E174 discipline: a byte-copied second
      * copy of this loop is the drift guards' favorite snack).
      *
      * @param mixed $assets
      *
-     * @return ?array{pharUrl: string, sidecarUrl: string, sigUrl: string}
+     * @return ?array{pharUrl: string, sidecarUrl: string, sigUrl: string, sigSidecarUrl: string}
      */
     private static function releaseAssetUrls(mixed $assets): ?array
     {
@@ -776,6 +812,7 @@ final class SelfUpdate
         $pharUrl = null;
         $sidecarUrl = null;
         $sigUrl = '';
+        $sigSidecarUrl = '';
         foreach ($assets as $asset) {
             if (!\is_array($asset)) {
                 continue;
@@ -790,13 +827,15 @@ final class SelfUpdate
                 $sidecarUrl = $url;
             } elseif ((string) ($asset['name'] ?? '') === self::SIGNATURE_ASSET) {
                 $sigUrl = $url;
+            } elseif ((string) ($asset['name'] ?? '') === self::SIDECAR_SIGNATURE_ASSET) {
+                $sigSidecarUrl = $url;
             }
         }
         if ($pharUrl === null || $sidecarUrl === null) {
             return null;
         }
 
-        return ['pharUrl' => $pharUrl, 'sidecarUrl' => $sidecarUrl, 'sigUrl' => $sigUrl];
+        return ['pharUrl' => $pharUrl, 'sidecarUrl' => $sidecarUrl, 'sigUrl' => $sigUrl, 'sigSidecarUrl' => $sigSidecarUrl];
     }
 
     /**
@@ -828,28 +867,121 @@ final class SelfUpdate
     }
 
     /**
-     * Verify the temp phar's detached signature against the pinned key.
-     * Returns the refusal text (never silent) or null when the bytes are
-     * signed by the key. A release that carries NO signature asset is a
-     * refusal in pinned state — a key that only vets artifacts which happen
-     * to ship signatures is a key an attacker can route around by deleting
-     * one asset.
+     * Verify the downloaded release's detached signature against the pinned
+     * key. Returns the refusal text (never silent) or null when the bytes
+     * are signed by the key. THREE legs, decided by what the release carries.
+     *
+     * STREAM-SAFE PATH (the preferred one): {@see SIDECAR_SIGNATURE_ASSET}
+     * signs the sidecar BODY, so this leg fetches a few dozen bytes and
+     * verifies them against the sidecar text already in hand. The sidecar's
+     * digest was already pinned to the temp bytes by the streaming
+     * {@see \hash_file()} gate above, so a key that signs the sidecar signs
+     * those bytes transitively — and the phar itself never enters memory,
+     * whatever the process' memory_limit says.
+     *
+     * LEGACY PATH (one further release cycle): {@see SIGNATURE_ASSET} signs
+     * the raw phar bytes, which forces a whole-file read. That read used to
+     * be the one fatal in the verb — a ~119 MB phar under the default 128 MB
+     * limit died mid-verify with bytes already streamed and nothing swapped.
+     * The leg now raises memory_limit to filesize plus headroom for its own
+     * duration and restores it afterwards, and prints a deprecation notice
+     * so the window is loud rather than silent. When a release carries BOTH
+     * signature assets, the stream-safe leg is the one that runs; the legacy
+     * asset is then dead weight, which is exactly how it ages out.
+     *
+     * NEITHER: a refusal in pinned state — a key that only vets artifacts
+     * which happen to ship signatures is a key an attacker can route around
+     * by deleting one asset.
      */
-    private static function verifySignature(ClientInterface $http, array $release, string $temp, string $key): ?string
+    private static function verifySignature(ClientInterface $http, array $release, string $temp, string $key, string $sidecarBody): ?string
     {
-        if ($release['sigUrl'] === '') {
-            return Lang::t('cli.selfupdate.signature_missing', ['asset' => self::SIGNATURE_ASSET, 'phar' => self::PHAR_ASSET]);
+        if ($release['sigSidecarUrl'] !== '') {
+            [$refusal, $signatureBody] = self::fetchOk($http, $release['sigSidecarUrl'], self::SIDECAR_SIGNATURE_ASSET);
+            if ($refusal !== null) {
+                return $refusal;
+            }
+            if (!self::verifyDetached($sidecarBody, $signatureBody, $key)) {
+                return Lang::t('cli.selfupdate.sig.sidecar_invalid', [
+                    'asset' => self::SIDECAR_SIGNATURE_ASSET,
+                    'sidecar' => self::SIDECAR_ASSET,
+                    'phar' => self::PHAR_ASSET,
+                ]);
+            }
+
+            return null;
         }
+        if ($release['sigUrl'] === '') {
+            return Lang::t('cli.selfupdate.signature_missing', [
+                'asset' => self::SIGNATURE_ASSET,
+                'sig_sidecar' => self::SIDECAR_SIGNATURE_ASSET,
+                'phar' => self::PHAR_ASSET,
+            ]);
+        }
+        self::stderr(Lang::t('cli.selfupdate.sig.deprecated', [
+            'asset' => self::SIGNATURE_ASSET,
+            'replacement' => self::SIDECAR_SIGNATURE_ASSET,
+        ]));
         [$refusal, $signatureBody] = self::fetchOk($http, $release['sigUrl'], self::SIGNATURE_ASSET);
         if ($refusal !== null) {
             return $refusal;
         }
-        $payload = \file_get_contents($temp);
+        $restoreMemory = self::raiseMemoryForRawBytesVerify($temp);
+        try {
+            $payload = \file_get_contents($temp);
+        } finally {
+            $restoreMemory();
+        }
         if ($payload === false || !self::verifyDetached($payload, $signatureBody, $key)) {
             return Lang::t('cli.selfupdate.signature_invalid', ['asset' => self::SIGNATURE_ASSET, 'phar' => self::PHAR_ASSET]);
         }
 
         return null;
+    }
+
+    /**
+     * The legacy raw-bytes leg holds the whole phar in memory to verify it,
+     * so a small memory_limit used to turn that leg into a fatal at the
+     * worst possible moment of the swap. Raise JUST for that leg: filesize
+     * plus {@see LEGACY_SIG_HEADROOM_BYTES}, and only when the current limit
+     * is finite and below what the read needs. Returns a closure that puts
+     * the old value back — the caller runs it in a finally, so the widening
+     * never outlives one signature check. An unparseable, empty, or
+     * unlimited current value answers with the no-op closure: the raise is
+     * best-effort, the verification is not.
+     */
+    private static function raiseMemoryForRawBytesVerify(string $temp): \Closure
+    {
+        $size = \filesize($temp);
+        $needed = ($size === false ? 0 : $size) + self::LEGACY_SIG_HEADROOM_BYTES;
+        $previous = (string) \ini_get('memory_limit');
+        $current = self::parseShorthandBytes($previous);
+        if ($current <= 0 || $current >= $needed || \ini_set('memory_limit', (string) $needed) === false) {
+            return static function (): void {};
+        }
+
+        return static function () use ($previous): void {
+            \ini_set('memory_limit', $previous);
+        };
+    }
+
+    /**
+     * PHP's shorthand-byte notation ('128M', '2G', '1024', '-1') as an int;
+     * <= 0 means "no finite limit", the state where nothing must be raised.
+     */
+    private static function parseShorthandBytes(string $value): int
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return -1;
+        }
+        $number = (int) $value;
+
+        return match (\strtoupper(\substr($value, -1))) {
+            'K' => $number * 1024,
+            'M' => $number * 1024 * 1024,
+            'G' => $number * 1024 * 1024 * 1024,
+            default => $number,
+        };
     }
 
     /**

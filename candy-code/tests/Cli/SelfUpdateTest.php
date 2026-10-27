@@ -23,6 +23,7 @@ use SugarCraft\Code\Cli\SelfUpdate;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\Version;
 use SugarCraft\Code\Tests\Support\MintsStampedPharTrait;
+use SugarCraft\Code\Tests\Support\RunsWallClockBoundedChildTrait;
 
 /**
  * DST-3: `candy-code self-update` end to end against a fake release server.
@@ -35,13 +36,16 @@ use SugarCraft\Code\Tests\Support\MintsStampedPharTrait;
  * Client::request path (Guzzle's stock StreamHandler is not an option: it
  * refuses the file:// scheme outright). The phar under swap is a stub
  * archive; the swap machinery treats bytes, and \Phar::running is replaced by
- * the $pharPath seam. The sole exception is the DST-1 stamp pin: reading a
- * real minted archive needs a child process, provided by the shared
- * {@see MintsStampedPharTrait} helper, and never a socket either.
+ * the $pharPath seam. The exceptions are the DST-1 stamp pin and the
+ * C-SES-5.b child-limit pins: reading a real minted archive, and proving the
+ * update fits inside a real `-d memory_limit`, each need a child process —
+ * provided by the shared {@see MintsStampedPharTrait} and
+ * {@see RunsWallClockBoundedChildTrait} helpers, and never a socket either.
  */
 final class SelfUpdateTest extends TestCase
 {
     use MintsStampedPharTrait;
+    use RunsWallClockBoundedChildTrait;
 
     private const SERVER_ORIGIN = 'http://fake-candy-code-server.invalid';
 
@@ -61,6 +65,27 @@ final class SelfUpdateTest extends TestCase
     private const FIXTURE_FORGED_SIGNATURE = 'mV4B/yaL1+gXurXu02mi4WBE5gfeTKNhdNlc3/xUpHUrycDIesPZXiN1/X8+gmmM2jD3DGNU/ZZlGxrPURPnAg==';
 
     private const SIGNED_PAYLOAD_BYTES = 'UPDATED-PHAR-BYTES';
+
+    /**
+     * SECOND test-only Ed25519 keypair (C-SES-5.b sidecar-signature pins),
+     * generated once on the build box and frozen here exactly like the keypair
+     * above. Its public half verifies {@see FIXTURE_SIDECAR_SIGNATURE}, a
+     * signature over the sidecar body `stageRelease()` builds by default for
+     * self::SIGNED_PAYLOAD_BYTES — `hash('sha256', 'UPDATED-PHAR-BYTES') .
+     * '  candy-code.phar' . "\n"` — and {@see FIXTURE_SIDECAR_SIGNATURE_48_MB}
+     * over the same shape for the 48 MB stream-safety child pin. Nothing real
+     * is signed; the distinct key also proves the sidecar leg uses the release's
+     * own key, not a fixture-wide constant shared with the raw-bytes legs.
+     */
+    private const FIXTURE_SIDECAR_PUBLIC_KEY_BASE64 = 'CJL0Ml8v3R9lPw8XlDZW1TH+UTLCtYbM7xFlqX2Om3o=';
+
+    private const FIXTURE_SIDECAR_SIGNATURE = 'phEvU+etKvyhWQtNJM7JvBMF3YXH4//bmRS8XQ5y7I4oEV0Wr1/rXxedqQlmlbV4WuIgiwyfvfsD7s1aiSQgCQ==';
+
+    /** The same sidecar keypair's signature over the 48 MB release's sidecar body. */
+    private const FIXTURE_SIDECAR_SIGNATURE_48_MB = 'JJeHbWhDFKIxQdLGq5BfotYKn6tk92rA8HhjofSE+cXA+rkR+sD3312eZV2Q23GIngYGLNPwbl9/ghHtHwkxAg==';
+
+    /** sha256 hex of the 48 MB stream-pin phar body: `str_repeat('A', 48 * 1024 * 1024)`. */
+    private const SIDECAR_48_MB_PHAR_SHA256 = '03b32c0feaf56cdd91bcefe1b11bda3624ac37f4873e5571771164da026409db';
 
     private string $dir;
 
@@ -203,7 +228,7 @@ final class SelfUpdateTest extends TestCase
      *
      * @return array<array-key, mixed>
      */
-    private function stageRelease(string $tag, string $pharBytes, ?string $sidecarBody = null, bool $withSidecar = true, bool $draft = false, bool $prerelease = false, ?string $sigBody = null, ?string $commitish = null): array
+    private function stageRelease(string $tag, string $pharBytes, ?string $sidecarBody = null, bool $withSidecar = true, bool $draft = false, bool $prerelease = false, ?string $sigBody = null, ?string $commitish = null, ?string $sigSidecarBody = null): array
     {
         $slug = \strtr($tag, ['/' => '-']);
         $assets = [[
@@ -216,6 +241,13 @@ final class SelfUpdateTest extends TestCase
             $assets[] = [
                 'name' => SelfUpdate::SIGNATURE_ASSET,
                 'browser_download_url' => self::SERVER_ORIGIN . '/' . $slug . '.minisig',
+            ];
+        }
+        if ($sigSidecarBody !== null) {
+            \file_put_contents($this->dir . '/srv/' . $slug . '.sha256.sig', $sigSidecarBody);
+            $assets[] = [
+                'name' => SelfUpdate::SIDECAR_SIGNATURE_ASSET,
+                'browser_download_url' => self::SERVER_ORIGIN . '/' . $slug . '.sha256.sig',
             ];
         }
         if ($withSidecar) {
@@ -793,6 +825,314 @@ final class SelfUpdateTest extends TestCase
     }
 
     /**
+     * C-SES-5.b: the stream-safe asset. The sidecar signature verifies the
+     * SIDECAR BODY — the phar bytes never enter this process' memory — and a
+     * sidecar whose digest differs from the signed one is refused on both
+     * crypto worlds. The happy leg additionally pins that the legacy
+     * deprecation notice stayed silent: the stream-safe leg must not read
+     * the raw bytes at all.
+     */
+    public function testTheSidecarSignatureAssetVerifiesWithoutEverReadingThePharIntoMemory(): void
+    {
+        // Happy path: sidecar carries the default true digest of the staged
+        // bytes, the .sha256.sig asset signs exactly that sidecar text.
+        $swapped = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease(
+                'candy-code/v9.9.9',
+                self::SIGNED_PAYLOAD_BYTES,
+                sigSidecarBody: self::FIXTURE_SIDECAR_SIGNATURE . "\n",
+            )]),
+            $this->livePharPath(),
+            'v0.1.0',
+            self::FIXTURE_SIDECAR_PUBLIC_KEY_BASE64,
+        );
+        if (\function_exists('sodium_crypto_sign_verify_detached')) {
+            self::assertSame(NonInteractive::EXIT_OK, $swapped);
+            self::assertSame(self::SIGNED_PAYLOAD_BYTES, \file_get_contents($this->livePharPath()));
+        } else {
+            self::assertSame(NonInteractive::EXIT_FAILURE, $swapped, 'without sodium the sidecar leg refuses rather than trusts');
+            self::assertStringContainsString('does not verify', $this->errorText());
+            self::assertSame('INSTALLED-PHAR-BYTES', \file_get_contents($this->livePharPath()), 'the refusal never touches the live bytes');
+        }
+        self::assertStringNotContainsString('signs the raw phar bytes', $this->errorText(), 'the stream-safe leg must not run the legacy notice');
+
+        $this->resetErrorStream();
+
+        // Tampered pairing: the asset signs the OTHER release's sidecar body
+        // (the small fixture signature over the UPDATED-bytes digest, served
+        // for a release whose staged bytes — and therefore whose default
+        // sidecar — say TAMPERED). The hash gate passes (sidecar matches the
+        // file); only the signature leg can see through this, and it refuses
+        // identically whether or not crypto exists.
+        self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
+        $tampered = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease(
+                'candy-code/v9.9.9',
+                'TAMPERED-PHAR-BYTES',
+                sigSidecarBody: self::FIXTURE_SIDECAR_SIGNATURE . "\n",
+            )]),
+            $this->livePharPath(),
+            'v0.1.0',
+            self::FIXTURE_SIDECAR_PUBLIC_KEY_BASE64,
+        );
+        self::assertSame(NonInteractive::EXIT_FAILURE, $tampered);
+        $text = $this->errorText();
+        self::assertStringContainsString('does not verify', $text);
+        self::assertStringContainsString(SelfUpdate::SIDECAR_SIGNATURE_ASSET, $text, 'the refusal names the stream-safe asset it just read');
+        self::assertStringContainsString(SelfUpdate::SIDECAR_ASSET, $text, 'and the sidecar it failed to certify');
+        self::assertStringNotContainsString('carries no ', $text, 'an ABSENT asset and a FAILED one are different refusals');
+        self::assertSame('ORIGINAL', \file_get_contents($this->livePharPath()));
+        self::assertSame([], \glob($this->livePharPath() . '.tmp-' . \chr(42)), 'the refused temp is deleted');
+    }
+
+    /**
+     * C-SES-5.b: when a release carries BOTH signature assets the
+     * stream-safe one decides — a forged legacy .minisig riding along must
+     * neither veto a valid sidecar signature nor trigger the legacy read.
+     */
+    public function testTheStreamSafeAssetDecidesEvenWhenALegacyAssetRidesAlong(): void
+    {
+        $exit = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease(
+                'candy-code/v9.9.9',
+                self::SIGNED_PAYLOAD_BYTES,
+                sigBody: self::FIXTURE_FORGED_SIGNATURE,
+                sigSidecarBody: self::FIXTURE_SIDECAR_SIGNATURE,
+            )]),
+            $this->livePharPath(),
+            'v0.1.0',
+            self::FIXTURE_SIDECAR_PUBLIC_KEY_BASE64,
+        );
+        self::assertStringNotContainsString('signs the raw phar bytes', $this->errorText(), 'the legacy leg never ran, so its notice must not print');
+        if (\function_exists('sodium_crypto_sign_verify_detached')) {
+            self::assertSame(NonInteractive::EXIT_OK, $exit, 'the valid sidecar signature outranks the forged raw-bytes one');
+            self::assertSame(self::SIGNED_PAYLOAD_BYTES, \file_get_contents($this->livePharPath()));
+        } else {
+            self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+            self::assertStringContainsString(SelfUpdate::SIDECAR_SIGNATURE_ASSET, $this->errorText(), 'the refusal that fired is the sidecar leg, not the legacy one');
+            self::assertSame('INSTALLED-PHAR-BYTES', \file_get_contents($this->livePharPath()));
+        }
+    }
+
+    /**
+     * C-SES-5.b: the legacy one-cycle fallback. A release carrying only the
+     * raw-bytes .minisig still swaps (where crypto exists), but not before
+     * the deprecation notice names its replacement, and whatever the leg
+     * raised for its own duration the process gives back — pinned against a
+     * limit ('64M') below filesize-plus-headroom so the raise genuinely
+     * fires between the ini snapshot and the restore.
+     */
+    public function testTheLegacyRawBytesLegStillVerifiesBehindADeprecationNotice(): void
+    {
+        $before = (string) ini_get('memory_limit');
+        $exit = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(),
+            $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', self::SIGNED_PAYLOAD_BYTES, sigBody: self::FIXTURE_VALID_SIGNATURE . "\n")]),
+            $this->livePharPath(),
+            'v0.1.0',
+            self::FIXTURE_PUBLIC_KEY_BASE64,
+        );
+        self::assertSame($before, (string) ini_get('memory_limit'), 'whatever the leg widened for its own duration, it handed back');
+        $text = $this->errorText();
+        self::assertStringContainsString('signs the raw phar bytes', $text);
+        self::assertStringContainsString(SelfUpdate::SIDECAR_SIGNATURE_ASSET, $text, 'the notice names the replacement to publish');
+        if (\function_exists('sodium_crypto_sign_verify_detached')) {
+            self::assertSame(NonInteractive::EXIT_OK, $exit, 'one further release cycle remains fully supported');
+            self::assertSame(self::SIGNED_PAYLOAD_BYTES, \file_get_contents($this->livePharPath()));
+        } else {
+            self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+            self::assertStringContainsString('does not verify', $text);
+        }
+    }
+
+    /**
+     * C-SES-5.b: the raise mechanism itself, pinned at the unit level so the
+     * end-to-end leg above owns only its own story. Shorthand parsing feeds
+     * the comparison; the raise fires for a finite too-small limit and hands
+     * back the old value, while an unlimited or already-big-enough limit is
+     * left untouched — the widening is best-effort, the verification is not.
+     * The finite-limit shapes are pinned INSIDE real `-d memory_limit`
+     * children because PHP's runtime cannot conjure them here: a decrease
+     * below the process' current usage is refused, and once a process has
+     * gone unlimited no finite value is ever settable again. A launch flag
+     * makes both shapes true from the child's first byte.
+     */
+    public function testTheRaiseForRawBytesVerificationWidensOnlyWhatItMust(): void
+    {
+        $parse = new \ReflectionMethod(SelfUpdate::class, 'parseShorthandBytes');
+        $parse->setAccessible(true);
+        self::assertSame(-1, $parse->invoke(null, ''), 'empty means unlimited, not zero');
+        self::assertSame(-1, $parse->invoke(null, '-1'), 'the sentinel survives');
+        self::assertSame(128, $parse->invoke(null, '128'));
+        self::assertSame(4096 * 1024, $parse->invoke(null, '4096K'));
+        self::assertSame(128 * 1024 * 1024, $parse->invoke(null, '128M'));
+        self::assertSame(2 * 1024 * 1024 * 1024, $parse->invoke(null, '2G'));
+
+        $probe = $this->dir . '/raise-probe.bin';
+        self::assertNotFalse(\file_put_contents($probe, 'ABCD'));
+        $script = $this->dir . '/child-memory-raise.php';
+        self::assertNotFalse(\file_put_contents($script, <<<'PHP'
+            <?php
+            declare(strict_types=1);
+
+            require (string) getenv('SUCS_AUTOLOAD');
+            $probe = (string) getenv('SUCS_PROBE');
+            $raise = new ReflectionMethod(SugarCraft\Code\Cli\SelfUpdate::class, 'raiseMemoryForRawBytesVerify');
+            $raise->setAccessible(true);
+            $fail = static function (string $what): never {
+                fwrite(STDERR, 'CHILD-FAIL: ' . $what . "\n");
+                exit(9);
+            };
+
+            if ((string) ini_get('memory_limit') === '-1') {
+                $restore = $raise->invoke(null, $probe);
+                if ((string) ini_get('memory_limit') !== '-1') {
+                    $fail('unlimited state was widened anyway');
+                }
+                $restore();
+                fwrite(STDOUT, 'UNLIMITEDLEFT=-1' . "\n");
+                fwrite(STDOUT, 'RC=0' . "\n");
+                exit(0);
+            }
+
+            $restore = $raise->invoke(null, $probe);
+            $during = (string) ini_get('memory_limit');
+            $restore();
+            $after = (string) ini_get('memory_limit');
+            fwrite(STDOUT, 'FIRED=' . $during . "\nRESTORED=" . $after . "\n");
+
+            if (ini_set('memory_limit', '512M') === false) {
+                $fail('could not raise to the big-enough state');
+            }
+            $restore = $raise->invoke(null, $probe);
+            $bigLeft = (string) ini_get('memory_limit');
+            $restore();
+            fwrite(STDOUT, 'BIGLEFT=' . $bigLeft . "\n");
+
+            if ($during !== '67108868' || $after !== '32M' || $bigLeft !== '512M') {
+                $fail('the raise did not do exactly filesize+headroom for exactly its own duration');
+            }
+            fwrite(STDOUT, 'RC=0' . "\n");
+            exit(0);
+            PHP));
+
+        $prefix = 'SUCS_AUTOLOAD=' . \escapeshellarg(\dirname(__DIR__, 2) . '/vendor/autoload.php')
+            . ' SUCS_PROBE=' . \escapeshellarg($probe) . ' ';
+        $finite = $this->runWallClockBoundedChild($prefix, \escapeshellarg(\PHP_BINARY) . ' -d memory_limit=32M ' . \escapeshellarg($script) . ' 2>&1');
+        $unlimited = $this->runWallClockBoundedChild($prefix, \escapeshellarg(\PHP_BINARY) . ' -d memory_limit=-1 ' . \escapeshellarg($script) . ' 2>&1');
+
+        self::assertSame(0, $finite[0], 'finite-child pins ran: ' . \implode("\n", $finite[1]));
+        self::assertStringContainsString('FIRED=67108868', \implode("\n", $finite[1]), 'filesize plus the documented headroom, nothing more');
+        self::assertStringContainsString('RESTORED=32M', \implode("\n", $finite[1]), 'the old value comes straight back');
+        self::assertStringContainsString('BIGLEFT=512M', \implode("\n", $finite[1]), 'a limit already above filesize+headroom is left alone');
+        self::assertSame(0, $unlimited[0], 'unlimited-child ran: ' . \implode("\n", $unlimited[1]));
+        self::assertStringContainsString('UNLIMITEDLEFT=-1', \implode("\n", $unlimited[1]), 'an unlimited process needs no widening');
+    }
+
+    /**
+     * C-SES-5.b, THE defect this step exists for: a ~119 MB phar against a
+     * 128 MB default used to die INSIDE verifySignature's whole-file read —
+     * bytes streamed, nothing swapped, exit 255. The stream-safe leg fixes
+     * that by signing the sidecar body instead, and this pin proves it with
+     * a REAL 48 MB artifact inside a REAL `-d memory_limit=32M` child. The
+     * child streams the download to its sink, hashes with hash_file, and
+     * verifies a few dozen bytes — never holding the artifact. Under the
+     * pre-fix code this same child fatals 'Allowed memory size … exhausted'
+     * (exit 255) after downloading; RC=0 with swapped 48 MB bytes is the
+     * regression proof. Bounded through the shared wall-clock trait so a
+     * hung child can never outrun the budget.
+     */
+    public function testAFortyEightMegabyteSidecarSignedSwapFitsInsideAThirtyTwoMegabyteChild(): void
+    {
+        $big = \str_repeat('A', 48 * 1024 * 1024);
+        $entries = [$this->stageRelease(
+            'candy-code/v9.9.9',
+            $big,
+            sigSidecarBody: self::FIXTURE_SIDECAR_SIGNATURE_48_MB . "\n",
+        )];
+        unset($big);
+        $releases = $this->releasesUrl($entries, 'stream-releases.json');
+        $script = $this->dir . '/child-stream-server.php';
+        self::assertNotFalse(\file_put_contents($script, <<<'PHP'
+            <?php
+            declare(strict_types=1);
+
+            $autoload = (string) getenv('SUCS_AUTOLOAD');
+            $srv = (string) getenv('SUCS_SRV');
+            require $autoload;
+
+            $handler = static function (Psr\Http\Message\RequestInterface $request, array $options) use ($srv): GuzzleHttp\Promise\PromiseInterface {
+                $path = $request->getUri()->getPath();
+                $file = $srv . \rawurldecode($path);
+                if (!\is_file($file)) {
+                    return new GuzzleHttp\Promise\RejectedPromise(new GuzzleHttp\Exception\ConnectException(
+                        'fake server has no route ' . $path,
+                        $request,
+                    ));
+                }
+                $size = (string) \filesize($file);
+                if (isset($options['sink']) && \is_string($options['sink'])) {
+                    // The streaming leg: copy without ever materialising the
+                    // body, so the child's whole-process footprint stays
+                    // inside the -d memory_limit=32M it was launched with.
+                    $in = \fopen($file, 'rb');
+                    $out = \fopen($options['sink'], 'wb');
+                    \stream_copy_to_stream($in, $out);
+                    \fclose($in);
+                    \fclose($out);
+
+                    return new GuzzleHttp\Promise\FulfilledPromise(new GuzzleHttp\Psr7\Response(200, ['Content-Length' => $size]));
+                }
+
+                return new GuzzleHttp\Promise\FulfilledPromise(new GuzzleHttp\Psr7\Response(200, ['Content-Length' => $size], GuzzleHttp\Psr7\Utils::streamFor((string) \file_get_contents($file))));
+            };
+
+            $client = new GuzzleHttp\Client([
+                'handler' => GuzzleHttp\HandlerStack::create($handler),
+                'http_errors' => false,
+            ]);
+            $rc = SugarCraft\Code\Cli\SelfUpdate::run(
+                SugarCraft\Code\Cli\ArgvParser::parse(['candy-code', 'self-update']),
+                $client,
+                (string) getenv('SUCS_RELEASES'),
+                (string) getenv('SUCS_LIVE'),
+                'v0.1.0',
+                (string) getenv('SUCS_KEY'),
+            );
+            \fwrite(\STDOUT, 'RC=' . $rc . "\n");
+            exit($rc);
+            PHP));
+
+        $prefix = 'SUCS_AUTOLOAD=' . \escapeshellarg(\dirname(__DIR__, 2) . '/vendor/autoload.php')
+            . ' SUCS_SRV=' . \escapeshellarg($this->dir . '/srv')
+            . ' SUCS_LIVE=' . \escapeshellarg($this->livePharPath())
+            . ' SUCS_KEY=' . \escapeshellarg(self::FIXTURE_SIDECAR_PUBLIC_KEY_BASE64)
+            . ' SUCS_RELEASES=' . \escapeshellarg($releases) . ' ';
+        $command = \escapeshellarg(\PHP_BINARY) . ' -d memory_limit=32M ' . \escapeshellarg($script) . ' 2>&1';
+        [$status, $lines] = $this->runWallClockBoundedChild($prefix, $command);
+        $output = \implode("\n", $lines);
+
+        self::assertStringContainsString('RC=', $output, 'the child ran to completion inside the wall-clock budget (never 137)');
+        self::assertStringNotContainsString('Allowed memory', $output, 'the stream-safe leg never touches the child limit');
+        if (\function_exists('sodium_crypto_sign_verify_detached')) {
+            self::assertSame(0, $status, 'RC=0: the pre-fix child fatal-exits 255 on exactly this shape');
+            self::assertSame(48 * 1024 * 1024, \filesize($this->livePharPath()));
+            self::assertSame(self::SIDECAR_48_MB_PHAR_SHA256, \hash_file('sha256', $this->livePharPath()));
+        } else {
+            self::assertSame(1, $status, 'no-sodium runners refuse loudly; they never OOM and never swap');
+            self::assertStringContainsString('does not verify', $output);
+            self::assertSame('INSTALLED-PHAR-BYTES', \file_get_contents($this->livePharPath()));
+        }
+    }
+
+    /**
      * DST-3 owner action (pinned 2026-10-20): the production DEFAULT is now
      * pinned state. Half one pins the constant's shape: non-empty, strict
      * base64 decoding to exactly the 32-byte raw public key verifyDetached()
@@ -867,6 +1207,15 @@ final class SelfUpdateTest extends TestCase
         self::assertIsArray($selected);
         self::assertSame('v2.0.0', $selected['version']);
         self::assertStringEndsWith('candy-code-v2.0.0.minisig', $selected['sigUrl']);
+        self::assertSame('', $selected['sigSidecarUrl'], 'a legacy-only release reports no stream-safe route, and selection still takes it');
+
+        $this->releasesUrl([
+            $this->stageRelease('candy-code/v3.0.0', 'NEW-THREE', sigSidecarBody: self::FIXTURE_SIDECAR_SIGNATURE),
+        ], 'sidecar-only.json');
+        $streamSafe = SelfUpdate::selectRelease(\json_decode((string) \file_get_contents($this->dir . '/srv/sidecar-only.json'), true));
+        self::assertIsArray($streamSafe);
+        self::assertStringEndsWith('candy-code-v3.0.0.sha256.sig', $streamSafe['sigSidecarUrl']);
+        self::assertSame('', $streamSafe['sigUrl'], 'the inverse pairing too: the quartet reports each asset independently');
     }
 
     // ------------------------------------------------------------------

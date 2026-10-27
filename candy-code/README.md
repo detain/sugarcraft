@@ -121,9 +121,14 @@ Or run the single-file phar — no Composer, no `vendor/`: download
 `candy-code.phar` and its `candy-code.phar.sha256` sidecar from the
 `candy-code/v*` releases at <https://github.com/detain/sugarcraft/releases>,
 verify with `sha256sum -c candy-code.phar.sha256`, run with
-`php candy-code.phar`. Releases from `candy-code/v0.1.1` onward carry
-`candy-code.phar.minisig`, an Ed25519 signature that `candy-code self-update`
-verifies against the pinned key before any swap. Phars from `candy-code/v0.1.0`
+`php candy-code.phar`. Releases from `candy-code/v0.1.1` onward carry an
+Ed25519 signature that `candy-code self-update` verifies against the pinned
+key before any swap. The preferred asset is `candy-code.phar.sha256.sig` — a
+signature over the `candy-code.phar.sha256` sidecar body, so verification
+stays on the stream and the phar never has to fit in memory. The legacy
+`candy-code.phar.minisig` signs the raw phar bytes and is accepted for one
+further release cycle. Despite the file names, both are RAW base64 sodium
+(Ed25519) signatures — neither is in minisign format. Phars from `candy-code/v0.1.0`
 and earlier are unsigned and report an uncomparable `dev-master` version
 stamp, so an install from one cannot self-update — download
 `candy-code/v0.1.1` manually instead. `self-update` keeps the phar current
