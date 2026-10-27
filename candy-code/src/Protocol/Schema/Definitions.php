@@ -52,10 +52,18 @@ final class Definitions
                 'updatedAt' => Schema::string()->nullable(),
                 'turns' => Schema::integer(0)->nullable(),
                 'preview' => Schema::string()->nullable(),
+                // C-SES-2.c: the FTS5 body-match snippet, present only on a
+                // row read through `session.list {query}` with the full-text
+                // path answering; null everywhere else.
+                'snippet' => Schema::string()->nullable(),
                 'open' => Schema::boolean(),
                 'status' => Schema::enum(['closed', 'idle', 'busy', 'waiting_permission']),
                 'permissionMode' => Schema::ref(self::PERMISSION_MODE)->nullable(),
                 'spentUsd' => Schema::number(0)->nullable(),
+                // The ≥ companion of spentUsd (SES-1 law): true means the
+                // figure is a lower bound. Read off the row's sticky
+                // cost_unpriced cache, so it holds for closed sessions too.
+                'spendUnpriced' => Schema::boolean(),
                 'root' => Schema::string()->describe('Set by the serve gateway on a session another project root\'s workspace host answered for (roadmap O-7).'),
             ], ['id', 'open', 'status']),
             self::PENDING_ASK => Schema::object([
@@ -190,6 +198,12 @@ final class Definitions
                 'cacheCreationTokens' => Schema::integer(0)->nullable(),
                 'reasoningTokens' => Schema::integer(0)->nullable(),
                 'costUsd' => Schema::number(0),
+                // SES-1 disclosure on the live wire: the model a frame was
+                // billed against when no price is on file, null otherwise.
+                // Usage::toArray() has carried it since the ≥ law; naming it
+                // here is what lets the web ≥ badge fire mid-turn instead of
+                // only from the next snapshot (C-SES-2.c).
+                'unpricedModel' => Schema::string()->nullable(),
             ]),
             self::MEDIA_REF => Schema::object([
                 'artifactId' => Schema::string()->describe('MediaStore artifact id: the stored name minus its final extension.'),

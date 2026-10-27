@@ -314,6 +314,14 @@ final class ServerContext
     /**
      * A session as `session.list` and the `session.*` events describe it.
      *
+     * The spend pair is read from ONE source per state (SES-1/SES-2): an
+     * OPEN session reports its live in-process tracker, a closed one falls
+     * back to the store's cached `cost_usd`/`cost_unpriced` — the same
+     * figures the ledger folds onto the row inside its own write transaction,
+     * so no query re-SUMs `usage_records` per list page. `snippet` rides only
+     * on a row the hub read through the ranked body search; every other
+     * summary carries null, exactly like SessionRow's own law.
+     *
      * @param array<string, mixed> $row a `sessions` row
      * @return array<string, mixed>
      */
@@ -333,10 +341,14 @@ final class ServerContext
             'updatedAt' => $row['last_activity'] ?? ($row['updated_at'] ?? null),
             'turns' => isset($row['turns']) ? (int) $row['turns'] : null,
             'preview' => $row['last_preview'] ?? null,
+            'snippet' => $row['bodySnippet'] ?? null,
             'open' => $host !== null,
             'status' => $host === null ? 'closed' : $this->feedFor($host)->status(),
             'permissionMode' => $host?->permissionMode()?->value,
-            'spentUsd' => $host?->spentUsd(),
+            'spentUsd' => $host !== null
+                ? $host->spentUsd()
+                : (isset($row['cost_usd']) && \is_numeric($row['cost_usd']) ? (float) $row['cost_usd'] : null),
+            'spendUnpriced' => (int) ($row['cost_unpriced'] ?? 0) !== 0,
         ];
     }
 

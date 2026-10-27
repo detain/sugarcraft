@@ -5,6 +5,8 @@ import { useConnectionStore } from './connection'
 
 const PAGE = 200
 const MAX_PAGES = 10
+/** C-SES-2.c: keystrokes inside this window collapse into one server round trip. */
+const SEARCH_DEBOUNCE_MS = 250
 
 function stamp(summary: SessionSummary): string {
   return summary.updatedAt ?? summary.createdAt ?? ''
@@ -121,6 +123,58 @@ export const useSessionsStore = defineStore('sessions', () => {
     byId.value = next
   }
 
+  /**
+   * C-SES-2.c: the sidebar's filter is a SERVER search, not a client-side
+   * sweep over whatever the last full page cached — typing routes through
+   * `session.list {query}`, which ranks by FTS5 body match (with the
+   * name/preview/id LIKE degrade) and carries each hit's snippet. Keystrokes
+   * inside SEARCH_DEBOUNCE_MS collapse to one round trip, and a result that
+   * loses the race to a newer query (or a clear) is dropped.
+   *
+   * `searchResults` is null while no query is active — the sidebar lists the
+   * full index then; while one is active it lists exactly what the server
+   * ranked.
+   */
+  const searchResults = ref<SessionSummary[] | null>(null)
+  const searching = ref(false)
+  let searchTimer: ReturnType<typeof setTimeout> | null = null
+  let searchSeq = 0
+
+  function search(query: string): void {
+    if (searchTimer !== null) {
+      clearTimeout(searchTimer)
+      searchTimer = null
+    }
+    const term = query.trim()
+    if (term === '') {
+      searchSeq++
+      searchResults.value = null
+      searching.value = false
+      return
+    }
+    searching.value = true
+    searchSeq++
+    const seq = searchSeq
+    searchTimer = setTimeout(() => {
+      searchTimer = null
+      void (async () => {
+        try {
+          const result: { items: SessionSummary[]; nextCursor: string | null } = await connection.request(
+            'session.list',
+            { limit: PAGE, query: term },
+          )
+          if (seq !== searchSeq) return
+          searchResults.value = result.items
+        } catch {
+          // A failed search leaves the previous results on screen; the index
+          // itself is untouched either way.
+        } finally {
+          if (seq === searchSeq) searching.value = false
+        }
+      })()
+    }, SEARCH_DEBOUNCE_MS)
+  }
+
   connection.onHello(() => {
     void load()
   })
@@ -150,5 +204,5 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   })
 
-  return { byId, items, loading, loaded, error, load, create, rename, remove, fork, close, exportTranscript }
+  return { byId, items, loading, loaded, error, searchResults, searching, load, search, create, rename, remove, fork, close, exportTranscript }
 })

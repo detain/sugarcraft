@@ -90,28 +90,11 @@ final class SessionMethods
         $cursor = $params->optionalString('cursor', self::SESSION_ID_MAX);
         $query = $params->optionalString('query', 256);
 
-        $hub = $call->server->hub();
-        if ($query === null) {
-            $page = $hub->list($limit, $cursor);
-        } else {
-            // Filtered before paging, so a page is $limit MATCHES.
-            $page = ['sessions' => [], 'nextCursor' => null];
-            $after = $cursor;
-            do {
-                $chunk = $hub->list(200, $after);
-                foreach ($chunk['sessions'] as $row) {
-                    $haystack = \strtolower((string) ($row['name'] ?? '') . ' ' . (string) ($row['id'] ?? '') . ' ' . (string) ($row['last_preview'] ?? ''));
-                    if (\str_contains($haystack, \strtolower($query))) {
-                        if (\count($page['sessions']) === $limit) {
-                            $page['nextCursor'] = (string) $page['sessions'][$limit - 1]['id'];
-                            break 2;
-                        }
-                        $page['sessions'][] = $row;
-                    }
-                }
-                $after = $chunk['nextCursor'];
-            } while ($after !== null);
-        }
+        // C-SES-2.c: $query reaches FTS through the hub — bodies ranked,
+        // snippets attached, LIKE as the degrade — instead of str_contains
+        // over what the first 200-row chunk happened to hold. Both paths
+        // page $limit MATCHES, so the cursor law is one law.
+        $page = $call->server->hub()->list($limit, $cursor, $query);
 
         return [
             'items' => \array_map(static fn (array $row): array => self::summary($call, $row), $page['sessions']),

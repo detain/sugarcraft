@@ -297,6 +297,29 @@ describe('reducer: snapshot', () => {
     expect(legacy.unpriced).toBe(false)
   })
 
+  // C-SES-2.c: the ≥ badge must not wait for the next snapshot — the
+  // per-call usage frame names its unpriced model, and the reducer reads it.
+  it('latches the unpriced badge from a mid-turn usage frame', () => {
+    const priced = run(createState('s1'), [
+      ev('usage.updated', { turnUsage: { totalTokens: 10, costUsd: 0.25, unpricedModel: null } }),
+    ])
+    expect(priced.turnUsage).toMatchObject({ costUsd: 0.25 })
+    expect(priced.unpriced).toBe(false, 'a priced frame is not the lower bound')
+
+    const unpriced = run(createState('s1'), [
+      ev('usage.updated', { turnUsage: { totalTokens: 10, costUsd: 0, unpricedModel: 'mystery-9' } }),
+    ])
+    expect(unpriced.unpriced).toBe(true, 'an unpriced frame lights the badge mid-turn')
+
+    const latched = run(unpriced, [
+      ev('usage.updated', { turnUsage: { totalTokens: 12, costUsd: 0.1, unpricedModel: null } }),
+    ])
+    expect(latched.unpriced).toBe(true, 'a later priced frame never un-says the blindness already billed')
+
+    const keyless = run(createState('s1'), [ev('usage.updated', { turnUsage: { totalTokens: 5, costUsd: 0.2 } })])
+    expect(keyless.unpriced).toBe(false, 'a frame that names no model is priced, absent stays absent')
+  })
+
   it('a refused row keeps its denial', () => {
     const [item] = itemsFromRow({ role: 'assistant', content: 'x', toolResults: [{ name: 'Write', result: '', error: 'refused', id: 'c', denial: 'UserRejected' }] }, 0)
     expect(item).toMatchObject({ kind: 'tool', status: 'denied', denial: { kind: 'UserRejected', reason: 'refused' } })

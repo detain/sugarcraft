@@ -132,6 +132,41 @@ final class SessionHubTest extends TestCase
         $hub->closeAll();
     }
 
+    /**
+     * C-SES-2.c: the hub's query arm answers from the FTS path — ranked
+     * SessionRow objects converted at this array boundary, snippets kept,
+     * the open marks and the cursor law identical to the plain page.
+     */
+    public function testTheQueryArmPagesRankedBodyMatchesWithTheirSnippets(): void
+    {
+        foreach (['x', 'y', 'z'] as $id) {
+            $this->store->createSession($id, 'p', 'm');
+            $this->store->saveTranscript($id, [
+                ['role' => 'user', 'content' => $id === 'x' ? 'a plain discussion' : 'the octopus arrived at ' . $id],
+            ]);
+        }
+        $hub = SessionHub::new(WorkspaceContext::new(sessionStore: $this->store));
+        $hub->open('z');
+
+        $first = $hub->list(1, null, 'octopus');
+        self::assertCount(1, $first['sessions']);
+        self::assertNotNull($first['nextCursor'], 'the second match waits behind the cursor');
+        self::assertSame($first['sessions'][0]['id'], $first['nextCursor'], 'the cursor is the last id handed out');
+        self::assertStringContainsString('[octopus]', (string) $first['sessions'][0]['bodySnippet']);
+
+        $second = $hub->list(1, $first['nextCursor'], 'octopus');
+        self::assertCount(1, $second['sessions']);
+        self::assertNull($second['nextCursor']);
+
+        $all = [...$first['sessions'], ...$second['sessions']];
+        self::assertEqualsCanonicalizing(['y', 'z'], array_column($all, 'id'), 'x never matches and the ranked pages drop nothing');
+        foreach ($all as $row) {
+            self::assertSame($row['id'] === 'z', $row['open'], 'the open mark rides the ranked row');
+        }
+        self::assertArrayNotHasKey('bodySnippet', $hub->list(10)['sessions'][0], 'the plain page stays byte-unchanged');
+        $hub->closeAll();
+    }
+
     public function testACapBelowOneIsRefused(): void
     {
         $this->expectException(\InvalidArgumentException::class);

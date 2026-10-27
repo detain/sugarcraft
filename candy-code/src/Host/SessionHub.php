@@ -7,6 +7,8 @@ namespace SugarCraft\Code\Host;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Session\SessionQuery;
+use SugarCraft\Code\Session\SessionRow;
 
 /**
  * The open sessions of one workspace, each with its {@see SessionHost}
@@ -189,7 +191,20 @@ final class SessionHub
      *
      * @return array{sessions: list<array<string, mixed>>, nextCursor: ?string}
      */
-    public function list(int $limit = 20, ?string $cursor = null): array
+    /**
+     * The workspace's sessions, newest activity first (ranked best-hit first
+     * with $query), paged by id cursor.
+     *
+     * $query switches the read to the SES-2 full-text path — bodies ranked
+     * by FTS5 with a snippet on each row — degrading to the name/preview/id
+     * LIKE prefilter when the module cannot answer (C-SES-2.c, which replaces
+     * the filter-every-page-then-discard loop this method used to run).
+     * Cursor paging keeps the same law on both paths: the cursor is the last
+     * id this page handed out, and the next page continues where it stopped.
+     *
+     * @return array{sessions: list<array<string, mixed>>, nextCursor: ?string}
+     */
+    public function list(int $limit = 20, ?string $cursor = null, ?string $query = null): array
     {
         $store = $this->workspace->sessionStore;
         if (!$store instanceof EnhancedSessionStore || $limit < 1) {
@@ -197,8 +212,16 @@ final class SessionHub
         }
 
         // One row beyond the page tells whether another page exists; a cursor
-        // means reading past everything up to it.
-        $rows = $store->listSessionsWithMeta(PHP_INT_MAX);
+        // means reading past everything up to it. The filtered path returns
+        // SessionRow OBJECTS (rank order, snippet attached); it is converted
+        // through toArray() here, at the hub's array boundary, so callers
+        // downstream keep seeing the storage-shaped rows they always did.
+        $rows = $query !== null
+            ? array_map(
+                static fn (SessionRow $row): array => [...$row->toArray(), 'bodySnippet' => $row->bodySnippet],
+                $store->listSessionsFiltered(SessionQuery::new()->withBodySearch($query)->withLimit(PHP_INT_MAX)),
+            )
+            : $store->listSessionsWithMeta(PHP_INT_MAX);
         if ($cursor !== null) {
             $ids = array_map(static fn (array $row): string => (string) ($row['id'] ?? ''), $rows);
             $at = array_search($cursor, $ids, true);

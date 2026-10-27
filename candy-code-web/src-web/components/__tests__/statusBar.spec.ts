@@ -1,10 +1,11 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { reactive } from 'vue'
 import { beforeEach, describe, expect, it } from 'vitest'
 import StatusBar from '../StatusBar.vue'
 import { summary as sessionSummary, Wire } from '../grid/__tests__/harness'
-import type { SessionSummary } from '../../protocol/generated'
-import { createState } from '../../stores/reducer'
+import type { EventEnvelope, SessionSummary } from '../../protocol/generated'
+import { applyEvent, createState } from '../../stores/reducer'
 
 /**
  * WEB-2: the status bar drives the two built-ins that gained host bodies.
@@ -131,5 +132,40 @@ describe('StatusBar spend bound (WEB-5 parity)', () => {
     expect(spend.text()).toBe('≥$0.00')
     expect(spend.attributes('data-unpriced')).toBe('true')
     expect(spend.attributes('title')).toContain('lower bound')
+  })
+
+  // C-SES-2.c: the badge no longer waits for the next snapshot. A usage
+  // frame in the middle of the FIRST turn of a never-snapshotted state —
+  // the exact shape a fresh `serve` session streams — is enough.
+  it('reads ≥ on a live turn the moment a usage frame names an unpriced model', async () => {
+    const state = reactive(createState('s1'))
+    state.turnId = 't1'
+    const wrapper = mount(StatusBar, {
+      props: {
+        state,
+        summary: sessionSummary('s1') as unknown as SessionSummary,
+        contextPct: null,
+        connection: 'live',
+      },
+    })
+    expect(wrapper.find('[data-testid="spend"]').text()).toBe('$0.00')
+
+    applyEvent(state, {
+      sessionId: 's1', seq: 1, type: 'usage.updated', ts: 1, durable: true, turnId: 't1',
+      data: { turnUsage: { totalTokens: 10, costUsd: 0, unpricedModel: 'mystery-9' } },
+    } as EventEnvelope)
+    await wrapper.vm.$nextTick()
+
+    const spend = wrapper.find('[data-testid="spend"]')
+    expect(spend.text()).toBe('≥$0.00', 'the live turn is a lower bound from its first call')
+    expect(spend.attributes('data-unpriced')).toBe('true')
+
+    applyEvent(state, {
+      sessionId: 's1', seq: 2, type: 'usage.updated', ts: 2, durable: true, turnId: 't1',
+      data: { turnUsage: { totalTokens: 20, costUsd: 0.25, unpricedModel: null } },
+    } as EventEnvelope)
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-testid="spend"]').text()).toBe('≥$0.25', 'the bound grows, the badge stays')
   })
 })

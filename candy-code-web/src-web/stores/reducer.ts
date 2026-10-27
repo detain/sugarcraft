@@ -114,7 +114,10 @@ export interface SessionState {
    * snapshot carries the bit as `spendUnpriced`, present only when true
    * (SES-1: `SessionSnapshot::shape()` emits it exactly that way). Wire-
    * truth key flip 2026-10-23 — the reader used to chase an `unpricedModel`
-   * key no server lane ever emitted; absent stays priced.
+   * key no server lane ever emitted in a SNAPSHOT; absent stays priced.
+   * Since C-SES-2.c the per-call `usage.updated` frame's `unpricedModel`
+   * (on the wire since the ≥ law, schema-named now) latches this flag
+   * mid-turn.
    */
   unpriced: boolean
   permissionMode: PermissionMode | null
@@ -585,7 +588,18 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
 
     case 'usage.updated': {
       const { data } = envelope as unknown as Ev<'usage.updated'>
-      if (data.turnUsage) state.turnUsage = data.turnUsage
+      if (data.turnUsage) {
+        state.turnUsage = data.turnUsage
+        // C-SES-2.c: the per-call Usage frame carries `unpricedModel` — the
+        // model it was billed against when no price is on file, null when
+        // priced. Flipping the badge HERE (not only at the next snapshot)
+        // is what makes a live turn read ≥$0.00 from its very first call;
+        // an unpriced frame latches, a priced frame never un-latches a
+        // mid-turn truth the ledger already recorded.
+        if (typeof data.turnUsage.unpricedModel === 'string' && data.turnUsage.unpricedModel !== '') {
+          state.unpriced = true
+        }
+      }
       break
     }
 

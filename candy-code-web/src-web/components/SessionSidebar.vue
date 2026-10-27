@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ago, oneLine } from '../lib/format'
+import { ago, oneLine, spendLabel } from '../lib/format'
 import type { SessionSummary } from '../protocol/generated'
 import { useApprovalsStore } from '../stores/approvals'
 import { useConnectionStore } from '../stores/connection'
@@ -25,11 +25,22 @@ const menuFor = ref<string | null>(null)
 
 const EXPORT_EXTENSIONS: Record<'markdown' | 'json' | 'text', string> = { markdown: 'md', json: 'json', text: 'txt' }
 
-const shown = computed(() => {
-  const query = filter.value.trim().toLowerCase()
-  if (query === '') return sessions.items
-  return sessions.items.filter((s) => `${s.name ?? ''} ${s.preview ?? ''} ${s.id}`.toLowerCase().includes(query))
-})
+/**
+ * C-SES-2.c: a non-empty filter lists what the SERVER ranked — typing routes
+ * through `session.list {query}` (FTS body search with the LIKE degrade) via
+ * the store's debounced `search()`, so matches in sessions that never made
+ * the cached page are findable and body-only matches are not silently lost
+ * the way the old client-side str filter dropped them.
+ */
+const shown = computed(() => (filter.value.trim() === '' ? sessions.items : sessions.searchResults ?? []))
+watch(filter, (term) => sessions.search(term))
+
+/** The row's spend, in the TUI's lower-bound form; empty when none is recorded. */
+function spendFor(summary: SessionSummary): string {
+  return summary.spentUsd === null || summary.spentUsd === undefined
+    ? ''
+    : spendLabel(summary.spentUsd, summary.spendUnpriced === true)
+}
 
 function title(summary: SessionSummary): string {
   return summary.name || (summary.preview ? oneLine(summary.preview, 48) : summary.id)
@@ -157,6 +168,7 @@ function onKey(event: KeyboardEvent): void {
     <input v-model="filter" type="search" placeholder="Filter…" aria-label="Filter sessions">
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="sessions.loaded && sessions.items.length === 0" class="empty">No sessions yet.</p>
+    <p v-else-if="filter.trim() !== '' && !sessions.searching && shown.length === 0" class="empty" data-testid="search-empty">No sessions match “{{ filter.trim() }}”.</p>
     <ul>
       <li v-for="summary in shown" :key="summary.id" class="row" :class="{ open: menuFor === summary.id }">
         <a
@@ -171,7 +183,8 @@ function onKey(event: KeyboardEvent): void {
           <span class="dot" :class="summary.status" aria-hidden="true" />
           <span class="name">{{ title(summary) }}</span>
           <span v-if="approvals.countFor(summary.id) > 0" class="badge" :title="`${approvals.countFor(summary.id)} waiting for an answer`" data-testid="ask-badge">{{ approvals.countFor(summary.id) }}</span>
-          <span class="meta">{{ summary.status === 'closed' ? '' : summary.status.replace('_', ' ') }}<template v-if="summary.updatedAt"> · {{ ago(summary.updatedAt) }}</template><template v-if="elsewhere(summary)"> · <span :title="summary.root" data-testid="session-root">{{ elsewhere(summary) }}/</span></template></span>
+          <span v-if="summary.snippet" class="snippet" data-testid="session-snippet">{{ oneLine(summary.snippet, 90) }}</span>
+          <span class="meta">{{ summary.status === 'closed' ? '' : summary.status.replace('_', ' ') }}<template v-if="summary.updatedAt"> · {{ ago(summary.updatedAt) }}</template><template v-if="spendFor(summary)"> · <span data-testid="session-spend">{{ spendFor(summary) }}</span></template><template v-if="elsewhere(summary)"> · <span :title="summary.root" data-testid="session-root">{{ elsewhere(summary) }}/</span></template></span>
         </a>
         <button
           type="button"
@@ -232,7 +245,7 @@ ul {
 .session {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  grid-template-areas: 'dot name badge' '. meta meta';
+  grid-template-areas: 'dot name badge' '. snippet snippet' '. meta meta';
   column-gap: 0.4rem;
   padding: 0.35rem 0.5rem;
   border-radius: 6px;
@@ -329,6 +342,14 @@ ul {
   padding: 0 0.4rem;
   font-size: 0.75rem;
   font-weight: 700;
+}
+.snippet {
+  grid-area: snippet;
+  font-size: 0.75rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .meta {
   grid-area: meta;
