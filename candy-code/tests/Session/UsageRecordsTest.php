@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\SpendLedger;
 use SugarCraft\Code\Host\WorkspaceContext;
+use SugarCraft\Code\Message;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionRow;
 use SugarCraft\Code\Session\SessionStore;
@@ -303,6 +304,59 @@ final class UsageRecordsTest extends TestCase
             1,
             (int) $pdo->query("SELECT COUNT(*) FROM session_tombstones WHERE id = 's1'")->fetchColumn(),
             'the delete left its mark',
+        );
+    }
+
+    public function testATranscriptSaveForADeletedSessionDoesNotResurrectTranscript(): void
+    {
+        // W7 wave-review MINOR (cure-W7): the SES-1-P5 gate covered
+        // appendUsageRecord() alone. saveTranscript()'s sibling recreate read
+        // "no session row" as "not minted yet" for a TOMBSTONED id too, so a
+        // save landing one tick after the delete resurrected the session as
+        // candy-code/unknown with its transcript behind it. The refusal is
+        // the whole fix: nothing written, the id stays dead — the FK is
+        // exactly why the refusal skips the entire save, not just the mint.
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('s1', 'p', 'm');
+        $store->saveTranscript('s1', [Message::user('first')]);
+        $store->deleteSession('s1');
+
+        $store->saveTranscript('s1', [Message::user('still talking')]);
+
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        self::assertNull($store->session('s1'), 'the sessions row stays destroyed');
+        self::assertSame(
+            0,
+            (int) $pdo->query("SELECT COUNT(*) FROM session_transcripts WHERE session_id = 's1'")->fetchColumn(),
+            'the save writes no transcript behind the refused mint',
+        );
+        self::assertSame(
+            1,
+            (int) $pdo->query("SELECT COUNT(*) FROM session_tombstones WHERE id = 's1'")->fetchColumn(),
+            'the delete left its mark',
+        );
+    }
+
+    public function testASessionEventForADeletedSessionDoesNotResurrectEvents(): void
+    {
+        // The second sibling path of the same cure-W7 class. The refused
+        // append answers 0 — the same "no event was written" sentinel
+        // sessionEventBounds()/latestSeq() already give for a log that never
+        // was; a real seq starts at 1. The polarity stands: a NEVER-minted id
+        // still lazy-mints exactly as SessionEventsTableTest pins it.
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('s1', 'p', 'm');
+        $store->appendSessionEvent('s1', 'turn.started');
+        $store->deleteSession('s1');
+
+        self::assertSame(0, $store->appendSessionEvent('s1', 'message.created', ['text' => 'still talking']));
+
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        self::assertNull($store->session('s1'), 'the sessions row stays destroyed');
+        self::assertSame(
+            0,
+            (int) $pdo->query("SELECT COUNT(*) FROM session_events WHERE session_id = 's1'")->fetchColumn(),
+            'the append writes no event behind the refused mint',
         );
     }
 

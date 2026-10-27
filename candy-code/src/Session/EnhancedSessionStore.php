@@ -1956,6 +1956,14 @@ final class EnhancedSessionStore
      * the foreign key would otherwise refuse the write and the conversation
      * the user is still having would never be saved.
      *
+     * EXCEPT for an id the user deleted (SES-1-P5, cure-W7): as in
+     * {@see appendUsageRecord()}, the tombstone ledger turns that recreate
+     * from a lazy mint into a resurrection of a session as
+     * `candy-code/unknown`, so a tombstoned id writes nothing at all —
+     * neither the row nor the transcript that needs it for the foreign key.
+     * A never-minted id still gets its row, exactly as every save predating
+     * this gate made it.
+     *
      * EVERY SAVED ROW HAS AN IDENTITY (roadmap 1.B-1, schema
      * {@see TRANSCRIPT_SCHEMA_VERSION}). A row that already carries its
      * `id`/`ref` keeps them; one that does not is given the next ref from the
@@ -1985,6 +1993,16 @@ final class EnhancedSessionStore
         // the previous transcript and no stray blobs.
         $this->writeTransaction(function () use ($sessionId, $messages): void {
             if ($this->sessionStore->session($sessionId) === null) {
+                // SES-1-P5 (cure-W7): destroyed on purpose, not yet minted.
+                // The save of a deleted session writes nothing — no
+                // resurrected `candy-code/unknown` row, and no transcript
+                // orphaned behind the foreign key that needs one. Silence is
+                // honest here: the conversation the user deleted is gone,
+                // which is precisely what they asked for.
+                if ($this->sessionTombstoned($sessionId)) {
+                    return;
+                }
+
                 $this->sessionStore->createSession($sessionId, 'candy-code', 'unknown');
             }
 
@@ -2342,7 +2360,10 @@ final class EnhancedSessionStore
      *
      * The session row is recreated if it has gone, for the reason
      * {@see saveTranscript()} recreates it - the foreign key would otherwise
-     * refuse the write.
+     * refuse the write - and, exactly as there, EXCEPT for an id the user
+     * deleted (SES-1-P5, cure-W7): a tombstoned id writes nothing and answers
+     * seq 0, the same "no event" sentinel {@see sessionEventBounds()} gives
+     * for a log that never was. A never-minted id still gets its row.
      *
      * Retention: once the log holds more than $retain events the oldest are
      * dropped in the same transaction; a reader whose cursor fell behind
@@ -2374,6 +2395,15 @@ final class EnhancedSessionStore
 
         return $this->writeTransaction(function () use ($sessionId, $type, $encoded, $tsMs, $retain): int {
             if ($this->sessionStore->session($sessionId) === null) {
+                // SES-1-P5 (cure-W7): destroyed on purpose, not yet minted.
+                // An event for a deleted session writes nothing — no
+                // resurrected `candy-code/unknown` row, and no event orphaned
+                // behind the foreign key that needs one — and the refused
+                // append answers 0 rather than a seq that was never earned.
+                if ($this->sessionTombstoned($sessionId)) {
+                    return 0;
+                }
+
                 $this->sessionStore->createSession($sessionId, 'candy-code', 'unknown');
             }
 
