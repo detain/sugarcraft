@@ -661,8 +661,19 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
                 RuntimeNoticeSink::hasPending(),
                 'the second launch inherited the first session\'s undrained inbox',
             );
-            self::assertNull(
-                $second->subscriptions(),
+            // C-AGT-7.a round-2: this leg read `assertNull($second->subscriptions())`
+            // while a launch with nothing to tick had exactly one subscription shape.
+            // The lane's slow schedule-watch changed what "nothing of ours is armed"
+            // LOOKS like — a Bootstrap chat on a file-backed roster now returns
+            // Subscriptions('code.schedule-watch') — not what it PINS, so the leg
+            // names the armed thing instead of the whole object, the same has()-on-id
+            // carve ScheduleLoopFireTest spells for the watch/fast pair. The watch
+            // arm is allowed: it answers BackgroundTickMsg and the pump no-ops
+            // ([$this, null]) while nothing moved. An armed NOTICE-POLL is the
+            // violation this test exists to catch: it would mean the second Chat
+            // believes it holds a row carried from the first.
+            self::assertFalse(
+                $second->subscriptions()?->has('code.runtime-notice-poll') ?? false,
                 'the second Chat armed the poll, so it believes it has a row to deliver',
             );
 
