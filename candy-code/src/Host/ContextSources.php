@@ -128,10 +128,23 @@ final class ContextSources
      * (null when no session is on screen — every session figure is then
      * honestly absent rather than zero); the workspace half is read from
      * $workspace. $mcpInventory is injectable so tests pin the shaping
-     * without a live `.mcp.json`; null runs the read-never-run census.
+     * without a live `.mcp.json`; null runs the read-never-run census —
+     * C-MCP-4.a feeds it the FULL nine-key
+     * {@see \SugarCraft\Code\Cli\McpDecision::mcpServerInventory()} shape,
+     * so both tiers' rows reach the wire.
+     *
+     * MCP-3 (dormant-wired here): user-tier rows append after the project
+     * rows, each badged with its `tier`; a name the project tier declares
+     * never repeats as a user row because the census already shadows it
+     * (the launch's precedence, mirrored on the listing). $mcpLiveness is
+     * injectable for the same reason as $mcpInventory; null reads
+     * {@see Bootstrap::mcpLivenessSnapshot()} — MEMO ONLY, never a launch,
+     * so a process holding no client answers null on every row and a
+     * declared-but-not-started server answers a row with null liveness.
      *
      * @param array{files: list<array{path: string, bytes: int, personal: bool}>, refused: list<array{path: string, reason: string}>}|null $instructionFiles
-     * @param array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, skipped: list<string>, error: string|null}|null $mcpInventory
+     * @param array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, skipped: list<string>, error: string|null, userStatus: string, userPath: string, userServers: list<array{name: string, type: string, detail: string}>, userSkipped: list<string>, userError: string|null}|null $mcpInventory
+     * @param array<string, array{transport: string, up: bool|null, tools: int}>|null $mcpLiveness
      *
      * @return array<string, mixed>
      */
@@ -140,6 +153,7 @@ final class ContextSources
         ?ContextBreakdown $breakdown,
         ?array $instructionFiles,
         ?array $mcpInventory = null,
+        ?array $mcpLiveness = null,
     ): array {
         $files = $instructionFiles === null ? null : array_map(
             static fn (array $file): array => [
@@ -151,6 +165,34 @@ final class ContextSources
         );
         $untrusted = $instructionFiles === null ? [] : $instructionFiles['refused'];
         $mcp = $mcpInventory ?? Bootstrap::mcpServerInventory($workspace?->root);
+        $liveness = $mcpLiveness ?? Bootstrap::mcpLivenessSnapshot($workspace?->root);
+
+        // C-MCP-4.a: both tiers ride ONE row builder, so the wire cannot
+        // drift into saying different things about the two files it read —
+        // the same law the census itself carries (mcpConfigRows). The
+        // liveness map is keyed by server name across both tiers; the
+        // shadowing makes the keys disjoint, so one lookup serves both.
+        $mcpRow = static function (array $server, string $tier) use ($liveness): array {
+            $live = $liveness[$server['name']] ?? null;
+
+            return [
+                'name' => $server['name'],
+                'transport' => $server['type'],
+                // The census only lists servers when the file is trusted,
+                // so every row here is a trusted entry; the file-level
+                // verdict rides `status`/`userStatus` above.
+                'trust' => 'trusted',
+                'tier' => $tier,
+                'liveness' => $live === null ? null : ['up' => $live['up'], 'tools' => $live['tools']],
+            ];
+        };
+        $mcpRows = [];
+        foreach ($mcp['servers'] as $server) {
+            $mcpRows[] = $mcpRow($server, 'project');
+        }
+        foreach ($mcp['userServers'] as $server) {
+            $mcpRows[] = $mcpRow($server, 'user');
+        }
 
         return [
             'instructionFiles' => $files,
@@ -165,17 +207,10 @@ final class ContextSources
                 'status' => $mcp['status'],
                 'error' => $mcp['error'],
                 'skipped' => $mcp['skipped'],
-                'servers' => array_map(
-                    static fn (array $server): array => [
-                        'name' => $server['name'],
-                        'transport' => $server['type'],
-                        // The census only lists servers when the file is trusted,
-                        // so every row here is a trusted entry; the file-level
-                        // verdict rides `status` above.
-                        'trust' => 'trusted',
-                    ],
-                    $mcp['servers'],
-                ),
+                'userStatus' => $mcp['userStatus'],
+                'userError' => $mcp['userError'],
+                'userSkipped' => $mcp['userSkipped'],
+                'servers' => $mcpRows,
             ],
             'breakdown' => $breakdown === null ? null : self::serialize($breakdown),
         ];

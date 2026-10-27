@@ -24,7 +24,11 @@ const SOURCES = {
     { name: 'release', tier: 'built-in', enabled: true },
     { name: 'legacy', tier: 'project', enabled: false },
   ],
-  mcp: { status: 'trusted', error: null, skipped: [], servers: [{ name: 'fs', transport: 'stdio', trust: 'trusted' }] },
+  mcp: {
+    status: 'trusted', error: null, skipped: [],
+    userStatus: 'absent', userError: null, userSkipped: [],
+    servers: [{ name: 'fs', transport: 'stdio', trust: 'trusted', tier: 'project', liveness: null }],
+  },
   untrusted: [{ path: '/repo/imported.md', reason: 'over the size ceiling' }],
   breakdown: {
     window: 131072,
@@ -71,6 +75,39 @@ describe('ContextPanel (WEB-3a)', () => {
     expect(wrapper.find('[data-testid="context-memory"]').text()).toContain('use pnpm')
     expect(wrapper.find('[data-testid="context-skills"]').text()).toContain('release')
     expect(wrapper.find('[data-testid="context-mcp-status"]').text()).toBe('trusted')
+    expect(wrapper.find('[data-testid="context-mcp-user-heading"]').exists()).toBe(false)
+  })
+
+  it('lists user-scope MCP rows under their own heading, each with its liveness dot', async () => {
+    await wire.connect()
+    const wrapper = mount(ContextPanel, { props: { sessionId: 's1' } })
+    await flushPromises()
+    await wire.answer('context.sources', {
+      ...SOURCES,
+      mcp: {
+        ...SOURCES.mcp,
+        userStatus: 'trusted',
+        servers: [
+          ...SOURCES.mcp.servers,
+          { name: 'live', transport: 'stdio', trust: 'trusted', tier: 'user', liveness: { up: true, tools: 5 } },
+          { name: 'dead', transport: 'http', trust: 'trusted', tier: 'user', liveness: { up: false, tools: 0 } },
+          { name: 'mute', transport: 'sse', trust: 'trusted', tier: 'user', liveness: { up: null, tools: 0 } },
+          { name: 'cold', transport: 'stdio', trust: 'trusted', tier: 'user', liveness: null },
+        ],
+      },
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="context-mcp-user-heading"]').text()).toBe('User scope')
+    const rows = wrapper.findAll('[data-testid="context-mcp-user-row"]')
+    expect(rows).toHaveLength(4)
+    expect(rows.map((row) => row.find('[data-testid="context-mcp-liveness"]').classes())).toEqual([
+      expect.arrayContaining(['liveness', 'up']),
+      expect.arrayContaining(['liveness', 'down']),
+      expect.arrayContaining(['liveness', 'unknown']),
+      expect.arrayContaining(['liveness', 'cold']),
+    ])
+    expect(rows[3]!.text()).toContain('cold')
+    expect(wrapper.find('[data-testid="context-mcp-user"]').text()).not.toContain('fs')
   })
 
   it('renders server paths as plain spans — no markup, no links', async () => {

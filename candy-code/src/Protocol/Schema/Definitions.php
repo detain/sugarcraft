@@ -231,12 +231,20 @@ final class Definitions
                     'status' => Schema::string()->describe('The config-level verdict of the read-never-run census (`Bootstrap::mcpServerInventory`): trusted, refused, or absent. Nothing is started to answer this.'),
                     'error' => Schema::string()->nullable(),
                     'skipped' => Schema::arrayOf(Schema::string()),
+                    'userStatus' => Schema::string()->describe('C-MCP-4.a: the USER tier\'s verdict from the same census — trusted, absent, or disabled; no containment or trust-list verdicts apply to the operator\'s own file (MCP-3).'),
+                    'userError' => Schema::string()->nullable()->describe('Why the user file could not be read, in the same sentence the project tier uses; null when there was nothing to report.'),
+                    'userSkipped' => Schema::arrayOf(Schema::string())->describe('Malformed entries the user file declared, mirrored from the project tier\'s `skipped`.'),
                     'servers' => Schema::arrayOf(Schema::object([
                         'name' => Schema::string(),
                         'transport' => Schema::string(),
                         'trust' => Schema::enum(['trusted'])->describe('Rows exist only while the file is trusted; the http entry\'s URL stays off the wire (the `server.hello` media restraint, restated).'),
-                    ], ['name', 'transport', 'trust'])),
-                ], ['status', 'error', 'skipped', 'servers'])->describe('The `.mcp.json` declaration as `candy-code mcp list` reads it, minus per-entry details.'),
+                        'tier' => Schema::enum(['project', 'user'])->describe('C-MCP-4.a: which file declared the row. A name the project tier declares never appears as a user row — the census shadows it, mirroring the launch\'s precedence.'),
+                        'liveness' => Schema::object([
+                            'up' => Schema::boolean()->nullable()->describe('Whether the started server reports its handshake complete; null only for a transport the client cannot answer for.'),
+                            'tools' => Schema::integer(0)->describe('Tool count the client last saw — a remembered figure, never a fresh exchange.'),
+                        ], ['up', 'tools'])->nullable()->describe('C-MCP-4.a: read from the launch memo only (`Bootstrap::mcpLivenessSnapshot`), NEVER a probe — a process holding no client answers null on every row; a declared server that was never started stays null rather than being launched to be asked.'),
+                    ], ['name', 'transport', 'trust', 'tier', 'liveness'])),
+                ], ['status', 'error', 'skipped', 'userStatus', 'userError', 'userSkipped', 'servers'])->describe('The `.mcp.json` declarations as `candy-code mcp list` reads them — both tiers, minus per-entry details.'),
                 'untrusted' => Schema::arrayOf(Schema::object([
                     'path' => Schema::string(4096),
                     'reason' => Schema::string(),

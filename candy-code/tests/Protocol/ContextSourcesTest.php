@@ -167,7 +167,7 @@ final class ContextSourcesTest extends TestCase
             workspace: null,
             breakdown: $breakdown,
             instructionFiles: null,
-            mcpInventory: ['status' => 'absent', 'path' => '', 'servers' => [], 'skipped' => [], 'error' => null],
+            mcpInventory: self::mcpCensus(),
         );
 
         $byKey = array_column($answer['breakdown']['categories'], null, 'key');
@@ -222,6 +222,44 @@ final class ContextSourcesTest extends TestCase
 
     // ── the builder, pinned through its public API ─────────────────────
 
+    /**
+     * C-MCP-4.a: census fixtures are built in the full nine-key shape
+     * {@see \SugarCraft\Code\Cli\McpDecision::mcpServerInventory()} answers
+     * with — the builder reads both tiers, so the user keys are no longer
+     * optional at these call sites.
+     *
+     * @param list<array{name: string, type: string, detail: string}> $servers
+     * @param list<string> $skipped
+     * @param list<array{name: string, type: string, detail: string}> $userServers
+     * @param list<string> $userSkipped
+     *
+     * @return array<string, mixed>
+     */
+    private static function mcpCensus(
+        string $status = 'absent',
+        string $path = '',
+        array $servers = [],
+        array $skipped = [],
+        ?string $error = null,
+        string $userStatus = 'absent',
+        array $userServers = [],
+        array $userSkipped = [],
+        ?string $userError = null,
+    ): array {
+        return [
+            'status' => $status,
+            'path' => $path,
+            'servers' => $servers,
+            'skipped' => $skipped,
+            'error' => $error,
+            'userStatus' => $userStatus,
+            'userPath' => $userServers === [] && $userSkipped === [] && $userError === null ? '' : '/home/op/.candy-code/mcp.json',
+            'userServers' => $userServers,
+            'userSkipped' => $userSkipped,
+            'userError' => $userError,
+        ];
+    }
+
     public function testTheAnswerBadgesTiersAndRefusalsAndDropsNothingElse(): void
     {
         $answer = ContextSources::answer(
@@ -234,7 +272,7 @@ final class ContextSourcesTest extends TestCase
                 ],
                 'refused' => [['path' => '/repo/imported.md', 'reason' => 'over the size ceiling']],
             ],
-            mcpInventory: ['status' => 'trusted', 'path' => '/repo/.mcp.json', 'servers' => [], 'skipped' => [], 'error' => null],
+            mcpInventory: self::mcpCensus('trusted', '/repo/.mcp.json'),
         );
 
         self::assertSame([
@@ -245,6 +283,18 @@ final class ContextSourcesTest extends TestCase
         self::assertNull($answer['breakdown'], 'no session on screen: every session figure is honestly absent');
         self::assertSame([], $answer['memorySections']);
         self::assertSame([], $answer['skills']);
+        self::assertSame(
+            ['error', 'servers', 'skipped', 'status', 'userError', 'userSkipped', 'userStatus'],
+            (static function (array $m): array {
+                ksort($m);
+
+                return array_keys($m);
+            })($answer['mcp']),
+            'C-MCP-4.a: the mcp object carries the user tier beside the project one — the whole set, nothing else',
+        );
+        self::assertSame('absent', $answer['mcp']['userStatus']);
+        self::assertNull($answer['mcp']['userError']);
+        self::assertSame([], $answer['mcp']['userSkipped']);
     }
 
     public function testTheMcpRowsKeepNameAndTransportAndNeverTheDetail(): void
@@ -256,24 +306,24 @@ final class ContextSourcesTest extends TestCase
             workspace: null,
             breakdown: null,
             instructionFiles: null,
-            mcpInventory: [
-                'status' => 'trusted',
-                'path' => '/repo/.mcp.json',
-                'servers' => [
+            mcpInventory: self::mcpCensus(
+                'trusted',
+                '/repo/.mcp.json',
+                servers: [
                     ['name' => 'api', 'type' => 'http', 'detail' => 'https://secret.example.internal/mcp'],
                     ['name' => 'fs', 'type' => 'stdio', 'detail' => 'npx fs-server'],
                 ],
-                'skipped' => ['bad (entry is string, not a named server object)'],
-                'error' => null,
-            ],
+                skipped: ['bad (entry is string, not a named server object)'],
+            ),
+            mcpLiveness: [],
         );
 
         $json = json_encode($answer['mcp'], \JSON_THROW_ON_ERROR);
         self::assertStringNotContainsString('secret.example.internal', $json);
         self::assertStringNotContainsString('npx fs-server', $json);
         self::assertSame([
-            ['name' => 'api', 'transport' => 'http', 'trust' => 'trusted'],
-            ['name' => 'fs', 'transport' => 'stdio', 'trust' => 'trusted'],
+            ['name' => 'api', 'transport' => 'http', 'trust' => 'trusted', 'tier' => 'project', 'liveness' => null],
+            ['name' => 'fs', 'transport' => 'stdio', 'trust' => 'trusted', 'tier' => 'project', 'liveness' => null],
         ], $answer['mcp']['servers']);
         self::assertSame('trusted', $answer['mcp']['status']);
         self::assertNull($answer['instructionFiles'], 'an unpriced loader record stays null — the panel says "not measured", never "none"');
@@ -289,7 +339,7 @@ final class ContextSourcesTest extends TestCase
             workspace: WorkspaceContext::new(root: $this->fixture->root, sessionStore: $this->fixture->store),
             breakdown: $breakdown,
             instructionFiles: null,
-            mcpInventory: ['status' => 'untrusted', 'path' => '/repo/.mcp.json', 'servers' => [], 'skipped' => [], 'error' => null],
+            mcpInventory: self::mcpCensus('untrusted', '/repo/.mcp.json'),
         );
 
         self::assertSame(['breaks' => 2, 'last' => ['from' => 95, 'to' => 5]], $answer['breakdown']['cacheBreaks']);

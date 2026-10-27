@@ -94,6 +94,26 @@ const CATEGORY_COLORS: Record<string, string> = {
 }
 
 const categories = computed<CategoryRow[] | null>(() => context.sources?.breakdown?.categories ?? null)
+
+// C-MCP-4.a: the MCP census now carries both tiers. Project rows keep the
+// existing list untouched; user-scope rows ride their own heading with a
+// liveness dot — filled when this process's memo says the server is up,
+// struck when it is down, hollow when the client cannot answer, and grey
+// when the memo holds nothing for it (a cold read never launches).
+// P-CTX-BREAKDOWN restyles this whole section later; keep it minimal here.
+type McpServerRow = ContextSourcesResult['mcp']['servers'][number]
+const mcpProjectRows = computed<McpServerRow[]>(
+  () => (context.sources?.mcp.servers ?? []).filter((row) => row.tier === 'project'),
+)
+const mcpUserRows = computed<McpServerRow[]>(
+  () => (context.sources?.mcp.servers ?? []).filter((row) => row.tier === 'user'),
+)
+function livenessDot(row: McpServerRow): { cls: string; label: string } {
+  if (row.liveness === null) return { cls: 'cold', label: 'no liveness data' }
+  if (row.liveness.up === true) return { cls: 'up', label: 'up' }
+  if (row.liveness.up === false) return { cls: 'down', label: 'down' }
+  return { cls: 'unknown', label: 'liveness unknown' }
+}
 const drill = ref<string | null>(null)
 
 function drillCategory(key: string): void {
@@ -249,14 +269,30 @@ onMounted(() => void context.load(props.sessionId))
           <span data-testid="context-mcp-status">{{ context.sources.mcp.status }}</span>
           <span v-if="context.sources.mcp.error"> — {{ context.sources.mcp.error }}</span>
         </p>
-        <ul v-if="context.sources.mcp.servers.length > 0">
-          <li v-for="server in context.sources.mcp.servers" :key="server.name">
+        <ul v-if="mcpProjectRows.length > 0">
+          <li v-for="server in mcpProjectRows" :key="server.name">
             <span class="name">{{ server.name }}</span>
             <span class="badge">{{ server.transport }}</span>
             <span class="badge">{{ server.trust }}</span>
           </li>
         </ul>
         <p v-if="context.sources.mcp.skipped.length > 0" class="meta">Skipped entries: <span class="reason">{{ context.sources.mcp.skipped.join('; ') }}</span></p>
+        <template v-if="mcpUserRows.length > 0">
+          <h4 data-testid="context-mcp-user-heading">User scope</h4>
+          <ul data-testid="context-mcp-user">
+            <li v-for="server in mcpUserRows" :key="server.name" data-testid="context-mcp-user-row">
+              <span
+                class="liveness"
+                :class="livenessDot(server).cls"
+                :aria-label="livenessDot(server).label"
+                data-testid="context-mcp-liveness"
+              ></span>
+              <span class="name">{{ server.name }}</span>
+              <span class="badge">{{ server.transport }}</span>
+              <span class="badge">{{ server.trust }}</span>
+            </li>
+          </ul>
+        </template>
       </section>
 
       <section v-if="context.sources.trust || trustError" data-testid="context-trust">
@@ -346,6 +382,32 @@ li {
 }
 .badge.off {
   color: var(--error);
+}
+h4 {
+  margin: 0.4rem 0 0.25rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.liveness {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.liveness.up {
+  background: #3fa796;
+}
+.liveness.down {
+  background: var(--error);
+}
+.liveness.unknown {
+  background: transparent;
+  border: 1px solid var(--muted);
+  box-sizing: border-box;
 }
 .meta,
 .empty {
