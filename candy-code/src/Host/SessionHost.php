@@ -238,8 +238,12 @@ final class SessionHost
             : new TokenTracker();
         $this->compactor = new ContextCompactor($compactorConfig ?? CompactorConfig::new());
         $root = $this->root();
+        // C-SEC-4.a: the launch's trust answer rides in here exactly as it
+        // rides the TUI load (the `projectCommandsTrusted:` seam in Chat's
+        // constructor), so a granted project's built-in override is a command
+        // row over serve and the web too — and an ungranted one is refused.
         $this->customCommands = $customCommands ?? array_filter(
-            $workspace->commandLoader?->loadAll($root) ?? [],
+            $workspace->commandLoader?->loadAll($root, $workspace->projectCommandsTrusted) ?? [],
             static fn (CommandSpec $spec): bool => $spec->isFileBased(),
         );
     }

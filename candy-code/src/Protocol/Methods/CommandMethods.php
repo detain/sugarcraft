@@ -128,7 +128,10 @@ final class CommandMethods
     {
         $workspace = $call->server->hub()->workspace();
         $files = [];
-        foreach ($workspace->commandLoader?->loadAll($workspace->root ?? (\getcwd() ?: '.')) ?? [] as $name => $spec) {
+        // C-SEC-4.a: the listing must name the rows the grant actually admits —
+        // the same answer SessionHost's constructor and Chat both pass, so
+        // `command.list` and what `command.exec` runs cannot disagree.
+        foreach ($workspace->commandLoader?->loadAll($workspace->root ?? (\getcwd() ?: '.'), $workspace->projectCommandsTrusted) ?? [] as $name => $spec) {
             if ($spec instanceof CommandSpec && $spec->isFileBased()) {
                 $files[(string) $name] = $spec;
             }
