@@ -1,0 +1,22 @@
+### C-SES-3.a — Shares die with their session; token redacted from the serve log
+- item: C-SES-3 (sources: SES-3-P1, SES-3-P2)
+- kind: fix · MAJOR · effort M
+- approach:
+  - **Root cause.** `shares` has no FK to `sessions` (`src/Share/ShareStore.php:54-62`), and no delete or prune path touches it. `SessionStore::deleteSessionTrees()` (`src/Session/SessionStore.php:1005-1052`) is the single choke that both `deleteSession()` (`:992`) and `pruneSessions()` (`:1267ff`) use. A deleted or pruned session therefore keeps `/s/<token>` live for up to 365 days, and nothing can list the token.
+  - **Root cause (log).** Separately, `Server.php:226-229` logs `getUri()->getPath()`, which includes the 32-hex capability token.
+  - **Fix.**
+    - Inside `deleteSessionTrees()`'s existing transaction, run a chunked `UPDATE shares SET revoked_at = ? WHERE revoked_at IS NULL AND session_id IN (…)`. Guard it with `hasTable('shares')`, since `shares` sits in the same `session.db`. The SQL lives once, as a `ShareStore` public constant or static helper.
+    - Add `ShareStore::liveAll()`: every live share across sessions, LEFT JOIN `sessions` for the name, with orphans flagged.
+    - The access-log closure redacts `/s/<token>` to `/s/<first 4 hex>…`, keyed on `ShareStore::URL_PREFIX`.
+- files.create: none
+- files.modify: `candy-code/src/Session/SessionStore.php` (deleteSessionTrees()), `candy-code/src/Share/ShareStore.php` (liveAll(), the revoke-for-sessions SQL), `candy-code/src/Server/Server.php` (the access-log middleware closure)
+- tests: create `candy-code/tests/Session/SessionDeleteRevokesSharesTest.php`: delete and prune both make `lookup()` return null; a store without a `shares` table is tolerated. Modify:
+  - `candy-code/tests/Share/ShareStoreTest.php`: `liveAll()` spans sessions and flags orphans;
+  - `candy-code/tests/Server/SharePageTest.php`: a share GET logs no full token.
+- docs/guards: none
+- serialized: none (hot file: `SessionStore.php`, see Notes)
+- deps: none
+- phase: normal
+- ruling: none
+- risks: Revoke rather than delete, so the row stays listable as revoked and auditable. `sweepInertRows()` later reaps it.
+

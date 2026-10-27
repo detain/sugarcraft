@@ -1,64 +1,52 @@
 {
   "welded": [
     "C-SEC-2.a",
-    "C-TOOL-1.c"
+    "C-TOOL-1.c",
+    "C-AGT-1.c",
+    "C-SES-3.a"
   ],
   "inflight": {
     "C-SEC-1.a": {
-      "stage": "build",
-      "round": 0,
+      "stage": "review",
+      "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SEC-1.a",
       "branch": "cc/C-SEC-1.a",
-      "session": "ses_e843e87f2ffeznP0AaNcfY7WQ4"
+      "session": "ses_e8427f68cffe7TjKrqO2njTYDT"
     },
     "C-TOOL-1.a": {
-      "stage": "review",
+      "stage": "clean",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-TOOL-1.a",
       "branch": "cc/C-TOOL-1.a",
-      "session": "ses_e842db54affeTtWEbT1dYfyfcn"
+      "session": null
     },
     "C-AGT-1.a": {
-      "stage": "build",
-      "round": 0,
+      "stage": "review",
+      "round": 1,
       "worktree": "/home/sites/cc-cmp-C-AGT-1.a",
       "branch": "cc/C-AGT-1.a",
-      "session": "ses_e843e87e3ffegHZdQOFe0a3WBH"
+      "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
     },
     "C-EXT-1.a": {
-      "stage": "build",
-      "round": 0,
+      "stage": "review",
+      "round": 1,
       "worktree": "/home/sites/cc-cmp-C-EXT-1.a",
       "branch": "cc/C-EXT-1.a",
-      "session": "ses_e843e87e1ffe3DvEgkGgz3uh0d"
+      "session": "ses_e842822d7ffeJCjGOCg5J9XJtW"
     },
     "C-MCP-1.a": {
-      "stage": "build",
-      "round": 0,
+      "stage": "review",
+      "round": 1,
       "worktree": "/home/sites/cc-cmp-C-MCP-1.a",
       "branch": "cc/C-MCP-1.a",
-      "session": "ses_e843e87cdffeTCAgy1OojfAnKa"
-    },
-    "C-SES-3.a": {
-      "stage": "review",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SES-3.a",
-      "branch": "cc/C-SES-3.a",
-      "session": "ses_e842db54bffeonnHAs69a4yj21"
-    },
-    "C-AGT-1.c": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-AGT-1.c",
-      "branch": "cc/C-AGT-1.c",
-      "session": "ses_e8433fec9ffe15lytLrU1hzaZK"
+      "session": "ses_e84274411ffewFZNgcHphKfC6h"
     },
     "C-AGT-2.a": {
-      "stage": "review",
-      "round": 1,
+      "stage": "fix",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-AGT-2.a",
       "branch": "cc/C-AGT-2.a",
-      "session": "ses_e842fa051ffeTBJ91qR0YdeMAK"
+      "session": "ses_e84278237ffe7L15Gk7pi3IcQv"
     }
   },
   "blocked": [],
