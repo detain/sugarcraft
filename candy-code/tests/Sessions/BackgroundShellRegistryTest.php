@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
+use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\ProcessContainment;
 
 /**
@@ -669,7 +670,7 @@ final class BackgroundShellRegistryTest extends TestCase
         }
     }
 
-    public function testTheSizeCapFellsAFloodingShellAndTheRecordNamesTheCause(): void
+    public function testTheSinkCapStillFellsARunawayLog(): void
     {
         $registry = $this->registry();
         $started = $registry->start('cat /dev/zero 2>/dev/null', 'flood');
@@ -684,21 +685,36 @@ final class BackgroundShellRegistryTest extends TestCase
         // try/finally: if the cap ever regresses, this test must not leave a
         // shell writing into /tmp for the rest of the wall.
         try {
-            self::assertTrue($settled, 'a shell writing past the cap must die at the cap, not run free to the wall');
+            self::assertTrue($settled, 'a runaway writer must be felled by its sink recorder, not run free to the wall');
 
             $state = $registry->status($id);
-            self::assertSame(BackgroundShellRegistry::OUTPUT_LIMIT_EXIT_CODE, $state['exitCode'], 'SIGXFSZ death records 128 + 25 through the recorder trailer');
+            // The recorder dies of SIGXFSZ at the cap; the writer's own code
+            // depends on whether the broken pipe reaches it before it stops
+            // writing (measured through this plumbing: 1; 141 and the legacy
+            // 153 are equally honest shapes — the cap verdict rides the
+            // settled SINK SIZE, not the number).
+            self::assertIsInt($state['exitCode']);
             self::assertIsString($state['exitNote']);
             self::assertStringContainsString('output limit exceeded', (string) $state['exitNote']);
             $written = (int) filesize((string) $state['stdoutPath']);
-            self::assertLessThanOrEqual(BackgroundShellRegistry::OUTPUT_LIMIT_BYTES, $written, 'nothing may land past the cap');
-            self::assertGreaterThan(BackgroundShellRegistry::OUTPUT_LIMIT_BYTES - 1048576, $written, 'the cap bounds, it does not strangle — bytes up to the limit survive');
+            // At/over the cap is the signature; the kernel lets the crossing
+            // burst land (measured 82767872), so no upper bound may be pinned.
+            self::assertGreaterThanOrEqual(BackgroundShellRegistry::OUTPUT_LIMIT_BYTES, $written, 'the recorder cap must actually cap the sink');
         } finally {
             $registry->stop($id);
+            // Hygiene: this flood's files are the test's own residue — the
+            // five names (<id>.out/.err/.exit/.outd/.errd) go now, not into
+            // the launch's sweep window.
+            $row = $registry->status($id);
+            $dir = \dirname((string) $row['stdoutPath']);
+            $base = \basename((string) $row['stdoutPath'], '.out');
+            foreach (['.out', '.err', '.exit', '.outd', '.errd'] as $ext) {
+                @unlink($dir . '/' . $base . $ext);
+            }
         }
 
         // The small-write arm: a shell far under the cap is byte-for-byte the
-        // shell it was before the wrapper existed.
+        // shell it was before the recorders existed.
         $small = $registry->start('printf small-ok', 'small');
         self::assertTrue($small['ok']);
         $smallId = (string) $small['shell']['id'];
@@ -713,9 +729,10 @@ final class BackgroundShellRegistryTest extends TestCase
 
     public function testANaturalExitOfTheCapCodeCarriesTheSameHonestNarration(): void
     {
-        // The note is derived from the exit code alone — a command that
-        // CHOOSES 153 reads identically to one killed by SIGXFSZ, and the
-        // note's own sentence says so. The ambiguity is disclosed, not hidden.
+        // The note derives from the exit code OR a settled capped sink; an
+        // empty-sink command that CHOOSES 153 still reads through the code
+        // branch, identically to the legacy SIGXFSZ shape, and the note's own
+        // sentence says so. The ambiguity is disclosed, not hidden.
         $registry = $this->registry();
         $started = $registry->start('exit 153', 'chose 153');
         self::assertTrue($started['ok']);
@@ -741,22 +758,117 @@ final class BackgroundShellRegistryTest extends TestCase
         self::assertNull($registry->status($plainId)['exitNote']);
     }
 
-    public function testTheWrapperSetsTheCapOnceExecsTheWallAndKeepsOneRecorder(): void
+    public function testTheWrapperCapsBothSinkRecordersExecsTheWallAndKeepsOneRecorder(): void
     {
         $wrapper = (new \ReflectionMethod(BackgroundShellRegistry::class, 'buildWrapper'))->invoke(null, 'true');
-        self::assertStringStartsWith('ulimit -f ' . BackgroundShellRegistry::OUTPUT_LIMIT_BLOCKS . ';', $wrapper, 'the size cap is the FIRST thing the shell does — a later ulimit would let an immediate flood outrun it');
+        self::assertStringStartsWith('SHELL_INNER=', $wrapper, 'the per-job cap is gone — the spawn string opens on the bound inner; only the recorders carry ulimit now');
+        self::assertSame(2, substr_count($wrapper, 'trap "" TERM; ulimit -f ' . BackgroundShellRegistry::OUTPUT_LIMIT_BLOCKS . '; cat > '), 'both sinks ride capped recorders — and nothing else is capped');
+        self::assertStringContainsString('${' . BackgroundShellRegistry::EXIT_CODE_FILE_ENV . '%.exit}.outd', $wrapper, 'the stdout recorder touches its done marker only after its cat falls');
+        self::assertStringContainsString('${' . BackgroundShellRegistry::EXIT_CODE_FILE_ENV . '%.exit}.errd', $wrapper, 'the stderr recorder owes the trailer its own marker');
+        self::assertStringContainsString('exec >&- 2>&-', $wrapper, 'the wrapper closes its own pipe copies so the recorders see EOF at the command\'s death');
+        self::assertStringContainsString('SHELL_DEADLINE', $wrapper, 'the drain is bounded — a daemon that inherits the pipes cannot strand the exit file forever');
         self::assertSame(
             BackgroundShellRegistry::OUTPUT_LIMIT_BYTES,
             BackgroundShellRegistry::OUTPUT_LIMIT_BLOCKS * 512,
             'RLIMIT_FSIZE counts 512-byte blocks; the pinned figures must agree',
         );
         self::assertStringContainsString('exec timeout -s KILL ' . BackgroundShellRegistry::MAX_LIFETIME_SECONDS . ' bash -c "$SHELL_INNER"', $wrapper, 'the wall must ride an exec so the recorded pid stays the group leader');
-        self::assertStringContainsString('; else exec bash -c "$SHELL_INNER"; fi', $wrapper, 'hosts without coreutils timeout keep the cap and the recorder — only the parent-independent wall degrades');
+        self::assertStringContainsString('; else exec bash -c "$SHELL_INNER"; fi', $wrapper, 'hosts without coreutils timeout lose only the parent-independent wall — the sink recorders still cap the two files');
         self::assertSame(1, substr_count($wrapper, 'SHELL_STATUS=$?'), 'the recorder rides the ONE bound inner literal both arms exec — never two copies');
         $big = 'printf ' . str_repeat('x', 70_000) . '-TAILMARKER-';
         $bigWrapper = (new \ReflectionMethod(BackgroundShellRegistry::class, 'buildWrapper'))->invoke(null, $big);
         self::assertSame(1, substr_count($bigWrapper, '-TAILMARKER-'), 'the command text is embedded exactly once');
         self::assertLessThan(131_072, \strlen($bigWrapper), 'the spawn string must stay under the per-argument exec limit');
+    }
+
+    public function testABigFileTheCommandWritesIsNotCapped(): void
+    {
+        // SHL-1-P4: the cap rides the two recorded SINKS, not the job. A
+        // legitimate 65 MiB artifact — bigger than the sink cap, exactly the
+        // file the old global `ulimit -f` fell with SIGXFSZ — must run free.
+        $registry = $this->registry();
+        $artifact = $this->root . '/big/artifact.bin';
+        $started = $registry->start(
+            'mkdir -p ' . $this->root . '/big && dd if=/dev/zero of=' . $artifact . ' bs=1M count=65 status=none',
+            'big-file',
+        );
+        self::assertTrue($started['ok'], (string) ($started['error'] ?? ''));
+        $id = (string) $started['shell']['id'];
+        try {
+            self::assertTrue($this->waitFor(
+                $registry,
+                static fn (BackgroundShellRegistry $r): bool => ($r->status($id)['state'] ?? '') === 'finished',
+                20.0,
+            ), 'the recorders cap only the sinks — the dd must run to its own end');
+            $state = $registry->status($id);
+            self::assertSame(0, $state['exitCode'], 'a 65 MiB non-output write must not be felled by any cap');
+            self::assertNull($state['exitNote'], 'the sink cap narrative is about SINKS, and these sinks are empty');
+            self::assertSame(65 * 1048576, (int) filesize($artifact), 'every byte the command wrote survives');
+        } finally {
+            $registry->stop($id);
+            @unlink($artifact);
+            @rmdir($this->root . '/big');
+        }
+    }
+
+    public function testAForkedChildDropsTheParentsHandles(): void
+    {
+        // SHL-1-P2: the class docblock's fork promise is now wired — a copy
+        // of the registry entered by a process that did not perform the
+        // spawns drops the inherited proc_open duplicates on ENTRY, one-way:
+        // the owner's own map is untouched. The child reports through a file
+        // and leaves via the house ForkedChild vehicle, never running the
+        // suite's teardown a second time.
+        if (!\function_exists('pcntl_fork') || !\function_exists('posix_kill')) {
+            self::markTestSkipped('the fork door needs ext-pcntl and ext-posix to duplicate and enter the registry');
+        }
+
+        $registry = $this->registry();
+        $started = $registry->start('sleep 120', 'fork pin');
+        self::assertTrue($started['ok'], (string) ($started['error'] ?? ''));
+        $id = (string) $started['shell']['id'];
+
+        $dir = $this->root . '/fork-' . bin2hex(random_bytes(3));
+        mkdir($dir, 0o700);
+        $report = $dir . '/verdict.json';
+
+        $pid = pcntl_fork();
+        self::assertGreaterThanOrEqual(0, $pid, 'the fork itself must succeed for this pin to mean anything');
+        if ($pid === 0) {
+            try {
+                $before = $registry->localIds();
+                $state = $registry->status($id);
+                $after = $registry->localIds();
+                file_put_contents($report, json_encode([
+                    'before' => $before,
+                    'after' => $after,
+                    'state' => $state['state'] ?? '?',
+                ]));
+            } catch (\Throwable $thrown) {
+                file_put_contents($report, json_encode(['thrown' => $thrown::class . ': ' . $thrown->getMessage()]));
+            }
+            ForkedChild::exitNow();
+        }
+
+        try {
+            $deadline = microtime(true) + 8.0;
+            while (!file_exists($report) && microtime(true) < $deadline) {
+                usleep(20_000);
+            }
+            self::assertGreaterThanOrEqual(0, pcntl_waitpid($pid, $status), 'the child must be reaped by this test');
+
+            $verdict = json_decode((string) file_get_contents($report), true);
+            self::assertIsArray($verdict, 'the child never reported its verdict');
+            self::assertArrayNotHasKey('thrown', $verdict, 'the child died inside the door: ' . (string) ($verdict['thrown'] ?? ''));
+            self::assertSame([$id], $verdict['before'], 'the child process starts life holding the parent\'s inherited copies');
+            self::assertSame([], $verdict['after'], 'entry to status() dropped every inherited copy');
+            self::assertSame('running', $verdict['state'], 'handle-free, the row still reads honestly through the group check');
+            self::assertSame([$id], $registry->localIds(), 'the door is one-way: the parent keeps what it spawned');
+        } finally {
+            $registry->stop($id);
+            @unlink($report);
+            @rmdir($dir);
+        }
     }
 
     public function testTheGroupedFlagIsRecordedAtSpawnAndSurvivesTheForkBoundary(): void

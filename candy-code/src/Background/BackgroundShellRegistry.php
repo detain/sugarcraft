@@ -81,14 +81,17 @@ use SugarCraft\Code\Support\ProcessContainment;
  * THE FILES ARE CAPPED AND SWEPT. An uncapped writer filled the filesystem
  * inside the lifetime wall — `while :; do cat /dev/zero; done` needs minutes,
  * not hours (SHL-1), which contradicted the synchronous path's 4 MiB spill
- * doctrine. The wrapper therefore sets `ulimit -f` ({@see OUTPUT_LIMIT_BLOCKS},
- * RLIMIT_FSIZE in the kernel's 512-byte blocks = 64 MiB per file), inherited by
- * every child. A member writing past the cap dies of SIGXFSZ; the recorder
- * outlives it (the recorder never writes to the capped sinks), so the exit file
- * still lands and reads {@see OUTPUT_LIMIT_EXIT_CODE} = 128 + 25, which
- * `ShellOutput` names as an output limit instead of leaving a bare number.
- * The cap rides EVERY file the shell writes, not just the two sinks — a
- * documented side effect, cheap against an unbounded loop. Corpses are swept:
+ * doctrine. The wrapper therefore caps the two SINKS, not the job: stdout and
+ * stderr ride process-substitution recorder cats, each under its own
+ * `ulimit -f` ({@see OUTPUT_LIMIT_BLOCKS}, RLIMIT_FSIZE in the kernel's
+ * 512-byte blocks = 64 MiB), so a shell writing a 65 MiB artifact to a file of
+ * its own choosing runs free — the flood the doctrine bounds is a flood of
+ * OUTPUT (SHL-1-P4). A recorder writing past its cap dies of SIGXFSZ and its
+ * writer's next pipe write dies of the broken pipe (128 + 13); the trailer
+ * drains the recorders within {@see SINK_DRAIN_SECONDS} and the exit file
+ * still lands last ({@see buildWrapper()}), reading {@see OUTPUT_LIMIT_EXIT_CODE}
+ * where the writer carried the signal itself — and `ShellOutput` names the
+ * limit from the settled sink size either way ({@see sinkCapped()}). Corpses are swept:
  * with the cap and the kernel leash below, shell files this launch no longer
  * tracks are dead weight, and {@see start()} unlinks any whose row is gone and
  * that have not changed for {@see CORPSE_RETENTION_SECONDS}.
@@ -364,8 +367,8 @@ final class BackgroundShellRegistry
     }
 
     /**
-     * Assemble the spawn wrapper: the recorded size cap, the parent-
-     * independent lifetime wall, and the exit-code recorder.
+     * Assemble the spawn wrapper: the two sink-capped recorders, the
+     * parent-independent lifetime wall, and the exit-code recorder.
      *
      * The command runs inside `( ... )` so an `exit N` in the user's own
      * text ends the SUBSHELL, never the wrapper — a bare append would let
@@ -376,29 +379,73 @@ final class BackgroundShellRegistry
      * so the pid the containment spawn recorded stays the pid of the running
      * wrapper chain: one process to signal, one group for the census. A
      * non-exec layer here would move the shell's members into a second group
-     * and blind the member-alive check the stop ladder is built on.
+     * and blind the member-alive check the stop ladder is built on. The sink
+     * recorders below are children of the INNER bash, so the outer single-
+     * group shape is untouched and the recorded string stays bashism-free.
      *
-     * The recorder trailer: it stamps `$?` into the exit file — whose path
-     * rides the env, so no figure is interpolated into the quoted string —
-     * and re-exits with the command's own code. Built from single-quoted
-     * segments because PHP interpolates `$SHELL_STATUS` inside a
-     * double-quoted string exactly as eagerly as `$foo` — only quoting keeps
-     * the child's variables verbatim. A wrapper killed before the trailer
-     * leaves the exit file empty: the honest `exitCode: null` of a signalled
-     * shell. The trailer appears exactly ONCE in the spawn string — both
-     * timeout and fallback arms exec the same bound variable — so a shell is
-     * never double-recorded and a large command never pays for its text
-     * twice (embedding the literal in both arms blew the per-argument exec
-     * limit on a 72 KiB quoted command, measured).
+     * The cap rides the RECORDERS, not the job (SHL-1-P4): the global
+     * `ulimit -f` this wrapper used to set fell any shell that wrote a file
+     * over the cap — a build artifact, a database growth, a core dump —
+     * because RLIMIT_FSIZE is per-process, not per-sink. Now the inner bash
+     * routes only its own stdout/stderr through process substitutions,
+     * `(trap "" TERM; ulimit -f N; cat > "$SINK"; : > "$MARKER")`, so the cap bounds the two
+     * recorded files and nothing else. A flooding log still dies at the cap:
+     * the recorder falls to SIGXFSZ and the writer's next pipe write is EPIPE.
+     *
+     * The recorder trailer: it captures `$?` BEFORE the drain can clobber
+     * it, closes the wrapper's own copies of the sink pipes (`exec >&-
+     * 2>&-`) so the recorders see EOF the moment the command is done, waits
+     * for both done markers bounded by {@see SINK_DRAIN_SECONDS} — a recorder
+     * a daemon's inherited pipe still pins open is left reading, since the
+     * group the launch owns is its reaper — and only then stamps the exit
+     * file — whose path rides the env, so no figure is interpolated into the
+     * quoted string — re-exiting with the command's own code. Flush-before-
+     * settle: the exit file is still written LAST, so a reader that sees a
+     * settled row never reads a half-flushed sink; the bound is the honest
+     * cost of the daemon shape (the markers land within a poll tick of a
+     * clean recorder's exit, and the settled-with-an-orphan-running
+     * boundary the observe() doctrine documents pays at most the bound).
+     * Built from
+     * single-quoted segments because PHP interpolates `$SHELL_STATUS` inside
+     * a double-quoted string exactly as eagerly as `$foo` — only quoting
+     * keeps the child's variables verbatim. A wrapper killed before the
+     * trailer leaves the exit file empty: the honest `exitCode: null` of a
+     * signalled shell. The trailer appears exactly ONCE in the spawn string
+     * — both timeout and fallback arms exec the same bound variable — so a
+     * shell is never double-recorded and a large command never pays for its
+     * text twice (embedding the literal in both arms blew the per-argument
+     * exec limit on a 72 KiB quoted command, measured).
      *
      * `timeout` is probed with `command -v`: hosts without coreutils (stock
-     * macOS) keep the size cap and lose only the parent-independent wall —
-     * the launch-side lazy ladder and the shutdown hook still apply there.
+     * macOS) lose only the parent-independent wall — the sink recorders
+     * live inside the bash inner and still cap the two files there, and the
+     * launch-side lazy ladder and the shutdown hook still apply regardless.
      */
     private static function buildWrapper(string $command): string
     {
-        $trailer = chr(10) . 'SHELL_STATUS=$?; printf "%s" "$SHELL_STATUS" > "$' . self::EXIT_CODE_FILE_ENV . '"; exit "$SHELL_STATUS"';
-        $inner = escapeshellarg('(' . $command . ')' . $trailer);
+        // Derived from the exit-file path already in the env (all these files
+        // live at <id>.exit / <id>.out / <id>.outd in one directory —
+        // {@see pathFor()}), so no sink figure is interpolated into the spawn
+        // string either. Each recorder touches its DONE MARKER only when its
+        // cat has exited — on EOF or on SIGXFSZ at the cap — because bash has
+        // never listed process substitutions in `jobs` (measured, 5.2): the
+        // trailer must observe recorder completion as a filesystem fact, not
+        // a job-table one. `cat` is deliberately not `exec`'d, so the marker
+        // command still runs when the cat falls to the cap. The recorders sit
+        // IN the shell's process group, so the stop ladder's TERM rung would
+        // otherwise kill a recorder before it drained the bytes its dying
+        // subject was still pushing: `trap "" TERM` makes the disposition
+        // IGNORED (inherited across the exec), so rung one cannot mute the
+        // record and only the uncatchable KILL rung ends a recorder early.
+        $recorders = ' > >(trap "" TERM; ulimit -f ' . self::OUTPUT_LIMIT_BLOCKS . '; cat > "${' . self::EXIT_CODE_FILE_ENV . '%.exit}.out"; :'
+            . ' > "${' . self::EXIT_CODE_FILE_ENV . '%.exit}.outd")'
+            . ' 2> >(trap "" TERM; ulimit -f ' . self::OUTPUT_LIMIT_BLOCKS . '; cat > "${' . self::EXIT_CODE_FILE_ENV . '%.exit}.err"; :'
+            . ' > "${' . self::EXIT_CODE_FILE_ENV . '%.exit}.errd")';
+        $drain = '; exec >&- 2>&-; SHELL_DEADLINE=$((SECONDS + ' . self::SINK_DRAIN_SECONDS
+            . ')); while { [ ! -f "${' . self::EXIT_CODE_FILE_ENV . '%.exit}.outd" ] || [ ! -f "${'
+            . self::EXIT_CODE_FILE_ENV . '%.exit}.errd" ]; } && [ "$SECONDS" -lt "$SHELL_DEADLINE" ]; do sleep 0.05; done;';
+        $trailer = chr(10) . 'SHELL_STATUS=$?' . $drain . ' printf "%s" "$SHELL_STATUS" > "$' . self::EXIT_CODE_FILE_ENV . '"; exit "$SHELL_STATUS"';
+        $inner = escapeshellarg('(' . $command . ')' . $recorders . $trailer);
 
         // The inner command is bound ONCE (SHELL_INNER) and referenced by
         // both arms: embedding the literal in two exec lines doubled the
@@ -407,19 +454,38 @@ final class BackgroundShellRegistry
         // started it fine (measured). The assignment lives only in the
         // outer sh; whichever arm execs replaces the image and takes the
         // variable name away with it, leaving the user's bash a normal env.
-        return 'ulimit -f ' . self::OUTPUT_LIMIT_BLOCKS
-            . '; SHELL_INNER=' . $inner
+        return 'SHELL_INNER=' . $inner
             . '; if command -v timeout >/dev/null 2>&1; then exec timeout -s KILL ' . self::MAX_LIFETIME_SECONDS . ' bash -c "$SHELL_INNER"'
             . '; else exec bash -c "$SHELL_INNER"; fi';
     }
 
-    /** The cause a {@see OUTPUT_LIMIT_EXIT_CODE} settlement is narrated with. */
+    /**
+     * The cause a capped-sink settlement is narrated with — decided by the
+     * settled SINK SIZE ({@see sinkCapped()}) or, for a shell whose writer
+     * carried the signal itself, a legacy {@see OUTPUT_LIMIT_EXIT_CODE}.
+     */
     private static function outputLimitNote(): string
     {
         return sprintf(
-            'output limit exceeded: a process in the shell died writing past the %d MiB per-file cap (exit 153 = 128 + SIGXFSZ; a command choosing 153 itself reads the same)',
+            'output limit exceeded: a sink stopped at the %d MiB recorder cap; the recorder died of SIGXFSZ and the writer of the broken pipe (128 + 13; a command exiting 153 = 128 + SIGXFSZ itself reads the same)',
             \intdiv(self::OUTPUT_LIMIT_BYTES, 1048576),
         );
+    }
+
+    /**
+     * Did a settled shell's sink reach its recorder cap? The kernel lets the
+     * crossing write land, so a capped sink sits AT or slightly ABOVE
+     * {@see OUTPUT_LIMIT_BYTES} (measured: exactly the cap through the old
+     * global-rlimit path, overshoot possible through the recorder path —
+     * never pin an upper bound). At-or-over IS the cap signature whichever
+     * exit code the writer carried: the recorder's death is invisible to the
+     * trailer's `$?`, and a writer that ignored SIGPIPE leaves a full sink
+     * with a clean code behind it.
+     */
+    private function sinkCapped(array $row): bool
+    {
+        return (int) (@filesize((string) $row['stdoutPath']) ?: 0) >= self::OUTPUT_LIMIT_BYTES
+            || (int) (@filesize((string) $row['stderrPath']) ?: 0) >= self::OUTPUT_LIMIT_BYTES;
     }
 
     /**
@@ -441,7 +507,7 @@ final class BackgroundShellRegistry
         }
         $ceiling = \microtime(true) - self::CORPSE_RETENTION_SECONDS;
         foreach ($entries as $entry) {
-            if (!\is_string($entry) || preg_match('/^(sh-[0-9a-f]{8})\.(?:out|err|exit)$/', $entry, $matches) !== 1) {
+            if (!\is_string($entry) || preg_match('/^(sh-[0-9a-f]{8})\.(?:out|err|exit|outd|errd)$/', $entry, $matches) !== 1) {
                 continue; // not shell files this tree owns the names of
             }
             if (isset($this->rows[$matches[1]])) {
@@ -463,7 +529,11 @@ final class BackgroundShellRegistry
      * id is never addressed again by any live table (the registry instance
      * died with its process). Death is proven by signal 0 only — without
      * posix there is no honest way to tell a dead pid from a live one, so
-     * the pass fails open and keeps everything. A live sibling's directory
+     * the pass fails open and keeps everything; signal 0 also answers false
+     * on EPERM, so a foreign user's recycled pid could read dead — the harm
+     * is bounded by the tree it can reach: this directory is the owner's
+     * HOME shells root (0700), so a false-dead sweep only ever deletes this
+     * user's own past-retention residue. A live sibling's directory
      * is untouchable regardless of mtimes: its rows are being read RIGHT
      * NOW by another process this one cannot see. Past that gate, the same
      * retention ceiling as the file sweep applies, file by file; the
@@ -529,10 +599,13 @@ final class BackgroundShellRegistry
         $state = $this->observe($shellId, $row);
         $row['state'] = $state['state'];
         $row['exitCode'] = $state['exitCode'];
-        // Derived on every status, never stored truth: the exit code alone
-        // decides whether the cap narrative applies, so a merged row that
-        // lost the note gets it back on the first observation.
-        $row['exitNote'] = $state['exitCode'] === self::OUTPUT_LIMIT_EXIT_CODE ? self::outputLimitNote() : null;
+        // Derived on every status, never stored truth: the exit code or a
+        // settled sink at/over the cap decides whether the cap narrative
+        // applies, so a merged row that lost the note gets it back on the
+        // first observation.
+        $row['exitNote'] = ($state['exitCode'] === self::OUTPUT_LIMIT_EXIT_CODE || $this->sinkCapped($row))
+            ? self::outputLimitNote()
+            : null;
         $row['ageSeconds'] = \max(0.0, \microtime(true) - (float) $row['spawnedAt']);
         $this->rows[$shellId] = $row;
 

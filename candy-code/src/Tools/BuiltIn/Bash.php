@@ -652,7 +652,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
             content: sprintf(
-                'Started background shell %s. Read new output with ShellOutput {shell_id: "%s", cursor: <the cursor the last answer gave>}; stop it with ShellStop {shell_id: "%s"}. It is killed with its whole process group after %d seconds whether or not anything reads it — the wrapper enforces that wall in the kernel, beside the launch-side ladder. Each output file is capped at %d MiB: a shell writing past the cap dies with exit 153 and ShellOutput names the limit. Its output and exit code stay readable while this launch tracks it, and any shell file nobody tracks and nobody has written for a day is swept when the next background shell starts.',
+                'Started background shell %s. Read new output with ShellOutput {shell_id: "%s", cursor: <the cursor the last answer gave>}; stop it with ShellStop {shell_id: "%s"}. It is killed with its whole process group after %d seconds whether or not anything reads it — the wrapper enforces that wall in the kernel, beside the launch-side ladder. Each output file is capped at %d MiB: writing past a cap kills its recorder and the writer dies of the broken pipe, and ShellOutput names the limit. Its output and exit code stay readable while this launch tracks it, and any shell file nobody tracks and nobody has written for a day is swept when the next background shell starts.',
                 $id,
                 $id,
                 $id,
