@@ -83,7 +83,8 @@
     "C-CTX-6.c",
     "C-AGT-7.c",
     "C-CTX-6.d",
-    "C-MCP-6.a"
+    "C-MCP-6.a",
+    "C-PRV-5.a"
   ],
   "inflight": {
     "P-MENU.d": {
@@ -103,15 +104,6 @@
       "branch": "cc/C-EXT-7.a",
       "note": "fix landed c311273ad on 0e5c35bf9 (PLUGINS.md :81/:89 + BundleDeclinedSurfacesTest:268 IsADeclined); r2 reviewer dispatching; after CLEAN weld chain 0e5c35bf9+c311273ad, DUR HooksHostCommandLiveChainTest 4T",
       "ts": "2026-10-27T22:22:46.006182+00:00"
-    },
-    "C-PRV-5.a": {
-      "stage": "clean",
-      "round": 1,
-      "session": "reviewer ses_e8098e5f4",
-      "worktree": "/home/sites/cc-cmp-C-PRV-5.a",
-      "branch": "cc/C-PRV-5.a",
-      "note": "r1 CLEAN (verdict replaced earlier FINDINGS record — disk REVIEW-1.md governs): gates ThinkingCeiling 20T/51A, provider siblings 247T, doc-guards 128T/4673A, five-guard pair-only; 8 files, SETTINGS.md hand prose zero generated touch, DUR ThinkingCeilingTest 20T. WELD queued.",
-      "ts": "2026-10-27T22:24:31.536044+00:00"
     },
     "C-CTX-6.a": {
       "stage": "clean",
@@ -459,6 +451,13 @@
       "regen": "no-op (cmd/tool/settings --check all up-to-date rc0; no src/Protocol or candy-code-web files in pick - gen-protocol-schema/npm skipped by scope)",
       "gates": "MCP|Sse|Login|BuiltInToolCorpus|ToolDocDrift 2215T/28227A/0F/1S + 2 pre-existing AccessorDeprecationTest deprecations (lane claimed 2219; -4 filter-count wobble, both new files run); SettingsSchemaDocDrift|TrustKey|DocFigureProseDrift 128T/4684A 0F",
       "durations_owed": "NEW tests/MCP/SseMcpServerForkTlsTest.php (3T) + tests/Chat/McpLoginForkTest.php rows - LIST ONLY, durations.tsv is closeout duty"
+    },
+    "C-PRV-5.a": {
+      "master": "aa0d35002",
+      "pick": "aa0d35002",
+      "regen": "no-op (cmd/tool/settings --check all up-to-date rc0; SETTINGS.md change is hand prose outside generated regions; no src/Protocol or candy-code-web files)",
+      "gates": "ThinkingCeiling 20T/51A EXACT; provider siblings (reviewer filter) 247T/739A EXACT; SettingsSchemaDocDrift|DocFigureProseDrift|TrustKey 128T/4684A 0F (+11A wobble); five-guard 133T/15773A failures=2 = staleness pair ONLY (25537 vs 26216)",
+      "durations_owed": "NEW tests/Providers/ThinkingCeilingTest.php (20T) - LIST ONLY, closeout duty"
     }
   },
   "carries": [
@@ -505,7 +504,8 @@
     "C-AGT-7.c + C-CTX-6.d clean-queued behind AGT-3.b/CTX-6.c welder; P-MENU.d + C-EXT-7.a in review; frontier capped at 2 starts which are both already live",
     "C-AGT-7.c r1 CLEAN with gates run (25,537 vs live 26,129 pair-only; foreign Lang red base-proven); queued behind AGT-3.b/CTX-6.c welder",
     "C-CTX-6.d DUR duty for closeout gate: scripts/parallel-tests-durations.tsv row for candy-code/tests/Chat/MemoryOpenJournalTest.php (new file, 3T; lanes never edit durations.tsv)",
-    "C-MCP-6.a weld: NEW candy-code tests/MCP/SseMcpServerForkTlsTest.php + tests/Chat/McpLoginForkTest.php rows owe durations.tsv at the closeout gate (welder does NOT edit durations.tsv). Welded-tree gate live 2215T/0F (lane report claimed 2219; +4 = filter-count wobble, both new files verified running: Sse 3T, McpLoginFork 11T); doc-guard trio 128T/4684A; gens --check up-to-date rc0 x3."
+    "C-MCP-6.a weld: NEW candy-code tests/MCP/SseMcpServerForkTlsTest.php + tests/Chat/McpLoginForkTest.php rows owe durations.tsv at the closeout gate (welder does NOT edit durations.tsv). Welded-tree gate live 2215T/0F (lane report claimed 2219; +4 = filter-count wobble, both new files verified running: Sse 3T, McpLoginFork 11T); doc-guard trio 128T/4684A; gens --check up-to-date rc0 x3.",
+    "C-PRV-5.a weld: NEW candy-code/tests/Providers/ThinkingCeilingTest.php (20T) owes a durations.tsv row at the closeout gate (welder does NOT edit durations.tsv). Welded-tree gates EXACT: ThinkingCeiling 20T/51A; provider siblings --filter 'ThinkingCeiling|AnthropicExtendedThinking|VertexGeminiOutputBudget|GeminiProvider|EffortGate|ProviderFactory' 247T/739A (reviewer filter reproduced exactly); doc trio 128T/4684A (+11A wobble vs 4673 claim, 0F); five-guard 133T pair-only (25,537 vs live 26,216)."
   ],
-  "updated": "2026-10-27T22:33:16.890488+00:00"
+  "updated": "2026-10-27T22:37:14.035028+00:00"
 }

@@ -1,0 +1,25 @@
+### C-PRV-5.a — Per-family thinking ceilings and omission
+- item: C-PRV-5 (sources: CTX-1-P2, PRV-2-P2)
+- kind: fix · MINOR · effort M
+- approach:
+  - Root cause: the only bound is a floor (`ProviderFactory.php:999-1006`), while the wire sets `max_tokens = max(…, 1.5×budget)` (`AnthropicMessagesWire.php:509-515`).
+  - These therefore 400 on every turn:
+    - `thinkingBudget: 50000` (gives `max_tokens: 75000`);
+    - `/effort low` on `claude-3-5-haiku`;
+    - `/effort max` on `gemini-2.5-flash` (ceiling 24576);
+    - any `/effort` on `gemini-2.0-flash`.
+  - Fix: the Anthropic and Gemini wires read C-PRV-1.a's `ThinkingCapability` table.
+    - Omit `thinking`/`thinkingConfig` for non-thinking families.
+    - Clamp the budget to the family ceiling, keeping the 1024 floor.
+    - Clamp `max_tokens` to the family output ceiling.
+  - `ProviderFactory` refuses at launch a configured `thinkingBudget` above the largest ceiling of the configured type, with the same loud shape as the floor.
+- files.create: `candy-code/tests/Providers/ThinkingCeilingTest.php`
+- files.modify: `candy-code/src/Providers/AnthropicProvider.php` (`anthropicThinkingBudget()`), `candy-code/src/Providers/Concerns/AnthropicMessagesWire.php` (`anthropicBody()`), `candy-code/src/Providers/Concerns/GeminiGenerateContentWire.php` (thinkingConfig block :255-262), `candy-code/src/Providers/EffortBudget.php`, `candy-code/src/Providers/ProviderFactory.php` (thinkingBudget resolver)
+- tests: create ThinkingCeilingTest with per-family wire-body pins: omission on non-thinking families, the clamp on budget and `max_tokens`, and the launch refusal above the ceiling.
+- docs/guards: `candy-code/docs/SETTINGS.md` hand prose for `thinkingBudget` (L344, L491)
+- serialized: [docs:SETTINGS.md] [hot:candy-code/src/Providers/AnthropicProvider.php] [hot:candy-code/src/Providers/Concerns/AnthropicMessagesWire.php] [hot:candy-code/src/Providers/Concerns/GeminiGenerateContentWire.php] [hot:candy-code/src/Providers/ProviderFactory.php]
+- deps: C-PRV-1.a
+- phase: normal
+- ruling: none
+- risks: the family table goes stale as models ship. An unknown family keeps today's behaviour (no clamp), so the table never refuses a model it does not know.
+
