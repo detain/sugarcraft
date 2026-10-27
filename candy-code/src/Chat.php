@@ -630,6 +630,26 @@ final class Chat implements Model
     private const BACKGROUND_POLL_SECONDS = 2.0;
 
     /**
+     * Reconciliation id of the slow schedule-watch tick (C-AGT-7.a). Same
+     * stable-across-rebuilds contract as
+     * {@see BACKGROUND_POLL_SUBSCRIPTION}; a distinct id because a distinct
+     * cadence.
+     */
+    private const SCHEDULE_WATCH_SUBSCRIPTION = 'code.schedule-watch';
+
+    /**
+     * How often the watch wakes (seconds) when a file-backed schedule roster
+     * exists but the fast {@see BACKGROUND_POLL_SECONDS} pump is not armed —
+     * i.e. nothing is live, so the only pending event is a hand-edit arriving
+     * on disk. Thirty seconds is a UI clock cadence, not a request timeout:
+     * it bounds how long an external edit waits to be noticed, never how long
+     * any dial or model call may run (E646). A roster with enabled rows keeps
+     * riding the two-second tick; this slower one exists so a DISABLED-all
+     * file still reloads and can revive itself without a relaunch.
+     */
+    private const SCHEDULE_WATCH_SECONDS = 30.0;
+
+    /**
      * Reconciliation id of the live tool-event poll subscription
      * (crush_feat.md §1 E1). Stable across rebuilds for the same reason
      * {@see BACKGROUND_POLL_SUBSCRIPTION} is.
@@ -18371,6 +18391,23 @@ final class Chat implements Model
             $subscriptions = (new \SugarCraft\Core\Subscriptions())->withTick(
                 self::BACKGROUND_POLL_SUBSCRIPTION,
                 self::BACKGROUND_POLL_SECONDS,
+                static fn (): \SugarCraft\Core\Msg => new BackgroundTickMsg(),
+            );
+        } elseif ($this->scheduleRegistry !== null && $this->scheduleRegistry->isWatchable()) {
+            // C-AGT-7.a: a file-backed roster whose rows are all disabled (or
+            // not yet due with no live daemon) would otherwise NEVER pump —
+            // and `reloadIfChanged()` lives on the pump, so a hand-edit that
+            // re-enabled a row would wait for a relaunch to be noticed. The
+            // slow watch keeps the digest reload breathing on its own cadence;
+            // the pump answers every tick with [$this, null] while nothing
+            // moved (the same no-op contract the fast arm relies on), so the
+            // watch costs a wake-up, not a repaint storm. Once anything is
+            // live or enabled again the fast two-second arm above takes over
+            // and this one goes away on the next reconcile — the two are
+            // mutually exclusive by construction (elseif), never both ticking.
+            $subscriptions = (new \SugarCraft\Core\Subscriptions())->withTick(
+                self::SCHEDULE_WATCH_SUBSCRIPTION,
+                self::SCHEDULE_WATCH_SECONDS,
                 static fn (): \SugarCraft\Core\Msg => new BackgroundTickMsg(),
             );
         }

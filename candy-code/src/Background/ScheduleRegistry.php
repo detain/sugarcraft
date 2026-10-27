@@ -108,7 +108,11 @@ final class ScheduleRegistry
      * model call lives inside it — so contention means a peer mid-rename, and
      * 2s of 10ms polls is orders of magnitude more patient than that needs.
      * This is a lock backoff, not a request ceiling (the E646 law stands: no
-     * timeout bounds any schedule's fire path).
+     * timeout bounds the ACT of firing — claim, advance, spawn). What bounds
+     * a fired run is the ordinary background-session cap on the daemon it
+     * spawns — default 3600s, per-row raisable via `timeoutSeconds`
+     * (C-AGT-7.a P4) — which is the house contract for every background
+     * session, not a schedule-path invention.
      */
     private const FILE_LOCK_RETRIES = 200;
 
@@ -226,6 +230,19 @@ final class ScheduleRegistry
         }
 
         return false;
+    }
+
+    /**
+     * Whether a hand-edit on disk could ARRIVE later — the slow watch's door
+     * (C-AGT-7.a). True for exactly the file-backed registries: an in-memory
+     * roster has no external writer, so nothing on disk can ever change it and
+     * a watch would only burn a timer. The reload itself is the registry's
+     * own {@see reloadIfChanged()} digest latch; this method only answers
+     * "is there a file to latch against".
+     */
+    public function isWatchable(): bool
+    {
+        return $this->path !== null;
     }
 
     /** @return list<string> human-formatted load notes (refusals, coerced modes, unbound rows), oldest first */

@@ -25,7 +25,12 @@ use SugarCraft\Code\Host\Commands\BackgroundCommand;
  * than copied), with the row's pinned provider substituted when it names one.
  * The row's RECORDED permission mode rides through: a scheduled run answers
  * to the consent state of the moment it was scheduled, never the live
- * session's (the dontAsk floor from {@see Schedule}).
+ * session's (the dontAsk floor from {@see Schedule}; bypass-class spellings
+ * never reach this line — {@see Schedule::fromArray()} refuses them at load,
+ * C-AGT-7.a P3). The row's optional `timeoutSeconds` rides too (P4): absent,
+ * the run takes spawnSession's own 3600s session default; present, it raises
+ * that ONE row's ceiling. Both are daemon-run bounds and mode grants — neither
+ * puts a timeout on a model request (E646).
  */
 final class ScheduleSpawner
 {
@@ -63,14 +68,26 @@ final class ScheduleSpawner
             // this process happens to be".
             $directory = $row->root ?? $root;
 
-            return $supervisor->spawnSession(
-                name: self::sessionName($row),
-                agent: $agent,
-                task: $row->prompt,
-                workingDirectory: $directory === null || $directory === '' ? '.' : $directory,
-                tags: ['schedule', 'schedule:' . $row->name],
-                permissionMode: $row->permissionMode,
-            )->id;
+            $spawn = [
+                'name' => self::sessionName($row),
+                'agent' => $agent,
+                'task' => $row->prompt,
+                'workingDirectory' => $directory === null || $directory === '' ? '.' : $directory,
+                'tags' => ['schedule', 'schedule:' . $row->name],
+                'permissionMode' => $row->permissionMode,
+            ];
+            // C-AGT-7.a P4: null adds NO key, so the default keeps living
+            // exactly where it always has — spawnSession's own signature —
+            // and a row that names a bound raises only its own runs. Omitting
+            // the key rather than passing null is deliberate: the parameter is
+            // `int`, and re-spelling 3600 here would mint a second source of
+            // truth for it. (Whole-array spread because PHP forbids unpacking
+            // after named arguments.)
+            if ($row->timeoutSeconds !== null) {
+                $spawn['timeoutSeconds'] = $row->timeoutSeconds;
+            }
+
+            return $supervisor->spawnSession(...$spawn)->id;
         };
     }
 

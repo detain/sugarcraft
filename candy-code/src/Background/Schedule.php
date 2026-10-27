@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Background;
 
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Server\ServerConfig;
 
 /**
  * One repeating prompt: a name, a cadence, the task, and when it next fires.
@@ -42,6 +43,25 @@ use SugarCraft\Code\Permissions\PermissionMode;
  * name at load through {@see ScheduleRegistry::loadErrors()}; it is never a
  * silent rewrite of what the operator asked for.
  *
+ * THE CLASS THE FLOOR DOES NOT RAISE (C-AGT-7.a). The ceiling matches the
+ * webhook's: a FILE row that SPELLS a bypass-class mode —
+ * `bypass-permissions` or the floor's own name `dont-ask` — is REFUSED at
+ * load, by name, and skipped, because an unattended fire has no one to
+ * answer a permission ask either way (`--allow-bypass` governs human-driven
+ * sessions only). The distinction is trust, not capability: the floor value
+ * is granted by the CODE to rows the file says nothing about, while a
+ * spelled mode is granted by the file itself, and this file refuses to let
+ * an untrusted hand edit escalate. That is also why {@see toArray()}
+ * serialises the settled floor as a null `permissionMode` — writing the
+ * spelling back would poison the very file this build wrote.
+ *
+ * THE RUN BOUND. Every fire spawns an ordinary background session, so the
+ * run is bounded by that contract's timeout — 3600 seconds by default,
+ * per-row raisable via {@see self::$timeoutSeconds}. This is the daemon's
+ * wall-clock ceiling on the whole run, not a request timeout on any model
+ * call (the E646 law untouched), and it exists for the same reason `/bg`
+ * has it: a wedged daemon must not run forever unseen.
+ *
  * THE ROOT BINDING (C-AGT-1). Every host on this machine reads the SAME
  * home-global file, so a row has to say which project it belongs to:
  * {@see self::$root} is the realpath'd directory its daemon runs in, and
@@ -64,6 +84,17 @@ final class Schedule
 
     /** Rows are cadenced in whole seconds — the file format, the tick granularity, and the bound all agree. */
     public const MAX_EVERY_SECONDS = 366 * 86_400;
+
+    /**
+     * Smallest run bound a row may name (C-AGT-7.a). Below a minute the
+     * "bound" would be a race against scheduling latency and would kill the
+     * very runs it means to cap; 60 is the same floor {@see MIN_EVERY_SECONDS}
+     * draws for cadence, borrowed here for the same "whole-minute world" reason.
+     */
+    public const MIN_TIMEOUT_SECONDS = 60;
+
+    /** Largest run bound a row may name — one whole year, so "raise it" always has room. */
+    public const MAX_TIMEOUT_SECONDS = 366 * 86_400;
 
     /** The floor a missing or unparseable mode falls to; see the class doc-block. */
     public const DEFAULT_PERMISSION_MODE = PermissionMode::DontAsk;
@@ -107,6 +138,18 @@ final class Schedule
      */
     public readonly ?string $sessionId;
 
+    /**
+     * Wall-clock ceiling on ONE fired run (C-AGT-7.a P4), in seconds, or null
+     * for the background session's own default (3600 — single-sourced in
+     * {@see BackgroundSupervisor::spawnSession()}, never mirrored here).
+     * The row's raisable knob for a task that legitimately runs longer than
+     * an hour. This is the daemon's RUN bound, not a timeout on any model
+     * request — the E646 law does not live on this field; the ceiling that IS
+     * enforced against untrusted spellings is the permission-mode one in
+     * {@see fromArray()}.
+     */
+    public readonly ?int $timeoutSeconds;
+
     public function __construct(
         string $name,
         int $everySeconds,
@@ -118,6 +161,7 @@ final class Schedule
         bool $persisted = true,
         ?string $root = null,
         ?string $sessionId = null,
+        ?int $timeoutSeconds = null,
     ) {
         if (preg_match(self::NAME_PATTERN, $name) !== 1) {
             throw new \InvalidArgumentException(
@@ -132,6 +176,13 @@ final class Schedule
         if (trim($prompt) === '') {
             throw new \InvalidArgumentException("Schedule '{$name}' carries no prompt to run.");
         }
+        if ($timeoutSeconds !== null
+            && ($timeoutSeconds < self::MIN_TIMEOUT_SECONDS || $timeoutSeconds > self::MAX_TIMEOUT_SECONDS)
+        ) {
+            throw new \InvalidArgumentException(
+                "Schedule '{$name}' names a \"timeoutSeconds\" of {$timeoutSeconds}; it must be between " . self::MIN_TIMEOUT_SECONDS . ' and ' . self::MAX_TIMEOUT_SECONDS . ' seconds, or absent for the session default.',
+            );
+        }
         // The mode is NORMALISED here, at the boundary, so nothing downstream
         // re-validates it or trusts a file: an unknown spelling silently
         // becomes the floor. The silence is LOCAL to this constructor: because
@@ -140,8 +191,12 @@ final class Schedule
         // load in ScheduleRegistry::load() (which owns the loadErrors
         // channel, read by `/schedules`). An ABSENT mode is not a coercion —
         // the format documents the floor as its default — and a real mode
-        // spelled by the operator's own hand-edited file rides unchanged;
-        // neither adds a note.
+        // spelled by the operator's own hand-edited file rides unchanged
+        // THROUGH HERE; the ceiling that refuses bypass-class spellings lives
+        // at the file boundary in {@see fromArray()}, deliberately not in this
+        // constructor, because the wither round-trips (`mutate()`) pass the
+        // settled floor value back in and a constructor-level refusal would
+        // turn every `withEnabled()` of a floor row into an exception.
         $mode = $permissionMode === null
             ? self::DEFAULT_PERMISSION_MODE->value
             : (PermissionMode::tryFrom($permissionMode) !== null ? $permissionMode : self::DEFAULT_PERMISSION_MODE->value);
@@ -174,6 +229,7 @@ final class Schedule
         $this->persisted = $persisted;
         $this->root = $resolved;
         $this->sessionId = $sessionId;
+        $this->timeoutSeconds = $timeoutSeconds;
     }
 
     /**
@@ -184,6 +240,11 @@ final class Schedule
      * the moment it appears). `root` may be absent as well, and means what its
      * absence has always meant here: a row written before the binding existed,
      * which no host fires — see {@see ScheduleRegistry::load()}.
+     * `timeoutSeconds` may be absent, and means the background session's own
+     * default (C-AGT-7.a P4). A present `permissionMode` is refused here when
+     * it spells a bypass-class mode (C-AGT-7.a P3) — see the ceiling note in
+     * the class doc-block; unknown spellings stay the constructor's business
+     * (floor + load-time announcement), and null means the same as absence.
      * `persisted` is deliberately NOT readable from
      * the wire: an on-disk row is by definition persisted, and the ephemeral
      * flag cannot survive a restart anyway.
@@ -213,6 +274,23 @@ final class Schedule
         if ($mode !== null && !is_string($mode)) {
             throw new \InvalidArgumentException("schedule '{$name}' carries a non-string \"permissionMode\"");
         }
+        // C-AGT-7.a P3, the ceiling beside the floor: a FILE row that spells a
+        // bypass-class mode is refused here — at the trust boundary — rather
+        // than coerced, with the same reasoning the webhook loader uses
+        // ({@see ServerConfig::answersAsksWithoutAHuman()}, consulted so the
+        // two surfaces cannot drift on which modes answer asks without a
+        // human). Unknown spellings are NOT this arm's business: they fall to
+        // the floor and are announced by ScheduleRegistry::load(), as they
+        // always have been. The constructor stays permissive on purpose — its
+        // bypass rides are in-process grants (a `/loop` row, a `mutate()`
+        // round-trip of the settled floor), and refusing there would break
+        // every wither of every floor row.
+        $modeEnum = $mode === null ? null : PermissionMode::tryFrom($mode);
+        if ($modeEnum !== null && ServerConfig::answersAsksWithoutAHuman($modeEnum)) {
+            throw new \InvalidArgumentException(
+                "schedule '{$name}': permission mode \"{$mode}\" is refused for schedules — a schedule fires unattended, with no one to answer a permission ask; leave \"permissionMode\" out of the row to run on the floor the code grants",
+            );
+        }
         $enabled = $row['enabled'] ?? true;
         if (!is_bool($enabled)) {
             throw new \InvalidArgumentException("schedule '{$name}' carries a non-boolean \"enabled\"");
@@ -225,6 +303,15 @@ final class Schedule
         if ($root !== null && !is_string($root)) {
             throw new \InvalidArgumentException("schedule '{$name}' carries a non-string \"root\"");
         }
+        // C-AGT-7.a P4: the optional run bound. Same grammar as `nextDue` —
+        // int or digit-string, anything else named and refused; ABSENT is not
+        // a value, it is the session default (3600), and stays null all the
+        // way to the spawner so the single source in spawnSession keeps
+        // answering.
+        $timeout = $row['timeoutSeconds'] ?? null;
+        if ($timeout !== null && !(is_int($timeout) || (is_string($timeout) && ctype_digit($timeout)))) {
+            throw new \InvalidArgumentException("schedule '{$name}' carries a non-integer \"timeoutSeconds\"");
+        }
 
         return new self(
             name: $name,
@@ -235,12 +322,20 @@ final class Schedule
             nextDue: $nextDue === null ? $now + (int) $every : (int) $nextDue,
             enabled: $enabled,
             root: $root,
+            timeoutSeconds: $timeout === null ? null : (int) $timeout,
         );
     }
 
     /**
-     * The file-row form. `model`/`reuseSession`-style keys are NOT part of the
-     * first cut — the plan's row is these eight fields and nothing else.
+     * The file-row form. `model`/`reuseSession`-style keys are NOT part of
+     * this format — the plan's row is these nine fields and nothing else.
+     *
+     * `permissionMode` serialises the settled FLOOR as null rather than as
+     * the spelling `dont-ask`: {@see fromArray()} refuses bypass-class
+     * spellings (C-AGT-7.a P3), so writing the floor's name back would make
+     * this build's own output unreadable by the next load — a file that
+     * poisons itself. Null means exactly what absence means on the read side,
+     * and a non-floor mode rides spelled, as recorded.
      *
      * @return array<string, mixed>
      */
@@ -251,10 +346,13 @@ final class Schedule
             'every' => $this->everySeconds,
             'prompt' => $this->prompt,
             'provider' => $this->provider,
-            'permissionMode' => $this->permissionMode,
+            'permissionMode' => $this->permissionMode === self::DEFAULT_PERMISSION_MODE->value
+                ? null
+                : $this->permissionMode,
             'nextDue' => $this->nextDue,
             'enabled' => $this->enabled,
             'root' => $this->root,
+            'timeoutSeconds' => $this->timeoutSeconds,
         ];
     }
 
@@ -268,8 +366,12 @@ final class Schedule
      * The next due stamp after $now, skipping every occurrence missed since the
      * current one. A host that was down for a week fires ONCE when it returns
      * and reschedules for the next live slot — the overrun skip is this
-     * arithmetic, not a queue, so missed counts cannot burst (E646: the bound
-     * is due-counts, there is no timeout anywhere on this path).
+     * arithmetic, not a queue, so missed counts cannot burst (the bound on
+     * this path is due-COUNTS; no timer bounds the act of firing itself. The
+     * run a fire spawns does carry the ordinary background-session wall-clock
+     * bound — default 3600s, per-row raisable, {@see self::$timeoutSeconds} —
+     * which is a daemon ceiling, not a timeout on any model request; E646
+     * untouched).
      */
     public function nextDueAfter(int $now): int
     {
