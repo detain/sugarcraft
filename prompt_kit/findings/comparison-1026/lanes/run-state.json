@@ -308,6 +308,7 @@
     "C-SES-9.c report-only seam: under a phar install the bundled trio is still NOT rostered (agentPresetTiers never injects the package dir; list() glob wrapper-dead) \u2014 tier-injection leg belongs to a later C-SES-9 step",
     "W4 \u00a74 erratum owed: P-CTX.d undisclosed +10 Chat-test-file widening at pick 967479a37 (W5 wave review MINOR) \u2014 dated note on plan file at W4 wave-close",
     "welder-run: C-SES-9.a + cure-envroster welded (63); re-verify entries lost by round-trips each weld",
-    "cure-envroster landed 86eab474c (pick of 793c32f92; CANDY_CODE_REF rostered as build-time prose ARG in ENVIRONMENT.md + DOCKER.md deferrals + EnvRosterDriftTest prose pin; EnvRoster pair red CLOSED; master repair, no \u00a74 mark, welded stays 63)"
+    "cure-envroster landed 86eab474c (pick of 793c32f92; CANDY_CODE_REF rostered as build-time prose ARG in ENVIRONMENT.md + DOCKER.md deferrals + EnvRosterDriftTest prose pin; EnvRoster pair red CLOSED; master repair, no \u00a74 mark, welded stays 63)",
+    "C-SES-9.a report-only seam OPEN: saveTranscript (:1988) and appendSessionEvent (:2377) still resurrect deleted session ids (tombstone gate covers appendUsageRecord only) \u2014 wave-loop/fixer owed"
   ]
 }
