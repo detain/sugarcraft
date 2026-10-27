@@ -44,7 +44,8 @@
     "P-TABS.a",
     "C-SEC-3.b",
     "C-WEB-1.b",
-    "P-IMG.c"
+    "P-IMG.c",
+    "P-CTX.b"
   ],
   "inflight": {
     "P-CTX.d": {
@@ -54,14 +55,6 @@
       "branch": "cc/P-CTX.d",
       "session": "ses_e8256a9bfffeq7CriYNRqC32RW",
       "note": "disk-verified 3a400ecc0 base ffe7b910d, 16 files +630/-25, tree clean; DUR duty TurnRunnerContextTest+ContextSnapshotScheduleTest; 2F dir-sweep claimed FOREIGN (ChatHostLangCatalogue<-e55b78f22, SessionSnapshot media<-C-WEB-1.d) — reviewer blame-check; MERGE-ARTIFACT scrutiny ordered (twin-absorption history); five-guard pair-only 25,838"
-    },
-    "P-CTX.b": {
-      "stage": "review",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-P-CTX.b",
-      "branch": "cc/P-CTX.b",
-      "session": "ses_e825830e2ffeilvtDVze0LF0Fi",
-      "note": "disk-verified tips 9a6ebd207+e34dd4938 base 5f740e62a clean; NEW ContextRawDumpTest 7T DUR duty; gates builder: 35T filter OK, gen-command-docs --check rc0, TrustKey|DocFigure 109T, pair-only 25,835; red-before 7/7; r1 review axes: jail/0600-before-write, byte-exactness of assembledSystemPrompt, file-only no echo, doc honesty, vacuity legs"
     }
   },
   "blocked": [],
@@ -113,7 +106,8 @@
     "P-TABS.a": "welded by welder agent at eecf4d5b0; Window 288T/2990A OK, TuiLang|LangParity 16T/4132A OK, five-guard pair-only; en.php auto-merged both-sides",
     "C-SEC-3.b": "WELDED 2026-10-27 master 393635d2c (pick acb746a59, plain cherry-pick, clean; 5 files +20/-16). Regen no-op (command/tool/settings gens up to date). Gates at weld: CommandShellPosture|TurnControllerBundle 13T/39A OK; wide CommandShellPosture|TurnController 35T/143A OK (builder 135T filter-era); TrustKey|DocFigure 109T/4486A OK; five-guard 133T/15572A F2 staleness pair only (25,537 pinned vs 25,934 live). PARTIAL by design: foreign-row/doc-truth half landed; opt-in half carried to C-SEC-3.c after C-EXT-4.c (row-identity gap). NO new candy-code test files -> no durations row. §4 mark ✅ 393635d2c UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
     "C-WEB-1.b": "WELDED 2026-10-27 master 34a295d2d (pick 07787590f, clean; StatusBar.vue +8/-1 + 3 pins). dist regen commit 21d7d039b (welder-only; amended to carry the two new hashed bundles — rename-detected, dist status clean). vitest serial: statusBar 10/10, protocol generated.spec 3/3 (dormantRoster.spec.ts does not exist yet — C-WEB-3.g pending). No PHP files -> no php gates. NO new spec files. §4 mark ✅ 34a295d2d UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
-    "P-IMG.c": "WELDED 2026-10-27 master a28779b00 (pick 26760f05b, clean; App.vue +3 + NEW src-web/components/__tests__/topbarGenerate.spec.ts). dist regen commit 8604d79d9 (welder-only, clean). vitest serial topbarGenerate+statusBar 14/14 green (4 new + 10 status-bar; brief's 11 was a builder-era recount, actual 10, all pass). PHP gates N/A. §4 mark ✅ a28779b00 UNSTAGED. Vitest-roster attention: NEW topbarGenerate.spec.ts (observation only, no durations.tsv involvement). Cherry proof '-'; worktree+branch pruned."
+    "P-IMG.c": "WELDED 2026-10-27 master a28779b00 (pick 26760f05b, clean; App.vue +3 + NEW src-web/components/__tests__/topbarGenerate.spec.ts). dist regen commit 8604d79d9 (welder-only, clean). vitest serial topbarGenerate+statusBar 14/14 green (4 new + 10 status-bar; brief's 11 was a builder-era recount, actual 10, all pass). PHP gates N/A. §4 mark ✅ a28779b00 UNSTAGED. Vitest-roster attention: NEW topbarGenerate.spec.ts (observation only, no durations.tsv involvement). Cherry proof '-'; worktree+branch pruned.",
+    "P-CTX.b": "WELDED 2026-10-27 master 4e91ddcb2+3edaa6acc (picks 9a6ebd207 build + e34dd4938 tests/docs, COMMANDS.md+lang auto-merged clean). Weld cure bdb1c96d8 TAKEN (brief premises matched text): (a) bad-args arg-count refusal moved BEFORE the capability-refusal branch; (b) failed .txt write now names the orphaned .json residue (NEW lang key cmd.context.raw.json-residue, single-locale). Regen no-op (gen-command-docs --write/--check up to date). Gates at weld: ContextRawDump 7T/35A OK exact; ContextRawDump|ContextHost 8T/41A OK post-cure; wide --filter Context 1839T/7859A OK; TrustKey|DocFigure 109T/4487A OK; five-guard 133T/15580A F2 staleness pair only (25,537 pinned vs 25,941 live). DURATIONS duty: NEW candy-code/tests/Host/Commands/ContextRawDumpTest.php (7T) — LIST ONLY, durations.tsv is closeout duty. §4 mark ✅ 4e91ddcb2 UNSTAGED. Cherry proof pending prune step."
   },
   "carries": [
     "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
