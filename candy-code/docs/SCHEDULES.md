@@ -84,7 +84,7 @@ So a persisted row carries `root`, and it is the only directory that row fires i
 - **A row with no `root`** (written before the field existed, or written by hand
   without one) belongs to nobody. It loads, `/schedules` lists it as `unbound`,
   and no host fires it — ever. Its note tells you the fix:
-  `schedule "nightly-tests" is not bound to a project; add "root" to the row — it
+  `schedule 'nightly-tests' is not bound to a project; add "root" to the row — it
   will not fire.`
 - **A `root` that does not exist** is refused the way any untrustworthy value is:
   the row is skipped by name, the note names the missing directory, and its

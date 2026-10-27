@@ -73,8 +73,10 @@ final class SchedulesCommand implements HostCommand
 
     /**
      * The `list` body: one line per row (file or loop), then the load notes
-     * — refusals and coerced permission modes alike — so a hand-edit mistake
-     * reads HERE rather than only in the absence of a fire.
+     * — refusals, coerced permission modes, and unbound-root rows alike —
+     * so a hand-edit mistake reads HERE rather than only in the absence of
+     * a fire. A persisted row with no `root` is listed as unbound and its
+     * note says plainly that no host will ever fire it.
      */
     public static function listing(ScheduleRegistry $registry): string
     {
