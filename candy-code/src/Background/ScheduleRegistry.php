@@ -20,6 +20,22 @@ use SugarCraft\Code\Support\PrivateDir;
  * and the serve-side {@see \SugarCraft\Code\Host\BackgroundEvents}), so there
  * is no second loop, no timer per row, and no cron anywhere.
  *
+ * WHY A ROW CARRIES A ROOT (C-AGT-1). That same design means ONE file is read
+ * by EVERY host sharing the home — every TUI in every checkout, plus `serve`.
+ * A row with no project of its own therefore runs wherever it happens to be
+ * claimed first: a schedule written while working in one repository would
+ * fire its prompt against whatever repository another host had open. So a
+ * persisted row names the directory it belongs to ({@see Schedule::$root}) and
+ * a registry is BUILT with the root of the host that owns it. {@see fireDue()}
+ * compares the two before it claims anything: a row this host does not own is
+ * reported `skipped-foreign` with no lock and no clock move, because touching
+ * another project's schedule is not this host's to do. A row that carries no
+ * root at all is a row written before the field existed; it loads, it is
+ * announced in {@see loadErrors()} as not bound to a project, and it fires
+ * nowhere until its operator names the directory. A registry built with no
+ * host root fires no persisted row for the same reason — nothing can show the
+ * directory is the right one.
+ *
  * WHY A LOCK PER ROW. Two hosts can share one home at once — a TUI and
  * `serve`, or two TUIs — and both pumps see the same due row at the same
  * instant. Before firing a PERSISTED row a host must claim
@@ -110,7 +126,8 @@ final class ScheduleRegistry
 
     /**
      * Human-formatted load notes: refusals this registry acted on, plus rows
-     * that LOADED yet whose spelled permission mode the floor overrode.
+     * that LOADED yet carry something the operator must know — a permission
+     * spelling the floor overrode, or no project binding to fire on.
      */
     private array $loadErrors = [];
 
@@ -125,6 +142,7 @@ final class ScheduleRegistry
 
     private function __construct(
         public readonly ?string $path,
+        private readonly ?string $hostRoot = null,
     ) {
     }
 
@@ -133,11 +151,20 @@ final class ScheduleRegistry
      * vouchsafe home there is nowhere durable to keep rows, so the registry
      * still exists — it just cannot persist (a persisted `add` refuses loudly,
      * `/loop` keeps working in memory).
+     *
+     * `$hostRoot` is the project directory of the host building this registry.
+     * It is what makes a persisted row fireable at all: {@see fireDue()} hands
+     * a row only to the host whose root the row names. Passed null, no
+     * persisted row fires — the safe answer when a host cannot say which
+     * project it is.
      */
-    public static function loadDefault(): self
+    public static function loadDefault(?string $hostRoot = null): self
     {
         $home = HomeDirectory::owned();
-        $registry = new self($home === null ? null : rtrim($home, '/') . '/.candy-code/schedules.json');
+        $registry = new self(
+            $home === null ? null : rtrim($home, '/') . '/.candy-code/schedules.json',
+            self::resolveRoot($hostRoot),
+        );
         // Load NOW, not on first pump: `hasEnabled()` gates the pump's own
         // tick subscription, so a registry that only read its file from
         // inside a tick could never read it the first time.
@@ -146,16 +173,36 @@ final class ScheduleRegistry
         return $registry;
     }
 
-    /** A registry over an explicit path (tests, --config homes). */
-    public static function atPath(string $path): self
+    /** A registry over an explicit path (tests, --config homes), bound to `$hostRoot`. */
+    public static function atPath(string $path, ?string $hostRoot = null): self
     {
-        return new self($path);
+        return new self($path, self::resolveRoot($hostRoot));
     }
 
     /** A registry with NO backing file: the `/loop` half works, persistence refuses loudly. */
     public static function inMemory(): self
     {
         return new self(null);
+    }
+
+    /**
+     * Put a host root in the same spelling a row's `root` carries
+     * ({@see Schedule}'s constructor realpath's the directory it is given).
+     *
+     * A root that cannot be found collapses to null rather than throwing: this
+     * is a host's own claim about where it lives, and the null answer already
+     * means "fire nothing", which is the correct response to a host that
+     * cannot name its directory. A row the host DOES own is re-read from the
+     * file the same way, so the two sides of the comparison can never differ
+     * by spelling alone.
+     */
+    private static function resolveRoot(?string $root): ?string
+    {
+        if ($root === null || $root === '') {
+            return null;
+        }
+
+        return realpath($root) ?: null;
     }
 
     /** @return list<Schedule> */
@@ -181,7 +228,7 @@ final class ScheduleRegistry
         return false;
     }
 
-    /** @return list<string> human-formatted load notes (refusals and coerced modes), oldest first */
+    /** @return list<string> human-formatted load notes (refusals, coerced modes, unbound rows), oldest first */
     public function loadErrors(): array
     {
         return $this->loadErrors;
@@ -189,6 +236,10 @@ final class ScheduleRegistry
 
     /**
      * @return list<Schedule> every enabled row whose nextDue has arrived
+     *
+     * Cadence and enablement decide membership — nothing else. Whether a row
+     * here is THIS host's to fire is decided later, inside
+     * {@see fireDue()}, where it costs no lock and no clock move to say so.
      */
     public function due(int $now): array
     {
@@ -378,10 +429,16 @@ final class ScheduleRegistry
     }
 
     /**
-     * Evaluate every due PERSISTED row: claim the row's lock, skip when
-     * another host holds it or a run of this name is still in flight, re-read
-     * the disk inside the claim, advance the clock, spawn through $spawn, and
-     * remember the session so the pump can {@see clearFired()} when it settles.
+     * Evaluate every due PERSISTED row THIS HOST owns: claim the row's lock,
+     * skip when another host holds it or a run of this name is still in
+     * flight, re-read the disk inside the claim, advance the clock, spawn
+     * through $spawn, and remember the session so the pump can
+     * {@see clearFired()} when it settles.
+     *
+     * The ROOT BINDING is decided first, before any lock and before any clock
+     * move: a row bound to another directory (or to none) is not this host's
+     * to fire, and this host leaves its schedule untouched — see
+     * `skipped-foreign`.
      *
      * @param \Closure(Schedule, int): (?string) $spawn receives the row and the
      *        tick's now-stamp, returns the spawned session id or null; throws
@@ -396,6 +453,17 @@ final class ScheduleRegistry
                 continue; // the Chat pump owns the ephemeral half
             }
             $name = $row->name;
+            if ($this->hostRoot === null || $row->root !== $this->hostRoot) {
+                // C-AGT-1: the file is shared by every host on the machine, so
+                // a row only belongs to the project it names. An unbound row
+                // (no root — it predates the field) belongs to nobody, and a
+                // registry that cannot name its own host root cannot prove the
+                // match either. Either way this host claims no lock and moves
+                // no clock: the row's own host, when it wakes, keeps its slot.
+                $results[] = ['name' => $name, 'action' => 'skipped-foreign'];
+
+                continue;
+            }
             if (isset($this->fired[$name])) {
                 // The previous run is still going: skip this slot but move the
                 // clock, so the row does not fire the instant it settles and a
@@ -422,9 +490,10 @@ final class ScheduleRegistry
                 // peer wrote under, so it cannot be older than that write.
                 $this->reloadIfChanged();
                 $current = $this->rows[$name] ?? null;
-                if ($current === null || !$current->isDue($now)) {
-                    // Deleted, disabled, or already fired by a peer: the clock
-                    // is the peer's (or nobody's) now, and this tick touches
+                if ($current === null || !$current->isDue($now) || $current->root !== $this->hostRoot) {
+                    // Deleted, disabled, already fired by a peer, or re-bound
+                    // to another project while we were claiming: the clock is
+                    // the peer's (or nobody's) now, and this tick touches
                     // neither.
                     $results[] = ['name' => $name, 'action' => 'skipped-stale'];
 
@@ -597,6 +666,16 @@ final class ScheduleRegistry
             if (is_string($spelled) && $spelled !== $row->permissionMode) {
                 $known = implode(', ', array_map(static fn (PermissionMode $m): string => $m->value, PermissionMode::cases()));
                 $this->loadErrors[] = "schedule '{$row->name}': permission mode \"{$spelled}\" is not one of: {$known}; the row loaded and runs as the floor \"{$row->permissionMode}\".";
+            }
+            if ($row->root === null) {
+                // C-AGT-1, the loud half of the same channel: a row written
+                // before the binding existed (or written without one) loads,
+                // and no host fires it — fireDue() refuses any row whose root
+                // is not its own. Silence here would read as a broken cron, so
+                // the note names the row and the fix. Inline prose rather than
+                // a catalogue key: these notes are file-side annotations, the
+                // same shape as every refusal above them.
+                $this->loadErrors[] = "schedule '{$row->name}' is not bound to a project; add \"root\" to the row — it will not fire.";
             }
             $this->rows[$row->name] = $row;
         }

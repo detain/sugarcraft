@@ -22,6 +22,10 @@ use SugarCraft\Code\Background\ScheduleRegistry;
  * Fork-safety contract identical to the Chat-side test: every due persisted
  * row here is parked behind a busy marker, so `spawnSession()` is never
  * reached for real.
+ *
+ * C-AGT-1: the serve host is rooted in `$this->root` and every persisted row
+ * carries that same root, because a registry without its host binding fires
+ * nothing — the pinned shape below would otherwise be a green vacuity.
  */
 final class BackgroundEventsSchedulesTest extends TestCase
 {
@@ -44,8 +48,8 @@ final class BackgroundEventsSchedulesTest extends TestCase
 
     public function testAnIdleServeStillEvaluatesTheClockBeforeItsEarlyReturn(): void
     {
-        $registry = ScheduleRegistry::atPath($this->root . '/schedules.json');
-        $registry->add(new Schedule(name: 'nightly', everySeconds: 60, prompt: 'p', nextDue: time() - 60));
+        $registry = ScheduleRegistry::atPath($this->root . '/schedules.json', $this->root);
+        $registry->add(new Schedule(name: 'nightly', everySeconds: 60, prompt: 'p', nextDue: time() - 60, root: $this->root));
         $registry->persist();
         // Park the row behind a marker whose daemon does not exist: fireDue
         // skips-but-advances (the busy rule), the marker retires this poll, and
@@ -67,8 +71,8 @@ final class BackgroundEventsSchedulesTest extends TestCase
     {
         $supervisor = new BackgroundSupervisor();
         $supervisor->addSession(self::backgroundSession());
-        $registry = ScheduleRegistry::atPath($this->root . '/schedules.json');
-        $registry->add(new Schedule(name: 'nightly', everySeconds: 60, prompt: 'p', nextDue: time() - 60));
+        $registry = ScheduleRegistry::atPath($this->root . '/schedules.json', $this->root);
+        $registry->add(new Schedule(name: 'nightly', everySeconds: 60, prompt: 'p', nextDue: time() - 60, root: $this->root));
         $registry->persist();
         $registry->noteFired('nightly', 'bg1');
         $events = $this->host($registry, $supervisor);
@@ -88,15 +92,15 @@ final class BackgroundEventsSchedulesTest extends TestCase
 
     public function testAHandWrittenRowLandsOnTheNextPoll(): void
     {
-        $registry = ScheduleRegistry::atPath($this->root . '/schedules.json');
+        $registry = ScheduleRegistry::atPath($this->root . '/schedules.json', $this->root);
         $events = $this->host($registry, new BackgroundSupervisor());
         $events->poll();
         self::assertNull($registry->get('outsider'), 'fixture: not seen before it existed');
 
         // A human writes the file while serve idles (future stamp: never
         // spawned, so nothing can fork).
-        $author = ScheduleRegistry::atPath($this->root . '/schedules.json');
-        $author->add(new Schedule(name: 'outsider', everySeconds: 3600, prompt: 'later', nextDue: time() + 3600));
+        $author = ScheduleRegistry::atPath($this->root . '/schedules.json', $this->root);
+        $author->add(new Schedule(name: 'outsider', everySeconds: 3600, prompt: 'later', nextDue: time() + 3600, root: $this->root));
         $author->persist();
 
         $events->poll();

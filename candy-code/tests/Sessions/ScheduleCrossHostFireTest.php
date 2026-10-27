@@ -31,9 +31,15 @@ use SugarCraft\Code\Tests\Support\RunsWallClockBoundedChildTrait;
  * {@see ScheduleRegistryTest::testASecondHostOnTheSamePathSkipsALockedRowWithoutTouchingTheClock()}
  * covers the overlapping case (holder inside its spawn). Nothing here re-runs
  * it: every test below lands the claim AFTER the peer's persist, which is the
- * interleaving that used to double-fire, and the last one does it with TWO
+ * interleaving that used to double-fire, and the real-process duel runs TWO
  * REAL PROCESSES and the kernel's own flock, bounded by
  * {@see RunsWallClockBoundedChildTrait}.
+ *
+ * C-AGT-1 adds a second axis to the word "host": a pump is rooted in ONE
+ * project, and rows carry their own binding. Same-home arbitration below runs
+ * every pump rooted in the same project so the FLOCK story stays pure; the
+ * last test in this file runs two pumps rooted in DIFFERENT projects against
+ * one home, which is the case the binding gate — not the lock — must answer.
  */
 final class ScheduleCrossHostFireTest extends TestCase
 {
@@ -98,7 +104,7 @@ final class ScheduleCrossHostFireTest extends TestCase
 
         // A peer adds a row on disk while this host holds the busy marker.
         $editor = $this->snapshottedHost();
-        $editor->add(new Schedule(name: 'added-later', everySeconds: 60, prompt: 'q', nextDue: self::TICK + 5));
+        $editor->add(new Schedule(name: 'added-later', everySeconds: 60, prompt: 'q', nextDue: self::TICK + 5, root: $this->dir));
         $editor->persist();
 
         $spawned = 0;
@@ -127,7 +133,7 @@ final class ScheduleCrossHostFireTest extends TestCase
 
         // A peer fires row1 for real and adds a row of its own.
         $peer = $this->snapshottedHost();
-        $peer->add(new Schedule(name: 'added-later', everySeconds: 60, prompt: 'q', nextDue: self::TICK + 5));
+        $peer->add(new Schedule(name: 'added-later', everySeconds: 60, prompt: 'q', nextDue: self::TICK + 5, root: $this->dir));
         $peer->fireDue(self::TICK, static fn (): ?string => 'sess_peer');
 
         // The busy host still believes row1 is due (its head snapshot predates
@@ -224,11 +230,12 @@ final class ScheduleCrossHostFireTest extends TestCase
         \file_put_contents($script, $this->peerHostSource());
 
         [$status, $lines] = $this->runWallClockBoundedChild('', \sprintf(
-            '%s %s %s %d 2>&1',
+            '%s %s %s %d %s 2>&1',
             \escapeshellarg(PHP_BINARY),
             \escapeshellarg($script),
             \escapeshellarg($this->path),
             self::TICK,
+            \escapeshellarg($this->dir),
         ));
         $output = \implode("\n", $lines);
 
@@ -254,14 +261,42 @@ final class ScheduleCrossHostFireTest extends TestCase
     }
 
     /**
+     * Two pumps, ONE home, two projects: the row written for /a must run on
+     * /a and must never run on /b, whichever pump on /b reaches the shared
+     * file first. This is the C-AGT-1 defect itself — the lock was never the
+     * answer, because a /b pump is not "second", it is the wrong host.
+     */
+    public function testAHostRootedInAnotherProjectFiresNothingOfThisProject(): void
+    {
+        $this->seedRoster('row1');
+        $bound = $this->snapshottedHost();
+
+        $elsewhere = $this->dir . '/elsewhere';
+        \mkdir($elsewhere, 0o700);
+        $foreign = ScheduleRegistry::atPath($this->path, $elsewhere);
+        $foreign->load();
+
+        $bFires = [];
+        $results = $foreign->fireDue(self::TICK, $this->collectingSpawn($bFires));
+        $this->assertSame([], $bFires, 'the other project spawns nothing from this file');
+        $this->assertSame(['row1' => 'skipped-foreign'], \array_column($results, 'action', 'name'));
+        $this->assertFalse(\is_file($this->dir . '/.candy-code/schedules/row1.lock'), 'it never even claims the row lock');
+
+        $aFires = [];
+        $bound->fireDue(self::TICK, $this->collectingSpawn($aFires));
+        $this->assertSame(['row1'], $aFires, 'the bound host runs it once, exactly as before');
+        $this->assertSame(['row1' => self::TICK + self::DAY], $this->diskClocks(), 'and advances it exactly once');
+    }
+
+    /**
      * Seed daily rows due at the shared tick, as a hand-edited
      * schedules.json would have them.
      */
     private function seedRoster(string ...$names): void
     {
-        $seed = ScheduleRegistry::atPath($this->path);
+        $seed = ScheduleRegistry::atPath($this->path, $this->dir);
         foreach ($names as $name) {
-            $seed->add(new Schedule(name: $name, everySeconds: self::DAY, prompt: 'p', nextDue: self::TICK));
+            $seed->add(new Schedule(name: $name, everySeconds: self::DAY, prompt: 'p', nextDue: self::TICK, root: $this->dir));
         }
         $seed->persist();
     }
@@ -269,7 +304,7 @@ final class ScheduleCrossHostFireTest extends TestCase
     /** A host that has read the roster and will NOT re-read it before firing. */
     private function snapshottedHost(): ScheduleRegistry
     {
-        $registry = ScheduleRegistry::atPath($this->path);
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
         $registry->load();
 
         return $registry;
@@ -339,7 +374,7 @@ final class ScheduleCrossHostFireTest extends TestCase
             use SugarCraft\Code\Background\Schedule;
             use SugarCraft\Code\Background\ScheduleRegistry;
 
-            $registry = ScheduleRegistry::atPath((string) $argv[1]);
+            $registry = ScheduleRegistry::atPath((string) $argv[1], (string) $argv[3]);
             $registry->load();
             $now = (int) $argv[2];
 

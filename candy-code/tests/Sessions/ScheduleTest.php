@@ -17,20 +17,21 @@ final class ScheduleTest extends TestCase
 {
     public function testAWellFormedRowSurvivesTheWireRoundTrip(): void
     {
-        $row = new Schedule(name: 'nightly', everySeconds: 86_400, prompt: 'run the tests', provider: 'sglang', nextDue: 1_000);
+        $root = sys_get_temp_dir();
+        $row = new Schedule(name: 'nightly', everySeconds: 86_400, prompt: 'run the tests', provider: 'sglang', nextDue: 1_000, root: $root);
         $back = Schedule::fromArray($row->toArray(), 500);
 
-        foreach (['name', 'everySeconds', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled'] as $field) {
+        foreach (['name', 'everySeconds', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root'] as $field) {
             $this->assertSame($row->$field, $back->$field, "field {$field}");
         }
         $this->assertTrue($back->persisted, 'an on-disk row is persisted by definition');
     }
 
-    public function testTheFileRowCarriesExactlyThePlannedSevenKeys(): void
+    public function testTheFileRowCarriesExactlyThePlannedEightKeys(): void
     {
         $row = new Schedule(name: 'a', everySeconds: 60, prompt: 'p', nextDue: 0);
 
-        $this->assertSame(['name', 'every', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled'], array_keys($row->toArray()));
+        $this->assertSame(['name', 'every', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root'], array_keys($row->toArray()));
     }
 
     /** @return list<array{0: string}> */
@@ -44,6 +45,7 @@ final class ScheduleTest extends TestCase
             ['UPPER'],
             ['colon:time'],
             ['a/' . 'x'],
+            ['root/slash/path'],
             [str_repeat('n', 66)],
         ];
     }
@@ -74,6 +76,47 @@ final class ScheduleTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         new Schedule(name: 'a', everySeconds: 60, prompt: "  \n ");
+    }
+
+    public function testARootIsStoredResolvedSoSpellingsConverge(): void
+    {
+        $base = sys_get_temp_dir() . '/w5c_root_' . bin2hex(random_bytes(6));
+        mkdir($base, 0o700);
+        $link = $base . '-link';
+        symlink($base, $link);
+
+        try {
+            $viaLink = new Schedule(name: 'a', everySeconds: 60, prompt: 'p', root: $link);
+            $viaDot = new Schedule(name: 'a', everySeconds: 60, prompt: 'p', root: $base . '/./');
+
+            $this->assertSame(realpath($base), $viaLink->root, 'a symlink spells the same binding');
+            $this->assertSame($viaLink->root, $viaDot->root, 'a `dir/./` spelling spells the same binding');
+        } finally {
+            @unlink($link);
+            @rmdir($base);
+        }
+    }
+
+    public function testARootThatDoesNotExistIsRefusedByName(): void
+    {
+        $ghost = sys_get_temp_dir() . '/w5c_ghost_' . bin2hex(random_bytes(6));
+
+        try {
+            new Schedule(name: 'a', everySeconds: 60, prompt: 'p', root: $ghost);
+            $this->fail('a missing root directory was accepted');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('"root"', $e->getMessage());
+            $this->assertStringContainsString('does not exist', $e->getMessage());
+            $this->assertStringContainsString($ghost, $e->getMessage());
+        }
+    }
+
+    public function testAnAbsentRootLoadsAsNullBinding(): void
+    {
+        $row = Schedule::fromArray(['name' => 'a', 'every' => 60, 'prompt' => 'p'], now: 0);
+
+        $this->assertNull($row->root);
+        $this->assertNull($row->toArray()['root'], 'the wire keeps the absence, it does not invent one');
     }
 
     public function testAnUnknownPermissionSpellingFallsToTheDontAskFloor(): void
@@ -108,6 +151,7 @@ final class ScheduleTest extends TestCase
             [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'permissionMode' => true], 'permissionMode'],
             [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'enabled' => 'yes'], 'enabled'],
             [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'nextDue' => 'soon'], 'nextDue'],
+            [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'root' => 3], '"root"'],
         ];
         foreach ($cases as [$row, $needle]) {
             try {
@@ -160,10 +204,10 @@ final class ScheduleTest extends TestCase
 
     public function testWithersCarryEveryFieldForwardIncludingTheEphemeralFlag(): void
     {
-        $row = new Schedule(name: 'a', everySeconds: 60, prompt: 'p', provider: 'v', permissionMode: PermissionMode::Auto->value, nextDue: 10, enabled: false, persisted: false);
+        $row = new Schedule(name: 'a', everySeconds: 60, prompt: 'p', provider: 'v', permissionMode: PermissionMode::Auto->value, nextDue: 10, enabled: false, persisted: false, root: sys_get_temp_dir());
         $moved = $row->withNextDue(70)->withEnabled(true);
 
-        foreach (['name', 'everySeconds', 'prompt', 'provider', 'permissionMode', 'persisted'] as $field) {
+        foreach (['name', 'everySeconds', 'prompt', 'provider', 'permissionMode', 'persisted', 'root'] as $field) {
             $this->assertSame($row->$field, $moved->$field, "field {$field}");
         }
         $this->assertSame(70, $moved->nextDue);

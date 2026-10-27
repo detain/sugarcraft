@@ -21,28 +21,35 @@ final class ScheduleRegistryTest extends TestCase
 
     private string $path;
 
+    private string $other;
+
     protected function setUp(): void
     {
         $this->dir = sys_get_temp_dir() . '/w5c_reg_' . bin2hex(random_bytes(6));
         mkdir($this->dir . '/.candy-code', 0o700, true);
         $this->path = $this->dir . '/.candy-code/schedules.json';
+        // A second project directory, for rows that belong to another host.
+        $this->other = sys_get_temp_dir() . '/w5c_regB_' . bin2hex(random_bytes(6));
+        mkdir($this->other, 0o700);
     }
 
     protected function tearDown(): void
     {
         self::sweep($this->dir);
+        self::sweep($this->other);
     }
 
     public function testAPersistedFileIsPrivateAndCarriesThePlannedEnvelope(): void
     {
         $registry = ScheduleRegistry::atPath($this->path);
-        $registry->add(new Schedule(name: 'nightly', everySeconds: 3_600, prompt: 'run tests', nextDue: 100));
+        $registry->add(new Schedule(name: 'nightly', everySeconds: 3_600, prompt: 'run tests', nextDue: 100, root: $this->dir));
         $registry->persist();
 
         $this->assertSame(0o600, fileperms($this->path) & 0o777);
         $document = json_decode((string) file_get_contents($this->path), true);
         $this->assertSame(ScheduleRegistry::VERSION, $document['version']);
         $this->assertSame('nightly', $document['schedules'][0]['name']);
+        $this->assertSame(realpath($this->dir), $document['schedules'][0]['root'], 'the binding lands on disk, not just in memory');
     }
 
     public function testAHandWrittenRowLoadsAndAnAbsentFileIsSimplyEmpty(): void
@@ -50,15 +57,16 @@ final class ScheduleRegistryTest extends TestCase
         file_put_contents($this->path, json_encode([
             'version' => 1,
             'schedules' => [
-                ['name' => 'morning', 'every' => '900', 'prompt' => 'summarise overnight logs'],
+                ['name' => 'morning', 'every' => '900', 'prompt' => 'summarise overnight logs', 'root' => $this->dir],
             ],
         ]));
-        $registry = ScheduleRegistry::atPath($this->path);
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
         $registry->load();
 
         $row = $registry->get('morning');
         $this->assertNotNull($row);
         $this->assertSame(900, $row->everySeconds, 'a digit-string "every" is a real interval');
+        $this->assertSame(realpath($this->dir), $row->root);
         $this->assertSame([], $registry->loadErrors());
 
         $missing = ScheduleRegistry::atPath($this->dir . '/nothing-here.json');
@@ -72,9 +80,9 @@ final class ScheduleRegistryTest extends TestCase
         file_put_contents($this->path, json_encode([
             'version' => 1,
             'schedules' => [
-                ['name' => 'good', 'every' => 60, 'prompt' => 'p'],
+                ['name' => 'good', 'every' => 60, 'prompt' => 'p', 'root' => $this->dir],
                 ['name' => 'Bad Name', 'every' => 60, 'prompt' => 'p'],
-                ['name' => 'also-good', 'every' => 60, 'prompt' => 'p'],
+                ['name' => 'also-good', 'every' => 60, 'prompt' => 'p', 'root' => $this->dir],
                 'not even an object',
             ],
         ]));
@@ -100,10 +108,10 @@ final class ScheduleRegistryTest extends TestCase
         file_put_contents($this->path, json_encode([
             'version' => 1,
             'schedules' => [
-                ['name' => 'typo', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'acceptEdits'],
-                ['name' => 'spelled-floor', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'dont-ask'],
-                ['name' => 'named-real', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'plan'],
-                ['name' => 'minimal', 'every' => 60, 'prompt' => 'p'],
+                ['name' => 'typo', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'acceptEdits', 'root' => $this->dir],
+                ['name' => 'spelled-floor', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'dont-ask', 'root' => $this->dir],
+                ['name' => 'named-real', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'plan', 'root' => $this->dir],
+                ['name' => 'minimal', 'every' => 60, 'prompt' => 'p', 'root' => $this->dir],
             ],
         ]));
         $registry = ScheduleRegistry::atPath($this->path);
@@ -158,8 +166,8 @@ final class ScheduleRegistryTest extends TestCase
 
     public function testFireDueAdvancesBeforeSpawningAndRemembersTheSession(): void
     {
-        $registry = ScheduleRegistry::atPath($this->path);
-        $registry->add(new Schedule(name: 'beat', everySeconds: 60, prompt: 'p', nextDue: time() - 1));
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
+        $registry->add(new Schedule(name: 'beat', everySeconds: 60, prompt: 'p', nextDue: time() - 1, root: $this->dir));
         $seen = null;
         $results = $registry->fireDue(time(), function (Schedule $row) use (&$seen, $registry): ?string {
             $seen = $row->name;
@@ -178,8 +186,8 @@ final class ScheduleRegistryTest extends TestCase
 
     public function testABusyRowIsSkippedButAdvancedSoItCannotStack(): void
     {
-        $registry = ScheduleRegistry::atPath($this->path);
-        $registry->add(new Schedule(name: 'slow', everySeconds: 60, prompt: 'p', nextDue: time() - 1));
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
+        $registry->add(new Schedule(name: 'slow', everySeconds: 60, prompt: 'p', nextDue: time() - 1, root: $this->dir));
         $registry->noteFired('slow', 'sess_running');
 
         $spawned = 0;
@@ -200,10 +208,10 @@ final class ScheduleRegistryTest extends TestCase
 
     public function testASecondHostOnTheSamePathSkipsALockedRowWithoutTouchingTheClock(): void
     {
-        $holder = ScheduleRegistry::atPath($this->path);
-        $holder->add(new Schedule(name: 'duel', everySeconds: 60, prompt: 'p', nextDue: time() - 1));
-        $holder->persist(); // the challenger reads the roster FROM DISK, like a second host does
-        $challenger = ScheduleRegistry::atPath($this->path);
+        $holder = ScheduleRegistry::atPath($this->path, $this->dir);
+        $holder->add(new Schedule(name: 'duel', everySeconds: 60, prompt: 'p', nextDue: time() - 1, root: $this->dir));
+        $holder->persist(); // the challenger reads the roster FROM DISK, like a second pump does
+        $challenger = ScheduleRegistry::atPath($this->path, $this->dir);
         $challenger->load();
 
         $outcomes = [];
@@ -222,8 +230,8 @@ final class ScheduleRegistryTest extends TestCase
 
     public function testASpawnRefusalKeepsTheAdvanceSoItAnnouncesOncePerPeriod(): void
     {
-        $registry = ScheduleRegistry::atPath($this->path);
-        $registry->add(new Schedule(name: 'broken', everySeconds: 60, prompt: 'p', nextDue: time() - 1));
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
+        $registry->add(new Schedule(name: 'broken', everySeconds: 60, prompt: 'p', nextDue: time() - 1, root: $this->dir));
 
         $results = $registry->fireDue(time(), static function (): ?string {
             throw new \RuntimeException('handshake went nowhere');
@@ -247,7 +255,7 @@ final class ScheduleRegistryTest extends TestCase
 
     public function testEphemeralRowsNeverTouchTheFileAndNeverLock(): void
     {
-        $registry = ScheduleRegistry::atPath($this->path);
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
         $registry->add(new Schedule(name: 'loop-1', everySeconds: 60, prompt: 'p', nextDue: 1, persisted: false));
         $registry->persist();
 
@@ -303,6 +311,88 @@ final class ScheduleRegistryTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $registry->persist();
+    }
+
+    public function testARowBoundToNoProjectIsAnnouncedAndFiredByNobody(): void
+    {
+        $tick = time();
+        file_put_contents($this->path, json_encode([
+            'version' => 1,
+            'schedules' => [
+                ['name' => 'orphan', 'every' => 60, 'prompt' => 'p', 'nextDue' => $tick - 60],
+            ],
+        ]));
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
+        $registry->load();
+
+        $notes = $registry->loadErrors();
+        $this->assertCount(1, $notes, 'the unbound row speaks up once at load');
+        $this->assertStringContainsString("'orphan'", $notes[0]);
+        $this->assertStringContainsString('not bound to a project', $notes[0]);
+        $this->assertStringContainsString('"root"', $notes[0], 'the note names the field that fixes it');
+        $this->assertStringContainsString('will not fire', $notes[0]);
+
+        $spawned = 0;
+        $results = $registry->fireDue($tick, static function () use (&$spawned): ?string {
+            ++$spawned;
+
+            return 'x';
+        });
+
+        $this->assertSame([['name' => 'orphan', 'action' => 'skipped-foreign']], $results);
+        $this->assertSame(0, $spawned, 'no host on the machine claims an unbound row');
+        $this->assertSame($tick - 60, $registry->get('orphan')->nextDue, 'its clock is left exactly as its author wrote it');
+    }
+
+    public function testARowBoundToAnotherProjectIsSkippedWithNeitherLockNorClockMove(): void
+    {
+        $tick = time();
+        file_put_contents($this->path, json_encode([
+            'version' => 1,
+            'schedules' => [
+                ['name' => 'elsewhere', 'every' => 60, 'prompt' => 'p', 'nextDue' => $tick - 60, 'root' => $this->other],
+            ],
+        ]));
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
+        $registry->load();
+        $this->assertSame([], $registry->loadErrors(), 'a row bound elsewhere is not a load problem HERE');
+
+        $spawned = 0;
+        $results = $registry->fireDue($tick, static function () use (&$spawned): ?string {
+            ++$spawned;
+
+            return 'x';
+        });
+
+        $this->assertSame([['name' => 'elsewhere', 'action' => 'skipped-foreign']], $results);
+        $this->assertSame(0, $spawned);
+        $this->assertFalse(is_dir($this->dir . '/.candy-code/schedules'), 'the row lock was never claimed — the foreign host still wins its own slot');
+        $document = json_decode((string) file_get_contents($this->path), true);
+        $this->assertSame($tick - 60, $document['schedules'][0]['nextDue'], 'the shared file is byte-still');
+    }
+
+    public function testAHostThatCannotNameItsRootFiresNoPersistedRow(): void
+    {
+        $tick = time();
+        file_put_contents($this->path, json_encode([
+            'version' => 1,
+            'schedules' => [
+                ['name' => 'home-bound', 'every' => 60, 'prompt' => 'p', 'nextDue' => $tick - 60, 'root' => $this->dir],
+            ],
+        ]));
+        // No host root at all: the fail-closed half of the binding gate.
+        $registry = ScheduleRegistry::atPath($this->path);
+        $registry->load();
+
+        $spawned = 0;
+        $results = $registry->fireDue($tick, static function () use (&$spawned): ?string {
+            ++$spawned;
+
+            return 'x';
+        });
+
+        $this->assertSame([['name' => 'home-bound', 'action' => 'skipped-foreign']], $results);
+        $this->assertSame(0, $spawned, 'an unrooted pump runs nobody\'s daemon, not even its own project\'s');
     }
 
     private static function sweep(string $path): void

@@ -1907,7 +1907,11 @@ final class Bootstrap
             // /schedules, serve's BackgroundEvents). Reload-on-stat-change
             // keeps hand-edits landing within a tick of the roster's own
             // clock, so nothing else needs to watch the file.
-            ->withService(\SugarCraft\Code\Background\ScheduleRegistry::class, \SugarCraft\Code\Background\ScheduleRegistry::loadDefault());
+            // C-AGT-1: the launch root rides this call as the host's binding —
+            // the single place a registry learns which project it speaks for,
+            // so a row fires only where its own `root` says it belongs and not
+            // in whichever host happened to claim the shared file first.
+            ->withService(\SugarCraft\Code\Background\ScheduleRegistry::class, \SugarCraft\Code\Background\ScheduleRegistry::loadDefault($root));
 
         $events = $transcripts->events();
 

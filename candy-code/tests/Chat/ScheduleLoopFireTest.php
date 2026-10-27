@@ -37,6 +37,10 @@ use SugarCraft\Code\Tests\Support\ScriptedProvider;
  *
  * Nothing here may reach `spawnSession()` for real (it would fork): every
  * persisted-row case parks the row behind a busy marker first.
+ *
+ * C-AGT-1: the persisted-row registry and its row share one root — a pump
+ * fires only rows bound to its own project, so an unbound fixture would pin
+ * nothing but the gate's refusal.
  */
 final class ScheduleLoopFireTest extends TestCase
 {
@@ -115,12 +119,13 @@ final class ScheduleLoopFireTest extends TestCase
     {
         $dir = $this->root . '/reg';
         mkdir($dir, 0o700, true);
-        $registry = ScheduleRegistry::atPath($dir . '/schedules.json');
+        $registry = ScheduleRegistry::atPath($dir . '/schedules.json', $dir);
         $registry->add(new Schedule(
             name: 'nightly',
             everySeconds: 60,
             prompt: 'do the nightly thing',
             nextDue: time() - 60,
+            root: $dir,
         ));
         $registry->noteFired('nightly', 'bg1');
         $supervisor = new BackgroundSupervisor();

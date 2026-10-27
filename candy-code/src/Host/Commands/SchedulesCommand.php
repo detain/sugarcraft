@@ -32,6 +32,11 @@ use SugarCraft\Code\Background\ScheduleRegistry;
  * `enable`/`disable`/`delete` on a PERSISTED row write schedules.json back
  * through the registry before answering, so the change survives the session;
  * on an ephemeral row they touch only memory, and the reply says so.
+ *
+ * The listing spells each row's project binding (C-AGT-1) — the directory a
+ * persisted row fires in, or the word `unbound` for a row no host will run.
+ * Because the file is shared by every host on the machine, that is the one
+ * piece of information an operator cannot get from the row's name.
  */
 final class SchedulesCommand implements HostCommand
 {
@@ -85,6 +90,9 @@ final class SchedulesCommand implements HostCommand
                     'kind' => $row->persisted ? Lang::t('host.schedules.kind_file') : Lang::t('host.schedules.kind_loop'),
                     'every' => LoopCommand::everyLabel($row->everySeconds),
                     'next' => date('Y-m-d H:i:s', $row->nextDue),
+                    // C-AGT-1: a file row's own binding, spelled, or the word
+                    // that says no host will ever run it.
+                    'root' => $row->root ?? Lang::t('host.schedules.unbound'),
                     'prompt' => self::clip($row->prompt),
                 ]);
             }

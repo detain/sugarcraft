@@ -36,6 +36,13 @@ final class ScheduleSpawner
     /**
      * The {@see ScheduleRegistry::fireDue()} closure for one host.
      *
+     * `$root` is the HOST's project directory, and it is only a FALLBACK since
+     * C-AGT-1: a persisted row carries its own bound `root`, and `fireDue()`
+     * hands a row to this closure only when that root is already this host's.
+     * What is left to the host's directory is an ephemeral `/loop` row, which
+     * has no binding of its own because it cannot outlive the session that
+     * made it.
+     *
      * @return \Closure(Schedule, int): ?string  the spawned session id; throws
      *         to report a refused spawn (the registry turns that into an
      *         error result — the advance it already made is NOT rolled back,
@@ -50,12 +57,17 @@ final class ScheduleSpawner
                 // shared with the live session's sub-agent dispatch.
                 $agent = Agent::fromArray(array_merge($agent->toArray(), ['provider' => $row->provider]));
             }
+            // The row's own binding wins wherever it exists (a realpath'd
+            // absolute directory); the host's directory answers only for the
+            // unbound half, and '.' keeps the pre-existing meaning of "wherever
+            // this process happens to be".
+            $directory = $row->root ?? $root;
 
             return $supervisor->spawnSession(
                 name: self::sessionName($row),
                 agent: $agent,
                 task: $row->prompt,
-                workingDirectory: $root === null || $root === '' ? '.' : $root,
+                workingDirectory: $directory === null || $directory === '' ? '.' : $directory,
                 tags: ['schedule', 'schedule:' . $row->name],
                 permissionMode: $row->permissionMode,
             )->id;

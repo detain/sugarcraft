@@ -39,6 +39,18 @@ use SugarCraft\Code\Permissions\PermissionMode;
  * one override this floor does make (an unknown spelling) is announced by
  * name at load through {@see ScheduleRegistry::loadErrors()}; it is never a
  * silent rewrite of what the operator asked for.
+ *
+ * THE ROOT BINDING (C-AGT-1). Every host on this machine reads the SAME
+ * home-global file, so a row has to say which project it belongs to:
+ * {@see self::$root} is the realpath'd directory its daemon runs in, and
+ * {@see ScheduleRegistry} fires the row only on the host whose own root is
+ * that same directory — nowhere else, and never by accident of which TUI
+ * happened to wake up first. A row with no root belongs to nobody: it still
+ * loads, it is listed as unbound, and no host fires it (the file predates this
+ * field, so silence is the only thing a legacy row can say). A root spelled
+ * for a directory that does not exist is refused HERE, naming the row, like
+ * any other untrustworthy value — the operator learns which line is wrong
+ * instead of watching a cron run in a checkout they never chose.
  */
 final class Schedule
 {
@@ -74,6 +86,13 @@ final class Schedule
     /** Ephemeral rows (`/loop`) live in one process's memory and are never written to the file. */
     public readonly bool $persisted;
 
+    /**
+     * The realpath'd project directory this row is bound to, or null when the
+     * row carries no binding — see the class doc-block's root-binding note.
+     * Ephemeral rows never have one: a `/loop` lives where its TUI lives.
+     */
+    public readonly ?string $root;
+
     public function __construct(
         string $name,
         int $everySeconds,
@@ -83,6 +102,7 @@ final class Schedule
         ?int $nextDue = null,
         bool $enabled = true,
         bool $persisted = true,
+        ?string $root = null,
     ) {
         if (preg_match(self::NAME_PATTERN, $name) !== 1) {
             throw new \InvalidArgumentException(
@@ -111,6 +131,24 @@ final class Schedule
             ? self::DEFAULT_PERMISSION_MODE->value
             : (PermissionMode::tryFrom($permissionMode) !== null ? $permissionMode : self::DEFAULT_PERMISSION_MODE->value);
 
+        // The binding is RESOLVED here, at the boundary, for the same reason
+        // the mode is normalised here: two spellings of one directory (`repo/`
+        // and `./repo`) must not become two different owners of one row, and a
+        // path that cannot be found is a wrong line in the file rather than a
+        // row that silently fires in some other checkout. An ABSENT root is
+        // not an error — it is a row written before this field existed — and
+        // {@see ScheduleRegistry} is what keeps such a row from firing.
+        $resolved = null;
+        if ($root !== null && $root !== '') {
+            $found = realpath($root);
+            if ($found === false) {
+                throw new \InvalidArgumentException(
+                    "Schedule '{$name}' names a \"root\" directory that does not exist: {$root}",
+                );
+            }
+            $resolved = $found;
+        }
+
         $this->name = $name;
         $this->everySeconds = $everySeconds;
         $this->prompt = $prompt;
@@ -119,6 +157,7 @@ final class Schedule
         $this->nextDue = $nextDue ?? 0;
         $this->enabled = $enabled;
         $this->persisted = $persisted;
+        $this->root = $resolved;
     }
 
     /**
@@ -126,7 +165,10 @@ final class Schedule
      * refused HERE, naming the field, rather than entering the roster.
      *
      * `nextDue` may be absent (a hand-written row is armed at $now, not fired
-     * the moment it appears). `persisted` is deliberately NOT readable from
+     * the moment it appears). `root` may be absent as well, and means what its
+     * absence has always meant here: a row written before the binding existed,
+     * which no host fires — see {@see ScheduleRegistry::load()}.
+     * `persisted` is deliberately NOT readable from
      * the wire: an on-disk row is by definition persisted, and the ephemeral
      * flag cannot survive a restart anyway.
      *
@@ -163,6 +205,10 @@ final class Schedule
         if ($nextDue !== null && !(is_int($nextDue) || (is_string($nextDue) && ctype_digit($nextDue)))) {
             throw new \InvalidArgumentException("schedule '{$name}' carries a non-integer \"nextDue\"");
         }
+        $root = $row['root'] ?? null;
+        if ($root !== null && !is_string($root)) {
+            throw new \InvalidArgumentException("schedule '{$name}' carries a non-string \"root\"");
+        }
 
         return new self(
             name: $name,
@@ -172,12 +218,13 @@ final class Schedule
             permissionMode: $mode,
             nextDue: $nextDue === null ? $now + (int) $every : (int) $nextDue,
             enabled: $enabled,
+            root: $root,
         );
     }
 
     /**
      * The file-row form. `model`/`reuseSession`-style keys are NOT part of the
-     * first cut — the plan's row is these seven fields and nothing else.
+     * first cut — the plan's row is these eight fields and nothing else.
      *
      * @return array<string, mixed>
      */
@@ -191,6 +238,7 @@ final class Schedule
             'permissionMode' => $this->permissionMode,
             'nextDue' => $this->nextDue,
             'enabled' => $this->enabled,
+            'root' => $this->root,
         ];
     }
 

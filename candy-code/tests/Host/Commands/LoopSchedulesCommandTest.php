@@ -91,10 +91,10 @@ final class LoopSchedulesCommandTest extends TestCase
 
     public function testListingOfNothingAndOfBothKinds(): void
     {
-        $registry = ScheduleRegistry::atPath($this->root . '/schedules.json');
+        $registry = ScheduleRegistry::atPath($this->root . '/schedules.json', $this->root);
         self::assertStringContainsString('No schedules', self::lastRow((new SchedulesCommand())->run($this->context($registry), '/schedules')));
 
-        $registry->add(new Schedule(name: 'nightly', everySeconds: 3600, prompt: 'run notes', nextDue: time() + 3600));
+        $registry->add(new Schedule(name: 'nightly', everySeconds: 3600, prompt: 'run notes', nextDue: time() + 3600, root: $this->root));
         $registry->persist();
         (new LoopCommand())->run($this->context($registry), '/loop 15m watch the tests');
 
@@ -104,6 +104,10 @@ final class LoopSchedulesCommandTest extends TestCase
         self::assertStringContainsString('loop-1', $listing);
         self::assertStringContainsString('(loop)', $listing);
         self::assertStringContainsString('every 15m', $listing, 'the label ladder reads in human units');
+        // C-AGT-1: each row spells WHERE it fires — a bound row names its
+        // project, a /loop row (which dies with this session) says so.
+        self::assertStringContainsString(' @ ' . realpath($this->root) . ':', $listing, 'the bound row lists its root');
+        self::assertStringContainsString('unbound', $listing, 'a row with no binding says unbound, not nothing');
     }
 
     public function testUnknownVerbIsUsageAndUnknownNameIsLoud(): void
