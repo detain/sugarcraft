@@ -605,6 +605,9 @@ final class TreeWideGuardRosterTest extends TestCase
         // purgeTempTree() in tearDown() empties the sys_get_temp_dir() scratch tree
         // setUp() made (session.db, repo, fake HOME and all) before the rmdir.
         'Cli/NonInteractiveSessionPersistenceTest.php' => ['scandir($path)'],
+        // purgeTempTree() in tearDown() empties the sys_get_temp_dir() scratch tree
+        // setUp() made (fake HOME and repo and all) before the rmdir.
+        'Cli/NonInteractiveUsageLedgerTest.php' => ['scandir($path)'],
         'Cli/RulesStateWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         // DST-3: deleteTree() in tearDown() empties the sys_get_temp_dir()
         // release sandbox setUp() made; the globs assert the swap's .tmp-*
