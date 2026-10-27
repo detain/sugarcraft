@@ -20,7 +20,8 @@
     "C-MCP-1.b",
     "C-EXT-1.b",
     "C-SES-5.b",
-    "C-CTX-1.b"
+    "C-CTX-1.b",
+    "C-SES-2.c"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -45,27 +46,20 @@
       "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
     },
     "C-SES-1.a": {
-      "stage": "review",
-      "round": 1,
+      "stage": "fix",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SES-1.a",
       "branch": "cc/C-SES-1.a",
-      "session": "ses_e83c0e7f5ffeC2s0Y2mjAubN1W",
-      "note": "tip b362f2e5a base 32f02ada1, 7 files; NEW NonInteractiveUsageLedgerTest durations duty"
+      "session": "ses_e83bc7f60ffesuCpr0QzVDoMC7",
+      "note": "fix r2: TreeWideGuardRoster row"
     },
     "C-SES-2.b": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SES-2.b",
       "branch": "cc/C-SES-2.b",
-      "session": "ses_e83db374cffeLBzipP6vdRrrW6"
-    },
-    "C-SES-2.c": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-SES-2.c",
-      "branch": "cc/C-SES-2.c",
       "session": null,
-      "note": "r2 CLEAN tip d89efd151; weld queued after C-CTX-1.b; welder regen protocol trio + web dist expected"
+      "note": "tip c20c36f1d base 50ec2e702"
     },
     "C-SES-5.d": {
       "stage": "review",
@@ -76,11 +70,19 @@
       "note": "tip d4c136c40 base fd4f36875; NEW tools/tests CandyCodeImageCacheBustTest.php tools-guard no durations"
     },
     "C-TOOL-1.b": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-TOOL-1.b",
       "branch": "cc/C-TOOL-1.b",
-      "session": "ses_e83be5b49ffezmEXm3WJ4QHhu6"
+      "session": null,
+      "note": "tip 2714e3421 base d7bbd104d"
+    },
+    "C-WEB-1.c": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-WEB-1.c",
+      "branch": "cc/C-WEB-1.c",
+      "session": "ses_e83bc07faffetjirZRMfBj7oJZ"
     }
   },
   "blocked": [],

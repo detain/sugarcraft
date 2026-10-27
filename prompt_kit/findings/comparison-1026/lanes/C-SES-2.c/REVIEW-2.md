@@ -1,0 +1,7 @@
+# C-SES-2.c round 2 — VERDICT: CLEAN
+Round-2 scope verified on disk (gate re-run shell-denied — welder re-runs full gate on merged tree after regen):
+- Fix commit d89efd151: exactly 1 file, 8 deletions, 0 insertions — stale SessionHub::list() docblock r1 named (:186-193) removed; surviving docblock (:186-198 now) is the truthful dual-path one, retains @return shape. Comment-only; no code touched.
+- Author law: both range commits A=C=detain@interserver.net; zero Co-Authored trailers; tree clean at tip.
+- Scope integrity: cumulative 12-file diff matches declared set; no generated-regen files (schema.json/SERVER.md/generated.ts) in diff — correct per §1.8 (welder regen); durations.tsv untouched, SessionListBodySearchTest row carried weld duty; dist/ uncommitted.
+- r1 CLEAN axes hold: fix cannot regress (deletion inside docblock); re-read confirmed non-vacuous 4T test (real FTS client calls, cursor no-repeat/no-drop law, closed-session cached spentUsd 2.5 + sticky spendUnpriced), honest ≥-latch reducer (unpriced frames latch, priced never un-latch, docblock truth-flipped), unpricedModel/snippet/spendUnpriced schema additions with why-comments.
+- Expected declared red unchanged: schema staleness arm until welder regen; five-guard pair-only live 25,658 — welder re-runs SessionMethods|SessionHub|ServerContext|ProtocolSchemaDrift|ServerProtocolDocumentationDrift (21T/384A staleness-only red) + vitest serial after regen.
