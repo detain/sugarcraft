@@ -1076,11 +1076,21 @@ final class SkillLoader
         $skillDir = dirname($skillPath);
         $assetPath = $skillDir . '/' . $relativePath;
 
+        // $relativePath is what the model typed, and every refusal below quotes
+        // it back into result content — a newline-bearing value would forge
+        // extra lines there, the same channel audit 15d-08 closed for names and
+        // descriptions. ONE folded display value for all of them, through the
+        // house SkillPromptLine::field() idiom the SkillTool refusals already
+        // ride. $skillPath itself is registry-supplied (a directory the loader
+        // was handed, never a model argument), so the 'Invalid skill path'
+        // message below keeps quoting it whole.
+        $shownPath = SkillPromptLine::field($relativePath);
+
         // Validate relativePath is within allowed subdirectories
         $firstComponent = explode('/', ltrim($relativePath, '/'))[0];
         if (!in_array($firstComponent, self::ASSET_SUBDIRS, true)) {
             throw new \RuntimeException(
-                "Asset path must be within " . implode('/', self::ASSET_SUBDIRS) . " subdirectory: $relativePath"
+                "Asset path must be within " . implode('/', self::ASSET_SUBDIRS) . " subdirectory: $shownPath"
             );
         }
 
@@ -1093,7 +1103,7 @@ final class SkillLoader
         }
 
         if ($realAssetPath === false) {
-            throw new \RuntimeException("Asset path does not exist: $relativePath");
+            throw new \RuntimeException("Asset path does not exist: $shownPath");
         }
 
         // Must be within skill directory (no path traversal). {@see ContainedPath}
@@ -1103,11 +1113,11 @@ final class SkillLoader
         // `src/` or `bin/`, only this suite), which is the shape that produced the
         // directory-level miss that doc-block describes.
         if (!ContainedPath::within($assetPath, $skillDir)) {
-            throw new \RuntimeException("Asset path escapes skill directory: $relativePath");
+            throw new \RuntimeException("Asset path escapes skill directory: $shownPath");
         }
 
         if (!is_file($assetPath)) {
-            throw new \RuntimeException("Asset not found: $assetPath");
+            throw new \RuntimeException('Asset not found: ' . SkillPromptLine::field($assetPath));
         }
 
         return SkillFileReader::read($assetPath, 'skill asset');

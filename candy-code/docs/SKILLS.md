@@ -570,7 +570,10 @@ from `scripts/`, `references/` and `assets/` only, sorted, listed and never read
 (`SkillLoader::listSkillAssets()`), links neither listed nor followed. Passing
 one of those paths as `asset` returns that file instead of the body, under the
 same two header lines, through `loadSkillAsset()`'s containment jail — the load
-re-decides the path, so nothing an announcement named can smuggle an escape. An
+re-decides the path, so nothing an announcement named can smuggle an escape. A
+manifest skill is refused on that door as well, before the reader runs: it has no
+directory to load from, and the loader's own answer would be a filesystem error
+about a path the skill never had. An
 `asset` call is also invisible to `SkillTool::invokedIn()`: a compaction
 re-injects bodies, and a bundled file's reload stays the model's decision.
 

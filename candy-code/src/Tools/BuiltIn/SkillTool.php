@@ -251,10 +251,29 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
         // reached through the loader's own jailed reader — first component must
         // be scripts|references|assets, and the resolved path must stay inside
         // the skill directory. The two header lines ride unchanged so the
-        // result still announces which skill the bytes belong to; a manifest
-        // skill has no source file to sit beside, and loadSkillAsset()'s
-        // realpath refusal answers that as the error it is.
+        // result still announces which skill the bytes belong to.
+        //
+        // A manifest skill (empty sourcePath) is refused HERE, before the
+        // loader is reached, because that arm has no designed answer for the
+        // emptiness. MEASURED on this tree (PHP 8.3.6, Linux): `dirname('')` is
+        // `''`, not `'.'`, so loadSkillAsset('', $rel) composes a root-anchored
+        // `/scripts/…` read and the refusal that follows comes from
+        // ContainedPath::within()'s empty-boundary leg (or from realpath()
+        // missing that path first) — a filesystem-shaped accident, correct only
+        // for as long as dirname() answers this way on the running version and
+        // platform and no host happens to carry a `/scripts` directory. Refusing
+        // here both tells the model the true reason and keeps a path the skill
+        // never owned out of the reader. The listing arm and
+        // substituteSkillDir() refuse the same emptiness by their own doors.
         if (is_string($asset) && trim($asset) !== '') {
+            if ($skill->sourcePath === '') {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: 'Error loading skill asset: this skill has no source directory on disk',
+                    isError: true,
+                );
+            }
+
             try {
                 $assetContent = $loader->loadSkillAsset($skill->sourcePath, $asset);
             } catch (\RuntimeException $e) {
