@@ -45,13 +45,20 @@ jobs:
 
       - name: Resolve tag
         id: tag
+        # C-SES-9.d: a dispatched tag name is attacker-influenceable text and
+        # `${{ }}` interpolation pastes it into the script BEFORE the shell
+        # sees it — a ref containing a quote would break out of the run body.
+        # Values now cross into the shell only through this step's `env:`.
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT" = 'workflow_dispatch' ]; then
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           else
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.event.inputs.tag }}
 
       - name: Attach HEAD to the tag
         # The build's integrity preflight refuses detached HEADs (a tag
@@ -59,7 +66,9 @@ jobs:
         # name keeps the artifact attributable without weakening the door.
         run: |
           set -euo pipefail
-          git checkout -B phar-build '${{ steps.tag.outputs.tag }}'
+          git checkout -B phar-build "$TAG"
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
 
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
@@ -85,10 +94,12 @@ jobs:
           # date so rebuilds of one tag agree on the stamp (DST-1 reproducibility
           # note); the byte-level guarantee still stops at the moving dev-master
           # dependency window disclosed in this file's header.
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT '${{ steps.tag.outputs.tag }}')"
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT "$TAG")"
           php -d phar.readonly=0 candy-code/tools/build-phar.php \
             --out=dist/candy-code.phar \
-            --version='${{ steps.tag.outputs.tag }}'
+            --version="$TAG"
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
 
       - name: Sign the archive (pinned-key mode)
         # OPTIONAL step by design: without the SUGARCRAFT_SIGNING_KEY secret it
@@ -203,7 +214,7 @@ jobs:
       - name: Publish GitHub release
         run: |
           set -euo pipefail
-          tag='${{ steps.tag.outputs.tag }}'
+          tag="$TAG"
           assets=(dist/candy-code.phar dist/candy-code.phar.sha256)
           if [ -f dist/candy-code.phar.minisig ]; then
             assets+=(dist/candy-code.phar.minisig dist/candy-code.phar.minisig.sha256)
@@ -216,4 +227,5 @@ jobs:
               --title "candy-code ${tag#candy-code/}" --verify-tag --notes "$(printf '%b' "$notes")"
           fi
         env:
+          TAG: ${{ steps.tag.outputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

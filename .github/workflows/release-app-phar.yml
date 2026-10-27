@@ -59,10 +59,13 @@ jobs:
 
       - name: Resolve app and guard the dedicated pipelines
         id: scope
+        # C-SES-9.d: the dispatched tag is attacker-influenceable text; it
+        # crosses into the shell only through this step's `env:`, never as a
+        # `${{ }}` paste into the script body.
         run: |
           set -euo pipefail
-          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
-            tag='${{ github.event.inputs.tag }}'
+          if [ "$EVENT" = 'workflow_dispatch' ]; then
+            tag="$TAG"
           else
             tag="${GITHUB_REF_NAME}"
           fi
@@ -86,6 +89,9 @@ jobs:
           echo "app=$app" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "proceed=true" >> "$GITHUB_OUTPUT"
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.event.inputs.tag }}
 
       - name: Attach HEAD to the tag
         if: steps.scope.outputs.proceed == 'true'
@@ -94,7 +100,9 @@ jobs:
         # name keeps the artifact attributable without weakening the door.
         run: |
           set -euo pipefail
-          git checkout -B phar-build '${{ steps.scope.outputs.tag }}'
+          git checkout -B phar-build "$TAG"
+        env:
+          TAG: ${{ steps.scope.outputs.tag }}
 
       - name: Setup PHP
         if: steps.scope.outputs.proceed == 'true'
@@ -111,23 +119,28 @@ jobs:
         if: steps.scope.outputs.proceed == 'true'
         run: |
           set -euo pipefail
-          cd '${{ steps.scope.outputs.app }}'
+          cd "$APP"
           rm -f composer.lock
           composer install --no-dev --prefer-dist --no-interaction --no-progress
+        env:
+          APP: ${{ steps.scope.outputs.app }}
 
       - name: Build the archive
         if: steps.scope.outputs.proceed == 'true'
         run: |
           set -euo pipefail
-          app='${{ steps.scope.outputs.app }}'
+          app="$APP"
           # SOURCE_DATE_EPOCH pins metadata['built_at'] to the tagged
           # commit's date so rebuilds of one tag agree on the stamp
           # (DST-1's discipline); the byte-level guarantee still stops at
           # the moving dev-master window disclosed in this header.
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT '${{ steps.scope.outputs.tag }}')"
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT "$TAG")"
           php -d phar.readonly=0 "$app/tools/build-phar.php" \
             --out="dist/$app.phar" \
-            --version='${{ steps.scope.outputs.tag }}'
+            --version="$TAG"
+        env:
+          APP: ${{ steps.scope.outputs.app }}
+          TAG: ${{ steps.scope.outputs.tag }}
 
       - name: Assert the archive carries the tagged stamp
         if: steps.scope.outputs.proceed == 'true'
@@ -156,7 +169,7 @@ jobs:
         if: steps.scope.outputs.proceed == 'true'
         run: |
           set -euo pipefail
-          app='${{ steps.scope.outputs.app }}'
+          app="$APP"
           if [ -z "${SUGARCRAFT_SIGNING_KEY:-}" ]; then
             echo "::notice::SUGARCRAFT_SIGNING_KEY secret not set — shipping unsigned (keyless state)"
             exit 0
@@ -179,12 +192,14 @@ jobs:
         if: steps.scope.outputs.proceed == 'true'
         run: |
           set -euo pipefail
-          app='${{ steps.scope.outputs.app }}'
+          app="$APP"
           (cd dist && sha256sum "$app.phar" > "$app.phar.sha256")
           if [ -f "dist/$app.phar.minisig" ]; then
             (cd dist && sha256sum "$app.phar.minisig" > "$app.phar.minisig.sha256")
           fi
           cat "dist/$app.phar.sha256"
+        env:
+          APP: ${{ steps.scope.outputs.app }}
 
       - name: Smoke — version and help on a virgin HOME
         if: steps.scope.outputs.proceed == 'true'
@@ -197,8 +212,8 @@ jobs:
         # silent pass.
         run: |
           set -euo pipefail
-          app='${{ steps.scope.outputs.app }}'
-          tag='${{ steps.scope.outputs.tag }}'
+          app="$APP"
+          tag="$TAG"
           fake_home="$(mktemp -d)"
           out="$(HOME="$fake_home" php "dist/$app.phar" --version)"
           test -n "$out"
@@ -207,6 +222,9 @@ jobs:
             echo "::notice::$app --version does not surface the tagged stamp (archive metadata still carries $tag)"
           fi
           HOME="$fake_home" php "dist/$app.phar" --help >/dev/null
+        env:
+          APP: ${{ steps.scope.outputs.app }}
+          TAG: ${{ steps.scope.outputs.tag }}
 
       - name: PharCompatTest heavy arm (apps that have one)
         if: steps.scope.outputs.proceed == 'true'
@@ -218,7 +236,7 @@ jobs:
         # install does not touch dist/.
         run: |
           set -euo pipefail
-          app='${{ steps.scope.outputs.app }}'
+          app="$APP"
           if [ ! -f "$app/tests/PharCompatTest.php" ]; then
             echo "$app ships no PharCompatTest — heavy arm not applicable"
             exit 0
@@ -227,13 +245,15 @@ jobs:
           composer install --prefer-dist --no-interaction --no-progress
           env_var="$(printf '%s' "$app" | tr '[:lower:]-' '[:upper:]_')_PHAR"
           env "$env_var=${GITHUB_WORKSPACE}/dist/$app.phar" vendor/bin/phpunit --no-coverage --filter PharCompatTest
+        env:
+          APP: ${{ steps.scope.outputs.app }}
 
       - name: Publish GitHub release
         if: steps.scope.outputs.proceed == 'true'
         run: |
           set -euo pipefail
-          app='${{ steps.scope.outputs.app }}'
-          tag='${{ steps.scope.outputs.tag }}'
+          app="$APP"
+          tag="$TAG"
           assets=("dist/$app.phar" "dist/$app.phar.sha256")
           if [ -f "dist/$app.phar.minisig" ]; then
             assets+=("dist/$app.phar.minisig" "dist/$app.phar.minisig.sha256")
@@ -246,4 +266,6 @@ jobs:
               --title "$app ${tag#"$app"/}" --verify-tag --notes "$(printf '%b' "$notes")"
           fi
         env:
+          APP: ${{ steps.scope.outputs.app }}
+          TAG: ${{ steps.scope.outputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
