@@ -78,53 +78,49 @@
   "C-SES-5.c",
   "C-WEB-3.c",
   "C-WEB-3.d",
-  "P-AGENT.d"
+  "P-AGENT.d",
+  "C-AGT-3.b"
  ],
  "inflight": {
-  "C-AGT-3.b": {
-   "stage": "build",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-AGT-3.b",
-   "branch": "cc/C-AGT-3.b",
-   "session": "DEAD-restart",
-   "note": "INCOMPLETE: builder killed by server restart with 17 dirty uncommitted paths (AgentMemory build partially done incl both new test files staged/untracked), zero commits (tip==base 86f43fae2). Next lead: resume-same-once disk-grounded or fresh re-cut consuming the partials."
-  },
   "P-MENU.d": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-P-MENU.d",
    "branch": "cc/P-MENU.d",
-   "session": "CANCELLED",
-   "note": "INCOMPLETE: cancelled mid-build (notification @1444@), 18 dirty uncommitted paths, zero commits (tip==base). Same recovery path as C-AGT-3.b."
+   "session": "ses_e80ad0dd7ffeJOYMjHxBRnFOnk",
+   "note": "landed 6c7cf7d1b 20 files +1251/-493; DUR MenuReachability/MenuKeyboardOwnership/MenuActionDispatch (14/5/9T); reviewer running"
   },
   "C-AGT-7.c": {
-   "stage": "build",
+   "stage": "clean",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-AGT-7.c",
    "branch": "cc/C-AGT-7.c",
-   "session": "pending"
+   "session": "ses_e80afcaa3ffe0WXIRtqUFSG2Fp",
+   "note": "r1 CLEAN (REVIEW-1.md). NEXT welder call: plain pick 30288d150; gen --check up-to-date expected; gates ServerConfig|HookWebhooks 76T + five-guard pair-only; no DUR; carry Serve.php:429-431 stale comment (report-only); evidence 3 files."
   },
   "C-CTX-6.c": {
-   "stage": "build",
+   "stage": "clean",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-CTX-6.c",
    "branch": "cc/C-CTX-6.c",
-   "session": "pending"
+   "session": "ses_e80d5cbe1ffeRyB61d7OtQYsed",
+   "weld_note": "r1 CLEAN (REVIEW-1.md on disk). Plain pick 43bccf095. SETTINGS.md gen --check MUST pass on merged tree (lane claims zero-diff). Gates: Lang|Runtime|Memory|SettingsSchemaDocDrift 1616T/2F base-proven (ChatHostLangCatalogue + DuplicatedTestHelperDrift) + five-guard pair-only. No DUR (no new test files). Carries: flushed_notice plural seam + SettingsEditorTest:70 roster + 'a one' grammar NIT. Evidence 3 files. Cherry, prune."
   },
   "C-CTX-6.d": {
-   "stage": "build",
+   "stage": "clean",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-CTX-6.d",
    "branch": "cc/C-CTX-6.d",
-   "session": "pending"
+   "session": null,
+   "note": "r1 CLEAN (REVIEW-1.md). Weld with C-AGT-7.c next call: plain pick 6fcfd0db8; no regen; gates MemoryOpenJournal|EditorCommand 15T/98A + five-guard pair-only; DUR row MemoryOpenJournalTest.php 3T; carry Chat.php:15877 NIT; evidence 3 files."
   },
   "C-EXT-7.a": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-EXT-7.a",
    "branch": "cc/C-EXT-7.a",
-   "session": "ses_e80cef218ffekYVBfBndlu810r",
-   "note": "RESUMED entry (lost in batch-welder round-trip @1479@). /hooks live-workspace + manifest declined hooks/mcpServers legs."
+   "session": "ses_e80b12859ffe04abUrfDSdMM93",
+   "note": "landed 0e5c35bf9; DUR HooksHostCommandLiveChainTest.php 4T"
   },
   "C-MCP-6.a": {
    "stage": "build",
@@ -140,6 +136,22 @@
    "branch": "cc/C-PRV-5.a",
    "session": "pending",
    "note": "collision-watch: both C-PRV-5.a (hand prose L344/L491) and C-CTX-6.c (gen region) edit docs/SETTINGS.md on separate branches — welder keep-both, distinct hunks expected"
+  },
+  "C-CTX-6.a": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-CTX-6.a",
+   "branch": "cc/C-CTX-6.a",
+   "session": "ses_e80b07d58ffeEXuHBBHSWaGQmJ",
+   "note": "idle-alarm re-arm; hot SessionHost serialized; no DUR"
+  },
+  "C-SEC-5.c": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-SEC-5.c",
+   "branch": "cc/C-SEC-5.c",
+   "session": "ses_e80b0396dffedxYm5oKlv4esUL",
+   "note": "TrustDialog modal; DUR TrustDialogTest.php; lang tui.trust.*"
   }
  },
  "blocked": [],
@@ -403,6 +415,17 @@
    "regen": "none - gen-protocol-schema/gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0; npm run gen:protocol byte-identical",
    "gates": "candy-code-web vitest --no-file-parallelism agentsParity agents panels stores tree sessionView = 28 files/221 green on merged tree (reviewer ran 27/215 pre-weld); vue-tsc -b --force = ONLY foreign 6 TS2554 (reducer.spec.ts x4, statusBar.spec.ts x2); five-guard 133T/15735A pair-only (pinned 25,537 vs live 26,141 - closeout re-pin)",
    "durations_owed": "none - vitest-side agentsParity.spec.ts roster, no new candy-code *Test.php"
+  },
+  "C-AGT-3.b": {
+   "master": "09da7d3e9",
+   "pick": "2eda0df96 (onto ff8225dbf, clean zero conflicts, 24 files +1201/-74, %ae/%ce 1/1 detain, zero trailers)",
+   "regen": "no-op (gen-command-docs/gen-tool-docs --write + gen-settings-doc --check all up to date; no regen commit)",
+   "gates": "filter 'AgentMemory|TaskToolAgentMemory|ForeignAgentPresetRegistry' 71T/245A OK EXACT (brief form 'ForeignAgentPreset' additionally admits pre-existing ForeignAgentPresetWiringTest = 105T/349A, green); wide 'Memory|Agent' 2829T/20672A F1 = DreamPassTest:288 ONLY (allowed foreign, lane-proven red at base); check-child-lifetimes rc0 (33 sites/9 accounted); check-path-repos --no-lib-path-repos rc0; five-guard 133T/15752A F2 = staleness pair ONLY (pinned 25,537 - closeout re-pin)",
+   "cure": "NOT TAKEN: MemoryBlock:128 the->an wording NIT premise grep-failed at both lane commit and merged tree (line is the readonly-class docblock; no wrong article found) - report-only",
+   "durations_owed": "NEW candy-code tests/Memory/AgentMemoryTest.php (265L) + tests/Tools/TaskToolAgentMemoryTest.php (305L) - LIST ONLY, durations.tsv is closeout/gate duty",
+   "carries": "docs/MEMORY.md :186 stale-home-only-summary + MemoryBlock:106/:327 docblock drift + TaskPromptBuilderTest:445 blank = report-only",
+   "evidence": "lanes/C-AGT-3.b/{BRIEF,REPORT}.md staged; REVIEW-1.md NEVER persisted on disk (reviewer lost it; weld_note claimed on-disk) - P-CTX.d precedent, lead CLEAN verdict in run-state authoritative",
+   "prune": "cherry proof '-'; worktree+branch pruned"
   }
  },
  "carries": [
@@ -444,6 +467,8 @@
   "2026-10-27T16:3x OWNER STOP-SPAWNING FREEZE active: 4-lane batch welder cancelled after L1(C-CTX-2.a)+L2(C-SES-4.b) landed; server restart killed all children. FROZEN-PRE-WELD queue: C-SEC-5.a, C-SES-5.c, C-WEB-3.c, C-WEB-3.d (dist), +P-AGENT.d after r2 review. W6 wave loop NOT dispatched (eligible: C-SES-9.a/9.c/9.d, C-EXT-7.b, C-SES-6.a, C-TOOL-7.c all welded). C-AGT-3.b/P-MENU.d hold uncommitted partials on their worktrees.",
   "C-SEC-5.a weld: docs/MCP.md :627-640 closeout seam rides this lane",
   "C-WEB-3.d weld: dormancy rows files.read/memory.log/undo/session.shares owed at C-WEB-3.g",
-  "P-AGENT.d weld: Ctrl+Enter stale-arm-clear leg unpinned micro + r1 queued-count NIT remain OPEN"
+  "P-AGENT.d weld: Ctrl+Enter stale-arm-clear leg unpinned micro + r1 queued-count NIT remain OPEN",
+  "C-CTX-6.c + C-AGT-3.b r1 CLEAN with gates RUN by reviewer (widened shell); both queued in welder order AGT-3.b -> CTX-6.c",
+  "C-AGT-7.c + C-CTX-6.d clean-queued behind AGT-3.b/CTX-6.c welder; P-MENU.d + C-EXT-7.a in review; frontier capped at 2 starts which are both already live"
  ]
 }
