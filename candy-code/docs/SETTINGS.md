@@ -517,7 +517,13 @@ same money reason as `maxOutputTokens`.
   above the budget, and each reply's signed thinking blocks are carried in
   the transcript and replayed on the next request — the shape the Messages
   API requires for thinking turns that end in tool calls. Thinking tokens bill as
-  output, which is why a project may not set it. A `thinkingBudget` larger than
+  output, which is why a project may not set it. The tool-less engines built by
+  `Bootstrap::toollessBackend()` discard the setting anyway: it is not sent on
+  title and auxiliary calls — session titles, `/btw`, goal judgements, commit
+  subjects — which are handful-of-words completions that never earn a thinking
+  bill. The summary backend is the one exception by design (C-PRV-5.b): a
+  compaction summary becomes permanent context, so it keeps the configured
+  reasoning. A `thinkingBudget` larger than
   the configured model's family output ceiling — 64000 tokens on the `claude`
   family, 65536 on the `gemini` family — is refused the same loud way when the
   provider is built, because no request can honour it: the wires now have the

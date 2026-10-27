@@ -9824,6 +9824,12 @@ public static function useMaxCost(?string $maxCost): void
      * session is a non-event (same silent-failure stance {@see
      * \SugarCraft\Code\Chat::scheduleTitleGeneration()} takes), and
      * `backend()` has already warned about an unusable provider.
+     *
+     * C-PRV-5.b: and it is built WITHOUT the configured `thinkingBudget` —
+     * block-tier and user-tier alike, switched off in
+     * {@see toollessBackend()} — because a title is a handful of words and
+     * never sends a `thinking` arm. {@see summaryBackend()} is the sole
+     * exception, and keeps the budget on purpose.
      */
     public static function titleBackend(): ?Backend
     {
@@ -9852,7 +9858,9 @@ public static function useMaxCost(?string $maxCost): void
      * the smallest model will do.
      *
      * The tool-less half shares {@see toollessBackend()} with the titler: no
-     * tools, no hooks, no skill registry, no instruction preamble.
+     * tools, no hooks, no skill registry, no instruction preamble — and,
+     * uniquely among the tool-less engines, it KEEPS the configured
+     * `thinkingBudget` (C-PRV-5.b), because a summary is permanent context.
      * {@see \SugarCraft\Code\Chat}'s $summaryBackend docblock spells out why
      * a plain completion through the tool-capable main backend would let it
      * raise a permission prompt; the cache-reusing half runs no tool either.
@@ -9866,6 +9874,12 @@ public static function useMaxCost(?string $maxCost): void
             'CANDY_CODE_SUMMARY_MODEL',
             'summaryModel',
             $main instanceof EngineBackend ? $main->model() : null,
+            // C-PRV-5.b: the ONE caller that keeps the configured thinking
+            // budget. A summary becomes permanent context for every later
+            // turn, so it is worth what the user paid reasoning for; a title
+            // is a handful of words and is not (titleBackend() and every
+            // other auxiliary consumer run without it).
+            keepThinking: true,
         );
         if ($toolless === null || !$main instanceof \SugarCraft\Code\Backend\SummarisesWithCache) {
             return $toolless;
@@ -9911,8 +9925,23 @@ public static function useMaxCost(?string $maxCost): void
      * TWO-STEP argument resting on a second fact, and this is asserted as a
      * safety property at four sites. One flag makes the sentence true on its
      * own terms.
+     *
+     * C-PRV-5.b: a tool-less completion is a handful of words, so it must not
+     * pay for extended thinking. Unless `$keepThinking` is set — and only
+     * {@see summaryBackend()} sets it, because a compaction summary is judged
+     * on the conversation's own reasoning quality — the builder writes the
+     * parsers' OFF SPELLING over `thinkingBudget` instead of merely unsetting
+     * the block key: every thinking arm resolves the setting as
+     * `$config['thinkingBudget'] ?? userTierSetting('thinkingBudget')`, so a
+     * removed key would let a user-tier `thinkingBudget` ride the fallback
+     * straight into the titler's requests. The empty string is a present
+     * non-null key — it beats the fallback — and each parser already maps it
+     * to "off" by both of the `thinkingBudget` parsers in `ProviderFactory`,
+     * the strict Anthropic one and the tolerant Gemini one), so the wire
+     * carries no `thinking` arm at all. Anthropic's budget surviving
+     * `withModel()` is then moot: there is no budget to carry.
      */
-    private static function toollessBackend(string $modelEnvVar, string $modelConfigKey, ?string $defaultModel = null): ?Backend
+    private static function toollessBackend(string $modelEnvVar, string $modelConfigKey, ?string $defaultModel = null, bool $keepThinking = false): ?Backend
     {
         $providerName = self::selectedProviderName();
         if ($providerName === null) {
@@ -9941,6 +9970,13 @@ public static function useMaxCost(?string $maxCost): void
                 return null;
             }
             $config['model'] = $model;
+
+            if (!$keepThinking) {
+                // C-PRV-5.b: overwrite rather than unset — see the method
+                // docblock. A deleted key loses to the factory's user-tier
+                // fallback; the empty string is what both parsers read as off.
+                $config['thinkingBudget'] = '';
+            }
 
             return new EngineBackend($factory->create($config), $model, hooksDisabled: true);
         } catch (\Throwable) {
