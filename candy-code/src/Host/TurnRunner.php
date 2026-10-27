@@ -14,6 +14,7 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\InteractiveTurn;
 use SugarCraft\Code\Backend\ObservesReasoning;
 use SugarCraft\Code\App\BackendToolEventsMsg;
+use SugarCraft\Code\Attachments\MentionIndex;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\Pruning\ContextLedger;
 use SugarCraft\Code\Context\Pruning\PruningMode;
@@ -886,10 +887,22 @@ final class TurnRunner
      * the reply (named by the identity of the row it lands as) and
      * `turn.completed`. A turn cancelled hard records only its end.
      *
+     * Refreshing the `@`-mention index is the FIRST act of every close
+     * (C-WEB-1.c): {@see MentionIndex} memoizes one `git ls-files` per root
+     * per process, so without this a file the turn wrote would stay invisible
+     * to the popup — and to the web `@` list, which answers through the same
+     * memo — until the process restarted. It runs before the early returns
+     * because a cancelled or failed turn's tools ran too, and what they wrote
+     * deserves to show at the next `@` just the same. One process-wide
+     * forget per turn end is bounded by the same 10-second GitRunner ceiling
+     * as today's first `@`.
+     *
      * @internal the settle calls this; a caller reaches it through {@see completeParked()}
      */
     public function complete(?CancellationToken $turn, Message $reply, bool $failed = false): void
     {
+        MentionIndex::forget();
+
         $state = $this->state($turn);
         if ($state === null) {
             return;

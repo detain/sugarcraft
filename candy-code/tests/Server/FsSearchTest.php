@@ -5,7 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\Attachments\MentionIndex;
+use SugarCraft\Code\Backend;
+use SugarCraft\Code\Backend\CancellationToken;
+use SugarCraft\Code\Host\TurnRunner;
+use SugarCraft\Code\Message;
 use SugarCraft\Code\Protocol\Methods\FsMethods;
 use SugarCraft\Code\Protocol\Schema\MethodSchemas;
 use SugarCraft\Code\Protocol\Schema\ProtocolSchema;
@@ -19,6 +25,8 @@ use SugarCraft\Code\Workspace\GitRunner;
  * MentionIndex the terminal ranks with), and the walk's JAIL (a non-git
  * workspace is walked, never escaped — every answer is root-relative, dot
  * internals and links stay out, and the caps cut the list, not the server).
+ * The third pin is C-WEB-1.c's serve half: the git listing the popup answers
+ * from refreshes when a turn ENDS, with no test-side memo reset doing it.
  */
 final class FsSearchTest extends TestCase
 {
@@ -123,6 +131,73 @@ final class FsSearchTest extends TestCase
         // floats it — proof the git-backed root answers from the popup's own
         // index rather than a re-walk. .env stays out: git ignores it.
         self::assertSame(['search_bar.rs'], $answer['matches']);
+    }
+
+    /**
+     * C-WEB-1.c: a file written while a turn is open is absent from the git
+     * listing, and the turn ENDING is what re-lists it — this body never
+     * touches {@see MentionIndex::forget()}; the only resets in the file are
+     * setUp/tearDown hygiene, so nothing but {@see TurnRunner::complete()}'s
+     * first statement can be doing the refresh.
+     */
+    public function testAGitWorkspaceReListsWhenATurnCompletes(): void
+    {
+        if (!GitRunner::available()) {
+            self::markTestSkipped('git is not available');
+        }
+        $this->plant(['first-note.md']);
+        \exec('git init --quiet ' . \escapeshellarg($this->fixture->root) . ' 2>&1');
+
+        // The first answer primes the memo, exactly like a session's first `@`.
+        self::assertSame(['first-note.md'], $this->search(['query' => 'first'])['matches']);
+
+        $runner = TurnRunner::new();
+        $cancellation = new CancellationToken();
+        $backend = self::backendWithOneTurn();
+        $run = $runner->start(
+            backend: $backend,
+            history: [Message::user('create a note')],
+            inbox: new \ArrayObject(),
+            generation: 1,
+            cancellation: $cancellation,
+        );
+        $run();
+
+        // Mid-turn the write exists on disk but not in the memoized listing.
+        $this->plant(['second-note.md']);
+        self::assertSame([], $this->search(['query' => 'second'])['matches'], 'the memo holds while the turn is open');
+
+        $backend->answer(Message::assistant('both notes exist now'));
+
+        self::assertSame(['second-note.md'], $this->search(['query' => 'second'])['matches'], 'closing the turn re-listed the root for the next popup');
+    }
+
+    /**
+     * A backend whose one turn the test answers by hand, so the runner's real
+     * settle (and through it, its refresh) runs without a socket or a model.
+     */
+    private static function backendWithOneTurn(): Backend
+    {
+        return new class () implements Backend {
+            public ?Deferred $deferred = null;
+
+            public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                return Message::assistant('unused');
+            }
+
+            public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            {
+                $this->deferred = new Deferred();
+
+                return $this->deferred->promise();
+            }
+
+            public function answer(Message $reply): void
+            {
+                $this->deferred?->resolve($reply);
+            }
+        };
     }
 
     /**

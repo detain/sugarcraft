@@ -17,14 +17,20 @@ use SugarCraft\Fuzzy\ScoringProfile;
  * runs for the repo map, minus the code-extension filter: a mention can point
  * at any file, so every file is a candidate.
  *
- * One listing per canonical root per process (a memo, like the repo map's).
- * The consequence, stated honestly: a file created AFTER the first popup of
- * the session is invisible to the popup until the process restarts. The
- * unique-prefix completion in {@see FileMentions::complete()} is NOT memoized,
- * so it stays the cold-index fallback — a brand-new file it can see through
- * a live directory read remains completable by Tab even while the popup does
- * not list it. A non-git root lists nothing at all: the popup stays closed
- * and only prefix completion applies.
+ * One listing per canonical root per process (a memo, like the repo map's),
+ * dropped at every turn end: {@see \SugarCraft\Code\Host\TurnRunner::complete()}
+ * calls {@see self::forget()} as its first act (C-WEB-1.c), so files a turn
+ * wrote — by Write, ApplyPatch or Bash — are listed at the next `@` popup, in
+ * the TUI and over serve alike (the server's `fs.search` answers through this
+ * same memo). What stays stale until that close is a file created while a
+ * turn is still open (the user's own edits, say); the memo is process-wide,
+ * so the refresh costs one re-list per root per turn end — the same bounded
+ * `git ls-files` as a session's first `@`. The unique-prefix completion in
+ * {@see FileMentions::complete()} is NOT memoized at all, so it remains the
+ * cold-index fallback — a brand-new file it can see through a live directory
+ * read is completable by Tab the moment it exists, even mid-turn while the
+ * popup does not yet list it. A non-git root lists nothing at all: the popup
+ * stays closed and only prefix completion applies.
  *
  * Ranking is the already-depended sugar-fuzzy Smith-Waterman matcher, with
  * the basename scored FIRST and the full path second: typing `@in` floats
@@ -534,8 +540,11 @@ final class MentionIndex
     }
 
     /**
-     * Drop the memos — the test seam, and the hook a future refresh command
-     * would call to make freshly created files visible without a restart.
+     * Drop the memos. Production calls this from
+     * {@see \SugarCraft\Code\Host\TurnRunner::complete()} at every turn end
+     * (C-WEB-1.c) — that is what makes a file the turn wrote visible to the
+     * next `@` without a restart — and tests use it as the process-wide reset
+     * around their own fixtures.
      */
     public static function forget(?string $root = null): void
     {
