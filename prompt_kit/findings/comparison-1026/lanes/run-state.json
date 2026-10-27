@@ -149,7 +149,8 @@
   2,
   3,
   4,
-  5
+  5,
+  6
  ],
  "wave_loops": {
   "1": "closed r2 CLEAN",
@@ -157,7 +158,7 @@
   "4": "closed r1 FINAL CLEAN battery green 2026-10-27",
   "3": "closed r3 (static proof + lead battery 94T/103T, pair-only, gens rc0)",
   "5": "closed r2 CLEAN (EnvRoster cure 86eab474c; battery pre-pass)",
-  "6": "r1 CLEAN (fresh reviewer ses_e80cd6267, 10-step roster; evidence lanes/W6/WAVE-REVIEW-1.md) — close behind batch welder"
+  "6": "closed r1 CLEAN (fresh reviewer; gates run at tip 6ab223f36, gens rc0)"
  },
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "weld_notes": {

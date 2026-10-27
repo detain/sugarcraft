@@ -139,7 +139,7 @@ So while 2 lanes are in review, the other 8 slots build steps from the next wave
 | ✅ W3 (closed 2026-10-27) | 10 | C-SEC-3.b · C-MCP-1.b · C-SES-5.b · C-CTX-1.a · C-PRV-1.b · C-PRV-1.c · C-SEC-4.b · C-SES-2.b · C-WEB-1.d · C-CTX-1.b |
 | ✅ W4 (closed 2026-10-27) | 10 | C-SES-2.c · C-SEC-4.a · C-SES-1.a · C-SES-5.d · C-TOOL-1.b · C-WEB-1.c · P-CTX.a · P-TABS.b · P-TABS.d · P-IMG.b |
 | ✅ W5 (closed 2026-10-27) | 10 | C-WEB-1.a · C-WEB-1.b · P-CTX.c · P-CTX.d · P-TABS.a · P-MENU.a · P-CTX.b · P-IMG.c · P-TABS.h · C-TOOL-7.a |
-| W6 | 10 | P-MENU.c · P-AGENT.a · P-TABS.c · P-MENU.b · P-CTX.f · C-TOOL-7.c · C-AGT-1.b · C-AGT-3.a · C-CTX-2.b · C-EXT-2.a |
+| ✅ W6 (closed 2026-10-27) | 10 | P-MENU.c · P-AGENT.a · P-TABS.c · P-MENU.b · P-CTX.f · C-TOOL-7.c · C-AGT-1.b · C-AGT-3.a · C-CTX-2.b · C-EXT-2.a |
 | W7 | 10 | P-CTX.e · P-AGENT.c · P-CTX.g · C-AGT-7.a · C-AGT-2.b · C-AGT-3.b · C-EXT-7.b · C-SEC-5.a · C-SES-6.a · C-SES-9.a |
 | W8 | 10 | P-MENU.d · P-AGENT.d · C-CTX-2.a · C-EXT-2.b · C-SES-4.b · C-SES-9.c · C-SES-9.d · C-WEB-3.a · C-WEB-3.b · C-WEB-3.c |
 | W9 | 10 | C-SES-5.c · P-MENU.e · C-CTX-2.c · C-WEB-3.d · C-AGT-7.c · C-CTX-6.c · C-CTX-6.d · C-EXT-7.a · C-MCP-6.a · C-PRV-5.a |
@@ -960,7 +960,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SEC-1.a (W1)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-7.b`
 
-#### C-SEC-5.a — Trust-target census and one shared grant door
+#### ✅ b20852ec8 C-SEC-5.a — Trust-target census and one shared grant door
 - **Item:** C-SEC-5 (sources: GAP-PER-11, GAP-MCP-N1, k3-dorm#5) · dormant-wire · effort M
 - **What:** The four trust lists exist (`PermissionSettings.php:134-152`, `Bootstrap.php:153/172/187`, `LayeredSettings::PROJECT_SETTINGS_TRUST_KEY`), and so do two writers: `SettingsWriter::grantTrust($key, $root)` …
 - **Files — create:** `candy-code/src/Config/Trust/TrustTarget.php`, `candy-code/src/Config/Trust/ProjectTrustCensus.php`
@@ -1008,7 +1008,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-MENU.b (W6), P-MENU.c (W6)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-menu.md` → `### P-MENU.d`
 
-#### P-AGENT.d — Web agents parity: colours, interrupt send, running-agents line (CLAW-new#7)
+#### ✅ ceed81ef0 P-AGENT.d — Web agents parity: colours, interrupt send, running-agents line (CLAW-new#7)
 - **Item:** P-AGENT-ATTACH (sources: CLAW-new#7, k1-dorm#3) · feature · effort M
 - **What:** `agents.ts` keeps the catalogue's colours by name and `message(sessionId, id, text, mode)`. `SubAgentTree` paints a colour dot per run. `AgentView` gets an "interrupt" send (a toggle, plus Ctrl+Enter) with the same `⚡`/`⧗` row …
 - **Files — create:** `candy-code-web/src-web/components/agents/RunningAgentsLine.vue`
@@ -1097,7 +1097,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-3.b`
 
-#### C-WEB-3.c — Live workflow run status (`workflow.status`)
+#### ✅ 5a9b2f2c6 C-WEB-3.c — Live workflow run status (`workflow.status`)
 - **Item:** C-WEB-3 (sources: k3-dorm#3 (`workflow.status`), WEB-1-P1) · dormant-wire · S
 - **What:** **Gap.** `workflow.status` (`WorkflowMethods.php:59`) has no caller. A run row's status comes from the transcript-derived `workflow.runs`, so it goes stale while a run is live. **Fix.** `stores/agents/workflows.ts` gains …
 - **Files — create:** `candy-code-web/src-web/components/panels/__tests__/workflowStatus.spec.ts`
@@ -1112,7 +1112,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 
 - Chat.php region claims: C-CTX-6.d (memoryOpenArm)
 
-#### C-SES-5.c — Workflows: release pipelines sign the sidecar
+#### ✅ 6ab223f36 C-SES-5.c — Workflows: release pipelines sign the sidecar
 - **Item:** C-SES-5 (sources: DST-3-P1 (signing half), DST-3-P5 (release-note verify line)) · fix · MAJOR · effort S
 - **What:** **The added signature.** In all three phar pipelines, move the checksum step BEFORE signing. Signing then additionally signs the `.sha256` sidecar's body into `<app>.phar.sha256.sig`, which is uploaded as an asset. **Additive.** …
 - **Files — create:** none
@@ -1146,7 +1146,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-CTX-2.b (W6), C-CTX-2.a (W8)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-2.c`
 
-#### C-WEB-3.d — Close a non-primary root's host (`workspace.close`)
+#### ✅ f566243c6 C-WEB-3.d — Close a non-primary root's host (`workspace.close`)
 - **Item:** C-WEB-3 (sources: k3-dorm#3 (`workspace.close`), WEB-1-P1) · dormant-wire · S
 - **What:** **Gap.** `workspace.close {root, force?}` (`WorkspaceMethods.php:37`) has no caller. The gateway's idle recycle is today's only release. **Menu item.** Rows whose `summary.root` is not the server root (`SessionSidebar.vue …
 - **Files — create:** `candy-code-web/src-web/components/__tests__/sidebarCloseRoot.spec.ts`
