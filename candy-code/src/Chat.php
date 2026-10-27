@@ -8044,10 +8044,11 @@ final class Chat implements Model
     /**
      * P-CTX.d: schedule one context measurement OFF the loop. The pane never
      * measures in view() — assembling prompt sections touches disk — so a
-     * settle, a landed compaction, or a dock hand this closure to the runner,
-     * which resolves it against the memo-backed prompt assembly and answers
-     * with a {@see \SugarCraft\Code\App\ContextMeasuredMsg} repaint nudge
-     * once {@see \SugarCraft\Code\Host\TurnRunner::heldContext()} is fresh.
+     * settle, a landed compaction, or a dock hand hands this closure to the
+     * runner, which resolves it against the memo-backed prompt assembly and
+     * answers with a {@see \SugarCraft\Code\App\ContextMeasuredMsg} repaint
+     * nudge once {@see \SugarCraft\Code\Host\TurnRunner::heldContext()} is
+     * fresh.
      * The state the pass reads is captured at schedule time, so a slow answer
      * still stamps the transcript it was measured against. No wall-clock
      * timer is armed anywhere (E646): the pass is a single prompt assembly.

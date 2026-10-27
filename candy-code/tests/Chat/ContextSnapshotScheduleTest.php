@@ -7,12 +7,15 @@ namespace SugarCraft\Code\Tests\Chat;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\BatchMsg;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EchoBackend;
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\ReportsPromptSections;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\Compaction\HistoryFingerprint;
@@ -26,16 +29,22 @@ use SugarCraft\Code\Host\CompactionService;
 use SugarCraft\Code\Host\TurnRunner;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
  * P-CTX.d: the context measurement is a scheduled Cmd, never a frame cost.
- * A turn's settle and every compaction landing answer with a
- * {@see ContextMeasuredMsg} nudge routed as a no-op repaint, and the
+ * A turn's settle, every compaction landing, and the successful model
+ * switch answer with a {@see ContextMeasuredMsg} nudge routed as a no-op
+ * repaint, and the
  * categories they land in {@see TurnRunner::heldContext()} are the fresh
  * ones — the pane reads, it never fetches.
  */
 final class ContextSnapshotScheduleTest extends TestCase
 {
+    use BackendSelectionEnvSandboxTrait;
+    use HomeSandboxTrait;
+
     private string $dir;
     private string|false $suggestions;
 
@@ -54,6 +63,13 @@ final class ContextSnapshotScheduleTest extends TestCase
         foreach (glob($this->dir . '/*') ?: [] as $file) {
             @unlink($file);
         }
+        // The switch pin's home sandbox nests under $this->dir; empty it too
+        // so the fixture root never survives as a silent rmdir failure. The
+        // chr(42) split keeps this sweep out of the GlobDialect corpus.
+        foreach (glob($this->dir . '/home/' . chr(42)) ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($this->dir . '/home');
         @rmdir($this->dir);
     }
 
@@ -130,6 +146,56 @@ final class ContextSnapshotScheduleTest extends TestCase
 
         self::assertNotNull($runner->heldContext('ctx-a'));
         self::assertNull($runner->heldContext('ctx-b'), 'a second session reads its own empty slot, not the first one\'s stamp');
+    }
+
+    /**
+     * P-CTX.d: the SUCCESSFUL model switch is the remeasure pinned nowhere
+     * else. A failed switch returns before the batch, so the settle, the
+     * landed fold and `/clear` each carry their own pin while the arm that
+     * swaps both the window and the prompt the snapshot counted — Chat.php's
+     * switch return — rode unasserted. The switch is driven as a keystroke
+     * (the ProviderSwitchKeepsTaskToolTest fixture shape: `custom` builds
+     * offline behind a key, and the sandboxed home plus the cleared selection
+     * chain keep an ambient install out of the build).
+     */
+    public function testASuccessfulModelSwitchRemeasuresTheEngineItSwappedIn(): void
+    {
+        $runner = TurnRunner::new();
+        $chat = $this->chatWithRunner($runner, new EchoBackend(), ['inFlight' => false]);
+        $stale = ContextCategories::from(
+            ContextBreakdown::measure($chat->history, null, null, 100_000, 1),
+        );
+        $runner->saveContext('ctx-a', $stale);
+
+        $this->useHomeSandbox($this->dir . '/home');
+        $this->clearBackendSelectionEnv();
+        $key = getenv('CUSTOM_API_KEY');
+        putenv('CUSTOM_API_KEY=test-key');
+        try {
+            $drafted = (new \ReflectionMethod(Chat::class, 'withInputBuf'))->invoke($chat, '/model custom');
+            [$next, $cmd] = $drafted->update(new KeyMsg(KeyType::Enter));
+
+            self::assertInstanceOf(Chat::class, $next);
+            self::assertInstanceOf(
+                EngineBackend::class,
+                $next->backend(),
+                'the switch took - the refusal path keeps the old engine and stays unmeasured',
+            );
+            self::assertNotNull($cmd, 'a switch that took schedules the remeasure its prompt needs');
+
+            $nudges = self::dispatchCmd($cmd);
+            self::assertCount(1, $nudges, 'exactly one nudge rides the switch');
+            self::assertSame('ctx-a', $nudges[0]->sessionId);
+            self::assertNotSame(
+                $stale,
+                $runner->heldContext('ctx-a'),
+                'the pane reads the switched engine\'s stamp, not the pre-switch one',
+            );
+        } finally {
+            $key === false ? putenv('CUSTOM_API_KEY') : putenv('CUSTOM_API_KEY=' . $key);
+            $this->restoreBackendSelectionEnv();
+            $this->restoreHomeSandbox();
+        }
     }
 
     /**
