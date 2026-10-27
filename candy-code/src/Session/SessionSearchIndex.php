@@ -33,6 +33,16 @@ use SugarCraft\Code\Memory\MemorySearchIndex;
  * delete and the garbage pass can never surface through a stale FTS row;
  * {@see collectGarbage()} reclaims space, it is not load-bearing.
  *
+ * BUILD TRUST IS PERSISTED (C-SES-2): the one-row `session_search_meta`
+ * marker records the index shape, when the sweep finished, and whether a
+ * sync failed. A fresh process seeds itself from that marker instead of
+ * sweeping every transcript again at its first body search — only the first
+ * build per database pays for the sweep, and the per-save
+ * {@see EnhancedSessionStore::syncSearchIndex()} diff keeps it current in
+ * between. A lock contention that merely refused to ANSWER a search never
+ * touches the marker; a failed sync records `dirty = 1` durably so the next
+ * process re-sweeps.
+ *
  * @see MemorySearchIndex the sibling FTS5 user — a cache on its own file,
  *      rebuilt from source notes; this one is a side table that shares the
  *      session store's connection, transaction and FK cascade.
@@ -63,17 +73,52 @@ final class SessionSearchIndex
     /** Placeholder-chunk size for IN lists — the same law as SessionStore::childCount(). */
     private const CHUNK = 400;
 
+    /**
+     * The shape this class can read. Bump it whenever the anchor/FTS pair,
+     * the tokenizer or the capping law changes meaning, and every database
+     * carrying a marker for the old shape rebuilds exactly once more; within
+     * one shape the marker is what lets the NEXT process trust the table on
+     * disk instead of sweeping every transcript again at first search (C-SES-2).
+     */
+    public const INDEX_VERSION = 1;
+
+    /**
+     * Sessions one rebuild transaction sweeps. One WAL commit per session is
+     * what made the old open sweep measure 128 s at 300 sessions; one
+     * transaction for a whole database hands the write lock to a concurrent
+     * writer only at chunk boundaries, and 500 transcripts keeps each commit
+     * comfortably inside the busy timeout.
+     */
+    public const REBUILD_CHUNK = 500;
+
+    /**
+     * Test seam — sees whether the store's rebuild hands the sweep a live
+     * transaction. Set only from tests, cleared back to null there.
+     *
+     * @var (callable(): void)|null
+     */
+    private static $syncObserver = null;
+
     private bool $latched;
 
-    /** Rebuild-on-first-search bookkeeping, per process (the store drives it). */
+    /**
+     * Trust bookkeeping for THIS process. The on-disk marker seeds it, so a
+     * second process over an index the first one built (and kept current via
+     * the per-save {@see syncMessages()} diff) does zero sweep work. "Never
+     * swept yet" rides {@see $built}; {@see $dirty} means a failure THIS
+     * process actually observed, and markBuilt persists exactly that.
+     */
     private bool $built = false;
-    private bool $dirty = true;
+    private bool $dirty = false;
 
     private function __construct(
         private readonly PDO $pdo,
         private readonly string $module,
     ) {
         $this->latched = !$this->createSchema();
+        if (!$this->latched) {
+            $this->seedTrustFromMarker();
+        }
     }
 
     /**
@@ -95,22 +140,46 @@ final class SessionSearchIndex
     }
 
     /**
-     * True until the store has swept the transcripts once this process (the
-     * first body search pays for it), and again after any failed sync left
-     * the anchor suspect.
+     * Test seam: arm (or disarm with null) an observer fired at the top of
+     * every {@see syncMessages()} body — the pin for "the rebuild sweep runs
+     * inside a transaction". Keep the callable side-effect-free: an observer
+     * that throws lands in the sync's catch and marks the index dirty, so
+     * tests collect values and assert them outside.
+     */
+    public static function observeSyncsForTesting(?callable $observer): void
+    {
+        self::$syncObserver = $observer;
+    }
+
+    /**
+     * True until this process has swept the transcripts (the first body
+     * search of a process the on-disk marker does not vouch for pays for it):
+     * no marker, a marker from a different {@see INDEX_VERSION}, a durably
+     * recorded failed sync, or a failure seen since the last sweep.
      */
     public function needsRebuild(): bool
     {
         return !$this->latched && (!$this->built || $this->dirty);
     }
 
-    /** The store calls this after a successful {@see clearAll()}-plus-sweep. */
+    /**
+     * The store calls this after a successful {@see clearAll()}-plus-sweep,
+     * inside the sweep's last transaction: the marker lands atomically with
+     * the index it vouches for. A sync failure the sweep swallowed is written
+     * into the marker as `dirty = 1` instead of being cleared away — this
+     * process answers from what it has (retrying a broken sweep on every
+     * search is the 128 s freeze all over again), and the NEXT process reads
+     * the durable flag and re-sweeps.
+     */
     public function markBuilt(): void
     {
-        if (!$this->latched) {
-            $this->built = true;
-            $this->dirty = false;
+        if ($this->latched) {
+            return;
         }
+
+        $this->writeMarker($this->dirty);
+        $this->built = true;
+        $this->dirty = false;
     }
 
     /**
@@ -120,9 +189,9 @@ final class SessionSearchIndex
      * rewind shortened the transcript) leave both tables. An empty body
      * indexes nothing, and a message id that never had a row simply gets one.
      *
-     * Never throws: a failed sync marks the index dirty for the next
-     * rebuild, because a search index is never worth failing a save over —
-     * the same law that keeps {@see MemorySearchIndex::sync()} off the note
+     * Never throws: a failed sync records the index dirty DURABLY for the
+     * next rebuild, because a search index is never worth failing a save over
+     * — the same law that keeps {@see MemorySearchIndex::sync()} off the note
      * writer's error path.
      *
      * @param array<string, string> $bodies
@@ -134,9 +203,13 @@ final class SessionSearchIndex
         }
 
         try {
+            $observer = self::$syncObserver;
+            if ($observer !== null) {
+                $observer();
+            }
             $this->syncMessagesInside($sessionId, $bodies);
         } catch (\Throwable) {
-            $this->dirty = true;
+            $this->recordDirty();
         }
     }
 
@@ -171,6 +244,13 @@ final class SessionSearchIndex
             $stmt->execute([$match, self::MESSAGE_CAP]);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $stmt->closeCursor();
+        } catch (\PDOException $error) {
+            if (self::isLockContention($error)) {
+                return null;
+            }
+            $this->dirty = true;
+
+            return null;
         } catch (\Throwable) {
             $this->dirty = true;
 
@@ -238,7 +318,11 @@ final class SessionSearchIndex
         try {
             $this->pdo->exec('DELETE FROM session_messages_fts WHERE rowid NOT IN (SELECT id FROM session_message_rows)');
         } catch (\Throwable) {
+            // A garbage pass that failed leaves the marker cleared: an
+            // un-reclaimed table is merely fat, but one this pass could not
+            // complete has no trustworthy build state to advertise.
             $this->dirty = true;
+            $this->clearMarkerRow();
         }
     }
 
@@ -251,6 +335,9 @@ final class SessionSearchIndex
 
         $this->pdo->exec('DELETE FROM session_messages_fts');
         $this->pdo->exec('DELETE FROM session_message_rows');
+        // An emptied table with a surviving built marker would tell the next
+        // process its history is indexed when every row is gone.
+        $this->clearMarkerRow();
     }
 
     /**
@@ -339,6 +426,16 @@ final class SessionSearchIndex
                     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
                 )
             ');
+            // The build marker, third and last: a database that latched above
+            // takes no new table at all, exactly as the LIKE-only path would
+            // have left it. One row, rowid 1, rewritten by every markBuilt.
+            $this->pdo->exec('
+                CREATE TABLE IF NOT EXISTS session_search_meta (
+                    version INTEGER NOT NULL,
+                    built_at TEXT NOT NULL,
+                    dirty INTEGER NOT NULL
+                )
+            ');
 
             return true;
         } catch (\Throwable) {
@@ -363,6 +460,103 @@ final class SessionSearchIndex
         }
 
         return mb_check_encoding($cut, 'UTF-8') ? $cut : '';
+    }
+
+    /**
+     * Adopt the on-disk build state. Only a marker for this exact
+     * {@see INDEX_VERSION} with `dirty = 0` vouches for the tables; anything
+     * else — absent (pre-C-SES-2 database or one that was just emptied),
+     * mismatched, or a recorded failure — leaves this process asking for the
+     * one sweep, which is what it did before the marker existed.
+     */
+    private function seedTrustFromMarker(): void
+    {
+        $marker = $this->readMarker();
+        if ($marker === null || $marker['version'] !== self::INDEX_VERSION || $marker['dirty'] !== 0) {
+            return;
+        }
+
+        $this->built = true;
+        $this->dirty = false;
+    }
+
+    /**
+     * @return array{version: int, dirty: int}|null
+     */
+    private function readMarker(): ?array
+    {
+        try {
+            $row = $this->pdo->query('SELECT version, dirty FROM session_search_meta WHERE rowid = 1')
+                ->fetch(PDO::FETCH_ASSOC);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_array($row)
+            ? ['version' => (int) $row['version'], 'dirty' => (int) $row['dirty']]
+            : null;
+    }
+
+    /**
+     * Write the build state in the caller's transaction — for a successful
+     * sweep that is the sweep's last chunk commit, so a reader can never see
+     * "vouched" beside a half-swept table. A marker write that fails merely
+     * buys the next process one more sweep.
+     */
+    private function writeMarker(bool $dirty): void
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                'INSERT OR REPLACE INTO session_search_meta (rowid, version, built_at, dirty) VALUES (1, ?, ?, ?)'
+            );
+            $stmt->execute([self::INDEX_VERSION, gmdate('Y-m-d H:i:s'), $dirty ? 1 : 0]);
+        } catch (\Throwable) {
+            // Degrade-not-fail, same law as the index body: a marker the
+            // database refused is a rebuild the next process pays for.
+        }
+    }
+
+    /**
+     * A failed sync is recorded durably, not just in this process: the next
+     * launch reads `dirty = 1` and re-sweeps instead of answering from a
+     * table this one knows is suspect. No marker row to flip means the
+     * database was never (or is no longer) vouched — the absence already
+     * asks for the sweep.
+     */
+    private function recordDirty(): void
+    {
+        $this->dirty = true;
+
+        try {
+            $stmt = $this->pdo->prepare('UPDATE session_search_meta SET dirty = 1 WHERE rowid = 1');
+            $stmt->execute();
+        } catch (\Throwable) {
+            // The in-process flag stands on its own; losing only the durable
+            // copy re-asks the next process the same question it must ask of
+            // any database whose marker write once failed anyway.
+        }
+    }
+
+    /** Drop the vouch (the sweep's markBuilt re-issues it atomically). */
+    private function clearMarkerRow(): void
+    {
+        try {
+            $this->pdo->exec('DELETE FROM session_search_meta WHERE rowid = 1');
+        } catch (\Throwable) {
+            // A marker this call could not delete is overwritten whole by the
+            // next successful sweep's markBuilt — stale vouches never outrank
+            // a rebuild actually completing.
+        }
+    }
+
+    /**
+     * SQLITE_BUSY (5) / SQLITE_LOCKED (6): "another writer is on it right
+     * now" — a read the lock schedule refused, not a table gone wrong. The
+     * caller's LIKE degrade answers this search; the index keeps its trust.
+     */
+    private static function isLockContention(\PDOException $error): bool
+    {
+        return in_array((int) ($error->errorInfo[1] ?? 0), [5, 6], true);
     }
 
     private function placeholders(int $count): string

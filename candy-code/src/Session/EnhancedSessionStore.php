@@ -2068,33 +2068,58 @@ final class EnhancedSessionStore
     }
 
     /**
-     * Rebuild-on-first-search (SES-2): sweep every stored transcript once per
-     * process so an index created after its sessions — or left suspect by a
-     * failed sync — answers from the full history, not just what this
-     * process saved. The sweep decodes each transcript exactly as a resume
-     * would ({@see loadTranscript()}, identities folded, blobs materialised),
-     * which is why it is a first-search cost and never a launch one: opening
-     * a store must stay a handful of milliseconds no matter how many
-     * sessions it holds.
+     * Rebuild-on-first-search (SES-2, C-SES-2): sweep every stored transcript
+     * so an index created after its sessions — or left suspect by a failed
+     * sync or a shape change — answers from the full history, and do it only
+     * when the on-disk build marker says this process may not trust what is
+     * already on disk. The sweep decodes each transcript exactly as a resume
+     * would ({@see loadTranscript()}, identities folded, blobs materialised).
+     *
+     * The sweep commits in chunks of {@see SessionSearchIndex::REBUILD_CHUNK}
+     * sessions inside {@see SessionStore::immediateTransaction()}: one WAL
+     * commit per session measured 128 s at 300 sessions, and one giant
+     * transaction would hold the write lock for the whole rebuild — chunking
+     * leaves a concurrent writer the lock at every chunk boundary instead.
+     * `clearAll()` rides the first chunk's transaction and the durable vouch
+     * rides the last one's, so a reader can never see an emptied table
+     * advertised as built, and a mid-sweep crash rolls back to the state the
+     * old marker described without claiming the new sweep ever finished.
      *
      * Returns false when the sweep could not run; the caller degrades that
-     * search to LIKE, and the next one tries again.
+     * search to LIKE, and the next one tries again — the marker was only
+     * ever written by a sweep that completed.
      */
     private function rebuildSearchIndex(): bool
     {
         try {
-            $this->searchIndex->clearAll();
             $ids = $this->pdo->query('SELECT session_id FROM session_transcripts ORDER BY session_id')
                 ->fetchAll(PDO::FETCH_COLUMN);
-            foreach ($ids as $sessionId) {
-                $rows = $this->loadTranscript((string) $sessionId);
-                if ($rows === null || $rows === []) {
-                    continue;
-                }
-                $this->searchIndex->syncMessages((string) $sessionId, self::searchBodies($rows, []));
+            $chunks = array_chunk($ids, SessionSearchIndex::REBUILD_CHUNK);
+            if ($chunks === []) {
+                // A database with no transcripts still earns its vouch:
+                // clear and mark, in one transaction, like any other sweep.
+                $chunks = [[]];
             }
-            $this->searchIndex->collectGarbage();
-            $this->searchIndex->markBuilt();
+            $last = count($chunks) - 1;
+
+            foreach ($chunks as $position => $chunk) {
+                $this->sessionStore->immediateTransaction(function () use ($chunk, $position, $last): void {
+                    if ($position === 0) {
+                        $this->searchIndex->clearAll();
+                    }
+                    foreach ($chunk as $sessionId) {
+                        $rows = $this->loadTranscript((string) $sessionId);
+                        if ($rows === null || $rows === []) {
+                            continue;
+                        }
+                        $this->searchIndex->syncMessages((string) $sessionId, self::searchBodies($rows, []));
+                    }
+                    if ($position === $last) {
+                        $this->searchIndex->collectGarbage();
+                        $this->searchIndex->markBuilt();
+                    }
+                });
+            }
 
             return true;
         } catch (\Throwable) {
