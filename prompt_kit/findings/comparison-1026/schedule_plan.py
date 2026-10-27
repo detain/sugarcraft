@@ -15,7 +15,8 @@ Concurrency rules (one wave):
 Priority among ready steps: (class, -critical-path) where class 0 = CRITICAL/MAJOR fix + owner picks,
 1 = dormant-wire + other fixes, 2 = gaps/features.
 
-Usage: schedule_plan.py <dir> [--lanes 10] [--json out.json] [--md out.md]
+Usage: schedule_plan.py <dir> [--lanes 10] [--json out.json]
+       schedule_plan.py <dir> --next --state <run-state.json> [--slots 10]   (rolling mode: JSON of steps to start now)
 """
 import json, re, sys, glob, os
 from collections import defaultdict
@@ -140,6 +141,61 @@ def tags(step):
                 if h:
                     t["hot"].add(os.path.basename(h.rstrip("/")) or h)
     return t
+
+
+class Packer:
+    """Accumulates the §2 claims of lanes running together; fits() says whether one more lane is safe."""
+
+    def __init__(self, cap=None):
+        self.placed, self.used_files, self.used_excl, self.chat, self.boot = [], set(), set(), [], []
+        self.docs, self.hot, self.capc, self.hubs = defaultdict(int), set(), defaultdict(int), defaultdict(list)
+
+    @staticmethod
+    def split(s):
+        soft = {p for p in s["files"] if p == "candy-code/README.md" or p.startswith("candy-code/docs/")}
+        hubset = {p for p in s["files"] if p in HUB_MAX}
+        hard = s["files"] - soft - hubset - {"candy-code/lang/en.php", "candy-code/src/Chat.php", "candy-code/src/Cli/Bootstrap.php"}
+        return soft, hubset, hard
+
+    def fits(self, s):
+        t = s["t"]
+        if t["excl"] & self.used_excl or t["hot"] & self.hot:
+            return False
+        soft, hubset, hard = self.split(s)
+        if hard & self.used_files:
+            return False
+        if any(self.docs[p] >= DOC_CAP.get(p, DOC_MAX) for p in soft):
+            return False
+        if any(self.capc[c] >= CAPPED[c] for c in s["capped"]):
+            return False
+        for p in hubset:
+            r = s["regions"].get(p, {"?"})
+            hs = self.hubs[p]
+            if hs and (len(hs) >= HUB_MAX[p] or "?" in r or any("?" in o or (o & r) for o in hs)):
+                return False
+        if t["chat"] is not None and self.chat and (len(self.chat) >= CHAT_MAX or "?" in t["chat"] or any("?" in c or (c & t["chat"]) for c in self.chat)):
+            return False
+        if t["boot"] is not None and self.boot and (len(self.boot) >= BOOT_MAX or "?" in t["boot"] or any("?" in b or (b & t["boot"]) for b in self.boot)):
+            return False
+        return True
+
+    def place(self, s):
+        t = s["t"]
+        soft, hubset, hard = self.split(s)
+        self.placed.append(s)
+        self.used_files |= hard
+        self.used_excl |= t["excl"]
+        self.hot |= t["hot"]
+        for p in soft:
+            self.docs[p] += 1
+        for c in s["capped"]:
+            self.capc[c] += 1
+        for p in hubset:
+            self.hubs[p].append(s["regions"].get(p, {"?"}))
+        if t["chat"] is not None:
+            self.chat.append(t["chat"])
+        if t["boot"] is not None:
+            self.boot.append(t["boot"])
 
 
 def main():
@@ -268,60 +324,53 @@ def main():
             warn.append(f"STUCK with {len(remaining)} steps: " + ", ".join(sorted(remaining)[:15]))
             break
         ready.sort(key=lambda s: (s["cls"], -s["cp"], s["id"]))
-        wave, used_files, used_excl, chat, boot, docs, hot = [], set(), set(), [], [], defaultdict(int), set()
-        capc, hubs = defaultdict(int), defaultdict(list)
+        pk = Packer()
         for s in ready:
-            if len(wave) >= LANES:
+            if len(pk.placed) >= LANES:
                 break
-            t = s["t"]
-            if t["excl"] & used_excl:
-                continue
-            if t["hot"] & hot:
-                continue
-            soft_docs = {p for p in s["files"] if p == "candy-code/README.md" or p.startswith("candy-code/docs/")}
-            hubset = {p for p in s["files"] if p in HUB_MAX}
-            hard = s["files"] - soft_docs - hubset - {"candy-code/lang/en.php", "candy-code/src/Chat.php", "candy-code/src/Cli/Bootstrap.php"}
-            if hard & used_files:
-                continue
-            if any(docs[p] >= DOC_CAP.get(p, DOC_MAX) for p in soft_docs):
-                continue
-            if any(capc[c] >= CAPPED[c] for c in s["capped"]):
-                continue
-            bad = False
-            for p in hubset:
-                r = s["regions"].get(p, {"?"})
-                if hubs[p] and (len(hubs[p]) >= HUB_MAX[p] or "?" in r or any("?" in o or (o & r) for o in hubs[p])):
-                    bad = True
-                    break
-            if bad:
-                continue
-            if t["chat"] is not None:
-                if chat and (len(chat) >= CHAT_MAX or "?" in t["chat"] or any("?" in c or (c & t["chat"]) for c in chat)):
-                    continue
-            if t["boot"] is not None:
-                if boot and (len(boot) >= BOOT_MAX or "?" in t["boot"] or any("?" in b or (b & t["boot"]) for b in boot)):
-                    continue
-            wave.append(s)
-            used_files |= hard
-            used_excl |= t["excl"]
-            hot |= t["hot"]
-            for p in soft_docs:
-                docs[p] += 1
-            for c in s["capped"]:
-                capc[c] += 1
-            for p in hubset:
-                hubs[p].append(s["regions"].get(p, {"?"}))
-            if t["chat"] is not None:
-                chat.append(t["chat"])
-            if t["boot"] is not None:
-                boot.append(t["boot"])
-        if not wave:
+            if pk.fits(s):
+                pk.place(s)
+        if not pk.placed:
             warn.append("empty wave - stuck")
             break
-        waves.append({"late": phase_late, "steps": [s["id"] for s in wave]})
-        for s in wave:
+        waves.append({"late": phase_late, "steps": [s["id"] for s in pk.placed]})
+        for s in pk.placed:
             done.add(s["id"])
             remaining.discard(s["id"])
+
+    if "--next" in a:
+        # Rolling mode: fill free agent slots with eligible steps from ANY wave.
+        sp = a[a.index("--state") + 1] if "--state" in a else None
+        st = json.load(open(sp, encoding="utf-8")) if sp and os.path.exists(sp) else {}
+        slots = int(a[a.index("--slots") + 1]) if "--slots" in a else LANES
+        welded = set(st.get("welded", []))
+        inflight = list(st.get("inflight", {}).keys()) + list(st.get("blocked", []))
+        busy = int(st.get("extra_agents", 0))          # wave reviewers/fixers running on master
+        wave_of = {sid: i for i, w in enumerate(waves, 1) for sid in w["steps"]}
+        pk = Packer(cap=10 ** 6)
+        for sid in inflight:
+            if sid in byid:
+                pk.place(byid[sid])                       # in-flight lanes hold their claims
+        normal_left = [s for s in steps if not s["late"] and s["id"] not in welded]
+        late_ok = not normal_left
+        free = max(0, slots - len(inflight) - busy)
+        cand = [s for s in steps if s["id"] not in welded and s["id"] not in inflight
+                and s["depset"] <= welded and (not s["late"] or late_ok)]
+        cand.sort(key=lambda s: (wave_of.get(s["id"], 999), s["cls"], -s["cp"], s["id"]))
+        picked = []
+        for s in cand:
+            if len(picked) >= free:
+                break
+            if pk.fits(s):
+                pk.place(s)
+                picked.append(s["id"])
+        out = {"start": [{"id": x, "wave": wave_of.get(x), "brief": f"prompt_kit/findings/comparison-1026/design-{byid[x]['area']}.md"} for x in picked],
+               "free_slots": free, "inflight": len(inflight),
+               "remaining": len([s for s in steps if s["id"] not in welded]),
+               "late_unlocked": late_ok,
+               "waves_fully_welded": [i for i, w in enumerate(waves, 1) if set(w["steps"]) <= welded]}
+        print(json.dumps(out, indent=1))
+        return
 
     for w in warn:
         sys.stderr.write("WARN " + w + "\n")

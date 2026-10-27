@@ -48,6 +48,8 @@ C-TUI-6 has six calls, each with a proposed default in `design-tui.md`:
 
 ## 7. Closeout gate (one gate agent, after the last wave)
 
+The gate is a LOOP (§1.6): run steps 1–4, then hand every red or drift to a fix agent, then re-run from step 1. Repeat until a full pass is green with no drift, then do steps 5–7.
+
 1. **Full battery, plain-pipe synchronous.**
    - Run under `env -u LINES -u COLUMNS`; never tmux, setsid or tee.
    - The candy-code serial must be green.
@@ -72,7 +74,7 @@ C-TUI-6 has six calls, each with a proposed default in `design-tui.md`:
    - Re-score every cell a landed step moved, in both the §3 cell and its Appendix A bullet, glyphs equal.
    - Delete the closed gaps from §6. Don't annotate them; the doc stays in current-state voice.
    - Re-run `python3 -I prompt_kit/findings/comparison-1026/apply_comparison.py candy-code/COMPARISON.md --check`.
-6. **Review-loop proof:** every step's final review shows 0 critical and 0 major, recorded under `prompt_kit/findings/comparison-1026/lanes/<step>/`. Keep a ledger at `prompt_kit/findings/comparison-1026/CLOSEOUT.md` with step → commit, per-wave counts, and residuals.
+6. **Review-loop proof:** every step loop and every wave loop ended on a fresh review with 0 critical and 0 major, recorded under `prompt_kit/findings/comparison-1026/lanes/<step>/` and `lanes/W<n>/`. Keep a ledger at `prompt_kit/findings/comparison-1026/CLOSEOUT.md` with step → commit, per-wave counts, and residuals.
 7. **Hygiene:** `git worktree list` shows the main checkout only, and no `cc/*` branches remain.
 
 ## 8. Not in scope

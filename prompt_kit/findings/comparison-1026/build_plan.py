@@ -59,7 +59,7 @@ def main():
         for sid in w["steps"]:
             wave_of[sid] = i
     import os
-    root = "/home/sites/sugarcraft"
+    root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
     def exists(x):
         return os.path.exists(os.path.join(root, x)) or os.path.exists(os.path.join(root, "candy-code", x))
     creates = {}
@@ -74,7 +74,7 @@ def main():
     n_norm = sum(1 for w in W if not w["late"])
     out += ["## 3. Wave overview", "",
             f"{len(S)} steps in {len(W)} waves: W1–W{n_norm} normal, W{n_norm + 1}–W{len(W)} LATE (the large items, run last by owner rule). "
-            "Lanes per wave ≤ 10; run fewer at once by splitting a wave into sub-batches in listed order — every lane in a wave is independent of every other lane in that wave.", "",
+            "Lanes per wave ≤ 10, and every lane in a wave is independent of every other lane in it. Waves are a **priority order, not a barrier**: under rolling execution (§2) free agent slots start eligible steps from later waves while earlier lanes are still in review or fix. Prefix a wave with ✅ once its wave loop is clean.", "",
             "| Wave | Lanes | Steps |", "|---|---|---|"]
     for i, w in enumerate(W, 1):
         tag = " (LATE)" if w["late"] else ""
