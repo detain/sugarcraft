@@ -1,5 +1,5 @@
 {
- "welded": 54,
+ "welded": 55,
  "inflight": {
   "C-TOOL-7.a": {
    "stage": "fix",
@@ -8,14 +8,6 @@
    "branch": "cc/C-TOOL-7.a",
    "session": "ses_e82119e0affe7R3cHkENqkYWpS",
    "note": "r1 FINDINGS 2MAJOR/1MINOR/1NIT (persisted REVIEW-1.md): item4 unimplemented (ulimit -f job cap vs procsub recorders or fallback wording), fork door unpinned (pcntl test owed), dead SINK_DRAIN_SECONDS const, EPERM caveat NIT. Resuming SAME builder session ses_e825233f0 (may be alive: tip moved to 2710d9d0b, 3 commits; no DONE received). REPORT.md absent - fixer/lead must author it."
-  },
-  "P-CTX.f": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-P-CTX.f",
-   "branch": "cc/P-CTX.f",
-   "session": "weld-queued",
-   "note": "RUN-STATE ROUND-TRIP LOSS RE-ADDED @1013@ (lane verified on disk: tip 827e37702, clean, REVIEW-1.md present, r1 CLEAN). WELD: protocol regen trio + dist-if-changed; gates ContextSources|drifts expect 22T/443A post-regen; no DUR; optional Definitions.php:311 NIT fold; evidence 3 files"
   },
   "C-CTX-2.b": {
    "stage": "review",
@@ -137,7 +129,8 @@
   },
   "C-PRV-1.b": "WELDED 2026-10-27 master a992413b0+f73cc493f (picks bc8289f54 build + 265aa26bf r2 cure, base eb20c154e era, clean auto-merge lang/en.php+Chat.php, zero conflicts; %ae/%ce 1/1 both, zero trailers). Regen no-op (command/tool --write up to date; settings --check up to date - SETTINGS.md row committed by lane). Gates: Effort 128T/434A OK exact; Bootstrap|Launch 1068T/6156A OK; DocFigure|TrustKey 109T/4490A OK; five-guard 133T/15625A F2 staleness pair only (pinned 25,537 - closeout re-pin). Disclosed inherited base-red (NOT cured, reproduced identical 5T/4544A/1F at pre-pick eb20c154e): SettingsWriterCensusTest chat->buildChat roster drift. DURATIONS duty: NEW candy-code/tests/Cli/LaunchEffortNoticeTest.php (4T) - LIST ONLY, durations.tsv is closeout duty. §4 mark ✅ a992413b0 left UNSTAGED per convention. Cherry proof both '-'; worktree+branch pruned.",
   "C-AGT-1.b": "WELDED 2026-10-27 master 2d45b868f (pick 38f0b3790, base b24e81154-era atop 144fe7955, clean auto-merge lang/en.php, zero conflicts; %ae/%ce 1/1, zero trailers). Regen no-op (command/tool/settings all up to date - LoopCommand hint did not move COMMANDS.md row; no regen commit). Gates: Loop|ScheduleRegistry|SessionHost|ServerContext 317T/1470A OK EXACT; five-guard 133T/15632A F2 staleness pair only (pinned 25,537 - closeout re-pin). DURATIONS duty: NEW candy-code/tests/Host/SessionHostLoopFireTest.php (5T) + ScheduleRegistryTest +2T figure note - LIST ONLY. NIT carry (from r1 review): SessionHost.php:918-931 notice wording. §4 mark ✅ 2d45b868f UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
-  "C-AGT-3.a": "WELDED 2026-10-27 master 0c051ee95 (pick b3082a646, base b24e81154-era atop 08fbe2591, clean, zero conflicts; %ae/%ce 1/1, zero trailers). Regen no-op (command/tool/settings all up to date). NO protocol/web files in pick (docs/AGENTS.md is hand prose, not the SERVER.md generated region). Gates: McpToolShape|McpDispatcher|AgentManager|MCP 1607T/9131A/1S OK (builder claim 1607T/9127A class, +4A tree-scan wobble); check-child-lifetimes rc0 (33 sites/9 findings/0 problems, spawn paths unchanged); five-guard 133T/15639A F2 staleness pair only (pinned 25,537 - closeout re-pin). DURATIONS duty: NEW candy-code/tests/Agents/McpDispatcherPresetScopeTest.php (6T) - LIST ONLY. CARRIES: (1) docs/MCP.md ~:627-640 'setAgentPreset has no production caller' now-false = CLOSEOUT DOC DUTY (serialized file, welder does NOT edit); (2) NIT scopedTo eagerDescriptors docblock = record carry. §4 mark ✅ 0c051ee95 UNSTAGED. Cherry proof '-'; worktree+branch pruned."
+  "C-AGT-3.a": "WELDED 2026-10-27 master 0c051ee95 (pick b3082a646, base b24e81154-era atop 08fbe2591, clean, zero conflicts; %ae/%ce 1/1, zero trailers). Regen no-op (command/tool/settings all up to date). NO protocol/web files in pick (docs/AGENTS.md is hand prose, not the SERVER.md generated region). Gates: McpToolShape|McpDispatcher|AgentManager|MCP 1607T/9131A/1S OK (builder claim 1607T/9127A class, +4A tree-scan wobble); check-child-lifetimes rc0 (33 sites/9 findings/0 problems, spawn paths unchanged); five-guard 133T/15639A F2 staleness pair only (pinned 25,537 - closeout re-pin). DURATIONS duty: NEW candy-code/tests/Agents/McpDispatcherPresetScopeTest.php (6T) - LIST ONLY. CARRIES: (1) docs/MCP.md ~:627-640 'setAgentPreset has no production caller' now-false = CLOSEOUT DOC DUTY (serialized file, welder does NOT edit); (2) NIT scopedTo eagerDescriptors docblock = record carry. §4 mark ✅ 0c051ee95 UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
+  "P-CTX.f": "WELDED 2026-10-27 master a863fea41 (pick 827e37702, base b24e81154-era atop 5e2d21060, clean, zero conflicts; %ae/%ce 1/1, zero trailers). PROTOCOL REGEN commit 671216854 (welder-only): gen-protocol-schema --write rewrote docs/protocol/candy-code.v1.schema.json (+SERVER.md byte-unchanged, checked); npm gen:protocol wrote candy-code-web/src-web/protocol/generated.ts; npm build left dist hashes UNCHANGED (type-only generated.ts delta erases at compile) - no dist files committed. Gates post-regen: ContextSources|ProtocolSchemaDrift|ServerProtocolDocumentationDrift 22T/443A OK EXACT; vitest serial --no-file-parallelism generated.spec.ts 3/3 PASS (real path src-web/protocol/__tests__/generated.spec.ts, brief's stores/ cite drifted); five-guard 133T/15639A F2 staleness pair only. DURATIONS duty: none - no NEW candy-code *Test.php (ContextSourcesTest mods only). §4 mark ✅ a863fea41 UNSTAGED. Cherry proof '-'; worktree+branch pruned."
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
