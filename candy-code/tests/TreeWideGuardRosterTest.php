@@ -708,6 +708,11 @@ final class TreeWideGuardRosterTest extends TestCase
         // autoloader; tearDown() empties the sys_get_temp_dir() fixture dir
         // setUp() made (audit R3).
         'Support/ProcessTreeKillAsyncTest.php' => ['glob($this->dir.\'/*\')'],
+        // C-TOOL-1.b r2 (pick c5b1f923a): the :249 source-read anchor
+        // realpath(__DIR__ . '/../../../src/Tools/BuiltIn/Grep.php') names the package
+        // root, so the file joins census scope; removeTree() in tearDown() empties the
+        // sys_get_temp_dir() crush-grep-optinj-* fixture dir setUp() made.
+        'Tools/BuiltIn/GrepOptionInjectionTest.php' => ['scandir($dir)'],
         'Tools/GenerateVideoTest.php' => ["glob(\$this->mediaRoot.'/main/'.\\chr(42).'.mp4')", "glob(\$this->mediaRoot.'/main/'.\\chr(42).'.json')", "glob(\$quietRoot.'/'.\\chr(42).'/'.\\chr(42).'.json')", "glob(\$this->mediaRoot.'/'.\\chr(42).'/'.\\chr(42))", "glob(\$root.'/main/'.\\chr(42).'.mp4')", "glob(\$root.'/main/'.\\chr(42).'.json')", 'scandir($dir)'],
         'Tools/PtyShimAutoloadResolutionTest.php' => ['RecursiveDirectoryIterator($path,\FilesystemIterator::SKIP_DOTS)'],
         'Workflows/WorkflowRegistryTest.php' => ['scandir($dir)'],
