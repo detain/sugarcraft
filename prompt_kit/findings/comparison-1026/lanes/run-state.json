@@ -6,29 +6,24 @@
     "C-SES-3.a",
     "C-TOOL-1.a",
     "C-EXT-1.a",
-    "C-SEC-1.a"
+    "C-SEC-1.a",
+    "C-MCP-1.a"
   ],
   "inflight": {
     "C-AGT-1.a": {
-      "stage": "fix",
+      "stage": "review",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-AGT-1.a",
       "branch": "cc/C-AGT-1.a",
       "session": null
     },
-    "C-MCP-1.a": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-MCP-1.a",
-      "branch": "cc/C-MCP-1.a",
-      "session": null
-    },
     "C-AGT-2.a": {
-      "stage": "review",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-AGT-2.a",
       "branch": "cc/C-AGT-2.a",
-      "session": "ses_e841b992effe7ekEG7n6DrOUoX"
+      "session": null,
+      "note": "r2 CLEAN 6da65595f; weld cure: ReviewCommand.php:96 prompt() docblock [ref]->[<tree-ish>]"
     },
     "C-SEC-2.b": {
       "stage": "build",
@@ -65,12 +60,19 @@
       "branch": "cc/C-SES-2.a",
       "session": "ses_e841b992fffeYG5E2v3ZOThtPD"
     },
-    "C-EXT-1.a": {
-      "stage": "clean",
+    "C-SES-3.c": {
+      "stage": "build",
       "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-EXT-1.a",
-      "branch": "cc/C-EXT-1.a",
-      "note": "pick 7949cc23d + cure 0b6ca769f landed; marks+evidence+prune owed by welder"
+      "worktree": "/home/sites/cc-cmp-C-SES-3.c",
+      "branch": "cc/C-SES-3.c",
+      "session": null
+    },
+    "C-SES-4.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SES-4.a",
+      "branch": "cc/C-SES-4.a",
+      "session": null
     }
   },
   "blocked": [],
