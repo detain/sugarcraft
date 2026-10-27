@@ -15,7 +15,8 @@ use PHPUnit\Framework\TestCase;
  *
  *  - `config.json` is written only through `Bootstrap::writeUserConfig()`, and
  *    that is called from exactly four places: Chat's config-change closure
- *    (`chat()`), the shell's layout hook (`app()`), the launch's settings
+ *    (`buildChat()` — the body `chat()` carried before P-TABS.d), the shell's
+ *    layout hook (`app()`), the launch's settings
  *    write door (`settingsWriter()`), and the project-MCP trust grant
  *    (`McpDecision::trustProjectMcp()` since the w4a launch split —
  *    `Bootstrap::trustProjectMcp()` is a delegating shim and writes nothing
@@ -42,11 +43,12 @@ use PHPUnit\Framework\TestCase;
 final class SettingsWriterCensusTest extends TestCase
 {
     private const EXPECTED_USER_CONFIG_WRITERS = [
-        'Cli/Bootstrap.php::chat' => 1,
+        // 2026-10-27: chat()'s body lives in buildChat() since the tab-factory
+        // extraction (P-TABS.d); the writer credit follows the body.
+        'Cli/Bootstrap.php::buildChat' => 1,
         // The `app()` and `settingsWriter()` bodies moved to LaunchContext in
         // the S1b composition split (W7-E C5); their writeUserConfig calls
-        // ride along, so these two rows re-key to the new owner file. The
-        // `chat` row stays: that body never moved.
+        // ride along, so these two rows re-key to the new owner file.
         'Cli/LaunchContext.php::app' => 1,
         'Cli/LaunchContext.php::settingsWriter' => 1,
         'Cli/McpDecision.php::trustProjectMcp' => 1,
