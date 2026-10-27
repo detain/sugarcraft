@@ -40,12 +40,21 @@ ini_set('display_errors', 'stderr');
     // for it: it loads the archive sealed inside the running script under the
     // build's alias, and on every UNSEALED script — a composer checkout's own
     // bin, a fixture copy of it — it throws PharException, which is why no
-    // pre-gate is needed. (__COMPILER_HALT_OFFSET__ cannot gate this: on PHP
-    // 8.3.6 `defined()` answers false inside the halting file itself — the
-    // constant is compile-time-substituted and never enters the symbol table,
-    // measured.) The alias literal pairs with tools/build-phar.php's
-    // `new Phar(..., 'candy-code.phar')`; BinCandyCodeAutoloadGuardTest pins
-    // both sides.
+    // pre-gate is needed. (No __COMPILER_HALT_OFFSET__ pre-gate would tell
+    // anything loadable: on PHP 8.3.6 `defined()` measures false in every
+    // context — halting file, phar stub, inside-archive frame, plain script
+    // — the constant is compile-time-substituted and never enters the
+    // symbol table, while the bare-token form that DOES resolve inside a
+    // halting file resolves just the same in a TRUNCATED archive whose
+    // bytes no longer load, so any halt-gate waves through exactly the
+    // broken installs this door must refuse. mapPhar is the oracle because
+    // it answers the runtime question directly — is this exact file a
+    // loadable archive? — and the probe transcript under this step's
+    // prompt_kit findings measures a truncated renamed install falling
+    // through it to the clean exit 2 below, stderr byte-exact against the
+    // line BinCandyCodeAutoloadGuardTest pins.) The alias literal pairs
+    // with tools/build-phar.php's `new Phar(..., 'candy-code.phar')`; that
+    // test pins both sides.
     if ($archive === '') {
         try {
             \Phar::mapPhar('candy-code.phar');
