@@ -15,7 +15,8 @@
     "C-AGT-2.c",
     "C-SES-3.b",
     "C-SES-5.a",
-    "C-SES-2.a"
+    "C-SES-2.a",
+    "C-PRV-1.c"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -54,14 +55,6 @@
       "branch": "cc/C-MCP-1.b",
       "session": null,
       "note": "tip af1eb01e6 base 351726864; NEW McpCallHookParityTest durations duty"
-    },
-    "C-PRV-1.c": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-PRV-1.c",
-      "branch": "cc/C-PRV-1.c",
-      "session": null,
-      "note": "r1 CLEAN after lead adjudication disproved reviewer MAJOR/MINOR on disk; welder ses_e83def1dc running"
     },
     "C-SES-5.b": {
       "stage": "build",
