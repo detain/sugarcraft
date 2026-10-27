@@ -18,7 +18,8 @@
     "C-SES-2.a",
     "C-PRV-1.c",
     "C-MCP-1.b",
-    "C-EXT-1.b"
+    "C-EXT-1.b",
+    "C-SES-5.b"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -26,37 +27,29 @@
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SEC-2.b",
       "branch": "cc/C-SEC-2.b",
-      "session": null
+      "session": "ses_e84278237ffe7L15Gk7pi3IcQv"
     },
     "C-SEC-3.a": {
       "stage": "build",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SEC-3.a",
       "branch": "cc/C-SEC-3.a",
-      "session": null
+      "session": "ses_e84274411ffewFZNgcHphKfC6h"
     },
     "C-PRV-1.a": {
       "stage": "build",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-PRV-1.a",
       "branch": "cc/C-PRV-1.a",
-      "session": null
+      "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
     },
-    "C-SES-5.b": {
-      "stage": "build",
+    "C-SES-1.a": {
+      "stage": "review",
       "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SES-5.b",
-      "branch": "cc/C-SES-5.b",
-      "session": "ses_e83dea32d",
-      "note": "phantom DONE #4 caught (fake SHA 01f32247b, zero disk); resumed same session with grounding order"
-    },
-    "C-CTX-1.b": {
-      "stage": "build",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-CTX-1.b",
-      "branch": "cc/C-CTX-1.b",
-      "session": "ses_e83dea32c",
-      "note": "builder blank-death #1, zero disk; resumed same session"
+      "worktree": "/home/sites/cc-cmp-C-SES-1.a",
+      "branch": "cc/C-SES-1.a",
+      "session": "ses_e83c0e7f5ffeC2s0Y2mjAubN1W",
+      "note": "tip b362f2e5a base 32f02ada1, 7 files; NEW NonInteractiveUsageLedgerTest durations duty"
     },
     "C-SES-2.b": {
       "stage": "build",
@@ -66,18 +59,28 @@
       "session": "ses_e83db374cffeLBzipP6vdRrrW6"
     },
     "C-SES-2.c": {
-      "stage": "build",
-      "round": 1,
+      "stage": "review",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SES-2.c",
       "branch": "cc/C-SES-2.c",
-      "session": "ses_e83d9644bffeR4eTGqSn05sHVn"
+      "session": "ses_e83c0e7f4ffeGNHrkvVm0G0rNl",
+      "note": "fix d89efd151 (8 del docblock); r2 review pending regen-cured filters"
     },
-    "C-SES-1.a": {
+    "C-CTX-1.b": {
+      "stage": "clean",
+      "round": 2,
+      "worktree": "/home/sites/cc-cmp-C-CTX-1.b",
+      "branch": "cc/C-CTX-1.b",
+      "session": null,
+      "note": "r2 CLEAN static tip 3cedf52a0; weld re-runs show --stat/authors/gates"
+    },
+    "C-SES-5.d": {
       "stage": "build",
       "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SES-1.a",
-      "branch": "cc/C-SES-1.a",
-      "session": "ses_e83d36b2cffevxRAK24OJn3BfS"
+      "worktree": "/home/sites/cc-cmp-C-SES-5.d",
+      "branch": "cc/C-SES-5.d",
+      "session": "ses_e83c8fc74ffebW5qkYXsIgeZyT",
+      "note": "base fd4f36875"
     }
   },
   "blocked": [],
