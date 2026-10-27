@@ -106,6 +106,18 @@ export const useContextSourcesStore = defineStore('contextSources', () => {
   }
 
   connection.onEvent((envelope) => {
+    if (envelope.type === 'turn.completed') {
+      // P-CTX.g: the turn that just settled changed the prompt — the category
+      // map, the buffer and the messages row are all re-measured by the next
+      // request. A session that has already been measured (the panel is or
+      // was open on it) reloads itself; an unmeasured session is left alone,
+      // so the store never dials `context.sources` nobody asked for. The
+      // generation latch inside load() drops a late answer the same way a
+      // session switch does.
+      const sid = envelope.sessionId
+      if (sid !== null && sid !== undefined && sources.value !== null && sessionId.value === sid) void load(sid)
+      return
+    }
     if (envelope.type !== 'permission.asked') return
     const data = envelope.data as unknown as Events['permission.asked']
     // Only trust prompts belong here; the approvals store owns the rest.

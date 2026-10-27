@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useConnectionStore } from '../../stores/connection'
-import { useContextSourcesStore } from '../../stores/contextSources'
+import { useContextSourcesStore, type ContextSourcesResult } from '../../stores/contextSources'
 import { ProtocolError } from '../../protocol/jsonrpc'
 
 /**
@@ -66,6 +66,76 @@ const share = computed(() => {
   return Math.min(100, Math.round((breakdown.historyTokens / breakdown.window) * 100))
 })
 
+/**
+ * P-CTX.g: the `By category` model — the web twin of the TUI's ContextPane
+ * box (P-CTX.a/c, over the `context.sources` categories welded by P-CTX.f).
+ * The bar apportions the track over the MEASURED rows only (an unmeasured
+ * row holds no cell, never a fabricated zero); a row with sub-rows drills in
+ * place, and its sub-figures follow the server's precedence — note, else
+ * bytes, else tokens, else "not measured". The not-sent MCP-instructions
+ * row is just such a note-carrying sub: every string stays a plain span.
+ */
+type CategoryRow = NonNullable<NonNullable<ContextSourcesResult['breakdown']>['categories']>[number]
+type CategorySub = CategoryRow['sub'][number]
+
+/** The TUI's eleven glyphs become eleven swatch hues; unknown keys stay neutral. */
+const CATEGORY_COLORS: Record<string, string> = {
+  'system-prompt': '#8e6cd8',
+  'system-tools': '#4b8bd0',
+  'mcp-tools': '#3fa796',
+  'custom-agents': '#c2793b',
+  'memory-files': '#99a83f',
+  'project-memory': '#c25b7e',
+  'repo-map': '#5f6fd0',
+  skills: '#3e9bb5',
+  messages: '#c9a13b',
+  'autocompact-buffer': '#8a8f98',
+  'free-space': '#3f7f52',
+}
+
+const categories = computed<CategoryRow[] | null>(() => context.sources?.breakdown?.categories ?? null)
+const drill = ref<string | null>(null)
+
+function drillCategory(key: string): void {
+  drill.value = drill.value === key ? null : key
+}
+
+function colorFor(key: string): string {
+  return CATEGORY_COLORS[key] ?? 'var(--line)'
+}
+
+const barSegments = computed(() => {
+  const rows = categories.value ?? []
+  const total = rows.reduce((sum, row) => sum + (row.tokens ?? 0), 0)
+  if (total <= 0) return []
+  return rows
+    .map((row) => {
+      const weight = row.tokens ?? 0
+      return { key: row.key, label: row.label, weight, pct: (weight / total) * 100, color: colorFor(row.key) }
+    })
+    .filter((segment) => segment.weight > 0)
+})
+
+/** Byte figure spelled like the TUI's: whole bytes under 1 KiB, else one-decimal KB. */
+function bytesFigure(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  return `${rtrimZero((bytes / 1024).toFixed(1))} KB`
+}
+
+function rtrimZero(text: string): string {
+  return text.replace(/\.?0+$/, '')
+}
+
+function catFigure(cat: CategoryRow): string {
+  return cat.tokens === null ? 'not measured' : `~${cat.tokens.toLocaleString()}`
+}
+
+function subFigure(row: CategorySub): string {
+  if (row.note !== null) return row.note
+  if (row.bytes !== null) return bytesFigure(row.bytes)
+  return row.tokens === null ? 'not measured' : `~${row.tokens.toLocaleString()}`
+}
+
 const loading = computed(() => context.loading && context.sessionId !== props.sessionId)
 
 onMounted(() => void context.load(props.sessionId))
@@ -99,6 +169,31 @@ onMounted(() => void context.load(props.sessionId))
         </p>
       </section>
       <p v-else class="empty" data-testid="context-no-breakdown">The breakdown is not measured for this session.</p>
+
+      <section v-if="categories !== null" data-testid="context-categories">
+        <h3>By category</h3>
+        <div class="cat-bar" data-testid="context-cat-bar" aria-hidden="true">
+          <span v-for="seg in barSegments" :key="seg.key" class="cat-seg" :data-testid="`context-cat-seg-${seg.key}`" :style="{ width: `${seg.pct}%`, background: seg.color }" :title="`${seg.label} · ${Math.round(seg.pct)}%`"></span>
+        </div>
+        <ul class="cats">
+          <li v-for="cat in categories" :key="cat.key" class="cat" :data-testid="`context-cat-${cat.key}`">
+            <button type="button" class="cat-head" :disabled="cat.sub.length === 0" :data-testid="`context-cat-toggle-${cat.key}`" @click="drillCategory(cat.key)">
+              <span class="swatch" :style="{ background: colorFor(cat.key) }" aria-hidden="true"></span>
+              <span class="label">{{ cat.label }}</span>
+              <span class="tokens">{{ catFigure(cat) }}</span>
+              <span v-if="cat.sub.length > 0" class="drill-mark">{{ drill === cat.key ? '▾' : '▸' }}</span>
+            </button>
+            <ul v-if="drill === cat.key && cat.sub.length > 0" class="subs" :data-testid="`context-subs-${cat.key}`">
+              <li v-for="(row, index) in cat.sub" :key="index" class="sub" :data-testid="`context-sub-${cat.key}-${index}`">
+                <span class="label sub-label">{{ row.label }}</span>
+                <span v-if="row.personal" class="badge">personal</span>
+                <span class="tokens">{{ subFigure(row) }}</span>
+              </li>
+            </ul>
+          </li>
+        </ul>
+        <p class="meta" data-testid="context-raw-hint">Run <code>/context --raw</code> in the terminal to dump the exact prompt bytes.</p>
+      </section>
 
       <section data-testid="context-instruction-files">
         <h3>Instruction files</h3>
@@ -257,6 +352,70 @@ li {
   margin: 0;
   color: var(--muted);
   font-size: 0.8125rem;
+}
+.cat-bar {
+  display: flex;
+  height: 0.55rem;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--line);
+  margin-bottom: 0.4rem;
+}
+.cat-seg {
+  height: 100%;
+}
+.cats,
+.subs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+li.cat {
+  display: block;
+}
+.cat-head {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.cat-head:disabled {
+  cursor: default;
+}
+.swatch {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  flex: none;
+}
+.drill-mark {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.subs {
+  padding-left: 1.1rem;
+  gap: 0.2rem;
+}
+.sub {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  min-width: 0;
+}
+.sub-label {
+  flex: 1;
+  color: var(--muted);
 }
 .error {
   margin: 0;

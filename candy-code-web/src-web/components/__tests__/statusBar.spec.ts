@@ -6,6 +6,7 @@ import StatusBar from '../StatusBar.vue'
 import { summary as sessionSummary, Wire } from '../grid/__tests__/harness'
 import type { EventEnvelope, SessionSummary } from '../../protocol/generated'
 import { applyEvent, createState } from '../../stores/reducer'
+import { usePanelsStore } from '../../stores/agents/panels'
 
 /**
  * WEB-2: the status bar drives the two built-ins that gained host bodies.
@@ -206,5 +207,82 @@ describe('StatusBar spend bound (WEB-5 parity)', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.find('[data-testid="spend"]').text()).toBe('≥$0.25', 'the bound grows, the badge stays')
+  })
+})
+
+/**
+ * P-CTX.g: the context meter is a button now — it opens the Context panel —
+ * and the bar carries a cache read-out computed from the live turn usage.
+ */
+describe('StatusBar context meter and cache (P-CTX.g)', () => {
+  function mountWith(state: ReturnType<typeof createState>, contextPct: number | null) {
+    return mount(StatusBar, {
+      props: {
+        state,
+        summary: sessionSummary('s1') as unknown as SessionSummary,
+        contextPct,
+        connection: 'live',
+      },
+    })
+  }
+
+  it('opens the Context panel from the meter button', async () => {
+    const panels = usePanelsStore()
+    const wrapper = mountWith(createState('s1'), 41)
+    const meter = wrapper.find('[data-testid="context-meter"]')
+    expect(meter.element.tagName).toBe('BUTTON')
+    expect(meter.text()).toContain('41%')
+    await meter.trigger('click')
+    expect(panels.active).toBe('context')
+    expect(panels.open).toBe(true)
+  })
+
+  it('keeps the meter without a percentage when the window is unmeasured', () => {
+    const wrapper = mountWith(createState('s1'), null)
+    const meter = wrapper.find('[data-testid="context-meter"]')
+    expect(meter.element.tagName).toBe('BUTTON')
+    expect(meter.text()).toContain('tok')
+  })
+
+  describe('cache read-out', () => {
+    function mountUsage(usage: Record<string, unknown> | null) {
+      const state = createState('s1')
+      if (usage) state.turnUsage = usage as never
+      return mountWith(state, null)
+    }
+
+    it('shows nothing before any usage was measured', () => {
+      const wrapper = mountUsage(null)
+      expect(wrapper.find('[data-testid="status-cache"]').exists()).toBe(false)
+    })
+
+    it('reads the OpenAI shape as read / (read + input)', () => {
+      const wrapper = mountUsage({ totalTokens: 1000, inputTokens: 100, cacheReadTokens: 900, cacheCreationTokens: null })
+      expect(wrapper.find('[data-testid="status-cache"]').text()).toBe('cache 90%')
+    })
+
+    it('uses the three-bucket identity when creation is reported', () => {
+      const wrapper = mountUsage({ totalTokens: 1050, inputTokens: 100, cacheReadTokens: 900, cacheCreationTokens: 50 })
+      expect(wrapper.find('[data-testid="status-cache"]').text()).toBe('cache 86%')
+    })
+
+    it('never turns an unreported bucket into a zero', () => {
+      const wrapper = mountUsage({ totalTokens: 1000, inputTokens: null, cacheReadTokens: 900, cacheCreationTokens: null })
+      expect(wrapper.find('[data-testid="status-cache"]').exists()).toBe(false)
+    })
+
+    it('tracks the live turn through usage frames', async () => {
+      const state = reactive(createState('s1'))
+      state.turnId = 't1'
+      const wrapper = mountWith(state, null)
+      expect(wrapper.find('[data-testid="status-cache"]').exists()).toBe(false)
+
+      applyEvent(state, {
+        sessionId: 's1', seq: 1, type: 'usage.updated', ts: 1, durable: true, turnId: 't1',
+        data: { turnUsage: { totalTokens: 2000, inputTokens: 200, cacheReadTokens: 1800, cacheCreationTokens: null, costUsd: 0.1, unpricedModel: null } },
+      } as EventEnvelope)
+      await wrapper.vm.$nextTick()
+      expect(wrapper.find('[data-testid="status-cache"]').text()).toBe('cache 90%')
+    })
   })
 })

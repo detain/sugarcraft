@@ -86,16 +86,36 @@ const model = computed(() => {
   const name = props.summary?.model || ''
   return [provider, name].filter((part) => part !== '').join(' · ') || 'default model'
 })
+
+/**
+ * P-CTX.g (GAP-MOD-15w): the cache read-out, spelled exactly as the TUI
+ * status line computes it (Renderer.php) — `read / prompt`, where prompt is
+ * the three-bucket identity `cacheRead + cacheCreation + input`, or the
+ * OpenAI-shaped `read + input` alone when the provider reports no
+ * cache-write bucket at all. An unreported bucket is never a zero: any leg
+ * null, the span vanishes rather than advertising 0%.
+ */
+const cachePct = computed<number | null>(() => {
+  const usage = props.state.turnUsage
+  const read = usage?.cacheReadTokens ?? null
+  const input = usage?.inputTokens ?? null
+  if (read === null || input === null) return null
+  const creation = usage?.cacheCreationTokens ?? null
+  const prompt = creation === null ? read + input : read + input + creation
+  if (prompt <= 0) return null
+  return Math.round((read / prompt) * 100)
+})
 </script>
 
 <template>
   <footer class="status" data-testid="status-bar" :data-status="state.status">
     <span class="item state" :class="state.status">{{ statusText }}</span>
     <button v-if="trustAwaiting" type="button" class="item action" data-testid="trust-badge" title="This project is not trusted — open the Context panel to answer" @click="panels.show('context')">trust?</button>
-    <span class="item" title="Context used">
+    <button type="button" class="item action" data-testid="context-meter" title="Context used — open the Context panel" @click="panels.show('context')">
       ~{{ tokens(state.contextTokens) }} tok<template v-if="contextPct !== null"> · {{ contextPct }}%</template>
       <span v-if="contextPct !== null" class="meter" aria-hidden="true"><span :style="{ width: `${contextPct}%` }" /></span>
-    </span>
+      <span v-if="cachePct !== null" class="cache" data-testid="status-cache">cache {{ cachePct }}%</span>
+    </button>
     <span class="item" :title="state.unpriced ? 'No price on file for this model — spend shown is a lower bound' : 'Spent this session'" :data-unpriced="state.unpriced ? 'true' : 'false'" data-testid="spend">{{ spendLabel(spent, state.unpriced) }}</span>
     <label v-if="selectableProviders.length > 0" class="item" :title="model">
       <span class="sr-only">Model</span>
