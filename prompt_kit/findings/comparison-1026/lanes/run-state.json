@@ -31,7 +31,8 @@
     "C-SES-2.b",
     "P-CTX.a",
     "P-TABS.b",
-    "C-CTX-1.a"
+    "C-CTX-1.a",
+    "C-WEB-1.a"
   ],
   "inflight": {
     "C-SEC-3.a": {
@@ -51,23 +52,23 @@
       "note": "re-cut fresh builder @590@ \u2014 prior recorded ID phantom (dead C-AGT-1.a reviewer); branch zero commits base 4f657c755"
     },
     "P-TABS.d": {
-      "stage": "fix",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-P-TABS.d",
       "branch": "cc/P-TABS.d",
       "session": null,
-      "tip": "068b6f48e764b258e2ad2f69bb299a45f6291ac4",
+      "tip": "8ff7a2b33",
       "reviewer": "ses_e82938b84",
       "weld_note": "no regen; gates Bootstrap|Launch|TabChat 1067T/6104A + Session|Chat 3314T/26727A (1F foreign RemoteBackend disclose); NEW TabChatFactoryTest durations; roster/drift guard set run (TEST-touching picks!)",
-      "note": "r1 1 MINOR step-local Bootstrap.php:1729 @return mint-optional docblock; fixer r2 one-line; gates measured at review (TabChat 9T/31A, 1067T/6104A, pair-only 25,702, RemoteBackend 1F foreign identical)"
+      "note": "r2 CLEAN. WELD queue 5th: plain picks 068b6f48e+8ff7a2b33 (base 30d4f91cb era, master moved \u2014 expect clean, [hot:bootstrap:chat] holder free); NO regen (verify diff has no Protocol/web files); gates --filter TabChatFactory|Bootstrap|Launch expect 1067T/6104A + 1F foreign RemoteBackend reproduce-at-base disclose-only + five-guard pair-only; NEW tests/Cli/TabChatFactoryTest.php DURATIONS duty; extraction purity r1-verified 12 hunks; evidence 4 files"
     },
     "C-SEC-4.b": {
-      "stage": "fix",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SEC-4.b",
       "branch": "cc/C-SEC-4.b",
-      "tip": "ee24cbcde",
-      "note": "r1 1 MAJOR web-spec type: contextTrustRouting.spec.ts:70 respondTrust(null) vs non-nullable TrustRemember + :76 vacuous null pin; fix = reject/session line-pair, then vue-tsc proof; weld reruns php+vitest",
+      "tip": "b8966c024",
+      "note": "r2 CLEAN queued 2nd (after running C-WEB-1.a welder): picks ee24cbcde+b8966c024, REGEN trio+dist (resolves TS2353), vitest serial + GatewayTrustRoutingTest php unit filter + five-guard; durations row GatewayTrustRoutingTest.php; evidence 4 files",
       "session": null
     },
     "C-WEB-1.d": {
@@ -91,17 +92,6 @@
       "reviewer": "ses_e82938b83",
       "weld_note": "no regen; gates per brief + EnvRoster base-red verify; +8T",
       "note": "r1 1 MINOR step-local (Renderer.php:1019 sentinel-free docblock false under live-agent split; Veil can split zone pairs) + NIT blank line MediaFormWiringTest:131; fixer r2 choose honest strip-or-amend, weld re-runs 1667T/71,647A battery"
-    },
-    "C-WEB-1.a": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-WEB-1.a",
-      "branch": "cc/C-WEB-1.a",
-      "session": null,
-      "tip": "6f07646c8",
-      "reviewer": "ses_e82938b86",
-      "weld_note": "REGEN trio+dist (protocol lane): gen-protocol-schema --write + npm gen:protocol + npm build welder-only; gates SessionSummaryModelOverlay|WebTwoHostCommands|SessionHost|ServerContext + drift guards 15T/455A; NEW SessionSummaryModelOverlayTest durations; AttachPaging 2F foreign disclose",
-      "note": "r1 CLEAN 2 NITs non-blocking; weld: regen trio+dist sequential (protocol lane), gates Host pair+guards, NEW SessionSummaryModelOverlayTest 4T durations, dropFeed disclosure + :39 numeral NIT = carry"
     },
     "P-CTX.c": {
       "stage": "clean",
