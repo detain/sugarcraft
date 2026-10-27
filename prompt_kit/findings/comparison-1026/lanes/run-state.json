@@ -60,7 +60,8 @@
     "C-TOOL-7.a",
     "C-SES-6.a",
     "C-EXT-2.a",
-    "C-SES-9.c"
+    "C-SES-9.c",
+    "P-CTX.g"
   ],
   "inflight": {
     "P-AGENT.a": {
@@ -102,14 +103,6 @@
       "branch": "cc/C-SES-9.a",
       "session": "ses_e81de68e3ffeTCMIl2N6p6wepf",
       "note": "cut from c2477fe71; deps linked"
-    },
-    "P-CTX.g": {
-      "stage": "review",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-P-CTX.g",
-      "branch": "cc/P-CTX.g",
-      "session": "ses_e81de68e6ffejOZwyerayTSSzT",
-      "note": "LANDED tip 7f85a5ab6 (web-only 5 files, vitest 34/34 x2, TS2554 x6 foreign disclosed, stash-pop incident claimed recovered \u2014 reviewer must diff-verify zero foreign content in branch)"
     }
   },
   "blocked": [],
@@ -278,7 +271,8 @@
       "note": "evidence completion weld",
       "gates": "AgentPresetRegistry|Phar merged-tree 114T/610A/1S OK (builder lane-base 112T/587A; +2T/+23A = C-SES-6.a PharCompatTest pins riding master); check-child-lifetimes rc0 (33 sites/9 accounted); five-guard 133T/15654A pair-only",
       "durations_owed": "none"
-    }
+    },
+    "P-CTX.g": "master 1ce007b2d (pick of 7f85a5ab6); test hardening 19bdf571b (review NITs taken: denominator fixtures carry outputTokens 700 so totalTokens-denominator impl fails 53/51/67 vs 90/86/90; +2 cache-edge pins: prompt==0 hidden, measured 0 renders 0%%); dist rebuild 8622554ea. Gates: vitest contextPanel.spec+statusBar.spec serial 36 passed (34 baseline +2). vue-tsc --build --force: exactly the six disclosed foreign TS2554 lines (reducer.spec.ts:307/312/317/320, statusBar.spec.ts:200/209), no new classes. Builder statusBar +6 claim actually +7 (reviewer reconciled 17+17=34). No new PHP files: no durations duty. \u00a74 mark uses master hash 1ce007b2d, not the lane hash."
   },
   "carries": [
     "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest \u2014 closeout gate duty",

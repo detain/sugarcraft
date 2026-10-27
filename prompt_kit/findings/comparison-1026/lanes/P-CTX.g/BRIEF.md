@@ -1,0 +1,23 @@
+### P-CTX.g — Web: context meter + category breakdown + cache %
+- item: P-CTX-BREAKDOWN (sources: PRM-12 web; GAP-MOD-15w cache half; MOD-19 web; MOD-N3 web)
+- kind: feature · effort M
+- approach:
+  - `ContextPanel.vue` gets the same model as the TUI box:
+    - a stacked category bar;
+    - category rows with expandable sub-rows (layers, files, MCP servers, largest messages);
+    - the "not sent" MCP-instructions row;
+    - a hint naming `/context --raw`.
+  - **Status bar.** `StatusBar.vue`'s context meter becomes a button that opens the panel (`panels.show('context')`). It gains a `cache NN%` span computed from `turnUsage.cacheReadTokens` (already in the reducer; no protocol change).
+  - **Store.** `contextSources.ts` re-loads the open session after `turn.completed`.
+  - The `context.changed` live reload belongs to C-CTX-2, which edits the same store.
+  - Every server string stays in plain `{{ }}` spans (the panel's security posture).
+- files.create: none
+- files.modify: `candy-code-web/src-web/components/panels/ContextPanel.vue`, `candy-code-web/src-web/components/StatusBar.vue`, `candy-code-web/src-web/stores/contextSources.ts`
+- tests: modify `candy-code-web/src-web/components/panels/__tests__/contextPanel.spec.ts` (bar widths sum to 100%; drill toggles) and `candy-code-web/src-web/components/__tests__/statusBar.spec.ts` (meter opens the panel; cache %)
+- docs/guards: web unit tests
+- serialized: [hot:candy-code-web/src-web/components/StatusBar.vue] [hot:candy-code-web/src-web/stores/contextSources.ts]
+- deps: P-CTX.f
+- phase: normal
+- ruling: none
+- risks: C-WEB-2 (`/effort` readout) also edits `StatusBar.vue`. Do not share a wave with it.
+
