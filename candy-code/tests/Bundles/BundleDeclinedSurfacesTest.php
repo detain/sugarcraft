@@ -265,7 +265,7 @@ final class BundleDeclinedSurfacesTest extends TestCase
         self::assertCount(1, $notices, 'the inline shape still fires the one-per-root hooks decline');
     }
 
-    public function testAStringMcpServersManifestEntryIsADECLINEDConfigFile(): void
+    public function testAStringMcpServersManifestEntryIsADeclinedConfigFile(): void
     {
         $name = 'mcpservers-path-' . getmypid();
         $root = $this->tempDir . '/mcpservers-path-root';
