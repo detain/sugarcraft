@@ -6,12 +6,17 @@ namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ResponseInterface;
+use React\EventLoop\Loop;
 use React\Http\Message\ServerRequest;
+use SugarCraft\Code\Server\Auth\AuthContext;
+use SugarCraft\Code\Server\Auth\TokenStore;
 use SugarCraft\Code\Server\Http\AuthMiddleware;
 use SugarCraft\Code\Server\Http\Responses;
 use SugarCraft\Code\Server\Http\Router;
 use SugarCraft\Code\Server\Http\SharePageController;
 use SugarCraft\Code\Server\Http\StaticFiles;
+use SugarCraft\Code\Server\Server;
+use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Share\ShareStore;
 
 /**
@@ -182,6 +187,83 @@ final class SharePageTest extends TestCase
         self::assertSame('api', $this->decodeKind($router($this->request('GET', '/api/sessions'))));
         self::assertSame('static', $this->decodeKind($router($this->request('GET', '/index.html'))));
         self::assertSame('static', $this->decodeKind($router($this->request('GET', '/secrets'))), 'a path merely STARTING with the prefix letter stays UI-side');
+    }
+
+    /**
+     * The request log is a plain line per request, but for a share page the
+     * path itself carries the whole capability — logged verbatim, the log
+     * file becomes a directory of live unauthenticated transcript URLs
+     * (C-SES-3). This drives a REAL listener: the middleware closure is not
+     * reachable any other way, and a redaction unit-tested in isolation
+     * proves nothing about the line the server actually writes.
+     */
+    public function testTheAccessLogRedactsTheShareTokenItJustServed(): void
+    {
+        $store = ShareStore::atPath($this->dbPath);
+        $record = $store->publish('sess-1', 'html', '<p>served</p>', 7);
+        $controller = new SharePageController($store);
+
+        $lines = [];
+        $server = Server::new(
+            ServerConfig::new('/nonexistent')->withPort(0),
+            AuthContext::new(TokenStore::new('/nonexistent')->withOverride(\str_repeat('7', 64))),
+            null,
+            null,
+            Loop::get(),
+            function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+            null,
+            null,
+            $controller(...),
+        );
+        $server->start();
+        $port = (int) $server->port();
+        $socket = null;
+        try {
+            $socket = @\stream_socket_client('127.0.0.1:' . $port, $errno, $errstr, 5.0);
+            self::assertNotFalse($socket, 'connect: ' . $errstr);
+            $bytes = 'GET ' . $record->path() . " HTTP/1.1\r\nHost: 127.0.0.1:{$port}\r\n\r\n";
+            self::assertSame(\strlen($bytes), @\fwrite($socket, $bytes));
+            $this->pumpLoop(0.25);
+            self::assertStringStartsWith('HTTP/1.1 200', $this->drainSocket($socket), 'sanity: the page was served — this is about what the log kept');
+
+            self::assertContains('GET /s/' . \substr($record->token, 0, 4) . '… 200', $lines, 'the line names the page without holding the key');
+            foreach ($lines as $line) {
+                self::assertStringNotContainsString($record->token, $line, 'the capability never reaches the log whole');
+            }
+        } finally {
+            if (\is_resource($socket)) {
+                @\fclose($socket);
+            }
+            $server->stop();
+            $reap = Loop::addTimer(0.05, static fn () => Loop::stop());
+            Loop::run();
+            Loop::cancelTimer($reap);
+        }
+    }
+
+    /** Hand the shared loop $seconds of runtime, then take control back. */
+    private function pumpLoop(float $seconds): void
+    {
+        $timer = Loop::addTimer($seconds, static fn () => Loop::stop());
+        Loop::run();
+        Loop::cancelTimer($timer);
+    }
+
+    /** Read whatever the answered socket still holds, then stop waiting. */
+    private function drainSocket($socket): string
+    {
+        \stream_set_blocking($socket, false);
+        $bytes = '';
+        while (false !== ($chunk = \fread($socket, 65536))) {
+            $bytes .= $chunk;
+            if ('' === $chunk) {
+                break;
+            }
+        }
+
+        return $bytes;
     }
 
     private function route(ShareStore $store, string $path, string $method = 'GET'): ResponseInterface

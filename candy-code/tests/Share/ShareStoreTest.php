@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Share;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Share\ShareStore;
 
 /**
@@ -170,6 +171,63 @@ final class ShareStoreTest extends TestCase
 
         self::assertSame([$newer->token, $older->token], $tokens);
         self::assertNotContains($elsewhere->token, $tokens);
+    }
+
+    /**
+     * liveAll() is the operator view (C-SES-3): every live share across
+     * ALL sessions, newest first, dead rows absent. On a shares-only
+     * database — no `sessions` table to join against — nothing can confirm
+     * an owner, so every row honestly reports itself unowned rather than
+     * disappearing or throwing.
+     */
+    public function testLiveAllListsEverySessionsLivePagesAcrossOwners(): void
+    {
+        $store = ShareStore::atPath($this->dbPath);
+        $first = $store->publish('sess-1', 'html', '<p>one</p>', 7);
+        $second = $store->publish('sess-2', 'html', '<p>two</p>', 7);
+        $gone = $store->publish('sess-2', 'html', '<p>revoked</p>', 7);
+        $store->revoke($gone->token);
+        $dead = $store->publish('sess-1', 'html', '<p>expired</p>', 7);
+        $this->expire($dead->token);
+
+        $rows = $store->liveAll();
+        $tokens = array_map(static fn(array $row): string => $row['record']->token, $rows);
+
+        self::assertSame([$second->token, $first->token], $tokens, 'newest first, across every session, dead rows gone');
+        foreach ($rows as $row) {
+            self::assertTrue($row['orphan'], 'no sessions table means no provable owner');
+            self::assertNull($row['sessionName']);
+        }
+    }
+
+    /**
+     * With the real session database, the LEFT JOIN names the owning
+     * session and flags the rows whose session id matches nothing — and
+     * deleting the session drops its pages out of the live list, because
+     * the delete path revokes them (C-SES-3, SessionDeleteRevokesSharesTest
+     * pins the revoke itself; this pins that the operator view sees it).
+     */
+    public function testLiveAllNamesTheOwningSessionAndFlagsRowsWhoseSessionIsGone(): void
+    {
+        $sessions = new SessionStore($this->dbPath);
+        $sessions->createSession('alpha', 'p', 'm', null, 'Alpha Session');
+        $store = ShareStore::atPath($this->dbPath);
+        $own = $store->publish('alpha', 'html', '<p>a</p>', 7);
+        $homeless = $store->publish('beta', 'html', '<p>b</p>', 7);
+
+        $byToken = [];
+        foreach ($store->liveAll() as $row) {
+            $byToken[$row['record']->token] = $row;
+        }
+
+        self::assertSame('Alpha Session', $byToken[$own->token]['sessionName']);
+        self::assertFalse($byToken[$own->token]['orphan']);
+        self::assertTrue($byToken[$homeless->token]['orphan'], 'a live page whose session never existed is exactly what an operator needs to see');
+
+        $sessions->deleteSession('alpha');
+
+        $afterDelete = array_map(static fn(array $row): string => $row['record']->token, $store->liveAll());
+        self::assertSame([$homeless->token], $afterDelete, 'the revoke-on-delete law keeps the live list clean');
     }
 
     public function testPublishSweepsRowsNoLookupCouldReturn(): void

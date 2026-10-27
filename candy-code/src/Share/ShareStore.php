@@ -7,6 +7,8 @@ namespace SugarCraft\Code\Share;
 use RuntimeException;
 use SugarCraft\Code\Lang;
 
+use function array_fill;
+use function implode;
 use function is_file;
 
 /**
@@ -60,6 +62,28 @@ final class ShareStore
         . 'expires_at INTEGER NOT NULL,'
         . 'revoked_at INTEGER NULL'
         . ')';
+
+    /**
+     * The statement that revokes every LIVE share published from a chunk of
+     * session ids. It lives HERE, beside the table it writes, because
+     * `SessionStore::deleteSessionTrees()` runs it inside the very
+     * transaction that removes those sessions (C-SES-3): a session that is
+     * gone must not leave `/s/{token}` answering for the rest of the expiry
+     * window. Copying the SQL into the session store would let the schema
+     * and its revocation law drift apart unnoticed.
+     *
+     * Revoked, not deleted — the rows stay listable through
+     * {@see liveAll()} for as long as `sweepInertRows()` has not reaped
+     * them, so an audit pass can still see what was shared and when it died.
+     *
+     * @param int $sessionIdCount number of session-id placeholders in the chunk
+     */
+    public static function revokeForSessionsSql(int $sessionIdCount): string
+    {
+        return 'UPDATE shares SET revoked_at = ? WHERE revoked_at IS NULL AND session_id IN ('
+            . implode(',', array_fill(0, $sessionIdCount, '?'))
+            . ')';
+    }
 
     private function __construct(
         private readonly string $dbPath,
@@ -233,6 +257,78 @@ final class ShareStore
             ),
             $rows,
         );
+    }
+
+    /**
+     * Every LIVE share across ALL sessions, newest first, each paired with
+     * its owning session's name when that row still exists.
+     *
+     * The join is the whole point (C-SES-3): deleting a session revokes its
+     * shares rather than erasing them, and rows can outlive their session
+     * by other paths too — a foreign or hand-edited database. A live share
+     * whose session row is gone (`orphan`) is exactly what an operator
+     * needs to SEE to decide to revoke it, so this lists it instead of
+     * hiding it; on a database without any `sessions` table every row
+     * reports that way, which is honest: nothing here proves those owners
+     * exist.
+     *
+     * Never throws, the same law {@see lookup()} follows for a public
+     * surface: a database without the shares table answers the empty list.
+     *
+     * @return list<array{record: ShareRecord, sessionName: ?string, orphan: bool}>
+     */
+    public function liveAll(): array
+    {
+        $joined = $this->hasTable('sessions');
+        try {
+            $statement = $this->pdo->prepare(
+                'SELECT shares.token, shares.session_id, shares.format, shares.html,'
+                . ' shares.created_at, shares.expires_at,'
+                . ($joined ? 'sessions.id AS session_row, sessions.name AS session_name FROM shares'
+                    : 'NULL AS session_row, NULL AS session_name FROM shares')
+                . ($joined ? ' LEFT JOIN sessions ON sessions.id = shares.session_id' : '')
+                . ' WHERE shares.revoked_at IS NULL AND shares.expires_at > :now'
+                . ' ORDER BY shares.created_at DESC, shares.rowid DESC'
+            );
+            $statement->execute([':now' => time()]);
+            $rows = $statement->fetchAll(\PDO::FETCH_ASSOC);
+        } catch (\PDOException) {
+            return [];
+        }
+
+        return array_map(
+            static fn(array $row): array => [
+                'record' => new ShareRecord(
+                    token: (string) $row['token'],
+                    sessionId: (string) $row['session_id'],
+                    format: (string) $row['format'],
+                    html: (string) $row['html'],
+                    createdAt: (int) $row['created_at'],
+                    expiresAt: (int) $row['expires_at'],
+                ),
+                'sessionName' => $row['session_name'] === null ? null : (string) $row['session_name'],
+                'orphan' => $row['session_row'] === null,
+            ],
+            $rows,
+        );
+    }
+
+    /**
+     * Whether the connected database carries $table. `liveAll()` asks for
+     * `sessions` so the join can be skipped on a shares-only file instead
+     * of erroring into the empty answer — the empty answer would hide even
+     * the rows that ARE listable.
+     */
+    private function hasTable(string $table): bool
+    {
+        try {
+            $statement = $this->pdo->prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?");
+            $statement->execute([$table]);
+
+            return (int) $statement->fetchColumn() > 0;
+        } catch (\PDOException) {
+            return false;
+        }
     }
 
     /** Delete rows no lookup could ever return again (expired or revoked). */

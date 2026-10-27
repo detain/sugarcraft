@@ -18,6 +18,7 @@ use React\Promise\PromiseInterface;
 use React\Socket\ConnectionInterface;
 use React\Stream\ReadableStreamInterface;
 use Ratchet\RFC6455\Messaging\Frame;
+use SugarCraft\Code\Share\ShareStore;
 use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\CookieSessions;
 use SugarCraft\Code\Server\Http\ApiController;
@@ -35,6 +36,9 @@ use SugarCraft\Code\Server\Ws\ProtocolPendingHandler;
 use SugarCraft\Code\Server\Ws\Upgrade;
 
 use function React\Promise\resolve;
+use function str_starts_with;
+use function strlen;
+use function substr;
 
 /**
  * The `candy-code serve` gateway: one HTTP + WebSocket listener on the SAME
@@ -43,7 +47,8 @@ use function React\Promise\resolve;
  * THE CHAIN, in order, for every request (ISS-055: nothing that can wait on
  * request bytes sits in front of the guards):
  *  1. react/http's streaming parse — headers only reach the chain;
- *  2. the request log (method, path, status — refusals included);
+ *  2. the request log (method, path with share tokens redacted, status —
+ *     refusals included);
  *  3. {@see ClientAddressGuard} — `--allowed-ips`, ahead of everything that
  *     could tell a refused address more than "refused", and ahead of any
  *     buffering at all;
@@ -222,10 +227,13 @@ final class Server
             new StreamingRequestMiddleware(),
             // Ahead of the guards, so a refusal is logged like an answer.
             // Method, path and status only: never the query (a ticket rides
-            // there), a header or a body (Appendix O §8.6).
+            // there), a header or a body (Appendix O §8.6) — and never a
+            // whole share token, which lives in the path itself (C-SES-3).
             function (ServerRequestInterface $request, callable $next): PromiseInterface {
-                return resolve($next($request))->then(function (ResponseInterface $response) use ($request): ResponseInterface {
-                    ($this->log)(\sprintf('%s %s %d', $request->getMethod(), $request->getUri()->getPath(), $response->getStatusCode()));
+                $path = self::redactShareToken($request->getUri()->getPath());
+
+                return resolve($next($request))->then(function (ResponseInterface $response) use ($request, $path): ResponseInterface {
+                    ($this->log)(\sprintf('%s %s %d', $request->getMethod(), $path, $response->getStatusCode()));
 
                     return $response;
                 });
@@ -400,6 +408,31 @@ final class Server
         $this->connections = [];
         $this->sessionLastUsed = [];
         $this->inFlightByAddress = [];
+    }
+
+    /**
+     * The share token IS the credential for a public page, so the request
+     * log must never hold a copy an attacker could read back out of the log
+     * file (C-SES-3). A `/s/{token}` path is logged as the prefix, the
+     * token's first four characters and an ellipsis — enough to correlate
+     * repeated hits on one page, not enough to reconstruct the URL. Every
+     * other path, and `/s/` itself, is logged verbatim; the keying lives on
+     * {@see ShareStore::URL_PREFIX}, the same constant the Router and the
+     * controller branch on, so the three can never disagree about what a
+     * share path looks like.
+     */
+    private static function redactShareToken(string $path): string
+    {
+        $prefix = '/' . ShareStore::URL_PREFIX . '/';
+        if (!str_starts_with($path, $prefix)) {
+            return $path;
+        }
+        $token = substr($path, strlen($prefix));
+        if ($token === '') {
+            return $path;
+        }
+
+        return $prefix . substr($token, 0, 4) . '…';
     }
 
     /**

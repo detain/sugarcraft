@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Session;
 
 use PDO;
+use SugarCraft\Code\Share\ShareStore;
 use SugarCraft\Code\Support\SqliteConnect;
 
 /**
@@ -1032,8 +1033,22 @@ final class SessionStore
         $children->closeCursor();
 
         $deleted = array_map('strval', array_keys($delete));
-        // Chunked because SQLite caps bound parameters per statement and an
-        // install that has never pruned can expire hundreds of rows at once.
+        // C-SES-3: a share page outliving the session it was rendered from
+        // is a leak — the snapshot holds the transcript of a conversation
+        // the user has just destroyed. The revocation rides the SAME
+        // transaction as the deletes below, so there is no window where the
+        // session is gone and `/s/{token}` still answers. Ruled revoke-not-
+        // delete: the rows stay listable ({@see ShareStore::liveAll()}) and
+        // auditable until sweepInertRows() reaps them at a later publish.
+        // A database that never saw `/share serve` carries no shares table;
+        // there the UPDATE has nothing to do, and running it anyway would
+        // break deletion on foreign or partial files.
+        //
+        // The chunk size and placeholder reuse follow the deletes below:
+        // SQLite caps bound parameters per statement, and an install that
+        // has never pruned can expire hundreds of rows at once.
+        $hasShares = $this->hasTable('shares');
+        $revokedAt = time();
         foreach (array_chunk($deleted, 400) as $chunk) {
             $placeholders = implode(',', array_fill(0, count($chunk), '?'));
             foreach (['tool_calls', 'messages'] as $table) {
@@ -1044,6 +1059,11 @@ final class SessionStore
             $this->pdo
                 ->prepare("DELETE FROM sessions WHERE id IN ({$placeholders})")
                 ->execute($chunk);
+            if ($hasShares) {
+                $this->pdo
+                    ->prepare(ShareStore::revokeForSessionsSql(count($chunk)))
+                    ->execute(array_merge([$revokedAt], $chunk));
+            }
         }
         foreach (array_chunk(array_map('strval', array_keys($detach)), 400) as $chunk) {
             $placeholders = implode(',', array_fill(0, count($chunk), '?'));
