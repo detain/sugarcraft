@@ -189,6 +189,25 @@ final class HookRegistryTest extends TestCase
         $this->assertSame($hook, $matches[0]);
     }
 
+    /**
+     * THE ARGUMENTS PARAMETER IS OPTIONAL. `findMatches()` grew a third
+     * parameter to resolve the deferred MCP wire name (C-MCP-1.b), but the
+     * selection sites that hold only a subject — {@see HookManager}'s
+     * out-of-process and has-hooks-for reads above all call it with two
+     * arguments. Making the parameter required is a silent fatal on those
+     * paths, so its optionality is pinned here rather than assumed.
+     */
+    public function testFindMatchesResolvesTheDeferredSubjectFromAnOptionalArgumentsParameter(): void
+    {
+        $parameter = (new \ReflectionMethod(HookRegistry::class, 'findMatches'))
+            ->getParameters()[2];
+
+        $this->assertSame('toolArgs', $parameter->getName());
+        $this->assertTrue($parameter->isOptional());
+        $this->assertSame([], $parameter->getDefaultValue());
+        $this->assertSame('array', (string) $parameter->getType());
+    }
+
     public function testFindMatchesWithRegexPattern(): void
     {
         $hook = $this->createHook('FileHook', HookEvent::PreToolUse, 'File.*', 'File(Read|Write)');

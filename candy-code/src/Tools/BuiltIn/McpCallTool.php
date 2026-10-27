@@ -26,10 +26,11 @@ use SugarCraft\Code\Tools\ToolResult;
  * allow/deny and the per-call refusals apply unchanged, and
  * {@see \SugarCraft\Code\Permissions\PermissionRule} translates rules naming
  * the bridge spelling across both directions of the pair — a `Deny` on
- * `mcp__server__tool` refuses the args form too. `PreToolUse` HOOKS are the
- * one view that moves: matchers see the frame the model sent, so a
- * server-scoped hook must additionally name `mcp_call` to keep firing for a
- * deferred server.
+ * `mcp__server__tool` refuses the args form too, and an exact argument-free
+ * `Allow mcp__server__tool` covers it (globs and `Allow mcp_call` do not
+ * translate). `PreToolUse` HOOKS match either spelling of the same call: a
+ * server-scoped matcher keeps firing when the floor defers its server, and a
+ * matcher naming `mcp_call` keeps seeing the dispatcher frame.
  *
  * IT REACHES ONLY THE FROZEN ROSTER: a (server, tool) pair that is not in
  * the dispatched half of this launch's shape is refused before anything is

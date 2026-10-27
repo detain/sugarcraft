@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Hooks;
 
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Support\HookContextFiles;
+use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
+use SugarCraft\Code\Tools\McpToolBridge;
 
 final class HookRegistry
 {
@@ -186,23 +188,51 @@ final class HookRegistry
      * own PostToolUse hook after `registerBuiltIns()`, or one before it — can
      * put the excerpt ahead of a refusal again.
      *
+     * DUAL SUBJECT FOR THE DEFERRED MCP SPELLING. A `mcp_call` frame whose
+     * `server`/`tool` arguments resolve to a wire name is matched under
+     * EITHER spelling: the dispatcher name the model sent, or the bridged
+     * name the dispatcher will actually run. A schema-deferred server is the
+     * same capability seen twice (MCP-7 parity doctrine, mirrored in
+     * {@see \SugarCraft\Code\Permissions\PermissionRule::namesCall()}), and
+     * an operator guard naming `mcp__git__*` must not go blind the moment
+     * the floor defers `git`. The hook's PAYLOAD is unchanged — scripts
+     * still see `tool_name: mcp_call` with the server and tool inside
+     * `tool_input`; only the matcher's view widens.
+     *
+     * @param array<string,mixed> $toolArgs the call's arguments, used solely
+     *        to resolve the deferred wire name for a `mcp_call` subject
+     *
      * @return array<HookInterface>
      */
-    public function findMatches(string $event, string $toolName): array
+    public function findMatches(string $event, string $toolName, array $toolArgs = []): array
     {
         $matches = [];
         $last = [];
+
+        $subjects = [$toolName];
+
+        if ($toolName === McpCallTool::NAME) {
+            $wire = McpToolBridge::dispatchedWireName($toolArgs);
+
+            if ($wire !== null) {
+                $subjects[] = $wire;
+            }
+        }
 
         foreach ($this->forEvent($event) as $hook) {
             if ($this->isDisabled($hook->name())) {
                 continue;
             }
 
-            if ($this->matcherMatches($hook->matcher(), $toolName)) {
-                if ($hook instanceof BuiltIn\AuditHook) {
-                    $last[] = $hook;
-                } else {
-                    $matches[] = $hook;
+            foreach ($subjects as $subject) {
+                if ($this->matcherMatches($hook->matcher(), $subject)) {
+                    if ($hook instanceof BuiltIn\AuditHook) {
+                        $last[] = $hook;
+                    } else {
+                        $matches[] = $hook;
+                    }
+
+                    break;
                 }
             }
         }
@@ -464,7 +494,7 @@ final class HookRegistry
         // ARMED ONCE, OUTSIDE THE LOOP — see chainBudgetSeconds(). Inside it,
         // every re-scan would get a fresh budget and the multiplication by
         // MAX_REWRITE_PASSES this exists to remove would still be there.
-        $chainBudget = $this->chainBudgetSeconds($event, $context->toolName);
+        $chainBudget = $this->chainBudgetSeconds($event, $context->toolName, $context->toolArgs);
         $armedAt = microtime(true);
         $chainDeadline = $chainBudget === null ? null : $armedAt + $chainBudget;
 
@@ -634,11 +664,11 @@ final class HookRegistry
      * chain instead. The gap is real and it is named rather than papered over:
      * see {@see BoundedHookInterface}.
      */
-    private function chainBudgetSeconds(string $event, string $toolName): ?float
+    private function chainBudgetSeconds(string $event, string $toolName, array $toolArgs = []): ?float
     {
         $budget = null;
 
-        foreach ($this->findMatches($event, $toolName) as $hook) {
+        foreach ($this->findMatches($event, $toolName, $toolArgs) as $hook) {
             if ($hook instanceof BoundedHookInterface) {
                 $budget = ($budget ?? 0.0) + $hook->timeoutSeconds();
             }
@@ -872,7 +902,7 @@ final class HookRegistry
         $pendingInertModify = null;
         $collectedContext = '';
 
-        foreach ($this->findMatches($event, $context->toolName) as $hook) {
+        foreach ($this->findMatches($event, $context->toolName, $context->toolArgs) as $hook) {
             if ($chainDeadline !== null && $hook instanceof BoundedHookInterface) {
                 $remaining = $chainDeadline - microtime(true);
 

@@ -24,8 +24,10 @@ use SugarCraft\Code\Tools\McpToolBridge;
  * its tools stop existing as `mcp__server__tool` NAMES and become arguments of
  * `mcp_call` — a user's `Deny mcp__server__tool` must not evaporate with the
  * spelling, and a rule written against the dispatcher must bind first-class
- * bridges too. Mirrors the fix-1017 shell proxy doctrine: translation is
- * RESTRICTIVE-only; a grant covers exactly what it names.
+ * bridges too. Mirrors the fix-1017 shell proxy doctrine: permissive
+ * translation is the narrow exception — an exact argument-free `Allow` of
+ * the named tool follows its deferred spelling, while globs, argument-scoped
+ * allows, and `Allow mcp_call` cover only what they name.
  */
 final class McpDispatchParityTest extends TestCase
 {
@@ -85,16 +87,45 @@ final class McpDispatchParityTest extends TestCase
         $this->assertFalse($denyCall->matches(new ToolCall('Bash', ['command' => 'ls'])), 'and it stops exactly there');
     }
 
-    public function testAllowTranslatesInNeitherDirection(): void
+    /**
+     * C-MCP-1.b: the permissive side translates EXACTLY once. A bare,
+     * argument-free `Allow mcp__server__tool` names one tool, and the
+     * deferred args form of THAT tool is that same tool — the grant follows.
+     * Every other permissive reading stays literal: a glob (`mcp__srv__*`)
+     * is a family the arguments would re-derive, `Allow mcp_call` names the
+     * dispatcher and not any server's tool, and an argument-scoped allow
+     * keeps its argument half (mcp tools map no subject, so it could never
+     * re-satisfy one from `server`/`tool`).
+     */
+    public function testAnExactAllowFollowsTheDeferredSpellingAndAGlobDoesNot(): void
     {
         $srv = $this->ruleServer();
         $grantWire = new PermissionRule(self::wire($srv, 'list_rows'), PermissionAction::Allow);
         $grantCall = new PermissionRule(McpCallTool::NAME, PermissionAction::Allow);
+        $star = chr(42);
+        $grantGlob = new PermissionRule(self::wire($srv, '') . $star, PermissionAction::Allow);
+        $grantScoped = new PermissionRule(self::wire($srv, 'list_rows') . '(' . $star . ')', PermissionAction::Allow);
 
-        $this->assertTrue($grantWire->matches(new ToolCall(self::wire($srv, 'list_rows'), [])));
-        $this->assertFalse($grantWire->matches(new ToolCall(McpCallTool::NAME, $this->args($srv, 'list_rows'))), 'a grant covers what it names — the widened reading would have to be spelled out');
-        $this->assertTrue($grantCall->matches(new ToolCall(McpCallTool::NAME, $this->args($srv, 'list_rows'))));
-        $this->assertFalse($grantCall->matches(new ToolCall(self::wire($srv, 'list_rows'), [])));
+        $this->assertTrue($grantWire->matches(new ToolCall(self::wire($srv, 'list_rows'), [])), 'the direct spelling, as ever');
+        $this->assertTrue(
+            $grantWire->matches(new ToolCall(McpCallTool::NAME, $this->args($srv, 'list_rows'))),
+            'an exact grant named for the tool the arguments spell IS the same capability',
+        );
+        $this->assertFalse(
+            $grantWire->matches(new ToolCall(McpCallTool::NAME, $this->args($srv, 'drop_table'))),
+            'and it follows only the tool it names, not the server',
+        );
+        $this->assertFalse(
+            $grantGlob->matches(new ToolCall(McpCallTool::NAME, $this->args($srv, 'list_rows'))),
+            'a glob Allow is not re-derived from a call\'s arguments — widening must be spelled out',
+        );
+        $this->assertFalse(
+            $grantScoped->matches(new ToolCall(McpCallTool::NAME, $this->args($srv, 'list_rows'))),
+            'an argument-scoped allow keeps its argument half',
+        );
+        $this->assertTrue($grantCall->matches(new ToolCall(McpCallTool::NAME, $this->args($srv, 'list_rows'))), 'naming the dispatcher covers the dispatcher');
+        $this->assertFalse($grantCall->matches(new ToolCall(self::wire($srv, 'list_rows'), [])), 'but it does not name the bridged tools');
+        $this->assertFalse($grantWire->matches(new ToolCall('Bash', ['command' => 'ls'])), 'and the leg stops at MCP spellings');
     }
 
     public function testSanitisedSpellingsAreTheDialectOnBothSides(): void

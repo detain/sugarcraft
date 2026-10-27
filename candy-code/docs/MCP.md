@@ -697,13 +697,14 @@ tools:
   `mcp_call(server, tool, arguments)`. The call goes through the exact same
   `McpClient::callTool()` path a bridge uses, so the router's allow/deny still
   decides it and the permission gate still translates your rules across both
-  spellings (below). The one thing that genuinely differs: `PreToolUse` hooks
-  receive the tool call as the model made it, so for a deferred server the
-  hook frame is `mcp_call` with the server and tool inside its arguments — an
-  operator hook whose matcher names `mcp__git__*` keeps firing for every
-  bridged server, and must additionally match `mcp_call` to keep seeing the
-  deferred ones. Gate and router are unchanged; the hook's view of the name
-  moves with the spelling.
+  spellings (below). `PreToolUse` hooks see both spellings of the same call:
+  the frame is `mcp_call` with the server and tool inside its arguments, and
+  the registry tests a hook's matcher against the dispatcher name *or* the
+  wire name those arguments resolve to — an operator hook whose matcher names
+  `mcp__git__*` keeps firing for deferred servers exactly as it does for
+  bridged ones, and a hook naming `mcp_call` keeps seeing the dispatcher
+  frame. Gate and router are unchanged; only the matcher's view widens — the
+  payload still carries `tool_name: mcp_call`.
 
 Three properties make this safe to turn on by default:
 
@@ -729,8 +730,11 @@ Permission rules speak both spellings. A restrictive rule written against a
 wire name — `Deny mcp__git__drop_table`, `mcp__git__*`, `mcp__*` — binds the
 dispatched call, and a rule written against `mcp_call` binds first-class
 bridges, because after the deferral they are one capability. Grants translate
-in neither direction: `Allow mcp__git__push` never reaches the args form, and
-`Allow mcp_call` never blesses a bridge it did not name. The gate classifies a
+narrowly: an exact argument-free `Allow mcp__git__push` follows its tool into
+the args form, because there the arguments spell exactly the name the user
+granted; a glob grant, an argument-scoped grant, and `Allow mcp_call` itself
+cover only what they name — a permissive reading is never re-derived from the
+arguments. The gate classifies a
 dispatched call by the *named tool's* `readOnlyHint` — a deferred read-only
 tool still runs unasked under `auto`, an unhinted one still asks — so moving a
 server over the floor cannot silently re-classify its tools. See

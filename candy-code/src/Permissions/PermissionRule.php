@@ -513,6 +513,29 @@ final class PermissionRule
             return true;
         }
 
+        // AN EXACT ALLOW SEES THROUGH THE DEFERRED SPELLING. `Allow
+        // mcp__git__commit` names ONE tool; whether that server rides
+        // first-class or the schema floor defers it and the model reaches it
+        // as `mcp_call{server: git, tool: commit}` is the host's routing
+        // choice, not a second capability the user never granted. The call's
+        // arguments spell the named tool EXACTLY, which is what keeps the
+        // translation narrow: a GLOB allow (`Allow mcp__git__*`, `Allow
+        // mcp__*`) is a reading over a family, and permissive rules fire
+        // only on the reading the user spelled out — the glob is not
+        // re-derived from the arguments. A bare `Allow mcp_call` names the
+        // dispatcher and translates neither way, and an argument-scoped
+        // allow (`mcp__git__commit(x)`) keeps its argument half — mcp tools
+        // map no subject, so the exact leg above is its only door.
+        if ($this->action === PermissionAction::Allow
+            && $call->name === \SugarCraft\Code\Tools\BuiltIn\McpCallTool::NAME
+            && $this->argumentPattern() === null) {
+            $wire = \SugarCraft\Code\Tools\McpToolBridge::dispatchedWireName($call->arguments);
+
+            if ($wire !== null && $namePattern === $wire) {
+                return true;
+            }
+        }
+
         if ($this->action === PermissionAction::Allow) {
             return false;
         }
@@ -524,9 +547,11 @@ final class PermissionRule
         // defers a server, a `Deny mcp__server__tool` the user wrote for the
         // bridged world must still bind the deferred one, and a
         // `Deny mcp_call` must bind the bridged tools a `eager: true` server
-        // kept first-class. Like the shell proxy below, and for the same
-        // reason (fix-1017 doctrine: a grant covers what it names), only
-        // RESTRICTIVE rules are translated; an Allow keeps its exact spelling.
+        // kept first-class. Like the shell proxy below, translation stays
+        // narrow on the permissive side (fix-1017 doctrine: a grant covers
+        // what it names): the ONLY Allow this leg reads through is the exact
+        // argument-free wire name handled above the blanket Allow return —
+        // globs and bare `Allow mcp_call` keep their literal spelling.
         if ($call->name === \SugarCraft\Code\Tools\BuiltIn\McpCallTool::NAME) {
             $wire = \SugarCraft\Code\Tools\McpToolBridge::dispatchedWireName($call->arguments);
             if ($wire !== null && self::matchesToolName($namePattern, $wire)) {

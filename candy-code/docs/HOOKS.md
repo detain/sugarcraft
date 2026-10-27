@@ -157,6 +157,12 @@ The matcher is a PCRE fragment, matched case-insensitively against the tool
 name. You write the pattern **without delimiters**; `HookConfig::pattern()`
 picks the first of `/ # ~ % ! @ ; : | + =` that your pattern does not contain.
 
+The subject a matcher is tested against is normally the frame's tool name, with
+one widening: for a deferred `mcp_call` frame the registry also tests the wire
+name the call's `server`/`tool` arguments resolve to, so a matcher naming
+`mcp__git__*` fires whether the server is bridged or dispatched. The payload
+never changes — `tool_name` stays `mcp_call` — only the matcher's view widens.
+
 That is why `matcher: 'Read|Write/Edit'` works. Under a fixed `/` delimiter it
 compiled to `/Read|Write/Edit/i`, whose delimiter closes at the slash — a valid
 regex that made `bin/candy-code` exit 2 over a slash. Picking an absent

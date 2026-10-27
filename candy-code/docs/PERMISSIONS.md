@@ -778,7 +778,13 @@ exists for the deferred MCP spelling: a RESTRICTIVE rule naming a wire
 tool, or any glob that matches it, also binds calls of the dispatcher named
 mcp_call whose server/tool arguments name that tool, and a restrictive rule
 naming that dispatcher binds bridged mcp__ calls too — the two spellings are
-one capability. As everywhere, Allow covers only what it names. To constrain
+one capability. On the permissive side exactly one translation exists: an
+ALLOW naming a wire tool with no argument pattern — `Allow mcp__git__push` —
+also covers calls of the dispatcher whose server/tool arguments spell that
+same name, because there the arguments name precisely what the user granted.
+Every other Allow keeps its literal spelling: a glob grant, an
+argument-scoped grant, and `Allow mcp_call` bind only what the user wrote.
+To constrain
 a command beyond what a glob can say, use a hook matcher instead — see
 [`HOOKS.md`](HOOKS.md).
 
@@ -1083,7 +1089,7 @@ allow, like any other `Ask`:
 
 | Pattern | Applies to |
 |---|---|
-| `.env`, `.env.*`, `.envrc` (not the `.env.example`/`.sample`/`.dist`/`.template`/`.tpl` templates) | `Read`, `Edit`, `Write`, `Bash`, `Grep`, `Glob`, `Lsp`, `mcp__*` — reading it *is* the leak; `Grep` also never opens these files itself, even with `include_ignored: true` |
+| `.env`, `.env.*`, `.envrc` (not the `.env.example`/`.sample`/`.dist`/`.template`/`.tpl` templates) | `Read`, `Edit`, `Write`, `Bash`, `Grep`, `Glob`, `Lsp`, `mcp__*` — and, for a server whose schema was deferred, the `mcp_call` spelling naming it — reading it *is* the leak; `Grep` also never opens these files itself, even with `include_ignored: true` |
 | `*.pem`, `*.key` (with a stem, any case), SSH identities `id_rsa*`, `id_dsa*`, `id_ecdsa*`, `id_ed25519*` (not the `.pub` half) | all of the above — key material is the credential itself; public `.pem` certificates are refused too, since the extension cannot tell a chain from a key; `Grep` also never opens these files in a directory search, so `pattern: "PRIVATE KEY", path: "."` cannot print one |
 | `.git/config`, `config/*.php` | all of the above |
 | `.candy-code/hooks.yaml`, `.candy-code/config.json`, `.candy-code/agents/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) — **floor: refuses in every mode, bypass included** |
