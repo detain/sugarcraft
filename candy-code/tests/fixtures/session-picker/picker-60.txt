@@ -6,6 +6,7 @@
 │ ▶ ★ Auth refactor                  2m  41 turns ⠋ live ✎ ★ ✕ │
 │ Today                                                        │
 │     Fix flaky PTY test             1h  12 turns +1 ag        │
+│     …run the [PTY] harness twice and the [pipe] edge flakes… │
 │     └ explore · Map the login…     1h   0 turns              │
 │     漢字のセッション名前がと…      3h    1 turn              │
 │ Yesterday                                                    │

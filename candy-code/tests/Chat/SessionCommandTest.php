@@ -424,12 +424,14 @@ final class SessionCommandTest extends TestCase
     }
 
     // =========================================================================
-    // SES-2 picker wire (w6h): the Ctrl+R page read threads the filter text
-    // into withBodySearch, so the store answers with FTS5 body hits; on a
-    // latched (no-FTS5) store the same text degrades to the name/preview/id
-    // LIKE prefilter. Pinned at the page read itself because the picker's
-    // client-side fuzzy ranks what arrives and cannot distinguish the two
-    // fetch shapes on its own.
+    // SES-2 picker wire (w6h + C-SES-2.b): the Ctrl+R page read threads the
+    // filter text into withBodySearch, so the store answers with FTS5 body
+    // hits; on a latched (no-FTS5) store the same text degrades to the
+    // name/preview/id LIKE prefilter. Pinned at the picker's VISIBLE rows —
+    // the old pin read the private page behind the picker and never proved
+    // the hits survived the layout; rankedLayout now admits store-ranked body
+    // hits (rows carrying a bodySnippet) below its fuzzy hits, so the wire and
+    // the surface are pinned in one assertion.
     // =========================================================================
 
     /** @param list<string> $bodies */
@@ -448,18 +450,19 @@ final class SessionCommandTest extends TestCase
     }
 
     /**
-     * Drive the private page read behind the picker and return its row ids.
+     * Build the picker for a query the way the `/` filter does and hand back
+     * its visible rows — the end of the wire, not a mid-stack page read.
      *
-     * @return list<string>
+     * @return list<array<string, mixed>>
      */
-    private function pickerPageIds(Chat $chat, string $bodyQuery): array
+    private function pickerVisibleRows(Chat $chat, string $bodyQuery): array
     {
-        $rows = (new \ReflectionMethod(Chat::class, 'sessionPickerRows'))->invoke($chat, 20, false, $bodyQuery)[0];
+        $picker = (new \ReflectionMethod(Chat::class, 'buildSessionPicker'))->invoke($chat, $bodyQuery);
 
-        return array_column($rows, 'sessionId');
+        return $picker->filteredSessions();
     }
 
-    public function testThePickerPageReadCarriesBodySearchHitsTheNameLegCannotSee(): void
+    public function testThePickerShowsBodySearchHitsTheNameLegCannotSee(): void
     {
         $store = new \SugarCraft\Code\Session\EnhancedSessionStore($this->tempDir . '/wire-fts.db');
         $this->saveBodySearchChat($store, 'quiet-vault', 'Quarterly Notes', ['the ledger entry about the amber anchor was misplaced']);
@@ -473,13 +476,16 @@ final class SessionCommandTest extends TestCase
             currentSessionId: 'bare-list',
         );
 
-        self::assertSame(['quiet-vault'], $this->pickerPageIds($chat, 'anchor'));
+        $visible = $this->pickerVisibleRows($chat, 'anchor');
+        self::assertSame(['quiet-vault'], array_column($visible, 'sessionId'));
+        self::assertNotNull($visible[0]['bodySnippet'] ?? null, 'the body hit rides the picker WITH its FTS snippet — that is what admits a row the fuzzy haystack cannot match');
+        self::assertStringContainsString('anchor', (string) $visible[0]['bodySnippet']);
         // No query keeps the plain recency page — the wire costs nothing when
         // the picker is not filtering.
-        self::assertContains('bare-list', $this->pickerPageIds($chat, ''));
+        self::assertContains('bare-list', array_column($this->pickerVisibleRows($chat, ''), 'sessionId'));
     }
 
-    public function testThePickerPageReadDegradesTheBodyQueryToTheLikeNameLegWhenFts5IsLatched(): void
+    public function testThePickerDegradesTheBodyQueryToTheLikeNameLegWhenFts5IsLatched(): void
     {
         $store = new \SugarCraft\Code\Session\EnhancedSessionStore($this->tempDir . '/wire-latched.db', 'no_such_fts_module_probe');
         $this->saveBodySearchChat($store, 'quiet-vault', 'Quarterly Notes', ['the ledger entry about the amber anchor was misplaced']);
@@ -494,7 +500,12 @@ final class SessionCommandTest extends TestCase
         );
 
         // Degrade, never fail: LIKE saw the name, never the body — exactly the
-        // pre-SES-2 answer for the same text.
-        self::assertSame(['named-anchor'], $this->pickerPageIds($chat, 'anchor'));
+        // pre-SES-2 answer for the same text, and no snippet rides the page,
+        // so the store-ranked admission stays silent.
+        $visible = $this->pickerVisibleRows($chat, 'anchor');
+        self::assertSame(['named-anchor'], array_column($visible, 'sessionId'));
+        foreach ($visible as $row) {
+            self::assertNull($row['bodySnippet'] ?? null, 'a LIKE page carries no snippets — the degrade keeps the old filtering byte-for-byte');
+        }
     }
 }

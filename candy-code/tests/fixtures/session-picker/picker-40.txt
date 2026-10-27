@@ -6,6 +6,7 @@
 │ ▶ ★ Auth refactor                        │
 │ Today                                    │
 │     Fix flaky PTY test                   │
+│     …run the [PTY] harness twice and th… │
 │     └ explore · Map the login flow ✓     │
 │     漢字のセッション名前がとても長いタ…  │
 │ Yesterday                                │

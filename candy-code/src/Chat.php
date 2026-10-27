@@ -115,6 +115,7 @@ use SugarCraft\Code\App\MemoryConsolidatedMsg;
 use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\App\PermissionRequestMsg;
 use SugarCraft\Code\App\RuntimeNoticePumpMsg;
+use SugarCraft\Code\App\SessionPickerSearchMsg;
 use SugarCraft\Code\App\TurnHooksResolvedMsg;
 use SugarCraft\Code\App\AgentMessageSentMsg;
 use SugarCraft\Code\App\HistoryCompactedMsg;
@@ -644,6 +645,14 @@ final class Chat implements Model
      * waiting on the provider.
      */
     private const TOOL_EVENT_POLL_SECONDS = 0.1;
+
+    /**
+     * Quiet period the session picker's `/` filter waits after a query edit
+     * before re-reading the FTS-ranked page (C-SES-2). A UI debounce on a
+     * local store read — deliberately NOT a request timeout: no LLM call is
+     * bounded by it (E646).
+     */
+    private const PICKER_SEARCH_DEBOUNCE_SECONDS = 0.3;
 
     /**
      * Reconciliation id of the `statusLine` poll subscription. Stable across
@@ -14847,6 +14856,16 @@ final class Chat implements Model
                     'children' => $children[$row->id] ?? 0,
                     'subagents' => $subagents[$row->id] ?? 0,
                     'live' => $liveId !== null && $row->id === $liveId,
+                    // The FTS snippet when the store ranked this row on a
+                    // transcript hit (its [brackets] are the hit markers);
+                    // null on every LIKE-degraded or plain page — that null
+                    // is exactly what keeps rankedLayout byte-conservative.
+                    'bodySnippet' => $field($row->bodySnippet),
+                    // The SES-1-P4 ledgered cost, spelled with the one
+                    // SpendLedger bound-format law; null when never accounted.
+                    'spend' => $row->costUsd === null
+                        ? null
+                        : \SugarCraft\Code\Host\SpendLedger::boundUsd($row->costUnpriced, $row->costUsd),
                 ];
             },
             $rows,
@@ -14963,8 +14982,25 @@ final class Chat implements Model
         try {
             switch ($action) {
                 case $Action::Filter:
-                    // One read when the filter opens; the ranking then runs over
-                    // these rows, so typing a query never touches the store.
+                    if ($picker->query() !== '') {
+                        // A query edit (C-SES-2): re-read the FTS page behind a
+                        // 300 ms debounce. The tick carries the query it was
+                        // armed for and the handler applies it only while the
+                        // picker still shows exactly that text, so fast typing
+                        // collapses into one store read per pause and stale
+                        // ticks no-op — the query stamp IS the cancellation.
+                        $query = $picker->query();
+
+                        return [
+                            $this->mutate(['sessionPicker' => $picker]),
+                            Cmd::tick(self::PICKER_SEARCH_DEBOUNCE_SECONDS, static fn (): Msg => new SessionPickerSearchMsg($query)),
+                        ];
+                    }
+                    // Opening the filter (empty query) is the one read that must
+                    // land synchronously: the picker paints immediately. Edits
+                    // after this point re-read through the debounce above, so
+                    // body hits reach the list as fast as the store answers —
+                    // not just the name-leg fuzzy over this page.
                     if ($picker->fetchLimit() >= SessionPicker::SEARCH_LIMIT) {
                         return $keep($picker);
                     }

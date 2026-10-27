@@ -37,6 +37,7 @@ use SugarCraft\Code\Tui\ComposerVim;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\SessionPicker;
+use SugarCraft\Code\App\SessionPickerSearchMsg;
 use SugarCraft\Code\Tui\SessionTabs;
 use SugarCraft\Code\Tui\TextSelection;
 use SugarCraft\Code\Tui\Components\PaneLabel;
@@ -155,6 +156,20 @@ trait HandlesSessionSurface
     private function handleSessionSurfaceMessages(Msg $msg): ?array
     {
 
+        if ($msg instanceof SessionPickerSearchMsg) {
+            // The debounced re-read behind the picker's `/` filter (C-SES-2).
+            // Applying it only while the picker still shows the query the tick
+            // was armed for IS the debounce: every abandoned keystroke's tick
+            // arrives for text the user has typed past, and no-ops here. A
+            // closed picker ignores it the same way — nobody is waiting.
+            $picker = $this->sessionPicker;
+            if ($picker === null || $picker->query() !== $msg->query) {
+                return [$this, null];
+            }
+            [$rows, $more] = $this->sessionPickerRows(SessionPicker::SEARCH_LIMIT, $picker->showsArchived(), $msg->query);
+
+            return [$this->mutate(['sessionPicker' => $picker->withFetchedRows($rows, SessionPicker::SEARCH_LIMIT, $more)]), null];
+        }
         if ($msg instanceof BackgroundSessionSpawnedMsg) {
             // Unlike the title call above this is NOT session-scoped: the
             // user asked for it out loud with a slash command, so the answer

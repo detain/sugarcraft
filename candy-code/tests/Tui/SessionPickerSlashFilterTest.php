@@ -62,7 +62,14 @@ final class SessionPickerSlashFilterTest extends TestCase
 
         [$typedOn, $action] = $refused->handleKey(' ');
         $this->assertNull($typedOn->notice(), 'any keystroke retires the last refusal');
-        $this->assertSame('edit', $action);
+        // C-SES-2: a typed character is a QUERY EDIT, and every query edit
+        // reports Filter so the host re-reads the FTS page behind its
+        // debounce — 'edit' here would strand body hits behind the stale
+        // page the refusal left up.
+        $this->assertSame(SessionListAction::Filter, $action);
+
+        [, $erased] = $typedOn->handleKey('backspace');
+        $this->assertSame(SessionListAction::Filter, $erased, 'backspace that leaves text is an edit too');
     }
 
     public function testEscapePathClearsThenClosesWithoutEverResuming(): void

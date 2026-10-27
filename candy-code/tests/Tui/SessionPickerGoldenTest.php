@@ -13,9 +13,12 @@ use SugarCraft\Code\Tui\SessionPicker;
 /**
  * The session picker's layout pinned as text goldens at four widths
  * (Appendix P §3.2): which columns survive as the box narrows (time ≥44,
- * turns ≥56, badge ≥60, provider/model ≥68, the mouse cluster ≥50), the
- * group headings, the indented sub-agent row, a wide-character title cut by
- * cells, and the footer's `cwd · branch · "last prompt"` (audit B1/B3).
+ * turns ≥56, badge ≥60, provider/model ≥68, spend ≥76, the mouse cluster
+ * ≥50), the group headings, the indented sub-agent row, a wide-character
+ * title cut by cells, the faint body-snippet line under a row the store
+ * ranked on a transcript hit (C-SES-2, priced by {@see SessionPicker::window()}),
+ * and the
+ * footer's `cwd · branch · "last prompt"` (audit B1/B3).
  *
  * The goldens are the SGR-stripped paint, so they pin layout rather than the
  * theme's colours. Regenerate with `UPDATE_GOLDENS=1` after an intended
@@ -56,8 +59,8 @@ final class SessionPickerGoldenTest extends TestCase
         ];
 
         $rows = [
-            $row(['sessionId' => 'a1', 'sessionName' => 'Auth refactor', 'title' => 'Auth refactor', 'summary' => 'make the login controller use the new guard', 'gitBranch' => 'main', 'lastActivity' => '2026-09-15 11:58:00', 'cwd' => '/work/app', 'pinned' => true, 'turns' => 41, 'live' => true]),
-            $row(['sessionId' => 'b2', 'sessionName' => 'Fix flaky PTY test', 'title' => 'Fix flaky PTY test', 'summary' => 'why is the PTY test flaky?', 'gitBranch' => 'main', 'lastActivity' => '2026-09-15 11:00:00', 'turns' => 12, 'subagents' => 1, 'children' => 1]),
+            $row(['sessionId' => 'a1', 'sessionName' => 'Auth refactor', 'title' => 'Auth refactor', 'summary' => 'make the login controller use the new guard', 'gitBranch' => 'main', 'lastActivity' => '2026-09-15 11:58:00', 'cwd' => '/work/app', 'pinned' => true, 'turns' => 41, 'live' => true, 'spend' => '$0.0123']),
+            $row(['sessionId' => 'b2', 'sessionName' => 'Fix flaky PTY test', 'title' => 'Fix flaky PTY test', 'summary' => 'why is the PTY test flaky?', 'gitBranch' => 'main', 'lastActivity' => '2026-09-15 11:00:00', 'turns' => 12, 'subagents' => 1, 'children' => 1, 'spend' => '≥$0.0500', 'bodySnippet' => '…run the [PTY] harness twice and the [pipe] edge flakes…']),
             $row(['sessionId' => 's7', 'sessionName' => 'Map the login flow', 'title' => 'Map the login flow', 'lastActivity' => '2026-09-15 10:30:00', 'kind' => 'subagent', 'parentId' => 'b2', 'agent' => 'explore', 'status' => 'complete']),
             $row(['sessionId' => 'c3', 'sessionName' => '漢字のセッション名前がとても長いタイトル', 'title' => '漢字のセッション名前がとても長いタイトル', 'lastActivity' => '2026-09-15 09:00:00', 'turns' => 1, 'provider' => 'claude-code', 'model' => '']),
             $row(['sessionId' => 'd4', 'sessionName' => '(untitled d4000000…)', 'title' => null, 'lastActivity' => '2026-09-14 10:00:00', 'kind' => 'background', 'turns' => 1, 'status' => 'complete']),

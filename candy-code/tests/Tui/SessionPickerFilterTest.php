@@ -77,6 +77,35 @@ final class SessionPickerFilterTest extends TestCase
         $this->assertSame(['c3'], self::ids($picker), 'only c3 mentions "login", and only in its last prompt');
     }
 
+    public function testStoreRankedBodyHitsRideBelowTheFuzzyHitsInArrivalOrder(): void
+    {
+        // C-SES-2: the FTS page arrives in bm25 order and a transcript-only
+        // hit carries a bodySnippet its fuzzy haystack cannot match. Dropping
+        // those was the defect: the store answered and the picker threw the
+        // body hits away, so the `/` filter never reached full-text.
+        $rows = [
+            ['sessionId' => 'x1', 'sessionName' => 'Xylophone bench', 'title' => 'Xylophone bench', 'summary' => 'tune the xylophone timing', 'gitBranch' => 'main', 'lastActivity' => ''],
+            ['sessionId' => 'q9', 'sessionName' => 'Quiet ledger', 'title' => 'Quiet ledger', 'summary' => 'notes on the vault', 'gitBranch' => 'main', 'lastActivity' => '', 'bodySnippet' => '[the entry about the xylophone drift]', 'spend' => '$0.0123'],
+            ['sessionId' => 'q7', 'sessionName' => 'Vault audit', 'title' => 'Vault audit', 'summary' => 'recount the ledger', 'gitBranch' => 'main', 'lastActivity' => '', 'bodySnippet' => '[second bm25 hit, arrival order matters]', 'spend' => '≥$0.0500'],
+            ['sessionId' => 'q8', 'sessionName' => 'Plain memo', 'title' => 'Plain memo', 'summary' => 'nothing here', 'gitBranch' => 'main', 'lastActivity' => ''],
+        ];
+
+        $picker = $this->press(SessionPicker::new($rows), ['/', 'x', 'y', 'l', 'o']);
+
+        $this->assertSame(['x1', 'q9', 'q7'], self::ids($picker), 'fuzzy hit first, then store-ranked body hits in bm25 arrival order');
+        $this->assertNotContains('q8', self::ids($picker), 'a row with neither fuzzy match nor snippet stays dropped');
+    }
+
+    public function testLikeDegradedPagesWithoutSnippetsKeepTheOldFiltering(): void
+    {
+        // Byte-keep for LIKE-degraded (or plain-store) pages: no row carries a
+        // snippet, so the store-ranked admission must not fire and 'xylo'
+        // finds nothing the fuzzy haystack cannot see.
+        $picker = $this->press(SessionPicker::new($this->rows()), ['/', 'x', 'y', 'l', 'o']);
+
+        $this->assertSame([], self::ids($picker));
+    }
+
     public function testTheBestMatchIsFirstAndHighlighted(): void
     {
         $picker = $this->press(SessionPicker::new($this->rows()), ['/', 'a', 'u', 't', 'h']);

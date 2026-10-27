@@ -28,18 +28,23 @@ use SugarCraft\Code\Theme;
  *
  * What it shows:
  * - one row per session — pin star, title, how long ago it was used, turn
- *   count, provider/model and a status badge (`⠋ live`, `⧗ bg`, `+N ag`,
+ *   count, provider/model, the session's ledgered spend (`≥$0.0500` where the
+ *   bound is unpriced) and a status badge (`⠋ live`, `⧗ bg`, `+N ag`,
  *   `⑂`), the right-hand columns dropped one by one as the box narrows;
  * - rows grouped Pinned, Today, Yesterday, then by date, with archived rows
  *   in a group of their own once `a` shows them;
  * - sub-agent sessions indented under their parent once Tab shows them;
+ * - under a body-matched row, a faint second line with the FTS snippet of the
+ *   matching message text, hit words in `[brackets]` (SES-2);
  * - a footer naming where the highlighted session was opened, its git branch
  *   and the last prompt sent in it.
  *
  * What it does, beyond ↑↓ / Enter / Esc:
  * - `/` filters: typed text goes to the query, which sugar-fuzzy's
  *   Smith-Waterman matcher ranks over title, last prompt, agent, id and
- *   branch, with the matched characters highlighted. `/` (rather than
+ *   branch, with the matched characters highlighted. Rows the store brought
+ *   back for a BODY hit that carry no fuzzy match in those fields keep their
+ *   place below the fuzzy hits, in the store's bm25 order. `/` (rather than
  *   type-to-filter) is what keeps `k`/`j` moving the highlight.
  * - `r` renames inline, `d` deletes after a second press, `p` pins, `f` forks,
  *   `x` archives, `u` unarchives, `a` shows archived rows, Tab shows children.
@@ -83,7 +88,9 @@ use SugarCraft\Code\Theme;
  *     agent?: string|null,
  *     subagents?: int,
  *     children?: int,
- *     live?: bool
+ *     live?: bool,
+ *     bodySnippet?: string|null,
+ *     spend?: string|null
  * }
  */
 final class SessionPicker
@@ -96,9 +103,11 @@ final class SessionPicker
     public const PAGE_SIZE = 20;
 
     /**
-     * Rows loaded once when the filter opens. Paging is suspended while a
-     * query is active (opencode does the same with its search limit): the
-     * ranking runs in PHP over these rows, so no keystroke reads the store.
+     * Rows loaded when the filter opens and on every debounced query edit.
+     * Paging is suspended while a query is active (opencode does the same
+     * with its search limit): the fuzzy ranking runs in PHP over these rows,
+     * and each edit re-reads the FTS-ranked page behind a 300 ms debounce
+     * ({@see \SugarCraft\Code\Chat}), not per keystroke.
      */
     public const SEARCH_LIMIT = 200;
 
@@ -341,6 +350,15 @@ final class SessionPicker
      * A flat list, best match first, no headings — the palette's rule for a
      * typed query, so the best match is always the first row.
      *
+     * Below the fuzzy hits ride the rows the STORE ranked: a body-search page
+     * arrives in bm25 order, and a row whose match lives in its transcript
+     * carries a `bodySnippet` while its title/preview/id/agent may not match
+     * the query at all through the client-side fuzzy. Dropping those was the
+     * C-SES-2 defect — the FTS read came back and the layout threw the body
+     * hits away. They keep the store's arrival order after the fuzzy hits.
+     * On a LIKE-degraded (or plain-store) page no row carries a snippet, so
+     * this admission never fires and the old filtering is byte-kept.
+     *
      * @param list<Row>                $top
      * @param array<string, list<Row>> $children
      *
@@ -364,6 +382,14 @@ final class SessionPicker
         usort($scored, static fn (array $a, array $b): int => [$b[0], $a[1]] <=> [$a[0], $b[1]]);
 
         $visible = array_map(static fn (array $s): array => $s[2], $scored);
+        $fuzzy = array_column($scored, 1);
+        foreach ($candidates as $i => $row) {
+            if (in_array($i, $fuzzy, true) || ($row['bodySnippet'] ?? null) === null) {
+                continue;
+            }
+            $visible[] = $row;
+        }
+
         $entries = [];
         foreach ($visible as $i => $row) {
             $entries[] = ['row' => $i, 'depth' => ($row['kind'] ?? 'main') === 'subagent' ? 1 : 0];
@@ -372,7 +398,11 @@ final class SessionPicker
         return [$visible, $entries];
     }
 
-    /** What the filter searches: title, last prompt, agent, id and branch. */
+    /**
+     * What the client-side filter searches: title, last prompt, agent, id and
+     * branch. The transcript BODY is the store's leg (FTS5 bm25); its hits
+     * enter the ranking through {@see rankedLayout()}, not through here.
+     */
     private static function haystack(array $row): string
     {
         return implode(' ', array_filter([
@@ -701,8 +731,9 @@ final class SessionPicker
      * Handle one keystroke.
      *
      * The tuple's middle slot names what happened: `'browse'` (the highlight
-     * or a view toggle moved), `'edit'` (filter or rename text changed),
-     * `'resume'` (Enter on a row), `'preview'` (Space), `'close'` (Esc), a
+     * or a view toggle moved), `'edit'` (rename text changed, or the filter
+     * was cleared/escaped — its text stops the fuzzy here), `'resume'` (Enter
+     * on a row), `'preview'` (Space), `'close'` (Esc), a
      * {@see SessionListAction} for the host to carry out, or null for a key
      * with no binding. The third slot is the Cmd an {@see ItemList}
      * navigation may raise (the load-more edge).
@@ -785,7 +816,10 @@ final class SessionPicker
                     return [$this->mutate(['filtering' => false]), 'edit', null];
                 }
 
-                return [$this->withQuery(mb_substr($this->query, 0, -1, 'UTF-8')), 'edit', null];
+                // A query edit reports Filter (not 'edit') so the host re-reads
+                // the FTS page behind its debounce: the store's body ranking
+                // has to see every new query text, not just the opening one.
+                return [$this->withQuery(mb_substr($this->query, 0, -1, 'UTF-8')), SessionListAction::Filter, null];
         }
 
         $typed = $msg === null ? '' : match (true) {
@@ -797,7 +831,7 @@ final class SessionPicker
             return [$this, null, null];
         }
 
-        return [$this->withQuery($this->query . $typed), 'edit', null];
+        return [$this->withQuery($this->query . $typed), SessionListAction::Filter, null];
     }
 
     /**
@@ -1054,7 +1088,10 @@ final class SessionPicker
         $lines = [];
         foreach ($this->window($height) as $entry) {
             if (isset($entry['row'])) {
-                $lines[$entry['row']] = $this->renderRow($entry['row'], $entry['depth'], $width, $theme);
+                // The zone key is the row's FIRST painted line: a snippet
+                // rides below it as a second physical overlay line, and the
+                // renderer's str_contains scan matches one line at a time.
+                $lines[$entry['row']] = explode("\n", $this->renderRow($entry['row'], $entry['depth'], $width, $theme))[0];
             }
         }
 
@@ -1092,14 +1129,29 @@ final class SessionPicker
      * The painted window: the entries shown in a box of $height rows, chosen
      * so the highlighted row stays visible.
      *
+     * The budget counts LINES, not entries: a body-matched row paints a faint
+     * snippet line under it and takes two rows ({@see renderRow()}). With no
+     * snippets in the list every entry costs one line and the slice is the
+     * original entry-based one, byte for byte.
+     *
      * @return list<array{header: string}|array{row: int, depth: int}>
      */
     private function window(int $height): array
     {
         $available = max(0, $height - self::HEADER_LINES - self::CHROME_LINES - $this->footerExtraLines());
         $total = count($this->entries);
-        if ($total <= $available) {
+
+        $cost = [];
+        $needed = 0;
+        foreach ($this->entries as $i => $entry) {
+            $cost[$i] = 1 + (isset($entry['row']) && ($this->visible[$entry['row']]['bodySnippet'] ?? null) !== null ? 1 : 0);
+            $needed += $cost[$i];
+        }
+        if ($needed <= $available) {
             return $this->entries;
+        }
+        if ($available <= 0) {
+            return [];
         }
 
         $line = 0;
@@ -1113,8 +1165,26 @@ final class SessionPicker
         if ($line >= $available) {
             $start = max(0, min($total - $available, $line - intdiv($available, 2)));
         }
+        $end = min($total, $start + $available);
+        // Snippets can push the entry-slice over the line budget; shave from
+        // the end FARTHER from the highlighted row first, never past it.
+        $used = array_sum(array_slice($cost, $start, $end - $start));
+        while ($used > $available) {
+            if ($end - 1 - $line >= $line - $start && $end - 1 > $line) {
+                $used -= $cost[$end - 1];
+                $end--;
+            } elseif ($start < $line) {
+                $used -= $cost[$start];
+                $start++;
+            } elseif ($end - 1 > $line) {
+                $used -= $cost[$end - 1];
+                $end--;
+            } else {
+                break; // the highlighted row alone is over budget: paint it clipped
+            }
+        }
 
-        return array_slice($this->entries, $start, $available);
+        return array_slice($this->entries, $start, $end - $start);
     }
 
     /** Footer lines beyond the fixed rule + detail line: the preview. */
@@ -1187,14 +1257,42 @@ final class SessionPicker
     }
 
     /**
-     * One row, fitted to exactly $width cells so the box never wraps it.
+     * One row, fitted to exactly $width cells so the box never wraps it —
+     * followed by the row's faint body-snippet line when the store ranked it
+     * on a transcript hit (two physical lines; {@see window()} budgets it).
      *
      * Columns left to right: highlight marker, pin star, title (flexible),
      * relative time (≥44 cells), turns (≥56), provider/model (≥68), status
-     * badge (≥60) and the mouse cluster (≥50, highlighted row only, space
-     * reserved on every row so the columns line up).
+     * badge (≥60), spend (≥76, only while any visible row carries one) and
+     * the mouse cluster (≥50, highlighted row only, space reserved on every
+     * row so the columns line up).
      */
     private function renderRow(int $index, int $depth, int $width, Theme $theme): string
+    {
+        $row = $this->visible[$index];
+        $line = $this->renderRowLine($index, $depth, $width, $theme);
+        $snippet = $row['bodySnippet'] ?? null;
+        if ($snippet === null) {
+            return $line;
+        }
+
+        return $line . "\n" . $this->renderSnippet($snippet, $width, $theme);
+    }
+
+    /**
+     * The snippet line under a body-matched row: the FTS5 `snippet()` text
+     * with its `[hit]` markers, faint and indented under the title column,
+     * never wider than the row it belongs to. Sanitized upstream like every
+     * other stored string.
+     */
+    private function renderSnippet(string $snippet, int $width, Theme $theme): string
+    {
+        // Fit PLAIN then style (the header's order): clipping a rendered run
+        // could cut a cell out of an SGR sequence.
+        return Style::new()->foreground($theme->shellMuted)->italic()->render(self::fit('    ' . $snippet, $width));
+    }
+
+    private function renderRowLine(int $index, int $depth, int $width, Theme $theme): string
     {
         $row = $this->visible[$index];
         $selected = $index === $this->selectedIndex();
@@ -1248,6 +1346,9 @@ final class SessionPicker
         }
         if ($width >= 60) {
             $columns[] = [6, self::badge($row), false];
+        }
+        if ($width >= 76 && $this->showsSpend()) {
+            $columns[] = [9, (string) ($row['spend'] ?? ''), true];
         }
 
         $fixed = Width::string($marker) + Width::string($pin) + $cluster;
@@ -1308,6 +1409,18 @@ final class SessionPicker
         }
 
         return $out;
+    }
+
+    /** Does any row in the shown list carry a ledgered spend? The column is reserved for all or none. */
+    private function showsSpend(): bool
+    {
+        foreach ($this->visible as $row) {
+            if (($row['spend'] ?? null) !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** The one-glyph state of a row: running, background, sub-agent children, branch. */
