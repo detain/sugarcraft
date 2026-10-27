@@ -26,8 +26,8 @@ use SugarCraft\Style\Style;
  * PURE BY DESIGN. Unlike the sibling panes this one renders from a
  * {@see ContextPaneModel} rather than from `App` — the measurement lives
  * behind the model and the shell wiring (the `Pane` case, the dock, the
- * click-zone plumbing, `layout(App)`) arrives with P-CTX.e, which will
- * adapt this renderer the way it adapts its siblings. Nothing here names a
+ * click-zone plumbing, `layout(App)`) arrived with P-CTX.e, which adapted
+ * this renderer the way it adapts its siblings. Nothing here names a
  * colour: every hue is read from the {@see Theme} (the ShellContrast law
  * over `src/Tui/`).
  *

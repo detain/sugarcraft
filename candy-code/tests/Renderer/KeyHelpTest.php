@@ -1144,8 +1144,10 @@ final class KeyHelpTest extends TestCase
         // one row under a heading it already had: 173 lines, 147 -> 148 at 100x30, fitting
         // at 100x178. The row cursor (v2:a11y-F1) declared `chat.tool-row`: one row
         // under a heading it already had: 174 lines, 148 -> 149 at 100x30, fitting
-        // at 100x179.
-        foreach ([[100, 30, 149], [100, 179, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // at 100x179. The docked context box (P-CTX.e) declared three ladder rows
+        // under a fifteenth heading plus one meter click under the mouse heading
+        // it already had: 180 lines, 149 -> 155 at 100x30, fitting at 100x185.
+        foreach ([[100, 30, 155], [100, 185, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1209,8 +1211,8 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 179 rows, not 80: the list is 174 content lines now (147 live
-            // rows, 14 headers, 13 separators; 173 before `chat.tool-row`, 172 before `chat.history-search`, 171 before `chat.repaint`, 170 before `permission.persist`,
+            // 185 rows, not 80: the list is 180 content lines now (151 live
+            // rows, 15 headers, 14 separators; 174 before the Context pane's three ladder rows and its meter click, 173 before `chat.tool-row`, 172 before `chat.history-search`, 171 before `chat.repaint`, 170 before `permission.persist`,
             // 167 before `media.open_form` and its fourteenth heading, 156 before `/new`'s nine folder-picker keys, 155 before `permission.edit`, 151 before the N-P5 remainder's four settings keys, 150 before 5.7-2's `permission.choice`, 148 before N-P5's two settings keys, 147 before P-E3's Ctrl+X b, 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
@@ -1220,7 +1222,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 179))),
+                Width::of($this->footer($this->chat('', $cols, 185))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }
@@ -1312,18 +1314,56 @@ final class KeyHelpTest extends TestCase
             [$chat] = $chat->update(new KeyMsg(KeyType::Down));
         }
 
+        // The description column's room is derived, not hardcoded, mirroring
+        // renderKeyHelp(): a full-width box spends KEY_HELP_COLS, the key column
+        // takes the widest live chord (14 here), and one space separates them.
+        // A description over that budget is NOT a dropped row — the renderer
+        // clips it WITH an ellipsis (ISS-099), so the guard here is "the row
+        // surfaces, in full if it fits, in its signed-clipped form otherwise",
+        // plus a roster leg that any NEW overflow must be added to deliberately.
+        // P-CTX.e put two rows over the line: `mouse.side-row` grew its
+        // description to name the Context pane, and `mouse.context-meter` is a
+        // new row whose sentence is one column too long. Both are pinned in
+        // clipped form below, and a third long sentence arrives only by editing
+        // this roster on purpose.
+        $keyCol = 0;
+        foreach (KeyBindingRegistry::live() as $binding) {
+            $keyCol = max($keyCol, Width::of($binding->keys));
+        }
+        $room = (new \ReflectionClass(Renderer::class))->getConstant('KEY_HELP_COLS') - $keyCol - 1;
+        $overflows = [];
+
         foreach (KeyBindingRegistry::live() as $binding) {
             $this->assertStringContainsString(
                 $binding->keys,
                 $seen,
                 $binding->id . ' is documented but never painted',
             );
+
+            if (Width::of($binding->description) <= $room) {
+                $this->assertStringContainsString(
+                    $binding->description,
+                    $seen,
+                    $binding->id . "'s description is never painted in full",
+                );
+
+                continue;
+            }
+
+            $overflows[] = $binding->id;
             $this->assertStringContainsString(
-                $binding->description,
+                rtrim(Width::truncate($binding->description, $room - 1)) . '…',
                 $seen,
-                $binding->id . "'s description is never painted in full",
+                $binding->id . "'s description is not even painted clipped — it is missing, not shortened",
             );
         }
+
+        $this->assertSame(
+            ['mouse.side-row', 'mouse.context-meter'],
+            $overflows,
+            'exactly these live rows exceed the box\'s ' . $room . '-column description room and ride the '
+            . 'ellipsis; a new one must be measured, shortened, or adjudicated into this roster',
+        );
     }
 
     /**
@@ -1821,7 +1861,9 @@ final class KeyHelpTest extends TestCase
      * this sweep still pins is the narrower, renderer-side fact it always
      * measured: THIS frame — a prompt with its turn still in flight, which is
      * what {@see promptRaisedByTheRealGate()} builds — marks nothing clickable
-     * at all, so here the pair is out of the mouse's reach twice over.
+     * but the status-bar context meter P-CTX.e added (the meter lives on the
+     * bar, outside the modal, and its click is refused downstream like every
+     * other key under a prompt).
      *
      * ONCE OVER EVERYWHERE ELSE, and the distinction is worth the sentence
      * because the state this fixture does NOT cover is the one the guard was
@@ -1862,10 +1904,17 @@ final class KeyHelpTest extends TestCase
             }
         }
         $this->assertSame(
-            [],
+            // P-CTX.e put a click zone on the status-bar context meter, and the
+            // meter rides the bar even at a live prompt — the bar is not part of
+            // the modal. So this frame marks exactly ONE zone now, where it
+            // marked none before; the sentence that matters is unchanged in
+            // substance: no pane, tab or row zone is offered under the prompt,
+            // and even the meter's own click answers to Chat::refuseMouseDispatch()
+            // before it can dock anything.
+            ['ctxmeter'],
             array_keys($zones),
-            'and the prompt frame marks no click zones at all, so the click path has nothing to '
-            . 'offer here even before Chat::refuseMouseDispatch() refuses it',
+            'the prompt frame marks only the status-bar meter (P-CTX.e), so the click path has '
+            . 'nothing else to offer here even before Chat::refuseMouseDispatch() refuses it',
         );
     }
 

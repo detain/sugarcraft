@@ -2177,8 +2177,10 @@ final class App implements Model
      * ruling for P-CTX.e): the box earns its right-of-pane columns only on a
      * genuinely wide terminal, and the narrower the frame the earlier
      * {@see AUTO_DOCK_MIN_CHAT_COLS} refuses it anyway — this gate is the
-     * explicit "wide terminals only", and an unknown (null) width skips like
-     * the chat-readability guard's stand-down, retried at the next resize.
+     * explicit "wide terminals only". An unknown (null) width REFUSES here —
+     * the predicate reads {@code $this->cols ?? 0} and 0 never reaches 120 —
+     * the opposite polarity from {@see AUTO_DOCK_MIN_CHAT_COLS}'s stand-down:
+     * an unmeasured frame leaves the offer pending, retried at the next resize.
      */
     public const AUTO_DOCK_CONTEXT_MIN_COLS = 120;
 
@@ -2817,8 +2819,9 @@ final class App implements Model
             // what the old swallow guarded here (every other arm returned
             // null); nulling it again would silently drop the measurement on
             // the meter, tab and slash-command paths alike. `SelectPaneMsg`
-            // extends this message but stays swallowed above: it is a focus
-            // chooser, not a docking mutation, and never carries the closure.
+            // rides the batch arm above through withoutEngineCmd, not this one:
+            // it is a focus chooser, not a docking mutation, and never carries
+            // the closure.
             $msg instanceof DockPaneMsg => $this->applyDockCommand($msg),
             // A click on an `agent:` zone in the chat (P-B3), the picker's
             // sub-agent row, and the open view's own tail tick (P-C2).
