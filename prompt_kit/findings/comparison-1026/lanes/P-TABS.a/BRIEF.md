@@ -1,0 +1,30 @@
+### P-TABS.a — Window kit: shared session-window primitives
+- item: P-SESSION-TABS + P-AGENT-ATTACH (sources: GAP-SES-12, GAP-UI-N6, k1-dorm#3)
+- kind: feature · effort M
+- approach:
+  - New pure value and renderer classes under `src/Tui/Window/`, shared by both picks.
+  - The model and its values:
+    - `WindowRef{kind, key, label, ?color, ?parentKey}`;
+    - `WindowAttention` enum (Idle/Working/Waiting/Unseen/Failed), with a distinct glyph per case (`●` `⠋` `⏳` `✱` `✗`), so NO_COLOR stays legible, a theme token and a rank for the title count;
+    - `WindowViewport{scrollOffset, draft, cursor}`, and `WindowViewports` as an immutable `stash(key, vp)`/`restore(key)` map;
+    - `WindowList`: an ordered tree of session entries, each with child agent entries, with focus, a badge count and a `summary` line.
+  - `WindowStrip::render(WindowList, Theme, cols, bool marked)` paints one row:
+    - `[+]` first, then a tab per session (glyph · name · badge · `×`), with the focused session's open agent chip `▸ @explore` right after its tab;
+    - three densities (full / icon / terse) plus a `‹N›` overflow, and it is never wider than `cols`;
+    - `WindowStrip::zones()` returns `win:new`, `win:s:<key>`, `winx:s:<key>`, `win:a:<runId>` and `winx:a:<runId>` spans from the same arithmetic, the MenuBar marked-twin law.
+  - `AgentColor::resolve(?string, Theme): ?string` maps the preset `color:` vocabulary (red/blue/green/yellow/purple/orange/pink/cyan → theme tokens; `#rrggbb` passes after a contrast check against `$theme`), and returns null for anything else.
+  - Nothing is wired yet.
+- files.create: `candy-code/src/Tui/Window/WindowKind.php`, `candy-code/src/Tui/Window/WindowRef.php`, `candy-code/src/Tui/Window/WindowAttention.php`, `candy-code/src/Tui/Window/WindowViewport.php`, `candy-code/src/Tui/Window/WindowViewports.php`, `candy-code/src/Tui/Window/WindowList.php`, `candy-code/src/Tui/Window/WindowEntry.php`, `candy-code/src/Tui/Window/WindowStrip.php`, `candy-code/src/Tui/Window/AgentColor.php`
+- files.modify: `candy-code/lang/en.php` (`tui.window.*` keys)
+- tests: create these, each a new file for the weld:
+  - `candy-code/tests/Tui/Window/WindowStripTest.php`: a 20–240-col sweep; never over-wide; `+` always present; zones land on painted cells at every density; badges keep distinct glyphs under NO_COLOR.
+  - `candy-code/tests/Tui/Window/WindowViewportsTest.php`: stash/restore round-trip; an unknown key yields the bottom/empty viewport.
+  - `candy-code/tests/Tui/Window/WindowAttentionTest.php`: rank order and glyph uniqueness.
+  - `candy-code/tests/Tui/Window/AgentColorTest.php`: names, hex, garbage → null, low-contrast hex refused.
+- docs/guards: none (one type per file: 9 files, 9 types)
+- serialized: [lang] (prefix `tui.window.`)
+- deps: none
+- phase: normal
+- ruling: none
+- risks: the kit is speculative until P-TABS.g and P-AGENT.b consume it. Keep the API minimal and let the consumer steps widen it.
+
