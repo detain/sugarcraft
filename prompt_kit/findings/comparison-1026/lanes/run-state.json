@@ -81,7 +81,8 @@
   "P-AGENT.d",
   "C-AGT-3.b",
   "C-CTX-6.c",
-  "C-AGT-7.c"
+  "C-AGT-7.c",
+  "C-CTX-6.d"
  ],
  "inflight": {
   "P-MENU.d": {
@@ -91,14 +92,6 @@
    "branch": "cc/P-MENU.d",
    "session": "ses_e80ad0dd7ffeJOYMjHxBRnFOnk",
    "note": "landed 6c7cf7d1b 20 files +1251/-493; DUR MenuReachability/MenuKeyboardOwnership/MenuActionDispatch (14/5/9T); reviewer running"
-  },
-  "C-CTX-6.d": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-CTX-6.d",
-   "branch": "cc/C-CTX-6.d",
-   "session": null,
-   "note": "r1 CLEAN (REVIEW-1.md). Weld with C-AGT-7.c next call: plain pick 6fcfd0db8; no regen; gates MemoryOpenJournal|EditorCommand 15T/98A + five-guard pair-only; DUR row MemoryOpenJournalTest.php 3T; carry Chat.php:15877 NIT; evidence 3 files."
   },
   "C-EXT-7.a": {
    "stage": "review",
@@ -423,7 +416,8 @@
    "evidence": "lanes/C-CTX-6.c/{BRIEF,REPORT,REVIEW-1}.md staged (REVIEW-1.md VERDICT CLEAN 0C/0M/0m landed on disk post-pick); %ae/%ce verified, base-proven reds confirmed byte-identical by reviewer",
    "prune": "cherry proof '-'; worktree+branch pruned"
   },
-  "C-AGT-7.c": "WELDED 2026-10-27 master 75853c72e (pick of 30288d150, branch base c36cc1982, clean auto-merge lang/en.php, zero conflicts; patch-id b1de309c IDENTICAL original-vs-pick; %ae/%ce separate greps 1/1 detain, zero trailers; 7 files +267/-80; sibling weld 276ea3e9a landed atop pick mid-run - lead-side C-CTX-6.c evidence, not my duty). Regen no-op VERIFIED: command/tool/settings gens --write all up-to-date rc0 (webhooks.help outside generated region; SERVER.md edit hand-region); no Protocol/web files. Gates: ServerConfig|HookWebhooks 76T/309A EXACT; SettingsSchemaDocDrift 19T/179A; five-guard 133T/15752A F2 staleness pair ONLY (25,537 pinned vs live 26,187 - closeout re-pin; climbed from lead note 26,129 via sibling welds). DURATIONS: none (zero new *Test.php, create-mode count 0). CARRIES: Serve.php:429-431 stale comment report-only per r1. \u00a74 mark \u2705 75853c72e UNSTAGED. Cherry proof '-'; worktree+branch pruned."
+  "C-AGT-7.c": "WELDED 2026-10-27 master 75853c72e (pick of 30288d150, branch base c36cc1982, clean auto-merge lang/en.php, zero conflicts; patch-id b1de309c IDENTICAL original-vs-pick; %ae/%ce separate greps 1/1 detain, zero trailers; 7 files +267/-80; sibling weld 276ea3e9a landed atop pick mid-run - lead-side C-CTX-6.c evidence, not my duty). Regen no-op VERIFIED: command/tool/settings gens --write all up-to-date rc0 (webhooks.help outside generated region; SERVER.md edit hand-region); no Protocol/web files. Gates: ServerConfig|HookWebhooks 76T/309A EXACT; SettingsSchemaDocDrift 19T/179A; five-guard 133T/15752A F2 staleness pair ONLY (25,537 pinned vs live 26,187 - closeout re-pin; climbed from lead note 26,129 via sibling welds). DURATIONS: none (zero new *Test.php, create-mode count 0). CARRIES: Serve.php:429-431 stale comment report-only per r1. \u00a74 mark \u2705 75853c72e UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
+  "C-CTX-6.d": "WELDED 2026-10-27 master dd6fd4069 (pick of 6fcfd0db8, branch base c36cc1982; clean cherry-pick, zero conflicts; patch-id fc4406ab IDENTICAL original-vs-pick; %ae/%ce separate greps 1/1 detain, zero trailers; 3 files +247/-8: src/Chat.php memoryOpenArm + src/Commands/EditorCommand.php on-saved hook + NEW tests/Chat/MemoryOpenJournalTest.php). No regen: no Protocol/web/docs files. Gates: MemoryOpenJournal|EditorCommand 15T/98A EXACT; Memory|Editor 775T/2F both base-proven foreign (DreamPassTest:288 allowed; SettingsEditorTest:189 re-proven red at 548ba04a2, names no lane file); five-guard 133T/15759A F2 staleness pair ONLY (25,537 pinned vs live 26,190 = 26,187 +3 new - closeout re-pin). DUR DUTY: durations.tsv row owed for tests/Chat/MemoryOpenJournalTest.php (3T; listed in carries). CARRIES: Chat.php:15877 NIT per lead r1 note. \u00a74 mark \u2705 dd6fd4069 UNSTAGED. Cherry proof '-'; worktree+branch pruned."
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -467,6 +461,7 @@
   "P-AGENT.d weld: Ctrl+Enter stale-arm-clear leg unpinned micro + r1 queued-count NIT remain OPEN",
   "C-CTX-6.c + C-AGT-3.b r1 CLEAN with gates RUN by reviewer (widened shell); both queued in welder order AGT-3.b -> CTX-6.c",
   "C-AGT-7.c + C-CTX-6.d clean-queued behind AGT-3.b/CTX-6.c welder; P-MENU.d + C-EXT-7.a in review; frontier capped at 2 starts which are both already live",
-  "C-AGT-7.c r1 CLEAN with gates run (25,537 vs live 26,129 pair-only; foreign Lang red base-proven); queued behind AGT-3.b/CTX-6.c welder"
+  "C-AGT-7.c r1 CLEAN with gates run (25,537 vs live 26,129 pair-only; foreign Lang red base-proven); queued behind AGT-3.b/CTX-6.c welder",
+  "C-CTX-6.d DUR duty for closeout gate: scripts/parallel-tests-durations.tsv row for candy-code/tests/Chat/MemoryOpenJournalTest.php (new file, 3T; lanes never edit durations.tsv)"
  ]
 }
