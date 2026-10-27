@@ -274,7 +274,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-3.a`
 
-#### C-AGT-1.c — Webhooks refuse over-size bodies with 413
+#### ✅ ccfb2d363 C-AGT-1.c — Webhooks refuse over-size bodies with 413
 - **Item:** C-AGT-1 (sources: AUT-6-P1) · fix · MAJOR · effort S
 - **What:** Root cause: `RequestBodyBufferMiddleware(MAX_API_BODY_BYTES)` (`src/Server/Server.php:241`) does not refuse an over-limit body; it swaps in an empty body and calls `$next`. `HookWebhooks::handle()` then splices …
 - **Files — create:** none
