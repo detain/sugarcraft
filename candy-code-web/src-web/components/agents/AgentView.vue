@@ -18,7 +18,8 @@ import AgentTranscript from './AgentTranscript.vue'
  * P-AGENT.d adds the TUI's interrupt send: the `⚡ interrupt` toggle (and the
  * Ctrl+Enter chord) deliver `mode: interrupt`, so the run skips the step's
  * unstarted sequential calls and reads the message first; a pending row
- * badges `⚡` for an interrupt, `⧗` for a plain steer, as the TUI does.
+ * badges `⚡` for an interrupt and `⧗` for a plain steer — the web adds the
+ * `⚡` to the TUI's `⧗` row-state vocabulary (`⧗` queued, `↻` running, `↩` replied).
  */
 const props = defineProps<{ sessionId: string; run: AgentRun }>()
 const emit = defineEmits<{ close: [] }>()
@@ -72,7 +73,9 @@ async function send(mode?: MessageMode): Promise<void> {
   const interrupt = mode === 'interrupt' || (mode === undefined && live.value && interruptMode.value)
   const result = await agents.message(props.sessionId, props.run.id, text, interrupt ? 'interrupt' : undefined)
   sending.value = false
-  if (mode === 'interrupt') interruptMode.value = false
+  // One-shot either way: any send that rode the armed toggle releases it
+  // (an explicit Ctrl/⌘+Enter send clears a stale arm too, never arms one).
+  if (interrupt) interruptMode.value = false
   if (result.status === 'failed') error.value = result.error ?? 'could not send'
   else draft.value = ''
 }

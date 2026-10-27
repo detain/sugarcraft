@@ -60,7 +60,7 @@ describe('AgentView interrupt send (P-AGENT.d)', () => {
     return r
   }
 
-  it('the toggle arms an interrupt send; Ctrl+Enter is a one-shot; plain send rides no mode', async () => {
+  it('the toggle arms a one-shot interrupt send; Ctrl+Enter is a one-shot; plain sends ride no mode', async () => {
     await wire.connect()
     const wrapper = mount(AgentView, { props: { sessionId: 's1', run: run() }, global: { plugins: [pinia] } })
     await flushPromises()
@@ -74,25 +74,28 @@ describe('AgentView interrupt send (P-AGENT.d)', () => {
     await flushPromises()
     expect(wire.sent('agents.message').pop()?.params).toMatchObject({ sessionId: 's1', agentId: 'a1', text: 'stop that', mode: 'interrupt' })
     await wire.answer('agents.message', { agentId: 'a1', status: 'queued', msgId: 'm1' })
+    await flushPromises()
+    // The armed toggle is one-shot: the send that rode it releases it (round-2 MAJOR).
+    expect(wrapper.find('[data-testid="agent-interrupt"]').attributes('aria-pressed')).toBe('false')
     expect(wrapper.find('[data-testid="agent-pending-badge"]').text()).toBe('⚡ interrupt')
 
-    // Ctrl+Enter sends an interrupt in one shot and disarms the toggle.
-    await wrapper.find('[data-testid="agent-input"]').setValue('actually stop')
-    await wrapper.find('[data-testid="agent-input"]').trigger('keydown', { key: 'Enter', ctrlKey: true })
-    await flushPromises()
-    expect(wire.sent('agents.message').pop()?.params).toMatchObject({ text: 'actually stop', mode: 'interrupt' })
-    await wire.answer('agents.message', { agentId: 'a1', status: 'queued', msgId: 'm2' })
-    expect(wrapper.find('[data-testid="agent-interrupt"]').attributes('aria-pressed')).toBe('false')
-
-    // A plain send after that rides no mode and badges with the TUI's ⧗ wording.
+    // So the plain send right after rides NO mode (a sticky toggle would ride interrupt).
     await wrapper.find('[data-testid="agent-input"]').setValue('carry on')
     await wrapper.find('[data-testid="agent-send"]').trigger('click')
     await flushPromises()
     const plain = wire.sent('agents.message').pop()?.params as Record<string, unknown>
     expect(plain.text).toBe('carry on')
     expect(plain.mode).toBeUndefined()
-    await wire.answer('agents.message', { agentId: 'a1', status: 'queued', msgId: 'm3' })
+    await wire.answer('agents.message', { agentId: 'a1', status: 'queued', msgId: 'm2' })
     expect(wrapper.findAll('[data-testid="agent-pending-badge"]').map((b) => b.text()).join(' ')).toContain('⧗ waiting')
+
+    // Ctrl+Enter stays a one-shot: the interrupt rides, the toggle was never armed by it.
+    await wrapper.find('[data-testid="agent-input"]').setValue('actually stop')
+    await wrapper.find('[data-testid="agent-input"]').trigger('keydown', { key: 'Enter', ctrlKey: true })
+    await flushPromises()
+    expect(wire.sent('agents.message').pop()?.params).toMatchObject({ text: 'actually stop', mode: 'interrupt' })
+    await wire.answer('agents.message', { agentId: 'a1', status: 'queued', msgId: 'm3' })
+    expect(wrapper.find('[data-testid="agent-interrupt"]').attributes('aria-pressed')).toBe('false')
     wrapper.unmount()
   })
 })
