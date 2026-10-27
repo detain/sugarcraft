@@ -386,10 +386,24 @@ final class AgentPresetRegistry
      * The package-bundled presets directory (`<package root>/.candy-code/
      * agents`, beside this class's own `src/`), or null when this install
      * ships none.
+     *
+     * Under a phar install the directory lives INSIDE the archive, where
+     * realpath() answers false for every entry — so the `phar://` spelling
+     * is kept verbatim after an `is_dir()` proof, and {@see
+     * isBundledPresetPath()} matches candidate files by normalized prefix
+     * instead. (C-SES-9.c: the build packs `.candy-code/agents`, and this
+     * gate is what keeps its own trio out of the frontmatter audit.)
      */
     private static function bundledPresetsDirectory(): ?string
     {
-        $real = realpath(\dirname(__DIR__, 2) . '/.candy-code/agents');
+        $candidates = \dirname(__DIR__, 2) . '/.candy-code/agents';
+        if (\str_starts_with(__DIR__, 'phar://')) {
+            $inPhar = self::normalisePath($candidates);
+
+            return is_dir($inPhar) ? $inPhar : null;
+        }
+
+        $real = realpath($candidates);
 
         return $real === false || !is_dir($real) ? null : $real;
     }
@@ -399,6 +413,9 @@ final class AgentPresetRegistry
      * {@see bundledPresetsDirectory()} by resolved-path identity, so a user
      * or project directory that merely shares the name is still audited. An
      * unresolvable path (deleted between glob and audit) is not bundled.
+     * A `phar://` candidate lives inside the archive itself, where no path
+     * resolves; it is matched by normalized prefix against the bundled
+     * directory instead.
      */
     private static function isBundledPresetPath(string $file): bool
     {
@@ -407,9 +424,11 @@ final class AgentPresetRegistry
             return false;
         }
 
-        $real = realpath($file);
+        $resolved = \str_starts_with($file, 'phar://')
+            ? self::normalisePath($file)
+            : realpath($file);
 
-        return $real !== false && str_starts_with($real, $bundled . '/');
+        return $resolved !== false && str_starts_with($resolved, $bundled . '/');
     }
 
     /**

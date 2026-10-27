@@ -741,6 +741,119 @@ YAML);
     }
 
     /**
+     * C-SES-9.c — a phar install keeps its bundled presets visible to the
+     * audit gate. {@see AgentPresetRegistry::bundledPresetsDirectory()} used
+     * to realpath() its `__DIR__`-derived candidate, and realpath() answers
+     * false for every `phar://` path, so the gate collapsed to "nothing is
+     * bundled" inside the published artifact — the exact opposite of its
+     * contract (see the disclosure this step retired in tools/build-phar.php).
+     *
+     * The proof runs as a child PHP: archive WRITING needs `phar.readonly=0`,
+     * which — like tests/Integration/PharCompatTest.php's own scratch builds —
+     * lives in the argv only, never in the suite ini. The child mints the
+     * scratch phar the way PharCompatTest::writePremisePhar() mints its
+     * premise (setStub + addFromString + stopBuffering + unset), packs this
+     * very class file at `src/Agents/AgentPresetRegistry.php` plus two preset
+     * entries under `.candy-code/agents/`, requires the class from inside the
+     * archive so its `__DIR__` IS a `phar://` path, and reports through JSON.
+     * No roster entry and no skip fires on the gate box: ext-phar is loaded
+     * and PHP_BINARY spawns here, so an arm that cannot run says so out loud
+     * through the rc assertion.
+     */
+    public function testAPharInstallResolvesTheBundledPresetsInsideTheArchive(): void
+    {
+        if (!extension_loaded('phar')) {
+            $this->markTestSkipped('ext-phar is not loaded in this process');
+        }
+
+        $registrySource = (new \ReflectionClass(AgentPresetRegistry::class))->getFileName();
+        $this->assertIsString($registrySource);
+
+        $pharPath = $this->tempDir . '/c-ses-9c-probe.phar';
+        $childScript = $this->tempDir . '/c-ses-9c-child.php';
+        file_put_contents($childScript, self::PHAR_PROBE_CHILD);
+
+        $pipes = [];
+        $process = proc_open(
+            [\PHP_BINARY, '-d', 'phar.readonly=0', $childScript, $pharPath, $registrySource],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes
+        );
+        if (!\is_resource($process)) {
+            $this->markTestSkipped('the scratch-phar child could not be spawned on this box');
+        }
+
+        // Drain both pipes to EOF before reaping (pipe-EOF law), then close.
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $rc = proc_close($process);
+
+        $this->assertSame(0, $rc, 'the scratch-phar child exited ' . $rc . ': ' . $err);
+        $report = json_decode($out, true);
+        $this->assertIsArray($report, 'the child printed no JSON report: ' . $out . ' / ' . $err);
+        $this->assertTrue((bool) ($report['ok'] ?? false), 'child reported: ' . (string) ($report['error'] ?? $err));
+
+        $this->assertSame(
+            'phar://' . realpath($pharPath) . '/.candy-code/agents',
+            $report['dir'],
+            'the bundled gate must name the directory INSIDE the archive, un-realpathed'
+        );
+        $this->assertSame(['bundled-alpha.md', 'bundled-beta.md'], $report['names'], 'scandir() must list both packed presets');
+        $this->assertTrue($report['inPhar'], 'a preset inside the archive is a bundled preset');
+        $this->assertFalse($report['outsidePhar'], 'a real file on disk is not inside the archive');
+    }
+
+    /**
+     * The child side of the phar probe above. Reads its two inputs from
+     * argv; prints one JSON report to stdout. Nowdoc so nothing here is
+     * evaluated by the parent process.
+     */
+    private const PHAR_PROBE_CHILD = <<<'PHP'
+<?php
+$report = ['ok' => false, 'error' => null, 'dir' => null, 'names' => [], 'inPhar' => null, 'outsidePhar' => null];
+try {
+    $out = (string) $argv[1];
+    $src = (string) $argv[2];
+    if (file_exists($out)) {
+        unlink($out);
+    }
+    $phar = new Phar($out, 0, basename($out));
+    $phar->setStub('<?php __HALT_COMPILER();');
+    $phar->addFromString('src/Agents/AgentPresetRegistry.php', (string) file_get_contents($src));
+    $entries = ['bundled-alpha.md', 'bundled-beta.md'];
+    foreach ($entries as $entry) {
+        $phar->addFromString('.candy-code/agents/' . $entry, "---\nname: {$entry}\ndescription: packed by the c-ses-9c probe\ntools: []\n---\n# {$entry}\n");
+    }
+    $phar->stopBuffering();
+    unset($phar);
+
+    require 'phar://' . $out . '/src/Agents/AgentPresetRegistry.php';
+    $class = 'SugarCraft\\Code\\Agents\\AgentPresetRegistry';
+    $dirMethod = new ReflectionMethod($class, 'bundledPresetsDirectory');
+    $dirMethod->setAccessible(true);
+    $fileMethod = new ReflectionMethod($class, 'isBundledPresetPath');
+    $fileMethod->setAccessible(true);
+
+    $dir = $dirMethod->invoke(null);
+    $report['dir'] = $dir;
+    $report['names'] = $dir === null ? [] : array_values(array_filter(
+        scandir($dir),
+        static fn (string $item): bool => str_ends_with($item, '.md')
+    ));
+    $report['inPhar'] = $dir === null ? null : $fileMethod->invoke(null, $dir . '/' . $entries[0]);
+    $report['outsidePhar'] = $fileMethod->invoke(null, $src);
+    $report['ok'] = true;
+} catch (Throwable $e) {
+    $report['error'] = $e->getMessage();
+    fwrite(STDERR, (string) $e . "\n");
+}
+fwrite(STDOUT, (string) json_encode($report));
+exit($report['ok'] ? 0 : 1);
+PHP;
+
+    /**
      * Absolute path to the repo's shipped .candy-code/agents/ preset directory.
      */
     private function shippedAgentsDir(): string

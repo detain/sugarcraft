@@ -40,8 +40,9 @@ declare(strict_types=1);
  * needs them and a "slim" phar that dies the first time someone configures
  * Bedrock is a worse product than a large honest one. Weight: a published
  * install packs to roughly 30 MB of PHP/JSON; the uncompressed phar of the
- * runtime vendor set lands in the tens of megabytes (the summary prints the
- * real figure; --gz trades a runtime ext-zlib dependency for transfer size).
+ * runtime vendor set measures about 118 MiB on a real build (the summary
+ * prints the real figure; --gz trades a runtime ext-zlib dependency for
+ * transfer size).
  *
  * THE FAIL-CLOSED INTEGRITY PREFLIGHT (GUARD 2, rev-w2j2 MAJOR-2)
  * ===============================================================
@@ -85,16 +86,6 @@ declare(strict_types=1);
  * `'phar://' . __FILE__`, which finds `vendor/autoload.php` inside the
  * archive; and a relaunch re-runs
  * the stub — the phar relaunches itself. PharCompatTest pins both halves.
- *
- * KNOWN PHAR DEGRADATION (disclosed, not fixed here):
- * AgentPresetRegistry::bundledPresetsDirectory() gates the three bundled
- * example presets with realpath(), which returns false under phar://, so a
- * phar install ships no BUNDLED presets — user/project/home preset
- * directories are unaffected. Every other `__DIR__`-relative DATA site was
- * audited and is wrapper-safe (scandir/is_file/require/file_get_contents).
- * Two of them (ToolCatalog::discover, BuiltInCommands) used glob(), which
- * reads no stream wrapper; they were converted to scandir in this lane
- * precisely so the artifact is not hollow.
  */
 
 $package = dirname(__DIR__);
