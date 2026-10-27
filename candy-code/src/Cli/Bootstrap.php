@@ -223,9 +223,10 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 47 is that sum — 46 after the v1:F-1 Claude-settings skip drain,
-     * the v1:m-1 home stand-in row and the v2:a11y-F3 terminal-guidance row
-     * joined the roster on top of the PLG-1
+     * 48 is that sum — 47 after the C-PRV-1.b unshaped-launch-tier row
+     * joined the roster on top of the v1:F-1 Claude-settings skip drain,
+     * the v1:m-1 home stand-in row and the v2:a11y-F3 terminal-guidance row,
+     * which joined the roster on top of the PLG-1
      * bundles discovery seam and the ISS-047
      * keybinding-collision drain — plus one row
      * of headroom. A launch that does hit
@@ -234,7 +235,7 @@ final class Bootstrap
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 47;
+    public const LAUNCH_NOTICE_LIMIT = 48;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -327,6 +328,11 @@ final class Bootstrap
         // v2:a11y-F3: one row, gated on the dumb family AND a tty, so a
         // scripted or piped launch contributes nothing.
         'reportTerminalGuidance' => 1,
+        // C-PRV-1.b: at most one row — the saved tier that shapes nothing on
+        // this launch's pair. The shelf de-dupes on message identity, and the
+        // reason is a single sentence whatever the tier, so one row is the
+        // bounded worst case, not a per-entry fan-out.
+        'withResolvedReasoningEffort' => 1,
     ];
 
     /**
@@ -3895,9 +3901,21 @@ public static function useMaxTurns(?string $maxTurns): void
 
     private static function withResolvedReasoningEffort(EngineBackend $engine): EngineBackend
     {
-        // Delegates to {@see LaunchContext::withResolvedReasoningEffort()}; the
-        // door stays private (v4:S1b, 2026-10-21).
-        return LaunchContext::withResolvedReasoningEffort($engine);
+        // Delegates to {@see LaunchContext::withResolvedReasoningEffort()} (the
+        // door stays private, v4:S1b, 2026-10-21); C-PRV-1.b added the reason
+        // half, and this is the seam that SPEAKS it: a launch whose saved tier
+        // shapes nothing carries no tier and records the one row explaining
+        // why, on the same shelf — through the same funnel — every other
+        // launch notice rides. The reason arrives pre-built from
+        // LaunchContext; this door adds no format constant and no new emitter,
+        // which is why the stderr and launch-format censuses do not move.
+        [$engine, $reason] = LaunchContext::withResolvedReasoningEffort($engine);
+
+        if ($reason !== null) {
+            self::warnLaunchRows([$reason]);
+        }
+
+        return $engine;
     }
 
     private static function withConsolePermissionPrompt(EngineBackend $engine, PermissionGate $gate, bool $enabled): EngineBackend

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Cli;
 
 use SugarCraft\Code\Background\BackgroundShellRegistry;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Bundles\Bundle;
 use SugarCraft\Code\LSP\LspClient;
@@ -2053,7 +2054,12 @@ final class LaunchContext
         $engine = self::withResolvedMaxToolSteps($engine);
         // PRV-2 (§6.5): the effort tier rides the same launch tail as the step
         // ceiling, for the same reason — one door, both engine settings.
-        $engine = self::withResolvedReasoningEffort($engine);
+        // The reason half is deliberately unsaid HERE: this door builds a
+        // mid-session switch's engine, and by {@see chat()}'s own note the
+        // notice shelf is read once at launch, so a row recorded now would sit
+        // unread. The Chat that installs this engine states the same fact on
+        // the transcript through `Chat::withEngineSettings()`.
+        [$engine] = self::withResolvedReasoningEffort($engine);
 
         return self::withConsolePermissionPrompt($engine, $gate, $consolePermissionPrompt);
     }
@@ -2069,15 +2075,45 @@ final class LaunchContext
         return $steps === null ? $engine : $engine->withMaxSteps($steps);
     }
     /**
-     * Attach the configured effort tier, or hand the engine back untouched —
-     * the {@see withResolvedMaxToolSteps()} shape, so the two engine settings
-     * can never drift on whether an unset key rewrites what launch built.
+     * C-PRV-1.b: the configured tier is lowered only where it SHAPES.
+     *
+     * A persisted `reasoningEffort` (saved while a shaper was live, or hand-
+     * edited) must not ride onto a provider+model pair whose wire has no field
+     * to read it — that was the set-but-ignored failure PRV-2 itself bans,
+     * relocated from the `/effort` command to the launch seam. So the tier is
+     * asked of {@see EffortGate::verdict()} for THIS engine, exactly as the
+     * command asks it, and on a verdict of no the engine comes back UNTOUCHED
+     * with a reason string beside it: the caller that can reach the notice
+     * shelf ({@see Bootstrap}'s launch delegate) says why. The mid-session
+     * switch factory needs no caller to speak — the Chat that installs this
+     * engine re-applies through `Chat::withEngineSettings()`, which states the
+     * same fact once on the transcript.
+     *
+     * @return array{0: EngineBackend, 1: ?string} the engine to carry, and the
+     *         reason to say when a saved tier was deliberately left off
      */
-    public static function withResolvedReasoningEffort(EngineBackend $engine): EngineBackend
+    public static function withResolvedReasoningEffort(EngineBackend $engine): array
     {
         $effort = Bootstrap::resolvedReasoningEffort();
 
-        return $effort === null ? $engine : $engine->withReasoningEffort($effort);
+        if ($effort === null) {
+            return [$engine, null];
+        }
+
+        $provider = $engine->provider();
+        if ($provider instanceof \SugarCraft\Code\Providers\FallbackProvider) {
+            $provider = $provider->primary();
+        }
+
+        if (!\SugarCraft\Code\Providers\EffortGate::verdict($provider, $engine->model())) {
+            return [$engine, Lang::t('chat.effort.launch_unshaped', [
+                'level' => $effort,
+                'provider' => $provider->name(),
+                'model' => $engine->model(),
+            ])];
+        }
+
+        return [$engine->withReasoningEffort($effort), null];
     }
     /**
      * Attach the console approver, or hand the engine back untouched.

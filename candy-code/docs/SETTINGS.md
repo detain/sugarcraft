@@ -440,6 +440,22 @@ what an integer can hold: a value too large to be one (`1e19`, or a numeric
 string such as `"99999999999999999999"`) resolves to the default as well,
 rather than being clamped to a ceiling the key deliberately does not have.
 
+`reasoningEffort` is the dial `/effort` turns: one of `low`, `medium`, `high`,
+`xhigh` or `max`, saved into the user file as this key and read back at every
+launch. The stored value is a request, not a guarantee — the tier rides the
+wire only where the provider-and-model pair actually shapes an effort field
+(`EffortGate`): the extended-thinking budget on Anthropic, the reasoning field
+on the OpenAI reasoning family (the `o`-prefixed models and the `gpt-5`
+spellings other than the `-chat` one), `thinkingConfig` on Gemini, and the
+per-provider shapes for Bedrock, Codex and SGLang. Pairs that shape no field —
+`echo`, `custom`, plain chat models like `gpt-4o` — never carried it silently
+by design, and since C-PRV-1.b they still do not: a saved tier landing on such
+a pair is left off the engine and the launch says so in one notice row; a
+mid-session switch onto such a pair states it once in the transcript; and
+`/effort` itself refuses per model, naming the pair and persisting nothing.
+The old doc page claimed the tier "rides the reasoning-effort field of every
+request"; the true claim is narrower — every request *this pair* sends.
+
 `secretEnvAllowlist` is the one exception to the credential scrub (audit
 F-E1). Bash, Grep and script hooks inherit your environment **minus** every
 variable whose name matches `*_API_KEY`, `*_TOKEN`, `*_SECRET` or `AWS_*`
@@ -1079,7 +1095,7 @@ project-settable.
 | `repoMap.maxBytes` | Context & Compaction | int | `8192` | U C | — | next turn | spend |
 | `env.gitDiffAfterWrites` | Context & Compaction | bool | `true` | P U C | — | next turn | narrowing |
 | `env.diffMaxBytes` | Context & Compaction | int | `8192` | U C | — | next turn | spend |
-| `notices.transcriptLimit` | Context & Compaction | int | `47` | C | — | restart | tuning |
+| `notices.transcriptLimit` | Context & Compaction | int | `48` | C | — | restart | tuning |
 | `contextWindow` | Context & Compaction | JSON | unset | U C | — | restart | tuning |
 | `contextPruning.mode` | Context & Compaction | enum | `auto` | C | `CANDY_CODE_CONTEXT_PRUNING` | next turn | tuning |
 | `permissionMode` | Permissions | enum | `default` (TUI); `bypass-permissions` (`-p`, daemon) | U C | `CANDY_CODE_PERMISSION_MODE`, `--permission-mode` | restart | security |

@@ -215,9 +215,11 @@ final class LaunchContextDelegatesTest extends TestCase
 
     /**
      * The builder families the composition-root wave moved (S1b W7-E C1-C5):
-     * name => whether the Bootstrap door was public before the move.
+     * name => [whether the Bootstrap door was public before the move, whether
+     * the door is the reason-SPEAKER (C-PRV-1.b) rather than a pure one-line
+     * forward].
      *
-     * @return array<string, array{0: string, 1: bool}>
+     * @return array<string, array{0: string, 1: bool, 2?: bool}>
      */
     public static function migratedBuilders(): iterable
     {
@@ -233,7 +235,12 @@ final class LaunchContextDelegatesTest extends TestCase
         yield 'taskWorkerPool' => ['taskWorkerPool', false];
         yield 'configRoot' => ['configRoot', false];
         yield 'withResolvedMaxToolSteps' => ['withResolvedMaxToolSteps', false];
-        yield 'withResolvedReasoningEffort' => ['withResolvedReasoningEffort', false];
+        // C-PRV-1.b: this door is the reason-SPEAKER. The moved body returns
+        // the [engine, ?reason] pair, and the door records the reason on the
+        // launch shelf — it cannot stay a single forwarding return without
+        // the launch going silent on an unshaped saved tier. Pinned as a
+        // speaker below: one body call, the shelf funnel, nothing else.
+        yield 'withResolvedReasoningEffort' => ['withResolvedReasoningEffort', false, true];
         yield 'withConsolePermissionPrompt' => ['withConsolePermissionPrompt', false];
         yield 'app' => ['app', true];
         yield 'settingsWriter' => ['settingsWriter', false];
@@ -249,6 +256,7 @@ final class LaunchContextDelegatesTest extends TestCase
     public function testEachMigratedBuilderKeepsAThinnestBootstrapDoorOverALaunchContextBody(
         string $name,
         bool $doorWasPublic,
+        bool $reasonSpeaker = false,
     ): void {
         $door = new ReflectionMethod(Bootstrap::class, $name);
         $body = new ReflectionMethod(LaunchContext::class, $name);
@@ -261,8 +269,19 @@ final class LaunchContextDelegatesTest extends TestCase
         self::assertFalse($door->isStatic() !== $body->isStatic(), 'staticness must agree across the door');
         self::assertSame($door->getNumberOfParameters(), $body->getNumberOfParameters(),
             "Bootstrap::{$name}() no longer forwards every argument the body takes");
-        self::assertSame((string) $door->getReturnType(), (string) $body->getReturnType(),
-            "the door's return type drifted from the moved body's");
+        if ($reasonSpeaker) {
+            // The speaker door converts the body's [engine, ?reason] tuple
+            // into the engine the whole launch chain threads — the return
+            // types differ BY DESIGN; the tuple shape is pinned on the door's
+            // own body below, not across the split.
+            self::assertSame('array', (string) $body->getReturnType(),
+                "LaunchContext::{$name}() stopped returning the [engine, ?reason] tuple its speaker door reads");
+            self::assertSame('SugarCraft\Code\Backend\EngineBackend', (string) $door->getReturnType(),
+                "Bootstrap::{$name}() stopped narrowing the tuple back to the engine");
+        } else {
+            self::assertSame((string) $door->getReturnType(), (string) $body->getReturnType(),
+                "the door's return type drifted from the moved body's");
+        }
 
         // THINNEST: the door body is one `return LaunchContext::name(...)` and
         // nothing else — a second truth living behind the door is exactly the
@@ -279,6 +298,28 @@ final class LaunchContextDelegatesTest extends TestCase
             \explode("\n", $text),
             static fn (string $line): bool => !str_starts_with(ltrim($line), '//'),
         ));
+        if ($reasonSpeaker) {
+            // The speaker's allowance, pinned at its floor: one call into the
+            // moved body, one funnel out (the shelf), one return. Anything
+            // else reaching Bootstrap.php text here would re-grow the second
+            // truth this file exists to refuse — and would move the stderr and
+            // launch-format censuses, which C-PRV-1.b left exactly where they
+            // were because the reason arrives PRE-BUILT.
+            self::assertSame(1, substr_count($code, 'LaunchContext::' . $name),
+                "Bootstrap::{$name}() must reach the moved body exactly once");
+            self::assertSame(1, substr_count($code, 'self::warnLaunchRows('),
+                "Bootstrap::{$name}() must use the shelf funnel, nothing louder");
+            self::assertSame(1, substr_count($code, 'self::'),
+                "Bootstrap::{$name}() sprouted a second self:: reach behind the door");
+            self::assertMatchesRegularExpression(
+                '/return\s+\$engine;\s*$/',
+                $code,
+                "Bootstrap::{$name}() must hand back exactly the narrowed engine",
+            );
+
+            return;
+        }
+
         self::assertMatchesRegularExpression(
             '/^\s*return LaunchContext::' . preg_quote($name, '/') . '\([^;]*\);\s*$/',
             $code,

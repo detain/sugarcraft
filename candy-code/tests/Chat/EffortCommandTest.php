@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Chat;
 
+use OpenAI\Contracts\ClientContract;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -16,6 +17,7 @@ use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Providers\EchoProvider;
+use SugarCraft\Code\Providers\OpenAIProvider;
 use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
@@ -94,6 +96,27 @@ final class EffortCommandTest extends TestCase
         $this->assertNull($this->engineOf($after)->reasoningEffort());
         $this->assertArrayNotHasKey('reasoningEffort', Bootstrap::readUserConfig());
         $this->assertEffortReply('no reasoning-effort control', $after);
+    }
+
+    public function testATierRefusedOnTheModelLandsNowhereAtAll(): void
+    {
+        // C-PRV-1.b: the same total refusal on a pair whose PROVIDER is on the
+        // roster but whose MODEL is not - gpt-4o has no thinking block, so the
+        // refusal names the pair and neither half of the contract lands.
+        $after = $this->sendEffort('/effort high', $this->modelChat('gpt-4o'));
+
+        $this->assertNull($this->engineOf($after)->reasoningEffort());
+        $this->assertArrayNotHasKey('reasoningEffort', Bootstrap::readUserConfig());
+        $this->assertEffortReply('sends no reasoning-effort field for gpt-4o', $after);
+    }
+
+    public function testATierOnAChatGptFiveModelAppliesBecauseThePairShapes(): void
+    {
+        $after = $this->sendEffort('/effort high', $this->modelChat('gpt-5-codex'));
+
+        $this->assertSame('high', $this->engineOf($after)->reasoningEffort());
+        $this->assertSame('high', Bootstrap::readUserConfig()['reasoningEffort'] ?? null);
+        $this->assertEffortReply('Effort set to high on openai', $after);
     }
 
     public function testAnUnknownTokenAnswersTheUsageAndChangesNothing(): void
@@ -194,6 +217,27 @@ final class EffortCommandTest extends TestCase
             backend: EngineBackend::new($provider, 'claude-sonnet-4-6'),
             projectRoot: $this->root . '/project',
             workspace: $workspace,
+        );
+    }
+
+    /**
+     * Same harness, OpenAI transport under a named model - the mock client is
+     * never dialed because /effort answers before any prompt leaves.
+     */
+    private function modelChat(string $model): Chat
+    {
+        $provider = new OpenAIProvider($this->createMock(ClientContract::class), $model);
+
+        return new Chat(
+            backend: EngineBackend::new($provider, $model),
+            projectRoot: $this->root . '/project',
+            workspace: WorkspaceContext::new(root: $this->root . '/project')->withService(
+                SettingsWriter::class,
+                SettingsWriter::new(
+                    Bootstrap::userConfigPath(),
+                    static fn (array $set, array $unset) => Bootstrap::writeUserConfig($set, $unset),
+                ),
+            ),
         );
     }
 

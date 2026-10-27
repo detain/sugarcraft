@@ -7773,13 +7773,20 @@ final class Chat implements Model
      * which is read off `EngineBackend`'s constructor rather than restated.
      * A non-engine backend has no step ceiling to move.
      *
-     * `reasoningEffort` (PRV-2, §6.5) goes through
+     * `reasoningEffort` (PRV-2, §6.5; honest since C-PRV-1.b) goes through
      * {@see \SugarCraft\Code\Cli\Bootstrap::resolvedReasoningEffort()} on the
-     * SAME rule-for-rule argument, and applies UNCONDITIONALLY rather than
-     * only-when-set: unlike the step ceiling, null here is a real value —
-     * "ask nothing" — which is exactly what clearing the tier (`/effort auto`)
-     * must mean for the running engine, and what a settings reset falls back
-     * to. A nonsense stored string resolves to that same null.
+     * SAME rule-for-rule argument, and null stays a real value — "ask
+     * nothing" — which is what clearing the tier (`/effort auto`) and a
+     * settings reset mean for the running engine. A SET tier, though, now
+     * lands only where {@see \SugarCraft\Code\Providers\EffortGate::verdict()}
+     * says it shapes THIS provider+model pair: a tier persisted on a shaper
+     * and carried onto a pair that reads no field comes off the engine —
+     * the same "ask nothing" the wire would honor anyway, stated rather
+     * than swallowed. The statement is one uiOnly row per distinct reason,
+     * deduped through the launch-warning shelf's once-set, because this
+     * door re-applies idempotently and an unrelated `/set` must not reprint
+     * it. A nonsense stored string resolves to that same null and asks for
+     * nothing, row included.
      */
     private function withEngineSettings(): self
     {
@@ -7789,10 +7796,33 @@ final class Chat implements Model
 
         $steps = \SugarCraft\Code\Cli\Bootstrap::resolvedMaxToolSteps()
             ?? (int) (new \ReflectionParameter([Backend\EngineBackend::class, '__construct'], 'maxSteps'))->getDefaultValue();
+        $effort = \SugarCraft\Code\Cli\Bootstrap::resolvedReasoningEffort();
 
-        return $this->withBackend($this->backend
-            ->withMaxSteps($steps)
-            ->withReasoningEffort(\SugarCraft\Code\Cli\Bootstrap::resolvedReasoningEffort()));
+        $engine = $this->backend->withMaxSteps($steps);
+
+        if ($effort !== null && !\SugarCraft\Code\Providers\EffortGate::verdict($engine->provider(), $engine->model())) {
+            $provider = $engine->provider();
+            if ($provider instanceof \SugarCraft\Code\Providers\FallbackProvider) {
+                $provider = $provider->primary();
+            }
+
+            $chat = $this->withBackend($engine->withReasoningEffort(null));
+            $row = Lang::t('chat.effort.settings_unshaped', [
+                'level' => $effort,
+                'provider' => $provider->name(),
+                'model' => $engine->model(),
+            ]);
+
+            if (!\SugarCraft\Code\Cli\LaunchNotices::reported($row)) {
+                \SugarCraft\Code\Cli\LaunchNotices::markReported($row);
+
+                return $chat->mutate(['history' => [...$chat->history, Message::assistant($row)->withUiOnly()]]);
+            }
+
+            return $chat;
+        }
+
+        return $this->withBackend($engine->withReasoningEffort($effort));
     }
 
     /**
@@ -12346,7 +12376,15 @@ final class Chat implements Model
         }
 
         if (!$shapes) {
-            return $this->effortRow(Lang::t('chat.effort.unsupported', ['provider' => $names]));
+            // C-PRV-1.b: refuse the pair the user actually named. An off-roster
+            // class (echo, custom) has no dial at all; a roster member whose
+            // wire has no field for THIS model id (OpenAI on `gpt-4o`) does
+            // have the dial and simply does not read it for this pair —
+            // claiming the provider lacks the control would trade one false
+            // sentence for another.
+            return $this->effortRow($provider instanceof \SugarCraft\Code\Providers\ShapesReasoningEffort
+                ? Lang::t('chat.effort.unsupported_model', ['provider' => $names, 'model' => (string) $engine?->model()])
+                : Lang::t('chat.effort.unsupported', ['provider' => $names]));
         }
 
         [$next, $cmd] = $this->effortRow(Lang::t('chat.effort.set', [

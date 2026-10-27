@@ -40,7 +40,7 @@ final class EffortGateTest extends TestCase
      */
     private const SHAPE_NONE = 'This provider has no effort control; the value changes nothing on the wire.';
 
-    private const SHAPE_REQUEST = 'The tier rides the reasoning-effort field of every request.';
+    private const SHAPE_REQUEST = 'The tier rides the reasoning-effort field of every request this pair sends.';
 
     private const SHAPE_THINKING_HIGH = 'The tier spends the thinking budget (8192 tokens); a configured thinkingBudget key wins.';
 

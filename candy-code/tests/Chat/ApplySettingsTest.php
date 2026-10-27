@@ -23,6 +23,8 @@ use SugarCraft\Code\Config\Settings\SettingsTier;
 use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Config\Settings\UiEditability;
 use SugarCraft\Code\Config\StatusLineCommand;
+use SugarCraft\Code\Cli\LaunchNotices;
+use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Providers\EchoProvider;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\App\StatusLineTickMsg;
@@ -51,12 +53,16 @@ final class ApplySettingsTest extends TestCase
         $this->useHomeSandbox($this->home);
         SessionSettings::reset();
         StatusLineCommand::reset();
+        // C-PRV-1.b: the switch notice rides the launch shelf, which is a
+        // process-static — clear it on both sides like every other resident.
+        LaunchNotices::reset();
     }
 
     protected function tearDown(): void
     {
         SessionSettings::reset();
         StatusLineCommand::reset();
+        LaunchNotices::reset();
         Bootstrap::useConfigPath(null);
         $this->restoreHomeSandbox();
         self::removeTree($this->home);
@@ -105,11 +111,18 @@ final class ApplySettingsTest extends TestCase
 
     public function testReasoningEffortMovesTheIdleEngineAndAResetAsksNothing(): void
     {
+        // C-PRV-1.b: the saved tier now rides only where the pair shapes an
+        // effort field, so the live-apply mechanic is pinned on a shaping
+        // pair; the unshaped pair gets its own test below.
         $this->writeConfig(['reasoningEffort' => 'high']);
-        [$chat] = $this->engineChat()->applySettings(['reasoningEffort'], '/x/config.json');
+        [$chat] = $this->shapingChat()->applySettings(['reasoningEffort'], '/x/config.json');
 
         self::assertSame('high', self::effort($chat), 'the running engine takes the saved tier at once');
         self::assertSame([], $chat->pendingSettingsApply());
+        self::assertSame([], array_filter(
+            $chat->history,
+            static fn ($row): bool => str_contains($row->content, 'left off') || str_contains($row->content, 'comes off'),
+        ), 'a pair that shapes needs no announcement');
 
         // PRV-2: null IS the engine's "ask nothing" — unlike the step ceiling,
         // a reset restores no numeric default, it clears the ask.
@@ -118,15 +131,42 @@ final class ApplySettingsTest extends TestCase
         self::assertNull(self::effort($chat), 'a reset means no effort on the wire, not a remembered tier');
     }
 
+    public function testASavedTierOnAPairThatShapesNothingComesOffWithOneRow(): void
+    {
+        // C-PRV-1.b root cause: the persisted tier used to land on ANY engine,
+        // including a pair (echo here) whose wire has no field for it — the
+        // transcript looked configured while the request stayed plain. Now the
+        // engine keeps no tier and the switch says so once, uiOnly.
+        $this->writeConfig(['reasoningEffort' => 'high']);
+        $before = $this->engineChat();
+        $historyBefore = count($before->history);
+
+        [$chat] = $before->applySettings(['reasoningEffort'], '/x/config.json');
+
+        self::assertNull(self::effort($chat), 'the unshaped pair carries no silent tier');
+        $rows = array_slice($chat->history, $historyBefore);
+        self::assertCount(1, $rows, 'the switch states the exception once');
+        self::assertTrue($rows[0]->uiOnly, 'the notice never rides the transcript to the model');
+        self::assertStringContainsString('comes off the running engine', $rows[0]->content);
+
+        // Re-applying (another settings save, the palette, a reset-and-set)
+        // does not repeat the sentence — the shelf de-dupes on identity.
+        [$again] = $chat->applySettings(['reasoningEffort']);
+        self::assertCount(0, array_slice($again->history, count($chat->history)),
+            'the same reason is not stated twice');
+        self::assertNull(self::effort($again), 'and the engine still carries nothing');
+    }
+
     public function testNonsenseOrCasewiseEffortResolvesLikeTheLaunchRuleNotWorse(): void
     {
         // One resolver, read by launch and live apply alike
         // (Bootstrap::resolvedReasoningEffort): a recognized tier is lowered
         // to its wire spelling, and anything else is exactly as good as
         // unset — never a throw a settings typo could weaponise against the
-        // next save.
+        // next save. Pinned on a shaping pair (C-PRV-1.b) so the assertion is
+        // about the resolver, not the effort gate.
         $this->writeConfig(['reasoningEffort' => 'High ']);
-        [$chat] = $this->engineChat()->applySettings(['reasoningEffort']);
+        [$chat] = $this->shapingChat()->applySettings(['reasoningEffort']);
         self::assertSame('high', self::effort($chat), 'the hand-edited spelling lands on the same tier');
 
         $this->writeConfig(['reasoningEffort' => 'turbo']);
@@ -342,6 +382,18 @@ final class ApplySettingsTest extends TestCase
     private function engineChat(): Chat
     {
         return new Chat(backend: new EngineBackend(new EchoProvider(), 'echo'));
+    }
+
+    /**
+     * The same live-apply mechanic on a pair that DOES shape an effort field
+     * (C-PRV-1.b): anthropic with a claude model is on the EffortGate roster.
+     */
+    private function shapingChat(): Chat
+    {
+        return new Chat(backend: new EngineBackend(
+            new AnthropicProvider('sk-test', 'https://api.anthropic.com', 'claude-sonnet-4-6'),
+            'claude-sonnet-4-6',
+        ));
     }
 
     private function writer(): SettingsWriter
