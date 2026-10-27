@@ -7,7 +7,8 @@
     "C-TOOL-1.a",
     "C-EXT-1.a",
     "C-SEC-1.a",
-    "C-MCP-1.a"
+    "C-MCP-1.a",
+    "C-AGT-2.a"
   ],
   "inflight": {
     "C-AGT-1.a": {
@@ -16,14 +17,6 @@
       "worktree": "/home/sites/cc-cmp-C-AGT-1.a",
       "branch": "cc/C-AGT-1.a",
       "session": null
-    },
-    "C-AGT-2.a": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-AGT-2.a",
-      "branch": "cc/C-AGT-2.a",
-      "session": null,
-      "note": "r2 CLEAN 6da65595f; weld cure: ReviewCommand.php:96 prompt() docblock [ref]->[<tree-ish>]"
     },
     "C-SEC-2.b": {
       "stage": "build",
