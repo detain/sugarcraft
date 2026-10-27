@@ -359,16 +359,22 @@ final class LoginSubcommandTest extends TestCase
         $sentinel = 'login-probe-read-' . uniqid('', true);
         $tty = $this->armEchoOffTty([], new \RuntimeException($sentinel));
 
+        // Capture-then-assert (SwallowingCatchCensus house idiom): the wide
+        // catch only records the throwable, every claim stands after the
+        // block — an assertion failure can never land in this catch and be
+        // tested by the next line.
         $level = ob_get_level();
+        $caught = null;
         try {
             $this->capture(fn (): int => $this->dispatch(['login', 'openai']));
-            $this->fail("a throwing byte read must propagate, not launder into a calm refusal ({$sentinel})");
         } catch (\RuntimeException $e) {
-            while (ob_get_level() > $level) {
-                ob_end_clean();
-            }
-            $this->assertSame($sentinel, $e->getMessage());
+            $caught = $e;
         }
+        while (ob_get_level() > $level) {
+            ob_end_clean();
+        }
+        $this->assertNotNull($caught, "a throwing byte read must propagate, not launder into a calm refusal ({$sentinel})");
+        $this->assertSame($sentinel, $caught->getMessage());
 
         $this->assertSame(1, $tty->restoreCalls, 'finally hands the terminal back even when the read itself throws');
         $this->assertSame('restore', $tty->callOrder[\count($tty->callOrder) - 1]);
