@@ -55,6 +55,18 @@ final class ActionYmlInstallTest extends TestCase
     private const REQUIRED_INSTALL = 'composer create-project';
 
     /**
+     * The interpolation arm. The `i` modifier is load-bearing: GitHub's
+     * expression evaluator resolves context names case-insensitively, so
+     * `${{ INPUTS.prompt }}` binds the same input as `${{ inputs.prompt }}`
+     * and was never any safer — a case-sensitive scan would let the
+     * re-spelled forgery through. (The other arms deliberately stay
+     * case-SENSITIVE: they scan shell text — the `composer` binary and
+     * `$RUNNER_TEMP`-style shell variables execute case-sensitively, so a
+     * re-spelling there is a broken command, not an evasion.)
+     */
+    private const INTERPOLATES_INPUTS = '/\$\{\{\s*inputs\./i';
+
+    /**
      * Every `run:` body in the action, in file order, newlines intact.
      *
      * Minimal YAML by design: this file needs "for each run key, the script
@@ -173,9 +185,43 @@ final class ActionYmlInstallTest extends TestCase
     {
         foreach (self::runBodies() as $index => $body) {
             self::assertDoesNotMatchRegularExpression(
-                '/\$\{\{\s*inputs\./',
+                self::INTERPOLATES_INPUTS,
                 $body,
                 'run body #' . $index . ' interpolates ${{ inputs.* }} into the script — script-injection door open; inputs cross only through env:'
+            );
+        }
+    }
+
+    /**
+     * Pins the `i` modifier on the arm above: every case spelling GitHub
+     * resolves must trip the pattern, and ordinary shell text must not (so
+     * the pattern is accused of exactly the forgery class, not of being
+     * match-anything).
+     */
+    public function testTheInterpolationPatternMatchesEveryCaseSpelling(): void
+    {
+        foreach ([
+            '${{ inputs.prompt }}',
+            '${{ INPUTS.prompt }}',
+            '${{ Inputs.prompt }}',
+            '${{iNpUtS.prompt}}',
+            '${{  INPUTS.permission-mode }}',
+        ] as $forgery) {
+            self::assertMatchesRegularExpression(
+                self::INTERPOLATES_INPUTS,
+                'run: echo "' . $forgery . '" was interpolated',
+                "context name \"$forgery\" resolves to inputs on GitHub but evades the arm — the i modifier is load-bearing"
+            );
+        }
+
+        foreach ([
+            'printf \'%s\n\' "$RUNNER_TEMP/candy-code/bin" >> "$GITHUB_PATH"',
+            'composer create-project --no-dev "sugarcraft/candy-code:${CANDY_CODE_CONSTRAINT}"',
+        ] as $harmless) {
+            self::assertDoesNotMatchRegularExpression(
+                self::INTERPOLATES_INPUTS,
+                $harmless,
+                'the arm must stay specific to ${{ }} context interpolation, not shell $-text'
             );
         }
     }
