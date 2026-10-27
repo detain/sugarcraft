@@ -22,16 +22,17 @@
     "C-SES-5.b",
     "C-CTX-1.b",
     "C-SES-2.c",
-    "C-SES-1.a"
+    "C-SES-1.a",
+    "C-WEB-1.c"
   ],
   "inflight": {
     "C-SEC-2.b": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SEC-2.b",
       "branch": "cc/C-SEC-2.b",
-      "session": "ses_e84278237ffe7L15Gk7pi3IcQv",
-      "note": "fake DONE #11: tip==base 4f657c755, tree clean, no REPORT \u2014 disk-grounding resume issued"
+      "session": null,
+      "note": "tip 9b6c8c19d base 4f657c755, 13 files +885/-7; NEW AskDiffPreviewTest 12T/PendingAskDiffTest 6T/PermissionAskDiffEventTest 2T durations duty; generated trio restored \u00a71.8 \u2014 welder regenerates trio+dist"
     },
     "C-SEC-3.a": {
       "stage": "build",
@@ -48,43 +49,43 @@
       "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
     },
     "C-SES-2.b": {
-      "stage": "fix",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SES-2.b",
       "branch": "cc/C-SES-2.b",
       "session": null,
-      "note": "tip c20c36f1d base 50ec2e702"
+      "note": "r2 CLEAN tip c7b7c17e3 base 50ec2e702; weld re-runs Session family 1726T/15114A + five-guard pair-only; goldens rode r1 commit; durations duty SessionPickerDebouncedSearchTest"
     },
     "C-SES-5.d": {
-      "stage": "fix",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SES-5.d",
       "branch": "cc/C-SES-5.d",
       "session": null,
-      "note": "r1 FINDINGS 2MAJOR/1MINOR/1NIT; fixer r2 launching"
+      "note": "r2 CLEAN tip 1ff716b92 base fd4f36875; weld re-runs tools/tests battery"
     },
     "C-TOOL-1.b": {
-      "stage": "fix",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-TOOL-1.b",
       "branch": "cc/C-TOOL-1.b",
       "session": null,
-      "note": "tip 3fbbe5948 base d7bbd104d; Grep --no-config + env drop; 222T/134688A; pair-only 25,677"
-    },
-    "C-WEB-1.c": {
-      "stage": "review",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-WEB-1.c",
-      "branch": "cc/C-WEB-1.c",
-      "session": "ses_e83bc07faffetjirZRMfBj7oJZ",
-      "note": "tip 2381b0d28 base 960772c97, 4 files, NEW TurnRunnerMentionFreshnessTest(3T) durations duty"
+      "note": "r2 CLEAN; weld re-runs Grep gates (reviewer could not)"
     },
     "C-SEC-4.a": {
-      "stage": "build",
+      "stage": "clean",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SEC-4.a",
       "branch": "cc/C-SEC-4.a",
-      "session": "ses_e83b85e28ffelovbFI4hwQtFDK"
+      "session": null,
+      "note": "r1 CLEAN tip 1c50da86b base fffeceaec; weld gates 95T/441A + five-guard pair-only; optional NIT docblock-order weld-absorbable; NEW ServedProjectCommandTrustTest 4T durations duty"
+    },
+    "P-CTX.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-P-CTX.a",
+      "branch": "cc/P-CTX.a",
+      "session": "ses_e83ab9b05ffeiGxLfyPZSdubu0"
     }
   },
   "blocked": [],
