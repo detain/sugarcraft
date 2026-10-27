@@ -10,15 +10,18 @@ namespace SugarCraft\Code\Bundles;
  * accepted too — the format's own README shows both shapes).
  *
  * A bundle is a CONTAINER of the surfaces candy-code already imports
- * individually — `skills/`, `commands/`, `agents/`, `.mcp.json`, hooks — and
+ * individually — `skills/`, `commands/`, `agents/`, `.mcp.json` (or the
+ * manifest's own `mcp`/`mcpServers` keys), hooks (paths OR an inline `hooks`
+ * object) — and
  * this class is only the reader of that layout. Nothing here executes or
  * installs anything: {@see BundleDiscovery} finds bundles on disk, and each
  * surface is mapped onto its own existing loader by the wiring in
  * `Cli\Bootstrap`. Two of the five surfaces are refused by construction and
  * this class is where their SHAPE is pinned so the refusal can be asserted:
  * `hooksPaths()` (bundle hooks are never registered — a launch notice names
- * the decline) and `mcpFile()` (a bundle `.mcp.json` is never auto-started —
- * it is offered to the operator through the existing `mcp import` verb).
+ * the decline) and `mcpFile()` (a bundle's MCP declaration is never
+ * auto-started — it is offered to the operator through the existing
+ * `mcp import` verb).
  *
  * Manifest fields candy-code does not know are ignored, which is what makes a
  * bundle written for the upstream tool load rather than trip.
@@ -165,14 +168,19 @@ final class Bundle
     }
 
     /**
-     * The bundle's MCP config file, when it ships one. DECLINED AT THE WIRE:
-     * discovery surfaces the path so the launch notice can name it, and the
-     * operator may import it deliberately through `candy-code mcp import`;
-     * nothing in candy-code starts servers from here.
+     * The bundle's MCP config file, when it ships or declares one. DECLINED AT
+     * THE WIRE: discovery surfaces the path so the launch notice can name it,
+     * and the operator may import it deliberately through `candy-code mcp
+     * import`; nothing in candy-code starts servers from here.
+     *
+     * Reads BOTH manifest spellings Claude-format bundles use in the wild —
+     * `mcp` and `mcpServers` (C-EXT-7): a string or list names files, and an
+     * INLINE server object (a non-path value) answers the manifest path
+     * itself, which is where the declaration actually lives.
      */
     public function mcpFile(): ?string
     {
-        foreach ($this->declared('mcp') as $path) {
+        foreach ([...$this->declared('mcp'), ...$this->declared('mcpServers')] as $path) {
             if (is_file($path)) {
                 return $path;
             }
@@ -180,15 +188,25 @@ final class Bundle
 
         $default = $this->dir . '/.mcp.json';
 
-        return is_file($default) ? $default : null;
+        if (is_file($default)) {
+            return $default;
+        }
+
+        if ($this->hasInlineSurface('mcpServers')) {
+            return self::manifestPath($this->dir);
+        }
+
+        return null;
     }
 
     /**
      * Every path in the bundle that would register hooks — a `hooks` manifest
-     * entry or the conventional `hooks/` directory. DECLINED AT THE WIRE:
-     * bundle hooks are never registered with the hook manager; a launch
-     * notice names the decline so the operator learns the bundle is not
-     * running whole rather than wondering why its statusline vanished.
+     * entry, an INLINE `hooks` object, or the conventional `hooks/` directory.
+     * DECLINED AT THE WIRE: bundle hooks are never registered with the hook
+     * manager; a launch notice names the decline so the operator learns the
+     * bundle is not running whole rather than wondering why its statusline
+     * vanished. An inline declaration answers the manifest path, because the
+     * hooks ride inside plugin.json itself (C-EXT-7).
      *
      * @return list<string>
      */
@@ -202,6 +220,14 @@ final class Bundle
             if ((str_ends_with($suffix, '.json') ? is_file($candidate) : is_dir($candidate))
                 && !\in_array($candidate, $paths, true)) {
                 $paths[] = $candidate;
+            }
+        }
+
+        if ($this->hasInlineSurface('hooks')) {
+            $manifest = self::manifestPath($this->dir);
+
+            if ($manifest !== null && !\in_array($manifest, $paths, true)) {
+                $paths[] = $manifest;
             }
         }
 
@@ -254,5 +280,23 @@ final class Bundle
         }
 
         return $paths;
+    }
+
+    /**
+     * True when a manifest key carries an INLINE surface — a value that is not
+     * a path (or a list of paths) but the declaration itself: Claude-format
+     * bundles ship `hooks` and `mcpServers` as objects inside plugin.json.
+     * A plain string, a list of all-strings (paths), null, '' and false all
+     * answer false; an object, or a list holding any non-string, answers true.
+     */
+    private function hasInlineSurface(string $key): bool
+    {
+        $value = $this->manifest[$key] ?? null;
+
+        if (\is_array($value)) {
+            return \array_filter($value, 'is_string') !== $value;
+        }
+
+        return !\is_string($value) && $value !== null && $value !== '' && $value !== false;
     }
 }

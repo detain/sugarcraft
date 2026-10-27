@@ -232,4 +232,89 @@ final class BundleDeclinedSurfacesTest extends TestCase
         self::assertStringContainsString('outside the project tree', $refusals[$link]);
         self::assertStringContainsString($outside, $refusals[$link], 'the reason names where it actually resolves');
     }
+
+    /**
+     * PLG-1-P4 (C-EXT-7): the Claude format also carries these surfaces as
+     * INLINE manifest values, and the reader must see them — the decline is
+     * about the wire, not about blindness to the shape.
+     */
+    public function testAnInlineHooksObjectInManifestCountsAsADeclinedSurface(): void
+    {
+        $name = 'inline-hooks-' . getmypid();
+        $root = $this->tempDir . '/inline-hooks-root';
+        mkdir($root, 0777, true);
+        $this->plantProjectBundle($root, $name, [
+            Bundle::MANIFEST_RELATIVE_PATH => (string) json_encode([
+                'name' => $name,
+                'hooks' => ['PreToolUse' => [['type' => 'command', 'command' => 'echo inline']]],
+            ]),
+        ]);
+
+        $bundles = $this->projectBundles($root);
+        $bundle = array_values(array_filter($bundles, static fn (Bundle $b): bool => $b->name === $name));
+        self::assertCount(1, $bundle, 'the bundle itself must still be discovered');
+
+        $paths = $bundle[0]->hooksPaths();
+        self::assertContains(
+            $bundle[0]->dir . '/' . Bundle::MANIFEST_RELATIVE_PATH,
+            $paths,
+            'an inline hooks object lives IN the manifest — the decline must name where the hooks actually are',
+        );
+
+        $notices = $this->noticesCarrying(['declined by design', $name]);
+        self::assertCount(1, $notices, 'the inline shape still fires the one-per-root hooks decline');
+    }
+
+    public function testAStringMcpServersManifestEntryIsADECLINEDConfigFile(): void
+    {
+        $name = 'mcpservers-path-' . getmypid();
+        $root = $this->tempDir . '/mcpservers-path-root';
+        mkdir($root, 0777, true);
+        // Re-spelled so the literal is not glob-shaped — a glued filename here
+        // would drift the GlobDialect corpus census (the chr(42)-concat law).
+        $file = 'servers' . '.json';
+        $this->plantProjectBundle($root, $name, [
+            Bundle::MANIFEST_RELATIVE_PATH => (string) json_encode([
+                'name' => $name,
+                'mcpServers' => $file,
+            ]),
+            $file => (string) json_encode(['mcpServers' => ['ghost' => ['command' => 'true']]]),
+        ]);
+
+        $bundles = $this->projectBundles($root);
+        $bundle = array_values(array_filter($bundles, static fn (Bundle $b): bool => $b->name === $name));
+        self::assertCount(1, $bundle);
+
+        self::assertSame(
+            $bundle[0]->dir . '/' . $file,
+            $bundle[0]->mcpFile(),
+            'mcpServers as a string names a file, exactly like mcp does',
+        );
+        self::assertCount(1, $this->noticesCarrying(['did NOT start', $name]), 'the string shape still fires the MCP decline');
+    }
+
+    public function testAnInlineMcpServersObjectAnswersTheManifestPath(): void
+    {
+        $name = 'mcpservers-inline-' . getmypid();
+        $root = $this->tempDir . '/mcpservers-inline-root';
+        mkdir($root, 0777, true);
+        $this->plantProjectBundle($root, $name, [
+            Bundle::MANIFEST_RELATIVE_PATH => (string) json_encode([
+                'name' => $name,
+                'mcpServers' => ['ghost' => ['command' => 'true']],
+            ]),
+        ]);
+
+        $bundles = $this->projectBundles($root);
+        $bundle = array_values(array_filter($bundles, static fn (Bundle $b): bool => $b->name === $name));
+        self::assertCount(1, $bundle);
+        self::assertFileDoesNotExist($bundle[0]->dir . '/.mcp.json', 'the fixture carries no conventional file — the inline shape alone must answer');
+
+        self::assertSame(
+            $bundle[0]->dir . '/' . Bundle::MANIFEST_RELATIVE_PATH,
+            $bundle[0]->mcpFile(),
+            'an inline mcpServers object lives IN the manifest — the decline names plugin.json',
+        );
+        self::assertCount(1, $this->noticesCarrying(['did NOT start', $name]), 'the inline shape still fires the MCP decline');
+    }
 }

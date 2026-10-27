@@ -76,12 +76,19 @@ A bundle may ship things candy-code will not run. The first two declines fire
 **once per session at launch**, naming the bundles affected, as ordinary
 system rows in the transcript:
 
-- **Hooks.** `hooks/` content is never registered. Lifecycle hooks execute
+- **Hooks.** Bundle hook content is never registered — neither the `hooks/`
+  directory, nor a `hooks` path declared in the manifest, nor an **inline
+  `hooks` object** inside `plugin.json` (C-EXT-7: the decline notice names
+  the manifest itself when the hooks ride inside it). Lifecycle hooks execute
   arbitrary programs at every session event; the hooks that do run are
   declared in the project's own `hooks.yaml` under
   [HOOKS.md](HOOKS.md) trust, not smuggled in by a third-party folder.
-- **`.mcp.json`.** A bundle's MCP declarations are never auto-started. The
-  only file `candy-code` starts servers from is the project root's
+- **`.mcp.json` — and its manifest twins.** A bundle's MCP declarations are
+  never auto-started: neither a shipped `.mcp.json`, nor the manifest's
+  `mcp`/`mcpServers` keys as path strings, nor an **inline `mcpServers`
+  object** inside `plugin.json` (the decline notice names the manifest,
+  where that declaration lives).
+  The only file `candy-code` starts servers from is the project root's
   `.mcp.json`, behind its trust gate ([MCP.md](MCP.md)). If you want a
   bundle's servers, read the file yourself and import deliberately:
 

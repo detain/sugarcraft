@@ -24,8 +24,9 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * the panel reads), {@see HooksCommand::compose()} (pure wording over a hand
  * -built inspection array, so every row shape is pinned without a chain),
  * and the host half end-to-end — a real `~/.candy-code/hooks.yaml` under a
- * sandboxed HOME, read through the launch's own {@see \SugarCraft\Code\Cli\Bootstrap::hooks()}
- * builder. Dispatch of the command row itself rides SlashDispatchTest, which
+ * sandboxed HOME, built through the launch's own builder and CARRIED on the
+ * workspace the panel reads (C-EXT-7: the panel itself never builds).
+ * Dispatch of the command row itself rides SlashDispatchTest, which
  * drives every visible registry row through a real `Chat::update()`.
  */
 final class HooksCommandTest extends TestCase
@@ -150,17 +151,23 @@ final class HooksCommandTest extends TestCase
             "hooks:\n  PreToolUse:\n    - name: demo-hook\n      matcher: 'Bash'\n      command: 'true'\n",
         );
 
+        // C-EXT-7: the host command reads the workspace's launch chain, so the
+        // fixture builds it through the launch builder FIRST and carries it on
+        // the context — the panel itself never rebuilds anything.
+        $manager = \SugarCraft\Code\Cli\Bootstrap::hooks(null, $this->tempDir . '/project');
+        $this->restoreHomeSandbox();
+
         $reply = (new \SugarCraft\Code\Host\Commands\HooksHostCommand())->run(
             \SugarCraft\Code\Host\Commands\CommandContext::new(
                 history: [Message::user('go')],
                 root: $this->tempDir . '/project',
+                workspace: \SugarCraft\Code\Host\WorkspaceContext::new(hooks: $manager),
             ),
             '/hooks',
         );
-        $this->restoreHomeSandbox();
         $text = implode("\n", array_map(static fn (Message $m): string => $m->content, $reply->rows));
 
-        self::assertStringContainsString('demo-hook', $text, 'the user-tier entry must reach the panel through the launch builder');
+        self::assertStringContainsString('demo-hook', $text, 'the user-tier entry must reach the panel through the chain carried on the workspace');
         self::assertStringContainsString('PreToolUse', $text);
         self::assertStringNotContainsString('not measured', $text);
     }
