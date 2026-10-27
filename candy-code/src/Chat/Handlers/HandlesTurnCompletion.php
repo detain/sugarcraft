@@ -341,6 +341,9 @@ trait HandlesTurnCompletion
             // notification, once the turn is really over — not while a queued
             // prompt or a goal's judging carries it on.
             $notify = $done->inFlight ? null : $done->terminalNotification('candy-code: ' . Lang::t('chat.notify.turn_finished'));
+            // P-CTX.d: the context pane's stamp refreshes off the loop, from
+            // the transcript this settle just produced.
+            $measure = $done->inFlight ? null : $done->measureContextCmd();
             $cmds = array_values(array_filter([
                 $doneCmd,
                 $suggest,
@@ -349,6 +352,7 @@ trait HandlesTurnCompletion
                 $dream === null ? null : Cmd::promise($dream),
                 $judge,
                 $notify,
+                $measure,
             ]));
 
             return [$done, match (count($cmds)) {
@@ -465,7 +469,7 @@ trait HandlesTurnCompletion
             if ($this->pendingIdleCompaction !== null
                 && $msg->compactionId === $this->pendingIdleCompaction['id']
             ) {
-                return $this->applyIdleCompaction($msg);
+                return $this->andContextRemeasure($this->applyIdleCompaction($msg));
             }
 
             // Superseded: a second /compact was issued, or one of the FOUR
@@ -479,7 +483,7 @@ trait HandlesTurnCompletion
                 return [$this, null];
             }
 
-            return $this->applyModelCompaction($msg);
+            return $this->andContextRemeasure($this->applyModelCompaction($msg));
         }
         if ($msg instanceof PromptSuggestionMsg) {
             // Accounted first, on the rule every provider-call arm follows:
@@ -539,5 +543,25 @@ trait HandlesTurnCompletion
         }
 
         return null;
+    }
+
+    /**
+     * P-CTX.d: ride a context remeasurement onto a landing where the fold
+     * actually rewrote the transcript — the pane's stamp is stale from this
+     * message on. A dropped or cancelled fold releases its latch and leaves
+     * the history value-identical: nothing changed to measure, so those keep
+     * the null-shaped schedule they always had.
+     *
+     * @param array{0: self, 1: ?\Closure} $applied
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function andContextRemeasure(array $applied): array
+    {
+        [$done, $cmd] = $applied;
+        if ($done->history === $this->history) {
+            return $applied;
+        }
+
+        return [$done, Cmd::batch($cmd, $done->measureContextCmd())];
     }
 }

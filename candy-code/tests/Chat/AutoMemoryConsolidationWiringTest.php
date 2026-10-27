@@ -7,7 +7,9 @@ namespace SugarCraft\Code\Tests\Chat;
 use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Code\App\AssistantMsg;
+use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Chat;
@@ -79,10 +81,14 @@ final class AutoMemoryConsolidationWiringTest extends TestCase
         $history = [Message::user(str_repeat('A long enough question. ', 20))];
 
         [, $cmd] = (new Chat(history: $history, inFlight: true, summaryBackend: $this->summaryBackend('{}'), projectRoot: $this->dir . '/root'))->update($reply);
-        self::assertNull($cmd);
+        // P-CTX.d: with nothing to consolidate, the settle's one scheduled pass is
+        // the context remeasure — a stamp, not an announcement.
+        self::assertInstanceOf(ContextMeasuredMsg::class, $this->resolve($cmd));
 
         [, $cmd] = (new Chat(history: $history, inFlight: true, memoryStore: new MemoryStore($this->dir . '/home'), projectRoot: $this->dir . '/root'))->update($reply);
-        self::assertNull($cmd);
+        // P-CTX.d: with nothing to consolidate, the settle's one scheduled pass is
+        // the context remeasure — a stamp, not an announcement.
+        self::assertInstanceOf(ContextMeasuredMsg::class, $this->resolve($cmd));
     }
 
     private function chat(MemoryStore $store, Backend $summary): Chat
@@ -99,6 +105,12 @@ final class AutoMemoryConsolidationWiringTest extends TestCase
     private function resolve(\Closure $cmd): mixed
     {
         $async = $cmd();
+        // P-CTX.d: a settle that schedules more than one pass batches them; the
+        // first child is the pass under test, the remeasure rides beside it.
+        if ($async instanceof BatchMsg) {
+            self::assertCount(2, $async->cmds);
+            $async = ($async->cmds[0])();
+        }
         self::assertInstanceOf(AsyncCmd::class, $async);
         $resolved = null;
         $async->promise->then(static function (mixed $msg) use (&$resolved): void {

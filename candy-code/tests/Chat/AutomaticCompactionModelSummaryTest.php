@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Chat;
 use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Backend;
@@ -470,7 +471,11 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
         $this->assertNotNull($turnCmd, 'the turn the user pressed Enter for must now go out');
         $this->assertSame(0, $main->calls(), 'and not before the Cmd is actually run');
 
-        $turnCmd();
+        $walking = $turnCmd();
+        // P-CTX.d: the landing dispatches the parked turn beside the context remeasure.
+        $this->assertInstanceOf(BatchMsg::class, $walking);
+        $this->assertCount(2, $walking->cmds);
+        ($walking->cmds[0])();
         $this->assertSame(1, $main->calls(), 'exactly one turn, not two and not zero');
         $this->assertTrue($dispatched->inFlight, 'which is a real turn now, with a real cancellation');
         $this->assertNotNull($this->cancellationOf($dispatched));
@@ -491,7 +496,11 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
         $this->assertSame(1, $this->countUserSaying($parked->history, 'what changed in the router?'));
 
         [$dispatched, $turnCmd] = $parked->update($this->resolve($cmd));
-        $turnCmd();
+        $walking = $turnCmd();
+        // P-CTX.d: the landing dispatches the parked turn beside the context remeasure.
+        $this->assertInstanceOf(BatchMsg::class, $walking);
+        $this->assertCount(2, $walking->cmds);
+        ($walking->cmds[0])();
 
         $this->assertSame(1, $this->countUserSaying($dispatched->history, 'what changed in the router?'));
         $this->assertSame(1, $this->countUserSaying($main->lastHistory(), 'what changed in the router?'));
@@ -555,7 +564,11 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
 
         [$parked, $cmd] = $this->submit($chat);
         [$landed, $turnCmd] = $parked->update($this->resolve($cmd));
-        $turnCmd();
+        $walking = $turnCmd();
+        // P-CTX.d: the landing dispatches the parked turn beside the context remeasure.
+        $this->assertInstanceOf(BatchMsg::class, $walking);
+        $this->assertCount(2, $walking->cmds);
+        ($walking->cmds[0])();
 
         $promptIndexIn = static function (array $history): ?int {
             $found = null;
@@ -671,7 +684,11 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
 
         [$refused, $turnCmd] = $parked->update($this->resolve($cmd));
 
-        $this->assertNull($turnCmd, 'the turn is refused, so nothing is scheduled');
+        // P-CTX.d: the refusal rewrite schedules the context remeasure — and
+        // only that; the parked turn stays refused.
+        $opened = $turnCmd();
+        $this->assertInstanceOf(BatchMsg::class, $opened);
+        $this->assertCount(1, $opened->cmds, 'the turn is refused, so nothing else is scheduled');
         $this->assertSame(0, $main->calls(), 'and the provider is never asked');
         $this->assertFalse($refused->inFlight, 'the parked window is released or the session wedges');
         $this->assertNull($this->latchOf($refused));
@@ -845,7 +862,11 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
 
         [$dispatched, $turnCmd] = $parked->update($msg);
         $this->assertNotNull($turnCmd);
-        $turnCmd();
+        $walking = $turnCmd();
+        // P-CTX.d: the landing dispatches the parked turn beside the context remeasure.
+        $this->assertInstanceOf(BatchMsg::class, $walking);
+        $this->assertCount(2, $walking->cmds);
+        ($walking->cmds[0])();
         $this->assertSame(1, $main->calls());
         $this->assertSame(1, $this->countUserSaying($dispatched->history, 'what changed in the router?'));
 
@@ -926,7 +947,10 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
         [$refused, $turnCmd] = $parked->update($this->resolve($cmd));
 
         $this->assertGreaterThanOrEqual(1.0, $refused->spentUsd(), 'fixture: the summary must cross the cap');
-        $this->assertNull($turnCmd, 'the parked turn must not be dispatched past the cap');
+        // P-CTX.d: the refusal rewrite schedules the context remeasure.
+        $opened = $turnCmd();
+        $this->assertInstanceOf(BatchMsg::class, $opened);
+        $this->assertCount(1, $opened->cmds, 'the parked turn must not be dispatched past the cap');
         $this->assertSame(0, $main->calls(), 'and the conversation backend is never called');
         $this->assertFalse($refused->inFlight, 'the parked window is released or the session wedges');
         $this->assertNull($this->latchOf($refused));
@@ -960,7 +984,11 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
 
         $this->assertLessThan(1.0, $dispatched->spentUsd(), 'fixture: $0.90 of a $1.00 cap');
         $this->assertNotNull($turnCmd);
-        $turnCmd();
+        $walking = $turnCmd();
+        // P-CTX.d: the landing dispatches the parked turn beside the context remeasure.
+        $this->assertInstanceOf(BatchMsg::class, $walking);
+        $this->assertCount(2, $walking->cmds);
+        ($walking->cmds[0])();
         $this->assertSame(1, $main->calls());
     }
 
@@ -1292,7 +1320,11 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
                 "attempt {$attempt}: the rewrite left the context back over the tier, so the run is {$attempt} long",
             );
             $this->assertSame($attempt, $summarizer->calls, 'and the model was asked exactly once per attempt');
-            $this->assertNull($landedCmd, 'the landing still ends at the 95% tier, exactly as it did before the breaker');
+            // P-CTX.d: the over-tier rewrite schedules the context remeasure
+            // alone; the landing still ends at the 95% tier.
+            $opened = $landedCmd();
+            $this->assertInstanceOf(BatchMsg::class, $opened);
+            $this->assertCount(1, $opened->cmds, 'exactly as it did before the breaker - no turn goes out');
             $this->assertNull($this->latchOf($landed), 'the landing released the latch as it always did');
             $this->assertFalse($landed->inFlight, 'and no window is left open behind it');
             $chat = $landed;
@@ -1383,7 +1415,11 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
 
         $this->assertSame(0, $this->refillCountOf($landed), 'a rewrite that got under the tier breaks the run');
         $this->assertNotNull($landedCmd, 'and the parked turn goes out - the breaker never held it');
-        $landedCmd();
+        $walking = $landedCmd();
+        // P-CTX.d: the turn rides beside the context remeasure.
+        $this->assertInstanceOf(BatchMsg::class, $walking);
+        $this->assertCount(2, $walking->cmds);
+        ($walking->cmds[0])();
         $this->assertSame(1, $main->calls(), 'the conversation backend saw it');
         $this->assertTrue($landed->inFlight);
     }
@@ -1452,7 +1488,11 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
                 "attempt {$attempt}: and no thrash refusal has ever been written into this transcript",
             );
 
-            [$chat] = $landed->update($this->resolve($turn));
+            // P-CTX.d: each rescue landing releases the turn beside the remeasure.
+            $walking = $turn();
+            $this->assertInstanceOf(BatchMsg::class, $walking);
+            $this->assertCount(2, $walking->cmds);
+            [$chat] = $landed->update($this->resolve($walking->cmds[0]));
             $this->assertSame($attempt, $main->calls(), 'the conversation backend was reached on every attempt');
         }
 
@@ -1544,7 +1584,11 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
 
         [$cleared, $cmd] = $this->submit($this->withDraft($chat, '/clear'));
 
-        $this->assertNull($cmd, '/clear starts no turn');
+        // P-CTX.d: /clear rewrites the transcript, so exactly the context
+        // remeasure rides along — and it starts no turn.
+        $opened = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $opened);
+        $this->assertCount(1, $opened->cmds, '/clear starts no turn');
         $this->assertSame([], $cleared->history, 'the transcript is gone');
         $this->assertSame(0, $this->refillCountOf($cleared), 'and so is the run that was counted against it');
 

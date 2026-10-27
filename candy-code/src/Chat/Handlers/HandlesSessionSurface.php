@@ -106,6 +106,7 @@ use SugarCraft\Code\Util\TokenEstimate;
 use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
 use SugarCraft\Code\App\BackgroundSessionStoppedMsg;
 use SugarCraft\Code\App\CancelledWorkflowReportMsg;
+use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\App\CustomCommandExpandedMsg;
 use SugarCraft\Code\App\PermissionModeToggledMsg;
 use SugarCraft\Code\App\ClipboardImagePastedMsg;
@@ -156,6 +157,16 @@ trait HandlesSessionSurface
     private function handleSessionSurfaceMessages(Msg $msg): ?array
     {
 
+        if ($msg instanceof ContextMeasuredMsg) {
+            // P-CTX.d's nudge: by the time this arrives the fresh snapshot is
+            // already in the runner (the scheduled pass saves before it
+            // dispatches), so the model itself does not move — returning
+            // $this is the repaint that lets the dock pane pick up the new
+            // stamp, and it arms nothing. A failed pass sends it too: the
+            // pane then repaints against the previous honest stamp, never a
+            // blank one.
+            return [$this, null];
+        }
         if ($msg instanceof SessionPickerSearchMsg) {
             // The debounced re-read behind the picker's `/` filter (C-SES-2).
             // Applying it only while the picker still shows the query the tick

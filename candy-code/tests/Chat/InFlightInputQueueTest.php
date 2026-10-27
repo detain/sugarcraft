@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\App\AssistantMsg;
+use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
@@ -873,7 +875,16 @@ final class InFlightInputQueueTest extends TestCase
 
         [$settled, $cmd] = $chat->update(new AssistantMsg(Message::assistant('the first answer')));
 
-        $this->assertNull($cmd, 'a capped session dispatches nothing');
+        // P-CTX.d: the refused prompt reaches no model; the settle's one scheduled
+        // pass is the context remeasure, whose nudge arms nothing.
+        $this->assertNotNull($cmd, 'a capped session still stamps its own context');
+        $async = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $async);
+        $stamp = null;
+        $async->promise->then(static function (mixed $msg) use (&$stamp): void {
+            $stamp = $msg;
+        });
+        $this->assertInstanceOf(ContextMeasuredMsg::class, $stamp);
         $this->assertFalse($settled->inFlight, 'and no turn is running');
         $this->assertSame(
             ['the second thing'],

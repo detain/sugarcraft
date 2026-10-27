@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Chat;
 use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Backend;
@@ -156,7 +157,11 @@ final class ParkedCompactionHookTest extends TestCase
         $this->assertInstanceOf(HistoryCompactedMsg::class, $msg);
         [$dispatched, $turnCmd] = $parked->update($msg);
         $this->assertNotNull($turnCmd, 'the parked turn goes out at the landing');
-        $turnCmd();
+        // P-CTX.d: the landing carries the parked turn beside the context remeasure.
+        $walking = $turnCmd();
+        $this->assertInstanceOf(BatchMsg::class, $walking);
+        $this->assertCount(2, $walking->cmds);
+        ($walking->cmds[0])();
 
         $this->assertCount(1, $this->fired, 'the landing does not run the hook a second time');
         $this->assertSame(1, $main->calls(), 'exactly one turn reached the main model');

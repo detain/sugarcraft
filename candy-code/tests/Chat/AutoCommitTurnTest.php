@@ -7,7 +7,9 @@ namespace SugarCraft\Code\Tests\Chat;
 use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Code\App\AssistantMsg;
+use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Backend\CancellationToken;
@@ -89,7 +91,11 @@ final class AutoCommitTurnTest extends TestCase
         file_put_contents($this->repo . '/file.txt', "changed\n");
         foreach (['off', 'edit', 'sometimes'] as $mode) {
             [, $none] = $this->chat($mode, null)->update(new AssistantMsg(Message::assistant('Done.')));
-            self::assertNull($none, "autoCommit: {$mode} schedules nothing at the end of a turn");
+            // P-CTX.d: the mode still schedules no commit pass — what settles
+            // now is the context remeasure ALONE, answering with its repaint
+            // nudge. The commit silence is pinned by the head stays 'base'.
+            self::assertNotNull($none, "autoCommit: {$mode} settles with the remeasure pass");
+            self::assertInstanceOf(ContextMeasuredMsg::class, $this->resolve($none));
         }
         self::assertSame('base', $this->gitAt('log', '-1', '--format=%s'));
     }
@@ -129,6 +135,12 @@ final class AutoCommitTurnTest extends TestCase
     {
         self::assertNotNull($cmd);
         $async = $cmd();
+        // P-CTX.d: a settle that schedules more than one pass batches them; the
+        // first child is the pass under test, the remeasure rides beside it.
+        if ($async instanceof BatchMsg) {
+            self::assertCount(2, $async->cmds);
+            $async = ($async->cmds[0])();
+        }
         self::assertInstanceOf(AsyncCmd::class, $async);
         $resolved = null;
         $async->promise->then(static function (mixed $msg) use (&$resolved): void {

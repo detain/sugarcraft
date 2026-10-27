@@ -53,6 +53,7 @@ final class RouteTraitParityTest extends TestCase
         'CancelAgentRunMsg',
         'CancelledWorkflowReportMsg',
         'ClipboardImagePastedMsg',
+        'ContextMeasuredMsg',
         'CloseAgentViewMsg',
         'CustomCommandExpandedMsg',
         'DreamPassCompletedMsg',
@@ -74,6 +75,7 @@ final class RouteTraitParityTest extends TestCase
         'PromptSuggestionMsg',
         'RuntimeNoticePumpMsg',
         'SessionLockRetryMsg',
+        'SessionPickerSearchMsg', // C-SES-2 arm landed without its roster row — base red cured in-step (P-CTX.d, 2026-10-27)
         'SessionTitledMsg',
         'SideQuestionAnsweredMsg',
         'StatusLineResultMsg',

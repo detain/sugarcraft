@@ -97,7 +97,13 @@ final class PreCompactHookTest extends TestCase
 
         [$landed, $post] = $pending->update($msg);
 
-        $this->assertNull($post, 'a blocked compaction fires no PostCompact');
+        // P-CTX.d: the skip note rewrites the transcript, so the landing carries
+        // the context remeasure — and nothing else: a fold that never happened
+        // fires no PostCompact pass beside it.
+        $this->assertNotNull($post, 'the remeasure rides the landing that wrote the skip note');
+        $opened = $post();
+        $this->assertInstanceOf(BatchMsg::class, $opened);
+        $this->assertCount(1, $opened->cmds, 'the remeasure alone - a blocked compaction fires no PostCompact');
         $this->assertSame($visibleBefore, $this->visibleContents($landed->history), 'nothing was condensed');
         $this->assertStringContainsString(
             'Compaction skipped: PreCompact hook blocked it (' . self::DENY_REASON . '). The history is unchanged.',

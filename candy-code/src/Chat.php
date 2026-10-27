@@ -33,6 +33,7 @@ use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Skills\SkillMentions;
 use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Host\SessionSwitch;
+use SugarCraft\Code\Host\ContextSources;
 use SugarCraft\Code\Tui\ComposerVim;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Code\Tui\Pane;
@@ -90,6 +91,7 @@ use SugarCraft\Code\Workflows\WorkflowEngine;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 use SugarCraft\Code\Workflows\WorkflowResult;
 use SugarCraft\Code\Context\ContextCompactor;
+use SugarCraft\Code\Context\ContextCategories;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextWindow;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
@@ -109,6 +111,7 @@ use SugarCraft\Code\App\CancelledWorkflowReportMsg;
 use SugarCraft\Code\App\CustomCommandExpandedMsg;
 use SugarCraft\Code\App\PermissionModeToggledMsg;
 use SugarCraft\Code\App\ClipboardImagePastedMsg;
+use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\App\SideQuestionAnsweredMsg;
 use SugarCraft\Code\App\DreamPassCompletedMsg;
 use SugarCraft\Code\App\MemoryConsolidatedMsg;
@@ -8039,6 +8042,59 @@ final class Chat implements Model
     }
 
     /**
+     * P-CTX.d: schedule one context measurement OFF the loop. The pane never
+     * measures in view() — assembling prompt sections touches disk — so a
+     * settle, a landed compaction, or a dock hand this closure to the runner,
+     * which resolves it against the memo-backed prompt assembly and answers
+     * with a {@see \SugarCraft\Code\App\ContextMeasuredMsg} repaint nudge
+     * once {@see \SugarCraft\Code\Host\TurnRunner::heldContext()} is fresh.
+     * The state the pass reads is captured at schedule time, so a slow answer
+     * still stamps the transcript it was measured against. No wall-clock
+     * timer is armed anywhere (E646): the pass is a single prompt assembly.
+     */
+    public function measureContextCmd(): ?\Closure
+    {
+        $context = $this->commandContext();
+        $runner = $this->turnRunner();
+        $sessionId = $this->currentSessionId;
+        $root = $this->projectRoot;
+        $historyTokens = $this->contextTokens();
+
+        return Cmd::promise(static function () use ($context, $runner, $sessionId, $root, $historyTokens): PromiseInterface {
+            $deferred = new Deferred();
+            try {
+                $runner->saveContext($sessionId, ContextCategories::from(
+                    ContextSources::measure($context, ContextSources::priceInstructionFiles($root), $historyTokens)
+                ));
+            } catch (\Throwable) {
+                // A measurement that failed leaves the previous stamp in
+                // place; the nudge repaints it honestly as still-current.
+            }
+            $deferred->resolve(new ContextMeasuredMsg($sessionId));
+
+            return $deferred->promise();
+        });
+    }
+
+    /**
+     * P-CTX.d: ride a remeasure beside a host-command pass that is KNOWN to
+     * have rewritten the transcript — `/clear` discards the history and the
+     * successful model switch swaps both the window and the prompt. Passes
+     * that might decline remeasure behind their own guard instead (see
+     * HandlesTurnCompletion::andContextRemeasure); here the change is
+     * unconditional, so the remeasure is too.
+     *
+     * @param array{0: self, 1: ?\Closure} $handled
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function withContextRemeasure(array $handled): array
+    {
+        [$done, $cmd] = $handled;
+
+        return [$done, Cmd::batch($cmd, $done->measureContextCmd())];
+    }
+
+    /**
      * Create a new Chat with an explicit current session ID.
      */
     public function withCurrentSessionId(string $currentSessionId): self
@@ -12529,7 +12585,7 @@ final class Chat implements Model
         // the expansions, a pending `/compact` and the breaker all reset with
         // the transcript, the breaker being the one reset not derived from a
         // compaction's own result — is {@see applyCommandResult()}'s.
-        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\ClearCommand(), '/clear');
+        return $this->withContextRemeasure($this->runHostCommand(new \SugarCraft\Code\Host\Commands\ClearCommand(), '/clear'));
     }
 
     /**
@@ -17652,7 +17708,12 @@ final class Chat implements Model
             ]),
         };
 
-        return [$this->mutate([
+        // P-CTX.d: the window and the prompt this session's snapshot counted
+        // just changed with the engine — remeasure the switched-to backend's
+        // prompt, whose tool list and section rows are only now what the next
+        // request will carry. The failure return above stays unmeasured: that
+        // transcript still stands as stamped.
+        return $this->withContextRemeasure([$this->mutate([
             'palette' => null,
             'backend' => $backend,
             'summaryBackend' => $this->summaryBackendFollowing($backend),
@@ -17663,7 +17724,7 @@ final class Chat implements Model
             // provider. See {@see poolWorkerSpecFor()}.
             'agentPoolConfig' => $this->agentPoolConfig?->withWorkerProvider(self::poolWorkerSpecFor($name, $backend)),
             'history' => [...$this->history, Message::assistant($report)->withUiOnly()],
-        ]), null];
+        ]), null]);
     }
 
     /**

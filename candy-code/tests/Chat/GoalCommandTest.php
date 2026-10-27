@@ -7,9 +7,11 @@ namespace SugarCraft\Code\Tests\Chat;
 use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\App\AssistantMsg;
+use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EchoBackend;
@@ -233,7 +235,9 @@ final class GoalCommandTest extends TestCase
 
         // Nothing is judged once the goal is cleared.
         [$settled, $cmd] = $this->settle($cleared, 'ok');
-        self::assertNull($cmd);
+        // P-CTX.d: no verdict is asked once the goal is cleared; the only pass
+        // the settle schedules is the context remeasure.
+        self::assertInstanceOf(ContextMeasuredMsg::class, $this->resolve($cmd));
         self::assertFalse($settled->inFlight);
     }
 
@@ -242,7 +246,9 @@ final class GoalCommandTest extends TestCase
         $judge = $this->judge('{}');
         [$settled, $cmd] = $this->settle($this->chat($judge, [Message::user('hi')]), 'hello');
 
-        self::assertNull($cmd);
+        // P-CTX.d: with no goal to judge, the settle's one scheduled pass is the
+        // context remeasure.
+        self::assertInstanceOf(ContextMeasuredMsg::class, $this->resolve($cmd));
         self::assertFalse($settled->inFlight);
         self::assertSame([], $judge->asked);
     }
@@ -321,6 +327,12 @@ final class GoalCommandTest extends TestCase
     {
         self::assertNotNull($cmd);
         $async = $cmd();
+        // P-CTX.d: a settle that schedules more than one pass batches them; the
+        // first child is the pass under test, the remeasure rides beside it.
+        if ($async instanceof BatchMsg) {
+            self::assertCount(2, $async->cmds);
+            $async = ($async->cmds[0])();
+        }
         self::assertInstanceOf(AsyncCmd::class, $async);
         $resolved = null;
         $async->promise->then(static function (mixed $msg) use (&$resolved): void {

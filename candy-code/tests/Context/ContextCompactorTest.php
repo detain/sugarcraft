@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Context;
 use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Attachment;
@@ -2059,7 +2060,11 @@ final class ContextCompactorTest extends TestCase
             $landed->history[count($landed->history) - 1]->content,
         );
 
-        $turnCmd();
+        $walking = $turnCmd();
+        // P-CTX.d: the parked turn rides beside the context remeasure.
+        $this->assertInstanceOf(BatchMsg::class, $walking);
+        $this->assertCount(2, $walking->cmds);
+        ($walking->cmds[0])();
         $this->assertSame(1, $backend->calls(), 'and the turn the user pressed Enter for actually reaches the provider');
 
         $dispatched = $backend->historyAt(0);

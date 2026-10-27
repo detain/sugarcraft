@@ -16,6 +16,7 @@ use SugarCraft\Code\Backend\ObservesReasoning;
 use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\Attachments\MentionIndex;
 use SugarCraft\Code\Context\CompactorConfig;
+use SugarCraft\Code\Context\ContextCategories;
 use SugarCraft\Code\Context\Pruning\ContextLedger;
 use SugarCraft\Code\Context\Pruning\PruningMode;
 use SugarCraft\Code\Diagnostics\NoticeSink;
@@ -146,6 +147,17 @@ final class TurnRunner
      * @var array<string, TodoList>
      */
     private array $todos = [];
+
+    /**
+     * The last context snapshot measured for each session, keyed like
+     * {@see $todos} (P-CTX.d) — what the context pane reads without touching
+     * the prompt assembly from `view()`. Memory only, unlike the todo list:
+     * a persisted stamp would outlive the transcript it described, so the
+     * next launch measures fresh instead of serving a remembered size.
+     *
+     * @var array<string, ContextCategories>
+     */
+    private array $contexts = [];
 
     private int $nextListener = 0;
 
@@ -738,6 +750,27 @@ final class TurnRunner
         if ($sessionId !== null && $transcripts?->persists() === true) {
             $transcripts->saveTodos($sessionId, $todos);
         }
+    }
+
+    /**
+     * $sessionId's context snapshot as this runner last measured it, or null
+     * when nothing has been measured for it — the store is never consulted,
+     * so the dock pane can call it per frame, exactly like {@see heldTodos()}.
+     */
+    public function heldContext(?string $sessionId): ?ContextCategories
+    {
+        return $this->contexts[$sessionId ?? ''] ?? null;
+    }
+
+    /**
+     * Keep $context as $sessionId's snapshot (P-CTX.d's writer: Chat's
+     * {@see \SugarCraft\Code\Chat::measureContextCmd()} pass). The latest
+     * save wins the slot; a failed measurement never calls this, so the
+     * pane keeps showing the previous stamp rather than an invented zero.
+     */
+    public function saveContext(?string $sessionId, ContextCategories $context): void
+    {
+        $this->contexts[$sessionId ?? ''] = $context;
     }
 
     /**
