@@ -1,0 +1,24 @@
+### P-CTX.e — Shell wiring: docked Context pane + clickable status-bar meter
+- item: P-CTX-BREAKDOWN (sources: owner pick)
+- kind: feature · effort M
+- approach:
+  - **The pane.** Add `Pane::Context` (dockable, icon `◔`, `tabCycle()`), a `MenuBar::PANE_TABS` entry, and a `Tui\Renderer::renderPane()` arm (`src/Tui/Renderer.php:1944`) through `keyed()`. `ContextPane::render(App …)` builds the model from `TurnRunner::heldContext(currentSessionId)` and `chat->contextTokens()`.
+  - **App state and clicks.** App gains `contextPaneExpanded`, `contextDrill` and a side-row arm in `dispatchChromeClick()` (:3422):
+    - the header or meter row toggles expand;
+    - a category row drills or undrills;
+    - `raw` runs `/context --raw`.
+  - **Keys.** Pane-focused keys: Enter/Space expand or drill, Esc/← undrill.
+  - **Status-bar meter.** The chat status bar's context segment (`Renderer::renderStatusBar`) becomes a `ctxmeter` zone. `Chat::handlePointer`'s chain (:6460+) answers it with a DockPaneMsg for Context. Docking calls `measureContextCmd()`.
+  - **Auto-show.** It auto-docks right once on wide terminals (≥120 cols) after the first reply, through `PaneAutoShow`. A user close is honoured and persisted.
+- files.create: none
+- files.modify: `candy-code/src/Tui/Pane.php` (case, `icon()`, `label()`, `dockable()`, `tabCycle()`), `candy-code/src/Tui/Components/MenuBar.php` (`PANE_TABS`), `candy-code/src/Tui/Components/ContextPane.php` (`render(App)` adapter), `candy-code/src/Tui/Renderer.php` (`renderPane()`), `candy-code/src/Renderer.php` (`renderStatusBar()` zone), `candy-code/src/Chat.php` (`handlePointer()` `ctxmeter` arm), `candy-code/src/App/App.php` (fields, side-row arm, `autoEnablePanes()`), `candy-code/src/Tui/KeyboardHandler.php` (pane keys), `candy-code/src/Commands/KeyBindingRegistry.php` (`context-pane` rows), `candy-code/lang/en.php` (`tui.pane.title.context`, `keys.context.*`), `candy-code/README.md` (panes paragraph + L642 `/context` section mentions the box)
+- tests:
+  - create `candy-code/tests/Tui/ContextPaneShellTest.php` (docked frame never over-wide; a click on a category drills; the meter zone docks the pane; auto-show honours userToggled);
+  - modify `candy-code/tests/Tui/PaneTest.php` (tabCycle ↔ PANE_TABS pin), `candy-code/tests/Tui/MenuBarCompactStripTest.php`, `candy-code/tests/Commands/KeyBindingDriftTest.php` (observations for the new rows).
+- docs/guards: `README.md`; `tests/Commands/KeyBindingDriftTest.php` moved in-step
+- serialized: [renderer:Tui/Renderer.php renderPane; Renderer.php renderStatusBar] (layout #2 of 3) [chat:handlePointer] [lang] (prefix `tui.pane.title.context`, `keys.context.`) [docs:README.md] [hot:candy-code/src/App/App.php] [hot:candy-code/src/Tui/Pane.php] [hot:candy-code/src/Tui/Components/MenuBar.php] [hot:candy-code/src/Tui/KeyboardHandler.php] [hot:candy-code/src/Commands/KeyBindingRegistry.php]
+- deps: P-CTX.c, P-CTX.d, P-IMG.b (serial: layout)
+- phase: normal
+- ruling: auto-dock the Context pane once on ≥120-col terminals after the first reply (proposed), or leave it off until the user docks it?
+- risks: one more pane tab widens the menu strip. P-IMG.a's overflow and MenuBar density absorb it; re-run the compact-strip sweep.
+
