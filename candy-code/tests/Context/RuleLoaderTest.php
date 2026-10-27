@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use SugarCraft\Code\Context\Rule;
 use SugarCraft\Code\Context\RuleLoader;
+use SugarCraft\Code\Context\RulePathNudge;
 use SugarCraft\Code\Context\RulesState;
 use SugarCraft\Code\Context\Triggers\IntentTrigger;
 use SugarCraft\Code\Context\Triggers\KeywordTrigger;
@@ -894,6 +895,8 @@ final class RuleLoaderTest extends TestCase
             'off' => $parsed[0]->enabled,
             'on' => $parsed[1]->enabled,
         ], 'the mis-map hazard: alwaysApply:false must read as OFF at parse, not stand in every prompt');
+        self::assertSame('alwaysApply', $parsed[0]->disabledBy, 'the pattern-less fold records its reason for the /rules listing');
+        self::assertNull($parsed[1]->disabledBy, 'an enabled rule carries no reason');
         self::assertSame(['on'], $this->ruleNames($loader->load()), 'and load() drops it like it drops enabled:false');
         self::assertSame([], $loader->ignoredFrontmatter(), 'globs/alwaysApply are acted-on aliases - a did-you-mean on a working key is a lie');
     }
@@ -910,6 +913,47 @@ final class RuleLoaderTest extends TestCase
 
         self::assertFalse($parsed[0]->enabled, 'one key saying off is enough');
         self::assertFalse($parsed[1]->enabled, 'the other key saying off is equally enough');
+    }
+
+    public function testAGlobbedAlwaysApplyFalseRuleStaysEnabledAndPathScoped(): void
+    {
+        $root = $this->sandbox . '/repo-globbed';
+        $cursor = $this->home . '/.cursor/rules';
+        mkdir($cursor, 0o755, true);
+        $this->emitRule($cursor . '/match.mdc', "---\nname: match\nglobs:\n  - src/main.php\nalwaysApply: false\n---\nBODY\n");
+        $this->emitRule($cursor . '/plain.mdc', "---\nname: plain\nalwaysApply: false\n---\nOFF\n");
+        $this->emitRule($cursor . '/veto.mdc', "---\nname: veto\nenabled: false\nalwaysApply: false\n---\nOFF\n");
+
+        $parsed = (new RuleLoader($root))->loadUserCursorRules();
+        // The walk sorts by key: match, plain, veto.
+
+        self::assertTrue($parsed[0]->enabled, 'C-CTX-1.b: beside globs, alwaysApply:false is Cursor\'s apply-on-match declaration, not an off switch');
+        self::assertNull($parsed[0]->disabledBy, 'a rule the parse left enabled carries no disable reason');
+        self::assertSame(['src/main.php'], $parsed[0]->triggers[0]->globs, 'the pattern still reaches the PathTrigger');
+        self::assertTrue(RulePathNudge::isPathScoped($parsed[0]), 'the pack rides the tool-time channel the standing splice skips');
+        self::assertFalse($parsed[1]->enabled, 'with no patterns at all the AND fold still means off');
+        self::assertSame('alwaysApply', $parsed[1]->disabledBy, 'the fold that disabled it records its reason');
+        self::assertFalse($parsed[2]->enabled, 'the native enabled:false vetoes even beside globs');
+        self::assertNull($parsed[2]->disabledBy, 'the file\'s own enabled key needs no second reason');
+
+        self::assertSame(['match'], $this->ruleNames((new RuleLoader($root))->load()), 'load() emits the globbed pack and drops the pattern-less one');
+    }
+
+    public function testACommaSeparatedGlobScalarSplitsIntoSeparatePatterns(): void
+    {
+        $root = $this->sandbox . '/repo-commasplit';
+        $cursor = $this->home . '/.cursor/rules';
+        mkdir($cursor, 0o755, true);
+        // Plain non-wildcard values: the SPLIT is the subject, and glob-shaped
+        // literals in this file would drift the harvested corpus
+        // (GlobDialectDifferentialTest).
+        $this->emitRule($cursor . '/pair.mdc', "---\nname: pair\nglobs: src/main.php, lib/util.php\nalwaysApply: false\n---\nBODY\n");
+
+        $rule = (new RuleLoader($root))->loadUserCursorRules()[0];
+
+        self::assertCount(1, $rule->triggers);
+        self::assertSame(['src/main.php', 'lib/util.php'], $rule->triggers[0]->globs, 'one scalar line spells two patterns, not one never-matching string');
+        self::assertTrue($rule->enabled, 'the split patterns count for the alwaysApply fold');
     }
 
     public function testANonBooleanAlwaysApplyFailsTheParseAndLandsInTheSkipLedger(): void

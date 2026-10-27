@@ -261,7 +261,14 @@ final class FrontmatterKeyAuditTest extends TestCase
         $rules = $loader->loadProjectClaudeRules();
 
         self::assertCount(1, $rules);
-        self::assertFalse($rules[0]->enabled, 'alwaysApply: false is ACTED ON at the parse boundary, not merely tolerated');
+        // C-CTX-1.b flipped the fold this pinned: `alwaysApply: false` BESIDE
+        // globs is Cursor's apply-on-match declaration, so the rule is enabled
+        // and path-scoped — ACTED ON now means the patterns arrive, not the
+        // AND-off. The pattern-less act-on proof lives in
+        // RuleLoaderTest::testAlwaysApplyFalseDisablesAtTheParseBoundaryAndEarnsNoAuditNotice.
+        self::assertTrue($rules[0]->enabled, 'alwaysApply: false beside globs is acted on as Cursor semantics, not folded off');
+        self::assertSame(['src/main.php'], $rules[0]->triggers[0]->globs, 'the globs: alias builds the PathTrigger the enable decision just consulted');
+        self::assertNull($rules[0]->disabledBy);
         self::assertSame([], $loader->ignoredFrontmatter(), 'a did-you-mean on a working alias would train the operator to ignore the audit');
     }
 

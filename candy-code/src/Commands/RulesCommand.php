@@ -185,7 +185,41 @@ final class RulesCommand
         echo $table->render() . "\n\n";
         echo TranscriptTable::indented(Lang::t('cmd.rules.footer')) . "\n";
 
+        // C-CTX-1.b: an imported pack switched off by its own `alwaysApply: false`
+        // with no globs looks in the table exactly like a pack its file disabled
+        // the native way - but its file never said `enabled: false`, so the
+        // footer's frontmatter sentence is not true of it. One aggregate line
+        // carries the real reason for all of them at once, never one per row.
+        $offByAlwaysApply = $this->countAlwaysApplyOff($packs);
+        if ($offByAlwaysApply > 0) {
+            echo "\n" . TranscriptTable::indented(Lang::t(
+                $offByAlwaysApply === 1 ? 'cmd.rules.alwaysapply_hint_one' : 'cmd.rules.alwaysapply_hint',
+                ['count' => $offByAlwaysApply],
+            )) . "\n";
+        }
+
         return 0;
+    }
+
+    /**
+     * Imported packs whose parse-time disable came purely from `alwaysApply: false`
+     * beside no path patterns ({@see Rule::DISABLED_ALWAYS_APPLY}). Native files
+     * are not counted - their own `enabled` key is the explanation the State
+     * column already names - and globbed imports are not off at all under
+     * C-CTX-1.b, so they cannot enter the count.
+     *
+     * @param list<Rule> $packs
+     */
+    private function countAlwaysApplyOff(array $packs): int
+    {
+        $count = 0;
+        foreach ($packs as $rule) {
+            if ($rule->origin !== Rule::ORIGIN_NATIVE && $rule->disabledBy === Rule::DISABLED_ALWAYS_APPLY) {
+                ++$count;
+            }
+        }
+
+        return $count;
     }
 
     /**

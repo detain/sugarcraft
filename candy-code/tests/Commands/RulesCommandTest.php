@@ -156,6 +156,53 @@ final class RulesCommandTest extends TestCase
         self::assertStringContainsString('rulebooks', $text);
     }
 
+    public function testTheListingExplainsImportedPacksSwitchedOffByAlwaysApply(): void
+    {
+        $claude = $this->home . '/.claude/rules';
+        $cursor = $this->home . '/.cursor/rules';
+        mkdir($claude, 0o700, true);
+        mkdir($cursor, 0o700, true);
+        $this->writePackFile($cursor . '/off1.mdc', "---\nname: off1\nalwaysApply: false\n---\nA\n");
+        $this->writePackFile($claude . '/off2.mdc', "---\nname: off2\nalwaysApply: false\n---\nB\n");
+        // Neither of these belongs in the count: the globbed pack is ENABLED and
+        // path-scoped under C-CTX-1.b, and the native self-disabled pack is
+        // explained by its own `enabled: false` row, not by an import hint.
+        $this->writePackFile($cursor . '/globbed.mdc', "---\nname: globbed\nglobs:\n  - src/main.php\nalwaysApply: false\n---\nC\n");
+        $this->writePackFile($this->packsDir . '/shy.md', "---\nname: shy\nenabled: false\n---\nD\n");
+
+        $text = $this->reply($this->submit('/rules'));
+
+        self::assertStringContainsString(
+            '2 imported rules are off (`alwaysApply: false`, no globs); turn one on with `/rules <name>`',
+            $text,
+            'the aggregate hint counts exactly the pattern-less imported alwaysApply-offs',
+        );
+        self::assertStringNotContainsString('3 imported', $text, 'the globbed and native packs must not inflate the count');
+    }
+
+    public function testTheAlwaysApplyHintSingularizesAndSilencesCorrectly(): void
+    {
+        $cursor = $this->home . '/.cursor/rules';
+        mkdir($cursor, 0o700, true);
+        $this->writePackFile($cursor . '/lone.mdc', "---\nname: lone\nalwaysApply: false\n---\nA\n");
+        $this->writePackFile($cursor . '/globbed.mdc', "---\nname: globbed\nglobs:\n  - src/main.php\nalwaysApply: false\n---\nB\n");
+
+        $text = $this->reply($this->submit('/rules'));
+
+        self::assertStringContainsString(
+            '1 imported rule is off (`alwaysApply: false`, no globs); turn it on with `/rules <name>`',
+            $text,
+            'one pack reads one rule, singular',
+        );
+        self::assertStringNotContainsString('imported rules are off', $text, 'no plural template beside a single counted pack');
+
+        // Zero-count polarity: drop the off pack's file, re-list, the hint leaves.
+        unlink($cursor . '/lone.mdc');
+        $quiet = $this->reply($this->submit('/rules'));
+
+        self::assertStringNotContainsString('imported rule', $quiet, 'with nothing counted the hint is not printed at all');
+    }
+
     /**
      * A pack needs no frontmatter to be a pack, but `name:` must not become a
      * second, conflicting identity in the listing: the toggle handle is the

@@ -23,8 +23,12 @@ use SugarCraft\Code\Support\Frontmatter;
  * rules tier: `name`, `description`, `enabled`, `models`, plus the two P6.S1
  * trigger keys `paths:` and `keywords:`, plus the two INT-2 foreign-tree keys
  * that map ONTO existing fields rather than minting new ones — `globs:` is read
- * as an alias of `paths:` (Cursor's spelling) and `alwaysApply:` folds into
- * `enabled` with AND semantics (Claude's and Cursor's opt-out). The frontmatter grammar itself
+ * as an alias of `paths:` (Cursor's spelling, and a comma-separated scalar
+ * spells several patterns in one line, so it splits), and `alwaysApply:` is
+ * Cursor's applicability declaration: `false` BESIDE path patterns leaves the
+ * rule enabled and path-scoped, and only `false` with no patterns at all folds
+ * into `enabled` with AND semantics (Claude's pure opt-out) — the reason that
+ * fold records itself in {@see $disabledBy}. The frontmatter grammar itself
  * (the `---` fence, scalar coercion, list-of-scalars) is {@see Frontmatter},
  * reached through the same single fenced-block read {@see \SugarCraft\Code\Commands\CommandSpec::fromFile()}
  * uses, so a rules file and a command file cannot disagree about what a block
@@ -137,16 +141,26 @@ final class Rule
     public const ORIGINS = [self::ORIGIN_NATIVE, self::ORIGIN_CLAUDE, self::ORIGIN_CURSOR];
 
     /**
+     * The machine-readable {@see $disabledBy} reason recorded when a rule's own
+     * `alwaysApply: false` — and nothing else — is what switched it off at the
+     * parse boundary, i.e. the key arrived with no path patterns to make it
+     * Cursor's apply-on-match declaration (C-CTX-1.b). A rule disabled by its
+     * native `enabled: false` carries no reason: that key is its own explanation.
+     */
+    public const DISABLED_ALWAYS_APPLY = 'alwaysApply';
+
+    /**
      * @param string           $name        Stable identifier: the frontmatter `name:` when present, else the loader's derived filename stem.
      * @param string           $body        The prompt text (everything after the closing `---`), un-trimmed.
      * @param string           $path        The resolved absolute path this rule was read from.
      * @param string           $tier        One of {@see TIERS}.
      * @param string|null      $description The one-line self-description, or null when the file carried none.
-     * @param bool             $enabled     Frontmatter `enabled:`; a rule with the key absent is enabled.
+     * @param bool             $enabled     Effective enable bit after the INT-2/C-CTX-1.b fold — `enabled:` AND-ed with `alwaysApply:` ONLY when the file carries no path patterns; a globbed `alwaysApply: false` stays enabled (Cursor's apply-on-match). Absent keys are enabled.
      * @param list<string>     $models      Model identifiers from `models:` (empty when the key is absent).
      * @param list<Trigger>    $triggers    The trigger value objects built from this file's frontmatter, in canonical order.
      * @param string           $key         The loader's pack identity for this file - never derived from frontmatter, so a `name:` cannot move what `/rules` types.
      * @param string           $origin      One of {@see ORIGINS} - which directory family the loader walked this file from; provenance for the `/rules` Source column, never an authority level.
+     * @param string|null      $disabledBy  Why the PARSE switched this rule off - {@see DISABLED_ALWAYS_APPLY} for an imported `alwaysApply: false` with no patterns, null when it is enabled or its file's own `enabled: false` is the whole story. Set at {@see new()} only; {@see withEnabled()} never writes it, so a session toggle cannot masquerade as a frontmatter disable.
      */
     private function __construct(
         public readonly string $name,
@@ -159,6 +173,7 @@ final class Rule
         public readonly array $triggers,
         public readonly string $key,
         public readonly string $origin = self::ORIGIN_NATIVE,
+        public readonly ?string $disabledBy = null,
     ) {
     }
 
@@ -230,12 +245,32 @@ final class Rule
             throw new InvalidArgumentException(sprintf('Rule name resolved to blank (%s).', $path));
         }
         $description = self::stringField($meta, 'description', $path);
-        // INT-2: `alwaysApply:` (Claude/Cursor spelling of the same opt-out)
-        // folds into `enabled` with AND semantics - either key says off, the
-        // rule is off; a mis-map here would leave an imported rule standing in
-        // every prompt, the exact hazard FrontmatterKeyAudit exists to catch.
-        $enabled = (self::boolField($meta, 'enabled', $path) ?? true)
-            && (self::boolField($meta, 'alwaysApply', $path) ?? true);
+        // C-CTX-1.b: the path patterns are resolved BEFORE the enable fold, and
+        // through the glob-list reader - Cursor writes `globs:` as a
+        // comma-separated scalar, and one line then spells several patterns.
+        $paths = self::globListField($meta, 'paths', $path);
+        if ($paths === []) {
+            // INT-2: foreign trees spell the path trigger `globs:` (Cursor's
+            // key); it is an ALIAS of `paths:`, and `paths:` wins when one file
+            // somehow declares both.
+            $paths = self::globListField($meta, 'globs', $path);
+        }
+        $enabledFlag = self::boolField($meta, 'enabled', $path) ?? true;
+        $alwaysApply = self::boolField($meta, 'alwaysApply', $path);
+        // INT-2/C-CTX-1.b: `alwaysApply: false` (Claude/Cursor spelling of the
+        // opt-out) folds into `enabled` with AND semantics ONLY when the file
+        // carries no path patterns. Beside patterns it is Cursor's "apply when a
+        // match fires" declaration: the rule stays enabled and rides the
+        // path-scoped channel ({@see RulePathNudge}), never the standing splice.
+        // When the fold IS what switched a rule off, the reason is recorded so
+        // the `/rules` listing can explain a row whose file never said
+        // `enabled: false` - a mis-map here would leave an imported rule
+        // standing in every prompt, the exact hazard FrontmatterKeyAudit exists
+        // to catch.
+        $enabled = $enabledFlag && (($alwaysApply ?? true) || $paths !== []);
+        $disabledBy = $enabledFlag && $alwaysApply === false && $paths === []
+            ? self::DISABLED_ALWAYS_APPLY
+            : null;
         $models = self::stringListField($meta, 'models', $path);
 
         return new self(
@@ -246,9 +281,10 @@ final class Rule
             description: $description,
             enabled: $enabled,
             models: $models,
-            triggers: self::buildTriggers($meta, $description, $path),
+            triggers: self::buildTriggers($meta, $description, $path, $paths),
             key: $key ?? $fallbackName,
             origin: $origin,
+            disabledBy: $disabledBy,
         );
     }
 
@@ -262,10 +298,11 @@ final class Rule
      *
      * @param array<string, mixed> $meta
      * @param string|null          $description Reused as the {@see IntentTrigger} text (the plan maps `description` -> IntentTrigger).
+     * @param list<string>         $paths The path patterns already resolved at the fold (C-CTX-1.b): `paths:` with `globs:` as its alias, comma scalars split. Passed in, not re-read, so the trigger and the enable decision can never disagree about what counted as a pattern.
      *
      * @return list<Trigger>
      */
-    private static function buildTriggers(array $meta, ?string $description, string $path): array
+    private static function buildTriggers(array $meta, ?string $description, string $path, array $paths): array
     {
         $triggers = [];
 
@@ -274,13 +311,12 @@ final class Rule
             $triggers[] = KeywordTrigger::new($keywords);
         }
 
-        // INT-2: foreign trees spell the path trigger `globs:` (Cursor's key);
-        // it is an ALIAS of `paths:`, not a second trigger kind, and `paths:`
-        // wins when one file somehow declares both.
-        $paths = self::stringListField($meta, 'paths', $path);
-        if ($paths === []) {
-            $paths = self::stringListField($meta, 'globs', $path);
-        }
+        // INT-2: foreign trees spell the path trigger `globs:` (Cursor's key); it
+        // is an ALIAS of `paths:` and `paths:` wins when one file declares both -
+        // both facts are already folded into $paths by the caller. C-CTX-1.b adds
+        // that a comma-packed scalar names SEVERAL patterns, so a lone
+        // `globs: "*.js, *.ts"` builds one PathTrigger over two patterns rather
+        // than one never-matching string.
         if ($paths !== []) {
             $triggers[] = PathTrigger::new($paths);
         }
@@ -363,7 +399,7 @@ final class Rule
      * Only the fields that have a `with*()` builder are operands here; every
      * other field carries through unchanged, and the ones a builder cannot
      * touch (identity `name` and pack identity `key`, source `path`/`tier`/`origin`, and the read-only
-     * `description`/`models` parsed once from the file) have no parameter to
+     * `description`/`models`/`disabledBy` parsed once from the file) have no parameter to
      * get out of sync.
      */
     private function mutate(
@@ -382,6 +418,7 @@ final class Rule
             triggers: $triggers ?? $this->triggers,
             key: $this->key,
             origin: $this->origin,
+            disabledBy: $this->disabledBy,
         );
     }
 
@@ -459,6 +496,35 @@ final class Rule
             }
 
             throw new InvalidArgumentException(sprintf('Rule "%s" entries must be scalars, %s given (%s).', $key, get_debug_type($item), $path));
+        }
+
+        return $out;
+    }
+
+    /**
+     * A list-of-glob-patterns key: {@see stringListField()} plus Cursor's comma
+     * habit. `globs: src/main.php, lib/util.php` is ONE scalar string carrying
+     * TWO patterns, and a list entry may pack commas the same way, so every
+     * item is comma-split and trimmed before it reaches a trigger. Splitting is
+     * naive by design: an fnmatch-style `[…]` class spelling a literal comma
+     * would mis-split here, and the dialect that decides what a pattern means
+     * ({@see \SugarCraft\Code\Util\PathGlob}) is not consulted at parse - it
+     * never sees a comma-pack, because by then there is one pattern per entry.
+     *
+     * @param array<string, mixed> $meta
+     *
+     * @return list<string>
+     */
+    private static function globListField(array $meta, string $key, string $path): array
+    {
+        $out = [];
+        foreach (self::stringListField($meta, $key, $path) as $item) {
+            foreach (explode(',', $item) as $part) {
+                $trimmed = trim($part);
+                if ($trimmed !== '') {
+                    $out[] = $trimmed;
+                }
+            }
         }
 
         return $out;

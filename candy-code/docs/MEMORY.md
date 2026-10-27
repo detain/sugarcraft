@@ -761,6 +761,18 @@ precedence order (`InstructionFileLoader::FILENAMES`):
 - **nested files** — a `CLAUDE.md`/`AGENTS.md` (or alias) in a subdirectory is
   injected when a tool touches a path under it, at most once per session.
 
+The two import trees bring their own frontmatter vocabulary; each foreign key
+maps ONTO the fields above rather than adding a kind of its own:
+
+| foreign spelling | what it becomes here |
+| --- | --- |
+| `globs:` | an alias of `paths:` — a comma-separated scalar splits into one pattern per item |
+| `alwaysApply: true` | no extra effect — an enabled rule either stands on its own or rides its patterns |
+| `alwaysApply: false` beside `globs:`/`paths:` | stays **enabled** and path-scoped: delivered when a tool touches a matching path, never spliced into the standing prompt |
+| `alwaysApply: false` with no patterns | switched off at parse; `Rule::$disabledBy` records `alwaysApply` and the `/rules` listing explains the rows in one aggregate line |
+| `enabled: false` | off either way — the native veto beats `alwaysApply: true` |
+| `description:` | the pack's intent trigger and its one-line label |
+
 `/init` asks the agent to write one: it studies the checkout and writes (or
 improves) `AGENTS.md` at the root, which the loader reads from the next session
 on — see [`COMMANDS.md`](COMMANDS.md#the-built-in-commands).
