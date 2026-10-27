@@ -74,7 +74,7 @@ use Symfony\Component\Yaml\Yaml;
  * ISS-039 anchoring keys off the native user file's realpath, so it
  * correctly does not fire for these paths.)
  *
- * WHAT THE NATIVE VALIDATOR CAN NEVER SAY, AND THE DIALLECTIC IT NEEDS. Two CC
+ * WHAT THE NATIVE VALIDATOR CAN NEVER SAY, AND THE DIALECT IT NEEDS. Two CC
  * keys have no native equivalent to flatten INTO, so they are carried as the
  * pair of stamps {@see parse()} adds after the validator returns:
  * `statusMessage` rides the native `description`, and `async: true` rides
