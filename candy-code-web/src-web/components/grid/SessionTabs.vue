@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { sessionLabel } from '../approvals/attention'
+import { describe } from '../../stores/session'
 import { loadTabChord, matchesTabChord, nextTabChord, saveTabChord, tabChordLabel, tabDigit, type TabChord } from '../../lib/tabChord'
 import { useApprovalsStore } from '../../stores/approvals'
 import { useLayoutStore, type Showing } from '../../stores/layout'
@@ -64,15 +65,19 @@ function toGrid(): void {
 }
 
 const starting = ref(false)
+const createError = ref<string | null>(null)
 
 /** P-TABS.h: `+` starts a session (through the picker when the server offers one). */
 async function create(): Promise<void> {
   starting.value = true
+  createError.value = null
   try {
     const summary = await newSession.start()
     if (summary) void router.push({ name: 'session', params: { id: summary.id } })
-  } catch {
-    // The sessions store's own error surfaces where the failure happened.
+  } catch (failure) {
+    // The no-picker path is `sessions.create()`, which records nothing on the
+    // store — surface the refusal here, as the dashboard and grid do.
+    createError.value = describe(failure)
   } finally {
     starting.value = false
   }
@@ -168,6 +173,7 @@ onBeforeUnmount(() => {
       </div>
       <button type="button" class="new-tab" data-testid="new-session-tab" :disabled="starting" title="Start a new session" @click="create">&#43;</button>
     </div>
+    <p v-if="createError" class="error" role="alert" data-testid="new-session-error">{{ createError }}</p>
     <div class="modes" role="group" aria-label="Layout">
       <button type="button" class="chord" data-testid="tab-chord" title="Key chord that picks a tab — click to cycle (the digit is the physical key, so laptop Option and AZERTY glyphs do not get in the way)" @click="cycleChord()">tabs: {{ tabChordLabel(chord) }}+1</button>
       <button type="button" :aria-pressed="!inGrid" data-testid="layout-tabs" @click="toTabs">&#9635; tabs</button>
@@ -282,6 +288,14 @@ onBeforeUnmount(() => {
 .new-tab:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+/* P-TABS.h review fix: a refused `+` surfaces locally, as the dashboard
+   (DashboardView) and grid (PaneGrid) errors do. */
+.error {
+  align-self: center;
+  margin: 0;
+  color: var(--error);
+  font-size: 0.875rem;
 }
 .modes {
   flex: none;

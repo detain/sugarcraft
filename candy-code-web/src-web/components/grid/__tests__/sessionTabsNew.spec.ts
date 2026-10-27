@@ -5,7 +5,7 @@ import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router'
 import { useLayoutStore } from '../../../stores/layout'
 import SessionTabs from '../SessionTabs.vue'
-import { summary, Wire } from './harness'
+import { ask, summary, Wire } from './harness'
 
 /**
  * P-TABS.h: the trailing `+` on the tab strip starts a session (picker-aware,
@@ -78,6 +78,28 @@ describe('session tabs: the + button (P-TABS.h)', () => {
     expect(router.currentRoute.value.params.id).toBe('a')
     expect(tabIds(wrapper)).toEqual(['a'])
   })
+
+  it('surfaces a refused new session next to the + button and clears on success', async () => {
+    const { wire, wrapper } = await setUp()
+
+    await wrapper.find('[data-testid="new-session-tab"]').trigger('click')
+    const frame = wire.sent('session.create').pop()
+    if (!frame) throw new Error('no session.create sent')
+    wire.socket.fail(-32000, 'server_error', 'no room', frame.id)
+    await flushPromises()
+
+    const error = wrapper.find('[data-testid="new-session-error"]')
+    expect(error.exists()).toBe(true)
+    expect(error.text()).toContain('no room')
+
+    // A following success settles the strip: no leftover error row.
+    await wrapper.find('[data-testid="new-session-tab"]').trigger('click')
+    await wire.answer('session.create', summary('d'))
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="new-session-error"]').exists()).toBe(false)
+    expect(tabIds(wrapper)).toEqual(['a', 'd'])
+  })
 })
 
 describe('session tabs: the unseen badge (P-TABS.h)', () => {
@@ -103,5 +125,25 @@ describe('session tabs: the unseen badge (P-TABS.h)', () => {
     expect(router.currentRoute.value.params.id).toBe('b')
     expect(wrapper.find('[data-testid="tab-unseen"]').exists()).toBe(false)
     expect(useLayoutStore().unseen).toEqual({})
+  })
+
+  it('keeps the ask badge in front of the unseen mark on the same tab', async () => {
+    const { wire, wrapper } = await setUp()
+    useLayoutStore().openTab('b')
+    await flushPromises()
+
+    wire.serverEvent('permission.asked', ask('k1', 'b'))
+    await flushPromises()
+    wire.serverEvent('session.updated', summary('b', { status: 'busy' }))
+    await flushPromises()
+    wire.serverEvent('session.updated', summary('b', { status: 'idle' }))
+    await flushPromises()
+
+    // The finish was marked — the store still carries the debt...
+    expect(useLayoutStore().unseen['b']).toBe(true)
+    // ...but a pending question outranks the unseen mark on the strip.
+    const tabB = wrapper.find('[data-testid="session-tab"][data-session-id="b"]')
+    expect(tabB.find('[data-testid="tab-ask-badge"]').exists()).toBe(true)
+    expect(tabB.find('[data-testid="tab-unseen"]').exists()).toBe(false)
   })
 })
