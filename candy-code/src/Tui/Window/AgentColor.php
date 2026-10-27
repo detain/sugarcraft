@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tui\Window;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Code\Theme;
+use SugarCraft\Core\Util\Color;
 
 /**
  * The agent-preset `color:` vocabulary resolved to a paintable hex string.
@@ -14,7 +14,7 @@ use SugarCraft\Code\Theme;
  * (red/blue/green/yellow/purple/orange/pink/cyan), and a literal `#rrggbb`.
  * The words are theme tokens — they ride whatever palette the user chose,
  * mapped onto the closest shell hue: error/info/success/warning carry
- * red/blue/green/yellow outright, and primary/systemLabel/shellMuted/userLabel
+ * red/blue/green/yellow outright, and shellPrimary/assistantLabel/userLabel/systemLabel
  * stand in for purple/pink/orange/cyan, the four with no token of their own.
  * A hex is the user overriding the palette on purpose, and it passes only
  * after the shell's own contrast law ({@see Theme::CONTRAST_MIN}) finds it
