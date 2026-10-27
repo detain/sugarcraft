@@ -61,6 +61,15 @@ permission:
     "npx vitest run *": allow
     "*/node_modules/.bin/vitest run *": allow
     "env -u LINES -u COLUMNS npx vitest run *": allow
+    "php vendor/bin/phpunit*": allow
+    "php */vendor/bin/phpunit*": allow
+    "env -u LINES -u COLUMNS php vendor/bin/phpunit *": allow
+    "npx vitest *": allow
+    "npx vue-tsc *": allow
+    "npm run *": allow
+    "npm install *": allow
+    "npm ci *": allow
+    "npm ls*": allow
 ---
 
 # cc-cmp step reviewer
