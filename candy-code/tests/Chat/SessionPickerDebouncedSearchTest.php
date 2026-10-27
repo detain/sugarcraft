@@ -221,4 +221,63 @@ final class SessionPickerDebouncedSearchTest extends TestCase
         $this->assertSame(SessionPicker::SEARCH_LIMIT, $filtering->sessionPicker()?->fetchLimit());
         $this->assertSame('', $filtering->sessionPicker()?->query());
     }
+
+    /**
+     * Narrow to a body hit, let the debounced re-read replace the page with
+     * the FTS match set, then Escape. The cleared filter must bring the full
+     * browse list back: before the fix the match set stranded on screen —
+     * bare-list (no transcript, matches nothing) was gone until a rebuild.
+     */
+    public function testEscapeFromANarrowedFetchRestoresTheBrowseList(): void
+    {
+        $chat = $this->openFilter($this->chat());
+        $this->store->createSession('quiet-vault', 'openai', 'gpt-4', null, 'Quarterly Notes');
+        $this->store->saveTranscript('quiet-vault', [
+            ['role' => 'user', 'content' => 'the ledger entry about the amber anchor was misplaced'],
+        ]);
+        [$typed, $cmd] = $this->typeChars($chat, 'anchor');
+        $tick = $cmd();
+        $this->assertInstanceOf(TickRequest::class, $tick);
+        [$settled] = $typed->update(($tick->produce)());
+
+        $this->assertContains('quiet-vault', self::visibleIds($settled), 'fixture: the debounced re-read landed');
+        $this->assertNotNull($settled->sessionPicker()?->lastFetchQuery(), 'fixture: the loaded page is query-narrowed');
+        $this->assertNotContains('bare-list', self::visibleIds($settled), 'fixture: the narrowed page dropped the non-matching row');
+
+        [$cleared, $cmd2] = $settled->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($cmd2, 'the widened re-read is synchronous — clearing must not wait behind a debounce');
+        $this->assertNotNull($cleared->sessionPicker(), 'the first Escape clears the filter, picker stays open');
+        $this->assertSame('', $cleared->sessionPicker()?->query());
+        $this->assertFalse($cleared->sessionPicker()?->isFiltering());
+        $this->assertContains('bare-list', self::visibleIds($cleared), 'Escape from a query-narrowed page re-reads the full browse list');
+        $this->assertNull($cleared->sessionPicker()?->lastFetchQuery(), 'the restored page is stamped un-narrowed');
+    }
+
+    /**
+     * The other clear path: backspace the narrowed query away to empty. The
+     * empty-query Filter edit must bypass the already-fetched gate while the
+     * loaded page is the match set, or the browse list stays stranded.
+     */
+    public function testBackspaceToEmptyFromANarrowedFetchRestoresTheBrowseList(): void
+    {
+        $chat = $this->openFilter($this->chat());
+        $this->store->createSession('quiet-vault', 'openai', 'gpt-4', null, 'Quarterly Notes');
+        $this->store->saveTranscript('quiet-vault', [
+            ['role' => 'user', 'content' => 'the ledger entry about the amber anchor was misplaced'],
+        ]);
+        [$typed, $cmd] = $this->typeChars($chat, 'anchor');
+        $tick = $cmd();
+        $this->assertInstanceOf(TickRequest::class, $tick);
+        [$settled] = $typed->update(($tick->produce)());
+        $this->assertNotContains('bare-list', self::visibleIds($settled), 'fixture: narrowed to the match set');
+
+        $cleared = $settled;
+        for ($i = 0; $i < mb_strlen('anchor'); $i++) {
+            [$cleared] = $cleared->update(new KeyMsg(KeyType::Backspace));
+        }
+
+        $this->assertSame('', $cleared->sessionPicker()?->query(), 'fixture: the backspaces emptied the query');
+        $this->assertContains('bare-list', self::visibleIds($cleared), 'backspace-to-empty re-reads the widened page, it does not keep the match set');
+        $this->assertNull($cleared->sessionPicker()?->lastFetchQuery());
+    }
 }

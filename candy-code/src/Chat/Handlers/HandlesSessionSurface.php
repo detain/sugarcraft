@@ -168,7 +168,10 @@ trait HandlesSessionSurface
             }
             [$rows, $more] = $this->sessionPickerRows(SessionPicker::SEARCH_LIMIT, $picker->showsArchived(), $msg->query);
 
-            return [$this->mutate(['sessionPicker' => $picker->withFetchedRows($rows, SessionPicker::SEARCH_LIMIT, $more)]), null];
+            // The fetch query rides along: this page IS the narrowed match
+            // set, and the picker's clear paths read that stamp to know a
+            // widened re-read is owed (C-SES-2 review round 1, MAJOR).
+            return [$this->mutate(['sessionPicker' => $picker->withFetchedRows($rows, SessionPicker::SEARCH_LIMIT, $more, $msg->query)]), null];
         }
         if ($msg instanceof BackgroundSessionSpawnedMsg) {
             // Unlike the title call above this is NOT session-scoped: the

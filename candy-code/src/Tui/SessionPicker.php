@@ -159,6 +159,7 @@ final class SessionPicker
         array $sessions,
         private readonly ?string $branchFilter,
         private readonly int $fetchLimit,
+        private readonly ?string $lastFetchQuery,
         private readonly bool $moreInStore,
         private readonly ?string $currentBranch,
         private readonly ?string $currentSessionId,
@@ -214,6 +215,7 @@ final class SessionPicker
             $sessions,
             null,
             $fetchLimit,
+            null,
             $moreInStore,
             $currentBranch,
             $currentSessionId,
@@ -245,6 +247,7 @@ final class SessionPicker
             $field('sessions'),
             $field('branchFilter'),
             $field('fetchLimit'),
+            $field('lastFetchQuery'),
             $field('moreInStore'),
             $field('currentBranch'),
             $field('currentSessionId'),
@@ -613,6 +616,17 @@ final class SessionPicker
         return $this->fetchLimit;
     }
 
+    /**
+     * The query the loaded page was fetched narrowed by, or null when the
+     * page is the plain browse list. Non-null on a page the debounced FTS
+     * re-read replaced the browse list with — what tells the host that an
+     * empty-query re-read is owed when the filter text clears.
+     */
+    public function lastFetchQuery(): ?string
+    {
+        return $this->lastFetchQuery;
+    }
+
     public function nextFetchLimit(): int
     {
         return $this->fetchLimit + self::PAGE_SIZE;
@@ -659,11 +673,22 @@ final class SessionPicker
      * is to keep walking. The clamp comes from `ItemList::select()`, which
      * cannot fire the edge — growth is never a navigation.
      *
+     * $fetchQuery names the query a narrowed (FTS) page was read for; null
+     * means the page is the plain browse list. Carrying it is what lets the
+     * clear paths (Escape from the filter, backspace-to-empty) notice that
+     * the loaded page is the match set and re-read the widened list instead
+     * of stranding it (C-SES-2 review round 1, MAJOR).
+     *
      * @param list<Row> $sessions
      */
-    public function withFetchedRows(array $sessions, int $fetchLimit, bool $moreInStore): self
+    public function withFetchedRows(array $sessions, int $fetchLimit, bool $moreInStore, ?string $fetchQuery = null): self
     {
-        return $this->mutate(['sessions' => $sessions, 'fetchLimit' => $fetchLimit, 'moreInStore' => $moreInStore]);
+        return $this->mutate([
+            'sessions' => $sessions,
+            'fetchLimit' => $fetchLimit,
+            'lastFetchQuery' => ($fetchQuery ?? '') === '' ? null : $fetchQuery,
+            'moreInStore' => $moreInStore,
+        ]);
     }
 
     /**
@@ -679,6 +704,9 @@ final class SessionPicker
             'sessions' => $sessions,
             'fetchLimit' => $fetchLimit,
             'moreInStore' => $moreInStore,
+            // The reload read the store with the CURRENT query threaded
+            // (reloadSessionPicker), so its narrowedness is that query.
+            'lastFetchQuery' => $this->query === '' ? null : $this->query,
             'armedDeleteId' => null,
             'renameId' => null,
             'renameInput' => null,
@@ -810,7 +838,16 @@ final class SessionPicker
                 return $this->rowKey('p');
             case 'escape':
                 // Esc clears the filter; a second Esc (outside it) closes.
-                return [$this->mutate(['query' => '', 'filtering' => false, 'armedDeleteId' => null], 0), 'edit', null];
+                // When the loaded page is the debounced FTS match set, the
+                // cleared picker must not keep showing only the matches with
+                // an empty query — report Filter so the host re-reads the
+                // widened browse page (C-SES-2 review round 1, MAJOR: the
+                // match set stranded otherwise until the picker was rebuilt).
+                $cleared = $this->mutate(['query' => '', 'filtering' => false, 'armedDeleteId' => null], 0);
+
+                return $cleared->lastFetchQuery === null
+                    ? [$cleared, 'edit', null]
+                    : [$cleared, SessionListAction::Filter, null];
             case 'backspace':
                 if ($this->query === '') {
                     return [$this->mutate(['filtering' => false]), 'edit', null];

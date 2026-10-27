@@ -15001,7 +15001,13 @@ final class Chat implements Model
                     // after this point re-read through the debounce above, so
                     // body hits reach the list as fast as the store answers —
                     // not just the name-leg fuzzy over this page.
-                    if ($picker->fetchLimit() >= SessionPicker::SEARCH_LIMIT) {
+                    // The already-fetched gate only covers a page that IS the
+                    // browse list: when the debounced re-read replaced it with
+                    // the FTS match set (lastFetchQuery non-null), clearing the
+                    // text is exactly when the widened page is owed (C-SES-2
+                    // review round 1, MAJOR: Escape/backspace-to-empty stranded
+                    // the match set until the picker was rebuilt).
+                    if ($picker->fetchLimit() >= SessionPicker::SEARCH_LIMIT && $picker->lastFetchQuery() === null) {
                         return $keep($picker);
                     }
                     [$rows, $more] = $this->sessionPickerRows(SessionPicker::SEARCH_LIMIT, $picker->showsArchived(), $picker->query());
