@@ -256,19 +256,35 @@ describe('StatusBar context meter and cache (P-CTX.g)', () => {
       expect(wrapper.find('[data-testid="status-cache"]').exists()).toBe(false)
     })
 
+    // The totalTokens leg deliberately carries an output bucket on top of the
+    // prompt identity (700 output on every fixture): an implementation that
+    // divided by totalTokens instead of the prompt buckets would answer 53% /
+    // 51% / 67% and fall over these pins. (Review NIT, P-CTX.g weld.)
     it('reads the OpenAI shape as read / (read + input)', () => {
-      const wrapper = mountUsage({ totalTokens: 1000, inputTokens: 100, cacheReadTokens: 900, cacheCreationTokens: null })
+      const wrapper = mountUsage({ totalTokens: 1700, outputTokens: 700, inputTokens: 100, cacheReadTokens: 900, cacheCreationTokens: null })
       expect(wrapper.find('[data-testid="status-cache"]').text()).toBe('cache 90%')
     })
 
     it('uses the three-bucket identity when creation is reported', () => {
-      const wrapper = mountUsage({ totalTokens: 1050, inputTokens: 100, cacheReadTokens: 900, cacheCreationTokens: 50 })
+      const wrapper = mountUsage({ totalTokens: 1750, outputTokens: 700, inputTokens: 100, cacheReadTokens: 900, cacheCreationTokens: 50 })
       expect(wrapper.find('[data-testid="status-cache"]').text()).toBe('cache 86%')
     })
 
     it('never turns an unreported bucket into a zero', () => {
       const wrapper = mountUsage({ totalTokens: 1000, inputTokens: null, cacheReadTokens: 900, cacheCreationTokens: null })
       expect(wrapper.find('[data-testid="status-cache"]').exists()).toBe(false)
+    })
+
+    // The two edges the TUI pins: a zero prompt identity hides the read-out,
+    // and a measured zero renders as 'cache 0%' rather than vanishing.
+    it('hides the read-out when the prompt identity is zero', () => {
+      const wrapper = mountUsage({ totalTokens: 0, inputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: null })
+      expect(wrapper.find('[data-testid="status-cache"]').exists()).toBe(false)
+    })
+
+    it('renders a measured zero cache hit as 0%', () => {
+      const wrapper = mountUsage({ totalTokens: 100, inputTokens: 100, cacheReadTokens: 0, cacheCreationTokens: null })
+      expect(wrapper.find('[data-testid="status-cache"]').text()).toBe('cache 0%')
     })
 
     it('tracks the live turn through usage frames', async () => {
@@ -279,7 +295,7 @@ describe('StatusBar context meter and cache (P-CTX.g)', () => {
 
       applyEvent(state, {
         sessionId: 's1', seq: 1, type: 'usage.updated', ts: 1, durable: true, turnId: 't1',
-        data: { turnUsage: { totalTokens: 2000, inputTokens: 200, cacheReadTokens: 1800, cacheCreationTokens: null, costUsd: 0.1, unpricedModel: null } },
+        data: { turnUsage: { totalTokens: 2700, outputTokens: 700, inputTokens: 200, cacheReadTokens: 1800, cacheCreationTokens: null, costUsd: 0.1, unpricedModel: null } },
       } as EventEnvelope)
       await wrapper.vm.$nextTick()
       expect(wrapper.find('[data-testid="status-cache"]').text()).toBe('cache 90%')
