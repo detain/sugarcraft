@@ -141,6 +141,7 @@ return [
     'cli.bundles.header' => 'BUNDLE            VERSION   TIER    SKILLS  COMMANDS  AGENTS  HOOKS  MCP',
     'cli.bundles.install.clone_failed' => 'bundles install: cloning {source} failed: {detail}',
     'cli.bundles.install.clone_timeout' => 'git clone of {source} ran past {seconds}s and was killed with its process group',
+    'cli.bundles.install.dot_name' => 'bundles install: the bundle name {name} begins with a dot, which bundle discovery never sees, so the install was refused instead of made invisible',
     'cli.bundles.install.exists' => 'bundles install: a bundle named {name} is already installed at {dest}; the install refused to overwrite it',
     'cli.bundles.install.invalid_name' => 'bundles install: the bundle name {name} is not a single safe path segment, so nothing was written',
     'cli.bundles.install.link_refused' => 'bundles install: {source} contains the symbolic link {link}, and a bundle that carries links is refused — nothing was installed',

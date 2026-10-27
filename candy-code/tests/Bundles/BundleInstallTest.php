@@ -114,6 +114,32 @@ final class BundleInstallTest extends TestCase
         self::assertSame(['clonely'], $this->entriesUnderRoot());
     }
 
+    /**
+     * C-EXT-7: the clone leg receives a `.git` the path leg's copy never
+     * carried, and the pre-fix installer renamed the scratch into place with
+     * it — the installed tree kept the vendor's history the docblock denied
+     * shipping. The fake clone plants `.git` in the scratch; after a
+     * successful install only content may remain under the name.
+     */
+    public function testAClonedInstallShedsItsGitDirectoryBeforeTheRename(): void
+    {
+        $this->armFakeClone(static function (string $url, string $scratch): array {
+            mkdir($scratch . '/.claude-plugin', 0777, true);
+            file_put_contents($scratch . '/.claude-plugin/plugin.json', json_encode(['name' => 'clonely']));
+            mkdir($scratch . '/.git/objects', 0777, true);
+            file_put_contents($scratch . '/.git/HEAD', "ref: refs/heads/main\n");
+            file_put_contents($scratch . '/.git/objects/pack', 'history');
+
+            return ['ok' => true, 'detail' => ''];
+        });
+
+        self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', 'https://example.invalid/clonely.git'));
+
+        self::assertFileExists($this->root . '/clonely/.claude-plugin/plugin.json');
+        self::assertDirectoryDoesNotExist($this->root . '/clonely/.git', 'a cloned install kept the vendor history it was supposed to strip');
+        self::assertSame(['clonely'], $this->entriesUnderRoot());
+    }
+
     public function testAFailedCloneIsReportedAndLeavesNeitherInstallNorScratch(): void
     {
         $this->armFakeClone(static fn (): array => ['ok' => false, 'detail' => 'repository not found']);
@@ -131,6 +157,23 @@ final class BundleInstallTest extends TestCase
         self::assertSame(NonInteractive::EXIT_FAILURE, $this->verb('install', $source));
         self::assertSame([], $this->entriesUnderRoot());
         self::assertDirectoryDoesNotExist($this->home . '/escape');
+    }
+
+    /**
+     * C-EXT-7: the segment regex admits a leading dot, so a manifest named
+     * `.invisible` pre-fix installed under a name `BundleDiscovery`'s
+     * container glob never matches — the bundle sat in the root invisible to
+     * every later load, silently. Such a name is now refused loudly and
+     * nothing lands under the root (the scratch leaves with the refusal).
+     */
+    public function testADotPrefixedManifestNameIsRefusedInsteadOfInstallingInvisibly(): void
+    {
+        $source = $this->tempDir . '/dot-src';
+        mkdir($source . '/.claude-plugin', 0777, true);
+        file_put_contents($source . '/.claude-plugin/plugin.json', json_encode(['name' => '.invisible']));
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $this->verb('install', $source));
+        self::assertSame([], $this->entriesUnderRoot());
     }
 
     public function testTheVerbWithoutAnActionStillAnswersUsageWithExitTwo(): void

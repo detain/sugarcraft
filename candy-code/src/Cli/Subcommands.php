@@ -1843,9 +1843,16 @@ final class Subcommands
      * `.git` directory — a bundle ships content, not the vendor's history.
      * A git URL is cloned shallowly into a scratch directory INSIDE the
      * bundle root, validated for a manifest, and only then renamed into
-     * place; failures remove the scratch. An existing install of the same
-     * name is refused, never overwritten: silently replacing what the
-     * session loaded this morning is not what an install means.
+     * place; failures remove the scratch. Since C-EXT-7 the clone sheds
+     * its own `<scratch>/.git` through the same no-follow walk the failure
+     * exits use, so BOTH arms land content-only trees. A name beginning
+     * with a dot is refused: `BundleDiscovery` scans the root with a glob
+     * that never matches a dot-entry, so a dot-named install would sit in
+     * the root invisible to every later
+     * load — a loud refusal beats an install that never arrives. An
+     * existing install of the same name is refused, never overwritten:
+     * silently replacing what the session loaded this morning is not what
+     * an install means.
      */
     private static function bundlesInstall(ParsedArgs $args): int
     {
@@ -1922,12 +1929,29 @@ final class Subcommands
             return NonInteractive::EXIT_FAILURE;
         }
 
+        // C-EXT-7: the clone arm received a `.git` the path arm's copy never
+        // carried. Shed it with the no-follow walk the failure exits use,
+        // before the rename, so whichever arm staged the tree, the install
+        // lands content-only. On the path arm this is a no-op by shape —
+        // copyBundleTree skipped every `.git` entry on the way in.
+        self::removeTree($staged . '/.git');
+
         $manifest = Bundle::readManifest($staged);
         $name = (string) ($manifest['name'] ?? '') !== ''
             ? (string) $manifest['name']
             : \basename(\rtrim(\str_replace(['\\', '/'], '/', $source), '/'));
         if (\preg_match('/^[A-Za-z0-9._-]+$/', $name) !== 1 || $name === '.' || $name === '..') {
             self::bundlesLine(Lang::t('cli.bundles.install.invalid_name', ['name' => $name]));
+            self::removeTree($scratch);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+        if (\str_starts_with($name, '.')) {
+            // C-EXT-7: the segment regex above admits a leading dot, but
+            // BundleDiscovery's container glob never matches one, so such an
+            // install would sit in the root invisible to every later load.
+            // Refuse it instead of writing a bundle that cannot arrive.
+            self::bundlesLine(Lang::t('cli.bundles.install.dot_name', ['name' => $name]));
             self::removeTree($scratch);
 
             return NonInteractive::EXIT_FAILURE;

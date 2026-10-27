@@ -113,7 +113,11 @@ candy-code bundles install <git-url>      # depth-one clone into the same place
 `--output-format json` emits the machine document. `install` refuses anything
 without a manifest, never overwrites (an existing name is an error, not a
 backup prompt), and names the installed bundle after its manifest `name` when
-it has one. A git clone runs as a bounded, non-interactive child: `--depth 1`,
+it has one — a name beginning with a dot is refused, because discovery's glob
+never sees a dot-named directory and an invisible install is worse than none.
+Both arms land content-only trees: the copy skips every `.git` directory and
+the clone sheds its own before the rename. A git clone runs as a bounded,
+non-interactive child: `--depth 1`,
 no tags, terminal prompts and askpass disabled, killed with its process group
 if it overstays. Its only destination is the user bundle root — a clone can
 land in `~/.candy-code/bundles/<name>` and nowhere else, under a name that can
