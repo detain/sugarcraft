@@ -630,7 +630,11 @@ conversation is not worth a call. It never runs without a summary backend or a
 memory store, or once `CANDY_CODE_MAX_COST` is reached; its cost counts towards
 the spend total either way. `CANDY_CODE_DISABLE_AUTO_MEMORY=1` turns it off
 ([ENVIRONMENT](ENVIRONMENT.md)), and so does `"memory.autoConsolidate": false`
-in `~/.candy-code/config.json` (the environment wins when it is set).
+in `~/.candy-code/config.json` (the environment wins when it is set). The rule
+answers for served sessions too: a turn that settles in a `serve`d session
+schedules the same pass (C-CTX-2.c), and because the throttle lives on disk it
+is one five-minute budget per project shared by the TUI and every served
+session of that checkout — intended, not an oversight.
 
 **Prefer saving nothing.** Every note is injected into later prompts, so the
 instructions tell the model that an empty operation list is the normal answer,
@@ -731,7 +735,10 @@ pass runs its engine on a fresh prompt memo of its own
 (`EngineBackend::withSessionPromptMemo()`), so its background turns can neither
 bust nor inherit the session's instruction layers.
 `CANDY_CODE_DISABLE_AUTO_MEMORY=1` or `"memory.autoConsolidate": false` turns it
-off together with auto-memory ([ENVIRONMENT](ENVIRONMENT.md)).
+off together with auto-memory ([ENVIRONMENT](ENVIRONMENT.md)). A `serve`d
+session runs the pass at its settles too (C-CTX-2.c), and the throttle file is
+shared on disk: the TUI and every served session of one checkout spend the same
+two-hour budget per project.
 
 **What the turn can do.** Its tool list is replaced, through
 `EngineBackend::withTools()`, by two tools that only read: `Memory` limited to

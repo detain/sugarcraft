@@ -37,6 +37,8 @@ use SugarCraft\Code\Goal\GoalJudge;
 use SugarCraft\Code\Goal\GoalLoop;
 use SugarCraft\Code\Goal\GoalState;
 use SugarCraft\Code\App\GoalJudgedMsg;
+use SugarCraft\Code\App\MemoryConsolidatedMsg;
+use SugarCraft\Code\App\DreamPassCompletedMsg;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\App\HistoryCompactedMsg;
@@ -47,6 +49,8 @@ use SugarCraft\Code\Host\Commands\CommandResult;
 use SugarCraft\Code\Host\Commands\CommandText;
 use SugarCraft\Code\Host\ContextSources;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Memory\AutoMemoryConsolidator;
+use SugarCraft\Code\Memory\DreamPass;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Permissions\PermissionGate;
@@ -59,6 +63,7 @@ use SugarCraft\Code\Session\SessionLock;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Usage;
 use SugarCraft\Code\Util\TokenTracker;
+use SugarCraft\Code\Workspace\AutoCommittedMsg;
 
 /**
  * One open session, driven without a screen (roadmap O-2g, Appendix O §4.3).
@@ -128,6 +133,14 @@ final class SessionHost
 
     /** Whether the work holding {@see $turn} is a workflow run (`/workflow pause|status` may still run). */
     private bool $workflowTurn = false;
+
+    /**
+     * Whether {@see self::release()} has run (C-CTX-2.c): a settle work item
+     * that answers AFTER the session closed is still billed — the provider
+     * call was really made and the spend belongs to the ledger — but its
+     * transcript row has no session left to land in, so it is dropped.
+     */
+    private bool $released = false;
 
     /** Thrash breaker's run of refilled compactions (roadmap 2.10 / §4.23). */
     private int $consecutiveRefills = 0;
@@ -1054,6 +1067,11 @@ final class SessionHost
      */
     public function release(): void
     {
+        // C-CTX-2.c: stamp the close FIRST — a settle work item answering
+        // after this point is billed to the ledger and dropped from the
+        // transcript (its landers consult this flag).
+        $this->released = true;
+
         // C-CTX-2.a: the session's notice inbox dies with the session.
         // reset() cancels any armed loop watcher BEFORE closing both socket
         // fds — a watcher left on the loop over a closed stream would be
@@ -2136,13 +2154,152 @@ final class SessionHost
             // message carries the conversation on, and the turn it starts is
             // judged when it settles. The decision table is the shared
             // {@see GoalLoop}'s, so budget and stop conditions cannot drift.
-            if ($this->turn === null) {
-                $goal = GoalState::activeIn($this->history);
-                if ($goal !== null) {
-                    $this->scheduleGoalJudge($goal);
-                }
+            $carriedOn = $this->turn !== null;
+            $goal = $carriedOn ? null : GoalState::activeIn($this->history);
+            if ($goal !== null) {
+                $this->scheduleGoalJudge($goal);
             }
+
+            // C-CTX-2.c: the same carried-on verdict feeds the settle work
+            // table — a queued prompt carrying the conversation on means the
+            // conversation never really settled, so auto-memory, the
+            // auto-commit and the dream pass all ride the settle of the turn
+            // that prompt starts, exactly as Chat's gate does.
+            $this->runSettleWork($carriedOn, $goal !== null);
         });
+    }
+
+    /**
+     * Ask the shared decision table what the settled turn earns and run it
+     * (C-CTX-2.c — the served mirror of {@see \SugarCraft\Code\Chat\Handlers\HandlesTurnCompletion}'s
+     * settle arms): auto-memory consolidation, the `turn`-mode auto-commit
+     * and the dream pass, each under THIS session's notice sink so the
+     * auxiliary call's runtime records land where C-CTX-2.a drains them, and
+     * each landed through its own bill-then-show lander.
+     *
+     * The suggestion slot is deliberately never run here: a served session
+     * has no input box to drop a ghost prompt into (C-CTX-2.e decides where
+     * — if anywhere — the guess rides on web), so the table's answer for it
+     * is read and left in the table.
+     */
+    private function runSettleWork(bool $carriedOn, bool $goalActive): void
+    {
+        $engine = $this->backend();
+        $work = TurnSettleWork::plan(
+            carriedOn: $carriedOn,
+            goalActive: $goalActive,
+            memoryStore: $this->workspace->memoryStore,
+            engineBackend: $engine,
+            summaryBackend: $this->workspace->summaryBackend,
+            titleBackend: $this->workspace->titleBackend,
+            history: $this->history,
+            capReached: $this->ledger()->capReached($this->spend, $this->workspace->maxCostUsd),
+            sessionId: $this->sessionId,
+            generation: $this->generation,
+            projectRoot: $this->root(),
+            userConfig: $this->workspace->userConfig,
+            sessionStore: $this->workspace->sessionStore,
+        );
+
+        if ($work->consolidation !== null) {
+            $factory = $work->consolidation;
+            RuntimeNoticeSink::using($this->notices, static fn(): PromiseInterface => $factory())
+                ->then(function (mixed $msg): void {
+                    $this->landConsolidation($msg);
+                });
+        }
+        if ($work->autoCommit !== null) {
+            $factory = $work->autoCommit;
+            RuntimeNoticeSink::using($this->notices, static fn(): PromiseInterface => $factory())
+                ->then(function (mixed $msg): void {
+                    $this->landAutoCommit($msg);
+                });
+        }
+        if ($work->dream !== null) {
+            $factory = $work->dream;
+            RuntimeNoticeSink::using($this->notices, static fn(): PromiseInterface => $factory())
+                ->then(function (mixed $msg) use ($engine): void {
+                    $this->landDream($msg, $engine);
+                });
+        }
+    }
+
+    /**
+     * Land a consolidation answer (C-CTX-2.c, mirroring Chat's
+     * `MemoryConsolidatedMsg` arm): billed FIRST whatever the outcome, on the
+     * model the summary engine actually ran (the TUI's OBS-3 rule — the
+     * ledger must not bill a call to a model that did not make it), then the
+     * producer's own notice row, or nothing when the run saved nothing.
+     * An answer arriving after {@see self::release()} is billed and dropped.
+     */
+    private function landConsolidation(mixed $msg): void
+    {
+        if (!$msg instanceof MemoryConsolidatedMsg) {
+            return;
+        }
+
+        $summary = $this->workspace->summaryBackend;
+        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $summary instanceof EngineBackend ? $summary->model() : null);
+        if ($this->released) {
+            return;
+        }
+
+        $notice = AutoMemoryConsolidator::notice($msg);
+        if ($notice === null) {
+            return;
+        }
+
+        $this->appendMessageRow(Message::notice($notice));
+    }
+
+    /**
+     * Land an auto-commit answer (C-CTX-2.c, mirroring Chat's
+     * `AutoCommittedMsg` arm): the commit is already made (or refused), so
+     * the subject's provider call is billed first — on the title engine's
+     * model per OBS-3 — and the line saying what was committed, or why not,
+     * ALWAYS shows. An answer arriving after {@see self::release()} is
+     * billed and dropped.
+     */
+    private function landAutoCommit(mixed $msg): void
+    {
+        if (!$msg instanceof AutoCommittedMsg) {
+            return;
+        }
+
+        $title = $this->workspace->titleBackend;
+        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $title instanceof EngineBackend ? $title->model() : null);
+        if ($this->released) {
+            return;
+        }
+
+        $this->appendMessageRow(Message::notice($msg->notice()));
+    }
+
+    /**
+     * Land a dream-pass answer (C-CTX-2.c, mirroring Chat's
+     * `DreamPassCompletedMsg` arm): billed first — the pass ran on the
+     * session's own engine, so the engine {@see self::runSettleWork()} handed
+     * the table IS the OBS-3 model here — then the producer's notice, or
+     * nothing when the pass neither saved nor proposed. An answer arriving
+     * after {@see self::release()} is billed and dropped.
+     */
+    private function landDream(mixed $msg, ?Backend $engine): void
+    {
+        if (!$msg instanceof DreamPassCompletedMsg) {
+            return;
+        }
+
+        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $engine instanceof EngineBackend ? $engine->model() : null);
+        if ($this->released) {
+            return;
+        }
+
+        $notice = DreamPass::notice($msg);
+        if ($notice === null) {
+            return;
+        }
+
+        $this->appendMessageRow(Message::notice($notice));
     }
 
     /**

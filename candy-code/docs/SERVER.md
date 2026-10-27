@@ -869,6 +869,18 @@ session's todo list as its `Todo` tool last wrote it, and every `Todo` call
 that changes the list is broadcast as the durable `todo.updated` (the whole
 list), so a client follows it live and a reconnecting one replays it.
 
+**Settled-turn memory and commit work.** When a served turn ends in a reply
+and nothing queued takes its place, the session runs the same settle work the
+TUI does (C-CTX-2.c): auto-memory consolidation, the `turn`-mode auto-commit
+and the dream pass, each under the session's own notice sink, each billed to
+the session's spend total and followed by its producer's display-only notice
+row in the session's transcript (`Auto-memory saved …`, `Auto-committed …`,
+`Dream pass …`); a run that changed nothing says nothing. The throttles are
+the same on-disk files the TUI claims, so a project pays at most one
+five-minute auto-memory budget and one two-hour dream budget across every
+process serving it. The next-prompt suggestion is deliberately not run on
+serve — a session over the wire has no input box to show a ghost prompt in.
+
 ## More than one project root (workspace hosts)
 
 A server serves the root it was started on; its sessions, settings, trust
