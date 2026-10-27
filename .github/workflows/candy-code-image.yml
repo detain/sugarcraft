@@ -1,16 +1,32 @@
 name: candy-code serve image
 
-# DST-2. The image resolves its app code from the PUBLISHED package stream
-# (composer dev-master), so this job both publishes and proves: every change
-# under candy-code/ re-verifies that the published stream still composes a
-# working serve image. Cloned from .github/workflows/vhs-runner-php-image.yml
-# (same pinned-action set, same GHCR tag shape: latest + sha).
+# DST-2 + C-SES-5.d. The image resolves its app code from the PUBLISHED
+# package stream (composer dev-master), so this job both publishes and proves.
+# Three seams the first editions got wrong, and this file fixes:
 #
-# The pull_request arm exists because the first edition of this workflow had
-# no pre-merge proof: every run since inception failed at `composer
-# create-project` on master, nine in a row, with nothing gating the merge.
-# A Dockerfile or entrypoint change now has to build green on its own PR
-# (push disabled) before it can reach the publishing trigger below.
+#  1. CACHE. The create-project instruction text never changed and the build
+#     caches with `type=gha`, so the layer was served CACHED and `:latest`
+#     shipped a frozen snapshot. The Dockerfile now consumes a per-run
+#     CANDY_CODE_REF build arg and records the resolved reference in
+#     /opt/candy-code/BUILD-REF; the build passes the arg and the summary
+#     prints BUILD-REF, so a lagging Packagist feed is visible, not silent.
+#  2. TRIGGER ORDER. A push-triggered build raced the split sync: it could
+#     resolve against yesterday's Packagist state of the very commit it was
+#     tagged with. Publishing now runs as a `workflow_run` after
+#     sync-sugarcraft.yml completes a SUCCESSFUL push event on master. The
+#     pull_request arm exists because the first edition had no pre-merge
+#     proof: every run since inception failed at `composer create-project`
+#     on master, nine in a row. A Dockerfile or entrypoint change still has
+#     to build green on its own PR (push disabled) before it can reach
+#     master at all.
+#  3. RELEASE SCOPE. `release: [published]` fires for EVERY tag in the
+#     shared monorepo stream — a candy-top or any-app release re-tagged this
+#     image. The job now admits a release only for `candy-code/v*` tags, and
+#     such a release additionally publishes a versioned tag (type=match on
+#     the tag's semver) plus the org.opencontainers.image.revision label.
+#
+# Cloned from .github/workflows/vhs-runner-php-image.yml (same pinned-action
+# set, same GHCR tag shape: latest + sha).
 
 on:
   pull_request:
@@ -19,18 +35,20 @@ on:
       - 'candy-code/docker/**'
       - 'candy-code/.dockerignore'
       - '.github/workflows/candy-code-image.yml'
-  push:
-    branches: [master]
-    paths:
-      - 'candy-code/**'
-      - '.github/workflows/candy-code-image.yml'
   release:
     types: [published]
+  workflow_run:
+    workflows: ['Sync to sugarcraft org']
+    types: [completed]
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
+
+concurrency:
+  group: candy-code-image
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -39,6 +57,18 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Per-event admission gates; unlisted events (pull_request proof,
+    # workflow_dispatch) run ungated. workflow_run jobs always resolve
+    # expressions against the triggering payload — the three conjuncts there
+    # are the Pwn-request hygiene: a workflow_run that failed, ran off
+    # master, or was itself triggered by a pull_request must never publish.
+    if: >-
+      (github.event_name != 'release'
+        || startsWith(github.event.release.tag_name, 'candy-code/v'))
+      && (github.event_name != 'workflow_run'
+        || (github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.head_branch == 'master'
+          && github.event.workflow_run.event == 'push'))
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
@@ -59,15 +89,25 @@ jobs:
           tags: |
             type=raw,value=latest
             type=sha,prefix=
+            type=match,pattern=candy-code/v(.*),group=1
+          labels: |
+            org.opencontainers.image.revision=${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Build + push image
         uses: docker/build-push-action@cb941d0b895b09c17fa011d41c411b33c752cf28
         with:
           context: candy-code
           file: candy-code/Dockerfile
+          # Unique per run: this value rides the create-project layer's cache
+          # key, so no build can serve a frozen snapshot again (C-SES-5.d).
+          build-args: |
+            CANDY_CODE_REF=${{ github.sha }}-${{ github.run_id }}
           # PR runs are proof-only: they build but never publish (and a fork
-          # PR would not have packages:write anyway).
+          # PR would not have packages:write anyway). `load` puts the fresh
+          # image into the runner's local docker so the Summary step reads
+          # BUILD-REF out of it on every arm, pushed or not.
           push: ${{ github.event_name != 'pull_request' }}
+          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -75,9 +115,14 @@ jobs:
 
       - name: Summary
         run: |
+          build_ref="$(docker run --rm --entrypoint cat "${IMAGE_NAME}:latest" /opt/candy-code/BUILD-REF 2>/dev/null || true)"
+          if [ -z "${build_ref}" ]; then
+            build_ref='BUILD-REF unreadable from the built image'
+          fi
           {
             echo "## candy-code serve image built"
             echo ""
             echo "- Image: \`${{ env.IMAGE_NAME }}:latest\`"
             echo "- SHA: \`${{ github.sha }}\`"
+            echo "- BUILD-REF (resolved package): \`${build_ref}\`"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -3,8 +3,10 @@
 The `serve` verb ships with an application image definition at
 [`Dockerfile`](../Dockerfile) and a publishing workflow at
 `.github/workflows/candy-code-image.yml` in the monorepo. The workflow
-publishes on every push to `master` that touches `candy-code/**` — it tags
-`:latest` plus the bare commit sha and pushes to GitHub Container Registry:
+publishes as a `workflow_run` after the split sync completes a successful
+push to `master` — it tags `:latest` plus the bare commit sha (and, for a
+`candy-code/v*` release, the versioned tag) and pushes to GitHub Container
+Registry:
 
 ```
 docker pull ghcr.io/detain/sugarcraft-candy-code:latest
@@ -25,7 +27,28 @@ docker pull ghcr.io/detain/sugarcraft-candy-code:latest
 
 The image resolves the app from the **published** package stream (Composer
 `dev-master`), never from a monorepo working tree, so its contents track the
-packagist feed rather than an arbitrary commit.
+packagist feed rather than an arbitrary commit. Publishing therefore waits on
+the sync: the build starts only after `Sync to sugarcraft org` finishes green
+for that push, because a push-triggered build raced the sync and could resolve
+yesterday's feed state of the very commit it was tagged with.
+
+Even so, the feed can lag; the image no longer hides it. The build passes a
+per-run `CANDY_CODE_REF=<sha>-<run id>` build argument that the
+create-project layer consumes, which defeats the otherwise-constant instruction
+text under the workflow's `type=gha` cache (a cached layer shipped a frozen
+snapshot of the feed, silently, on every build). After the install the same
+layer records the reference the stream actually resolved into
+`/opt/candy-code/BUILD-REF` inside the image, and the workflow's job summary
+prints it. To see what a running image carries:
+
+```
+docker run --rm --entrypoint cat \
+  ghcr.io/detain/sugarcraft-candy-code:latest /opt/candy-code/BUILD-REF
+```
+
+The row reads `<package-version> <resolved commit>`; if the commit stops
+moving while `master` does, the packagist feed is lagging and the next
+after-sync build will show it.
 
 ## What the image guarantees
 
@@ -120,7 +143,10 @@ docker build -t candy-code:local candy-code/
 
 The build context is the `candy-code/` directory; the Dockerfile COPYs only
 the entrypoint script and pulls the rest from Packagist, so a dirty working
-tree cannot leak into an image built from this definition.
+tree cannot leak into an image built from this definition. The
+`CANDY_CODE_REF` build argument defaults to `local`, so a plain build needs no
+`--build-arg`; passing a per-build value is what makes CI builds uncachable
+against each other.
 
 ## Launch notices in the log
 

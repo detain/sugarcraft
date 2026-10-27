@@ -5,8 +5,12 @@
 # This image builds from the PUBLISHED package stream (composer's dev-master
 # resolution on Packagist), not from the monorepo working tree: the build never
 # COPYs `src/`, so a linked-vendor checkout can never freeze working-tree code
-# into a published layer. Merging `candy-code/**` re-runs the build as a proof
-# that the published stream still composes a working server image.
+# into a published layer. PRs touching the image proof-build before merge; the
+# publishing build runs as a `workflow_run` after sync-sugarcraft.yml has
+# completed (C-SES-5.d) — CANDY_CODE_REF below forces a fresh resolve every
+# run, and BUILD-REF records the commit it actually resolved, so a lagging
+# Packagist feed becomes visible in the job summary rather than a frozen
+# layer silently wearing `:latest`.
 #
 # The startup contract this image honors (see src/Server/Preflight.php and the
 # Serve docblock): a non-loopback `--host` requires `--allow-remote`, and
@@ -60,11 +64,35 @@ COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
 # Published resolution only: no path repositories exist in a lib manifest
 # (that is the repo-wide path-repo law), so this works in a bare container.
-RUN composer create-project sugarcraft/candy-code:dev-master /opt/candy-code \
-        --no-interaction --prefer-dist --no-progress \
+#
+# CANDY_CODE_REF is the per-run cache-bust key (C-SES-5.d). The instruction
+# text below was otherwise CONSTANT, so with the workflow's
+# `cache-from: type=gha` the whole install layer was served CACHED: `:latest`
+# shipped whatever commit the command last happened to resolve. Declaring the
+# ARG here and ECHOING it inside the RUN ties the layer's cache key to a value
+# the workflow stamps `<sha>-<run id>` — unique per build. The default keeps a
+# plain local `docker build` (docs/DOCKER.md) working without --build-arg.
+#
+# BUILD-REF then records what the stream ACTUALLY resolved, because the
+# published feed can lag the split push even when the build runs after the
+# sync completes. The app package cannot be `composer show`n by name inside
+# its own create-project root (composer answers "Package not found" —
+# measured), so the reference is read from sugarcraft/candy-code-web: the
+# sibling package of the same split-synced stream, installed by the require
+# step immediately above, whose resolved dist (or source) reference is the
+# commit this image carries. `composer show <installed> --format=json` answers
+# {versions, dist{reference}, source{reference}}; the extractor is fail-closed
+# — an unreadable JSON kills the build rather than stranding a silent
+# BUILD-REF, which would be the same lie with better manners.
+ARG CANDY_CODE_REF=local
+RUN echo "candy-code build ref: ${CANDY_CODE_REF}" \
+    && composer create-project sugarcraft/candy-code:dev-master /opt/candy-code \
+            --no-interaction --prefer-dist --no-progress \
     && cd /opt/candy-code \
     && composer require sugarcraft/candy-code-web \
-        --no-interaction --prefer-dist --no-progress \
+            --no-interaction --prefer-dist --no-progress \
+    && composer show sugarcraft/candy-code-web --format=json \
+            | php -r '$p = json_decode(stream_get_contents(STDIN), true); if (!is_array($p) || empty($p["versions"])) { fwrite(STDERR, "Dockerfile build probe: composer show JSON is unreadable, so /opt/candy-code/BUILD-REF would be a lie\n"); exit(1); } $r = $p["dist"]["reference"] ?? $p["source"]["reference"] ?? "unknown"; file_put_contents("/opt/candy-code/BUILD-REF", $p["versions"][0] . " " . $r . "\n");' \
     && ln -s /opt/candy-code/bin/candy-code /usr/local/bin/candy-code \
     && rm -f /usr/local/bin/composer
 

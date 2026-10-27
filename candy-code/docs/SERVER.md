@@ -1396,11 +1396,12 @@ start there. WSL works.
 
 A ready-made serve image is published from this repository
 (`ghcr.io/detain/sugarcraft-candy-code:latest`, built by
-`.github/workflows/candy-code-image.yml` from `candy-code/Dockerfile` on
-every push to `master` that touches `candy-code/**`; see the registry-status
-note in [DOCKER.md](DOCKER.md) — the image is live since the first green run
-(39525070215) after the `unzip` + `ext-gd` build fixes, so `:latest`
-publishes on every master push). It
+`.github/workflows/candy-code-image.yml` from `candy-code/Dockerfile` as a
+`workflow_run` after the split sync completes a successful push to `master`;
+see the registry-status note in [DOCKER.md](DOCKER.md) — the image is live
+since the first green run (39525070215) after the `unzip` + `ext-gd` build
+fixes, and every build records the resolved package reference in
+`/opt/candy-code/BUILD-REF` so a lagging packagist feed is visible). It
 runs unprivileged as `candy` with `HOME=/data` — the serve preflight's refusal
 to run as root is honored, not bypassed (`--allow-root` is never passed) — so
 all server state (sessions, token, discovery record, control socket) lives on
