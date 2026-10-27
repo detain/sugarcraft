@@ -1,73 +1,76 @@
 {
- "welded": [
-  "C-SEC-2.a",
-  "C-TOOL-1.c",
-  "C-AGT-1.c",
-  "C-SES-3.a",
-  "C-TOOL-1.a",
-  "C-EXT-1.a",
-  "C-SEC-1.a",
-  "C-MCP-1.a",
-  "C-AGT-2.a",
-  "C-AGT-1.a",
-  "C-SES-4.a",
-  "C-SES-3.c",
-  "C-AGT-2.c",
-  "C-SES-3.b",
-  "C-SES-5.a",
-  "C-SES-2.a",
-  "C-PRV-1.c",
-  "C-MCP-1.b",
-  "C-EXT-1.b",
-  "C-SES-5.b",
-  "C-CTX-1.b",
-  "C-SES-2.c",
-  "C-SES-1.a",
-  "C-WEB-1.c",
-  "C-TOOL-1.b",
-  "C-SEC-2.b",
-  "C-SES-5.d",
-  "C-SEC-4.a",
-  "C-SES-2.b",
-  "P-CTX.a"
- ],
- "inflight": {
-  "C-SEC-3.a": {
-   "stage": "build",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-SEC-3.a",
-   "branch": "cc/C-SEC-3.a",
-   "session": "ses_e84274411ffewFZNgcHphKfC6h"
+  "welded": [
+    "C-SEC-2.a",
+    "C-TOOL-1.c",
+    "C-AGT-1.c",
+    "C-SES-3.a",
+    "C-TOOL-1.a",
+    "C-EXT-1.a",
+    "C-SEC-1.a",
+    "C-MCP-1.a",
+    "C-AGT-2.a",
+    "C-AGT-1.a",
+    "C-SES-4.a",
+    "C-SES-3.c",
+    "C-AGT-2.c",
+    "C-SES-3.b",
+    "C-SES-5.a",
+    "C-SES-2.a",
+    "C-PRV-1.c",
+    "C-MCP-1.b",
+    "C-EXT-1.b",
+    "C-SES-5.b",
+    "C-CTX-1.b",
+    "C-SES-2.c",
+    "C-SES-1.a",
+    "C-WEB-1.c",
+    "C-TOOL-1.b",
+    "C-SEC-2.b",
+    "C-SES-5.d",
+    "C-SEC-4.a",
+    "C-SES-2.b",
+    "P-CTX.a",
+    "P-TABS.b"
+  ],
+  "inflight": {
+    "C-SEC-3.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SEC-3.a",
+      "branch": "cc/C-SEC-3.a",
+      "session": "ses_e84274411ffewFZNgcHphKfC6h"
+    },
+    "C-PRV-1.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-PRV-1.a",
+      "branch": "cc/C-PRV-1.a",
+      "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
+    },
+    "P-TABS.d": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-P-TABS.d",
+      "branch": "cc/P-TABS.d",
+      "session": "ses_e82bfb651ffeITeZC6TxecHG9w"
+    }
   },
-  "C-PRV-1.a": {
-   "stage": "build",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-PRV-1.a",
-   "branch": "cc/C-PRV-1.a",
-   "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
+  "blocked": [],
+  "extra_agents": 1,
+  "waves_closed": [
+    1
+  ],
+  "wave_loops": {
+    "1": "closed r2 CLEAN"
   },
-  "P-TABS.b": {
-   "stage": "build",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-P-TABS.b",
-   "branch": "cc/P-TABS.b",
-   "session": "ses_e82bfb652ffebETDv9D7jwlpET"
-  },
-  "P-TABS.d": {
-   "stage": "build",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-P-TABS.d",
-   "branch": "cc/P-TABS.d",
-   "session": "ses_e82bfb651ffeITeZC6TxecHG9w"
+  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
+  "weld_notes": {
+    "P-TABS.b": {
+      "master": "88ac5e485",
+      "pick": "fe389906e",
+      "regen": "no-op (cmd/tool/settings all up to date; no schema/web)",
+      "gates": "TabScope|SessionDeck|SessionTab 142T/1190A OK; drift-quartet 56T/20837A OK; five-guard 133T pair-only (pinned 25,537 vs live 25,777 \u2014 closeout re-pin)",
+      "durations_owed": "NEW candy-code tests/App/Tabs/TabScopeTest.php (14) + SessionDeckTest.php (12) \u2014 LIST ONLY, durations.tsv is closeout duty"
+    }
   }
- },
- "blocked": [],
- "extra_agents": 1,
- "waves_closed": [
-  1
- ],
- "wave_loops": {
-  "1": "closed r2 CLEAN"
- },
- "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg"
 }

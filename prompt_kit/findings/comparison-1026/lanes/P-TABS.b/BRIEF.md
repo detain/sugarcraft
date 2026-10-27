@@ -1,0 +1,32 @@
+### P-TABS.b — TabScope envelope + SessionDeck (wires dormant SessionTabs detach/summary)
+- item: P-SESSION-TABS (sources: GAP-SES-12, GAP-UI-N6)
+- kind: feature · effort M
+- approach:
+  - **The problem.** Today one `App::$chat` receives every Msg (`App::delegateToChat`, `src/App/App.php:4298`). For a parked tab to keep streaming, its Cmds must come back addressed to it.
+  - **`TabScope::cmd(string $tabKey, ?Closure)`** wraps lazily and maps each Cmd result:
+    - BatchMsg/SequenceMsg → each inner Cmd wrapped;
+    - TickRequest → produce wrapped;
+    - AsyncCmd → `then(scope, reject → scoped ExceptionMsg)`;
+    - a plain Msg → `TabScopedMsg{tabKey, inner}`;
+    - Program sentinels pass through unwrapped (RawMsg, PrintMsg, ExecRequest, Quit/Interrupt/Suspend, SubscriptionsMsg, ScreenStack*; see `sugar-core/src/Program.php:723-866`).
+  - **`TabScope::subscriptions(tabKey, ?Subscriptions, list<string> $foregroundOnly)`** re-keys the ids `tab:<key>:<id>` and wraps the producers. It drops foreground-only ids such as the background-supervisor poll, so two Chats never double-announce.
+  - **`SessionDeck`** wraps the existing `SessionTabs` model, using the deck's own stable tab keys rather than session ids, because a lazily minted or `/branch`ed session changes id in place. It adds:
+    - `parked: array<key, Model>` and `sessionOf(key)`;
+    - attention per tab;
+    - `park()`/`unpark()`/`open()`/`close()`/`cycle()`;
+    - `rekey(key, newSessionId)`.
+  - It finally calls the dormant `SessionTabs::detachTab`/`reattachTab`/`updateTabSummary` (`src/Tui/SessionTabs.php:195-235`, no production caller), and `SessionTab` gains `withAttention()`.
+  - `OpenTabMsg`, `CloseTabMsg` and `CycleTabMsg` are created here for P-TABS.e and P-TABS.f.
+- files.create: `candy-code/src/App/Tabs/TabScope.php`, `candy-code/src/App/Tabs/TabScopedMsg.php`, `candy-code/src/App/Tabs/SessionDeck.php`, `candy-code/src/App/Tabs/OpenTabMsg.php`, `candy-code/src/App/Tabs/CloseTabMsg.php`, `candy-code/src/App/Tabs/CycleTabMsg.php`
+- files.modify: `candy-code/src/Tui/SessionTab.php` (`attention` field + `withAttention()`), `candy-code/src/Tui/SessionTabs.php` (`updateTabAttention()`)
+- tests:
+  - create `candy-code/tests/App/Tabs/TabScopeTest.php`: nested batch/sequence/tick/promise wrapping; rejection → scoped ExceptionMsg; sentinels unwrapped; subscription re-keying and foreground-only filtering;
+  - create `candy-code/tests/App/Tabs/SessionDeckTest.php`: park/unpark/rekey/close-last-refused; detach/reattach/summary wired;
+  - modify `candy-code/tests/Tui/SessionTabsTest.php` and `candy-code/tests/Host/SessionTabsExtractionParityTest.php` (attention field).
+- docs/guards: none
+- serialized: none
+- deps: none
+- phase: normal
+- ruling: none
+- risks: if a Program sentinel is missed and wrapped, it would be silently swallowed. The test must enumerate every sentinel `Program::runCmd` inspects.
+
