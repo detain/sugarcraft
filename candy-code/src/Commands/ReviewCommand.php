@@ -93,7 +93,7 @@ final class ReviewCommand
     }
 
     /**
-     * The prompt `/review [ref]` or `/security-review [ref]` submits: the
+     * The prompt `/review [<tree-ish>]` or `/security-review [ref]` submits: the
      * canned body, closing on the `@diff` mention (optionally scoped to
      * $ref) that makes the scanner attach the very change being reviewed.
      */
