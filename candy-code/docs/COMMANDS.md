@@ -385,7 +385,7 @@ edit it by hand.
 | `/undo` | ✓ | | — | Take back the last turn, or revert the last auto-commit |
 | `/redo` | ✓ | | — | Step forward again over what /rewind or /undo took back |
 | `/diff` | ✓ | | `[n]` | Show what changed in the files since a checkpoint |
-| `/review` | ✓ | | `[<ref>]` | Review the diff against a revision and report findings without editing |
+| `/review` | ✓ | | `[<tree-ish>]` | Review the diff against a revision and report findings without editing |
 | `/security-review` | ✓ | | `[<ref>]` | Security-review the diff against a revision and report findings without editing |
 | `/bg` | ✓ | | `<task>` | Run a task in a background session |
 | `/schedules` | ✓ | | `[list\|enable\|disable\|delete <name>]` | List, enable, disable, and delete scheduled prompt rows |

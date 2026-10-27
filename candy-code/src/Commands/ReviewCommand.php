@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Commands;
 
+use SugarCraft\Code\Attachments\ContextMentions;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Workspace\GitRunner;
+
 /**
  * The `/review [ref]` and `/security-review [ref]` commands (GIT-1): canned
  * review prompts, dispatched as ordinary turns the way {@see InitCommand} is.
@@ -15,9 +19,10 @@ namespace SugarCraft\Code\Commands;
  * as an attachment rather than as text the model may misread. Unlike
  * InitCommand — whose prompt is kept free of `@` on purpose — this one
  * INVITES the scanner; the mention is the whole point. The Chat handlers
- * validate $ref with {@see \SugarCraft\Code\Attachments\ContextMentions::isDiffRef()}
- * before assembling the prompt, so the command can never submit a diff
- * mention the scanner would silently refuse to attach.
+ * validate $ref with {@see self::refError()} before assembling the prompt —
+ * the scanner's own trim round trip, plus a bounded pre-resolution that the
+ * ref names a real tree-ish — so the command can never bill a review turn
+ * whose diff silently attaches nothing.
  *
  * REPORT, DO NOT EDIT is mandated in both prompts: a review that rewrites the
  * code it is judging conflates the roles, and the permission modes should not
@@ -100,5 +105,47 @@ final class ReviewCommand
             : sprintf(self::DIFF_MENTION_FORMAT, $ref);
 
         return rtrim(sprintf($security ? self::SECURITY_PROMPT : self::REVIEW_PROMPT, $mention));
+    }
+
+    /**
+     * Why $ref cannot carry a review turn, as the row the transcript should
+     * answer with — or null when the ref may (C-AGT-2). Two gates, in the
+     * order the scanner itself enforces them:
+     *
+     * 1. the {@see ContextMentions::isDiffRef()} round trip — a spelling the
+     *    mention scanner would trim back or refuse as a keyword (a range, an
+     *    unclosed reflog address) can never attach, and
+     * 2. a bounded `git rev-parse --verify <ref>^{tree}` — a well-spelled ref
+     *    that resolves to nothing would fail `diff-index` just as quietly, so
+     *    the turn is refused BEFORE it is billed.
+     *
+     * An empty ref means the bare command and is always allowed; where git is
+     * not available at all the second gate abstains — the scanner's own
+     * notice is the answer in that world, not a false "not a revision".
+     *
+     * @param string $root the workspace the review would run in
+     */
+    public static function refError(string $ref, string $root): ?string
+    {
+        if ($ref === '') {
+            return null;
+        }
+
+        if (!ContextMentions::isDiffRef($ref)) {
+            return Lang::t('cmd.review.bad-ref', ['ref' => $ref]);
+        }
+
+        if (!GitRunner::available()) {
+            return null;
+        }
+
+        $resolved = GitRunner::new($root)
+            ->withInheritedGitEnv()
+            ->withTimeout(ContextMentions::DIFF_TIMEOUT_SECONDS)
+            ->capture(4096, 'rev-parse', '--verify', $ref . '^{tree}');
+
+        return $resolved['timedOut'] || $resolved['exitCode'] !== 0
+            ? Lang::t('cmd.review.bad-ref', ['ref' => $ref])
+            : null;
     }
 }

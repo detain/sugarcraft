@@ -83,6 +83,30 @@ final class ContextMentionsTest extends TestCase
         self::assertStringContainsString('git could not diff against no-such-branch', $missing['notices'][0]);
     }
 
+    public function testAtDiffKeepsAReflogAddressThroughTheTrim(): void
+    {
+        // C-AGT-2: `HEAD@{1}` ends in the very character sentence
+        // punctuation would strip. While the token holds an UNMATCHED `@{`,
+        // the trailing `}` belongs to the ref and rides — the same reflog
+        // form `git diff-index` accepts.
+        $this->repoWithOneCommit();
+        file_put_contents($this->root . '/app.php', "<?php\necho 'second';\n");
+        $this->git('add', 'app.php');
+        $this->git('commit', '-qm', 'second');
+
+        $r = ContextMentions::new($this->root)->resolve('review @diff:HEAD@{1}, quickly');
+
+        self::assertSame([], $r['notices']);
+        self::assertSame('@diff:HEAD@{1}', $r['attachments'][0]->path);
+        self::assertStringContainsString("+echo 'second';", (string) $r['attachments'][0]->data);
+
+        // A reflog form the user never closed is NOT silently re-braced into
+        // a different ref — it stays broken and lands as the refusal it is.
+        $unclosed = ContextMentions::new($this->root)->resolve('@diff:HEAD@{1,');
+        self::assertSame([], $unclosed['attachments']);
+        self::assertStringContainsString('was not attached', $unclosed['notices'][0]);
+    }
+
     public function testAtDiffInARepositoryWithNoCommitShowsTheStagedFilesAgainstTheEmptyTree(): void
     {
         $this->requireGit();

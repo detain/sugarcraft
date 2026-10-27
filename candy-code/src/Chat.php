@@ -11774,20 +11774,22 @@ final class Chat implements Model
     }
 
     /**
-     * The shared review dispatch: a named ref is validated against the
-     * mention scanner's own pattern first, so a typo answers loudly instead
-     * of submitting a review whose diff never attaches; a valid (or absent)
-     * ref becomes the prompt's closing mention and the turn begins.
+     * The shared review dispatch: a named ref is validated through
+     * {@see \SugarCraft\Code\Commands\ReviewCommand::refError()} first — the
+     * scanner's trim round trip and a bounded pre-resolution — so a typo
+     * answers loudly instead of billing a review turn whose diff never
+     * attaches; a valid (or absent) ref becomes the prompt's closing mention
+     * and the turn begins.
      *
      * @return array{0: self, 1: ?\Closure}
      */
     private function reviewTurn(string $inputText, bool $security): array
     {
         $ref = \trim(self::commandArgument($inputText));
-        if ($ref !== '' && !\SugarCraft\Code\Attachments\ContextMentions::isDiffRef($ref)) {
+        if (($refusal = \SugarCraft\Code\Commands\ReviewCommand::refError($ref, $this->projectRoot())) !== null) {
             return [
                 $this->mutate([
-                    'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant(Lang::t('cmd.review.bad-ref', ['ref' => $ref]))->withUiOnly()],
+                    'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($refusal)->withUiOnly()],
                     'inputBuf' => '',
                     'inFlight' => false,
                 ]),

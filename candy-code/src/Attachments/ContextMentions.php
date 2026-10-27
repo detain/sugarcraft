@@ -85,14 +85,30 @@ final class ContextMentions
     private const REF_PATTERN = '#\A[A-Za-z0-9_./~^@{}+][A-Za-z0-9_./~^@{}+:-]*\z#';
 
     /**
-     * Whether $ref is spellable inside `@diff:<ref>` (GIT-1: `/review <ref>`
-     * validates against the scanner's own pattern before assembling its
-     * prompt, so a command can never submit a diff mention the scanner would
-     * refuse to attach and the review would silently run against nothing).
+     * Whether $ref survives the scanner's own round trip (GIT-1, C-AGT-2:
+     * `/review <ref>` validates through here before assembling its prompt, so
+     * a command can never submit a diff mention the scanner would refuse to
+     * attach and the review would silently run against nothing). The check is
+     * the full walk, not just the pattern: a spelling the trailing-punctuation
+     * trim would cut back (`HEAD@{1`, a path that cannot close) is refused, as
+     * is a range (`base..HEAD`) — the diff runner resolves a single tree-ish,
+     * so a range would fail `diff-index` and attach nothing.
      */
     public static function isDiffRef(string $ref): bool
     {
-        return preg_match(self::REF_PATTERN, $ref) === 1;
+        if ($ref === '' || \str_contains($ref, '..') || preg_match(self::REF_PATTERN, $ref) !== 1) {
+            return false;
+        }
+
+        // A reflog address the user never closed (`HEAD@{1`) survives the
+        // trim untouched — nothing trims it back — but git can never resolve
+        // it, so the turn would bill against a diff that fails to attach.
+        // Refuse the dangling spelling here, at the scanner's door.
+        if (\substr_count($ref, '@{') > \substr_count($ref, '}')) {
+            return false;
+        }
+
+        return self::trimmed('diff:' . $ref) === 'diff:' . $ref;
     }
 
     /**
@@ -521,7 +537,23 @@ final class ContextMentions
 
     private static function trimmed(string $written): string
     {
-        $trimmed = rtrim($written, self::TRAILING_PUNCTUATION);
+        // C-AGT-2 (GIT-1-P1): a git reflog address ENDS in a brace —
+        // `HEAD@{1}`, `@{u}` — and a plain rtrim would eat exactly the
+        // character that makes it a ref, then hand git a mangled revision.
+        // Walk the punctuation from the right instead, and stop on a `}`
+        // that closes an otherwise unmatched `@{` behind it: that brace is
+        // part of the mention, not sentence punctuation.
+        $end = \strlen($written);
+        while ($end > 0 && str_contains(self::TRAILING_PUNCTUATION, $written[$end - 1])) {
+            if ($written[$end - 1] === '}') {
+                $head = substr($written, 0, $end - 1);
+                if (\substr_count($head, '@{') > \substr_count($head, '}')) {
+                    break;
+                }
+            }
+            $end--;
+        }
+        $trimmed = substr($written, 0, $end);
 
         return $trimmed === '' ? $written : $trimmed;
     }
