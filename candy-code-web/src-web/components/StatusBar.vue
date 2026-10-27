@@ -59,8 +59,15 @@ function modelOptionLabel(provider: string): string {
   return provider === currentProvider.value ? model.value : provider
 }
 function pickModel(event: Event): void {
-  const value = (event.target as HTMLSelectElement).value
+  const select = event.target as HTMLSelectElement
+  const value = select.value
   if (value !== '' && value !== modelOptionValue(currentProvider.value)) emit('runCommand', `/model ${value}`)
+  // C-WEB-1.b: a pick is a REQUEST the session has not granted yet — while the
+  // switch is pending, or if it is refused, the summary keeps naming the old
+  // entry. The bound :value did not change, so Vue never repaints the element
+  // and the select would advertise a model that is not in use. Pull the DOM
+  // back to the summary's entry; the select repaints when the summary moves.
+  select.value = modelOptionValue(currentProvider.value)
 }
 
 const statusText = computed(() => {

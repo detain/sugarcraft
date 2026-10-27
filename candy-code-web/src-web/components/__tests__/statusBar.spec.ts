@@ -73,6 +73,45 @@ describe('StatusBar (WEB-2)', { retry: 0 }, () => {
     expect(wrapper.emitted('runCommand')).toBeUndefined()
   })
 
+  /**
+   * C-WEB-1.b: the select must never display a switch the session has not
+   * applied. A pick emits and the element is pulled back to the summary's
+   * entry; the repaint happens when (and only when) the summary moves.
+   * Every drive below uses setValue, which sets target.value BEFORE the
+   * change event — a bare synthetic Event would not see the reset.
+   */
+  async function pickPendingSwitch() {
+    const wrapper = await mountConnected()
+    const select = wrapper.find('[data-testid="model-select"]')
+    await select.setValue('anthropic')
+    return { wrapper, select }
+  }
+
+  const appliedAnthropic = () =>
+    sessionSummary('s1', { provider: 'anthropic', model: 'opus-4.6' }) as unknown as SessionSummary
+
+  it('after picking B the element still shows the summary entry A', async () => {
+    const { wrapper, select } = await pickPendingSwitch()
+    expect(wrapper.emitted('runCommand')).toEqual([['/model anthropic']])
+    expect((select.element as HTMLSelectElement).value).toBe('openai gpt-5')
+  })
+
+  it('the summary moving to B repaints the select', async () => {
+    const { wrapper, select } = await pickPendingSwitch()
+    await wrapper.setProps({ summary: appliedAnthropic() })
+    expect((select.element as HTMLSelectElement).value).toBe('anthropic opus-4.6')
+  })
+
+  it('picking A after the apply emits the switch back and re-parks on B', async () => {
+    const { wrapper, select } = await pickPendingSwitch()
+    await wrapper.setProps({ summary: appliedAnthropic() })
+    await select.setValue('openai')
+    const commands = wrapper.emitted('runCommand')
+    if (!commands) throw new Error('no runCommand emitted')
+    expect(commands.at(-1)).toEqual(['/model openai'])
+    expect((select.element as HTMLSelectElement).value).toBe('anthropic opus-4.6')
+  })
+
   it('the compact button runs /compact and parks itself while the session works', async () => {
     const wrapper = await mountConnected()
     const button = wrapper.find('[data-testid="compact-button"]')
