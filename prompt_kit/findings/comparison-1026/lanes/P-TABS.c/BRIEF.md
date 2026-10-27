@@ -1,0 +1,22 @@
+### P-TABS.c — SessionsPane component (vertical `+` / sessions / agents list)
+- item: P-SESSION-TABS + P-AGENT-ATTACH (sources: GAP-UI-N6; owner wording "a tab up top to open a new session … tabs for the running sessions under it"; OC2 vertical tabs, COMPARISON SES-12)
+- kind: feature · effort M
+- approach:
+  - `SessionsPane::renderModel(WindowList, Theme, int width, int rows)` draws the dockable pane form of the window list:
+    - row 0 is `＋ New session`;
+    - then one row per session tab: attention glyph, name, badge and summary (`⠋ step 4 · 2 agents`);
+    - each session's agent windows are indented under it (`└ ⠋ @explore`, in the preset colour);
+    - the focused window is highlighted;
+    - a list longer than the pane keeps the focused row in view (the TodoPane anchor rule).
+  - `layout()` returns `[block, rowKeys]` in the `Tui\Renderer::keyed()` shape (`src/Tui/Renderer.php:1930-1938`): keys `new`, `s:<key>`, `a:<runId>`.
+  - It reads only the model and does no I/O.
+- files.create: `candy-code/src/Tui/Components/SessionsPane.php`
+- files.modify: `candy-code/lang/en.php` (`tui.sessions.*`)
+- tests: create `candy-code/tests/Tui/Components/SessionsPaneTest.php` (row keys align with painted rows; never over-wide; the agent rows nest; a long list keeps focus in view; the "+" row is always row 0)
+- docs/guards: none
+- serialized: [lang] (prefix `tui.sessions.`)
+- deps: P-TABS.a
+- phase: normal
+- ruling: none
+- risks: low. The widths follow PaneFrame chrome (`src/Tui/Components/PaneFrame.php`).
+

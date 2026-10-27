@@ -47,50 +47,20 @@
     "P-IMG.c",
     "P-CTX.b",
     "P-CTX.d",
-    "P-TABS.h"
+    "P-TABS.h",
+    "P-TABS.c"
   ],
-  "inflight": {
-    "C-PRV-1.b": {
-      "stage": "build",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-PRV-1.b",
-      "branch": "cc/C-PRV-1.b",
-      "session": "ses_e825233faffeIYofJffE71RzDz",
-      "note": "died harness-error zero-disk @859@, resume disk-grounded @869@; base 8d9814130"
-    },
-    "C-TOOL-7.a": {
-      "stage": "build",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-TOOL-7.a",
-      "branch": "cc/C-TOOL-7.a",
-      "session": "ses_e825233f0ffe0zIzWxMarpWOkP",
-      "note": "died provider-error zero-disk @866@, resume @869@; base 8d9814130; four registry nits"
-    },
-    "P-MENU.c": {
-      "stage": "build",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-P-MENU.c",
-      "branch": "cc/P-MENU.c",
-      "session": "ses_e823a2633ffeG2r4iejDj31Ch9",
-      "note": "menu overlay seam; DUR MenuOverlayFrameTest; base 75ba82ddb"
-    },
-    "P-TABS.c": {
-      "stage": "build",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-P-TABS.c",
-      "branch": "cc/P-TABS.c",
-      "session": "ses_e823a2631ffeNAM9e4L2wFxNOC",
-      "note": "SessionsPane; DUR SessionsPaneTest; lang tui.sessions."
-    },
-    "P-MENU.b": {
-      "stage": "build",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-P-MENU.b",
-      "branch": "cc/P-MENU.b",
-      "session": "ses_e823a2629ffeUj7Cl0wJ800SfB",
-      "note": "ShellMenu tree; DUR ShellMenuTest; lang tui.menu."
-    }
-  },
+  "inflight": [
+    "C-PRV-1.b",
+    "C-TOOL-7.a",
+    "P-MENU.c",
+    "P-MENU.b",
+    "P-CTX.f",
+    "C-AGT-1.b",
+    "C-AGT-3.a",
+    "C-CTX-2.b",
+    "C-EXT-2.a"
+  ],
   "blocked": [],
   "extra_agents": 0,
   "waves_closed": [
@@ -109,8 +79,8 @@
       "master": "88ac5e485",
       "pick": "fe389906e",
       "regen": "no-op (cmd/tool/settings all up to date; no schema/web)",
-      "gates": "TabScope|SessionDeck|SessionTab 142T/1190A OK; drift-quartet 56T/20837A OK; five-guard 133T pair-only (pinned 25,537 vs live 25,777 — closeout re-pin)",
-      "durations_owed": "NEW candy-code tests/App/Tabs/TabScopeTest.php (14) + SessionDeckTest.php (12) — LIST ONLY, durations.tsv is closeout duty"
+      "gates": "TabScope|SessionDeck|SessionTab 142T/1190A OK; drift-quartet 56T/20837A OK; five-guard 133T pair-only (pinned 25,537 vs live 25,777 \u2014 closeout re-pin)",
+      "durations_owed": "NEW candy-code tests/App/Tabs/TabScopeTest.php (14) + SessionDeckTest.php (12) \u2014 LIST ONLY, durations.tsv is closeout duty"
     },
     "C-CTX-1.a": {
       "master": "893f271cf",
@@ -122,42 +92,51 @@
     },
     "C-WEB-1.d": {
       "master": "8c93928f2",
-      "pick": "8c93928f2 (landed 4db08f543 with -x trailer, amended message-only to strip — zero trailers per precedent)",
+      "pick": "8c93928f2 (landed 4db08f543 with -x trailer, amended message-only to strip \u2014 zero trailers per precedent)",
       "regen": "no-op (gen-protocol-schema --check up-to-date rc0; SessionSnapshot change is row-mapping body, no wire-schema; diff-tree carries no candy-code-web files, no new test files)",
-      "gates": "TranscriptProjectorMedia|MediaMethods|MediaStore|ReadPathCensus 79T/861A OK exact (r1); five-guard 133T/15444A pair-only (pinned 25,537 vs live 25,787 — closeout re-pin); foreign AttachPaging 2F/RemoteBackend 1F byte-identical across pick (16T/97A/3F) — inherited, disclosed, not cured; php -l 5 touched PHP files clean",
-      "durations_owed": "none — NO new candy-code *Test.php in pick"
+      "gates": "TranscriptProjectorMedia|MediaMethods|MediaStore|ReadPathCensus 79T/861A OK exact (r1); five-guard 133T/15444A pair-only (pinned 25,537 vs live 25,787 \u2014 closeout re-pin); foreign AttachPaging 2F/RemoteBackend 1F byte-identical across pick (16T/97A/3F) \u2014 inherited, disclosed, not cured; php -l 5 touched PHP files clean",
+      "durations_owed": "none \u2014 NO new candy-code *Test.php in pick"
     },
     "C-SEC-3.a": {
       "master": "2dd2f9a7d",
       "pick": "edbbab8b1 (build e34bd1835) + 2dd2f9a7d (r2 ecaf40947), plain cherry-pick no -x",
       "regen": "no-op (command/tool/settings gens all up to date; no Protocol/web files in lane, web/schema gens skipped)",
-      "gates": "McpPrompt|TurnController|CommandShell 112T/553A OK exact; refusal family 83T/1342A OK exact; DocFigureProseDriftTest 91T/3906A OK (+12A master-era arms, green); five-guard 133T/15470A only-red staleness pair (pinned 25,537 vs live 25,79x — closeout re-pin); TreeWideGuardRoster 2F PRE-EXISTING SelfUpdateTest glob (a8ead9976 C-SES-5.b, disclosed, not cured); DuplicatedTestHelperDrift green; MCP.md+lang auto-merge content-verified keep-both (C-MCP-1.b Deferred+foreign-spelling intact, lane refusal rows+2 keys live)",
-      "durations_owed": "NEW candy-code tests/Commands/CommandShellPostureTest.php + tests/Host/TurnControllerBundleShellTest.php — LIST ONLY, durations.tsv is closeout duty"
+      "gates": "McpPrompt|TurnController|CommandShell 112T/553A OK exact; refusal family 83T/1342A OK exact; DocFigureProseDriftTest 91T/3906A OK (+12A master-era arms, green); five-guard 133T/15470A only-red staleness pair (pinned 25,537 vs live 25,79x \u2014 closeout re-pin); TreeWideGuardRoster 2F PRE-EXISTING SelfUpdateTest glob (a8ead9976 C-SES-5.b, disclosed, not cured); DuplicatedTestHelperDrift green; MCP.md+lang auto-merge content-verified keep-both (C-MCP-1.b Deferred+foreign-spelling intact, lane refusal rows+2 keys live)",
+      "durations_owed": "NEW candy-code tests/Commands/CommandShellPostureTest.php + tests/Host/TurnControllerBundleShellTest.php \u2014 LIST ONLY, durations.tsv is closeout duty"
     },
-    "C-PRV-1.a": "WELDED 2026-10-27 master e55b78f22+ffe7b910d (picks of 30fddc88a+0a5ad3c99, clean auto-merge lang/en.php+Chat.php, zero conflicts, patch-ids identical). Regen no-op (command/tool/settings docs all up to date; no Protocol/web files in picks). Merged gates: Effort|BedrockProvider 189T/504A OK; Codex|ClaudeCode 221T/746A OK; OpenAIProvider 89T/204A OK (filter broader than lane-suffix form); SettingsSchemaDocDrift 19T/179A; five-guard 133T/15479A F2=staleness pair only (25,537 pinned vs 25,827 live - closeout re-pin carries +290 incl foreign); TreeWideGuardRoster|DuplicatedTestHelperDrift 31T F2 = disclosed foreign SelfUpdateTest glob carrier. DURATIONS duty: candy-code/tests/Providers/EffortGateTest.php. §4 mark ✅ e55b78f22 left UNSTAGED. Cherry proof both '-'; worktree+branch pruned. => W2 step fully welded.",
+    "C-PRV-1.a": "WELDED 2026-10-27 master e55b78f22+ffe7b910d (picks of 30fddc88a+0a5ad3c99, clean auto-merge lang/en.php+Chat.php, zero conflicts, patch-ids identical). Regen no-op (command/tool/settings docs all up to date; no Protocol/web files in picks). Merged gates: Effort|BedrockProvider 189T/504A OK; Codex|ClaudeCode 221T/746A OK; OpenAIProvider 89T/204A OK (filter broader than lane-suffix form); SettingsSchemaDocDrift 19T/179A; five-guard 133T/15479A F2=staleness pair only (25,537 pinned vs 25,827 live - closeout re-pin carries +290 incl foreign); TreeWideGuardRoster|DuplicatedTestHelperDrift 31T F2 = disclosed foreign SelfUpdateTest glob carrier. DURATIONS duty: candy-code/tests/Providers/EffortGateTest.php. \u00a74 mark \u2705 e55b78f22 left UNSTAGED. Cherry proof both '-'; worktree+branch pruned. => W2 step fully welded.",
     "C-SEC-4.b": "WELDED 2026-10-27 master 40d19f15f (cherry-pick of weld fix 54094cf58 atop already-landed picks 8f625725a+0fd50b209+regen 593e5d769). Gates: GatewayTrustRouting 2T/30A OK, ContextTrustPrompt 12T/74A OK, ProtocolSchemaDrift|ServerProtocolDocumentationDrift 12T/332A OK, gen-protocol-schema --check up-to-date, dist clean (build ran at regen). five-guard 133T/15479A F2 staleness pair only. vitest N/A this pick (tests-only, name-only shows 1 file). Durations duty: GatewayTrustRoutingTest.php (landed earlier pick - closeout row).",
-    "P-CTX.c": "WELDED 2026-10-27 master 9aa5258b1 (picks bb4be27fc=6a69bf018 build +796/4 files incl NEW tests/Tui/Components/ContextPaneTest.php + lang +8 tui.context.*; fix d807cf3e2 — brief cite 0699c31a9 was PHANTOM, disk tip authoritative, 2+/2- citation lines match). NO regen (no Protocol/web files). Gates: ContextPane 12T/388A exact; SymbolCitation|DuplicatedDocBlockLine 13T/16125A OK (+50A tree-scan wobble); five-guard 133T/15488A F2 staleness pair only. Durations duty: candy-code/tests/Tui/Components/ContextPaneTest.php (+12T) - closeout.",
+    "P-CTX.c": "WELDED 2026-10-27 master 9aa5258b1 (picks bb4be27fc=6a69bf018 build +796/4 files incl NEW tests/Tui/Components/ContextPaneTest.php + lang +8 tui.context.*; fix d807cf3e2 \u2014 brief cite 0699c31a9 was PHANTOM, disk tip authoritative, 2+/2- citation lines match). NO regen (no Protocol/web files). Gates: ContextPane 12T/388A exact; SymbolCitation|DuplicatedDocBlockLine 13T/16125A OK (+50A tree-scan wobble); five-guard 133T/15488A F2 staleness pair only. Durations duty: candy-code/tests/Tui/Components/ContextPaneTest.php (+12T) - closeout.",
     "P-TABS.d": "welded by welder agent at da772ff56; 4 foreign Session|Chat reds reproduce identically at pre-pick tip fbd4c9654 (RemoteBackend unique-prefix, ChatHostLangCatalogue chat.effort.shape.*, RouteTraitParity SessionPickerSearchMsg roster, SessionSnapshot artifact-refs) - disclosed not cured",
     "P-IMG.b": "welded by welder agent at 6caf1052d; tests/Tui+tests/App 1707T/72196A OK, EnvRoster reds absent, five-guard pair-only",
     "P-MENU.a": "welded by welder agent at c1267a71a; Menu filter 209T/2736A OK, check-one-type-per-file RC=0 (62 libs/3170 files/0 problems), five-guard pair-only; NIT carries accepted (MenuNode new-self, MenuCascade hover row-0, sampled sweep widths)",
     "P-TABS.a": "welded by welder agent at eecf4d5b0; Window 288T/2990A OK, TuiLang|LangParity 16T/4132A OK, five-guard pair-only; en.php auto-merged both-sides",
-    "C-SEC-3.b": "WELDED 2026-10-27 master 393635d2c (pick acb746a59, plain cherry-pick, clean; 5 files +20/-16). Regen no-op (command/tool/settings gens up to date). Gates at weld: CommandShellPosture|TurnControllerBundle 13T/39A OK; wide CommandShellPosture|TurnController 35T/143A OK (builder 135T filter-era); TrustKey|DocFigure 109T/4486A OK; five-guard 133T/15572A F2 staleness pair only (25,537 pinned vs 25,934 live). PARTIAL by design: foreign-row/doc-truth half landed; opt-in half carried to C-SEC-3.c after C-EXT-4.c (row-identity gap). NO new candy-code test files -> no durations row. §4 mark ✅ 393635d2c UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
-    "C-WEB-1.b": "WELDED 2026-10-27 master 34a295d2d (pick 07787590f, clean; StatusBar.vue +8/-1 + 3 pins). dist regen commit 21d7d039b (welder-only; amended to carry the two new hashed bundles — rename-detected, dist status clean). vitest serial: statusBar 10/10, protocol generated.spec 3/3 (dormantRoster.spec.ts does not exist yet — C-WEB-3.g pending). No PHP files -> no php gates. NO new spec files. §4 mark ✅ 34a295d2d UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
-    "P-IMG.c": "WELDED 2026-10-27 master a28779b00 (pick 26760f05b, clean; App.vue +3 + NEW src-web/components/__tests__/topbarGenerate.spec.ts). dist regen commit 8604d79d9 (welder-only, clean). vitest serial topbarGenerate+statusBar 14/14 green (4 new + 10 status-bar; brief's 11 was a builder-era recount, actual 10, all pass). PHP gates N/A. §4 mark ✅ a28779b00 UNSTAGED. Vitest-roster attention: NEW topbarGenerate.spec.ts (observation only, no durations.tsv involvement). Cherry proof '-'; worktree+branch pruned.",
-    "P-CTX.b": "WELDED 2026-10-27 master 4e91ddcb2+3edaa6acc (picks 9a6ebd207 build + e34dd4938 tests/docs, COMMANDS.md+lang auto-merged clean). Weld cure bdb1c96d8 TAKEN (brief premises matched text): (a) bad-args arg-count refusal moved BEFORE the capability-refusal branch; (b) failed .txt write now names the orphaned .json residue (NEW lang key cmd.context.raw.json-residue, single-locale). Regen no-op (gen-command-docs --write/--check up to date). Gates at weld: ContextRawDump 7T/35A OK exact; ContextRawDump|ContextHost 8T/41A OK post-cure; wide --filter Context 1839T/7859A OK; TrustKey|DocFigure 109T/4487A OK; five-guard 133T/15580A F2 staleness pair only (25,537 pinned vs 25,941 live). DURATIONS duty: NEW candy-code/tests/Host/Commands/ContextRawDumpTest.php (7T) — LIST ONLY, durations.tsv is closeout duty. §4 mark ✅ 4e91ddcb2 UNSTAGED. Cherry proof pending prune step.",
+    "C-SEC-3.b": "WELDED 2026-10-27 master 393635d2c (pick acb746a59, plain cherry-pick, clean; 5 files +20/-16). Regen no-op (command/tool/settings gens up to date). Gates at weld: CommandShellPosture|TurnControllerBundle 13T/39A OK; wide CommandShellPosture|TurnController 35T/143A OK (builder 135T filter-era); TrustKey|DocFigure 109T/4486A OK; five-guard 133T/15572A F2 staleness pair only (25,537 pinned vs 25,934 live). PARTIAL by design: foreign-row/doc-truth half landed; opt-in half carried to C-SEC-3.c after C-EXT-4.c (row-identity gap). NO new candy-code test files -> no durations row. \u00a74 mark \u2705 393635d2c UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
+    "C-WEB-1.b": "WELDED 2026-10-27 master 34a295d2d (pick 07787590f, clean; StatusBar.vue +8/-1 + 3 pins). dist regen commit 21d7d039b (welder-only; amended to carry the two new hashed bundles \u2014 rename-detected, dist status clean). vitest serial: statusBar 10/10, protocol generated.spec 3/3 (dormantRoster.spec.ts does not exist yet \u2014 C-WEB-3.g pending). No PHP files -> no php gates. NO new spec files. \u00a74 mark \u2705 34a295d2d UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
+    "P-IMG.c": "WELDED 2026-10-27 master a28779b00 (pick 26760f05b, clean; App.vue +3 + NEW src-web/components/__tests__/topbarGenerate.spec.ts). dist regen commit 8604d79d9 (welder-only, clean). vitest serial topbarGenerate+statusBar 14/14 green (4 new + 10 status-bar; brief's 11 was a builder-era recount, actual 10, all pass). PHP gates N/A. \u00a74 mark \u2705 a28779b00 UNSTAGED. Vitest-roster attention: NEW topbarGenerate.spec.ts (observation only, no durations.tsv involvement). Cherry proof '-'; worktree+branch pruned.",
+    "P-CTX.b": "WELDED 2026-10-27 master 4e91ddcb2+3edaa6acc (picks 9a6ebd207 build + e34dd4938 tests/docs, COMMANDS.md+lang auto-merged clean). Weld cure bdb1c96d8 TAKEN (brief premises matched text): (a) bad-args arg-count refusal moved BEFORE the capability-refusal branch; (b) failed .txt write now names the orphaned .json residue (NEW lang key cmd.context.raw.json-residue, single-locale). Regen no-op (gen-command-docs --write/--check up to date). Gates at weld: ContextRawDump 7T/35A OK exact; ContextRawDump|ContextHost 8T/41A OK post-cure; wide --filter Context 1839T/7859A OK; TrustKey|DocFigure 109T/4487A OK; five-guard 133T/15580A F2 staleness pair only (25,537 pinned vs 25,941 live). DURATIONS duty: NEW candy-code/tests/Host/Commands/ContextRawDumpTest.php (7T) \u2014 LIST ONLY, durations.tsv is closeout duty. \u00a74 mark \u2705 4e91ddcb2 UNSTAGED. Cherry proof pending prune step.",
     "P-CTX.d": "WELDED 2026-10-27 master 967479a37+d1b47ee87 (picks 983b8e021 build + 77e114904 fix r2, clean, zero conflicts; %ae/%ce 1/1 both, zero trailers). Regen no-op (command/tool/settings gens all up to date; no Protocol/web files in picks). Gates: TurnRunnerContext|ContextSnapshotSchedule|AutomaticCompaction|RouteTraitParity 54T/448A OK EXACT; broad --filter Context 1851T/7903A OK; five-guard 133T/2F staleness pair only. Absorbed W4 disclosed carrier: lane-bundled dated foreign cure row SessionPickerSearchMsg in RouteTraitParityTest (base-red cured in-step). REVIEW-2.md not persisted on disk at weld (r2 verdict per lead dispatch CLEAN); evidence staged BRIEF/REPORT/REVIEW-1. DURATIONS duty: NEW candy-code tests/Host/TurnRunnerContextTest.php + tests/Chat/ContextSnapshotScheduleTest.php - closeout rows. Cherry proof both '-'; worktree+branch pruned.",
-    "P-TABS.h": "WELDED 2026-10-27 master c6f3e3f56+e30d7f4ee (picks of e94426fe0 build + e1bba1b95 fix r2, base 8d9814130, clean zero conflicts; %ae/%ce 1/1 both, zero trailers; web-only files). dist regen commit 79b4479a1 (weld-only duty; bundle rename JS + CSS swap, index.html+manifest updated, dist clean after). Gates: vitest serial --no-file-parallelism sessionTabsNew+layout+grid+sessionTileSpend = 26 passed EXACT. No PHP files -> no phpunit gates needed; five-guard unchanged from P-CTX.d weld (133T pair-only). Cherry proof both '-'; worktree+branch pruned."
+    "P-TABS.h": "WELDED 2026-10-27 master c6f3e3f56+e30d7f4ee (picks of e94426fe0 build + e1bba1b95 fix r2, base 8d9814130, clean zero conflicts; %ae/%ce 1/1 both, zero trailers; web-only files). dist regen commit 79b4479a1 (weld-only duty; bundle rename JS + CSS swap, index.html+manifest updated, dist clean after). Gates: vitest serial --no-file-parallelism sessionTabsNew+layout+grid+sessionTileSpend = 26 passed EXACT. No PHP files -> no phpunit gates needed; five-guard unchanged from P-CTX.d weld (133T pair-only). Cherry proof both '-'; worktree+branch pruned.",
+    "P-TABS.c": {
+      "master": "940fea719",
+      "pick": "940fea719 (cherry-pick 679609a9b, clean, single commit)",
+      "regen": "no-op (command/tool/settings docs --check all up to date; no protocol/web touched)",
+      "gates": "SessionsPane 11T/1457A OK; TuiLang|LangParity 16T/4149A OK; five-guard 133T pair-only staleness (pinned 25,537 vs live 25,965 - closeout re-pin)",
+      "durations_owed": "NEW candy-code tests/Tui/Components/SessionsPaneTest.php (11T)"
+    }
   },
   "carries": [
-    "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
-    "C-SEC-3.b opt-in deferral recommendation -> C-EXT-4.c (per-origin shell allow-list needs row identity from C-EXT-2.e/C-EXT-4.c/C-MCP-2.a) — decide at C-EXT-4.c cut or plan erratum",
+    "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest \u2014 closeout gate duty",
+    "C-SEC-3.b opt-in deferral recommendation -> C-EXT-4.c (per-origin shell allow-list needs row identity from C-EXT-2.e/C-EXT-4.c/C-MCP-2.a) \u2014 decide at C-EXT-4.c cut or plan erratum",
     "C-SEC-3.c follow-up lane (NEW id, mint after C-EXT-4.c W20): CommandSpec origin field + bundle/McpPromptCommands name propagation + trustedBundleCommands/mcpPromptShell lists + Chat/SessionHost callers + settings/lang/docs + opt-in tests; ALSO fix ShellProvenance.php:19-20 wording on that commit",
-    "P-CTX.d weld ledger: RouteTraitParityTest foreign SessionPickerSearchMsg cure row bundled (genuine base-red cured in-step, dated comment) — log at weld",
+    "P-CTX.d weld ledger: RouteTraitParityTest foreign SessionPickerSearchMsg cure row bundled (genuine base-red cured in-step, dated comment) \u2014 log at weld",
     "LEAD CURES in flight @878@: cc/cure-lang (ChatHostLangCatalogue roster chat.effort.shape.* emitters, worktree cc-cmp-cure-lang) + cc/cure-snap (SessionSnapshot artifact-refs expectation vs 8c93928f2 mediaBearingRow, worktree cc-cmp-cure-snap). RouteTraitParity cure rides P-CTX.d (do not duplicate). Weld cures as picks when they land.",
     "W4 closeout: 9 durations rows + 6 planned-seam carries (see W4/WAVE-REVIEW-1.md)",
-    "cure-lang landed 34ac69dfc (pick of 2685a32c9; ChatHostLangCatalogue roster; lanes/cure-lang/REPORT.md weld-reconstructed — lane report never persisted)",
+    "cure-lang landed 34ac69dfc (pick of 2685a32c9; ChatHostLangCatalogue roster; lanes/cure-lang/REPORT.md weld-reconstructed \u2014 lane report never persisted)",
     "cure-snap landed f76420f74 (pick of dd1aab173; SessionSnapshotTest fixture-shape cure, TEST-at-fault per lanes/cure-snap/REPORT.md; AttachPaging 2F stays foreign-not-cured)",
     "P-CTX.d weld: RouteTraitParityTest SessionPickerSearchMsg foreign cure row ABSORBED (W4 disclosed carrier closed at this weld); durations rows owed TurnRunnerContextTest + ContextSnapshotScheduleTest (closeout)",
-    "P-TABS.h weld: NEW candy-code-web/src-web/components/grid/__tests__/sessionTabsNew.spec.ts = vitest-side roster note, no phpunit durations row (durations.tsv is phpunit-only; vitest files are run wholesale)"
+    "P-TABS.h weld: NEW candy-code-web/src-web/components/grid/__tests__/sessionTabsNew.spec.ts = vitest-side roster note, no phpunit durations row (durations.tsv is phpunit-only; vitest files are run wholesale)",
+    "P-CTX.d REVIEW-2.md persisted post-weld (r2 CLEAN; weld 967479a37+d1b47ee87/1ae5f9c69 absorbed RouteTraitParity W4 carrier)",
+    "phantom #18: stale P-CTX.d welder notification claimed evidence 21255c943 (nonexistent); real weld 967479a37+d1b47ee87/1ae5f9c69 verified on master, no duplicates"
   ]
 }
