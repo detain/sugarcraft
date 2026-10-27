@@ -5,6 +5,7 @@ import { diffSectionForPath } from '../../lib/diff'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
 import DiffView from '../DiffView.vue'
+import FileViewer from '../FileViewer.vue'
 
 /**
  * WEB-1b: the workspace's uncommitted changes in the open (`files.changed`
@@ -28,6 +29,8 @@ const selected = ref<string | null>(null)
 const loading = ref(false)
 const loaded = ref(false)
 const error = ref<string | null>(null)
+/** C-WEB-3.b: a row's "view" opens the shared read-only {@see FileViewer}. */
+const viewerPath = ref<string | null>(null)
 
 async function load(): Promise<void> {
   loading.value = true
@@ -86,7 +89,7 @@ onMounted(() => void load())
       <p v-if="changedTruncated" class="warn" data-testid="changes-truncated">The changed list is truncated.</p>
       <p v-if="items.length === 0" class="empty" data-testid="changes-none">The workspace is clean.</p>
       <ul v-else class="list" data-testid="changes-list">
-        <li v-for="item in items" :key="item.path">
+        <li v-for="item in items" :key="item.path" class="entry">
           <button
             type="button"
             class="row"
@@ -99,8 +102,10 @@ onMounted(() => void load())
             <span class="path">{{ item.path }}</span>
             <span v-if="item.from" class="from">{{ item.from }} →</span>
           </button>
+          <button type="button" class="view" :data-testid="`changed-view-${item.path}`" title="View the file" @click="viewerPath = item.path">view</button>
         </li>
       </ul>
+      <FileViewer v-if="viewerPath !== null" :path="viewerPath" @close="viewerPath = null" />
       <p v-if="diffTruncated" class="warn" data-testid="diff-truncated">The workspace diff is truncated.</p>
       <!-- The stub precedes the untracked line in this chain: a refused diff is not an untracked file. -->
       <p v-if="diffError" class="error" role="alert" data-testid="changes-diff-error">{{ diffError }}</p>
@@ -135,6 +140,20 @@ onMounted(() => void load())
   margin: 0.4rem 0 0;
   padding: 0;
   font-size: 0.8125rem;
+}
+.entry {
+  display: flex;
+  gap: 0.3rem;
+  align-items: baseline;
+}
+.entry .row {
+  flex: 1;
+  min-width: 0;
+}
+.view {
+  flex: none;
+  font-size: 0.6875rem;
+  padding: 0.1rem 0.4rem;
 }
 .row {
   display: flex;

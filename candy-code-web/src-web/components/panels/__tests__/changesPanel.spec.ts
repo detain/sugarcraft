@@ -164,6 +164,19 @@ describe('ChangesPanel (WEB-1b)', () => {
     expect(wrapper.find('[data-testid="changes-selected"]').text()).toBe('all files')
   })
 
+  it('opens the shared viewer for that path from a row\'s "view" (C-WEB-3.b)', async () => {
+    await wire.connect()
+    const wrapper = await openPanel()
+    await wrapper.find('[data-testid="changed-view-src/a.ts"]').trigger('click')
+    expect(wrapper.find('[data-testid="file-viewer"]').exists()).toBe(true)
+    expect(wire.sent('files.read').at(-1)?.params).toEqual({ path: 'src/a.ts', offset: 0, limit: 32_768 })
+    await wire.answer('files.read', { path: 'src/a.ts', size: 6, offset: 0, binary: false, content: 'keep\nnew', truncated: false })
+    expect(wrapper.find('[data-testid="file-viewer-path"]').text()).toBe('src/a.ts')
+    expect(wrapper.find('[data-testid="file-viewer-line-1"]').text()).toBe('1keep')
+    await wrapper.find('[data-testid="file-viewer-close"]').trigger('click')
+    expect(wrapper.find('[data-testid="file-viewer"]').exists()).toBe(false)
+  })
+
   it('mounts in the drawer under a Changes tab', async () => {
     await wire.connect()
     const wrapper = mount(SidePanels, { props: { sessionId: null } })

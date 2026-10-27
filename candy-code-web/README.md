@@ -100,7 +100,7 @@ documents the protocol and the UI).
   tries make up the ladder; when it runs out the tab stops retrying and says
   the server is gone — the same verdict `candy-code attach` reaches after its
   exhausted ladder (SERVER.md) — with *Try again* to spend a fresh one.
-- **Side panels** (the *panels* button — ten, per the `PANELS` registry in
+- **Side panels** (the *panels* button — eleven, per the `PANELS` registry in
   `src-web/stores/agents/panels.ts`): **Agents** — the
   session's delegated runs as a live tree, also under each `Task` card, each
   opening into an agent view with the run's own transcript, a box to message it
@@ -115,8 +115,12 @@ documents the protocol and the UI).
   its source, allow/ask/deny rules, grants picked up as the session ran;
   read-only — the dials live in the status bar and settings); **Catalog** —
   every agent this server can delegate a run as, with model, provider and
-  mode; **Changes** — the workspace's uncommitted files with per-file diffs;
-  **Context** — what the next request is built from, as structure rather
+  mode; **Changes** — the workspace's uncommitted files with per-file diffs,
+  each row also opening the read-only viewer; **Files** — workspace file
+  search with the same read-only viewer (`fs.search`, `files.read` — plain
+  text with line numbers, never markup; binary files answer with a size
+  notice, long ones load more by offset); **Context** — what the next
+  request is built from, as structure rather
   than `/context`'s text, plus the directory-trust prompt; **Generate** —
   the media-generation form and live job surface (shown only when the
   server says it can generate).
@@ -206,7 +210,7 @@ src-web/
               reducer in reducer.ts), approvals, layout, settings (theme,
               notifications), settings/ (the settings form: fields,
               serverSettings), agents/ (agent tree, todos, background,
-              workflows, memory, the ten-panel drawer state)
+              workflows, memory, the eleven-panel drawer state)
   components/ SessionSidebar, Transcript (virtualised), TranscriptItem,
               MessageMarkdown, ReasoningFold, ToolCard, DiffView,
               PermissionCard, Composer, QueueStrip, StatusBar,
