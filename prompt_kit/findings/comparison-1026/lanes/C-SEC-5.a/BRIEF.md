@@ -1,0 +1,24 @@
+### C-SEC-5.a — Trust-target census and one shared grant door
+- item: C-SEC-5 (sources: GAP-PER-11, GAP-MCP-N1, k3-dorm#5)
+- kind: dormant-wire · effort M
+- approach:
+  - The four trust lists exist (`PermissionSettings.php:134-152`, `Bootstrap.php:153/172/187`, `LayeredSettings::PROJECT_SETTINGS_TRUST_KEY`), and so do two writers:
+    - `SettingsWriter::grantTrust($key, $root)` (`src/Config/Settings/SettingsWriter.php:376`), already wired by the settings editor through `App::grantProjectTrust()`;
+    - `Bootstrap::trustProjectMcp()` (:7773), which also records MCP pins.
+  - What is missing is a census of which targets a root needs. New `TrustTarget` enum: `mcp`, `mcp-pin`, `hooks`, `commands`, `settings`, with each case's config key. New `ProjectTrustCensus`: pure, with the predicates and "does the root declare it" probes injected as closures.
+  - Three public Bootstrap methods, placed beside `trustProjectMcp`:
+    - `pendingProjectTrust(?string $root)` wires the private predicates (`projectHooksAreTrusted`, `projectMcpIsTrusted`) and the public ones (`projectCommandShellIsTrusted`, `projectSettingsTrusted`);
+    - `mcpPinRefusals(?string $root)` reads the memo client's `refusedServers()` (`src/MCP/McpClient.php:315`) through `McpDecision`, never launching a server;
+    - `grantProjectTrust(TrustTarget, string $root, ?SettingsWriter)` sends `mcp`/`mcp-pin` to `trustProjectMcp` and every other target to `SettingsWriter::grantTrust`. It returns `{granted, persisted, error}`.
+- files.create: `candy-code/src/Config/Trust/TrustTarget.php`, `candy-code/src/Config/Trust/ProjectTrustCensus.php`
+- files.modify: `candy-code/src/Cli/Bootstrap.php` (new `pendingProjectTrust`, `mcpPinRefusals`, `grantProjectTrust` beside `trustProjectMcp`), `candy-code/src/Cli/McpDecision.php` (memo-only pin-refusal reader), `candy-code/lang/en.php` (`server.trust.ask.hooks|commands|settings|mcp_pin` reasons)
+- tests: create `candy-code/tests/Config/Trust/ProjectTrustCensusTest.php` (each target declared or absent, trusted or not); create `candy-code/tests/Cli/BootstrapProjectTrustGrantTest.php` (each target lands in the right writer; an unwritable config reports `error`; the MCP path records pins)
+- docs/guards:
+  - none in this step; the user-visible docs land with 5.b and 5.d.
+  - The writes go through the existing `SettingsWriter`/`writeUserConfig` doors, not Chat's `$onConfigChange`, so `ConfigWriteProducerDocumentationDriftTest`'s exact-two census holds.
+- serialized: [bootstrap:new methods beside trustProjectMcp] [lang:server.trust.ask.]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: the "declares commands" probe must mean "has a `!` form that could run" (`CommandSpec::hasShellSubstitution`), or every repo with a plain command file gets prompted.
+
