@@ -17,7 +17,8 @@
     "C-SES-5.a",
     "C-SES-2.a",
     "C-PRV-1.c",
-    "C-MCP-1.b"
+    "C-MCP-1.b",
+    "C-EXT-1.b"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -40,14 +41,6 @@
       "worktree": "/home/sites/cc-cmp-C-PRV-1.a",
       "branch": "cc/C-PRV-1.a",
       "session": null
-    },
-    "C-EXT-1.b": {
-      "stage": "fix",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-EXT-1.b",
-      "branch": "cc/C-EXT-1.b",
-      "session": "ses_e83db374bfferPNQmWWJmZLlnQ",
-      "note": "r1 0C/0M/2MINOR(1 step-local double-count, DOCKER.md DOC-ROW weld-absorb)/4NIT"
     },
     "C-SES-5.b": {
       "stage": "build",
@@ -78,6 +71,13 @@
       "worktree": "/home/sites/cc-cmp-C-SES-2.c",
       "branch": "cc/C-SES-2.c",
       "session": "ses_e83d9644bffeR4eTGqSn05sHVn"
+    },
+    "C-SES-1.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SES-1.a",
+      "branch": "cc/C-SES-1.a",
+      "session": "ses_e83d36b2cffevxRAK24OJn3BfS"
     }
   },
   "blocked": [],

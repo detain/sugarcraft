@@ -1,0 +1,31 @@
+### C-EXT-1.b — Skip-and-record unsupported CC entries, file-qualified names, `~/.claude/settings.json` in policy freshness
+- item: C-EXT-1 (sources: INT-4-P1, INT-4-P2, INT-4-P3, GAP-HK-07, p1-miss: CC hook `type: prompt|agent`)
+- kind: fix · MAJOR · effort M
+- approach:
+  - **Root causes.**
+    - `ClaudeSettingsHooks.php:257-265` refuses the launch for any non-`command` type.
+    - `:269` names rows `cc:{event}:{index}` with a per-file index, so a user `PreToolUse` plus a trusted project `PreToolUse` collide. `HookManager.php:156-160` throws on that, and `tests/Cli/BootstrapHookFileTest.php:866-878` pins the refusal.
+    - `Bootstrap::checkPolicyFreshness()` (`Bootstrap.php:4391-4460`) fingerprints only `config.json` and `hooks.yaml` (INT-4-P2).
+    - `docs/HOOKS.md:59-74` still claims refusals the code no longer makes (INT-4-P3).
+  - **Fix.**
+    - `prompt`, `agent`, `http` and `mcp_tool` types, plus unknown entry keys (`if`, `once`, …), are skipped and recorded in a `skippedEntries()` accumulator holding type or key, event and file.
+    - `reportSkippedClaudeSettingsEvents()` widens its single aggregate row to name skipped events, types and keys. The launch-cap census entry stays at 1; the format constant changes.
+    - `fromFile($path, string $scope)` names rows `cc:{user|project|local}:{event}:{index}`. `local` comes from `settings.local.json`. `hookFileEntries()` passes `user` for `userClaudeSettingsFile()`.
+    - The policy snapshot gains a `userClaudeSettings` fingerprint that feeds `$userChanged`. `PolicySnapshot::VERSION` goes 1→2; a version mismatch reads as null, so the one-time name churn quarantines nothing.
+- files.create: none
+- files.modify: `candy-code/src/Hooks/ClaudeSettingsHooks.php` (type and key skip, accumulator, scope naming), `candy-code/src/Cli/Bootstrap.php` (`hookFileEntries`, `checkPolicyFreshness`, `reportSkippedClaudeSettingsEvents`, `CLAUDE_SETTINGS_SKIPPED_EVENTS_NOTICE_FORMAT`), `candy-code/src/Config/PolicySnapshot.php` (VERSION, record key), `candy-code/docs/HOOKS.md` (naming paragraph, type/key bullets, the Notification/unknown-event bullet)
+- tests: create none. Modify:
+  - `candy-code/tests/Cli/BootstrapHookFileTest.php`: flip :866 so both rows register; add the `settings.json` + `settings.local.json` pair and a name-format pin.
+  - `candy-code/tests/Hooks/ClaudeSettingsHooksTest.php`
+  - `candy-code/tests/Cli/ClaudeSettingsHooksSkipRecordTest.php`
+  - `candy-code/tests/Cli/BootstrapLaunchFormatConstantsTest.php`
+  - `candy-code/tests/Cli/PolicyFreshnessQuarantineTest.php`: an edit to `~/.claude/settings.json` raises the drift notice.
+  - `candy-code/tests/Config/PolicySnapshotTest.php`
+  - `candy-code/tests/Config/DocFigureProseDriftTest.php`: the INT-4-P3 prose pin.
+- docs/guards: HOOKS.md. `BootstrapLaunchNoticeCapCensusTest` must stay at 1 for this drain, and the step asserts it unchanged.
+- serialized: [bootstrap:hookFileEntries,checkPolicyFreshness,reportSkippedClaudeSettingsEvents] [docs:HOOKS.md]
+- deps: C-EXT-1.a
+- phase: normal
+- ruling: none
+- risks: the VERSION bump silently resets the snapshot once, which is intended. Any user script that greps `cc:PreToolUse:0` breaks.
+
