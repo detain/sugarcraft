@@ -1,0 +1,10 @@
+# P-CTX.c round 1 — VERDICT: FINDINGS (1 MINOR step-local)
+- **MINOR (step-local)** — `candy-code/src/Tui/Components/ContextPane.php:64-65`: GLYPHS docblock cites `{@see ContextCategory::bar()}` but `bar()` lives on `ContextCategories`, not the `ContextCategory` enum (enum has only `forSectionLabel()`/`label()`). Doc-truth defect; the dangling-citation arm of SymbolCitationDriftTest covers test symbols only, so no guard reddens. Fix: cite `{@see ContextCategories::bar()}` on one line.
+Everything else clean:
+- File-set == brief exactly (4 files, +796); no weld-only files (suite-figure.json/durations.tsv untouched — new-test durations row is closeout duty, expected). Author law verified: %ae and %ce both detain@interserver.net (separate greps), zero Co-Authored trailer.
+- ContextPaneModel: final, readonly promoted props, 8 with*() all via private mutate(); stale-clearing and drill-clearing rules documented with rationale; live-override law in messageTokens()/usedTokens() matches brief.
+- Renders over welded P-CTX.a truthfully — every ContextCategories/ContextBreakdown/ContextCategory member cited exists; no invented fields; fixture ctor args match the real signature.
+- Lang: +8 tui.context.* keys, quoted, brace params match, all used keys resolve; candy-code is en-only so parity duty satisfied (LangParity derives locales from tree).
+- Pins non-vacuous: width sweep, glyph-distinctness under Ascii profile, per-theme adjacency table, cold assertNotContains('0 / 200K'), stale/non-stale total pair — each mutation-reasons red against a plausible regression.
+- In-step guard law: ShellContrast sweep is a recursive src/Tui scan with no roster to join (zero colour literals/constructors → passes); TreeWideGuardRoster is tree-derived and the new test walks no filesystem root. E646/§1.9: zero timers. Disclosed deviations (content-width semantics via Style::width truth, free-space→shellInfo, note-as-figure, drill nesting, scroll deferred to P-CTX.e) all confirmed honest.
+- One-line nit (not scored): the wrapped-citation style `Class::\n * method()` is itself drift-fragile; keep {@see} targets unbroken.

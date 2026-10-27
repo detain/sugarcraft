@@ -36,7 +36,8 @@
     "C-WEB-1.d",
     "C-SEC-3.a",
     "C-PRV-1.a",
-    "C-SEC-4.b"
+    "C-SEC-4.b",
+    "P-CTX.c"
   ],
   "inflight": {
     "P-TABS.d": {
@@ -60,17 +61,6 @@
       "reviewer": "ses_e82938b83",
       "weld_note": "no regen; gates per brief + EnvRoster base-red verify; +8T",
       "note": "r2 CLEAN (static, REVIEW-2.md persisted verbatim @691); weld queue AFTER P-TABS.d: picks 2daed61e8+b9dd35a93, NO regen (TUI-only Renderer/MediaForm/FormTabs), gates tests/Tui+tests/App battery 1668T/71661A + five-guard pair-only + author law; no new phpunit files beyond brief-declared? (MediaForm* tests existing-file mods — re-read REPORT durations duty at weld)"
-    },
-    "P-CTX.c": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-P-CTX.c",
-      "branch": "cc/P-CTX.c",
-      "session": null,
-      "tip": "d807cf3e27582644607334f3e5726915ee841446",
-      "reviewer": "ses_e82938b94",
-      "weld_note": "NEW tests/Context? locate ContextPaneTest.php path at weld for durations duty; gates ContextPane 12T/388A + TuiLang|LangParity + ShellContrast; regen no-op; [lang tui.context.*]",
-      "note": "r2 CLEAN. WELD queue: plain picks 6a69bf018+ d807cf3e2 both (build+fix chain); NO regen; gates --filter ContextPane 12T/388A + SymbolCitation|DuplicatedDocBlock + five-guard pair-only; NEW ContextPaneTest.php DURATIONS duty (+12T); evidence 4 lane files+run-state; cherry proof; prune"
     },
     "P-CTX.d": {
       "stage": "build",
@@ -154,7 +144,8 @@
       "durations_owed": "NEW candy-code tests/Commands/CommandShellPostureTest.php + tests/Host/TurnControllerBundleShellTest.php — LIST ONLY, durations.tsv is closeout duty"
     },
     "C-PRV-1.a": "WELDED 2026-10-27 master e55b78f22+ffe7b910d (picks of 30fddc88a+0a5ad3c99, clean auto-merge lang/en.php+Chat.php, zero conflicts, patch-ids identical). Regen no-op (command/tool/settings docs all up to date; no Protocol/web files in picks). Merged gates: Effort|BedrockProvider 189T/504A OK; Codex|ClaudeCode 221T/746A OK; OpenAIProvider 89T/204A OK (filter broader than lane-suffix form); SettingsSchemaDocDrift 19T/179A; five-guard 133T/15479A F2=staleness pair only (25,537 pinned vs 25,827 live - closeout re-pin carries +290 incl foreign); TreeWideGuardRoster|DuplicatedTestHelperDrift 31T F2 = disclosed foreign SelfUpdateTest glob carrier. DURATIONS duty: candy-code/tests/Providers/EffortGateTest.php. §4 mark ✅ e55b78f22 left UNSTAGED. Cherry proof both '-'; worktree+branch pruned. => W2 step fully welded.",
-    "C-SEC-4.b": "WELDED 2026-10-27 master 40d19f15f (cherry-pick of weld fix 54094cf58 atop already-landed picks 8f625725a+0fd50b209+regen 593e5d769). Gates: GatewayTrustRouting 2T/30A OK, ContextTrustPrompt 12T/74A OK, ProtocolSchemaDrift|ServerProtocolDocumentationDrift 12T/332A OK, gen-protocol-schema --check up-to-date, dist clean (build ran at regen). five-guard 133T/15479A F2 staleness pair only. vitest N/A this pick (tests-only, name-only shows 1 file). Durations duty: GatewayTrustRoutingTest.php (landed earlier pick - closeout row)."
+    "C-SEC-4.b": "WELDED 2026-10-27 master 40d19f15f (cherry-pick of weld fix 54094cf58 atop already-landed picks 8f625725a+0fd50b209+regen 593e5d769). Gates: GatewayTrustRouting 2T/30A OK, ContextTrustPrompt 12T/74A OK, ProtocolSchemaDrift|ServerProtocolDocumentationDrift 12T/332A OK, gen-protocol-schema --check up-to-date, dist clean (build ran at regen). five-guard 133T/15479A F2 staleness pair only. vitest N/A this pick (tests-only, name-only shows 1 file). Durations duty: GatewayTrustRoutingTest.php (landed earlier pick - closeout row).",
+    "P-CTX.c": "WELDED 2026-10-27 master 9aa5258b1 (picks bb4be27fc=6a69bf018 build +796/4 files incl NEW tests/Tui/Components/ContextPaneTest.php + lang +8 tui.context.*; fix d807cf3e2 — brief cite 0699c31a9 was PHANTOM, disk tip authoritative, 2+/2- citation lines match). NO regen (no Protocol/web files). Gates: ContextPane 12T/388A exact; SymbolCitation|DuplicatedDocBlockLine 13T/16125A OK (+50A tree-scan wobble); five-guard 133T/15488A F2 staleness pair only. Durations duty: candy-code/tests/Tui/Components/ContextPaneTest.php (+12T) - closeout."
   },
   "carries": [
     "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty"

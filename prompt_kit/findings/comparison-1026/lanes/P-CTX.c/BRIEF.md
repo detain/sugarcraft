@@ -1,0 +1,23 @@
+### P-CTX.c — ContextPane component (collapsed meter → expanded breakdown)
+- item: P-CTX-BREAKDOWN (sources: owner pick)
+- kind: feature · effort M
+- approach:
+  - `ContextPane::renderModel(ContextPaneModel, Theme, width, rows)` and `layout()` (row keys), the pure "sidebar box". `ContextPaneModel` holds `?ContextCategories`, the live history tokens (status-bar figure), the window, `expanded`, `?drill`, `stale` and `cachePercent`.
+  - **Collapsed** (4 rows with border): a stacked category bar, then `81K / 200K · 41% ▸`.
+  - **Expanded:**
+    - the bar;
+    - one row per category: a glyph per category (█▓▒░▚… for NO_COLOR) in its own theme colour, the label, and `~tokens` right-aligned;
+    - `▸` on drillable rows;
+    - a drilled category shows its sub-rows in place (layers / files / MCP servers / largest messages);
+    - a footer: `cache 94% · −4K pruned`, plus a `dump prompt` row (key `raw`).
+  - While a turn runs, the Messages row and the total follow the live history tokens and the other rows keep the snapshot. Unmeasured parts read "not measured", never 0.
+- files.create: `candy-code/src/Tui/Components/ContextPane.php`, `candy-code/src/Tui/Components/ContextPaneModel.php`
+- files.modify: `candy-code/lang/en.php` (`tui.context.*`)
+- tests: create `candy-code/tests/Tui/Components/ContextPaneTest.php` (collapsed exactly 4 rows; never over-wide over a 20–80 sweep; distinct glyphs under NO_COLOR; drill rows; a null snapshot → "measuring…"; live tokens override Messages)
+- docs/guards: none
+- serialized: [lang] (prefix `tui.context.`)
+- deps: P-CTX.a
+- phase: normal
+- ruling: none
+- risks: theme tokens for 11 categories must stay distinct in all five palettes. Reuse the ShellContrastTest helper.
+
