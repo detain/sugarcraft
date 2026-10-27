@@ -65,11 +65,16 @@ use SugarCraft\Diff\Diff;
  *   turn — the exact per-step re-read this design exists to avoid.
  * - `loadForPath()` on-touch delivery and `Skill` bodies keep their own
  *   channels and are not session instructions.
- * - The capture rides the first turn-context build of the session rather than
- *   the slab closure itself, so an edit landing in the window between the two
- *   is measured against the post-edit bytes — worst case the diff arrives one
- *   refresh point late, which is today's whole-session behaviour. The frozen
- *   slab is unaffected either way.
+ * - The capture rides the parent's pre-fork prime of this slot
+ *   ({@see \SugarCraft\Code\Runtime::primeInstructionDiff()}, called by
+ *   EngineBackend in beginSessionTurn and beside the summary prime), not the
+ *   slab closure itself, so an edit landing in the window between the two is
+ *   measured against the post-edit bytes — worst case the diff arrives one
+ *   refresh point late. The frozen slab is unaffected either way. What the
+ *   prime fixes (C-CTX-1) is the fork case: a capture left to the child's
+ *   first turn-context build froze "frozen = current disk" once per child,
+ *   the tracker died with each child, and a mid-session edit surfaced in no
+ *   turn at all.
  *
  * Mutable by design — a snapshot that recorded no pending state could not
  * replay a delta without re-reading every step, defeating the stat gate. Its

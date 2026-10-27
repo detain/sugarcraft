@@ -218,6 +218,149 @@ final class PromptPrefixByteStabilityTest extends TestCase
         );
     }
 
+    /**
+     * C-CTX-1, the fork-path twin of the test above: the same two turns with
+     * the same mid-session edit, driven through {@see EngineBackend::completeAsync()}
+     * so each turn really forks its child. There the tracker was captured in
+     * the CHILD until the parent-side prime landed: every child froze "frozen
+     * = current disk" for itself and its tracker died with it, so turn 2's
+     * tail row carried no diff — the feature simply did not fire on a forked
+     * session. Requests are recorded through disk because a child's
+     * `$provider->requests` never reaches this process.
+     */
+    public function testAMidSessionInstructionEditReachesTheForkedTurnToo(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('the forked turn path needs ext-pcntl');
+        }
+
+        $home = $this->tempDir();
+        mkdir($home . '/.candy-code', 0o700, true);
+        $this->useHomeSandbox($home);
+
+        $root = $this->gitFixture();
+        file_put_contents($root . '/CLAUDE.md', "Alpha rule\nBeta rule\n");
+
+        $wireDir = $this->tempDir();
+        // One closure entry does the whole script: a forked child calls the
+        // provider in ITS memory, so the parent's request count never
+        // advances and every child would otherwise replay entry 0. The
+        // request itself says which turn it is — the new question row.
+        $capture = static function (CompleteRequest $request) use ($wireDir): CompleteResponse {
+            $turn = 'turn-1';
+            $answer = 'first answer';
+            // Turn 1's request carries its three rows; turn 2's carries the
+            // persisted tail row, the reply and the new question on top.
+            if (\count($request->messages) >= 5) {
+                $turn = 'turn-2';
+                $answer = 'second answer';
+            }
+            // Runs in the forked child; the file is the channel back.
+            file_put_contents($wireDir . '/' . $turn . '.json', json_encode([
+                'systemPrompt' => (string) $request->systemPrompt,
+                'messages' => self::wire(CustomProvider::class, $request),
+            ]));
+
+            return new CompleteResponse(content: $answer);
+        };
+
+        $provider = new ScriptedProvider([$capture]);
+        $backend = EngineBackend::new($provider, 'm')
+            ->withoutHooks()
+            ->withRoot($root)
+            ->withInstructionLoader(new InstructionFileLoader($root));
+
+        $reply = $this->drainUntilSettled($backend->completeAsync([
+            RootMessage::system(self::LAUNCH_NOTICE),
+            RootMessage::user('go'),
+        ]));
+        $this->assertSame('first answer', $reply->content);
+
+        $first = json_decode((string) file_get_contents($wireDir . '/turn-1.json'), true);
+        $this->assertIsArray($first);
+        $firstRow = (string) $first['messages'][array_key_last($first['messages'])]['content'];
+        $this->assertStringStartsWith(TurnContextBlock::FENCE, $firstRow);
+        $this->assertStringNotContainsString(InstructionDiffTracker::HEADER, $firstRow, 'nothing has moved yet');
+        $this->assertStringNotContainsString(InstructionDiffTracker::HEADER, (string) $first['systemPrompt']);
+        $this->assertStringContainsString('Alpha rule', (string) $first['systemPrompt'], 'the slab froze the file — the fixture only works if it did');
+
+        // The user edits the instruction file mid-session, AFTER the whole
+        // forked turn 1 is done: every child for turn 2 reads the EDITED disk
+        // at its own start-up. Only a tracker captured in the parent, before
+        // the first fork, can still tell the two apart.
+        file_put_contents($root . '/CLAUDE.md', "Alpha rule\nBeta rule\nGamma rule\n");
+
+        $reply = $this->drainUntilSettled($backend->completeAsync([
+            RootMessage::system(self::LAUNCH_NOTICE),
+            RootMessage::user('go'),
+            RootMessage::user($firstRow),
+            RootMessage::assistant('first answer'),
+            RootMessage::user('more'),
+        ]));
+        $this->assertSame('second answer', $reply->content);
+
+        $second = json_decode((string) file_get_contents($wireDir . '/turn-2.json'), true);
+        $this->assertIsArray($second);
+        $this->assertSame((string) $first['systemPrompt'], (string) $second['systemPrompt'], 'the forked prefix must not feel the edit');
+        $this->assertStringNotContainsString('Gamma rule', (string) $second['systemPrompt']);
+        $this->assertStringNotContainsString(InstructionDiffTracker::HEADER, (string) $second['systemPrompt'], 'the delta lands in the tail, never the slab');
+
+        $tail = (string) $second['messages'][array_key_last($second['messages'])]['content'];
+        $this->assertStringStartsWith(TurnContextBlock::FENCE . "\n", $tail, 'the forked turn must end on its <turn-context> row');
+        $this->assertStringContainsString(InstructionDiffTracker::HEADER, $tail, 'the edit must reach the FORKED turn — that is the whole feature');
+        $this->assertStringContainsString('+Gamma rule', $tail);
+        $this->assertStringContainsString('CLAUDE.md (', $tail);
+
+        // And every row turn 1's child sent is still in turn 2's wire byte for
+        // byte, edit notwithstanding.
+        $this->assertSame(
+            json_encode($first['messages']),
+            json_encode(\array_slice($second['messages'], 0, \count($first['messages']))),
+            'the instruction edit must not disturb a single byte the earlier forked turn already sent',
+        );
+    }
+
+    /**
+     * Run the loop until the forked completion settles (the house fork-test
+     * idiom, sibling of EngineBackend's own reap discipline).
+     */
+    private function drainUntilSettled(\React\Promise\PromiseInterface $promise): \SugarCraft\Code\Message
+    {
+        $loop = \React\EventLoop\Loop::get();
+        $settled = false;
+        $value = null;
+        $failure = null;
+
+        $promise->then(
+            static function ($v) use (&$settled, &$value, $loop): void {
+                $settled = true;
+                $value = $v;
+                $loop->stop();
+            },
+            static function (\Throwable $e) use (&$settled, &$failure, $loop): void {
+                $settled = true;
+                $failure = $e;
+                $loop->stop();
+            },
+        );
+
+        if (!$settled) {
+            $watchdog = $loop->addTimer(30.0, static function () use ($loop, &$failure): void {
+                $failure = new \RuntimeException('the forked completion never settled within the safety window');
+                $loop->stop();
+            });
+            $loop->run();
+            $loop->cancelTimer($watchdog);
+        }
+
+        if ($failure !== null) {
+            $this->fail('forked turn failed: ' . $failure->getMessage());
+        }
+        $this->assertInstanceOf(\SugarCraft\Code\Message::class, $value);
+
+        return $value;
+    }
+
     private const MARKER = '// written by step one';
 
     private const LAUNCH_NOTICE = 'Launch notice: one MCP server is offline.';

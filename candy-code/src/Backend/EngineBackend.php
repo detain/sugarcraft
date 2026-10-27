@@ -2854,6 +2854,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * that fails is left to the child, which builds the same layers itself
      * and reports the failure on the turn it belongs to.
      *
+     * C-CTX-1: the instruction-diff tracker is primed alongside the slab
+     * for the same reason it froze with the same miss. A tracker captured
+     * inside a forked child fingerprints the child's own start-up disk as
+     * "the session's frozen copies" and dies with the child, so the next
+     * child re-captures from current bytes and a mid-session CLAUDE.md edit
+     * never reaches the tail row. Captured HERE, its baseline predates every
+     * child that reads it.
+     *
      * @param list<Message> $history
      */
     private function beginSessionTurn(array $history): void
@@ -2868,8 +2876,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         }
 
         try {
-            $this->newRuntime(new HookManager(new HookRegistry()))
-                ->primeSessionPrompt($this->sessionApp());
+            $runtime = $this->newRuntime(new HookManager(new HookRegistry()));
+            $app = $this->sessionApp();
+            $runtime->primeSessionPrompt($app);
+            $runtime->primeInstructionDiff($app);
         } catch (\Throwable) {
             // See the docblock: the child rebuilds and owns the error.
         }
@@ -4438,7 +4448,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         }
 
         try {
-            $this->newRuntime(new HookManager(new HookRegistry()))->primeSessionPrompt($this->sessionApp());
+            $runtime = $this->newRuntime(new HookManager(new HookRegistry()));
+            $app = $this->sessionApp();
+            $runtime->primeSessionPrompt($app);
+            // C-CTX-1: the same parent-side prime a real turn gets — the
+            // summary's child must inherit the session's frozen fingerprints,
+            // never capture the post-edit bytes as the baseline.
+            $runtime->primeInstructionDiff($app);
         } catch (\Throwable) {
             // The child builds the same layers itself and owns the error.
         }

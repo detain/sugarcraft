@@ -5748,16 +5748,57 @@ final class Runtime
      */
     private function instructionDiff(App $app): string
     {
+        return $this->instructionTracker($app)?->recheck() ?? '';
+    }
+
+    /**
+     * The session's tracker, captured once into the shared memo's
+     * `instruction-diffs:<loader id>` slot, or null when the App has no
+     * loader and so no slab to diff against.
+     *
+     * C-CTX-1: filling the slot is {@see primeInstructionDiff()} — called in
+     * the PARENT before a turn forks — because a capture made inside a
+     * forked child freezes the child's start-up bytes as "the session's
+     * frozen copies", and that tracker dies with the child: every later
+     * child re-captures from current disk again and the recheck finds
+     * nothing. The prime and the read share this one method so the slot key
+     * has exactly one spelling.
+     */
+    private function instructionTracker(App $app): ?Context\InstructionDiffTracker
+    {
         $loader = $app->instructionLoader;
         if ($loader === null) {
-            return '';
+            return null;
         }
 
         return $this->sessionPromptMemo()->remember(
             $app->sessionId,
             'instruction-diffs:' . \spl_object_id($loader),
             static fn(): Context\InstructionDiffTracker => Context\InstructionDiffTracker::capture($loader),
-        )->recheck();
+        );
+    }
+
+    /**
+     * Fill the instruction-diff slot in the process that OUTLIVES the turn —
+     * the parent-side sibling of {@see primeSessionPrompt()}, called by
+     * EngineBackend right after that prime, before a turn's fork and before
+     * a summary's (C-CTX-1).
+     *
+     * The tracker is a PerSession layer like the slab it fingerprints, so it
+     * must be captured where its bytes survive: a frozen fingerprint taken
+     * inside a forked child measures "frozen = the disk at that child's
+     * start-up", a mid-session CLAUDE.md edit then never shows a delta, and
+     * the memo entry evaporates with the child anyway. Captured here, every
+     * child inherits the same tracker and its first recheck renders the
+     * edit as the bounded tail-row diff CTX-3 promised.
+     *
+     * Fills the slot only — never rechecks: the parent must not advance the
+     * tracker's `seen` state, which belongs to the child that sends the row.
+     * A loader-less App has no slab and no slot to fill.
+     */
+    public function primeInstructionDiff(App $app): void
+    {
+        $this->instructionTracker($app);
     }
 
     /**
