@@ -51,7 +51,7 @@ use SugarCraft\Video\Render\Mode;
 final class MenuOverlayFrameTest extends TestCase
 {
     private const VARS = ['CANDY_CODE_DISABLE_MOUSE', 'CANDY_CODE_DISABLE_MOUSE_CLICKS'];
-    private const CLIP = '/media/sess/clip.mp4';
+    private const MENU_CLIP_PATH = '/media/sess/clip.mp4';
 
     protected function setUp(): void
     {
@@ -197,7 +197,7 @@ final class MenuOverlayFrameTest extends TestCase
         MenuBar::openMenu(1);
         TuiRenderer::chromeScanner()->clear();
         $control = Ansi::strip(TuiRenderer::renderView(
-            $app->withVideoPlayer(VideoPlayerScreen::preparing(self::CLIP, Mode::HalfBlock)),
+            $app->withVideoPlayer(VideoPlayerScreen::preparing(self::MENU_CLIP_PATH, Mode::HalfBlock)),
             120,
             30,
         )->body);
@@ -220,13 +220,13 @@ final class MenuOverlayFrameTest extends TestCase
             $frames[] = new RgbFrame(str_repeat($tint, 80 * 60 * 3), 80, 60, null);
         }
 
-        $player = Player::fromDecoder(new VideoPlayerScriptedDecoder($frames), 8, 3, 10.0, Mode::Kitty, 4, self::CLIP, paused: false);
-        [$ready] = VideoPlayerScreen::ready(self::CLIP, $player, Mode::Kitty)->update(new TickMsg());
+        $player = Player::fromDecoder(new VideoPlayerScriptedDecoder($frames), 8, 3, 10.0, Mode::Kitty, 4, self::MENU_CLIP_PATH, paused: false);
+        [$ready] = VideoPlayerScreen::ready(self::MENU_CLIP_PATH, $player, Mode::Kitty)->update(new TickMsg());
 
         return [
-            'preparing' => VideoPlayerScreen::preparing(self::CLIP, Mode::Kitty),
+            'preparing' => VideoPlayerScreen::preparing(self::MENU_CLIP_PATH, Mode::Kitty),
             'ready' => $ready,
-            'failed' => VideoPlayerScreen::failed(self::CLIP, 'ffprobe is dead', Mode::Kitty),
+            'failed' => VideoPlayerScreen::failed(self::MENU_CLIP_PATH, 'ffprobe is dead', Mode::Kitty),
         ];
     }
 
