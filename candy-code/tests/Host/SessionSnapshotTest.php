@@ -73,10 +73,18 @@ final class SessionSnapshotTest extends TestCase
         self::assertArrayNotHasKey('media', $wire['messages'][1]['toolResults'][0]);
     }
 
-    public function testAFinishedCallNamingAnArtifactGainsTheRefsOnItsRow(): void
+    public function testAFinishedCallNamingAnUnloadableArtifactGainsNoRefs(): void
     {
-        // R16(a): reload hydration. The snapshot row of a finished media call
-        // carries the ref list — path, id, size, mime — and still no bytes.
+        // C-WEB-1.d moved the snapshot fold through the session store, and
+        // with it the law that a ref no client can `media.fetch` is no ref
+        // at all: this persisted path sits OUTSIDE the store and names no
+        // bytes to adopt (real rows persist `imageBytesBase64` — Message —
+        // precisely so a re-fold has something to adopt), so the ref is
+        // dropped rather than emitted broken, and the row serialises
+        // exactly as saved. The positive half — a finished media call
+        // gaining the same refs the live event carried — is pinned at the
+        // snapshot level by TranscriptProjectorMediaTest::
+        // testTheSnapshotRowCarriesTheEventRefsByteIdentical.
         $row = Message::assistant('saved')->withToolResults([
             new ToolResult(name: 'GenerateImage', result: 'ok', id: 'g1', imagePath: '/media/s1/art.png'),
         ]);
@@ -84,15 +92,11 @@ final class SessionSnapshotTest extends TestCase
         $wire = SessionSnapshot::new('s', [$row])->toArray();
         $entry = $wire['messages'][0]['toolResults'][0];
 
-        self::assertSame([[
-            'artifactId' => 'art',
-            'kind' => 'image',
-            'path' => '/media/s1/art.png',
-            'bytes' => 0,
-            'mime' => 'image/png',
-        ]], $entry['media']);
+        self::assertArrayNotHasKey('media', $entry);
         self::assertArrayNotHasKey('mediaTruncated', $entry);
-        // The persisted keys ride on untouched.
+        // The persisted keys ride on untouched — fold-by-absence, the same
+        // additive shape a media-less row has always kept.
         self::assertSame('/media/s1/art.png', $entry['imagePath']);
+        self::assertSame($row->jsonSerialize(), $wire['messages'][0]);
     }
 }
