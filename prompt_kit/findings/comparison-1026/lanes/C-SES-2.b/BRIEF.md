@@ -1,0 +1,31 @@
+### C-SES-2.b — Picker shows body hits + snippets + per-row spend; `/` filter reaches FTS
+- item: C-SES-2 (+ C-SES-1's SES-1-P4 picker half) (sources: SES-2-P1, p2-miss: picker body snippet (`SessionRow::withBodySnippet` dormant), SES-1-P4, p2-miss: per-session spend on picker)
+- kind: fix · MAJOR · effort M
+- approach:
+  - **Root cause.** `buildSessionPicker()` (`src/Chat.php:14668-14689`) fetches FTS-ranked rows through `sessionPickerRows()` (`:14714-14733`), then calls `withQuery()`. `SessionPicker::rankedLayout()` (`src/Tui/SessionPicker.php:349-374`) keeps only rows whose `haystack()` (`:376-385`: title, summary, agent, id, branch) passes a `requireFullQuery` Smith-Waterman match, so a body-only hit is dropped. The Ctrl+R `/` filter reads the store once, when it opens (`Chat.php:14963-14969`: "typing a query never touches the store").
+  - **Fix, in the rows.** `sanitizeSessionRows()` carries two new keys:
+    - `bodySnippet`, from `SessionRow::$bodySnippet` (`:53`, `:106`), sanitized like the other fields;
+    - `spend`, as `SpendLedger::boundUsd(costUnpriced, costUsd)` when `costUsd !== null`. This wires the write-only cache (SES-1-P4).
+  - **Fix, in the picker.**
+    - `rankedLayout()` admits store-ranked rows (a non-null `bodySnippet`) after the fuzzy hits, in bm25 order.
+    - `renderRow()` paints the snippet as a faint second line under body-matched rows, and the spend in the meta column.
+    - In filter mode, the picker emits `SessionListAction::Filter` on every query edit.
+  - **Fix, in Chat.** Chat debounces those edits: a 300 ms Cmd tick returns `SessionPickerSearchMsg(query)`. When it arrives, Chat re-reads `sessionPickerRows(SEARCH_LIMIT, archived, query)` only if the picker's query still matches.
+  - **What the user sees:**
+    - `/sessions anchor` lists a session that matched only in its body, with the snippet;
+    - typing in Ctrl+R reaches the full-text index;
+    - each row shows its spend.
+- files.create: `candy-code/src/App/SessionPickerSearchMsg.php`
+- files.modify: `candy-code/src/Chat.php` (buildSessionPicker, sanitizeSessionRows, runSessionListAction: Filter arm), `candy-code/src/Chat/Handlers/HandlesSessionSurface.php` (the SessionPickerSearchMsg arm), `candy-code/src/Tui/SessionPicker.php` (rankedLayout, haystack, renderRow, filter-key emission)
+- tests: create `candy-code/tests/Chat/SessionPickerDebouncedSearchTest.php`: a stale query is ignored and a fresh one re-reads the store. Modify:
+  - `candy-code/tests/Chat/SessionCommandTest.php`: the VISIBLE rows of `/sessions anchor` include the body-only session. This replaces the reflection pin on the private page read, which asserts the wrong layer.
+  - `candy-code/tests/Tui/SessionPickerFilterTest.php`: store-ranked rows are admitted; the LIKE degrade keeps its polarity.
+  - `candy-code/tests/Tui/SessionPickerSlashFilterTest.php`: query edits emit `Filter`.
+  - `candy-code/tests/Tui/SessionPickerGoldenTest.php`: re-pin the goldens with snippet and spend.
+- docs/guards: none (no new key binding, since `/` already exists)
+- serialized: [chat:buildSessionPicker,sanitizeSessionRows,runSessionListAction] [hot:candy-code/src/Chat/Handlers/HandlesSessionSurface.php] [hot:candy-code/src/Tui/SessionPicker.php]
+- deps: C-SES-2.a
+- phase: normal
+- ruling: none
+- risks: P-SESSION-TABS also touches the session-switch and picker surfaces. Do not run them in the same wave.
+
