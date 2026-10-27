@@ -50,21 +50,77 @@
   "inflight": {
     "P-CTX.d": {
       "stage": "review",
-      "round": 1,
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-P-CTX.d",
       "branch": "cc/P-CTX.d",
-      "session": "ses_e8256a9bfffeq7CriYNRqC32RW",
-      "note": "disk-verified 3a400ecc0 base ffe7b910d, 16 files +630/-25, tree clean; DUR duty TurnRunnerContextTest+ContextSnapshotScheduleTest; 2F dir-sweep claimed FOREIGN (ChatHostLangCatalogue<-e55b78f22, SessionSnapshot media<-C-WEB-1.d) — reviewer blame-check; MERGE-ARTIFACT scrutiny ordered (twin-absorption history); five-guard pair-only 25,838"
+      "session": "r2-pending",
+      "note": "fix 77e114904 disk-verified (items 1/3/4, kept 2); r2 reviewer launching; weld note: cite 983b8e021 build + 77e114904 fix, DUR TurnRunnerContextTest+ContextSnapshotScheduleTest"
+    },
+    "C-PRV-1.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-PRV-1.b",
+      "branch": "cc/C-PRV-1.b",
+      "session": "ses_e825233faffeIYofJffE71RzDz",
+      "note": "died harness-error zero-disk @859@, resume disk-grounded @869@; base 8d9814130"
+    },
+    "C-TOOL-7.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-TOOL-7.a",
+      "branch": "cc/C-TOOL-7.a",
+      "session": "ses_e825233f0ffe0zIzWxMarpWOkP",
+      "note": "died provider-error zero-disk @866@, resume @869@; base 8d9814130; four registry nits"
+    },
+    "P-TABS.h": {
+      "stage": "clean",
+      "round": 2,
+      "worktree": "/home/sites/cc-cmp-P-TABS.h",
+      "branch": "cc/P-TABS.h",
+      "session": "",
+      "note": "r2 CLEAN (REVIEW-2.md persisted). WELD: picks e94426fe0+e1bba1b95 base 8d9814130; dist build commit-if-changed; vitest serial sessionTabsNew+layout+grid expect 26; DUR duty NEW sessionTabsNew.spec.ts (vitest-side note); §4 unstaged; evidence 4 files+run-state; cherry proof; prune"
+    },
+    "P-MENU.c": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-P-MENU.c",
+      "branch": "cc/P-MENU.c",
+      "session": "ses_e823a2633ffeG2r4iejDj31Ch9",
+      "note": "menu overlay seam; DUR MenuOverlayFrameTest; base 75ba82ddb"
+    },
+    "P-TABS.c": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-P-TABS.c",
+      "branch": "cc/P-TABS.c",
+      "session": "ses_e823a2631ffeNAM9e4L2wFxNOC",
+      "note": "SessionsPane; DUR SessionsPaneTest; lang tui.sessions."
+    },
+    "P-MENU.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-P-MENU.b",
+      "branch": "cc/P-MENU.b",
+      "session": "ses_e823a2629ffeUj7Cl0wJ800SfB",
+      "note": "ShellMenu tree; DUR ShellMenuTest; lang tui.menu."
+    },
+    "cure:snap": {
+      "stage": "clean",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-cure-snap",
+      "branch": "cc/cure-snap",
+      "note": "dd1aab173 SessionSnapshot fixture cure; weld after cure:lang (disjoint files)"
     }
   },
   "blocked": [],
-  "extra_agents": 1,
+  "extra_agents": 0,
   "waves_closed": [
     1
   ],
   "wave_loops": {
     "1": "closed r2 CLEAN",
-    "2": "r1 CLEAN static; gates owed by lead post six-lane welder; close then"
+    "2": "r1 CLEAN static; gates owed by lead post six-lane welder; close then",
+    "4": "r1 CLEAN FINAL (draft FINDINGS superseded; WAVE-REVIEW-1.md rewritten, draft kept); battery owed then wave-close"
   },
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "weld_notes": {
@@ -112,6 +168,10 @@
   "carries": [
     "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
     "C-SEC-3.b opt-in deferral recommendation -> C-EXT-4.c (per-origin shell allow-list needs row identity from C-EXT-2.e/C-EXT-4.c/C-MCP-2.a) — decide at C-EXT-4.c cut or plan erratum",
-    "C-SEC-3.c follow-up lane (NEW id, mint after C-EXT-4.c W20): CommandSpec origin field + bundle/McpPromptCommands name propagation + trustedBundleCommands/mcpPromptShell lists + Chat/SessionHost callers + settings/lang/docs + opt-in tests; ALSO fix ShellProvenance.php:19-20 wording on that commit"
+    "C-SEC-3.c follow-up lane (NEW id, mint after C-EXT-4.c W20): CommandSpec origin field + bundle/McpPromptCommands name propagation + trustedBundleCommands/mcpPromptShell lists + Chat/SessionHost callers + settings/lang/docs + opt-in tests; ALSO fix ShellProvenance.php:19-20 wording on that commit",
+    "P-CTX.d weld ledger: RouteTraitParityTest foreign SessionPickerSearchMsg cure row bundled (genuine base-red cured in-step, dated comment) — log at weld",
+    "LEAD CURES in flight @878@: cc/cure-lang (ChatHostLangCatalogue roster chat.effort.shape.* emitters, worktree cc-cmp-cure-lang) + cc/cure-snap (SessionSnapshot artifact-refs expectation vs 8c93928f2 mediaBearingRow, worktree cc-cmp-cure-snap). RouteTraitParity cure rides P-CTX.d (do not duplicate). Weld cures as picks when they land.",
+    "W4 closeout: 9 durations rows + 6 planned-seam carries (see W4/WAVE-REVIEW-1.md)",
+    "cure-lang landed 34ac69dfc (pick of 2685a32c9; ChatHostLangCatalogue roster; lanes/cure-lang/REPORT.md weld-reconstructed — lane report never persisted)"
   ]
 }
