@@ -173,7 +173,7 @@ final class RulesCommandTest extends TestCase
         $text = $this->reply($this->submit('/rules'));
 
         self::assertStringContainsString(
-            '2 imported rules are off (`alwaysApply: false`, no globs); turn one on with `/rules <name>`',
+            '2 imported rules are off (`alwaysApply: false`, no globs); each stays off until `alwaysApply: false` is removed from its frontmatter',
             $text,
             'the aggregate hint counts exactly the pattern-less imported alwaysApply-offs',
         );
@@ -190,7 +190,7 @@ final class RulesCommandTest extends TestCase
         $text = $this->reply($this->submit('/rules'));
 
         self::assertStringContainsString(
-            '1 imported rule is off (`alwaysApply: false`, no globs); turn it on with `/rules <name>`',
+            '1 imported rule is off (`alwaysApply: false`, no globs); it stays off until `alwaysApply: false` is removed from its frontmatter',
             $text,
             'one pack reads one rule, singular',
         );

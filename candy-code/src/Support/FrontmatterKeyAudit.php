@@ -56,7 +56,8 @@ final class FrontmatterKeyAudit
      * Rule keys `globs` and `alwaysApply` are the INT-2 foreign-tree spellings
      * and they are ACTED ON, not carried: `globs:` is read as an alias of
      * `paths:` during {@see \SugarCraft\Code\Context\Rule}'s trigger build and
-     * `alwaysApply:` folds into `enabled` at the parse boundary. They belong in
+     * `alwaysApply:` decides at the parse boundary - beside a pattern the rule
+     * stays enabled and path-scoped, without one it switches off. They belong in
      * KNOWN precisely so an imported rule using them earns no did-you-mean -
      * and in no INERT row, because both keys decide something.
      *
