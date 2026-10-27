@@ -133,6 +133,19 @@ answered here:
   are never honoured — the freeze rule rests on the gate, not on a
   never-re-read mechanism. The `CANDY_CODE_MCP_DISABLE`
   switch answers for both tiers at once.
+- **Where a `stdio` server runs (C-MCP-1).** An entry never inherits whatever
+  directory the launch happened to stand in. A project-tier entry spawns at
+  the root holding its `.mcp.json` — the same root the pin record is keyed
+  to, so an approval made while sitting in `repo/sub` runs the server at
+  `repo`; before this rule the child inherited the launch directory, which
+  meant a server resolving `.` or reading its own config-relative files was
+  really reading wherever the last `candy-code` happened to be typed. A
+  user-tier entry spawns at the home whose ownership gate admitted the file.
+  An entry may also pin its own directory with `cwd`: an absolute existing
+  one wins on either tier, and a relative or missing spelling is a config
+  error costing that entry alone — named in the `startServers()` aggregate
+  like any other bad key, and fingerprinted by the trust record like any
+  other good one, because moving where a server runs moves what it loads.
 
 ---
 
@@ -167,7 +180,7 @@ Five types, and they are the five `McpClient::startServer()` constructs:
 
 | `type` | Class | Keys |
 |---|---|---|
-| `stdio` (the default when `type` is absent) | `StdioMcpServer` | `command`, `args`, `env`, `startTimeout`, `toolTimeout` |
+| `stdio` (the default when `type` is absent) | `StdioMcpServer` | `command`, `args`, `env`, `startTimeout`, `toolTimeout`, `cwd` |
 | `http` | `HttpMcpServer` | `url`, `headers`, `toolTimeout` |
 | `sse` | `SseMcpServer` | `url`, `headers`, `toolTimeout` |
 | `git` | `GitMcpServer` | `path` (omitted → this project), `timeout` |

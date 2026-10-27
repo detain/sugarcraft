@@ -650,7 +650,7 @@ final class McpClient
 
                 return null;
             }
-            $server = $this->buildServer($name, $type, $entry);
+            $server = $this->buildServer($name, $type, $entry, $tierPath);
         } catch (\Throwable $e) {
             return sprintf('%s (%s)', $name, $e->getMessage());
         }
@@ -707,8 +707,13 @@ final class McpClient
      * inside that method's guard rather than beside it — see route 2 there.
      *
      * @param array<string, mixed> $config
+     * @param string $tierPath the file this entry was read from ('' when the
+     *        launch carries no tier provenance); the `stdio` arm resolves it
+     *        into a spawn directory through {@see stdioSpawnCwd()} — C-MCP-1,
+     *        so a server never silently runs with the checkout it was launched
+     *        from as its view of "here"
      */
-    private function buildServer(string $name, string $type, array $config): McpServer
+    private function buildServer(string $name, string $type, array $config, string $tierPath = ''): McpServer
     {
         return match ($type) {
             // `startTimeout` (seconds) is OPTIONAL and per-server: a locally
@@ -728,6 +733,11 @@ final class McpClient
             // Only a positive finite number overrides it — a string, 0 or a
             // negative falls back to the default rather than inventing a
             // zero bound, the same policy `startTimeout` enforces.
+            //
+            // `cwd` (C-MCP-1) picks where the child starts: an absolute
+            // existing directory on the entry wins, otherwise the approving
+            // tier decides — never the launch position of the parent. See
+            // {@see self::stdioSpawnCwd()} for the rules and the reason.
             'stdio' => new StdioMcpServer(
                 name: $name,
                 command: $config['command'] ?? '',
@@ -737,6 +747,7 @@ final class McpClient
                     ? (float) $config['startTimeout']
                     : null,
                 toolTimeoutSeconds: self::toolTimeout($config['toolTimeout'] ?? null),
+                cwd: $this->stdioSpawnCwd($config['cwd'] ?? null, $tierPath),
             ),
             'http' => new HttpMcpServer(
                 name: $name,
@@ -807,6 +818,78 @@ final class McpClient
             ),
             default => throw new \RuntimeException("Unknown MCP server type: $type"),
         };
+    }
+
+    /**
+     * Resolve where a `stdio` entry's child process starts (C-MCP-1).
+     *
+     * Two inputs, one answer. An explicit directory spelled by the entry wins
+     * when it is a string, absolute, and an existing directory — anything else
+     * about it is a config error raised for that entry alone, joining the same
+     * per-entry aggregate as an unknown type. With no explicit spelling, the
+     * tier the entry was read from decides:
+     *
+     * - The USER tier spawns at the home root. `$userConfigPath` is
+     *   {@see \SugarCraft\Code\Cli\McpDecision::mcpUserConfigPath()}'s
+     *   composition of the ownership-verified home, `/.candy-code/` and the
+     *   file name, so walking two directories up reproduces that home
+     *   byte-identically without minting a fresh ownership check here — the
+     *   gate already passed when the path was built, and checking again would
+     *   let two answers (launch-time home, now-time home) exist for one file.
+     * - The PROJECT tier spawns at the directory holding its `.mcp.json` —
+     *   the canonical root the trust record is keyed to. A server approved
+     *   from `repo/sub` therefore runs at `repo`, the location the entry and
+     *   the approval both speak of, not wherever the shell happened to stand.
+     * - No tier provenance (the empty project path of a legacy construction,
+     *   or a client built outside the tier loader) returns null: the
+     *   library's inherited spawn, byte-identical to before this method
+     *   existed.
+     *
+     * The trust record fingerprints `cwd` like any other key — adding it to
+     * McpTrustPins::UNPINNED_KEYS would be wrong on purpose: moving where a
+     * server runs moves what it loads.
+     */
+    private function stdioSpawnCwd(mixed $explicit, string $tierPath): ?string
+    {
+        if ($explicit !== null) {
+            if (!is_string($explicit) || !self::pathIsAbsolute($explicit) || !is_dir($explicit)) {
+                throw new \RuntimeException(sprintf(
+                    'stdio cwd must be an absolute existing directory, got %s',
+                    is_string($explicit) ? '"' . $explicit . '"' : get_debug_type($explicit),
+                ));
+            }
+
+            return $explicit;
+        }
+
+        if ($tierPath === '') {
+            return null;
+        }
+
+        return $tierPath === $this->userConfigPath
+            ? dirname(dirname($tierPath))
+            : dirname($tierPath);
+    }
+
+    /**
+     * Does this path spelling start at a filesystem root? Written as a
+     * character walk, not a pattern: the question has exactly three answers
+     * on any supported OS — POSIX root, Windows drive (`C:` + separator), or
+     * UNC share (leading backslash).
+     */
+    private static function pathIsAbsolute(string $path): bool
+    {
+        if ($path === '') {
+            return false;
+        }
+
+        if ($path[0] === '/' || $path[0] === '\\') {
+            return true;
+        }
+
+        return strlen($path) > 2
+            && $path[1] === ':'
+            && ($path[2] === '\\' || $path[2] === '/');
     }
 
     /**

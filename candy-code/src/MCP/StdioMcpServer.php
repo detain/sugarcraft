@@ -99,6 +99,13 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
      *        (item 0.5, decision D2, bounded-by-default per cl-4 FIX-C): a
      *        bound on each `tools/call`; null or a non-positive takes
      *        {@see DEFAULT_TOOL_TIMEOUT_SECONDS} — a call is never unbounded
+     * @param string|null $cwd C-MCP-1: the directory the server process
+     *        starts in — resolved by tier BEFORE construction in
+     *        {@see McpClient::buildServer()} (user-tier entries spawn in the
+     *        user's home, project-tier entries at the project root, an entry
+     *        that spells its own absolute `cwd` wins either way). Null means
+     *        the historic inherit-the-launch-cwd spawn, which stays exactly
+     *        what a single-file launch with no tier provenance gets
      */
     public function __construct(
         public readonly string $name,
@@ -107,6 +114,7 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
         array $env,
         ?float $startTimeoutSeconds = null,
         ?float $toolTimeoutSeconds = null,
+        ?string $cwd = null,
     ) {
         $this->toolTimeoutSeconds = $toolTimeoutSeconds !== null && $toolTimeoutSeconds > 0.0
             ? $toolTimeoutSeconds
@@ -120,6 +128,7 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
             startTimeoutSeconds: $startTimeoutSeconds,
             spawnPlanner: fn (string $name, array $argv, array $env): array => $this->spawnPlan($name, $argv, $env),
             clientInfo: ['name' => 'candy-code', 'version' => '1.0.0'],
+            cwd: $cwd,
         );
     }
 

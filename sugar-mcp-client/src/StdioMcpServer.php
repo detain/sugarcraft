@@ -235,6 +235,16 @@ final class StdioMcpServer implements McpServer
      *        must carry a non-empty string 'name' and a string 'version' —
      *        the default constant is the only shape that may stand in for an
      *        omission, a caller-supplied [] is a bug, not a reset
+     * @param string|null $cwd directory the child process starts in; null (the
+     *        default) keeps the historic inherit-the-parent-cwd behavior
+     *        byte-identical. An embedder that must not let a server see where
+     *        it happened to be launched passes an absolute directory and the
+     *        child opens there — the move is proc_open's own cwd argument, so
+     *        it lands on the child at exec time and the parent's working
+     *        directory is never touched. The spawn planner cannot express it:
+     *        the planner returns [command, env], and this is why the seam's
+     *        shape stayed two-tuple — the directory is a spawn fact the
+     *        embedder decides up front, not one the wrapper negotiates.
      */
     public function __construct(
         public readonly string $name,
@@ -244,6 +254,7 @@ final class StdioMcpServer implements McpServer
         ?float $startTimeoutSeconds = null,
         private readonly ?\Closure $spawnPlanner = null,
         array $clientInfo = self::DEFAULT_CLIENT_INFO,
+        private readonly ?string $cwd = null,
     ) {
         $this->startTimeoutSeconds = $startTimeoutSeconds !== null && $startTimeoutSeconds > 0
             ? $startTimeoutSeconds
@@ -378,7 +389,7 @@ final class StdioMcpServer implements McpServer
                 2 => ['pipe', 'w'],
             ],
             $this->pipes,
-            null,
+            $this->cwd,
             $spawnEnv,
         );
 

@@ -25,7 +25,7 @@ composer require sugarcraft/sugar-mcp-client
 | `McpTool` | Tool definition value object with a well-typedness gate (`tryFromArray`) |
 | `ArgumentShape` | Restores `{}` vs `[]` in decoded tool-call arguments against the tool's `inputSchema` |
 | `McpServer` | Transport contract: `start` / `stop` / `listTools` / `callTool` |
-| `StdioMcpServer` | Child-process stdio transport: argv-array spawn, NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture, `BoundedShutdown` teardown, `__destruct` orphan-proofing |
+| `StdioMcpServer` | Child-process stdio transport: argv-array spawn, explicit spawn directory (`cwd`, default inherit), NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture, `BoundedShutdown` teardown, `__destruct` orphan-proofing |
 | `McpRouter` | Deny-before-allow tool/server narrowing over raw config keys; empty allow-list means allow-all |
 | `RequestIdSequence` | JSON-RPC ids unique across `pcntl_fork()`: plain counters in the owner, `<pid>-<nonce>-<n>` elsewhere |
 | `ExchangeLock` | Cross-process `flock` for one connection, carrying the shared read buffer and the dead-holder phase marker |
@@ -49,6 +49,19 @@ foreach ($server->listTools() as $tool) {
 $result = $server->callTool('echo', ['message' => 'hi']);
 $server->stop();                     // also runs automatically on destruct
 ```
+
+## Spawn directory
+
+The child's working directory is the embedder's decision, not an accident of
+where the parent happened to be standing: pass `cwd:` to start the server in a
+specific absolute directory (`new StdioMcpServer(name: …, cwd: $home)`), and
+the default `null` keeps the historic inherited spawn byte-identical. The move
+is `proc_open`'s own cwd argument, so it lands on the child at exec time and
+the parent's directory is never touched — and it composes with a spawn
+planner: the planner decides *what* runs, `cwd` decides *where*. `candy-code`
+uses the seam to run its user-tier MCP servers in the home directory and its
+project-tier servers at the project root rather than inheriting whatever
+checkout the launch stood in.
 
 ## Timeout discipline (E646)
 
