@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Cli;
 
+use Composer\InstalledVersions;
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\TransferException;
@@ -19,22 +20,29 @@ use SugarCraft\Code\Support\Version;
  *
  * PHAR-MODE ONLY. The verb acts on the file `bin/candy-code` was launched
  * from: `\Phar::running(false)`. On a Composer install that answer is the
- * empty string, and this command REFUSES LOUDLY — prints the exact
- * `composer update sugarcraft/candy-code` to run instead and exits 1. A
- * silent no-op on the Composer path is the banned failure mode: it would
- * report success while changing nothing.
+ * empty string, and this command REFUSES LOUDLY — prints the update command
+ * that fits the install shape and exits 1: inside a consuming project's
+ * vendor tree that is the exact `composer update sugarcraft/candy-code`;
+ * inside a clone where candy-code IS the Composer root package it is
+ * `git pull && composer install` instead, because a root package cannot
+ * pull an update to itself through `composer update <its own name>` — that
+ * command updates the package's dependencies, not the package. A silent
+ * no-op on the Composer path is the banned failure mode: it would report
+ * success while changing nothing.
  *
  * WHAT "LATEST" MEANS HERE. The release trains out of detain/sugarcraft are
  * per-library tags (`candy-code/v0.1.0`, `sugar-core/v3.2.0`, …) sharing one
  * GitHub release stream, so the repo-wide `/releases/latest` answer is
- * usually some other library's tag. The lookup is the one-page list
- * (`?per_page=100`), filtered to non-draft, non-prerelease releases whose
- * tag starts with {@see Version::TAG_PREFIX}, that carry BOTH required
- * assets (`candy-code.phar` and `candy-code.phar.sha256`), and highest by
- * {@see Version::compare()} — the newest CANDY-CODE release, not the newest
- * release. The signature asset (`candy-code.phar.minisig`) is OPTIONAL at
- * selection: whether it is REQUIRED is a fact about the pinned-key state,
- * not about the release, and the two must not be conflated.
+ * usually some other library's tag. The lookup walks the release list
+ * forward — the first page is `?per_page=100`, and a `Link: rel="next"` hop
+ * is followed up to five pages deep — filtered to non-draft, non-prerelease
+ * releases whose tag starts with {@see Version::TAG_PREFIX}, that carry BOTH
+ * required assets (`candy-code.phar` and `candy-code.phar.sha256`), and
+ * highest by {@see Version::compare()} — the newest CANDY-CODE release, not
+ * the newest release. The signature asset (`candy-code.phar.minisig`) is
+ * OPTIONAL at selection: whether it is REQUIRED is a fact about the
+ * pinned-key state, not about the release, and the two must not be
+ * conflated.
  *
  * TWO CHANNELS. The same fetch answers on two release trains. STABLE (what
  * the verb always did): non-draft, non-prerelease `candy-code/v*` tags,
@@ -60,13 +68,23 @@ use SugarCraft\Code\Support\Version;
  * OWN DIRECTORY (a rename only exchanges atoms inside one filesystem), its
  * sha256 is computed over the finished file and compared with
  * `hash_equals()`. If a signing key is pinned (see TRUST MODEL below) the
- * detached signature leg runs next, against those same temp bytes. Only then
- * is the running phar copied to `<phar>.old` and the temp renamed over it.
- * Every refusal before the rename deletes the temp and leaves the running
- * phar byte-identical; a mismatch that fires after the copy still leaves
- * `.old` as the exact prior bytes. `--rollback` renames `<phar>.old` back
+ * detached signature leg runs next, against those same temp bytes. Every
+ * download leg — list, sidecar, phar, signature — judges HTTP status: with
+ * the client's `http_errors` off, a 404 arrives as a plain response, and a
+ * leg that read only the body would install GitHub's JSON error document as
+ * the artifact. Only then is the running phar copied to `<phar>.old` and the
+ * temp renamed over it; the live file's permission mode, captured before
+ * anything is written, is carried onto both the temp (rename would otherwise
+ * publish the temp's umask mode) and the `.old` copy (copy() does not
+ * preserve it). Every refusal before the rename deletes the temp and leaves
+ * the running phar byte-identical; a mismatch that fires after the copy
+ * still leaves `.old` as the exact prior bytes; and a fatal that dies
+ * between minting the temp and renaming it leaves no stranded file behind —
+ * a shutdown hook sweeps the path. `--rollback` renames `<phar>.old` back
  * over the phar — consuming it in the rename, so the restore is one-shot by
- * construction and touches no network.
+ * construction and touches no network — and re-asserts the captured mode,
+ * because the rename carries `.old`'s mode onto the target and legacy
+ * `.old` copies predate the preservation above.
  *
  * WINDOWS CAVEAT (DST-3). On NT, renaming over the image a live process is
  * executing from fails while that process runs — so on Windows the LAST leg
@@ -107,10 +125,15 @@ use SugarCraft\Code\Support\Version;
  * state; it never bypasses the sha256 sidecar and is refused next to
  * `--check` (there is nothing to bypass when nothing is swapped).
  *
- * TIME BOUNDS follow the E646 rule: a connect ceiling and a per-read
- * ceiling, deliberately no total request timeout — a 100 MB phar download on
- * a slow link is legitimate work that a blanket clock would abort. The read
- * ceiling is what kills a stalled transfer.
+ * TIME BOUNDS follow the E646 rule: a connect ceiling, a per-read ceiling,
+ * and a low-speed stall pair, deliberately no total request timeout — a
+ * 100 MB phar download on a slow link is legitimate work that a blanket
+ * clock would abort. On the curl transport the low-speed pair is what
+ * actually kills a stalled transfer (abort once the link moves under a
+ * kilobyte per second for a minute); `read_timeout` alone does NOT — a peer
+ * that trickles a byte now and then keeps resetting it forever. On a
+ * StreamHandler runtime (no ext-curl) the pair does not exist, and
+ * `read_timeout` stays the ceiling in force there.
  *
  * The $http / $releasesUrl / $pharPath / $currentVersion / $publicKey
  * parameters exist for the suite: `SelfUpdateTest` mounts a fake release
@@ -199,6 +222,44 @@ final class SelfUpdate
      */
     public const COMPOSER_COMMAND = 'composer update sugarcraft/candy-code';
 
+    /**
+     * The OTHER honest update command, for the install shape where candy-code
+     * IS the Composer root package (a clone, or the repo checked out and
+     * installed in place): `composer update sugarcraft/candy-code` refreshes
+     * that package's DEPENDENCIES, never the package itself, so there the
+     * answer is to pull the clone and rebuild the vendor tree.
+     */
+    public const PULL_AND_INSTALL_COMMAND = 'git pull && composer install';
+
+    /**
+     * The Composer root package name that triggers
+     * {@see PULL_AND_INSTALL_COMMAND}. Help and Version carry the same
+     * literal in their own families; this class owns its copy because the
+     * refusal wording is decided here.
+     */
+    private const PACKAGE = 'sugarcraft/candy-code';
+
+    /**
+     * DST-3-P3: the curl transport's stall killer — abort when the transfer
+     * has moved fewer than this many bytes per second for
+     * {@see LOW_SPEED_STALL_SECONDS} seconds. A peer that completes the TLS
+     * handshake and then dies no longer hangs the verb forever, while a
+     * slow-but-live link stays legitimate work (E646: the total-request
+     * clock is still deliberately absent — these two bound SLOTHOOD, not
+     * length).
+     */
+    private const LOW_SPEED_LIMIT_BYTES_PER_SECOND = 1024;
+
+    private const LOW_SPEED_STALL_SECONDS = 60;
+
+    /**
+     * DST-3-P5: how many release-list pages the selection walk may follow
+     * via `Link: rel="next"`. Five pages of one hundred is far past this
+     * repo's release count; the cap exists so a broken or hostile
+     * pagination loop can never fetch forever.
+     */
+    private const RELEASE_PAGE_LIMIT = 5;
+
     private const CONNECT_TIMEOUT_SECONDS = 5.0;
 
     private const READ_TIMEOUT_SECONDS = 60.0;
@@ -282,9 +343,19 @@ final class SelfUpdate
             return NonInteractive::EXIT_FAILURE;
         }
 
+        // DST-3-P2: the live file's mode, captured before anything is
+        // written. rename() publishes the TEMP's mode onto the target and
+        // copy() gives `.old` the umask's mode, so without pinning the
+        // original to both, one self-update could turn a 0700 install into
+        // 0755 — or a 0755 phar into something the shell refuses to exec.
+        // false (raced unlink between the gate above and this call) reads
+        // as "no mode to preserve", never as zero.
+        $perms = \fileperms($phar);
+        $pharMode = $perms === false ? null : $perms & 0777;
+
         $old = $phar . '.old';
         if ($rollback) {
-            return self::rollback($old, $phar);
+            return self::rollback($old, $phar, $pharMode);
         }
 
         // Resolution moved ahead of the fetch (choosing a channel needs the
@@ -293,21 +364,41 @@ final class SelfUpdate
         $channel = $channelArg ?? (Version::isDev($current) ? self::CHANNEL_DEV : self::CHANNEL_STABLE);
 
         $http ??= self::httpClient();
-        try {
-            $response = $http->request('GET', $releasesUrl ?? self::RELEASES_URL);
-        } catch (TransferException $e) {
-            self::stderr(Lang::t('cli.selfupdate.fetch_failed', ['reason' => $e->getMessage()]));
+        // DST-3-P5: one page is not the whole train. GitHub paginates the
+        // release list; the candy-code tag the user wants can ride any page.
+        // Follow `Link: rel="next"` hops up to RELEASE_PAGE_LIMIT pages and
+        // select over the accumulated list. A page whose body is not a JSON
+        // array contributes nothing (the old shape refused a non-array
+        // single body outright — the accumulation answers the same way via
+        // the selection below finding no release in an empty list).
+        $releases = [];
+        $pageUrl = $releasesUrl ?? self::RELEASES_URL;
+        for ($page = 1; $page <= self::RELEASE_PAGE_LIMIT; $page++) {
+            try {
+                $response = $http->request('GET', $pageUrl);
+            } catch (TransferException $e) {
+                self::stderr(Lang::t('cli.selfupdate.fetch_failed', ['reason' => $e->getMessage()]));
 
-            return NonInteractive::EXIT_FAILURE;
-        }
-        if ($response->getStatusCode() >= 400) {
-            self::stderr(Lang::t('cli.selfupdate.fetch_failed', ['reason' => 'HTTP ' . $response->getStatusCode()]));
+                return NonInteractive::EXIT_FAILURE;
+            }
+            if ($response->getStatusCode() >= 400) {
+                self::stderr(Lang::t('cli.selfupdate.fetch_failed', ['reason' => 'HTTP ' . $response->getStatusCode()]));
 
-            return NonInteractive::EXIT_FAILURE;
+                return NonInteractive::EXIT_FAILURE;
+            }
+            $decoded = \json_decode((string) $response->getBody()->getContents(), true);
+            if (\is_array($decoded)) {
+                $releases = \array_merge($releases, $decoded);
+            }
+            $pageUrl = $page < self::RELEASE_PAGE_LIMIT
+                ? self::nextPageUrl($response->getHeaderLine('Link'))
+                : null;
+            if ($pageUrl === null) {
+                break;
+            }
         }
-        $decoded = \json_decode((string) $response->getBody()->getContents(), true);
         if ($channel === self::CHANNEL_DEV) {
-            $release = \is_array($decoded) ? self::selectDevRelease($decoded) : null;
+            $release = self::selectDevRelease($releases);
             if ($release === null) {
                 self::stderr(Lang::t('cli.selfupdate.no_dev_release', [
                     'tag' => self::DEV_TAG,
@@ -319,7 +410,7 @@ final class SelfUpdate
             }
             [$cmp, $latest] = self::devDecision($current, $release);
         } else {
-            $release = \is_array($decoded) ? self::selectRelease($decoded) : null;
+            $release = self::selectRelease($releases);
             if ($release === null) {
                 self::stderr(Lang::t('cli.selfupdate.no_release', ['phar' => self::PHAR_ASSET, 'sidecar' => self::SIDECAR_ASSET]));
 
@@ -368,10 +459,9 @@ final class SelfUpdate
 
         // Sidecar first: a shape it cannot answer with stops the verb before
         // a single phar byte is transferred.
-        try {
-            $sidecarBody = (string) $http->request('GET', $release['sidecarUrl'])->getBody()->getContents();
-        } catch (TransferException $e) {
-            self::stderr(Lang::t('cli.selfupdate.download_failed', ['asset' => self::SIDECAR_ASSET, 'reason' => $e->getMessage()]));
+        [$refusal, $sidecarBody] = self::fetchOk($http, $release['sidecarUrl'], self::SIDECAR_ASSET);
+        if ($refusal !== null) {
+            self::stderr($refusal);
 
             return NonInteractive::EXIT_FAILURE;
         }
@@ -389,11 +479,17 @@ final class SelfUpdate
         }
 
         $temp = $phar . '.tmp-' . \getmypid() . '-' . \bin2hex(\random_bytes(4));
-        try {
-            $http->request('GET', $release['pharUrl'], ['sink' => $temp]);
-        } catch (TransferException $e) {
+        // DST-3-P1: every explicit refusal below unlinks the temp, but a
+        // FATAL (or any exit path we did not write) used to leave it
+        // stranded next to the live phar forever. The sweep hook runs on
+        // shutdown regardless; after a successful rename the path is gone
+        // and the hook is inert (forget() checks is_file first).
+        \register_shutdown_function(static function () use ($temp): void {
             self::forget($temp);
-            self::stderr(Lang::t('cli.selfupdate.download_failed', ['asset' => self::PHAR_ASSET, 'reason' => $e->getMessage()]));
+        });
+        [$refusal] = self::fetchOk($http, $release['pharUrl'], self::PHAR_ASSET, $temp);
+        if ($refusal !== null) {
+            self::stderr($refusal);
 
             return NonInteractive::EXIT_FAILURE;
         }
@@ -448,6 +544,17 @@ final class SelfUpdate
             return NonInteractive::EXIT_FAILURE;
         }
 
+        // DST-3-P2: carry the captured mode onto both halves of the swap —
+        // the temp BEFORE the rename (rename is what publishes its mode onto
+        // the target) and the preserved `.old` after the copy (copy() takes
+        // the umask, not the source mode). Best-effort with @: a filesystem
+        // that refuses chmod must not fail a validated update, it just keeps
+        // the mode it has.
+        if ($pharMode !== null) {
+            @\chmod($old, $pharMode);
+            @\chmod($temp, $pharMode);
+        }
+
         if (!\rename($temp, $phar)) {
             self::forget($temp);
             self::stderr(Lang::t('cli.selfupdate.rename_failed', ['old' => $old, 'path' => $phar]));
@@ -463,6 +570,69 @@ final class SelfUpdate
         ]));
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * One GET for one artifact, judged the same way everywhere (DST-3-P4).
+     * The client runs with `http_errors` off, so a 404 arrives as a plain
+     * response — a leg that read only the body would happily take GitHub's
+     * JSON error document as the sidecar, the phar bytes, or the signature.
+     * Every download leg therefore runs through here: a TransferException or
+     * a status of 400 or more is a `download_failed` refusal naming the
+     * status, and a sink the transport half-filled is deleted before the
+     * refusal is handed back, so the caller's error path never has to
+     * remember it.
+     *
+     * @return array{0: ?string, 1: string} [refusal text (null on success), body (empty when a sink was used)]
+     */
+    private static function fetchOk(ClientInterface $http, string $url, string $asset, ?string $sink = null): array
+    {
+        $options = $sink === null ? [] : ['sink' => $sink];
+        try {
+            $response = $http->request('GET', $url, $options);
+        } catch (TransferException $e) {
+            if ($sink !== null) {
+                self::forget($sink);
+            }
+
+            return [Lang::t('cli.selfupdate.download_failed', ['asset' => $asset, 'reason' => $e->getMessage()]), ''];
+        }
+        $status = $response->getStatusCode();
+        if ($status >= 400) {
+            if ($sink !== null) {
+                self::forget($sink);
+            }
+
+            return [Lang::t('cli.selfupdate.download_failed', ['asset' => $asset, 'reason' => 'HTTP ' . $status]), ''];
+        }
+
+        return [null, $sink === null ? (string) $response->getBody()->getContents() : ''];
+    }
+
+    /**
+     * The `next` hop of an RFC 8288 Link header, or null to end the walk.
+     * GitHub pages the release list as `Link: <url>; rel="next", <url>;
+     * rel="last"`; only the next relation is followed, and a header without
+     * one (or a malformed one) is simply the end of the list.
+     */
+    private static function nextPageUrl(string $linkHeader): ?string
+    {
+        if ($linkHeader === '') {
+            return null;
+        }
+        foreach (\explode(',', $linkHeader) as $part) {
+            // '<target>; rel="next"' — params follow the first ';'. A
+            // quoted rel needs the closing quote OR a word end to be
+            // exactly 'next' (rel="next-page" is not a next hop).
+            if (
+                \preg_match('/<([^>]+)>;?\s*(.*)/', \trim($part), $m) === 1
+                && \preg_match('/\brel\s*=\s*"?next(?![\w-])/', $m[2]) === 1
+            ) {
+                return $m[1];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -670,10 +840,9 @@ final class SelfUpdate
         if ($release['sigUrl'] === '') {
             return Lang::t('cli.selfupdate.signature_missing', ['asset' => self::SIGNATURE_ASSET, 'phar' => self::PHAR_ASSET]);
         }
-        try {
-            $signatureBody = (string) $http->request('GET', $release['sigUrl'])->getBody()->getContents();
-        } catch (TransferException $e) {
-            return Lang::t('cli.selfupdate.download_failed', ['asset' => self::SIGNATURE_ASSET, 'reason' => $e->getMessage()]);
+        [$refusal, $signatureBody] = self::fetchOk($http, $release['sigUrl'], self::SIGNATURE_ASSET);
+        if ($refusal !== null) {
+            return $refusal;
         }
         $payload = \file_get_contents($temp);
         if ($payload === false || !self::verifyDetached($payload, $signatureBody, $key)) {
@@ -719,15 +888,41 @@ final class SelfUpdate
 
     /**
      * The loud composer-mode refusal, verbatim: what to run instead, stated
-     * as the exact command. Public and pure so the refusal text is pinned
-     * without needing a non-phar "phar" to point the swap machinery at.
+     * as the exact command — and the command fits the install shape (see
+     * PHAR-MODE ONLY in the class docblock): a consuming project is pointed
+     * at its dependency update, a candy-code clone at pulling the clone.
+     * Public and pure so the refusal text is pinned without needing a
+     * non-phar "phar" to point the swap machinery at; the optional seam
+     * names the root package directly, the way production resolution reads
+     * it from the runtime.
      */
-    public static function composerRefusal(): string
+    public static function composerRefusal(?string $rootPackage = null): string
     {
+        if (($rootPackage ?? self::rootPackageName()) === self::PACKAGE) {
+            return Lang::t('cli.selfupdate.composer_mode_root', ['command' => self::PULL_AND_INSTALL_COMMAND]);
+        }
+
         return Lang::t('cli.selfupdate.composer_mode', ['command' => self::COMPOSER_COMMAND]);
     }
 
-    private static function rollback(string $old, string $phar): int
+    /**
+     * The package the running code is the ROOT of, or '' when the runtime
+     * cannot answer. A shipped phar never reaches this call (the refusal
+     * fires only when `\Phar::running(false)` is empty), so the answer read
+     * here is always the real install's root: the consuming project's name
+     * in a vendor tree, `sugarcraft/candy-code` in a clone.
+     */
+    private static function rootPackageName(): string
+    {
+        if (!\class_exists(InstalledVersions::class)) {
+            return '';
+        }
+        $name = InstalledVersions::getRootPackage()['name'] ?? null;
+
+        return \is_string($name) ? $name : '';
+    }
+
+    private static function rollback(string $old, string $phar, ?int $pharMode = null): int
     {
         if (!\is_file($old)) {
             self::stderr(Lang::t('cli.selfupdate.rollback_missing', ['old' => $old]));
@@ -739,6 +934,13 @@ final class SelfUpdate
 
             return NonInteractive::EXIT_FAILURE;
         }
+        // DST-3-P2: the rename carries `.old`'s mode onto the target. A copy
+        // preserved by the current code already matches; a LEGACY `.old`
+        // (made before the mode was pinned) does not, so re-assert the mode
+        // the live phar had when this command started.
+        if ($pharMode !== null) {
+            @\chmod($phar, $pharMode);
+        }
         self::stderr(Lang::t('cli.selfupdate.rollback_restored', ['old' => $old, 'path' => $phar]));
 
         return NonInteractive::EXIT_OK;
@@ -746,9 +948,11 @@ final class SelfUpdate
 
     private static function httpClient(): ClientInterface
     {
-        return new Client([
+        $options = [
             // E646: ceilings on the two blocking operations, not a clock on
-            // the whole request — see the class docblock.
+            // the whole request — see the class docblock. read_timeout is
+            // the StreamHandler ceiling; on curl the low-speed pair below
+            // is what catches the stalled bulk transfer.
             'connect_timeout' => self::CONNECT_TIMEOUT_SECONDS,
             'read_timeout' => self::READ_TIMEOUT_SECONDS,
             // The suite's client asserts its own answers (status >= 400 is
@@ -760,7 +964,22 @@ final class SelfUpdate
                 // The GitHub API rejects a request with no user agent.
                 'User-Agent' => 'candy-code-self-update',
             ],
-        ]);
+        ];
+        // DST-3-P3: the constants exist only when ext-curl is loaded, and
+        // only the curl handler reads them. A curl-less runtime keeps the
+        // StreamHandler shape (read_timeout in force) instead of fataling
+        // on a constant lookup. Raw CURLOPT_* values travel in the 'curl'
+        // option (the handler ignores top-level ints), and this pair sits
+        // on Guzzle's supported allow-list — the named-option machinery has
+        // no low-speed equivalents to route through.
+        if (\defined('CURLOPT_LOW_SPEED_LIMIT') && \defined('CURLOPT_LOW_SPEED_TIME')) {
+            $options['curl'] = [
+                \CURLOPT_LOW_SPEED_LIMIT => self::LOW_SPEED_LIMIT_BYTES_PER_SECOND,
+                \CURLOPT_LOW_SPEED_TIME => self::LOW_SPEED_STALL_SECONDS,
+            ];
+        }
+
+        return new Client($options);
     }
 
     private static function forget(string $path): void

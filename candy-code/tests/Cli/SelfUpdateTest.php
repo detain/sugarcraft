@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Cli;
 
+use Composer\InstalledVersions;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\HandlerStack;
@@ -115,31 +116,61 @@ final class SelfUpdateTest extends TestCase
      * srv/<path>; unknown routes reject with the ConnectException a dead
      * dial would produce. The sink option is honoured because the production
      * download asks for one.
+     *
+     * $statusByPath overrides the standing 200 per route — the download legs
+     * judge HTTP status as their own concern (DST-3-P4 pins), which is only
+     * observable when the client carries http_errors disabled exactly as the
+     * production client does (httpClient()); a 404 must arrive as a plain
+     * Response, not as a Guzzle-generated RequestException. $linkByPath
+     * stamps a Link header on a route so the selection walk can be made to
+     * page (DST-3-P5). $requestLog, taken by reference, collects the route
+     * paths in arrival order so a test can prove EXACTLY how far a walk went
+     * — not just where it ended.
+     *
+     * @param array<string, int>    $statusByPath
+     * @param array<string, string> $linkByPath
+     * @param list<string>|null     $requestLog
      */
-    private function fakeServerClient(): Client
+    private function fakeServerClient(array $statusByPath = [], array $linkByPath = [], ?array &$requestLog = null): Client
     {
         $srv = $this->dir . '/srv';
-        $handler = static function (RequestInterface $request, array $options) use ($srv): PromiseInterface {
-            $file = $srv . \rawurldecode($request->getUri()->getPath());
+        $handler = static function (RequestInterface $request, array $options) use ($srv, $statusByPath, $linkByPath, &$requestLog): PromiseInterface {
+            $path = $request->getUri()->getPath();
+            if ($requestLog === null) {
+                $requestLog = [];
+            }
+            $requestLog[] = $path;
+            $file = $srv . \rawurldecode($path);
             if (!\is_file($file)) {
                 return new RejectedPromise(new ConnectException(
-                    'fake server has no route ' . $request->getUri()->getPath(),
+                    'fake server has no route ' . $path,
                     $request,
                 ));
             }
+            $status = $statusByPath[$path] ?? 200;
+            $headers = [];
+            if (isset($linkByPath[$path])) {
+                $headers['Link'] = $linkByPath[$path];
+            }
             $body = (string) \file_get_contents($file);
+            $headers['Content-Length'] = (string) \strlen($body);
             if (isset($options['sink']) && \is_string($options['sink'])) {
                 if (\file_put_contents($options['sink'], $body) === false) {
                     return new RejectedPromise(new ConnectException('fake sink write failed', $request));
                 }
 
-                return new FulfilledPromise(new Response(200, ['Content-Length' => (string) \strlen($body)]));
+                return new FulfilledPromise(new Response($status, $headers));
             }
 
-            return new FulfilledPromise(new Response(200, ['Content-Length' => (string) \strlen($body)], Utils::streamFor($body)));
+            return new FulfilledPromise(new Response($status, $headers, Utils::streamFor($body)));
         };
 
-        return new Client(['handler' => HandlerStack::create($handler)]);
+        // Mirrors httpClient(): http_errors off, so a 4xx reaches the legs as a
+        // plain Response and their own status judgement is what speaks.
+        return new Client([
+            'handler' => HandlerStack::create($handler),
+            'http_errors' => false,
+        ]);
     }
 
     private function errorText(): string
@@ -209,12 +240,16 @@ final class SelfUpdateTest extends TestCase
         return $entry;
     }
 
-    /** @param list<array<array-key, mixed>> $entries */
-    private function releasesUrl(array $entries): string
+    /**
+     * @param list<array<array-key, mixed>> $entries
+     * @param string $name the route file is served under, so a paged walk
+     *                     can stage distinct pages at distinct paths.
+     */
+    private function releasesUrl(array $entries, string $name = 'releases.json'): string
     {
-        self::assertNotFalse(\file_put_contents($this->dir . '/srv/releases.json', \json_encode($entries, \JSON_THROW_ON_ERROR)));
+        self::assertNotFalse(\file_put_contents($this->dir . '/srv/' . $name, \json_encode($entries, \JSON_THROW_ON_ERROR)));
 
-        return self::SERVER_ORIGIN . '/releases.json';
+        return self::SERVER_ORIGIN . '/' . $name;
     }
 
     public function testTheRosterCarriesElevenVerbsWithSelfUpdateInAlphaOrder(): void
@@ -273,8 +308,21 @@ final class SelfUpdateTest extends TestCase
         self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
         $text = $this->errorText();
         self::assertStringContainsString('Composer', $text);
-        self::assertStringContainsString('composer update sugarcraft/candy-code', $text);
-        self::assertStringContainsString('composer global update sugarcraft/candy-code', $text);
+        // The named command fits the install shape (DST-3's refusal branch):
+        // this suite's Composer root package IS sugarcraft/candy-code, so the
+        // honest answer printed here is the clone pull, not a
+        // self-referential dependency update. Both install shapes are pinned
+        // directly on composerRefusal in the test below; this one only
+        // asserts the shape the live runtime actually reports.
+        $root = \class_exists(InstalledVersions::class)
+            ? (InstalledVersions::getRootPackage()['name'] ?? '')
+            : '';
+        if ($root === 'sugarcraft/candy-code') {
+            self::assertStringContainsString(SelfUpdate::PULL_AND_INSTALL_COMMAND, $text);
+        } else {
+            self::assertStringContainsString(SelfUpdate::COMPOSER_COMMAND, $text);
+            self::assertStringContainsString('composer global update sugarcraft/candy-code', $text);
+        }
         self::assertSame(SelfUpdate::composerRefusal(), \trim($text), 'the refusal is the documented sentence verbatim');
     }
 
@@ -1127,5 +1175,230 @@ final class SelfUpdateTest extends TestCase
             Help::pretendHostArchiveForTesting(null);
             self::discardStampedPhar($stamped);
         }
+    }
+
+    /**
+     * DST-3-P2: rename() publishes the temp's mode and copy() takes the
+     * umask — both halves of the swap must carry the LIVE file's mode, and
+     * a rollback of a legacy `.old` (one made before this existed) re-asserts
+     * the mode the phar had when the verb started, not whatever the kept
+     * copy drifted to.
+     */
+    public function testTheSwapAndTheRollbackBothPreserveTheExecBit(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('chmod carries no executable-bit truth on NT; the Windows swap leg dies at the documented rename refusal.');
+        }
+
+        foreach ([0755, 0700] as $mode) {
+            $phar = $this->livePharPath();
+            $old = $phar . '.old';
+            $label = 'mode ' . \decoct($mode) . ': ';
+            self::assertNotFalse(\file_put_contents($phar, 'ORIGINAL'));
+            self::assertNotFalse(\chmod($phar, $mode));
+            $this->resetErrorStream();
+
+            $installed = SelfUpdate::run(
+                self::selfUpdateArgs(['self-update']),
+                $this->fakeServerClient(),
+                $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', 'UPDATED-PHAR-BYTES')]),
+                $phar,
+                'v0.1.0',
+                '',
+            );
+            self::assertSame(NonInteractive::EXIT_OK, $installed, $label . 'the swap runs');
+            self::assertSame('UPDATED-PHAR-BYTES', \file_get_contents($phar), $label . 'the new bytes landed');
+            self::assertSame($mode, \fileperms($phar) & 0777, $label . 'rename carried the live mode, not the temp umask');
+            self::assertFileExists($old);
+            self::assertSame($mode, \fileperms($old) & 0777, $label . 'the kept copy carries the live mode, not the copy umask');
+
+            // The legacy shape: a pre-preservation `.old` sits at the umask.
+            // The rollback must hand the ORIGINAL bytes back AT THE CAPTURED
+            // MODE, because --rollback renames .old over the phar and the
+            // rename would otherwise publish the kept copy's mode.
+            self::assertNotFalse(\chmod($old, 0600));
+            $this->resetErrorStream();
+            $restored = SelfUpdate::run(self::selfUpdateArgs(['self-update', '--rollback']), null, null, $phar);
+            self::assertSame(NonInteractive::EXIT_OK, $restored, $label . 'the rollback runs');
+            self::assertSame('ORIGINAL', \file_get_contents($phar), $label . 'the prior bytes came back');
+            self::assertSame($mode, \fileperms($phar) & 0777, $label . 'the rollback re-asserted the captured mode over the legacy .old mode');
+        }
+    }
+
+    /**
+     * DST-3-P4 + DST-3-P1: the client runs with http_errors off, so a 404 is
+     * a plain response — every download leg must judge status itself, name
+     * it in the refusal, and leave the live phar byte-identical with no
+     * half-written sink behind. The shutdown sweep is pinned structurally on
+     * the real source (its registration must sit between the temp's mint and
+     * the rename that consumes it — that window is exactly the stranding
+     * window).
+     */
+    public function testEveryDownloadLegJudgesItsHttpStatus(): void
+    {
+        $phar = $this->livePharPath();
+
+        // Leg 1: the sidecar 404s — the verb stops before a single phar byte
+        // moves, so no temp is even minted.
+        $exit = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(['/candy-code-v9.9.9.sha256' => 404]),
+            $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', 'UPDATED-PHAR-BYTES')]),
+            $phar,
+            'v0.1.0',
+            '',
+        );
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit, 'a 404 sidecar is a refusal, not an empty body');
+        self::assertStringContainsString(SelfUpdate::SIDECAR_ASSET . ': HTTP 404', $this->errorText());
+        self::assertSame('INSTALLED-PHAR-BYTES', \file_get_contents($phar), 'the live phar never moved');
+
+        // Leg 2: the phar 404s after the sidecar passed — the sink receives
+        // the error document, the leg judges status, and the half-file goes.
+        $this->resetErrorStream();
+        $exit = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(['/candy-code-v9.9.9.phar' => 404]),
+            $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', 'UPDATED-PHAR-BYTES')]),
+            $phar,
+            'v0.1.0',
+            '',
+        );
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringContainsString(SelfUpdate::PHAR_ASSET . ': HTTP 404', $this->errorText());
+        self::assertSame([], \glob($phar . '.tmp-' . \chr(42)), 'the sink that the 404 half-filled is gone');
+        self::assertSame('INSTALLED-PHAR-BYTES', \file_get_contents($phar));
+        self::assertFileDoesNotExist($phar . '.old');
+
+        // Leg 3: the signature 404s in PINNED state — the phar bytes are
+        // hash-valid and sitting in the temp, and the refusal must still
+        // sweep the temp and leave the install untouched.
+        $this->resetErrorStream();
+        $exit = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update']),
+            $this->fakeServerClient(['/candy-code-v9.9.9.minisig' => 404]),
+            $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', self::SIGNED_PAYLOAD_BYTES, sigBody: self::FIXTURE_VALID_SIGNATURE)]),
+            $phar,
+            'v0.1.0',
+            self::FIXTURE_PUBLIC_KEY_BASE64,
+        );
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringContainsString(SelfUpdate::SIGNATURE_ASSET . ': HTTP 404', $this->errorText());
+        self::assertSame([], \glob($phar . '.tmp-' . \chr(42)));
+        self::assertSame('INSTALLED-PHAR-BYTES', \file_get_contents($phar));
+
+        // Structural pin of the sweep hook: mint < hook registration < rename.
+        $src = (string) \file_get_contents((new \ReflectionClass(SelfUpdate::class))->getFileName());
+        $mint = \strpos($src, "\$temp = \$phar . '.tmp-'");
+        $hook = \strpos($src, 'register_shutdown_function');
+        $rename = \strpos($src, 'if (!\\rename($temp, $phar))');
+        self::assertIsInt($mint, 'the mint line the pin measures from exists');
+        self::assertIsInt($rename, 'the rename line the pin measures to exists');
+        self::assertIsInt($hook, 'a shutdown sweep is registered at all');
+        self::assertGreaterThan($mint, $hook, 'the sweep can only forget a temp that was already minted');
+        self::assertLessThan($rename, $hook, 'the sweep is armed before the stranding window opens');
+    }
+
+    /**
+     * DST-3-P3, E646: the shipped client carries the low-speed stall pair on
+     * the curl transport and the connect/read ceilings, and NEVER a total
+     * request clock — a big phar over a slow link is legitimate work.
+     */
+    public function testTheProductionClientCarriesTheStallGuardsAndNoBlanketClock(): void
+    {
+        $client = (new \ReflectionMethod(SelfUpdate::class, 'httpClient'))->invoke(null);
+        self::assertInstanceOf(Client::class, $client);
+        $config = (new \ReflectionProperty(Client::class, 'config'))->getValue($client);
+        self::assertIsArray($config);
+
+        self::assertSame(5.0, $config['connect_timeout']);
+        self::assertSame(60.0, $config['read_timeout']);
+        self::assertFalse($config['http_errors']);
+        self::assertArrayNotHasKey('timeout', $config, 'E646: no blanket total-request clock on the shipped client');
+
+        if (\defined('CURLOPT_LOW_SPEED_LIMIT') && \defined('CURLOPT_LOW_SPEED_TIME')) {
+            $curl = $config['curl'] ?? [];
+            self::assertSame(1024, $curl[\CURLOPT_LOW_SPEED_LIMIT] ?? null, 'the curl transport aborts a stalled bulk transfer');
+            self::assertSame(60, $curl[\CURLOPT_LOW_SPEED_TIME] ?? null, 'after a minute under the low-speed floor');
+        } else {
+            self::assertArrayNotHasKey(\CURLOPT_LOW_SPEED_LIMIT, $config['curl'] ?? [], 'a curl-less runtime keeps the StreamHandler shape');
+            self::assertArrayNotHasKey(\CURLOPT_LOW_SPEED_TIME, $config['curl'] ?? [], 'rather than fataling on a constant lookup');
+        }
+    }
+
+    /**
+     * DST-3-P5: selection walks `Link: rel="next"` pages (the newest
+     * candy-code tag can ride page two of a busy repo) but the walk is
+     * capped — page six of a runaway chain is never fetched.
+     */
+    public function testSelectionFollowsPagination(): void
+    {
+        // A: the candy-code release lives on page two; the old one-page
+        // lookup answers "no release", the walk finds v9.9.9.
+        $foreign = $this->stageRelease('candy-sql/v99.0.0', 'OTHER-LIB');
+        $wanted = $this->stageRelease('candy-code/v9.9.9', 'NEW');
+        $page1 = $this->releasesUrl([$foreign], 'releases-page1.json');
+        $this->releasesUrl([$wanted], 'releases-page2.json');
+        $log = [];
+        $client = $this->fakeServerClient([], ['/releases-page1.json' => '<' . self::SERVER_ORIGIN . '/releases-page2.json>; rel="next"'], $log);
+        $exit = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update', '--check']),
+            $client,
+            $page1,
+            $this->livePharPath(),
+            'v0.1.0',
+        );
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit, '--check finding an update exits 1 by design');
+        self::assertStringContainsString('v9.9.9', $this->errorText(), 'the paged lookup found the release the one-page list would have missed');
+        self::assertSame(['/releases-page1.json', '/releases-page2.json'], $log);
+
+        // B: a chain with no end — the cap stops the walk at five pages. The
+        // candy-code tag rides page six, so a walk that ignored the cap would
+        // find it and report v9.9.9 instead of refusing.
+        $this->resetErrorStream();
+        $links = [];
+        for ($page = 1; $page <= 7; $page++) {
+            $entries = [$this->stageRelease('candy-sql/v' . $page . '.0.0', 'OTHER-' . $page)];
+            if ($page === 6) {
+                $entries[] = $this->stageRelease('candy-code/v9.9.9', 'PAST-THE-CAP');
+            }
+            $this->releasesUrl($entries, 'paged-' . $page . '.json');
+            $links['/paged-' . $page . '.json'] = '<' . self::SERVER_ORIGIN . '/paged-' . ($page + 1) . '.json>; rel="next"';
+        }
+        $log = [];
+        $capped = $this->fakeServerClient([], $links, $log);
+        $exit = SelfUpdate::run(
+            self::selfUpdateArgs(['self-update', '--check']),
+            $capped,
+            self::SERVER_ORIGIN . '/paged-1.json',
+            $this->livePharPath(),
+            'v0.1.0',
+        );
+        self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
+        self::assertStringNotContainsString('v9.9.9', $this->errorText(), 'a runaway pagination chain cannot drag the verb page after page');
+        self::assertCount(5, $log, 'exactly five pages are fetched, no more');
+        self::assertSame('/paged-1.json', $log[0]);
+        self::assertSame('/paged-5.json', $log[4]);
+    }
+
+    /**
+     * DST-3-P5's refusal branch: the composer-mode answer fits the install.
+     * A consuming project is pointed at its dependency update; a clone whose
+     * OWN package is the Composer root — where that command updates the
+     * dependencies, not the package — is pointed at the pull-and-rebuild.
+     */
+    public function testTheComposerRefusalNamesTheHonestCommandForEachInstallShape(): void
+    {
+        $foreign = SelfUpdate::composerRefusal('acme/consuming-tool');
+        self::assertStringContainsString('Composer', $foreign);
+        self::assertStringContainsString(SelfUpdate::COMPOSER_COMMAND, $foreign);
+        self::assertStringContainsString('composer global update sugarcraft/candy-code', $foreign);
+        self::assertStringNotContainsString('git pull', $foreign);
+
+        $root = SelfUpdate::composerRefusal('sugarcraft/candy-code');
+        self::assertStringContainsString('Composer', $root);
+        self::assertStringContainsString(SelfUpdate::PULL_AND_INSTALL_COMMAND, $root);
+        self::assertStringNotContainsString('composer update', $root, 'the root answer never tells a package to update itself through its own dependency command');
+
+        self::assertNotSame($foreign, $root, 'one string cannot be honest for both install shapes');
     }
 }
