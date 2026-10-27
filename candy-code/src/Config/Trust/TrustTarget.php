@@ -14,8 +14,8 @@ namespace SugarCraft\Code\Config\Trust;
  * knew the lists by key string, and hooks and commands each carried their own
  * refusal sentence. A census needs a vocabulary, and an enum is the smallest
  * one that cannot drift: adding a fifth grant means adding a case, and every
- * `match` below refuses to compile-check-free at the call sites the same way a
- * silently-missing array key would.
+ * `match` below is exhaustive, so a new case cannot silently slip through a
+ * call site.
  *
  * WHAT `mcp-pin` IS. It is not a fifth settings key — the pins ride the MCP
  * grant itself ({@see \SugarCraft\Code\MCP\McpTrustPins}). It is a separate

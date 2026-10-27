@@ -8101,10 +8101,23 @@ public static function useMaxCost(?string $maxCost): void
                 return ['granted' => false, 'persisted' => false, 'error' => $e->getMessage()];
             }
 
+            $error = $report['error'];
+            if (!$report['granted'] && null === $error) {
+                // The early returns (ABSENT/OUTSIDE_TREE/DISABLED) answer
+                // "not granted" without a reason of their own; the docblock
+                // forbids swallowing one, so the not-granted row speaks for
+                // them — the root asked for, and the operator config the
+                // grant would have had to land in.
+                $error = Lang::t('cli.mcp.trust.not_granted', [
+                    'root' => $root,
+                    'config' => self::userConfigPath(),
+                ]);
+            }
+
             return [
                 'granted' => $report['granted'],
                 'persisted' => $report['granted'] && $report['recorded'],
-                'error' => $report['error'],
+                'error' => $error,
             ];
         }
 

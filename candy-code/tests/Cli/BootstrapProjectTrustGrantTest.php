@@ -183,6 +183,26 @@ final class BootstrapProjectTrustGrantTest extends TestCase
     }
 
     /**
+     * Round-2 review fix: the door's early returns — ABSENT, OUTSIDE_TREE,
+     * DISABLED — answered `granted:false` with a null error, the swallowed
+     * reason the door's own docblock forbids. An empty project root hits
+     * the ABSENT shape, so the failure must still carry the WHY: the
+     * existing `cli.mcp.trust.not_granted` row naming the root and the
+     * operator config the grant would have landed in.
+     */
+    public function testAnAbsentConfigStillExplainsTheRefusalThroughTheDoor(): void
+    {
+        $report = Bootstrap::grantProjectTrust(TrustTarget::Mcp, $this->root);
+
+        self::assertFalse($report['granted']);
+        self::assertFalse($report['persisted']);
+        self::assertIsString($report['error']);
+        self::assertNotSame('', $report['error']);
+        self::assertStringContainsString($this->root, (string) $report['error']);
+        self::assertStringContainsString(Bootstrap::userConfigPath(), (string) $report['error']);
+    }
+
+    /**
      * Never throws: the surfaces that use the door must be able to SHOW the
      * user why an answer failed. With the config directory sealed, the
      * report says so and nothing else moves.
