@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { money, tokens } from '../../lib/format'
-import { useAgentsStore, type ControlVerb } from '../../stores/agents/agents'
+import { useAgentsStore, type ControlVerb, type MessageMode } from '../../stores/agents/agents'
 import { statusIcon, type AgentRun } from '../../stores/agents/tree'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
@@ -14,6 +14,11 @@ import AgentTranscript from './AgentTranscript.vue'
  * controls (pause, resume, cancel, and — for a run the conversation itself
  * delegated — send it to the background, the TUI's `Ctrl+X b`), all through
  * the run's signed mailbox.
+ *
+ * P-AGENT.d adds the TUI's interrupt send: the `⚡ interrupt` toggle (and the
+ * Ctrl+Enter chord) deliver `mode: interrupt`, so the run skips the step's
+ * unstarted sequential calls and reads the message first; a pending row
+ * badges `⚡` for an interrupt, `⧗` for a plain steer, as the TUI does.
  */
 const props = defineProps<{ sessionId: string; run: AgentRun }>()
 const emit = defineEmits<{ close: [] }>()
@@ -26,6 +31,8 @@ const connection = useConnectionStore()
 const draft = ref('')
 const error = ref<string | null>(null)
 const sending = ref(false)
+/** Armed by the toggle or Ctrl+Enter: the next send skips unstarted calls. */
+const interruptMode = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
 
 const view = computed(() => agents.transcript(props.sessionId, props.run.id))
@@ -57,13 +64,15 @@ watch(live, (running) => {
 
 onBeforeUnmount(stopPolling)
 
-async function send(): Promise<void> {
+async function send(mode?: MessageMode): Promise<void> {
   const text = draft.value.trim()
   if (text === '' || sending.value) return
   sending.value = true
   error.value = null
-  const result = await agents.message(props.sessionId, props.run.id, text)
+  const interrupt = mode === 'interrupt' || (mode === undefined && live.value && interruptMode.value)
+  const result = await agents.message(props.sessionId, props.run.id, text, interrupt ? 'interrupt' : undefined)
   sending.value = false
+  if (mode === 'interrupt') interruptMode.value = false
   if (result.status === 'failed') error.value = result.error ?? 'could not send'
   else draft.value = ''
 }
@@ -78,7 +87,14 @@ async function control(verb: ControlVerb): Promise<void> {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+  if (event.key !== 'Enter' || event.isComposing) return
+  // Ctrl+Enter (⌘+Enter on a Mac) is the one-shot interrupt send, the TUI's chord.
+  if (event.ctrlKey || event.metaKey) {
+    event.preventDefault()
+    void send('interrupt')
+    return
+  }
+  if (!event.shiftKey) {
     event.preventDefault()
     void send()
   }
@@ -110,7 +126,7 @@ function onKeydown(event: KeyboardEvent): void {
     <AgentTranscript :items="view.items" />
     <ul v-if="view.pending.length > 0" class="pending" data-testid="agent-pending">
       <li v-for="(message, i) in view.pending" :key="i" :class="message.status">
-        you → {{ message.text }} <span class="badge">{{ message.status === 'queued' ? 'waiting for its next step' : message.status === 'resuming' ? 'continuing the run' : message.status }}</span>
+        you → {{ message.text }} <span class="badge" data-testid="agent-pending-badge">{{ message.status === 'queued' ? (message.mode === 'interrupt' ? '⚡ interrupt' : '⧗ waiting for its next step') : message.status === 'resuming' ? '↻ continuing the run' : message.status }}</span>
         <span v-if="message.error"> — {{ message.error }}</span>
         <button v-if="message.status === 'failed'" type="button" class="link" @click="agents.dismissPending(sessionId, run.id, i)">dismiss</button>
       </li>
@@ -120,12 +136,22 @@ function onKeydown(event: KeyboardEvent): void {
       <textarea
         v-model="draft"
         rows="2"
-        :placeholder="live ? `Message ${run.name}… (read at its next step)` : `Continue ${run.name}…`"
+        :placeholder="live ? `Message ${run.name}… (read at its next step; ⚡ interrupts the step, Ctrl+Enter sends one now)` : `Continue ${run.name}…`"
         aria-label="Message the run"
         data-testid="agent-input"
         @keydown="onKeydown"
       />
-      <button type="button" class="primary" :disabled="sending || draft.trim() === ''" data-testid="agent-send" @click="send">Send</button>
+      <button
+        v-if="live"
+        type="button"
+        class="interrupt"
+        :class="{ on: interruptMode }"
+        :aria-pressed="interruptMode"
+        title="Interrupt send: the run skips this step's unstarted calls and reads your message first (Ctrl+Enter sends one without arming the toggle)"
+        data-testid="agent-interrupt"
+        @click="interruptMode = !interruptMode"
+      >⚡ interrupt</button>
+      <button type="button" class="primary" :disabled="sending || draft.trim() === ''" data-testid="agent-send" @click="send()">Send</button>
     </div>
   </section>
 </template>
@@ -206,5 +232,13 @@ textarea {
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 6px;
+}
+.interrupt {
+  white-space: nowrap;
+}
+.interrupt.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
 }
 </style>

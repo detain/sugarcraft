@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Composer from '../components/Composer.vue'
+import RunningAgentsLine from '../components/agents/RunningAgentsLine.vue'
 import type { PastedImage } from '../lib/paste'
 import PermissionCard, { type Reply } from '../components/PermissionCard.vue'
 import QueueStrip from '../components/QueueStrip.vue'
@@ -166,6 +167,7 @@ async function rename(): Promise<void> {
           :can-answer="canAnswer"
           @answer="(reply, cascade, note, failed) => answer(ask.askId, reply, cascade, note, failed)"
         />
+        <RunningAgentsLine :session-id="id" />
       </template>
     </Transcript>
     <p class="sr-only" role="status" aria-live="polite" data-testid="reply-announcement">{{ finishedReply }}</p>

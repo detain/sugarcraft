@@ -6,6 +6,9 @@ import { useConnectionStore } from '../connection'
 
 export type TranscriptEntry = MethodResult<'agents.transcript'>['items'][number]
 export type ControlVerb = 'cancel' | 'pause' | 'resume' | 'background'
+/** How a message rides to a running run: at its next step (`steer`, the wire
+ * default) or skipping that step's unstarted sequential calls (`interrupt`). */
+export type MessageMode = 'steer' | 'interrupt'
 
 /** A message sent to a run that its transcript has not shown arriving yet. */
 export interface PendingMessage {
@@ -13,6 +16,8 @@ export interface PendingMessage {
   msgId?: string
   status: 'sending' | 'queued' | 'resuming' | 'failed'
   error?: string
+  /** The delivery mode the message was sent with; `interrupt` rows badge `⚡`. */
+  mode?: MessageMode
 }
 
 /** One run's agent view: its own transcript as read so far, and what was sent to it. */
@@ -55,15 +60,56 @@ export const useAgentsStore = defineStore('agents', () => {
   const seeds = ref<Record<string, Record<string, unknown>[]>>({})
   const errors = ref<Record<string, string | null>>({})
   const transcripts = ref<Record<string, RunTranscript>>({})
+  /**
+   * The catalogue's `color:` names resolved by the server to `#rrggbb`
+   * (P-AGENT.c: agents.list), keyed by agent name — the same hex the TUI
+   * strip paints, already contrast-checked. Kept here (not in the tree fold,
+   * which stays pure) so any run row can look one up by name.
+   */
+  const catalogue = ref<Record<string, string>>({})
+  /** Each seed's own `color` hex, keyed by run id — the live preset colour. */
+  const runColours = ref<Record<string, string>>({})
+  let catalogueLoaded = false
 
   function seed(sessionId: string): Record<string, unknown>[] {
     return seeds.value[sessionId] ?? []
   }
 
+  /** The server's contrast-checked hex for run $agentId of $name, if it has one. */
+  function colourFor(agentId: string, name: string): string | null {
+    return runColours.value[agentId] ?? catalogue.value[name] ?? null
+  }
+
+  /** Index the `color` hexes $items carry (a seed or a catalogue roster). */
+  function indexColours(items: Record<string, unknown>[], byName: boolean): void {
+    for (const item of items) {
+      const color = typeof item.color === 'string' ? item.color : ''
+      const id = typeof item.id === 'string' ? item.id : ''
+      const name = typeof item.name === 'string' ? item.name : ''
+      if (color === '' || (byName ? name === '' : id === '')) continue
+      if (byName) catalogue.value = { ...catalogue.value, [name]: color }
+      else runColours.value = { ...runColours.value, [id]: color }
+    }
+  }
+
+  /** Read the delegation catalogue once; its colours name the runs' dots. */
+  async function refreshCatalogue(): Promise<void> {
+    if (catalogueLoaded) return
+    try {
+      const result = await connection.request('agents.list', {})
+      indexColours(result.items as Record<string, unknown>[], true)
+      catalogueLoaded = true
+    } catch {
+      // The dots keep their status colours; the next refresh tries again.
+    }
+  }
+
   async function refresh(sessionId: string): Promise<void> {
+    void refreshCatalogue()
     try {
       const result = await connection.request('agents.subtree', { sessionId })
       seeds.value = { ...seeds.value, [sessionId]: result.items }
+      indexColours(result.items, false)
       errors.value = { ...errors.value, [sessionId]: null }
     } catch (failure) {
       errors.value = { ...errors.value, [sessionId]: describe(failure) }
@@ -116,18 +162,20 @@ export const useAgentsStore = defineStore('agents', () => {
 
   /**
    * Send $text to run $agentId: into its mailbox while it runs, as a
-   * follow-up once it finished. The message shows as pending until the run's
-   * transcript shows it read.
+   * follow-up once it finished. $mode rides `agents.message` — `interrupt`
+   * skips the current step's unstarted sequential calls, `steer` (or, on
+   * the wire, nothing) delivers at the next step boundary. The message shows
+   * as pending until the run's transcript shows it read.
    */
-  async function message(sessionId: string, agentId: string, text: string): Promise<PendingMessage> {
-    const entry: PendingMessage = { text, status: 'sending' }
+  async function message(sessionId: string, agentId: string, text: string, mode?: MessageMode): Promise<PendingMessage> {
+    const entry: PendingMessage = { text, status: 'sending', ...(mode ? { mode } : {}) }
     setPending(sessionId, agentId, (pending) => [...pending, entry])
     let settled: PendingMessage
     try {
-      const result = await connection.request('agents.message', { sessionId, agentId, text })
-      settled = { text, status: result.status, ...(result.msgId ? { msgId: result.msgId } : {}) }
+      const result = await connection.request('agents.message', { sessionId, agentId, text, ...(mode ? { mode } : {}) })
+      settled = { text, status: result.status, ...(result.msgId ? { msgId: result.msgId } : {}), ...(mode ? { mode } : {}) }
     } catch (failure) {
-      settled = { text, status: 'failed', error: describe(failure) }
+      settled = { text, status: 'failed', error: describe(failure), ...(mode ? { mode } : {}) }
     }
     setPending(sessionId, agentId, (pending) => pending.map((p) => (p === entry || (p.text === text && p.status === 'sending') ? settled : p)))
     return settled
@@ -141,5 +189,5 @@ export const useAgentsStore = defineStore('agents', () => {
     setPending(sessionId, agentId, (pending) => pending.filter((_, i) => i !== index))
   }
 
-  return { seeds, errors, transcripts, seed, refresh, transcript, loadTranscript, message, control, dismissPending }
+  return { seeds, errors, transcripts, catalogue, runColours, seed, colourFor, refresh, transcript, loadTranscript, message, control, dismissPending }
 })

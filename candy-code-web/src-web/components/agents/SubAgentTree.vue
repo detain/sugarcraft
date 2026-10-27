@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import { money, oneLine, tokens } from '../../lib/format'
+import { useAgentsStore } from '../../stores/agents/agents'
 import { statusIcon, type AgentNode, type AgentRun } from '../../stores/agents/tree'
 
 /**
  * Delegated runs as a tree (roadmap O-6c, Appendix O §7.4 "sub-agent tree"):
  * one row per run with its live activity — status, what it was asked, its
  * step, tokens and spend, the tool call it is on — and the runs it delegated
- * to below it. Recursive. A row opens the run's agent view.
+ * to below it. Recursive. A row opens the run's agent view. Each run wears a
+ * colour dot (P-AGENT.d): the server's contrast-checked preset hex when it
+ * has one, the status colour otherwise — the TUI strip's vocabulary.
  */
 defineProps<{ nodes: AgentNode[]; selected?: string | null; compact?: boolean }>()
 const emit = defineEmits<{ open: [agentId: string] }>()
+
+const agents = useAgentsStore()
+
+function dotColour(run: AgentRun): string | null {
+  return agents.colourFor(run.id, run.name)
+}
 
 function what(run: AgentRun): string {
   return oneLine(run.description || run.task, 140)
@@ -37,6 +46,14 @@ function activity(run: AgentRun): string {
         @click="emit('open', node.run.id)"
       >
         <span class="icon" aria-hidden="true">{{ statusIcon(node.run.status) }}</span>
+        <span
+          class="dot"
+          :class="node.run.status"
+          :style="dotColour(node.run) ? { color: dotColour(node.run) as string } : undefined"
+          aria-hidden="true"
+          data-testid="agent-dot"
+          :data-agent-id="node.run.id"
+        >●</span>
         <span class="name">{{ node.run.name }}</span>
         <span class="what">{{ what(node.run) }}</span>
         <span v-if="!compact" class="figures">
@@ -65,7 +82,7 @@ function activity(run: AgentRun): string {
 }
 .row {
   display: grid;
-  grid-template-columns: 1.2em auto 1fr;
+  grid-template-columns: 1.2em 0.9em auto 1fr;
   column-gap: 0.4rem;
   row-gap: 0.1rem;
   width: 100%;
@@ -77,21 +94,32 @@ function activity(run: AgentRun): string {
 .row.on {
   border-color: var(--accent);
 }
-.icon {
+.icon,
+.dot {
   grid-row: span 2;
 }
-.running .icon {
+.dot {
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.running .icon,
+.running .dot {
   color: var(--accent);
 }
-.done .icon {
+.done .icon,
+.done .dot {
   color: var(--ok);
 }
 .failed .icon,
-.cancelled .icon {
+.failed .dot,
+.cancelled .icon,
+.cancelled .dot {
   color: var(--error);
 }
 .queued .icon,
-.empty .icon {
+.queued .dot,
+.empty .icon,
+.empty .dot {
   color: var(--muted);
 }
 .name {
@@ -107,7 +135,7 @@ function activity(run: AgentRun): string {
 }
 .figures,
 .activity {
-  grid-column: 2 / 4;
+  grid-column: 2 / 5;
   font-size: 0.8125rem;
   color: var(--muted);
   overflow: hidden;
