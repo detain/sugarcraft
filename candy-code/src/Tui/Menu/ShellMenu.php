@@ -179,8 +179,6 @@ final class ShellMenu
             $specs[$spec->name] = $spec;
         }
 
-        /** @var array<string, true> names a placement entry consumed */
-        $placed = [];
         $menus = [];
 
         foreach (self::PLACEMENT as $menuKey => $entries) {
@@ -211,7 +209,6 @@ final class ShellMenu
                         continue;
                     }
 
-                    $placed[$entry] = true;
                     $nodes[] = self::commandLeaf($spec);
                     continue;
                 }
@@ -220,7 +217,7 @@ final class ShellMenu
                 $declared = $entry[$subKey];
                 $children = $declared === self::PANES_CYCLE
                     ? self::paneRows($a)
-                    : self::commandRows($declared, $specs, $placed);
+                    : self::commandRows($declared, $specs);
 
                 if ($children !== []) {
                     // A submenu whose every name ghosted is not emitted —
@@ -238,11 +235,10 @@ final class ShellMenu
     /**
      * @param list<string>         $names
      * @param array<string, CommandSpec> $specs
-     * @param array<string, true>  $placed in/out: names this walk consumed
      *
      * @return list<MenuNode>
      */
-    private static function commandRows(array $names, array $specs, array &$placed): array
+    private static function commandRows(array $names, array $specs): array
     {
         $nodes = [];
 
@@ -253,7 +249,6 @@ final class ShellMenu
                 continue;
             }
 
-            $placed[$name] = true;
             $nodes[] = self::commandLeaf($spec);
         }
 
