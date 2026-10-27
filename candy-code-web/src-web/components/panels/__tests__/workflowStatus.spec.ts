@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Wire } from '../../../stores/agents/__tests__/harness'
+import { useWorkflowsStore } from '../../../stores/agents/workflows'
 import WorkflowPanel from '../WorkflowPanel.vue'
 
 /**
@@ -99,5 +100,39 @@ describe('WorkflowPanel live status poll', () => {
     await openPanel([TOOL_LIVE, SETTLED])
     await vi.advanceTimersByTimeAsync(6000)
     expect(wire.sent('workflow.status')).toHaveLength(0)
+  })
+
+  it('skips the newest idless row and polls the older running one', async () => {
+    // Rows arrive oldest-first; reversed, the newest is the running `tool` row
+    // with no workflowId — nothing to ask the engine about. The id filter in
+    // `polled` must carry past it to the older `/workflow` run that answers:
+    // without the filter the idless newest row wins and nothing arms.
+    await openPanel([RUNNING, TOOL_LIVE])
+    await vi.advanceTimersByTimeAsync(2000)
+    const statusSends = wire.sent('workflow.status')
+    expect(statusSends).toHaveLength(1)
+    expect(statusSends[0]?.params).toMatchObject({ workflowId: 'wf1' })
+  })
+
+  it('stops polling on a session change whose rows keep the same id polled', async () => {
+    // s2's rows are read into the store BEFORE the switch and carry the same
+    // workflowId, so `polled` never changes value and its watch stays silent:
+    // clearing the interval at the switch is the sessionId watch's stopPolling
+    // alone. Without it the stale timer keeps polling into the next session.
+    const wrapper = await openPanel([RUNNING])
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(wire.sent('workflow.status')).toHaveLength(1)
+    await wire.answer('workflow.status', { workflowId: 'wf1', status: 'running' })
+
+    void useWorkflowsStore().loadRuns('s2')
+    await flushPromises()
+    await wire.answer('workflow.runs', { items: [RUNNING] })
+    await flushPromises()
+
+    await wrapper.setProps({ sessionId: 's2' })
+    await flushPromises()
+
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(wire.sent('workflow.status')).toHaveLength(1)
   })
 })
