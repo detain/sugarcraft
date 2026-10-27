@@ -301,38 +301,37 @@ trait HandlesTurnCompletion
             // starts is judged when it settles.
             $goal = $done->inFlight ? null : \SugarCraft\Code\Goal\GoalState::activeIn($done->history);
 
-            // The turn is over and nothing queued took its place: guess the
-            // user's next message in the background (→ accepts it). Batched
-            // beside, never before, whatever the drain scheduled. Not while a
-            // goal keeps the conversation going: the guess would be stale
-            // before the box is free to show it.
-            $suggest = $done->inFlight || $goal !== null ? null : $done->schedulePromptSuggestion();
-
-            // Roadmap 5.2, same seam and same rule: auto-memory consolidation
-            // on the tool-less summary backend, throttled on disk to one run
-            // per project per five minutes. Only the gating runs here; the
-            // request runs in the backend's fork and the notes are written in
-            // this process as its promise settles (MemoryConsolidatedMsg).
-            $consolidate = $done->inFlight || $done->memoryStore === null ? null
-                : \SugarCraft\Code\Memory\AutoMemoryConsolidator::new(
-                    \SugarCraft\Code\Memory\MemoryWriter::new($done->memoryStore, $done->projectRoot()),
-                )->call($done->summaryBackend, $done->history, $done->spendCapReached(), $done->currentSessionId);
-            // Step 3.G, same seam: `autoCommit: turn` commits what this turn
-            // changed, with a subject from the title model. Only when nothing
-            // queued took the turn's place — a queued prompt is the same
-            // conversation carrying on, and commits once it settles.
-            $autoCommit = $done->inFlight ? null : $done->scheduleAutoCommit();
-            // Roadmap 5.4-3, same seam: the dream pass folds the compaction
-            // journal into memory in a restricted-tool turn of the session's
-            // engine (read-only Memory + Read, via EngineBackend::withTools),
-            // throttled on disk to one pass per project per two hours. Only
-            // the gating runs here (a stat and a small state read); the turn
-            // runs in the engine's fork, and the notes are written in this
-            // process as it settles (DreamPassCompletedMsg).
-            $dream = $done->inFlight || $done->memoryStore === null ? null
-                : \SugarCraft\Code\Memory\DreamPass::new(
-                    \SugarCraft\Code\Memory\MemoryWriter::new($done->memoryStore, $done->projectRoot()),
-                )->call($done->backend, $done->spendCapReached(), $done->currentSessionId);
+            // C-CTX-2.e: the four per-turn side calls (next-prompt suggestion,
+            // auto-memory consolidation, `turn`-mode auto-commit, the dream
+            // pass) are decided by the ONE table the served host also consults
+            // — Host\TurnSettleWork::plan() (C-CTX-2.b, sources: GAP-MEM-02w
+            // "one decision table, two hosts"). The rule comments that lived
+            // on these gates are the table's docblock now; what stays here is
+            // purely TUI machinery: hand each scheduled call to the loop
+            // through Chat's wrapping (`Cmd::promise`). The landers —
+            // PromptSuggestionMsg, MemoryConsolidatedMsg, AutoCommittedMsg,
+            // DreamPassCompletedMsg — are unchanged, and the batch keeps its
+            // order.
+            $work = \SugarCraft\Code\Host\TurnSettleWork::plan(
+                carriedOn: $done->inFlight,
+                goalActive: $goal !== null,
+                memoryStore: $done->memoryStore,
+                engineBackend: $done->backend,
+                summaryBackend: $done->summaryBackend,
+                titleBackend: $done->titleBackend,
+                history: $done->history,
+                capReached: $done->spendCapReached(),
+                sessionId: $done->currentSessionId,
+                generation: $done->generation,
+                projectRoot: $done->projectRoot(),
+                userConfig: $done->workspace?->userConfig ?? [],
+                sessionStore: $done->sessionStore,
+                titleService: $done->titleService(),
+            );
+            $suggest = $done->schedulePromptSuggestion($work);
+            $consolidate = $work->consolidation;
+            $autoCommit = $done->scheduleAutoCommit($work);
+            $dream = $work->dream;
             $judge = null;
             if ($goal !== null) {
                 [$done, $judge] = $done->scheduleGoalJudge($goal);

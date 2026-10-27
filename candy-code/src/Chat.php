@@ -12827,19 +12827,33 @@ final class Chat implements Model
      * guess the user's next message, or null when this settle should not ask
      * — no title backend, suggestions off on the {@see \SugarCraft\Code\Host\TitleService} or by
      * `CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS`, the spend cap reached, or no
-     * assistant reply to follow up. See {@see \SugarCraft\Code\Host\TitleService::suggestionCall()}.
+     * assistant reply to follow up. C-CTX-2.e: the decision is the shared
+     * table's ({@see \SugarCraft\Code\Host\TurnSettleWork::plan()}); the
+     * AssistantMsg settle hands in the plan it already made, so one table
+     * gates all four side calls per settle. Fed no table, this asks the table
+     * for just its own slot — the memory store is fed null so that standalone
+     * call never claims the consolidation or dream throttles.
      */
-    private function schedulePromptSuggestion(): ?\Closure
+    private function schedulePromptSuggestion(?\SugarCraft\Code\Host\TurnSettleWork $work = null): ?\Closure
     {
-        $call = $this->titleService()->suggestionCall(
-            $this->titleBackend,
-            $this->history,
-            $this->generation,
-            $this->currentSessionId,
-            $this->spendCapReached(),
+        $work ??= \SugarCraft\Code\Host\TurnSettleWork::plan(
+            carriedOn: false,
+            goalActive: false,
+            memoryStore: null,
+            engineBackend: $this->backend,
+            summaryBackend: $this->summaryBackend,
+            titleBackend: $this->titleBackend,
+            history: $this->history,
+            capReached: $this->spendCapReached(),
+            sessionId: $this->currentSessionId,
+            generation: $this->generation,
+            projectRoot: $this->projectRoot(),
+            userConfig: $this->workspace?->userConfig ?? [],
+            sessionStore: $this->sessionStore,
+            titleService: $this->titleService(),
         );
 
-        return $call === null ? null : Cmd::promise($call);
+        return $work->suggestion === null ? null : Cmd::promise($work->suggestion);
     }
 
     /** {@see \SugarCraft\Code\Host\TitleService::sanitizeSuggestion()}: the guess as one safe input-box line. */
@@ -15690,80 +15704,35 @@ final class Chat implements Model
      * plain one when there is no title model or the spend cap is reached. The
      * commit is made as the answer settles, in this process, and reported by
      * an {@see \SugarCraft\Code\Workspace\AutoCommittedMsg}.
+     *
+     * C-CTX-2.e: this is the shared table's decision now — the body that lived
+     * here moved to {@see \SugarCraft\Code\Workspace\AutoCommitter::turnCall()}
+     * in C-CTX-2.b and {@see \SugarCraft\Code\Host\TurnSettleWork::plan()}
+     * consults it, so the TUI and the served host commit a settled turn by one
+     * rule; the AssistantMsg settle hands in the plan it already made. Fed no
+     * table, this asks the table for just its own slot — with the memory and
+     * summary slots fed null so that standalone call never claims the
+     * consolidation or dream throttles.
      */
-    private function scheduleAutoCommit(): ?\Closure
+    private function scheduleAutoCommit(?\SugarCraft\Code\Host\TurnSettleWork $work = null): ?\Closure
     {
-        $config = $this->workspace?->userConfig ?? [];
-        $mode = \SugarCraft\Code\Workspace\AutoCommitter::modeFrom($config[\SugarCraft\Code\Workspace\AutoCommitter::SETTINGS_KEY] ?? null);
-        $store = $this->sessionStore;
-        $sessionId = $this->currentSessionId;
-        if ($mode !== \SugarCraft\Code\Workspace\AutoCommitter::MODE_TURN || !$store instanceof EnhancedSessionStore
-            || $sessionId === null || $this->projectRoot === null || $this->projectRoot === '') {
-            return null;
-        }
+        $work ??= \SugarCraft\Code\Host\TurnSettleWork::plan(
+            carriedOn: false,
+            goalActive: false,
+            memoryStore: null,
+            engineBackend: null,
+            summaryBackend: null,
+            titleBackend: $this->titleBackend,
+            history: $this->history,
+            capReached: $this->spendCapReached(),
+            sessionId: $this->currentSessionId,
+            generation: $this->generation,
+            projectRoot: $this->projectRoot(),
+            userConfig: $this->workspace?->userConfig ?? [],
+            sessionStore: $this->sessionStore,
+        );
 
-        try {
-            $latest = $store->listCheckpoints($sessionId, 1)[0]['state_data'] ?? null;
-        } catch (\Throwable) {
-            return null;
-        }
-        $workspace = self::checkpointWorkspace($latest);
-        if (!\SugarCraft\Code\Workspace\WorkspaceCheckpointer::isCaptured($workspace) || !\is_array($workspace)) {
-            return null;
-        }
-
-        $committer = \SugarCraft\Code\Workspace\AutoCommitter::new($this->projectRoot)
-            ->withSessionId($sessionId)
-            ->withTrailer(\SugarCraft\Code\Workspace\AutoCommitter::trailerFor($config['attribution'] ?? null));
-        $checkpointer = $store->workspaceCheckpointer($this->projectRoot);
-        $backend = $this->spendCapReached() ? null : $this->titleBackend;
-        $context = '';
-        foreach (array_reverse(Message::agentVisible($this->history)) as $message) {
-            if ($message->role === Role::User) {
-                $context = $message->content;
-                break;
-            }
-        }
-
-        return Cmd::promise(static function () use ($committer, $checkpointer, $workspace, $backend, $context, $sessionId): PromiseInterface {
-            try {
-                $prepared = $committer->prepareTurn($checkpointer, $workspace);
-            } catch (\Throwable $e) {
-                $prepared = $e->getMessage();
-            }
-            if ($prepared === null) {
-                return \React\Promise\resolve(null);
-            }
-            if (\is_string($prepared)) {
-                return \React\Promise\resolve(new \SugarCraft\Code\Workspace\AutoCommittedMsg(error: $prepared, sessionId: $sessionId));
-            }
-
-            $finish = static function (?string $reply, ?Usage $usage) use ($committer, $prepared, $sessionId): Msg {
-                $subject = ($reply === null ? null : \SugarCraft\Code\Workspace\CommitMessageWriter::subjectFrom($reply))
-                    ?? \SugarCraft\Code\Workspace\CommitMessageWriter::fallback($prepared['paths']);
-                $outcome = $committer->commit($prepared['paths'], $subject);
-
-                return new \SugarCraft\Code\Workspace\AutoCommittedMsg(
-                    sha: $outcome['sha'],
-                    subject: $outcome['subject'],
-                    paths: $outcome['paths'],
-                    snapshot: $prepared['snapshot'],
-                    error: $outcome['ok'] ? null : $outcome['reason'],
-                    usage: $usage,
-                    sessionId: $sessionId,
-                );
-            };
-            if ($backend === null) {
-                return \React\Promise\resolve($finish(null, null));
-            }
-
-            return $backend->completeAsync(\SugarCraft\Code\Workspace\CommitMessageWriter::request($prepared['diff'], $context))->then(
-                static fn (Message $reply): Msg => $finish($reply->content, $reply->usage),
-                // The commit still happens, with a plain subject: a title
-                // model that failed is no reason to leave the turn uncommitted.
-                static fn (\Throwable $e): Msg => $finish(null, null),
-            );
-        });
+        return $work->autoCommit === null ? null : Cmd::promise($work->autoCommit);
     }
 
     /**
@@ -15787,18 +15756,6 @@ final class Chat implements Model
     private function handleDiffCommand(string $inputText): array
     {
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\DiffCommand(), $inputText);
-    }
-
-    /**
-     * The workspace outcome a decoded checkpoint state carries, if any —
-     * {@see \SugarCraft\Code\Host\Commands\Checkpoints::checkpointWorkspace()}.
-     *
-     * @param mixed $state
-     * @return array<string, mixed>|null
-     */
-    private static function checkpointWorkspace(mixed $state): ?array
-    {
-        return \SugarCraft\Code\Host\Commands\Checkpoints::checkpointWorkspace($state);
     }
 
     /**

@@ -14,6 +14,7 @@ use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\TurnSettleWork;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Tests\Support\CheckpointedRepoTrait;
@@ -114,6 +115,97 @@ final class AutoCommitTurnTest extends TestCase
         [$shown] = $settled->update($landed);
         self::assertStringStartsWith('Auto-commit skipped: git commit failed: tests failed', $shown->history[\count($shown->history) - 1]->content);
         self::assertSame('base', $this->gitAt('log', '-1', '--format=%s'));
+    }
+
+    /**
+     * C-CTX-2.e parity: the settle no longer keeps its own gates — it asks
+     * Host\TurnSettleWork::plan(), the same table a served host consults
+     * (C-CTX-2.c). Two access paths of one table must agree for one set of
+     * inputs: the passes this TUI settle actually runs are exactly the slots
+     * the table schedules when fed the same flags. (turnCall's gate is a
+     * pure read, so planning before the commit changes the repo is honest.)
+     */
+    public function testTheSharedTableSchedulesTheSameSetTheTuiSettleRuns(): void
+    {
+        $this->turnCheckpoint([], 'change it');
+        file_put_contents($this->repo . '/file.txt', "changed\n");
+
+        $chat = $this->chat('turn', null);
+        $work = TurnSettleWork::plan(
+            carriedOn: false,
+            goalActive: false,
+            memoryStore: null,
+            engineBackend: new EchoBackend(),
+            summaryBackend: null,
+            titleBackend: null,
+            history: $chat->history,
+            capReached: false,
+            sessionId: 'undo-session',
+            generation: 0,
+            projectRoot: $this->repo,
+            userConfig: [AutoCommitter::SETTINGS_KEY => 'turn'],
+            sessionStore: $this->store,
+        );
+        self::assertSame(['autoCommit'], \array_keys(\array_filter([
+            'suggestion' => $work->suggestion,
+            'consolidation' => $work->consolidation,
+            'autoCommit' => $work->autoCommit,
+            'dream' => $work->dream,
+        ])), 'the table schedules the auto-commit pass alone');
+
+        [$settled, $cmd] = $chat->update(new AssistantMsg(Message::assistant('Done.')));
+        self::assertSame([AutoCommittedMsg::class], $this->settleScheduledPasses($cmd), 'the TUI settle runs the same set');
+
+        $off = TurnSettleWork::plan(
+            carriedOn: false,
+            goalActive: false,
+            memoryStore: null,
+            engineBackend: new EchoBackend(),
+            summaryBackend: null,
+            titleBackend: null,
+            history: $settled->history,
+            capReached: false,
+            sessionId: 'undo-session',
+            generation: 0,
+            projectRoot: $this->repo,
+            userConfig: [AutoCommitter::SETTINGS_KEY => 'off'],
+            sessionStore: $this->store,
+        );
+        self::assertSame([], \array_keys(\array_filter([
+            'suggestion' => $off->suggestion,
+            'consolidation' => $off->consolidation,
+            'autoCommit' => $off->autoCommit,
+            'dream' => $off->dream,
+        ])), 'and the stand-downs match too: `off` commits on neither path');
+    }
+
+    /**
+     * The passes the settle actually scheduled: every child of the batch it
+     * hands the loop, resolved, minus the context-remeasure stamp that rides
+     * beside them.
+     *
+     * @return list<class-string>
+     */
+    private function settleScheduledPasses(?\Closure $cmd): array
+    {
+        self::assertNotNull($cmd);
+        $batch = $cmd();
+        $types = [];
+
+        foreach ($batch instanceof BatchMsg ? $batch->cmds : [$batch] as $child) {
+            $async = $child instanceof AsyncCmd ? $child : $child();
+            self::assertInstanceOf(AsyncCmd::class, $async);
+            $landed = null;
+            $async->promise->then(static function (mixed $msg) use (&$landed): void {
+                $landed = $msg;
+            });
+
+            if ($landed !== null && !$landed instanceof ContextMeasuredMsg) {
+                $types[] = $landed::class;
+            }
+        }
+
+        return $types;
     }
 
     private function chat(string $mode, ?Backend $title): Chat

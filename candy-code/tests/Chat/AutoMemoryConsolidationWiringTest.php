@@ -11,8 +11,10 @@ use SugarCraft\Core\BatchMsg;
 use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\Backend;
+use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\TurnSettleWork;
 use SugarCraft\Code\Memory\AutoMemoryConsolidator;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\App\MemoryConsolidatedMsg;
@@ -89,6 +91,99 @@ final class AutoMemoryConsolidationWiringTest extends TestCase
         // P-CTX.d: with nothing to consolidate, the settle's one scheduled pass is
         // the context remeasure — a stamp, not an announcement.
         self::assertInstanceOf(ContextMeasuredMsg::class, $this->resolve($cmd));
+    }
+
+    /**
+     * C-CTX-2.e parity: the settle no longer keeps its own gates — it asks
+     * Host\TurnSettleWork::plan(), the same table a served host consults
+     * (C-CTX-2.c). Two access paths of one table must agree for one set of
+     * inputs: the passes this TUI settle actually runs are exactly the slots
+     * the table schedules when fed the same flags. The store here is a fresh
+     * corner: consolidation's throttle CLAIMS at planning time (that is how
+     * one turn cannot ask twice), so the second access path reads its own
+     * undisputed claim — same decision, same set.
+     */
+    public function testTheSharedTableSchedulesTheSameSetTheTuiSettleRuns(): void
+    {
+        $store = new MemoryStore($this->dir . '/home');
+        $summary = $this->summaryBackend('{"operations":[{"op":"add","content":"The API is versioned under /v2."}]}');
+
+        [$settled, $cmd] = $this->chat($store, $summary)->update(new AssistantMsg(Message::assistant(str_repeat('The API now lives under /v2 and v1 is gone. ', 8))));
+        self::assertSame([MemoryConsolidatedMsg::class], $this->settleScheduledPasses($cmd), 'the TUI settle runs the consolidation pass alone');
+
+        mkdir($this->dir . '/home2', 0700, true);
+        $work = TurnSettleWork::plan(
+            carriedOn: false,
+            goalActive: false,
+            memoryStore: new MemoryStore($this->dir . '/home2'),
+            engineBackend: new EchoBackend(),
+            summaryBackend: $summary,
+            titleBackend: null,
+            history: $settled->history,
+            capReached: false,
+            sessionId: null,
+            generation: 0,
+            projectRoot: $this->dir . '/root',
+            userConfig: [],
+            sessionStore: null,
+        );
+        self::assertSame(['consolidation'], \array_keys(\array_filter([
+            'suggestion' => $work->suggestion,
+            'consolidation' => $work->consolidation,
+            'autoCommit' => $work->autoCommit,
+            'dream' => $work->dream,
+        ])), 'the table schedules the same set: consolidation alone (a bare EchoBackend is no engine for the dream)');
+
+        $none = TurnSettleWork::plan(
+            carriedOn: false,
+            goalActive: false,
+            memoryStore: null,
+            engineBackend: new EchoBackend(),
+            summaryBackend: $summary,
+            titleBackend: null,
+            history: $settled->history,
+            capReached: false,
+            sessionId: null,
+            generation: 0,
+            projectRoot: $this->dir . '/root',
+            userConfig: [],
+            sessionStore: null,
+        );
+        self::assertSame([], \array_keys(\array_filter([
+            'suggestion' => $none->suggestion,
+            'consolidation' => $none->consolidation,
+            'autoCommit' => $none->autoCommit,
+            'dream' => $none->dream,
+        ])), 'and the stand-downs match too: nowhere to write asks for nothing');
+    }
+
+    /**
+     * The passes the settle actually scheduled: every child of the batch it
+     * hands the loop, resolved, minus the context-remeasure stamp that rides
+     * beside them.
+     *
+     * @return list<class-string>
+     */
+    private function settleScheduledPasses(?\Closure $cmd): array
+    {
+        self::assertNotNull($cmd);
+        $batch = $cmd();
+        $types = [];
+
+        foreach ($batch instanceof BatchMsg ? $batch->cmds : [$batch] as $child) {
+            $async = $child instanceof AsyncCmd ? $child : $child();
+            self::assertInstanceOf(AsyncCmd::class, $async);
+            $landed = null;
+            $async->promise->then(static function (mixed $msg) use (&$landed): void {
+                $landed = $msg;
+            });
+
+            if ($landed !== null && !$landed instanceof ContextMeasuredMsg) {
+                $types[] = $landed::class;
+            }
+        }
+
+        return $types;
     }
 
     private function chat(MemoryStore $store, Backend $summary): Chat
