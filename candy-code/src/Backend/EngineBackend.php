@@ -73,7 +73,7 @@ use SugarCraft\Code\Tools\ToolResult;
  * works in the typed {@see \SugarCraft\Code\Messages\Message} hierarchy.
  * Conversion happens here at the seam.
  */
-final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromptSections, ObservesReasoning, InteractiveTurn, SummarisesWithCache
+final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromptSections, DumpsSystemPrompt, ObservesReasoning, InteractiveTurn, SummarisesWithCache
 {
     /**
      * IDLE ceiling on a forked completion child in {@see completeAsync()} -
@@ -2831,6 +2831,37 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // guard's identity, so the shared launch manager keeps serving turns.
         return $this->newRuntime($this->resolveHookManager(new ToolCallLoopGuard()))
             ->promptSectionSizes($app);
+    }
+
+    /**
+     * The next request's system prompt verbatim and the tools riding it
+     * (`/context --raw`, GAP-PRM-15), built the SAME way
+     * {@see promptSectionSizes()} builds its rows — the session App with the
+     * turn's tools (ISS-063's lesson: without them the dump would describe a
+     * request no turn ever sends) and the resolved hook manager — so the
+     * dumped bytes and the panel's row-bytes sum are equal by construction,
+     * and the dump test pins it. Fresh guard per call, as there.
+     *
+     * @return array{prompt: string, tools: list<array{name: string, description: string, input_schema: array<mixed>}>}
+     */
+    public function dumpSystemPrompt(): array
+    {
+        $turnTools = $this->promptTools();
+        $app = $this->sessionApp()->withTools($turnTools);
+
+        $prompt = $this->newRuntime($this->resolveHookManager(new ToolCallLoopGuard()))
+            ->assembledSystemPrompt($app);
+
+        $tools = [];
+        foreach ($turnTools as $tool) {
+            $tools[] = [
+                'name' => $tool->name(),
+                'description' => $tool->description(),
+                'input_schema' => $tool->inputSchema(),
+            ];
+        }
+
+        return ['prompt' => $prompt, 'tools' => $tools];
     }
 
     /**

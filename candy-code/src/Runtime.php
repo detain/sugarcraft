@@ -4368,6 +4368,21 @@ final class Runtime
      */
     private function buildSystemPrompt(App $app): string
     {
+        return $this->assembledSystemPrompt($app);
+    }
+
+    /**
+     * The system prompt $app would send, as the assembled string itself —
+     * the raw half the `Backend\DumpsSystemPrompt` capability hands to
+     * `/context --raw` (GAP-PRM-15). One fold behind the very method a turn
+     * builds with, so the dumped bytes ARE the sent bytes, and they sum to
+     * the {@see promptSectionSizes()} rows exactly — the identity the dump
+     * test pins. The transcript never sees this string; it only ever reaches
+     * a file the user named (or the exports shelf), which is WHY this arm
+     * exists beside the panel rather than inside it.
+     */
+    public function assembledSystemPrompt(App $app): string
+    {
         return self::assemblePrompt($this->systemPromptSections($app));
     }
 
