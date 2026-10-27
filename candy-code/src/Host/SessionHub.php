@@ -184,14 +184,6 @@ final class SessionHub
     }
 
     /**
-     * The workspace's sessions with their metadata, newest activity first
-     * (`EnhancedSessionStore::listSessionsWithMeta()`), each marked with
-     * whether this hub has it open. $cursor is the id of the last row of the
-     * previous page; the page starts after it.
-     *
-     * @return array{sessions: list<array<string, mixed>>, nextCursor: ?string}
-     */
-    /**
      * The workspace's sessions, newest activity first (ranked best-hit first
      * with $query), paged by id cursor.
      *
