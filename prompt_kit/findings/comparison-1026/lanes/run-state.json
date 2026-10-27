@@ -77,7 +77,8 @@
   "C-SEC-5.a",
   "C-SES-5.c",
   "C-WEB-3.c",
-  "C-WEB-3.d"
+  "C-WEB-3.d",
+  "P-AGENT.d"
  ],
  "inflight": {
   "C-AGT-3.b": {
@@ -95,14 +96,6 @@
    "branch": "cc/P-MENU.d",
    "session": "CANCELLED",
    "note": "INCOMPLETE: cancelled mid-build (notification @1444@), 18 dirty uncommitted paths, zero commits (tip==base). Same recovery path as C-AGT-3.b."
-  },
-  "P-AGENT.d": {
-   "stage": "clean",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-P-AGENT.d",
-   "branch": "cc/P-AGENT.d",
-   "session": "closed",
-   "note": "r2 CLEAN with gates RUN (27 files/215 vitest; vue-tsc 6 foreign TS2554 only). REVIEW-2.md collected from /tmp/opencode/cc-cmp/ to lanes. WELD queued behind running batch welder: picks 0504a19a6+b98125b2b (base e36d86d84-era), npm build dist commit-if-changed, vitest re-run, §4 unstaged, evidence 4 files (BRIEF/REPORT/REVIEW-1/REVIEW-2). Carries: NIT Ctrl+Enter-stale-arm-clear leg unpinned (later micro: arm, Ctrl+Enter, assert aria-pressed false); r1 queued-count NIT open; reviewer /tmp probe file leftover harmless."
   },
   "C-AGT-7.c": {
    "stage": "build",
@@ -402,6 +395,13 @@
    "regen": "none - web lane; npm run build changed bundle hashes (index-C8CC-Omt.js / index-czZF8ZjI.css), dist committed as separate weld commit",
    "gates": "r1 [SEV-GATE] runtime checks all PASS: --stat exactly 4 declared files (no dist/durations/suite-figure), lane worktree porcelain clean, %ae+%ce detain / 0 Co-Authored; vitest --no-file-parallelism sidebarCloseRoot sessions = 2 files/9 passed; regression session+sidebar = 9 files/45 passed; vue-tsc -b --force = exactly 6 TS2554 (foreign); five-guard 133T/15735A pair-only (25,537-vs-26,141)",
    "durations_owed": "none - sidebarCloseRoot.spec.ts rides the vitest-side roster, no phpunit DUR row"
+  },
+  "P-AGENT.d": {
+   "master": "268844b75",
+   "pick": "ceed81ef0 (0504a19a6) + 600e28341 (b98125b2b), base b5d7a4bfb, zero conflicts, web-only (6 src-web files); dist rebuild 268844b75 (index-qVoNgm2E.js / index-DRzy8kqq.css)",
+   "regen": "none - gen-protocol-schema/gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0; npm run gen:protocol byte-identical",
+   "gates": "candy-code-web vitest --no-file-parallelism agentsParity agents panels stores tree sessionView = 28 files/221 green on merged tree (reviewer ran 27/215 pre-weld); vue-tsc -b --force = ONLY foreign 6 TS2554 (reducer.spec.ts x4, statusBar.spec.ts x2); five-guard 133T/15735A pair-only (pinned 25,537 vs live 26,141 - closeout re-pin)",
+   "durations_owed": "none - vitest-side agentsParity.spec.ts roster, no new candy-code *Test.php"
   }
  },
  "carries": [
@@ -442,6 +442,7 @@
   "C-WEB-3.a memoryHistory.spec.ts = vitest-side; dormantRoster row drop owed at C-WEB-3.g",
   "2026-10-27T16:3x OWNER STOP-SPAWNING FREEZE active: 4-lane batch welder cancelled after L1(C-CTX-2.a)+L2(C-SES-4.b) landed; server restart killed all children. FROZEN-PRE-WELD queue: C-SEC-5.a, C-SES-5.c, C-WEB-3.c, C-WEB-3.d (dist), +P-AGENT.d after r2 review. W6 wave loop NOT dispatched (eligible: C-SES-9.a/9.c/9.d, C-EXT-7.b, C-SES-6.a, C-TOOL-7.c all welded). C-AGT-3.b/P-MENU.d hold uncommitted partials on their worktrees.",
   "C-SEC-5.a weld: docs/MCP.md :627-640 closeout seam rides this lane",
-  "C-WEB-3.d weld: dormancy rows files.read/memory.log/undo/session.shares owed at C-WEB-3.g"
+  "C-WEB-3.d weld: dormancy rows files.read/memory.log/undo/session.shares owed at C-WEB-3.g",
+  "P-AGENT.d weld: Ctrl+Enter stale-arm-clear leg unpinned micro + r1 queued-count NIT remain OPEN"
  ]
 }
