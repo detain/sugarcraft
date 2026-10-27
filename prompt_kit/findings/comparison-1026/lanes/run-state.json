@@ -85,7 +85,8 @@
     "C-CTX-6.d",
     "C-MCP-6.a",
     "C-PRV-5.a",
-    "C-SEC-5.c"
+    "C-SEC-5.c",
+    "C-CTX-6.a"
   ],
   "inflight": {
     "P-MENU.d": {
@@ -104,15 +105,6 @@
       "worktree": "/home/sites/cc-cmp-C-EXT-7.a",
       "branch": "cc/C-EXT-7.a",
       "note": "fix landed c311273ad on 0e5c35bf9 (PLUGINS.md :81/:89 + BundleDeclinedSurfacesTest:268 IsADeclined); r2 reviewer dispatching; after CLEAN weld chain 0e5c35bf9+c311273ad, DUR HooksHostCommandLiveChainTest 4T",
-      "ts": "2026-10-27T22:22:46.006182+00:00"
-    },
-    "C-CTX-6.a": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-CTX-6.a",
-      "branch": "cc/C-CTX-6.a",
-      "session": "ses_e80b07d58ffeEXuHBBHSWaGQmJ",
-      "note": "r1 CLEAN 57T/283A + 461T/22159A pair-only; DUR none; carry SessionHost:1055 release no alarm-cancel (base shape) + BRIEF stale App.php cite",
       "ts": "2026-10-27T22:22:46.006182+00:00"
     },
     "C-EXT-2.b": {
@@ -458,6 +450,13 @@
       "gates": "TrustDialogTest 12T/15706A EXACT; --filter TrustDialog 13T/15712A (13th = BinCandyCodeWiringTest dataset 'Tui/TrustDialog.php'); TuiLang|LangParity 16T/4231A; five-guard 133T/15781A failures=2 = staleness pair ONLY",
       "durations_owed": "NEW tests/Tui/TrustDialogTest.php (12T) - LIST ONLY, closeout duty",
       "report_corrections": "en.php +13 keys (claim +15 wrong); extra row = BinCandyCodeWiringTest dataset, not AccessorDeprecationTest (REVIEW-1 NIT)"
+    },
+    "C-CTX-6.a": {
+      "master": "4219a10c4",
+      "pick": "4219a10c4",
+      "regen": "no-op (cmd/tool/settings --check up-to-date rc0; hub file SessionHost.php touched, no generated doc/protocol/web regions affected)",
+      "gates": "SessionHost 57T/283A EXACT; Idle|AutoCompact|Compaction 461T/22159A EXACT; five-guard 133T/15781A failures=2 = staleness pair ONLY",
+      "durations_owed": "none - no new candy-code *Test.php (+3T rides closeout re-pin)"
     }
   },
   "carries": [
@@ -506,7 +505,10 @@
     "C-CTX-6.d DUR duty for closeout gate: scripts/parallel-tests-durations.tsv row for candy-code/tests/Chat/MemoryOpenJournalTest.php (new file, 3T; lanes never edit durations.tsv)",
     "C-MCP-6.a weld: NEW candy-code tests/MCP/SseMcpServerForkTlsTest.php + tests/Chat/McpLoginForkTest.php rows owe durations.tsv at the closeout gate (welder does NOT edit durations.tsv). Welded-tree gate live 2215T/0F (lane report claimed 2219; +4 = filter-count wobble, both new files verified running: Sse 3T, McpLoginFork 11T); doc-guard trio 128T/4684A; gens --check up-to-date rc0 x3.",
     "C-PRV-5.a weld: NEW candy-code/tests/Providers/ThinkingCeilingTest.php (20T) owes a durations.tsv row at the closeout gate (welder does NOT edit durations.tsv). Welded-tree gates EXACT: ThinkingCeiling 20T/51A; provider siblings --filter 'ThinkingCeiling|AnthropicExtendedThinking|VertexGeminiOutputBudget|GeminiProvider|EffortGate|ProviderFactory' 247T/739A (reviewer filter reproduced exactly); doc trio 128T/4684A (+11A wobble vs 4673 claim, 0F); five-guard 133T pair-only (25,537 vs live 26,216).",
-    "C-SEC-5.c weld: NEW candy-code/tests/Tui/TrustDialogTest.php (12T) owes a durations.tsv row at the closeout gate. Welder REPORT corrections committed with the evidence: en.php adds 13 tui.trust.* keys (not +15; git show --numstat +13, 13 quoted keys) and the extra --filter TrustDialog row is BinCandyCodeWiringTest dataset \"Tui/TrustDialog.php\" (not AccessorDeprecationTest) per REVIEW-1 NIT. Gates EXACT: TrustDialogTest 12T/15706A (filter TrustDialog = 13T/15712A with the integration row); TuiLang|LangParity 16T/4231A; five-guard 133T pair-only; gens --check up-to-date x3."
+    "C-SEC-5.c weld: NEW candy-code/tests/Tui/TrustDialogTest.php (12T) owes a durations.tsv row at the closeout gate. Welder REPORT corrections committed with the evidence: en.php adds 13 tui.trust.* keys (not +15; git show --numstat +13, 13 quoted keys) and the extra --filter TrustDialog row is BinCandyCodeWiringTest dataset \"Tui/TrustDialog.php\" (not AccessorDeprecationTest) per REVIEW-1 NIT. Gates EXACT: TrustDialogTest 12T/15706A (filter TrustDialog = 13T/15712A with the integration row); TuiLang|LangParity 16T/4231A; five-guard 133T pair-only; gens --check up-to-date x3.",
+    "C-CTX-6.a weld: DUR none (no NEW candy-code *Test.php — SessionHostIdleAutoTest.php pre-existing, +3T rides the closeout re-pin). Gates EXACT: SessionHost 57T/283A; Idle|AutoCompact|Compaction 461T/22159A; gens --check up-to-date x3 (SessionHost is [hot] but minted no CommandLoader/registry doc drift); five-guard 133T pair-only.",
+    "SessionHost.php:1055 release() never cancels the idle alarm — base shape, lane re-arms lengthen its life; wave-ledger note for a future release-side cure",
+    "C-CTX-6.a BRIEF.md:5 stale App.php:4691 cite (real anchor Chat.php ~:14300 handleIdleCompactTick) — closeout doc sweep"
   ],
-  "updated": "2026-10-27T22:41:30.582718+00:00"
+  "updated": "2026-10-27T22:45:50.494375+00:00"
 }
