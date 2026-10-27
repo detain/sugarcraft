@@ -8,16 +8,10 @@
     "C-EXT-1.a",
     "C-SEC-1.a",
     "C-MCP-1.a",
-    "C-AGT-2.a"
+    "C-AGT-2.a",
+    "C-AGT-1.a"
   ],
   "inflight": {
-    "C-AGT-1.a": {
-      "stage": "review",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-AGT-1.a",
-      "branch": "cc/C-AGT-1.a",
-      "session": null
-    },
     "C-SEC-2.b": {
       "stage": "build",
       "round": 1,
