@@ -61,12 +61,12 @@
   ],
   "inflight": {
     "C-EXT-2.a": {
-      "stage": "clean",
+      "stage": "held-at-stop",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-EXT-2.a",
       "branch": "cc/C-EXT-2.a",
       "session": "ses_e81fd46ecfferx3536ffHYjUuH",
-      "note": "QUEUED for next welder call: C-TOOL-7.a 4-pick chain 3eb40269a+da99eeabb+2710d9d0b+b5f3aeefb, C-EXT-2.a 0c3ed3a6b + weld-fold dirname cure SkillTool.php:325/:525"
+      "note": "PICKS+CURE ON MASTER (376e9d0f1/39e523d36/7a8bb5cf6); evidence+\u00a74 HELD because ReadPathCensus red surfaced at this unit gate \u2014 ATTRIBUTED TO C-TOOL-7.a (2 unrostered scandir sinks, see lanes/C-TOOL-7.a/FINDING-readpath-census.md). Welder stopped per rule; cure owed by a fixer, then this unit re-gates and closes (58->59)."
     },
     "C-SES-6.a": {
       "stage": "build",
@@ -197,14 +197,24 @@
     "C-TOOL-7.a": {
       "master_first_pick": "ccd7c37b2",
       "picks": "3eb40269a->ccd7c37b2, da99eeabb->b4d89cdce, 2710d9d0b->f98e9cc32, b5f3aeefb->87dba649c",
-      "weld": "pending-read-back",
+      "weld": "72c0272d4",
       "base_era": "8d9814130",
       "regen": "none (no Protocol/Command/tool-doc/Settings/web files in the chain)",
       "bootstrap": "[bootstrap:backgroundShells] auto-merged clean over a992413b0; launch-<pid> dir + sweep intent landed, both sides kept",
       "gates": "BackgroundShellRegistry 29T/225A EXACT builder claim (RECONCILED: junit shows 28 BackgroundShellRegistryTest methods + 1 BinCandyCodeWiringTest case the filter admits \u2014 reviewer's '32 methods' MISCOUNT, file holds 28); BashBackground|ShellOutput 23T/85A; DescriptorInheritanceGuard 15T/5111A; tools/check-child-lifetimes.php rc=0; five-guard 133T/15647A ONLY staleness pair (25,537 pinned vs live 26,0xx)",
       "note": "lane-reported ShellContrastTest isolated red NOT reproduced \u2014 cured by 8d142a648 (cure-contrast) landed immediately before this weld",
       "durations": "NO new row (existing test file only; no new *Test.php)",
-      "prune": "worktree cc-cmp-C-TOOL-7.a + branch cc/C-TOOL-7.a after git-cherry proof (all 4)"
+      "prune": "worktree cc-cmp-C-TOOL-7.a + branch cc/C-TOOL-7.a after git-cherry proof (all 4)",
+      "FINDING": "READPATH CENSUS RED (see carries + lanes/C-TOOL-7.a/FINDING-readpath-census.md): chain adds 2 scandir sinks (:548/:568) with no ReadPathCensusTest re-arm -> testTheCensusIsDerivedFromSrcAndFullyClassified RED on master (expected 2 vs live 4)"
+    },
+    "C-EXT-2.a": {
+      "status": "HELD \u2014 picks + cure on master, evidence commit + \u00a74 mark WITHHELD at the STOP rule",
+      "master_first_pick": "376e9d0f1",
+      "picks": "118f8100f->376e9d0f1, 0c3ed3a6b->39e523d36",
+      "cure": "7a8bb5cf6 (SkillTool.php :325/:529 dirname premise comments, comment-only, php -l clean, zero non-comment diff lines)",
+      "gates": "SkillTool|SkillLoader 134T/397A EXACT (report claim confirmed; +3T/+14A over r1 131T/383A); ReadPathCensus|PromptStability 36T/1020A with 1F = C-TOOL-7.a's un-armed scandir roster (NOT this lane's key); five-guard 133T/15654A ONLY staleness pair; gen-tool-docs --check rc=0 up to date",
+      "durations": "NEW FILE owed to the gate list: candy-code/tests/Tools/BuiltIn/SkillToolAssetTest.php (13 test methods)",
+      "prune": "NOT pruned \u2014 branch cc/C-EXT-2.a + worktree /home/sites/cc-cmp-C-EXT-2.a intact pending the stop ruling"
     }
   },
   "carries": [
@@ -225,6 +235,8 @@
     "next welder call (single): cure-swcap + cure-contrast (master repairs, no \u00a74 mark, welded count unchanged) then C-TOOL-7.a + C-EXT-2.a per run-state notes; C-SES-6.a joins after r2 review",
     "cure-swcap landed c2477fe71 (pick of 2b250f827; SettingsWriterCensusTest buildChat re-key; lanes/cure-swcap/REPORT.md staged at weld; no \u00a74 mark, welded stays 57)",
     "cure-contrast landed 8d142a648 (pick of 2ebf7d8ce; AgentColor owns window-kit Color construction, ShellContrast roster basename key; lanes/cure-contrast/REPORT.md staged at weld; no \u00a74 mark, welded stays 57)",
-    "C-TOOL-7.a welded (ccd7c37b2/b4d89cdce/f98e9cc32/87dba649c, weld see weld_notes) \u2014 \u00a74 marked \u2705 ccd7c37b2 UNSTAGED; welded 57->58; NIT open: recorder markers .outd/.errd land at umask 0644 inside the 0700 dir (doctrine 0600) \u2014 optional sinkFiles() pre-create at closeout"
+    "C-TOOL-7.a welded (ccd7c37b2/b4d89cdce/f98e9cc32/87dba649c, weld see weld_notes) \u2014 \u00a74 marked \u2705 ccd7c37b2 UNSTAGED; welded 57->58; NIT open: recorder markers .outd/.errd land at umask 0644 inside the 0700 dir (doctrine 0600) \u2014 optional sinkFiles() pre-create at closeout",
+    "C-TOOL-7.a FINDING (MAJOR, weld-time): ReadPathCensusTest::testTheCensusIsDerivedFromSrcAndFullyClassified RED \u2014 Background/BackgroundShellRegistry.php|scandir roster 2 vs live 4 (sweep sinks :548 + :568 un-armed, \u00a71.8 in-step law). Fixer owed; proven not-foreign (2==2 green at 85afa9f90) and not-C-EXT-2.a (its SkillLoader DirectoryIterator row satisfied).",
+    "C-EXT-2.a welded-partial: picks 376e9d0f1+39e523d36 + cure 7a8bb5cf6 on master; \u00a74 mark + evidence commit HELD, welded stays 58 (NOT 59); branch/worktree kept; durations row owed for tests/Tools/BuiltIn/SkillToolAssetTest.php (13 methods)."
   ]
 }
