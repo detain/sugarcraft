@@ -1,0 +1,31 @@
+### C-SEC-3.b — Per-origin shell opt-in and the foreign-row decision
+- item: C-SEC-3 (sources: PLG-1-P2 fix option 2, MCP-2-P1 fix option 2, p1-miss "foreign-user" tier)
+- kind: fix · MAJOR · effort S
+- approach:
+  - Two user-tier-only list keys:
+    - `trustedBundleCommands`: bundle names whose command `!` forms may run;
+    - `mcpPromptShell`: MCP server names whose prompt bodies may run `!` forms.
+  - Neither key is ever project-settable. The `CommandShellPosture` third-party arm consults them, then the gate.
+  - The same step applies the owner's foreign-row ruling (`~/.claude/commands`, `~/.opencode/commands`). The code today lets the tier decide (`ForeignCommandDiscovery::claudeDirs` stamps them `user`), while `docs/COMMANDS.md:28` says foreign imports "never" run a shell. Either the table or the doc is wrong; the ruling picks which.
+- files.create: none
+- files.modify:
+  - `candy-code/src/Commands/CommandShellPosture.php`
+  - `candy-code/src/Host/TurnController.php` (pass the two lists)
+  - `candy-code/src/Config/Settings/Definitions/PermissionSettings.php` (two `SettingDefinition`s, `ApplyMode::Frozen`, user-tier only)
+  - `candy-code/src/Config/LayeredSettings.php` (generated roster blocks via `tools/gen-settings-doc.php --write`)
+  - `candy-code/lang/en.php` (`settings.trustedBundleCommands.*`, `settings.mcpPromptShell.*`)
+  - `candy-code/docs/SETTINGS.md` (generated)
+  - `candy-code/README.md` (the user-tier-only key sentence at :1255 and its word number)
+  - `candy-code/docs/COMMANDS.md` (foreign row per the ruling)
+- tests: modify `candy-code/tests/Commands/CommandShellPostureTest.php` (opt-in arms and the foreign row per the ruling); modify `candy-code/tests/Host/TurnControllerBundleShellTest.php` (an opted-in bundle runs through the gate)
+- docs/guards:
+  - `tools/gen-settings-doc.php --check`;
+  - `TrustKeyDocumentationDriftTest` (the README user-tier-only roster);
+  - `DocFigureProseDriftTest` (the SETTINGS.md and README word numbers);
+  - `SettingsWriter::trustKeys()` if the keys are classed as trust lists.
+- serialized: [hot:candy-code/src/Host/TurnController.php] [hot:candy-code/src/Config/LayeredSettings.php] [hot:candy-code/src/Config/Settings/Definitions/PermissionSettings.php] [lang:settings.] [docs:SETTINGS.md] [docs:README.md] [docs:COMMANDS.md]
+- deps: C-SEC-3.a
+- phase: normal
+- ruling: Should bundle and MCP-prompt `!cmd` be opt-in per origin (two new user-tier list keys)? And do user-tier foreign commands (`~/.claude|.opencode/commands`) run `!cmd` as the tier gate allows today, or never, as `docs/COMMANDS.md:28` states?
+- risks: if the owner rules "never" for foreign rows, Claude Code users' personal `!` commands stop expanding. The refusal notice must say why.
+
