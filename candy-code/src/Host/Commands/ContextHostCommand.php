@@ -82,6 +82,10 @@ final class ContextHostCommand implements HostCommand
      */
     private function runRaw(string $text, CommandContext $context, array $args): CommandResult
     {
+        if (\count($args) > 1) {
+            return CommandResult::errorReply($text, Lang::t('cmd.context.raw.bad-args'));
+        }
+
         $backend = $context->backend;
         if (!$backend instanceof DumpsSystemPrompt) {
             // Named refusal: the user learns WHICH door is missing, and no
@@ -91,11 +95,8 @@ final class ContextHostCommand implements HostCommand
             ]));
         }
 
-        if (\count($args) > 1) {
-            return CommandResult::errorReply($text, Lang::t('cmd.context.raw.bad-args'));
-        }
-
         $literalTokens = [];
+        $jsonWritten = false;
 
         try {
             $dump = $backend->dumpSystemPrompt();
@@ -110,9 +111,16 @@ final class ContextHostCommand implements HostCommand
             $jsonTarget = $base . '.json';
             $txtTarget = $base . '.txt';
             AtomicFileWriter::write($jsonTarget, $json, 0600);
+            $jsonWritten = true;
             AtomicFileWriter::write($txtTarget, $dump['prompt'], 0600);
         } catch (RuntimeException $e) {
-            return CommandResult::errorReply($text, $e->getMessage());
+            $message = $e->getMessage();
+            if ($jsonWritten && !\is_file($txtTarget)) {
+                // The JSON half landed before the failure; name the orphan
+                // instead of letting the reply imply nothing was written.
+                $message .= "\n" . Lang::t('cmd.context.raw.json-residue', ['json' => $jsonTarget]);
+            }
+            return CommandResult::errorReply($text, $message);
         }
 
         $reply = Lang::t('cmd.context.raw.dumped', [
