@@ -32,3 +32,36 @@ NEW test file needing a `scripts/parallel-tests-durations.tsv` row: `candy-code/
 - candy-code/tests/Tui/MenuOverlayFrameTest.php (NEW)
 - candy-code/tests/Tui/MenuDropdownTest.php (forwarder pin)
 - candy-code/tests/Tui/MenuBarMouseTest.php (dashboard leg records the painted row zone)
+
+## Cure (post-weld, 2026-10-27)
+
+REVIEW-1.md MINOR (step-local) fixed on branch cc/cure-pmenuc (worktree
+/home/sites/cc-cmp-cure-pmenuc, cut from master 9d890b49c). Tests-only:
+candy-code/tests/Tui/MenuOverlayFrameTest.php gains
+testTheGraphicsLegRefusesToPaintAndMarkTogether + graphicsScreens() helper.
+
+Shape deviation (disclosed): the literal "sixth framePaths provider case"
+would invert the shared paint⇔mark assertion (the graphics leg must NOT
+splice), and the probe showed a single Kitty case cannot pin both guards —
+the READY blob frame is 2 physical lines, so the splice budget buries every
+marked row and the panelTop ternary is only observable at a taller non-clipping
+frame. The leg instead pins the three live graphics states (preparing
+placeholder / ready kitty blob via the scripted child-free decoder, mirroring
+VideoPlayerScreenTest / failed card): paint guard observable on all three
+(`┌` on preparing/failed, `│ …` overflow on ready), mark guard observable on
+the four-row failed card. Plus a text-mode control (`┌` splices) so the
+refusals name the mode, not a dead harness.
+
+Mutation proofs (Renderer.php cp-backed, md5 aadf5280fa3597cead8df2606edfe679
+restored, verified): M1 paint guard only → new test 1F; M2 BOTH guards (the
+review's scenario) → new test 1F; M3 ternary only → new test 1F; all other
+7 cases green under every mutation (discrimination is the new leg alone).
+
+Gates (worktree, plain pipe, -u LINES -u COLUMNS): --filter MenuOverlayFrame
+8T/1012A OK (baseline 7T; the brief's "13T-class" expectation did not match
+disk — the file at 9d890b49c carries 7 cases); --filter Menu 230T/4126A OK.
+No candy-code src touched, no suite-figure/durations change. SEAM RECORDED
+(outside this cure, pre-existing at 9d890b49c): scripts/parallel-tests-durations.tsv
+carries NO row for MenuOverlayFrameTest.php at all — the file runs in zero
+shards until a closeout regenerates it (REVIEW-1.md already owed this to the
+weld; still open).

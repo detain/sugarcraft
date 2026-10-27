@@ -25,14 +25,6 @@
    "session": "ses_e81fd46ecfferx3536ffHYjUuH",
    "note": "r1 FINDINGS: MAJOR asset-branch missing sourcePath==='' guard (CWD anchor serves project scripts/files); MINOR raw $relativePath in refusal messages; NIT no-action. REVIEW-1.md persisted @1003"
   },
-  "cure-pmenuc": {
-   "stage": "build",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-cure-pmenuc",
-   "branch": "cc/cure-pmenuc",
-   "session": "ses_e820454d3ffeR6kDzW9pJmXvHt",
-   "note": "P-MENU.c post-weld cure: 6th provider case video-graphics refusal leg (tests/Tui/MenuOverlayFrameTest), Renderer.php:1214/1224 guards uncovered; then weld as cure commit"
-  },
   "C-EXT-7.b": {
    "stage": "build",
    "round": 1,
@@ -144,6 +136,7 @@
   "P-CTX.d weld: RouteTraitParityTest SessionPickerSearchMsg foreign cure row ABSORBED (W4 disclosed carrier closed at this weld); durations rows owed TurnRunnerContextTest + ContextSnapshotScheduleTest (closeout)",
   "P-TABS.h weld: NEW candy-code-web/src-web/components/grid/__tests__/sessionTabsNew.spec.ts = vitest-side roster note, no phpunit durations row (durations.tsv is phpunit-only; vitest files are run wholesale)",
   "P-CTX.d REVIEW-2.md persisted post-weld (r2 CLEAN; weld 967479a37+d1b47ee87/1ae5f9c69 absorbed RouteTraitParity W4 carrier)",
-  "phantom #18: stale P-CTX.d welder notification claimed evidence 21255c943 (nonexistent); real weld 967479a37+d1b47ee87/1ae5f9c69 verified on master, no duplicates"
+  "phantom #18: stale P-CTX.d welder notification claimed evidence 21255c943 (nonexistent); real weld 967479a37+d1b47ee87/1ae5f9c69 verified on master, no duplicates",
+  "P-MENU.c video-graphics refusal leg pinned (018609a6c-pick 02bab4d68); MenuOverlayFrameTest DUR baseline 7T -> 8T with cure — file still UNROWED, gate duty"
  ]
 }
