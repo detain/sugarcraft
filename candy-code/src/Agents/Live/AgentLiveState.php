@@ -94,6 +94,22 @@ final readonly class AgentLiveState
          * it, on the finished frame it projected.
          */
         public ?string $childSessionId = null,
+        /**
+         * The session whose tab launched the run, kept off the frame's
+         * {@see SubAgentActivity::$parentSessionId} (P-AGENT.a) — what
+         * {@see AgentLiveRegistry::forSession()} filters on. '' when no frame
+         * of the run ever carried one (a v1 wire, a hand-built frame).
+         */
+        public string $parentSessionId = '',
+        /**
+         * The colour word the preset of this run's name declares, as authored
+         * (P-AGENT.a). The registry's resolver answers it once per fold; the
+         * surfaces paint it through
+         * {@see \SugarCraft\Code\Tui\Window\AgentColor}, which alone decides
+         * whether the word is legible on the live theme. Null until a fold
+         * had a resolver to ask.
+         */
+        public ?string $color = null,
     ) {
     }
 
@@ -104,8 +120,10 @@ final readonly class AgentLiveState
      *
      * @param float $now the parent's clock, seconds — stamps a run that
      *        reports no start time of its own, and a finish
+     * @param (\Closure(string): ?string)|null $colorResolver name → declared
+     *        colour word, threaded to the fold ({@see self::apply()})
      */
-    public static function fromActivity(SubAgentActivity $activity, float $now): self
+    public static function fromActivity(SubAgentActivity $activity, float $now, ?\Closure $colorResolver = null): self
     {
         $blank = new self(
             id: $activity->id,
@@ -132,14 +150,18 @@ final readonly class AgentLiveState
             resumeId: null,
         );
 
-        return $blank->apply($activity, $now);
+        return $blank->apply($activity, $now, $colorResolver);
     }
 
     /**
      * This run with one more frame folded in, or this very state when the
      * frame is stale (its seq is not newer) or belongs to another run.
+     *
+     * @param (\Closure(string): ?string)|null $colorResolver asked for the
+     *        run's colour word when the state has none yet (P-AGENT.a);
+     *        null keeps the colour as it stands
      */
-    public function apply(SubAgentActivity $activity, float $now): self
+    public function apply(SubAgentActivity $activity, float $now, ?\Closure $colorResolver = null): self
     {
         if ($activity->id !== $this->id || $activity->seq <= $this->seq) {
             return $this;
@@ -212,6 +234,11 @@ final readonly class AgentLiveState
             'resumeId' => $activity->resumeId ?? $this->resumeId,
             'transcriptLog' => $activity->transcriptLog ?? $this->transcriptLog,
             'childSessionId' => $activity->childSessionId ?? $this->childSessionId,
+            'parentSessionId' => $activity->parentSessionId ?? $this->parentSessionId,
+            // Asked for once and kept (P-AGENT.a): a later frame for the same
+            // run must not drop the word, and a resolver seeded after the
+            // first fold still reaches the run on its next beat.
+            'color' => $this->color ?? ($colorResolver !== null ? ($colorResolver)($activity->name) : null),
         ]);
     }
 

@@ -78,6 +78,17 @@ final class AgentLiveRegistry
     /** @var array<string, list<string>> parent call id → run ids, in arrival order */
     private array $byCall = [];
 
+    /**
+     * The workspace's preset-colour resolver (P-AGENT.a): a run name → the
+     * colour word its preset declares, or null when the name is off-roster
+     * or declares none. Seeded once at build time
+     * ({@see withColorResolver()}); {@see apply()} threads it into every
+     * fold so a run carries its colour from the first frame seen.
+     *
+     * @var (\Closure(string): ?string)|null
+     */
+    private ?\Closure $colorResolver = null;
+
     private float $now;
 
     private int $spinnerFrame;
@@ -118,6 +129,22 @@ final class AgentLiveRegistry
     }
 
     /**
+     * Seed the preset-colour resolver (P-AGENT.a). Build-time only, like the
+     * clock in {@see new()}: this writes the one field that never moves after
+     * the workspace is made, so it returns $this for the seeding chain in
+     * {@see \SugarCraft\Code\Cli\Bootstrap::workspace()} rather than pretending
+     * to be one of the value-object `with*()`s it is not.
+     *
+     * @param (\Closure(string): ?string)|null $resolver name → declared colour word
+     */
+    public function withColorResolver(?\Closure $resolver): self
+    {
+        $this->colorResolver = $resolver;
+
+        return $this;
+    }
+
+    /**
      * Fold one frame into its run. A queued member's placeholder is replaced
      * by the run's own state the moment a non-queued frame for the same Task
      * call arrives.
@@ -126,8 +153,8 @@ final class AgentLiveRegistry
     {
         $current = $this->states[$activity->id] ?? null;
         $next = $current === null
-            ? AgentLiveState::fromActivity($activity, $this->now)
-            : $current->apply($activity, $this->now);
+            ? AgentLiveState::fromActivity($activity, $this->now, $this->colorResolver)
+            : $current->apply($activity, $this->now, $this->colorResolver);
         if ($next === $current) {
             return;
         }
@@ -198,6 +225,32 @@ final class AgentLiveRegistry
     public function all(): array
     {
         return array_values($this->states);
+    }
+
+    /**
+     * The runs belonging to one parent session (P-AGENT.a). A null
+     * $sessionId is the unscoped answer — every run, exactly {@see all()} —
+     * which is what the server host and every not-yet-scoped reader pass, so
+     * the web agent tree never sees a filter. A real id answers only runs
+     * whose frames carried that `parentSessionId`: a legacy run that carried
+     * none stays invisible to a scoped view and visible to the unscoped one.
+     *
+     * @return list<AgentLiveState>
+     */
+    public function forSession(?string $sessionId): array
+    {
+        if ($sessionId === null) {
+            return $this->all();
+        }
+
+        $states = [];
+        foreach ($this->states as $state) {
+            if ($state->parentSessionId === $sessionId) {
+                $states[] = $state;
+            }
+        }
+
+        return $states;
     }
 
     /**

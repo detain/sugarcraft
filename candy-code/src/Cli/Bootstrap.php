@@ -2075,7 +2075,11 @@ final class Bootstrap
             ->withService(\SugarCraft\Code\Host\CompactionService::class, \SugarCraft\Code\Host\CompactionService::new()->withJournal(
                 ($home = self::memoryStoreOrNull($root)) === null ? null : \SugarCraft\Code\Memory\CompactionJournal::forStore($home),
             ))
-            ->withService(\SugarCraft\Code\Agents\Live\AgentLiveRegistry::class, \SugarCraft\Code\Agents\Live\AgentLiveRegistry::new())
+            // P-AGENT.a: the roster is built by now, so every folded run
+            // learns the colour word its preset declares (null when the name
+            // is off-roster or the preset declared none).
+            ->withService(\SugarCraft\Code\Agents\Live\AgentLiveRegistry::class, \SugarCraft\Code\Agents\Live\AgentLiveRegistry::new()
+                ->withColorResolver(static fn (string $name): ?string => $agentManager->get($name)?->color))
             // O-2f: the runner a server host listen()s on; without it every
             // Chat lineage falls back to a runner of its own (TurnRunner::of()).
             ->withService(\SugarCraft\Code\Host\TurnRunner::class, \SugarCraft\Code\Host\TurnRunner::new())
