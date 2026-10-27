@@ -289,6 +289,29 @@ final class Definitions
                         'breaks' => Schema::integer(0),
                         'last' => Schema::object(['from' => Schema::integer(0), 'to' => Schema::integer(0)], ['from', 'to'])->nullable(),
                     ], ['breaks'])->nullable(),
+                    // P-CTX.f: OPTIONAL members — older servers never send
+                    // them and older clients never read them; every row below
+                    // is the SAME measured tokens the per-layer rows carry,
+                    // attributed by category ({@see \SugarCraft\Code\Context\ContextCategories}).
+                    'categories' => Schema::arrayOf(Schema::object([
+                        'key' => Schema::string()->describe('The {@see \SugarCraft\Code\Context\ContextCategory} case value — stable vocabulary; `label` is the translated display name.'),
+                        'label' => Schema::string(),
+                        'tokens' => Schema::integer(0)->nullable()->describe('Estimated tokens billed to this category, null when not measured — never a fabricated zero.'),
+                        'share' => Schema::integer(0)->nullable()->describe('`tokens` as a whole percent of `window`; null exactly when `tokens` is.'),
+                        'sub' => Schema::arrayOf(Schema::object([
+                            'label' => Schema::string()->describe('Server name, document path, or `#<index> <role>` for a message row.'),
+                            'tokens' => Schema::integer(0)->nullable(),
+                            'bytes' => Schema::integer(0)->nullable()->describe('Set instead of `tokens` for instruction documents — priced by size, bodies never.'),
+                            'personal' => Schema::boolean()->describe('True when the document came from the personal tier.'),
+                            'note' => Schema::string()->nullable()->describe('Replaces the figures with the reason there are none (the never-sent MCP instructions row).'),
+                        ], ['label', 'tokens', 'bytes', 'personal', 'note'])),
+                    ], ['key', 'label', 'tokens', 'share', 'sub']))->describe('The `/context` `By category` block (roadmap P-CTX.a / P-CTX.f): every measured token attributed by owner. Summing law — all rows except `autocompact-buffer` and `free-space` equal `window` less the reservation and what is left; content + buffer + free-space is the window.'),
+                    'buffer' => Schema::integer(0)->nullable()->describe('The autocompact reservation — room between where background compaction fires and the window end; 0 when compaction is off, null when this session reports no compaction config.'),
+                    'mcpServers' => Schema::arrayOf(Schema::object([
+                        'name' => Schema::string(),
+                        'count' => Schema::integer(0),
+                        'tokens' => Schema::integer(0),
+                    ], ['name', 'count', 'tokens']))->nullable()->describe('The `mcp__<server>__*` bridges grouped per server — the MCP half of `toolTokens`, measured in the same single pass; null when the tool list is unknown.'),
                 ], ['window', 'sections', 'toolCount', 'toolTokens', 'historyTokens', 'historyMessages', 'uiOnlyRows', 'largest', 'lastCache', 'sessionCache'])->describe('The `/context` figures ({@see \SugarCraft\Code\Context\ContextBreakdown}) — same measurement, same single writer (WEB-3a).'),
             ], ['instructionFiles', 'memorySections', 'skills', 'mcp', 'untrusted', 'breakdown'])->describe('WEB-3a: what the session\'s context is built from — structure for the panel `/context` prints as text.'),
         ];

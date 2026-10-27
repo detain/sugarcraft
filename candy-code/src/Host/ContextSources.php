@@ -8,6 +8,7 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\ReportsPromptSections;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Context\ContextBreakdown;
+use SugarCraft\Code\Context\ContextCategories;
 use SugarCraft\Code\Host\Commands\CommandContext;
 use SugarCraft\Code\Memory\MemoryEntry;
 use SugarCraft\Code\Memory\MemoryStore;
@@ -217,10 +218,42 @@ final class ContextSources
      * serialization, schema-checked by ContextSourcesTest through the
      * fixtures a real session produces.
      *
+     * P-CTX.f adds the category attribution (roadmap P-CTX.a) to the wire:
+     * `categories` rides {@see ContextCategories::from()} — the SAME tokens
+     * the per-layer rows already serialize, just billed to who owns them —
+     * with each row's `share` the whole-percent of the window (the rounding
+     * law every other percentage on this surface follows). `buffer` is the
+     * autocompact reservation lifted to the top level for the meter panels,
+     * and `mcpServers` the bridge grouping the breakdown measured in its one
+     * pass over the priced tool list. Nothing here re-measures: unknown parts
+     * stay null, and the per-server / per-document / per-message sub-rows
+     * carry exactly the fields {@see ContextCategories} shaped — bytes for the
+     * documents priced by size, the not-sent note for server instructions.
+     *
      * @return array<string, mixed>
      */
     private static function serialize(ContextBreakdown $b): array
     {
+        $categories = [];
+        foreach (ContextCategories::from($b)->rows as $row) {
+            $tokens = $row['tokens'];
+            $categories[] = [
+                'key' => $row['category']->value,
+                'label' => $row['category']->label(),
+                'tokens' => $tokens,
+                'share' => $tokens === null || $b->window <= 0
+                    ? null
+                    : (int) round($tokens * 100 / $b->window),
+                'sub' => array_map(static fn (array $sub): array => [
+                    'label' => $sub['label'],
+                    'tokens' => $sub['tokens'],
+                    'bytes' => $sub['bytes'],
+                    'personal' => $sub['personal'],
+                    'note' => $sub['note'],
+                ], $row['sub']),
+            ];
+        }
+
         return [
             'window' => $b->window,
             'sections' => $b->sections,
@@ -234,6 +267,9 @@ final class ContextSources
             'sessionCache' => $b->sessionCache,
             'pruning' => $b->pruning,
             'cacheBreaks' => $b->cacheBreaks,
+            'categories' => $categories,
+            'buffer' => ContextCategories::bufferTokens($b),
+            'mcpServers' => $b->mcpServers,
         ];
     }
 }
