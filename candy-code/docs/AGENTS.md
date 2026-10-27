@@ -78,7 +78,11 @@ at 90% the run is stopped and its partial output and resume id come back (see
 **Permissions only narrow.** The session's permission gate judges every call a
 sub-agent makes. A preset's `tools:` / `disallowedTools:` grant is enforced per
 call, and its `permissionMode:` applies only when it is stricter than the
-session's — a sub-agent never gets more than you allowed. A sub-agent's
+session's — a sub-agent never gets more than you allowed. Its `mcpServers:`
+allowlist narrows MCP both ways a roster can be narrowed: bridges of servers it
+does not name are dropped from the grant, and the `mcp_list`/`mcp_call`
+dispatchers handed to the run reach only the named servers — the shared launch
+client stays the main agent's. A sub-agent's
 permission question comes up in the same y/n/a modal as the main agent's,
 naming the agent that asked; this holds for parallel members too, whose
 questions are relayed through the turn one at a time.

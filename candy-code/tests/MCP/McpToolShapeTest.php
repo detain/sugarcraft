@@ -197,4 +197,74 @@ final class McpToolShapeTest extends TestCase
             McpToolBridge::dispatchedWireName(['server' => $srv, 'tool' => 'go']),
         );
     }
+
+    // ---- C-AGT-3: the per-preset scope view -----------------------------------
+
+    public function testScopedToFiltersTheDispatchedHalfAndRebindsTheClientWithoutTouchingTheLaunchShape(): void
+    {
+        $kept = $this->shapeServer();
+        $dropped = $this->shapeServer();
+        $small = $this->shapeServer();
+        $launch = new McpClient('/nonexistent/mcp-7-shape/.mcp.json', unrestricted: true);
+
+        $shape = McpToolShape::derive(
+            $launch,
+            [
+                $this->descriptor($kept, 'keeps', 5000),
+                $this->descriptor($dropped, 'drops', 5000),
+                $this->descriptor($small, 'ping'),
+            ],
+            [],
+            100,
+        );
+        $this->assertSame(
+            [$kept, $dropped],
+            array_values(array_unique(array_map(
+                static fn (McpTool $d): string => $d->serverName,
+                $shape->dispatchedDescriptors,
+            ))),
+            'the fixture lands BOTH fat servers on the dispatched side or the filter measures nothing',
+        );
+
+        $scoped = $shape->scopedTo([$kept]);
+
+        $this->assertSame([$kept], array_map(
+            static fn (McpTool $d): string => $d->serverName,
+            $scoped->dispatchedDescriptors,
+        ));
+        $this->assertNotNull($scoped->findDispatched($kept, 'keeps'));
+        $this->assertNull($scoped->findDispatched($dropped, 'drops'), 'the outside server is gone from the frozen roster, not hidden at print');
+
+        // The eager half and the lazy flag pass through: the shape is a
+        // launch fact, the scope is a view on it.
+        $this->assertSame($shape->eagerDescriptors, $scoped->eagerDescriptors);
+        $this->assertTrue($scoped->lazy);
+
+        // The launch shape is untouched — scoping never mutates what the
+        // main agent's dispatchers carry.
+        $this->assertCount(2, $shape->dispatchedDescriptors);
+
+        // The client is a preset-bound clone; the launch client stays
+        // preset-free. Reflection reads the private the routing branches on.
+        $this->assertNotSame($launch, $scoped->client);
+        $preset = new \ReflectionProperty(McpClient::class, 'agentPreset');
+        $this->assertNull($preset->getValue($launch), 'forAgentPreset() must clone, never bind in place');
+        $this->assertNotNull($preset->getValue($scoped->client));
+    }
+
+    public function testScopedToWithTheRouterAllowAllEmptyListKeepsTheWholeDispatchedHalf(): void
+    {
+        $big = $this->shapeServer();
+        $shape = McpToolShape::derive(
+            new McpClient('/nonexistent/mcp-7-shape/.mcp.json'),
+            [$this->descriptor($big, 'heavy', 5000)],
+            [],
+            100,
+        );
+
+        $scoped = $shape->scopedTo([]);
+
+        $this->assertSame($shape->dispatchedDescriptors, $scoped->dispatchedDescriptors, 'no restriction configured is not restrict to nothing');
+        $this->assertNotSame($shape->client, $scoped->client);
+    }
 }

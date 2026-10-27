@@ -181,6 +181,30 @@ final class McpClient
     }
 
     /**
+     * C-AGT-3: a copy of this client bound to $agentPreset — the production
+     * caller {@see setAgentPreset()} always lacked. The launch client is
+     * shared by every roster (TaskTool's engine and the worker-pool grants
+     * both run through the one instance), so scoping one agent could never
+     * mutate it in place; instead each preset gets its own handle. Started
+     * servers travel BY HANDLE: the shallow clone shares the same
+     * {@see McpServer} objects (stdio children are never duplicated, and a
+     * scoped run talks to the same live server the main agent does), the
+     * bookkeeping arrays copy with it, and the router is rebuilt per call
+     * ({@see router()} caches nothing), so the clone carries no stale routing
+     * state. A clone never starts servers — {@see $admit} and the config
+     * paths stay bound to the original for exactly that reason. The preset
+     * branch takes precedence over the launch client's `unrestricted` flag:
+     * routing checks `agentPreset` first in listTools()/callTool().
+     */
+    public function forAgentPreset(AgentPreset $agentPreset): self
+    {
+        $scoped = clone $this;
+        $scoped->setAgentPreset($agentPreset);
+
+        return $scoped;
+    }
+
+    /**
      * MCP-7: the config entries this client read during `startServers()`,
      * keyed by server name, project tier winning each shared name (the
      * shadow-safe record point is inside `startServer()`). Metadata only —

@@ -22,6 +22,8 @@ use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Support\MediaStore;
 use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\ToolCall;
+use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
+use SugarCraft\Code\Tools\BuiltIn\McpListTool;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Tool;
 
@@ -1529,7 +1531,7 @@ final class AgentManager
                     continue;
                 }
 
-                $allowed[] = $tool;
+                $allowed[] = $this->scopeDispatchersFor($agent, $tool);
             }
 
             if ($this->toolRegistry !== []) {
@@ -1666,7 +1668,7 @@ final class AgentManager
                 continue;
             }
 
-            $granted[] = $tool;
+            $granted[] = $this->scopeDispatchersFor($agent, $tool);
         }
 
         $unresolved = [];
@@ -1741,6 +1743,36 @@ final class AgentManager
         // AgentManagerTest::testAFullyDeniedGrantIsNotReportedAsUnresolvable,
         // which reds if this returns `[]`.
         return $granted === [] ? null : $granted;
+    }
+
+    /**
+     * C-AGT-3: a preset that names `mcpServers` narrows the deferred
+     * dispatchers exactly like it already narrows the bridges. The registry
+     * holds the launch-wide `mcp_call`/`mcp_list` over the unrestricted
+     * client, so handing a scoped agent the shared instance let it call
+     * through to servers the preset never named — `setAgentPreset()` existed
+     * with no production caller until {@see McpClient::forAgentPreset()}.
+     * The swap keeps name, schema and description byte-identical and narrows
+     * only the two things a scope can change: the frozen dispatched roster
+     * `mcp_list` prints, and the client the call dials through (a
+     * preset-bound clone, never a mutation of the shared launch client).
+     * Enforcement lands on the granted INSTANCES — both consumers (the
+     * in-process TaskTool roster and the parent-side worker-pool grants)
+     * execute through exactly what this method returns, and the fork worker
+     * runs nothing itself (E647). A non-dispatcher tool, or an agent that
+     * named no servers, passes through untouched.
+     */
+    private function scopeDispatchersFor(Agent $agent, Tool $tool): Tool
+    {
+        if ($agent->mcpServers === []) {
+            return $tool;
+        }
+
+        return match (true) {
+            $tool instanceof McpCallTool => $tool->scopedTo($agent->mcpServers),
+            $tool instanceof McpListTool => $tool->scopedTo($agent->mcpServers),
+            default => $tool,
+        };
     }
 
     /**

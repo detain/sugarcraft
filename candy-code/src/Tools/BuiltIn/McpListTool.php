@@ -48,6 +48,19 @@ final readonly class McpListTool implements Tool, BuildsFromCatalog, TakesToolCa
 
     public function __construct(private McpToolShape $shape) {}
 
+    /**
+     * C-AGT-3: this dispatcher narrowed to one preset's `mcpServers`
+     * allowlist — {@see McpToolShape::scopedTo()} carries the binding. Name,
+     * schema and description are byte-identical: a scoped roster must not
+     * look like a different tool, only a smaller one.
+     *
+     * @param array<array-key, mixed> $mcpServers
+     */
+    public function scopedTo(array $mcpServers): self
+    {
+        return new self($this->shape->scopedTo($mcpServers));
+    }
+
     public static function fromCatalog(ToolBuildContext $context): ?Tool
     {
         return $context->mcpShape !== null && $context->mcpShape->lazy

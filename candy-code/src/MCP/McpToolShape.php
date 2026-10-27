@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\MCP;
 
+use SugarCraft\Code\Agents\AgentPreset;
 use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\BuiltIn\McpListTool;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Util\TokenEstimate;
+use SugarCraft\McpClient\McpRouter as LibraryMcpRouter;
 
 /**
  * The frozen split of one launch's MCP tool roster into bridged and dispatched halves.
@@ -106,6 +108,52 @@ final class McpToolShape
         }
 
         return new self($client, $dispatched !== [], $eager, $dispatched);
+    }
+
+    /**
+     * C-AGT-3: this shape narrowed to one preset's `mcpServers` allowlist —
+     * the scoped copy {@see AgentManager::resolveGrantedTools()} hands a
+     * sub-agent in place of the launch dispatcher, so `mcpServers` restricts
+     * `mcp_list`/`mcp_call` exactly as it already restricts the bridges.
+     *
+     * Two halves move together and neither mutates the launch shape:
+     *
+     * - the client is re-bound via {@see McpClient::forAgentPreset()} — a
+     *   clone carrying a preset over the SAME server handles, so a call the
+     *   frozen roster let through still fails closed at
+     *   `McpClient::callTool()` on the membership law (defence in depth: one
+     *   law, {@see LibraryMcpRouter::serverAllowed()}, checked twice);
+     * - the dispatched half is filtered by that same law, RAW server keys on
+     *   both sides (E42), so `mcp_list` prints only what `mcp_call` can run.
+     *
+     * The eager half and the lazy flag pass through unchanged: bridges() is
+     * resolved out of the launch roster (the narrowing at grant-resolution
+     * already drops the disallowed ones), and re-deriving the split per agent
+     * would let one preset's schema floor disagree with another's about what
+     * exists — the shape is a launch fact, the scope is a view on it. A
+     * non-string allowlist entry throws from the shared law, the same loud
+     * refusal the bridge filter gives it at resolution.
+     *
+     * @param array<array-key, mixed> $mcpServers the preset's allowlist; the
+     *        caller reaches here only for a non-empty list, and an empty one
+     *        would be the router's documented allow-all reading anyway
+     */
+    public function scopedTo(array $mcpServers): self
+    {
+        $client = $this->client->forAgentPreset(new AgentPreset(
+            name: 'mcp-agent-scope',
+            description: '',
+            mcpServers: $mcpServers,
+        ));
+
+        $dispatched = [];
+        foreach ($this->dispatchedDescriptors as $descriptor) {
+            if (LibraryMcpRouter::serverAllowed($descriptor->serverName, $mcpServers)) {
+                $dispatched[] = $descriptor;
+            }
+        }
+
+        return new self($client, $this->lazy, $this->eagerDescriptors, array_values($dispatched));
     }
 
     /**
