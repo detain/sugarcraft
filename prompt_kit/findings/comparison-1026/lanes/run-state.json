@@ -271,6 +271,12 @@
       "pick": "3eae0176a",
       "note": "census roster re-armed (ReadPathCensus scandir 2->4 NAMES_ONLY); C-TOOL-7.a chain debt closed",
       "gates": "ReadPathCensus|PromptStability 36T/1024A OK; five-guard 133T pair-only (25,537 vs live 26,043)"
+    },
+    "cure-glob": {
+      "master": "6124edcc9",
+      "pick": "d0a0ce626",
+      "note": "SelfUpdateTest glob pair foreign-red CLOSED \u2014 remove from allowed-red list in future briefs",
+      "gates": "TreeWideGuardRoster|DuplicatedTestHelperDrift 31T/3538A OK; five-guard 133T/15654A pair-only (2F, staleness)"
     }
   },
   "carries": [
