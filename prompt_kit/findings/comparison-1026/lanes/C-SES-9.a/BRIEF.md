@@ -1,0 +1,24 @@
+### C-SES-9.a — Ledger: no resurrection, `ts` index, one-snapshot rollups
+- item: C-SES-9 (sources: SES-1-P5, SES-1-P6, OBS-3-P2)
+- kind: fix · MINOR/NIT · effort S
+- approach:
+  - **SES-1-P5.** `appendUsageRecord()` recreates a missing row as `candy-code/unknown` (`src/Session/EnhancedSessionStore.php:2436-2438`), so a late settle resurrects a deleted session.
+    - The recreate exists on purpose, for the lazy mint, so do not simply skip missing rows.
+    - Instead, `deleteSessionTrees()` records a tombstone in `session_tombstones(id PRIMARY KEY, deleted_at)`, reaping entries older than 30 days on insert. `appendUsageRecord()` returns false, without recreating, for a tombstoned id only.
+  - **SES-1-P6.** Add `CREATE INDEX IF NOT EXISTS idx_usage_records_ts ON usage_records(ts)` and correct the "nothing scans by anything else" docblock (`:755-760`).
+  - **OBS-3-P2.** Add `EnhancedSessionStore::usageRollups(?string $sessionId, ?int $days): array{days, models}`, which runs both reads in one `BEGIN DEFERRED` snapshot.
+  - **Shared read.** `UsageHostCommand` uses `usageRollups()` and exposes a public static `UsageHostCommand::rollupFacts(EnhancedSessionStore, ?string $sessionId, ?int $windowDays, bool $scopeAll): array`. The RPC (C-SES-8.a), the CLI verb (C-SES-8.e) and insights (C-SES-8.c) share this one read.
+- files.create: none
+- files.modify: `candy-code/src/Session/SessionStore.php` (deleteSessionTrees(): tombstone insert), `candy-code/src/Session/EnhancedSessionStore.php` (initEnhancedSchema: index + tombstone table; appendUsageRecord(); new usageRollups()), `candy-code/src/Host/Commands/UsageHostCommand.php` (facts → rollupFacts())
+- tests: modify `candy-code/tests/Session/UsageRecordsTest.php`:
+  - delete then append → no row resurrected;
+  - a never-minted id still gets its row (the lazy-mint polarity);
+  - `EXPLAIN QUERY PLAN` for the `/usage all` window uses `idx_usage_records_ts`;
+  - both folds see one snapshot when a writer interleaves.
+- docs/guards: none
+- serialized: none (hot files: `EnhancedSessionStore.php`, `SessionStore.php`, `UsageHostCommand.php`)
+- deps: C-SES-3.a (the same `deleteSessionTrees()` region)
+- phase: normal
+- ruling: none
+- risks: The tombstone table must be created by both `SessionStore` (the delete side) and `EnhancedSessionStore` (the read side), tolerant of absence.
+

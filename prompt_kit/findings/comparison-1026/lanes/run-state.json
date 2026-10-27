@@ -61,16 +61,18 @@
     "C-SES-6.a",
     "C-EXT-2.a",
     "C-SES-9.c",
-    "P-CTX.g"
+    "P-CTX.g",
+    "C-SES-9.a"
   ],
   "inflight": {
     "P-AGENT.a": {
-      "stage": "build",
-      "round": 1,
+      "stage": "fix",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-P-AGENT.a",
       "branch": "cc/P-AGENT.a",
-      "session": "ses_e81de68f4ffe5Sa9jZQxE0FHfe",
-      "note": "cut from c2477fe71; deps linked"
+      "session": "ses_e81ad84b9ffeXmijE8Hdxk9UlM",
+      "tip": "ba9dd8539",
+      "note": "fixer on r1 MAJOR (workspace seed reflection pin) + MINOR doc orphan + REPORT +15"
     },
     "P-CTX.e": {
       "stage": "build",
@@ -81,32 +83,25 @@
       "note": "cut from c2477fe71; deps linked"
     },
     "C-AGT-7.a": {
-      "stage": "build",
-      "round": 1,
+      "stage": "review",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-AGT-7.a",
       "branch": "cc/C-AGT-7.a",
-      "session": "ses_e81de68e5ffeV6tOKftydXFFOO",
-      "note": "cut from c2477fe71; deps linked"
+      "session": "ses_e81a7d0fcffeaURbg7S1VYg8vR",
+      "tip": "d7eda9643",
+      "note": "fix r2 landed (poll-absence carve pin); on CLEAN weld batch: gates Schedule 118T/535A/1F DreamPass-sole-red disclose + RuntimeNoticeSinkDelivery 25T/5602A + FAPW 17T/57A + pair-only; no DUR; \u00a74 unstaged"
     },
     "C-AGT-2.b": {
-      "stage": "build",
+      "stage": "clean",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-AGT-2.b",
       "branch": "cc/C-AGT-2.b",
-      "session": "ses_e81de68e4ffe5kjiO3HrKji0cb",
-      "note": "cut from c2477fe71; deps linked"
-    },
-    "C-SES-9.a": {
-      "stage": "build",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SES-9.a",
-      "branch": "cc/C-SES-9.a",
-      "session": "ses_e81de68e3ffeTCMIl2N6p6wepf",
-      "note": "cut from c2477fe71; deps linked"
+      "tip": "ee187b3fd",
+      "note": "REVIEW-1.md persisted CLEAN; weld: plain pick, gates Review|ModeCeiling 165T/825A + SessionHost 54T/271A + wide 2367T/13558A + pair-only; DUR SessionHostModeCeilingTest 3T; NIT watch mutate-chokepoint collision at pick; pick AFTER C-SES-9.a (done) - schema watch satisfied"
     }
   },
   "blocked": [],
-  "extra_agents": 1,
+  "extra_agents": 2,
   "waves_closed": [
     1,
     2,
@@ -116,7 +111,7 @@
     "1": "closed r2 CLEAN",
     "2": "closed r1 CLEAN battery green",
     "4": "closed r1 FINAL CLEAN battery green 2026-10-27",
-    "3": "r1 reviewer resumed ses_e81dda757 (died mid-battery once; report lanes/W3/WAVE-REVIEW-1.md owed)"
+    "3": "r2 re-review dispatched (ses_e81aaf5cb): both gate cures welded (glob 6124edcc9, roster 9e04380a7); close on CLEAN"
   },
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "weld_notes": {
@@ -272,7 +267,14 @@
       "gates": "AgentPresetRegistry|Phar merged-tree 114T/610A/1S OK (builder lane-base 112T/587A; +2T/+23A = C-SES-6.a PharCompatTest pins riding master); check-child-lifetimes rc0 (33 sites/9 accounted); five-guard 133T/15654A pair-only",
       "durations_owed": "none"
     },
-    "P-CTX.g": "master 1ce007b2d (pick of 7f85a5ab6); test hardening 19bdf571b (review NITs taken: denominator fixtures carry outputTokens 700 so totalTokens-denominator impl fails 53/51/67 vs 90/86/90; +2 cache-edge pins: prompt==0 hidden, measured 0 renders 0%%); dist rebuild 8622554ea. Gates: vitest contextPanel.spec+statusBar.spec serial 36 passed (34 baseline +2). vue-tsc --build --force: exactly the six disclosed foreign TS2554 lines (reducer.spec.ts:307/312/317/320, statusBar.spec.ts:200/209), no new classes. Builder statusBar +6 claim actually +7 (reviewer reconciled 17+17=34). No new PHP files: no durations duty. \u00a74 mark uses master hash 1ce007b2d, not the lane hash."
+    "P-CTX.g": "master 1ce007b2d (pick of 7f85a5ab6); test hardening 19bdf571b (review NITs taken: denominator fixtures carry outputTokens 700 so totalTokens-denominator impl fails 53/51/67 vs 90/86/90; +2 cache-edge pins: prompt==0 hidden, measured 0 renders 0%%); dist rebuild 8622554ea. Gates: vitest contextPanel.spec+statusBar.spec serial 36 passed (34 baseline +2). vue-tsc --build --force: exactly the six disclosed foreign TS2554 lines (reducer.spec.ts:307/312/317/320, statusBar.spec.ts:200/209), no new classes. Builder statusBar +6 claim actually +7 (reviewer reconciled 17+17=34). No new PHP files: no durations duty. \u00a74 mark uses master hash 1ce007b2d, not the lane hash.",
+    "C-SES-9.a": {
+      "master": "98b862e9f+7971828b8",
+      "picks": "81eabef46->98b862e9f, 58701feb7->7971828b8, zero conflicts",
+      "regen": "no-op (cmd/tool/settings --write zero diff; no schema/web)",
+      "gates": "UsageRecords 21T/102A OK exact; builder wide filter on merged tree 491T/2275A OK (= builder lane-tree 490/2267 + r2 test, lead-cut 'SessionStore|Tombstone|Usage' 484/2253 OK); five-guard 133T/15654A pair-only (pinned 25,537 vs live 26,051 - closeout re-pin; +23 over builder's 26,028 = other master welds)",
+      "durations_owed": "none (no new test files)"
+    }
   },
   "carries": [
     "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest \u2014 closeout gate duty",
@@ -297,6 +299,8 @@
     "C-EXT-2.a welded-partial: picks 376e9d0f1+39e523d36 + cure 7a8bb5cf6 on master; \u00a74 mark + evidence commit HELD, welded stays 58 (NOT 59); branch/worktree kept; durations row owed for tests/Tools/BuiltIn/SkillToolAssetTest.php (13 methods).",
     "2026-10-27: origin/master mirrors local (owner-side sync incl push of our picks + CI .vhs gif re-renders); 3 merge commits in master (316b36acf/eb20c154e/8c7f6b4f2) carry ZERO code delta \u2014 accepted, recorded; NEVER pull/push from lanes",
     "C-EXT-2.a: SkillPromptLine.php:104 dirname falsehood \u2014 closeout fix (report-only seam, pick stays on master)",
-    "C-SES-9.c report-only seam: under a phar install the bundled trio is still NOT rostered (agentPresetTiers never injects the package dir; list() glob wrapper-dead) \u2014 tier-injection leg belongs to a later C-SES-9 step"
+    "C-SES-9.c report-only seam: under a phar install the bundled trio is still NOT rostered (agentPresetTiers never injects the package dir; list() glob wrapper-dead) \u2014 tier-injection leg belongs to a later C-SES-9 step",
+    "W4 \u00a74 erratum owed: P-CTX.d undisclosed +10 Chat-test-file widening at pick 967479a37 (W5 wave review MINOR) \u2014 dated note on plan file at W4 wave-close",
+    "welder-run: C-SES-9.a + cure-envroster welded (63); re-verify entries lost by round-trips each weld"
   ]
 }
