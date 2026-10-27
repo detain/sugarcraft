@@ -297,7 +297,10 @@ final class MenuBarMouseTest extends TestCase
 
     /**
      * The dashboard drops the hosted chat's zones but paints the bar, so its
-     * titles have to stay clickable there too.
+     * titles have to stay clickable there too — and since P-MENU.c put the
+     * dropdown splice on this path (F10 works here; it just rendered nothing
+     * before), opening a menu has to record its ROW zones here as well, on
+     * the rows the frame actually paints.
      */
     public function testTheAgentDashboardFrameStillRecordsTheMenuTitles(): void
     {
@@ -309,6 +312,17 @@ final class MenuBarMouseTest extends TestCase
 
         self::assertInstanceOf(Zone::class, $zone);
         self::assertSame(MenuBar::MENU_TITLE_ZONE_PREFIX . '1', $zone->id);
+
+        MenuBar::openMenu(1);
+        $open = TuiRenderer::renderView($app, 120, 30)->body;
+        $label = MenuBar::getMenuItems($this->menuName(1))[0];
+        [$labelCol, $labelRow] = $this->locate($open, $label);
+        $itemZone = TuiRenderer::chromeScanner()->get(MenuBar::MENU_ITEM_ZONE_PREFIX . '0');
+
+        self::assertInstanceOf(Zone::class, $itemZone);
+        self::assertSame($labelRow, $itemZone->startRow);
+        self::assertGreaterThanOrEqual($itemZone->startCol, $labelCol);
+        self::assertLessThanOrEqual($itemZone->endCol, $labelCol);
     }
 
     /**

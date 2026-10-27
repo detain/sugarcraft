@@ -11,6 +11,7 @@ use SugarCraft\Code\App\App;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Theme;
+use SugarCraft\Code\Tui\Menu\MenuPanel;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Mouse\Mark;
 
@@ -528,6 +529,60 @@ final class MenuBar
     }
 
     /**
+     * The open menu as panel-kit geometry, positioned for a frame of $cols
+     * whose menu bar occupies the rows above screen line $top.
+     *
+     * One box per open menu — the bar holds at most one — with the painted
+     * twin of {@see renderDropdown()} inside it and the anchor the splice
+     * needs already resolved: `col` is the box's 1-based left border and
+     * lands one cell right of where the title is PAINTED, byte-identical to
+     * the pre-kit splice. When the terminal sheds the title (the same budget
+     * {@see compose()} applies), the anchor is pulled left so the box ends
+     * inside $cols instead of hanging past the edge; a frame path that
+     * renders a row of this panel marks the same row, and one that clamps a
+     * row off paints and marks nothing there.
+     *
+     * @return list<MenuPanel>
+     */
+    public static function panels(App $a, int $cols, int $top): array
+    {
+        return self::panelsFrom(false, $a, $cols, $top);
+    }
+
+    /**
+     * The same panel with the row zones of {@see renderDropdownMarked()}.
+     *
+     * @return list<MenuPanel>
+     */
+    public static function panelsMarked(App $a, int $cols, int $top): array
+    {
+        return self::panelsFrom(true, $a, $cols, $top);
+    }
+
+    /**
+     * @return list<MenuPanel>
+     */
+    private static function panelsFrom(bool $marked, App $a, int $cols, int $top): array
+    {
+        $lines = self::dropdownLines($marked, $a->theme());
+        if ($lines === []) {
+            return [];
+        }
+
+        // Width::string is ANSI-aware, so the styled top border measures the
+        // true cell count in either twin (marked rows carry no zones on the
+        // borders, only between them).
+        $width = Width::string($lines[0]);
+        $col = max(1, min(self::activeMenuColumn() + 1, $cols - $width + 1));
+
+        // `nodes` stays empty until the click-routing step fills it from the
+        // registry: today's mouse path resolves rows through the
+        // menuitem:<row> zones the marked twin already paints, so the kit's
+        // node identity would be decoration here, not behaviour.
+        return [MenuPanel::new($col, $top, $lines, [], [], 0)];
+    }
+
+    /**
      * @param bool $marked Whether item rows carry zone sentinels.
      *
      * @return list<string>
@@ -584,6 +639,11 @@ final class MenuBar
      * Column the open menu's title starts at, so its dropdown can be drawn
      * under it. Mirrors {@see render()}'s own layout arithmetic (one leading
      * space, then each name plus a three-space gap).
+     *
+     * The arithmetic ignores shedding: below the width where {@see compose()}
+     * drops menu names this still counts the unpainted ones, which is why a
+     * frame path splices through {@see panels()} — the accessor that resolves
+     * the anchor the painted bar actually keeps, clamped inside $cols.
      */
     public static function activeMenuColumn(): int
     {

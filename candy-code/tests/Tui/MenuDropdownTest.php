@@ -162,6 +162,31 @@ final class MenuDropdownTest extends TestCase
         $this->assertStringContainsString($this->dropdownLabel($panel[count($panel) - 2]), $body, 'every item of a fitting panel must be painted');
     }
 
+    /**
+     * The P-MENU.c seam: the two dropdown accessors this file has always
+     * driven are now thin forwarders around the panel kit, and the overlay
+     * splices the kit's geometry. Pinning both twins (painted and marked) to
+     * the historical bytes is what keeps the rename of the splice seam honest
+     * — the panel kit may add position, it may not move a single cell.
+     */
+    public function testTheDropdownForwardersAgreeWithThePanelKit(): void
+    {
+        $app = $this->menuApp();
+        $panel = $this->openChatMenuPanel();
+
+        $panels = MenuBar::panels($app, 10000, 0);
+        $this->assertCount(1, $panels);
+        $this->assertSame($panel, $panels[0]->lines, 'the painted twin must be the panel lines verbatim');
+
+        $marked = MenuBar::panelsMarked($app, 10000, 0);
+        $this->assertCount(1, $marked);
+        $this->assertSame(
+            MenuBar::renderDropdownMarked($app->theme()),
+            $marked[0]->lines,
+            'the scan twin must be the marked panel lines verbatim',
+        );
+    }
+
     private function menuApp(): App
     {
         $p = $this->createMock(ProviderInterface::class);

@@ -478,12 +478,14 @@ final class Renderer
     /**
      * Record the chrome's click zones for the frame just composed.
      *
-     * Scans a SCRATCH copy of the bar (and, when it is painted, the dropdown
+     * Scans a SCRATCH copy of the bar (and, when one is open, the dropdown
      * panel padded to the column it is spliced at) rather than the frame
      * itself: the frame must reach the terminal marker-free, and the marked
      * copy exists only to be measured. Both copies come from the same layout
-     * arithmetic ({@see MenuBar::compose()}), so a column measured here is
-     * the column the title is painted at.
+     * arithmetic — the marked rows of {@see MenuBar::panelsMarked()} and the
+     * plain rows {@see overlayMenu()} splices resolve their anchor through
+     * the same accessor — so a column measured here is the column the title
+     * and the panel are painted at.
      *
      * The registry is CLEARED rather than populated when the frame lost rows
      * off the top — `clipTail` keeps the bottom, so a dropped row means the
@@ -493,8 +495,15 @@ final class Renderer
      *
      * @param int $dropped   Rows `clipTail` removed from the top of the frame.
      * @param int $frameRows Height of the composed frame; panel rows past it
-     *                       were never painted (see {@see overlayDropdown()},
+     *                       were never painted (see {@see overlayMenu()},
      *                       which stops at the same edge).
+     * @param ?int $panelTop Screen line an open menu's panel starts at — the
+     *                       row count of the painted bar on every cell-grid
+     *                       path — or null where the frame carries no panel
+     *                       at all: the video path's graphics leg, whose rows
+     *                       are protocol bytes the splice must not touch.
+     *                       Marking without painting is exactly the bug this
+     *                       seam retired, so the two refusals stay one.
      */
     private static function scanChrome(
         App $a,
@@ -502,7 +511,7 @@ final class Renderer
         string $menuBar,
         int $dropped,
         int $frameRows,
-        bool $withDropdown,
+        ?int $panelTop,
         array $dockRows = [],
     ): void {
         if ($dropped > 0 || !Chat::mouseClicksEnabled()) {
@@ -513,14 +522,20 @@ final class Renderer
 
         $lines = explode("\n", MenuBar::renderMarked($a, $cols));
 
-        if ($withDropdown) {
-            $col = MenuBar::activeMenuColumn();
-            $top = self::lineCount($menuBar);
-            foreach (MenuBar::renderDropdownMarked($a->theme()) as $i => $panelLine) {
-                if ($top + $i >= $frameRows) {
-                    break;
+        if ($panelTop !== null) {
+            foreach (MenuBar::panelsMarked($a, $cols, $panelTop) as $panel) {
+                // Paint ⇔ mark, to the row: the overlay spent its bottom
+                // row on the `…` continuation instead of a label, so that
+                // row and everything the clip buried answer to no item.
+                $budget = $frameRows - $panel->row;
+                if ($budget <= 0) {
+                    continue;
                 }
-                $lines[$top + $i] = str_repeat(' ', $col) . $panelLine;
+
+                $painted = count($panel->lines) > $budget ? $budget - 1 : count($panel->lines);
+                for ($i = 0; $i < $painted; ++$i) {
+                    $lines[$panel->row + $i] = str_repeat(' ', max(0, $panel->col - 1)) . $panel->lines[$i];
+                }
             }
         }
 
@@ -714,7 +729,7 @@ final class Renderer
         // taking part in the layout above, so opening a menu cannot reflow the
         // panes underneath it. Applied after the clips so it is never the thing
         // that gets trimmed away.
-        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($a->theme()), MenuBar::activeMenuColumn(), self::lineCount($menuBar), $a->theme());
+        $frame = self::overlayMenu($a, $frame, $cols, self::lineCount($menuBar));
 
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
@@ -817,7 +832,7 @@ final class Renderer
         // The bar's own click zones, recorded against the frame that was just
         // composed — the menu bar is chrome, so this is the terminal's own
         // coordinate space and NOT the pane-local space declared below.
-        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, $dockRows);
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), $dockRows);
 
         // The composite is final, so the hosted chat's zone registry — recorded
         // against the chat's own body, one nesting level down — can be told
@@ -962,6 +977,11 @@ final class Renderer
         $joined = implode("\n", $parts);
         $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
 
+        // P-MENU.c: the dropdown floats over this surface too. F10 and the
+        // title click both open a menu here, and until this seam an open
+        // menu on the dashboard simply did not exist on screen.
+        $frame = self::overlayMenu($a, $frame, $cols, self::lineCount($menuBar));
+
         LiveRenderer::clearZones();
 
         // No side columns exist to resize or drag in a full-band dashboard.
@@ -969,7 +989,8 @@ final class Renderer
 
         // The dashboard drops the hosted chat's zones (above) but keeps the
         // bar's: this frame DOES paint the menu titles, so a click on one has
-        // to work here too. No dropdown — this path never overlays one. Each
+        // to work here too, and the dropdown rows are marked by the panel
+        // pass over the rows overlayMenu just painted. Each
         // run's row is an `agent:<runId>` zone in the same chrome registry
         // (the settings view's technique), and a click opens its Agent View.
         $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
@@ -987,7 +1008,7 @@ final class Renderer
             $menuBar,
             self::lineCount($joined) - self::lineCount($frame),
             self::lineCount($frame),
-            false,
+            self::lineCount($menuBar),
             $zoneRows,
         );
 
@@ -1064,7 +1085,7 @@ final class Renderer
 
         $joined = implode("\n", $parts);
         $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
-        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($theme), MenuBar::activeMenuColumn(), self::lineCount($menuBar), $theme);
+        $frame = self::overlayMenu($a, $frame, $cols, self::lineCount($menuBar));
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
@@ -1095,7 +1116,7 @@ final class Renderer
             $zoneRows[$absRow] = self::scratchRow($cols, $spans);
         }
 
-        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, $zoneRows);
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), $zoneRows);
 
         return new View($frame);
     }
@@ -1152,8 +1173,14 @@ final class Renderer
      * so the width clip is skipped for it — {@see
      * \SugarCraft\Code\Tui\VideoPlayer\VideoPlayerScreen::clipsLines()}
      * answers false and the geometry the shell asked the Player for at
-     * open stands. The v1 screen has no clickable zones, so `$zoneRows`
-     * stays empty and no dropdown rides over the picture.
+     * open stands. The v1 screen has no clickable zones of its own, so
+     * `$zoneRows` stays empty. A TEXT-mode frame is a cell grid like any
+     * other: the open menu's dropdown rides over it there, and the chrome
+     * scan marks exactly the rows this path painted. A graphics frame is
+     * protocol bytes, so this path neither splices a panel into it nor
+     * registers panel rows the picture still shows (the seam both legs keep);
+     * a menu opened over a graphics picture therefore stays keyboard-only
+     * until an App-side refusal lands — reported, not fabricated here.
      */
     private static function renderVideoPlayer(
         App $a,
@@ -1179,14 +1206,22 @@ final class Renderer
 
         $joined = implode("\n", $parts);
         $clipped = self::clipTail($joined, $rows);
-        $frame = $screen->clipsLines() ? self::clipWidth($clipped, $cols) : $clipped;
+        $cellGrid = $screen->clipsLines();
+        $frame = $cellGrid ? self::clipWidth($clipped, $cols) : $clipped;
+
+        // The dropdown rides over the text-mode frame only; see the docblock
+        // for why the graphics leg refuses paint and mark together.
+        if ($cellGrid) {
+            $frame = self::overlayMenu($a, $frame, $cols, self::lineCount($menuBar));
+        }
+
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
         self::$lastDockFrame = null;
         self::$scrollRegions = [];
 
-        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, []);
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), $cellGrid ? self::lineCount($menuBar) : null, []);
 
         return new View($frame);
     }
@@ -1225,7 +1260,7 @@ final class Renderer
 
         $joined = implode("\n", $parts);
         $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
-        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($theme), MenuBar::activeMenuColumn(), self::lineCount($menuBar), $theme);
+        $frame = self::overlayMenu($a, $frame, $cols, self::lineCount($menuBar));
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
@@ -1249,7 +1284,7 @@ final class Renderer
             $zoneRows[$absRow] = self::scratchRow($cols, $spans);
         }
 
-        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, $zoneRows);
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), $zoneRows);
 
         return new View($frame);
     }
@@ -2281,46 +2316,60 @@ final class Renderer
     }
 
     /**
-     * Paint the menu dropdown onto an already-composed frame.
+     * Paint the open menu's dropdown panels onto an already-composed frame.
      *
      * A floating overlay, in the same spirit as the palette's Veil: it
      * replaces cells rather than inserting rows, so the panes below keep the
      * geometry the layout gave them and the zone origin computed after this
-     * stays correct.
+     * stays correct. The geometry comes from {@see MenuBar::panels()} — the
+     * same accessor the chrome scan walks through its marked twin — so a row
+     * that is marked clickable is a row that was spliced here, never one the
+     * picture underneath still shows.
      *
      * When the panel is taller than the rows left below its anchor the
      * last available row carries a faint `…` continuation instead of the
      * panel vanishing mid-list into the frame's bottom edge — silent
      * truncation made a clipped menu indistinguishable from a short one.
-     *
-     * @param list<string> $panel
+     * The spliced row is clamped to $cols: a shed title could once anchor
+     * the box past the terminal's own edge.
      */
-    private static function overlayDropdown(string $frame, array $panel, int $col, int $topRow, Theme $theme): string
+    private static function overlayMenu(App $a, string $frame, int $cols, int $top): string
     {
-        if ($panel === []) {
+        $panels = MenuBar::panels($a, $cols, $top);
+        if ($panels === []) {
             return $frame;
         }
 
         $lines = explode("\n", $frame);
-        $budget = count($lines) - $topRow;
+        $theme = $a->theme();
 
-        if ($budget <= 0) {
-            return $frame;
-        }
+        foreach ($panels as $panel) {
+            $budget = count($lines) - $panel->row;
 
-        $clipped = count($panel) > $budget;
-        $painted = $clipped ? $budget - 1 : count($panel);
+            if ($budget <= 0) {
+                continue;
+            }
 
-        for ($i = 0; $i < $painted; ++$i) {
-            $lines[$topRow + $i] = self::spliceInto($lines[$topRow + $i], $panel[$i], $col);
-        }
+            $clipped = count($panel->lines) > $budget;
+            $painted = $clipped ? $budget - 1 : count($panel->lines);
 
-        if ($clipped) {
-            $lines[$topRow + $painted] = self::spliceInto(
-                $lines[$topRow + $painted],
-                self::dropdownOverflowLine($panel, $theme),
-                $col
-            );
+            for ($i = 0; $i < $painted; ++$i) {
+                $lines[$panel->row + $i] = Width::truncateAnsi(
+                    self::spliceInto($lines[$panel->row + $i], $panel->lines[$i], $panel->col - 1),
+                    $cols
+                );
+            }
+
+            if ($clipped) {
+                $lines[$panel->row + $painted] = Width::truncateAnsi(
+                    self::spliceInto(
+                        $lines[$panel->row + $painted],
+                        self::dropdownOverflowLine($panel->lines, $theme),
+                        $panel->col - 1
+                    ),
+                    $cols
+                );
+            }
         }
 
         return implode("\n", $lines);
