@@ -113,16 +113,30 @@ final class EditorCommand
      * other way would run an editor with no terminal. There is deliberately
      * no PasteMsg round-trip here: the file is its own destination, and the
      * memory store re-reads from disk on every call, so the edit lands
-     * without this class ever reading the bytes back.
+     * without this class ever handing the bytes back to the transcript.
+     *
+     * The optional `$onSaved` closure (C-CTX-6.d) is the journaling hook:
+     * it runs exactly once when the editor exits 0 AND the file's hash
+     * differs from the one read here, before the terminal is handed over.
+     * Without it an edit made in the editor reaches the memory history only
+     * when some later `/memory` command sweeps it into an outside-/memory
+     * commit; `Chat::memoryOpenArm()` passes one that records the note
+     * under its own subject the moment the editor is gone.
      */
-    public function openFile(string $path): \Closure
+    public function openFile(string $path, ?\Closure $onSaved = null): \Closure
     {
         $editor = $this->editor();
+        // VIS-2b opens may name a file the editor itself creates, so absence
+        // is the ordinary arm-time shape, not an error: false is the sentinel
+        // openCollect() compares against. The is_file() door keeps the
+        // expected-absent case from tripping a PHP warning under
+        // failOnWarning.
+        $hashBefore = \is_file($path) ? \sha1_file($path) : false;
 
         return Cmd::exec(
             $editor . ' ' . escapeshellarg($path),
             false,
-            static fn (int $exit, string $out, string $err, ?\Throwable $error): Msg => self::openCollect($path, $editor, $exit, $error),
+            static fn (int $exit, string $out, string $err, ?\Throwable $error): Msg => self::openCollect($path, $editor, $exit, $error, $onSaved, $hashBefore),
         );
     }
 
@@ -130,9 +144,22 @@ final class EditorCommand
      * The single transcript row an in-place open answers with once the
      * editor is gone: which file was closed, or how it failed. Public for
      * the same reason collect() is — exercisable without a terminal.
+     *
+     * `$onSaved` and `$hashBefore` arrive as a pair from {@see openFile()}
+     * (C-CTX-6.d): the closure runs only on a clean exit and only when the
+     * file's hash no longer matches the pre-hand-over one — the user really
+     * edited. It may answer a warning line for the transcript (the shape
+     * {@see MemoryHistoryCommand::record()} returns); a warning rides under
+     * the opened row rather than being swallowed.
      */
-    public static function openCollect(string $path, string $editor, int $exit, ?\Throwable $error): Msg
-    {
+    public static function openCollect(
+        string $path,
+        string $editor,
+        int $exit,
+        ?\Throwable $error,
+        ?\Closure $onSaved = null,
+        string|false $hashBefore = false,
+    ): Msg {
         if ($error !== null) {
             return new ErrorMsg(Lang::t('cmd.editor.open-not-started', [
                 'editor' => $editor,
@@ -147,7 +174,17 @@ final class EditorCommand
             ]));
         }
 
-        return new StatusMsg(Lang::t('cmd.editor.opened', ['path' => $path]));
+        $message = Lang::t('cmd.editor.opened', ['path' => $path]);
+        // The same absence-tolerant read as openFile()'s: an editor quit
+        // before creating the file leaves it false === false, no edit.
+        if ($onSaved !== null && (\is_file($path) ? \sha1_file($path) : false) !== $hashBefore) {
+            $warning = $onSaved();
+            if (\is_string($warning) && trim($warning) !== '') {
+                $message .= "\n" . $warning;
+            }
+        }
+
+        return new StatusMsg($message);
     }
 
     /**

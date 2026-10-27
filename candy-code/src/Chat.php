@@ -15826,7 +15826,9 @@ final class Chat implements Model
      * /memory form, so the router keeps them. A bare `/memory open` gets the
      * usage row; an id the stores do not have gets the unknown row (checked
      * repository-first through the same {@see MemoryWriter} the `Memory` tool
-     * shares); a hit gets the editor Cmd onto the exec channel.
+     * shares); a hit gets the editor Cmd onto the exec channel — carrying the
+     * journaling hook of C-CTX-6.d, because this arm answers before the
+     * router's commit-wrap in `MemoryCommand::run()` ever sees `open`.
      *
      * @return ?array{0:Chat,1:?\Closure}
      */
@@ -15858,9 +15860,22 @@ final class Chat implements Model
             return [$this->memoryRow($inputText, Lang::t('host.memory.open-unknown', ['id' => $id])), null];
         }
 
+        $history = \SugarCraft\Code\Memory\MemoryHistory::forStore($home);
+
         return [
             $this->withInputBuf(''),
-            \SugarCraft\Code\Commands\EditorCommand::new()->openFile($path),
+            \SugarCraft\Code\Commands\EditorCommand::new()->openFile(
+                $path,
+                // The hook runs only when the editor exited 0 with the file's
+                // hash changed, so the edit lands in the home memory history
+                // under the same `memory: /memory <sub>` subject shape the
+                // mutating sub-commands use — credited to this open in
+                // `/memory log`/`restore`, not swept into a later
+                // outside-/memory commit. record() answers a warning string
+                // when the commit failed; it rides under the opened row
+                // (openCollect), never silently.
+                static fn (): ?string => \SugarCraft\Code\Commands\MemoryHistoryCommand::record($history, "memory: /memory open {$id}"),
+            ),
         ];
     }
 
