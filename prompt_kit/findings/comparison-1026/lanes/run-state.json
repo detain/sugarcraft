@@ -79,7 +79,8 @@
   "C-WEB-3.c",
   "C-WEB-3.d",
   "P-AGENT.d",
-  "C-AGT-3.b"
+  "C-AGT-3.b",
+  "C-CTX-6.c"
  ],
  "inflight": {
   "P-MENU.d": {
@@ -95,16 +96,8 @@
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-AGT-7.c",
    "branch": "cc/C-AGT-7.c",
-   "session": "ses_e80afcaa3ffe0WXIRtqUFSG2Fp",
-   "note": "r1 CLEAN (REVIEW-1.md). NEXT welder call: plain pick 30288d150; gen --check up-to-date expected; gates ServerConfig|HookWebhooks 76T + five-guard pair-only; no DUR; carry Serve.php:429-431 stale comment (report-only); evidence 3 files."
-  },
-  "C-CTX-6.c": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-CTX-6.c",
-   "branch": "cc/C-CTX-6.c",
-   "session": "ses_e80d5cbe1ffeRyB61d7OtQYsed",
-   "weld_note": "r1 CLEAN (REVIEW-1.md on disk). Plain pick 43bccf095. SETTINGS.md gen --check MUST pass on merged tree (lane claims zero-diff). Gates: Lang|Runtime|Memory|SettingsSchemaDocDrift 1616T/2F base-proven (ChatHostLangCatalogue + DuplicatedTestHelperDrift) + five-guard pair-only. No DUR (no new test files). Carries: flushed_notice plural seam + SettingsEditorTest:70 roster + 'a one' grammar NIT. Evidence 3 files. Cherry, prune."
+   "session": "ses_e80b48b26ffeAr4AUOww1E277V",
+   "note": "r1 CLEAN gates RUN (REVIEW-1.md on disk). Weld brief: pick 30288d150; gen --check no-op expected (help outside generated regions); gates ServerConfig|HookWebhooks 76T/309A + Lang|SettingsSchemaDocDrift (1F disclosed foreign ChatHostLangCatalogue launch_unshaped — allowed, report-only) + five-guard pair-only; no DUR; carry Serve.php:429-431 stale comment report-only; evidence 3 files"
   },
   "C-CTX-6.d": {
    "stage": "clean",
@@ -426,6 +419,16 @@
    "carries": "docs/MEMORY.md :186 stale-home-only-summary + MemoryBlock:106/:327 docblock drift + TaskPromptBuilderTest:445 blank = report-only",
    "evidence": "lanes/C-AGT-3.b/{BRIEF,REPORT}.md staged; REVIEW-1.md NEVER persisted on disk (reviewer lost it; weld_note claimed on-disk) - P-CTX.d precedent, lead CLEAN verdict in run-state authoritative",
    "prune": "cherry proof '-'; worktree+branch pruned"
+  },
+  "C-CTX-6.c": {
+   "master": "16266186d",
+   "pick": "43bccf095 (onto 0fe10345b post-C-AGT-3.b-weld, clean zero conflicts, 5 files +56/-11, patch-id cb1762fcb both sides, %ae/%ce 1/1 detain, zero trailers)",
+   "regen": "no-op on merged tree (gen-command-docs/gen-tool-docs --write + gen-settings-doc --check all up to date rc0 - lane zero-diff SETTINGS.md claim VERIFIED; no regen commit)",
+   "gates": "filter 'Lang|Runtime|Memory|SettingsSchemaDocDrift' 1653T/18557A F2 = ChatHostLangCatalogue launch_unshaped (allowed foreign roster gap - cure-lang 34ac69dfc leg stale again, NOT a CTX-6.c key: recalled_notice .one/.many are asked in Runtime.php) + DreamPassTest:288 (allowed foreign); DuplicatedTestHelperDrift GREEN (no collision with C-AGT-3.b files - stop-condition not fired); five-guard 133T/15752A F2 = staleness pair ONLY (pinned 25,537 - closeout re-pin)",
+   "durations_owed": "none - no new *Test.php (MemoryRecallBlockTest +1 method)",
+   "carries": "chat.memory.flushed_notice plural-injection seam + SettingsEditorTest:70 roster + a-one grammar NIT stay REPORT-ONLY (lead disposition); +1 method rides closeout re-pin",
+   "evidence": "lanes/C-CTX-6.c/{BRIEF,REPORT,REVIEW-1}.md staged (REVIEW-1.md VERDICT CLEAN 0C/0M/0m landed on disk post-pick); %ae/%ce verified, base-proven reds confirmed byte-identical by reviewer",
+   "prune": "cherry proof '-'; worktree+branch pruned"
   }
  },
  "carries": [
@@ -469,6 +472,7 @@
   "C-WEB-3.d weld: dormancy rows files.read/memory.log/undo/session.shares owed at C-WEB-3.g",
   "P-AGENT.d weld: Ctrl+Enter stale-arm-clear leg unpinned micro + r1 queued-count NIT remain OPEN",
   "C-CTX-6.c + C-AGT-3.b r1 CLEAN with gates RUN by reviewer (widened shell); both queued in welder order AGT-3.b -> CTX-6.c",
-  "C-AGT-7.c + C-CTX-6.d clean-queued behind AGT-3.b/CTX-6.c welder; P-MENU.d + C-EXT-7.a in review; frontier capped at 2 starts which are both already live"
+  "C-AGT-7.c + C-CTX-6.d clean-queued behind AGT-3.b/CTX-6.c welder; P-MENU.d + C-EXT-7.a in review; frontier capped at 2 starts which are both already live",
+  "C-AGT-7.c r1 CLEAN with gates run (25,537 vs live 26,129 pair-only; foreign Lang red base-proven); queued behind AGT-3.b/CTX-6.c welder"
  ]
 }

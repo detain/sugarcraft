@@ -1,0 +1,22 @@
+# REVIEW-1 — C-CTX-6.c (context nit bundle)
+
+VERDICT: CLEAN (0 critical / 0 major / 0 minor)
+
+Branch cc/C-CTX-6.c @ 43bccf095, base == master == c36cc1982, single commit. Author law verified: `%ae` and `%ce` separate greps both detain@interserver.net, zero Co-Authored trailers.
+
+## Gates (re-run independently, cwd worktree candy-code, plain pipe, env -u LINES -u COLUMNS)
+- `--filter 'Lang|Memory|SettingsSchemaDocDrift'` → Tests: 1227, Assertions: 10121, Failures: 2, Skipped: 1, Deprecations: 2. Both F are the REPORT-named foreigns, base-proven:
+  - ChatHostLangCatalogueTest:90 roster gap `chat.effort.launch_unshaped` — the offending key and ALL its scanned src requesters (Chat.php, src/Host, GoalLoop, EffortGate, …) are byte-identical base↔HEAD (`git diff c36cc1982 HEAD --` those paths = 0 lines); lane diff never touches the key. Red at base by construction.
+  - DreamPassTest:288 "not an engine schedules no pass" — test file and src/Chat.php byte-identical base↔HEAD; assertion path never reaches the lane's Runtime::announceMemoryRecall (count-0 early-return precedes it, and the echo-backend Chat never primes recall). Base-proven.
+- five-guard `ReadmeSuiteFigureDrift|DocFigureProseDrift|GlobDialectDifferential|ChildWallClockBudget|DuplicatedTestHelperDrift` → 133T/15713A, Failures: 2 = EXACTLY the allowed staleness pair (pinned 25,537 vs live 26,122; campaign-wide re-pin duty, lane carries +1 method). GlobDialect/DuplicatedTestHelperDrift/DocFigure green — new literals ('Recalled N note(s) for this turn', '{notes}') trip nothing.
+- gen-settings-doc `--check` invocation denied by reviewer permission map; verified structurally instead: tools/gen-settings-doc.php emits no help strings (grep 'help' in the script = usage text only), SETTINGS.md contains no "ancestor copies" region, and the lane changed no setting KEY (only two `.help` values), so the generated regions cannot drift — zero-diff claim stands. SettingsSchemaDocDriftTest green in gate 1. The two edited helps are consumed live via withHelp() at MemoryRuleSettings.php:138 and ContextSettings.php:178.
+
+## Axes
+1. **Scope**: exactly the five brief-declared files (Runtime.php, en.php, 3400-goal.php comment, CONTEXT.md, + the recall pin "wherever the recall row is asserted today" = MemoryRecallBlockTest, confirmed by grep). No suite-figure.json/durations.tsv/dist touches. SettingsSchemaDocDrift gate green. Clean.
+2. **Byte-identity + mutation-reason**: old row count=1 rendered 'Recalled 1 note for this turn'; `.one` renders identically; `.many` identical for ≥2. Call site picks `$count === 1 ? .one : .many` with the pre-existing `$count === 0` early return guarding the boundary. Red-before re-derived: at base the bare key exists → `assertArrayNotHasKey` leg fails. Non-vacuous both directions: catalog regressions hit the new pin; call-site regressions hit the pre-existing behavioral pins (:270/:284/:301) that drive the real Runtime::primeMemoryRecall → announceMemoryRecall and assert the exact byte rows. Clean.
+3. **/goal truth**: SessionHost::scheduleGoalJudge()/landGoalVerdict()/endGoal() live at :2107/:2149/:2207, called on the served settle path (:2094), sharing GoalLoop::refusalReason — the same decision table as the TUI; docblock self-declares "mirroring Chat::scheduleGoalJudge() exactly (W7a-3)". The comment's removal of the false "follow-up" sentence is true. Clean.
+4. **instructionsExclude**: help truth matches the brief's prescription (checkout-relative vs absolute matching, `**/CLAUDE.local.md` reaches ancestors); SETTINGS.md zero-diff structurally confirmed above. Clean.
+5. **CONTEXT.md**: Chat::buildSummarizationRequest exists (Chat.php:13802, delegates to CompactionService::buildSummarizationRequest :1124); SessionHost::requestAheadOfNeed exists (:667, same CompactionService gate) — "never sees two sources" is literally the method docblock. idleAuto disclosure honest: CompactorConfig SETTING_IDLE_AUTO gates IdleCompactionPolicy (fires only after the full idle window); repo-wide grep finds no cacheWarm/cache-warm machinery — "no short cache-warm idle tier ships yet" is true. Clean.
+6. **Pin non-vacuity**: see axis 2. Clean.
+7. **Hazards/laws**: no glob-shaped or denial-shaped literals; single commit; Lang::t retained for user strings. Clean.
+8. **flushed_notice carry**: the brief's bullet scopes only `recalled_notice`; `flushed_notice` lives on a different row/method not named anywhere in this block — a genuine disclosed carry (REPORT note), not a half-fix. Clean.

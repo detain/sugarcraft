@@ -1,0 +1,25 @@
+### C-CTX-6.c — Context nit bundle
+- item: C-CTX-6 (sources: VIS-6-P1, k1-dorm#7, INT-1-P1, CTX-5-P2, p2-miss: TUI-6 English plural)
+- kind: fix · MINOR/NIT · effort S
+- approach:
+  - **VIS-6-P1:** `Runtime::announceMemoryRecall()` (`Runtime.php:5991-5994`) injects the English plural as a parameter. Split `chat.memory.recalled_notice` (`lang/en.php:1898`) into `.one`/`.many` keys.
+  - **k1-dorm#7:** truth-flip the `/goal` spec comment (`builtin-commands/3400-goal.php:15-19`). The served judge loop is wired (`SessionHost.php:1864-1930`).
+  - **INT-1-P1:** add to the `instructionsExclude` help that patterns match ancestor files by absolute path (`**/CLAUDE.local.md` reaches ancestors), then regenerate SETTINGS.md.
+  - **CTX-5-P2:**
+    - `docs/CONTEXT.md` names the real reuse points: `SessionHost::requestAheadOfNeed()` on serve and `buildSummarizationRequest` in the TUI;
+    - the `compaction.idleAuto` help discloses that no short cache-warm idle tier ships yet. C-CTX-5.c later replaces that sentence.
+- files.create: none
+- files.modify:
+  - `candy-code/src/Runtime.php` (`announceMemoryRecall()`)
+  - `candy-code/lang/en.php` (`chat.memory.recalled_notice.*`, `settings.instructionsExclude.help`, `settings.compaction.idleAuto.help`)
+  - `candy-code/builtin-commands/3400-goal.php` (comment only)
+  - `candy-code/docs/SETTINGS.md` (gen)
+  - `candy-code/docs/CONTEXT.md`
+- tests: modify `candy-code/tests/LangParityTest.php` only if it pins the removed key; add a one/many pin wherever the recall row is asserted today (grep `recalled_notice` in tests/)
+- docs/guards: settings gen + `candy-code/tests/Config/Settings/SettingsSchemaDocDriftTest.php`
+- serialized: [runtime:announceMemoryRecall] [commands] [lang:chat.memory.recalled_notice.*, settings.*.help] [docs:SETTINGS.md] [docs:CONTEXT.md]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: none.
+
