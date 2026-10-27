@@ -5,16 +5,10 @@
     "C-AGT-1.c",
     "C-SES-3.a",
     "C-TOOL-1.a",
-    "C-EXT-1.a"
+    "C-EXT-1.a",
+    "C-SEC-1.a"
   ],
   "inflight": {
-    "C-SEC-1.a": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-SEC-1.a",
-      "branch": "cc/C-SEC-1.a",
-      "session": null
-    },
     "C-AGT-1.a": {
       "stage": "fix",
       "round": 2,
@@ -70,6 +64,13 @@
       "worktree": "/home/sites/cc-cmp-C-SES-2.a",
       "branch": "cc/C-SES-2.a",
       "session": "ses_e841b992fffeYG5E2v3ZOThtPD"
+    },
+    "C-EXT-1.a": {
+      "stage": "clean",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-EXT-1.a",
+      "branch": "cc/C-EXT-1.a",
+      "note": "pick 7949cc23d + cure 0b6ca769f landed; marks+evidence+prune owed by welder"
     }
   },
   "blocked": [],

@@ -1,0 +1,23 @@
+### C-SEC-1.a — Bundle install never follows symlinks
+- item: C-SEC-1 (sources: PLG-1-P1, PLG-1-P3)
+- kind: fix · CRITICAL · effort S
+- approach:
+  - Root cause: `Subcommands::removeTree()` (`candy-code/src/Cli/Subcommands.php:1920-1935`) recurses on `\is_dir($child)` at :1931, and `is_dir()` follows symlinks. A clone holding `x -> ../../..` therefore empties `$HOME` on every failure exit: :1670 (clone failed), :1683 (no manifest), :1694 (bad name), :1702 (already installed) and :1712-1717 (copy fallback).
+  - Fix 1: test `is_link()` before `is_dir()` and `unlink()` the link itself, never descending. Apply the same guard to the top-level `$path`.
+  - Fix 2: add `-c core.symlinks=false` to the clone argv at :1749, so git checks links out as plain files.
+  - Fix 3 (PLG-1-P3): `copyBundleTree()` (:1877-1913) follows links when it recurses and when it copies (~:1899-1911). It now refuses the install and names the first link it meets, which also ends cyclic-link loops.
+- files.create: none
+- files.modify: `candy-code/src/Cli/Subcommands.php` (`removeTree`, `copyBundleTree`, `bundlesCloneDefault` argv), `candy-code/lang/en.php` (new key `cli.bundles.install.link_refused`)
+- tests:
+  - modify `candy-code/tests/Bundles/BundleInstallTest.php`:
+    - Through the `$bundlesInstallSpawn` seam, build a scratch holding `link -> <outside sentinel dir>`, crossed with each of: no manifest, an invalid name, an existing name. Assert the sentinel survives and the scratch is gone.
+    - A path source holding an outside link is refused, and the message names the link.
+    - A cyclic link terminates.
+    - Update the argv pin at :189-197 (`testTheDefaultCloneArgvPinsTheExtTransportOffBeforeTheCloneToken`): its substring `'git', '-c', 'protocol.ext.allow=never', 'clone'` breaks once a second `-c` is inserted. Re-pin both `-c` pairs ahead of `clone`.
+- docs/guards: none. The refusal names the link, and no doc page describes the cleanup. Child lifetime: no new spawn.
+- serialized: [headless] [lang:cli.bundles.install.]
+- deps: none. C-EXT-4 (marketplace) and C-MCP-2 should name this step as a prerequisite.
+- phase: normal
+- ruling: none
+- risks: a legitimate bundle that ships an in-tree relative symlink now installs as a plain file (clone) or is refused (path). The loaders already refuse links that escape the tree, so nothing that loads today is lost.
+
