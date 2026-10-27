@@ -63,7 +63,8 @@
     "C-SES-9.c",
     "P-CTX.g",
     "C-SES-9.a",
-    "C-AGT-2.b"
+    "C-AGT-2.b",
+    "C-AGT-7.a"
   ],
   "inflight": {
     "P-AGENT.a": {
@@ -82,15 +83,6 @@
       "branch": "cc/P-CTX.e",
       "session": "ses_e81de68f3ffe7UDNrTyqnojJpF",
       "note": "cut from c2477fe71; deps linked"
-    },
-    "C-AGT-7.a": {
-      "stage": "review",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-AGT-7.a",
-      "branch": "cc/C-AGT-7.a",
-      "session": "ses_e81a7d0fcffeaURbg7S1VYg8vR",
-      "tip": "d7eda9643",
-      "note": "fix r2 landed (poll-absence carve pin); on CLEAN weld batch: gates Schedule 118T/535A/1F DreamPass-sole-red disclose + RuntimeNoticeSinkDelivery 25T/5602A + FAPW 17T/57A + pair-only; no DUR; §4 unstaged"
     }
   },
   "blocked": [],
@@ -281,6 +273,13 @@
       "regen": "no-op (cmd/tool/settings --check all up to date; no schema/web — ReviewCommand docblock only, no command-list change)",
       "gates": "Review|ModeCeiling 165T/825A OK exact; SessionHost 54T/271A OK; SessionHost|Tombstone|Usage 430T/2152A OK (C-SES-9.a tombstone compat satisfied); wide Review|ModeCeiling|Permission|SessionHost 2367T/13558A OK EXACT vs lane claim (zero merged-tree drift); EnvRosterDrift 37T/37443A OK; five-guard 133T/15661A pair-only (pinned 25,537 vs live 26,060 — closeout re-pin)",
       "durations_owed": "candy-code/tests/Host/SessionHostModeCeilingTest.php (3T)"
+    },
+    "C-AGT-7.a": {
+      "master": "f2db15f0a+687f9c38c+4d960c382",
+      "picks": "1993c8f14->f2db15f0a, 289c06a88->687f9c38c, d7eda9643->4d960c382, zero conflicts (lang/en.php + Chat.php auto-merged)",
+      "regen": "no-op (cmd/tool/settings --check up to date; docs/SCHEDULES.md is hand-truth, not a generated region)",
+      "gates": "RuntimeNoticeSinkDelivery 25T/5606A OK (+4A vs lane 5602 claim = merged-tree drift, disclosed); Schedule 118T/535A/1F — sole red DreamPassTest.php:288 REPRODUCED at pre-pick 40ce5f1cc (foreign, allowed); ForeignAgentPresetWiring 17T/57A exact; five-guard 133T/15661A pair-only; check-child-lifetimes rc0 (spawn timeout threading accounted)",
+      "durations_owed": "none (no new test files)"
     }
   },
   "carries": [
