@@ -41,7 +41,7 @@
       "worktree": "/home/sites/cc-cmp-C-SES-3.b",
       "branch": "cc/C-SES-3.b",
       "session": null,
-      "note": "r1 FINDINGS: MINOR buffer-keystone finally/drain unpin + NIT revoke() bool ignore; out-of-scope MINOR ShareStore.php:216-226 expiry-guard = closeout ledger"
+      "note": "fix r2 running ses_e840550d4 (finally-pin + revoke bool NIT)"
     },
     "C-SES-2.a": {
       "stage": "build",
@@ -51,26 +51,43 @@
       "session": "ses_e841b992fffeYG5E2v3ZOThtPD"
     },
     "C-SES-5.a": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SES-5.a",
       "branch": "cc/C-SES-5.a",
-      "session": null
+      "session": null,
+      "note": "tip 6b4474a5b base cf12e96fb; +5 methods weld re-pin carry"
     },
     "C-AGT-2.c": {
-      "stage": "build",
-      "round": 1,
+      "stage": "fix",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-AGT-2.c",
       "branch": "cc/C-AGT-2.c",
       "session": null,
-      "note": "builder died mid-stream @174@ blank return; branch zero commits, 5 dirty files \u2014 resumed same session"
+      "note": "r1 FINDINGS: NIT i-flag regex + gates must run; DOC-ROW GETTING-STARTED.md:140 carry closeout"
+    },
+    "C-EXT-1.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-EXT-1.b",
+      "branch": "cc/C-EXT-1.b",
+      "session": null
+    },
+    "C-MCP-1.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-MCP-1.b",
+      "branch": "cc/C-MCP-1.b",
+      "session": null
     }
   },
   "blocked": [],
   "extra_agents": 1,
-  "waves_closed": [],
+  "waves_closed": [
+    1
+  ],
   "wave_loops": {
-    "1": "review r1 running"
+    "1": "closed r2 CLEAN"
   },
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg"
 }

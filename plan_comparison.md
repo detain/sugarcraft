@@ -134,7 +134,7 @@ So while 2 lanes are in review, the other 8 slots build steps from the next wave
 
 | Wave | Lanes | Steps |
 |---|---|---|
-| W1 | 10 | C-SEC-1.a · C-SEC-2.a · C-TOOL-1.a · C-AGT-1.a · C-TOOL-1.c · C-EXT-1.a · C-MCP-1.a · C-SES-3.a · C-AGT-1.c · C-AGT-2.a |
+| ✅ W1 (closed 2026-10-27) | 10 | C-SEC-1.a · C-SEC-2.a · C-TOOL-1.a · C-AGT-1.a · C-TOOL-1.c · C-EXT-1.a · C-MCP-1.a · C-SES-3.a · C-AGT-1.c · C-AGT-2.a |
 | W2 | 10 | C-SEC-2.b · C-SEC-3.a · C-SES-3.b · C-PRV-1.a · C-SES-2.a · C-SES-3.c · C-SES-4.a · C-SES-5.a · C-AGT-2.c · C-EXT-1.b |
 | W3 | 10 | C-SEC-3.b · C-MCP-1.b · C-SES-5.b · C-CTX-1.a · C-PRV-1.b · C-PRV-1.c · C-SEC-4.b · C-SES-2.b · C-WEB-1.d · C-CTX-1.b |
 | W4 | 10 | C-SES-2.c · C-SEC-4.a · C-SES-1.a · C-SES-5.d · C-TOOL-1.b · C-WEB-1.c · P-CTX.a · P-TABS.b · P-TABS.d · P-IMG.b |
@@ -186,7 +186,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: C-AGT-2.a (reviewTurn)
 - Bootstrap.php method claims: C-AGT-1.a (workspace)
 
-#### C-SEC-1.a — Bundle install never follows symlinks
+#### ✅ eeb908c5d C-SEC-1.a — Bundle install never follows symlinks
 - **Item:** C-SEC-1 (sources: PLG-1-P1, PLG-1-P3) · fix · CRITICAL · effort S
 - **What:** Root cause: `Subcommands::removeTree()` (`candy-code/src/Cli/Subcommands.php:1920-1935`) recurses on `\is_dir($child)` at :1931, and `is_dir()` follows symlinks. A clone holding `x -> ../../..` therefore empties `$HOME` on every …
 - **Files — create:** none
@@ -208,7 +208,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-2.a`
 
-#### C-TOOL-1.a — Background-shell two-part cursor
+#### ✅ f1faf48f8 C-TOOL-1.a — Background-shell two-part cursor
 - **Item:** C-TOOL-1 (sources: SHL-1-P1) · fix · MAJOR · effort M
 - **What:** Root cause `candy-code/src/Background/BackgroundShellRegistry.php:503-546` (`read()`): one global cursor over stdout‖stderr, split as `stdoutOffset=min(cursor,stdoutSize)` / `stderrOffset=cursor-stdoutSize`. Valid only while …
 - **Files — create:** none
@@ -219,7 +219,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-1.a`
 
-#### C-AGT-1.a — Bind persisted schedules to a project root
+#### ✅ 5d1647f4b C-AGT-1.a — Bind persisted schedules to a project root
 - **Item:** C-AGT-1 (sources: AUT-1-P1, p1-miss: schedules UX) · fix · MAJOR · effort M
 - **What:** Root cause: a row is `name/every/prompt/provider/permissionMode/nextDue/enabled` (`src/Background/Schedule.php:136-195`), and `ScheduleSpawner::closure` spawns at the HOST's root (`src/Background/ScheduleSpawner.php:58`). One …
 - **Files — create:** `candy-code/docs/SCHEDULES.md`
@@ -241,7 +241,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-1.c`
 
-#### C-EXT-1.a — CC hook entries: accept `statusMessage`/`async`, Claude exit-code dialect
+#### ✅ 7949cc23d C-EXT-1.a — CC hook entries: accept `statusMessage`/`async`, Claude exit-code dialect
 - **Item:** C-EXT-1 (sources: INT-4-P1, GAP-HK-07, k2-sum HK-07 ✅→🟡) · fix · MAJOR · effort M
 - **What:** **Root cause.** `candy-code/src/Hooks/ClaudeSettingsHooks.php:98` has `ENTRY_KEYS = ['type','command','timeout']`, and `:247-255` refuses the whole launch on any other key. Claude Code writes `statusMessage` and `async` …
 - **Files — create:** none
@@ -252,7 +252,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-1.a`
 
-#### C-MCP-1.a — User-tier stdio servers spawn in $HOME, project tier at its root
+#### ✅ 2e1ef6430 C-MCP-1.a — User-tier stdio servers spawn in $HOME, project tier at its root
 - **Item:** C-MCP-1 (sources: MCP-3-P1) · fix · MAJOR · effort M
 - **What:** Root cause: the library spawns with `proc_open(..., null, $env)`, so the child inherits candy-code's cwd (`sugar-mcp-client/src/StdioMcpServer.php:373-383`, arg 4 `null`). The adapter passes only argv and env …
 - **Files — create:** `sugar-mcp-client/tests/StdioMcpServerCwdTest.php`, `sugar-mcp-client/tests/Fixtures/cwd_server.php`, `candy-code/tests/MCP/StdioMcpUserTierCwdTest.php`
@@ -263,7 +263,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-1.a`
 
-#### C-SES-3.a — Shares die with their session; token redacted from the serve log
+#### ✅ 0e7412c16 C-SES-3.a — Shares die with their session; token redacted from the serve log
 - **Item:** C-SES-3 (sources: SES-3-P1, SES-3-P2) · fix · MAJOR · effort M
 - **What:** **Root cause.** `shares` has no FK to `sessions` (`src/Share/ShareStore.php:54-62`), and no delete or prune path touches it. `SessionStore::deleteSessionTrees()` (`src/Session/SessionStore.php:1005-1052`) is the single choke that …
 - **Files — create:** none
@@ -285,7 +285,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-1.c`
 
-#### C-AGT-2.a — `/review` refuses refs the scanner cannot attach
+#### ✅ 8ee649805 C-AGT-2.a — `/review` refuses refs the scanner cannot attach
 - **Item:** C-AGT-2 (sources: GIT-1-P1) · fix · MAJOR · effort M
 - **What:** Root cause: `ContextMentions::isDiffRef()` checks only `REF_PATTERN` (`src/Attachments/ContextMentions.php:93-96`). The scanner then strips trailing `}` (`trimmed()` :522-527, `TRAILING_PUNCTUATION` :79), and `diff()` runs …
 - **Files — create:** none
@@ -356,7 +356,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-2.a`
 
-#### C-SES-3.c — `session.shares` read RPC (for C-WEB-3's menu)
+#### ✅ 5c83a0ce3 C-SES-3.c — `session.shares` read RPC (for C-WEB-3's menu)
 - **Item:** C-SES-3 (sources: p2-miss: `session.shares` RPC + web share UI, SES-3-P4) · fix · MAJOR · effort S
 - **What:** Add `session.shares {sessionId?}`, Scope Read. It returns the live shares of one session, or of every session when `sessionId` is absent. Each row carries a token prefix, the full token (the method is token-scoped, the same as …
 - **Files — create:** none
@@ -367,7 +367,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-3.a (W1)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-3.c`
 
-#### C-SES-4.a — Consume-time span stamps, one OTLP body per batch, PID-guarded flush
+#### ✅ ea6ee5594 C-SES-4.a — Consume-time span stamps, one OTLP body per batch, PID-guarded flush
 - **Item:** C-SES-4 (sources: OBS-1-P1, OBS-1-P4, OBS-1-P2 (one-body half)) · fix · MAJOR · effort M
 - **What:** **Root cause (timestamps).** `BatchEventSink::consume()` buffers raw events (`src/Observability/BatchEventSink.php:62-71`), and `OtlpEncoder::encode()` stamps `wallClockNanos()` at ENCODE time …
 - **Files — create:** none
