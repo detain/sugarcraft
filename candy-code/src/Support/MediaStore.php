@@ -273,6 +273,62 @@ final class MediaStore
         return @unlink($path);
     }
 
+    /**
+     * Take a copy of bytes the caller already holds under an exact name the
+     * caller computes — the fold that makes a transcript ref fetchable when
+     * the file it names lives OUTSIDE this store (C-WEB-1.d: a `Read` of a
+     * workspace image carries bytes on the tool result and a workspace path;
+     * `media.fetch` serves only this store, so the projection adopts the
+     * copy rather than emitting a ref that could only 404).
+     *
+     * Idempotent by construction: $stem is the whole name body, no pattern
+     * and no `-N` collision tail, so adopting the same bytes twice reuses
+     * the one existing copy — which is what lets the live event and every
+     * snapshot re-fold of the same row name the same artifact.
+     *
+     * Publish rides {@see publish()}: temp-then-rename, `0600` settled on
+     * the partial before any payload, containment re-checked after the
+     * rename. A non-regular entry already holding the name (planted
+     * symlink, directory) is refused, never replaced.
+     *
+     * @param string $stem final name body — no extension, no separator
+     *
+     * @return string absolute path of the copy inside this store
+     *
+     * @throws \InvalidArgumentException on a junk extension, an empty stem or
+     *         a stem carrying a character off the name alphabet (the same
+     *         fail-closed alphabet {@see sanitizeToNameAlphabet()} maps to).
+     * @throws \RuntimeException when an existing copy resolves outside the
+     *         session directory or the publish itself fails.
+     */
+    public function adopt(string $stem, string $bytes, string $ext): string
+    {
+        $extension = self::normalizeExtension($ext);
+        if ($stem === '' || \strspn($stem, self::NAME_ALPHABET) !== \strlen($stem)) {
+            throw new \InvalidArgumentException('MediaStore: adopt stem carries a character off the name alphabet');
+        }
+        if (\strlen($stem) + 1 + \strlen($extension) > self::FILENAME_MAX_LENGTH) {
+            throw new \InvalidArgumentException('MediaStore: adopt stem cannot name a file within the length cap');
+        }
+
+        $target = $this->directory . '/' . $stem . '.' . $extension;
+        $stat = @lstat($target);
+        if ($stat !== false) {
+            if (($stat['mode'] & 0o170000) !== 0o100000) {
+                throw new \RuntimeException("MediaStore: a non-regular entry already sits at {$target}");
+            }
+            if (!self::contained(realpath($target), $this->resolvedDirectory)) {
+                throw new \RuntimeException("MediaStore: {$target} resolved outside its session directory");
+            }
+
+            return $target;
+        }
+
+        $this->publish($target, $target . self::PARTIAL_SUFFIX, $bytes);
+
+        return $target;
+    }
+
     /** The HOME-rooted store directory every default-constructed session shares one level above. */
     private static function defaultRoot(): string
     {

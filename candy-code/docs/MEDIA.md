@@ -180,9 +180,15 @@ out-of-turn answers `permission_ask_unanswered` rather than treating silence
 as consent — web clients normally run under a granted mode, so this is the
 honest edge, not the common path.
 
-`tool.finished` events carry a `media` array of refs — path and metadata,
-never bytes — and the web UI fetches slices through `media.fetch` to paint
-media cards. `hello` advertises `features.media` (`image`, `video`, and a
+`tool.finished` events carry a `media` array of refs — identity and metadata,
+never a copy of the bytes in the journal — and the web UI fetches slices
+through `media.fetch` to paint media cards. Every ref names the session
+media store: a finished result that carries an image's bytes while naming a
+path outside the store — a `Read` of a workspace image — has that copy
+adopted into it under a deterministic `read-<sha256(id|path) prefix>.<ext>`
+name (idempotent, so re-projecting the same row reuses the one copy), and a
+path with no bytes to adopt projects no ref at all — no card renders that
+cannot load. `hello` advertises `features.media` (`image`, `video`, and a
 truncated SHA-256 of the configured origin's host, never the hostname)
 computed fail-open at boot.
 

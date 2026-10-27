@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Host;
 
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Support\MediaStore;
 use SugarCraft\Code\ToolResult;
 
 /**
@@ -127,11 +128,15 @@ final class SessionSnapshot
      */
     private function shape(array $rows, ?array $page): array
     {
+        $store = $this->storeForRows($rows);
         $shape = array_filter([
             'sessionId' => $this->sessionId,
             'status' => $this->status(),
             'turnId' => $this->turnId,
-            'messages' => array_map(self::mediaBearingRow(...), $rows),
+            'messages' => array_map(
+                static fn (Message $row): array => self::mediaBearingRow($row, $store),
+                $rows,
+            ),
             'queued' => $this->queued,
             'spentUsd' => $this->spentUsd,
             'lastSeq' => $this->lastSeq,
@@ -145,20 +150,48 @@ final class SessionSnapshot
     }
 
     /**
+     * The session store the media fold adopts through, or null — opened
+     * through {@see TranscriptProjector::mediaStoreForSession()} so the live
+     * event and this re-fold judge paths against one derivation (R16(a)).
+     * Built once per shaped page, and only when some row actually names an
+     * artifact: a session of plain `Bash` rows never mints a media
+     * directory on the strength of a snapshot alone.
+     *
+     * @param list<Message> $rows
+     */
+    private function storeForRows(array $rows): ?MediaStore
+    {
+        foreach ($rows as $row) {
+            foreach ($row->toolResults as $result) {
+                if ($result instanceof ToolResult && $result->imagePath !== null) {
+                    return TranscriptProjector::mediaStoreForSession($this->sessionId);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * One saved row as the snapshot carries it: the persisted shape plus, on
      * each finished tool entry that names an artifact, the `media` list and —
      * only when the cap bites — `mediaTruncated`, built by the very same
      * {@see TranscriptProjector::mediaRefs()} that stamps `tool.finished`
      * (W7 snapshot fold, R16(a): a reload must show the same MediaCards a live
      * tab saw, so the row and the event must never hold two derivations).
+     * C-WEB-1.d extends the shared fold: with $store the same adoption runs
+     * here that the live event ran, and adoption is deterministic in the
+     * persisted (id, path) pair, so the reload names the very artifact the
+     * live tab fetched — reusing its copy rather than writing a second one.
      *
      * The fold is wire-only: the saved row ({@see Message::jsonSerialize()})
      * stays as it was, because a ref is derived data — derived at read time it
      * always agrees with the row it describes; persisted, it could go stale
-     * against a later ref law. A result without an artifact path carries no
-     * keys at all, so every media-less row serialises byte-for-byte as before.
+     * against a later ref law. A result whose path the store neither owns nor
+     * can adopt carries no keys at all, so every media-less row serialises
+     * byte-for-byte as before.
      */
-    private static function mediaBearingRow(Message $message): array
+    private static function mediaBearingRow(Message $message, ?MediaStore $store): array
     {
         $row = $message->jsonSerialize();
         foreach ($message->toolResults as $index => $result) {
@@ -166,7 +199,7 @@ final class SessionSnapshot
                 continue;
             }
             $truncated = false;
-            $media = TranscriptProjector::mediaRefs($result, $truncated);
+            $media = TranscriptProjector::mediaRefs($result, $truncated, $store);
             if ($media === null) {
                 continue;
             }

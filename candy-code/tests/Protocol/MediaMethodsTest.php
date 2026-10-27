@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Protocol;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Events\ToolFinished;
+use SugarCraft\Code\Host\TranscriptProjector;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Media\MediaRequest;
 use SugarCraft\Code\Permissions\PermissionDecision;
@@ -111,6 +113,65 @@ final class MediaMethodsTest extends TestCase
         self::assertSame('image/png', $fetched['mime']);
         self::assertSame($status['artifacts'][0]['artifactId'], $fetched['artifactId']);
         self::assertSame([], ProtocolSchema::errors($fetched, MethodSchemas::result('media.fetch')));
+    }
+
+    /**
+     * C-WEB-1.d: the ref a `tool.finished` frame projects for a Read of a
+     * workspace image names the ADOPTED copy inside the session store, so the
+     * card's very first `media.fetch` answers it byte-exact — before this step
+     * the same call failed `media_artifact_not_found` (or, on a basename
+     * collision, served the wrong image). The workspace path itself stays
+     * unservable: adoption copied the bytes, it did not open the directory.
+     */
+    public function testAReadImageRefFromToolFinishedFetchesThroughMediaFetch(): void
+    {
+        $png = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            true,
+        );
+        self::assertIsString($png);
+
+        $workspace = $this->homeRoot . '/workspace/photo.png';
+        mkdir(dirname($workspace), 0o700, true);
+        file_put_contents($workspace, $png);
+
+        $event = TranscriptProjector::new()->toolFinishedEvent(
+            new ToolFinished('read-9', 'Read', new ToolResult('read-9', 'photo.png is an image.')),
+            TranscriptProjector::resultRow(new \SugarCraft\Code\ToolResult(
+                name: 'Read',
+                result: 'photo.png is an image.',
+                id: 'read-9',
+                imageBytes: $png,
+                imagePath: $workspace,
+                durationMs: 4,
+            )),
+            null,
+            null,
+            $this->sessionId,
+            'turn',
+        );
+
+        self::assertArrayHasKey('media', $event->data);
+        $artifactId = (string) $event->data['media'][0]['artifactId'];
+        self::assertStringStartsWith('read-', $artifactId);
+
+        $fetched = $this->client->call('media.fetch', [
+            'sessionId' => $this->sessionId,
+            'artifactId' => $artifactId,
+        ]);
+        self::assertSame($png, base64_decode($fetched['bytes'], true));
+        self::assertSame($artifactId, $fetched['artifactId']);
+        self::assertTrue($fetched['eof']);
+
+        $escaped = $this->client->request('media.fetch', [
+            'sessionId' => $this->sessionId,
+            'path' => $workspace,
+        ]);
+        self::assertSame(
+            'media_artifact_not_found',
+            $escaped['error']['data']['kind'],
+            'the workspace path itself stays unservable; only the adopted copy is fetchable',
+        );
     }
 
     public function testSlicesReassembleByteExactAndOnlyTheFirstRowCarriesMime(): void

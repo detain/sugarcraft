@@ -38,10 +38,16 @@ use SugarCraft\Code\Tools\ToolCall as EngineToolCall;
  * live here and Chat folds through them; the TUI and a server cannot drift on
  * what a finished tool row looks like.
  *
- * PURE. Every method maps its input to a new history or a new
- * {@see SessionEvent}; nothing here writes a store or touches a clock beyond
- * the event's own timestamp. The writing — the durable log and the listeners —
- * is {@see TurnRunner}'s, which hands the projector the row identities
+ * PURE-BY-DEFAULT, SAVE ONE FOLD THAT CANNOT BE. Every method maps its input
+ * to a new history or a new {@see SessionEvent}, and nothing here touches a
+ * clock beyond the event's own timestamp. The one writer is C-WEB-1.d: a
+ * finished result that names an artifact OUTSIDE the session
+ * {@see MediaStore} while carrying its bytes (a `Read` of a workspace image)
+ * is adopted INTO that store during projection — the only ref a client can
+ * fetch through `media.fetch` is one the store owns. Adoption is idempotent
+ * and keyed by the result's own identity, so re-projecting a row writes
+ * nothing new. Everything else's writing — the durable log and the listeners
+ * — is {@see TurnRunner}'s, which hands the projector the row identities
  * {@see TranscriptStore::identify()} allocated.
  */
 final class TranscriptProjector
@@ -61,6 +67,15 @@ final class TranscriptProjector
      * ask the media store for the rest instead of assuming the batch ended.
      */
     public const MAX_EVENT_MEDIA_REFS = 32;
+
+    /**
+     * Hex characters of the SHA-256 digest in a C-WEB-1.d adoption name
+     * (`read-<digest prefix>.<ext>`). Thirty-two is 128 bits of identity —
+     * far past any collision budget a session's reads could exhaust — and
+     * the whole name stays inside {@see MediaStore::FILENAME_MAX_LENGTH}
+     * with the extension headroom to spare.
+     */
+    public const ADOPT_STEM_HEX_LENGTH = 32;
 
     /**
      * Extension (lower-case, no dot) → media type for a ref's `mime`.
@@ -249,6 +264,12 @@ final class TranscriptProjector
      * `tool.finished`, naming the finished row ($identity) and the
      * placeholder it replaced when that one had an identity.
      *
+     * C-WEB-1.d: when the result names an image the session store does not
+     * own, the projection adopts the copy through {@see mediaStoreForSession()}
+     * so the stamped ref is one `media.fetch` can serve; a named path with no
+     * bytes to adopt projects no ref at all. A result without an image path
+     * never opens the store — no directory is minted for an ordinary `Bash`.
+     *
      * @param array{0: string, 1: int}|null $identity
      * @param array{0: string, 1: int}|null $replaced
      */
@@ -267,7 +288,7 @@ final class TranscriptProjector
             $content = mb_strcut($content, 0, self::MAX_EVENT_CONTENT_BYTES, 'UTF-8');
         }
         $mediaTruncated = false;
-        $media = self::mediaRefs($result, $mediaTruncated);
+        $media = self::mediaRefs($result, $mediaTruncated, $result->imagePath === null ? null : self::mediaStoreForSession($sessionId));
 
         return SessionEvent::new(SessionEvent::TOOL_FINISHED, array_filter([
             'toolCallId' => $event->toolCallId,
@@ -292,15 +313,42 @@ final class TranscriptProjector
      * the path, sizes, mime — never image bytes. Production surfaces name at
      * most one artifact on the result today (the head image's `imagePath`),
      * so this is the single-ref fold of {@see mediaRefsForPaths()}; the
-     * ordered-list contract is exercised there directly.
+     * ordered-list contract is exercised there directly. Pass $store (the
+     * session's, from {@see mediaStoreForSession()}) to make the fold
+     * adopt-through-C-WEB-1.d: a head path outside the store carrying bytes
+     * names its adopted copy instead, and one outside with no bytes drops
+     * out; with $store null the fold is exactly the pre-admission shape
+     * `generate.status` has always used.
      *
      * @param-out ?bool $truncated
      *
      * @return list<array<string, mixed>>|null
      */
-    public static function mediaRefs(ToolResult $result, ?bool &$truncated = null): ?array
+    public static function mediaRefs(ToolResult $result, ?bool &$truncated = null, ?MediaStore $store = null): ?array
     {
-        return self::mediaRefsForPaths([$result->imagePath], $result->imageBytes, $truncated);
+        return self::mediaRefsForPaths([$result->imagePath], $result->imageBytes, $truncated, $store, $result->id);
+    }
+
+    /**
+     * The session media store a projection adopts through, or null when none
+     * can be opened — no session named, a hostile id, an unestablishable
+     * home. Null is a degraded fold, not a broken one: refs then name their
+     * paths exactly as given, the pre-C-WEB-1.d shape. Public because
+     * {@see SessionSnapshot} folds the same rows and R16(a) demands the two
+     * surfaces share one derivation rather than each opening stores its own
+     * way (or, worse, one refusing where the other adopted).
+     */
+    public static function mediaStoreForSession(?string $sessionId): ?MediaStore
+    {
+        if ($sessionId === null || $sessionId === '') {
+            return null;
+        }
+
+        try {
+            return MediaStore::forSession($sessionId);
+        } catch (\RuntimeException) {
+            return null;
+        }
     }
 
     /**
@@ -314,19 +362,38 @@ final class TranscriptProjector
      * unpathed) input projects to null so the event key stays absent for
      * old-client compatibility.
      *
+     * With a $store (C-WEB-1.d) every path is judged against it: paths the
+     * store owns project as named; the head path outside it that carries
+     * bytes is adopted under a deterministic `read-` name and projects the
+     * copy; anything outside with no bytes to adopt projects nothing —
+     * the law that a ref is never emitted a client cannot load.
+     *
      * @param list<string|null> $paths
      * @param-out ?bool $truncated
      *
      * @return list<array<string, mixed>>|null
      */
-    public static function mediaRefsForPaths(array $paths, ?string $headBytes = null, ?bool &$truncated = null): ?array
-    {
+    public static function mediaRefsForPaths(
+        array $paths,
+        ?string $headBytes = null,
+        ?bool &$truncated = null,
+        ?MediaStore $store = null,
+        ?string $resultId = null,
+    ): ?array {
         $refs = [];
         foreach ($paths as $index => $path) {
             if (!\is_string($path) || $path === '') {
                 continue;
             }
-            $refs[] = self::mediaRef($path, $index === 0 ? $headBytes : null);
+            $bytes = $index === 0 ? $headBytes : null;
+            if ($store !== null) {
+                $named = self::adoptedPath($store, $path, $bytes, $resultId);
+                if ($named === null) {
+                    continue;
+                }
+                $path = $named;
+            }
+            $refs[] = self::mediaRef($path, $bytes);
         }
 
         $truncated = \count($refs) > self::MAX_EVENT_MEDIA_REFS;
@@ -335,6 +402,45 @@ final class TranscriptProjector
         }
 
         return \array_slice($refs, 0, self::MAX_EVENT_MEDIA_REFS);
+    }
+
+    /**
+     * The path a store-aware projection names for $path (C-WEB-1.d).
+     *
+     * A path inside the store is already fetchable by its own id and is
+     * named as given — judged by realpath, never by id equality, because a
+     * workspace file whose basename happens to collide with a stored
+     * artifact is the exact "wrong image" the old fold could serve. Outside
+     * the store with bytes, the copy is adopted under
+     * `read-<sha256(result id|path) prefix>.<ext>`: deterministic, so the
+     * live event and every snapshot re-fold of the same persisted row name
+     * one and the same artifact, and idempotent, so projecting it twice
+     * still leaves one file. Outside with no bytes — or an adoption the
+     * store refuses (junk extension, unwritable directory) — has nothing a
+     * `media.fetch` could serve, so the ref is dropped rather than emitted
+     * broken.
+     *
+     * @return string|null the path to project, or null to drop the ref
+     */
+    private static function adoptedPath(MediaStore $store, string $path, ?string $bytes, ?string $resultId): ?string
+    {
+        $real = realpath($path);
+        $anchor = realpath($store->directoryPath());
+        if ($real !== false && $anchor !== false && str_starts_with($real, $anchor . '/')) {
+            return $path;
+        }
+        if ($bytes === null || $bytes === '') {
+            return null;
+        }
+
+        $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+        $stem = 'read-' . substr(hash('sha256', ($resultId ?? '') . '|' . $path), 0, self::ADOPT_STEM_HEX_LENGTH);
+
+        try {
+            return $store->adopt($stem, $bytes, $extension);
+        } catch (\RuntimeException | \InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**

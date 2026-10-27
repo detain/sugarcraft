@@ -15,6 +15,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Protocol\Schema\EventSchemas;
 use SugarCraft\Code\Protocol\Schema\ProtocolSchema;
 use SugarCraft\Code\Support\MediaStore;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\ToolResult;
 use SugarCraft\Code\Tools\ToolResult as EngineToolResult;
 use ReflectionMethod;
@@ -28,9 +29,18 @@ use ReflectionMethod;
  * {@see TranscriptProjector::MAX_EVENT_MEDIA_REFS} with an honest
  * `mediaTruncated` flag mirroring the content-clipping ethic, and every
  * projected frame fits the protocol schema.
+ *
+ * C-WEB-1.d adds the adoption contract: the event's fold now runs against
+ * the session store, a head path outside that store which carries bytes is
+ * adopted into it under a deterministic `read-` name, and one outside with
+ * no bytes projects no ref at all. The store lives under HOME, so the whole
+ * class runs sandboxed; the direct static fold without a store — the shape
+ * `generate.status` uses — keeps its pre-admission pins.
  */
 final class TranscriptProjectorMediaTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     /** Smallest valid 1x1 PNG — no text chunk, so no infotext to digest. */
     private const RAW_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
@@ -38,29 +48,50 @@ final class TranscriptProjectorMediaTest extends TestCase
 
     private ?string $tempRoot = null;
 
+    private string $homeRoot = '';
+
+    protected function setUp(): void
+    {
+        // Adoption writes into the session store rooted at HOME; every event()
+        // in this class lands in the sandbox, never in the developer's home.
+        $this->homeRoot = \sys_get_temp_dir() . '/sc-cwd1d-' . \uniqid('', true);
+        $this->useHomeSandbox($this->homeRoot);
+    }
+
     protected function tearDown(): void
     {
-        if ($this->tempRoot === null) {
-            return;
+        if ($this->tempRoot !== null) {
+            self::purgeMediaBeneath($this->tempRoot);
+            $this->tempRoot = null;
         }
+        self::purgeMediaBeneath($this->homeRoot);
+        $this->restoreHomeSandbox();
+    }
+
+    private static function purgeMediaBeneath(string $root): void
+    {
         // chr(42): a glued '*' here is a glob-shaped literal and would drift the PathGlob corpus figure
-        foreach (\glob($this->tempRoot . '/.candy-code/media/' . \chr(42) . '/' . \chr(42)) ?: [] as $file) {
+        foreach (\glob($root . '/.candy-code/media/' . \chr(42) . '/' . \chr(42)) ?: [] as $file) {
             @\unlink($file);
         }
-        foreach (\array_reverse(\glob($this->tempRoot . '/.candy-code/media/' . \chr(42)) ?: []) as $dir) {
+        foreach (\array_reverse(\glob($root . '/.candy-code/media/' . \chr(42)) ?: []) as $dir) {
             @\rmdir($dir);
         }
         foreach (['.candy-code/media', '.candy-code'] as $dir) {
-            @\rmdir($this->tempRoot . '/' . $dir);
+            @\rmdir($root . '/' . $dir);
         }
-        @\rmdir($this->tempRoot);
-        $this->tempRoot = null;
+        @\rmdir($root);
     }
 
     public function testAFinishWithoutMediaCarriesNoMediaKeys(): void
     {
+        // C-WEB-1.d: a path outside the store with no bytes to adopt names
+        // nothing media.fetch could ever serve, so the ref is DROPPED rather
+        // than emitted broken. The store-less status() shape — a path-only
+        // ref reporting bytes: 0 — stays pinned on the direct fold below.
         $data = self::event(self::finished('/only/a/path.png'))->data;
-        self::assertArrayHasKey('media', $data);
+        self::assertArrayNotHasKey('media', $data);
+        self::assertArrayNotHasKey('mediaTruncated', $data);
 
         $plain = self::event(self::finished())->data;
         self::assertArrayNotHasKey('media', $plain);
@@ -70,12 +101,18 @@ final class TranscriptProjectorMediaTest extends TestCase
     public function testTheHeadRefNamesTheArtifactWithoutCarryingBytes(): void
     {
         $png = self::stampedPng();
-        $data = self::event(self::finished('/sessions/s1/wave-6-sample-00.png', $png))->data;
+        $path = '/sessions/s1/wave-6-sample-00.png';
+        $data = self::event(self::finished($path, $png))->data;
 
+        // C-WEB-1.d: this path is outside the session store and carries
+        // bytes, so the fold adopts the copy and the ref names it — under
+        // the deterministic read-<hash> law, inside the store directory.
+        $stem = self::adoptedStem($path);
+        $storeDir = MediaStore::forSession('sess')->directoryPath();
         self::assertSame([[
-            'artifactId' => 'wave-6-sample-00',
+            'artifactId' => $stem,
             'kind' => 'image',
-            'path' => '/sessions/s1/wave-6-sample-00.png',
+            'path' => $storeDir . '/' . $stem . '.png',
             'bytes' => \strlen($png),
             'mime' => 'image/png',
             'infotextDigest' => \hash('sha256', self::INFOTEXT),
@@ -85,6 +122,60 @@ final class TranscriptProjectorMediaTest extends TestCase
         $json = \json_encode($data, JSON_THROW_ON_ERROR);
         self::assertStringNotContainsString(\base64_encode($png), $json);
         self::assertLessThan(65536, \strlen($json));
+    }
+
+    public function testAReadImageOutsideTheStoreIsAdoptedAndItsRefNamesTheCopy(): void
+    {
+        $png = self::stampedPng();
+        $workspaceDir = \sys_get_temp_dir() . '/sc-cwd1d-ws-' . \uniqid('', true);
+        self::assertTrue(mkdir($workspaceDir, 0o700, true));
+        $workspace = $workspaceDir . '/photo.png';
+        self::assertNotFalse(file_put_contents($workspace, $png));
+
+        try {
+            $data = self::event(new ToolResult(
+                name: 'Read',
+                result: 'photo.png is an image.',
+                id: 'call-read-7',
+                imageBytes: $png,
+                imagePath: $workspace,
+                durationMs: 4,
+            ))->data;
+            self::assertArrayHasKey('media', $data);
+            $ref = $data['media'][0];
+            $store = MediaStore::forSession('sess');
+
+            // The ref names a copy inside the session store — the ONLY
+            // place media.fetch serves from — never the workspace path.
+            self::assertSame(self::adoptedStem($workspace, 'call-read-7'), $ref['artifactId']);
+            self::assertSame($store->directoryPath() . '/' . $ref['artifactId'] . '.png', $ref['path']);
+            self::assertNotSame($workspace, $ref['path']);
+            self::assertSame(\strlen($png), $ref['bytes']);
+            self::assertSame('image/png', $ref['mime']);
+            // The copy is real and readable through the store's fetch law.
+            self::assertSame($png, $store->read($ref['artifactId']));
+            // C-7 still holds: the frame names the artifact, it does not embed it.
+            self::assertStringNotContainsString(\base64_encode($png), \json_encode($data, JSON_THROW_ON_ERROR));
+        } finally {
+            @\unlink($workspace);
+            @\rmdir($workspaceDir);
+        }
+    }
+
+    public function testReProjectingTheSameRowReusesTheOneAdoptedCopy(): void
+    {
+        $png = self::stampedPng();
+        $path = '/sessions/s1/wave-6-reuse.png';
+
+        $first = self::event(self::finished($path, $png))->data['media'];
+        $second = self::event(self::finished($path, $png))->data['media'];
+        self::assertSame($first, $second, 'the same row projects the same artifact forever');
+
+        $store = MediaStore::forSession('sess');
+        $listed = $store->list();
+        // One copy under the deterministic name — no collision tail, no rewrite.
+        self::assertSame([$first[0]['artifactId']], \array_column($listed, 'id'));
+        self::assertSame($png, $store->read($first[0]['artifactId']));
     }
 
     public function testAPathWithoutBytesReportsZeroSizeAndNoDigest(): void
@@ -280,7 +371,10 @@ final class TranscriptProjectorMediaTest extends TestCase
         $rowMedia = $wire['messages'][0]['toolResults'][0]['media'];
 
         self::assertSame($eventMedia, $rowMedia);
-        self::assertSame('wave-6-sample-00', $rowMedia[0]['artifactId']);
+        // C-WEB-1.d inside R16(a): the re-fold adopts through the same store
+        // and the same deterministic name, so the reload carries the very
+        // artifact id the live tab fetched — never a second, divergent one.
+        self::assertSame(self::adoptedStem('/sessions/s1/wave-6-sample-00.png'), $rowMedia[0]['artifactId']);
         self::assertStringNotContainsString(
             \base64_encode($png),
             \json_encode($rowMedia, JSON_THROW_ON_ERROR),
@@ -334,6 +428,20 @@ final class TranscriptProjectorMediaTest extends TestCase
     private static function stampedPng(): string
     {
         return Png::setInfotext(\base64_decode(self::RAW_PNG_B64, true), self::INFOTEXT);
+    }
+
+    /**
+     * The C-WEB-1.d adoption name law, spelled independently of the
+     * projector so a silent change to the scheme (prefix, digest input,
+     * length) reddens these pins rather than sliding through both sides.
+     */
+    private static function adoptedStem(string $path, ?string $resultId = null): string
+    {
+        return 'read-' . \substr(
+            hash('sha256', ($resultId ?? '') . '|' . $path),
+            0,
+            TranscriptProjector::ADOPT_STEM_HEX_LENGTH,
+        );
     }
 
     private static function projector(): TranscriptProjector
