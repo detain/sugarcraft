@@ -32,16 +32,17 @@
     "P-CTX.a",
     "P-TABS.b",
     "C-CTX-1.a",
-    "C-WEB-1.a"
+    "C-WEB-1.a",
+    "C-WEB-1.d"
   ],
   "inflight": {
     "C-SEC-3.a": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SEC-3.a",
       "branch": "cc/C-SEC-3.a",
-      "session": "ses_e82912453ffeA5y02RHgUZgNlr",
-      "note": "re-cut fresh builder @584@ \u2014 prior recorded ID was phantom mixup (dead W1 reviewer session); branch still zero commits base 4f657c755"
+      "session": null,
+      "note": "LANDED honest @694: tip e34bd1835 base 4f657c755, 13 files +454/-60, single commit, detain 1/1. NEW CommandShellPostureTest+TurnControllerBundleShellTest durations duty. Gates builder: new pair 12T/33A, 83T/1342A, 112T/553A, DocFigure 91T/3894A, doc guards green, five-guard pair-only live 25,579. Deviations: COMMANDS.md foreign rows kept (C-SEC-3.b), stash slip restored same turn. r1 reviewer launching."
     },
     "C-PRV-1.a": {
       "stage": "build",
@@ -71,19 +72,8 @@
       "note": "r2 CLEAN queued 2nd (after running C-WEB-1.a welder): picks ee24cbcde+b8966c024, REGEN trio+dist (resolves TS2353), vitest serial + GatewayTrustRoutingTest php unit filter + five-guard; durations row GatewayTrustRoutingTest.php; evidence 4 files",
       "session": null
     },
-    "C-WEB-1.d": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-WEB-1.d",
-      "branch": "cc/C-WEB-1.d",
-      "session": null,
-      "tip": "871f018ff",
-      "reviewer": "ses_e82938b85",
-      "weld_note": "no regen; gates TranscriptProjectorMedia|MediaMethods|MediaStore|ReadPathCensus 79T/861A; no new files",
-      "note": "r1 CLEAN measured (79T/861A, pair-only). WELD: plain pick 871f018ff, NO regen (no Protocol/web files \u2014 verify), merged gates TranscriptProjectorMedia|MediaMethods|MediaStore|ReadPathCensus 79T/861A + five-guard pair-only, no new test files (no durations row), \u00a74 unstaged, evidence 3 lane files+run-state"
-    },
     "P-IMG.b": {
-      "stage": "fix",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-P-IMG.b",
       "branch": "cc/P-IMG.b",
@@ -91,7 +81,7 @@
       "tip": "2daed61e8",
       "reviewer": "ses_e82938b83",
       "weld_note": "no regen; gates per brief + EnvRoster base-red verify; +8T",
-      "note": "r1 1 MINOR step-local (Renderer.php:1019 sentinel-free docblock false under live-agent split; Veil can split zone pairs) + NIT blank line MediaFormWiringTest:131; fixer r2 choose honest strip-or-amend, weld re-runs 1667T/71,647A battery"
+      "note": "r2 CLEAN (static, REVIEW-2.md persisted verbatim @691); weld queue AFTER P-TABS.d: picks 2daed61e8+b9dd35a93, NO regen (TUI-only Renderer/MediaForm/FormTabs), gates tests/Tui+tests/App battery 1668T/71661A + five-guard pair-only + author law; no new phpunit files beyond brief-declared? (MediaForm* tests existing-file mods \u2014 re-read REPORT durations duty at weld)"
     },
     "P-CTX.c": {
       "stage": "clean",
@@ -103,6 +93,22 @@
       "reviewer": "ses_e82938b94",
       "weld_note": "NEW tests/Context? locate ContextPaneTest.php path at weld for durations duty; gates ContextPane 12T/388A + TuiLang|LangParity + ShellContrast; regen no-op; [lang tui.context.*]",
       "note": "r2 CLEAN. WELD queue: plain picks 6a69bf018+ d807cf3e2 both (build+fix chain); NO regen; gates --filter ContextPane 12T/388A + SymbolCitation|DuplicatedDocBlock + five-guard pair-only; NEW ContextPaneTest.php DURATIONS duty (+12T); evidence 4 lane files+run-state; cherry proof; prune"
+    },
+    "P-CTX.d": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-P-CTX.d",
+      "branch": "cc/P-CTX.d",
+      "session": "ses_e82819d2dffeAtY6rF2CLNtVWa",
+      "note": "died harness-error zero-disk @683, resumed disk-grounded @686"
+    },
+    "P-TABS.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-P-TABS.a",
+      "branch": "cc/P-TABS.a",
+      "session": "ses_e82819d2dffdYxBj4g6WECBTHP",
+      "note": "died harness-error zero-disk @682, resumed disk-grounded @686; second zero-disk death => CUT FRESH"
     }
   },
   "blocked": [],
@@ -129,6 +135,13 @@
       "gates": "builder file-path gate 19T/117A OK exact; ReadPathCensus|StderrEmitterCensus 114T/20639A 0F (2 foreign AccessorDeprecationTest phpunit deprecations); five-guard 133T/15437A pair-only (pinned 25,537 vs live 25,778 - closeout re-pin)",
       "welded_note": "gates exact / pair-only @ weld",
       "durations_owed": "none - NO new candy-code *Test.php in pick"
+    },
+    "C-WEB-1.d": {
+      "master": "8c93928f2",
+      "pick": "8c93928f2 (landed 4db08f543 with -x trailer, amended message-only to strip \u2014 zero trailers per precedent)",
+      "regen": "no-op (gen-protocol-schema --check up-to-date rc0; SessionSnapshot change is row-mapping body, no wire-schema; diff-tree carries no candy-code-web files, no new test files)",
+      "gates": "TranscriptProjectorMedia|MediaMethods|MediaStore|ReadPathCensus 79T/861A OK exact (r1); five-guard 133T/15444A pair-only (pinned 25,537 vs live 25,787 \u2014 closeout re-pin); foreign AttachPaging 2F/RemoteBackend 1F byte-identical across pick (16T/97A/3F) \u2014 inherited, disclosed, not cured; php -l 5 touched PHP files clean",
+      "durations_owed": "none \u2014 NO new candy-code *Test.php in pick"
     }
   }
 }
