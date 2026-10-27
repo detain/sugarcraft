@@ -117,10 +117,82 @@ final class ShareMethodsTest extends TestCase
         self::assertFalse($answer['revoked']);
     }
 
-    /** @param list<Message> $messages */
-    private function seedSession(string $id, array $messages): string
+    /**
+     * C-SES-3.c: `session.shares {sessionId}` — the Share/Revoke menu's list
+     * for one session. Each row carries the FULL token exactly as
+     * `session.share`'s answer does (the method is token-scoped like the page
+     * it lists), beside the display prefix, path, expiry, format and the
+     * owning session's name.
+     */
+    public function testSharesListsTheLiveSharesOfOneSessionWithTheirFullTokens(): void
     {
-        $this->fixture->store->createSession($id, 'anthropic', 'claude-sonnet-4-6');
+        $client = $this->fixture->client();
+        $mine = $this->seedSession('ses3-sh-a', [Message::user('mine')], 'Alpha notes');
+        $theirs = $this->seedSession('ses3-sh-b', [Message::user('theirs')], 'Beta notes');
+
+        $first = $client->call('session.share', ['sessionId' => $mine]);
+        $second = $client->call('session.share', ['sessionId' => $mine]);
+        $other = $client->call('session.share', ['sessionId' => $theirs]);
+
+        $rows = $client->call('session.shares', ['sessionId' => $mine])['items'];
+
+        self::assertCount(2, $rows, 'the listing holds exactly the two live shares of this session');
+        // Newest first, per ShareStore::liveAll()'s ORDER BY.
+        self::assertSame([$second['token'], $first['token']], array_column($rows, 'token'), 'full tokens, newest first');
+        foreach ($rows as $row) {
+            self::assertSame($mine, $row['sessionId']);
+            self::assertSame('Alpha notes', $row['sessionName']);
+            self::assertSame(substr((string) $row['token'], 0, 8), $row['tokenPrefix'], 'prefix is the leading hex chars');
+            self::assertSame('/s/' . $row['token'], $row['path']);
+            self::assertSame('html', $row['format']);
+            self::assertGreaterThanOrEqual(time(), (int) $row['expiresAt'], 'only live rows are listed');
+        }
+        self::assertNotContains($other['token'], array_column($rows, 'token'), "another session's share is not listed");
+    }
+
+    public function testSharesWithoutSessionIdListsEverySessionsLiveShares(): void
+    {
+        $client = $this->fixture->client();
+        $alpha = $this->seedSession('ses3-all-a', [Message::user('a')], 'Alpha notes');
+        $beta = $this->seedSession('ses3-all-b', [Message::user('b')], 'Beta notes');
+
+        $shared = $client->call('session.share', ['sessionId' => $alpha]);
+        $sharedAgain = $client->call('session.share', ['sessionId' => $beta]);
+
+        $rows = $client->call('session.shares')['items'];
+
+        self::assertCount(2, $rows);
+        self::assertSame([$sharedAgain['token'], $shared['token']], array_column($rows, 'token'));
+        $namesBySession = array_column($rows, 'sessionName', 'sessionId');
+        self::assertSame(['ses3-all-b' => 'Beta notes', 'ses3-all-a' => 'Alpha notes'], $namesBySession, 'the all-sessions list names each owner');
+    }
+
+    public function testARevokedShareLeavesTheList(): void
+    {
+        $client = $this->fixture->client();
+        $sessionId = $this->seedSession('ses3-rev', [Message::user('r')]);
+
+        $shared = $client->call('session.share', ['sessionId' => $sessionId]);
+        self::assertCount(1, $client->call('session.shares', ['sessionId' => $sessionId])['items']);
+
+        self::assertTrue($client->call('session.unshare', ['token' => $shared['token']])['revoked']);
+
+        self::assertSame([], $client->call('session.shares')['items'], 'a revoked token is gone from every listing');
+    }
+
+    public function testSharesOfASessionThatNeverExistedIsTheEmptyList(): void
+    {
+        $client = $this->fixture->client();
+
+        $answer = $client->call('session.shares', ['sessionId' => 'ses3-no-such']);
+
+        self::assertSame([], $answer['items'], 'the listing states the shares table, which holds nothing for it');
+    }
+
+    /** @param list<Message> $messages */
+    private function seedSession(string $id, array $messages, ?string $name = null): string
+    {
+        $this->fixture->store->createSession($id, 'anthropic', 'claude-sonnet-4-6', null, $name);
         TranscriptStore::new($this->fixture->store)->save($id, $messages);
 
         return $id;

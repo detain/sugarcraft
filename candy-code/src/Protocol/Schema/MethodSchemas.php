@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Protocol\Schema;
 use SugarCraft\Code\Host\SessionSnapshot;
 use SugarCraft\Code\Memory\MemoryHistory;
 use SugarCraft\Code\Protocol\Methods\FsMethods;
+use SugarCraft\Code\Protocol\Methods\SessionMethods;
 use SugarCraft\Code\Protocol\Methods\TurnMethods;
 use SugarCraft\Code\Protocol\Schema\Definitions as D;
 use SugarCraft\Code\Server\ServerConfig;
@@ -197,6 +198,18 @@ final class MethodSchemas
             'session.unshare' => [
                 Schema::object(['token' => Schema::string(ShareStore::TOKEN_BYTES * 2)], ['token']),
                 Schema::object(['revoked' => Schema::boolean()], ['revoked']),
+            ],
+            'session.shares' => [
+                Schema::object(['sessionId' => Schema::ref(D::SESSION_ID)]),
+                $items(Schema::object([
+                    'sessionId' => Schema::ref(D::SESSION_ID),
+                    'sessionName' => Schema::string()->nullable(),
+                    'token' => Schema::string(ShareStore::TOKEN_BYTES * 2),
+                    'tokenPrefix' => Schema::string(SessionMethods::SHARE_TOKEN_PREFIX_CHARS),
+                    'path' => Schema::string(),
+                    'format' => Schema::enum([ShareSession::FORMAT_HTML]),
+                    'expiresAt' => Schema::integer(0),
+                ], ['sessionId', 'sessionName', 'token', 'tokenPrefix', 'path', 'format', 'expiresAt'])),
             ],
             'session.setMode' => [
                 Schema::object([...$sid, 'permissionMode' => Schema::ref(D::PERMISSION_MODE)], ['sessionId', 'permissionMode']),

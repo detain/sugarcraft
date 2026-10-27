@@ -24,8 +24,8 @@ use SugarCraft\Code\Util\Exporter;
 
 /**
  * `session.*` lifecycle (Appendix O §6.3): list, create, open and follow,
- * rename, fork, close, delete, export, serve and revoke (share pages), and
- * the session's permission mode.
+ * rename, fork, close, delete, export, serve, list and revoke (share pages),
+ * and the session's permission mode.
  * Prompting is {@see TurnMethods}.
  *
  * A SESSION'S PERMISSION MODE is the client's to choose — within
@@ -36,6 +36,9 @@ use SugarCraft\Code\Util\Exporter;
 final class SessionMethods
 {
     public const SESSION_ID_MAX = 128;
+
+    /** How many leading hex chars of a token `session.shares` rows echo for display. */
+    public const SHARE_TOKEN_PREFIX_CHARS = 8;
 
     private function __construct()
     {
@@ -55,6 +58,7 @@ final class SessionMethods
         $registry->add(MethodSpec::new('session.export', Scope::Read, 'A session\'s transcript as markdown, json or text.', self::export(...)));
         $registry->add(MethodSpec::new('session.setMode', Scope::Write, 'The permission mode the session\'s next turns run in.', self::setMode(...), true));
         $registry->add(MethodSpec::new('session.share', Scope::Write, 'Publish an HTML snapshot of a session as a self-hosted share page at /s/{token}.', self::share(...), true));
+        $registry->add(MethodSpec::new('session.shares', Scope::Read, 'The live share pages of one session, or of every session when sessionId is absent.', self::shares(...)));
         $registry->add(MethodSpec::new('session.unshare', Scope::Write, 'Revoke a share page by token; it 404s from its next request.', self::unshare(...), true));
     }
 
@@ -309,6 +313,45 @@ final class SessionMethods
         $token = $params->string('token', ShareStore::TOKEN_BYTES * 2);
 
         return ['revoked' => self::shareStore($call)->revoke($token)];
+    }
+
+    /**
+     * `session.shares` — the read twin of `session.share` / `session.unshare`
+     * (C-SES-3, for the web Share/Revoke menu): the LIVE shares of one
+     * session, or of every session when `sessionId` is absent. Rows carry the
+     * full token exactly as `session.share`'s answer does — the method is
+     * token-scoped like the page it lists, not a public register — beside a
+     * short display prefix, the page path, expiry, format, and the owning
+     * session's id and name.
+     *
+     * A `sessionId` no session owns answers the empty list, not not-found:
+     * the listing states what the shares table holds, and a deleted session
+     * has its live shares revoked with it, so an honest empty IS the whole
+     * truth about it.
+     *
+     * @return array<string, mixed>
+     */
+    private static function shares(CallContext $call, Params $params): array
+    {
+        $sessionId = $params->has('sessionId') ? self::sessionId($params) : null;
+
+        $rows = self::shareStore($call)->liveAll();
+        if ($sessionId !== null) {
+            $rows = \array_values(\array_filter(
+                $rows,
+                static fn (array $row): bool => $row['record']->sessionId === $sessionId,
+            ));
+        }
+
+        return ['items' => \array_map(static fn (array $row): array => [
+            'sessionId' => $row['record']->sessionId,
+            'sessionName' => $row['sessionName'],
+            'token' => $row['record']->token,
+            'tokenPrefix' => \substr($row['record']->token, 0, self::SHARE_TOKEN_PREFIX_CHARS),
+            'path' => $row['record']->path(),
+            'format' => $row['record']->format,
+            'expiresAt' => $row['record']->expiresAt,
+        ], $rows)];
     }
 
     /**
