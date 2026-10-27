@@ -45,17 +45,10 @@
     "C-SEC-3.b",
     "C-WEB-1.b",
     "P-IMG.c",
-    "P-CTX.b"
+    "P-CTX.b",
+    "P-CTX.d"
   ],
   "inflight": {
-    "P-CTX.d": {
-      "stage": "review",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-P-CTX.d",
-      "branch": "cc/P-CTX.d",
-      "session": "r2-pending",
-      "note": "fix 77e114904 disk-verified (items 1/3/4, kept 2); r2 reviewer launching; weld note: cite 983b8e021 build + 77e114904 fix, DUR TurnRunnerContextTest+ContextSnapshotScheduleTest"
-    },
     "C-PRV-1.b": {
       "stage": "build",
       "round": 1,
@@ -156,7 +149,8 @@
     "C-SEC-3.b": "WELDED 2026-10-27 master 393635d2c (pick acb746a59, plain cherry-pick, clean; 5 files +20/-16). Regen no-op (command/tool/settings gens up to date). Gates at weld: CommandShellPosture|TurnControllerBundle 13T/39A OK; wide CommandShellPosture|TurnController 35T/143A OK (builder 135T filter-era); TrustKey|DocFigure 109T/4486A OK; five-guard 133T/15572A F2 staleness pair only (25,537 pinned vs 25,934 live). PARTIAL by design: foreign-row/doc-truth half landed; opt-in half carried to C-SEC-3.c after C-EXT-4.c (row-identity gap). NO new candy-code test files -> no durations row. §4 mark ✅ 393635d2c UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
     "C-WEB-1.b": "WELDED 2026-10-27 master 34a295d2d (pick 07787590f, clean; StatusBar.vue +8/-1 + 3 pins). dist regen commit 21d7d039b (welder-only; amended to carry the two new hashed bundles — rename-detected, dist status clean). vitest serial: statusBar 10/10, protocol generated.spec 3/3 (dormantRoster.spec.ts does not exist yet — C-WEB-3.g pending). No PHP files -> no php gates. NO new spec files. §4 mark ✅ 34a295d2d UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
     "P-IMG.c": "WELDED 2026-10-27 master a28779b00 (pick 26760f05b, clean; App.vue +3 + NEW src-web/components/__tests__/topbarGenerate.spec.ts). dist regen commit 8604d79d9 (welder-only, clean). vitest serial topbarGenerate+statusBar 14/14 green (4 new + 10 status-bar; brief's 11 was a builder-era recount, actual 10, all pass). PHP gates N/A. §4 mark ✅ a28779b00 UNSTAGED. Vitest-roster attention: NEW topbarGenerate.spec.ts (observation only, no durations.tsv involvement). Cherry proof '-'; worktree+branch pruned.",
-    "P-CTX.b": "WELDED 2026-10-27 master 4e91ddcb2+3edaa6acc (picks 9a6ebd207 build + e34dd4938 tests/docs, COMMANDS.md+lang auto-merged clean). Weld cure bdb1c96d8 TAKEN (brief premises matched text): (a) bad-args arg-count refusal moved BEFORE the capability-refusal branch; (b) failed .txt write now names the orphaned .json residue (NEW lang key cmd.context.raw.json-residue, single-locale). Regen no-op (gen-command-docs --write/--check up to date). Gates at weld: ContextRawDump 7T/35A OK exact; ContextRawDump|ContextHost 8T/41A OK post-cure; wide --filter Context 1839T/7859A OK; TrustKey|DocFigure 109T/4487A OK; five-guard 133T/15580A F2 staleness pair only (25,537 pinned vs 25,941 live). DURATIONS duty: NEW candy-code/tests/Host/Commands/ContextRawDumpTest.php (7T) — LIST ONLY, durations.tsv is closeout duty. §4 mark ✅ 4e91ddcb2 UNSTAGED. Cherry proof pending prune step."
+    "P-CTX.b": "WELDED 2026-10-27 master 4e91ddcb2+3edaa6acc (picks 9a6ebd207 build + e34dd4938 tests/docs, COMMANDS.md+lang auto-merged clean). Weld cure bdb1c96d8 TAKEN (brief premises matched text): (a) bad-args arg-count refusal moved BEFORE the capability-refusal branch; (b) failed .txt write now names the orphaned .json residue (NEW lang key cmd.context.raw.json-residue, single-locale). Regen no-op (gen-command-docs --write/--check up to date). Gates at weld: ContextRawDump 7T/35A OK exact; ContextRawDump|ContextHost 8T/41A OK post-cure; wide --filter Context 1839T/7859A OK; TrustKey|DocFigure 109T/4487A OK; five-guard 133T/15580A F2 staleness pair only (25,537 pinned vs 25,941 live). DURATIONS duty: NEW candy-code/tests/Host/Commands/ContextRawDumpTest.php (7T) — LIST ONLY, durations.tsv is closeout duty. §4 mark ✅ 4e91ddcb2 UNSTAGED. Cherry proof pending prune step.",
+    "P-CTX.d": "WELDED 2026-10-27 master 967479a37+d1b47ee87 (picks 983b8e021 build + 77e114904 fix r2, clean, zero conflicts; %ae/%ce 1/1 both, zero trailers). Regen no-op (command/tool/settings gens all up to date; no Protocol/web files in picks). Gates: TurnRunnerContext|ContextSnapshotSchedule|AutomaticCompaction|RouteTraitParity 54T/448A OK EXACT; broad --filter Context 1851T/7903A OK; five-guard 133T/2F staleness pair only. Absorbed W4 disclosed carrier: lane-bundled dated foreign cure row SessionPickerSearchMsg in RouteTraitParityTest (base-red cured in-step). REVIEW-2.md not persisted on disk at weld (r2 verdict per lead dispatch CLEAN); evidence staged BRIEF/REPORT/REVIEW-1. DURATIONS duty: NEW candy-code tests/Host/TurnRunnerContextTest.php + tests/Chat/ContextSnapshotScheduleTest.php - closeout rows. Cherry proof both '-'; worktree+branch pruned."
   },
   "carries": [
     "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -166,6 +160,7 @@
     "LEAD CURES in flight @878@: cc/cure-lang (ChatHostLangCatalogue roster chat.effort.shape.* emitters, worktree cc-cmp-cure-lang) + cc/cure-snap (SessionSnapshot artifact-refs expectation vs 8c93928f2 mediaBearingRow, worktree cc-cmp-cure-snap). RouteTraitParity cure rides P-CTX.d (do not duplicate). Weld cures as picks when they land.",
     "W4 closeout: 9 durations rows + 6 planned-seam carries (see W4/WAVE-REVIEW-1.md)",
     "cure-lang landed 34ac69dfc (pick of 2685a32c9; ChatHostLangCatalogue roster; lanes/cure-lang/REPORT.md weld-reconstructed — lane report never persisted)",
-    "cure-snap landed f76420f74 (pick of dd1aab173; SessionSnapshotTest fixture-shape cure, TEST-at-fault per lanes/cure-snap/REPORT.md; AttachPaging 2F stays foreign-not-cured)"
+    "cure-snap landed f76420f74 (pick of dd1aab173; SessionSnapshotTest fixture-shape cure, TEST-at-fault per lanes/cure-snap/REPORT.md; AttachPaging 2F stays foreign-not-cured)",
+    "P-CTX.d weld: RouteTraitParityTest SessionPickerSearchMsg foreign cure row ABSORBED (W4 disclosed carrier closed at this weld); durations rows owed TurnRunnerContextTest + ContextSnapshotScheduleTest (closeout)"
   ]
 }
