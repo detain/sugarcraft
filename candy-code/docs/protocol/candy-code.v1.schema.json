@@ -5601,7 +5601,7 @@
             }
         },
         "session.updated": {
-            "description": "A session was renamed, its mode changed, or its status changed (idle, busy, waiting_permission).",
+            "description": "A session was renamed, its mode changed, its model changed, or its status changed (idle, busy, waiting_permission). A served `/model` or `/rename` reaches every client through this arm, not only the status lane.",
             "durable": false,
             "scope": "server",
             "data": {

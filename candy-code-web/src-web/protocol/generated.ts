@@ -1649,7 +1649,7 @@ export interface Events {
   "session.status": {
     status: "idle" | "busy" | "waiting_permission"
   }
-  /** A session was renamed, its mode changed, or its status changed (idle, busy, waiting_permission). */
+  /** A session was renamed, its mode changed, its model changed, or its status changed (idle, busy, waiting_permission). A served `/model` or `/rename` reaches every client through this arm, not only the status lane. */
   "session.updated": SessionSummary
   /** The session spend cap stopped the turn. */
   "spend_cap.breached": {

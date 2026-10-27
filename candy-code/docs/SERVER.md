@@ -538,7 +538,7 @@ one re-reads what it describes (`session.list`, `permission.pending`).
 | `session.created` | server | live | A session was created. |
 | `session.deleted` | server | live | A session was deleted. |
 | `session.status` | session | durable | The session became idle, busy or waiting_permission. |
-| `session.updated` | server | live | A session was renamed, its mode changed, or its status changed (idle, busy, waiting_permission). |
+| `session.updated` | server | live | A session was renamed, its mode changed, its model changed, or its status changed (idle, busy, waiting_permission). A served `/model` or `/rename` reaches every client through this arm, not only the status lane. |
 | `spend_cap.breached` | session | durable | The session spend cap stopped the turn. |
 | `subagent.finished` | session | durable | A delegated sub-agent finished. |
 | `subagent.progress` | session | live | A delegated sub-agent made progress. |
