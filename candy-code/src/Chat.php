@@ -842,6 +842,15 @@ final class Chat implements Model
          */
         private readonly ?float $lastEscapeAt = null,
     /**
+         * The permission mode a `/review` clamp stepped the session away
+         * from (C-AGT-2.b), restored by {@see restoreReviewMode()} the
+         * instant the review turn releases its slot — every settle path,
+         * cancellations and errors included, passes through the one
+         * {@see mutate()} chokepoint that reads this field. Null whenever
+         * no review clamp is outstanding.
+         */
+        private readonly ?\SugarCraft\Code\Permissions\PermissionMode $reviewModeRestore = null,
+    /**
          * Real terminal dimensions, sourced from {@see WindowSizeMsg} - the
          * one size sugar-core's Program actually dispatches at startup AND
          * again on every SIGWINCH resize (see Program::installSignalHandlers()).
@@ -8790,6 +8799,7 @@ final class Chat implements Model
             'generation' => $this->generation,
             'inFlightCancellation' => $this->inFlightCancellation,
             'lastEscapeAt' => $this->lastEscapeAt,
+            'reviewModeRestore' => $this->reviewModeRestore,
             'rows' => $this->rows,
             'cols' => $this->cols,
             'mosaic' => $this->mosaic,
@@ -8977,7 +8987,19 @@ final class Chat implements Model
             unset($changes[$flowKey]);
         }
 
-        return new self(...array_merge($constructorProps, $changes));
+        $next = new self(...array_merge($constructorProps, $changes));
+
+        // C-AGT-2.b, the one chokepoint every turn release passes through:
+        // an outstanding `/review` clamp gives the session's mode back the
+        // instant the turn stops holding the slot — plain answer, refusal,
+        // cancel and error settle alike, because all of them land here with
+        // `inFlight => false`. The restore's own mutates carry no `inFlight`
+        // key, so it cannot recurse.
+        if ($next->reviewModeRestore !== null && ($changes['inFlight'] ?? true) === false) {
+            return $next->restoreReviewMode();
+        }
+
+        return $next;
     }
 
     public function withStreaming(bool $enable): self
@@ -11877,6 +11899,19 @@ final class Chat implements Model
      * attaches; a valid (or absent) ref becomes the prompt's closing mention
      * and the turn begins.
      *
+     * THE TURN IS READ-ONLY BY ACTION, not only by mandate (C-AGT-2.b): a
+     * session whose gate is looser than `plan` is stepped down to `plan` for
+     * exactly this one turn, so the reviewing model physically cannot Write,
+     * Edit or run a non-read-only `Bash` while it reads the diff; the settle
+     * releases (answer, refusal, cancel, error — every one lands through
+     * {@see mutate()}'s release guard) gives the prior mode back. A session
+     * already in `plan` is untouched, and `dont-ask` is left alone because
+     * plan-vs-dont-ask is a strictness trade the clamp must not silently
+     * make. A `/review` typed WHILE a turn runs rides the queue: the clamp
+     * is a between-turns swap, so that queued prompt goes out unclamped the
+     * moment the running turn settles — disclosed, matching every other
+     * between-turns-only mode surface in this class.
+     *
      * @return array{0: self, 1: ?\Closure}
      */
     private function reviewTurn(string $inputText, bool $security): array
@@ -11893,7 +11928,25 @@ final class Chat implements Model
             ];
         }
 
-        return $this->withInputBuf(
+        $chat = $this;
+        $gate = $this->permissionGate();
+        $prior = $gate?->mode();
+        if ($gate !== null && $prior !== null && !$this->inFlight
+            && $prior !== \SugarCraft\Code\Permissions\PermissionMode::Plan
+            && $prior !== \SugarCraft\Code\Permissions\PermissionMode::DontAsk
+        ) {
+            [$clamped] = $this->swapPermissionGate(
+                $gate,
+                \SugarCraft\Code\Permissions\PermissionMode::Plan,
+                self::REVIEW_CLAMP_SOURCE,
+                ['reviewModeRestore' => $prior],
+            );
+            $chat = $clamped->mutate([
+                'history' => [...$clamped->history, Message::notice(Lang::t('cmd.review.clamped', ['mode' => $prior->value]))],
+            ]);
+        }
+
+        return $chat->withInputBuf(
             \SugarCraft\Code\Commands\ReviewCommand::prompt($ref, $security),
         )->submit();
     }
@@ -17457,6 +17510,12 @@ final class Chat implements Model
     /** How `/permissions` names a mode set by `/permissions mode`. */
     public const MODE_COMMAND_SOURCE = '/permissions mode, this session';
 
+    /** How the gate records the mode a `/review` clamp set (C-AGT-2.b). */
+    public const REVIEW_CLAMP_SOURCE = '/review, this turn';
+
+    /** How the gate records the mode a settled `/review` gave back (C-AGT-2.b). */
+    public const REVIEW_RESTORE_SOURCE = '/review, restored';
+
     /**
      * The opening words of the model-visible row a mode switch appends — what
      * {@see togglePermissionMode()} recognises as a switch the model has not
@@ -17530,7 +17589,37 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        $next = $gate->withMode($target, $msg->source ?? self::MODE_SWITCH_SOURCE);
+        return $this->swapPermissionGate($gate, $target, $msg->source ?? self::MODE_SWITCH_SOURCE);
+    }
+
+    /**
+     * The gate swap {@see togglePermissionMode()} performs once its guards
+     * pass — shared with the `/review` clamp and its restore (C-AGT-2.b).
+     * Replaces the gate wherever it is read (the hook chain's
+     * {@see \SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook} and the engine
+     * backend's own copy) and appends the model-visible notice row naming the
+     * switch, superseding a previous unsent one rather than stacking.
+     *
+     * THE CALLER OWNS THE GUARDS: "between turns only" and the no-gate case
+     * are judged by each caller; this helper trusts its $gate and a $target
+     * that differs from it (an equal pair answers [$this, null] unchanged).
+     *
+     * @param array<string, mixed> $changes extra mutate() changes the caller
+     *        rides onto the result (the clamp carries its restore flag here)
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function swapPermissionGate(
+        \SugarCraft\Code\Permissions\PermissionGate $gate,
+        \SugarCraft\Code\Permissions\PermissionMode $target,
+        string $source,
+        array $changes = [],
+    ): array {
+        $current = $gate->mode();
+        if ($target === $current) {
+            return [$this, null];
+        }
+
+        $next = $gate->withMode($target, $source);
         if ($this->hooks?->hook(
             \SugarCraft\Code\Hooks\HookEvent::PreToolUse->value,
             \SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook::NAME,
@@ -17548,7 +17637,36 @@ final class Chat implements Model
             ? Message::notice(Lang::t('chat.mode.back_unsent', ['mode' => $target->value]))
             : Message::system(self::modeChangeNotice($from, $target));
 
-        return [$chat->mutate(['history' => $history]), null];
+        return [$chat->mutate(array_merge(['history' => $history], $changes)), null];
+    }
+
+    /**
+     * Give the session its permission mode back when a `/review` clamp's turn
+     * releases the slot (C-AGT-2.b).
+     *
+     * Reached ONLY from the `inFlight => false` guard in {@see mutate()}, the
+     * one chokepoint every settle path shares — a plain answer, a refusal, a
+     * double-Escape cancel, a rejected stream. A gate that vanished underneath
+     * the clamp, or that already answers with the mode the clamp stepped away
+     * from, leaves only the pending flag to drop; anything else goes back
+     * through the same swap the clamp used, so the model is told the session
+     * is no longer in `plan` exactly as it was told the switch in.
+     */
+    private function restoreReviewMode(): self
+    {
+        $prior = $this->reviewModeRestore;
+        if ($prior === null) {
+            return $this;
+        }
+
+        $gate = $this->permissionGate();
+        if ($gate === null || $gate->mode() === $prior) {
+            return $this->mutate(['reviewModeRestore' => null]);
+        }
+
+        [$restored] = $this->swapPermissionGate($gate, $prior, self::REVIEW_RESTORE_SOURCE, ['reviewModeRestore' => null]);
+
+        return $restored;
     }
 
     /**

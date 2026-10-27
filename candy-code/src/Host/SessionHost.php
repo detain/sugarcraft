@@ -1031,7 +1031,7 @@ final class SessionHost
             return TurnTicket::refused($turns->noBackendNotice());
         }
 
-        return $this->admitPrompt($text, $options->resolveMentions, $text, attachments: $options->attachments);
+        return $this->admitPrompt($text, $options->resolveMentions, $text, attachments: $options->attachments, modeCeiling: $options->modeCeiling);
     }
 
     /**
@@ -1113,9 +1113,18 @@ final class SessionHost
      * @param array{0: HookResult, 1: ?HookResult}|null $verdicts
      * @param list<\SugarCraft\Code\Attachment> $attachments pasted images riding this
      *     prompt (WEB-5b); threaded unchanged through a forked hook's resume
+     * @param ?PermissionMode $modeCeiling the C-AGT-2.b gate ceiling of the
+     *     submission that starts this turn; threaded unchanged through a
+     *     forked hook's resume, null for an expansion that names none
      */
-    private function admitPrompt(string $text, bool $resolveMentions, string $draft, ?array $verdicts = null, array $attachments = []): TurnTicket
-    {
+    private function admitPrompt(
+        string $text,
+        bool $resolveMentions,
+        string $draft,
+        ?array $verdicts = null,
+        array $attachments = [],
+        ?PermissionMode $modeCeiling = null,
+    ): TurnTicket {
         $turns = $this->turns();
         $ledger = $this->ledger();
 
@@ -1226,7 +1235,7 @@ final class SessionHost
         $notes = [];
         if ($hooks !== null) {
             if ($verdicts === null) {
-                $verdicts = $this->fireTurnHooks($text, $resolveMentions, $draft, $attachments);
+                $verdicts = $this->fireTurnHooks($text, $resolveMentions, $draft, $attachments, $modeCeiling);
                 if ($verdicts === null) {
                     return TurnTicket::pending();
                 }
@@ -1240,7 +1249,7 @@ final class SessionHost
             $notes = $turns->turnHookNotes($prompt, $session);
         }
 
-        return $this->dispatch($text, $resolveMentions, $draft, $baseHistory, $reports, $notes, $refilled, $attachments);
+        return $this->dispatch($text, $resolveMentions, $draft, $baseHistory, $reports, $notes, $refilled, $attachments, $modeCeiling);
     }
 
     /**
@@ -1253,7 +1262,7 @@ final class SessionHost
      *
      * @return array{0: HookResult, 1: ?HookResult}|null
      */
-    private function fireTurnHooks(string $text, bool $resolveMentions, string $draft, array $attachments = []): ?array
+    private function fireTurnHooks(string $text, bool $resolveMentions, string $draft, array $attachments = [], ?PermissionMode $modeCeiling = null): ?array
     {
         $hooks = $this->workspace->hooks ?? throw new \LogicException('fireTurnHooks() needs a hook manager');
         $turns = $this->turns();
@@ -1278,8 +1287,8 @@ final class SessionHost
             },
             static fn (string $file): array => TurnController::turnHookResultsFromPayload(TurnController::takePayload($file)),
             $run,
-            function (array $verdicts) use ($text, $resolveMentions, $draft, $attachments): void {
-                $this->admitPrompt($text, $resolveMentions, $draft, $verdicts, $attachments);
+            function (array $verdicts) use ($text, $resolveMentions, $draft, $attachments, $modeCeiling): void {
+                $this->admitPrompt($text, $resolveMentions, $draft, $verdicts, $attachments, $modeCeiling);
             },
         );
 
@@ -1818,6 +1827,8 @@ final class SessionHost
      *        rewrite goes out with this turn, else null
      * @param list<\SugarCraft\Code\Attachment> $attachments pasted images
      *        riding this prompt (WEB-5b)
+     * @param ?PermissionMode $modeCeiling the submission's gate ceiling for
+     *        this turn only (C-AGT-2.b); null names none
      */
     private function dispatch(
         string $text,
@@ -1828,6 +1839,7 @@ final class SessionHost
         array $notes,
         ?bool $refilled,
         array $attachments = [],
+        ?PermissionMode $modeCeiling = null,
     ): TurnTicket {
         $turns = $this->turns();
         $preTurnHistory = [...$baseHistory, ...$reports];
@@ -1904,7 +1916,7 @@ final class SessionHost
 
         $run = $this->runner()->start(
             backend: TurnRunner::backendForTurn(
-                $this->backend(),
+                $this->backend($modeCeiling),
                 $this->workspace->maxCostUsd,
                 $this->spentUsd(),
                 $this->compactor->config(),
@@ -2276,15 +2288,21 @@ final class SessionHost
      * permission mode when it has one: a gate in that mode over the same
      * rules, so a client choosing `accept-edits` for one session changes
      * nothing for another.
+     *
+     * @param ?PermissionMode $ceiling when given (C-AGT-2.b, from
+     *        {@see SubmitOptions::withModeCeiling()}), this ONE turn's gate
+     *        is additionally held at or below it; the next independent
+     *        submission, and every out-of-turn surface
+     *        ({@see permissionGate()}), read the session mode alone.
      */
-    private function backend(): Backend
+    private function backend(?PermissionMode $ceiling = null): Backend
     {
         $backend = ($this->sessionBackend ?? $this->workspace->backend) ?? throw new \LogicException('This session has no backend.');
         if (!$backend instanceof EngineBackend) {
             return $backend;
         }
         $base = $backend->permissionGate();
-        $gated = $this->sessionGate($base);
+        $gated = $this->sessionGate($base, $ceiling);
         if ($gated === null || $gated === $base) {
             return $backend;
         }
@@ -2304,18 +2322,28 @@ final class SessionHost
     }
 
     /**
-     * $base itself unless this session names its own mode, in which case a
-     * gate in that mode over the same rules — the single construction site
-     * for session-cloned gates ({@see permissionGate()}, {@see backend()}).
+     * $base itself unless this session names its own mode or $ceiling caps
+     * this turn below the mode it has (C-AGT-2.b), in which case a gate in
+     * the stricter of the two over the same rules — the single construction
+     * site for session-cloned gates ({@see permissionGate()},
+     * {@see backend()}). A ceiling never manufactures a gate where none is
+     * wired, and a null $ceiling answers exactly as before.
      */
-    private function sessionGate(?PermissionGate $base): ?PermissionGate
+    private function sessionGate(?PermissionGate $base, ?PermissionMode $ceiling = null): ?PermissionGate
     {
-        if ($this->permissionMode === null || $base?->mode() === $this->permissionMode) {
+        $mode = $this->permissionMode ?? $base?->mode();
+        if ($ceiling !== null) {
+            if ($mode === null) {
+                return $base;
+            }
+            $mode = $mode->stricterOf($ceiling);
+        }
+        if ($mode === null || $base?->mode() === $mode) {
             return $base;
         }
 
         return new PermissionGate(
-            $this->permissionMode,
+            $mode,
             $base?->rules() ?? [],
             new SafetyClassifier(),
             'session',

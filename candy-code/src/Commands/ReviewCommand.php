@@ -25,8 +25,10 @@ use SugarCraft\Code\Workspace\GitRunner;
  * whose diff silently attaches nothing.
  *
  * REPORT, DO NOT EDIT is mandated in both prompts: a review that rewrites the
- * code it is judging conflates the roles, and the permission modes should not
- * have to be the thing standing between `/review` and an unwanted Write.
+ * code it is judging conflates the roles. It no longer has to stand alone:
+ * `Chat::reviewTurn()` steps a looser session down to `plan` for exactly the
+ * review turn (C-AGT-2.b), so an unwanted Write is refused action-side as
+ * well as mandated prompt-side.
  *
  * UNTRUSTED BY CONSTRUCTION (GIT-1): the attached diff is repository content,
  * and repository content feeds the LLM here exactly as a Read result would.
@@ -34,7 +36,7 @@ use SugarCraft\Code\Workspace\GitRunner;
  * exception — can embed instructions in its own diff text hoping the
  * reviewing agent obeys them instead of judging them. The REPORT, DO NOT
  * EDIT mandate above is the prompt-side answer to that injection and the
- * permission mode is the action-side one; the doctrine page is the
+ * turn's `plan` clamp is the action-side one; the doctrine page is the
  * prompt-injection section of docs/CI.md (GIT-2). Same trust posture as
  * every other attachment: data to review, never instructions to follow.
  *

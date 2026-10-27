@@ -5,15 +5,28 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
+use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Attachments\ContextMentions;
 use SugarCraft\Code\Backend\EchoBackend;
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\ReviewCommand;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Role;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
+use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tools\ToolCall;
+use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Workspace\GitRunner;
 
 /**
@@ -176,6 +189,9 @@ final class ReviewCommandTest extends TestCase
         self::assertSame([ReviewCommand::prompt()], $prompts);
         self::assertStringEndsWith(ReviewCommand::DIFF_MENTION, $prompts[0]);
         self::assertSame('', $next->inputBuf);
+        // C-AGT-2.b: the clamp is gate-only — a session with no gate (every
+        // embedder, most tests) submits the review exactly as before.
+        self::assertNull($next->currentPermissionMode(), 'a gateless chat clamps nothing');
     }
 
     public function testSecurityReviewSendsTheThreatBody(): void
@@ -274,12 +290,10 @@ final class ReviewCommandTest extends TestCase
         self::assertStringEndsWith('%s', rtrim(ReviewCommand::REVIEW_PROMPT));
         self::assertStringEndsWith('%s', rtrim(ReviewCommand::SECURITY_PROMPT));
 
-        // GIT-1: the mandate's other half — the class itself must document
-        // the injection threat the mandate answers, so a reader of the
-        // command sees the trust posture without visiting docs/CI.md.
-        $doc = (string) (new \ReflectionClass(ReviewCommand::class))->getDocComment();
-        self::assertStringContainsString('UNTRUSTED BY CONSTRUCTION', $doc, 'the class docblock lost its trust-boundary sentence — reviewing an adversarial repo feeds the LLM untrusted diff text and the file must say so (GIT-1)');
-        self::assertStringContainsString('prompt-injection section of docs/CI.md', $doc, 'the trust sentence no longer routes to the doctrine page (GIT-2)');
+        // C-AGT-2.b retired this pin's docblock half: the mandate's other
+        // half is now enforced ACTION-side, so the proof moved from prose
+        // to the behavioral trio below (a bypass-mode `/review` whose tool
+        // call the plan clamp physically refuses).
     }
 
     public function testIsDiffRefAgreesWithTheScannerRoundTrip(): void
@@ -298,5 +312,265 @@ final class ReviewCommandTest extends TestCase
         self::assertFalse(ContextMentions::isDiffRef(''), 'an empty ref never reaches this call, but the pattern rejects it anyway');
         self::assertFalse(ContextMentions::isDiffRef('-x'), 'a leading dash could read as an option');
         self::assertFalse(ContextMentions::isDiffRef('two words'), 'a spaced ref is not one revision');
+    }
+
+    // =====================================================================
+    // C-AGT-2.b: the plan clamp is action-side law, not prose
+    // =====================================================================
+
+    public function testAReviewTurnInBypassModeRefusesTheWritesToolCallUnderTheClamp(): void
+    {
+        $this->requireFork();
+        $chat = new Chat(
+            inputBuf: '/review',
+            backend: self::gatedEngine(self::writeCallScript(), PermissionMode::BypassPermissions),
+            liveToolEvents: new \ArrayObject(),
+            projectRoot: $this->sandbox,
+        );
+
+        [$running, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        self::assertSame(PermissionMode::Plan, $running->currentPermissionMode(), 'the review turn steps the gate down to plan');
+        self::assertSame(PermissionMode::BypassPermissions, self::restoreField($running), 'the clamp remembers what to give back');
+        self::assertNotEmpty(array_filter(self::transcriptTexts($running), static fn (string $t): bool => str_starts_with($t, 'Reviewing read-only')), 'the clamp announces itself in the transcript');
+
+        $box = $this->start($cmd);
+        $this->runUntil(static fn (): bool => $box->msg !== null);
+        self::assertNotNull($box->msg, 'the clamped review turn never settled');
+        $done = $this->apply($running, $box->msg);
+
+        // The refusal is the hook DENY landing as the call's error row;
+        // structural matching (a row BEGINNING with the hook's own framing)
+        // keeps the pin honest even while the turn-context echoes this
+        // file's own diff into a user row.
+        $refused = array_filter(
+            self::transcriptTexts($done),
+            static fn (string $t): bool => str_starts_with($t, 'Tool error: Hook denied: Permission mode') && str_contains($t, "does not allow Write"),
+        );
+        self::assertNotEmpty($refused, 'the reviewing model physically could not Write');
+        self::assertSame('', self::toolRowsText($done), 'the refused call never executed');
+        self::assertContains('done', self::transcriptTexts($done), 'the review answer still landed');
+        self::assertFalse($done->inFlight);
+        self::assertSame(PermissionMode::BypassPermissions, $done->currentPermissionMode(), 'the settle gives the prior mode back');
+        self::assertNull(self::restoreField($done), 'the restore disarms');
+    }
+
+    public function testTheNextOrdinaryTurnRunsAgainUnderTheRestoredBypassMode(): void
+    {
+        $this->requireFork();
+        $chat = new Chat(
+            inputBuf: '/review',
+            backend: self::gatedEngine(self::writeCallScript(), PermissionMode::BypassPermissions),
+            liveToolEvents: new \ArrayObject(),
+            projectRoot: $this->sandbox,
+        );
+        [$running, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $first = $this->start($cmd);
+        $this->runUntil(static fn (): bool => $first->msg !== null);
+        self::assertNotNull($first->msg);
+        $settled = $this->apply($running, $first->msg);
+        $mark = count($settled->history);
+
+        foreach (mb_str_split('again') as $char) {
+            [$settled] = $settled->update(new KeyMsg(KeyType::Char, $char));
+        }
+        [$second, $cmd2] = $settled->update(new KeyMsg(KeyType::Enter, ''));
+        self::assertSame(PermissionMode::BypassPermissions, $second->currentPermissionMode(), 'an ordinary turn clamps nothing');
+
+        $next = $this->start($cmd2);
+        $this->runUntil(static fn (): bool => $next->msg !== null);
+        self::assertNotNull($next->msg, 'the turn after the review never settled');
+        $done = $this->apply($second, $next->msg);
+
+        $rows = self::toolRowsText($done, $mark);
+        self::assertStringContainsString('ran', $rows, 'the restored bypass mode runs the call the review turn was refused');
+        $refusals = array_filter(
+            self::transcriptTexts($done, $mark),
+            static fn (string $t): bool => str_starts_with($t, 'Tool error: Hook denied: Permission mode'),
+        );
+        self::assertSame([], $refusals, 'the ordinary turn was never refused');
+        self::assertSame(PermissionMode::BypassPermissions, $done->currentPermissionMode());
+    }
+
+    public function testACancelledReviewTurnGivesTheModeBackToo(): void
+    {
+        // The cancel arm of the Escape handler releases the turn through
+        // Chat::mutate() like every other settle, and the release guard in
+        // mutate() is where the clamp restores — no fork is started here on
+        // purpose: the child-kill machinery is pinned by ChatCancelKeepsLoopLiveTest.
+        $chat = new Chat(
+            inputBuf: '/review',
+            backend: self::gatedEngine(self::writeCallScript(), PermissionMode::BypassPermissions),
+            liveToolEvents: new \ArrayObject(),
+            projectRoot: $this->sandbox,
+        );
+        [$running] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        self::assertSame(PermissionMode::Plan, $running->currentPermissionMode(), 'fixture: the clamp stepped down');
+
+        [$armed] = $running->update(new KeyMsg(KeyType::Escape));
+        self::assertTrue($armed->inFlight, 'the first Escape only arms the cancel');
+        [$cancelled] = $armed->update(new KeyMsg(KeyType::Escape));
+
+        self::assertFalse($cancelled->inFlight);
+        self::assertStringContainsString('_Request cancelled._', implode("\n", self::transcriptTexts($cancelled)));
+        self::assertSame(PermissionMode::BypassPermissions, $cancelled->currentPermissionMode(), 'the cancel gives the mode back — a stranded plan clamp would cage the session');
+        self::assertNull(self::restoreField($cancelled), 'the restore disarms');
+    }
+
+    public function testAnAlreadyPlanSessionIsLeftExactlyAsItWas(): void
+    {
+        $chat = new Chat(
+            inputBuf: '/review',
+            backend: self::gatedEngine(self::writeCallScript(), PermissionMode::Plan),
+            liveToolEvents: new \ArrayObject(),
+            projectRoot: $this->sandbox,
+        );
+        [$running] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        self::assertSame(PermissionMode::Plan, $running->currentPermissionMode());
+        self::assertNull(self::restoreField($running), 'nothing to restore: the session already read-only');
+        self::assertSame([], array_filter(self::transcriptTexts($running), static fn (string $t): bool => str_starts_with($t, 'Reviewing read-only') || str_starts_with($t, 'The permission mode changed')), 'no announce, no mode rows');
+    }
+
+    public function testADontAskSessionIsNotTradedIntoPlan(): void
+    {
+        // Plan-vs-dont-ask is a strictness trade (one cages writes but asks
+        // nothing, the other answers every question with a refusal); the
+        // clamp must not silently make it.
+        $chat = new Chat(
+            inputBuf: '/review',
+            backend: self::gatedEngine(self::writeCallScript(), PermissionMode::DontAsk),
+            liveToolEvents: new \ArrayObject(),
+            projectRoot: $this->sandbox,
+        );
+        [$running] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        self::assertSame(PermissionMode::DontAsk, $running->currentPermissionMode(), 'dont-ask stays dont-ask');
+        self::assertNull(self::restoreField($running));
+        self::assertSame([], array_filter(self::transcriptTexts($running), static fn (string $t): bool => str_starts_with($t, 'Reviewing read-only') || str_starts_with($t, 'The permission mode changed')), 'the strictness trade is never silently made');
+    }
+
+    /** @return list<CompleteResponse> two turns, each a Write call then the answer */
+    private static function writeCallScript(): array
+    {
+        $call = new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'Write', ['file_path' => 'a.txt', 'content' => 'x'])]);
+        $answer = new CompleteResponse(content: 'done');
+
+        return [$call, $answer, $call, $answer];
+    }
+
+    private static function gatedEngine(array $script, PermissionMode $mode): EngineBackend
+    {
+        return EngineBackend::new(new ScriptedProvider($script), 'm')
+            ->withTools([self::writeToolRan()])
+            ->withoutHooks()
+            ->withPermissionGate(new PermissionGate($mode));
+    }
+
+    private static function writeToolRan(): Tool
+    {
+        return new class implements Tool {
+            public function name(): string { return 'Write'; }
+            public function description(): string { return 'says it ran'; }
+            public function inputSchema(): array { return []; }
+
+            public function execute(array $args): ToolResult
+            {
+                return new ToolResult(toolCallId: 'call', content: 'ran');
+            }
+        };
+    }
+
+    /** @return list<string> the content of every row, from $forward (offset or negative tail) */
+    private static function transcriptTexts(Chat $chat, int $forward = 0): array
+    {
+        return array_map(static fn (Message $m): string => $m->content, array_slice($chat->history, $forward));
+    }
+
+    /** @return string every tool-result row's text, from $forward */
+    private static function toolRowsText(Chat $chat, int $forward = 0): string
+    {
+        $rows = [];
+        foreach (array_slice($chat->history, $forward) as $message) {
+            foreach ($message->toolResults as $result) {
+                $rows[] = (string) $result->result;
+            }
+        }
+
+        return implode("\n", $rows);
+    }
+
+    /** The pending `/review` restore — private state, read structurally. */
+    private static function restoreField(Chat $chat): ?PermissionMode
+    {
+        return (new \ReflectionProperty(Chat::class, 'reviewModeRestore'))->getValue($chat);
+    }
+
+    private function requireFork(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            self::markTestSkipped('an engine turn asks over completeAsync()\'s fork, which needs ext-pcntl.');
+        }
+    }
+
+    /**
+     * Start the turn's Cmd and capture the Msg its promise settles to.
+     */
+    private function start(?\Closure $cmd): \stdClass
+    {
+        self::assertNotNull($cmd);
+        $box = new \stdClass();
+        $box->msg = null;
+        $pending = [$cmd];
+        $found = false;
+        while (($next = array_shift($pending)) !== null) {
+            $out = $next();
+            if ($out instanceof BatchMsg) {
+                array_push($pending, ...$out->cmds);
+            } elseif ($out instanceof AsyncCmd) {
+                $found = true;
+                $out->promise->then(static function (mixed $msg) use ($box): void {
+                    $box->msg = $msg;
+                });
+            }
+        }
+        self::assertTrue($found, 'submitting started no async turn');
+
+        return $box;
+    }
+
+    private function runUntil(\Closure $done, float $seconds = 15.0): void
+    {
+        $deadline = microtime(true) + $seconds;
+        while (!$done() && microtime(true) < $deadline) {
+            $this->tick();
+        }
+    }
+
+    private function tick(): void
+    {
+        $loop = Loop::get();
+        $timer = $loop->addTimer(0.05, static fn () => $loop->stop());
+        $loop->run();
+        $loop->cancelTimer($timer);
+    }
+
+    /**
+     * Fold a settled turn's Msg the way Program::runCmd() does.
+     */
+    private function apply(Chat $chat, Msg $msg): Chat
+    {
+        $next = $msg;
+        for ($i = 0; $i < 32 && $next !== null; $i++) {
+            [$chat, $cmd] = $chat->update($next);
+            $next = null;
+            if ($cmd !== null) {
+                $produced = $cmd();
+                if ($produced instanceof Msg && !$produced instanceof AsyncCmd && !$produced instanceof BatchMsg) {
+                    $next = $produced;
+                }
+            }
+        }
+
+        return $chat;
     }
 }

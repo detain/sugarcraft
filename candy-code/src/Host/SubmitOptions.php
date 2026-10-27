@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Host;
 
 use SugarCraft\Code\Backend\QueueMode;
+use SugarCraft\Code\Permissions\PermissionMode;
 
 /**
  * How one submission asks to be admitted (roadmap O-2g, Appendix O §4.3
@@ -31,6 +32,13 @@ use SugarCraft\Code\Backend\QueueMode;
  * - **attachments** — images (or documents) the sender pasted alongside the
  *   text, decoded and sniffed by the wire handler (WEB-5b). They ride only a
  *   prompt that starts a turn; the host's queue and steer lanes hold strings.
+ * - **modeCeiling** — the strictest permission mode this one submission's
+ *   turn may run under (C-AGT-2.b). The TUI's `/review` is the shipped
+ *   producer through its own gate clamp; on the serve side this is the door
+ *   a `ReviewHostCommand` uses: the host takes `min(session mode, ceiling)`
+ *   for the turn the submission starts and nothing else — like attachments,
+ *   it rides only prompts that START a turn now, never a queued release
+ *   (the queue holds strings) nor the next independent submission.
  *
  * Immutable and fluent like every value in this package.
  */
@@ -42,6 +50,7 @@ final class SubmitOptions
         public readonly bool $resolveMentions,
         /** @var list<\SugarCraft\Code\Attachment> */
         public readonly array $attachments = [],
+        public readonly ?PermissionMode $modeCeiling = null,
     ) {
     }
 
@@ -89,6 +98,16 @@ final class SubmitOptions
     }
 
     /**
+     * A copy whose turn runs under at most $ceiling (C-AGT-2.b): the host's
+     * session gate answers `stricterOf` against it for the turn this
+     * submission starts. Null — the default — names no ceiling.
+     */
+    public function withModeCeiling(?PermissionMode $ceiling): self
+    {
+        return $this->mutate(['modeCeiling' => $ceiling]);
+    }
+
+    /**
      * The delivery this submission gets while a turn is running: the one it
      * asked for, else {@see QueueMode::onEnter()}.
      */
@@ -107,6 +126,7 @@ final class SubmitOptions
             'idempotencyKey' => $this->idempotencyKey,
             'resolveMentions' => $this->resolveMentions,
             'attachments' => $this->attachments,
+            'modeCeiling' => $this->modeCeiling,
         ], $changes));
     }
 }
