@@ -1,5 +1,5 @@
 {
- "welded": 56,
+ "welded": 57,
  "inflight": {
   "C-TOOL-7.a": {
    "stage": "fix",
@@ -8,14 +8,6 @@
    "branch": "cc/C-TOOL-7.a",
    "session": "ses_e82119e0affe7R3cHkENqkYWpS",
    "note": "r1 FINDINGS 2MAJOR/1MINOR/1NIT (persisted REVIEW-1.md): item4 unimplemented (ulimit -f job cap vs procsub recorders or fallback wording), fork door unpinned (pcntl test owed), dead SINK_DRAIN_SECONDS const, EPERM caveat NIT. Resuming SAME builder session ses_e825233f0 (may be alive: tip moved to 2710d9d0b, 3 commits; no DONE received). REPORT.md absent - fixer/lead must author it."
-  },
-  "C-CTX-2.b": {
-   "stage": "review",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-CTX-2.b",
-   "branch": "cc/C-CTX-2.b",
-   "session": "PENDING-r1-dispatch-now",
-   "note": "build tip 8b6b440e3 base b24e81154 verified clean, 4 files +561/0 (TurnSettleWork 127L, AutoCommitter +131 turnCall, TurnSettleWorkTest 228L DUR, AutoCommitterTest +75). Builder gates 20T/264A TurnSettleWork|AutoCommitter, Workspace|Host 121T, pair-only +9T"
   },
   "C-EXT-2.a": {
    "stage": "fix",
@@ -121,6 +113,13 @@
    "regen": "no-op (command/tool/settings --write + --check all up to date; no schema/web)",
    "gates": "BundleInstall 19T/57A exact; BundleInstall|Subcommands 86T/501A exact; five-guard 133T/15639A pair-only (after weld cure a33919030 renamed MenuOverlayFrameTest CLIP -> MENU_CLIP_PATH per lead ruling; cure-pmenuc CLIP drift-guard collision cured, roster NOT licensed)",
    "durations_owed": "none (no new test files)"
+  },
+  "C-CTX-2.b": {
+   "master": "020772dca",
+   "pick": "8b6b440e3 -> 020772dca (base b24e81154; clean, 4 files +561/0, no conflicts)",
+   "regen": "none (per brief; new classes touch no generator surface)",
+   "gates": "TurnSettleWork|AutoCommitter 20T/264A OK — builder 20T figure is DISK TRUTH on merged tree, reviewer static 18T recount undercounted (6+12 methods; live run yields 20 rows, REPORT itself defers 'welder re-run is the truth'); Workspace|Host\\ 484T/3820A OK (base-era 121T class figure inflated by Host lanes landed after the cut); five-guard 133T/15647A pair-only",
+   "durations_owed": "NEW candy-code tests/Host/TurnSettleWorkTest.php (6 methods) — LIST ONLY, durations.tsv is closeout/gate duty (lane+welder never stage it)"
   }
  },
  "carries": [

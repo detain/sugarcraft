@@ -1,0 +1,32 @@
+### C-CTX-2.b — Extract the turn-settle side work into one host-neutral gate
+- item: C-CTX-2 (sources: GAP-MEM-02w, k1-sum (b), k1-dorm#6)
+- kind: dormant-wire · MAJOR · effort M
+- approach:
+  - Today, auto-memory, the dream pass, prompt suggestion and auto-commit are gated only in `candy-code/src/Chat/Handlers/HandlesTurnCompletion.php:304-336`. Auto-commit's body lives in `Chat::scheduleAutoCommit()` (`Chat.php:15489-15560`).
+  - Follow the GoalLoop precedent ("one decision table, two hosts") and create `Host\TurnSettleWork`: a final readonly value with a static `plan(...)`.
+  - `plan()` takes what any settle knows:
+    - carried-on / goal-active flags;
+    - memory store;
+    - engine, summary and title backends;
+    - history, cap-reached flag, session id, generation;
+    - project root, user config, session store.
+  - It returns the four calls as nullable `\Closure(): PromiseInterface`, each resolving to the existing Msg: `PromptSuggestionMsg`, `MemoryConsolidatedMsg`, `DreamPassCompletedMsg` or `AutoCommittedMsg`.
+  - Move the auto-commit body into a static `Workspace\AutoCommitter::turnCall()`.
+  - This is a pure core step: no host is rewired.
+- files.create: `candy-code/src/Host/TurnSettleWork.php`, `candy-code/tests/Host/TurnSettleWorkTest.php`
+- files.modify: `candy-code/src/Workspace/AutoCommitter.php` (new static `turnCall()` plus the checkpoint-workspace reader it needs)
+- tests:
+  - create TurnSettleWorkTest, pinning each gate:
+    - carried on → nothing;
+    - goal live → no suggestion;
+    - no memory store → no consolidation or dream;
+    - cap reached → no suggestion;
+    - `autoCommit` ≠ `turn` → no commit;
+  - modify `candy-code/tests/Workspace/AutoCommitterTest.php`: `turnCall()` commits a turn's files with a plain subject when there is no title backend.
+- docs/guards: none
+- serialized: none
+- deps: none
+- phase: normal
+- ruling: none
+- risks: until C-CTX-2.e lands there are two copies of the auto-commit body (Chat's and AutoCommitter's). Schedule 2.e within a wave or two.
+
