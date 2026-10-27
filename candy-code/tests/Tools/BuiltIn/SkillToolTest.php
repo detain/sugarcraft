@@ -48,6 +48,11 @@ final class SkillToolTest extends TestCase
         $this->assertSame(['name'], $schema['required']);
         $this->assertArrayHasKey('name', $schema['properties']);
         $this->assertArrayHasKey('args', $schema['properties']);
+        // C-EXT-2: the optional `asset` arm. It must NOT join `required` —
+        // every body call predates it and a required asset would turn the
+        // tool's primary purpose into the error path.
+        $this->assertArrayHasKey('asset', $schema['properties']);
+        $this->assertSame('string', $schema['properties']['asset']['type']);
     }
 
     public function testExecuteReturnsErrorForEmptyName(): void

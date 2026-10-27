@@ -503,7 +503,11 @@ roster is cheap:
    the foreign path parses the whole file.
 3. **Assets** (`loadSkillAsset()`) — one file from `scripts/`, `references/` or
    `assets/` beside the `SKILL.md`. Any other first path component is refused,
-   and the resolved path must be contained by the skill directory.
+   and the resolved path must be contained by the skill directory. The model
+   reaches this stage through the `Skill` tool's `asset` argument (C-EXT-2),
+   and `listSkillAssets()` enumerates the paths a body result announces —
+   names only, sorted, capped at ten (`SkillLoader::ASSET_LIST_LIMIT`), links
+   neither listed nor followed.
 
 **The foreign trees do not get stage 1.** `ForeignSkillDiscovery` goes through
 `loadFromDirectory()`, which parses the whole file, because the `SkillSource`
@@ -526,14 +530,14 @@ the system prompt is the separate, much smaller per-skill budget.
 ## Invoking a skill
 
 The model calls the built-in `Skill` tool
-(`src/Tools/BuiltIn/SkillTool.php`), which takes `name` and an optional
-`args` string, and returns the on-disk body. `name` resolves against the exact
+(`src/Tools/BuiltIn/SkillTool.php`), which takes `name` and optional `args` and
+`asset` strings, and returns the on-disk body. `name` resolves against the exact
 registry key first; failing that, a unique display name — the last
 `/`-separated segment the listing shows — resolves to its skill, and a display
 name several skills share refuses with an error naming every colliding full key
 so the model can retry by one of them. It also refuses with an error — not an
 empty success — when the name matches nothing, is not model-invocable, or when
-`name` or `args` is not a string. The result opens with `## Skill: <display
+`name`, `args` or `asset` is not a string. The result opens with `## Skill: <display
 name>`, then a `> Base directory for this skill: <dir>` line (the directory of
 the skill's `SKILL.md`, fence-escaped), so a body that references
 `scripts/helper.php` relative to itself has the anchor to resolve it against,
@@ -552,6 +556,23 @@ recognised — unlike a [custom command template](COMMANDS.md), `$1`…`$9`, `$$
 snippets that use them. The append is the other deliberate difference from
 custom commands, which send a placeholder-free template unchanged: here the
 arguments come from the model, which passed them for the skill to act on.
+
+Two more body mechanics, both C-EXT-2. `${CLAUDE_SKILL_DIR}` and `${SKILL_DIR}`
+in a body are replaced with the skill's base directory — the same value the
+header line states — by `SkillTool::substituteSkillDir()`, so a body written for
+Claude Code that tells the model to run `${CLAUDE_SKILL_DIR}/scripts/run.sh`
+arrives runnable instead of as a literal path that exists nowhere; a manifest
+skill (no `SKILL.md` on disk) gets the token left as written, the same refusal
+the base-directory line makes rather than substituting `dirname('')`. And a body
+result for a skill that bundles files ends with a `> Skill resources (load one
+with the `asset` argument):` block announcing up to ten of them — relative paths
+from `scripts/`, `references/` and `assets/` only, sorted, listed and never read
+(`SkillLoader::listSkillAssets()`), links neither listed nor followed. Passing
+one of those paths as `asset` returns that file instead of the body, under the
+same two header lines, through `loadSkillAsset()`'s containment jail — the load
+re-decides the path, so nothing an announcement named can smuggle an escape. An
+`asset` call is also invisible to `SkillTool::invokedIn()`: a compaction
+re-injects bodies, and a bundled file's reload stays the model's decision.
 
 `Bootstrap::tools()` and `EngineBackend` are handed the *same* `SkillRegistry`
 instance, so a skill disabled on one is not reachable through the other.

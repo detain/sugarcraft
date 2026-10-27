@@ -798,6 +798,86 @@ SKILL
         $this->assertSame('INSIDE-ASSET', $loader->loadSkillAsset($skillPath, 'scripts/run.sh'));
     }
 
+    // =========================================================================
+    // listSkillAssets() — the C-EXT-2 resource listing beside the asset load.
+    //
+    // Names only, relative to the skill directory, sorted across the three
+    // bundled subdirectories, capped at ten by default. Content is NEVER read
+    // here — that is loadSkillAsset()'s job on the later `asset` call, where
+    // containment is re-decided per path.
+    // =========================================================================
+
+    public function testListSkillAssetsReturnsRelativePathsFromAllThreeSubdirsSorted(): void
+    {
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/listing-skill/SKILL.md';
+        mkdir($this->tempDir . '/listing-skill/scripts', 0777, true);
+        mkdir($this->tempDir . '/listing-skill/references', 0777, true);
+        mkdir($this->tempDir . '/listing-skill/assets', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: List\n---\nBody");
+        mkdir($this->tempDir . '/listing-skill/scripts/nested', 0777, true);
+        file_put_contents($this->tempDir . '/listing-skill/scripts/z.sh', 'z');
+        file_put_contents($this->tempDir . '/listing-skill/scripts/nested/deep.txt', 'd');
+        file_put_contents($this->tempDir . '/listing-skill/references/guide.md', 'g');
+        file_put_contents($this->tempDir . '/listing-skill/assets/logo.png', 'l');
+
+        $this->assertSame([
+            'assets/logo.png',
+            'references/guide.md',
+            'scripts/nested/deep.txt',
+            'scripts/z.sh',
+        ], $loader->listSkillAssets($skillPath));
+    }
+
+    public function testListSkillAssetsCapsAtTenAndHonoursAnExplicitLimit(): void
+    {
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/cap-skill/SKILL.md';
+        mkdir($this->tempDir . '/cap-skill/references', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: Cap\n---\nBody");
+        for ($i = 0; $i < 12; $i++) {
+            file_put_contents($this->tempDir . '/cap-skill/references/r' . $i . '.md', 'x');
+        }
+
+        $default = $loader->listSkillAssets($skillPath);
+        $this->assertCount(SkillLoader::ASSET_LIST_LIMIT, $default);
+        $this->assertSame('references/r0.md', $default[0]);
+
+        $this->assertSame([], $loader->listSkillAssets($skillPath, 0));
+        $this->assertCount(3, $loader->listSkillAssets($skillPath, 3));
+    }
+
+    public function testListSkillAssetsOmitsTheBodyFileUnlistedSubdirectoriesAndLinks(): void
+    {
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/omit-skill/SKILL.md';
+        mkdir($this->tempDir . '/omit-skill/scripts', 0777, true);
+        mkdir($this->tempDir . '/omit-skill/notes', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: Omit\n---\nBody");
+        file_put_contents($this->tempDir . '/omit-skill/scripts/real.sh', 'r');
+        file_put_contents($this->tempDir . '/omit-skill/notes/off-tree.md', 'o');
+        // A symlink INSIDE scripts/ pointing at a real file also inside the
+        // skill: it loads through loadSkillAsset() (pinned above) but the
+        // listing deliberately does not announce it — see the helper's
+        // doc-block for the narrower-promise reasoning.
+        $this->assertTrue(symlink(
+            $this->tempDir . '/omit-skill/scripts/real.sh',
+            $this->tempDir . '/omit-skill/scripts/linked.sh',
+        ));
+
+        $this->assertSame(['scripts/real.sh'], $loader->listSkillAssets($skillPath));
+    }
+
+    public function testListSkillAssetsOnASkillWithNoResourcesReturnsEmptyArray(): void
+    {
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/bare-skill/SKILL.md';
+        mkdir($this->tempDir . '/bare-skill', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: Bare\n---\nBody");
+
+        $this->assertSame([], $loader->listSkillAssets($skillPath));
+    }
+
     // -------------------------------------------------------------------------
     // loadManifestsFromDirectory() / loadAllManifests() -- lazy progressive
     // loading (crush_feat.md section 7.E3)

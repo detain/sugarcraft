@@ -26,6 +26,26 @@ final class SkillLoader
     private const ASSET_SUBDIRS = ['scripts', 'references', 'assets'];
 
     /**
+     * How many resource paths a body load announces (C-EXT-2).
+     *
+     * OpenCode's sample size: a skill that bundles fifty reference files does
+     * not need fifty lines per load — the model needs to learn the resources
+     * EXIST and that `asset` reaches them, and it can Bash `ls` the rest. Ten
+     * sorted paths is the announcement that stays cheap on every load.
+     */
+    public const ASSET_LIST_LIMIT = 10;
+
+    /**
+     * Paths the listing walk collects before it stops, while {@see
+     * ASSET_LIST_LIMIT} is what it finally returns.
+     *
+     * The gap between the two is the sampling: sorting needs the candidates it
+     * sorts, and a `references/` tree that is a grafted vendor directory must
+     * cost a bounded walk, not a full enumeration held in memory.
+     */
+    private const ASSET_LIST_SCAN_CEILING = 200;
+
+    /**
      * The env var that puts the skips back on stderr — see {@see recordSkip()}
      * for why they are off it by default.
      */
@@ -1091,5 +1111,91 @@ final class SkillLoader
         }
 
         return SkillFileReader::read($assetPath, 'skill asset');
+    }
+
+    /**
+     * Stage 3 companion to {@see loadSkillAsset()}: the resource paths bundled
+     * beside a skill's SKILL.md, for announcement in a body result (C-EXT-2).
+     *
+     * A body that references `scripts/helper.php` is only loadable through the
+     * `asset` argument if the model learns the file EXISTS; until the body
+     * result lists them, a skill's bundled resources were reachable by guess
+     * or by Bash and nothing else. This lists names, never reads content:
+     * every path returned is relative to the skill directory and under one of
+     * {@see ASSET_SUBDIRS}, and {@see loadSkillAsset()} re-decides containment
+     * on the load itself, so a listing can never smuggle an escape through.
+     *
+     * Collection stops at {@see ASSET_LIST_SCAN_CEILING} before sorting, and
+     * the sorted head is what returns — deterministic for a given tree, so a
+     * body result is byte-stable across loads of an unchanged skill.
+     *
+     * @param string $skillPath Absolute path to the skill's SKILL.md
+     * @param int    $limit     Most paths to return; the class default is what
+     *                          the Skill tool announces
+     *
+     * @return list<string> relative paths such as `scripts/run.sh`, sorted
+     */
+    public function listSkillAssets(string $skillPath, int $limit = self::ASSET_LIST_LIMIT): array
+    {
+        $skillDir = dirname($skillPath);
+        $found = [];
+
+        foreach (self::ASSET_SUBDIRS as $subdir) {
+            $this->collectAssetsBelow($skillDir, $skillDir . '/' . $subdir, 0, $found);
+            if (count($found) >= self::ASSET_LIST_SCAN_CEILING) {
+                break;
+            }
+        }
+
+        sort($found, SORT_STRING);
+
+        return array_slice($found, 0, max(0, $limit));
+    }
+
+    /**
+     * One level of the listing walk under $skillDir, appending relative paths.
+     *
+     * Symlinks are neither listed nor followed HERE, a deliberate narrower
+     * promise than {@see loadSkillAsset()}'s: a link that stays inside the
+     * skill does load (pinned), but announcing it would mean re-deciding its
+     * containment at listing time for a name the model may never ask for.
+     * Directory descent keeps the same predicate the loader itself uses —
+     * {@see ContainedPath::within()} — and the same depth cap as the skill
+     * tree walk, so a grafted real directory cannot drive this recursion.
+     */
+    private function collectAssetsBelow(string $skillDir, string $dir, int $depth, array &$found): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        try {
+            $entries = new \DirectoryIterator($dir);
+        } catch (\Throwable) {
+            // An unreadable resource directory is an unannounced one, not a
+            // failed load: the body result stands on its own bytes.
+            return;
+        }
+
+        foreach ($entries as $entry) {
+            if ($entry->isDot() || $entry->isLink()) {
+                continue;
+            }
+
+            $path = $entry->getPathname();
+
+            if ($entry->isDir()) {
+                if ($depth + 1 > self::MAX_DEPTH || !ContainedPath::within($path, $skillDir)) {
+                    continue;
+                }
+                $this->collectAssetsBelow($skillDir, $path, $depth + 1, $found);
+            } elseif ($entry->isFile()) {
+                $found[] = substr($path, strlen($skillDir) + 1);
+            }
+
+            if (count($found) >= self::ASSET_LIST_SCAN_CEILING) {
+                return;
+            }
+        }
     }
 }

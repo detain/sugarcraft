@@ -51,6 +51,20 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
      */
     public const ARGUMENTS_PLACEHOLDER = '$ARGUMENTS';
 
+    /**
+     * The two spellings a skill body uses to name its own directory — Claude
+     * Code's `${CLAUDE_SKILL_DIR}` and the generic `${SKILL_DIR}` — replaced
+     * on a body load with the directory the SKILL.md was read from (C-EXT-2).
+     *
+     * The base-directory header line already states that directory, but a
+     * body written for Claude Code tells the model to RUN
+     * `${CLAUDE_SKILL_DIR}/scripts/run.sh`; an unsubstituted token reads as a
+     * literal path that exists nowhere, exactly the leftover-`$ARGUMENTS`
+     * problem {@see substituteArguments()} reasons through.
+     */
+    public const SKILL_DIR_PLACEHOLDER = '${CLAUDE_SKILL_DIR}';
+    public const SKILL_DIR_PLACEHOLDER_ALT = '${SKILL_DIR}';
+
     /** The first bytes of every body this tool returns, before the skill's display name. */
     public const RESULT_PREFIX = SkillPromptLine::HEADING_PREFIX;
 
@@ -101,8 +115,12 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
             . 'when the name is empty, is not model-invocable, or its file cannot be read. '
             . 'Pass `args` to hand the skill its input: each $ARGUMENTS in the body is '
             . 'replaced by it, and a body that names no $ARGUMENTS gets it appended on a '
-            . 'final "ARGUMENTS:" line. Do not call this tool again for a skill whose body '
-            . 'is already in the conversation.';
+            . 'final "ARGUMENTS:" line; `${CLAUDE_SKILL_DIR}` and `${SKILL_DIR}` in a body '
+            . 'name the skill\'s base directory. A body result lists up to ten of the '
+            . 'skill\'s bundled resource paths under it; pass one as `asset` (a path under '
+            . 'scripts/, references/ or assets/, relative to the skill directory) to get '
+            . 'that file instead of the body, under the same two header lines. Do not call '
+            . 'this tool again for a skill whose body is already in the conversation.';
     }
 
     public function inputSchema(): array
@@ -116,6 +134,13 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
                     'description' => 'Optional input for the skill. Replaces each $ARGUMENTS in its '
                         . 'body; appended as a final "ARGUMENTS: ..." line when the body has none.',
                 ],
+                'asset' => [
+                    'type' => 'string',
+                    'description' => 'Optional resource file instead of the body: a path relative to '
+                        . "the skill's directory under scripts/, references/ or assets/ (the body "
+                        . 'result lists up to ten of them). Returns that file under the same two '
+                        . 'header lines; anything else is refused.',
+                ],
             ],
             'required' => ['name'],
         ];
@@ -125,14 +150,15 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
     {
         $name = $args['name'] ?? '';
         $skillArgs = $args['args'] ?? '';
+        $asset = $args['asset'] ?? '';
 
-        // Untyped tool-call JSON can carry a number or an array for either
-        // field. Under strict_types the registry lookup and the substitution
-        // below would throw a TypeError out of execute() — a crash the model
-        // never sees — so a malformed call is answered as one, the way Read
-        // and Grep answer theirs. `args` is not coerced: a JSON array has no
-        // single string a skill body could have meant.
-        foreach (['name' => $name, 'args' => $skillArgs] as $field => $value) {
+        // Untyped tool-call JSON can carry a number or an array for any of
+        // these fields. Under strict_types the registry lookup and the
+        // substitution below would throw a TypeError out of execute() — a
+        // crash the model never sees — so a malformed call is answered as one,
+        // the way Read and Grep answer theirs. `args` and `asset` are not
+        // coerced: a JSON array has no single string a skill could have meant.
+        foreach (['name' => $name, 'args' => $skillArgs, 'asset' => $asset] as $field => $value) {
             if (!is_string($value)) {
                 return new ToolResult(
                     toolCallId: $args['id'] ?? '',
@@ -221,6 +247,33 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
 
         $loader = $this->loader ?? new SkillLoader();
 
+        // The `asset` branch (C-EXT-2): one bundled file instead of the body,
+        // reached through the loader's own jailed reader — first component must
+        // be scripts|references|assets, and the resolved path must stay inside
+        // the skill directory. The two header lines ride unchanged so the
+        // result still announces which skill the bytes belong to; a manifest
+        // skill has no source file to sit beside, and loadSkillAsset()'s
+        // realpath refusal answers that as the error it is.
+        if (is_string($asset) && trim($asset) !== '') {
+            try {
+                $assetContent = $loader->loadSkillAsset($skill->sourcePath, $asset);
+            } catch (\RuntimeException $e) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: "Error loading skill asset: {$e->getMessage()}",
+                    isError: true,
+                );
+            }
+
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: SkillPromptLine::heading($skill)
+                    . SkillPromptLine::baseDirLine($skill)
+                    . $assetContent,
+                isError: false,
+            );
+        }
+
         // Level 2: load the body only now, on invocation — not at startup.
         try {
             $body = $loader->loadSkillBody($skill->sourcePath);
@@ -232,6 +285,7 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
             );
         }
 
+        $body = self::substituteSkillDir($body, $skill->sourcePath);
         $body = self::substituteArguments($body, $skillArgs);
 
         // Two header lines, then the body: the display name the model called
@@ -240,15 +294,36 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
         // relative to their own folder, which is unresolvable without this
         // line (crush skills QA, inv1 §7). Both values are repository text:
         // a directory name is arbitrary bytes (audit 15d-08), so each rides
-        // SkillPromptLine::field() like every other repo value that reaches a
-        // model-facing string. The helpers are the same ones an enabled skill's
-        // prompt section calls, so the two never disagree about what naming a
-        // skill costs.
+        // SkillPromptLine::field() like every other model-facing repo value.
+        // The helpers are the same ones an enabled skill's prompt section
+        // calls, so the two never disagree about what naming a skill costs.
+        //
+        // The resource announcement (C-EXT-2): up to ten bundled paths under
+        // the body, so a model reading `scripts/helper.php` in the prose — or
+        // a skill that names no files at all — learns what `asset` can reach.
+        // Each path is repository-named bytes and rides field() like the
+        // headers do. A manifest skill (empty sourcePath) gets no listing:
+        // dirname('') is '.', and the session directory's own scripts/ folder
+        // is not this skill's resources — the same lie baseDirLine() refuses.
+        $content = SkillPromptLine::heading($skill)
+            . SkillPromptLine::baseDirLine($skill)
+            . $body;
+
+        if ($skill->sourcePath !== '') {
+            $resources = $loader->listSkillAssets($skill->sourcePath);
+            if ($resources !== []) {
+                $lines = array_map(
+                    static fn(string $path): string => '> - ' . SkillPromptLine::field($path),
+                    $resources,
+                );
+                $content .= "\n\n> Skill resources (load one with the `asset` argument):\n"
+                    . implode("\n", $lines);
+            }
+        }
+
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
-            content: SkillPromptLine::heading($skill)
-                . SkillPromptLine::baseDirLine($skill)
-                . $body,
+            content: $content,
             isError: false,
         );
     }
@@ -338,6 +413,18 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
                     if (!\is_string($name) || trim($name) === '') {
                         continue;
                     }
+                    // An `asset` call loaded ONE bundled file, not the body
+                    // (C-EXT-2): re-injecting it after a compaction would
+                    // answer a question the model no longer asks — the plan
+                    // re-loads bodies, and the file's own load stays the
+                    // model's decision. The name is still recorded for a
+                    // later body load by the body call that must exist for
+                    // the model to have learned the path (the listing rides
+                    // the body result).
+                    $asset = $call->arguments()['asset'] ?? '';
+                    if (\is_string($asset) && trim($asset) !== '') {
+                        continue;
+                    }
                     unset($calls[$call->id()]);
                     $calls[$call->id()] = ['name' => trim($name), 'args' => \is_string($args) ? $args : ''];
                 }
@@ -406,5 +493,34 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
         }
 
         return $body . "\n\nARGUMENTS: {$arguments}";
+    }
+
+    /**
+     * Replace each `${CLAUDE_SKILL_DIR}` / `${SKILL_DIR}` in $body with the
+     * directory $skillPath's SKILL.md sits in (C-EXT-2).
+     *
+     * Both spellings become the same directory: Claude Code skills write the
+     * first, opencode-style skills the second, and a body that names its own
+     * directory has nowhere correct to point but the file it came from. A
+     * manifest skill has no directory — the empty sourcePath returns the body
+     * unchanged rather than substituting `dirname('')`'s confident `'.'`,
+     * the same refusal {@see SkillPromptLine::baseDirLine()} makes — so the
+     * token survives only where nothing could resolve it either way.
+     *
+     * str_replace() for the same one-pass reason {@see
+     * substituteArguments()} gives: inserted bytes are never rescanned, and a
+     * directory name that happens to contain the token cannot self-expand.
+     */
+    public static function substituteSkillDir(string $body, string $skillPath): string
+    {
+        if ($skillPath === '') {
+            return $body;
+        }
+
+        return str_replace(
+            [self::SKILL_DIR_PLACEHOLDER, self::SKILL_DIR_PLACEHOLDER_ALT],
+            dirname($skillPath),
+            $body,
+        );
     }
 }

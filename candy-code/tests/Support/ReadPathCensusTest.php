@@ -925,6 +925,11 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Skills/SkillLoader.php|new DirectoryIterator' => [
             'CONTAINED — the bounded walk over a skills tree, itself capped against a grafted tree',
+            'NAMES_ONLY — the C-EXT-2 resource listing under one skill\'s scripts|references|assets: '
+                . 'it announces relative names and reads no content, links are neither listed nor '
+                . 'followed, directory descent re-asks ContainedPath::within() and the skill walk\'s '
+                . 'own MAX_DEPTH, and the later read through loadSkillAsset() re-decides containment '
+                . 'per path',
         ],
         'StreamingDirectoryLister.php|opendir' => [
             'NAMES_ONLY — yields entry names; no content is read here and this class holds no '
