@@ -101,16 +101,36 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.tag }}
 
+      - name: Checksum
+        # C-SES-5.c: the checksum runs BEFORE signing on purpose — the
+        # signing step's headline artifact is a signature over THIS sidecar's
+        # body, so the sidecar has to exist first. The .sha256 names the bytes
+        # this job built (integrity); the trust leg is the signature below.
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum candy-code.phar > candy-code.phar.sha256)
+          cat dist/candy-code.phar.sha256
+
       - name: Sign the archive (pinned-key mode)
         # OPTIONAL step by design: without the SUGARCRAFT_SIGNING_KEY secret it
         # skips green and the release ships unsigned. The secret is shared
         # sugarcraft-wide — one owner keypair signs every app's phar, and each
         # app pins the public half in its own source. When the owner populates
         # the secret AND SelfUpdate::PUBLIC_KEY_BASE64 (the two halves of the
-        # same Ed25519 keypair), this emits candy-code.phar.minisig — the
-        # base64 detached signature `self-update` then REQUIRES, verified
-        # against the key pinned in source rather than against anything the
-        # release channel controls.
+        # same Ed25519 keypair), this emits — verified against the key pinned
+        # in source rather than against anything the release channel controls:
+        #   - candy-code.phar.sha256.sig: a base64 detached sodium signature
+        #     over the .sha256 SIDECAR BODY (a few dozen bytes, never the
+        #     ~119 MiB archive). Current `self-update` verifies this leg and
+        #     only then trusts the sidecar to gate the swap (C-SES-5.b).
+        #   - candy-code.phar.minisig: the legacy base64 detached signature
+        #     over the raw phar bytes, KEPT ADDITIVELY because candy-top and
+        #     older candy-code releases verify it.
+        #   - candy-code.phar.minisig.sha256: the legacy sidecar-of-the-
+        #     sidecar, computed here rather than in the (now earlier) checksum
+        #     step, since it can only exist after the file it names does.
+        # In keyless state all three are skipped together: they share this one
+        # early-exit step, so the publish gate below sees no signature files.
         run: |
           set -euo pipefail
           if [ -z "${SUGARCRAFT_SIGNING_KEY:-}" ]; then
@@ -125,19 +145,14 @@ jobs:
             }
             $sig = sodium_crypto_sign_detached(file_get_contents("dist/candy-code.phar"), $key);
             file_put_contents("dist/candy-code.phar.minisig", base64_encode($sig) . "\n");
+            $sidecar_sig = sodium_crypto_sign_detached(file_get_contents("dist/candy-code.phar.sha256"), $key);
+            file_put_contents("dist/candy-code.phar.sha256.sig", base64_encode($sidecar_sig) . "\n");
           '
+          (cd dist && sha256sum candy-code.phar.minisig > candy-code.phar.minisig.sha256)
           cat dist/candy-code.phar.minisig
+          cat dist/candy-code.phar.sha256.sig
         env:
           SUGARCRAFT_SIGNING_KEY: ${{ secrets.SUGARCRAFT_SIGNING_KEY }}
-
-      - name: Checksum
-        run: |
-          set -euo pipefail
-          (cd dist && sha256sum candy-code.phar > candy-code.phar.sha256)
-          if [ -f dist/candy-code.phar.minisig ]; then
-            (cd dist && sha256sum candy-code.phar.minisig > candy-code.phar.minisig.sha256)
-          fi
-          cat dist/candy-code.phar.sha256
 
       - name: Smoke — version
         run: php dist/candy-code.phar --version
@@ -217,7 +232,7 @@ jobs:
           tag="$TAG"
           assets=(dist/candy-code.phar dist/candy-code.phar.sha256)
           if [ -f dist/candy-code.phar.minisig ]; then
-            assets+=(dist/candy-code.phar.minisig dist/candy-code.phar.minisig.sha256)
+            assets+=(dist/candy-code.phar.minisig dist/candy-code.phar.minisig.sha256 dist/candy-code.phar.sha256.sig)
           fi
           notes="Self-contained candy-code PHAR built by .github/workflows/release-phar.yml at commit ${GITHUB_SHA}.\n\nVerify: sha256sum -c candy-code.phar.sha256\n\nRun: php candy-code.phar --version"
           if gh release view "$tag" >/dev/null 2>&1; then

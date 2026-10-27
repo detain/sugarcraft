@@ -3,8 +3,9 @@
 # Each app gets a permanent, wget-able channel:
 #   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar
 #   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.sha256
-#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.minisig        (when signed)
-#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.minisig.sha256 (when signed)
+#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.sha256.sig      (when signed)
+#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.minisig         (when signed)
+#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.minisig.sha256  (when signed)
 #
 # The phar-capable set is FILESYSTEM-DRIVEN: an app is built iff it appears
 # in the affected set of scripts/affected-libs.php AND carries a
@@ -225,12 +226,31 @@ jobs:
           PHAR_PATH: ${{ github.workspace }}/dist/${{ matrix.app }}.phar
           WANT_STAMP: dev-${{ steps.build.outputs.short }}
 
+      - name: Checksum
+        # C-SES-5.c: runs BEFORE signing on purpose — the signing step's
+        # headline artifact is a signature over this sidecar's body, so the
+        # sidecar has to exist first. The .sha256 names the bytes this job
+        # built (integrity); the trust leg is the signature below.
+        run: |
+          set -euo pipefail
+          app='${{ matrix.app }}'
+          (cd dist && sha256sum "$app.phar" > "$app.phar.sha256")
+          cat "dist/$app.phar.sha256"
+
       - name: Sign the archive (pinned-key mode)
         # OPTIONAL by design (identical semantics to the release pipelines):
         # without SUGARCRAFT_SIGNING_KEY the step skips green and the dev
         # channel ships unsigned. When the owner populates the sugarcraft-wide
-        # secret, every app's phar carries a detached Ed25519 minisig verified
-        # by each app against the public half pinned in its own source.
+        # secret, every app's phar carries — verified by each app against the
+        # public half pinned in its own source:
+        #   - $app.phar.sha256.sig: a base64 detached sodium signature over
+        #     the .sha256 SIDECAR BODY (a few bytes, never the whole archive);
+        #     the leg current candy-code `self-update` verifies (C-SES-5.b).
+        #   - $app.phar.minisig: the legacy raw-byte signature, kept
+        #     additively for candy-top and older candy-code releases.
+        #   - $app.phar.minisig.sha256: computed here, not in the (now
+        #     earlier) checksum step, since it can only exist after its file.
+        # In keyless state all three are skipped together: one early-exit step.
         run: |
           set -euo pipefail
           app='${{ matrix.app }}'
@@ -247,20 +267,13 @@ jobs:
             }
             $sig = sodium_crypto_sign_detached(file_get_contents("dist/$app.phar"), $key);
             file_put_contents("dist/$app.phar.minisig", base64_encode($sig) . "\n");
+            $sidecar_sig = sodium_crypto_sign_detached(file_get_contents("dist/$app.phar.sha256"), $key);
+            file_put_contents("dist/$app.phar.sha256.sig", base64_encode($sidecar_sig) . "\n");
           '
+          (cd dist && sha256sum "$app.phar.minisig" > "$app.phar.minisig.sha256")
         env:
           APP: ${{ matrix.app }}
           SUGARCRAFT_SIGNING_KEY: ${{ secrets.SUGARCRAFT_SIGNING_KEY }}
-
-      - name: Checksum
-        run: |
-          set -euo pipefail
-          app='${{ matrix.app }}'
-          (cd dist && sha256sum "$app.phar" > "$app.phar.sha256")
-          if [ -f "dist/$app.phar.minisig" ]; then
-            (cd dist && sha256sum "$app.phar.minisig" > "$app.phar.minisig.sha256")
-          fi
-          cat "dist/$app.phar.sha256"
 
       - name: Smoke — the archive runs
         # Honest, app-agnostic shape: --version must succeed and print
@@ -302,8 +315,8 @@ jobs:
           git push -f origin "refs/tags/$app/dev"
           assets=("dist/$app.phar" "dist/$app.phar.sha256")
           if [ -f "dist/$app.phar.minisig" ]; then
-            assets+=("dist/$app.phar.minisig" "dist/$app.phar.minisig.sha256")
-            signed="Signed with the sugarcraft-wide key (verify: sha256sum -c $app.phar.minisig.sha256; signature: sodium detached, public half pinned in source)."
+            assets+=("dist/$app.phar.minisig" "dist/$app.phar.minisig.sha256" "dist/$app.phar.sha256.sig")
+            signed="Signed with the sugarcraft-wide key (verify the chain: check $app.phar.sha256.sig — a sodium detached signature over the sidecar body — against the public half pinned in the app's source, then sha256sum -c $app.phar.sha256 on the archive; the legacy raw-byte $app.phar.minisig rides along for older clients, and a plain sha256sum -c of it would prove integrity only, never authenticity)."
           else
             signed="Unsigned in this build (no SUGARCRAFT_SIGNING_KEY on the runner at build time)."
           fi

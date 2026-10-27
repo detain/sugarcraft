@@ -25,8 +25,10 @@
 #
 # The signing step reads the sugarcraft-WIDE secret SUGARCRAFT_SIGNING_KEY
 # (owner ruling 2026-10-21: one keypair signs every app's phar; each app pins
-# the public half in its own source). Absent the secret, the build ships
-# UNSIGNED; nothing else changes.
+# the public half in its own source). It signs the .sha256 sidecar body into
+# <app>.phar.sha256.sig and keeps emitting the legacy raw-byte .minisig
+# additively (C-SES-5.c). Absent the secret, the build ships UNSIGNED;
+# nothing else changes.
 name: Release app PHARs
 
 on:
@@ -165,8 +167,39 @@ jobs:
           PHAR_PATH: ${{ github.workspace }}/dist/${{ steps.scope.outputs.app }}.phar
           WANT_STAMP: ${{ steps.scope.outputs.tag }}
 
+      - name: Checksum
+        if: steps.scope.outputs.proceed == 'true'
+        # C-SES-5.c: runs BEFORE signing on purpose — the signing step's
+        # headline artifact is a signature over this sidecar's body, so the
+        # sidecar has to exist first. The .sha256 names the bytes this job
+        # built (integrity); the trust leg is the signature below.
+        run: |
+          set -euo pipefail
+          app="$APP"
+          (cd dist && sha256sum "$app.phar" > "$app.phar.sha256")
+          cat "dist/$app.phar.sha256"
+        env:
+          APP: ${{ steps.scope.outputs.app }}
+
       - name: Sign the archive (pinned-key mode)
         if: steps.scope.outputs.proceed == 'true'
+        # OPTIONAL by design (identical semantics to the reference pipeline):
+        # without SUGARCRAFT_SIGNING_KEY the step skips green and the release
+        # ships unsigned. When the owner populates the sugarcraft-wide secret
+        # (one keypair signs every app's phar; each app pins the public half
+        # in its own source), this emits — all legs verified against the key
+        # pinned in source, never against anything the release channel
+        # controls:
+        #   - $app.phar.sha256.sig: a base64 detached sodium signature over
+        #     the .sha256 SIDECAR BODY (a few bytes, never the whole archive);
+        #     the leg current candy-code-style `self-update` verifies
+        #     (C-SES-5.b) before trusting the sidecar to gate a swap.
+        #   - $app.phar.minisig: the legacy raw-byte signature, kept
+        #     additively for candy-top and older clients.
+        #   - $app.phar.minisig.sha256: computed here, not in the (now
+        #     earlier) checksum step, since it can only exist after its file.
+        # In keyless state all three are skipped together: one early-exit
+        # step, and the publish gate below sees no signature files.
         run: |
           set -euo pipefail
           app="$APP"
@@ -183,23 +216,13 @@ jobs:
             }
             $sig = sodium_crypto_sign_detached(file_get_contents("dist/$app.phar"), $key);
             file_put_contents("dist/$app.phar.minisig", base64_encode($sig) . "\n");
+            $sidecar_sig = sodium_crypto_sign_detached(file_get_contents("dist/$app.phar.sha256"), $key);
+            file_put_contents("dist/$app.phar.sha256.sig", base64_encode($sidecar_sig) . "\n");
           '
+          (cd dist && sha256sum "$app.phar.minisig" > "$app.phar.minisig.sha256")
         env:
           APP: ${{ steps.scope.outputs.app }}
           SUGARCRAFT_SIGNING_KEY: ${{ secrets.SUGARCRAFT_SIGNING_KEY }}
-
-      - name: Checksum
-        if: steps.scope.outputs.proceed == 'true'
-        run: |
-          set -euo pipefail
-          app="$APP"
-          (cd dist && sha256sum "$app.phar" > "$app.phar.sha256")
-          if [ -f "dist/$app.phar.minisig" ]; then
-            (cd dist && sha256sum "$app.phar.minisig" > "$app.phar.minisig.sha256")
-          fi
-          cat "dist/$app.phar.sha256"
-        env:
-          APP: ${{ steps.scope.outputs.app }}
 
       - name: Smoke — version and help on a virgin HOME
         if: steps.scope.outputs.proceed == 'true'
@@ -256,7 +279,7 @@ jobs:
           tag="$TAG"
           assets=("dist/$app.phar" "dist/$app.phar.sha256")
           if [ -f "dist/$app.phar.minisig" ]; then
-            assets+=("dist/$app.phar.minisig" "dist/$app.phar.minisig.sha256")
+            assets+=("dist/$app.phar.minisig" "dist/$app.phar.minisig.sha256" "dist/$app.phar.sha256.sig")
           fi
           notes="Self-contained $app PHAR built by .github/workflows/release-app-phar.yml at commit ${GITHUB_SHA}.\n\nVerify: sha256sum -c $app.phar.sha256\n\nRun: php $app.phar --version"
           if gh release view "$tag" >/dev/null 2>&1; then
