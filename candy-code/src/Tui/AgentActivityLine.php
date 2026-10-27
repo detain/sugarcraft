@@ -13,6 +13,7 @@ use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\Components\PaneLabel;
+use SugarCraft\Code\Tui\Window\AgentColor;
 use SugarCraft\Code\Util\TokenCount;
 use SugarCraft\Style\Style;
 
@@ -70,6 +71,7 @@ final class AgentActivityLine
         }
 
         [$glyph, $glyphColor] = self::glyph($state, $theme, $spinnerFrame);
+        $glyphColor = self::accent($state->color, $theme, $glyphColor);
         $item = self::item($state);
         $elapsed = $elapsedSeconds ?? $state->elapsed($now);
 
@@ -158,6 +160,20 @@ final class AgentActivityLine
             SubAgentActivity::OUTCOME_BACKGROUNDED => ['⧗', $theme->assistantLabel],
             default => ['✗', $theme->shellError],
         };
+    }
+
+    /**
+     * The colour one run's accents paint with (P-AGENT.a): the preset's own
+     * colour word when the theme can render it legibly, else the status
+     * colour the caller's {@see glyph()} answered. One helper so every live
+     * surface — this line, the agents strip, the Agent View header, the
+     * dashboard row — answers the same question the same way; a run with no
+     * declared colour (or an illegible one) is byte-identical to the status
+     * colour it always used.
+     */
+    public static function accent(?string $vocab, Theme $theme, Color $statusColor): Color
+    {
+        return AgentColor::resolve($vocab, $theme) ?? $statusColor;
     }
 
     /**

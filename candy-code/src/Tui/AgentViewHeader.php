@@ -10,6 +10,7 @@ use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\Components\PaneLabel;
+use SugarCraft\Code\Tui\Window\AgentColor;
 use SugarCraft\Code\Util\TokenCount;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Style\Style;
@@ -109,6 +110,7 @@ final class AgentViewHeader
         $figures = [];
         if ($state !== null) {
             [$glyph, $glyphColor] = AgentActivityLine::glyph($state, $theme, $spinnerFrame);
+            $glyphColor = AgentActivityLine::accent($state->color, $theme, $glyphColor);
             $status = self::statusWord($state);
             // Display order; each carries its drop rank (lowest goes first).
             if ($state->maxSteps > 0 || $state->step > 0) {
@@ -188,7 +190,16 @@ final class AgentViewHeader
             $crumbPainted = Mark::zone(self::BACK_ZONE, $crumbPainted);
         }
 
-        $row = $crumbPainted . $dim->render(self::ARROW) . Style::new()->bold()->render($name);
+        // P-AGENT.a: the run's own colour names it, when its preset declared
+        // one this theme renders legibly; without a legible colour the row is
+        // byte-identical to the plain bold name it always was.
+        $nameStyle = Style::new()->bold();
+        $nameColor = $state === null ? null : AgentColor::resolve($state->color, $theme);
+        if ($nameColor !== null) {
+            $nameStyle = $nameStyle->foreground($nameColor);
+        }
+
+        $row = $crumbPainted . $dim->render(self::ARROW) . $nameStyle->render($name);
         if ($counter !== '') {
             $row .= '  ' . self::counter($counter, $siblings, $at, $dim, $zones);
         }

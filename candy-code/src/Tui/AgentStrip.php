@@ -84,9 +84,38 @@ final class AgentStrip
      */
     public static function items(AgentLiveRegistry $live, array $dismissed = []): array
     {
-        $now = $live->now();
+        return self::filter($live->all(), $dismissed, $live->now());
+    }
+
+    /**
+     * The runs of one parent session the strip would show (P-AGENT.a) — the
+     * same drop-list {@see items()} applies, taken from
+     * {@see AgentLiveRegistry::forSession()}. A null $sessionId is the
+     * unscoped read the server host and every not-yet-scoped caller keep
+     * using; the per-tab scoped read arrives with the renderer switch.
+     *
+     * @param array<string, true> $dismissed run ids taken off the strip
+     *
+     * @return list<AgentLiveState>
+     */
+    public static function itemsFor(AgentLiveRegistry $live, array $dismissed, ?string $sessionId): array
+    {
+        return self::filter($live->forSession($sessionId), $dismissed, $live->now());
+    }
+
+    /**
+     * Dismissed ids off, finished runs past their linger off; the rest in
+     * the order given.
+     *
+     * @param list<AgentLiveState> $states
+     * @param array<string, true>  $dismissed
+     *
+     * @return list<AgentLiveState>
+     */
+    private static function filter(array $states, array $dismissed, float $now): array
+    {
         $items = [];
-        foreach ($live->all() as $state) {
+        foreach ($states as $state) {
             if (isset($dismissed[$state->id])) {
                 continue;
             }
@@ -234,7 +263,7 @@ final class AgentStrip
     private static function item(AgentLiveState $state, string $label, bool $focused, Theme $theme, int $spinnerFrame, bool $zones): string
     {
         [, $color] = AgentActivityLine::glyph($state, $theme, $spinnerFrame);
-        $style = Style::new()->foreground($color);
+        $style = Style::new()->foreground(AgentActivityLine::accent($state->color, $theme, $color));
         $painted = $focused ? $style->reverse()->bold()->render($label) : $style->render($label);
 
         $zoneId = self::ZONE_PREFIX . $state->id;

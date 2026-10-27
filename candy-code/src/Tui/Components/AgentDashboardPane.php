@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tui\Components;
 
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Agents\Agent;
+use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Lang;
@@ -21,6 +24,7 @@ use SugarCraft\Code\Tui\AgentViewPane;
 use SugarCraft\Code\Tui\Mode;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\StallWarning;
+use SugarCraft\Code\Tui\Window\AgentColor;
 use SugarCraft\Code\Theme;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
@@ -338,6 +342,9 @@ final class AgentDashboardPane
     private static function body(App $a, array $entries, int $inner, int $budget, Theme $theme): string
     {
         $lines = [];
+        // P-AGENT.a: the live registry answers which row's run declared a
+        // colour; a session row's key never resolves to a run state.
+        $live = $a->chat?->agentLive();
         foreach (self::grouped($entries) as $groupId => $members) {
             $lines[] = Style::new()
                 ->bold()
@@ -345,7 +352,7 @@ final class AgentDashboardPane
                 ->render(Lang::t(self::GROUP_LABELS[$groupId]) . ' (' . count($members) . ')');
 
             foreach ($members as [$index, $entry]) {
-                $lines[] = self::row($index, $entry, $a->selectedAgentIndex === $index, $inner, $theme);
+                $lines[] = self::row($index, $entry, $a->selectedAgentIndex === $index, $inner, $theme, $live);
             }
         }
 
@@ -429,14 +436,21 @@ final class AgentDashboardPane
      * block here would be mistaken for one of them by
      * {@see \SugarCraft\Code\Renderer::maskImageMarkers()}.
      */
-    private static function row(int $index, AgentOutputState $entry, bool $selected, int $inner, Theme $theme): string
+    private static function row(int $index, AgentOutputState $entry, bool $selected, int $inner, Theme $theme, ?AgentLiveRegistry $live = null): string
     {
         $slot = $index < self::MAX_JUMP_SLOTS ? '[' . ($index + 1) . ']' : '   ';
         $label = Style::new()
             ->foreground($selected ? $theme->shellWarning : $theme->shellMuted)
             ->render($slot);
 
-        $line = $label . ' ' . AgentStatusBar::renderAgentLine($entry, $theme);
+        // P-AGENT.a: a run whose preset declared a legible colour paints its
+        // dot and name with it. Unaccented rows — no live state, no declared
+        // word, an illegible one — keep AgentStatusBar's line byte-identical.
+        $state = $entry->key === null || $entry->key === '' ? null : $live?->get($entry->key);
+        $accent = $state === null ? null : AgentColor::resolve($state->color, $theme);
+        $line = $label . ' ' . ($accent === null
+            ? AgentStatusBar::renderAgentLine($entry, $theme)
+            : self::tintedAgentLine($entry, $theme, $accent));
 
         // The LIST row has to carry this too, not just the peek overlay. The
         // parameter above used to be typed as the PARENT AgentDisplayState,
@@ -456,6 +470,49 @@ final class AgentDashboardPane
         }
 
         return Width::string($line) > $inner ? Width::truncateAnsi($line, $inner) : $line;
+    }
+
+    /**
+     * {@see AgentStatusBar::renderAgentLine()}'s row with the run's preset
+     * colour painted where the status colour owns the dot and the name
+     * (P-AGENT.a); the status word, operation, elapsed and usage segments
+     * keep their own colours. The composition is deliberately spelled out
+     * here rather than behind a new AgentStatusBar parameter because the pane
+     * is the only reader that has a live state to ask; the fold is owed to
+     * AgentStatusBar (an optional ?Color) if a second reader ever arrives.
+     * Its private helpers are mirrored exactly — bracket(), colouredDot(),
+     * truncate() — and AgentColorPaintTest pins the plain-text segments equal
+     * to the unaccented line's, so a drift in either copy goes red.
+     */
+    private static function tintedAgentLine(AgentOutputState $entry, Theme $theme, Color $accent): string
+    {
+        $color = AgentStatusBar::statusColor($entry->status, $theme);
+        $dot = Style::new()->foreground($accent)->render("\u{25CF}");
+        $name = Style::new()->bold()->foreground($accent)->render($entry->name);
+        $status = Style::new()->foreground($color)->render('[' . AgentStatusBar::statusLabel($entry->status) . ']');
+        $operation = Style::new()->foreground($theme->shellForeground)->render(self::tintTruncate($entry->operation, 30));
+        $elapsed = Style::new()->foreground($theme->shellMuted)->render($entry->elapsedDisplay());
+        $usage = Style::new()->foreground($theme->shellMuted)->render($entry->usageDisplay());
+
+        return "{$dot} {$name} {$status} {$operation} {$elapsed} {$usage}";
+    }
+
+    /**
+     * AgentStatusBar::truncate()'s cell rule, mirrored per its docblock: a
+     * text that already fits returns byte-for-byte unchanged, an overflow is
+     * untrusted-scrubbed then cut to $maxWidth - 1 cells with the ellipsis.
+     */
+    private static function tintTruncate(string $text, int $maxWidth): string
+    {
+        if ($text === '') {
+            return '';
+        }
+
+        if (Width::of($text) <= $maxWidth) {
+            return $text;
+        }
+
+        return Width::truncate(Sanitize::untrusted($text), max(0, $maxWidth - 1)) . "\u{2026}";
     }
 
     /**
