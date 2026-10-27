@@ -263,11 +263,15 @@ final class McpDispatcherPresetScopeTest extends TestCase
             ['note'],
             array_map(static fn (McpTool $t): string => $t->name, $scopedClient->listTools()),
         );
+        // Capture-then-assert (SwallowingCatchCensus house idiom): the wide
+        // catch records only, both claims stand after the block.
+        $caught = null;
         try {
             $scopedClient->callTool($git, 'push', []);
-            $this->fail('the scoped client reached a server outside the allowlist');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('not allowed for this agent', $e->getMessage());
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'the scoped client reached a server outside the allowlist');
+        $this->assertStringContainsString('not allowed for this agent', $caught->getMessage());
     }
 }
