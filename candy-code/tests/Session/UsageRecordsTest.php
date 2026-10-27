@@ -63,7 +63,9 @@ final class UsageRecordsTest extends TestCase
 
         $tables = $pdo->query("SELECT name FROM sqlite_master WHERE type IN ('table', 'index')")->fetchAll(PDO::FETCH_COLUMN);
         self::assertContains('usage_records', $tables);
-        self::assertContains('idx_usage_records_session', $tables, 'the rollups read one session by id; nothing scans by any other key');
+        self::assertContains('idx_usage_records_session', $tables, 'the per-session folds read one session by id');
+        self::assertContains('idx_usage_records_ts', $tables, 'SES-1-P6: the windowed folds scan the ledger by ts, so the index the old comment denied is the second key it needs');
+        self::assertContains('session_tombstones', $tables, 'SES-1-P5: the delete ledger the lazy mint consults must exist before the first delete');
     }
 
     public function testAnUpgradedDatabaseGainsTheLedgerAndTheCacheColumns(): void
@@ -277,6 +279,169 @@ final class UsageRecordsTest extends TestCase
         self::assertNull($store->usageTotals('s1'), 'retention must not leave orphans behind the row');
         $pdo = new PDO('sqlite:' . $this->dbPath);
         self::assertSame(0, (int) $pdo->query('SELECT COUNT(*) FROM usage_records')->fetchColumn());
+    }
+
+    public function testALateSettleForADeletedSessionWritesNothingAndResurrectsNoRow(): void
+    {
+        // SES-1-P5: the delete is the user's last word. Before the tombstone
+        // ledger, the lazy recreate inside appendUsageRecord() read
+        // "no session row" as "not minted yet" — so the in-flight settle that
+        // lands one tick after /session delete resurrected the session as
+        // candy-code/unknown with a fresh money row. The refusal is the whole
+        // fix: false out, nothing written, the id stays dead.
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('s1', 'p', 'm');
+        $store->appendUsageRecord('s1', Usage::new(100, 0.02));
+        $store->deleteSession('s1');
+
+        self::assertFalse($store->appendUsageRecord('s1', Usage::new(50, 0.01), 'm'));
+
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        self::assertSame(0, (int) $pdo->query('SELECT COUNT(*) FROM usage_records')->fetchColumn());
+        self::assertNull($store->session('s1'), 'the sessions row stays destroyed');
+        self::assertSame(
+            1,
+            (int) $pdo->query("SELECT COUNT(*) FROM session_tombstones WHERE id = 's1'")->fetchColumn(),
+            'the delete left its mark',
+        );
+    }
+
+    public function testANeverMintedIdStillLazyMintsItsRowBesideTheLedger(): void
+    {
+        // The polarity the tombstone must not disturb: a settle for an id
+        // that was simply never minted (Chat's late-mint race) still gets its
+        // row exactly as every append predating this ledger made it — the
+        // refusal is reserved for ids the user DESTROYED.
+        $store = new EnhancedSessionStore($this->dbPath);
+
+        self::assertTrue($store->appendUsageRecord('never-minted', Usage::new(100, 0.02), 'test-model'));
+
+        $row = $store->session('never-minted');
+        self::assertNotNull($row);
+        self::assertSame('candy-code', $row['provider']);
+        self::assertSame('unknown', $row['model']);
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        self::assertSame(1, (int) $pdo->query('SELECT COUNT(*) FROM usage_records')->fetchColumn());
+    }
+
+    public function testTheTombstoneLedgerReapsItsOwnHistoryOnTheNextDelete(): void
+    {
+        // 30 days is the resurrection window: past it, a settle is a clock
+        // artifact or a genuinely new conversation under a reused id, and the
+        // id returns to ordinary never-minted behavior. The reap rides the
+        // next delete's insert — the table bounds itself, never a sweep.
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('old', 'p', 'm');
+        $store->deleteSession('old');
+
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $aged = $pdo->prepare('UPDATE session_tombstones SET deleted_at = ? WHERE id = ?');
+        $aged->execute([time() - 31 * 86400, 'old']);
+
+        $store->createSession('fresh', 'p', 'm');
+        $store->deleteSession('fresh');
+
+        self::assertSame(
+            0,
+            (int) $pdo->query("SELECT COUNT(*) FROM session_tombstones WHERE id = 'old'")->fetchColumn(),
+            'the entry older than the TTL is gone with the next insert',
+        );
+        self::assertSame(
+            1,
+            (int) $pdo->query("SELECT COUNT(*) FROM session_tombstones WHERE id = 'fresh'")->fetchColumn(),
+        );
+
+        self::assertTrue($store->appendUsageRecord('old', Usage::new(10, 0.001), 'm'), 'a reaped id is just an id again');
+    }
+
+    public function testTheWindowedFoldScansByTheTimestampIndexItNowCarries(): void
+    {
+        // SES-1-P6 as the planner sees it: the OBS-3 window (`/usage all`
+        // over a bounded span) filters `ts >= ?` — the exact shape
+        // usageWindowClause builds — and on a ledger with history that is a
+        // range scan, not the whole-table walk it was before the index.
+        new EnhancedSessionStore($this->dbPath);
+
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $insert = $pdo->prepare(
+            "INSERT INTO usage_records (session_id, ts, model, total_tokens, input_tokens, output_tokens,"
+            . " cache_read_tokens, cache_creation_tokens, reasoning_tokens, cost_usd, unpriced)"
+            . " VALUES ('s1', ?, 'm', 1, 0, 0, 0, 0, 0, 0.0, 0)"
+        );
+        $now = time();
+        for ($back = 0; $back < 40; $back++) {
+            for ($k = 0; $k < 20; $k++) {
+                $insert->execute([$now - $back * 86400 - $k * 60]);
+            }
+        }
+        $pdo->exec('ANALYZE');
+
+        $stmt = $pdo->prepare("EXPLAIN QUERY PLAN SELECT date(ts, 'unixepoch') AS day, model, COUNT(*) FROM usage_records WHERE ts >= ? GROUP BY day, model");
+        $stmt->execute([$now - 6 * 86400]);
+        $plan = implode('; ', array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'detail'));
+        self::assertStringContainsString('idx_usage_records_ts', $plan, 'the window reads through the index: ' . $plan);
+    }
+
+    public function testTheRollupPairReadsOneSnapshotAcrossAnInterleavedCommit(): void
+    {
+        // OBS-3-P2 as SQLite executes it: while one connection's deferred
+        // read transaction is open, a committed write from another connection
+        // is invisible to every later read in that transaction. The pair of
+        // folds answering `/usage` rides exactly such a frame — so the money
+        // totals row can no longer count a call the day grid above it never saw.
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('s1', 'p', 'm');
+        $store->appendUsageRecord('s1', Usage::new(100, 0.01), 'm1');
+
+        $property = new \ReflectionProperty(EnhancedSessionStore::class, 'pdo');
+        $property->setAccessible(true);
+        $reader = $property->getValue($store);
+        self::assertInstanceOf(PDO::class, $reader);
+
+        $reader->exec('BEGIN DEFERRED');
+        $before = $store->usageModelRollups();
+
+        $writer = new PDO('sqlite:' . $this->dbPath);
+        $writer->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $writer->exec(
+            "INSERT INTO usage_records (session_id, ts, model, total_tokens, input_tokens, output_tokens,"
+            . " cache_read_tokens, cache_creation_tokens, reasoning_tokens, cost_usd, unpriced)"
+            . " VALUES ('s2', " . time() . ", 'm1', 999, 0, 0, 0, 0, 0, 0.5, 0)"
+        );
+        $writer = null;
+
+        $after = $store->usageModelRollups();
+        $reader->exec('COMMIT');
+
+        self::assertSame($before, $after, 'the fold pair must not straddle the commit');
+    }
+
+    public function testUsageRollupsWrapsBothFoldsInOneDeferredFrame(): void
+    {
+        // The behavior above proves the FRAME snapshots; this shape pin proves
+        // usageRollups() IS the frame — an interleaved commit cannot be
+        // arranged inside a single call from a test, so the house wire for
+        // "wiring only visible at runtime" is the source scan.
+        $source = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Session/EnhancedSessionStore.php');
+        $start = strpos($source, 'public function usageRollups');
+        self::assertNotFalse($start, 'the pair method exists');
+        $end = strpos($source, "\n    }", $start);
+        self::assertNotFalse($end);
+        $slice = substr($source, $start, $end - $start);
+
+        $begin = strpos($slice, "'BEGIN DEFERRED'");
+        $days = strpos($slice, 'usageDayModelRollups(');
+        $models = strpos($slice, 'usageModelRollups($sessionId');
+        $commit = strpos($slice, "'COMMIT'");
+        foreach (['begin' => $begin, 'days fold' => $days, 'models fold' => $models, 'commit' => $commit] as $what => $at) {
+            self::assertIsInt($at, 'usageRollups must still carry its ' . $what);
+        }
+        self::assertLessThan($days, $begin);
+        self::assertLessThan($models, $days, 'both folds read inside the frame');
+        self::assertLessThan($commit, $models, 'and only then does the frame close');
+        self::assertSame(0, substr_count($slice, 'BEGIN IMMEDIATE'), 'reads take no write lock — /usage must not queue behind a writer');
     }
 
     public function testAPlainSessionStoreStillOpensAndCarriesTheCacheColumns(): void

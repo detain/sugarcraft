@@ -77,6 +77,15 @@ final class SessionStore
     public const PREVIEW_MAX_BYTES = 160;
 
     /**
+     * How long a deleted session id stays tombstoned (SES-1-P5). The
+     * ledger's resurrection window must not be eternal: a settle arriving
+     * more than 30 days after the delete is indistinguishable from a clock
+     * artifact, and an id genuinely re-minted after that span is the user's
+     * own new conversation, not a ghost.
+     */
+    private const TOMBSTONE_TTL_SECONDS = 30 * 86400;
+
+    /**
      * Upper bound on `pruneSessions()`'s `$daysOld`, ~100 years.
      *
      * `strtotime("-N days")` with an unbounded N does not fail, it OVERFLOWS
@@ -251,6 +260,25 @@ final class SessionStore
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
                 FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+            )
+        ');
+
+        // The tombstone ledger (C-SES-9, SES-1-P5): ids the user deleted, so
+        // the lazy-mint seam in EnhancedSessionStore::appendUsageRecord() can
+        // tell "not yet created" from "destroyed on purpose" and refuse the
+        // second. Created on BOTH sides of that door — here (the delete side
+        // writes it from deleteSessionTrees()) and in
+        // EnhancedSessionStore::initEnhancedSchema() (the read side consults
+        // it) — because either store may open a file the other never
+        // touched, and each read tolerates the table's absence rather than
+        // assume it. There is deliberately NO foreign key to sessions: the
+        // whole point is a row that outlives the session it names. Entries
+        // older than TOMBSTONE_TTL_SECONDS are reaped on the next insert —
+        // the table bounds itself, never a sweep.
+        $this->pdo->exec('
+            CREATE TABLE IF NOT EXISTS session_tombstones (
+                id TEXT PRIMARY KEY,
+                deleted_at INTEGER NOT NULL
             )
         ');
     }
@@ -1070,6 +1098,34 @@ final class SessionStore
             $this->pdo
                 ->prepare("UPDATE sessions SET parent_id = NULL WHERE id IN ({$placeholders})")
                 ->execute($chunk);
+        }
+
+        // SES-1-P5 (C-SES-9): record what went, riding the SAME transaction
+        // the deletes above ride — a tombstone that could commit apart from
+        // its delete would either lie about a live session or vanish with a
+        // rolled-back one. Only $deleted is marked: detached children are
+        // still live sessions. initSchema() created the table on every
+        // connection that can reach this line; the read side in
+        // EnhancedSessionStore tolerates its absence for foreign or partial
+        // files. The reap is the table's only garbage collection — a settle
+        // older than the TTL is indistinguishable from a clock artifact, and
+        // the guard is about the row that lands seconds after the delete,
+        // not about history.
+        if ($deleted !== []) {
+            $this->pdo
+                ->prepare('DELETE FROM session_tombstones WHERE deleted_at < ?')
+                ->execute([$revokedAt - self::TOMBSTONE_TTL_SECONDS]);
+            foreach (array_chunk($deleted, 400) as $chunk) {
+                $placeholders = implode(',', array_fill(0, count($chunk), '(?,?)'));
+                $params = [];
+                foreach ($chunk as $id) {
+                    $params[] = $id;
+                    $params[] = $revokedAt;
+                }
+                $this->pdo
+                    ->prepare("INSERT OR REPLACE INTO session_tombstones (id, deleted_at) VALUES {$placeholders}")
+                    ->execute($params);
+            }
         }
         $this->sessionWriteSeq++;
 

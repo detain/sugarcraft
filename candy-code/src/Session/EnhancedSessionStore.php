@@ -752,11 +752,32 @@ final class EnhancedSessionStore
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             )
         ');
-        // usageTotals()/the rollups read one session's rows; nothing ever
-        // scans the table by anything else, so this is the only index kept.
+        // usageTotals() and the single-session folds read one session's rows
+        // by id; the WINDOWED `/usage` folds (OBS-3) filter `ts >= ?` across
+        // every session, so the ledger is scanned by two keys and both carry
+        // an index (SES-1-P6: the pre-window comment below claimed nothing
+        // ever scanned by anything else — the day-grid window quietly began
+        // doing exactly that the day OBS-3 shipped).
         $this->pdo->exec('
             CREATE INDEX IF NOT EXISTS idx_usage_records_session
             ON usage_records(session_id)
+        ');
+        $this->pdo->exec('
+            CREATE INDEX IF NOT EXISTS idx_usage_records_ts
+            ON usage_records(ts)
+        ');
+
+        // The tombstone ledger (SES-1-P5) — the READ side of the door
+        // appendUsageRecord() consults before its lazy recreate. The CREATE
+        // rides here as well as in SessionStore::initSchema() so either
+        // store alone brings a fresh file up to shape; each side's read
+        // tolerates the table's absence meanwhile (an old database answers
+        // "nothing was ever deleted", the truth until a delete lands).
+        $this->pdo->exec('
+            CREATE TABLE IF NOT EXISTS session_tombstones (
+                id TEXT PRIMARY KEY,
+                deleted_at INTEGER NOT NULL
+            )
         ');
     }
 
@@ -2441,7 +2462,12 @@ final class EnhancedSessionStore
      * THE ONE APPEND SITE, reached through the closure
      * {@see \SugarCraft\Code\Host\SpendLedger::account()} hands every
      * accounted call to. A missing session row is recreated around the write
-     * for the reason {@see appendSessionEvent()} states for the same FK.
+     * for the reason {@see appendSessionEvent()} states for the same FK —
+     * EXCEPT for an id the user deleted (SES-1-P5): the tombstone ledger
+     * turns that recreate from a lazy mint into a resurrection of a session
+     * as `candy-code/unknown`, so a tombstoned id answers false and nothing
+     * is written. The polarity is the point — a never-minted id still gets
+     * its row exactly as every late settle before this ledger did.
      *
      * Like {@see saveContextLedger()}, this returns false rather than
      * throwing when the store refuses: the tracker in the process already
@@ -2457,8 +2483,18 @@ final class EnhancedSessionStore
         }
 
         try {
-            $this->writeTransaction(function () use ($sessionId, $usage, $model): void {
+            $appended = $this->writeTransaction(function () use ($sessionId, $usage, $model): bool {
                 if ($this->sessionStore->session($sessionId) === null) {
+                    // SES-1-P5: destroyed on purpose, not yet minted. The
+                    // late settle of a deleted session writes nothing — no
+                    // ledger row, no resurrected sessions row — and answers
+                    // false without an announcement: the session the money
+                    // was spent in is gone, which is precisely what the user
+                    // asked for.
+                    if ($this->sessionTombstoned($sessionId)) {
+                        return false;
+                    }
+
                     $this->sessionStore->createSession($sessionId, 'candy-code', 'unknown');
                 }
 
@@ -2482,6 +2518,8 @@ final class EnhancedSessionStore
                 ]);
 
                 $this->sessionStore->addSessionSpend($sessionId, $usage->costUsd, $usage->unpricedModel !== null);
+
+                return true;
             });
         } catch (\Throwable $error) {
             // SES-1: still fail-soft — the in-process tracker carries this
@@ -2497,7 +2535,29 @@ final class EnhancedSessionStore
             return false;
         }
 
-        return true;
+        return $appended === true;
+    }
+
+    /**
+     * Whether $sessionId sits in the delete tombstone (SES-1-P5): an id the
+     * user destroyed, which the lazy recreate must refuse, as opposed to an
+     * id simply not minted yet, which it must serve. Absence of the table —
+     * a database no store carrying this schema has ever opened — reads as
+     * "nothing was ever deleted", the honest answer for such a file and the
+     * exact behavior every append predating this ledger observed.
+     */
+    private function sessionTombstoned(string $sessionId): bool
+    {
+        try {
+            $stmt = $this->pdo->prepare('SELECT 1 FROM session_tombstones WHERE id = ?');
+            $stmt->execute([$sessionId]);
+            $found = $stmt->fetchColumn();
+            $stmt->closeCursor();
+        } catch (\PDOException) {
+            return false;
+        }
+
+        return $found !== false;
     }
 
     /**
@@ -2613,6 +2673,59 @@ final class EnhancedSessionStore
         $stmt->closeCursor();
 
         return $rows;
+    }
+
+    /**
+     * Both `/usage` folds answered from ONE read snapshot (OBS-3-P2).
+     *
+     * Run loose, the grid fold and the model fold were two autocommit reads,
+     * so a settle landing between them printed one window twice: the totals
+     * row already counted the call the day grid above it had never seen.
+     * `BEGIN DEFERRED` snapshots the WAL connection at the fold's first
+     * read and holds it to COMMIT — the pair can no longer straddle a
+     * commit — without taking the write lock a `BEGIN IMMEDIATE` would (the
+     * folds are reads, and `/usage` on a busy database must not queue
+     * behind a writer). A transaction the caller already holds on this
+     * connection is the snapshot the caller meant; ride it, never nest.
+     *
+     * @return array{days: list<array{day: string, model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>, models: list<array{model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>}
+     */
+    public function usageRollups(?string $sessionId = null, ?int $days = null): array
+    {
+        $ownTransaction = false;
+        try {
+            $this->pdo->exec('BEGIN DEFERRED');
+            $ownTransaction = true;
+        } catch (\PDOException) {
+            // A transaction this connection already carries is invisible to
+            // PDO::inTransaction() on builds whose pdo_sqlite never asks
+            // SQLite for its autocommit state (the same lie
+            // SessionStore::immediateTransaction() documents) — the refusal
+            // to nest is the signal, and the folds read inside the frame
+            // that exists.
+        }
+
+        try {
+            $rollups = [
+                'days' => $this->usageDayModelRollups($sessionId, $days),
+                'models' => $this->usageModelRollups($sessionId, $days),
+            ];
+        } catch (\Throwable $e) {
+            if ($ownTransaction) {
+                try {
+                    $this->pdo->exec('ROLLBACK');
+                } catch (\PDOException) {
+                }
+            }
+
+            throw $e;
+        }
+
+        if ($ownTransaction) {
+            $this->pdo->exec('COMMIT');
+        }
+
+        return $rollups;
     }
 
     /**

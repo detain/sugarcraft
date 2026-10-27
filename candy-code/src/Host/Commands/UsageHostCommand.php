@@ -66,12 +66,29 @@ final class UsageHostCommand implements HostCommand
             return ['scopeAll' => false, 'windowDays' => $windowDays, 'days' => null, 'models' => null, 'reason' => 'this session has no id yet; `/usage all` spans the whole ledger'];
         }
 
+        return self::rollupFacts($store, $sessionId, $windowDays, $scopeAll);
+    }
+
+    /**
+     * THE SHARED READ (OBS-3-P2): one snapshot fold of the durable ledger,
+     * shaped into the fact map {@see UsageCommand::compose()} parses. The
+     * `/usage` act above, the usage RPC (C-SES-8.a), the CLI verb
+     * (C-SES-8.e) and insights (C-SES-8.c) all answer through this one
+     * method, so no two surfaces can print different grids, different
+     * totals, or different reasons for the same ledger at the same instant.
+     *
+     * @return array<string, mixed>
+     */
+    public static function rollupFacts(EnhancedSessionStore $store, ?string $sessionId, ?int $windowDays, bool $scopeAll): array
+    {
         try {
+            $rollups = $store->usageRollups($sessionId, $windowDays);
+
             return [
                 'scopeAll' => $scopeAll,
                 'windowDays' => $windowDays,
-                'days' => $store->usageDayModelRollups($sessionId, $windowDays),
-                'models' => $store->usageModelRollups($sessionId, $windowDays),
+                'days' => $rollups['days'],
+                'models' => $rollups['models'],
                 'reason' => '',
             ];
         } catch (\Throwable $e) {
