@@ -75,7 +75,8 @@
   "P-TABS.d",
   "P-TABS.h",
   "C-SEC-5.a",
-  "C-SES-5.c"
+  "C-SES-5.c",
+  "C-WEB-3.c"
  ],
  "inflight": {
   "C-AGT-3.b": {
@@ -93,14 +94,6 @@
    "branch": "cc/P-MENU.d",
    "session": "CANCELLED",
    "note": "INCOMPLETE: cancelled mid-build (notification @1444@), 18 dirty uncommitted paths, zero commits (tip==base). Same recovery path as C-AGT-3.b."
-  },
-  "C-WEB-3.c": {
-   "stage": "clean",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-C-WEB-3.c",
-   "branch": "cc/C-WEB-3.c",
-   "session": "closed",
-   "note": "r2 CLEAN gates RUN (26 passed). FROZEN pre-weld: chain a617e2746+3ce8946f5; welder rebuilds dist; vitest serial trio + vue-tsc foreign-6; §4 unstaged; evidence 4 files; prune."
   },
   "P-AGENT.d": {
    "stage": "clean",
@@ -378,6 +371,13 @@
    "regen": "none (workflows-only, per brief)",
    "gates": "tools battery 489T/2578A OK (pre- and post-cure) incl WorkflowRunInterpolation 3T/134A executing on merged tree; five-guard 133T/15735A pair-only (pinned 25,537 vs live 26,141 - closeout re-pin)",
    "durations_owed": "none - tools-side only, no new candy-code *Test.php"
+  },
+  "C-WEB-3.c": {
+   "master": "a88fa904a",
+   "pick": "5a9b2f2c6 (a617e2746) + aa6fb9c5c (3ce8946f5); dist rebuild a88fa904a",
+   "regen": "none - web lane; npm run build changed bundle hashes (index-BFWWS6rn.js / index-DCx0m3NK.css), dist committed as separate weld commit",
+   "gates": "vitest --no-file-parallelism workflowStatus panels stores = 25 files / 210 tests passed (0 failed; superset of the 3-file/26 trio); vue-tsc -b --force = exactly 6 errors, all TS2554 in foreign statusBar.spec.ts(2)+reducer.spec.ts(4)",
+   "durations_owed": "none - workflowStatus.spec.ts rides the vitest-side roster, no phpunit DUR row"
   }
  },
  "carries": [
