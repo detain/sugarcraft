@@ -1,0 +1,7 @@
+# C-TOOL-1.b round 2 — VERDICT: CLEAN (static; gates not re-runnable in sandbox)
+1. Fix scope: 86635cf8b = tests-only, one file, +36/−0 (GrepOptionInjectionTest.php); tree clean, branch cc/C-TOOL-1.b correct.
+2. New pin non-vacuous (read at GrepOptionInjectionTest.php:262): assertSame(1, substr_count('$this->runCaptured(')) genuinely unique in Grep.php (bare runCaptured() mentions :400/:530 lack $this-> prefix); assertIsInt fail-closed on missing slice; first ');' newline after open is true call-end — deleting the override, moving it outside the call, or growing a second spawn each redden it. Needle matches Grep.php:424 bytes.
+3. Wiring sound: 5th positional arg array $envOverrides = [] at CapturesProcessOutput.php:169 → ProcessContainment::scrubbedEnv($overrides) (:286) real blanking channel.
+4. Cumulative diff vs base = exactly the brief's set: Grep.php (--no-config first flag + env blanking + docblock truth :929/:986), GrepOptionInjectionTest (e2e reuses setUp jail symlink fixture :63-73 + argv pin), GrepEngineDifferentialTest:256 pinned prefix flipped in-step (§1.8). No suite-figure/durations or other files touched.
+5. Author law: %ae count 2 detain, %ce count 2 detain (separate greps), zero Co-Authored-By.
+6. MINOR, step-local: gates NOT re-run — sandbox denied phpunit (and which rg) on four shapes; builder's 223T/134,694A + five-guard pair-only rest on consistent static verification. WELD must re-run --filter Grep + five-guard on merged tree.

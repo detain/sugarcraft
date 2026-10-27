@@ -23,16 +23,17 @@
     "C-CTX-1.b",
     "C-SES-2.c",
     "C-SES-1.a",
-    "C-WEB-1.c"
+    "C-WEB-1.c",
+    "C-TOOL-1.b"
   ],
   "inflight": {
     "C-SEC-2.b": {
-      "stage": "review",
+      "stage": "clean",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SEC-2.b",
       "branch": "cc/C-SEC-2.b",
       "session": null,
-      "note": "tip 9b6c8c19d base 4f657c755, 13 files +885/-7; NEW AskDiffPreviewTest 12T/PendingAskDiffTest 6T/PermissionAskDiffEventTest 2T durations duty; generated trio restored \u00a71.8 \u2014 welder regenerates trio+dist"
+      "note": "r1 CLEAN tip 9b6c8c19d base 4f657c755; WELD = pick + regen trio (php gen-protocol-schema --write + npm gen:protocol) + npm build dist, commit regenerated files, then merged gates AskDiffPreview|PendingAsk|PermissionAskDiff|PermissionCard ~45T/454A + vitest serial card specs + five-guard pair-only; PathJail additive accepted (MINOR judged necessary); NEW 3 test files durations duty (13/5/2 methods)"
     },
     "C-SEC-3.a": {
       "stage": "build",
@@ -63,14 +64,6 @@
       "branch": "cc/C-SES-5.d",
       "session": null,
       "note": "r2 CLEAN tip 1ff716b92 base fd4f36875; weld re-runs tools/tests battery"
-    },
-    "C-TOOL-1.b": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-TOOL-1.b",
-      "branch": "cc/C-TOOL-1.b",
-      "session": null,
-      "note": "r2 CLEAN; weld re-runs Grep gates (reviewer could not)"
     },
     "C-SEC-4.a": {
       "stage": "clean",
