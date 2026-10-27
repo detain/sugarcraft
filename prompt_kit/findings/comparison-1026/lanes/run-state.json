@@ -274,6 +274,12 @@
       "regen": "no-op (cmd/tool/settings --write zero diff; no schema/web)",
       "gates": "UsageRecords 21T/102A OK exact; builder wide filter on merged tree 491T/2275A OK (= builder lane-tree 490/2267 + r2 test, lead-cut 'SessionStore|Tombstone|Usage' 484/2253 OK); five-guard 133T/15654A pair-only (pinned 25,537 vs live 26,051 - closeout re-pin; +23 over builder's 26,028 = other master welds)",
       "durations_owed": "none (no new test files)"
+    },
+    "cure-envroster": {
+      "master": "86eab474c",
+      "pick": "793c32f92->86eab474c, zero conflicts",
+      "gates": "EnvRosterDrift 37T/37443A OK exact; five-guard 133T/15654A pair-only (25,537 vs live 26,052, +1 cure pin)",
+      "note": "master repair, NOT a plan step; welded count unchanged"
     }
   },
   "carries": [
@@ -301,6 +307,7 @@
     "C-EXT-2.a: SkillPromptLine.php:104 dirname falsehood \u2014 closeout fix (report-only seam, pick stays on master)",
     "C-SES-9.c report-only seam: under a phar install the bundled trio is still NOT rostered (agentPresetTiers never injects the package dir; list() glob wrapper-dead) \u2014 tier-injection leg belongs to a later C-SES-9 step",
     "W4 \u00a74 erratum owed: P-CTX.d undisclosed +10 Chat-test-file widening at pick 967479a37 (W5 wave review MINOR) \u2014 dated note on plan file at W4 wave-close",
-    "welder-run: C-SES-9.a + cure-envroster welded (63); re-verify entries lost by round-trips each weld"
+    "welder-run: C-SES-9.a + cure-envroster welded (63); re-verify entries lost by round-trips each weld",
+    "cure-envroster landed 86eab474c (pick of 793c32f92; CANDY_CODE_REF rostered as build-time prose ARG in ENVIRONMENT.md + DOCKER.md deferrals + EnvRosterDriftTest prose pin; EnvRoster pair red CLOSED; master repair, no \u00a74 mark, welded stays 63)"
   ]
 }

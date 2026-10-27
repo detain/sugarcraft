@@ -1,0 +1,5 @@
+# cure-envroster — DONE, 793c32f92 on cc/cure-envroster (never pushed)
+FIXED per guard verdict: ENVIRONMENT.md table oracle forbids a row (tabulated⇒read), so the name moved to the page's sanctioned build-time prose section (`## Build-time image arguments`) and docs/DOCKER.md now defers to it — 2F reproduced pre-edit, EnvRosterDrift green 37T/37443A post-edit (+1 new pin testTheBuildTimeImageArgumentIsRosteredOnThePageInProse, mutation-proven: section delete → exactly 1F).
+Five-guard: ONLY the staleness pair red (pinned 25,537 vs live 26,044 — carries this lane's +1; re-pin is closeout duty, suite-figure/README untouched).
+Files: candy-code/docs/ENVIRONMENT.md +14, candy-code/docs/DOCKER.md 2 mentions reworded, candy-code/tests/Config/EnvRosterDriftTest.php +36. Author 1/1 detain, zero Co-Authored; tree clean at tip.
+Note on brief deviation: the primary "table row" option is structurally impossible without reddening testEveryVariableTheEnvironmentPageTabulatesIsOneTheCodeReads (unread name tabulated) — the guard's own message ("move the discussion to docs/ENVIRONMENT.md, the one page whose PROSE…") is the authority followed, per the brief's fallback clause.
