@@ -220,6 +220,30 @@ final class PostToolUseAttributionTest extends TestCase
         (new HookManager($this->registry))->preToolUse(self::context());
     }
 
+    // ---- C-TOOL-1: the failure bit rides to the chain -----------------------
+
+    /**
+     * `Runtime::settle()` hands the PostToolUse chain the call's failure bit.
+     * A write-y hook — the post-edit formatter, which REWRITES the file it is
+     * shown — stands down on a failed call, and can only do that if the bit
+     * arrives. Both polarities: a permitting chain sees `toolFailed` false on
+     * a successful call and true on a failed one.
+     */
+    public function testAFailedCallReachesThePostToolUseChainMarkedFailed(): void
+    {
+        $seen = [];
+        $this->registry->register(self::hook('spy', static function (HookContext $c) use (&$seen): HookResult {
+            $seen[] = $c->toolFailed;
+
+            return HookResult::allow();
+        }));
+
+        $this->dispatch('README.md');
+        $this->dispatch('Error: file changed since you read it', isError: true);
+
+        $this->assertSame([false, true], $seen, 'settle() dropped the call\'s isError bit on the way to the chain');
+    }
+
     // ---- HookResult --------------------------------------------------------
 
     public function testRefusingHookReadsTheRightOriginForEachAction(): void
@@ -260,14 +284,14 @@ final class PostToolUseAttributionTest extends TestCase
 
     // ---- fixtures ----------------------------------------------------------
 
-    private function dispatch(string $output): ToolResultMessage
+    private function dispatch(string $output, bool $isError = false): ToolResultMessage
     {
-        $tool = new class ($output) implements Tool {
-            public function __construct(private readonly string $output) {}
+        $tool = new class ($output, $isError) implements Tool {
+            public function __construct(private readonly string $output, private readonly bool $failed) {}
             public function name(): string { return 'Bash'; }
             public function description(): string { return 'stub'; }
             public function inputSchema(): array { return []; }
-            public function execute(array $args): ToolResult { return new ToolResult('stub', $this->output); }
+            public function execute(array $args): ToolResult { return new ToolResult('stub', $this->output, $this->failed); }
         };
         $app = App::new($this->provider, 'test-model')->withTools([$tool]);
         $method = new \ReflectionMethod($this->runtime, 'executeToolCalls');

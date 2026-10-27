@@ -225,6 +225,59 @@ final class HookContextTest extends TestCase
     }
 
     // =========================================================================
+    // toolFailed Tests (C-TOOL-1)
+    // =========================================================================
+
+    public function testTheFailureBitDefaultsToFalse(): void
+    {
+        $this->assertFalse($this->createContext()->toolFailed);
+    }
+
+    public function testWithToolFailedSetsTheBit(): void
+    {
+        $context = $this->createContext()->withToolFailed(true);
+
+        $this->assertTrue($context->toolFailed);
+        $this->assertFalse($this->createContext()->toolFailed, 'the copy sets the bit, the original is untouched');
+    }
+
+    public function testWithToolFailedPreservesOtherFields(): void
+    {
+        $original = $this->createContext();
+
+        $failed = $original->withToolFailed(true);
+
+        $this->assertSame($original->sessionId, $failed->sessionId);
+        $this->assertSame($original->toolName, $failed->toolName);
+        $this->assertSame($original->toolArgs, $failed->toolArgs);
+        $this->assertSame($original->toolInput, $failed->toolInput);
+        $this->assertSame($original->toolOutput, $failed->toolOutput);
+        $this->assertSame($original->model, $failed->model);
+        $this->assertSame($original->provider, $failed->provider);
+        $this->assertSame($original->projectRoot, $failed->projectRoot);
+    }
+
+    /**
+     * Every `with*()` copy carries the bit: a cloner that drops it would
+     * silently un-fail a failed call on its way through the post chain
+     * (C-TOOL-1 — the format hook stands down on it).
+     */
+    public function testTheFailureBitRoundTripsThroughEveryWither(): void
+    {
+        $failed = $this->createContext()->withToolFailed(true);
+
+        $this->assertTrue($failed->withHeartbeat(null)->toolFailed, 'withHeartbeat dropped the bit');
+        $this->assertTrue($failed->withToolInput('changed')->toolFailed, 'withToolInput dropped the bit');
+        $this->assertTrue($failed->withToolOutput('changed')->toolFailed, 'withToolOutput dropped the bit');
+        $this->assertTrue($failed->withRewrittenArgs(['a' => 1], '{"a":1}')->toolFailed, 'withRewrittenArgs dropped the bit');
+
+        // And it does not leak upward: clearing on an un-failed context is a no-op copy.
+        $this->assertFalse($this->createContext()->withHeartbeat(null)->toolFailed);
+        $this->assertFalse($this->createContext()->withToolOutput('changed')->toolFailed);
+        $this->assertFalse($this->createContext()->withToolFailed(false)->toolFailed);
+    }
+
+    // =========================================================================
     // Helper Methods
     // =========================================================================
 

@@ -3407,7 +3407,14 @@ final class Runtime
         $withheldReason = null;
         $withheldBy = null;
         try {
-            $hookResult = $this->hookManager->postToolUse($context->withToolOutput($result->content()));
+            $hookResult = $this->hookManager->postToolUse(
+                // C-TOOL-1: the chain sees whether the call ENDED IN ERROR. A
+                // refused write left the user's bytes on disk, and the format
+                // hook — which WRITES — stands down on that bit; the lint hook,
+                // which only reads, keeps reporting. The withhold logic below
+                // is untouched: this only hands the context one more fact.
+                $context->withToolOutput($result->content())->withToolFailed($result->isError())
+            );
 
             // A BLOCK HERE USED TO BE A SILENT NO-OP (audit F-H1): only
             // `additionalContext` was read, so a secret scanner exiting 2 on

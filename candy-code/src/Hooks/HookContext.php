@@ -12,6 +12,15 @@ namespace SugarCraft\Code\Hooks;
  * kills a turn silent for `turnIdleTimeoutSeconds`) calls it while it waits —
  * {@see BuiltIn\AutoTestHook} hands it to the test run. It is the caller's
  * to throttle and to bind to its process ({@see HookManager::stop()}).
+ *
+ * `$toolFailed` says the call this context observes ENDED IN ERROR. Only the
+ * PostToolUse half can carry it (the tool has to have run to fail), and it
+ * exists for the hooks that WRITE: a refused `Edit`/`Write` left the user's
+ * bytes on disk untouched, and a post-edit formatter that "helpfully"
+ * reformatted them would rewrite the user's file as a side effect of a call
+ * that did nothing — {@see BuiltIn\PostEditFormatHook} stands down on the bit.
+ * Read-only hooks (lint, diagnostics, audit) keep observing failed calls: the
+ * file holds what it holds, and that is the picture the next attempt edits.
  */
 final readonly class HookContext
 {
@@ -28,6 +37,7 @@ final readonly class HookContext
         public string $provider,
         public string $projectRoot,
         public ?\Closure $heartbeat = null,
+        public bool $toolFailed = false,
     ) {}
 
     /** The same context carrying $heartbeat ({@see $heartbeat}). */
@@ -43,6 +53,24 @@ final readonly class HookContext
             provider: $this->provider,
             projectRoot: $this->projectRoot,
             heartbeat: $heartbeat,
+            toolFailed: $this->toolFailed,
+        );
+    }
+
+    /** The same call marked failed ({@see $toolFailed}) — or cleared. */
+    public function withToolFailed(bool $failed): self
+    {
+        return new self(
+            sessionId: $this->sessionId,
+            toolName: $this->toolName,
+            toolArgs: $this->toolArgs,
+            toolInput: $this->toolInput,
+            toolOutput: $this->toolOutput,
+            model: $this->model,
+            provider: $this->provider,
+            projectRoot: $this->projectRoot,
+            heartbeat: $this->heartbeat,
+            toolFailed: $failed,
         );
     }
 
@@ -58,6 +86,7 @@ final readonly class HookContext
             provider: $this->provider,
             projectRoot: $this->projectRoot,
             heartbeat: $this->heartbeat,
+            toolFailed: $this->toolFailed,
         );
     }
 
@@ -91,6 +120,7 @@ final readonly class HookContext
             provider: $this->provider,
             projectRoot: $this->projectRoot,
             heartbeat: $this->heartbeat,
+            toolFailed: $this->toolFailed,
         );
     }
 
@@ -106,6 +136,7 @@ final readonly class HookContext
             provider: $this->provider,
             projectRoot: $this->projectRoot,
             heartbeat: $this->heartbeat,
+            toolFailed: $this->toolFailed,
         );
     }
 }

@@ -175,6 +175,76 @@ final class PostEditFormatHookTest extends TestCase
         $this->assertSame('', $result->additionalContext);
     }
 
+    // ── C-TOOL-1: the two guards (failed edits, stale blesses) ──────────
+
+    public function testAFailedEditIsNeitherFormattedNorRecorded(): void
+    {
+        // A refused Write/Edit leaves the USER's bytes on disk — the tool
+        // never wrote. Formatting then rewrites the user's file as a side
+        // effect of a call that did nothing, and the record() blesses that
+        // rewrite, so the model's retry silently overwrites the user's
+        // edits. The lint keeps linting failed edits (it only reads); the
+        // formatter stands down entirely.
+        $this->put('src/a.php', "one\n");
+        $absolute = $this->root . '/src/a.php';
+        $ledger = ReadLedger::new();
+        $ledger->record($absolute);
+        $hook = new PostEditFormatHook(FormatRunner::new()->withCommands(['php' => 'printf "two\\n" >> {file}']), $ledger);
+
+        $result = $hook->execute($this->context('Edit', 'src/a.php')->withToolFailed(true));
+
+        $this->assertTrue($result->isAllowed());
+        $this->assertSame('', $result->additionalContext, 'a failed call earns no format note');
+        $this->assertSame("one\n", file_get_contents($absolute), 'the formatter rewrote the file of a call that failed');
+        $this->assertSame([], $ledger->changedSinceRead());
+    }
+
+    public function testAStaleFileIsNotBlessedByTheFormatter(): void
+    {
+        // The second, independent guard: even on a SUCCESSFUL call, a file
+        // the ledger already considers stale holds somebody else's work —
+        // the tool succeeded earlier and the user edited since, say. The
+        // formatter may rewrite it (its run is guarded and noted), but the
+        // kept rewrite must NOT be recorded: re-hashing would launder the
+        // user's change into the model's own baseline and the next Edit
+        // would clobber it with no refusal at all.
+        $this->put('src/a.php', "one\n");
+        $absolute = $this->root . '/src/a.php';
+        $ledger = ReadLedger::new();
+        $ledger->record($absolute);          // the ledger believes "one\n"
+        file_put_contents($absolute, "the user's own edit\n"); // external change: already stale
+
+        $hook = new PostEditFormatHook(FormatRunner::new()->withCommands(['php' => 'printf "two\\n" >> {file}']), $ledger);
+        $result = $hook->execute($this->context('Write', 'src/a.php'));
+
+        $this->assertTrue($result->isAllowed());
+        $this->assertStringContainsString('rewrote src/a.php', $result->additionalContext, 'the format itself still runs on a successful call');
+        $this->assertSame("the user's own edit\ntwo\n", file_get_contents($absolute));
+        $this->assertSame(
+            [$absolute => 'modified'],
+            $ledger->changedSinceRead(),
+            'the formatter blessed an already-stale file — the next Edit would clobber the user with no refusal',
+        );
+    }
+
+    public function testAFreshFileIsStillBlessedByTheRecordingHalfOfTheGuard(): void
+    {
+        // The polarity partner: bytes the ledger agrees with are formatted
+        // AND recorded exactly as before — the guard must not silently stop
+        // the recording that makes the hook exist.
+        $this->put('src/a.php', "one\n");
+        $absolute = $this->root . '/src/a.php';
+        $ledger = ReadLedger::new();
+        $ledger->record($absolute);
+
+        $hook = new PostEditFormatHook(FormatRunner::new()->withCommands(['php' => 'printf "two\\n" >> {file}']), $ledger);
+        $result = $hook->execute($this->context('Edit', 'src/a.php'));
+
+        $this->assertStringContainsString('rewrote src/a.php', $result->additionalContext);
+        $this->assertSame("one\ntwo\n", file_get_contents($absolute));
+        $this->assertSame([], $ledger->changedSinceRead(), 'a rewrite of a file the ledger agreed with was not recorded');
+    }
+
     // ── the launch wiring (THE GAP this item closes) ───────────────────
 
     public function testTheLaunchHandsOneLedgerToTheToolsAndToTheHook(): void

@@ -1069,8 +1069,8 @@ every path (it still is for `-p` and background sessions; the TUI now starts in
 
 ### Post-edit format
 
-After every `Write`, `Edit` or `ApplyPatch`, `PostEditFormatHook` runs the
-formatter named by `formatCommands` over each edited file and lets it
+After every `Write`, `Edit` or `ApplyPatch` that did NOT fail, `PostEditFormatHook`
+runs the formatter named by `formatCommands` over each edited file and lets it
 REWRITE the file. It is registered ahead of `PostEditLintHook` — the linter
 then reads the bytes that actually stand on disk — and only registers at all
 when the map names a command: `formatCommands` is off by default, and where
@@ -1092,12 +1092,23 @@ to pick for you.
   exited non-zero after already changing bytes is UNDONE — the pre-run bytes
   are put back — and the note says which of these happened. A clean rewrite
   stands; a run that changed nothing is silent.
+- **A failed call is not formatted at all.** When the tool result carries an
+  error — the staleness refusal, a bad patch, a missing string — the call
+  left the user's bytes on disk, and formatting them would REWRITE the file
+  in the very call that failed to change it. `Runtime` hands the chain the
+  call's error bit as `HookContext::$toolFailed`, and this hook stands down
+  on it. The lint hook has no such standing-down: a failed edit is linted
+  like any other, because lint READS and format WRITES.
 - A kept rewrite is recorded in the launch's read ledger — the same instance
   `Read`, `Edit`, `Write` and `ApplyPatch` consult — so the formatter's
   change never reads as an external edit and never trips the staleness
-  refusal on the next `Edit`. That recording is the ledger reason the hook
-  exists; an embedder that registers it without a ledger still formats, it
-  just cannot make the change look read.
+  refusal on the next `Edit`. But the recording is conditional: the ledger's
+  pre-format staleness check over the bytes read before the formatter ran
+  must have agreed. A file the user moved in the meantime is formatted (the
+  rewrite stands, the note reports it) but NEVER blessed — its staleness
+  stays visible to the next call, exactly as if no formatter had run. That
+  recording is the ledger reason the hook exists; an embedder that registers
+  it without a ledger still formats, it just cannot make the change look read.
 - The model still hears about it: each kept rewrite earns a note that the
   file's bytes are no longer the ones it wrote, so line numbers from the
   previous read are stale and worth re-reading against.

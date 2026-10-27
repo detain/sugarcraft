@@ -551,6 +551,17 @@ final class ReadPathCensusTest extends TestCase
             'PATH_JAIL — guard(): the read-back that decides whether the formatter run earned its '
                 . 'write — same jail-resolved path, compared to the baseline hash',
         ],
+        // plan_comparison C-TOOL-1: the pre-format evidence for the ledger-
+        // agreement check that keeps a formatter from blessing an already-
+        // stale file. Same jail the FormatRunner row above claims — the path
+        // is the model-spelled tool argument resolved against the hook's
+        // project root, and the bytes are only ever compared to the ledger's
+        // stored hash, never rendered and never kept.
+        'Hooks/BuiltIn/PostEditFormatHook.php|file_get_contents' => [
+            'PATH_JAIL — preFormatBytes(): `$absolute` is `PathJail::resolve($context->projectRoot, '
+                . '$path)`, size-capped at `FormatRunner::MAX_SOURCE_BYTES` like the runner\'s own '
+                . 'baseline read; the bytes feed only `ReadLedger::staleness()` evidence',
+        ],
         // CALLER_SUPPLIED, not CONTAINED_UPSTREAM, and the correction was made BY
         // this test: the first draft claimed the upstream gate was in
         // `Cli/Bootstrap.php`, and the measured check refused it, because Bootstrap's
