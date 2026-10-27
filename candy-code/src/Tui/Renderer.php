@@ -36,6 +36,8 @@ use SugarCraft\Constraints\Dock\Side;
 use SugarCraft\Constraints\Region;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Zone;
+use SugarCraft\Overlay\Position as OverlayPosition;
+use SugarCraft\Overlay\Veil;
 
 /**
  * Stateless renderer for the candy-code TUI shell.
@@ -660,30 +662,23 @@ final class Renderer
             return self::renderAgentDashboard($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
 
-        // The split-pane compositor's activation decision, taken BEFORE the
-        // band is laid out because it changes the band's width. See
-        // {@see agentSplitWidth()} for the policy; 0 means "no split", and
-        // every measurement below then reduces to what it was before.
-        $liveAgents = self::liveAgentRuns($a);
-        $agentCols = self::agentSplitWidth($liveAgents, $cols, $a->agentSplitCols);
-        $bandCols = $agentCols > 0 ? $cols - $agentCols - self::SPLIT_DIVIDER_COLS : $cols;
-
-        [$leftPane, $leftMeta, $leftHeaders] = self::renderSide($a, Side::Left, $bandCols, $paneRows);
-        [$rightPane, $rightMeta, $rightHeaders] = self::renderSide($a, Side::Right, $bandCols, $paneRows);
-
-        // The chat pane gets the columns actually LEFT OVER, measured from the
-        // rendered sidebars. The old `$cols - 80` guess assumed two 40-column
-        // sidebars; the real ones are a quarter of the terminal each and the
-        // right one is usually absent, so on a 120-column terminal it handed
-        // the pane 40 columns out of an available 86 and then truncated
-        // everything wider than 40 to fit.
-        // The chat's floor is the dock's own centre minimum — the same
-        // vocabulary hostableLegacySide() sizes the sides against, so the
-        // band arithmetic (`side + chrome + centre <= band`) closes at
-        // every width. At the seeded 24 this is the floor it has always
-        // been; only a withMinimums() re-floor could move it, and then the
-        // renderer should move with it.
-        $paneCols = max(self::dockMinimums($a)[0], $bandCols - self::blockWidth($leftPane) - self::blockWidth($rightPane));
+        // The band itself — sidebars, chat column, live-agent split — lays
+        // out in {@see composeBand()}, the moved text of what this method
+        // always did here; the publish below and every chrome step after it
+        // stay, because they assemble the frame, not the band.
+        [
+            'middle' => $middle,
+            'images' => $images,
+            'leftPane' => $leftPane,
+            'leftMeta' => $leftMeta,
+            'leftHeaders' => $leftHeaders,
+            'rightMeta' => $rightMeta,
+            'rightHeaders' => $rightHeaders,
+            'paneCols' => $paneCols,
+            'bandCols' => $bandCols,
+            'liveAgents' => $liveAgents,
+            'agentCols' => $agentCols,
+        ] = self::composeBand($a, $cols, $paneRows);
 
         // Publish the band the pointer maths resolve against (see
         // {@see $lastDockFrame}): exactly these widths, this frame, whether
@@ -702,19 +697,6 @@ final class Renderer
             // seam drag measures its travel against.
             'agentCols' => $agentCols,
         ];
-
-        [$chatPane, $images] = ChatPane::renderView($a, $paneCols, $paneRows);
-
-        // A sidebar taller than the pane budget would push the bottom chrome
-        // off-screen, so the joined band is held to the budget as well.
-        $middle = self::clipHead(
-            Layout::joinHorizontal(Position::TOP, $leftPane, $chatPane, $rightPane),
-            $paneRows,
-        );
-
-        if ($agentCols > 0) {
-            $middle = self::composeAgentSplit($a, $liveAgents, $middle, $bandCols, $agentCols, $cols, $paneRows);
-        }
 
         $parts = [$menuBar];
         if ($notice !== '') {
@@ -854,6 +836,89 @@ final class Renderer
     }
 
     /**
+     * The shell's content band — sidebars, chat column, live-agent split —
+     * laid out exactly as {@see renderView()} has always laid it out, moved
+     * whole so the media-form popup can paint the same band dimmed behind its
+     * box (P-IMAGE-MENU). One copy, two callers: the popup's backdrop cannot
+     * drift from the real frame, because it IS the real frame's band.
+     *
+     * The caller owns everything that is frame rather than band: the
+     * `$lastDockFrame` publish, the chrome assembly, the zone stamps, and
+     * {@see LiveRenderer::setZoneOrigin()}. `images` comes back in the map
+     * instead of a View so a caller that dims the band can drop them — a
+     * pixel-graphics placement has nothing to be painted onto once the rows
+     * it spans are only a backdrop.
+     *
+     * @return array{
+     *     middle: string,
+     *     images: array<int, \SugarCraft\Core\ImagePlacement>,
+     *     leftPane: string,
+     *     leftMeta: ?array{width: int, dividerColLocal: int, grabFrom: int, grabTo: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>},
+     *     leftHeaders: list<array{paneId: string, row: int, from: int, to: int}>,
+     *     rightMeta: ?array{width: int, dividerColLocal: int, grabFrom: int, grabTo: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>},
+     *     rightHeaders: list<array{paneId: string, row: int, from: int, to: int}>,
+     *     paneCols: int,
+     *     bandCols: int,
+     *     liveAgents: list<\SugarCraft\Code\Agents\SubAgent>,
+     *     agentCols: int
+     * }
+     */
+    private static function composeBand(App $a, int $cols, int $paneRows): array
+    {
+        // The split-pane compositor's activation decision, taken BEFORE the
+        // band is laid out because it changes the band's width. See
+        // {@see agentSplitWidth()} for the policy; 0 means "no split", and
+        // every measurement below then reduces to what it was before.
+        $liveAgents = self::liveAgentRuns($a);
+        $agentCols = self::agentSplitWidth($liveAgents, $cols, $a->agentSplitCols);
+        $bandCols = $agentCols > 0 ? $cols - $agentCols - self::SPLIT_DIVIDER_COLS : $cols;
+
+        [$leftPane, $leftMeta, $leftHeaders] = self::renderSide($a, Side::Left, $bandCols, $paneRows);
+        [$rightPane, $rightMeta, $rightHeaders] = self::renderSide($a, Side::Right, $bandCols, $paneRows);
+
+        // The chat pane gets the columns actually LEFT OVER, measured from the
+        // rendered sidebars. The old `$cols - 80` guess assumed two 40-column
+        // sidebars; the real ones are a quarter of the terminal each and the
+        // right one is usually absent, so on a 120-column terminal it handed
+        // the pane 40 columns out of an available 86 and then truncated
+        // everything wider than 40 to fit.
+        // The chat's floor is the dock's own centre minimum — the same
+        // vocabulary hostableLegacySide() sizes the sides against, so the
+        // band arithmetic (`side + chrome + centre <= band`) closes at
+        // every width. At the seeded 24 this is the floor it has always
+        // been; only a withMinimums() re-floor could move it, and then the
+        // renderer should move with it.
+        $paneCols = max(self::dockMinimums($a)[0], $bandCols - self::blockWidth($leftPane) - self::blockWidth($rightPane));
+
+        [$chatPane, $images] = ChatPane::renderView($a, $paneCols, $paneRows);
+
+        // A sidebar taller than the pane budget would push the bottom chrome
+        // off-screen, so the joined band is held to the budget as well.
+        $middle = self::clipHead(
+            Layout::joinHorizontal(Position::TOP, $leftPane, $chatPane, $rightPane),
+            $paneRows,
+        );
+
+        if ($agentCols > 0) {
+            $middle = self::composeAgentSplit($a, $liveAgents, $middle, $bandCols, $agentCols, $cols, $paneRows);
+        }
+
+        return [
+            'middle' => $middle,
+            'images' => $images,
+            'leftPane' => $leftPane,
+            'leftMeta' => $leftMeta,
+            'leftHeaders' => $leftHeaders,
+            'rightMeta' => $rightMeta,
+            'rightHeaders' => $rightHeaders,
+            'paneCols' => $paneCols,
+            'bandCols' => $bandCols,
+            'liveAgents' => $liveAgents,
+            'agentCols' => $agentCols,
+        ];
+    }
+
+    /**
      * The {@see Pane::Agents} frame: shell chrome around the full-width
      * {@see AgentDashboardPane}.
      *
@@ -930,12 +995,31 @@ final class Renderer
     }
 
     /**
-     * The media-form frame (crush-media W3.1): the settings band's shape
-     * applied to the full-band {@see \SugarCraft\Code\Tui\MediaForm\MediaForm}
-     * — held to `$rows`/`$cols`, its `media:` tab/row zones recorded in the
-     * chrome registry, the menu dropdown painted over it. Deliberately NOT a
-     * Veil overlay: the chat's composite chain (src/Renderer.php's
-     * painted==routed band) stays untouched while this modal is up.
+     * The media-form frame (crush-media W3.1; popup rework P-IMAGE-MENU):
+     * the form is a CONTENT-SIZED box centred in the band, not a fullscreen
+     * takeover. The shell's normal band composes first through
+     * {@see composeBand()} and becomes a dimmed backdrop — the palette's
+     * Veil law (src/Renderer.php's overlay chain) — and the box is the form
+     * drawn at its {@see \SugarCraft\Code\Tui\MediaForm\MediaForm::naturalSize()}
+     * on top of it.
+     *
+     * What the backdrop carries into the paint and what it sheds:
+     * - its `images` are DROPPED. A graphics placement lands by absolute
+     *   cursor over the rows it spans; with the box centred on those same
+     *   rows the picture would paint THROUGH the popup, so while the form is
+     *   up nothing renders under it and the stray U+E002 marker cells blank
+     *   to spaces exactly as the resolve-with-no-placements law already
+     *   makes them blank for the text-only diff path.
+     * - the chat's zone registry is CLEARED (it always was): the rows under
+     *   the box are inert; the menu bar's chrome zones and the box's own
+     *   `media:` tab/row zones, offset to where Veil actually landed the
+     *   box, are the frame's only click targets.
+     *
+     * The box never over-reaches its band (`naturalSize` clamps against it),
+     * and the band's rows are sentinel-free by scanRoot's law, so Veil's
+     * own cell maths lands the box exactly where the zone offsets compute —
+     * no lift/restore dance is needed here for the reasons the chat overlay
+     * chain does it.
      */
     private static function renderMediaForm(
         App $a,
@@ -950,11 +1034,27 @@ final class Renderer
         \assert($form !== null);
         $theme = $a->theme();
 
+        $band = self::composeBand($a, $cols, $paneRows);
+        [$boxCols, $boxRows] = $form->naturalSize($theme, $cols, $paneRows);
+
+        // Veil centres on the backdrop's widest line and its line count, and
+        // the composed band hugs its content like AgentDashboardPane's box
+        // did before padCanvas fixed exactly that: square the canvas to the
+        // full band first, so CENTER means band centre.
+        $backdrop = self::padBand($band['middle'], $cols, $paneRows);
+
+        $middle = Veil::new()->withBackdrop(50)->composite(
+            $form->view($theme, $boxCols, $boxRows),
+            $backdrop,
+            OverlayPosition::CENTER,
+            OverlayPosition::CENTER,
+        );
+
         $parts = [$menuBar];
         if ($notice !== '') {
             $parts[] = $notice;
         }
-        $parts[] = $form->view($theme, $cols, $paneRows);
+        $parts[] = $middle;
         if ($bottom !== '') {
             $parts[] = $bottom;
         }
@@ -969,14 +1069,21 @@ final class Renderer
         self::$scrollRegions = [];
 
         $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
+        // The offsets Veil's CENTER maths lands the box at, for a canvas of
+        // exactly $cols x $paneRows — which padBand just made it. Center's
+        // own floor((bg - fg)/2) and these intdiv()s agree for the
+        // non-negative remainders naturalSize's clamps guarantee.
+        $boxLeft = intdiv($cols - $boxCols, 2);
+        $boxTop = intdiv($paneRows - $boxRows, 2);
         $byRow = [];
-        foreach ($form->zones($theme, $cols, $paneRows) as [$row, $from, $to, $id]) {
-            $to = min($to, $cols);
+        foreach ($form->zones($theme, $boxCols, $boxRows) as [$row, $from, $to, $id]) {
+            $from += $boxLeft;
+            $to = min($to + $boxLeft, $cols);
             if ($to <= $from) {
                 continue;
             }
 
-            $byRow[$bandTop + $row][] = [$from, $to, \SugarCraft\Mouse\Mark::zone($id, str_repeat(' ', $to - $from))];
+            $byRow[$bandTop + $boxTop + $row][] = [$from, $to, \SugarCraft\Mouse\Mark::zone($id, str_repeat(' ', $to - $from))];
         }
 
         $zoneRows = [];
@@ -988,6 +1095,27 @@ final class Renderer
         self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, $zoneRows);
 
         return new View($frame);
+    }
+
+    /**
+     * Square a composed band to exactly `$cols` cells x `$paneRows` lines:
+     * every line truncated then padded to the full width, and short bands
+     * extended with blank full-width rows, so Veil's canvas maths (widest
+     * line, line count) sees the whole band as its surface — the
+     * {@see AgentDashboardPane}-shaped padCanvas law, widened to columns for
+     * the popup's horizontal centring (P-IMAGE-MENU).
+     */
+    private static function padBand(string $band, int $cols, int $paneRows): string
+    {
+        $lines = [];
+        foreach (array_slice(explode("\n", self::clipWidth($band, $cols)), 0, $paneRows) as $line) {
+            $lines[] = Width::padRight($line, $cols);
+        }
+        while (count($lines) < $paneRows) {
+            $lines[] = str_repeat(' ', $cols);
+        }
+
+        return implode("\n", $lines);
     }
 
     /**

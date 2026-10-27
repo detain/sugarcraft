@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\App;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\App\ClipboardImagePastedMsg;
 use SugarCraft\Code\Cli\Bootstrap;
@@ -100,7 +101,34 @@ final class MediaFormWiringTest extends TestCase
         self::assertSame(33, $form->collectValues()['steps'], 'ui.mediaDisplayOverrides rode to the lattice');
     }
 
+    // ---- the popup frame (P-IMAGE-MENU) ----------------------------------------------
+
+    public function testTheAppRendersTheFormAsAnInsetCentredPopupNotAFullBand(): void
+    {
+        // P-IMAGE-MENU through the REAL App door: the wiring test's setUp
+        // pins the shell at 200x60, and the popup it renders must sit
+        // inset from the terminal edges — the app path, not just the
+        // renderer's unit shape.
+        $app = $this->awApp()->openMediaForm();
+        self::assertInstanceOf(MediaForm::class, $app->mediaForm);
+
+        $lines = explode("\n", Ansi::strip(TuiRenderer::renderView($app)->body));
+        $cornerRow = null;
+        foreach ($lines as $index => $line) {
+            $at = mb_strpos($line, "\u{256D}\u{2500} \u{1F3A8}");
+            if ($at !== false) {
+                self::assertGreaterThan(0, $at, 'the popup box is inset from the terminal edge');
+                $cornerRow = $index;
+                break;
+            }
+        }
+
+        self::assertNotNull($cornerRow, 'the wired app rendered the form box');
+        self::assertGreaterThan(0, $cornerRow, 'the box sits below the menu bar, not at the frame top');
+    }
+
     // ---- the SavePreset action, App to disk ------------------------------------------
+
 
     public function testSavePresetKeyWalksAppToDiskThroughTheWiredDoor(): void
     {

@@ -756,6 +756,86 @@ final class MediaForm
         return self::fit($lines, $cols, $rows);
     }
 
+    /** Box width the popup never shrinks below — the strip's own cells
+     * already need it; below it the chrome stops being readable. */
+    private const MIN_COLS = 60;
+    /** Box width the popup never grows past: it is a popup, not a second
+     * fullscreen (P-IMAGE-MENU). Content wider than the cap still wins its
+     * band (the cap is taken against `$maxCols` too). */
+    private const MAX_COLS = 104;
+
+    /**
+     * The box size that shows this form's content without cutting any of it
+     * (P-IMAGE-MENU): the widest of the title line, the FULL tab strip (the
+     * scroll marks are {@see FormTabs::naturalWidth()}'s no-cost absence, so
+     * the strip never lands cut when the popup is centred in a wide band),
+     * the longest label+value row of every visible section, and the footer
+     * hint chain / status line — plus the box's own chrome. Clamped into
+     * `[MIN_COLS, min(maxCols, MAX_COLS)]`; full band width only when content
+     * genuinely demands more.
+     *
+     * Rows: the six chrome lines {@see view()} spends (two borders, the tab
+     * strip, two rules, the status) plus the tallest VISIBLE section's row
+     * count — the max keeps the box the same height across tab jumps, which
+     * a focused-section-only measure would not. Bounded by the band.
+     *
+     * Height does not chase the editing field: opening a field reflows the
+     * BODY inside the box exactly as it always has ({@see bodyLines()}
+     * slices the field to the budget); the field's own prompt text is short
+     * by construction, and a box that grew per keypress would move under the
+     * cursor.
+     *
+     * @return array{0: int, 1: int} [cols, rows] the shell centres at
+     *                       `intdiv` offsets inside its band budget
+     */
+    public function naturalSize(Theme $theme, int $maxCols, int $maxRows): array
+    {
+        $maxCols = max(1, $maxCols);
+        $maxRows = max(1, $maxRows);
+        $visible = $this->visibleSections();
+
+        // '╭─' + title + '╮'.
+        $needed = Width::string(' 🎨 ' . Lang::t(GenFormKeys::TITLE) . ' ') + 3;
+
+        // The whole strip unscrolled, inside the '│ ' … ' │' side chrome.
+        $needed = max($needed, FormTabs::naturalWidth($this->tabLabelsFrom($visible)) + 4);
+
+        // Rows: marker (2) + label + gap-to-column-14 (bodyLines' labelW cap
+        // is min(14, …), so 14 upper-bounds the column whatever width finally
+        // picks) + value. Preview sections read the live draft exactly as
+        // bodyLines threads it, so the measure cannot undershoot.
+        $tallest = 1;
+        foreach ($visible as $section) {
+            if ($section instanceof DraftContextSection) {
+                $section = $section->withDraftContext($this->draft);
+            }
+
+            $labels = $section->rows();
+            $tallest = max($tallest, count($labels));
+            foreach ($labels as $index => $label) {
+                $labelW = Width::string($label);
+                $needed = max(
+                    $needed,
+                    2 + $labelW + max(1, 14 - $labelW) + Width::string($section->valueAt($index)) + 4,
+                );
+            }
+        }
+
+        // Footer: the full hint chain untruncated, and the whole status line
+        // when one is set (hints() keeps `Close` at any width; the chain is
+        // what the widest footer wants to be).
+        $needed = max($needed, Width::string(implode(' · ', $this->footer())) + 4);
+        if ($this->status !== null) {
+            $needed = max($needed, Width::string(ltrim($this->status, '! ')) + 4);
+        }
+
+        $cap = min($maxCols, self::MAX_COLS);
+        $cols = min($needed > $cap ? $cap : max(self::MIN_COLS, $needed), $maxCols);
+        $rows = min($maxRows, max(7, 6 + $tallest));
+
+        return [$cols, $rows];
+    }
+
     /**
      * The click targets {@see view()} paints, in view-local cells (row 0 is
      * the top border), as `[row, from, to (exclusive), zone id]` — computed
