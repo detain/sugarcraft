@@ -618,8 +618,12 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
         // take the block as a validation error or ignore it. The family
         // ladder is the same one {@see marksPromptCache()} uses to scope
         // cache points — same decoration-stripping, same `anthropic.claude`
-        // head.
-        return str_starts_with(self::family($model), 'anthropic.claude');
+        // head. WITHIN that head the generation question is the same one
+        // the direct and Vertex arms answer from {@see ThinkingCapability}:
+        // pre-3.7 Claudes refuse the block, so the pair is gated by both —
+        // the decoration-stripped family form is the id the table expects.
+        return str_starts_with(self::family($model), 'anthropic.claude')
+            && ThinkingCapability::supportsThinking(self::family($model));
     }
 
     public function complete(CompleteRequest $request): CompleteResponse

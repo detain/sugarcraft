@@ -80,6 +80,10 @@ final class EffortGateTest extends TestCase
             'sglang + any id' => [$this->gateSglang(), 'Qwen3-Next-80B', true],
             // Bedrock shapes only its Claude ids, decorated or not.
             'bedrock + bare claude id' => [$this->gateBedrock(), 'anthropic.claude-sonnet-4-6', true],
+            // The generation leg inside the Claude head: pre-3-7 refused,
+            // 3-7 and up shaped — same table the direct arms consult.
+            'bedrock + claude-3-5-sonnet' => [$this->gateBedrock(), 'anthropic.claude-3-5-sonnet-20241022-v2:0', false],
+            'bedrock + claude-3-7-sonnet' => [$this->gateBedrock(), 'anthropic.claude-3-7-sonnet-20250219-v1:0', true],
             'bedrock + dated version id' => [$this->gateBedrock(), 'anthropic.claude-sonnet-4-5-20250929-v1:0', true],
             'bedrock + geo profile id' => [$this->gateBedrock(), 'us.anthropic.claude-sonnet-4-6', true],
             'bedrock + arn' => [

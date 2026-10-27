@@ -12224,7 +12224,7 @@ final class Chat implements Model
      * `/effort [level|auto]` (PRV-2 §6.5) - the one reasoning dial, answered
      * by the only authority on what a dial does: the provider.
      *
-     * The ShapesReasoningEffort roster decides, and every class outside it
+     * EffortGate::verdict decides, per model, and every class off the roster
      * is refused OUT LOUD - a tier that saves cleanly into config.json while
      * no wire reads it is the exact set-but-ignored failure the plan bans,
      * so a refusal here never persists and never touches the backend. A
