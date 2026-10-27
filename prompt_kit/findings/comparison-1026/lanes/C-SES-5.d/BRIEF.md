@@ -1,0 +1,23 @@
+### C-SES-5.d — Workflows: GHCR image cache-bust, release filter, versioned tags
+- item: C-SES-5 (sources: DST-2-P1, DST-2-P2, p2-miss: versioned Docker tags/provenance)
+- kind: fix · MAJOR · effort M
+- approach:
+  - **Root cause.** The `RUN composer create-project sugarcraft/candy-code:dev-master` instruction text never changes (`candy-code/Dockerfile:63-69`), and the workflow caches with `cache-from: type=gha`. The layer is therefore served `CACHED`, and `:latest`/`:<sha>` ship a frozen snapshot. Any monorepo release also re-tags the image (`candy-code-image.yml:27-28`).
+  - **Fix, Dockerfile.** Add `ARG CANDY_CODE_REF` and consume it in the create-project `RUN` (`echo "$CANDY_CODE_REF" && composer create-project …`). Write the resolved package reference (`composer show sugarcraft/candy-code --format=json`) to `/opt/candy-code/BUILD-REF`.
+  - **Fix, workflow.**
+    - Pass `build-args: CANDY_CODE_REF=${{ github.sha }}-${{ github.run_id }}`.
+    - Run publishing builds as `workflow_run` after `sync-sugarcraft.yml` completes. The `pull_request` proof arm stays.
+    - Release arm: `if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'candy-code/v')`.
+    - Metadata: `type=match,pattern=candy-code/v(.*),group=1` plus an `org.opencontainers.image.revision` label.
+    - The summary prints `BUILD-REF`.
+  - **Docs.** Fix `docs/DOCKER.md` (freshness claims, tags) and `docs/SERVER.md` (`:1396-1398`, publish prose).
+- files.create: `tools/tests/CandyCodeImageCacheBustTest.php`
+- files.modify: `candy-code/Dockerfile` (header comment, the create-project RUN, ARG), `.github/workflows/candy-code-image.yml` (on:, if:, build-args, metadata tags/labels, summary), `candy-code/docs/DOCKER.md` (Registry status, freshness, tags), `candy-code/docs/SERVER.md` (the image paragraph)
+- tests: create `tools/tests/CandyCodeImageCacheBustTest.php`. It runs in the `tools-guards` job and pins: the create-project RUN consumes an ARG that the workflow passes per run; the release arm is filtered to `candy-code/v*`. Live check after merge: two consecutive pushes do NOT show the composer layer as `CACHED`.
+- docs/guards: DOCKER.md and SERVER.md prose
+- serialized: [workflows] [docs:DOCKER.md] [docs:SERVER.md]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: Packagist can lag the split push even after `sync-sugarcraft.yml` completes. `BUILD-REF` in the summary makes any lag visible rather than silent.
+
