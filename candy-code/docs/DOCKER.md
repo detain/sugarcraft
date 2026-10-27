@@ -46,9 +46,14 @@ docker run --rm --entrypoint cat \
   ghcr.io/detain/sugarcraft-candy-code:latest /opt/candy-code/BUILD-REF
 ```
 
-The row reads `<package-version> <resolved commit>`; if the commit stops
-moving while `master` does, the packagist feed is lagging and the next
-after-sync build will show it.
+The row reads `sugarcraft/candy-code-web <package-version> <resolved
+commit>`. The recorded reference is the `sugarcraft/candy-code-web`
+package's: the app package cannot be `composer show`n inside its own
+create-project root, so the row is read from that sibling package of the
+same split-synced stream. A web row whose commit stops moving while
+`master` does is therefore a stream-level lag the next after-sync build
+will show; a package-side-only lag (app feed behind while the web feed is
+current) would stay invisible in the row.
 
 ## What the image guarantees
 

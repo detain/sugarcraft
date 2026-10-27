@@ -1401,7 +1401,10 @@ A ready-made serve image is published from this repository
 see the registry-status note in [DOCKER.md](DOCKER.md) — the image is live
 since the first green run (39525070215) after the `unzip` + `ext-gd` build
 fixes, and every build records the resolved package reference in
-`/opt/candy-code/BUILD-REF` so a lagging packagist feed is visible). It
+`/opt/candy-code/BUILD-REF` so a lagging packagist feed is visible — the
+recorded ref is the `sugarcraft/candy-code-web` package's (a sibling of
+the same split-synced stream), so a package-side-only lag stays outside
+what the row proves). It
 runs unprivileged as `candy` with `HOME=/data` — the serve preflight's refusal
 to run as root is honored, not bypassed (`--allow-root` is never passed) — so
 all server state (sessions, token, discovery record, control socket) lives on

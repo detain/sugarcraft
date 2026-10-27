@@ -29,13 +29,17 @@ use PHPUnit\Framework\TestCase;
  *    `release: [published]` re-tagged this image for every other app's tag in
  *    the shared monorepo stream.
  *
- * THE SCANS ARE REGION-ANCHORED ON PURPOSE (fail-closed YAML reading, same
- * doctrine as ActionYmlInstallTest next door): every assertion checks content
- * INSIDE the extracted `on:` block, job-level `if:`, metadata/build-args
- * `with:` block, or the create-project `RUN`. A file whose trigger was moved
- * into a comment, or whose gate lives in the wrong step, cannot satisfy these
- * — and each extractor asserts it found its region, so an empty parse reddens
- * here rather than acquitting the whole file.
+ * THE SCANS ARE REGION-ANCHORED ON PURPOSE (fail-closed YAML READING AS TEXT,
+ * same doctrine as ActionYmlInstallTest next door): every assertion checks
+ * content INSIDE the extracted `on:` block, job-level `if:`, metadata/
+ * build-args `with:` block, or the create-project `RUN`. A file whose trigger
+ * was moved into a comment, or whose gate lives in the wrong step, cannot
+ * satisfy these — and each extractor asserts it found its region, so an empty
+ * parse reddens here rather than acquitting the whole file. Nothing here
+ * parses through a YAML library: the `tools-guards` job of ci.yml runs the
+ * phpunit PHAR with no composer autoload, so a symfony/yaml dependency would
+ * not be a stronger reader in CI — it would be a skip-path that quietly
+ * unruns the headline pins in the one job that owns them.
  *
  * Deliberately standalone (`--no-configuration tools/tests/`, per
  * CONTRIBUTING.md): it parses text, needs no lib autoloader, joins the
@@ -137,33 +141,50 @@ final class CandyCodeImageCacheBustTest extends TestCase
     }
 
     /**
-     * The `build` job's top-level `if:` value, read through the SAME YAML
-     * parser the pinned-versions guard next door uses. Region anchoring is
-     * preserved — the value is taken from the parse tree at jobs.build.if, so
-     * a comment or a step-level gate cannot satisfy the assertions — and a
-     * hand-rolled fold could not: the `>-` scalar's newlines join with
-     * single spaces, gluing a trailing `(` of one line to the next, and the
-     * explanatory comment lines inside the block would be captured as value.
+     * The `build` job's top-level `if:` value, extracted as a TEXT region —
+     * the same way the sibling guards under tools/tests/ read YAML, because
+     * the `tools-guards` CI job runs the phpunit PHAR with no composer
+     * autoload (see that job's own comment in ci.yml) and a YAML library is
+     * simply not available there. Region anchoring is preserved: the walk
+     * starts only at the four-space `if:` directly under `jobs.build` (a
+     * comment line begins with `#` at that indent and cannot match; a
+     * step-level gate sits at indent 8, two levels deeper), reproduces the
+     * `>-` fold by joining the scalar's lines with spaces, and ends at the
+     * first line no deeper than the `if:` keyword. Fail-closed on every
+     * leg: no anchor, an empty scalar, or a second anchor each redden
+     * here rather than acquitting the file.
      */
     private static function jobIf(): string
     {
-        if (!\class_exists(\Symfony\Component\Yaml\Yaml::class)) {
-            self::markTestSkipped('symfony/yaml is unavailable, so the workflow cannot be parsed');
+        $lines = \explode("\n", self::read(self::WORKFLOW));
+        $total = \count($lines);
+
+        $start = -1;
+        for ($i = 0; $i < $total; $i++) {
+            if (\preg_match('/^    if: >-\s*$/', \rtrim($lines[$i], "\r")) === 1) {
+                self::assertSame(-1, $start, 'two job-level "if: >-" anchors were found in ' . self::WORKFLOW . '; the extraction needs exactly one');
+                $start = $i;
+            }
+        }
+        self::assertNotSame(-1, $start, 'the build job in ' . self::WORKFLOW . ' carries no four-space "if: >-" scalar — every trigger admission gate would be missing');
+
+        $value = [];
+        for ($j = $start + 1; $j < $total; $j++) {
+            $line = \rtrim($lines[$j], "\r");
+            if (\trim($line) === '') {
+                continue;
+            }
+            $indent = \strlen($line) - \strlen(\ltrim($line, ' '));
+            if ($indent <= 4) {
+                break;
+            }
+            $value[] = \trim($line);
         }
 
-        $path = \dirname(__DIR__, 2) . '/' . self::WORKFLOW;
-        try {
-            /** @var mixed $workflow */
-            $workflow = \Symfony\Component\Yaml\Yaml::parseFile($path);
-        } catch (\Throwable $e) {
-            self::fail(self::WORKFLOW . ' does not parse: ' . $e->getMessage());
-        }
+        $folded = \implode(' ', $value);
+        self::assertNotSame('', $folded, 'the "if: >-" scalar in ' . self::WORKFLOW . ' is empty, so no admission gate could satisfy the pins below');
 
-        self::assertIsArray($workflow, self::WORKFLOW . ' did not parse to a mapping');
-        $if = $workflow['jobs']['build']['if'] ?? null;
-        self::assertIsString($if, 'the build job in ' . self::WORKFLOW . ' carries no string top-level if: — every trigger admission gate would be missing');
-
-        return \preg_replace('/\s+/', ' ', $if);
+        return \preg_replace('/\s+/', ' ', $folded);
     }
 
     /**
@@ -176,7 +197,12 @@ final class CandyCodeImageCacheBustTest extends TestCase
 
         for ($i = 0; $i < $total; $i++) {
             $line = \rtrim($lines[$i], "\r");
-            if (\preg_match('/^(\s+)uses: \S*' . \preg_quote($usesNeedle, '/') . '/', $line, $m) !== 1) {
+            // Accepts both legal spellings of a step key: the indented
+            // `uses:` and the dash-leading `- uses:` that opens a step
+            // (the same both-forms reading ActionYmlInstallTest's run:
+            // walker documents). The capture stays spaces-only, so the
+            // sibling-key indent math below is unchanged either way.
+            if (\preg_match('/^(\s+(?:-\s+)?)uses: \S*' . \preg_quote($usesNeedle, '/') . '/', $line, $m) !== 1) {
                 continue;
             }
             // `uses:` and `with:` are SIBLING keys of one step: the walk
@@ -273,6 +299,11 @@ final class CandyCodeImageCacheBustTest extends TestCase
         $dockerfile = self::read(self::DOCKERFILE);
         $argAt = \preg_match('/^ARG CANDY_CODE_REF\S*$/m', $dockerfile);
         self::assertSame(1, $argAt, 'the Dockerfile declares no top-level ARG CANDY_CODE_REF');
+        // PHPUnit's shape is assertLessThan($expected, $actual) asserting
+        // actual < expected: the RUN offset is the EXPECTED ceiling and the
+        // ARG offset the ACTUAL that must sit below it. The round-1 order is
+        // right; a probe harness that reads the pair the other way round
+        // produces a false red (the CI-shape stub runner learned otherwise).
         self::assertLessThan(
             (int) \strpos($dockerfile, 'RUN echo "candy-code build ref'),
             (int) \strpos($dockerfile, 'ARG CANDY_CODE_REF'),
@@ -309,6 +340,16 @@ final class CandyCodeImageCacheBustTest extends TestCase
         self::assertStringContainsString('BUILD-REF', $run);
         self::assertStringContainsString('exit(1)', $run, 'the BUILD-REF extractor must be fail-closed, not best-effort');
         self::assertMatchesRegularExpression('/json_decode\(/', $run);
+        // The row NAMES its source package. The reference is read from the
+        // web sibling (the app package cannot be `composer show`n inside
+        // its own create-project root), and a bare "<version> <commit>" row
+        // reads as the app's own reference — the lag disclosure would be
+        // overpromising exactly what it exists to catch.
+        self::assertStringContainsString(
+            'file_put_contents("/opt/candy-code/BUILD-REF", "sugarcraft/candy-code-web "',
+            $run,
+            'the BUILD-REF row must carry the observed package name, not just its version and commit'
+        );
 
         $summary = self::summaryRunBody();
         self::assertStringContainsString('/opt/candy-code/BUILD-REF', $summary, 'the job summary must read BUILD-REF out of the built image');
@@ -328,6 +369,7 @@ final class CandyCodeImageCacheBustTest extends TestCase
         $if = self::jobIf();
         self::assertStringContainsString("github.event.workflow_run.conclusion == 'success'", $if, 'a failed sync run must not trigger a publishing build');
         self::assertStringContainsString("github.event.workflow_run.head_branch == 'master'", $if, 'only master syncs publish');
+        self::assertStringContainsString("github.event.workflow_run.event == 'push'", $if, 'a sync run that was itself triggered by a pull_request must never publish — this is the Pwn-request hygiene the header comment promises');
     }
 
     public function testTheReleaseArmIsFilteredToCandyCodeTags(): void

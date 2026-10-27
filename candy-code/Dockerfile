@@ -83,7 +83,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 # commit this image carries. `composer show <installed> --format=json` answers
 # {versions, dist{reference}, source{reference}}; the extractor is fail-closed
 # — an unreadable JSON kills the build rather than stranding a silent
-# BUILD-REF, which would be the same lie with better manners.
+# BUILD-REF, which would be the same lie with better manners — and the row
+# names its source package (`sugarcraft/candy-code-web <version> <commit>`)
+# so a reader never mistakes it for the app package's own reference.
 ARG CANDY_CODE_REF=local
 RUN echo "candy-code build ref: ${CANDY_CODE_REF}" \
     && composer create-project sugarcraft/candy-code:dev-master /opt/candy-code \
@@ -92,7 +94,7 @@ RUN echo "candy-code build ref: ${CANDY_CODE_REF}" \
     && composer require sugarcraft/candy-code-web \
             --no-interaction --prefer-dist --no-progress \
     && composer show sugarcraft/candy-code-web --format=json \
-            | php -r '$p = json_decode(stream_get_contents(STDIN), true); if (!is_array($p) || empty($p["versions"])) { fwrite(STDERR, "Dockerfile build probe: composer show JSON is unreadable, so /opt/candy-code/BUILD-REF would be a lie\n"); exit(1); } $r = $p["dist"]["reference"] ?? $p["source"]["reference"] ?? "unknown"; file_put_contents("/opt/candy-code/BUILD-REF", $p["versions"][0] . " " . $r . "\n");' \
+            | php -r '$p = json_decode(stream_get_contents(STDIN), true); if (!is_array($p) || empty($p["versions"])) { fwrite(STDERR, "Dockerfile build probe: composer show JSON is unreadable, so /opt/candy-code/BUILD-REF would be a lie\n"); exit(1); } $r = $p["dist"]["reference"] ?? $p["source"]["reference"] ?? "unknown"; file_put_contents("/opt/candy-code/BUILD-REF", "sugarcraft/candy-code-web " . $p["versions"][0] . " " . $r . "\n");' \
     && ln -s /opt/candy-code/bin/candy-code /usr/local/bin/candy-code \
     && rm -f /usr/local/bin/composer
 
