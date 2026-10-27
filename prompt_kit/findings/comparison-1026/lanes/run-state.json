@@ -21,7 +21,8 @@
     "C-EXT-1.b",
     "C-SES-5.b",
     "C-CTX-1.b",
-    "C-SES-2.c"
+    "C-SES-2.c",
+    "C-SES-1.a"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -29,7 +30,8 @@
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SEC-2.b",
       "branch": "cc/C-SEC-2.b",
-      "session": "ses_e84278237ffe7L15Gk7pi3IcQv"
+      "session": "ses_e84278237ffe7L15Gk7pi3IcQv",
+      "note": "fake DONE #11: tip==base 4f657c755, tree clean, no REPORT \u2014 disk-grounding resume issued"
     },
     "C-SEC-3.a": {
       "stage": "build",
@@ -45,44 +47,44 @@
       "branch": "cc/C-PRV-1.a",
       "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
     },
-    "C-SES-1.a": {
+    "C-SES-2.b": {
       "stage": "fix",
       "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-SES-1.a",
-      "branch": "cc/C-SES-1.a",
-      "session": "ses_e83bc7f60ffesuCpr0QzVDoMC7",
-      "note": "fix r2: TreeWideGuardRoster row"
-    },
-    "C-SES-2.b": {
-      "stage": "review",
-      "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SES-2.b",
       "branch": "cc/C-SES-2.b",
       "session": null,
       "note": "tip c20c36f1d base 50ec2e702"
     },
     "C-SES-5.d": {
-      "stage": "review",
-      "round": 1,
+      "stage": "fix",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SES-5.d",
       "branch": "cc/C-SES-5.d",
-      "session": "ses_e83c8fc74ffebW5qkYXsIgeZyT",
-      "note": "tip d4c136c40 base fd4f36875; NEW tools/tests CandyCodeImageCacheBustTest.php tools-guard no durations"
+      "session": null,
+      "note": "r1 FINDINGS 2MAJOR/1MINOR/1NIT; fixer r2 launching"
     },
     "C-TOOL-1.b": {
-      "stage": "review",
-      "round": 1,
+      "stage": "fix",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-TOOL-1.b",
       "branch": "cc/C-TOOL-1.b",
       "session": null,
-      "note": "tip 2714e3421 base d7bbd104d"
+      "note": "tip 3fbbe5948 base d7bbd104d; Grep --no-config + env drop; 222T/134688A; pair-only 25,677"
     },
     "C-WEB-1.c": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-WEB-1.c",
       "branch": "cc/C-WEB-1.c",
-      "session": "ses_e83bc07faffetjirZRMfBj7oJZ"
+      "session": "ses_e83bc07faffetjirZRMfBj7oJZ",
+      "note": "tip 2381b0d28 base 960772c97, 4 files, NEW TurnRunnerMentionFreshnessTest(3T) durations duty"
+    },
+    "C-SEC-4.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SEC-4.a",
+      "branch": "cc/C-SEC-4.a",
+      "session": "ses_e83b85e28ffelovbFI4hwQtFDK"
     }
   },
   "blocked": [],

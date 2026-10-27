@@ -1,0 +1,18 @@
+# C-SES-1.a — CLOSED, committed
+Commit: b362f2e5a on cc/C-SES-1.a (base 32f02ada1) — A/C = detain@interserver.net, 0 Co-Authored-By, clean tree, NOT pushed.
+Files (7, 558+/11−): src/Cli/NonInteractive.php +24 (persist-block ledger routing via SpendLedger::account + appendUsageRecord sink, summed Usage, inside the same try); src/Cli/Subcommands.php +26/−6 (spend column via boundUsd, '—' null, JSON spentUsd/spendUnpriced, docblock); lang/en.php +1 (cli.session.list.spend_none); README.md +14/−4 (ledger paragraph + list-columns sentence); tests/Cli/SessionSubcommandsTest.php +29/−1; tests/Support/DuplicatedTestHelperDriftTest.php +1 (SELECTION_ENV_KEYS roster, guard in same commit); tests/Cli/NonInteractiveUsageLedgerTest.php NEW +485.
+Gate (cwd candy-code, plain pipe, -u LINES -u COLUMNS): --filter 'NonInteractive|SessionSubcommands|SpendLedger' = **166T/818A/0F/2 PHPUnit-deprecations OK** (green). Five-guard: 133T/15356A, reds = ONLY the allowed staleness pair (pinned 25,537 vs live 25,665).
+NEW TEST FILE FOR GATE DURATIONS: candy-code/tests/Cli/NonInteractiveUsageLedgerTest.php (+5T; durations.tsv row owed by the gate — lane never edits it).
+Deviations/seams:
+1. Brief's quoted gate figures (--filter 'Schedule' 101T/411A) and its 3 named deviations are stale-prompt artifacts — disk truth is the figures above; no 'ledger pre-records via SessionHost' or 're-derived' work exists here (sink writes the cached spend via appendUsageRecord as designed).
+2. PHPUnit Deprecations 2 pre-date this lane (same 2 at base-shape runs); kept.
+3. TreeWideGuardRoster (outside the brief's gate list) is red on two sites: NonInteractiveUsageLedgerTest.php:110 `scandir($path)` (my file, copy of the rostered persistence-test purge shape — needs a WALKS_A_DIRECTORY_THE_TEST_MADE row, 8th-file edit forbidden by stop-order) and Cli/SelfUpdateTest.php:405/:426 glob chr(42) (file untouched by this lane — base-era red). Welder should roster the first and triage the second.
+README/doc rows moved in-step with the guard edits (§1.8); no suite-figure.json/durations.tsv touches.
+
+## Fixes (round 2)
+Step-local MINOR (REVIEW-1.md :110 `scandir($path)` unresolved walker site) cured IN-LANE per §1.8: added `'Cli/NonInteractiveUsageLedgerTest.php' => ['scandir($path)'],` to WALKS_A_DIRECTORY_THE_TEST_MADE in candy-code/tests/TreeWideGuardRosterTest.php (alphabetical slot after the byte-identical NonInteractiveSessionPersistenceTest twin row :607, house comment matching its purgeTempTree() shape). Single file, +3 lines; commit on cc/C-SES-1.a. NITs untouched (%-9s cosmetic queued; summed-row disclosure accepted).
+
+Gates re-run (cwd candy-code, plain pipe, env -u LINES -u COLUMNS):
+- --filter 'NonInteractive|SessionSubcommands|SpendLedger': 166T/818A OK (brief's predicted figure HIT exact; 2 PHPUnit Deprecations pre-existing per deviation 2).
+- five-guard: 133T/15356A, failures = ONLY the ReadmeSuiteFigureDrift staleness pair (closeout re-pin duty).
+- --filter 'TreeWideGuardRoster|DuplicatedTestHelperDrift': my UsageLedger name is GONE from both walker tests (discrimination proven both ways: base run without the row named it; tip run with the row names only the pre-existing foreign site). NOT fully green: 2 residual failures name Cli/SelfUpdateTest.php `glob($phar.'.tmp-'.\chr(42))` — verified pre-existing at base 32f02ada1 (pristine-roster run names BOTH sites) and present identically on master (roster row :612 licenses only the livePharPath() spelling; `$phar` sites at :1268/:1286 unlicensed since C-SES-5.a 111efbb46, which this step never touched). Welder triage per round-1 seam 3; root-cause correction: the offending expression is the `$phar` spelling at :1268/:1286, not :405/:426.
