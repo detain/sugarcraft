@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ago, oneLine, spendLabel } from '../lib/format'
 import type { SessionSummary } from '../protocol/generated'
+import { ProtocolError } from '../protocol/jsonrpc'
 import { useApprovalsStore } from '../stores/approvals'
 import { useConnectionStore } from '../stores/connection'
 import { useLayoutStore } from '../stores/layout'
@@ -92,6 +93,28 @@ async function fork(summary: SessionSummary): Promise<void> {
 async function closeRow(summary: SessionSummary): Promise<void> {
   menuFor.value = null
   await act(() => sessions.close(summary.id))
+}
+
+/**
+ * C-WEB-3.d: stop the workspace host of a root that is not the server's own.
+ * The first confirm is the ask. When the server refuses because one of the
+ * host's turns is still running (`turn_running`), a second confirm retries
+ * with force; anything else lands in the sidebar's one error line.
+ */
+async function closeHost(summary: SessionSummary): Promise<void> {
+  menuFor.value = null
+  const root = summary.root
+  if (!root) return
+  if (!window.confirm(`Close the host for ${root}? Its sessions stay on disk; the rows leave the list.`)) return
+  await act(async () => {
+    try {
+      await sessions.closeRoot(root)
+    } catch (failure) {
+      if (!(failure instanceof ProtocolError) || failure.kind !== 'turn_running') throw failure
+      if (!window.confirm('A turn is running in that workspace. Stop the host anyway?')) return
+      await sessions.closeRoot(root, true)
+    }
+  })
 }
 
 /** WEB-1a: delete is the one destructive row action — it asks first. */
@@ -202,6 +225,7 @@ function onKey(event: KeyboardEvent): void {
           <li><button type="button" role="menuitem" :data-testid="`row-export-text-${summary.id}`" @click="exportRow(summary, 'text')">Export · Text</button></li>
           <li v-if="summary.status !== 'closed'"><button type="button" role="menuitem" :data-testid="`row-close-${summary.id}`" @click="closeRow(summary)">Close</button></li>
           <li><button type="button" role="menuitem" class="danger" :data-testid="`row-delete-${summary.id}`" @click="removeRow(summary)">Delete</button></li>
+          <li v-if="elsewhere(summary)"><button type="button" role="menuitem" :data-testid="`row-close-host-${summary.id}`" @click="closeHost(summary)">Close {{ elsewhere(summary) }}/ host</button></li>
         </ul>
       </li>
     </ul>

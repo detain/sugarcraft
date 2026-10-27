@@ -117,6 +117,23 @@ export const useSessionsStore = defineStore('sessions', () => {
     return connection.request('session.export', { sessionId, format })
   }
 
+  /**
+   * C-WEB-3.d: stop a non-primary root's workspace host (`workspace.close`),
+   * drop that root's rows from the index, and reload it. While one of the
+   * host's turns runs the server refuses with `turn_running` — that throws
+   * here before the drop, so a host that stays up keeps its rows; the
+   * sidebar's second confirm retries with `force`.
+   */
+  async function closeRoot(root: string, force = false): Promise<void> {
+    await connection.request('workspace.close', force ? { root, force: true } : { root })
+    const next = { ...byId.value }
+    for (const [id, summary] of Object.entries(next)) {
+      if (summary.root === root) delete next[id]
+    }
+    byId.value = next
+    await load()
+  }
+
   function drop(sessionId: string): void {
     const next = { ...byId.value }
     delete next[sessionId]
@@ -204,5 +221,5 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   })
 
-  return { byId, items, loading, loaded, error, searchResults, searching, load, search, create, rename, remove, fork, close, exportTranscript }
+  return { byId, items, loading, loaded, error, searchResults, searching, load, search, create, rename, remove, fork, close, exportTranscript, closeRoot }
 })

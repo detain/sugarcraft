@@ -61,7 +61,9 @@ documents the protocol and the UI).
 
 - **Sessions sidebar**: newest first, filter, status, and a badge for every
   question a session is waiting on (also in the tab title, and as an opt-in
-  desktop notification).
+  desktop notification). Rows for another project root carry a "Close
+  `<root>/` host" menu item: it asks first, retries with force when the
+  server refuses because a turn is running, and reloads the list after.
 - **New session in any project** (servers started with `serve
   --allow-dir-browse`): New session opens a folder picker over the server's
   browse root — breadcrumb, Up, child directories with a project badge, show
