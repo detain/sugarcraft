@@ -471,6 +471,27 @@ final class McpDecision
     }
 
     /**
+     * C-SEC-5.a: the servers the memo client's admission check refused —
+     * command, args or env drifted from what `mcp trust` fingerprinted
+     * (audit MCP-5).
+     *
+     * MEMO ONLY, for exactly the reason {@see mcpLivenessSnapshot()} gives:
+     * the only way to ask a client that is not in the memo is to BUILD one,
+     * and building starts servers. A census question must never be a launch,
+     * so a cold memo answers "nothing refused" — the honest reading, because
+     * this process started no server to refuse.
+     *
+     * @param array{path: string, userPath?: string} $decision the shared verdict whose memo key this reads
+     * @param \Closure(string):?\SugarCraft\Code\MCP\McpClient $memoClient the memo reader — a lookup, never a builder
+     *
+     * @return list<string>
+     */
+    public static function mcpPinRefusals(array $decision, \Closure $memoClient): array
+    {
+        return $memoClient(self::mcpConfigMemoKey($decision))?->refusedServers() ?? [];
+    }
+
+    /**
      * MCP-3: the memo key for a decision. With NO resolvable user tier (an
      * unowned home, or the disabled switch) this is exactly the canonical
      * project path — the key every pre-MCP-3 reader and writer used. Whenever

@@ -143,6 +143,11 @@ final class SettingsWriterCensusTest extends TestCase
             // reasoningEffort key alone; a failed save rides the note, never
             // fatal.
             'Chat.php::persistEffort->write' => 2,
+            // C-SEC-5.a: the census's one grant door. The list/settings targets
+            // go through the sanctioned writer exactly as the settings editor's
+            // own confirmed action does — one site, the writer still built only
+            // by the launch.
+            'Cli/Bootstrap.php::grantProjectTrust->grantTrust' => 1,
             'Config/Settings/ModelChoice.php::persist->write' => 1,
             // crush-media W5.7: /rendermode writes the chosen render mode
             // through the sanctioned writer — the one command that mutates a

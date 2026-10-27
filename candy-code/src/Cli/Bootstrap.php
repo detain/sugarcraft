@@ -26,6 +26,8 @@ use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Config\PolicySnapshot;
 use SugarCraft\Code\Config\Settings\Validator\KeyBindingsValidator;
 use SugarCraft\Code\Config\StatusLineCommand;
+use SugarCraft\Code\Config\Trust\ProjectTrustCensus;
+use SugarCraft\Code\Config\Trust\TrustTarget;
 use SugarCraft\Code\Context\EnvironmentBlock;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\ProjectMemoryWriter;
@@ -8012,6 +8014,171 @@ public static function useMaxCost(?string $maxCost): void
             static fn(): string => self::trustedConfigDirPath(),
             static fn(array $config, string $key, string $nothingTrusted): array => self::trustedProjectRoots($config, $key, $nothingTrusted),
         );
+    }
+
+    /**
+     * C-SEC-5.a: which trust targets this root declares but does not yet hold
+     * — the census behind the one prompt. Reads the four trust doors and the
+     * memo client's pin refusals through {@see ProjectTrustCensus}; never
+     * launches, never writes. The declares probes are deliberately narrow:
+     * `Commands` counts only a file with a `!` form that COULD run
+     * ({@see \SugarCraft\Code\Commands\CommandSpec::hasShellSubstitution()}),
+     * or every repository shipping a plain command file would be asked.
+     *
+     * @return list<TrustTarget>
+     */
+    public static function pendingProjectTrust(?string $root): array
+    {
+        $configRoot = self::configRoot($root);
+        if ($configRoot === null) {
+            return [];
+        }
+
+        $canonical = realpath($configRoot);
+        $base = rtrim($canonical !== false ? $canonical : $configRoot, '/');
+        $decision = self::mcpConfigDecision($root);
+
+        return ProjectTrustCensus::pending(
+            static fn (TrustTarget $target): bool => match ($target) {
+                TrustTarget::Mcp, TrustTarget::McpPin => self::pendingTrustMcpDeclared($decision),
+                TrustTarget::Hooks => self::pendingTrustHooksDeclared($base),
+                TrustTarget::Commands => self::pendingTrustCommandsDeclared($base),
+                TrustTarget::Settings => is_file($base . '/' . LayeredSettings::SHARED_PATH)
+                    || is_file($base . '/' . LayeredSettings::LOCAL_PATH),
+            },
+            static fn (TrustTarget $target): bool => match ($target) {
+                TrustTarget::Mcp => self::projectMcpIsTrusted($configRoot),
+                // The pin row is answered by re-recording, so its honest
+                // "granted" is "no refusal stands" — see the class doc-block
+                // of ProjectTrustCensus. A cold memo refuses nothing.
+                TrustTarget::McpPin => self::mcpPinRefusals($root) === [],
+                TrustTarget::Hooks => self::projectHooksAreTrusted($configRoot),
+                TrustTarget::Commands => self::projectCommandShellIsTrusted($configRoot),
+                TrustTarget::Settings => self::projectSettingsTrusted($configRoot),
+            },
+        );
+    }
+
+    /**
+     * C-SEC-5.a: the servers this process's memo client refused — pins that
+     * drifted from what `mcp trust` fingerprinted. Read through
+     * {@see McpDecision::mcpPinRefusals()}, memo-only: a cold process has
+     * nothing to refuse and this never builds a client to find out.
+     *
+     * @return list<string>
+     */
+    public static function mcpPinRefusals(?string $root = null): array
+    {
+        return McpDecision::mcpPinRefusals(
+            self::mcpConfigDecision($root),
+            static fn (string $key): ?McpClient => LaunchContext::mcpClientFor(getmypid() ?: 0, $key),
+        );
+    }
+
+    /**
+     * C-SEC-5.a: THE ONE GRANT DOOR for one census row. `mcp` and `mcp-pin`
+     * go through {@see trustProjectMcp()} — grant and pin record land
+     * together, because a pin cannot be approved apart from the list it keys
+     * on; every other target goes through
+     * {@see \SugarCraft\Code\Config\Settings\SettingsWriter::grantTrust()},
+     * the settings editor's already-wired confirmed action. Both doors write
+     * the OPERATOR's own config only — a project can never grant itself
+     * through this (or any) path, the property
+     * {@see \SugarCraft\Code\Protocol\TrustAsks} is built on.
+     *
+     * NEVER throws: its consumers (the prompt, the settings view, a later
+     * CLI verb) must be able to show the user WHY an answer failed rather
+     * than swallow it.
+     *
+     * @return array{granted: bool, persisted: bool, error: string|null}
+     */
+    public static function grantProjectTrust(TrustTarget $target, string $root, ?\SugarCraft\Code\Config\Settings\SettingsWriter $writer = null): array
+    {
+        if ($target->grantsThroughMcpDoor()) {
+            try {
+                $report = self::trustProjectMcp($root);
+            } catch (\Throwable $e) {
+                return ['granted' => false, 'persisted' => false, 'error' => $e->getMessage()];
+            }
+
+            return [
+                'granted' => $report['granted'],
+                'persisted' => $report['granted'] && $report['recorded'],
+                'error' => $report['error'],
+            ];
+        }
+
+        try {
+            ($writer ?? LaunchContext::settingsWriter($root))->grantTrust($target->configKey(), $root);
+        } catch (\Throwable $e) {
+            return ['granted' => false, 'persisted' => false, 'error' => $e->getMessage()];
+        }
+
+        return ['granted' => true, 'persisted' => true, 'error' => null];
+    }
+
+    /**
+     * The project-tier half of the MCP declares probe: does the file the
+     * decision located NAME at least one server? Stat and decode only — the
+     * same pre-read {@see McpDecision::trustProjectMcp()} performs; listing
+     * never launches.
+     *
+     * @param array{status: string, path: string} $decision
+     */
+    private static function pendingTrustMcpDeclared(array $decision): bool
+    {
+        if ($decision['status'] !== self::MCP_UNTRUSTED && $decision['status'] !== self::MCP_TRUSTED) {
+            return false;
+        }
+
+        $contents = @file_get_contents($decision['path']);
+        if (!is_string($contents)) {
+            return false;
+        }
+
+        $data = json_decode($contents, true);
+
+        return is_array($data) && is_array($data['mcpServers'] ?? null) && $data['mcpServers'] !== [];
+    }
+
+    /**
+     * Whether ANY project-tier hook file exists — the project half of the
+     * path list {@see hookFiles()} would load under a grant. `is_file` only:
+     * the refusal collector is NOT re-run through this, because a census
+     * that announces itself on stderr is a notice wearing a question's
+     * clothes.
+     */
+    private static function pendingTrustHooksDeclared(string $base): bool
+    {
+        foreach (array_merge(
+            [$base . '/.candy-code/hooks.yaml'],
+            array_map(
+                static fn (string $name): string => $base . '/.claude/' . $name,
+                ClaudeSettingsHooks::FILENAMES,
+            ),
+        ) as $file) {
+            if (is_file($file)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether any project command file carries a `!` form that could run —
+     * the declaration the risk note says to mean. Parses with the production
+     * loader, reporting forced off; the loader only reads.
+     */
+    private static function pendingTrustCommandsDeclared(string $base): bool
+    {
+        foreach ((new CommandLoader(false))->loadProjectCommands($base) as $spec) {
+            if ($spec->hasShellSubstitution()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

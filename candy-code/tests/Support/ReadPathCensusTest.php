@@ -299,6 +299,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'refuse a /keys reload whose source no longer parses; both paths resolve under a home '
                 . 'HomeDirectory::owned() established as this user\'s, and the bytes are only ever '
                 . 'json_decode\'d into a validation verdict',
+            'CONTAINED_UPSTREAM:Cli/McpDecision.php — pendingTrustMcpDeclared() (C-SEC-5.a) reading the '
+                . 'project `.mcp.json` the mcpConfigDecision() path names, for the census probe: the path '
+                . 'arrives already bounded by McpDecision\'s own ContainedPath::within compare (the same '
+                . 'route trustProjectMcp() reads above), reached only on the UNTRUSTED or TRUSTED verdict, '
+                . 'and the bytes decode to a server-count and nothing else — never executed, never launched',
         ],
         'Cli/Bootstrap.php|fopen' => [
             'SELF_LOCATED — acquireUserConfigLock(): the `.config.json.lock` sidecar beside the '
