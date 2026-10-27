@@ -1041,8 +1041,9 @@ final class Subcommands
      *   whose `finally` cannot be skipped because default disposition kills
      *   before any shutdown runs.
      *
-     * No child process is spawned for any of this: sugar-core's Tty drives
-     * termios through its own FFI/stty seam.
+     * No child process is spawned FROM CANDY-CODE for any of this;
+     * sugar-core's Tty drives termios through its own FFI/stty seam, and
+     * that seam's stty arm may shell out to stty(1) on hosts without FFI.
      */
     private static function loginKeyLine(): string|false
     {

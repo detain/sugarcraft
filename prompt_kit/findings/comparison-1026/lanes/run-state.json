@@ -78,11 +78,6 @@
       "worktree": "/home/sites/cc-cmp-C-SES-2.c",
       "branch": "cc/C-SES-2.c",
       "session": "ses_e83d9644bffeR4eTGqSn05sHVn"
-    },
-    "C-PRV-1.c": {
-      "stage": "welded-postcure-pending",
-      "round": 1,
-      "note": "welded e6d225f68; master cure owed: Subcommands.php:1044 docblock overstatement (REVIEW-1.md item 2) + add REVIEW-1.md to evidence"
     }
   },
   "blocked": [],

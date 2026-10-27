@@ -1,0 +1,6 @@
+# C-PRV-1.c r1 — VERDICT: CLEAN (post-weld, static — reviewer shell/php denied; worktree pruned mid-review; commit 0a93e9a9b welded as 0e25ae5c7, master stamp e6d225f68, committer detain via reflog, zero trailers)
+1. Brief honored in full: provider-block merge preserves model/thinkingBudget/modelPrices/baseUrl; type clash refuses before any write via new lang key cli.sub.login.type_mismatch with byte-identical-file pin; echo-off Tty raw read (Enter/Backspace/Ctrl-C) with restore in finally; $loginKeyRead keeps TTY-free precedence, $loginTty seam added (defaulted param); only the 3 brief-named files touched; no durations/suite-figure/doc-row edits; no new candy-code proc_open; §1.9 clean.
+2. [MINOR step-local] Subcommands.php:1044 — "No child process is spawned for any of this" overstates (sugar-core SttyTermios shell_execs stty(1) on FFI-less hosts); reword to "…from candy-code". MASTER CURE OWED post-weld.
+3. [NIT] live-SIGINT restore pinned by source-shape scan only (honestly documented; acceptable).
+4. [NIT closeout] weld REPORT "41 methods, fork-safety probe" wrong: committed file has 23 test methods (26 cases), no fork-safety method; figures to fix in this record.
+5. Unverifiable statically: %ae, and gates (none run here); merged-tree figures per weld report (Login 76T/1500A, five-guard staleness-pair only) stand as the record.
