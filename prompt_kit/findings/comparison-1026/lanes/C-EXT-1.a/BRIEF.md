@@ -1,0 +1,22 @@
+### C-EXT-1.a — CC hook entries: accept `statusMessage`/`async`, Claude exit-code dialect
+- item: C-EXT-1 (sources: INT-4-P1, GAP-HK-07, k2-sum HK-07 ✅→🟡)
+- kind: fix · MAJOR · effort M
+- approach:
+  - **Root cause.** `candy-code/src/Hooks/ClaudeSettingsHooks.php:98` has `ENTRY_KEYS = ['type','command','timeout']`, and `:247-255` refuses the whole launch on any other key. Claude Code writes `statusMessage` and `async` routinely. Separately, `ScriptHook.php:782-811` maps every exit code except 0/3/4 to DENY, so a CC hook that exits 1 blocks the call where Claude Code proceeds.
+  - **Fix.**
+    - The parser accepts `statusMessage`, mapped onto the native `description`, which `/hooks` shows.
+    - The parser accepts `async: true`. candy-code has no detached hook runner, so the entry runs inline within its timeout and its verdict is advisory: never a block.
+    - After `HookConfig::parse()`, the parser stamps each CC row with `dialect: 'claude'` and `advisory: bool`. Native `hooks.yaml` cannot spell either key, because `HookConfig::ENTRY_KEYS` refuses them.
+    - `ScriptHook::fromConfig()` reads both flags. Under the claude dialect, 0 allows or reads the envelope and 2 blocks. Any other code becomes allow plus a human notice through `RuntimeNoticeSink::record()`, which crosses forks. Advisory rows downgrade every non-allow the same way.
+    - The notice helper is a small private method that C-EXT-6.a reuses.
+  - Unknown types and other keys still refuse in this step; C-EXT-1.b turns them into skip-and-record. That keeps every commit from skipping anything silently.
+- files.create: none
+- files.modify: `candy-code/src/Hooks/ClaudeSettingsHooks.php` (ENTRY_KEYS, `parse()` row build, post-parse dialect stamp), `candy-code/src/Hooks/ScriptHook.php` (constructor flags, `fromConfig()`, the exit `match` at :782), `candy-code/lang/en.php` (`hooks.notice.*`), `candy-code/docs/HOOKS.md` ("What is read from a Claude settings file", "The exit-code contract")
+- tests: create `candy-code/tests/Hooks/ScriptHookClaudeDialectTest.php` (exit 1 and exit 5 allow with a notice; exit 2 denies; an advisory row never denies; native rows unchanged). Modify `candy-code/tests/Hooks/ClaudeSettingsHooksTest.php` (`statusMessage` becomes the description; `async` sets advisory; the native validator is still the one used).
+- docs/guards: `docs/HOOKS.md`. Check whether `DocFigureProseDriftTest`'s HOOKS.md entry-key pin covers the CC bullets, and move it if so. No child-lifetime change.
+- serialized: [docs:HOOKS.md] [lang:hooks.notice.]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: on serve the exit-1 notice shows only after C-CTX-2's notice drain lands.
+

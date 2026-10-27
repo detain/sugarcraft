@@ -4,47 +4,77 @@
     "C-TOOL-1.c",
     "C-AGT-1.c",
     "C-SES-3.a",
-    "C-TOOL-1.a"
+    "C-TOOL-1.a",
+    "C-EXT-1.a"
   ],
   "inflight": {
     "C-SEC-1.a": {
-      "stage": "review",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SEC-1.a",
       "branch": "cc/C-SEC-1.a",
-      "session": "ses_e84228fbfffeIswfZrQoo4nYi2"
+      "session": null
     },
     "C-AGT-1.a": {
-      "stage": "review",
-      "round": 1,
+      "stage": "fix",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-AGT-1.a",
       "branch": "cc/C-AGT-1.a",
-      "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
-    },
-    "C-EXT-1.a": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-EXT-1.a",
-      "branch": "cc/C-EXT-1.a",
       "session": null
     },
     "C-MCP-1.a": {
-      "stage": "review",
+      "stage": "clean",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-MCP-1.a",
       "branch": "cc/C-MCP-1.a",
-      "session": "ses_e84274411ffewFZNgcHphKfC6h"
+      "session": null
     },
     "C-AGT-2.a": {
-      "stage": "fix",
+      "stage": "review",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-AGT-2.a",
       "branch": "cc/C-AGT-2.a",
-      "session": "ses_e84278237ffe7L15Gk7pi3IcQv"
+      "session": "ses_e841b992effe7ekEG7n6DrOUoX"
+    },
+    "C-SEC-2.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SEC-2.b",
+      "branch": "cc/C-SEC-2.b",
+      "session": null
+    },
+    "C-SEC-3.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SEC-3.a",
+      "branch": "cc/C-SEC-3.a",
+      "session": null
+    },
+    "C-PRV-1.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-PRV-1.a",
+      "branch": "cc/C-PRV-1.a",
+      "session": null
+    },
+    "C-SES-3.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SES-3.b",
+      "branch": "cc/C-SES-3.b",
+      "session": "ses_e841b9937ffebSihQx02MjfnN2"
+    },
+    "C-SES-2.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SES-2.a",
+      "branch": "cc/C-SES-2.a",
+      "session": "ses_e841b992fffeYG5E2v3ZOThtPD"
     }
   },
   "blocked": [],
   "extra_agents": 0,
   "waves_closed": [],
-  "wave_loops": {}
+  "wave_loops": {},
+  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg"
 }
