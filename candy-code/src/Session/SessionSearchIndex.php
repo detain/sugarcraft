@@ -318,9 +318,11 @@ final class SessionSearchIndex
         try {
             $this->pdo->exec('DELETE FROM session_messages_fts WHERE rowid NOT IN (SELECT id FROM session_message_rows)');
         } catch (\Throwable) {
-            // A garbage pass that failed leaves the marker cleared: an
-            // un-reclaimed table is merely fat, but one this pass could not
-            // complete has no trustworthy build state to advertise.
+            // A garbage pass that failed leaves no trustworthy build state
+            // to advertise: the marker is cleared here, and on the in-sweep
+            // path markBuilt re-writes it as dirty=1 in the same transaction
+            // — either way, the next launch sweeps again. An un-reclaimed
+            // table is merely fat; one this pass could not complete is not.
             $this->dirty = true;
             $this->clearMarkerRow();
         }
