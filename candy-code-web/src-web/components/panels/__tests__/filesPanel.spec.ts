@@ -18,6 +18,9 @@ let wire: Wire
 
 const SEARCH = (matches: string[]) => ({ root: '/project', matches, truncated: false })
 
+/** A complete (untruncated) files.read answer for $path. */
+const READ_FILE = (path: string, content: string) => ({ path, size: content.length, offset: 0, binary: false, content, truncated: false })
+
 async function openPanel(): Promise<ReturnType<typeof mount>> {
   const wrapper = mount(FilesPanel, { props: { sessionId: 's1' } })
   await flushPromises()
@@ -61,6 +64,23 @@ describe('FilesPanel (C-WEB-3.b)', () => {
     await wire.answer('fs.search', SEARCH(['src/a.ts']))
     await flushPromises()
     expect(wrapper.findAll('[data-testid^="files-row-"]')).toHaveLength(1)
+  })
+
+  it('drops a stale answer while a newer search is pending', async () => {
+    await wire.connect()
+    const wrapper = await openPanel()
+    await wrapper.find('[data-testid="files-search"]').setValue('sr')
+    await flushPromises()
+    expect(wire.sent('fs.search')).toHaveLength(2)
+    // Answer the newest (mount) search, then let the keystroke's stale
+    // response arrive late: the seq guard must keep it off the list.
+    await wire.answer('fs.search', SEARCH(['src/a.ts']))
+    expect(wrapper.findAll('[data-testid^="files-row-"]')).toHaveLength(1)
+    wire.socket().answer(SEARCH(['stale.txt']), wire.sent('fs.search')[0]!.id)
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid^="files-row-"]')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="files-row-stale.txt"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="files-row-src/a.ts"]').exists()).toBe(true)
   })
 
   it('says so when a search matches nothing, and when the search itself is refused', async () => {
@@ -124,18 +144,42 @@ describe('FilesPanel (C-WEB-3.b)', () => {
     expect(wrapper.find('[data-testid="file-viewer-lines"]').exists()).toBe(false)
   })
 
+  it('drops an earlier read when the path switches mid-read (shared instance)', async () => {
+    await wire.connect()
+    const wrapper = await openPanel()
+    await front(wrapper, ['src/a.ts', 'src/b.ts'])
+    await wrapper.find('[data-testid="files-row-src/a.ts"]').trigger('click')
+    // FilesPanel reuses the viewer instance and only changes :path; a.ts's
+    // read is still unanswered when b.ts's read goes out.
+    await wrapper.find('[data-testid="files-row-src/b.ts"]').trigger('click')
+    await flushPromises()
+    expect(wire.sent('files.read')).toHaveLength(2)
+    wire.socket().answer(READ_FILE('src/a.ts', 'A-CONTENT'), wire.sent('files.read')[0]!.id)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-path"]').text()).toBe('src/b.ts')
+    expect(wrapper.text()).not.toContain('A-CONTENT')
+    await wire.answer('files.read', READ_FILE('src/b.ts', 'B-CONTENT'))
+    expect(wrapper.find('[data-testid="file-viewer-line-1"]').text()).toBe('1B-CONTENT')
+  })
+
   it('loads more by byte offset and re-splits the whole text so line numbers stay true', async () => {
     await wire.connect()
     const wrapper = await openPanel()
     await front(wrapper, ['long.txt'])
     await wrapper.find('[data-testid="files-row-long.txt"]').trigger('click')
-    await wire.answer('files.read', { path: 'long.txt', size: 20, offset: 0, binary: false, content: 'line1\nli', truncated: true })
+    // truncated ⇒ the server consumed the WHOLE raw limit (FilesMethods.php:97,109);
+    // the sanitized content string here is shorter than that — invalid UTF-8
+    // bytes collapsed — which is exactly why the advance must be the limit,
+    // not the content's length.
+    await wire.answer('files.read', { path: 'long.txt', size: 40_000, offset: 0, binary: false, content: 'line1\nli', truncated: true })
     expect(wrapper.find('[data-testid="file-viewer-load-more"]').exists()).toBe(true)
+    expect(wrapper.get('.hint').text()).toBe('showing 32768 of 40000 bytes')
 
     await wrapper.find('[data-testid="file-viewer-load-more"]').trigger('click')
     await flushPromises()
-    expect(wire.sent('files.read').at(-1)?.params).toEqual({ path: 'long.txt', offset: 8, limit: 32_768 })
-    await wire.answer('files.read', { path: 'long.txt', size: 20, offset: 7, binary: false, content: 'ne2', truncated: false })
+    expect(wire.sent('files.read').at(-1)?.params).toEqual({ path: 'long.txt', offset: 32_768, limit: 32_768 })
+    // The server echoes the requested offset (FilesMethods.php:106).
+    await wire.answer('files.read', { path: 'long.txt', size: 40_000, offset: 32_768, binary: false, content: 'ne2', truncated: false })
     expect(wrapper.findAll('[data-testid^="file-viewer-line-"]')).toHaveLength(2)
     expect(wrapper.find('[data-testid="file-viewer-line-2"]').text()).toBe('2line2')
   })
@@ -160,5 +204,17 @@ describe('FilesPanel (C-WEB-3.b)', () => {
     await wire.answer('fs.search', SEARCH(['src/a.ts']))
     await flushPromises()
     expect(wrapper.find('[data-testid="files-row-src/a.ts"]').exists()).toBe(true)
+  })
+
+  it('does not mount the Files panel — and never searches — without a session', async () => {
+    await wire.connect()
+    const wrapper = mount(SidePanels, { props: { sessionId: null } })
+    await wrapper.find('[data-testid="panels-toggle"]').trigger('click')
+    await wrapper.find('[data-testid="panel-tab-files"]').trigger('click')
+    await flushPromises()
+    // The `active === 'files' && sessionId` gate (SidePanels.vue): no
+    // session, no panel, and so no fs.search on the wire either.
+    expect(wrapper.find('[data-testid="files-panel"]').exists()).toBe(false)
+    expect(wire.sent('fs.search')).toHaveLength(0)
   })
 })

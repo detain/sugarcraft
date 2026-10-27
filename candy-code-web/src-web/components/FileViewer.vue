@@ -11,7 +11,11 @@ import { describe } from '../stores/session'
  * an attempt to print it; `truncated` offers "load more" that continues at
  * the next byte offset (the wire reads bytes, not lines, so loaded chunks
  * are appended and the whole text is re-split — line numbers stay true
- * across a mid-line chunk boundary).
+ * across a mid-line chunk boundary). A truncated read consumed exactly the
+ * requested limit in RAW bytes (FilesMethods truncates iff offset + the raw
+ * strlen < size), so the advance is offset + READ_LIMIT_BYTES — never the
+ * sanitized content's length, which is shorter when the read carried
+ * invalid UTF-8 bytes.
  */
 const props = defineProps<{ path: string }>()
 const emit = defineEmits<{ close: [] }>()
@@ -28,30 +32,33 @@ const binary = ref(false)
 const truncated = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
-/** UTF-8 byte length of the newest chunk — the server measured its read in bytes. */
-let lastChunkBytes = 0
-
-const bytes = new TextEncoder()
+// A row click while the viewer is open reuses this instance (FilesPanel.vue
+// binds :path): an in-flight read for the old path must not land under the
+// new one's header. Same newest-wins discipline as the panel's search.
+let seq = 0
 
 const lines = computed(() => (text.value === '' ? [] : text.value.split('\n')))
-const shownBytes = computed(() => offset.value + lastChunkBytes)
+/** Raw bytes consumed so far: a truncated read filled the whole limit. */
+const shownBytes = computed(() => offset.value + (truncated.value ? READ_LIMIT_BYTES : 0))
 
 async function load(startOffset: number): Promise<void> {
+  const mine = ++seq
   loading.value = true
   error.value = null
   try {
     const answer = await connection.request('files.read', { path: props.path, offset: startOffset, limit: READ_LIMIT_BYTES })
+    if (mine !== seq) return
     if (startOffset === 0) text.value = answer.content
     else text.value += answer.content
-    lastChunkBytes = bytes.encode(answer.content).length
     offset.value = answer.offset
     size.value = answer.size
     binary.value = answer.binary
     truncated.value = answer.binary ? false : answer.truncated
   } catch (failure) {
+    if (mine !== seq) return
     error.value = describe(failure)
   }
-  loading.value = false
+  if (mine === seq) loading.value = false
 }
 
 function loadMore(): void {
@@ -60,7 +67,6 @@ function loadMore(): void {
 
 function reset(): void {
   text.value = ''
-  lastChunkBytes = 0
   offset.value = 0
   size.value = 0
   binary.value = false
