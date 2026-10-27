@@ -113,12 +113,15 @@ use SugarCraft\Code\Support\ProcessContainment;
  * THE PAYLOAD CROSSES THE FORK AS PLAIN ARRAYS. Under the forked tool-child
  * path ({@see \SugarCraft\Code\Tools\CarriesSessionState}) a child's rows
  * ride `exportSessionState()` to the parent; `proc_open()` resources stay
- * UNSERIALISED in the local `$handles` map, and a child's inherited copies
- * are dropped on merge ({@see forgetHandles()}) so only the process that
- * owns a child keeps a handle to it. {@see merge()} is order-independent: a
- * row reporting an exit code beats one that does not, and among equally
- * informed rows the later record wins, so applying the same export twice is
- * a no-op.
+ * UNSERIALISED in the local `$handles` map, and a copy entered by a process
+ * that did not perform the spawns — a forked child holding the parent's
+ * duplicates — drops them on ENTRY ({@see dropForkInheritedHandles()},
+ * {@see forgetHandles()}, {@see localIds()}) so only the process that owns
+ * a child keeps a handle to it; {@see start()} adopts ownership when a
+ * child spawns through its copy, so the child's OWN shells stay observable
+ * there. {@see merge()} is order-independent: a row reporting an exit code
+ * beats one that does not, and among equally informed rows the later record
+ * wins, so applying the same export twice is a no-op.
  */
 final class BackgroundShellRegistry
 {
@@ -185,6 +188,19 @@ final class BackgroundShellRegistry
      */
     public const CORPSE_RETENTION_SECONDS = 86400;
 
+    /**
+     * How long the trailer gives the sink recorders to drain before the exit
+     * file is written anyway ({@see buildWrapper()}). A daemon the command
+     * inherits the output pipes to (`X & exit 0`) keeps the recorder reading,
+     * and the wrapper's flush-before-settle law must not hand the launch an
+     * exit file that never lands because of a child it already walked away
+     * from; three seconds covers every real drain (measured: clean recorders
+     * exit within one poll tick of the compound's death) and the bound keeps
+     * the settled-with-an-orphan-running boundary the observe() doctrine
+     * documents at least as prompt as its eight-second readers.
+     */
+    private const SINK_DRAIN_SECONDS = 3;
+
     /** Poll cadence while the stop ladder waits for the group to go quiet. */
     private const STOP_POLL_SECONDS = 0.01;
 
@@ -204,10 +220,17 @@ final class BackgroundShellRegistry
 
     /**
      * @param (callable(float): void)|null $sleeper poll-sleep seam for the stop ladder (tests inject a no-op)
+     * @param int $ownerPid the pid whose process performed the spawns the
+     *        handle map names; entry from any other pid is a fork-inherited
+     *        copy and drops the duplicated `proc_open()` resources it can
+     *        honestly neither wait nor terminate ({@see forgetHandles()}).
+     *        {@see start()} adopts the pid when a child spawns through
+     *        this copy, so a child's OWN shells keep their handles.
      */
     private function __construct(
         private readonly string $directory,
         private readonly ?\Closure $sleeper = null,
+        private int $ownerPid = 0,
     ) {}
 
     /**
@@ -227,7 +250,7 @@ final class BackgroundShellRegistry
         $root ??= self::defaultRoot();
         $safe = self::sanitizeSessionId($sessionId);
 
-        return new self(rtrim($root, '/\\') . '/' . $safe, $sleeper === null ? null : \Closure::fromCallable($sleeper));
+        return new self(rtrim($root, '/\\') . '/' . $safe, $sleeper === null ? null : \Closure::fromCallable($sleeper), \getmypid());
     }
 
     /** The HOME-rooted tree every default session shares one level above. */
@@ -257,6 +280,10 @@ final class BackgroundShellRegistry
      */
     public function start(string $command, string $label, array $envOverrides = []): array
     {
+        // The fork door, with adoption: a child that spawns through this
+        // copy owns its own handles, and its parent's inherited duplicates
+        // must already be gone before the new row joins the map.
+        $this->dropForkInheritedHandles(true);
         // The cap counts TABLE SIZE, not liveness: a row this process cannot
         // observe (a merged export, a zombie awaiting the launch's reaper) is
         // still a shell the launch has taken responsibility for, and a cap
@@ -434,6 +461,7 @@ final class BackgroundShellRegistry
      */
     public function status(string $shellId): ?array
     {
+        $this->dropForkInheritedHandles();
         $row = $this->rows[$shellId] ?? null;
         if ($row === null) {
             return null;
@@ -477,6 +505,7 @@ final class BackgroundShellRegistry
      */
     public function read(string $shellId, int|string $cursor = 0, ?int $maxBytes = null): array
     {
+        $this->dropForkInheritedHandles();
         $row = $this->status($shellId);
         if ($row === null) {
             return ['ok' => false, 'error' => 'no background shell ' . $shellId . ' is registered by this launch'];
@@ -551,6 +580,7 @@ final class BackgroundShellRegistry
      */
     public function stop(string $shellId): array
     {
+        $this->dropForkInheritedHandles();
         $row = $this->rows[$shellId] ?? null;
         if ($row === null) {
             return ['found' => false, 'wasRunning' => false, 'confirmed' => false, 'grouped' => false, 'exitCode' => null, 'expired' => false];
@@ -581,6 +611,7 @@ final class BackgroundShellRegistry
      */
     public function teardown(): void
     {
+        $this->dropForkInheritedHandles();
         foreach (array_keys($this->rows) as $id) {
             $this->stop((string) $id);
         }
@@ -661,11 +692,14 @@ final class BackgroundShellRegistry
     }
 
     /**
-     * Drop the inherited handle copies for $ids — called on the PARENT after
-     * merging a forked child's rows, so the parent's fd table keeps one
-     * handle per child it actually spawned. The child closed its own copies
-     * when it exited; this is the parent letting go of the copies IT
-     * inherited at fork and never owned a use for.
+     * Drop this process's handle copies for $ids. Wired through
+     * {@see dropForkInheritedHandles()} on entry to every public method from
+     * a pid other than the one that spawned: after a fork, both processes'
+     * copies point at the same kernel children, and a copy its holder never
+     * spawned can honestly neither be waited (one waitpid, either process)
+     * nor be terminated without reaching into the owner's child. The owner
+     * keeps its handles; every later non-owner entry forgets again, cheaply
+     * and idempotently.
      *
      * @param list<string> $ids
      */
@@ -673,6 +707,27 @@ final class BackgroundShellRegistry
     {
         foreach ($ids as $id) {
             unset($this->handles[$id]);
+        }
+    }
+
+    /**
+     * The fork door every public entry passes through: when the calling
+     * process is not the one that performed the spawns this copy records,
+     * the handle map holds duplicated `proc_open()` resources inherited at
+     * fork — neither waitable nor terminable from here without racing the
+     * owner — so the copies are dropped before anything is read. Idempotent
+     * for the owner itself, which is the common path.
+     */
+    private function dropForkInheritedHandles(bool $adoptingSpawn = false): void
+    {
+        if ($this->ownerPid === \getmypid()) {
+            return;
+        }
+        $this->forgetHandles($this->localIds());
+        if ($adoptingSpawn) {
+            // A child that SPAWNS through this copy legitimately owns its
+            // own handles; adopting keeps its fresh shell observable here.
+            $this->ownerPid = \getmypid();
         }
     }
 
