@@ -48,13 +48,13 @@
     "P-CTX.b",
     "P-CTX.d",
     "P-TABS.h",
-    "P-TABS.c"
+    "P-TABS.c",
+    "P-MENU.b"
   ],
   "inflight": [
     "C-PRV-1.b",
     "C-TOOL-7.a",
     "P-MENU.c",
-    "P-MENU.b",
     "P-CTX.f",
     "C-AGT-1.b",
     "C-AGT-3.a",
@@ -122,7 +122,14 @@
       "pick": "940fea719 (cherry-pick 679609a9b, clean, single commit)",
       "regen": "no-op (command/tool/settings docs --check all up to date; no protocol/web touched)",
       "gates": "SessionsPane 11T/1457A OK; TuiLang|LangParity 16T/4149A OK; five-guard 133T pair-only staleness (pinned 25,537 vs live 25,965 - closeout re-pin)",
-      "durations_owed": "NEW candy-code tests/Tui/Components/SessionsPaneTest.php (11T)"
+      "durations_owed": "NEW candy-code tests/Tui/Components/SessionsPaneTest.php (10T; filter SessionsPane showed 11 incl. one AccessorDeprecationTest dataset row)"
+    },
+    "P-MENU.b": {
+      "master": "901f40d9a",
+      "pick": "901f40d9a (cherry-pick 4da1fb2c4, clean, single commit) + cure 5497f52e0 (drop dead $placed ledger per reviewer nit: written at :183/:214/:256, never read - moreRows uses declaredNames() pre-pass)",
+      "regen": "no-op (command/tool/settings docs --check all up to date; no protocol/web touched)",
+      "gates": "ShellMenu|Menu 221T/3102A OK; TuiLang|LangParity 16T/4187A OK; five-guard 133T pair-only staleness (pinned 25,537 vs live - closeout re-pin)",
+      "durations_owed": "NEW candy-code tests/Tui/Menu/ShellMenuTest.php (11T)"
     }
   },
   "carries": [
