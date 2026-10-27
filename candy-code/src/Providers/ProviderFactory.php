@@ -9,6 +9,7 @@ use SugarCraft\Code\Providers\ToolCallParser\DsmlToolCallParser;
 use SugarCraft\Code\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Code\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Code\Providers\ToolCallParser\ToolCallParserInterface;
+use SugarCraft\Code\Providers\ThinkingCapability;
 use SugarCraft\Code\Support\ContainedPath;
 
 /**
@@ -951,13 +952,36 @@ final readonly class ProviderFactory
     /**
      * Normalises the `thinkingBudget` setting (audit A21 b): -1 (dynamic),
      * 0 (off) or a positive token count; anything else is no setting, for
-     * {@see configuredContextWindow()}'s tolerant reason.
+     * {@see configuredContextWindow()}'s tolerant reason. C-PRV-5.a added one
+     * loud exception inside the tolerated parse: a WHOLE number above the
+     * configured model's family output ceiling is refused at launch with the
+     * floor-refusal's shape, because the wire can only ever send it clamped
+     * and a setting nobody can honour is the silent-drift class this family
+     * of parsers exists to prevent. An id outside both families has no
+     * ceiling to name, so it keeps the old pass-through.
      */
-    private static function configuredThinkingBudget(mixed $value): ?int
+    private static function configuredThinkingBudget(mixed $value, string $model): ?int
     {
         $tokens = self::wholeNumber($value);
 
-        return $tokens !== null && $tokens >= -1 ? $tokens : null;
+        if ($tokens === null || $tokens < -1) {
+            return null;
+        }
+
+        $ceiling = ThinkingCapability::outputCeiling($model);
+
+        if ($ceiling !== null && $tokens > $ceiling) {
+            throw new \InvalidArgumentException(sprintf(
+                'the `thinkingBudget` setting must not exceed %d tokens (the %s family\'s published output '
+                . 'ceiling - thinking tokens spend from inside that reply, so a larger number can only '
+                . 'ever be sent clamped); got %d - use 0 to disable thinking or -1 for dynamic.',
+                $ceiling,
+                (string) ThinkingCapability::family($model),
+                $tokens,
+            ));
+        }
+
+        return $tokens;
     }
 
     /**
@@ -970,13 +994,16 @@ final readonly class ProviderFactory
      * that cannot mean anything the API accepts, and generous only for
      * "thinking off" in its conventional spellings (absent, null, the empty
      * unset-`${VAR}` placeholder, 0). Everything reaching the provider is
-     * therefore trusted: a whole number at or above the protocol floor.
+     * therefore trusted: a whole number inside the family's thinking window
+     * (at or above the protocol floor, at or below the family's published
+     * output ceiling - the upper refusal is C-PRV-5.a's, mirroring the
+     * floor's shape; an id outside both families keeps only the floor leg).
      *
      * `-1` is deliberately refused rather than reinterpreted: it is Gemini's
      * dynamic-thinking spelling and has no Anthropic equivalent, so on this
      * provider it is a setting addressed to the wrong arm.
      */
-    private static function configuredAnthropicThinkingBudget(mixed $value): ?int
+    private static function configuredAnthropicThinkingBudget(mixed $value, string $model): ?int
     {
         if ($value === null || $value === '' || (is_array($value) && $value === [])) {
             return null;
@@ -1001,6 +1028,26 @@ final readonly class ProviderFactory
                 'anthropic: the `thinkingBudget` setting must be at least %d tokens (the Messages API '
                 . 'refuses any smaller extended-thinking budget); got %d - use 0 to disable thinking.',
                 AnthropicProvider::MIN_THINKING_BUDGET,
+                $tokens,
+            ));
+        }
+
+        // C-PRV-5.a: the same loud shape at the other end of the window. The
+        // family's published output ceiling is the largest budget the wire
+        // can ever send for this configured model (thinking tokens spend from
+        // inside it), so a number above it is a setting that cannot mean
+        // anything the API accepts - exactly the class this parse refuses to
+        // guess through. An id outside both families has no ceiling to name,
+        // so the old pass-through stands.
+        $ceiling = ThinkingCapability::outputCeiling($model);
+
+        if ($ceiling !== null && $tokens > $ceiling) {
+            throw new \InvalidArgumentException(sprintf(
+                'anthropic: the `thinkingBudget` setting must not exceed %d tokens (the %s family\'s published '
+                . 'output ceiling - thinking tokens spend from inside that reply); got %d - use 0 to disable '
+                . 'thinking.',
+                $ceiling,
+                (string) ThinkingCapability::family($model),
                 $tokens,
             ));
         }
@@ -1135,6 +1182,7 @@ final readonly class ProviderFactory
             ),
             thinkingBudget: self::configuredAnthropicThinkingBudget(
                 $config['thinkingBudget'] ?? self::userTierSetting('thinkingBudget'),
+                $model,
             ),
         );
     }
@@ -1673,6 +1721,7 @@ final readonly class ProviderFactory
             // thinking may spend. User-tier only - raising it raises spend.
             thinkingBudget: self::configuredThinkingBudget(
                 $config['thinkingBudget'] ?? self::userTierSetting('thinkingBudget'),
+                $model,
             ),
             // Audit A15: `cache_control` breakpoints on the Anthropic arm
             // (system, last tool, conversation tail), unless turned off.
@@ -1709,6 +1758,7 @@ final readonly class ProviderFactory
             modelPrices: self::modelPricesFor($config),
             thinkingBudget: self::configuredThinkingBudget(
                 $config['thinkingBudget'] ?? self::userTierSetting('thinkingBudget'),
+                $model,
             ),
             contextWindowOverride: self::configuredContextWindow(
                 $config['contextWindow'] ?? self::userTierSetting('contextWindow'),

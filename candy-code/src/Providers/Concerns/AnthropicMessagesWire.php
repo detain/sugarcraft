@@ -18,6 +18,7 @@ use SugarCraft\Code\Providers\ContextOverflow;
 use SugarCraft\Code\Providers\EffortBudget;
 use SugarCraft\Code\Providers\ProviderException;
 use SugarCraft\Code\Providers\ProviderStreamException;
+use SugarCraft\Code\Providers\ThinkingCapability;
 use SugarCraft\Code\Providers\TransientFailure;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall;
@@ -479,6 +480,51 @@ trait AnthropicMessagesWire
         // one request - the hook may now read the request's effort tier,
         // and a per-message re-read would be re-deriving, not caching.
         $thinkingBudget = $this->anthropicThinkingBudget($request);
+
+        // C-PRV-5.a: the family table gets the last word before the triangle
+        // is computed. A family that predates extended thinking answers as if
+        // no budget existed at all - on `claude-3-5-*` a `thinking` arm is a
+        // server-side 400, so a configured number or an effort tier is
+        // DROPPED here, not resent. A family that thinks has its budget
+        // clamped into the family's published output ceiling, with the
+        // protocol floor standing under it. An id outside every known family
+        // keeps the pre-C-PRV-5 behavior byte-for-byte: the table refuses
+        // nothing it does not know. (modelId() is the same resolution the
+        // cache-breakpoint mark below uses - request model first, default
+        // second - so both read one answer.)
+        $model = $this->modelId($request);
+        $ceiling = ThinkingCapability::outputCeiling($model);
+
+        if ($thinkingBudget !== null) {
+            if ($ceiling !== null && !ThinkingCapability::supportsThinking($model)) {
+                // A family the table KNOWS never to think: drop the number
+                // whole. An id outside every family is not "a family that
+                // never thinks" - it is a family the table cannot place - and
+                // keeps its arm, per the table's own law of refusing nothing
+                // it does not know.
+                $thinkingBudget = null;
+            } else {
+                $thinkingBudget = max(
+                    self::MIN_THINKING_BUDGET,
+                    EffortBudget::capToCeiling($thinkingBudget, $ceiling)
+                );
+            }
+        }
+
+        $maxTokens = $thinkingBudget === null
+            ? ($request->maxTokens ?? self::DEFAULT_MAX_TOKENS)
+            : max($request->maxTokens ?? self::DEFAULT_MAX_TOKENS, $thinkingBudget + intdiv($thinkingBudget, 2));
+        $maxTokens = EffortBudget::capToCeiling($maxTokens, $ceiling);
+
+        if ($thinkingBudget !== null && $maxTokens <= $thinkingBudget) {
+            // A budget pinned at the ceiling leaves the reply leg no room
+            // under the clamp. The triangle is the protocol's, so the budget
+            // yields one token below the ceiling - never below the floor -
+            // and the single resolved value feeds the message walk, the
+            // signed-block replay gate and the thinking arm alike.
+            $thinkingBudget = max(self::MIN_THINKING_BUDGET, $maxTokens - 1);
+        }
+
         $messages = $this->formatAnthropicMessages($request->messages, $thinkingBudget);
 
         if ($messages === []) {
@@ -497,19 +543,19 @@ trait AnthropicMessagesWire
 
         // CTX-1 (§6.3): extended thinking, once the host's budget hook is on.
         // The protocol pins three fields together, so they move together:
-        // `thinking.budget_tokens` must be >= MIN_THINKING_BUDGET (the hook's
-        // boundary parse guarantees it), `temperature` must be exactly 1, and
-        // `max_tokens` must be larger than the budget - the answer cannot fit
-        // inside the thoughts. The max_tokens floor of budget x 1.5 is
-        // deliberate headroom, and `max()` guarantees enabling thinking can
-        // only ever RAISE an explicit request ceiling, never shrink it.
-        // ($thinkingBudget itself was resolved above the message walk.)
+        // `thinking.budget_tokens` must be >= MIN_THINKING_BUDGET,
+        // `temperature` must be exactly 1, and `max_tokens` must be larger
+        // than the budget - the answer cannot fit inside the thoughts. The
+        // max_tokens floor of budget x 1.5 is deliberate headroom; C-PRV-5.a
+        // then caps the field at the family's published output ceiling, which
+        // CAN shrink an explicit request ceiling the raw `max()` above would
+        // have sent, and the equal-to-ceiling collision above keeps the
+        // triangle holding under that cap.
+        // ($thinkingBudget and $maxTokens were resolved above the message walk.)
 
         $body = array_merge($this->anthropicWireBodyPrelude($request), [
             'messages' => $messages,
-            'max_tokens' => $thinkingBudget === null
-                ? ($request->maxTokens ?? self::DEFAULT_MAX_TOKENS)
-                : max($request->maxTokens ?? self::DEFAULT_MAX_TOKENS, $thinkingBudget + intdiv($thinkingBudget, 2)),
+            'max_tokens' => $maxTokens,
             'temperature' => $thinkingBudget === null
                 ? ($request->temperature ?? self::DEFAULT_TEMPERATURE)
                 : self::THINKING_TEMPERATURE,

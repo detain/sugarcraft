@@ -12,6 +12,7 @@ use SugarCraft\Code\Providers\AttachmentEncoding;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\EffortBudget;
+use SugarCraft\Code\Providers\ThinkingCapability;
 use SugarCraft\Code\Providers\TransientFailure;
 use SugarCraft\Code\Usage;
 
@@ -245,8 +246,16 @@ trait GeminiGenerateContentWire
         // option and was declined: older Gemini models cap output at 8,192
         // and Vertex answers a larger value with a 400, so any one number is
         // wrong for one family. `maxOutputTokens` in settings still sends.
+        // C-PRV-5.a adds the other direction of the same family law: when a
+        // ceiling WAS asked for AND the id is inside a known family, the
+        // request is trimmed to that family's published output maximum, so a
+        // hand-raised number cannot 400 the turn the way an over-large
+        // thinking budget used to. An unknown id sends exactly what was asked.
+        $model = $this->modelId($request);
+        $ceiling = ThinkingCapability::outputCeiling($model);
+
         if ($request->maxTokens !== null) {
-            $generationConfig['maxOutputTokens'] = $request->maxTokens;
+            $generationConfig['maxOutputTokens'] = EffortBudget::capToCeiling($request->maxTokens, $ceiling);
         }
 
         // The other half of A21 (b): how much of that budget thinking may
@@ -255,9 +264,25 @@ trait GeminiGenerateContentWire
         // >= 1024 tokens, so the derivation can never manufacture the 0/-1
         // shapes that live only on the settings side. With neither, no
         // `thinkingConfig` goes out and the model's own default stands — the
-        // exact pre-A21(b) body. Not verified live - this repo holds no GCP
-        // credentials.
+        // exact pre-A21(b) body. C-PRV-5.a added a third cause for the
+        // omission: on a family that never had `thinkingConfig` at all (the
+        // 1-series and 2.0 - a number of ANY spelling there is the 400 the
+        // omission prevents), the resolved value is dropped whole. On a
+        // thinking family a positive budget is clamped into the family
+        // ceiling; `-1` and `0` are the settings side's dynamic/off
+        // spellings and pass through unclamped, because a clamp can neither
+        // produce them nor may eat them. Not verified live - this repo holds
+        // no GCP credentials.
         $geminiThinking = $this->thinkingBudget ?? EffortBudget::thinkingTokens($request->reasoningEffort);
+        if ($geminiThinking !== null && $ceiling !== null && !ThinkingCapability::supportsThinking($model)) {
+            // A family the table KNOWS to predate `thinkingConfig` - the
+            // omission below is the 400-prevention. An id outside both
+            // families is not a pre-thinking family; it keeps its arm whole.
+            $geminiThinking = null;
+        } elseif ($geminiThinking !== null && $geminiThinking > 0) {
+            $geminiThinking = EffortBudget::capToCeiling($geminiThinking, $ceiling);
+        }
+
         if ($geminiThinking !== null) {
             $generationConfig['thinkingConfig'] = ['thinkingBudget' => $geminiThinking];
         }

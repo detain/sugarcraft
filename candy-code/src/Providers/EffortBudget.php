@@ -58,6 +58,20 @@ final class EffortBudget
     }
 
     /**
+     * C-PRV-5.a: the one clamp both thinking wires use, so the ceiling law
+     * has a single spelling. A token count (an extended-thinking budget, or
+     * the reply ceiling that must leave room for one) is trimmed to the
+     * family's published output ceiling from {@see ThinkingCapability}. A
+     * null ceiling is the table's own "no answer" for an id outside both
+     * families and passes the value through untouched — the table refuses
+     * nothing it does not know.
+     */
+    public static function capToCeiling(int $tokens, ?int $ceiling): int
+    {
+        return $ceiling === null ? $tokens : min($tokens, $ceiling);
+    }
+
+    /**
      * The tier names, in ascending spend order — the list `/effort` prints
      * in its refusal and usage rows, derived from the table itself so the
      * two can never disagree.

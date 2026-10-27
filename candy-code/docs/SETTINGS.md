@@ -517,7 +517,18 @@ same money reason as `maxOutputTokens`.
   above the budget, and each reply's signed thinking blocks are carried in
   the transcript and replayed on the next request — the shape the Messages
   API requires for thinking turns that end in tool calls. Thinking tokens bill as
-  output, which is why a project may not set it. Separately, Vertex no longer
+  output, which is why a project may not set it. A `thinkingBudget` larger than
+  the configured model's family output ceiling — 64000 tokens on the `claude`
+  family, 65536 on the `gemini` family — is refused the same loud way when the
+  provider is built, because no request can honour it: the wires now have the
+  family table as their last word, clamping a thinking budget into that ceiling
+  (and with it the reply ceiling that thinking raises), and dropping the
+  `thinking`/`thinkingConfig` arm whole on families that predate thinking
+  (`claude-2*`, `claude-3-*`, `claude-3-5-*`, `gemini-1*`, `gemini-2.0-*`)
+  however the number arrived, setting or `/effort` tier alike, because those
+  endpoints reject the arm rather than clamp it. An id the table cannot place
+  is clamped nothing and refused nothing — the table never refuses what it does
+  not know. Separately, Vertex no longer
   sends a 4096 `maxOutputTokens` to Gemini when you set none: Gemini 2.5 thinks
   by default and its thinking spends from that same budget, so a hard prompt
   could end at the ceiling with almost no answer. With no `maxOutputTokens` the

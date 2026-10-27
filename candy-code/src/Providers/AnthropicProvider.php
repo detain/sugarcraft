@@ -394,7 +394,11 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
     /**
      * CTX-1 (§6.3): this host speaks extended thinking natively, so it feeds
      * the wire's budget hook from the constructor-parsed setting. The value
-     * is already trusted (>= 1024 or null) by the time the body is shaped.
+     * arrives at the body shaped >= 1024 or null; C-PRV-5.a added that the
+     * wire itself now has the last word - on a family that predates thinking
+     * the answer is dropped whole, and on a thinking family it is clamped
+     * into the family's published output ceiling - so this hook stays the
+     * raw "what was asked" answer the table then judges.
      *
      * PRV-2 (§6.5): with no configured budget the request's effort tier
      * answers — {@see EffortBudget} maps it to a budget at or above the
