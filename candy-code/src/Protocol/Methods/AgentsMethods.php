@@ -8,6 +8,7 @@ use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\Live\AgentInbox;
 use SugarCraft\Code\Agents\Live\AgentMessage;
 use SugarCraft\Code\Agents\Live\AgentTranscriptTail;
+use SugarCraft\Code\Agents\Live\MessageMode;
 use SugarCraft\Code\Agents\Live\SubAgentTranscriptLog;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Events\SubAgentActivity;
@@ -21,7 +22,9 @@ use SugarCraft\Code\Protocol\MethodSpec;
 use SugarCraft\Code\Protocol\Params;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
+use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tools\ToolResult;
+use SugarCraft\Code\Tui\Window\AgentColor;
 
 /**
  * `agents.*` (Appendix O §6.3, roadmap O-6c): the agent roster, the live tree
@@ -67,6 +70,16 @@ final class AgentsMethods
      */
     public const CONTROL_VERBS = [...AgentInbox::CONTROL_VERBS, AgentInbox::BACKGROUND_VERB];
 
+    /**
+     * The `agents.message` modes on the wire: a browser's Agent View composer
+     * offers the two mid-run deliveries the TUI's mode cycle leads with —
+     * `steer` (the {@see MessageMode::Steer} default, current step's calls
+     * run first) and `interrupt` (skips the step's unstarted sequential
+     * calls). The schema's enum is this list; the modes a wire client cannot
+     * ask for — `followup`, `note`, `control` — stay internal.
+     */
+    public const MESSAGE_MODES = [MessageMode::Steer->value, MessageMode::Interrupt->value];
+
     /** The fields a transcript item may carry over the wire, by type. */
     private const ITEM_FIELDS = ['text', 'callId', 'tool', 'args', 'ok', 'content', 'truncated', 'status', 'outcome', 'error', 'from', 'mode', 'msgId', 'step'];
 
@@ -87,15 +100,28 @@ final class AgentsMethods
     private static function list(CallContext $call, Params $params): array
     {
         $agents = $call->server->hub()->workspace()->agentManager?->all() ?? [];
+        $theme = Theme::default();
 
-        return ['items' => \array_values(\array_map(static fn (Agent $agent): array => [
-            'name' => $agent->name,
-            'description' => $agent->description,
-            'model' => $agent->model,
-            'provider' => $agent->provider,
-            'permissionMode' => $agent->permissionMode->value,
-            'active' => $agent->isActive,
-        ], $agents))];
+        return ['items' => \array_values(\array_map(static function (Agent $agent) use ($theme): array {
+            $item = [
+                'name' => $agent->name,
+                'description' => $agent->description,
+                'model' => $agent->model,
+                'provider' => $agent->provider,
+                'permissionMode' => $agent->permissionMode->value,
+                'active' => $agent->isActive,
+            ];
+            // The preset's `color:` vocabulary resolved to a hex the browser
+            // can paint, the same AgentColor law the TUI strip follows; a
+            // preset naming no legible colour carries no key — the browser
+            // keeps its own default rather than guessing one.
+            $color = AgentColor::resolve($agent->color, $theme);
+            if ($color !== null) {
+                $item['color'] = $color->toHex();
+            }
+
+            return $item;
+        }, $agents))];
     }
 
     /** @return array<string, mixed> */
@@ -149,7 +175,8 @@ final class AgentsMethods
             return self::followUp($host, $run, $text);
         }
 
-        $message = self::inbox($host)->send($agentId, AgentMessage::fromUser($text));
+        $mode = MessageMode::from($params->enum('mode', self::MESSAGE_MODES, MessageMode::Steer->value));
+        $message = self::inbox($host)->send($agentId, AgentMessage::fromUser($text, $mode));
 
         return ['agentId' => $agentId, 'status' => 'queued', 'msgId' => $message->msgId];
     }

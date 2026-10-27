@@ -444,6 +444,7 @@ final class MethodSchemas
                 'provider' => Schema::string(),
                 'permissionMode' => Schema::ref(D::PERMISSION_MODE),
                 'active' => Schema::boolean(),
+                'color' => Schema::string(7)->describe('The preset\'s `color:` vocabulary resolved through the same AgentColor law the TUI strip follows, as a `#rrggbb` hex against the server\'s default theme; omitted when the preset names no colour or names one that does not resolve legibly.'),
             ], ['name']))],
             'agents.subtree' => [$sessionOnly, $items(Schema::map(Schema::any())->describe('A delegated run\'s latest `subagent.*` event data, from the session\'s log and the live feed.'))],
             'agents.transcript' => [
@@ -474,7 +475,7 @@ final class MethodSchemas
                 ], ['agentId', 'offset', 'items', 'more', 'finished']),
             ],
             'agents.message' => [
-                Schema::object([...$sid, 'agentId' => $agentId, 'text' => Schema::string(65_536)], ['sessionId', 'agentId', 'text']),
+                Schema::object([...$sid, 'agentId' => $agentId, 'text' => Schema::string(65_536), 'mode' => Schema::enum(\SugarCraft\Code\Protocol\Methods\AgentsMethods::MESSAGE_MODES)->describe('steer (the default): delivered at the run\'s next step boundary, the current step\'s tool calls all running first; interrupt: delivered there too, but the step\'s sequential calls that have not started are skipped, so the run reads the message before doing more work on a plan it may change. Omitted on a FINISHED run — its follow-up conversation carries no step to steer.')], ['sessionId', 'agentId', 'text']),
                 $agentSent,
             ],
             'agents.control' => [

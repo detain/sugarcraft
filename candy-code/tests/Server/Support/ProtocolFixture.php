@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Server\Support;
 
 use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
+use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Host\EventLog;
 use SugarCraft\Code\Host\SessionHub;
@@ -46,7 +47,7 @@ final class ProtocolFixture
 
     public readonly Dispatcher $dispatcher;
 
-    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows, ?MemoryStore $memoryStore, ?\Closure $log)
+    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows, ?MemoryStore $memoryStore, ?\Closure $log, ?AgentManager $agentManager)
     {
         $this->dir = \sys_get_temp_dir() . '/crush-protocol-' . \bin2hex(\random_bytes(6));
         $this->root = $this->dir . '/project';
@@ -55,7 +56,7 @@ final class ProtocolFixture
         $this->backend = new ScriptedTurnBackend();
 
         $transcripts = TranscriptStore::new($this->store, null, EventLog::new($this->store, $retain));
-        $workspace = WorkspaceContext::new(root: $this->root, sessionStore: $this->store, backend: $this->backend, workflowEngine: $workflows, backgroundSupervisor: $supervisor, memoryStore: $memoryStore)
+        $workspace = WorkspaceContext::new(root: $this->root, sessionStore: $this->store, backend: $this->backend, agentManager: $agentManager, workflowEngine: $workflows, backgroundSupervisor: $supervisor, memoryStore: $memoryStore)
             ->withService(TurnRunner::class, TurnRunner::new())
             ->withService(TurnController::class, TurnController::new())
             ->withService(TranscriptStore::class, $transcripts)
@@ -85,10 +86,12 @@ final class ProtocolFixture
      * @param (\Closure(string): void)|null $log the server's log sink, exactly the one
      *        `Cli\Serve` wires the real dispatcher to; null keeps every swallowed
      *        failure silent (the shape every existing fixture runs, ISS-057)
+     * @param AgentManager|null $agentManager the workspace's agent roster; none by
+     *        default, which leaves `agents.list` an empty array
      */
-    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null, ?MemoryStore $memoryStore = null, ?\Closure $log = null): self
+    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null, ?MemoryStore $memoryStore = null, ?\Closure $log = null, ?AgentManager $agentManager = null): self
     {
-        return new self($config, $retain, $supervisor, $workflows, $memoryStore, $log);
+        return new self($config, $retain, $supervisor, $workflows, $memoryStore, $log, $agentManager);
     }
 
     /** A client that has said hello. */
