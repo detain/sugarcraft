@@ -253,7 +253,7 @@ final class GrepEngineDifferentialTest extends TestCase
 
         $this->assertIsString($cmd);
         $this->assertStringStartsWith(
-            'rg --no-heading --line-number --with-filename --color never --binary --hidden --no-ignore',
+            'rg --no-config --no-heading --line-number --with-filename --color never --binary --hidden --no-ignore',
             $cmd
         );
         // --with-filename is load-bearing: without it a bare FILE operand

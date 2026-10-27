@@ -413,7 +413,15 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
                 'groupKilled' => false,
             ];
         } else {
-            $run = $this->runCaptured($cmd, null, $this->captureBound($this->maxOutputBytes), $timeout, [], $heartbeat);
+            // C-TOOL-1.b belt and braces under the --no-config flag: blank
+            // RIPGREP_CONFIG_PATH for this child. scrubbedEnv() strips
+            // secret-shaped names only, so the operator's config path would
+            // otherwise ride in; an EMPTY value is rg's own "no config"
+            // reading (measured on 14.1.0: the file is consulted only when
+            // the variable is non-empty), which is the unset this overrides
+            // channel cannot express as a key removal. Harmless to the grep
+            // branch — the variable names an rg flag file only.
+            $run = $this->runCaptured($cmd, null, $this->captureBound($this->maxOutputBytes), $timeout, ['RIPGREP_CONFIG_PATH' => ''], $heartbeat);
         }
 
         $filtered = self::withoutIgnoredHits($run, $rules, $path);
@@ -921,6 +929,15 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      *    (both measured — link_to_sub walked as operand, not descended as
      *    walk member). So rg is passed NO -L/--follow, ever; passing it would
      *    reopen exactly the `-R` hole with the other engine's flag spelling.
+     *    NOT passing it is not the whole doctrine (C-TOOL-1.b): the operator's
+     *    RIPGREP_CONFIG_PATH file rides in BEFORE argv, so a lone `--follow`
+     *    line there reopened the same hole out of band — measured, through
+     *    this command, before the fix. `--no-config` is stated as rg's FIRST
+     *    flag and the child's environment blanks RIPGREP_CONFIG_PATH; belt
+     *    and braces, so neither the flag channel nor the env channel can
+     *    reach the binary. (The same file also smuggled `--smart-case`,
+     *    `--max-columns` and `--type-not` past the engine-parity contract;
+     *    --no-config screens that class of drift too.)
      *  - F-J2 secrets: see {@see secretExcludeFlags()} for the grep-side set
      *    and {@see rgSecretGlobs()} for its one-for-one mirror.
      *
@@ -969,7 +986,10 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             // the child's stdout is a pipe and rg would not colorize anyway;
             // stated because an ANSI-tinted hit line breaks `hitPath()`'s
             // prefix attribution as surely as a real terminal would.
-            $cmd = 'rg --no-heading --line-number --with-filename --color never --binary --hidden --no-ignore';
+            // --no-config (C-TOOL-1.b) leads the line so nothing an
+            // operator's RIPGREP_CONFIG_PATH file can prepend — a `--follow`
+            // walk hatch, engine-breaking parity flags — is even parsed.
+            $cmd = 'rg --no-config --no-heading --line-number --with-filename --color never --binary --hidden --no-ignore';
             foreach ($rules->excludedDirs as $dir) {
                 $cmd .= ' --glob=' . escapeshellarg('!' . $dir);
             }

@@ -6,8 +6,10 @@ namespace SugarCraft\Code\Tests\Tools\BuiltIn;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Tools\BuiltIn\Grep;
+use SugarCraft\Code\Tools\IgnoreRules;
 
 /**
  * Audit F-J1 — model-supplied Grep arguments must never reach grep as options.
@@ -33,7 +35,11 @@ use SugarCraft\Code\Tools\BuiltIn\Grep;
  * `-r`-not-`-R` doctrine lands as rg's own default — walk-time symlinks are
  * never followed and `--follow` is deliberately never passed (a link named on
  * the command line IS followed on both engines, measured: that parity is the
- * bounded IgnoreRules::halts() hatch, not an accident). The rg legs join the
+ * bounded IgnoreRules::halts() hatch, not an accident). Not passing it is not
+ * the whole doctrine: since C-TOOL-1.b the operator's RIPGREP_CONFIG_PATH
+ * file cannot smuggle it either — `--no-config` leads the rg line and the
+ * variable is blanked in the child's environment (see
+ * {@see testRipgrepConfigFileCannotWidenTheWalk()}). The rg legs join the
  * dataset only on hosts with rg, via the same boot probe the wiring uses.
  * The non-string-argument guard test stays single-engine: it answers before
  * any command exists, which is the whole point of it.
@@ -164,6 +170,82 @@ final class GrepOptionInjectionTest extends TestCase
         ])->content();
 
         $this->assertStringNotContainsString('hunter2', $content);
+    }
+
+    /**
+     * C-TOOL-1.b — the operator's rg config file must not widen the walk.
+     * RIPGREP_CONFIG_PATH makes rg prepend that file's lines to argv, so a
+     * lone `--follow` line reopens the `-R` hole out of band: the walk exits
+     * the jail through this fixture's `innocent_link`, and because the hit
+     * path the walk reports is still jail-prefixed, hitPath() cannot tell the
+     * smuggled descent from a contained one (the leak was reproduced through
+     * this exact spawn path before the fix). The command line carries
+     * `--no-config`, and the child's environment blanks the variable — belt
+     * and braces, so neither the flag channel nor the env channel reaches rg.
+     *
+     * Early-returns (never skips) on rg-less hosts, the differential legs'
+     * convention: there is no binary here to configure.
+     */
+    public function testRipgrepConfigFileCannotWidenTheWalk(): void
+    {
+        if (!Bootstrap::capabilityPresent('rg')) {
+            return;
+        }
+
+        $rc = $this->base . '/ripgreprc';
+        file_put_contents($rc, "--follow\n");
+
+        $previous = getenv('RIPGREP_CONFIG_PATH');
+        putenv('RIPGREP_CONFIG_PATH=' . $rc);
+        try {
+            $content = (new Grep($this->root, rgAvailable: true))->execute([
+                'pattern' => 'SECRET',
+                'path' => '.',
+                'description' => 'config-injected follow',
+            ])->content();
+        } finally {
+            // Restore on the failure path too: a leaked hostile rc would
+            // poison every later rg child in the process.
+            if ($previous === false) {
+                putenv('RIPGREP_CONFIG_PATH');
+            } else {
+                putenv('RIPGREP_CONFIG_PATH=' . $previous);
+            }
+        }
+
+        $this->assertStringNotContainsString('hunter2', $content);
+        $this->assertStringNotContainsString('innocent_link', $content);
+        $this->assertStringNotContainsString('creds.txt', $content);
+    }
+
+    /**
+     * The argv half of the fix, pinned without a binary: `--no-config` rides
+     * the command as the FIRST rg flag — before any flag the config could
+     * rewrite — and the pin holds on rg-less hosts because buildCommand is
+     * pure string work.
+     */
+    public function testTheBuiltRgCommandCarriesNoConfigAsItsFirstFlag(): void
+    {
+        $cmd = self::builtRgCommandLine();
+
+        $this->assertIsString($cmd);
+        $this->assertStringStartsWith('rg --no-config ', $cmd);
+    }
+
+    /**
+     * Reflection onto the private buildCommand() with a throwaway rooted
+     * instance whose own root the method never reads — the same no-spawn
+     * shape GrepEngineDifferentialTest uses for its argv legs.
+     */
+    private static function builtRgCommandLine(): ?string
+    {
+        $tool = new Grep(root: '/', rgAvailable: true);
+        $method = new ReflectionMethod($tool, 'buildCommand');
+
+        /** @var ?string $cmd */
+        $cmd = $method->invoke($tool, IgnoreRules::new('/'), '*', 'needle', '/tmp/opencode/ctool1b-inner.txt');
+
+        return $cmd;
     }
 
     /**
