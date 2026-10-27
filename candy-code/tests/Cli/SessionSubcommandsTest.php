@@ -14,6 +14,7 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionKind;
 use SugarCraft\Code\Session\SessionResolver;
 use SugarCraft\Code\Session\TitleSource;
+use SugarCraft\Code\Usage;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
@@ -125,7 +126,9 @@ final class SessionSubcommandsTest extends TestCase
         self::assertSame(0, $rc, $out);
         self::assertStringContainsString('sess-main-0001', $out);
         self::assertStringContainsString('login work', $out);
-        self::assertMatchesRegularExpression('/sess-main-0001\s+\S+ \S+\s+main\s+1t\s+openai\/gpt-4o\s+login work/', $out);
+        // C-SES-1.a: the spend column sits between turns and provider/model;
+        // a never-billed row prints the em dash.
+        self::assertMatchesRegularExpression('/sess-main-0001\s+\S+ \S+\s+main\s+1t\s+—\s+openai\/gpt-4o\s+login work/', $out);
         self::assertStringNotContainsString('sess-arch-0002', $out, 'archived rows are hidden by default');
         self::assertStringNotContainsString($this->kid, $out, 'sub-agent rows are hidden by default');
     }
@@ -168,6 +171,31 @@ final class SessionSubcommandsTest extends TestCase
         self::assertNotNull($byId['sess-arch-0002']['archived_at']);
         self::assertSame('subagent', $byId[$this->kid]['kind']);
         self::assertSame('sess-main-0001', $byId[$this->kid]['parent_id']);
+    }
+
+    public function testListPrintsTheCachedLedgerSpendAndTheJsonRowsCarryIt(): void
+    {
+        // Priced: one accounted call, spelled by the SAME formatter the
+        // tracker readout uses — the exact figure, not a substring.
+        $this->store->appendUsageRecord('sess-main-0001', Usage::new(totalTokens: 18, costUsd: 0.025, inputTokens: 11, outputTokens: 7), 'gpt-4o');
+        // Unpriced: a lower bound, `≥$`, never a bare `$`.
+        $this->store->appendUsageRecord('sess-arch-0002', Usage::new(totalTokens: 10, costUsd: 0.5, inputTokens: 6, outputTokens: 4, unpricedModel: 'mystery-model'), 'mystery-model');
+
+        [, $out] = $this->dispatch(['session', 'list', '--all']);
+        self::assertMatchesRegularExpression('/sess-main-0001\s+\S+ \S+\s+main\s+1t\s+\$0\.0250\s+openai\/gpt-4o/', $out);
+        self::assertMatchesRegularExpression('/sess-arch-0002\s+\S+ \S+\s+main\s+0t\s+≥\$0\.5000\s+openai\/gpt-4o/', $out);
+        self::assertMatchesRegularExpression('/' . $this->kid . '\s+\S+ \S+\s+subagent\s+\d+t\s+—\s/', $out, 'an unaccounted row prints the dash');
+
+        [$rc, $json] = $this->dispatch(['session', 'list', '--all', '--output-format', 'json']);
+        self::assertSame(0, $rc);
+        $byId = array_column(json_decode($json, true)['result']['sessions'], null, 'id');
+
+        self::assertSame(0.025, $byId['sess-main-0001']['spentUsd']);
+        self::assertFalse($byId['sess-main-0001']['spendUnpriced']);
+        self::assertSame(0.5, $byId['sess-arch-0002']['spentUsd']);
+        self::assertTrue($byId['sess-arch-0002']['spendUnpriced']);
+        self::assertNull($byId[$this->kid]['spentUsd'], 'never-billed is null, not zero');
+        self::assertFalse($byId[$this->kid]['spendUnpriced']);
     }
 
     public function testABadLimitAndAFlagForAnotherActionAreUsageErrors(): void

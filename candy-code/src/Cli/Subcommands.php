@@ -8,6 +8,7 @@ use SugarCraft\Code\Bundles\BundleDiscovery;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Host\SpendLedger;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Bundles\Bundle;
@@ -1321,10 +1322,14 @@ final class Subcommands
      * sub-agent and background rows that hang under them, `--archived` adds
      * archived rows, `--all` is both, and `--limit N` changes the page size.
      *
-     * The text row is `★ id updated kind turns provider/model name`, with
-     * `[archived]` after an archived row's name; the JSON rows are
-     * {@see \SugarCraft\Code\Session\SessionRow::toArray()}, which carries
-     * every column the store keeps (kind, parent, pinned, archived_at, turns,
+     * The text row is `★ id updated kind turns spend provider/model name`,
+     * with `[archived]` after an archived row's name and `spend` the session's
+     * cached ledger figure — {@see \SugarCraft\Code\Host\SpendLedger::boundUsd()}
+     * spelling, `≥$` when an unpriced model set the lower bound, an em dash when
+     * no accounted call ever named the row; the JSON rows are
+     * {@see \SugarCraft\Code\Session\SessionRow::toArray()} plus the
+     * `spentUsd`/`spendUnpriced` pair, which carries every column the store
+     * keeps (kind, parent, pinned, archived_at, turns,
      * cwd, branch, preview).
      */
     private static function sessionList(ParsedArgs $args): int
@@ -1359,7 +1364,14 @@ final class Subcommands
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
             self::emitDocument(['result' => ['sessions' => \array_map(
-                static fn(SessionRow $r): array => $r->toArray(),
+                // C-SES-1.a: the ledger-derived spend rides the camelCase keys a
+                // script reads the one-shot envelope by (`spentUsd`,
+                // `spendUnpriced`), beside the snake_case stored columns
+                // `toArray()` already carries.
+                static fn(SessionRow $r): array => $r->toArray() + [
+                    'spentUsd' => $r->costUsd,
+                    'spendUnpriced' => $r->costUnpriced,
+                ],
                 $rows,
             )]]);
 
@@ -1378,12 +1390,20 @@ final class Subcommands
         }
         foreach ($rows as $row) {
             \printf(
-                "%s %-{$idWidth}s  %-19s  %-10s  %5s  %-24s  %s\n",
+                "%s %-{$idWidth}s  %-19s  %-10s  %5s  %-9s  %-24s  %s\n",
                 $row->pinned ? '★' : ' ',
                 $row->id,
                 $row->updatedAt,
                 $row->kind->value,
                 $row->turns . 't',
+                // C-SES-1.a: the session's cached ledger spend, spelled exactly
+                // as the tracker's readout spells it (SpendLedger::boundUsd, so
+                // an unpriced session reads as a LOWER BOUND `≥$…`), and an em
+                // dash when no accounted call ever named this row — null is
+                // "never measured", distinct from a measured zero.
+                $row->costUsd === null
+                    ? Lang::t('cli.session.list.spend_none')
+                    : SpendLedger::boundUsd($row->costUnpriced, $row->costUsd),
                 $row->provider . '/' . $row->model,
                 self::sessionLabel($row) . ($row->archived() ? ' ' . Lang::t('cli.session.archived_tag') : ''),
             );

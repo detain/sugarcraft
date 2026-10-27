@@ -2001,6 +2001,14 @@ the result by whoever refused the call, never read off its text, so a tool
 that ran and printed a line opening `Permission denied:` before failing — a
 shell script, an MCP server — is not listed.
 
+A reported `usage` is not only envelope decoration: once the answer is
+persisted, the run's summed usage also appends to the same durable spend
+ledger the TUI and serve paths settle through, so `candy-code session list`
+shows a headless run's cached spend (as a `≥$…` lower bound when an unpriced
+model contributed to it). A ledger write that cannot land costs the caller
+nothing, like every store failure on this path: one stderr line, answer
+intact, exit code unchanged.
+
 On stdout, `--output-format text` carries no such list — it does not need one:
 **on the `-p` one-shot path, every refused tool call is announced on stderr,**
 one line per refusal, naming the tool and quoting the reason the model was
@@ -2192,10 +2200,12 @@ A session `<target>` is an id, a name or a unique id prefix — the resolver
 `--resume` uses, over every kind and archived rows too. Nothing matching exits
 `1` (`not-found`); an ambiguous prefix exits `2` and lists the candidates. The
 flags after `session list` and `session delete` belong to that verb: before it
-they are unknown options. `list` prints `★ id updated kind turns
-provider/model name` (★ = pinned, `[archived]` after an archived name), and its
-JSON rows carry every stored column (`kind`, `parent_id`, `pinned`,
-`archived_at`, `turns`, …). A pinned session lists first and is never pruned;
+they are unknown options. `list` prints `★ id updated kind turns spend
+provider/model name` (★ = pinned, `[archived]` after an archived name, `spend`
+the session's cached ledger figure — `≥$…` when an unpriced model set its lower
+bound, `—` when no accounted call ever named the row), and its
+JSON rows carry every stored column plus `spentUsd` and `spendUnpriced`
+(`kind`, `parent_id`, `pinned`, `archived_at`, `turns`, …). A pinned session lists first and is never pruned;
 an archived one leaves the default list, the tab strip and `--continue` but
 keeps its transcript.
 

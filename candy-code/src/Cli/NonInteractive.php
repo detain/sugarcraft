@@ -658,6 +658,30 @@ final class NonInteractive
                 }
                 $sessionStore->recordTurn($opened['id'], (string) $args->prompt);
                 \SugarCraft\Code\Host\TranscriptStore::new($sessionStore)->save($opened['id'], [...$history, $message]);
+
+                // C-SES-1.a: the run's provider-reported usage joins the durable
+                // ledger, crossing the SAME choke the TUI settles through at
+                // {@see \SugarCraft\Code\Chat::accountUsage()} and the serve path
+                // crosses at {@see \SugarCraft\Code\Host\SessionHost::usageRecordSink()}:
+                // SpendLedger::account() with an appendUsageRecord sink. The steps
+                // are summed once here rather than appended inside the observer
+                // because the observer fires before the lazy mint has opened the
+                // row — an append per step would name a session id that does not
+                // exist yet. Null summed usage (an echo run, or a provider that
+                // reported nothing) is a no-op inside account(), so the ledger
+                // never invents a zero-dollar call. A store that fails HERE rides
+                // this try exactly like recordTurn/save do: one stderr line, exit
+                // status unchanged — the answer is already out.
+                if ($sessionStore instanceof \SugarCraft\Code\Session\EnhancedSessionStore) {
+                    \SugarCraft\Code\Host\SpendLedger::new()->account(
+                        new \SugarCraft\Code\Util\TokenTracker(),
+                        \SugarCraft\Code\Usage::sum($sessionUsages),
+                        static function (\SugarCraft\Code\Usage $usage, ?string $model = null) use ($sessionStore, $opened): void {
+                            $sessionStore->appendUsageRecord($opened['id'], $usage, $model);
+                        },
+                        $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $backend->model() : null,
+                    );
+                }
             } catch (\Throwable $e) {
                 \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.session_save_failed', ['error' => $e->getMessage()]) . "\n");
             }

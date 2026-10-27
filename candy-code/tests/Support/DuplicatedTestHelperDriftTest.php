@@ -2655,6 +2655,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'README' => 'The documentation-census suites point at the same repository file path.',
         'ROWS' => 'The child-ask view suite and the thinking-frame border suite each build a 60-row terminal frame; the value is one viewport-height fixture choice per suite, unrelated classes, and neither reads the other — consolidating would couple two render censuses that move independently.',
         'SAFE_BYTES' => 'The under-capacity byte count the drain and wedge families share.',
+        'SELECTION_ENV_KEYS' => 'The C-SES-1.a pair (the AUT-2 persistence suite and the headless-usage-ledger suite) clear the same backend-selection environment before the offline echo answer; the list is one statement about which variables pick a backend, and a new selection variable moves the pair together.',
         'SETTINGS_DOC' => 'The suites point at the same settings documentation path.',
         'SHAPE_UNCLASSIFIED' => 'The two child-lifetime scanners emit the same token for an unclassified shape; it is a wire string, so the copies must move together.',
         'SMALL_BYTES' => 'The small-write byte count the stdin-wedge pair shares.',
