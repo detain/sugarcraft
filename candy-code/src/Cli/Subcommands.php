@@ -19,6 +19,7 @@ use SugarCraft\Code\Session\SessionRow;
 use SugarCraft\Code\Session\TitleSource;
 use SugarCraft\Code\Util\Exporter;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
+use SugarCraft\Core\Util\Tty;
 
 /**
  * The real CLI subcommands — `mcp list`, `session list|show|rename|delete|
@@ -814,18 +815,32 @@ final class Subcommands
     private static ?\Closure $loginKeyRead = null;
 
     /**
+     * Test seam for the echo-off terminal handle; null opens sugar-core's
+     * {@see Tty} over STDIN. The armed fake — `isTty`, `enableRawMode`,
+     * `getc`, `restore` — is what makes the raw-mode branch testable with
+     * no terminal anywhere: {@see self::loginKeyLine()} consults the seam
+     * ONLY when `$loginKeyRead` itself is null, so the existing paste
+     * seams never touch the terminal at all.
+     *
+     * @var (callable(): object)|null
+     */
+    private static ?\Closure $loginTty = null;
+
+    /**
      * @param (callable(array<string>): int)|null $spawn
      * @param (callable(): string|false)|null $keyRead
+     * @param (callable(): object)|null $tty
      */
-    public static function setLoginSeamsForTesting(?\Closure $spawn, ?\Closure $keyRead): void
+    public static function setLoginSeamsForTesting(?\Closure $spawn, ?\Closure $keyRead, ?\Closure $tty = null): void
     {
         self::$loginSpawn = $spawn;
         self::$loginKeyRead = $keyRead;
+        self::$loginTty = $tty;
     }
 
     public static function resetLoginSeamsForTesting(): void
     {
-        self::setLoginSeamsForTesting(null, null);
+        self::setLoginSeamsForTesting(null, null, null);
     }
 
     /**
@@ -933,14 +948,26 @@ final class Subcommands
      * `providers` map — merging onto the file's EXISTING map by hand, because
      * writeUserConfig() merges shallow at the top level and replacing the
      * whole `providers` key would silently drop every other named provider.
+     *
+     * The provider's OWN block is merged too (C-PRV-1.c): a rotation rewrites
+     * `apiKey` and (re)asserts `type` but keeps `model`, `thinkingBudget`,
+     * `modelPrices` and — worst case to lose — a gateway `baseUrl`. When the
+     * existing block declares a DIFFERENT `type` the write is refused
+     * outright: two provider kinds cannot share one slot, and silently
+     * flipping `type` would repoint a hand-tuned block's endpoint and prices
+     * at a protocol it never asked for. A block with no `type` at all is
+     * untyped rather than contradicting, so it merges and gains one. A
+     * non-array block has no `type` to differ and is replaced, as before.
+     *
+     * The read itself goes through {@see self::loginKeyLine()}: echo stays
+     * off on a live terminal.
      */
     private static function loginStoreKey(string $type): int
     {
         $path = Bootstrap::userConfigPath();
         echo Lang::t('cli.sub.login.ask_key', ['provider' => $type, 'path' => $path]) . "\n";
 
-        $read = self::$loginKeyRead ?? static fn (): string|false => fgets(\STDIN);
-        $key = trim((string) $read());
+        $key = trim((string) self::loginKeyLine());
 
         if ($key === '') {
             echo Lang::t('cli.sub.login.empty_key') . "\n";
@@ -970,7 +997,15 @@ final class Subcommands
             }
         }
 
-        $providers[$type] = ['type' => $type, 'apiKey' => $key];
+        $block = $providers[$type] ?? null;
+        if (is_array($block) && \array_key_exists('type', $block) && $block['type'] !== $type) {
+            $actual = \is_string($block['type']) ? $block['type'] : \get_debug_type($block['type']);
+            echo Lang::t('cli.sub.login.type_mismatch', ['path' => $path, 'provider' => $type, 'actual' => $actual]) . "\n";
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $providers[$type] = [...(is_array($block) ? $block : []), 'type' => $type, 'apiKey' => $key];
         Bootstrap::writeUserConfig(['providers' => $providers]);
 
         // writeUserConfig() can bail without writing (lock contention, an
@@ -986,6 +1021,184 @@ final class Subcommands
         echo Lang::t('cli.sub.login.stored', ['provider' => $type, 'path' => $path, 'env' => self::LOGIN_KEY_ENVS[$type]]) . "\n";
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * Read the pasted key line in whichever shape the situation has.
+     *
+     * - A test-armed `$loginKeyRead` IS the whole read: the terminal is
+     *   never opened, never probed, never mode-switched — which is what
+     *   keeps this suite TTY-free exactly as it was before C-PRV-1.c.
+     * - Otherwise a handle over STDIN (the `$loginTty` seam, or the real
+     *   sugar-core {@see Tty}) answers whether this is a terminal. A pipe
+     *   gets the original `fgets()` line with nothing touched.
+     * - A terminal gets raw mode, which is `stty raw -echo`: the typed key
+     *   never appears on screen, and because raw also clears ISIG, Ctrl-C
+     *   arrives as a byte the reader answers rather than as a signal. The
+     *   handle is given back in `finally` on EVERY exit path — normal end,
+     *   Ctrl-C, EOF, or a throwing read — and an externally delivered
+     *   SIGINT/SIGTERM is covered by {@see self::armLoginKeySignals()},
+     *   whose `finally` cannot be skipped because default disposition kills
+     *   before any shutdown runs.
+     *
+     * No child process is spawned for any of this: sugar-core's Tty drives
+     * termios through its own FFI/stty seam.
+     */
+    private static function loginKeyLine(): string|false
+    {
+        $read = self::$loginKeyRead;
+        if ($read !== null) {
+            return $read();
+        }
+
+        $openTty = self::$loginTty ?? static fn (): object => self::openLoginTtyHandle();
+        $tty = $openTty();
+
+        if (!$tty->isTty()) {
+            return \fgets(\STDIN);
+        }
+
+        $disarm = self::armLoginKeySignals($tty);
+        try {
+            $tty->enableRawMode();
+
+            return self::readLoginKeyLine($tty);
+        } finally {
+            // Restore first: the signal guard points AT the handle, so the
+            // terminal goes back before its interrupt handlers come off.
+            $tty->restore();
+
+            if ($disarm !== null) {
+                $disarm();
+            }
+        }
+    }
+
+    /**
+     * The production shape of the `$loginTty` handle: sugar-core's Tty for
+     * the modes, one byte at a time from the same STDIN it was opened over.
+     * Anonymous on purpose — this is a private seam shape, not a type.
+     */
+    private static function openLoginTtyHandle(): object
+    {
+        $tty = new Tty(\STDIN);
+
+        return new class($tty) {
+            public function __construct(private readonly Tty $tty)
+            {
+            }
+
+            public function isTty(): bool
+            {
+                return $this->tty->isTty();
+            }
+
+            public function enableRawMode(): void
+            {
+                $this->tty->enableRawMode();
+
+                // sugar-core leaves STDIN non-blocking for render loops that
+                // must never stall on a key. This read waits on a human, so
+                // it blocks again and lets a dispatched signal interrupt the
+                // wait instead of spinning on "nothing yet". restore()
+                // re-asserts blocking mode on the POSIX backend anyway.
+                if (\DIRECTORY_SEPARATOR !== '\\') {
+                    @\stream_set_blocking(\STDIN, true);
+                }
+            }
+
+            public function restore(): void
+            {
+                $this->tty->restore();
+            }
+
+            public function getc(): string|false
+            {
+                return \fgetc(\STDIN);
+            }
+        };
+    }
+
+    /**
+     * One echo-off key line: Enter ends it, Backspace erases the character
+     * before the caret, Ctrl-C — which raw mode delivers as a byte, not a
+     * signal — refuses the read whole (a half-typed key is thrown away,
+     * never stored), and a real end-of-file answers with whatever was typed,
+     * exactly as `fgets()` would. Every other byte, arrow escapes included,
+     * joins the line and is left for the control-character check after the
+     * read to refuse.
+     */
+    private static function readLoginKeyLine(object $tty): string|false
+    {
+        $line = '';
+
+        while (true) {
+            $byte = $tty->getc();
+
+            if ($byte === false) {
+                return $line === '' ? false : $line;
+            }
+            if ($byte === "\r" || $byte === "\n") {
+                return $line;
+            }
+            if ($byte === "\x7F" || $byte === "\x08") {
+                $line = \substr($line, 0, -1);
+
+                continue;
+            }
+            if ($byte === "\x03") {
+                return false;
+            }
+
+            $line .= $byte;
+        }
+    }
+
+    /**
+     * The one exit path a `finally` cannot cover: default-disposition
+     * SIGINT kills the process mid-read without running any finally or
+     * destructor, leaving the terminal raw and echoless for the shell that
+     * inherits it. While the echo-off read is in flight, SIGINT and SIGTERM
+     * are caught, the terminal is handed back, and the signal is re-raised
+     * at its default disposition — so the process still dies with true
+     * signal status (128+N to the shell) rather than a laundered exit.
+     * Returns the teardown that puts the previous handlers back, or null
+     * when this process has no pcntl/posix to ask (Windows consoles need
+     * none: raw mode there delivers Ctrl-C as a byte, which the reader
+     * already answers).
+     */
+    private static function armLoginKeySignals(object $tty): ?callable
+    {
+        if (!\function_exists('pcntl_signal') || !\function_exists('pcntl_async_signals')
+            || !\function_exists('pcntl_signal_get_handler') || !\function_exists('posix_kill')
+            || !\defined('SIGINT') || !\defined('SIGTERM')
+        ) {
+            return null;
+        }
+
+        $handler = static function (int $signo) use ($tty): void {
+            try {
+                $tty->restore();
+            } finally {
+                \pcntl_signal($signo, \SIG_DFL);
+                \posix_kill(\getmypid(), $signo);
+            }
+        };
+
+        /** @var array<int, int|callable> $previous */
+        $previous = [];
+        foreach ([\SIGINT, \SIGTERM] as $signo) {
+            $previous[$signo] = \pcntl_signal_get_handler($signo);
+            \pcntl_signal($signo, $handler);
+        }
+        $previousAsync = \pcntl_async_signals(true);
+
+        return static function () use ($previous, $previousAsync): void {
+            foreach ($previous as $signo => $handler) {
+                \pcntl_signal($signo, $handler);
+            }
+            \pcntl_async_signals($previousAsync);
+        };
     }
 
     /**
