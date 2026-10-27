@@ -321,9 +321,13 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
         // the body, so a model reading `scripts/helper.php` in the prose — or
         // a skill that names no files at all — learns what `asset` can reach.
         // Each path is repository-named bytes and rides field() like the
-        // headers do. A manifest skill (empty sourcePath) gets no listing:
-        // dirname('') is '.', and the session directory's own scripts/ folder
-        // is not this skill's resources — the same lie baseDirLine() refuses.
+        // headers do. A manifest skill (empty sourcePath) gets no listing: it
+        // names no directory on disk, so there is nothing that belongs to it to
+        // announce, and a walk started from the empty root would describe the
+        // process working directory instead — the same emptiness baseDirLine()
+        // refuses. (Weld cure 2026-10-27: this sentence used to blame
+        // `dirname('')` answering `'.'`; measured on PHP 8.3.6/Linux it answers
+        // `''`. The refusal stands, only the stated mechanism was wrong.)
         $content = SkillPromptLine::heading($skill)
             . SkillPromptLine::baseDirLine($skill)
             . $body;
@@ -522,9 +526,13 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
      * first, opencode-style skills the second, and a body that names its own
      * directory has nowhere correct to point but the file it came from. A
      * manifest skill has no directory — the empty sourcePath returns the body
-     * unchanged rather than substituting `dirname('')`'s confident `'.'`,
-     * the same refusal {@see SkillPromptLine::baseDirLine()} makes — so the
-     * token survives only where nothing could resolve it either way.
+     * unchanged rather than substituting `dirname('')`, which measured on PHP
+     * 8.3.6/Linux is the empty string itself (a weld cure 2026-10-27: this
+     * paragraph used to call it a confident `'.'`; the `'.'` belief is false,
+     * and the guard's reason is that splicing `''` would silently delete the
+     * token while naming nothing). The refusal is the same one
+     * {@see SkillPromptLine::baseDirLine()} makes — so the token survives only
+     * where nothing could resolve it either way.
      *
      * str_replace() for the same one-pass reason {@see
      * substituteArguments()} gives: inserted bytes are never rescanned, and a
