@@ -1,0 +1,21 @@
+# REVIEW-1 — C-MCP-6.a (lane cc/C-MCP-6.a @ 18d163ccd, base c36cc1982)
+
+VERDICT: CLEAN
+
+## Scope / traceability
+- Diff = exactly the BRIEF's 7 files: src/Tools/BuiltIn/McpListTool.php, src/Support/McpLoginFork.php, src/MCP/SseMcpServer.php, docs/MCP.md (§Deferred schemas hand rows), tests/Chat/McpLoginForkTest.php, tests/MCP/McpDispatcherToolsTest.php, NEW tests/MCP/SseMcpServerForkTlsTest.php. No suite-figure.json, no durations.tsv, no dist/, no COMPARISON.md. Catalog surface untouched (position 39 stays; the VIS-3-P1 leg is grep-only and COMPARISON.md is unedited, as the brief demands).
+- Single commit; porcelain clean; author law: %ae grep -c detain = 1, %ce grep -c detain = 1 (separate greps), zero Co-Authored trailers. Dep C-MCP-1.b landed on master before the cut (e3d4679f9).
+
+## Leg-by-leg
+- **mcp_list**: `tool` exact-name filter emits per-match Server header + full schemaLine; miss answers as information (non-failure polarity, matches empty-server-filter precedent); non-string refused. Over-cap (unfiltered or server-filtered) returns names-only overview + fetch pointer; truncateOutput stays the final guard. Model-facing description/schema bytes changed — audited: NO pin accuses them. PromptStabilityTest's schema test is a byte-stability property (same serialization across turns), not a golden; no test/golden/doc contains the old or new sentence bytes (tree-wide grep). BuiltInToolCorpus consumers + ToolDocDriftTest green.
+- **McpLoginFork**: un-truncated head-kept scan buffer (64 KiB flood bound per brief) replaces tail-window scanning; announce regex `^\s+(https?://\S+)\s*$`m is the brief's exact specified shape and matches the real OAuthLoopbackFlow.php:158-160 print (verified on disk: indented URL-only line after the backticked server sentence). The brief's contract is "first URL-only line" — there is NO two-URL refuse-to-announce clause in the authoritative design; the spawn note misremembered it. redirectPort parses the announced URL's redirect_uri (parse_url/parse_str) — real port, never hard-coded/0; accessor shape matches C-MCP-4.c's contract ("redirect-port accessor", C-MCP-4.c deps THIS lane, W27). Port cleared on re-arm, flushed in releaseAll, outlives the slot — pinned both sides in the new test.
+- **SseMcpServer**: pid-aware retain on replace (openStream) AND on closeStream defense-in-depth; opener-pid stamp deliberately distinct from sessionPid (documented). Failure path (catch nulls $this->socket after retaining) verified leak-free; re-entry double-push onto retainedSockets is benign. Child keeps parent's handle; own-socket close-order unchanged. DescriptorInheritanceGuard green (15T). Test pins BOTH pid arms non-vacuously: inherit-retain (test 1, 3) and own-close (test 2) — removing the guard reddens 1&3, inverting it reddens 2; pre-fix regression holds because the pidProvider/connector seams exist on master (SseMcpServer.php:158-180) and base code would fclose the inherited handle → fixture EOF witness trips.
+
+## Gates run (cwd lane candy-code, plain pipe, env -u LINES -u COLUMNS)
+- --filter 'MCP|Sse|Login|BuiltInToolCorpus|ToolDocDrift': 2219T/0F (superset of builder's claimed ~334T family).
+- five-guard: 133T, failures = ONLY the staleness pair (25,537 pinned vs 26,127 live — base-era drift + lane's +6T; weld/gate owns re-pin + the SseMcpServerForkTlsTest durations row, both listed in the lane REPORT.md per law).
+- check-child-lifetimes: script invocation denied by this harness's shell matcher; verified statically instead — the diff adds ZERO proc_open/fork sites (login spawn untouched; new test uses in-process stream_socket_pair, outside the tool's proc_open census), so the roster cannot drift.
+- No foreign-allowed reds appeared (ChatHostLangCatalogue/DreamPass/AttachPaging/RemoteBackend all green inside the run).
+
+## NIT (out-of-scope, brief-specified)
+- McpLoginFork.php:152 — in /m mode `$` also matches end-of-string, so a read boundary falling mid-URL-line could announce a truncated URL (urlSent then latches). Old code shared the hazard and the brief mandates this exact regex; production print is block-buffered so it is rare. Fix candidate for a future micro: require a trailing newline in the announce pattern.
