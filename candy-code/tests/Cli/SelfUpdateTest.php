@@ -1320,8 +1320,8 @@ final class SelfUpdateTest extends TestCase
             self::assertSame(1024, $curl[\CURLOPT_LOW_SPEED_LIMIT] ?? null, 'the curl transport aborts a stalled bulk transfer');
             self::assertSame(60, $curl[\CURLOPT_LOW_SPEED_TIME] ?? null, 'after a minute under the low-speed floor');
         } else {
-            self::assertArrayNotHasKey(\CURLOPT_LOW_SPEED_LIMIT, $config['curl'] ?? [], 'a curl-less runtime keeps the StreamHandler shape');
-            self::assertArrayNotHasKey(\CURLOPT_LOW_SPEED_TIME, $config['curl'] ?? [], 'rather than fataling on a constant lookup');
+            self::assertArrayNotHasKey('curl', $config, 'a curl-less runtime keeps the StreamHandler shape');
+            self::assertArrayNotHasKey('curl', $config, 'production sets the key only under the \\defined guard');
         }
     }
 
