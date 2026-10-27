@@ -58,18 +58,33 @@ export interface ContextSources {
     /** False when the `disabledSkills` setting withheld it. */
     enabled: boolean
   }[]
-  /** The `.mcp.json` declaration as `candy-code mcp list` reads it, minus per-entry details. */
+  /** The `.mcp.json` declarations as `candy-code mcp list` reads them — both tiers, minus per-entry details. */
   mcp: {
     /** The config-level verdict of the read-never-run census (`Bootstrap::mcpServerInventory`): trusted, refused, or absent. Nothing is started to answer this. */
     status: string
     error: string | null
     skipped: string[]
-    servers: {
+    /** C-MCP-4.a: the USER tier's verdict from the same census — trusted, absent, or disabled; no containment or trust-list verdicts apply to the operator's own file (MCP-3). */
+    userStatus: string
+    /** Why the user file could not be read, in the same sentence the project tier uses; null when there was nothing to report. */
+    userError: string | null
+    /** Malformed entries the user file declared, mirrored from the project tier's `skipped`. */
+    userSkipped: string[]
+    servers: ({
       name: string
       transport: string
       /** Rows exist only while the file is trusted; the http entry's URL stays off the wire (the `server.hello` media restraint, restated). */
       trust: "trusted"
-    }[]
+      /** C-MCP-4.a: which file declared the row. A name the project tier declares never appears as a user row — the census shadows it, mirroring the launch's precedence. */
+      tier: "project" | "user"
+      /** C-MCP-4.a: read from the launch memo only (`Bootstrap::mcpLivenessSnapshot`), NEVER a probe — a process holding no client answers null on every row; a declared server that was never started stays null rather than being launched to be asked. */
+      liveness: {
+        /** Whether the started server reports its handshake complete; null only for a transport the client cannot answer for. */
+        up: boolean | null
+        /** Tool count the client last saw — a remembered figure, never a fresh exchange. */
+        tools: number
+      } | null
+    })[]
   }
   /** Instruction paths the loader refused and why. */
   untrusted: {

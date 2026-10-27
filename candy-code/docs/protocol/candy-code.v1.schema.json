@@ -218,6 +218,24 @@
                                 "type": "string"
                             }
                         },
+                        "userStatus": {
+                            "type": "string",
+                            "description": "C-MCP-4.a: the USER tier's verdict from the same census — trusted, absent, or disabled; no containment or trust-list verdicts apply to the operator's own file (MCP-3)."
+                        },
+                        "userError": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "description": "Why the user file could not be read, in the same sentence the project tier uses; null when there was nothing to report."
+                        },
+                        "userSkipped": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Malformed entries the user file declared, mirrored from the project tier's `skipped`."
+                        },
                         "servers": {
                             "type": "array",
                             "items": {
@@ -234,12 +252,46 @@
                                             "trusted"
                                         ],
                                         "description": "Rows exist only while the file is trusted; the http entry's URL stays off the wire (the `server.hello` media restraint, restated)."
+                                    },
+                                    "tier": {
+                                        "enum": [
+                                            "project",
+                                            "user"
+                                        ],
+                                        "description": "C-MCP-4.a: which file declared the row. A name the project tier declares never appears as a user row — the census shadows it, mirroring the launch's precedence."
+                                    },
+                                    "liveness": {
+                                        "type": [
+                                            "object",
+                                            "null"
+                                        ],
+                                        "properties": {
+                                            "up": {
+                                                "type": [
+                                                    "boolean",
+                                                    "null"
+                                                ],
+                                                "description": "Whether the started server reports its handshake complete; null only for a transport the client cannot answer for."
+                                            },
+                                            "tools": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "description": "Tool count the client last saw — a remembered figure, never a fresh exchange."
+                                            }
+                                        },
+                                        "required": [
+                                            "up",
+                                            "tools"
+                                        ],
+                                        "description": "C-MCP-4.a: read from the launch memo only (`Bootstrap::mcpLivenessSnapshot`), NEVER a probe — a process holding no client answers null on every row; a declared server that was never started stays null rather than being launched to be asked."
                                     }
                                 },
                                 "required": [
                                     "name",
                                     "transport",
-                                    "trust"
+                                    "trust",
+                                    "tier",
+                                    "liveness"
                                 ]
                             }
                         }
@@ -248,9 +300,12 @@
                         "status",
                         "error",
                         "skipped",
+                        "userStatus",
+                        "userError",
+                        "userSkipped",
                         "servers"
                     ],
-                    "description": "The `.mcp.json` declaration as `candy-code mcp list` reads it, minus per-entry details."
+                    "description": "The `.mcp.json` declarations as `candy-code mcp list` reads them — both tiers, minus per-entry details."
                 },
                 "untrusted": {
                     "type": "array",
