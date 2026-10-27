@@ -1,0 +1,9 @@
+# C-SES-5.a round 2 — VERDICT: CLEAN (static; php denied in reviewer sandbox — WELD MUST re-run gates)
+
+Round-2 fix verified on disk (git show eb8ce97a9):
+- Scope: fix commit touches ONLY candy-code/tests/Cli/SelfUpdateTest.php lines 1323-1324 (the claimed curl-less else-branch legs); whole-lane diff = exactly the 3 BRIEF files (SelfUpdate.php, lang/en.php, SelfUpdateTest.php), no suite-figure.json/durations.tsv/dist touches, tree clean.
+- Correctness: root cause removed. Old else-branch evaluated \CURLOPT_* in assertArrayNotHasKey args — fatal precisely when that branch runs. New legs assert assertArrayNotHasKey('curl', $config) (string key, no constant deref). Polarity exact vs production SelfUpdate.php:975: $options['curl'] is minted only under the same \defined pair, and the test's if condition at :1318 is byte-identical to that gate, so both runtimes (curl present/absent) and the half-defined edge agree. assertIsArray($config) at :1311 precedes the leg. Hand-traced: curl-less → gate false → key absent → green, no fatal; with-curl → if-branch as before.
+- Law: both commits A=detain@interserver.net C=detain@interserver.net (separate fields), zero Co-Authored trailers; lang diff adds composer_mode_root consumed at SelfUpdate.php:902, download_failed{reason} pre-existing and used at :598/:606 — matches round-1 ruling.
+- No fabricated success path, no stubs in the fix; no glob-shaped/denial-vocabulary literals introduced.
+Gates UNVERIFIED here (php + shell-pipe denied): welder must run, cwd candy-code of merged tree, plain pipe env -u LINES -u COLUMNS: --filter SelfUpdate expect 37T/677A green, and five-guard expect ONLY staleness pair (25,537 pinned vs live).
+NIT (no action): the two replacement legs are the same assertion with different messages — harmless redundancy, round-1 prescribed exactly this shape.

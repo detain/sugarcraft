@@ -13,7 +13,8 @@
     "C-SES-4.a",
     "C-SES-3.c",
     "C-AGT-2.c",
-    "C-SES-3.b"
+    "C-SES-3.b",
+    "C-SES-5.a"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -44,14 +45,6 @@
       "branch": "cc/C-SES-2.a",
       "session": null,
       "note": "tip 94e9b7385 base 7949cc23d, 3 files no new test file"
-    },
-    "C-SES-5.a": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-SES-5.a",
-      "branch": "cc/C-SES-5.a",
-      "session": null,
-      "note": "tip eb8ce97a9 r2 CLEAN static; queued weld after C-SES-3.b; welder re-runs gates 37T/677A"
     },
     "C-EXT-1.b": {
       "stage": "build",

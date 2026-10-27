@@ -1,0 +1,26 @@
+### C-SES-5.a — Self-update robustness: exec bit, HTTP status, stall abort, temp cleanup, pagination
+- item: C-SES-5 (sources: DST-3-P2, DST-3-P3, DST-3-P4, DST-3-P5, DST-3-P1 (stranded-temp half))
+- kind: fix · MAJOR · effort M
+- approach: All in `src/Cli/SelfUpdate.php`.
+  - **DST-3-P2, the exec bit.** Capture `fileperms($phar) & 0777` before the swap. `chmod` the temp file after verification and before the `rename` (`:451`). `chmod` the `.old` copy after `copy()` (`:444`). Restore the mode in `rollback()` (`:730-737`).
+  - **DST-3-P4, HTTP status.** One `fetchOk()` helper checks the status code (`>= 400` emits `download_failed: HTTP <code>`) and unlinks the sink temp. Use it on the sidecar (`:372`), phar (`:393`) and signature (`:674`) legs, since `http_errors=false` (`:757`) means only the release-list call checks status today.
+  - **DST-3-P3, stalls.** `httpClient()` (`:747-757`) adds `CURLOPT_LOW_SPEED_LIMIT = 1024` and `CURLOPT_LOW_SPEED_TIME = 60`, guarded by `\defined()`, and keeps no total timeout. Fix the docblock's false claim that `read_timeout` kills a stall (`:110-113`).
+  - **DST-3-P1, the stranded temp.** A shutdown function unlinks `$temp`, so a fatal leaves nothing behind.
+  - **DST-3-P5.**
+    - Follow `Link: rel=next` for up to 5 pages (`RELEASES_URL`, `:193`).
+    - `composerRefusal()` (`:725`) branches on `InstalledVersions::getRootPackage()['name']`: when candy-code is itself the root package, the honest answer is `git pull && composer install`.
+- files.create: none
+- files.modify: `candy-code/src/Cli/SelfUpdate.php` (run(), rollback(), httpClient(), new fetchOk(), release selection paging, composerRefusal(), class docblock), `candy-code/lang/en.php` (`cli.selfupdate.download_failed*`, the composer-refusal variants)
+- tests: modify `candy-code/tests/Cli/SelfUpdateTest.php`:
+  - swap and rollback both preserve `0755` and `0700` (skipped on Windows);
+  - a 404 on each of the three legs gives `download_failed` naming `HTTP 404`, with no temp left and the live phar byte-identical;
+  - the client config carries the low-speed pair (via reflection);
+  - `testSelectionFollowsPagination`;
+  - the refusal wording for each install shape.
+- docs/guards: none
+- serialized: [lang:cli.selfupdate.]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: `CURLOPT_*` constants are absent without ext-curl. Guard with `\defined()`; the StreamHandler path keeps `read_timeout`.
+
