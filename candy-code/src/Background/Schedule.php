@@ -13,8 +13,10 @@ use SugarCraft\Code\Permissions\PermissionMode;
  * {@see ScheduleRegistry} persists these as `~/.candy-code/schedules.json`
  * rows, the pumps call {@see ScheduleRegistry::due()}, and a due row spawns a
  * daemon running its {@see self::$prompt} as the task. `/loop` registers one
- * in memory instead (ephemeral: never written, dies with the TUI, and fires
- * through Chat's prompt queue rather than the supervisor).
+ * in memory instead (ephemeral: never written, dies with its host, and fires
+ * through the session's prompt queue rather than the supervisor — on a served
+ * session through {@see \SugarCraft\Code\Host\SessionHost::tick()}, which
+ * fires only the rows stamped with ITS session id, {@see self::$sessionId}).
  *
  * IMMUTABLE LIKE EVERYTHING ELSE ON THIS PATH — every `with*()` returns a new
  * row, and the registry holds the only mutable thing (the roster itself).
@@ -93,6 +95,18 @@ final class Schedule
      */
     public readonly ?string $root;
 
+    /**
+     * The session whose `/loop` registered this EPHEMERAL row (C-AGT-1.b).
+     * A served host fires only the rows carrying its own id, and lets go of
+     * them when the session closes, so two browser tabs sharing one serve
+     * process cannot fire each other's loops. NEVER serialized: an ephemeral
+     * row has no life after this process, so there is nothing for the file
+     * to remember, and {@see fromArray()} never reads such a key. The TUI
+     * stamps the same field (its pump ignores it for now — it fires every
+     * in-process loop row) so one grammar answers both drivers.
+     */
+    public readonly ?string $sessionId;
+
     public function __construct(
         string $name,
         int $everySeconds,
@@ -103,6 +117,7 @@ final class Schedule
         bool $enabled = true,
         bool $persisted = true,
         ?string $root = null,
+        ?string $sessionId = null,
     ) {
         if (preg_match(self::NAME_PATTERN, $name) !== 1) {
             throw new \InvalidArgumentException(
@@ -158,6 +173,7 @@ final class Schedule
         $this->enabled = $enabled;
         $this->persisted = $persisted;
         $this->root = $resolved;
+        $this->sessionId = $sessionId;
     }
 
     /**

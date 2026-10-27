@@ -165,6 +165,18 @@ verbs do not, because they persist consent-bearing rows that later turns will ac
 on. Enable, disable and delete write the file back before answering, so the change
 survives the session; on a `/loop` row they touch only memory and say so.
 
+## `/loop` on a served session
+
+In `candy-code serve` a `/loop` row means the same thing per session: the row
+remembers the id of the session that registered it, and the server's pump calls
+every open host at most once a second, firing only the rows stamped with its own
+id — a browser tab never runs another tab's loop, and rows carry no stamp the
+serve side ignores. The prompt queues as a follow-up exactly as in the TUI: it
+becomes the session's next turn when idle and waits behind a running turn when
+not. Closing a session — or the hub evicting its host — drops its rows, so a
+served loop dies with the session that promised it. The rate rides the pump's
+existing clock, never a timer per row, here either.
+
 ## See also
 
 - [PERMISSIONS.md](PERMISSIONS.md) — what each mode allows, and the headless

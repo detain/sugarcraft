@@ -14,11 +14,14 @@ use SugarCraft\Code\Background\ScheduleRegistry;
  *
  * The row it registers is EPHEMERAL: in the {@see ScheduleRegistry} but never
  * written to schedules.json, needing no fire lock (exactly one process can
- * know it exists), and dying with the TUI. Its prompt rides Chat's
- * `queuedPrompts` door — the same one settled `/bg` announcements use — so it
- * becomes the next turn when the session is idle and simply waits while a turn
- * is running. That is why `/loop` is NOT read-only-safe: it programs future
- * turns, which is a write against the session.
+ * know it exists), and dying with its host. On the TUI its prompt rides
+ * Chat's `queuedPrompts` door — the same one settled `/bg` announcements use —
+ * so it becomes the next turn when the session is idle and simply waits while
+ * a turn is running. On a served session the row is stamped with the owning
+ * session id and {@see \SugarCraft\Code\Host\SessionHost::tick()} fires only
+ * ITS rows, queueing the prompt behind any running turn (C-AGT-1.b). That is
+ * why `/loop` is NOT read-only-safe: it programs future turns, which is a
+ * write against the session.
  *
  * The interval grammar is a bare number of seconds or a number with an
  * `s`/`m`/`h`/`d` suffix; the floor and ceiling are {@see Schedule}'s, checked
@@ -68,6 +71,7 @@ final class LoopCommand implements HostCommand
                 prompt: $prompt,
                 nextDue: time() + $seconds,
                 persisted: false,
+                sessionId: $context->sessionId,
             );
             $registry->add($schedule);
         } catch (\InvalidArgumentException $e) {

@@ -254,6 +254,51 @@ final class ScheduleRegistry
     }
 
     /**
+     * @return list<Schedule> due EPHEMERAL rows stamped with this session id,
+     *                        registration order
+     *
+     * The served half of the `/loop` keying (C-AGT-1.b): one serve process
+     * hosts many sessions and one registry, so a host may fire only the loop
+     * rows that carry its own id. Rows with a null stamp belong to no host —
+     * the TUI registers those (its pump ignores the stamp and still fires
+     * every ephemeral row, unchanged) — and are never answered here. This is
+     * the memory-only mirror of {@see due()}; it takes no lock and consults
+     * no file, exactly like the half it keys.
+     */
+    public function dueEphemeralFor(string $sessionId, int $now): array
+    {
+        $due = [];
+        foreach ($this->ephemeral as $row) {
+            if ($row->sessionId === $sessionId && $row->isDue($now)) {
+                $due[] = $row;
+            }
+        }
+
+        return $due;
+    }
+
+    /**
+     * Drop every ephemeral row belonging to this session; returns how many went.
+     *
+     * A `/loop` row is already memory-only, so this is all the unregistration
+     * it needs: called from the host's release(), the loop dies with its
+     * session (and with the host process, which was always true). Persisted
+     * rows are none of this call's business — they outlive sessions by design.
+     */
+    public function removeEphemeralFor(string $sessionId): int
+    {
+        $dropped = 0;
+        foreach ($this->ephemeral as $name => $row) {
+            if ($row->sessionId === $sessionId) {
+                unset($this->ephemeral[$name]);
+                $dropped++;
+            }
+        }
+
+        return $dropped;
+    }
+
+    /**
      * Insert or replace a row. Duplicate names refuse — a name is an identity
      * (and a lock-file stem), silently shadowing one row with another would
      * let the second writer steal the first's clock.

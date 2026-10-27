@@ -271,6 +271,43 @@ final class ScheduleRegistryTest extends TestCase
         $this->assertCount(1, $registry->due(time()));
     }
 
+    public function testDueEphemeralForAnswersOneSessionsDueRowsOnly(): void
+    {
+        // C-AGT-1.b keying: one serve process, many tabs, one registry.
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
+        $registry->add(new Schedule(name: 'mine', everySeconds: 60, prompt: 'p', nextDue: 1, persisted: false, sessionId: 's'));
+        $registry->add(new Schedule(name: 'theirs', everySeconds: 60, prompt: 'p', nextDue: 1, persisted: false, sessionId: 't'));
+        $registry->add(new Schedule(name: 'unstamped', everySeconds: 60, prompt: 'p', nextDue: 1, persisted: false));
+        $registry->add(new Schedule(name: 'persisted', everySeconds: 60, prompt: 'p', nextDue: 1, root: $this->dir));
+        $registry->add(new Schedule(name: 'mine-later', everySeconds: 60, prompt: 'p', nextDue: 9_999_999_999, persisted: false, sessionId: 's'));
+        $registry->add(new Schedule(name: 'mine-paused', everySeconds: 60, prompt: 'p', nextDue: 1, persisted: false, enabled: false, sessionId: 's'));
+
+        $due = $registry->dueEphemeralFor('s', time());
+        $this->assertSame(['mine'], array_map(static fn (Schedule $row): string => $row->name, $due), 'due, enabled, MY stamp — nothing else; the file rows and the other tabs are not this call\'s answer');
+
+        $this->assertSame([], $registry->dueEphemeralFor('nobody', time()), 'a session with no rows gets none');
+        // Cadence alone still decides membership in the ungated view: the
+        // key is a filter over due(), never a second clock.
+        $this->assertContains('theirs', array_map(static fn (Schedule $row): string => $row->name, $registry->due(time())));
+    }
+
+    public function testRemoveEphemeralForDropsOneSessionsRowsAndAnswersCount(): void
+    {
+        $registry = ScheduleRegistry::atPath($this->path, $this->dir);
+        $registry->add(new Schedule(name: 'loop-1', everySeconds: 60, prompt: 'p', nextDue: 1, persisted: false, sessionId: 's'));
+        $registry->add(new Schedule(name: 'loop-2', everySeconds: 60, prompt: 'p', nextDue: 1, persisted: false, sessionId: 's'));
+        $registry->add(new Schedule(name: 'tab-t', everySeconds: 60, prompt: 'p', nextDue: 1, persisted: false, sessionId: 't'));
+        $registry->add(new Schedule(name: 'persisted', everySeconds: 60, prompt: 'p', nextDue: 1, root: $this->dir));
+
+        $this->assertSame(2, $registry->removeEphemeralFor('s'), 'both of the session\'s rows went');
+        $this->assertNull($registry->get('loop-1'));
+        $this->assertNull($registry->get('loop-2'));
+        $this->assertNotNull($registry->get('tab-t'), 'another tab keeps its loop');
+        $this->assertNotNull($registry->get('persisted'), 'file rows outlive sessions by design');
+
+        $this->assertSame(0, $registry->removeEphemeralFor('s'), 'the second sweep is empty, not an error');
+    }
+
     public function testADuplicateNameRefusesInEitherDirection(): void
     {
         $registry = ScheduleRegistry::atPath($this->path);

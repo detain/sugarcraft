@@ -56,6 +56,9 @@ final class ServerContext
 
     private readonly float $startedAt;
 
+    /** Whole-second stamp of the last loop advance (C-AGT-1.b), null until the first. */
+    private ?int $loopTickAt = null;
+
     /**
      * @param \Closure(): float          $clock
      * @param (\Closure(string): void)|null $log the server's log sink; internal failures reach the client as codes only, the cause comes here (ISS-057)
@@ -468,12 +471,32 @@ final class ServerContext
     /**
      * Fold every running turn's live events (the host's tick). Also notices a
      * host the hub evicted, and drops its feed.
+     *
+     * C-AGT-1.b adds the served `/loop` advance: every OPEN host gets its
+     * {@see \SugarCraft\Code\Host\SessionHost::tick()} — not only busy ones,
+     * because an idle session is exactly when a due loop wants to run. The
+     * whole sweep rides this pump's own clock at most once per wall-second
+     * ($loopTickAt), so a fast caller cannot spin loops faster than their
+     * cadence; no per-row timer is ever minted (E646). The TUI pump is
+     * unchanged — this path exists only because a served session has no Chat
+     * instance to run {@see \SugarCraft\Code\Chat::pumpSchedules()}.
      */
     public function pump(): void
     {
+        $now = (int) (($this->clock)());
+        $fireLoops = $now !== $this->loopTickAt;
+        if ($fireLoops) {
+            $this->loopTickAt = $now;
+        }
         foreach ($this->hub->openSessionIds() as $sessionId) {
             $host = $this->hub->get($sessionId);
-            if ($host !== null && $host->isBusy()) {
+            if ($host === null) {
+                continue;
+            }
+            if ($fireLoops) {
+                $host->tick($now);
+            }
+            if ($host->isBusy()) {
                 $this->feedFor($host);
                 $host->pump();
             }

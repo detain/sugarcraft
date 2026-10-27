@@ -13,6 +13,8 @@ use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\InteractiveTurn;
 use SugarCraft\Code\Backend\PendingAsk;
+use SugarCraft\Code\Backend\QueueMode;
+use SugarCraft\Code\Background\ScheduleRegistry;
 use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\App\BangShellResultMsg;
 use SugarCraft\Code\Chat;
@@ -887,9 +889,57 @@ final class SessionHost
         return $folded;
     }
 
-    /** Let go of the session's lock; the host must not be used after. */
+    /**
+     * Advance this session's due `/loop` rows (C-AGT-1.b) — the generic
+     * per-session clock a server calls on its own tick (C-AGT-4.e reuses it).
+     *
+     * Rate lives with the caller, never here: {@see
+     * \SugarCraft\Code\Protocol\ServerContext::pump()} calls this at most
+     * once per second riding ITS clock; minting a wall-clock timer per loop
+     * row would be an E646-shaped request-side ceiling in disguise. For each
+     * due row this host owns — only rows stamped with its own id, which is
+     * {@see ScheduleRegistry::dueEphemeralFor()}'s keying; another session's
+     * row (or an un-stamped TUI row) is never fired here — it re-arms the
+     * row's next due in memory, appends a notice row exactly as the TUI pump
+     * does, and hands the prompt to {@see submit()} as a
+     * {@see QueueMode::Followup}: it becomes the next turn when the session
+     * is idle and waits behind the running turn when it is not.
+     *
+     * @return int how many loop prompts fired
+     */
+    public function tick(int $now): int
+    {
+        $registry = $this->workspace->service(ScheduleRegistry::class);
+        if (!$registry instanceof ScheduleRegistry) {
+            return 0;
+        }
+
+        $fired = 0;
+        foreach ($registry->dueEphemeralFor($this->sessionId, $now) as $row) {
+            $registry->noteNextDue($row->name, $row->nextDueAfter($now));
+            $notice = Message::notice(Lang::t('host.loop.queued', ['name' => $row->name]));
+            $this->history[] = $notice;
+            $this->save();
+            $this->announceTranscriptRow($notice);
+            $this->submit($row->prompt, SubmitOptions::new()->withDelivery(QueueMode::Followup));
+            $fired++;
+        }
+
+        return $fired;
+    }
+
+    /**
+     * Let go of the session's lock and its `/loop` rows; the host must not be
+     * used after. Dropping the ephemeral rows keyed to this session is what
+     * makes a served loop die with its session (C-AGT-1.b) — a row nobody
+     * fires is a row nobody promised to fire, so close must clear the promise.
+     */
     public function release(): void
     {
+        $registry = $this->workspace->service(ScheduleRegistry::class);
+        if ($registry instanceof ScheduleRegistry) {
+            $registry->removeEphemeralFor($this->sessionId);
+        }
         $this->transcripts->flush();
         $this->lease?->release();
         $this->lease = null;
