@@ -136,9 +136,9 @@ So while 2 lanes are in review, the other 8 slots build steps from the next wave
 |---|---|---|
 | ✅ W1 (closed 2026-10-27) | 10 | C-SEC-1.a · C-SEC-2.a · C-TOOL-1.a · C-AGT-1.a · C-TOOL-1.c · C-EXT-1.a · C-MCP-1.a · C-SES-3.a · C-AGT-1.c · C-AGT-2.a |
 | ✅ W2 (closed 2026-10-27) | 10 | C-SEC-2.b · C-SEC-3.a · C-SES-3.b · C-PRV-1.a · C-SES-2.a · C-SES-3.c · C-SES-4.a · C-SES-5.a · C-AGT-2.c · C-EXT-1.b |
-| W3 | 10 | C-SEC-3.b · C-MCP-1.b · C-SES-5.b · C-CTX-1.a · C-PRV-1.b · C-PRV-1.c · C-SEC-4.b · C-SES-2.b · C-WEB-1.d · C-CTX-1.b |
+| ✅ W3 (closed 2026-10-27) | 10 | C-SEC-3.b · C-MCP-1.b · C-SES-5.b · C-CTX-1.a · C-PRV-1.b · C-PRV-1.c · C-SEC-4.b · C-SES-2.b · C-WEB-1.d · C-CTX-1.b |
 | ✅ W4 (closed 2026-10-27) | 10 | C-SES-2.c · C-SEC-4.a · C-SES-1.a · C-SES-5.d · C-TOOL-1.b · C-WEB-1.c · P-CTX.a · P-TABS.b · P-TABS.d · P-IMG.b |
-| W5 | 10 | C-WEB-1.a · C-WEB-1.b · P-CTX.c · P-CTX.d · P-TABS.a · P-MENU.a · P-CTX.b · P-IMG.c · P-TABS.h · C-TOOL-7.a |
+| ✅ W5 (closed 2026-10-27) | 10 | C-WEB-1.a · C-WEB-1.b · P-CTX.c · P-CTX.d · P-TABS.a · P-MENU.a · P-CTX.b · P-IMG.c · P-TABS.h · C-TOOL-7.a |
 | W6 | 10 | P-MENU.c · P-AGENT.a · P-TABS.c · P-MENU.b · P-CTX.f · C-TOOL-7.c · C-AGT-1.b · C-AGT-3.a · C-CTX-2.b · C-EXT-2.a |
 | W7 | 10 | P-CTX.e · P-AGENT.c · P-CTX.g · C-AGT-7.a · C-AGT-2.b · C-AGT-3.b · C-EXT-7.b · C-SEC-5.a · C-SES-6.a · C-SES-9.a |
 | W8 | 10 | P-MENU.d · P-AGENT.d · C-CTX-2.a · C-EXT-2.b · C-SES-4.b · C-SES-9.c · C-SES-9.d · C-WEB-3.a · C-WEB-3.b · C-WEB-3.c |
@@ -462,7 +462,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-1.a`
 
-#### C-PRV-1.b — Honest `/effort` and an honest launch tier
+#### ✅ a992413b0 C-PRV-1.b — Honest `/effort` and an honest launch tier
 - **Item:** C-PRV-1 (sources: PRV-2-P1) · fix · MAJOR · effort S
 - **What:** `Chat::handleEffortCommand()` (`Chat.php:12234-12310`) asks `EffortGate::verdict($provider, $engine->model())`. It refuses per model (`chat.effort.unsupported_model`) and takes its status shape from `EffortGate::shape()`. Correct …
 - **Files — create:** `candy-code/tests/Cli/LaunchEffortNoticeTest.php`
@@ -682,7 +682,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-CTX.a (W4)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-CTX.c`
 
-#### ✅ 967479a37 P-CTX.d — Chat context-snapshot producer (TurnRunner-held)
+#### ✅ 967479a37 P-CTX.d — Chat context-snapshot producer (TurnRunner-held) (erratum 2026-10-27: pick 967479a37 undisclosed +10 Chat-test widening disclosed at W5 wave review)
 - **Item:** P-CTX-BREAKDOWN (sources: owner pick) · feature · effort S
 - **What:** The pane must never measure in `view()`: `promptSectionSizes()` builds a Runtime, and the first call can touch disk. Follow TodoPane's "read, never fetched" law (`src/Tui/Components/TodoPane.php:103-115`): `TurnRunner` gains …
 - **Files — create:** `candy-code/src/App/ContextMeasuredMsg.php`
@@ -748,7 +748,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-TABS.h`
 
-#### C-TOOL-7.a — Background-shell registry nits
+#### ✅ ccd7c37b2 C-TOOL-7.a — Background-shell registry nits
 - **Item:** C-TOOL-7 (sources: SHL-1-P2, SHL-1-P3, SHL-1-P4) · fix · MINOR · effort M
 - **What:** Four fixes on one file family, kept in one lane so the registry is touched once. (1) Wire, don't delete, the dead `forgetHandles()` (`candy-code/src/Background/BackgroundShellRegistry.php:692`; zero callers). The registry …
 - **Files — create:** none
@@ -764,7 +764,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - protocol lanes: P-CTX.f, C-AGT-1.b (weld regenerates schema → SERVER.md → generated.ts once)
 - Bootstrap.php method claims: P-AGENT.a (workspace); C-TOOL-7.c (lspClient)
 
-#### P-MENU.c — Menu overlay seam: every frame paints, clamps and scans the open menu
+#### ✅ e3a84187d P-MENU.c — Menu overlay seam: every frame paints, clamps and scans the open menu
 - **Item:** P-MENU-REDO (sources: owner pick; latent bugs 1–3 above) · fix · major · effort M
 - **What:** **Root causes.** All three are read from source; the lane's regression tests must go red first. 1. `renderAgentDashboard()` overlays nothing and scans titles only (`src/Tui/Renderer.php:905-927`). Yet F10 …
 - **Files — create:** none
@@ -775,7 +775,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-IMG.b (W4), P-MENU.a (W5)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-menu.md` → `### P-MENU.c`
 
-#### P-AGENT.a — Live-agent registry: session scope + preset colour (k1-dorm#3)
+#### ✅ 953c01c9e P-AGENT.a — Live-agent registry: session scope + preset colour (k1-dorm#3)
 - **Item:** P-AGENT-ATTACH + P-SESSION-TABS (sources: k1-dorm#3, GAP-SES-12) · dormant-wire · effort M
 - **What:** **Session scope.** `AgentLiveRegistry` is ONE workspace service (`src/Cli/Bootstrap.php:1893`), and `apply()` (`src/Agents/Live/AgentLiveRegistry.php:125`) keeps no session. With several hosted Chats, tab A's strip would list tab …
 - **Files — create:** none
@@ -786,7 +786,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-TABS.a (W5)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-AGENT.a`
 
-#### P-TABS.c — SessionsPane component (vertical `+` / sessions / agents list)
+#### ✅ 940fea719 P-TABS.c — SessionsPane component (vertical `+` / sessions / agents list)
 - **Item:** P-SESSION-TABS + P-AGENT-ATTACH (sources: GAP-UI-N6; owner wording "a tab up top to open a new session … tabs for the running sessions under it"; OC2 vertical … · feature · effort M
 - **What:** `SessionsPane::renderModel(WindowList, Theme, int width, int rows)` draws the dockable pane form of the window list: row 0 is `＋ New session`; then one row per session tab: attention glyph, name, badge and summary (`⠋ step 4 · 2 …
 - **Files — create:** `candy-code/src/Tui/Components/SessionsPane.php`
@@ -797,7 +797,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-TABS.a (W5)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-TABS.c`
 
-#### P-MENU.b — `ShellMenu`: the five-menu tree
+#### ✅ 901f40d9a P-MENU.b — `ShellMenu`: the five-menu tree
 - **Item:** P-MENU-REDO (sources: owner pick) · feature · effort S
 - **What:** **Builder.** `ShellMenu::tree(?App $a = null, ?list<CommandSpec> $rows = null): MenuTree` builds the tree in "Proposed menu tree" from a nested `PLACEMENT` const keyed by command **name**. Dispatch can then go by name, and a …
 - **Files — create:** `candy-code/src/Tui/Menu/ShellMenu.php`
@@ -809,7 +809,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** R-MENU-1. Approve the five menus, the placements and hiding bare `/generate` from the menu (default: as drawn). — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-menu.md` → `### P-MENU.b`
 
-#### P-CTX.f — Protocol: `context.sources` categories
+#### ✅ a863fea41 P-CTX.f — Protocol: `context.sources` categories
 - **Item:** P-CTX-BREAKDOWN (sources: owner pick; PRM-12 web) · feature · effort S
 - **What:** `ContextSources::serialize()` (`src/Host/ContextSources.php:217-233`) adds `categories: [{key, label, tokens|null, share, sub:[{label, tokens}]}]` plus `buffer` and `mcpServers`. The `context.sources` breakdown schema …
 - **Files — create:** none
@@ -831,7 +831,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-7.c`
 
-#### C-AGT-1.b — Fire `/loop` on served sessions
+#### ✅ 2d45b868f C-AGT-1.b — Fire `/loop` on served sessions
 - **Item:** C-AGT-1 (sources: GAP-AUT-08, k3-sum (live defect), k3-dorm#1, p1-miss: schedules UX (`/loop` for served sessions)) · dormant-wire · MAJOR · effort M
 - **What:** Root cause: `LoopCommand` registers an ephemeral row (`src/Host/Commands/LoopCommand.php:65-72`), but `fireDue()` skips non-persisted rows (`ScheduleRegistry.php:395`), and the only ephemeral pump is `Chat::pumpSchedules()` …
 - **Files — create:** none
@@ -842,7 +842,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-1.a (W1)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-1.b`
 
-#### C-AGT-3.a — Preset `mcpServers` scopes `mcp_call`/`mcp_list`
+#### ✅ 0c051ee95 C-AGT-3.a — Preset `mcpServers` scopes `mcp_call`/`mcp_list`
 - **Item:** C-AGT-3 (sources: GAP-MCP-11, k2-dorm (`setAgentPreset`), k2-sum (MCP-11 ✅→🟡)) · dormant-wire · effort S
 - **What:** Today `AgentManager::resolveGrantedTools()` (`src/Agents/AgentManager.php:1496-1580`) filters `McpToolBridge`s by `mcpServers`, but the deferred dispatchers `McpCallTool`/`McpListTool` keep the launch `McpClient`. That client is …
 - **Files — create:** none
@@ -853,7 +853,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-3.a`
 
-#### C-CTX-2.b — Extract the turn-settle side work into one host-neutral gate
+#### ✅ 020772dca C-CTX-2.b — Extract the turn-settle side work into one host-neutral gate
 - **Item:** C-CTX-2 (sources: GAP-MEM-02w, k1-sum (b), k1-dorm#6) · dormant-wire · MAJOR · effort M
 - **What:** Today, auto-memory, the dream pass, prompt suggestion and auto-commit are gated only in `candy-code/src/Chat/Handlers/HandlesTurnCompletion.php:304-336`. Auto-commit's body lives in `Chat::scheduleAutoCommit()` …
 - **Files — create:** `candy-code/src/Host/TurnSettleWork.php`, `candy-code/tests/Host/TurnSettleWorkTest.php`
@@ -864,7 +864,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-2.b`
 
-#### C-EXT-2.a — Skill resources: `asset` loads, resource listing, `${CLAUDE_SKILL_DIR}`
+#### ✅ 376e9d0f1 C-EXT-2.a — Skill resources: `asset` loads, resource listing, `${CLAUDE_SKILL_DIR}`
 - **Item:** C-EXT-2 (sources: GAP-SKL-10, k2-dorm `loadSkillAsset`) · dormant-wire · effort M
 - **What:** **What's dormant.** `SkillLoader::loadSkillAsset()` (`SkillLoader.php:1054`, containment-checked through `ContainedPath::within`) has no caller. Read is jailed to the project root, so a user-tier skill's `scripts/` and …
 - **Files — create:** none
@@ -881,7 +881,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: P-CTX.e (handlePointer); C-AGT-7.a (subscriptions); C-AGT-2.b (applyCommandResult (none — the restore lives in the settle trait), ctor, reviewTurn, togglePermissionMode)
 - Bootstrap.php method claims: C-SEC-5.a (new methods beside trustProjectMcp)
 
-#### P-CTX.e — Shell wiring: docked Context pane + clickable status-bar meter
+#### ✅ 66559688e P-CTX.e — Shell wiring: docked Context pane + clickable status-bar meter
 - **Item:** P-CTX-BREAKDOWN (sources: owner pick) · feature · effort M
 - **What:** **The pane.** Add `Pane::Context` (dockable, icon `◔`, `tabCycle()`), a `MenuBar::PANE_TABS` entry, and a `Tui\Renderer::renderPane()` arm (`src/Tui/Renderer.php:1944`) through `keyed()`. `ContextPane::render(App …)` builds the …
 - **Files — create:** none
@@ -892,6 +892,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-IMG.b (W4), P-CTX.c (W5), P-CTX.d (W5)
 - **Ruling:** auto-dock the Context pane once on ≥120-col terminals after the first reply (proposed), or leave it off until the user docks it? — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-CTX.e`
+- **Note (2026-10-27):** auto-dock ≥120 honoured (R-MENU family, decided ON); first-dock fires once per process after the ≥80 pane floor lands the pane at ~160 cols; refusal retries on later resize.
 
 #### P-AGENT.c — Protocol: `agents.list` colour + `agents.message` mode
 - **Item:** P-AGENT-ATTACH (sources: k1-dorm#3, CLAW-new#7) · feature · effort S
@@ -904,7 +905,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-AGENT.a (W6)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-AGENT.c`
 
-#### P-CTX.g — Web: context meter + category breakdown + cache %
+#### ✅ 1ce007b2d P-CTX.g — Web: context meter + category breakdown + cache %
 - **Item:** P-CTX-BREAKDOWN (sources: PRM-12 web; GAP-MOD-15w cache half; MOD-19 web; MOD-N3 web) · feature · effort M
 - **What:** `ContextPanel.vue` gets the same model as the TUI box: a stacked category bar; category rows with expandable sub-rows (layers, files, MCP servers, largest messages); the "not sent" MCP-instructions row; a hint naming `/context …
 - **Files — create:** none
@@ -915,7 +916,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-CTX.f (W6)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-CTX.g`
 
-#### C-AGT-7.a — Schedule hygiene: watch tick, bypass ceiling, run limit
+#### ✅ f2db15f0a C-AGT-7.a — Schedule hygiene: watch tick, bypass ceiling, run limit
 - **Item:** C-AGT-7 (sources: AUT-1-P2, AUT-1-P3, AUT-1-P4) · fix · MINOR/NIT · effort M
 - **What:** P2: `Chat::subscriptions()` arms the 2 s tick only when a row is enabled or a daemon is active (`src/Chat.php:18118-18128`), so a row hand-written after an empty launch never fires in that TUI. Add a slow 30 s watch tick, armed …
 - **Files — create:** none
@@ -926,7 +927,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-1.a (W1), C-AGT-1.b (W6)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-7.a`
 
-#### C-AGT-2.b — Review turns run read-only (plan clamp)
+#### ✅ bb1f488d1 C-AGT-2.b — Review turns run read-only (plan clamp)
 - **Item:** C-AGT-2 (sources: GIT-1-P2) · fix · MINOR · effort M
 - **What:** Root cause: the "report, do not edit" mandate is prompt prose. The review turn runs under whatever mode the session holds (`src/Chat.php:11798` plain `submit()`), and the only test pins docblock text …
 - **Files — create:** none
@@ -948,7 +949,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-3.a (W6)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-3.b`
 
-#### C-EXT-7.b — `bundles install`: refuse dot names, strip `.git` after clone
+#### ✅ 066d6e8ce C-EXT-7.b — `bundles install`: refuse dot names, strip `.git` after clone
 - **Item:** C-EXT-7 (sources: PLG-1-P5) · fix · NIT · effort S
 - **What:** `Subcommands.php:1692` accepts a leading-dot manifest name, which `BundleDiscovery::scanContainer`'s glob never finds, so the bundle installs invisibly. The git arm keeps `.git` while the path arm strips it (docblock :1606-1612). …
 - **Files — create:** none
@@ -970,7 +971,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-5.a`
 
-#### C-SES-6.a — A phar renamed without `.phar` boots
+#### ✅ 60bc8f0a4 C-SES-6.a — A phar renamed without `.phar` boots
 - **Item:** C-SES-6 (sources: DST-1-P1) · fix · MINOR · effort M
 - **What:** **Root cause.** The stub derives the archive identity only from `Phar::running(false)`, which is `''` in stub context, or from a `.phar` suffix on `__FILE__` (`candy-code/bin/candy-code:32-37`). The usual `~/bin/candy-code` …
 - **Files — create:** none
@@ -981,7 +982,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-6.a`
 
-#### C-SES-9.a — Ledger: no resurrection, `ts` index, one-snapshot rollups
+#### ✅ 98b862e9f C-SES-9.a — Ledger: no resurrection, `ts` index, one-snapshot rollups
 - **Item:** C-SES-9 (sources: SES-1-P5, SES-1-P6, OBS-3-P2) · fix · MINOR/NIT · effort S
 - **What:** **SES-1-P5.** `appendUsageRecord()` recreates a missing row as `candy-code/unknown` (`src/Session/EnhancedSessionStore.php:2436-2438`), so a late settle resurrects a deleted session. The recreate exists on purpose, for the lazy …
 - **Files — create:** none
@@ -1052,7 +1053,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-4.a (W2)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-4.b`
 
-#### C-SES-9.c — Phar installs ship bundled presets; build-phar docblocks truthful
+#### ✅ 5badf6d2f C-SES-9.c — Phar installs ship bundled presets; build-phar docblocks truthful
 - **Item:** C-SES-9 (sources: DST-1-P2, DST-1-P3) · dormant-wire · MINOR · effort S
 - **What:** **Root cause.** `AgentPresetRegistry::bundledPresetsDirectory()` calls `realpath()` on a `phar://` path, which returns false, so the method answers null (`src/Agents/AgentPresetRegistry.php:390-395`). `isBundledPresetPath()` …
 - **Files — create:** none

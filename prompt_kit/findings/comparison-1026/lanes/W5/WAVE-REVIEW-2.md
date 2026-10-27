@@ -1,0 +1,10 @@
+# WAVE 5 review — round 2 (tip 0f6dd7506; reviewed cure 86eab474c + evidence weld 8569082e7 + carry-note 0f6dd7506 atop d4d3e808c)
+
+VERDICT: CLEAN (W5 may close; §3/§4 close marks, waves_closed, durations/figure re-pin owed to a welder). Sandbox disclosure: php execution and git worktree/branch/merge-base are DENIED here — runtime gates replaced by static proof; none contradicted a green run.
+
+1. MAJOR cure LANDS. CANDY_CODE_REF spelling removed from both DOCKER.md mention sites (now "source-ref build argument" + link defers to ENVIRONMENT.md#build-time-image-arguments, :39/:155); repo grep shows the name only in ENVIRONMENT.md (roster), Dockerfile, the test, .github/tools/prompt_kit — no mention surface names it. Guard logic re-read: mentionSurfaces() (:1003) excludes ENVIRONMENT.md; both round-1 red legs (:1225/:1273) key off mentionedNames() ⇒ clear; tabulatedNames() is table-rows-only ⇒ prose section can't poison the oracle. New pin testTheBuildTimeImageArgumentIsRosteredOnThePageInProse (+1T → 37T shape consistent) asserts contains(page)+notContains(tabulatedNames()), structurally valid, adds no duplicated helper (DuplicatedTestHelperDrift safe).
+2. Prose honest: Dockerfile:89 `ARG CANDY_CODE_REF=local`, :90 echo in install RUN, :97 BUILD-REF write — every sentence disk-true. Authors detain A/C, zero trailers.
+3. Cure families all welded: ReadPathCensus 9e04380a7, TreeWideGuardRoster 6124edcc9+30d4f91cb — ancestors of tip.
+4. Claims hold: sampled 967479a37, c6f3e3f56+e30d7f4ee, ccd7c37b2+87dba649c — all on master; all 10 §4 steps ✅; no §6 open ruling gates W5.
+5. Hygiene: refs/heads + .git/worktrees hold only four live later-wave lanes (C-AGT-2.b/C-AGT-7.a/P-AGENT.a/P-CTX.e) — zero W5 residue; cure touches no generated file.
+6. Carries (non-blocking): P-CTX.d §4 dated erratum for 967479a37's +10 Chat-test widening STILL ABSENT (lead assigned post-final-welder — wave-close owes it); C-TOOL-7.a 4-commit framing NIT unchanged. Unverifiable-here: the phpunit filters, gen-*-docs --check (no inputs touched — expect rc0), vitest/dist (no W5 web commits since).
