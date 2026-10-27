@@ -220,17 +220,33 @@ final class MenuReachabilityTest extends TestCase
         }
     }
 
-    public function testTheMediaFormOpensThroughF10AtEightyColumns(): void
+    public function testTheMediaFormIsReachableThroughTheFold(): void
     {
         // R-MENU-1: the bare /generate command is hidden from the palette; the
-        // menu row IS its door. The F10 → → Enter walk the README advertises:
-        // F10 opens Session, two rights walk the title ring to Tools (an
-        // update chain composes no fold, so the ring is the full five-menu
-        // tree), Enter chooses its first row — and the choice raises exactly
-        // the command the palette row and Ctrl+D raise: a closure emitting
+        // menu row IS its door. The README advertises F10 → → ENTER — and AT
+        // 80 COLUMNS THAT MEANS THE FOLD: the chain repaints 80 first, so
+        // compose() records the fold and the title ring the keys walk is the
+        // painted one, "Session Agent »" — the third root is the `»` slot,
+        // not Tools. The advertised keystroke therefore needs TWO Enters at
+        // this width: the first ENTERS the fold's shed Tools row (a submenu —
+        // chosen stays null, the cursor path grows one level), the second
+        // CHOOSES cmd:generate-form. The choice raises exactly the command
+        // the palette row and Ctrl+D raise: a closure emitting
         // OpenMediaFormMsg, which the update loop delivers one hop later
         // (AppModelTest's law).
+        $this->repaint(80);
         $app = $this->barApp();
+
+        $titles = array_keys(TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_TITLE_ZONE_PREFIX));
+        sort($titles);
+        self::assertSame(
+            ['menu:1', 'menu:2', 'menu:3'],
+            $titles,
+            'the 80-col chrome pass paints Session, Agent and the » fold — three titles, not five',
+        );
+        $folded = MenuBar::tree();
+        self::assertCount(3, $folded->menus, 'the fold replaced the five-title ring at 80 cols');
+        self::assertSame(MenuBar::MORE_MENU_ID, $folded->menus[2]->id, 'the third painted title IS the » fold');
 
         [$app] = $app->update(new KeyMsg(KeyType::F10));
         self::assertSame(1, MenuBar::getActiveMenu(), 'F10 opened the first shell menu');
@@ -239,8 +255,18 @@ final class MenuReachabilityTest extends TestCase
         self::assertSame(2, MenuBar::getActiveMenu());
 
         [$app] = $app->update(new KeyMsg(KeyType::Right));
-        self::assertSame(3, MenuBar::getActiveMenu(), 'two rights land on Tools');
-        self::assertSame(0, MenuBar::getActiveItem(), 'Tools row 0 is Generate image');
+        self::assertSame(3, MenuBar::getActiveMenu(), 'two rights land on the » fold, not on Tools directly');
+        $under = MenuBar::tree()->node(MenuBar::cursor()->absolutePath());
+        self::assertNotNull($under, 'the fold root has a highlighted row');
+        self::assertSame('menu:tools', $under->id, 'the fold row under the cursor is the shed Tools submenu');
+
+        [$app, $cmd] = $app->update(new KeyMsg(KeyType::Enter));
+        self::assertNull($cmd, 'Enter on a submenu row enters it — it must not choose or dispatch');
+        self::assertSame(3, MenuBar::getActiveMenu(), 'the menu stays open one level deeper');
+        self::assertCount(2, MenuBar::cursor()->rows, 'Tools is now an entered level of the cursor path');
+        $under = MenuBar::tree()->node(MenuBar::cursor()->absolutePath());
+        self::assertNotNull($under, 'the entered Tools menu has a highlighted row');
+        self::assertSame('cmd:generate-form', $under->id, 'Tools row 0 is Generate image');
 
         [$app, $cmd] = $app->update(new KeyMsg(KeyType::Enter));
         self::assertSame(0, MenuBar::getActiveMenu(), 'choosing closes the menu');
@@ -248,6 +274,6 @@ final class MenuReachabilityTest extends TestCase
 
         [$app] = $app->update($cmd());
 
-        self::assertNotNull($app->mediaForm, 'F10 → → Enter must open the interactive generation form');
+        self::assertNotNull($app->mediaForm, 'the 80-col fold walk F10 → → ENTER ENTER must open the interactive generation form');
     }
 }
