@@ -58,17 +58,10 @@
     "P-TABS.d",
     "P-TABS.h",
     "C-TOOL-7.a",
-    "C-SES-6.a"
+    "C-SES-6.a",
+    "C-EXT-2.a"
   ],
   "inflight": {
-    "C-EXT-2.a": {
-      "stage": "held-at-stop",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-EXT-2.a",
-      "branch": "cc/C-EXT-2.a",
-      "session": "ses_e81fd46ecfferx3536ffHYjUuH",
-      "note": "picks 376e9d0f1+39e523d36 + dirname cure 7a8bb5cf6 ON MASTER; evidence+\u00a74 HELD pending ReadPathCensus cure (C-TOOL-7.a \u00a71.8 miss: BackgroundShellRegistry scandir 2->4, NAMES_ONLY verdicts for :548+:568 per lanes/C-TOOL-7.a/FINDING-readpath-census.md). DUR owed: SkillToolAssetTest 13 methods. Next welder completes: cure-roster pick + C-EXT-2.a evidence ->59"
-    },
     "P-AGENT.a": {
       "stage": "build",
       "round": 1,
@@ -258,13 +251,11 @@
       "FINDING": "READPATH CENSUS RED (see carries + lanes/C-TOOL-7.a/FINDING-readpath-census.md): chain adds 2 scandir sinks (:548/:568) with no ReadPathCensusTest re-arm -> testTheCensusIsDerivedFromSrcAndFullyClassified RED on master (expected 2 vs live 4)"
     },
     "C-EXT-2.a": {
-      "status": "HELD \u2014 picks + cure on master, evidence commit + \u00a74 mark WITHHELD at the STOP rule",
-      "master_first_pick": "376e9d0f1",
-      "picks": "118f8100f->376e9d0f1, 0c3ed3a6b->39e523d36",
-      "cure": "7a8bb5cf6 (SkillTool.php :325/:529 dirname premise comments, comment-only, php -l clean, zero non-comment diff lines)",
-      "gates": "SkillTool|SkillLoader 134T/397A EXACT (report claim confirmed; +3T/+14A over r1 131T/383A); ReadPathCensus|PromptStability 36T/1020A with 1F = C-TOOL-7.a's un-armed scandir roster (NOT this lane's key); five-guard 133T/15654A ONLY staleness pair; gen-tool-docs --check rc=0 up to date",
-      "durations": "NEW FILE owed to the gate list: candy-code/tests/Tools/BuiltIn/SkillToolAssetTest.php (13 test methods)",
-      "prune": "NOT pruned \u2014 branch cc/C-EXT-2.a + worktree /home/sites/cc-cmp-C-EXT-2.a intact pending the stop ruling"
+      "master": "376e9d0f1",
+      "picks": "376e9d0f1 + 39e523d36 (earlier call) + dirname cure 7a8bb5cf6",
+      "note": "evidence completion \u2014 ReadPathCensus re-armed by cure-roster weld",
+      "gates": "SkillTool|SkillLoader 134T/397A OK; ReadPathCensus|PromptStability 36T/1024A OK; five-guard 133T pair-only (25,537 vs 26,043)",
+      "durations_owed": "NEW candy-code tests/Tools/BuiltIn/SkillToolAssetTest.php (13 methods) \u2014 gate duty"
     },
     "C-SES-6.a": {
       "master_first_pick": "60bc8f0a4",
@@ -303,6 +294,7 @@
     "C-TOOL-7.a welded (ccd7c37b2/b4d89cdce/f98e9cc32/87dba649c, weld see weld_notes) \u2014 \u00a74 marked \u2705 ccd7c37b2 UNSTAGED; welded 57->58; NIT open: recorder markers .outd/.errd land at umask 0644 inside the 0700 dir (doctrine 0600) \u2014 optional sinkFiles() pre-create at closeout",
     "C-TOOL-7.a FINDING (MAJOR, weld-time): ReadPathCensusTest::testTheCensusIsDerivedFromSrcAndFullyClassified RED \u2014 Background/BackgroundShellRegistry.php|scandir roster 2 vs live 4 (sweep sinks :548 + :568 un-armed, \u00a71.8 in-step law). Fixer owed; proven not-foreign (2==2 green at 85afa9f90) and not-C-EXT-2.a (its SkillLoader DirectoryIterator row satisfied).",
     "C-EXT-2.a welded-partial: picks 376e9d0f1+39e523d36 + cure 7a8bb5cf6 on master; \u00a74 mark + evidence commit HELD, welded stays 58 (NOT 59); branch/worktree kept; durations row owed for tests/Tools/BuiltIn/SkillToolAssetTest.php (13 methods).",
-    "2026-10-27: origin/master mirrors local (owner-side sync incl push of our picks + CI .vhs gif re-renders); 3 merge commits in master (316b36acf/eb20c154e/8c7f6b4f2) carry ZERO code delta \u2014 accepted, recorded; NEVER pull/push from lanes"
+    "2026-10-27: origin/master mirrors local (owner-side sync incl push of our picks + CI .vhs gif re-renders); 3 merge commits in master (316b36acf/eb20c154e/8c7f6b4f2) carry ZERO code delta \u2014 accepted, recorded; NEVER pull/push from lanes",
+    "C-EXT-2.a: SkillPromptLine.php:104 dirname falsehood \u2014 closeout fix (report-only seam, pick stays on master)"
   ]
 }
