@@ -11,7 +11,8 @@
     "C-AGT-2.a",
     "C-AGT-1.a",
     "C-SES-4.a",
-    "C-SES-3.c"
+    "C-SES-3.c",
+    "C-AGT-2.c"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -36,35 +37,28 @@
       "session": null
     },
     "C-SES-3.b": {
-      "stage": "fix",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SES-3.b",
       "branch": "cc/C-SES-3.b",
       "session": null,
-      "note": "fix r2 running ses_e840550d4 (finally-pin + revoke bool NIT)"
+      "note": "tip 46ca811ca r2 CLEAN; weld queued; welder re-run gates (reviewer php denied)"
     },
     "C-SES-2.a": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SES-2.a",
       "branch": "cc/C-SES-2.a",
-      "session": "ses_e841b992fffeYG5E2v3ZOThtPD"
+      "session": null,
+      "note": "tip 94e9b7385 base 7949cc23d, 3 files no new test file"
     },
     "C-SES-5.a": {
-      "stage": "review",
-      "round": 1,
+      "stage": "fix",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SES-5.a",
       "branch": "cc/C-SES-5.a",
       "session": null,
-      "note": "tip 6b4474a5b base cf12e96fb; +5 methods weld re-pin carry"
-    },
-    "C-AGT-2.c": {
-      "stage": "fix",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-AGT-2.c",
-      "branch": "cc/C-AGT-2.c",
-      "session": null,
-      "note": "r1 FINDINGS: NIT i-flag regex + gates must run; DOC-ROW GETTING-STARTED.md:140 carry closeout"
+      "note": "tip 6b4474a5b; fix MINOR curl-less assert fatality; NIT declined"
     },
     "C-EXT-1.b": {
       "stage": "build",
