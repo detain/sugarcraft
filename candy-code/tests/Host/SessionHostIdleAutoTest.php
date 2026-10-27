@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Host;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
+use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\ReportsContextWindow;
@@ -26,8 +27,10 @@ use SugarCraft\Code\Usage;
  * through the machinery that already exists.
  *
  * {@see SessionHost::armIdleAutoCompaction()} replaces the periodic TUI tick
- * with the one clock this host has: a one-shot alarm at the end of the idle
- * window armed when a prompt is accepted. The callback is the whole test
+ * with the two clocks this host has — the instant a prompt is accepted and
+ * the instant a turn settles (C-CTX-6.a) — as one single-slot alarm at the
+ * end of the idle window, re-armed from the later stamp. The callback is the
+ * whole test
  * surface here (invoked through reflection, never by real sleep): it re-
  * derives every condition — clock identity, breaker, cap, latch, tier — and
  * passes ONLY into {@see SessionHost::requestAheadOfNeed()}, the block the
@@ -47,7 +50,7 @@ final class SessionHostIdleAutoTest extends TestCase
 
     private EnhancedSessionStore $store;
 
-    /** @var list<SessionHost> hosts whose one-shot alarm must not outlive the test */
+    /** @var list<SessionHost> hosts whose idle alarm must not outlive the test */
     private array $armedHosts = [];
 
     protected function setUp(): void
@@ -253,6 +256,99 @@ final class SessionHostIdleAutoTest extends TestCase
         self::assertSame(0, $backend->summaryCalls, 'nothing was paid for');
     }
 
+    // ── C-CTX-6.a: the watch survives the turn ───────────────────────────────
+
+    /**
+     * The one-shot fired while a turn owned the transcript. The old shape
+     * nulled the alarm and returned — the fold the opt-in exists to make was
+     * lost for the rest of the idle, and a long turn simply ate it. The alarm
+     * re-arms from a busy fire, exactly as the TUI's tick simply re-checks
+     * the next minute; paying and dispatching still wait for the verdict.
+     */
+    public function testAnAlarmThatFiresIntoARunningTurnReArmsItself(): void
+    {
+        $backend = new IdleAutoBackend(88_000, str_repeat('z', 60_000), self::idleSummaryReply());
+        $host = $this->host($backend, self::autoOn());
+        $this->armedHosts[] = $host;
+        self::setIdleHistory($host);
+        $stamp = new \DateTimeImmutable('-2 hours');
+        self::stampIdlePromptAt($host, $stamp);
+
+        // The timer's real closure nulls the slot BEFORE judging; mirror
+        // that, then run the callback body with a turn in flight.
+        self::clearAlarm($host);
+        self::setBusy($host, new CancellationToken());
+
+        self::fire($host, $stamp);
+
+        self::assertNotNull(self::timer($host), 'a busy fire hands the watch to the next gap, never drops it');
+        self::assertNull(self::held($host), 'the busy fire itself makes no request');
+        self::assertSame(0, $backend->summaryCalls, 'and it pays for nothing');
+        self::assertSame(0, $backend->turnCalls, 'and it dispatches no turn');
+    }
+
+    /**
+     * The verdict side of the same fix: idleness counts from the LATER of
+     * the two activity stamps. A session whose turn settled moments ago is
+     * not idle — folding it off the prompt stamp alone would bill the
+     * summarisation a moment after the user watched a reply land, counting
+     * the turn itself as silence.
+     */
+    public function testTheAlarmMeasuresIdlenessFromTheSettle(): void
+    {
+        $backend = new IdleAutoBackend(88_000, str_repeat('z', 60_000), self::idleSummaryReply());
+        $host = $this->host($backend, self::autoOn());
+        $this->armedHosts[] = $host;
+        self::setIdleHistory($host);
+        $stamp = new \DateTimeImmutable('-2 hours');
+        self::stampIdlePromptAt($host, $stamp);
+
+        self::setBusy($host, $turn = new CancellationToken());
+        self::settleTurn($host, $turn, Message::assistant('settled at last'));
+
+        // Wind the prompt stamp back to the pre-turn hour and drop the
+        // settle-armed alarm: the fire below is judged purely on the stamps.
+        self::clearAlarm($host);
+        self::stampIdlePromptAt($host, $stamp);
+
+        self::fire($host, $stamp);
+
+        self::assertNull(self::held($host), 'a session whose turn just settled is not an idle session');
+        self::assertSame(0, $backend->summaryCalls, 'and the fold waits its window from the settle');
+    }
+
+    /**
+     * Every settle re-arms, single-slot: a busy fire had already handed the
+     * watch along; the settle replaces that alarm with one measured from
+     * this instant, and the replaced one is cancelled, not stacked.
+     */
+    public function testEverySettleReArmsTheWatch(): void
+    {
+        $backend = new IdleAutoBackend(88_000, str_repeat('z', 60_000), self::idleSummaryReply());
+        $host = $this->host($backend, self::autoOn());
+        $this->armedHosts[] = $host;
+        self::setIdleHistory($host);
+        $stamp = new \DateTimeImmutable('-2 hours');
+        self::stampIdlePromptAt($host, $stamp);
+
+        self::clearAlarm($host);
+        self::setBusy($host, $turn = new CancellationToken());
+        self::fire($host, $stamp);
+        $refired = self::timer($host);
+        self::assertNotNull($refired, 'the busy fire kept the watch alive to see the settle');
+
+        self::settleTurn($host, $turn, Message::assistant('the reply the alarm waited through'));
+
+        $settled = self::timer($host);
+        self::assertNotNull($settled, 'the settle re-arms — one idle window from NOW, not from the prompt');
+        self::assertNotSame($refired, $settled, 'and the fire-carried alarm is replaced, never left to stack');
+
+        $anchor = (new \ReflectionProperty(SessionHost::class, 'lastSettledAt'))->getValue($host);
+        self::assertInstanceOf(\DateTimeImmutable::class, $anchor, 'the settle leaves its stamp behind');
+        self::assertNull(self::held($host), 're-arming is not folding: nothing is paid for yet');
+        self::assertSame(0, $backend->summaryCalls);
+    }
+
     // ── fixtures ─────────────────────────────────────────────────────────────
 
     private static function autoOn(): CompactorConfig
@@ -334,6 +430,32 @@ final class SessionHostIdleAutoTest extends TestCase
     private static function fire(SessionHost $host, ?\DateTimeImmutable $markedAt): void
     {
         (new \ReflectionMethod(SessionHost::class, 'onIdleAutoCompaction'))->invoke($host, $markedAt);
+    }
+
+    /** Mirror the timer closure's own first move: the slot is empty while judging. */
+    private static function clearAlarm(SessionHost $host): void
+    {
+        $timer = self::timer($host);
+        if ($timer !== null) {
+            Loop::cancelTimer($timer);
+            (new \ReflectionProperty(SessionHost::class, 'idleAutoTimer'))->setValue($host, null);
+        }
+    }
+
+    private static function setBusy(SessionHost $host, CancellationToken $turn): void
+    {
+        (new \ReflectionProperty(SessionHost::class, 'turn'))->setValue($host, $turn);
+    }
+
+    /**
+     * Run a turn's settle through the host's own settle path with a resolved
+     * reply — the synchronous shape the double's completeAsync produces.
+     */
+    private static function settleTurn(SessionHost $host, CancellationToken $turn, Message $reply): void
+    {
+        $generation = (new \ReflectionProperty(SessionHost::class, 'generation'))->getValue($host);
+        $promise = \React\Promise\resolve(new AssistantMsg($reply));
+        (new \ReflectionMethod(SessionHost::class, 'settleWith'))->invoke($host, $promise, $generation, $turn);
     }
 
     private static function timer(SessionHost $host): ?object

@@ -140,6 +140,15 @@ final class SessionHost
     private ?\DateTimeImmutable $lastPromptAt = null;
 
     /**
+     * When the last turn settled (C-CTX-6.a): the second clock of the idle
+     * watch. A session whose turn just ended has NOT been idle since the
+     * prompt that started it — the fold verdict measures from whichever of
+     * the two stamps is later, the served mirror of the TUI tick re-deriving
+     * idleness from its activity clock at every check.
+     */
+    private ?\DateTimeImmutable $lastSettledAt = null;
+
+    /**
      * The ahead-of-need summary of roadmap 2.10, host edition (ISS-064): the
      * mirrors the TUI's `$backgroundSummary` — requested beside the turn at
      * the 70% reminder tier so the 85% tier can splice model-written records
@@ -158,10 +167,13 @@ final class SessionHost
     /**
      * The CTX-5 idle auto-compaction watch, served-host edition. The TUI
      * re-derives its verdict from a periodic tick because it has a keystroke
-     * stream to notice; this host has one clock that matters — the instant
-     * the last prompt was accepted — so a single one-shot timer at the end
-     * of the idle window is the whole watch. Every condition lives in the
-     * callback ({@see onIdleAutoCompaction()}), which fires a pure state
+     * stream to notice; this host has two clocks that matter — the instant
+     * the last prompt was accepted and the instant the last turn settled
+     * (C-CTX-6.a) — so the whole watch is one alarm, re-armed from whichever
+     * stamp is later: on every accepted prompt, on every settle, and on an
+     * alarm that fires into a running turn instead of being lost with it.
+     * Every condition lives in
+     * the callback ({@see onIdleAutoCompaction()}), which fires a pure state
      * check and never aborts work in flight — the E646 law, unchanged: the
      * fold is a money decision, and a timer is allowed to re-ask whether
      * the money is worth spending, not to kill a request already made.
@@ -713,8 +725,11 @@ final class SessionHost
     }
 
     /**
-     * (Re-)arm the CTX-5 idle auto-compaction watch. One shot per accepted
-     * prompt: a fresh submit replaces the deadline (cancel first — a user
+     * (Re-)arm the CTX-5 idle auto-compaction watch. Called from every event
+     * that RE-STARTS the idle window: an accepted prompt, a settled turn, and
+     * an alarm that fired into a running turn (C-CTX-6.a — dropping the watch
+     * on a busy fire forfeits the fold the opt-in exists to make). Each call
+     * replaces the deadline (cancel first — a user
      * who returned must not leave an orphan alarm that fires against the
      * NEXT quiet gap and charges for it to the wrong window), and the
      * opt-out shape never arms at all, so the default-off default costs a
@@ -763,9 +778,22 @@ final class SessionHost
     private function onIdleAutoCompaction(?\DateTimeImmutable $markedAt): void
     {
         // The user returned — a later prompt re-stamped the clock (and
-        // re-armed) — or a turn owns the transcript right now. Either way
-        // this is no longer an idle fold; the ordinary tiers take it.
-        if ($this->lastPromptAt !== $markedAt || $this->isBusy()) {
+        // re-armed) — so this is no longer an idle fold; the ordinary tiers
+        // take it. The stamp identity alone says it: every event that moves
+        // the window re-arms, so a live alarm always carries the current
+        // prompt stamp.
+        if ($this->lastPromptAt !== $markedAt) {
+            return;
+        }
+
+        // C-CTX-6.a: a running turn is a momentary silence, not the end of
+        // the watch. The TUI's tick simply re-checks the next minute and
+        // loses nothing; this one-shot hands itself to the next gap with the
+        // re-arm below, so the fold is judged from the settle instead of
+        // forfeited to the turn that outlived the alarm.
+        if ($this->isBusy()) {
+            $this->armIdleAutoCompaction();
+
             return;
         }
 
@@ -783,6 +811,17 @@ final class SessionHost
             return;
         }
 
+        // Idle since the LATER of the two activity stamps — the prompt, or
+        // the settle of the turn that ran after it (C-CTX-6.a). Measuring
+        // from the prompt alone would count the turn itself as silence and
+        // bill a fold moments after a reply landed.
+        $idleAnchor = $this->lastPromptAt;
+        if ($this->lastSettledAt !== null
+            && ($idleAnchor === null || $this->lastSettledAt > $idleAnchor)
+        ) {
+            $idleAnchor = $this->lastSettledAt;
+        }
+
         // The tier itself, measured exactly as submit() measures it, AND-ed
         // with the shared idle clock so one policy answers both verdicts.
         if (!IdleCompactionPolicy::shouldAutoCompact(
@@ -791,7 +830,7 @@ final class SessionHost
                 $this->meter()->limit($this->backend()),
                 CompactionService::tierTokenCount($this->estimate($this->history), $this->history),
             ),
-            $this->lastPromptAt,
+            $idleAnchor,
             $config->idleAuto,
             idleSeconds: $config->idleOfferSeconds,
         )) {
@@ -2080,6 +2119,15 @@ final class SessionHost
             // a wake left un-drained across release() would drop them.
             $this->pumpRuntimeNotices();
             $this->releaseQueue();
+
+            // C-CTX-6.a: settling is the event that RE-STARTS the idle clock
+            // when nobody is watching — stamp it and re-arm so the fold is
+            // measured one idle window from this reply, never from the
+            // prompt of the turn that just ate the previous alarm. The arm
+            // cancels first, so a busy-fire alarm this settle supersedes is
+            // replaced, never stacked: the watch stays single-slot.
+            $this->lastSettledAt = new \DateTimeImmutable();
+            $this->armIdleAutoCompaction();
 
             // W7a-3: a session with a live `/goal` is not done yet — the title
             // model judges this turn and the agent goes back to work until the
