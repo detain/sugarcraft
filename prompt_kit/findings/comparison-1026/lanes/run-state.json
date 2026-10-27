@@ -1,5 +1,5 @@
 {
- "welded": 52,
+ "welded": 53,
  "inflight": {
   "C-TOOL-7.a": {
    "stage": "fix",
@@ -16,14 +16,6 @@
    "branch": "cc/P-CTX.f",
    "session": "weld-queued",
    "note": "RUN-STATE ROUND-TRIP LOSS RE-ADDED @1013@ (lane verified on disk: tip 827e37702, clean, REVIEW-1.md present, r1 CLEAN). WELD: protocol regen trio + dist-if-changed; gates ContextSources|drifts expect 22T/443A post-regen; no DUR; optional Definitions.php:311 NIT fold; evidence 3 files"
-  },
-  "C-AGT-1.b": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-AGT-1.b",
-   "branch": "cc/C-AGT-1.b",
-   "session": "ses_e820454d5ffeZ7GxM5r4wKvX2s",
-   "note": "r1 CLEAN static @1009@ (REVIEW-1.md persisted). WELD: pick 38f0b3790 base b24e81154; regen trio --write commit-only-if-diff (LoopCommand/COMMANDS.md row possible, lang host.loop.queued); gates --filter Loop|ScheduleRegistry|SessionHost|ServerContext claim 317T/1470A + five-guard pair-only; DUR SessionHostLoopFireTest.php 5T + ScheduleRegistryTest +2T figure note; NIT SessionHost:918-931 notice wording = carry"
   },
   "C-AGT-3.a": {
    "stage": "clean",
@@ -151,7 +143,8 @@
    "gates": "Menu filter 229T/4110A OK (2 pre-existing phpunit deprecations); Renderer|Frame|Overlay|MediaFormPopupSize 1610T/158138A OK exact, P-IMG.b clickable pins green, expected foreign ShellContrastTest 1F did NOT appear; five-guard 133T/15618A F2 = staleness pair only (pinned 25,537 vs live 25,985 - closeout re-pin)",
    "durations_owed": "NEW candy-code tests/Tui/MenuOverlayFrameTest.php (12T) - LIST ONLY, durations.tsv is closeout duty"
   },
-  "C-PRV-1.b": "WELDED 2026-10-27 master a992413b0+f73cc493f (picks bc8289f54 build + 265aa26bf r2 cure, base eb20c154e era, clean auto-merge lang/en.php+Chat.php, zero conflicts; %ae/%ce 1/1 both, zero trailers). Regen no-op (command/tool --write up to date; settings --check up to date - SETTINGS.md row committed by lane). Gates: Effort 128T/434A OK exact; Bootstrap|Launch 1068T/6156A OK; DocFigure|TrustKey 109T/4490A OK; five-guard 133T/15625A F2 staleness pair only (pinned 25,537 - closeout re-pin). Disclosed inherited base-red (NOT cured, reproduced identical 5T/4544A/1F at pre-pick eb20c154e): SettingsWriterCensusTest chat->buildChat roster drift. DURATIONS duty: NEW candy-code/tests/Cli/LaunchEffortNoticeTest.php (4T) - LIST ONLY, durations.tsv is closeout duty. §4 mark ✅ a992413b0 left UNSTAGED per convention. Cherry proof both '-'; worktree+branch pruned."
+  "C-PRV-1.b": "WELDED 2026-10-27 master a992413b0+f73cc493f (picks bc8289f54 build + 265aa26bf r2 cure, base eb20c154e era, clean auto-merge lang/en.php+Chat.php, zero conflicts; %ae/%ce 1/1 both, zero trailers). Regen no-op (command/tool --write up to date; settings --check up to date - SETTINGS.md row committed by lane). Gates: Effort 128T/434A OK exact; Bootstrap|Launch 1068T/6156A OK; DocFigure|TrustKey 109T/4490A OK; five-guard 133T/15625A F2 staleness pair only (pinned 25,537 - closeout re-pin). Disclosed inherited base-red (NOT cured, reproduced identical 5T/4544A/1F at pre-pick eb20c154e): SettingsWriterCensusTest chat->buildChat roster drift. DURATIONS duty: NEW candy-code/tests/Cli/LaunchEffortNoticeTest.php (4T) - LIST ONLY, durations.tsv is closeout duty. §4 mark ✅ a992413b0 left UNSTAGED per convention. Cherry proof both '-'; worktree+branch pruned.",
+  "C-AGT-1.b": "WELDED 2026-10-27 master 2d45b868f (pick 38f0b3790, base b24e81154-era atop 144fe7955, clean auto-merge lang/en.php, zero conflicts; %ae/%ce 1/1, zero trailers). Regen no-op (command/tool/settings all up to date - LoopCommand hint did not move COMMANDS.md row; no regen commit). Gates: Loop|ScheduleRegistry|SessionHost|ServerContext 317T/1470A OK EXACT; five-guard 133T/15632A F2 staleness pair only (pinned 25,537 - closeout re-pin). DURATIONS duty: NEW candy-code/tests/Host/SessionHostLoopFireTest.php (5T) + ScheduleRegistryTest +2T figure note - LIST ONLY. NIT carry (from r1 review): SessionHost.php:918-931 notice wording. §4 mark ✅ 2d45b868f UNSTAGED. Cherry proof '-'; worktree+branch pruned."
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",

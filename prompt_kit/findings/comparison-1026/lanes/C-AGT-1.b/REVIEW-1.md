@@ -1,0 +1,10 @@
+# REVIEW-1 — C-AGT-1.b (cc/C-AGT-1.b @ 38f0b3790, base b24e81154)
+[lead-persist: reviewer static-only (php denied, no writes); delivered verbatim @1009@. Weld duties: durations.tsv row tests/Host/SessionHostLoopFireTest.php (5T) + ScheduleRegistryTest +2T; suite-figure/README re-pin (+7T, live 25,961); %ae/%ce greps; re-run --filter 'Loop|ScheduleRegistry|SessionHost|ServerContext' (claim 317T/1470A OK) + five-guard pair-only.]
+
+## VERDICT: CLEAN
+Scope: new API (dueEphemeralFor, removeEphemeralFor, SessionHost::tick, loopTickAt, host.loop.queued) exclusively in seven declared files; tests ScheduleRegistryTest +2T, new tests/Host/SessionHostLoopFireTest.php 5T. No weld-only files in diff.
+Serialization purity ✓: Schedule::toArray exactly 8 file fields, no sessionId; fromArray never reads key; mutate carries stamp via get_object_vars spread (in-memory only). Daemon fireDue sessionId strings = pre-existing spawn-id concept, zero disk/wire leak. Served loops cannot resurrect each other.
+tick() ✓: due-math reuses Schedule::isDue + nextDueAfter; re-arm BEFORE submit → no hot-loop/never-due leak on refuse paths (only LoopCommand passes sessionId → dueEphemeralFor/removeEphemeralFor pairing closes at release; release() removes first, reached SessionHub close/evict :173/:257). Return = fire count. QueueMode::Followup threading confirmed vs admitWhileBusy.
+pump() ✓: loopTickAt int-second dedup on existing clock; ticks every open host; busy fold byte-identical base; TUI Chat::pumpSchedules byte-identical (main vs worktree); no Timer/fork — E646 clean.
+Tests non-vacuous ✓: T1 strip-stamp/tick-body/submit→queued red; T2 Followup flip cuts pin; T3 neuter-release reds; T4 remove-ignores-id / due-drop-filter reds (incl unstamped leg); T5 clock-rewind rate-gate leg; provider discriminates stamp/isDue/enabled/kind. No §1.9 hazard literals.
+[NIT step-local] SessionHost.php:918-931 notice says "queues" unconditionally; refused-submit edge (backend===null mid-teardown) loses slot prompt after promise row; docblock hedges; branch notice on ticket kind later (record only).
