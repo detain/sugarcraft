@@ -3,22 +3,16 @@
     "C-SEC-2.a",
     "C-TOOL-1.c",
     "C-AGT-1.c",
-    "C-SES-3.a"
+    "C-SES-3.a",
+    "C-TOOL-1.a"
   ],
   "inflight": {
     "C-SEC-1.a": {
       "stage": "review",
-      "round": 1,
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SEC-1.a",
       "branch": "cc/C-SEC-1.a",
-      "session": "ses_e8427f68cffe7TjKrqO2njTYDT"
-    },
-    "C-TOOL-1.a": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-TOOL-1.a",
-      "branch": "cc/C-TOOL-1.a",
-      "session": null
+      "session": "ses_e84228fbfffeIswfZrQoo4nYi2"
     },
     "C-AGT-1.a": {
       "stage": "review",
@@ -28,11 +22,11 @@
       "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
     },
     "C-EXT-1.a": {
-      "stage": "review",
+      "stage": "clean",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-EXT-1.a",
       "branch": "cc/C-EXT-1.a",
-      "session": "ses_e842822d7ffeJCjGOCg5J9XJtW"
+      "session": null
     },
     "C-MCP-1.a": {
       "stage": "review",
