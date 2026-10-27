@@ -233,6 +233,42 @@ final class GrepOptionInjectionTest extends TestCase
     }
 
     /**
+     * The env half of the fix, pinned without a spawn. The belt line —
+     * ['RIPGREP_CONFIG_PATH' => ''] as runCaptured()'s scrubbedEnv override —
+     * is invisible to every functional test in this file: the e2e repro stays
+     * green without it (--no-config alone defeats the --follow rc), and the
+     * argv pin never reads the environment. This structural source-slice
+     * assertion is therefore the ONLY thing distinguishing the shipped double
+     * guard from a single-flag line: it reads the runCaptured call site out of
+     * Grep.php and requires the override to ride INSIDE the call. Deleting the
+     * override, moving it outside the call, or growing a second runCaptured
+     * call site (which would make "the call site" ambiguous) each redden it.
+     */
+    public function testTheRgSpawnCarriesTheEnvBlankingOverrideIntoRunCaptured(): void
+    {
+        $path = realpath(__DIR__ . '/../../../src/Tools/BuiltIn/Grep.php');
+        $this->assertIsString($path, 'the structural pin needs the Grep.php source');
+
+        $source = file_get_contents($path);
+        $this->assertIsString($source);
+
+        $this->assertSame(
+            1,
+            substr_count($source, '$this->runCaptured('),
+            'the spawn is a single call site; a second one must be adjudicated into this pin'
+        );
+
+        $open = strpos($source, '$this->runCaptured(');
+        $this->assertIsInt($open);
+
+        $end = strpos($source, ");\n", $open);
+        $this->assertIsInt($end, 'the runCaptured call must terminate with ); at a line end');
+
+        $callSite = substr($source, $open, $end - $open + 2);
+        $this->assertStringContainsString("'RIPGREP_CONFIG_PATH' => ''", $callSite);
+    }
+
+    /**
      * Reflection onto the private buildCommand() with a throwaway rooted
      * instance whose own root the method never reads — the same no-spawn
      * shape GrepEngineDifferentialTest uses for its argv legs.
