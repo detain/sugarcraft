@@ -1,0 +1,480 @@
+{
+ "cells": [
+  {
+   "row": "PLAT-01",
+   "col": "oc2",
+   "expect": "✅ Δ Same TS/Effect stack, re-cut as core",
+   "new": "✅ Δ Same TS/Effect stack, re-cut as core/server/cli/tui/app packages; native `@opencode/ai` provider layer; ~240 MB binary",
+   "detail": "✅ — Same architecture as 1.x re-cut into packages/core (Location-scoped services, durable session inbox, plugin host), packages/server, packages/cli, packages/tui (OpenTUI/Solid), packages/app + desktop (Electron), packages/ai (own provider protocols; AI-SDK packages still usable via `aisdk:` prefix) and packages/sdk (in-process host incl. Cloudflare workerd). The linux-x64 platform package is 240.4 MB unpacked and bundles Bun 1.4.4. — _Evidence:_ `npm view @opencode/cli-linux-x64@2.1.4 dist.unpackedSize` = 240417179; opencode.ai/changelog v2.1.3; tag v2.1.4 packages/",
+   "why": "binary size"
+  },
+  {
+   "row": "PLAT-03",
+   "col": "oc2",
+   "expect": "✅ Δ v2: curl /v2/install, npm @opencode/",
+   "new": "✅ Δ curl /v2/install, npm @opencode/cli, Homebrew core `opencode` (v2) or tap opencode-v2, AUR opencode-beta, mise, WinGet, Docker",
+   "detail": "✅ — Homebrew core's `opencode` formula ships v2 (2.1.4), and v1 stops offering 1.x updates to Homebrew-core installs. The README lists the tap `anomalyco/tap/opencode-v2` (recommended) and `brew install opencode` (official, \"updated less\"). Other channels: curl /v2/install, npm `@opencode/cli`, AUR opencode-beta, mise, WinGet, Docker. — _Evidence:_ formulae.brew.sh/api/formula/opencode.json (stable 2.1.4); anomalyco/opencode@v2.1.4:README.md L50-58; v1.19.2 release notes",
+   "why": "Homebrew core flipped to v2"
+  },
+  {
+   "row": "PLAT-04",
+   "col": "oc2",
+   "expect": "✅ Δ Linux (glibc+musl), macOS, Windows n",
+   "new": "✅ Δ Linux (glibc+musl), macOS, Windows native incl. ARM64 (persistent PTY terminals on Windows); WSL supported",
+   "detail": "✅ — Linux (glibc and musl), macOS and Windows native incl. ARM64 builds; WSL is supported. Persistent PTYs work on Windows x64 and ARM64, and Windows managed services use port 28894 to avoid WSL-reserved ranges. — _Evidence:_ anomalyco/opencode@v2.1.4:CHANGELOG.md v2.1.0 (#56245), v2.1.3 (#57428)",
+   "why": "Windows parity"
+  },
+  {
+   "row": "PLAT-09",
+   "col": "oc2",
+   "expect": "✅ Δ `opencode --version` measured 0.15 s",
+   "new": "✅ Δ `opencode --version` 0.15 s / ~89 MB RSS measured on 2.0.31 (not re-run on 2.1.4); ~240 MB binary",
+   "detail": "✅ — `opencode --version` measured 0.15 s / ~89 MB RSS on 2.0.31 (v1: 1.1 s / 200 MB); the timing was not re-measured on 2.1.4 because the downloaded binaries were not executed. Binary size is from npm (240 MB unpacked). — _Evidence:_ measured locally on 2.0.31; `npm view @opencode/cli-linux-x64@2.1.4 dist.unpackedSize`",
+   "why": "size and measurement provenance"
+  },
+  {
+   "row": "MOD-13",
+   "col": "oc2",
+   "expect": "🟡 Δ `small_model` now only sets the `tit",
+   "new": "✅ Δ Title agent model via `small_model`/`agents.title.model` (lowest suitable variant); `agents.compaction.model` for summaries",
+   "detail": "✅ — Titles use the model set by `small_model` / `agents.title.model`, picking the lowest suitable variant. Summary compaction honours `agents.compaction.model` and falls back to the session model if it cannot be resolved; native compaction always uses the session model. There is no automatic cheap-model pick, unlike v1's `small_model` default. — _Evidence:_ anomalyco/opencode@v2.1.4:services/www/src/docs/content/compaction.mdx L91-104, L202; CHANGELOG v2.1.3 (#51939, #57648); migrate-v1.mdx (\"small_model becomes … agents.title.model\")",
+   "why": "compaction model is configurable"
+  },
+  {
+   "row": "MOD-22",
+   "col": "oc2",
+   "expect": "🟡 Δ read tool still passes PDFs, but PDF",
+   "new": "✅ Δ PDFs sent as document media from composer attachments and the read tool; models without PDF input get a short note",
+   "detail": "✅ — The attachment table lists `PDF → Document media`: PDFs from composer attachments and the read tool reach the model, and models without PDF input get a short note. The source path was not pinned. — _Evidence:_ anomalyco/opencode@v2.1.4:services/www/src/docs/content/attachments.mdx L60-70",
+   "why": "PDF attachments sent"
+  },
+  {
+   "row": "MOD-23",
+   "col": "oc2",
+   "expect": "❌ No voice/audio input or speech output ",
+   "new": "🟡 Δ Experimental SDK `client.voice.session()` brokers realtime voice models (OpenAI, xAI, Gemini Live); no voice in TUI/desktop",
+   "detail": "🟡 — Server-brokered realtime voice sessions (WebRTC/WebSocket) for OpenAI GPT-Live/Realtime, xAI Grok Voice and Gemini Live, plus `client.voice.models()` and Console-hosted GPT-Live. This is an SDK-only API: the TUI and desktop have no voice UI. — _Evidence:_ anomalyco/opencode@v2.1.4:packages/core/src/voice.ts, packages/server/src/handlers/voice.ts; CHANGELOG v2.0.32 (#55951), v2.1.0 (#56888), v2.1.3 (#57194)",
+   "why": "provider-level audio I/O"
+  },
+  {
+   "row": "CTX-03",
+   "col": "oc2",
+   "expect": "✅ Δ Auto-compact when estimated request ",
+   "new": "✅ Δ Auto-compact when estimated request exceeds window minus `buffer` (default 15% of limit, ≥16k); `compaction.auto`",
+   "detail": "✅ — Auto-compaction starts when the estimated request exceeds the window minus `buffer` (default 15% of the limit, at least 16k; 1.x: 10%). A buffer at least as large as the model limit is ignored. `compaction.auto` toggles it. — _Evidence:_ anomalyco/opencode@v2.1.4:services/www/src/docs/content/compaction.mdx L87; CHANGELOG v2.1.0 (#57091); opencode.ai/changelog v2.1.4 (#58313)",
+   "why": "default changed"
+  },
+  {
+   "row": "CTX-05",
+   "col": "oc2",
+   "expect": "✅ Δ Rolling structured summary by the se",
+   "new": "✅ Δ Whole-conversation summary (cache-reusing) + ~15k tokens kept verbatim; optional summary model; or provider-native compaction",
+   "detail": "✅ — The summary request sends the whole conversation, so it reuses the prompt cache. The summary sits beside the last ~15k tokens kept verbatim (`keep.tokens`), referenced by `metadata.keepID`. `agents.compaction.model` selects another summariser, and overlong compaction requests shorten older tool output first. Provider-native encrypted compaction needs only the same provider and model. — _Evidence:_ compaction.mdx@v2.1.4 L8-23, L91-104, L174; CHANGELOG v2.1.0 (#57091), v2.1.3 (#57564); opencode.ai/changelog v2.1.4 (#58015)",
+   "why": "method changed"
+  },
+  {
+   "row": "CTX-09",
+   "col": "oc2",
+   "expect": "❌ Δ DCP plugin targets the V1 plugin API",
+   "new": "🔌 Δ Via @cortexkit/opencode-magic-context (`ctx_reduce`, v2 build); DCP targets the V1 plugin API only",
+   "detail": "🔌 — magic-context 0.49.23 ships a `dist/v2/` build; its model tool `ctx_reduce` queues stale tagged content for removal (cache-aware) and `ctx_expand` restores ranges. DCP 3.2.0 peers `@opencode-ai/plugin >=1.18.29` and has no v2 export. Neither is installed on this host for v2. — _Evidence:_ npm @cortexkit/opencode-magic-context@0.49.23 tarball `package/dist/v2/*` and README \"Agent tools at a glance\"; npm @tarquinen/opencode-dcp@3.2.0 peerDependencies/exports",
+   "why": "v2 plugin provides model-driven pruning"
+  },
+  {
+   "row": "CTX-N1",
+   "col": "oc2",
+   "expect": "❌ No background pre-summarisation; compa",
+   "new": "🟡 Δ Experimental `background_compaction`: summary prepared at 85% of threshold, swapped in at threshold (held in memory)",
+   "detail": "🟡 — Opt-in under `experimental`. The summary is prepared in the background and swapped in at the threshold; it is skipped for native compaction, for sessions under ~64k tokens, right after a model switch, and when the provider rejects a request as too long. An unused summary still costs tokens, and held summaries are lost on restart. — _Evidence:_ opencode.ai/changelog v2.1.4 (#57444, #58294); compaction.mdx@v2.1.4 L106-137; config.mdx@v2.1.4 L651",
+   "why": "feature added (experimental)"
+  },
+  {
+   "row": "SES-09",
+   "col": "oc2",
+   "expect": "❌ Δ Share removed: 2.0.30 deleted the re",
+   "new": "❌ Share removed: 2.0.30 deleted the retired sharing backend and /share",
+   "detail": "❌ — v1 had /share → opncd.ai/s/<id>; v2 has none, and pairing links share a live server instead. v1 also dropped sharing, and the backend returns 410. — _Evidence:_ CHANGELOG v2.0.30 (#55716); v1.19.1 release notes",
+   "why": "drop Δ: no longer differs from 1.x"
+  },
+  {
+   "row": "SES-17",
+   "col": "oc2",
+   "expect": "🟡 Δ Projects auto-archive when their dir",
+   "new": "🟡 Δ Archive/restore sessions (desktop/web + SDK filter); projects auto-archive when dirs vanish; nothing auto-pruned",
+   "detail": "🟡 — Session archiving with archive-state filtering and restore (`client.session.list/update`); the desktop/web app has archive actions. Projects auto-archive when their directories vanish. There is no age-based retention, and uninstall keeps data. — _Evidence:_ CHANGELOG v2.1.0 (#53759); anomalyco/opencode@v2.1.4:packages/app/src/shell/commands/palette.ts (archive)",
+   "why": "archive restored"
+  },
+  {
+   "row": "AGT-16",
+   "col": "oc2",
+   "expect": "❓ Δ No native teams; V1 swarm plugins (o",
+   "new": "❌ Δ No native teams; oh-my-openagent 5.1.48 loads on v2 with agents/tools/hooks inactive; subtask2/conductor V1-only",
+   "detail": "❌ — No native teams. oh-my-openagent 5.1.48's own bundle says \"OpenCode 2 support is limited: the plugin loads, but its agents, tools and hooks are not active here\"; subtask2 0.3.5 and opencode-conductor-plugin 1.32.0 depend only on `@opencode-ai/plugin` (V1). No v2 team/swarm plugin was found. — _Evidence:_ npm oh-my-openagent@5.1.48 tarball `package/dist/index.js`; `npm view @spoons-and-mirrors/subtask2@0.3.5 peerDependencies`; `npm view opencode-conductor-plugin@1.32.0 dependencies`",
+   "why": "plugin path checked"
+  },
+  {
+   "row": "MEM-06",
+   "col": "oc2",
+   "expect": "🔌 Δ agent-memory 0.3 journal search (v2 ",
+   "new": "🔌 Δ agent-memory 0.3 journal search (v2 only); supermemory 2.0.17 and magic-context hybrid `ctx_search` run on v1+v2",
+   "detail": "🔌 — opencode-agent-memory 0.3 offers journal search (v2 only). opencode-supermemory 2.0.17 exports `./v2`, and magic-context's `ctx_search` covers memories, conversation history, git commits and notes with local or remote embeddings plus keyword search; it ships a v2 build. — _Evidence:_ npm @cortexkit/opencode-magic-context@0.49.23 README (tool table, embedding section), `package/dist/v2/`; npm opencode-supermemory@2.0.17 exports `./v2`",
+   "why": "plugin compatibility resolved"
+  },
+  {
+   "row": "MEM-08",
+   "col": "oc2",
+   "expect": "❓ Δ No native consolidation; magic-conte",
+   "new": "🔌 Δ No native consolidation; magic-context dreamer (v2 build) verifies/dedups memories; harness-memory stays V1-API",
+   "detail": "🔌 — No native consolidation. The magic-context \"dreamer\" runs idle-time maintenance in ephemeral child sessions (verify against the codebase, curate duplicates and stale entries, promote recurring ones) and is triggerable with `/ctx-dream`; it ships a v2 build. harness-memory 0.5.1 depends on `@opencode-ai/sdk ^1.3.13` only. — _Evidence:_ npm @cortexkit/opencode-magic-context@0.49.23 README L48, L213-227; `npm view harness-memory@0.5.1 dependencies`",
+   "why": "plugin compatibility resolved"
+  },
+  {
+   "row": "PRM-06",
+   "col": "oc2",
+   "expect": "✅ Δ Each step lists permitted skills (id",
+   "new": "✅ Δ Permitted skills (id, name, description) in the instruction baseline; updates sent as changed entries only",
+   "detail": "✅ — The instruction baseline lists permitted skills (id, name, description). MCP-instruction, skill and reference updates send only changed entries instead of repeating the full list. `opencode/autoinvoke:false` hides a skill, and the body still comes via the skill tool. Changelog only; source not traced. — _Evidence:_ CHANGELOG v2.1.3 (#57626)",
+   "why": "delivery changed"
+  },
+  {
+   "row": "PRM-N3",
+   "col": "oc2",
+   "expect": "❌ Δ No completion contract; opencode-goa",
+   "new": "🔌 Δ No native contract; opencode-goal-plugin 0.11+ (v2 bridge: own /goal, evidence-gated completion audits)",
+   "detail": "🔌 — opencode-goal-plugin 0.11+ has an OpenCode 2 `setup` entrypoint whose bridge maps hooks onto `session.hook`, `tool.transform` and `command.transform`; the author verified it on 2.0.16, 2.0.26 and 2.0.31. Not installed on this host. — _Evidence:_ npm opencode-goal-plugin@0.11.1 tarball `package/CHANGELOG.md` (0.11.0, 0.11.1 entries), README compatibility table",
+   "why": "plugin supports v2"
+  },
+  {
+   "row": "MCP-08",
+   "col": "oc2",
+   "expect": "🟡 Δ Elicitation supported (forms and URL",
+   "new": "🟡 Δ Elicitation forms (text/number/choice/multiselect/boolean/URL) in TUI, desktop and web; no sampling",
+   "detail": "🟡 — The client advertises `elicitation: {form, url}` and registers `elicitation/create`; forms (text, number, choice, multiselect, boolean, URL) render in the TUI, desktop and web. There is no sampling handler. — _Evidence:_ opencode.ai/changelog v2.1.4 (#58184, #58305); anomalyco/opencode@v2.1.4:packages/core/src/mcp/client.ts L203, L222-227; mcp-servers.mdx L443-449",
+   "why": "form rendering wired in 2.1.4"
+  },
+  {
+   "row": "MCP-14",
+   "col": "oc2",
+   "expect": "✅ Δ Per-server timeouts startup/catalog/",
+   "new": "✅ Δ Per-server startup/catalog/execution timeouts; large output to managed file; media inline, binary resources saved to files",
+   "detail": "✅ — Per-server startup, catalog and execution timeouts (12 h default execution). Large outputs are shortened to a managed file; supported media stays inline, textual resources are decoded, and unsupported binary resources are saved to files. Remote MCP requests survive Bun's fetch idle timeout. — _Evidence:_ CHANGELOG v2.1.3 (#57640); opencode.ai/changelog v2.1.4 (#58341)",
+   "why": "handling extended"
+  },
+  {
+   "row": "TL-04",
+   "col": "oc2",
+   "expect": "❌ No multiedit/batch edit tool in 1.18.3",
+   "new": "❌ No multiedit/batch edit tool in v2 (`experimental.batch_tool` is ignored with a warning)",
+   "detail": "❌ — No multiedit/batch edit tool. `experimental.batch_tool` is listed among the accepted-but-unsupported V1 experimental fields. — _Evidence:_ anomalyco/opencode@v2.1.4:services/www/src/docs/content/migrate-v1.mdx L476",
+   "why": "cell text named wrong version"
+  },
+  {
+   "row": "TL-11",
+   "col": "oc2",
+   "expect": "❌ Δ No todo tool in v2 (todowrite/sideba",
+   "new": "🟡 Δ Experimental `todowrite` (`experimental.todo`, off by default): full-list replace, 4 statuses, no priority",
+   "detail": "🟡 — Registered only when `experimental.todo === true`, as a direct tool (`codemode:false`). It replaces the full list with statuses pending, in_progress, completed and cancelled; the v1 `priority` field is gone. — _Evidence:_ anomalyco/opencode@v2.1.4:packages/core/src/tool/plugin/todo.ts L13-23, L50; migrate-v1.mdx L126-135; config.mdx L637; CHANGELOG v2.1.0 (#56947)",
+   "why": "todo tool restored behind a flag"
+  },
+  {
+   "row": "TL-22",
+   "col": "oc2",
+   "expect": "❓ Δ No cron tool; opencode-scheduler is ",
+   "new": "❌ Δ No cron tool; opencode-scheduler 1.3.0 ships only a V1-API entry (@opencode-ai/plugin), so it cannot load on v2",
+   "detail": "❌ — The latest opencode-scheduler peers `@opencode-ai/plugin >=1.0.0` with a single `.` export, and \"V1 plugin implementations do not run in V2.\" — _Evidence:_ `npm view opencode-scheduler@1.3.0 peerDependencies exports`; migrate-v1.mdx@v2.1.4 (Plugins callout)",
+   "why": "plugin compatibility resolved"
+  },
+  {
+   "row": "TL-28",
+   "col": "oc2",
+   "expect": "❓ Δ No media generation; opencode-gpt-im",
+   "new": "❌ Δ No media generation; opencode-gpt-imagegen 1.1.0 targets the V1 plugin API only",
+   "detail": "❌ — opencode-gpt-imagegen 1.1.0 depends on `@opencode-ai/plugin ^1.14.41` with a single export and no v2 entry. — _Evidence:_ `npm view opencode-gpt-imagegen@1.1.0 dependencies exports`",
+   "why": "plugin compatibility resolved"
+  },
+  {
+   "row": "TL-N1",
+   "col": "oc2",
+   "expect": "❌ Δ No agent PTY driver; persistent PTYs",
+   "new": "🟡 Δ Experimental TUI tools `open_terminal`/`write_terminal` type into the session terminal; no output read-back",
+   "detail": "🟡 — The TUI serves its own tools to the server as the client-MCP server `tui`, enabled in the experiments dialog (\"TUI tools\"): `open_terminal` opens a terminal without taking focus and `write_terminal` sends raw text (a trailing `\\n` runs it). No read tool exists, so the agent drives blind. opencode-pty 0.4.0's `opencode-pty/v2` entry registers only two web-UI commands, not its `pty_spawn/write/read/list/kill` tools. — _Evidence:_ anomalyco/opencode@v2.1.4:packages/tui/src/context/client-mcp.tsx L11-14, L82-95; packages/tui/src/component/dialog-experiments.tsx L25; opencode.ai/changelog v2.1.4 (#57506); npm opencode-pty@0.4.0 `package/dist/src/v2/index.js`",
+   "why": "partial native capability; plugin claim corrected"
+  },
+  {
+   "row": "SH-05",
+   "col": "oc2",
+   "expect": "❌ Δ No stdin interaction with agent comm",
+   "new": "❌ Δ No stdin to agent commands; experimental write_terminal types blind into the user's terminal; pty plugin's v2 entry has no tools",
+   "detail": "❌ — The agent cannot interact with its own running commands. See TL-N1 for the experimental write-only terminal tool and opencode-pty's v2 entry. — _Evidence:_ as TL-N1",
+   "why": "wording"
+  },
+  {
+   "row": "UI-16",
+   "col": "oc2",
+   "expect": "✅ <leader>y copies last reply, /copy tra",
+   "new": "✅ Δ /copy copies the latest reply (or compaction summary); <leader>y; transcript via palette or /export; copy-on-select",
+   "detail": "✅ — `/copy` copies the latest assistant message, or the completed compaction summary when that is newest (1.x: the transcript). `<leader>y` copies the last reply; the transcript is available through the palette or `/export`; copy-on-select works with the mouse. — _Evidence:_ CHANGELOG v2.0.32 (#56053, #56055)",
+   "why": "differs from v1"
+  },
+  {
+   "row": "UI-19",
+   "col": "oc2",
+   "expect": "🟡 Δ Sidebar: context + MCP only (no LSP,",
+   "new": "🟡 Δ Sidebar: context + MCP, plus todos when `experimental.todo` is on; no LSP or modified-files panels; diff viewer separate",
+   "detail": "🟡 — The sidebar shows context and MCP, plus todo lists (also in session output and compact cards) when the `experimental.todo` flag is on. It has no LSP or modified-files panel; the diff viewer is separate. — _Evidence:_ CHANGELOG v2.1.0 (#56947)",
+   "why": "todo panel back (experimental)"
+  },
+  {
+   "row": "UI-20",
+   "col": "oc2",
+   "expect": "❌ Δ No todo list (no todo tool)",
+   "new": "🟡 Δ Todo list in session output, compact cards and sidebar only with `experimental.todo` (off by default)",
+   "detail": "🟡 — Todo lists appear in session output, compact cards and the sidebar only when `experimental.todo` is on (off by default). See TL-11. — _Evidence:_ CHANGELOG v2.1.0 (#56947); migrate-v1.mdx@v2.1.4 L126",
+   "why": "todo list behind a flag"
+  },
+  {
+   "row": "PER-04",
+   "col": "oc2",
+   "expect": "✅ Δ Saved approvals are durable, project",
+   "new": "✅ Δ Saved approvals are durable project-scoped allow rules (v1: in-memory); list/edit/delete via `/api/permission/saved`",
+   "detail": "✅ — Saved approvals are durable, project-scoped allow rules (1.x: in-memory until restart). The generated client exposes GET, PATCH and DELETE on `/api/permission/saved` (`client.permission.saved.update`); no TUI or desktop UI for them was found. — _Evidence:_ CHANGELOG v2.1.0 (#56659); anomalyco/opencode@v2.1.4:packages/client/src/promise/generated/client.ts L1605-1640; permissions.mdx L289-292",
+   "why": "management API added"
+  },
+  {
+   "row": "PLG-10",
+   "col": "oc2",
+   "expect": "🟡 Δ V1 ecosystem must be ported: agent-m",
+   "new": "🟡 Δ Partial re-port: agent-memory, goal, plannotator, supermemory, magic-context, froggy, handoff run on v2; DCP/subtask2 V1",
+   "detail": "🟡 — v2 builds: opencode-goal-plugin 0.11+, @plannotator/opencode 0.28.31, opencode-supermemory 2.0.17, magic-context 0.49.23, opencode-froggy 1.6.2, opencode-handoff 0.6.1 (v2 only), opencode-agent-memory 0.3.0 (v2 only) and the official Figma plugin. Partial: opencode-pty 0.4.0 (v2 entry has no agent tools) and oh-my-openagent 5.1.48 (load-only). V1-only: DCP 3.2.0, subtask2, conductor, scheduler, gpt-imagegen, wakatime. — _Evidence:_ npm metadata and tarballs of each plugin named",
+   "why": "ecosystem partly ported"
+  },
+  {
+   "row": "WEB-13",
+   "col": "oc2",
+   "expect": "🟡 Δ Voice only via the iOS app's voice-c",
+   "new": "🟡 Δ iOS app voice-call delegation plus experimental SDK realtime voice sessions; no voice in TUI/desktop",
+   "detail": "🟡 — The iOS app delegates voice calls, and the experimental SDK offers realtime voice sessions (see MOD-23); the TUI and desktop have no voice. — _Evidence:_ anomalyco/opencode@v2.1.4:packages/core/src/voice.ts; packages/app/src/session/timeline/voice-delegation.ts",
+   "why": "SDK voice added"
+  },
+  {
+   "row": "AUT-09",
+   "col": "oc2",
+   "expect": "❌ Δ opencode-goal-plugin explicitly does",
+   "new": "🔌 Δ opencode-goal-plugin 0.11+ supports v2 (registers /goal itself, auto-continue, audited completion); no native goal mode",
+   "detail": "🔌 — On v2 the plugin registers `/goal` through `ctx.command.transform`, so a legacy `command.goal` config entry should be removed. Completion-audit verifier child sessions are retained, because v2's plugin API cannot remove sessions. No native goal mode. — _Evidence:_ npm opencode-goal-plugin@0.11.1 README (OpenCode 2 sections, L64-101, L527) and CHANGELOG 0.11.0",
+   "why": "plugin supports v2"
+  },
+  {
+   "row": "PLAT-01",
+   "col": "oc1",
+   "expect": "✅ TypeScript on Bun compiled to one ~186",
+   "new": "✅ TypeScript on Bun compiled to one ~215 MB binary; Effect-TS core, OpenTUI+SolidJS TUI, Electron desktop",
+   "detail": "✅ — v1 layout: `packages/opencode` holds the agent loop and HTTP server, `packages/tui` the OpenTUI/Solid terminal client, `packages/core` the shared Effect services (plus the unused v2 runner), `packages/app` the web/desktop UI, and `packages/desktop` the Electron 42 shell. The npm package `opencode-ai` installs a per-platform prebuilt binary (~215 MB, bundling Bun 1.4.4). Tree-sitter WASM is used for bash parsing and syntax highlighting. — _Evidence:_ `npm view opencode-linux-x64@1.19.4 dist.unpackedSize` = 214522169; packages/desktop/package.json (`electron 42.3.3`); tag v1.19.4",
+   "why": "binary size"
+  },
+  {
+   "row": "PLAT-05",
+   "col": "oc1",
+   "expect": "✅ `autoupdate` true/false/notify on star",
+   "new": "✅ Notify-only update checks (`autoupdate: false` disables); `/update` installs 1.x or offers v2; `opencode upgrade [ver] [--major]`",
+   "detail": "✅ — Updates are never installed automatically: the startup check only notifies (`autoupdate: false` disables it; `OPENCODE_DISABLE_AUTOUPDATE` and `OPENCODE_ALWAYS_NOTIFY_UPDATE` override). `/update` installs a newer 1.x or offers 2.0, and `opencode upgrade [ver] --major` installs v2 and removes v1. Update checks pin to npm `opencode-ai@latest`, and the curl script refuses 2.x. `opencode uninstall` takes `--keep-config` / `--keep-data` / `--dry-run`. — _Evidence:_ v1.19.0 and v1.19.2 release notes; anomalyco/opencode@v1.19.4:packages/web/src/content/docs/config.mdx (Autoupdate), tui.mdx (`/update`), cli.mdx (`--major`)",
+   "why": "update semantics changed"
+  },
+  {
+   "row": "PLAT-09",
+   "col": "oc1",
+   "expect": "🟡 `opencode --version` measured 1.1 s / ",
+   "new": "🟡 `opencode --version` 1.1 s / ~200 MB RSS (measured on 1.18.35); ~215 MB binary; `opencode debug startup` prints timing",
+   "detail": "🟡 — Measured 3× on this host on 1.18.35 with `/usr/bin/time opencode --version`: 1.11-1.12 s and 204 MB max RSS for printing the version alone; not re-measured on 1.19.4, and the TUI was not started, so interactive cold-start is unmeasured. The 1.19.4 binary is ~215 MB. `opencode debug startup` exists for timing. MCP cold boot is the documented reason for `run --attach` to a warm server. — _Evidence:_ measured locally; CLI: `opencode debug --help`; DOCS/cli (run --attach rationale); `npm view opencode-linux-x64@1.19.4 dist.unpackedSize`",
+   "why": "binary size and measurement provenance"
+  },
+  {
+   "row": "SES-09",
+   "col": "oc1",
+   "expect": "✅ /share → public opncd.ai/s/<id> (synce",
+   "new": "❌ Sharing discontinued: /share, /unshare and share-URL import are removed; the opncd.ai share host returns 410",
+   "detail": "❌ — `SessionShare.share` always fails with \"Session sharing has been discontinued\" (the endpoints remain for API compatibility, and unshare only clears the local link). The TUI commands `session.share`/`session.unshare` are removed, and `https://opncd.ai/s/<id>` and `/share/<id>` return HTTP 410. — _Evidence:_ v1.19.1 release notes; anomalyco/opencode@v1.19.4:packages/opencode/src/share/session.ts L19-23; `curl -o /dev/null -w '%{http_code}' https://opncd.ai/s/abcdefgh` → 410",
+   "why": "sharing discontinued"
+  },
+  {
+   "row": "SES-10",
+   "col": "oc1",
+   "expect": "✅ `opencode import <file.json/share URL>",
+   "new": "✅ `opencode import <file.json>`; share-URL import is refused (sharing discontinued)",
+   "detail": "✅ — Imports an exported JSON file. An http(s) argument fails with \"Importing from share URLs is no longer supported\". — _Evidence:_ CLI: `opencode import --help`; `git diff v1.18.35 v1.19.4 -- packages/opencode/src/cli/cmd/import.ts`",
+   "why": "share-URL import removed"
+  },
+  {
+   "row": "SES-14",
+   "col": "oc1",
+   "expect": "🟡 attach to remote server, share-URL imp",
+   "new": "🟡 attach to remote server, TUI+web on one server; no share-URL import; no one-click web↔CLI teleport",
+   "detail": "🟡 — `opencode attach http://host:4096` (basic auth) moves work between devices; share-URL import is no longer supported. There is no cloud session handoff. — _Evidence:_ CLI: `opencode attach --help`; DOCS/web (Attaching a Terminal); `git diff v1.18.35 v1.19.4 -- packages/opencode/src/cli/cmd/import.ts`",
+   "why": "share-URL import removed"
+  },
+  {
+   "row": "CMD-01",
+   "col": "oc1",
+   "expect": "✅ ~33 built-in slash commands: /init /re",
+   "new": "✅ ~32 built-in slash commands: /init /review /compact /undo /redo /fork /timeline /sessions /models /agents /diff /update…",
+   "detail": "✅ — TUI: sessions, new/clear, models, agents, mcps, variants, connect, org, status, debug, themes, help, exit, editor, skills, move, update, rename, timeline, fork, compact, undo, redo, timestamps, thinking, copy, export, diff; plus workspaces and warp (experimental). Server: init, review. `/share` and `/unshare` are removed. Custom commands override built-ins of the same name. — _Evidence:_ `git diff v1.18.35 v1.19.4 -- packages/tui/src/routes/session/index.tsx`; v1.19.4 `tui.mdx` \"### update\"; TUI/app.tsx:577-833; OC/command/index.ts:46-88",
+   "why": "roster changed"
+  },
+  {
+   "row": "AUT-09",
+   "col": "oc1",
+   "expect": "🔌 🔌 opencode-goal-plugin (installed here",
+   "new": "🔌 opencode-goal-plugin (v1 and v2; not installed on this host): /goal with auto-continue, limits, evidence-gated completion",
+   "detail": "🔌 — The plugin relies on experimental hooks and supports both majors. It appears in neither `~/.config/opencode/opencode.jsonc` nor `.opencode/opencode.jsonc`, and no `opencode-goal-plugin*` directory exists under `~/.cache/opencode/packages`. — _Evidence:_ read-only listing of those paths; npm opencode-goal-plugin@0.11.1",
+   "why": "plugin is not installed here"
+  },
+  {
+   "row": "PRM-N3",
+   "col": "oc1",
+   "expect": "🔌 No native completion contract; 🔌 openc",
+   "new": "🔌 No native completion contract; opencode-goal-plugin adds evidence-gated /goal completion (v1 and v2)",
+   "detail": "🔌 — Native pieces only: model prompts such as beast.txt (“keep going until resolved”) and the max-steps summary. opencode-goal-plugin adds evidence-gated /goal completion and supports both majors. — _Evidence:_ OC/session/prompt/beast.txt; npm opencode-goal-plugin@0.11.1 CHANGELOG 0.11.0",
+   "why": "plugin supports both majors"
+  }
+ ],
+ "new_rows": [
+  {
+   "id": "MCP-N3",
+   "feature": "🆕 Client-hosted tools (a UI client serves tools to the agent, e.g. to drive the visible terminal pane)",
+   "cells": {
+    "cc": "❌ No client-registered tools: the protocol exposes agent-to-client events and methods only; the TUI cannot serve tools to the agent",
+    "web": "❌ The browser client registers no tools for the agent",
+    "claude": "· Not assessed",
+    "oc1": "❌ No client-MCP transport found",
+    "oc2": "🟡 Experimental client-MCP transport (SDK `connectClientMcp()`); the TUI serves `open_terminal`/`write_terminal`",
+    "claw": "· Not assessed"
+   },
+   "details": {
+    "cc": "❌ — The agent protocol has methods the client calls and events it receives, but no method through which a client registers tools the agent can call. — _Evidence:_ `src/Protocol/Methods/` (no tool-registration method)",
+    "web": "❌ — The web client only consumes the protocol and registers no tools. — _Evidence:_ `web:protocol/generated.ts`",
+    "claude": "· — Not assessed — _Evidence:_ none",
+    "oc1": "❌ — No client-hosted tool mechanism found in the 1.x line. — _Evidence:_ absence in tag v1.19.4 packages/tui",
+    "oc2": "🟡 — The TUI serves its own tools to the server as client-MCP server `tui`, behind the experiments dialog (\"TUI tools\"); the SDK exposes `connectClientMcp()`. — _Evidence:_ anomalyco/opencode@v2.1.4:packages/tui/src/context/client-mcp.tsx L1-14, L75-95; opencode.ai/changelog v2.1.4 (#57504, #57505, #57506)",
+    "claw": "· — Not assessed — _Evidence:_ none"
+   }
+  },
+  {
+   "id": "PER-N3",
+   "feature": "🆕 Persisted-approval management (list / edit / revoke saved \"always\" grants)",
+   "cells": {
+    "cc": "🟡 `permission.rules` lists the effective rules read-only; saved grants cannot be edited or revoked over the wire",
+    "web": "🟡 Rules panel shows the effective rules read-only",
+    "claude": "· Not assessed",
+    "oc1": "❌ \"always\" approvals are in-memory until restart",
+    "oc2": "🟡 API/SDK only: GET/PATCH/DELETE `/api/permission/saved`; no TUI or desktop UI found",
+    "claw": "· Not assessed"
+   },
+   "details": {
+    "cc": "🟡 — The `permission.rules` method returns the effective mode and rules, read-only. Session grants are saved with the session, and the wire offers no edit or revoke. — _Evidence:_ `src/Protocol/Methods/PermissionMethods.php:53,213-227`",
+    "web": "🟡 — The Rules panel renders the effective rules and offers no edit or revoke. — _Evidence:_ `web:components/panels/RulesPanel.vue`",
+    "claude": "· — Not assessed — _Evidence:_ none",
+    "oc1": "❌ — \"always\" approvals live in memory until restart, so there is nothing to manage. — _Evidence:_ see PER-04",
+    "oc2": "🟡 — The generated client exposes GET, PATCH and DELETE on `/api/permission/saved` (`client.permission.saved.*`). No TUI or desktop UI for them was found in `packages/tui/src` or `packages/app/src/settings`. — _Evidence:_ anomalyco/opencode@v2.1.4:packages/client/src/promise/generated/client.ts L1605-1640; CHANGELOG v2.1.0 (#56659)",
+    "claw": "· — Not assessed — _Evidence:_ none"
+   }
+  },
+  {
+   "id": "OBS-N2",
+   "feature": "🆕 Live diagnostics capture (heap snapshot of a running server/app without restart)",
+   "cells": {
+    "cc": "❌ No heap-snapshot or live-diagnostics capture command",
+    "web": "❌ No heap-snapshot capture",
+    "claude": "· Not assessed",
+    "oc1": "· Not assessed",
+    "oc2": "✅ `opencode debug heap-dump [--server <url>]`; desktop palette \"Capture heap snapshots\"",
+    "claw": "· Not assessed"
+   },
+   "details": {
+    "cc": "❌ — `doctor` and the diagnostics sinks report state, but nothing captures a heap snapshot of a running process. — _Evidence:_ `src/Diagnostics/`; no heap-dump command under `src/Commands/`",
+    "web": "❌ — No capture action in the client. — _Evidence:_ no match under `web:components`",
+    "claude": "· — Not assessed — _Evidence:_ none",
+    "oc1": "· — Not assessed — _Evidence:_ none",
+    "oc2": "✅ — `opencode debug heap-dump` captures a snapshot, optionally from a running server (`--server <url>`); the desktop palette has \"Capture heap snapshots\". — _Evidence:_ anomalyco/opencode@v2.1.4:packages/cli/src/commands/handlers/debug/heap-dump.ts; opencode.ai/changelog v2.1.4 (#58252, #58259, #58311)",
+    "claw": "· — Not assessed — _Evidence:_ none"
+   }
+  },
+  {
+   "id": "UI-N7",
+   "feature": "🆕 Experimental-feature toggles in the UI",
+   "cells": {
+    "cc": "❌ No in-app experiments dialog",
+    "web": "❌ No experiments settings page",
+    "claude": "· Not assessed",
+    "oc1": "· Not assessed",
+    "oc2": "✅ TUI experiments dialog and desktop `settings/experimental`; `cli.json experimental` map",
+    "claw": "· Not assessed"
+   },
+   "details": {
+    "cc": "❌ — Behaviour switches live in config and env vars; there is no in-UI experiments dialog. — _Evidence:_ no match for an experiments dialog under `src/Tui/`",
+    "web": "❌ — The Settings page has no experiments section. — _Evidence:_ no match under `web:components`",
+    "claude": "· — Not assessed — _Evidence:_ none",
+    "oc1": "· — Not assessed — _Evidence:_ none",
+    "oc2": "✅ — The TUI experiments dialog and the desktop `settings/experimental` page toggle experimental features, backed by the `experimental` map in the CLI config. — _Evidence:_ anomalyco/opencode@v2.1.4:packages/tui/src/component/dialog-experiments.tsx; packages/app settings/experimental",
+    "claw": "· — Not assessed — _Evidence:_ none"
+   }
+  }
+ ],
+ "narrative": [
+  {
+   "old": "| **OpenCode** | **1.18.35** (installed here) and **2.0.31** (latest major) | Source at both tags, shipped docs, CLI help, local configs and installed plugins. v1 latest is 1.19.3, so the installed copy is 4 releases behind |",
+   "new": "| **OpenCode** | **1.19.4** (latest v1; 1.18.35 is installed here) and **2.1.4** (latest v2; not installed here) | Source at 1.18.35, 1.19.4, 2.0.31 and 2.1.4, shipped docs and changelogs, CLI help, local configs and installed plugins. 1.18.35 → 1.19.4 changes only updates, session sharing, reasoning variants and the bundled Bun |"
+  },
+  {
+   "old": "native `Prune`/`Compress`/`Recall` tools (OpenCode needs the DCP plugin; Claude Code and OpenClaw have none);",
+   "new": "native `Prune`/`Compress`/`Recall` tools (OpenCode needs a plugin: DCP on 1.x, magic-context on either major; Claude Code and OpenClaw have none);"
+  },
+  {
+   "old": "OpenCode 1.x needs the opencode-pty plugin; Claude Code has none)",
+   "new": "OpenCode 1.x needs the opencode-pty plugin and 2.1.4 has only an experimental, write-only `write_terminal`; Claude Code has none)"
+  },
+  {
+   "old": "(as Claude Code and OpenClaw; OpenCode 1.18.35 has no lock and `/goal` only via a plugin)",
+   "new": "(as Claude Code and OpenClaw; OpenCode has no lock and `/goal` only via opencode-goal-plugin, now on both majors)"
+  },
+  {
+   "old": "The OpenCode cells in this section describe 1.18.35; §5 lists what 2.0.31 changes.",
+   "new": "The OpenCode cells in this section describe the 1.x line (1.19.4; this host runs 1.18.35, which still advertises session sharing that no longer works); §5 lists what 2.1.4 changes."
+  },
+  {
+   "old": "No sampling or elicitation (disabled deliberately), and no deferred loading by default (an experimental code mode hides MCP tools behind one `execute` tool; v2 makes it the default).",
+   "new": "No sampling or elicitation (disabled deliberately), and no deferred loading by default (an experimental code mode hides MCP tools behind one `execute` tool). v2 makes Code Mode the default, drops SSE, and supports elicitation; its forms render in TUI, desktop and web."
+  },
+  {
+   "old": "| 🔌 opencode-dynamic-context-pruning |",
+   "new": "| 🔌 opencode-dynamic-context-pruning (1.x only); magic-context `ctx_reduce` on either major |"
+  },
+  {
+   "old": "\"always\" approvals lost on restart; no sandbox, no trust dialog.",
+   "new": "\"always\" approvals lost on restart; no sandbox, no trust dialog. v2 persists approvals per project (editable through its API) but allows external directories by default and drops the doom-loop guard."
+  },
+  {
+   "old": "- **OpenCode**: one server, many clients (TUI, web, desktop, VS Code extension, ACP, SDK, GitHub/GitLab bots, `attach`).",
+   "new": "- **OpenCode**: one server, many clients (TUI, web, desktop, VS Code extension, ACP, SDK, GitHub/GitLab bots, `attach`); v2 adds a per-user background service, password-protected web, `opencode pair` links/QR, OpenTunnel and an iOS app, but its CLI has no GitHub bot."
+  },
+  {
+   "old": "OpenCode v2's pairing links / QR codes and end-to-end tunnel for phone access;",
+   "new": "OpenCode v2's pairing links / QR codes and end-to-end tunnel for phone access, and its browser-rendered MCP elicitation forms;"
+  },
+  {
+   "old": "A follow-up pass compared OpenCode 1.18.35 with 2.0.31.",
+   "new": "A follow-up pass compared the OpenCode 1.x and 2.x lines, at 1.19.4 and 2.1.4."
+  },
+  {
+   "old": "**OpenCode 1.18.35 and 2.0.31.**",
+   "new": "**OpenCode 1.19.4 and 2.1.4.**"
+  },
+  {
+   "old": "- Source at both tags of <https://github.com/anomalyco/opencode> (`packages/opencode/src/`, v2 core), the docs shipped with each tag, and <https://opencode.ai/docs/>.",
+   "new": "- Source at the 1.18.35, 1.19.4, 2.0.31 and 2.1.4 tags of <https://github.com/anomalyco/opencode> (`packages/opencode/src/`, v2 `packages/core`), the docs shipped with each tag, the v2 `CHANGELOG.md`, <https://opencode.ai/changelog> and <https://opencode.ai/docs/>. v1 notes are GitHub releases; v2 tags have none."
+  },
+  {
+   "old": "READMEs of installed ecosystem plugins (opencode-goal-plugin, opencode-pty, ocx, DCP, opencode-agent-memory, …).",
+   "new": "npm metadata, READMEs and tarballs of ecosystem plugins (opencode-goal-plugin, opencode-pty, magic-context, DCP, opencode-agent-memory, supermemory, plannotator, oh-my-openagent, …)."
+  }
+ ]
+}

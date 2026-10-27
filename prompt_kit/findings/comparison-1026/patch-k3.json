@@ -1,0 +1,594 @@
+{
+ "cells": [
+  {
+   "row": "PER-03",
+   "col": "web",
+   "expect": "🧪 `permission.rules` (read-only) exists ",
+   "why": "RulesPanel (WEB-1c) calls the method; the 🧪 premise is false.",
+   "new": "🟡 Rules panel lists the effective mode (+source), allow/ask/deny rules and session grants read-only; no rule editor",
+   "detail": "🟡 — `permission.rules` (Scope::Read) answers mode, modeSource, rules and sessionGrants. The Rules side panel renders them read-only and reloads on session switch, using a generation latch against the switch race. Rules change only in settings files, and the mode moves through the status-bar select. — _Evidence:_ `web:components/panels/RulesPanel.vue:7-55`; `src/Protocol/Methods/PermissionMethods.php:53,213-227`; `web:components/panels/SidePanels.vue:98`"
+  },
+  {
+   "row": "PER-07",
+   "col": "cc",
+   "expect": "🟡 — Auto mode is a regex classifier; wit",
+   "why": "The unflagged review covers ShellSubjectTools only, not every call. The old detail's \"Verified-by-repro … all Allow\" list is now matched by the classifier.",
+   "new": "🟡 Regex classifier; opt-in `autoReview` sends flagged calls and every unflagged non-read-only shell call to `ExecReviewer`",
+   "detail": "🟡 — The classifier's pattern families are: curl/wget-into-shell: pipes, process substitution `bash <(…)`, download-then-run, pipes into python/perl/ruby/node/php, and `$(…)`/backtick URLs; external endpoints; pre-session deletion, including `git clean -f`; force-push and reset-hard. Security findings always ask. With `autoReview` on, unflagged Bash/PtyRun calls that are not auto-allowed read-only lines also go to the reviewer. Edit, Write and WebFetch keep the classifier-only verdict. — _Evidence:_ `src/Permissions/SafetyClassifier.php:79-106,210-224`; `src/Permissions/PermissionGate.php:909-921,998-1003`"
+  },
+  {
+   "row": "PER-09",
+   "col": "cc",
+   "expect": "🟡 — `SecretRedactor` covers memory, jour",
+   "why": "The env-scrubbing half of the row was missing from the cell. The old detail (\"Not scrubbed: *_PASSWORD, PGPASSWORD, … env/printenv run unasked\") is false.",
+   "new": "🟡 Credential env vars scrubbed from children; `SecretRedactor` covers memory, journal, dreams, audit log, `/share`; tool output raw",
+   "detail": "🟡 — SECRET_ENV_PATTERNS scrubs `*_API_KEY`, `*_TOKEN`, `*_SECRET`, `AWS_*`, `*_PASSWORD/_PASS/_PWD`, `*_DSN`, `*_CREDENTIALS`, `*_KEY`, `DATABASE_URL` and `PGPASSWORD`. SSH_AUTH_SOCK is kept on purpose, and `secretEnvAllowlist` releases named variables. `env`/`printenv` are never auto-run. Streamed and recorded tool output is not redacted, and `/export` writes raw bytes by design (`/share` redacts). — _Evidence:_ `src/Support/ProcessContainment.php:115-135`; `src/Permissions/ReadOnlyCommands.php:353-359`; `src/Commands/ExportCommand.php:20-33`; `src/Hooks/BuiltIn/AuditHook.php:479-503`"
+  },
+  {
+   "row": "PER-11",
+   "col": "web",
+   "expect": "❌ No workspace-trust dialog in the web",
+   "why": "WEB-3b shipped a trust prompt.",
+   "new": "🟡 Context panel prompts to trust an untrusted project `.mcp.json` (this run, or saved user-tier); no general trust dialog",
+   "detail": "🟡 — A `context.sources` measurement mints one server-scope trust prompt per untrusted root: a `permission.asked` with kind \"trust\". The Context panel answers it with `context.trust` (Scope::Approve). A user-tier remember writes `trustedProjectMcp`; a project-tier remember is refused. The approvals drawer skips these prompts, so they show only in the Context panel, and MCP is the only grantable target. — _Evidence:_ `src/Protocol/TrustAsks.php:5-30`; `src/Protocol/Methods/ContextMethods.php:50,62-86`; `web:components/panels/ContextPanel.vue:15-24`; `web:stores/approvals.ts:124-128`"
+  },
+  {
+   "row": "PER-14",
+   "col": "cc",
+   "expect": "✅ AuditHook logs every call/refusal to `",
+   "why": "The cell has the wrong path and wrong rotation. The old detail said \"sits in tmp … unredacted\".",
+   "new": "✅ AuditHook logs every call/refusal to `~/.candy-code/audit/audit.log` (4 KiB in, 200 B out, redacted); rolls to `.1` at 5 MiB",
+   "detail": "✅ — The default directory is under the user's home (0700, owner-checked); the euid-scoped temp directory is only a fallback. Excerpts are redacted before they are cut, and are written only after PostToolUse hooks allow the output. Lines are injection-safe. — _Evidence:_ `src/Hooks/BuiltIn/AuditHook.php:81-114,279-305,479-503`"
+  },
+  {
+   "row": "GIT-01",
+   "col": "web",
+   "expect": "❌ No branch/status display; `files.chang",
+   "why": "WEB-1b wired `files.changed`.",
+   "new": "🟡 Changes panel lists changed/untracked files (`files.changed`) with the workspace diff; no branch display",
+   "detail": "🟡 — The Changes panel loads `files.changed` and `files.diff` together, fail-soft per side. Clicking a file narrows the diff to it, and untracked files are labelled. SessionSummary carries no branch, so the web never shows one. — _Evidence:_ `web:components/panels/ChangesPanel.vue:9-58`; `src/Protocol/Methods/FilesMethods.php:38-39`; `web:protocol/generated.ts` (SessionSummary, no `branch`)"
+  },
+  {
+   "row": "GIT-09",
+   "col": "web",
+   "expect": "🧪 Per-call diffs render; the session-wid",
+   "why": "The methods are called; 🧪 is false.",
+   "new": "🟡 Changes panel: changed-file list + whole workspace diff (click narrows to a file); per-call diffs; no per-turn/checkpoint view",
+   "detail": "🟡 — The diff arrives whole and is carved per file client-side (`diffSectionForPath`), then rendered by DiffView. There is no checkpoint/turn base selector. `/diff [n]` still prints text. — _Evidence:_ `web:components/panels/ChangesPanel.vue:31-72`; `web:lib/diff.ts`; `web:components/DiffView.vue`"
+  },
+  {
+   "row": "GIT-10",
+   "col": "web",
+   "expect": "❌ No review command",
+   "why": "The old cell implied no command exists at all; the cause is the missing host body (see GAP-GIT-10).",
+   "new": "❌ `/review` and `/security-review` are terminal-only (refused `ui_only`); no review panel",
+   "detail": "❌ — Both specs have a Chat handler but no host command, so `command.list` marks them `runsIn: client` and the composer refuses them. — _Evidence:_ `builtin-commands/2840-review.php`; `src/Protocol/Methods/CommandMethods.php:117-120`; `web:stores/session.ts:168-171`"
+  },
+  {
+   "row": "UI-09",
+   "col": "cc",
+   "expect": "🟡 ↑/↓ on empty box recalls prompts acros",
+   "why": "TUI-2 shipped.",
+   "new": "✅ ↑/↓ on an empty box recalls prompts across sessions (`prompt_history.jsonl`); Ctrl+G reverse search (Ctrl+R = session picker)",
+   "detail": "✅ — HistorySearch filters recalled prompts newest-first by case-insensitive containment. Pressing Ctrl+G again cycles matches. Enter accepts into the draft without sending, and Esc restores the pre-search draft. There is no session/project scope switch. — _Evidence:_ `src/Tui/HistorySearch.php:5-25`; `src/Commands/KeyBindingRegistry.php:947-949`; `src/Chat.php:17781-17810`; `src/Renderer.php:6418-6424`"
+  },
+  {
+   "row": "UI-09",
+   "col": "web",
+   "expect": "❌ No ↑ prompt history or Ctrl+R; only a ",
+   "why": "WEB-5a-i shipped.",
+   "new": "🟡 ↑/↓ walks a per-browser 50-prompt history ring; no reverse/incremental search",
+   "detail": "🟡 — `promptHistory.ts` keeps a most-recent-first ring in localStorage, capped at 50, skipping a duplicate of the head. The composer's ↑/↓ walk it and restore the draft on the way back. — _Evidence:_ `web:stores/promptHistory.ts:1-36`; `web:components/Composer.vue:147-208`"
+  },
+  {
+   "row": "UI-10",
+   "col": "cc",
+   "expect": "🟡 `@path` mentions with shell-style Tab ",
+   "why": "TUI-1 shipped.",
+   "new": "✅ `@` opens a fuzzy file popup (git-listed, Smith-Waterman rank); Tab completes paths; `@diff`, `@session:`, `@https://`, `$skill`",
+   "detail": "✅ — MentionIndex memoizes the per-project file list (tracked plus non-ignored) and ranks it with sugar-fuzzy's Smith-Waterman, basename first. ↑/↓/Tab/Enter accept and Esc closes. Outside git the popup is empty and unique-prefix Tab completion remains. Mentions attach on Enter, up to 20 files of 256 KiB each. — _Evidence:_ `src/Attachments/MentionIndex.php:54`; `src/Renderer.php:1862-1868`; `src/Protocol/Methods/FsMethods.php:41-44` (same index)"
+  },
+  {
+   "row": "UI-10",
+   "col": "web",
+   "expect": "🟡 `@path` mentions are resolved server-s",
+   "why": "WEB-5b shipped.",
+   "new": "✅ `@` popup ranks workspace files via `fs.search` (the TUI's MentionIndex ranking, root-jailed); mentions resolve server-side",
+   "detail": "✅ — `fs.search` (Scope::Read) reuses MentionIndex over the caller's own workspace, re-checks containment, and caps rows at the TUI popup limit. The composer queries it for the trailing `@partial`. It returns files only: no folder, agent or MCP rows. — _Evidence:_ `src/Protocol/Methods/FsMethods.php:33-71`; `web:components/Composer.vue:18-19,72-100`; `web:stores/session.ts:193-199`"
+  },
+  {
+   "row": "UI-12",
+   "col": "web",
+   "expect": "❌ No image paste or drag-drop",
+   "why": "WEB-5b shipped.",
+   "new": "🟡 Clipboard image paste (PNG/JPEG/GIF/WebP) attaches chips sent with `session.send`; no drag-drop",
+   "detail": "🟡 — `readPastedImages` turns clipboard Blobs into strict-base64 entries of the sniffed raster type. Images never ride a `/command` or `!bang`. No drop handler exists. — _Evidence:_ `web:lib/paste.ts:1-20`; `web:components/Composer.vue:70-71,114-122`; `web:stores/session.ts:172-176`"
+  },
+  {
+   "row": "UI-16",
+   "col": "web",
+   "expect": "✅ — Virtualized transcript; the streamin",
+   "why": "The cell text describes transcript rendering, not copying, which is the wrong row. The detail bullet was already ❌.",
+   "new": "🟡 Native browser text selection copies; no copy-message or copy-code-block button",
+   "detail": "🟡 — No component calls the Clipboard API (a grep for `navigator.clipboard`/`copy` across `src-web` finds no caller), so code blocks and replies have no copy affordance. — _Evidence:_ `web:components/MessageMarkdown.vue`; `web:components/TranscriptItem.vue`"
+  },
+  {
+   "row": "UI-19",
+   "col": "web",
+   "expect": "✅ Side panels: Agents, Todo, Background,",
+   "why": "Five panels shipped since.",
+   "new": "✅ Ten side panels: Agents, Todo, Background, Workflows, Memory, Rules, Catalog, Changes, Context, Generate (drawer or own column)",
+   "detail": "✅ — Ten panels: agents, todo, background, workflows, memory, rules, catalog, changes, context and generate; a drawer, or an own column on wide screens. — _Evidence:_ `web:stores/agents/panels.ts:5`; `web:components/panels/SidePanels.vue:94-104`"
+  },
+  {
+   "row": "UI-21",
+   "col": "web",
+   "expect": "✅ Tool cards: icon, name, key argument, ",
+   "why": "WEB-4 shipped.",
+   "new": "✅ Tool cards: icon, name, key argument, live output tail while running, +/− stats, duration; collapsed on success",
+   "detail": "✅ — While a call runs, the newest ephemeral `tool.progress` frame's tail renders in a live `<pre>`, terminal sequences stripped, with an \"older output dropped\" tag. `tool.finished` replaces it. — _Evidence:_ `web:components/ToolCard.vue:44,69-71`; `web:stores/reducer.ts:70`; `src/Protocol/EventType.php:62`"
+  },
+  {
+   "row": "UI-23",
+   "col": "cc",
+   "expect": "✅ — `statusLine` runs in a forked child ",
+   "why": "The scriptable half lacks session context, which competitors provide. The old cell described the implementation, not the feature.",
+   "new": "🟡 `statusLine` shell command runs in a forked child and fills a status-bar segment; no session JSON on stdin (model, cost, context)",
+   "detail": "🟡 — The line refreshes every 2 s (configurable up to 1 h). Output is stripped of ANSI, zone sentinels and newlines and fitted last, and returns over ToolIpc, so a frame never blocks. Stdin is closed at spawn and only the inherited, scrubbed env is passed. Claude Code's JSON payload has no counterpart. — _Evidence:_ `src/Config/StatusLineCommand.php:528,590-623`"
+  },
+  {
+   "row": "UI-25",
+   "col": "cc",
+   "expect": "🟡 Chord overrides per binding id via the",
+   "why": "TUI-4a/4b/4c shipped. The old cell said \"Launch-only\", and the old detail is ❌ plus `_remediated_`.",
+   "new": "✅ `keybindings` remaps any binding id to a chord or null (unbind); collisions announced; `/keys reload` re-applies",
+   "detail": "✅ — Overrides and suppressions register at launch after validation. `/keys reload` re-runs the same path mid-session (there is no file watcher) and clears every derived memo. An unbound chord is rewritten to an inert sentinel, so the shell regains the key. Vim keys are a mode, not registry rows, and are not rebindable. — _Evidence:_ `src/Commands/KeyBindingRegistry.php:200-301`; `src/Commands/KeyBinding.php:174`; `src/Chat.php:11947-11955`; `src/Config/Settings/Definitions/InterfaceSettings.php:281-289`"
+  },
+  {
+   "row": "UI-26",
+   "col": "web",
+   "expect": "✅ — Still needs HTTPS/localhost for the ",
+   "why": "\"now explains\" is history voice.",
+   "new": "✅ Opt-in desktop notifications for questions; needs HTTPS or localhost, and says why when insecure, denied or unsupported",
+   "detail": "✅ — The Notification API needs a secure context; the topbar and the approvals drawer say why a notify is unavailable, denied or unsupported. — _Evidence:_ `web:stores/settings.ts:8-14`; `web:components/approvals/ApprovalsDrawer.vue:93`"
+  },
+  {
+   "row": "UI-30",
+   "col": "web",
+   "expect": "✅ — Contrast spec derives pairs from tok",
+   "why": "\"no longer\" is history voice, and the question announcements (WEB-7a) were missing. The old detail carries `_remediated_` clutter.",
+   "new": "✅ WCAG AA token pairs pinned by a contrast spec; finished replies and arriving questions announced via polite live regions",
+   "detail": "✅ — The streaming tail is plain pre-wrap text announced once, politely, on completion. A newly arrived question announces its origin from App.vue's region. — _Evidence:_ `web:views/SessionView.vue:34-35,171`; `web:lib/questions.ts:9-36`; `web:styles/tokens.css`"
+  },
+  {
+   "row": "UI-33",
+   "col": "cc",
+   "expect": "❌ — No startup banner (version, model, c",
+   "why": "VIS-1 shipped. The cell contradicted §1 and §4.11.",
+   "new": "✅ Fresh launch shows a four-row summary: version, provider·model·mode, cwd·branch, instruction files, memory/skill/MCP counts, a tip",
+   "detail": "✅ — StartupSummary replaces the empty-conversation placeholder view-side only, with no transcript row, so `/clear` brings it back. Facts are gathered fail-soft, and the tip rotates by session id. It has no logo, effort, account or announcements. — _Evidence:_ `src/Support/StartupSummary.php:5-40,166`; `src/Renderer.php:4214-4224`"
+  },
+  {
+   "row": "UI-N3",
+   "col": "web",
+   "expect": "🧪 Generated images/videos render as Medi",
+   "why": "WEB-1d shipped.",
+   "new": "🟡 Generate panel: txt2img form over `generate.submit`/`status`, results as MediaCards; no img2img, inpaint or video",
+   "detail": "🟡 — The panel is offered only when `server.hello` reports image capability. It sends prompt, negative prompt and count, then polls `generate.status` and renders artifacts through MediaCard (`media.fetch`). `canGenerateVideo` is computed but nothing reads it. A typed `/generate <prompt>` also runs server-side. — _Evidence:_ `web:components/panels/GeneratePanel.vue:7-38`; `web:stores/connection.ts:90-91`; `web:stores/generate.ts:85-109`; `src/Protocol/Methods/MediaMethods.php:93-110`"
+  },
+  {
+   "row": "WEB-02",
+   "col": "cc",
+   "expect": "✅ HTTP+WS JSON-RPC 2.0 `candy-code.v1`: ",
+   "why": "The three media methods and `server.hello` are not in the 66.",
+   "new": "✅ HTTP+WS JSON-RPC 2.0 `candy-code.v1`: 69 methods, 35 events, generated schema, validated params, idempotency, seq replay"
+  },
+  {
+   "row": "WEB-02",
+   "col": "web",
+   "expect": "✅ Speaks the server's HTTP + WS JSON-RPC",
+   "why": "The detail's 17-method \"Unused\" list is stale (most are now called).",
+   "new": "✅ Speaks the server's HTTP + WS JSON-RPC API; requests 61 of 69 methods",
+   "detail": "✅ — Never requested: `files.read`, `memory.log`, `memory.undo`, `session.share`, `session.unshare`, `workflow.status`, `workspace.close`, and `server.shutdown` (Scope::Admin; it arrives as a notification and is handled). — _Evidence:_ `src/Protocol/Methods/FilesMethods.php:40`; `MemoryMethods.php:70-71`; `SessionMethods.php:57-58`; `WorkflowMethods.php:59`; `WorkspaceMethods.php:37`; `web:stores/connection.ts:137`"
+  },
+  {
+   "row": "WEB-10",
+   "col": "cc",
+   "expect": "❌ No mobile app; the responsive web UI s",
+   "why": "Commit SHA in a cell.",
+   "new": "❌ No mobile app; the responsive web UI is installable as a PWA (`manifest.webmanifest`)"
+  },
+  {
+   "row": "WEB-N2",
+   "col": "web",
+   "expect": "✅ — `server.overflow` resubscribes the n",
+   "why": "The cell described overflow handling, not multi-root. The old detail (\"The web ignores server.overflow\") is false.",
+   "new": "✅ Sidebar lists sessions of every running root (`workspace.list`); the folder picker opens new roots; no way to close a root host",
+   "detail": "✅ — With dir-browse on, the sessions store reads `workspace.list` and pages `session.list` per running non-primary root. `workspace.open {browse:true}` starts a host. A host death's `server.overflow` resubscribes the named session, or every followed one, from its cursor. `workspace.close` is never called. — _Evidence:_ `web:stores/sessions.ts:58-76`; `web:stores/newSession.ts:47-59`; `web:stores/connection.ts:124-140`"
+  },
+  {
+   "row": "WEB-N3",
+   "col": "cc",
+   "expect": "🟡 Server side complete (durable seq log,",
+   "why": "ISS-114 (d32c08f66) predates the doc. The old detail (\"lastSeq … nothing reads it\") is false.",
+   "new": "✅ Durable seq log, `hello {resume}` replay, idempotency keys; `candy-code attach` redials with backoff and resumes from its cursor",
+   "detail": "✅ — The server logs durable events with a gap-free per-session `seq` before broadcast. 20,000 are kept in the session DB, so seqs continue across restarts. The attach client redials after 0.25 s, doubling to 4 s, for up to 12 attempts, and re-says `server.hello` with `resume: {sessionId: lastSeq}`. When the log can no longer serve the cursor, it stitches a paged reset snapshot. A deliberate close, a refused resume or an exhausted ladder ends the redial. — _Evidence:_ `src/Host/RemoteSessionHost.php:85-95,866-935`; `docs/SERVER.md:990-1000`"
+  },
+  {
+   "row": "AUT-07",
+   "col": "web",
+   "expect": "❌ —",
+   "why": "The command is reachable from the composer.",
+   "new": "🟡 `/schedules` list/enable/disable/delete runs server-side (serve fires persisted rows); no schedules panel",
+   "detail": "🟡 — SchedulesCommand has a host body (`runsIn: server`). Serve's BackgroundEvents tick fires due persisted rows through `fireDue` as background sessions, and the Background panel shows them. — _Evidence:_ `src/Host/Commands/SchedulesCommand.php:5-30,53-58`; `src/Host/BackgroundEvents.php:110-130,227`; `src/Host/SessionHost.php:1647`"
+  },
+  {
+   "row": "AUT-08",
+   "col": "web",
+   "expect": "❌ No loop/recurring prompts in the web",
+   "why": "The glyph stands, but the cell must not imply the command is simply absent: it is a live silent failure.",
+   "new": "❌ `/loop` is accepted over `command.exec` but its in-memory row never fires in a served session; no loop UI",
+   "detail": "❌ — LoopCommand registers an ephemeral (non-persisted) Schedule and replies \"registered\". Only Chat's pump fires ephemeral rows; `ScheduleRegistry::fireDue()`, the serve path, skips them. A browser-typed loop therefore silently never runs. — _Evidence:_ `src/Host/Commands/LoopCommand.php:63-81`; `src/Background/ScheduleRegistry.php:391-397`; `src/Chat.php:18556-18566`; `src/Host/SessionHost.php:1647`"
+  },
+  {
+   "row": "AUT-09",
+   "col": "web",
+   "expect": "❌ `/goal` and `/grind` are client-only —",
+   "why": "WEB-2 shipped Goal/Grind host bodies.",
+   "new": "✅ `/goal` and `/grind` run server-side via `command.exec`; the served host runs the title-model judge loop between turns",
+   "detail": "✅ — After each settled turn with a live goal, SessionHost schedules the judge, mirroring Chat's loop through the shared GoalLoop decision table (budget and stop conditions). — _Evidence:_ `src/Host/SessionHost.php:1841-1870`; `src/Host/Commands/GoalHostCommand.php`; `src/Host/Commands/GrindHostCommand.php`; `src/Protocol/Methods/CommandMethods.php:117-120`"
+  },
+  {
+   "row": "CFG-04",
+   "col": "cc",
+   "expect": "✅ 43 `CANDY_CODE_*` variables (+20 provi",
+   "why": "The count is stale.",
+   "new": "✅ 45 `CANDY_CODE_*` variables (plus OTel, provider, terminal and OS vars) in `docs/ENVIRONMENT.md` and `--help`, drift-tested"
+  },
+  {
+   "row": "CFG-06",
+   "col": "web",
+   "expect": "❌ No diagnostics page (`doctor` is CLI)",
+   "why": "WEB-1c shipped a partial diagnostics surface.",
+   "new": "🟡 About modal shows server version, providers, tools and health; no `doctor` checks in the browser",
+   "detail": "🟡 — AboutModal reads `server.info` (version, protocol, root, providers, tools, commands, modes, agents) and `server.health` (ok, uptime, sessions open, turns running, draining), each fail-soft. — _Evidence:_ `web:components/AboutModal.vue:7-113`"
+  },
+  {
+   "row": "CFG-08",
+   "col": "cc",
+   "expect": "🟡 mcp import claude/opencode translates ",
+   "why": "INT-2/3/4 shipped.",
+   "new": "🟡 `mcp import claude/opencode`, memory import; Claude hooks, rules and commands read live; no settings or permission import",
+   "detail": "🟡 — Foreign configuration is read live rather than migrated: the `hooks` block of `.claude/settings.json`; `.claude/rules` and `.cursor/rules` trees; `.claude/commands` and `.opencode/command(s)`, at lowest precedence; foreign agents and skills. Permissions, env and model in `.claude/settings.json` are not imported. — _Evidence:_ `src/Hooks/ClaudeSettingsHooks.php`; `src/Commands/ForeignCommandDiscovery.php`; `src/Host/Commands/MemoryCommand.php:211`"
+  },
+  {
+   "row": "OBS-01",
+   "col": "web",
+   "expect": "🟡 — Swallowed internal errors now reach ",
+   "why": "History voice. The detail glyph is ❌ against the 🟡 cell.",
+   "new": "🟡 Internal errors reach the server log (`serve logs`); no log view in the browser",
+   "detail": "🟡 — The Dispatcher logs handler failures to the serve log; the browser has no log method or panel. — _Evidence:_ `src/Protocol/Dispatcher.php:365-370`; `docs/SERVER.md:123-212`"
+  },
+  {
+   "row": "OBS-03",
+   "col": "web",
+   "expect": "🟡 Spend per session in status bar, tiles",
+   "why": "The host body is reachable from the web.",
+   "new": "🟡 Spend per session in status bar, tiles and summaries; `/usage` rollups run server-side as text; no usage page",
+   "detail": "🟡 — UsageHostCommand returns the 7/30/all day×model rows over `command.exec`. — _Evidence:_ `src/Host/Commands/UsageHostCommand.php`; `builtin-commands/2210-usage.php`"
+  },
+  {
+   "row": "OBS-04",
+   "col": "web",
+   "expect": "🟡 Top bar: connection state + RTT; dashb",
+   "why": "Both methods are called; `/status` is a server built-in.",
+   "new": "✅ `/status` runs server-side; About modal shows `server.info` + `server.health`; top bar shows connection state + RTT",
+   "detail": "✅ — StatusHostCommand answers the read-only snapshot over `command.exec`. — _Evidence:_ `src/Host/Commands/StatusHostCommand.php`; `web:components/AboutModal.vue:43-51`; `web:components/StatusBar.vue:31`"
+  },
+  {
+   "row": "OBS-05",
+   "col": "cc",
+   "expect": "🟡 Transcripts in SQLite (session show), ",
+   "why": "AUT-2 made `-p` persist.",
+   "new": "🟡 Transcripts in SQLite (`session show`, `/export` md/json/html, `-p` runs persist), sub-agent trails on disk; no JSONL files",
+   "detail": "🟡 — The durable per-session event log lives in `session_events` (capped). `-p` runs are saved to a session row and are resumable. `/export` writes raw local files; `/share` writes redacted ones. — _Evidence:_ `src/Cli/NonInteractive.php:295-311,643-651`; `src/Commands/ExportCommand.php:216-218`; `src/Session/EnhancedSessionStore.php:594-640`"
+  },
+  {
+   "row": "OBS-05",
+   "col": "web",
+   "expect": "🟡 Inherited (server-side session store/e",
+   "why": "WEB-1a wired export.",
+   "new": "🟡 Session-row menu downloads a transcript (`session.export`: Markdown, JSON, text); no raw on-disk files",
+   "detail": "🟡 — The session-row menu downloads a transcript through `session.export` as Markdown, JSON or text; the raw on-disk files are not exposed. — _Evidence:_ `web:components/SessionSidebar.vue:26,93-97,187-189`; `web:stores/sessions.ts:113-115`"
+  },
+  {
+   "row": "PA-02",
+   "col": "cc",
+   "expect": "❌ No heartbeat/proactive check-ins; `/go",
+   "why": "This is parity with Claude Code's 🟡 for self-paced `/loop` and routines. AUT-1 shipped since the cell was written.",
+   "new": "🟡 No heartbeat; `schedules.json` rows and `/loop` re-run a check-in prompt on an interval, but nothing reaches you off-terminal",
+   "detail": "🟡 — Persisted schedule rows fire background sessions whose results announce in the TUI or web. There is no push channel and no built-in maintenance prompt. — _Evidence:_ `src/Background/ScheduleRegistry.php:193,391`; `src/Host/Commands/LoopCommand.php:5-25`"
+  },
+  {
+   "row": "PER-08",
+   "col": "cc",
+   "expect": "✅ File tools jailed to root; protect-fil",
+   "detail": "✅ — Bash is deliberately not jailed, and path checks are spelling-based: `cat .e?v` and `$var` indirection get through, as the docs admit. The protect-files hook covers both shell subjects, checking every decoded PtyRun step like a Bash command. — _Evidence:_ `src/Hooks/BuiltIn/ProtectFilesHook.php:139-293,426-430,656-668`; `src/Permissions/WritePathScope.php:101`",
+   "why": "\"PtyRun is not covered at all\" is false."
+  },
+  {
+   "row": "PER-12",
+   "col": "web",
+   "expect": "✅ — `bg.spawn` inherits the server's per",
+   "detail": "✅ — `bg.spawn` derives the child's mode from the server's configured mode, so it never escapes a server started without `--allow-bypass`, and it relays the child's asks to the approvals drawer. — _Evidence:_ `src/Protocol/Methods/BgMethods.php:93-101,131-132`; `src/Background/BackgroundPermissionRelay.php`",
+   "why": "drop `live probe` and the `_2026-10-18 remediated:_` clutter."
+  },
+  {
+   "row": "PER-N1",
+   "col": "cc",
+   "expect": "✅ Writes to hooks.yaml/config.json/agent",
+   "detail": "✅ — Blocks a model from granting itself trust. PtyRun steps fire the same PreToolUse shell hooks, protect-files floor included, and run inside the bash sandbox like Bash. — _Evidence:_ `src/Hooks/BuiltIn/ProtectFilesHook.php:227-293,426-430,656-668`; `src/Permissions/ShellSubjectTools.php:51`",
+   "why": "\"PtyRun bypasses this floor entirely (ISSUES P1)\" is false, plus `_remediated_` clutter."
+  },
+  {
+   "row": "GIT-10",
+   "col": "cc",
+   "expect": "✅ Built-in `/review` and `/security-revi",
+   "detail": "✅ — `/review [ref]` and `/security-review [ref]` submit a canned report-only prompt that closes on an `@diff` mention scoped to the revision, so the change set rides the ordinary mention path; both start a turn. — _Evidence:_ `builtin-commands/2840-review.php`; `builtin-commands/2845-security-review.php`; `src/Commands/ReviewCommand.php`; `src/Chat.php:11799`",
+   "why": "the detail glyph ❌ and \"docs/COMMANDS.md\" evidence are stale."
+  },
+  {
+   "row": "GIT-11",
+   "col": "cc",
+   "expect": "✅ Composite GitHub Action (`candy-code/a",
+   "detail": "✅ — The composite action `candy-code/action.yml` takes inputs prompt, permission-mode (default `plan`), max-cost (1.00), model and a version pin. It runs `-p --output-format json` and parses the envelope into the step summary. PR posting is left to the caller. `docs/CI.md` carries the CI/container recipe and the fork-PR/injection doctrine. — _Evidence:_ `action.yml:41-64,112-118`; `docs/CI.md`",
+   "why": "the detail glyph ❌ and \"grep github action = 0\" are stale."
+  },
+  {
+   "row": "UI-02",
+   "col": "web",
+   "expect": "🟡 auto / dark (TokyoNight) / light only;",
+   "detail": "🟡 — Three token sets (auto/dark/light), cycled from the top bar and kept per viewer. The token pairs are WCAG AA-checked by a contrast spec derived from `tokens.css`. The TUI's dracula/tokyoNight/ansi sets are not mirrored. — _Evidence:_ `web:stores/settings.ts:5,23-40`; `web:styles/tokens.css`",
+   "why": "\"Several token pairs miss WCAG AA (ISSUES)\" plus `_remediated_`."
+  },
+  {
+   "row": "UI-05",
+   "col": "cc",
+   "expect": "🟡 — Diffs render inline and unified; no ",
+   "detail": "🟡 — Edit/Write results build a unified diff with project-relative headers. It is painted boxed with a DiffGutter, capped at `diffPreviewRows` (default 24), and Ctrl+O expands it. The Edit/Write/ApplyPatch approval modal previews the same diff. There is no side-by-side view, no word-level highlighting and no syntax highlighting. `/diff [n]` prints a checkpoint patch. — _Evidence:_ `src/Tools/Concerns/BuildsUnifiedDiff.php:165-168`; `src/Renderer.php:286-294,7259-7261`; `src/Tools/BuiltIn/Edit.php:573`; `src/Tui/DiffGutter.php`",
+   "why": "\"the permission modal shows no diff\" and \"absolute path headers\" are false."
+  },
+  {
+   "row": "UI-07",
+   "col": "cc",
+   "expect": "🟡 `vimMode` setting arms the sugar-forms",
+   "detail": "🟡 — The user-tier `vimMode` setting (default off) arms the sugar-forms Vim layer on the `TextArea` chat composer: the minimum key set i a I A o O Esc h j k l w b e 0 $ x dd D v V d y plus p/P; inside a live visual selection `d`/`x` delete the span and `y` copies it via OSC-52, and in NORMAL `d`/`y` arm a pending-operator grammar whose kill/yank lands in an unnamed register that `p`/`P` paste. Deliberately not implemented: counts (`3dd`), the change operator (`cw`), text objects (`di\"`), named registers; `V` aliases `v` (line-wise entry awaits the E736 3.2 / R4 ruling). — _Evidence:_ `src/Config/Settings/Definitions/InterfaceSettings.php:299`; `src/Tui/ComposerVim.php` (docblock); `sugar-forms/src/Vim/VimKeyHandler.php:199-226`; `sugar-forms/src/TextArea/TextArea.php:431-434`",
+   "why": "SHA and wave tag."
+  },
+  {
+   "row": "UI-11",
+   "col": "cc",
+   "expect": "✅ — Long pastes collapse to numbered chi",
+   "detail": "✅ — Pastes that would bury the composer collapse to numbered, expandable chips over a height-capped input. A paste that is only an image path becomes a mention. Bracketed paste is sanitised (escapes and C0/C1 stripped). — _Evidence:_ `src/Renderer.php:1842`; `src/Chat.php` paste-chip region",
+   "why": "the old detail is the pre-fix bug text plus `_remediated_`."
+  },
+  {
+   "row": "UI-30",
+   "col": "cc",
+   "expect": "🟡 NO_COLOR, WCAG-projected theme contras",
+   "detail": "🟡 — `CANDY_CODE_REDUCED_MOTION` makes every spinner static at once. NO_COLOR and WCAG-projected chrome contrast apply. Mouse can be turned off. Ctrl+F walks a keyboard row cursor over collapsible transcript rows, and Ctrl+O expands the focused one. All strings go through `Lang::t`, but only `en` ships. There is no screen-reader/plain-text mode and no colour-blind palettes. — _Evidence:_ `src/Cli/Bootstrap.php:1232-1240`; `src/Commands/KeyBindingRegistry.php:908-914`; `src/Theme.php:237-480`",
+   "why": "\"the main spinner never animates anyway\" is false."
+  },
+  {
+   "row": "UI-31",
+   "col": "cc",
+   "expect": "✅ — The main-turn spinner animates and c",
+   "detail": "✅ — The main-turn spinner animates with an elapsed clock, the thinking row carries a paint-time silence gap, and sub-agent live lines animate with tool count, clock and tokens. StallDetector covers background sessions. — _Evidence:_ `src/Tui/AgentActivityLine.php`; `src/Agents/Live/AgentLiveRegistry.php:62`",
+   "why": "the old detail is the pre-fix bug text plus `_remediated_`."
+  },
+  {
+   "row": "UI-N1",
+   "col": "web",
+   "expect": "🟡 Fixed auto/dark/light token sets with ",
+   "detail": "🟡 — The token sets are fixed per theme with no background-aware projection like `Theme::pair`, but every text/background pair is checked to WCAG AA by a spec over `tokens.css`. — _Evidence:_ `web:styles/tokens.css`",
+   "why": "glyph mismatch."
+  },
+  {
+   "row": "WEB-04",
+   "col": "cc",
+   "expect": "🟡 Remote use via SSH tunnel or TLS rever",
+   "detail": "🟡 — Host check (DNS rebinding), Origin check, `--allowed-ips`, and trusted-proxy X-Forwarded-For/Proto (Secure cookie only behind a trusted HTTPS proxy). Request bodies carry a read deadline enforced ahead of auth (408). — _Evidence:_ `docs/SERVER.md:1144-1270`; `src/Server/Server.php:507-525`",
+   "why": "\"slowloris stalls the listener (ISSUES)\" plus `_remediated_`."
+  },
+  {
+   "row": "WEB-04",
+   "col": "web",
+   "expect": "✅ — Responsive down to phone width: the ",
+   "detail": "✅ — The top bar wraps and compacts at 375 px, and the PWA manifest makes the UI installable. — _Evidence:_ `web:App.vue`; `web:public/manifest.webmanifest`",
+   "why": "`_remediated_` clutter."
+  },
+  {
+   "row": "WEB-11",
+   "col": "cc",
+   "expect": "✅ Token never in browser; 128-bit one-ti",
+   "detail": "✅ — Host allow-list. Origin check on every upgrade and non-GET. Sec-Fetch-Site cross-site refused. Headers: CSP, nosniff, DENY, no-referrer, COOP, CORP. Port-scoped cookie name. Logout ends the cookie session and closes its sockets. The sign-in lockout never falls on the owner token. Token rotation signs everyone out (4001). Cookie sessions persist hash-only across restarts (0600, pruned on boot). — _Evidence:_ `src/Server/Http/AuthMiddleware.php:211-227`; `src/Server/Http/ApiController.php:31,133-153`; `src/Server/Auth/RateLimiter.php:14-27`; `src/Server/Auth/CookieSessions.php:16-19`",
+   "why": "the \"Gaps (ISSUES): …\" list is false, plus `_remediated_`."
+  },
+  {
+   "row": "WEB-11",
+   "col": "web",
+   "expect": "✅ — Code in URL fragment → HttpOnly Same",
+   "detail": "✅ — The page never holds the token: a code in the URL fragment becomes a cookie, then a 30 s single-use ticket per socket. — _Evidence:_ `web:protocol/auth.ts`",
+   "why": "\"Detail in DEEP-DIVE … ISSUES\" is not a current-state reference."
+  },
+  {
+   "row": "WEB-14",
+   "col": "cc",
+   "expect": "✅ `permission.requested` per session + s",
+   "detail": "✅ — `always` is remembered per session with argument-scoped patterns and cascades only to questions the pattern covers. `reject` + `cascade` stops the turn, and `server.askTimeoutSeconds` is optional. Background sessions relay their asks to every client (`permission.asked`, named by bg id), answered the same way with first-answer-wins. — _Evidence:_ `src/Protocol/Methods/PermissionMethods.php:20-42,75-80`",
+   "why": "\"bg.spawn work never asks at all (P1)\" is false."
+  },
+  {
+   "row": "WEB-N2",
+   "col": "cc",
+   "expect": "✅ one PHP process per extra project root",
+   "detail": "✅ — A token-authenticated UNIX socket is bound after spawn, and secrets go on stdin, not argv. A host death is announced as `server.overflow {sessionId, action: resubscribe}`, which the web acts on. — _Evidence:_ `src/Server/Workspace/Gateway.php:579-601`; `src/Server/Workspace/WorkspaceHostProcess.php`; `web:stores/connection.ts:131`",
+   "why": "\"which the web ignores — ISSUES\" is false."
+  },
+  {
+   "row": "WEB-N4",
+   "col": "web",
+   "expect": "🟡 Works against `serve --detach` (sign i",
+   "detail": "🟡 — The About modal shows `server.info` + `server.health` (uptime, sessions, turns, draining). A `server.shutdown` notification names the reason and grace in the connection banner. There are no stop or log controls: `server.shutdown` is Admin-scope and deliberately not requested, and logs stay CLI-only (`serve logs`). — _Evidence:_ `web:components/AboutModal.vue:7-113`; `web:stores/connection.ts:68,137`",
+   "why": "\"server.shutdown and server.health are unused\" is false."
+  },
+  {
+   "row": "AUT-01",
+   "col": "cc",
+   "expect": "✅ `maxCostUsd`/`CANDY_CODE_MAX_COST` enf",
+   "detail": "✅ — `NonInteractive::run` builds the engine backend, closes AskUser/PlanExit and prints the final message. `-p` defaults to bypass-permissions, with a stderr notice. `--max-turns` overrides the step ceiling (default 1000). `maxCostUsd`/`CANDY_CODE_MAX_COST` are validated and enforced. Each run is saved to a session row, and `--resume` works. — _Evidence:_ `src/Cli/NonInteractive.php:275,295-311,643-651`; `src/Cli/Bootstrap.php:189-197`",
+   "why": "glyph mismatch, a stale \"(ISSUES P1)\", and `_remediated_`."
+  },
+  {
+   "row": "AUT-02",
+   "col": "cc",
+   "expect": "✅ --output-format text/json/stream-json;",
+   "detail": "✅ — `--output-format text|json|stream-json`. stream-json writes one NDJSON `EventEnvelope` per typed event through `StreamJsonEmitter` and ends with the success document. json carries `session_id` and `usage`. Error types usage/provider_configuration/installation/backend/encoding/mcp-config/not-found share the envelope. — _Evidence:_ `src/Cli/NonInteractive.php:70-78,567`; `src/Cli/StreamJsonEmitter.php:48`; `src/Cli/ParsedArgs.php:33`",
+   "why": "\"stream-json → exit 2\" plus `_superseded_`."
+  },
+  {
+   "row": "AUT-03",
+   "col": "cc",
+   "expect": "✅ — Piped stdin is read with a first-byt",
+   "detail": "✅ — Piped stdin is read behind a `stream_select` first-byte watch (2 s). An open, silent pipe counts as no piped context, with a stderr notice. — _Evidence:_ `src/Cli/NonInteractive.php:208,1719-1767`",
+   "why": "the old repro text plus `_remediated_`."
+  },
+  {
+   "row": "AUT-04",
+   "col": "cc",
+   "expect": "✅ — `--max-cost` spend cap plus parsed `",
+   "detail": "✅ — `--max-turns` is parsed strictly like `--max-cost` (flag over config) and caps tool steps. `--max-cost`/`maxCostUsd` caps spend on the `-p` path. — _Evidence:_ `src/Cli/ArgvParser.php:535-620`; `src/Cli/Bootstrap.php:3541-3562`; `src/Cli/NonInteractive.php:275`",
+   "why": "\"--max-turns → unrecognized\" plus `_superseded_`."
+  },
+  {
+   "row": "AUT-05",
+   "col": "cc",
+   "expect": "🟡 GitHub Action shipped (`action.yml`) p",
+   "detail": "🟡 — A composite GitHub Action plus `docs/CI.md`: fork-PR/injection doctrine, HOME, exit codes, JSON contract and serve tokens, and a systemd unit for serve. PR/issue posting is left to the caller. — _Evidence:_ `action.yml`; `docs/CI.md`; `docs/examples/candy-code.service`",
+   "why": "the old evidence cites only README prose."
+  },
+  {
+   "row": "AUT-07",
+   "col": "cc",
+   "expect": "✅ Scheduler ships: `src/Background/Sched",
+   "detail": "✅ — Rows in `~/.candy-code/schedules.json` fire background sessions when due. They are evaluated inside the TUI pump and serve's BackgroundEvents tick, with a per-row 0600 lock against double fires. A busy previous run skips its slot. `/schedules` lists and flips rows. `/loop` adds in-process rows. — _Evidence:_ `src/Background/ScheduleRegistry.php:193,391-420`; `src/Host/BackgroundEvents.php:110-130,227`; `src/Chat.php:18520-18566`",
+   "why": "\"No scheduler code exists\" plus `_superseded_`."
+  },
+  {
+   "row": "AUT-08",
+   "col": "cc",
+   "expect": "✅ `/loop` + `/schedules` recurring promp",
+   "detail": "✅ — `/loop <interval> <prompt>` (seconds, or an s/m/h/d suffix) registers an ephemeral row whose prompt queues as the next turn each interval. The first fire comes one interval out. Rows end with the process or with `/schedules delete`. TUI only; see AUT-08 web. — _Evidence:_ `src/Host/Commands/LoopCommand.php:5-81`; `src/Chat.php:18556-18566`",
+   "why": "the glyph ❌ and `_superseded_` are stale."
+  },
+  {
+   "row": "AUT-11",
+   "col": "cc",
+   "expect": "✅ Inbound webhooks: `POST /api/hooks/{na",
+   "detail": "✅ — `POST /api/hooks/{name}` on serve: a per-hook secret (constant-time header check), a rate limit and a body cap. The body is spliced into the configured prompt as untrusted input and runs through the same queue/`bg.spawn` door. It is off by default (404 unless configured) and inbound only. — _Evidence:_ `src/Server/Http/ApiController.php:33-49`; `src/Server/Http/HookWebhooks.php:14-47`",
+   "why": "the glyph ❌ and `_superseded_`."
+  },
+  {
+   "row": "CFG-03",
+   "col": "cc",
+   "expect": "✅ — Every settings layer is schema-check",
+   "detail": "✅ — Every layer is schema-checked. Unknown keys get did-you-mean suggestions (case/`-`/`_`-folded, Levenshtein ≤2), and wrong types are named at launch. There is no JSON Schema file for editors; the shipped schema is the RPC protocol's. — _Evidence:_ `src/Config/LayeredSettings.php:1155-1185`; `src/Config/Settings/SettingsSchema.php`",
+   "why": "the old repro text (\"doctor printed No problems\") plus `_remediated_`."
+  },
+  {
+   "row": "CFG-06",
+   "col": "cc",
+   "expect": "✅ — `doctor` actually constructs the pro",
+   "detail": "✅ — `doctor` constructs the configured provider and reports a failure, and opens a real PDO handle to probe ext-sqlite3. There is no network or auth round-trip. — _Evidence:_ `src/Cli/Subcommands.php:298-470`",
+   "why": "the \"Gaps: …\" text is false, plus `_remediated_`."
+  }
+ ],
+ "narrative": [
+  {
+   "old": "8 of the 66 protocol methods are never requested from the browser (`server.shutdown` still arrives as a notification and is handled).",
+   "new": "8 of the 69 protocol methods are never requested from the browser: `files.read`, `memory.log`, `memory.undo`, `session.share`, `session.unshare`, `workflow.status`, `workspace.close`, and the Admin-scope `server.shutdown` (which arrives as a notification and is handled)."
+  },
+  {
+   "old": "- `/theme`, `/keys` and `/sessions` are terminal-only (`/model`, `/compact` and `/init` gained host bodies and now run over the wire).",
+   "new": "- 16 built-ins have no host body and are refused `ui_only` over the wire: `/new`, `/sessions`, `/effort`, `/exit`, `/theme`, `/settings`, `/keys`, `/help`, `/compress`, `/newrule`, `/pane`, `/layout`, `/editor`, `/budget`, `/review` and `/security-review` (`/theme`, `/settings`, `/sessions` and `/new` have web-native equivalents). The other 41 run on the server, `/model`, `/compact`, `/init`, `/goal`, `/grind`, `/btw`, `/hooks` and `/skills` among them."
+  },
+  {
+   "old": "- No panel shows loaded instructions, skills, MCP or hooks; only text commands (`/context`, `/mcp`, `/notices`) hint at them.",
+   "new": "- The Context panel (`context.sources`) lists loaded instruction files (path, size, tier), refused files, memory notes, skills (name and tier) and project MCP servers (configured status, no liveness), with a project-trust prompt; hooks show only through the server-run `/hooks` text table. `@mcp:` mentions, MCP prompt commands, `/mcp login` and `/skill-name` do not work in served sessions, and runtime notices (memory recall, model fallback) never reach the browser because serve does not drain the notice sink."
+  },
+  {
+   "old": "- No P1 remains: background sessions inherit the server's permission mode and route their asks to the approvals drawer.",
+   "new": "- Background sessions inherit the server's permission mode and route their asks to the approvals drawer; a `/loop` typed in the browser registers but never fires (the served host has no ephemeral-schedule pump)."
+  },
+  {
+   "old": "webhook triggers are serve-only (no outbound); share links need a running `serve` (no hosted endpoint)",
+   "new": "webhook triggers are serve-only (no outbound); share links need a running `serve` (no hosted endpoint); `/loop` never fires in a served session"
+  },
+  {
+   "old": "Status bar, permission modal depth, steering (Enter/Tab/Esc)",
+   "new": "Status bar, permission modal depth with diff preview, steering (Enter/Tab/Esc), fuzzy `@` file popup, Ctrl+G history search, rebindable keymap with `/keys reload`"
+  },
+  {
+   "old": "startup banner is one summary line, not a logo block; history-search UI polish and a richer vim vocabulary remain",
+   "new": "the startup summary is four text rows (no logo, effort, account or announcements); no screen-reader mode; vim lacks counts, text objects, `cw` and registers; `statusLine` gets no session JSON"
+  },
+  {
+   "old": "lossless reconnect (OpenClaw and OpenCode 2.0.31 replay too; `candy-code attach` never reconnects)",
+   "new": "lossless reconnect in both clients (OpenClaw and OpenCode 2.x replay too; `candy-code attach` redials with backoff and resumes from its cursor)"
+  },
+  {
+   "old": "Linux-first, no Windows; Composer-only install",
+   "new": "Linux-first, no Windows; Composer, release PHAR (`self-update`) or the serve Docker image only (no npm, brew or curl installer)"
+  },
+  {
+   "old": "  - **But:**\n    - ✅ `PtyRun` is inside the permission model: its steps are rule/classifier/breaker/grant subjects, render in the modal, drive shell hooks and honour the bwrap sandbox.\n    - ✅ Edit/Write approvals preview the diff and show full arguments, with `v` to expand.\n    - Auto mode is a regex classifier (opt-in `autoReview` feeds every non-read-only call to the LLM reviewer).\n    - `-p` still defaults to bypass (with the notice on stderr), but its spend cap is now enforced.\n",
+   "new": "  - `PtyRun` is inside the permission model: its steps are rule/classifier/breaker/grant subjects, render in the modal, drive shell hooks and honour the bwrap sandbox.\n  - Edit/Write/ApplyPatch approvals preview the diff and show full arguments, with `v` to expand.\n  - Auto mode is a regex classifier (opt-in `autoReview` sends flagged calls and every unflagged non-read-only shell call to the LLM reviewer; Edit/Write/WebFetch stay classifier-only).\n  - `-p` defaults to bypass (with a notice on stderr) and enforces its spend cap; rules live in the user tier only; no TUI workspace-trust dialog; no managed policy.\n- **candy-code-web**: server-wide approvals drawer (once / always-for-session / reject / reject & stop, with Edit/Write diff preview, AskUser choice buttons and Markdown plan approval); a read-only Rules panel (mode, rules, session grants); a project `.mcp.json` trust prompt in the Context panel; `remember: \"user\"` is not offered over the wire.\n"
+  },
+  {
+   "old": "- **candy-code-web**: sessions sidebar with question badges, tab-title counts, opt-in desktop notifications, status bar (step, tokens, spend, mode).",
+   "new": "- **candy-code-web**: dashboard (served root, open questions, recent sessions, versions); sessions sidebar with question badges, tab-title counts, opt-in desktop notifications and polite live-region announcements; status bar (step, tokens, spend, mode select, model select, Compact button); About modal over `server.info` + `server.health`."
+  },
+  {
+   "old": "panels for agents/todo/background/workflows/memory, settings with provenance. Requests 58 of the 66 protocol methods (`server.shutdown` still arrives as a notification and is handled).",
+   "new": "ten side panels (agents, todo, background, workflows, memory, rules, agent catalog, changes, context, generate), settings with provenance. Requests 61 of the 69 protocol methods (`server.shutdown` arrives as a notification and is handled)."
+  },
+  {
+   "old": "most formerly unmoved protocol methods are called from the web (files.read, workflow.status and workspace.close still have no web caller)",
+   "new": "most formerly unmoved protocol methods are called from the web (files.read, memory.log, memory.undo, session.share, session.unshare, workflow.status and workspace.close still have no web caller)"
+  },
+  {
+   "old": "Per-binding-id chord overrides ship via the `keybindings` setting: launch-validated, collision-announced, `/keys` effective.",
+   "new": "Per-binding-id chord overrides ship via the `keybindings` setting: launch-validated, collision-announced, `/keys` effective. Still open: vim counts, text objects (the sugar-forms `TextObject` resolver is unwired), `cw`, registers and line-wise `V`; session JSON for `statusLine`; a copy-reply/copy-code command; transcript search; a screen-reader mode."
+  },
+  {
+   "old": "the image/video Generate form on the `canGenerate*` capabilities (`generate.submit`/`status`, `media.fetch`)",
+   "new": "the image Generate form (txt2img; `canGenerateVideo` is computed but unread) on `generate.submit`/`status` and `media.fetch`"
+  },
+  {
+   "old": "(`sessions.remove` now called)",
+   "new": "(`sessions.remove` wired)"
+  },
+  {
+   "old": "the prompt-history ring,",
+   "new": "the prompt-history ring, the `@` file popup over the new `fs.search` method (the TUI's MentionIndex ranking), clipboard image paste riding `session.send` `images`,"
+  },
+  {
+   "old": "8. **Ideas from the competitors:**",
+   "new": "8. **Still open:** a browser `/loop` registers but never fires on serve (SessionHost has no ephemeral pump); host bodies for `/review`, `/security-review`, `/effort` and `/budget`; callers for `files.read`, `memory.log`/`undo`, `session.share`/`unshare`, `workflow.status` and `workspace.close`; a help/shortcuts overlay; copy buttons; drag-drop; reverse history search; a global thinking toggle; branch display; and i18n of the chrome (backlog).\n9. **Ideas from the competitors:**"
+  },
+  {
+   "old": "OpenClaw's Control UI side panels (Files / Terminal / Review)",
+   "new": "OpenClaw's Control UI side panels (Files, Terminal, Review, Subagents and Processes; the Changes panel partly covers Review)"
+  }
+ ]
+}

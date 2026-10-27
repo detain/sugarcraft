@@ -1,0 +1,954 @@
+{
+ "cells": [
+  {
+   "row": "PLAT-03",
+   "col": "cc",
+   "expect": "🟡 Composer, self-built phar (`tools/buil",
+   "new": "🟡 Composer, signed release phar (GitHub releases) and GHCR Docker image; no brew, npm, curl installer or native binary",
+   "detail": "🟡 — Composer `bin/candy-code`. `release-phar.yml` builds `candy-code.phar` and publishes it with a `.sha256` sidecar on every `candy-code/v*` tag; tags `candy-code/v0.1.0` and `v0.1.1` exist. From v0.1.1 on, releases also carry a minisign signature. `candy-code-image.yml` pushes `ghcr.io/detain/sugarcraft-candy-code` for `serve`. There is no Homebrew tap, npm package or curl/PowerShell installer. — _Evidence:_ `.github/workflows/release-phar.yml:1-30`; `.github/workflows/candy-code-image.yml:37,63-71`; `README.md:117-129`; `docs/DOCKER.md:10`; `git tag -l 'candy-code/*'`",
+   "why": "the phar is a published release artifact and the image is published; the old detail says \"no image is published\"."
+  },
+  {
+   "row": "PLAT-06",
+   "col": "web",
+   "expect": "✅ Browser UI (desktop + responsive layou",
+   "new": "✅ Browser UI (desktop + responsive, installable PWA manifest) over `candy-code serve`; sibling clients: `attach` TUI, ACP editors",
+   "why": "the PWA manifest (WEB-7b) shipped."
+  },
+  {
+   "row": "PLAT-09",
+   "col": "cc",
+   "expect": "✅ — TUI first frame ≈0.6 s now that the ",
+   "new": "✅ TUI first frame ≈0.6 s (the DA1 probe runs after raw-mode entry); help, version and subcommands never build the TUI",
+   "why": "drop the history voice (\"now that…\", \"was ~450 ms slower\")."
+  },
+  {
+   "row": "PLAT-10",
+   "col": "cc",
+   "expect": "🟡 i18n plumbing (Lang::t, locale from LC",
+   "new": "🟡 i18n plumbing (Lang::t, locale from LC_ALL/LANG, ~2,700 externalised strings) but only `lang/en.php` ships",
+   "detail": "🟡 — Lang::useLaunchLocale` runs first after autoload. Any non-en locale falls back to en because `lang/` holds only `en.php` (2,705 keys). — _Evidence:_ `lang/en.php` (`grep -c \"=>\"` → 2705); `ls lang/",
+   "why": "the string count is stale."
+  },
+  {
+   "row": "MOD-01",
+   "col": "web",
+   "expect": "🟡 Inherited: works when the server's con",
+   "new": "🟡 Inherited: usable when the server configures `anthropic`/`claude-code`; status-bar select switches to it; keys stay on the server",
+   "detail": "🟡 — The status bar fetches `server.info` providers and renders a `<select>`. Picking a provider runs `/model <provider>` on the host (`ModelHostCommand`, session-scoped), which takes that provider's configured default model. The browser never sees or sets credentials. — _Evidence:_ `web:components/StatusBar.vue:28-55,84-91`; `builtin-commands/0300-model.php:20-32`",
+   "why": "\"no provider picker\" is stale."
+  },
+  {
+   "row": "MOD-02",
+   "col": "cc",
+   "expect": "🟡 — `max_completion_tokens`, omitted tem",
+   "new": "🟡 Chat Completions only: reasoning families get `max_completion_tokens` + `reasoning_effort`; no Responses API",
+   "detail": "🟡 — Non-reasoning models keep `temperature` (default 0.7) + `max_tokens`. Reasoning families send `max_completion_tokens`, send `temperature` only when the operator set one, and map `/effort` to `reasoning_effort`. There is no Responses-API arm; a ChatGPT subscription rides the separate `codex` type. — _Evidence:_ `src/Providers/OpenAIProvider.php:466-491`; `src/Providers/CodexProvider.php` (class docblock)",
+   "why": "drop the \"—\" remediation form. The detail's \"always temperature 0.7 / gpt-5 400s\" is stale."
+  },
+  {
+   "row": "MOD-02",
+   "col": "web",
+   "expect": "🟡 Inherited (server `openai` provider); ",
+   "new": "🟡 Inherited (server `openai` provider); selectable from the status-bar provider select when the server configures it",
+   "detail": "🟡 — Inherited from the server's `openai` provider. The status-bar select lists the `server.info` providers and emits `/model <provider>`, which the host runs session-scoped; credentials stay server-side. — _Evidence:_ `web:components/StatusBar.vue:28-55,84-91`",
+   "why": "\"not selectable\" is stale."
+  },
+  {
+   "row": "MOD-03",
+   "col": "cc",
+   "expect": "🟡 Gemini only via vertex (ADC, generateC",
+   "new": "✅ Native `gemini` type (`GEMINI_API_KEY`, `x-goog-api-key`, generateContent + `?alt=sse`) beside Gemini-on-`vertex` (ADC)",
+   "detail": "✅ — GeminiProvider` speaks `generativelanguage.googleapis.com` with the key in the `x-goog-api-key` header. It shares the `GeminiGenerateContentWire` lifted out of `VertexProvider`, so a prompt behaves the same on `gemini` and on `vertex`. It implements `ShapesReasoningEffort` (thinking budget) and `RebindsModel`, and `candy-code login gemini` stores its key. — _Evidence:_ `src/Providers/GeminiProvider.php:14-57`; `src/Providers/ProviderFactory.php:483,620-628,766,843`; `src/Cli/Subcommands.php:793-797,877",
+   "why": "PRV-3 shipped a first-party Gemini API-key provider."
+  },
+  {
+   "row": "MOD-03",
+   "col": "web",
+   "expect": "🟡 Inherited (server `vertex` provider); ",
+   "new": "🟡 Inherited (server `gemini`/`vertex` providers); selectable from the status-bar provider select when configured",
+   "detail": "🟡 — Inherited from the server's `gemini` and `vertex` providers. The status-bar select lists the `server.info` providers and emits `/model <provider>`, which the host runs session-scoped; credentials stay server-side. — _Evidence:_ `web:components/StatusBar.vue:28-55,84-91`",
+   "why": "stale."
+  },
+  {
+   "row": "MOD-04",
+   "col": "web",
+   "expect": "🟡 Inherited (server `bedrock` provider);",
+   "new": "🟡 Inherited (server `bedrock` provider); selectable from the status-bar provider select when configured",
+   "detail": "🟡 — Inherited from the server's `bedrock` provider. The status-bar select lists the `server.info` providers and emits `/model <provider>`, which the host runs session-scoped; credentials stay server-side. — _Evidence:_ `web:components/StatusBar.vue:28-55,84-91`",
+   "why": "stale."
+  },
+  {
+   "row": "MOD-06",
+   "col": "web",
+   "expect": "🟡 Inherited via the server's `custom` pr",
+   "new": "🟡 Inherited via the server's `custom`/named provider blocks; selectable from the status-bar select, not configurable from the web",
+   "detail": "🟡 — Inherited from the server's `custom` and named provider blocks; they are not configurable from the web. The status-bar select lists the `server.info` providers and emits `/model <provider>`, which the host runs session-scoped; credentials stay server-side. — _Evidence:_ `web:components/StatusBar.vue:28-55,84-91`",
+   "why": "stale."
+  },
+  {
+   "row": "MOD-07",
+   "col": "web",
+   "expect": "🟡 Inherited (server `sglang`/custom loca",
+   "new": "🟡 Inherited (server `sglang`/custom local endpoints); selectable from the status-bar provider select when configured",
+   "detail": "🟡 — Inherited from the server's `sglang` and custom local endpoints. The status-bar select lists the `server.info` providers and emits `/model <provider>`, which the host runs session-scoped; credentials stay server-side. — _Evidence:_ `web:components/StatusBar.vue:28-55,84-91`",
+   "why": "stale."
+  },
+  {
+   "row": "MOD-09",
+   "col": "cc",
+   "expect": "🟡 — No in-app OAuth flow; a Pro/Max subs",
+   "new": "🟡 `candy-code login claude-code`/`codex` hands off to `claude auth login`/`codex login`; `bare: false` uses it; no native OAuth",
+   "detail": "🟡 — `login <type>` passes subscription arms through to the vendor CLI with inherited stdio, so candy-code never touches the token. It stores API keys for openai/anthropic/gemini into the user config's `providers` block and refuses ambient types with the owner's name. A Claude Pro/Max login is used only when the `claude-code` block sets `bare: false` (default stays `--bare`). The `codex` type relays the Codex CLI's ChatGPT subscription. There is no native OAuth flow and no Copilot login. — _Evidence:_ `src/Cli/Subcommands.php:832-878`; `lang/en.php:1005-1007`; `src/Providers/ClaudeCodeProvider.php:30-37`; `src/Providers/CodexProvider.php` (class docblock)",
+   "why": "`candy-code login` (PRV-4) shipped; the cell still says \"no in-app OAuth flow\" as if nothing existed."
+  },
+  {
+   "row": "MOD-10",
+   "col": "cc",
+   "expect": "✅ 9 provider types (+`gemini`, +`codex`)",
+   "new": "✅ 9 types (openai, anthropic, claude-code, codex, sglang, bedrock, vertex, gemini, custom) + echo + named blocks; `models all`",
+   "detail": "✅ — availableTypes()` lists the nine. `/model` and `models all` list ids from `/v1/models` (HasModelCatalog providers) plus the cached LiteLLM DB, lazily on open. — _Evidence:_ `src/Providers/ProviderFactory.php:481-484`; `src/Providers/HasModelCatalog.php`; `src/Providers/ModelCatalog.php",
+   "why": "drop the \"(+…)\" delta voice. The old detail (\"7 types, ≤3 ids, LiteLLM only sizes\") is stale."
+  },
+  {
+   "row": "MOD-11",
+   "col": "web",
+   "expect": "❌ `/model` is client-only: `command.exec",
+   "new": "✅ Status-bar provider `<select>` and typed `/model [provider [model]]` run `ModelHostCommand` on the server (session-scoped switch)",
+   "detail": "✅ — The `/model` spec carries `ModelHostCommand`, so `command.list` marks it `runsIn: server`. The host lists `Bootstrap::availableProviders()` and switches through the workspace's provider factory, scoped to the session. The persisted `models` write stays the terminal's. The status bar's select emits `/model <provider>` (or `<provider> <model>` for the current entry). — _Evidence:_ `builtin-commands/0300-model.php:20-32`; `src/Host/Commands/ModelHostCommand.php`; `web:components/StatusBar.vue:39-55,84-91`",
+   "why": "WEB-2 shipped."
+  },
+  {
+   "row": "MOD-12",
+   "col": "web",
+   "expect": "🟡 Per-agent models apply server-side; th",
+   "new": "✅ Per-agent models apply server-side; the agent view header names each run's model beside status, step, tokens and cost",
+   "detail": "✅ — subagent.*` events carry `model`. The tree store keeps it, and `AgentView` prints it in the run header. — _Evidence:_ `src/Protocol/Schema/EventSchemas.php:59`; `web:stores/agents/tree.ts:39,111`; `web:components/agents/AgentView.vue:95",
+   "why": "the model is now shown."
+  },
+  {
+   "row": "MOD-14",
+   "col": "web",
+   "expect": "❓ Any server-side fallback is invisible;",
+   "new": "🟡 Fallback applies to served turns, but its switch notice rides RuntimeNoticeSink, which serve never drains; the browser is not told",
+   "detail": "🟡 — FallbackProvider` reports a switch through `RuntimeNoticeSink::warn()` (error_log + sink). Serve arms the process sink in `Bootstrap::workspace()`, but the only drain is the TUI's `Chat`. No `drain()`/`notifyOnceWhenPending()` caller exists under `src/Host` or `src/Server`, so the row never reaches a served transcript. — _Evidence:_ `src/Providers/FallbackProvider.php:105-112,457`; `src/Cli/Bootstrap.php:1610,1679`; `src/Cli/Serve.php:592`; `src/Chat.php:18636",
+   "why": "now settled by code reading."
+  },
+  {
+   "row": "MOD-15",
+   "col": "web",
+   "expect": "❌ No effort/thinking control; e.g. `thin",
+   "new": "❌ No effort control: `/effort` has no host body (`ui_only`); `reasoningEffort`/`thinkingBudget` are `spend`-class, refused remotely",
+   "detail": "❌ — The `/effort` spec has no `withHostCommand`. Both settings are `RiskClass::Spend`, which `settings.set` refuses over the wire. — _Evidence:_ `builtin-commands/0350-effort.php:15-19`; `src/Config/Settings/Definitions/ModelProviderSettings.php:123-125,141-143`",
+   "why": "name the real blocker; /effort exists in the TUI now."
+  },
+  {
+   "row": "MOD-19",
+   "col": "cc",
+   "expect": "✅ — The native arm implements `MarksProm",
+   "new": "✅ `CacheBreakpoints` on native `anthropic` and Claude-on-Vertex, Bedrock `cachePoint`; OpenAI/SGLang cache server-side; health watch",
+   "detail": "✅ — The shared `AnthropicMessagesWire` applies `withCacheBreakpoints` (≤4 marks: system tail, last tool, tail chain) for both `anthropic` and the Vertex Anthropic arm. Bedrock marks system + last message. `promptCache` / `CANDY_CODE_DISABLE_PROMPT_CACHE` switch it off. `CacheHealthWatch` warns after 3 zero-cache replies. — _Evidence:_ `src/Providers/AnthropicProvider.php:39`; `src/Providers/Concerns/AnthropicMessagesWire.php:551-563`; `src/Providers/BedrockProvider.php:118-128`; `src/Backend/CacheHealthWatch.php:52-59`",
+   "why": "the cell described one arm only. The detail still cites the OpenAI-compat \"not supported\" relay."
+  },
+  {
+   "row": "MOD-21",
+   "col": "web",
+   "expect": "✅ `session.send` carries `images` alongs",
+   "new": "✅ Clipboard paste attaches PNG/JPEG/GIF/WebP via `session.send` `images` (server re-sniffs bytes); no drag-drop or file picker",
+   "detail": "✅ — Composer.vue` reads pasted images (cap `MAX_PASTED_IMAGES`). `session.send` validates base64 + mime and `TurnMethods` sniffs the bytes. No component handles `drop`. — _Evidence:_ `web:components/Composer.vue:70-71,115-119`; `src/Protocol/Schema/MethodSchemas.php:211-219`; `src/Protocol/Methods/TurnMethods.php:170",
+   "why": "no drop handler exists, and the cell carried plan IDs. The detail still says ❌ \"a user cannot send one\"."
+  },
+  {
+   "row": "MOD-22",
+   "col": "web",
+   "expect": "❌ No PDF/document upload; only `@path` m",
+   "new": "🟡 No browser PDF upload; `@path` to a PDF already on the server rides as a document block (`FileMentions` `%PDF-` sniff)",
+   "detail": "🟡 — Served prompts resolve mentions server-side. A `%PDF-` file within `DOCUMENT_MAX_BYTES` becomes an `AttachmentType::Document` sent as a document block on supporting providers. `session.send` accepts only `images`. — _Evidence:_ `src/Attachments/FileMentions.php:260-262,296-310`; `src/Host/TurnController.php:1060`; `src/Protocol/Schema/MethodSchemas.php:215`",
+   "why": "PDF delivery works through mentions."
+  },
+  {
+   "row": "MOD-25",
+   "col": "cc",
+   "expect": "🟡 Env vars or plaintext apiKey in ~/.can",
+   "new": "🟡 Env vars or plaintext apiKey in ~/.candy-code/config.json (0600, ${VAR}; `candy-code login` writes it); no OS keychain",
+   "why": "`login` is now the documented writer."
+  },
+  {
+   "row": "MOD-N1",
+   "col": "web",
+   "expect": "🟡 Inherited Task `model` arg (sub-agent ",
+   "new": "🟡 Inherited Task `model` arg (sub-agent on another model, same provider); the agent view header names the run's model",
+   "detail": "🟡 — No advisor surface. A delegated run appears as a Task card and tree node, and the header shows status, step, tokens, cost and model. — _Evidence:_ `web:components/agents/AgentView.vue:95`",
+   "why": "the \"without its model\" part is stale."
+  },
+  {
+   "row": "MOD-N2",
+   "col": "web",
+   "expect": "❌ No fast mode / service tier; the web h",
+   "new": "❌ No fast mode or service tier (the engine has none); the status-bar provider select and `/model` are the only model controls",
+   "detail": "❌ — The engine sends no `service_tier`. The web's only model controls are the provider select and typed `/model` (ModelHostCommand). — _Evidence:_ `web:components/StatusBar.vue:84-91`; grep `service_tier` in `src/Providers` → none",
+   "why": "\"no model controls at all\" is stale."
+  },
+  {
+   "row": "INS-01",
+   "col": "web",
+   "expect": "🟡 Engine loads CLAUDE.md for served sess",
+   "new": "✅ Engine loads CLAUDE.md for served sessions; the Context panel lists each loaded file with path, size and tier",
+   "detail": "✅ — context.sources` prices the same memoized `Bootstrap::instructionLoader()` the prompt splices: ancestor, root, forced and personal docs, plus refused or deferred paths. `ContextPanel.vue` renders them as plain spans with no content viewer. — _Evidence:_ `src/Host/ContextSources.php:98-118,133-150`; `src/Protocol/Methods/ContextMethods.php:54-76`; `web:components/panels/ContextPanel.vue:96-118`; `web:components/panels/SidePanels.vue:102",
+   "why": "WEB-3a shipped."
+  },
+  {
+   "row": "INS-02",
+   "col": "web",
+   "expect": "🟡 AGENTS.md: same — applied server-side,",
+   "new": "✅ AGENTS.md: same — applied server-side and listed by path and size in the Context panel",
+   "detail": "✅ — AGENTS.md is applied server-side and `context.sources` lists it by path, size and tier in the Context panel. The panel lists `context.sources` rows (ancestor, root, forced and personal docs) as plain spans with no content viewer. — _Evidence:_ `src/Host/ContextSources.php:98-118,133-150`; `web:components/panels/ContextPanel.vue:96-118`",
+   "why": "stale."
+  },
+  {
+   "row": "INS-03",
+   "col": "web",
+   "expect": "🟡 Whatever vendor rule files the engine ",
+   "new": "🟡 Whatever vendor files the engine reads apply and appear in the Context panel's instruction list; rule packs are not listed",
+   "detail": "🟡 — Vendor files the engine reads apply and appear in the Context panel's list (`loadDocuments()` + `loadPersonal()`); `RuleLoader` packs (`.claude/rules`, `.cursor/rules`) are not in it. — _Evidence:_ `src/Host/ContextSources.php:103-108`",
+   "why": "stale."
+  },
+  {
+   "row": "INS-04",
+   "col": "web",
+   "expect": "🟡 The server account's user-global instr",
+   "new": "✅ The server account's personal `~/.candy-code/AGENTS.md` (or `~/.claude/CLAUDE.md` stand-in) applies; the panel tags it `personal`",
+   "detail": "✅ — The personal tier (`~/.candy-code/AGENTS.md`, or the `~/.claude/CLAUDE.md` stand-in) applies; `loadPersonal()` rows carry `tier: personal` in the Context panel. — _Evidence:_ `src/Host/ContextSources.php:106-108,138-144`; `web:components/panels/ContextPanel.vue:104`",
+   "why": "stale."
+  },
+  {
+   "row": "INS-05",
+   "col": "web",
+   "expect": "🟡 Inherited if the engine supports a loc",
+   "new": "✅ Inherited: `CLAUDE.local.md` is an engine FILENAMES tier and appears in the Context panel when loaded",
+   "detail": "✅ — `CLAUDE.local.md` is an engine FILENAMES tier, so it applies and shows in the Context panel's list when loaded. — _Evidence:_ `src/Context/InstructionFileLoader.php:180`; `src/Host/ContextSources.php:98-118,133-150`; `web:components/panels/ContextPanel.vue:96-118`",
+   "why": "the engine does support it; the \"if\" is stale."
+  },
+  {
+   "row": "INS-06",
+   "col": "web",
+   "expect": "❓ Managed/enterprise instruction support",
+   "new": "❌ No managed/enterprise instruction file (the engine has none)",
+   "detail": "❌ — The engine's policy file governs permissions and hooks only. — _Evidence:_ `src/Context/InstructionFileLoader.php:180` (no managed tier)",
+   "why": "now settled."
+  },
+  {
+   "row": "INS-07",
+   "col": "web",
+   "expect": "🟡 Inherited: discovery runs from the ser",
+   "new": "🟡 Inherited: discovery runs from the served root (or the workspace host's root); ancestor files appear in the Context panel",
+   "detail": "🟡 — `loadDocuments()` returns ancestor, root and forced docs, and the Context panel lists them. — _Evidence:_ `src/Context/InstructionFileLoader.php:461-479`; `src/Host/ContextSources.php:103-108`",
+   "why": "stale."
+  },
+  {
+   "row": "INS-12",
+   "col": "cc",
+   "expect": "✅ Read once per session at first prompt ",
+   "new": "✅ Read once at first prompt build, frozen until a refresh point; mid-session edits arrive as a bounded diff in `<turn-context>`",
+   "detail": "✅ — The standing slab is a `SessionPromptMemo` PerSession layer, refreshed only at `/clear`, compaction, rewind or a session switch. `InstructionDiffTracker` fingerprints the root files at freeze and stat-checks them each turn. A change renders a bounded, PromptFence-escaped unified diff (or a name+size `Read` pointer) in the user-role `<turn-context>` tail, so the cached prefix never moves. Nested files arrive on touch. — _Evidence:_ `src/Context/InstructionDiffTracker.php:1-50`; `src/Runtime.php:5742-5754`; `src/Context/TurnContextBlock.php:105,209,283`; `src/Context/InstructionFileLoader.php:1653`",
+   "why": "CTX-3 shipped. Cell and detail both said edits are not seen until a refresh point."
+  },
+  {
+   "row": "INS-14",
+   "col": "web",
+   "expect": "❌ No startup banner or list of loaded fi",
+   "new": "❌ No startup banner; loaded instruction files are listed only on demand in the Context panel",
+   "detail": "❌ — The dashboard shows served root and versions. `/notices` prints launch warnings, and the Context panel lists files when opened. — _Evidence:_ `web:components/panels/ContextPanel.vue:96-108`; `src/Host/Commands/NoticesHostCommand.php`",
+   "why": "the \"or list of loaded files\" part is stale."
+  },
+  {
+   "row": "INS-15",
+   "col": "web",
+   "expect": "🟡 `/context` (server-run) prints the sec",
+   "new": "✅ Context panel (`context.sources`): instruction files with size and tier, \"Not read\" refusals, memory notes, skills, MCP, breakdown",
+   "detail": "✅ — The panel uses the same `ContextBreakdown` measurement as `/context`, structured and rendered as plain spans. Typed `/context` still prints the text report. There is no content viewer. — _Evidence:_ `web:components/panels/ContextPanel.vue:68-150`; `src/Host/ContextSources.php:133-160`; `web:stores/contextSources.ts:49`",
+   "why": "WEB-3a shipped. The detail's \"verified: rows …\" probe is stale."
+  },
+  {
+   "row": "INS-17",
+   "col": "cc",
+   "expect": "✅ `/init [focus]` has the agent study th",
+   "new": "✅ `/init [focus]` has the agent study the repo and write or improve root AGENTS.md; served sessions run it too (InitHostCommand)",
+   "detail": "✅ — It sends `InitCommand::prompt()` as a user turn. The prompt reads existing AGENTS.md, CLAUDE.md, GEMINI.md, .cursorrules, .clinerules and copilot-instructions first; the gated Write tool does the writing. `InitHostCommand` lands the same prompt through the host's submit route. The new file reaches the prompt as a `<turn-context>` diff, or in full at the next refresh point. — _Evidence:_ `builtin-commands/2500-init.php:16-26`; `src/Host/Commands/InitHostCommand.php`; `src/Commands/InitCommand.php`",
+   "why": "WEB-2 gave /init a host body."
+  },
+  {
+   "row": "INS-17",
+   "col": "web",
+   "expect": "❌ `/init` is client-only: refused -32030",
+   "new": "✅ Typed `/init [focus]` runs on the server (InitHostCommand) and starts the AGENTS.md-writing turn",
+   "detail": "✅ — The `/init` spec carries `InitHostCommand`, so a typed `/init [focus]` runs on the host and lands the same AGENTS.md-writing prompt through the host's submit route. — _Evidence:_ `builtin-commands/2500-init.php:26`; `src/Host/Commands/InitHostCommand.php`",
+   "why": "WEB-2."
+  },
+  {
+   "row": "INS-18",
+   "col": "web",
+   "expect": "🟡 Inherited truncation; any warning reac",
+   "new": "🟡 Inherited truncation; refused or deferred files are listed with reasons under the Context panel's \"Not read\"",
+   "detail": "🟡 — refusedPaths()` rides `context.sources` as `untrusted` and is rendered in the panel. — _Evidence:_ `src/Host/ContextSources.php:110-112,146`; `web:components/panels/ContextPanel.vue:111-118",
+   "why": "stale."
+  },
+  {
+   "row": "INS-19",
+   "col": "web",
+   "expect": "❌ No trust dialog: untrusted project hoo",
+   "new": "❌ Instruction files are not trust-gated (engine has none); the Context panel's trust prompt covers project `.mcp.json` only",
+   "detail": "❌ — context.sources` raises a `kind: trust` ask when the root's `.mcp.json` is untrusted, answered by `context.trust`. The answer is session or user tier; project-tier remember is refused. It never gates CLAUDE.md or AGENTS.md. — _Evidence:_ `src/Protocol/Methods/ContextMethods.php:32-50,61-74`; `web:components/panels/ContextPanel.vue:160-172",
+   "why": "\"the web cannot grant trust\" is stale."
+  },
+  {
+   "row": "INS-20",
+   "col": "cc",
+   "expect": "❌ No exclusion control for instruction d",
+   "new": "✅ User-tier `instructionsExclude` globs skip root, ancestor, forced and on-touch docs, recorded as refusals; a repo cannot set it",
+   "detail": "✅ — Bootstrap::instructionLoader()` passes `excludedInstructions()` (user config only) to the loader. One `excluded()` gate runs before containment on every repository-tier read loop and records `excluded by instructionsExclude` in `refusedPaths`, so the skip is announced. The personal tier is never silenced. — _Evidence:_ `src/Config/Settings/Definitions/MemoryRuleSettings.php:132-139`; `src/Cli/Bootstrap.php:8904-8910,8998-9013`; `src/Context/InstructionFileLoader.php:390-397,588-620,946`; `docs/SETTINGS.md:266,1141",
+   "why": "INT-1(d) shipped. Cell and detail both say ❌."
+  },
+  {
+   "row": "INS-20",
+   "col": "web",
+   "expect": "🟡 Exclusion keys appear in the schema-dr",
+   "new": "🟡 `instructionsExclude` is read-only in the Settings form (prompt class, not remotely writable); excluded files show as \"Not read\"",
+   "detail": "🟡 — `instructionsExclude` is `prompt` risk class, so the Settings form shows it read-only and remote writes are refused; excluded files appear under \"Not read\" in the Context panel. — _Evidence:_ `src/Config/Settings/Definitions/MemoryRuleSettings.php:134`; `web:components/panels/ContextPanel.vue:111-118`",
+   "why": "name the real key."
+  },
+  {
+   "row": "MEM-02",
+   "col": "web",
+   "expect": "🟡 Model-initiated saves (Memory tool) ap",
+   "new": "🟡 Served sessions run no turn-end auto-memory (scheduled only by the TUI); Memory-tool saves appear as plain tool cards",
+   "detail": "🟡 — `AutoMemoryConsolidator::call` is scheduled only from the TUI's turn-completion handler. `SessionHost` has no equivalent, so a web-driven session saves memory only when the model calls `Memory`. — _Evidence:_ `src/Chat/Handlers/HandlesTurnCompletion.php:311-319`; grep `AutoMemoryConsolidator` in `src/Host`, `src/Server` → none",
+   "why": "the cell implied auto-memory was inherited."
+  },
+  {
+   "row": "MEM-08",
+   "col": "web",
+   "expect": "🟡 Consolidation/dreaming not surfaced; `",
+   "new": "🟡 The dream pass runs only from the TUI's turn completion, never on served sessions; `/skills proposed` lists drafts a TUI pass made",
+   "detail": "🟡 — DreamPass::call` is gated and scheduled only in `HandlesTurnCompletion`. — _Evidence:_ `src/Chat/Handlers/HandlesTurnCompletion.php:326-336",
+   "why": "the cell implied the pass runs but is invisible."
+  },
+  {
+   "row": "MEM-09",
+   "col": "cc",
+   "expect": "🟡 `/memory list/add/search/edit/delete/c",
+   "new": "✅ `/memory list/add/search/edit/delete/clear/import/log/restore` plus `/memory open <id>` in `$EDITOR`; no browsing panel in the TUI",
+   "detail": "✅ — MemoryCommand` is a host command, so it also works over `serve` except `open`, which needs a terminal and is refused there. In the TUI, `memoryOpenArm` resolves the id and hands the note file to `EditorCommand::openFile()` on the `Cmd::exec` channel. — _Evidence:_ `src/Chat.php:15609-15660`; `src/Host/Commands/MemoryCommand.php:65-79`; `src/Commands/EditorCommand.php:118",
+   "why": "VIS-2b shipped the editor."
+  },
+  {
+   "row": "MEM-10",
+   "col": "cc",
+   "expect": "🟡 — Pre-compaction flush now prints a sa",
+   "new": "✅ Notices for auto-memory, dream-pass and pre-compaction-flush writes plus a per-turn \"💭 Recalled N notes\" row (count only, TUI)",
+   "detail": "✅ — `Runtime::announceMemoryRecall()` records `chat.memory.recalled_notice` into `RuntimeNoticeSink` whenever the recall set is non-empty and changed. `MemoryConsolidatedMsg` and `DreamPassCompletedMsg` append a notice when a note was saved, changed or removed, and the flush notice names its rows. Recall rows name no notes and link no files. — _Evidence:_ `src/Runtime.php:5975-5994`; `lang/en.php:1897-1898`; `src/Chat/Handlers/HandlesTurnCompletion.php:380-415",
+   "why": "VIS-6 shipped."
+  },
+  {
+   "row": "MEM-10",
+   "col": "web",
+   "expect": "🟡 No \"memory saved/recalled\" toast; the ",
+   "new": "🟡 Only tool cards: the recall row rides RuntimeNoticeSink, which serve never drains; no auto-memory or dream pass on served sessions",
+   "detail": "🟡 — The recall notice is recorded in the served turn child but never drained (only `Chat` drains). The consolidator and dream notices come from TUI-only scheduling. — _Evidence:_ `src/Runtime.php:5991`; `src/Chat.php:18636`; `src/Cli/Bootstrap.php:1679`; `src/Chat/Handlers/HandlesTurnCompletion.php:311-336`",
+   "why": "give the cause, which also defines the gap."
+  },
+  {
+   "row": "MEM-N1",
+   "col": "web",
+   "expect": "✅ — Panel mutations route through `Memor",
+   "new": "✅ Panel writes commit to memory history (MemoryWriter); log/restore by typing `/memory log` or `/memory restore`; no history view",
+   "detail": "✅ — `memory.add/edit/delete` route through `MemoryWriter`, so HOME-store writes commit like `/memory`. The `memory.log`/`memory.undo` methods exist but no web code requests them. — _Evidence:_ `src/Protocol/Methods/MemoryMethods.php:25-37,70-71,177-180`; grep `memory.log` in `src-web` → none",
+   "why": "the detail is stale (\"no MemoryHistory commit … 'outside' subject\"); the cell needs the true UI scope."
+  },
+  {
+   "row": "PRM-05",
+   "col": "web",
+   "expect": "🟡 Tool sets per mode/agent are server-si",
+   "new": "🟡 Tool sets per mode/agent are server-side; the About dialog lists the server's tool names (`server.info`); no per-mode/agent view",
+   "detail": "🟡 — AboutModal` renders `info.tools` (count + names) from `server.info`. — _Evidence:_ `web:components/AboutModal.vue:45,88-91",
+   "why": "\"`server.info` unused\" is stale."
+  },
+  {
+   "row": "PRM-06",
+   "col": "web",
+   "expect": "🟡 `/context` shows the `available-skills",
+   "new": "✅ Inherited listing; the Context panel lists skills by name with tier and enabled state",
+   "detail": "✅ — context.sources.skills` comes from the workspace skill registry. — _Evidence:_ `src/Host/ContextSources.php:154-158`; `web:components/panels/ContextPanel.vue:132-140",
+   "why": "WEB-3a."
+  },
+  {
+   "row": "PRM-07",
+   "col": "web",
+   "expect": "🟡 Inherited; `agents.list` is unused by ",
+   "new": "✅ Inherited `<available-agents>` roster; the Agent catalog panel (`agents.list`) and About dialog list it with model and description",
+   "detail": "✅ — AgentCatalogPanel` requests `agents.list` and shows provider · model, permission mode and description per preset. — _Evidence:_ `web:components/agents/AgentCatalogPanel.vue:26,51-52`; `web:components/panels/SidePanels.vue:100`; `web:components/AboutModal.vue:97-100",
+   "why": "WEB-1c."
+  },
+  {
+   "row": "PRM-12",
+   "col": "web",
+   "expect": "🟡 `/context` runs server-side and prints",
+   "new": "✅ Context panel renders the per-section breakdown and history share (`context.sources`); typed `/context` prints the text report",
+   "detail": "✅ — The Context panel renders the per-section breakdown and history share from `context.sources`, using the same `ContextBreakdown` measurement as `/context`; typed `/context` prints the full text report. — _Evidence:_ `web:components/panels/ContextPanel.vue:56-60,76-94`",
+   "why": "WEB-3a."
+  },
+  {
+   "row": "PRM-N3",
+   "col": "web",
+   "expect": "🟡 Inherited Maxims + prove-before-done p",
+   "new": "✅ Inherited Maxims + prove-before-done clauses; `/goal` and `/grind` run on the host, judge loop on SessionHost's turn settle",
+   "detail": "✅ — GoalHostCommand` serves status, set and clear and the first round. `SessionHost` arms the title-model judge on its own turn settle through the shared `GoalLoop` decision table and stops on the TUI's exact conditions. — _Evidence:_ `builtin-commands/3400-goal.php:27`; `src/Host/SessionHost.php:1847-1930`; `src/Goal/GoalLoop.php",
+   "why": "WEB-2 and W7a-3. Note: the comment at `builtin-commands/3400-goal.php:15-19` still says the continuation loop does not run headless. That comment is stale (see Dormant code)."
+  },
+  {
+   "row": "CTX-04",
+   "col": "cc",
+   "expect": "✅ `/compact [focus]` (LLM summary) and `",
+   "new": "✅ `/compact [focus]` (LLM summary, TUI and served) and `/compact --self` (model's Compress, previewed; terminal only)",
+   "detail": "✅ — CompactHostCommand` runs the same `CompactionService` fold on served sessions and refuses only `--self`. A typed `/compact` refuses on a SummarySafeguard HOLD. — _Evidence:_ `builtin-commands/2000-compact.php:16-27`; `src/Host/Commands/CompactHostCommand.php:11-47",
+   "why": "the cell's trailing \"TUI only\" is stale (beyond the 100-char prefix). The detail says \"no host command\"."
+  },
+  {
+   "row": "CTX-04",
+   "col": "web",
+   "expect": "❌ `/compact` is client-only — refused -3",
+   "new": "✅ Status-bar \"compact\" button and typed `/compact [focus]` run CompactHostCommand on the server; `--self` stays terminal-only",
+   "detail": "✅ — The button emits `/compact` (disabled while busy). — _Evidence:_ `web:components/StatusBar.vue:92-99`; `src/Host/Commands/CompactHostCommand.php:34-47`",
+   "why": "WEB-2."
+  },
+  {
+   "row": "CTX-11",
+   "col": "web",
+   "expect": "🟡 `/btw` is a server-run built-in; wheth",
+   "new": "🟡 `/btw` runs on the host (BtwHostCommand) between turns only; `SessionHost::runCommand` refuses every built-in while a turn runs",
+   "detail": "🟡 — The busy gate admits only workflow-control commands mid-turn, so the side question cannot be asked during the turn it is meant for. — _Evidence:_ `src/Host/SessionHost.php:787-793`; `src/Host/Commands/BtwHostCommand.php:49-54`",
+   "why": "now settled by code reading."
+  },
+  {
+   "row": "CTX-N2",
+   "col": "cc",
+   "expect": "🟡 — Idle windows over the offer threshol",
+   "new": "🟡 Opt-in `compaction.idleAuto` folds a session idle past `idleOfferSeconds` (1 h) when over the 85% tier; off by default",
+   "detail": "🟡 — IdleCompactionPolicy::shouldAutoCompact()` is shared by the TUI idle tick and a one-shot `SessionHost` timer. It fires only after the idle window, re-asks the 85%/cap verdict and never aborts in-flight work. With `idleAuto` off, a session idle past the window and over the whole window gets an advice row instead. No path times a fold to a provider cache TTL (5-min default marks). — _Evidence:_ `src/Context/IdleCompactionPolicy.php:130-154`; `src/Chat.php:14059-14160`; `src/Host/SessionHost.php:155-165,532-545,673-708`; `src/Config/Settings/Definitions/ContextSettings.php:177-180",
+   "why": "CTX-5 shipped. The cell still says only an advice row exists."
+  },
+  {
+   "row": "CTX-N2",
+   "col": "web",
+   "expect": "🟡 — The host advisory is wired and the a",
+   "new": "🟡 Inherited: served sessions run the same opt-in `compaction.idleAuto` fold (SessionHost timer) and the over-window advisory",
+   "detail": "🟡 — Served sessions share `IdleCompactionPolicy` through a one-shot `SessionHost` timer. The fold lands as `compaction.completed`, which the reducer renders as a \"History compacted\" notice. — _Evidence:_ `src/Host/SessionHost.php:673-708`",
+   "why": "\"no silent auto-compact\" is stale."
+  },
+  {
+   "row": "SES-01",
+   "col": "cc",
+   "expect": "✅ SQLite WAL ~/.candy-code/session.db (0",
+   "new": "✅ SQLite WAL ~/.candy-code/session.db (0600), interned transcripts + checkpoints, saved within 0.5 s; `-p` runs saved and resumable",
+   "detail": "✅ — Transcript rows are interned into `checkpoint_blobs`, so a save writes only new data. A one-shot `-p` opens a real session row before the turn and records it after the answer, so `--resume`/`-c` and the JSON envelope's `session_id` work. — _Evidence:_ `src/Cli/NonInteractive.php:297-334,643-659`; `src/Session/EnhancedSessionStore.php`",
+   "why": "the cell's tail \"-p not saved\" is stale (AUT-2). The detail also says `-p` is not persisted."
+  },
+  {
+   "row": "SES-06",
+   "col": "web",
+   "expect": "🟡 `/fork` and `/branch` run server-side ",
+   "new": "✅ Session row menu \"Fork\" calls `session.fork` and opens the copy; `/fork` and `/branch` also run server-side",
+   "detail": "✅ — SessionSidebar` fork → `sessions.fork()` → `session.fork`, then `open(forked.id)`. — _Evidence:_ `web:components/SessionSidebar.vue:73-79,186`; `web:stores/sessions.ts:95-100",
+   "why": "WEB-1a."
+  },
+  {
+   "row": "SES-08",
+   "col": "web",
+   "expect": "🧪 `session.export` (markdown/json/text) ",
+   "new": "✅ Session row menu \"Export · Markdown/JSON/Text\" calls `session.export` and downloads the file in the browser",
+   "detail": "✅ — exportRow` downloads through a blob URL (revoked on the next export or unmount). — _Evidence:_ `web:components/SessionSidebar.vue:93-118,187-189`; `web:stores/sessions.ts:113-116",
+   "why": "WEB-1a wired the dormant method."
+  },
+  {
+   "row": "SES-09",
+   "col": "web",
+   "expect": "❌ No public share URL; `/share` exports ",
+   "new": "🟡 Typed `/share serve [days]` publishes a token page on this server and prints its URL (`/share revoke`); no Share button",
+   "detail": "🟡 — `ShareHostCommand` runs `ShareCommand`, whose `serve` verb publishes into `ShareStore` and prints the URL. The `session.share`/`session.unshare` RPCs have no web caller. — _Evidence:_ `src/Host/Commands/ShareHostCommand.php`; `src/Commands/ShareCommand.php:154-200`; grep `session.share` in `src-web` → none",
+   "why": "SES-3 made a share URL reachable from the web composer."
+  },
+  {
+   "row": "SES-15",
+   "col": "web",
+   "expect": "🟡 Per-session spend in status bar, tiles",
+   "new": "🟡 Per-session spend in status bar, tiles and summaries; typed `/usage` (host) prints ledger rollups as text; no usage view",
+   "detail": "🟡 — UsageHostCommand` folds the durable `usage_records` ledger. — _Evidence:_ `src/Host/Commands/UsageHostCommand.php:12-66",
+   "why": "/usage is reachable over the wire."
+  },
+  {
+   "row": "SES-17",
+   "col": "web",
+   "expect": "🧪 `sessions.remove` → `session.delete` e",
+   "new": "🟡 Session row menu \"Delete\" (with confirm) calls `session.delete`; no retention controls (retention is server config)",
+   "detail": "🟡 — removeRow` confirms, then `sessions.remove()`. — _Evidence:_ `web:components/SessionSidebar.vue:86-91,191`; `web:stores/sessions.ts:90-93",
+   "why": "WEB-1a."
+  },
+  {
+   "row": "AGT-02",
+   "col": "cc",
+   "expect": "🟡 Alt+M toggles plan mode, /permissions ",
+   "new": "🟡 Alt+M toggles plan mode, `/permissions mode <name>` switches; no primary-agent or persona switch (palette \"List agents\")",
+   "detail": "🟡 — The `/agents` palette row (action `SwitchAgent`) is labelled \"List agents\" and lists or inspects the roster. Nothing switches the main chat to a preset. — _Evidence:_ `builtin-commands/0800-agents.php`; `lang/en.php:1057,1073`; `src/Palette/PaletteAction.php:33`",
+   "why": "the label changed. The detail's \"Switch agent … switches nothing (see ISSUES)\" is stale."
+  },
+  {
+   "row": "AGT-02",
+   "col": "web",
+   "expect": "❌ No agent switcher; `/agents` (server-r",
+   "new": "❌ No agent switcher; the Agent catalog panel and `/agents` (server-run) only list the roster",
+   "detail": "❌ — The Agent catalog panel and `/agents` (server-run) list or inspect the roster; nothing switches the main session to a preset. — _Evidence:_ `web:components/agents/AgentCatalogPanel.vue:26,51-52`; `web:components/panels/SidePanels.vue:100`",
+   "why": "the catalog exists, but nothing switches."
+  },
+  {
+   "row": "AGT-03",
+   "col": "web",
+   "expect": "🟡 Built-ins (coder, reviewer, debugger, ",
+   "new": "✅ Built-ins run server-side; the Agent catalog panel lists them with description, provider · model and permission mode",
+   "detail": "✅ — Built-ins run server-side. `AgentCatalogPanel` requests `agents.list` and shows provider · model, permission mode and description per preset. — _Evidence:_ `web:components/agents/AgentCatalogPanel.vue:26,51-52`; `web:components/panels/SidePanels.vue:100`",
+   "why": "\"shows runs, not the catalog\" is stale."
+  },
+  {
+   "row": "AGT-04",
+   "col": "web",
+   "expect": "🟡 Custom agent files apply server-side; ",
+   "new": "🟡 Custom agent files apply server-side and are listed in the Agent catalog panel; not editable from the web",
+   "detail": "🟡 — Custom agent files apply server-side and appear in the Agent catalog panel's `agents.list` rows; nothing edits them from the web. — _Evidence:_ `web:components/agents/AgentCatalogPanel.vue:26,51-52`; `web:components/panels/SidePanels.vue:100`",
+   "why": "stale."
+  },
+  {
+   "row": "AGT-05",
+   "col": "web",
+   "expect": "🟡 Inherited; fields not shown",
+   "new": "🟡 Inherited; the catalog shows description, provider · model and permission mode, not tools, skills or isolation",
+   "detail": "🟡 — Inherited; the catalog shows description, provider · model and permission mode, not tools, skills or isolation. — _Evidence:_ `web:components/agents/AgentCatalogPanel.vue:51-52`",
+   "why": "stale."
+  },
+  {
+   "row": "AGT-06",
+   "col": "web",
+   "expect": "🟡 Agents panel = live tree of THIS sessi",
+   "new": "✅ Agents panel = live tree of this session's runs; the Agent catalog panel (`agents.list`) lists every preset with model and mode",
+   "detail": "✅ — The Agents panel is a live tree of this session's delegated runs (status, step, tokens, cost); the Agent catalog panel requests `agents.list` and shows provider · model, permission mode and description per preset. — _Evidence:_ `web:components/agents/AgentCatalogPanel.vue:26,51-52`; `web:components/panels/SidePanels.vue:100`",
+   "why": "WEB-1c."
+  },
+  {
+   "row": "PLAT-07",
+   "col": "cc",
+   "expect": "✅ No telemetry code; only non-LLM networ",
+   "detail": "✅ — `ModelMetadata` refreshes the LiteLLM price DB at most once per 24 h in a detached grandchild (`CANDY_CODE_DISABLE_MODEL_METADATA=1` turns it off). There is no telemetry code; OTLP event export runs only when the user configures an endpoint. `self-update` contacts GitHub only when invoked. Share pages are served by the user's own `serve`. — _Evidence:_ `src/Providers/ModelMetadata.php`; `docs/ENVIRONMENT.md:67-68,195`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MOD-13",
+   "col": "cc",
+   "expect": "✅ — Unset `titleModel`/`summaryModel` re",
+   "detail": "✅ — `Bootstrap::toollessBackend` uses env → setting → the provider block's own `model`. The title backend also drives prompt suggestions (on by default, one extra call per turn over the last 12 messages), `/btw`, `/goal` judging and autoReview; the summary backend drives compaction and auto-memory. Unset `titleModel`/`summaryModel` take `ProviderFactory::AUXILIARY_MODEL_BY_TYPE` (haiku-4-5 / gpt-4o-mini class). — _Evidence:_ `src/Cli/Bootstrap.php:10093-10095,10186-10213`; `src/Providers/ProviderFactory.php:100-106`; `docs/ENVIRONMENT.md:50`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MOD-17",
+   "col": "web",
+   "expect": "✅ `assistant.delta` with byte offsets → ",
+   "detail": "✅ — A duplicate delta is dropped, a gap is marked \"…\" and healed by the completed reply. Streaming replies render incrementally; the settled tail is announced once. — _Evidence:_ `src-web/stores/reducer.ts:269-280`; `src-web/views/SessionView.vue:125-128`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MOD-18",
+   "col": "cc",
+   "expect": "✅ — `TransientFailure` honors a server `",
+   "detail": "✅ — `TransientFailure::isTransient` walks the exception chain (Guzzle, openai-php, AWS, Google ApiCore, Anthropic error types). Mid-stream failures resume via continuation/prefill rather than repainting. Connect bound 15 s (`CANDY_CODE_CONNECT_TIMEOUT`), stream read-idle 3600 s, turn idle ceiling 120 s (`turnIdleTimeoutSeconds`, re-armed per frame); there is no total-request timeout on any LLM call (Vertex SDK's hidden 60 s deadline is explicitly neutralised). `TransientFailure` honours `Retry-After` (un-jittered, capped), else full-jitter backoff below the ladder ceiling; AWS SDK retries still stack on top. — _Evidence:_ `src/Providers/TransientFailure.php:15-30,140-200,700-703`; `src/Runtime.php:1580-1715`; `src/Providers/Concerns/HttpClientDefaults.php`; `src/Providers/VertexProvider.php:2885-2950`; `src/Backend/EngineBackend.php:75-126`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MOD-20",
+   "col": "cc",
+   "expect": "✅ — Per-model Vertex `CONTEXT_WINDOWS` t",
+   "detail": "✅ — Absolute compaction caps (100k / 150k, `compaction.modelTokenCaps`) stop 1M windows compacting at 700k. Vertex has a per-model `CONTEXT_WINDOWS` table and a working `contextWindow` override; unknown Vertex models report null rather than a 200k guess. claude-code is fixed at 200k. No `[1m]` / beta-header handling on the anthropic type. — _Evidence:_ `src/Providers/CustomProvider.php:300`; `src/Providers/SglangProvider.php:1119`; `src/Providers/BedrockProvider.php:203-216`, `:437`; `src/Providers/VertexProvider.php` (`CONTEXT_WINDOWS`); `docs/SETTINGS.md:223`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MOD-10",
+   "col": "web",
+   "expect": "🟡 `server.info` is called (status-bar pr",
+   "detail": "🟡 — `server.info` feeds the status-bar provider select and the About dialog (version, providers, tools, agents, uptime with `server.health`); per-provider model catalogs are not surfaced. — _Evidence:_ `web:components/StatusBar.vue:31`; `web:components/AboutModal.vue:45,83-110`",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-04",
+   "col": "cc",
+   "expect": "✅ Personal ~/.candy-code/AGENTS.md in ev",
+   "detail": "✅ — `loadPersonal` reads only `AGENTS.md` under the owned home's `~/.candy-code`; when it is absent, `~/.claude/CLAUDE.md` stands in (never both). It is priced first under the combined instruction budget and framed with `USER_RULES_AUTHORITY_PREAMBLE`, ahead of project docs. Imports are bounded to `~/.candy-code`. Also user-tier: `~/.candy-code/rules/*.md` and `rulebooks/*.md`. — _Evidence:_ `src/Context/InstructionFileLoader.php:485-497,524`; `src/Runtime.php:4889`",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-09",
+   "col": "cc",
+   "expect": "✅ `@path.md` imports, max depth 4, .md o",
+   "detail": "✅ — `ImportResolver` (MAX_DEPTH 4). Fenced ``` blocks are skipped. In the loader, the gate blocks out-of-repo targets (`<import-blocked>`), skips already-emitted ones (`<import-skipped>`), and defers oversize ones (`<import-deferred>` pointer). Absolute paths are not supported. Inline-code and email-like forms are not expanded; forced docs expand their own imports. — _Evidence:_ `src/Context/ImportResolver.php:27`, `:149`; `src/Context/InstructionFileLoader.php:1445`; `docs/MEMORY.md:713-732`",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-10",
+   "col": "cc",
+   "expect": "✅ Path-scoped rules: `.candy-code/rules/",
+   "detail": "✅ — `RuleLoader` has three tiers: user `~/.candy-code/rules` and `rulebooks`, project `.candy-code/rules`, root `RULES.md`. A rule with a `PathTrigger` is skipped from the standing prompt and nudged by `RulePathNudge` in tool output on first matching touch. The nudge re-walks the rules on every consult, so mid-session edits are picked up. `keywords:` and `models:` are parsed but inert. Foreign `.claude/rules` and `.cursor/rules` trees load at user and project tiers. — _Evidence:_ `src/Runtime.php:4525-4545`; `src/Context/RuleLoader.php:26-32,290`, `:444`; `src/Context/RulePathNudge.php`",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-N1",
+   "col": "cc",
+   "expect": "✅ Root docs fenced, escaped against 11 t",
+   "detail": "✅ — `PromptFence::escape` defangs `<project-instructions>`, `<system-reminder>`, `<∣im_start∣>` and the rest inside every root, ancestor, forced, personal and on-touch doc, plus rules, memory and skills. Authority preambles tell the model a repo doc cannot override the harness. Pinned by `BaseSystemPromptTest` forgery guards. On-touch docs arrive inside a path-named fence with escaped bodies. — _Evidence:_ `src/Context/PromptFence.php`; `src/Runtime.php:122`, `:4896-4900`; `src/Context/InstructionFileLoader.php:1159-1240`; `docs/PROMPT_ENGINEERING.md` \"Fence and provenance rules\"",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-N1",
+   "col": "web",
+   "expect": "✅ Inherited: web-started sessions assemb",
+   "detail": "✅ — A served turn runs SessionHost → TurnRunner → EngineBackend → Runtime, the same path as the TUI. So `PromptFence::escape` and the authority preambles cover every root, ancestor, forced, personal and nested on-touch doc, plus rules, memory and skills. A workspace host for a picked directory fences that root's files. The browser shows the files only through the Context panel, which lists the whole-session files by path and size. — _Evidence:_ `src/Host/SessionHost.php:48-60`; `src/Host/TurnRunner.php:488-496`; `src/Context/PromptFence.php`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MEM-06",
+   "col": "cc",
+   "expect": "✅ Per-turn <memory-recall> (3 notes): BM",
+   "detail": "✅ — `HybridMemoryRanker` (0.7 vector + 0.3 BM25, gate 0.35, half-life 30 d, MMR λ0.7). Embeddings are opt-in (`embeddingModel`). The query is the latest user message. Primed in the parent before the fork; the embedding request runs in the forked turn child (blocking only when there is no child). `/memory search` uses FTS5 BM25. — _Evidence:_ `src/Context/MemoryRecallBlock.php:126`; `src/Memory/HybridMemoryRanker.php`; `src/Backend/EngineBackend.php:3528-3560`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MEM-08",
+   "col": "cc",
+   "expect": "✅ Dream pass every 2h folds the compacti",
+   "detail": "✅ — `DreamPass::call` runs at turn settle on the session engine with tools swapped to `DreamMemoryView` plus Read, 12 steps, the same JSON ops and caps as auto-memory, and one git commit per pass. It can draft up to 3 skills in `~/.candy-code/skills-proposed/` (opt-in). The pass does not touch the main session's prompt memo. — _Evidence:_ `src/Memory/DreamPass.php:293-395`; `src/Chat.php:2484-2488`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MEM-11",
+   "col": "cc",
+   "expect": "🟡 No daily logs; the closest is the appe",
+   "detail": "🟡 — `~/.candy-code/memory/.compaction-journal-<key>.jsonl`, secrets redacted. Only the dream pass reads it. Records are size-capped and the dream pass reads from a byte offset. — _Evidence:_ `src/Memory/CompactionJournal.php:82-179`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MEM-N2",
+   "col": "cc",
+   "expect": "✅ Project notes default to git-visible <",
+   "detail": "✅ — Labelled apart in the prompt; user-written and model-written repo notes carry their own author labels. — _Evidence:_ `src/Context/ProjectMemoryWriter.php:119`; `src/Context/MemoryBlock.php:264`",
+   "why": "detail-only"
+  },
+  {
+   "row": "PRM-06",
+   "col": "cc",
+   "expect": "✅ — Single-line `<available-skills>` lis",
+   "detail": "✅ — Enabled skill bodies go in full (5k / 25k-token budgets). The listing is bounded by `skills.listingMaxBytes` with per-line clips and ranked truncation. — _Evidence:_ `src/Skills/SkillMatcher.php:86`; `src/Skills/SkillPromptLine.php:60`; `src/Runtime.php:4706-4712`",
+   "why": "detail-only"
+  },
+  {
+   "row": "PRM-12",
+   "col": "cc",
+   "expect": "✅ /context: per-layer system prompt, too",
+   "detail": "✅ — Local, calls no model. Server host command. Every layer is shown, and the instruction files read are named. — _Evidence:_ `src/Commands/ContextCommand.php:157`; `src/Host/Commands/ContextHostCommand.php:33`",
+   "why": "detail-only"
+  },
+  {
+   "row": "CTX-03",
+   "col": "cc",
+   "expect": "✅ Tiers: reminder 70% (cap 100k), auto 8",
+   "detail": "✅ — `CompactorConfig::tierThreshold` uses the lower of percent and cap. The reminder tier pre-fetches summaries in the background. Futile absolute tiers stand down. — _Evidence:_ `src/Context/CompactorConfig.php:264`, `:679`; `src/Chat.php:11269-11290`; `src/Context/ContextBudget.php`",
+   "why": "detail-only"
+  },
+  {
+   "row": "SES-02",
+   "col": "cc",
+   "expect": "✅ — `-c`/resume resolve through a cwd-sc",
+   "detail": "✅ — `-c`/resume resolve through a cwd-scoped ladder, so `-c` in project B stays inside project B. `-c` with `--resume` is refused (exit 2), as is `-p` with `--resume`. — _Evidence:_ `src/Session/EnhancedSessionStore.php:2146-2160`; `src/Cli/Bootstrap.php:4141-4151`; `src/Cli/ArgvParser.php:646-655`",
+   "why": "detail-only"
+  },
+  {
+   "row": "SES-11",
+   "col": "web",
+   "expect": "🟡 Sidebar filter is client-side over nam",
+   "detail": "🟡 — j/k navigate only outside text inputs; typing in the filter does not move selection. — _Evidence:_ `src-web/components/SessionSidebar.vue:24-28,59-67`",
+   "why": "detail-only"
+  },
+  {
+   "row": "SES-17",
+   "col": "cc",
+   "expect": "✅ — Retention keeps only user-chosen tit",
+   "detail": "✅ — Retention keeps `title_source='user'` sessions (legacy rows judged by name) plus pinned and sub-agent rows, prunes auto-titled sessions, and counts real content rows in its report. — _Evidence:_ `src/Session/SessionStore.php:1107-1162`; `src/Cli/Bootstrap.php:9698-9735,9809-9827`",
+   "why": "detail-only"
+  },
+  {
+   "row": "AGT-04",
+   "col": "cc",
+   "expect": "✅ Markdown + YAML presets in <root>/.can",
+   "detail": "✅ — `AgentPresetRegistry::list` takes the first search path on a name conflict: user tier first, then project, and shadowed files are reported at launch. Both tiers are anchored (no link out of the root or $HOME). A malformed file is skipped on its own, with a launch notice. The roster is foreign < built-in < native. — _Evidence:_ `src/Cli/Bootstrap.php:3126-3160`; `src/Agents/AgentPresetRegistry.php:65-72,226`",
+   "why": "detail-only"
+  },
+  {
+   "row": "AGT-07",
+   "col": "cc",
+   "expect": "❌ No agent-creation wizard and no AI-gen",
+   "detail": "❌ — No `/agents new` or generator exists; no `builtin-commands/` spec creates agents. Presets are written by hand. — _Evidence:_ `builtin-commands/`",
+   "why": "detail-only"
+  },
+  {
+   "row": "AGT-08",
+   "col": "cc",
+   "expect": "✅ — A fenced `<available-agents>` roster",
+   "detail": "✅ — The tool's guidance fragment, joined into the system prompt's tool-guidance layer, carries the fenced `<available-agents>` roster (name, description, tools, source). Unknown names are refused with the roster listed. Model resolution: call arg > preset > `subagentModel` > session. A model the provider cannot serve falls back with a `[model: …]` note. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:283-286,715-735,2480`; `src/Runtime.php:4770-4790`",
+   "why": "detail-only"
+  },
+  {
+   "row": "AGT-19",
+   "col": "cc",
+   "expect": "✅ Imports .claude/agents + .opencode/age",
+   "detail": "✅ — `ForeignAgentPresetRegistry`: project beats user, and Claude beats opencode. The body becomes the prompt, and opencode `permission` rules collapse to tool lists. Comma-string `skills:`/`mcpServers:` and inline definitions normalise, `background` parses strictly, and parse failures or collapsed permission rules reach launch-notice verdicts. Agents defined in opencode.json are not read. — _Evidence:_ `src/Agents/ForeignAgentPresetRegistry.php:284-311,442,498-529`",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-19",
+   "col": "cc",
+   "expect": "❌ Project instruction files load with no",
+   "detail": "❌ — Trust lists cover hooks, MCP, `!cmd` in project commands and project settings. Instruction files are not trust-gated; every root, ancestor, forced, nested and personal doc is fenced and escaped. — _Evidence:_ `src/Cli/Bootstrap.php:6382-6585`; `src/Context/PromptFence.php`",
+   "why": "detail-only"
+  },
+  {
+   "row": "PLAT-01",
+   "col": "cc",
+   "expect": "✅ PHP 8.3+ (pure PHP, ReactPHP loop, pcn",
+   "detail": "✅ — Runs on stock php-cli 8.3. composer.json requires ext-sqlite3, pdo_sqlite, mbstring and intl, and suggests curl plus pcntl/posix/ffi, which `serve` needs. `doctor` opens a real sqlite3 and PDO handle and fails when either is missing. Interactive turns run in a pcntl-forked child streaming frames to the parent; without pcntl they run in-process and the screen updates only when they finish. — _Evidence:_ `composer.json:35-39,77-81`; `src/Cli/Subcommands.php:261-271`",
+   "why": "detail-only"
+  },
+  {
+   "row": "PLAT-02",
+   "col": "cc",
+   "expect": "✅ — `composer.json` and `candy-code/LICE",
+   "detail": "✅ — `composer.json` declares MIT and `candy-code/LICENSE` (MIT) ships in the package dir, so the README badge resolves in monorepo and split clones alike. — _Evidence:_ `composer.json:5`; `LICENSE:1`",
+   "why": "detail-only"
+  },
+  {
+   "row": "PLAT-05",
+   "col": "cc",
+   "expect": "🟡 Signed self-update with stable/dev cha",
+   "detail": "🟡 — `candy-code self-update [--check] [--rollback] [--channel=stable|dev]` replaces a release phar after sha256 and minisign checks (signature required when a key is pinned). The default channel follows the running build. Releases before `v0.1.1` carry no stamp and must be upgraded by hand. Composer installs update with `composer update`. There is no background update check. — _Evidence:_ `src/Cli/SelfUpdate.php:18,48-54,244-309`; `README.md:120-129`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MOD-01",
+   "col": "cc",
+   "expect": "✅ — Native `/v1/messages` arm (`Anthropi",
+   "detail": "✅ — `AnthropicProvider` posts to `/v1/messages` through the shared `AnthropicMessagesWire` (the Vertex Anthropic arm's body, parse, usage and cost code), with `CacheBreakpoints` caching. It supports `thinkingBudget` extended thinking with signed-block replay, PDF document blocks and assistant prefill. Default model `claude-sonnet-4-6`. — _Evidence:_ `src/Providers/AnthropicProvider.php:13-39,207,287`; `src/Providers/Concerns/AnthropicMessagesWire.php:551-563`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MOD-15",
+   "col": "cc",
+   "expect": "✅ Mid-session `/effort` command maps per",
+   "detail": "✅ — `/effort [level|auto]` sets the session's reasoning dial, applied live after a running turn ends. Providers implementing `ShapesReasoningEffort` map it to their native shape: Anthropic and Vertex thinking budgets, Gemini thinking budget, OpenAI `reasoning_effort`, SGLang `reasoningEffort`. Others (bedrock, claude-code, codex, custom, echo) refuse honestly. Presets carry `effort:` for delegated runs. — _Evidence:_ `builtin-commands/0350-effort.php`; `src/Chat.php:12234`; `src/Providers/{Anthropic,Gemini,OpenAI,Sglang,Vertex}Provider.php` (implements `ShapesReasoningEffort`)",
+   "why": "detail-only"
+  },
+  {
+   "row": "MOD-24",
+   "col": "cc",
+   "expect": "✅ `--json-schema` wired end-to-end (flag",
+   "detail": "✅ — `--json-schema` is decoded in `NonInteractive` and applied via `Backend::withJsonSchema()`. Providers answering `supportsJsonSchema()` false refuse with exit 2 `json_schema_unsupported` before the first billed call. — _Evidence:_ `src/Cli/ArgvParser.php:668`; `src/Cli/NonInteractive.php:287,415-429`",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-03",
+   "col": "cc",
+   "expect": "🟡 Also reads GEMINI.md, .cursorrules, .c",
+   "detail": "🟡 — FILENAMES = CLAUDE.md, CLAUDE.local.md, AGENTS.md, GEMINI.md, .cursorrules, .clinerules, .github/copilot-instructions.md, all through the same containment, size, scrub, @import and dedup gates. `RuleLoader` adds `.claude/rules/**` and `.cursor/rules/**` (`.mdc` accepted) at user and project tiers with `[claude]`/`[cursor]` badges. Not read: `.windsurfrules`, `CONVENTIONS.md`, the `.clinerules/` directory form. — _Evidence:_ `src/Context/InstructionFileLoader.php:180`; `src/Context/RuleLoader.php:26-32,214-217`",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-05",
+   "col": "cc",
+   "expect": "✅ `CLAUDE.local.md` is a first-class pri",
+   "detail": "✅ — `CLAUDE.local.md` is the second FILENAMES entry, read at every level after CLAUDE.md, under the same gates. — _Evidence:_ `src/Context/InstructionFileLoader.php:180`",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-08",
+   "col": "cc",
+   "expect": "✅ — On-touch nested files arrive framed:",
+   "detail": "✅ — re-injected every turn … raw, no fence\" correction and the dated tail): \"`loadForPath` runs after Read, Edit, Write, ApplyPatch, Glob and Grep touches. It returns every not-yet-shown ancestor doc between the touched dir and the root in one outermost-first pass, each inside a path-naming fence with an escaped body. Shown-marks persist across forked turns and delegated transcripts. — _Evidence:_ `src/Context/InstructionFileLoader.php:1159-1240`",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-11",
+   "col": "cc",
+   "expect": "🟡 User-tier `instructions` globs force f",
+   "detail": "🟡 — `Bootstrap::forcedInstructions` → `loadForced`. Absolute and `~` patterns are refused loudly into `refusedPaths`, and forced files expand their own `@import`s. A project may not set the key. — _Evidence:_ `src/Context/InstructionFileLoader.php:1043-1075`",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-14",
+   "col": "cc",
+   "expect": "✅ StartupSummary names the instruction f",
+   "detail": "✅ — `StartupSummary::render` replaces the empty-conversation placeholder with version, provider · model, mode, cwd · branch, the instruction files the prompt splices (name + bytes), memory/skill/MCP counts and a tip. Refusals and deferrals stay launch notices. — _Evidence:_ `src/Support/StartupSummary.php:31,105-140,275-290`; `src/Renderer.php:4223`",
+   "why": "detail-only"
+  },
+  {
+   "row": "INS-15",
+   "col": "cc",
+   "expect": "✅ `/context` breaks down layers with tok",
+   "detail": "✅ — No command lists the loaded paths\"): \"`/context` (also served) prints per-layer tokens and stability, and lists the instruction files read with sizes and refusals via `ContextBreakdown::$instructionFiles`. — _Evidence:_ `src/Commands/ContextCommand.php:157`; `src/Host/Commands/ContextHostCommand.php:31,50`",
+   "why": "detail-only"
+  },
+  {
+   "row": "MEM-N2",
+   "col": "web",
+   "expect": "✅ — The panel reads and writes both stor",
+   "detail": "✅ — `memory.list/search` read both stores, repository rows first with `source: repo|home`. `memory.add` routes through `MemoryWriter`, so a project note lands in `<repo>/.candy-code/memory/project/`. `edit` and `delete` resolve ids via `MemoryWriter::locate()`. — _Evidence:_ `src/Protocol/Methods/MemoryMethods.php:25-37,53-54,67`",
+   "why": "detail-only"
+  },
+  {
+   "row": "PRM-07",
+   "col": "cc",
+   "expect": "✅ — Fenced `<available-agents>` roster w",
+   "detail": "✅ — `TaskTool::promptGuidance()` appends a fenced `<available-agents>` roster (name, description, tools summary, source badge) to the spawn doctrine. It falls back to bare names only when the listing is empty. Unknown names are refused with the roster listed. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:283-286,715-735`",
+   "why": "detail-only"
+  },
+  {
+   "row": "CTX-01",
+   "col": "cc",
+   "expect": "✅ — Compaction tiers consume the session",
+   "detail": "✅ — `TokenEstimate` is script-weighted. `ContextMeter` calibrates it against provider-reported usage (×1–3), and the 70/85/95 % tiers consume that calibrated estimate, which covers system prompt, tool schemas and tool-argument bytes. — _Evidence:_ `src/Context/ContextCompactor.php:175-194,262-272`; `src/Host/ContextMeter.php`",
+   "why": "detail-only"
+  },
+  {
+   "row": "CTX-N1",
+   "col": "web",
+   "expect": "✅ — Ahead-of-need summarization runs in ",
+   "detail": "✅ — `SessionHost` keeps its own ahead-of-need slot (id, history fingerprint, summaries, safeguard hold), pre-fetched at the reminder tier and spliced at the auto tier when the fingerprint still matches. — _Evidence:_ `src/Host/SessionHost.php:145-152`",
+   "why": "detail-only"
+  },
+  {
+   "row": "SES-09",
+   "col": "cc",
+   "expect": "✅ Share links served by `serve`: `shares",
+   "detail": "✅ — `/share serve [days]` publishes an HTML snapshot into `ShareStore` (128-bit token, expiry) served by `serve`. `/share revoke [token]` kills it, `session.share`/`session.unshare` expose the same over RPC, and the published body runs through `SecretRedactor`. — _Evidence:_ `src/Commands/ShareCommand.php:24-67,154-240`; `src/Share/ShareStore.php`",
+   "why": "detail-only"
+  },
+  {
+   "row": "SES-15",
+   "col": "cc",
+   "expect": "✅ Durable `usage_records` per session; r",
+   "detail": "✅ — `SpendLedger` records every billed call into the durable `usage_records` table with the calling engine's model. Resume reseeds spend, and `/usage [session|all]` folds day × model and per-model rollups; unpriced models print as `≥` lower bounds. — _Evidence:_ `src/Host/SpendLedger.php`; `src/Host/Commands/UsageHostCommand.php:12-66`",
+   "why": "detail-only"
+  },
+  {
+   "row": "AGT-03",
+   "col": "cc",
+   "expect": "✅ — Built-in presets get real file tools",
+   "detail": "✅ — Grants: coder Read/Edit/Write/Grep/Glob/ApplyPatch/Bash/Skill; tester Read/Write/Edit/Grep/Glob/Bash/Skill + phpunit-master; reviewer, debugger, architect and devops are read-leaning; none lists `Task`, so built-ins do not nest. — _Evidence:_ `src/Agents/AgentDefinition.php:38-57,182-205`",
+   "why": "detail-only"
+  },
+  {
+   "row": "AGT-06",
+   "col": "cc",
+   "expect": "✅ — `/agents` renders the full roster as",
+   "detail": "✅ — No surface browses the roster\"): \"`/agents` renders every configured agent as a `TranscriptTable` (working first) with Description, Model, Tier and Status; `/agents <name>` details one; `/agents <run>` opens its Agent View. — _Evidence:_ `src/Commands/AgentsCommand.php:39-63,114-165`",
+   "why": "detail-only"
+  }
+ ],
+ "new_rows": [],
+ "narrative": [
+  {
+   "old": "vim mode lacks counts, text objects and `cw`",
+   "new": "No managed-policy instructions, system-prompt append or output styles (Claude Code has all three); no per-sub-agent memory; no prompt-cache warming; served sessions skip turn-end auto-memory and the dream pass"
+  },
+  {
+   "old": "`models all` catalog and `candy-code login [provider]` (Codex PKCE) have shipped (a Claude subscription can ride the CLI's own login via the `bare: false` provider option)",
+   "new": "No native subscription OAuth (`candy-code login` hands off to `claude auth login` / `codex login` or stores an API key); no Azure or OpenRouter type, no OpenAI Responses API, no OS keychain"
+  },
+  {
+   "old": "First prompt build of a session, memoised; re-read only on `/clear`, compaction, rewind or a session switch",
+   "new": "First prompt build of a session, memoised; re-spliced only on `/clear`, compaction, rewind or a session switch. Mid-session edits reach the model next turn as a bounded diff in the `<turn-context>` tail"
+  },
+  {
+   "old": "`/context` text only",
+   "new": "Context panel: instruction files with path, size and tier, refused files under \"Not read\", memory, skills, MCP; `/context` text too"
+  },
+  {
+   "old": "`/init` (TUI only) | ❌ refused (`ui_only`)",
+   "new": "`/init` (TUI and served) | ✅ typed `/init` runs on the host"
+  },
+  {
+   "old": "Its nested path is now fenced and fork-safe. What remains is *visibility*: no tool lists the loaded files at startup (Claude Code only notes AGENTS.md and size warnings), and candy-code doesn't even name them in `/context`.",
+   "new": "Its nested path is fenced and fork-safe, and it is also the most *visible*: the startup summary and `/context` name the loaded files, the web Context panel lists them, and `instructionsExclude` silences a file with a recorded refusal. What it lacks is an in-app editor for instruction files and a trust gate."
+  },
+  {
+   "old": "Claude Code and OpenClaw at least name the files on demand (`/memory`, `/context list`).",
+   "new": "Claude Code and OpenClaw also name the files on demand (`/memory`, `/context list`), and both can open them for editing, which candy-code cannot."
+  },
+  {
+   "old": "🟡 Notices for auto/dream writes and for the flush (names its saved rows); recall stays unannounced",
+   "new": "✅ Notices for auto/dream writes and the flush (names its saved rows) plus a per-turn \"Recalled N notes\" row (count only; TUI only, since serve never drains the notice sink)"
+  },
+  {
+   "old": "`/memory list/add/search/edit/delete/log/restore` (text)",
+   "new": "`/memory list/add/search/edit/delete/clear/import/log/restore` (text) + `/memory open <id>` in `$EDITOR`"
+  },
+  {
+   "old": "Claude Code's memory is simpler but the most *transparent*: it says when it saved or recalled something.",
+   "new": "Claude Code's memory is simpler but the most *transparent*: its saved/recalled rows link the files. candy-code's TUI also reports saves and a recall count, but the web shows neither."
+  },
+  {
+   "old": "Provenance labels were fixed (user and model notes in the repo store carry the right author, and the memory slot refreshes after `/memory add`).",
+   "new": "User and model notes in the repo store carry their own author labels, and the memory slot refreshes after `/memory add`."
+  },
+  {
+   "old": "coder, reviewer, debugger, architect, tester, devops (⚠ coder lacks Write; tester lacks Write+Edit) | runs only",
+   "new": "coder, reviewer, debugger, architect, tester, devops (coder and tester carry Write/Edit/Grep/Glob) | runs + Agent catalog panel"
+  },
+  {
+   "old": "⚠ Names only (\"Current agent roster: architect, coder, …\")",
+   "new": "✅ Fenced `<available-agents>` roster in the Task guidance: name, description, tools summary, source badge"
+  },
+  {
+   "old": "Agents panel = this session's runs; catalog unused",
+   "new": "Agents panel = this session's runs; Agent catalog panel (`agents.list`) lists every preset with model and mode"
+  },
+  {
+   "old": "For *finding* them the model still sees names only, though the user-facing gap closed on 2026-10-18: `/agents` now lists the full roster with descriptions.",
+   "new": "For *finding* them it is at parity: the model gets a fenced roster with descriptions and tools, `/agents` lists the full roster, and the web has a catalog panel; only `@agent` mentions and an agent wizard are missing."
+  },
+  {
+   "old": "Each step also gets a user-role `<turn-context>` tail: git status/diff after writes, changed-since-read files, memory recall, context % past 60 %, post-compaction re-injection.",
+   "new": "Each step also gets a user-role `<turn-context>` tail: git status/diff after writes, changed-since-read files, instruction-file diffs, memory recall, context % past 60 %, post-compaction re-injection."
+  },
+  {
+   "old": "Explicit cache breakpoints exist only for Claude-on-Vertex and Bedrock. ⚠ The `anthropic` provider uses Anthropic's OpenAI-compatible endpoint, which **does not cache**.",
+   "new": "Explicit cache breakpoints on the native `anthropic` arm and Claude-on-Vertex (`CacheBreakpoints`, ≤4 marks) and Bedrock (`cachePoint`); OpenAI and SGLang cache prefixes server-side; `CacheHealthWatch` warns on repeated zero-cache replies."
+  },
+  {
+   "old": "Three figures: calibrated status-bar estimate, provider-anchored in-turn budget, and ⚠ history-only text estimate for the 70/85/95 % tiers (misses system prompt + tool schemas, so tiers fire late)",
+   "new": "Script-weighted estimate calibrated against provider-reported usage; the 70/85/95 % tiers and the status bar read the same calibrated figure (system prompt, tool schemas and tool arguments included); the in-turn step budget is provider-anchored"
+  },
+  {
+   "old": "Tiers 70/85/95 %, absolute caps 100k/150k, in-turn step budget, overflow retry",
+   "new": "Tiers 70/85/95 %, absolute caps 100k/150k, in-turn step budget, overflow retry; opt-in idle fold (`compaction.idleAuto`) after an hour idle"
+  },
+  {
+   "old": "Model summary with six facets + merged `<session-state>`; summaries **pre-fetched ahead of need** using the cached prefix; re-inject files, plan, skills, git, todos",
+   "new": "Model summary with six facets + merged `<session-state>`; summaries **pre-fetched ahead of need** using the cached prefix; `SummarySafeguard` audits headings, asks and identifiers (HOLD → heuristic fold); re-inject files, plan, skills, git, todos"
+  },
+  {
+   "old": "6. **One-per-turn \"Recalled N notes\" row** — count-only, uiOnly, riding the `RuntimeNoticeSink` pipeline with zero renderer work.",
+   "new": "6. **One-per-turn \"Recalled N notes\" row** — count-only, uiOnly, riding the `RuntimeNoticeSink` pipeline with zero renderer work (TUI only: `serve` arms the sink but nothing drains it)."
+  }
+ ]
+}

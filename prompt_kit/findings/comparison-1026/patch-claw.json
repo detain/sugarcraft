@@ -1,0 +1,247 @@
+{
+ "cells": [
+  {
+   "row": "PLAT-01",
+   "col": "claw",
+   "expect": "✅ TypeScript on Node 24.16+/26 (Bun opt-",
+   "why": "Node floor and bundled-Bun Gateways",
+   "new": "✅ TypeScript on Node 24.22.1+/26.12.1+ (Bun opt-in; Linux companion/macOS app use a bundled Bun fork); companion apps; Lit UI",
+   "detail": "✅ — Gateway, CLI, TUI and the embedded agent runtime ship as the `openclaw` npm package (ESM bundles). `engines.node` is `>=24.22.1 <25` or `>=26.12.1`; Node 26 is recommended and Bun 1.4+ is opt-in, while fresh Linux-companion setups and the macOS app run the Gateway on a bundled OpenClaw Bun fork. Companion apps: macOS menu-bar, iOS/watchOS, Android, Windows Hub (WinUI), Linux companion; the Control UI is a Vite + Lit SPA. — _Evidence:_ `oc@2026.10.7/package.json` (engines); `oc@2026.10.7/docs/install/index.md`; `oc@2026.10.7/docs/platforms/linux.md` (Use the bundled runtime)"
+  },
+  {
+   "row": "PLAT-05",
+   "col": "claw",
+   "expect": "✅ `openclaw update` with stable / extend",
+   "why": "Detail-only: stale latest tag and sealed generations",
+   "detail": "✅ — Four channels: stable (npm `latest`), extended-stable (a Gateway-only LTS line), beta and dev (git main). Automatic updates, guarded upgrades with Doctor, sealed immutable installation generations with activation and recovery, and a rollback/recovery journal; owners update from chat (`/update`) or Control UI Updates. npm dist-tags: latest 2026.10.7, extended-stable 2026.9.34, beta 2026.10.10-beta.3. — _Evidence:_ `npm view openclaw dist-tags time --json`; `oc@2026.10.7/docs/cli/update.md`; `oc@2026.10.7/docs/install/development-channels.md`"
+  },
+  {
+   "row": "PLAT-09",
+   "col": "claw",
+   "expect": "🟡 Fast CLI cold start (0.14 s, ~68 MB RS",
+   "why": "Package footprint is version-specific",
+   "new": "🟡 Fast CLI cold start (0.14 s, ~68 MB RSS, measured on 9.8); npm package 250 MB unpacked; Gateway is a daemon",
+   "detail": "🟡 — Measured on an installed 2026.9.8: `openclaw --version` took 0.14 s wall and 68.7 MB max RSS (Node compile cache warm). The 2026.10.7 npm tarball unpacks to 250 MB across 14,041 files (`dist/` 239 MB). The runtime is a long-lived Gateway process with SQLite state, so startup is not paid per message. No published footprint numbers. — _Evidence:_ Local `/usr/bin/time openclaw --version`; `npm view openclaw@2026.10.7 dist.unpackedSize dist.fileCount`"
+  },
+  {
+   "row": "MOD-N2",
+   "col": "claw",
+   "expect": "✅ `/fast status/auto/on/off/default` map",
+   "why": "New ultrafast level",
+   "new": "✅ `/fast status/auto/on/off/ultrafast/default` maps to provider service tiers per session (Ultrafast only on eligible Codex)",
+   "detail": "✅ — `/fast auto/on/off/ultrafast` persists a session override and `/fast default` clears it. On OpenAI/Codex, ordinary Fast uses the priority service tier; Codex requests Ultrafast only for an explicit `ultrafast` choice when an authenticated app-server catalog advertises it for the selected native model (`appServer.enableUltrafast: false` disables it). Direct Anthropic maps to `service_tier=auto` or `standard_only`; the exec reviewer has its own `fastMode`. — _Evidence:_ `oc@2026.10.7/docs/tools/slash-commands.md` (/fast); `oc@2026.10.7/docs/tools/exec.md`"
+  },
+  {
+   "row": "INS-01",
+   "col": "claw",
+   "expect": "🟡 Native runtime does NOT read CLAUDE.md",
+   "why": "claude-cli path no longer loads CLAUDE.md; glyph stays 🟡",
+   "new": "🟡 No live CLAUDE.md read: native runtime ignores it, managed claude-cli turns exclude it; one-time `openclaw migrate claude`",
+   "detail": "🟡 — The embedded runner injects only OpenClaw's own workspace bootstrap set; its resource loader handles skills, prompts and extensions and has no ancestor context-file loader. Managed `claude-cli` turns run on OpenClaw's policy-filtered tool surface and \"exclude Claude's user settings, instruction files, auto-memory, user hooks, plugins, Chrome, and MCP servers configured only in Claude\"; restricted runs also pass `claudeMdExcludes`. What remains is the one-time `openclaw migrate claude` import: project `CLAUDE.md` and `.claude/CLAUDE.md` go into workspace AGENTS.md, and `~/.claude/CLAUDE.md` into USER.md, with preview and backup. — _Evidence:_ `oc@2026.10.7/docs/gateway/cli-backends.md` (\"Managed turns also exclude…\"); `oc@2026.10.7/dist/settings-manager-DipDVfMv.mjs:3721` (DefaultResourceLoader); `oc@2026.10.7/dist/cli-shared-BZRFWmwK.mjs:31` (CLAUDE_RESTRICTED_SETTINGS); `oc@2026.10.7/docs/install/migrating-claude.md`"
+  },
+  {
+   "row": "PRM-06",
+   "col": "claw",
+   "expect": "✅ `<available_skills>` XML (name, descri",
+   "why": "Listing is not the only discovery path",
+   "new": "✅ Budgeted `<available_skills>` directory (name, description, location); omitted skills found via `skills_search`",
+   "detail": "✅ — The Skills section carries a bounded skill directory (budget `skills.limits.maxSkillsPromptChars`; names/locations first, then shortened descriptions; small catalogs appear in full). When skills are omitted, the prompt says so and tells the agent to search by task goal with `skills_search` before work involving files, specialized tools or a reusable workflow; `/context` counts only the catalog actually rendered. Small-context models get shorter descriptions. — _Evidence:_ `oc@2026.10.7/docs/tools/skills.md` (Search installed skills; Token impact); `oc@2026.10.7/docs/concepts/context.md`; `oc@2026.10.7/docs/concepts/system-prompt.md` (Skills)"
+  },
+  {
+   "row": "CTX-05",
+   "col": "claw",
+   "expect": "✅ Structured LLM summary; default \"safeg",
+   "why": "Keeps history does not hold for summary timeouts",
+   "new": "✅ Structured LLM summary; safeguard audit keeps history if no summary passes; a summary timeout commits a summary-less compaction",
+   "detail": "✅ — Tool-call/result pairs never split; split-turn prefix summarized separately; read/modified file lists and latest unresolved user request preserved; summary capped (16k chars) with structure-preserving fit; identifierPolicy strict; post-compaction AGENTS.md excerpt; `compaction.model`; pluggable context engines (`plugins.slots.contextEngine`, e.g. Lossless Claw). Safeguard mode audits required headings and identifiers and keeps history when no summary passes. If an automatic compaction's summary times out (summary deadline, HTTP 408 or 504) while the turn is active, the compaction is committed without a summary: recent messages and complete tool pairs stay verbatim and the previous summary carries forward, but older unsummarized facts leave the model context; this is logged with no chat notice. — _Evidence:_ `oc@2026.10.7/docs/concepts/compaction.md` (Auto-compaction; Provider checkpoints); `oc@2026.10.7/docs/concepts/context-engine.md`"
+  },
+  {
+   "row": "CTX-N4",
+   "col": "claw",
+   "expect": "🟡 Auto-continues only when an OpenAI Res",
+   "why": "Broader continuation trigger",
+   "new": "🟡 Continues after an output-limit cut mid tool call (OpenAI Responses) or an empty `length` reply; cut-off partial text is not",
+   "detail": "🟡 — When a Responses request hits its output limit while generating a tool call, the admitted tools finish, the partial call is never executed, and the run continues from recorded results (shared retry budget and run deadline). An empty `length` response that leaves no completed or pending reply also continues the transcript with the normal tools, on the same retry budget. A partial text answer stopped at `length` is not continued; it is routed to overflow/error handling. — _Evidence:_ `oc@2026.10.7/docs/concepts/agent-loop.md` (Compaction and retries); `oc@2026.10.7/docs/concepts/retry.md`"
+  },
+  {
+   "row": "SES-10",
+   "col": "claw",
+   "expect": "✅ Session catalogs discover Claude Code,",
+   "why": "CLI bulk-import surface",
+   "new": "✅ Session catalogs (Claude Code, Codex, OpenCode, Pi) + `openclaw sessions import claude/codex <id>` / `--all` into durable sessions",
+   "detail": "✅ — Session catalogs discover native Claude Code, Codex, OpenCode and Pi sessions on the Gateway, paired nodes and apps. `openclaw sessions import <catalog> <thread-id>` (or `--all`, with `--catalog`, `--host`, `--limit` and `--dry-run`) copies a transcript into an ordinary OpenClaw session as untrusted reference material: a draft visible to its creator, at most 50,000 items / 64 MiB keeping the newest, incremental on re-import. It does not resume the native session. Adoption of Claude CLI rows imports bounded visible history; Doctor imports legacy OpenClaw JSONL. — _Evidence:_ `oc@2026.10.7/docs/cli/sessions.md` (Import transcripts); `oc@2026.10.7/docs/nodes/session-catalogs.md`"
+  },
+  {
+   "row": "AGT-12",
+   "col": "claw",
+   "expect": "✅ Control UI shows child transcripts liv",
+   "why": "Dedicated live panel",
+   "new": "✅ Control UI Subagents panel (status, activity, view-only transcripts, Stop) + per-child rows in the chat; `/subagents log`",
+   "detail": "✅ — The chat side panel has a Subagents tab that groups running and finished child runs with elapsed time, tool activity, view-only transcripts beside the parent, and a targeted Stop. Under the working line, each unfinished subagent gets a row with its name and current activity headline, the working indicator counts subagents down (\"3 subagents running\"), and launch rows show running, failed or stopped status. `/subagents list/info/log` remain. — _Evidence:_ `oc@2026.10.7/docs/web/control-ui.md`; `oc@2026.10.7/docs/web/control-ui/chat.md`; `oc@2026.10.7/docs/tools/subagents/slash-command.md`"
+  },
+  {
+   "row": "SKL-04",
+   "col": "claw",
+   "expect": "✅ Compact list (name, description, locat",
+   "why": "Fallback past the budget",
+   "new": "✅ Budgeted list (name, description, location) in the prompt; body via `skills_read`/`read`; `skills_search` finds omitted ones",
+   "detail": "✅ — Snapshot per session. The prompt keeps names and locations first, then shortened descriptions, within `skills.limits.maxSkillsPromptChars`. Skills omitted by the budget remain discoverable through `skills_search` (an in-memory lexical index over names, descriptions and bounded body text, at most 20 results, with coverage reporting). `skills_read` loads a complete SKILL.md by exact name, up to 256 KiB for skills not in the prompt directory. — _Evidence:_ `oc@2026.10.7/docs/tools/skills.md` (Search installed skills; Token impact); `oc@2026.10.7/docs/concepts/system-prompt.md` (Skills)"
+  },
+  {
+   "row": "SKL-05",
+   "col": "claw",
+   "expect": "✅ Model picks skills itself by reading t",
+   "why": "Dedicated skill tools exist",
+   "new": "✅ Model loads listed skills with `skills_read` (or `read`) and finds unlisted ones with `skills_search`; `$skill` forces reads",
+   "detail": "✅ — Dedicated skill tools: `skills_search({query, limit?})` searches the session's eligible catalog and `skills_read({name})` loads a complete SKILL.md. A `read` policy grant also permits `skills_read`, and an explicit `skills_read` denial wins. Code Mode exposes `skills.search/read/list`, and Codex gets the tools through its dynamic tool surface. Disabled, filtered and model-hidden skills never appear in results; up to 8 `$name` references per message force reads, and `disable-model-invocation: true` hides a skill from the model but keeps it user-invocable. — _Evidence:_ `oc@2026.10.7/docs/tools/skills.md` (Search installed skills; Reference a skill in a prompt); `oc@2026.10.7/docs/plugins/codex-harness/runtime-behavior.md`; `oc@2026.10.7/dist/tool-display-C9Npyj04.mjs`"
+  },
+  {
+   "row": "SKL-14",
+   "col": "claw",
+   "expect": "✅ Bundled skill-creator; Skill Workshop ",
+   "why": "Saves are direct and versioned",
+   "new": "✅ Bundled skill-creator; Skill Workshop 2.0: agent saves/patches learned skills directly, versioned with Undo/archive; `/learn`",
+   "detail": "✅ — `skill_workshop` (list/view/create/patch/write_file/remove_file/archive/restore) is how the agent writes its own learned skills: mid-turn after hard multi-step work or a misleading skill, through a background review after 10 model iterations or a skill read (`skills.workshop.autonomous.mode: \"auto\"` by default), via `/learn [sources]`, or with \"Learn from history\". Every change applies immediately, is announced in chat (\"Say \"undo\"\"), and saves the previous version (newest 10 kept). Skills unused for 30 days are auto-archived, and the Control UI and `openclaw skills workshop list/changes/show/archive/restore` show history and diffs. — _Evidence:_ `oc@2026.10.7/docs/tools/skill-workshop.md`; `oc@2026.10.7/docs/tools/self-learning.md`; `oc@2026.10.7/skills/skill-creator/SKILL.md`"
+  },
+  {
+   "row": "PLG-N2",
+   "col": "claw",
+   "expect": "🟡 Skill Workshop evaluators (`workshop e",
+   "why": "Workshop evaluators no longer exist",
+   "new": "🟡 SDK test utilities, `--json` costUsd and a source-only Code Mode model matrix; no plugin eval",
+   "detail": "🟡 — The plugin SDK ships testing utilities, and `openclaw agent --json` reports `costUsd`, assistant turns and tool summaries. The Code Mode model matrix (`pnpm qa:code-mode-models`) measures pass rate, latency and cost, but only from a source checkout. There is no plugin effect or cost evaluation. — _Evidence:_ `oc@2026.10.7/docs/plugins/sdk-testing.md`; `oc@2026.10.7/docs/cli/agent.md`"
+  },
+  {
+   "row": "MCP-06",
+   "col": "claw",
+   "expect": "🟡 Resources reachable by the model via g",
+   "why": "Plugin extensions give partial user-side attach",
+   "new": "🟡 Model reads resources via generated `resources_list`/`resources_read`; opt-in MCP Apps plugin extensions add composer attach",
+   "detail": "🟡 — Resources reach the model through the generated `resources_list`/`resources_read` tools, and there is no general user @-mention of MCP resources. MCP Apps (`ui://` HTML, opt-in via `mcp.apps.enabled`) render in sandboxed double iframes; the same host also recognizes OpenAI MCP Plugin Extensions, whose servers can offer composer resource search and attach, app-selection model context, and file viewers (opaque resource URIs, rechecked per session). — _Evidence:_ `oc@2026.10.7/docs/cli/mcp/apps.md` (Plugin extensions); `oc@2026.10.7/docs/tools/mcp.md`; `oc@2026.10.7/docs/cli/mcp/registry.md`"
+  },
+  {
+   "row": "TL-N2",
+   "col": "claw",
+   "expect": "🟡 Repetitive-call detection is opt-in; a",
+   "why": "Always-on guard for identical errors; glyph stays 🟡",
+   "new": "🟡 3 identical consecutive tool errors always end the turn; general repeat detection is opt-in; post-compaction guard on by default",
+   "detail": "🟡 — Three consecutive identical tool errors (same tool, arguments and error result) always end the turn with a recorded error and recovery guidance, even with `tools.loopDetection.enabled: false`; changed arguments or results, and successful calls, reset the streak. The rolling-history detectors for no-progress patterns and repeated successful calls stay opt-in (`enabled: false` by default), and the post-compaction guard aborts a run that repeats the same (tool, args, result) after a compaction retry unless explicitly disabled. — _Evidence:_ `oc@2026.10.7/docs/tools/loop-detection.md`; `oc@2026.10.7/docs/gateway/config-tools/built-in-tools.md`"
+  },
+  {
+   "row": "SH-09",
+   "col": "claw",
+   "expect": "✅ Output bounded by live tool-result cap",
+   "why": "Tail-preserving truncation",
+   "new": "✅ Output bounded by live tool-result caps (16k–64k chars by window), tail kept when shortened; Tokenjuice plugin compacts noise",
+   "detail": "✅ — Exec output is bounded by the live tool-result caps (16k/32k/64k chars by context window, at most 30% of the window). Shortened output keeps its end, where the error usually is. Backgrounded commands return a short output tail, and `process poll/log` read retained output. The Tokenjuice plugin compacts noisy output. — _Evidence:_ `oc@2026.10.7/docs/gateway/background-process.md`; `oc@2026.10.7/docs/gateway/config-agents/workspace-and-bootstrap.md`; `oc@2026.10.7/docs/tools/tokenjuice.md`"
+  },
+  {
+   "row": "UI-19",
+   "col": "claw",
+   "expect": "✅ Control UI sidebar (agents, groups, pe",
+   "why": "Two more panels",
+   "new": "✅ Control UI sidebar + panels: Files, Review, Browser, Terminal, Desktop, Side chat, Dashboard, Subagents, Processes",
+   "detail": "✅ — The sidebar shows agents (rows, search, pinning, \"Show all\" team mode), groups and people. Side panels (via + or the chat header Panels menu) are Files, Review, Browser, Terminal (bundled Nerd Font), Desktop, Side chat, Dashboard, Subagents, and Processes: background exec commands with status, exit info, recent output and a per-process Stop. Plugin pages can dock a conversation beside them. — _Evidence:_ `oc@2026.10.7/docs/web/control-ui.md`; `oc@2026.10.7/docs/web/control-ui/panels.md`; `oc@2026.10.7/docs/gateway/background-process.md` (Control UI)"
+  },
+  {
+   "row": "WEB-09",
+   "col": "claw",
+   "expect": "✅ 20+ channels: Telegram (bundled), What",
+   "why": "New bundled channel",
+   "new": "✅ 20+ channels: Telegram and X (bundled), WhatsApp, Discord, Slack, iMessage, Signal, Matrix, Teams, Google Chat, IRC, LINE...",
+   "detail": "✅ — Most channels are official installable plugins (`clawhub:@openclaw/whatsapp`, `/discord`, `/slack`, and so on), with per-channel threads, rich messages and voice. Telegram and X/Twitter are bundled. X turns bot mentions into group-thread conversations with allowlisted public replies and an optional restricted guest mode; DMs and media uploads are not supported. — _Evidence:_ `oc@2026.10.7/docs/channels/index.md`; `oc@2026.10.7/docs/channels/x.md`; `oc@2026.10.7/dist/extensions/x/`"
+  }
+ ],
+ "new_rows": [
+  {
+   "id": "SKL-N1",
+   "feature": "🆕 Self-learning skills (agent saves and patches its own skills from experience, versioned with undo)",
+   "cells": {
+    "cc": "🟡 Opt-in dream pass proposes up to 3 skill drafts the user accepts or rejects; no direct saves, versions or undo",
+    "web": "🟡 `/skills accept` / `reject` manage dream-proposed drafts; no direct saves or undo",
+    "claude": "· Not assessed",
+    "oc1": "· Not assessed",
+    "oc2": "· Not assessed",
+    "claw": "✅ Skill Workshop: mid-turn saves/patches, background review, `/learn`, announced with Undo, 10 versions, auto-archive"
+   },
+   "details": {
+    "cc": "🟡 — The dream pass may propose drafts (`SkillProposal`/`ProposedSkills`, opt-in `memory.dreamProposeSkills`); the user accepts or rejects them. There are no direct agent saves, version history or undo. — _Evidence:_ `src/Skills/ProposedSkills.php`; `src/Skills/SkillProposal.php`; `src/Config/Settings/Definitions/MemoryRuleSettings.php`",
+    "web": "🟡 — `/skills accept` / `reject` manage dream-proposed drafts as typed commands; no direct saves or undo. — _Evidence:_ `web:App.vue`; `src/Skills/ProposedSkills.php`",
+    "claude": "· — Not assessed — _Evidence:_ —",
+    "oc1": "· — Not assessed — _Evidence:_ —",
+    "oc2": "· — Not assessed — _Evidence:_ —",
+    "claw": "✅ — `skill_workshop` saves and patches learned skills mid-turn, through a background review after 10 model iterations (`skills.workshop.autonomous.mode: \"auto\"` default) and via `/learn`; every change applies immediately, is announced with \"Say undo\", and keeps the newest 10 versions. Unused skills are auto-archived after 30 days; the Control UI shows history and diffs. — _Evidence:_ `oc@2026.10.7/docs/tools/skill-workshop.md`; `oc@2026.10.7/docs/tools/self-learning.md`"
+   }
+  },
+  {
+   "id": "SKL-N2",
+   "feature": "🆕 Skill search beyond the prompt listing (model-callable search over skills the budgeted listing omits)",
+   "cells": {
+    "cc": "❌ Skill tool loads one skill by exact name and does not search; skills past `skills.listingMaxBytes` collapse to an \"N more\" line",
+    "web": "❌ Inherited: same Skill tool, no skill search",
+    "claude": "· Not assessed",
+    "oc1": "· Not assessed",
+    "oc2": "· Not assessed",
+    "claw": "✅ `skills_search` (lexical index, up to 20 results, coverage reporting) + `skills_read` by name"
+   },
+   "details": {
+    "cc": "❌ — The Skill tool description states it does not list or search skills; the listing drops skills past `skills.listingMaxBytes` from the tail and replaces them with one \"N more skills\" line. No search tool exists in the catalog. — _Evidence:_ `src/Tools/BuiltIn/SkillTool.php:88-107`; `src/Skills/SkillMatcher.php:26-44`",
+    "web": "❌ — Served turns run the same engine tool set, so the model has no skill search; the web has no skills list either. — _Evidence:_ `src/Tools/BuiltIn/SkillTool.php:88-107`; no `skills_search` hit under `web:`",
+    "claude": "· — Not assessed — _Evidence:_ —",
+    "oc1": "· — Not assessed — _Evidence:_ —",
+    "oc2": "· — Not assessed — _Evidence:_ —",
+    "claw": "✅ — `skills_search({query, limit?})` searches an in-memory lexical index over names, descriptions and bounded body text (at most 20 results, with coverage reporting); the prompt tells the agent to use it when skills are omitted by the budget. `skills_read` loads a complete SKILL.md by exact name. — _Evidence:_ `oc@2026.10.7/docs/tools/skills.md` (Search installed skills)"
+   }
+  },
+  {
+   "id": "SH-N2",
+   "feature": "🆕 Background-process inspector UI (list of running and finished shell processes with output and per-process stop)",
+   "cells": {
+    "cc": "🟡 Model-side `ShellOutput`/`ShellStop` tools read and stop background shells; no user-facing process list",
+    "web": "❌ Background panel lists `/bg` sessions, not shell processes; no per-shell list or kill",
+    "claude": "· Not assessed",
+    "oc1": "· Not assessed",
+    "oc2": "· Not assessed",
+    "claw": "✅ Control UI Processes panel: status, exit info, recent output, per-process Stop"
+   },
+   "details": {
+    "cc": "🟡 — Background shells are tracked in a registry and the model polls and stops them with `ShellOutput` and `ShellStop`; no TUI command or pane lists them for the user. — _Evidence:_ `src/Background/BackgroundShellRegistry.php`; `src/Tools/BuiltIn/ShellOutput.php`; `src/Tools/BuiltIn/ShellStop.php`",
+    "web": "❌ — The Background panel manages `/bg` sessions (output, stop, inject) and has no per-shell-process list or kill. — _Evidence:_ `web:components/panels/BackgroundPanel.vue`",
+    "claude": "· — Not assessed — _Evidence:_ —",
+    "oc1": "· — Not assessed — _Evidence:_ —",
+    "oc2": "· — Not assessed — _Evidence:_ —",
+    "claw": "✅ — The Control UI Processes panel lists background exec commands with status, exit info, recent output and a per-process Stop. — _Evidence:_ `oc@2026.10.7/docs/gateway/background-process.md` (Control UI)"
+   }
+  }
+ ],
+ "narrative": [
+  {
+   "old": "| **OpenClaw** | 2026.9.8 (installed here) | The installed package's ~1,300 doc pages, `dist/` source, CLI help, the `clawhub` CLI, and GitHub changelogs to 2026.10.4 |",
+   "new": "| **OpenClaw** | 2026.10.7 (npm latest; installed baseline 2026.9.8) | The 2026.10.7 npm package's ~1,300 doc pages and `dist/` source (diffed against the installed 2026.9.8), CLI help, the `clawhub` CLI, and GitHub changelogs to 2026.10.7 |"
+  },
+  {
+   "old": "**CLAUDE.md is not read** by the native runtime",
+   "new": "**CLAUDE.md is not read**: the native runtime ignores it and managed Claude CLI turns exclude it (one-time `openclaw migrate claude` import only)"
+  },
+  {
+   "old": "`<available_skills>` (name, description, path), budgeted",
+   "new": "`<available_skills>` (name, description, path), budgeted; omitted skills found via `skills_search`"
+  },
+  {
+   "old": "Reads the SKILL.md with `read` (no Skill tool)",
+   "new": "`skills_read` (or `read`) by name; `skills_search` for skills the listing omits"
+  },
+  {
+   "old": "✅ View-only child transcripts; `sessions_send` steering",
+   "new": "✅ Subagents panel (view-only transcripts, activity, Stop); `sessions_send` steering"
+  },
+  {
+   "old": "**Safeguard** mode audits headings, pending asks and identifiers, and aborts rather than write a lossy summary",
+   "new": "**Safeguard** mode audits headings, pending asks and identifiers and keeps history on a failed audit; a summary timeout commits a summary-less compaction"
+  },
+  {
+   "old": "- <https://docs.openclaw.ai> and GitHub release notes up to 2026.10.4 (later releases are reliability fixes only and change no row).",
+   "new": "- <https://docs.openclaw.ai>, the 2026.10.7 npm package (docs + `dist/`, diffed against the installed 2026.9.8), and the per-version changelogs 2026.9.9–2026.10.7 (`CHANGELOG/<ver>.md` on GitHub). 2026.10.5 is the feature release; 9.9–10.4, 10.6 and 10.7 are mostly reliability and security fixes."
+  }
+ ]
+}

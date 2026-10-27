@@ -1,0 +1,1026 @@
+{
+ "cells": [
+  {
+   "row": "SKL-01",
+   "col": "web",
+   "expect": "🟡 Inherited; skills are invisible in the",
+   "new": "✅ Inherited; the Context panel lists each loaded skill with its tier (built-in/user/project) and a disabled flag",
+   "detail": "✅ — SKILL.md parsing is the engine's. The web's Context panel (`context.sources`) lists every registered skill by name, `SkillOrigin` tier and `disabledSkills` state; descriptions and format badges are not sent. — _Evidence:_ `candy-code/src/Host/ContextSources.php:153-157`; `candy-code-web/src-web/components/panels/ContextPanel.vue:132-142`; `candy-code-web/src-web/components/panels/SidePanels.vue:102`",
+   "why": "WEB-3a's Context panel ships a skills section; \"invisible\" is stale."
+  },
+  {
+   "row": "SKL-02",
+   "col": "cc",
+   "expect": "✅ built-in (src/Skills/BuiltIn) < projec",
+   "new": "✅ built-in < project < user `.candy-code/skills`, plus foreign trees and plugin-bundle `skills/` (lowest within each tier)",
+   "detail": "✅ — SkillManager::loadAll()` walks tiers built-in < project < user; inside a tier, bundle trees register first, then `.agents`, `.claude`, `.opencode`, then native, so the last write wins and every displaced skill is recorded for the launch notice. Bundles come from `~/.candy-code/bundles`, `<root>/.candy-code/bundles` and the user-tier `pluginPaths` list. Symlinks are followed but confined; the walk stops at depth 7 or 2000 directories. — _Evidence:_ `src/Skills/SkillManager.php:113-170`; `src/Cli/Bootstrap.php:2273-2290,4952-4955`; `src/Skills/SkillLoader.php:189,205",
+   "why": "PLG-1 bundles feed skills; \"No plugin directories\" is false."
+  },
+  {
+   "row": "SKL-02",
+   "col": "web",
+   "expect": "🟡 Inherited; not listed",
+   "new": "✅ Inherited discovery; the Context panel lists every loaded skill with its tier",
+   "detail": "✅ — Served sessions use the workspace registry built by `Bootstrap::skillRegistry()`, and `context.sources` exposes it to the panel. — _Evidence:_ `candy-code/src/Host/ContextSources.php:153-157`; `candy-code-web/src-web/components/panels/ContextPanel.vue:132-142`",
+   "why": "skills are listed now."
+  },
+  {
+   "row": "SKL-03",
+   "col": "web",
+   "expect": "🟡 Inherited; not listed",
+   "new": "🟡 Inherited; the Context panel lists imported skills by tier but without the [claude]/[opencode]/[bundle] badge",
+   "detail": "🟡 — ContextSources` sends `tier` (a `SkillOrigin` value: built-in/user/project) and never the `SkillSource` format, so a `.claude/skills` import looks like a native one in the browser. — _Evidence:_ `candy-code/src/Host/ContextSources.php:153-157`; `src/Skills/SkillSource.php:16-36",
+   "why": "\"not listed\" is stale; the provenance gap is the real partial."
+  },
+  {
+   "row": "SKL-04",
+   "col": "cc",
+   "expect": "✅ One-line <available-skills> listing in",
+   "detail": "✅ — The listing sits inside a fenced `<available-skills>` section under a preamble and a \"MUST load\" mandate, each line badged with its tier, escaped, clipped and budgeted by `skills.listingMaxBytes`. Skills enabled from the Ctrl+S picker ride as standing system-prompt sections and leave the listing. A `paths:` match announces a skill once through `SkillPathNudge` in Read/Edit/Glob/Grep/Write results. `SkillLoader::loadSkillAsset()` has no production caller. — _Evidence:_ `src/Runtime.php:4856-4870`; `src/Skills/SkillListingSection.php`; `src/Skills/SkillMatcher.php`; `src/Skills/SkillLoader.php:1054`",
+   "why": "cited Runtime lines (4706-4710) moved; content otherwise holds."
+  },
+  {
+   "row": "SKL-04",
+   "col": "web",
+   "expect": "🟡 Inherited; `/context` shows only the a",
+   "new": "✅ Inherited; the Context panel lists the skills and the prompt layers' token sizes",
+   "detail": "✅ — The panel renders `context.sources` breakdown sections (per-layer token estimates) and the skills list; the body still loads only through the Skill tool server-side. — _Evidence:_ `candy-code-web/src-web/components/panels/ContextPanel.vue:80-92,132-142`",
+   "why": "the web now shows more than one section size."
+  },
+  {
+   "row": "SKL-06",
+   "col": "cc",
+   "expect": "🟡 — `$name` attaches to the skill and re",
+   "new": "✅ `/skill-name args` rewrites into the `$name args` channel (built-ins and command files win the name); `$name` Tab-completes",
+   "detail": "✅ — After `dispatchCommand()` and the file-command branch decline a draft, `Chat::skillInvocationDraft()` rewrites a typed `/name args` (colon names walked longest-first) into `$name args`, so `SkillMentions` applies the registry gate, `$ARGUMENTS` substitution, the attachment and the `✨ Loaded skill:` row. Disabled or non-user-invocable skills never dispatch; an unclaimed `/word` is refused locally with a did-you-mean. The `/` popup lists no skills. — _Evidence:_ `src/Chat.php:9572-9605,11296-11365,11418-11460`; `src/Host/TurnController.php:1054-1056`; `src/Chat.php:16153-16166`",
+   "why": "VIS-5 shipped; the cell and detail still say there is no `/skill-name`."
+  },
+  {
+   "row": "SKL-06",
+   "col": "web",
+   "expect": "❌ Skills are not in `command.list`; a `/",
+   "new": "🟡 `$name` typed in the web loads the skill server-side (no completion); `/skill-name` is sent to the model as prose",
+   "detail": "🟡 — session.send` resolves mentions by default, and `TurnController::userTurnMessage()` runs `SkillMentions` against the workspace registry, so `$name args` works from the browser. `SessionHost::admit()` has no `/name`-to-`$name` rewrite: a `/word` no built-in or command file claims falls through to `admitPrompt()` as prose. `command.list` carries no skill rows. — _Evidence:_ `candy-code/src/Host/SessionHost.php:892-933,1702-1710`; `candy-code/src/Protocol/Methods/TurnMethods.php:191-198`; `candy-code/src/Protocol/Methods/CommandMethods.php:48-60",
+   "why": "`$name` already reaches skills from the web; ❌ understates."
+  },
+  {
+   "row": "SKL-07",
+   "col": "cc",
+   "expect": "✅ — Skills pane = names; `/skills` lists",
+   "new": "✅ Skills pane lists names; `/skills` prints the installed table (tier, disabled, shadowed); drafts sit behind `/skills proposed`",
+   "detail": "✅ — The pane shows the enabled list, or else the available names dimmed. Bare `/skills` (or `/skills installed`) prints a `TranscriptTable` of every invocable skill with tier, enabled flag, shadow count and description; `/skills proposed|accept|reject` manage dream drafts. The `/` popup lists no skills; `CANDY_CODE_DEBUG_SKILLS=1` names skipped files. — _Evidence:_ `src/Tui/Components/SkillsPane.php:67-91`; `src/Host/Commands/SkillsHostCommand.php:15-30,60-66`; `builtin-commands/2410-skills.php`",
+   "why": "cell was 150 chars; detail said `/skills` covers drafts only and carried a dated \"remediated\" tail."
+  },
+  {
+   "row": "SKL-07",
+   "col": "web",
+   "expect": "❌ No skills list anywhere; `/skills` (se",
+   "new": "✅ Context panel lists skills (name, tier, disabled); server-run `/skills` prints the installed table; no toggles",
+   "detail": "✅ — /skills` has a host body, so `command.exec` runs the same installed-table listing the TUI prints; the Context panel shows the registry as structure. Neither can enable or disable a skill. — _Evidence:_ `builtin-commands/2410-skills.php`; `candy-code/src/Host/Commands/SkillsHostCommand.php:60-66`; `candy-code-web/src-web/components/panels/ContextPanel.vue:132-142",
+   "why": "both halves of the ❌ are stale."
+  },
+  {
+   "row": "SKL-08",
+   "col": "web",
+   "expect": "🟡 Inherited; not shown",
+   "new": "✅ Inherited; the Context panel lists the 8 bundled skills under the built-in tier",
+   "detail": "✅ — The eight `src/Skills/BuiltIn/` skills register in served sessions and appear in the panel with tier `built-in`. — _Evidence:_ `src/Skills/BuiltIn/`; `src/Skills/SkillOrigin.php:33`; `candy-code/src/Host/ContextSources.php:153-157`",
+   "why": "now shown."
+  },
+  {
+   "row": "SKL-09",
+   "col": "cc",
+   "expect": "❌ No registry, marketplace or install co",
+   "new": "🟡 No registry or marketplace; `candy-code bundles install <git-url/path>` installs a plugin bundle whose `skills/` load",
+   "detail": "🟡 — bundles install` stages a Claude-format bundle into `~/.candy-code/bundles/` (bounded git clone with `protocol.ext.allow=never`, or a path copy) and `bundles list` shows what the reader sees; its `skills/` join discovery on the next launch. There is no index, search or update command. — _Evidence:_ `src/Cli/Subcommands.php:1464-1480,1604-1625`; `src/Cli/ParsedArgs.php:56`; `src/Skills/SkillManager.php:115",
+   "why": "an install command exists now."
+  },
+  {
+   "row": "SKL-11",
+   "col": "web",
+   "expect": "🟡 Inherited; not shown",
+   "new": "❌ Inherited: allowed-tools / disallowed-tools are inert server-side too",
+   "detail": "❌ — The engine lists both keys in `FrontmatterKeyAudit::INERT` and no tool-scoping code reads them, so a served session inherits nothing to show. — _Evidence:_ `src/Support/FrontmatterKeyAudit.php:120-131`",
+   "why": "a 🟡 for inheriting an absent feature is inconsistent with the ❌ engine cell."
+  },
+  {
+   "row": "SKL-12",
+   "col": "web",
+   "expect": "🟡 Inherited; not shown",
+   "new": "🟡 Inherited; the Context panel lists only skills that passed gating, never the gated-out ones or why",
+   "detail": "🟡 — Gating runs at registration (`SkillRegistry::register()` refuses unmet `requires`/`os`); `ContextSources` lists `all()`, which excludes the refused ones, and sends no `unavailable()` reasons. — _Evidence:_ `src/Skills/SkillRegistry.php:214-238`; `candy-code/src/Host/ContextSources.php:153-157`",
+   "why": "\"not shown\" is stale; the remaining partial is the missing reasons."
+  },
+  {
+   "row": "SKL-13",
+   "col": "web",
+   "expect": "❓ Engine question; the web shows no skil",
+   "new": "🟡 Inherited: the served root's roster is built once per serve process; the Context panel's reload re-reads it, not disk",
+   "detail": "🟡 — serve` builds one workspace per root at launch (`Bootstrap::workspace()` → `skillRegistry()`); the panel's reload calls `context.sources` again over the same registry. Bodies are re-read from disk per Skill call, as in the TUI. — _Evidence:_ `candy-code/src/Cli/Serve.php:592`; `candy-code/src/Host/ContextSources.php:153-157`; `src/Tools/BuiltIn/SkillTool.php:226",
+   "why": "❓ is settleable from code."
+  },
+  {
+   "row": "SKL-14",
+   "col": "cc",
+   "expect": "🟡 The dream pass may propose up to 3 dra",
+   "new": "🟡 Opt-in `memory.dreamProposeSkills` lets the dream pass propose ≤3 drafts; `/skills accept/reject` reviews them; no wizard",
+   "detail": "🟡 — Drafts land in `~/.candy-code/skills-proposed/`; `accept` validates with the loader and is user-only (no tool reaches it). — _Evidence:_ `src/Memory/DreamPass.php:107,156-160`; `src/Skills/ProposedSkills.php:15`; `src/Host/Commands/SkillsHostCommand.php:15-30`",
+   "why": "cell was 132 chars (trim only)."
+  },
+  {
+   "row": "SKL-15",
+   "col": "cc",
+   "expect": "🧪 `context: fork` is parsed, but the for",
+   "detail": "🧪 — isContextFork()` is consulted only by `App::dispatchSkill()` (no production caller) and by the picker's status text; the Skill tool loads every skill inline. `model` and `effort` skill keys are likewise inert. — _Evidence:_ `src/App/App.php:2528-2560,4758-4767`; `src/Tools/BuiltIn/SkillTool.php:208-250`; `src/Support/FrontmatterKeyAudit.php:120-131",
+   "why": "cited App lines (2213-2240, 2409) moved."
+  },
+  {
+   "row": "SKL-15",
+   "col": "web",
+   "expect": "🟡 Inherited; a forked skill shows as sub",
+   "new": "🧪 Inherited: `context: fork` is parsed but runs inline (App::dispatchSkill has no caller), so nothing forks",
+   "detail": "🧪 — Served sessions use the same Skill tool, so a fork skill loads inline exactly as in the TUI. — _Evidence:_ `src/App/App.php:2528-2560`; `src/Tools/BuiltIn/SkillTool.php:208-250`",
+   "why": "the old text implied a working fork path."
+  },
+  {
+   "row": "CMD-01",
+   "col": "cc",
+   "expect": "✅ 64 built-ins (+6 aliases) from builtin",
+   "detail": "✅ — Slash commands: /new /sessions /model /effort /share /export /exit(quit) /theme /settings(config) /agents(agent) /mcp /keys /help /permissions /notices /status /context(tokens) /sweep /pruning /compress /decompress /recompress /hooks /rules /newrule /pane /layout /editor /compact /clear /budget /usage /workflow /memory /skills /init /branch /rename /rewind /undo /redo /diff /review /security-review /bg(background) /schedules(schedule) /loop /fork /websearch /goal /grind /btw /handoff /generate /sendto /play /rendermode. Palette/menu-only: new-picker, session-pin, session-delete, docs, pane-dock-left, pane-dock-right, generate-form. Absent vs Claude Code: /plan (Alt+M instead), /cost (/budget + /usage instead). Dispatch is table-driven; slash commands are refused mid-turn except /exit and /btw. — _Evidence:_ `builtin-commands/` (64 files, 6 `withAliases`); `src/Commands/Specs/BuiltInCommands.php`",
+   "why": "detail listed /loop /schedule /hooks /review /status as absent."
+  },
+  {
+   "row": "CMD-01",
+   "col": "web",
+   "expect": "🟡 57 built-ins listed: 41 run server-sid",
+   "new": "🟡 57 built-ins listed: 41 run server-side via `command.exec`, 16 refused `ui_only` (theme, keys, help, review, editor…)",
+   "detail": "🟡 — `command.list` marks a built-in `runsIn:\"server\"` iff its spec has a host body. Terminal-only: new, sessions, effort, exit, theme, settings, keys, help, compress, newrule, pane, layout, editor, budget, review, security-review. — _Evidence:_ `candy-code/src/Protocol/Methods/CommandMethods.php:48-60,116-119`; `builtin-commands/*.php` (`withHostCommand`, 41 files)",
+   "why": "cell was 131 chars and the detail's server-run list predates compact/model/init/goal/grind/export/hooks/status/usage/schedules/loop."
+  },
+  {
+   "row": "CMD-02",
+   "col": "cc",
+   "expect": "✅ Markdown files in ~/.candy-code/comman",
+   "new": "✅ ~/.candy-code/commands + <root>/.candy-code/commands (project wins; built-in override needs trust); foreign/bundle trees below",
+   "detail": "✅ — CommandLoader::loadAll()` merges foreign (`.claude`/`.opencode`/bundle) < built-in < user < project. A project file replacing a built-in needs `trustedProjectCommands`; refusals and accepted shadows are reported at launch and file rows carry `[user]`/`[project]` badges. The 9 CONTROL_PLANE names are never file-overridable. — _Evidence:_ `src/Commands/CommandLoader.php:605-660`; `src/Commands/CommandRegistry.php:74",
+   "why": "cell was 215 chars and omitted the foreign floor; detail carried a dated \"remediated\" tail."
+  },
+  {
+   "row": "CMD-02",
+   "col": "web",
+   "expect": "✅ Project/user command files are listed ",
+   "new": "✅ Native, foreign and bundle command files list in `/` completion and run server-side; trusted built-in overrides are TUI-only",
+   "detail": "✅ — command.list` and `SessionHost` both call `commandLoader->loadAll($root)` without the workspace's `projectCommandsTrusted`, so a trusted project's `undo.md` replaces `/undo` in the TUI but the web still runs the built-in. — _Evidence:_ `candy-code/src/Protocol/Methods/CommandMethods.php:131`; `candy-code/src/Host/SessionHost.php:241-244`; `src/Chat.php:1796-1800`; `src/Host/WorkspaceContext.php:79",
+   "why": "\"exactly as typing\" is not true for trusted built-in overrides; the foreign floor also reaches the web."
+  },
+  {
+   "row": "CMD-04",
+   "col": "cc",
+   "expect": "🟡 description, argument-hint live; model",
+   "new": "🟡 description, argument-hint live; opencode `template:` fills an empty body; model/subtask inert; allowed-tools/agent not enforced",
+   "detail": "🟡 — `allowed-tools`, `disallowed-tools` and `agent` are KNOWN keys (no did-you-mean) but nothing acts on them; `model` and `subtask` are listed INERT and named in the launch row. Display fields are sanitized. — _Evidence:_ `src/Support/FrontmatterKeyAudit.php:63-76,88,132-135`; `src/Commands/CommandSpec.php` (`fromFile`, `template`)",
+   "why": "INT-3 made the Claude keys known, so \"flagged unknown\" is wrong."
+  },
+  {
+   "row": "CMD-07",
+   "col": "cc",
+   "expect": "✅ \"/\" popup with fuzzy matching and high",
+   "detail": "✅ — slashCommandRows()` merges built-in specs with the file map (a file row wins its name); file rows carry `[user]`/`[project]` tier and `[claude]`/`[opencode]`/`[bundle]` source badges. Skills are not listed. — _Evidence:_ `src/Chat.php:16153-16166`; `src/Renderer.php:6024-6025`; `src/Commands/CommandSpec.php:443-448",
+   "why": "detail said the popup shows no tier and carried a dated \"remediated\" tail."
+  },
+  {
+   "row": "CMD-08",
+   "col": "cc",
+   "expect": "🟡 Ctrl+P (Ctrl+K in shell) palette: 19 a",
+   "new": "🟡 Ctrl+P (Ctrl+K in shell): 42 of 57 slash commands + 7 palette-only rows + pickers; arg-taking and file commands absent",
+   "detail": "🟡 — Palette rows are the 49 specs carrying a `paletteAction`; most dispatch through the generic `/<name>` tail. Fifteen slash commands stay slash-only by recorded judgement (effort, status, pane, usage, review, security-review, bg, schedules, loop, fork, websearch, btw, generate, sendto, play), and command files and MCP prompts never appear. — _Evidence:_ `src/Commands/CommandRegistry.php:200-209`; `src/Chat.php:17227`; `tests/Chat/PaletteSupersetDispatchTest.php:40-90`",
+   "why": "\"19 actions\" is stale and it is not a superset."
+  },
+  {
+   "row": "CMD-09",
+   "col": "cc",
+   "expect": "✅ prompts/list merges commands (`/mcp__s",
+   "detail": "✅ — McpPromptCommands::specs()` turns each server's `prompts/list` into `/mcp__server__prompt` rows merged under every disk file (project > user > MCP prompt) once at Chat construction; `prompts/get` runs in a forked child at submission, and a fetched body's `!cmd` needs `trustedProjectCommands`. TUI only. — _Evidence:_ `src/Chat.php:1785-1800,11101-11102`; `src/Host/TurnController.php:538-550,610-618`; `src/Commands/McpPromptCommands.php:49,71,130",
+   "why": "detail still said ❌ with a dated \"superseded\" note."
+  },
+  {
+   "row": "CMD-10",
+   "col": "cc",
+   "expect": "🟡 Bundle-supplied commands",
+   "new": "🟡 Bundle `commands/` trees import at the foreign floor, badged [bundle]; no /plugin:name namespace or code-registered commands",
+   "detail": "🟡 — ForeignCommandDiscovery::bundleDirs()` adds each bundle's `commands/` tree, walked first inside its tier so plain foreign trees win a name; the whole foreign floor loses to built-ins and native files. — _Evidence:_ `src/Commands/ForeignCommandDiscovery.php:110-155`; `src/Commands/CommandLoader.php:620-624",
+   "why": "the cell said nothing about the limits; the detail said ❌."
+  },
+  {
+   "row": "CMD-10",
+   "col": "web",
+   "expect": "➖ No plugin system",
+   "new": "🟡 Inherited: bundle commands list as `file` rows in `/` completion and the palette and run server-side; no badge",
+   "detail": "🟡 — The same loader feeds `command.list` and the served host. — _Evidence:_ `candy-code/src/Protocol/Methods/CommandMethods.php:131`; `candy-code-web/src-web/components/panels/CommandPalette.vue:48-60`",
+   "why": "➖ is wrong once bundles exist."
+  },
+  {
+   "row": "CMD-11",
+   "col": "web",
+   "expect": "🟡 `!cmd` runs on the server, but `sessio",
+   "new": "✅ `!cmd` runs on the server (deny rules and plan mode refuse); its running and output rows arrive as transcript events",
+   "detail": "✅ — SessionHost::runBang()` answers `TurnTicket::handled()` (`admitted:\"handled\"`), marks the session busy, and announces the running notice and the result row as `message.created`. Output arrives at completion. — _Evidence:_ `candy-code/src/Host/SessionHost.php:1527-1567`; `candy-code/src/Protocol/Methods/TurnMethods.php:214-216",
+   "why": "ISS-056 fixed the refusal and the missing events."
+  },
+  {
+   "row": "CMD-12",
+   "col": "cc",
+   "expect": "🟡 The `keybindings` setting rebinds chor",
+   "new": "🟡 `keybindings` rebinds or unbinds (null) declared binding ids, `/keys reload` re-applies; slash/custom commands get no binding",
+   "detail": "🟡 — Overrides accept Ctrl/Alt/Shift chords and lone function keys; a `null` value drops the shipped chord; `/keys reload` re-registers the map mid-session; collisions are announced and `/keys` shows effective rows. Binding ids name actions, not slash or file commands. — _Evidence:_ `src/Commands/KeyBindingRegistry.php:239-262,281`; `src/Chat.php:11947`; `src/Config/Settings/Validator/KeyBindingsValidator.php`",
+   "why": "TUI-4 shipped unbind and hot-reload; cell was 248 chars and says \"no unbind, no hot-reload\"."
+  },
+  {
+   "row": "CMD-N1",
+   "col": "cc",
+   "expect": "✅ `.claude/` and `.opencode/` commands a",
+   "detail": "✅ — ForeignCommandDiscovery` walks `.claude/commands` and `.opencode/command(s)` in the project and home (plus `~/.config/opencode/command(s)`), and bundle trees; `CommandLoader::loadAll()` merges them below built-ins, so `.claude/commands/exit.md` simply loses. opencode `template:` fills an empty body; Claude `allowed-tools`/`agent` load silently and are not enforced. — _Evidence:_ `src/Commands/ForeignCommandDiscovery.php:110-191`; `src/Commands/CommandLoader.php:605-624`; `src/Support/FrontmatterKeyAudit.php:63-76",
+   "why": "detail said ❌ (\"walks only the two .candy-code trees\")."
+  },
+  {
+   "row": "CMD-N1",
+   "col": "web",
+   "expect": "❌ Not supported by the engine (only .can",
+   "new": "✅ Inherited: foreign command files ride `command.list` as `file` rows and run server-side (no origin badge)",
+   "detail": "✅ — command.list` describes file rows with `source:\"file\"` only, so the browser cannot tell a `.claude` import from a native file. — _Evidence:_ `candy-code/src/Protocol/Methods/CommandMethods.php:131,141-150`; `candy-code-web/src-web/components/Composer.vue:54-58",
+   "why": "the engine reads the foreign trees."
+  },
+  {
+   "row": "HK-01",
+   "col": "web",
+   "expect": "🟡 Hooks run server-side for served sessi",
+   "new": "🟡 Hooks run server-side for served sessions; server-run `/hooks` prints the chain as text; no hooks panel",
+   "detail": "🟡 — /hooks` has a host body (`HooksHostCommand`), so `command.exec` returns the same read-only table. — _Evidence:_ `builtin-commands/1390-hooks.php`; `candy-code/src/Host/Commands/HooksHostCommand.php:26-42",
+   "why": "a text view exists."
+  },
+  {
+   "row": "HK-02",
+   "col": "cc",
+   "expect": "✅ 12 events: Pre/PostToolUse, Stop, Suba",
+   "detail": "✅ — All 12 events have production dispatch sites; UserPromptSubmit and SessionStart also fire for `-p` and background sessions. Naming an unknown event in `hooks.yaml` stops the launch; an unknown event in a Claude settings file (e.g. `Notification`) is skipped and recorded in one launch notice. — _Evidence:_ `src/Hooks/HookEvent.php:31-74`; `src/Cli/NonInteractive.php:789-829`; `src/Background/BackgroundSessionRunner.php:634-662`; `src/Hooks/ClaudeSettingsHooks.php:193-201`",
+   "why": "detail said TUI/serve only for UserPromptSubmit/SessionStart."
+  },
+  {
+   "row": "HK-06",
+   "col": "cc",
+   "expect": "🟡 ~/.candy-code/hooks.yaml always; proje",
+   "new": "🟡 User hooks.yaml + ~/.claude/settings.json; project hooks.yaml + .claude/settings(.local).json only if trusted; no managed tier",
+   "detail": "🟡 — hookFiles()` reads `~/.candy-code/hooks.yaml` and `~/.claude/settings.json` always (both must not be world-writable or foreign-owned), and the project's `.candy-code/hooks.yaml`, `.claude/settings.json` and `.claude/settings.local.json` only under `trustedProjectHooks`. Files add, never override. New project entries are quarantined for a launch after the user's policy changed. — _Evidence:_ `src/Cli/Bootstrap.php:6238-6262,6022-6040,6109-6136`; `src/Hooks/ClaudeSettingsHooks.php:82",
+   "why": "cell omitted `~/.claude/settings.json` and `settings.local.json` and was 142 chars."
+  },
+  {
+   "row": "HK-07",
+   "col": "cc",
+   "expect": "✅ — Claude-shaped JSON payload rides std",
+   "new": "🟡 Reads .claude settings `hooks` + CC stdin JSON/envelope; exit 1 denies; non-command types or extra keys refuse the launch",
+   "detail": "🟡 — ClaudeSettingsHooks` flattens `hooks` into `cc:{event}:{index}` rows through `HookConfig::parse()`. Scripts get six stdin keys (session_id, cwd, hook_event_name, tool_name, tool_input, tool_response) plus `CRUSH_*` env, and the JSON envelope is honoured. Divergences: exit 1 denies (Claude Code proceeds); unknown events are skipped and recorded; any `type` other than `command`, any entry key beyond type/command/timeout (`async`, `statusMessage`, `if`…) or group key beyond matcher/hooks throws, and `hooks()` turns that into a refused launch (exit 2) — including from `~/.claude/settings.json`. — _Evidence:_ `src/Hooks/ClaudeSettingsHooks.php:95,98,193-201,256-262`; `src/Hooks/ScriptHook.php:631-654,1067-1078`; `src/Cli/Bootstrap.php:5957-5970",
+   "why": "the old detail still said ❌/stdin closed; the cell overstates parity given launch-refusing entry keys and exit-1 semantics."
+  },
+  {
+   "row": "HK-10",
+   "col": "cc",
+   "expect": "🟡 `/hooks` is a read-only browser; no ed",
+   "detail": "🟡 — /hooks` (spec 1390, palette row) prints every registered hook by event with matcher, disabled/built-in state and unevaluable matchers, read from `HookManager::inspect()`; it never registers, disables or runs a hook. — _Evidence:_ `builtin-commands/1390-hooks.php`; `src/Commands/HooksCommand.php:10-60`; `src/Host/Commands/HooksHostCommand.php:26-42",
+   "why": "detail said ❌ \"not among the 55 spec files\"."
+  },
+  {
+   "row": "HK-10",
+   "col": "web",
+   "expect": "❌ No hooks management UI",
+   "new": "🟡 Server-run `/hooks` prints the chain (event, matcher, state) as text; no panel or edit UI",
+   "detail": "🟡 — Same host body as the TUI over `command.exec`; the web palette offers it as a no-argument command. — _Evidence:_ `candy-code/src/Host/Commands/HooksHostCommand.php:26-42`; `candy-code-web/src-web/components/panels/CommandPalette.vue:48-60`",
+   "why": "matches Claude Code's own 🟡 read-only browser level."
+  },
+  {
+   "row": "MCP-01",
+   "col": "web",
+   "expect": "🟡 Inherited: a trusted `.mcp.json` stdio",
+   "new": "🟡 Inherited: stdio servers start server-side; the Context panel lists project `.mcp.json` servers (no liveness, no user tier)",
+   "detail": "🟡 — Served sessions inherit the launch's stdio client. The web Context panel (`context.sources`) lists each declared project server with its transport and a `trusted` badge read from the config census, not from liveness, and drops the user-tier rows the census computes. — _Evidence:_ `candy-code-web/src-web/components/panels/ContextPanel.vue:144-158`; `candy-code/src/Host/ContextSources.php:147-173`; `candy-code/src/Cli/McpDecision.php:295-340`",
+   "why": "\"invisible in the web\" is false since the WEB-3 Context panel."
+  },
+  {
+   "row": "MCP-02",
+   "col": "web",
+   "expect": "🟡 Inherited; invisible",
+   "new": "🟡 Inherited; the Context panel badges a project server's `sse` transport, nothing more",
+   "detail": "🟡 — Same census row as MCP-01: name + transport + trust badge; no stream state. — _Evidence:_ `candy-code-web/src-web/components/panels/ContextPanel.vue:150-155`; `candy-code/src/Host/ContextSources.php:162-171`",
+   "why": "transport is now shown."
+  },
+  {
+   "row": "MCP-03",
+   "col": "cc",
+   "expect": "🟡 — Body buffered and no GET stream; HTT",
+   "new": "🟡 POST replies are buffered whole and no GET stream is opened; per-entry `toolTimeout` (default 120 s) plus a 10 s connect bound",
+   "detail": "🟡 — HttpMcpServer` POSTs every message with `Accept: application/json, text/event-stream`, reads the reply buffered (not `stream => true`, measured hostile), re-initialises when a session-bearing request gets 404, sends a session DELETE on stop, never follows redirects, and advertises protocol 2024-11-05. No standalone GET listener exists, so server-pushed notifications/requests outside a reply are never received. — _Evidence:_ `src/MCP/HttpMcpServer.php:14-17,42,84,92,304-322,558-575,700-735",
+   "why": "\"instead of the old fixed 30 s total\" is history voice; buffering/no-GET verified."
+  },
+  {
+   "row": "MCP-03",
+   "col": "web",
+   "expect": "🟡 Inherited; invisible",
+   "new": "🟡 Inherited; the Context panel badges a project server's `http` transport, nothing more",
+   "detail": "🟡 — As MCP-02. — _Evidence:_ `candy-code-web/src-web/components/panels/ContextPanel.vue:150-155`",
+   "why": "transport is now shown."
+  },
+  {
+   "row": "MCP-04",
+   "col": "cc",
+   "expect": "✅ — A 401 raises a typed auth-required f",
+   "new": "✅ PKCE loopback login with scopes + refresh (`mcp auth login`; TUI `/mcp login` forks it); a 401 is a typed auth-required failure",
+   "detail": "✅ — candy-code mcp auth login <server>` runs PKCE against a 127.0.0.1 loopback listener (300 s human-wait bound), supports scopes, stores tokens in `~/.local/share/candy-code/mcp-auth.json` and refreshes ahead of expiry; no RFC 8707 `resource` parameter. In the TUI `/mcp login <server>` forks that CLI arm (`McpLoginFork`) and announces the URL; `/mcp reconnect` restarts servers behind a config-drift gate. Tokens attach at the next launch. — _Evidence:_ `src/MCP/OAuthLoopbackFlow.php:51,215-239`; `src/Chat.php:19810-19843`; `src/Support/McpLoginFork.php:12-28`; `src/MCP/HttpMcpServer.php:962-975`; `src/MCP/OAuthClientRegistration.php:365-386,904-913`; `lang/en.php:1257",
+   "why": "154 chars, and \"`/mcp reconnect` re-attaches (token lands next launch)\" contradicts itself."
+  },
+  {
+   "row": "MCP-04",
+   "col": "web",
+   "expect": "❓ `/mcp` is server-run; whether `/mcp au",
+   "new": "🟡 Inherited tokens attach server-side, but served `/mcp login` only prints the shell command; the login fork is TUI-only",
+   "detail": "🟡 — A served `/mcp` runs `McpAuthHostCommand` → `McpAuthCommand::execute()`, whose `login` arm prints the `candy-code mcp auth login …` guidance; only `Chat::handleMcpAuthCommand` intercepts `login <server>` to fork the flow, and the listener binds 127.0.0.1 on the server host, so a remote browser cannot finish it. Tokens stored by a host-side CLI login do ride served http servers. — _Evidence:_ `src/Host/Commands/McpAuthHostCommand.php:19-26`; `src/Commands/McpAuthCommand.php:167-173,308-313`; `src/Chat.php:19810-19820`; `lang/en.php:1264`",
+   "why": "❓ settled by reading the dispatch."
+  },
+  {
+   "row": "MCP-06",
+   "col": "cc",
+   "expect": "✅ listResources/readResource; `@mcp:` re",
+   "new": "✅ `@mcp:<server>:<uri>` mentions attach text resources (fenced as data, 256 KiB clip) in the TUI; serve and `-p` refuse them",
+   "detail": "✅ — McpClient::listResources()/readResource()` over the stdio/http/sse providers; `ContextMentions` resolves `@mcp:<server>:<uri>` at submit, framed as untrusted data, binary refused, text clipped at 256 KiB, saved with the transcript. Only Chat passes the MCP reader into `TurnController::userTurnMessage()`; served sessions and headless runs build the scanner without it and meet the refusal notice. — _Evidence:_ `src/Attachments/ContextMentions.php:113-155,398-414`; `src/Chat.php:9925-9935`; `src/Host/SessionHost.php:1702-1710`; `docs/MCP.md:824-845",
+   "why": "TUI-only scope missing; Appendix still says ❌ + dated superseded note."
+  },
+  {
+   "row": "MCP-07",
+   "col": "cc",
+   "expect": "✅ prompts/list + prompts/get drive `/mcp",
+   "new": "✅ `prompts/list` rows become `/mcp__server__prompt` commands (`prompts/get` on Enter, disk files win); TUI only",
+   "detail": "✅ — McpPromptCommands::specs()` turns the launch-frozen `prompts/list` roster into file-shaped specs merged into Chat's command map (project-file > user-file > mcp-prompt); `prompts/get` runs at submission; `` !`cmd` `` inside a fetched body needs `trustedProjectCommands`. SessionHost reads only `CommandLoader` rows, so served sessions have no MCP prompt commands. — _Evidence:_ `src/Commands/McpPromptCommands.php:8-40`; `src/Chat.php:1796,11101-11102`; `src/Host/TurnController.php:539-552`; `src/Host/SessionHost.php:241-244",
+   "why": "scope qualification; Appendix still ❌ + superseded note."
+  },
+  {
+   "row": "MCP-08",
+   "col": "web",
+   "expect": "❓ Not verified; the protocol has no elic",
+   "new": "❌ Engine has none, and the protocol carries no elicitation or sampling event",
+   "detail": "❌ — Nothing to surface: every transport advertises empty client capabilities and skips server-initiated frames (MCP-08 candy-code). — _Evidence:_ `candy-code-web/src-web/protocol/generated.ts:1829-1865` (EVENT_KINDS has no elicitation/sampling event)",
+   "why": "engine absence is settled, so ❓ is no longer warranted."
+  },
+  {
+   "row": "MCP-09",
+   "col": "cc",
+   "expect": "✅ User scope `~/.candy-code/mcp.json` + ",
+   "new": "✅ User `~/.candy-code/mcp.json` + project `.mcp.json` (trustedProjectMcp, per-server pins; project wins); no local/managed tier",
+   "detail": "✅ — Two tiers: the user file starts without repo trust (owner-checked home path); the project `.mcp.json` needs `trustedProjectMcp` plus per-server fingerprint pins; the project wins a shared name. `disabledMcpServers` globs, `mcp.enabled` and `CANDY_CODE_MCP_DISABLE` switch servers off at launch. — _Evidence:_ `src/Cli/McpDecision.php:61-81,123-136`; `src/Cli/Bootstrap.php:7703,7716,8015-8021`; `src/MCP/McpTrustPins.php:34,51`",
+   "why": "140 chars; Appendix still 🟡 + superseded note."
+  },
+  {
+   "row": "MCP-09",
+   "col": "web",
+   "expect": "🟡 Inherited",
+   "new": "🟡 Inherited; an untrusted project `.mcp.json` can be granted from the Context panel's trust prompt (applies next launch)",
+   "detail": "🟡 — context.sources` mints a server-scope `permission.asked` with `kind:\"trust\"` when the project census is untrusted; `context.trust` writes the user's `trustedProjectMcp` and records pins via `Bootstrap::trustProjectMcp()`. — _Evidence:_ `src/Protocol/Methods/ContextMethods.php:48-75`; `src/Protocol/TrustAsks.php:33-34,120-124`; `lang/en.php:1125",
+   "why": "WEB-3b trust prompt not reflected."
+  },
+  {
+   "row": "MCP-10",
+   "col": "web",
+   "expect": "🟡 `/mcp` (server-run) prints the project",
+   "new": "🟡 Context panel lists project servers (transport, trust; no liveness/user tier); `/mcp` verbs answer as text",
+   "detail": "🟡 — The panel reads the config census, not `mcpLivenessSnapshot()`, and keeps only project rows. `/mcp list|add|remove|reconnect` run through `McpAuthHostCommand` and print transcript text; `login` prints shell guidance. — _Evidence:_ `src/Host/ContextSources.php:147-173`; `candy-code-web/src-web/components/panels/ContextPanel.vue:144-158`; `src/Host/Commands/McpAuthHostCommand.php:19-26`",
+   "why": "WEB-3 Context panel shipped; old detail (\"Status: none\") is stale."
+  },
+  {
+   "row": "MCP-11",
+   "col": "cc",
+   "expect": "✅ — A preset's `mcpServers` allowlist is",
+   "new": "🟡 `mcpServers` allowlist strips a preset's `mcp__` bridges, but `mcp_call`/`mcp_list` still reach every deferred server",
+   "detail": "🟡 — AgentManager::resolveGrantedTools()` removes `McpToolBridge` instances whose server is outside the preset's `mcpServers` (with or without `tools:`). The deferred dispatchers are not filtered: `McpCallTool` calls `McpClient::callTool()` on the launch client, which production builds unrestricted with no preset, so `isServerAllowed()` passes any non-denied server; `McpClient::setAgentPreset()` has no caller. — _Evidence:_ `src/Agents/AgentManager.php:1503-1533,1665`; `src/Tools/BuiltIn/McpCallTool.php:131-156`; `src/MCP/McpClient.php:178-181,861-870,888-899`; `src/Cli/Bootstrap.php:8015-8030",
+   "why": "the ✅ claim does not hold for servers past the lazy floor; Appendix carries dated remediation clutter."
+  },
+  {
+   "row": "MCP-12",
+   "col": "cc",
+   "expect": "✅ Deferred loading by default: McpToolSh",
+   "new": "✅ Servers whose schemas pass `mcp.lazySchemaTokens` (8000) sit behind `mcp_list`/`mcp_call`; small or `eager: true` stay bridged",
+   "detail": "✅ — McpToolShape::derive()` splits the launch roster once per memo key: per server, schemas under the floor keep first-class `mcp__server__tool` bridges; larger servers are reached only through `mcp_list` (roster from the frozen descriptors) and `mcp_call`; the pair is declared only when something was deferred. Deny rules bind both spellings. — _Evidence:_ `src/MCP/McpToolShape.php:14-37,58-98`; `src/Cli/Bootstrap.php:7724,7731,8325-8330`; `src/Permissions/PermissionRule.php:530-536",
+   "why": "\"by default\" overstates it — a typical small config is never deferred."
+  },
+  {
+   "row": "MCP-14",
+   "col": "cc",
+   "expect": "✅ — Embedded resource and image/audio pa",
+   "new": "✅ 64 KiB cap (`mcpResultCapBytes`); embedded resource text inline (8 KiB); image/audio/blob parts named by mime and size only",
+   "detail": "✅ — McpToolBridge::renderPart()` inlines an embedded resource's text up to `MAX_RESOURCE_TEXT_BYTES` (8192) and announces image/audio/blob parts as `[image: <mime>, N base64 bytes not shown]`; no image reaches the vision channel. The whole render is clipped at 65,536 bytes unless `mcpResultCapBytes` overrides. — _Evidence:_ `src/Tools/McpToolBridge.php:111,598-606,815-863,866-910`; `src/Tools/Concerns/TruncatesOutput.php:155`; `src/Tools/ToolLimits.php:276-279",
+   "why": "\"bytes to the image channel\" is false; 166 chars."
+  },
+  {
+   "row": "MCP-N1",
+   "col": "web",
+   "expect": "🟡 Inherited pins for the server's MCP la",
+   "new": "🟡 Inherited pins; an untrusted project can be granted from the Context panel, but a changed server needs CLI `mcp trust`",
+   "detail": "🟡 — The WEB-3b trust prompt fires only while the census says the project is untrusted; once trusted, a pin mismatch leaves that server off with a `/notices` line and no browser path to re-approve. — _Evidence:_ `src/Protocol/Methods/ContextMethods.php:61-75`; `src/Cli/McpDecision.php:343-350`",
+   "why": "old detail says a browser user cannot re-approve at all."
+  },
+  {
+   "row": "PLG-01",
+   "col": "cc",
+   "expect": "🟡 Bundles: Claude-format plugin dirs imp",
+   "new": "🟡 Claude-format bundles (`.claude-plugin/plugin.json`) add skills, commands and agents via existing loaders; hooks/MCP declined",
+   "detail": "🟡 — BundleDiscovery` scans `<root>/.candy-code/bundles` (project tier), `~/.candy-code/bundles` and `pluginPaths`; `Bootstrap::bundles()` feeds `CommandLoader::useBundles()`, `SkillManager::loadAll()` and the foreign agent preset registry at the lowest precedence seat, badged `[bundle]`. Bundle hooks are never registered and a bundle `.mcp.json` is never auto-started (launch notice names both). — _Evidence:_ `src/Cli/Bootstrap.php:1764,2240-2300,2831,4955`; `src/Skills/SkillSource.php:22,34`; `docs/PLUGINS.md:49-93",
+   "why": "\"file-based surfaces as before\" is history voice; MCP decline omitted; Appendix says ❌ —."
+  },
+  {
+   "row": "PLG-01",
+   "col": "web",
+   "expect": "❌ No web plugin/extension mechanism",
+   "new": "🟡 Inherited: bundle commands reach `/` completion and bundle skills/agents load server-side; no web-side extension mechanism",
+   "detail": "🟡 — The served workspace's `CommandLoader` carries the bundles, and both `command.list` and SessionHost read it. — _Evidence:_ `src/Protocol/Methods/CommandMethods.php:131`; `src/Host/SessionHost.php:241-244`; `src/Cli/Bootstrap.php:1764`",
+   "why": "bundle content does reach served sessions."
+  },
+  {
+   "row": "PLG-03",
+   "col": "web",
+   "expect": "➖ No plugins",
+   "new": "🟡 Inherited: bundle skills, commands and agents apply to served sessions",
+   "detail": "🟡 — As PLG-01 candy-code-web. — _Evidence:_ `src/Cli/Bootstrap.php:1764,4955`",
+   "why": "\"No plugins\" is false."
+  },
+  {
+   "row": "PLG-08",
+   "col": "web",
+   "expect": "✅ Consumes the server event stream (34 e",
+   "new": "✅ Consumes the server event stream (35 event types) with gap-free per-session `seq` cursors",
+   "why": "count drift."
+  },
+  {
+   "row": "EDT-01",
+   "col": "web",
+   "expect": "🟡 Inherited; invisible",
+   "new": "🟡 Inherited; the Edit card's output names the stage that matched",
+   "detail": "🟡 — Hook- and matcher-annotated result text rides `tool.finished` and the card prints it under the diff. — _Evidence:_ `src/Tools/BuiltIn/Edit.php:108`; `candy-code-web/src-web/components/ToolCard.vue:39,81-82`",
+   "why": "not invisible."
+  },
+  {
+   "row": "EDT-03",
+   "col": "web",
+   "expect": "🟡 — Inherited; permission cards still sh",
+   "new": "🟡 Edit/Write asks show a client-side diff of the echoed strings (no file context); ApplyPatch asks stay raw JSON",
+   "detail": "🟡 — askDiffPreview()` diffs `old_string`→`new_string` (or each `edits[]` pair) and shows Write content as a whole-file add, failing soft to the JSON dump; the server's dry-run `previewDiff()` is not sent. — _Evidence:_ `candy-code-web/src-web/components/PermissionCard.vue:32-37,112-114`; `candy-code-web/src-web/lib/lineDiff.ts:36-76",
+   "why": "WEB-5a-ii shipped; \"raw JSON\" is stale."
+  },
+  {
+   "row": "EDT-04",
+   "col": "web",
+   "expect": "🟡 Inherited; invisible",
+   "new": "🟡 Inherited; the format report rides the Edit card's output",
+   "detail": "🟡 — PostToolUse context is folded into the result before `ToolFinished`, which the card prints. — _Evidence:_ `src/Runtime.php:3405-3440`; `candy-code-web/src-web/components/ToolCard.vue:39,81-82`",
+   "why": "not invisible."
+  },
+  {
+   "row": "EDT-05",
+   "col": "web",
+   "expect": "🟡 Inherited; invisible",
+   "new": "🟡 Inherited; the lint report rides the Edit card's output",
+   "detail": "🟡 — As EDT-04. — _Evidence:_ `src/Runtime.php:3405-3440`; `candy-code-web/src-web/components/ToolCard.vue:81-82`",
+   "why": "not invisible."
+  },
+  {
+   "row": "EDT-06",
+   "col": "web",
+   "expect": "🟡 Inherited; invisible",
+   "new": "🟡 Inherited; LSP errors ride the Edit card's output",
+   "detail": "🟡 — As EDT-04. — _Evidence:_ `src/Cli/Bootstrap.php:5869-5872`; `candy-code-web/src-web/components/ToolCard.vue:81-82`",
+   "why": "not invisible."
+  },
+  {
+   "row": "EDT-08",
+   "col": "cc",
+   "expect": "✅ RepoMap tool: PageRank over symbol ref",
+   "new": "✅ RepoMap tool: PageRank over symbol references (PHP tokenizer; Universal Ctags otherwise), token-budgeted and cached",
+   "why": "131 chars (limit 130)."
+  },
+  {
+   "row": "EDT-09",
+   "col": "web",
+   "expect": "❓ Engine question; no protocol event for",
+   "new": "🟡 Inherited: served turns list read files changed on disk; no live watcher, no protocol event",
+   "detail": "🟡 — EngineBackend` adds `ReadLedger::notice()` to every turn's context block, served turns included; there is no file-change event and no AI-comment watch in serve. — _Evidence:_ `src/Backend/EngineBackend.php:1841`; `src/Tools/ReadLedger.php:230,266",
+   "why": "engine question settled."
+  },
+  {
+   "row": "EDT-10",
+   "col": "cc",
+   "expect": "🟡 Atomic writes keep mode/owner/hardlink",
+   "new": "🟡 Atomic writes keep mode/owner/hardlinks; Edit, Write and ApplyPatch keep a pure-CRLF file CRLF; no BOM handling",
+   "detail": "🟡 — IndentShift::inheritEndings()` converts a replacement's bare LF to CRLF when the file is purely CRLF — the exact stage (`EditMatcher`) and Write overwrite both call it; ApplyPatch uses `normalizeEndings()` on the assembled file. Mixed or LF files are written as given. No BOM detection or preservation exists in the edit path. — _Evidence:_ `src/Tools/Edit/IndentShift.php:59-100`; `src/Tools/Edit/EditMatcher.php:111`; `src/Tools/BuiltIn/Write.php:294-300`; `src/Tools/BuiltIn/ApplyPatch.php:388`; `src/Support/AtomicFileWriter.php",
+   "why": "ISS-062 fixed the exact-match LF injection; cell and Appendix repro are stale."
+  },
+  {
+   "row": "EDT-N1",
+   "col": "web",
+   "expect": "🟡 Inherited when the server user's confi",
+   "new": "🟡 Inherited when the server user's config sets autoTest + testCommand (exec-class keys, read-only in the web Settings form)",
+   "detail": "🟡 — `Bootstrap::hooks` registers AutoTestEditHook + AutoTestHook for the served workspace. The run is a Stop hook, so the browser sees only the follow-up step a failure triggers, not a card for the test run. `settings.set` refuses Exec-class keys. — _Evidence:_ `src/Cli/Bootstrap.php:5908-5918`; `src/Config/Settings/Definitions/ToolSettings.php:93-108`; `src/Config/Settings/RiskClass.php:46`",
+   "why": "132 chars."
+  },
+  {
+   "row": "MCP-02",
+   "col": "cc",
+   "expect": "✅ SSE transport supported (SseMcpServer,",
+   "detail": "✅ — SseMcpServer` speaks the 2024-11-05 HTTP+SSE transport: one GET event stream on a raw deadline-bounded socket, POSTs via Guzzle; the server's `endpoint` event must share the configured URL's origin or is refused before any POST; a dropped stream fails the in-flight call and retries a bounded backoff burst; `type: \"sse\"` entries (Claude dialect) route here. — _Evidence:_ `src/MCP/SseMcpServer.php:13-60`; `src/MCP/McpClient.php:760-775",
+   "why": "Appendix bullet still says ❌ with a dated \"superseded\" note."
+  },
+  {
+   "row": "MCP-08",
+   "col": "cc",
+   "expect": "❌ No sampling, elicitation, roots, loggi",
+   "detail": "❌ — All three transports send `capabilities: {}` in `initialize`; the stdio read loop skips method-bearing frames (server requests and notifications) while waiting for its reply id, so a server `ping`/`roots/list`/`elicitation/create` is never answered. — _Evidence:_ `../sugar-mcp-client/src/StdioMcpServer.php:408-414,1142-1156`; `src/MCP/HttpMcpServer.php:525-527`; `src/MCP/SseMcpServer.php:583`",
+   "why": "evidence lines drifted (399/1143 → 413/1150)."
+  },
+  {
+   "row": "MCP-10",
+   "col": "cc",
+   "expect": "🟡 /mcp list/add/remove/login/reconnect +",
+   "detail": "🟡 — /mcp` has five verbs; `list` opens with the project-inventory panel (declared servers, up/down, tool/resource counts, config-changed-since-launch) then the auth table; `reconnect` stops/starts the session client only when the config is unchanged and reports tool-roster drift without re-deriving it; `login <server>` forks the CLI flow. Enabling/disabling a server needs `disabledMcpServers` and a relaunch. — _Evidence:_ `src/Commands/McpAuthCommand.php:163-300,322-350`; `src/Tui/McpPanel.php:82-100",
+   "why": "Appendix carries a dated superseded note and the stale `--root` ISSUES remark."
+  },
+  {
+   "row": "MCP-13",
+   "col": "cc",
+   "expect": "❌ Does not act as an MCP server (the in-",
+   "detail": "❌ — No `mcp serve` verb exists (`mcp` verbs are list/auth/import/trust); docs/MCP.md describes `GitMcpServer` correctly as an in-process `type: git` entry the client uses. — _Evidence:_ `src/Cli/Subcommands.php:1952-1965,2587`; `docs/MCP.md:885-887`",
+   "why": "\"README and MCP.md overclaim a server mode (ISSUES)\" no longer holds."
+  },
+  {
+   "row": "PLG-02",
+   "col": "cc",
+   "expect": "🟡 `bundles install` (git/path); no regis",
+   "detail": "🟡 — candy-code bundles list|install <path|git-url>`; install refuses a manifest-less dir, never overwrites, and clones with `git -c protocol.ext.allow=never clone --depth 1 --no-tags` as a contained child into `~/.candy-code/bundles/<name>` only. No index, search, update or marketplace. — _Evidence:_ `src/Cli/Subcommands.php:1464-1520,1616,1726-1750`; `docs/PLUGINS.md:95-113",
+   "why": "Appendix says `❌ — —`, contradicting the 🟡 cell."
+  },
+  {
+   "row": "PLG-03",
+   "col": "cc",
+   "expect": "🟡 Bundles add skills, commands and agent",
+   "detail": "🟡 — Surfaces map onto the existing loaders at the lowest precedence seat; hooks are declined by design, a bundle `.mcp.json` is offered only through `mcp import` (prints, writes nothing); no themes, providers or tools. — _Evidence:_ `src/Cli/Bootstrap.php:2253-2262`; `docs/PLUGINS.md:72-93`",
+   "why": "Appendix says `➖ — —`."
+  },
+  {
+   "row": "PLG-04",
+   "col": "cc",
+   "expect": "🟡 Embedders can pass PHP Tool objects (E",
+   "detail": "🟡 — The catalog is the attribute scan of `src/Tools/BuiltIn`; `EngineBackend::withTools()` and `Chat::registerTool()` are embedder seams with no caller in the shipped binary (`registerTool` adds a callback without a schema, so the model sees it only if the embedder's backend advertises it). — _Evidence:_ `src/Backend/EngineBackend.php:792`; `src/Chat.php:8899-8916`; `src/Tools/Catalog/ToolCatalog.php`",
+   "why": "evidence `Chat.php:10546` / `EngineBackend.php:741` drifted."
+  },
+  {
+   "row": "PLG-05",
+   "col": "web",
+   "expect": "🟡 Generated TS protocol types + `CandyCo",
+   "detail": "🟡 — generated.ts` (1,865 lines) is generated from the PHP JSON Schema; `CandyCodeClient` lives in `protocol/client.ts`; the package is `\"private\": true`. — _Evidence:_ `candy-code-web/src-web/protocol/generated.ts`; `candy-code-web/src-web/protocol/client.ts:76`; `candy-code-web/package.json:4",
+   "why": "line count 1,586 → 1,865."
+  },
+  {
+   "row": "PLG-N1",
+   "col": "cc",
+   "expect": "❌ No plugin/mod system; extension is fil",
+   "detail": "❌ — Bundles are read as content, never loaded as code. Hooks are out-of-process scripts that can deny, ask or rewrite tool input but not draw UI; `statusLine` runs a command whose output fills a status-bar segment; `Chat::registerTool` is an embedder seam with no `bin/` caller. Nothing adds a pane, rewrites TUI events or registers a tool in-process. — _Evidence:_ `src/Chat.php:8899-8916`; `src/Config/Settings/Definitions/InterfaceSettings.php:65-72`; `docs/PLUGINS.md:1-10`",
+   "why": "\"There is no plugin loader\" predates the bundle reader; evidence drifted."
+  },
+  {
+   "row": "EDT-02",
+   "col": "cc",
+   "expect": "🟡 Stale-file refusal by content hash in ",
+   "detail": "🟡 — ReadLedger` hashes what Read saw and what Edit/Write/ApplyPatch (and the post-edit formatter) wrote; a later write to a file whose bytes changed is refused with \"Read it again\"; ≤256 entries, merged across forks; a never-read file is never refused. — _Evidence:_ `src/Tools/ReadLedger.php:33-37,80,163,230`; `src/Tools/BuiltIn/Edit.php:501`; `src/Tools/BuiltIn/Write.php:281`; `src/Hooks/BuiltIn/PostEditFormatHook.php:117-120",
+   "why": "evidence drifted; formatter recording missing."
+  },
+  {
+   "row": "EDT-03",
+   "col": "cc",
+   "expect": "✅ — The approval modal previews real dif",
+   "detail": "✅ — The approval modal calls `Edit/Write/ApplyPatch::previewDiff()` — a dry run against the file on disk — and shows the unified diff with full arguments; `v` expands tall content; after the write the tool row renders the diff. — _Evidence:_ `src/Renderer.php:7255-7262`; `src/Tools/BuiltIn/Edit.php:573`; `src/Tools/BuiltIn/Write.php:406`; `src/Tools/BuiltIn/ApplyPatch.php:679`",
+   "why": "Appendix keeps the pre-fix 80-char-clip text plus a dated remediation note."
+  },
+  {
+   "row": "EDT-04",
+   "col": "cc",
+   "expect": "🟡 Opt-in auto-format after edits (`forma",
+   "detail": "🟡 — User-tier `formatCommands` (extension → command) builds a `FormatRunner`; when non-empty, `PostEditFormatHook` registers before the lint hook, hashes bytes before the run, restores on a corrupting result, and records the formatted bytes into `ReadLedger` so they never read as stale. No built-in formatter table. — _Evidence:_ `src/Cli/Bootstrap.php:5834-5848`; `src/Format/FormatRunner.php:35-42,206`; `src/Hooks/BuiltIn/PostEditFormatHook.php:117-120`",
+   "why": "Appendix says ❌ \"No formatter setting or hook\"."
+  },
+  {
+   "row": "EDT-05",
+   "col": "cc",
+   "expect": "✅ Post-edit lint: `php -l` by default pl",
+   "detail": "✅ — PostToolUse for Write/Edit/ApplyPatch via the bounded spawn path, 30 s per lint, never refuses; a quoted `\"{file}\"` placeholder is unquoted and the path `escapeshellarg`ed, so it is not injectable. — _Evidence:_ `src/Cli/Bootstrap.php:5857-5861`; `src/Lint/LintRunner.php:22-27,65,149-153,215-216`",
+   "why": "\"A quoted `{file}` placeholder makes it injectable (ISSUES P2)\" is fixed (ISS-011)."
+  },
+  {
+   "row": "EDT-07",
+   "col": "cc",
+   "expect": "🟡 Hand-written `lsp` config plus opt-in ",
+   "detail": "🟡 — LspLauncher` starts the hand-written `lsp` map; with user-tier `lspAutoDetect` it consults `AUTO_TABLE` fingerprints (composer/php→intelephense, tsconfig→typescript, pyproject→pyright, go.mod→gopls, Cargo.toml→rust-analyzer) gated on binary presence; explicit entries win; ≤8 servers, 2 s handshake each; nothing is downloaded. — _Evidence:_ `src/LSP/LspLauncher.php:27-28,83,95,107,213-237`; `src/Cli/Bootstrap.php:8456-8459",
+   "why": "Appendix says ❌."
+  },
+  {
+   "row": "EDT-N2",
+   "col": "cc",
+   "expect": "✅ opt-in `watchFiles`: `AI!`/`AI?` comme",
+   "detail": "✅ — Comments already present at startup are ignored. Each fires once. Dispatched through the normal submit path, so hooks and the gate apply. — _Evidence:_ `src/Support/AiCommentWatcher.php:9-75`; `src/Chat.php:18283-18288`",
+   "why": "`Chat.php:18472-18477` drifted."
+  },
+  {
+   "row": "TL-04",
+   "col": "web",
+   "expect": "🟡 No MultiEdit in the server's tool list",
+   "new": "✅ Edit `edits` batches and ApplyPatch run server-side; cards show the +N −M diff and the ask card previews every hunk",
+   "detail": "✅ — Served sessions build the same tool roster as the TUI, so Edit's all-or-nothing `edits` list and ApplyPatch both run; `tool.finished` carries the result diff (DiffView + stats) and the Edit permission card mints one diff per `edits` pair client-side, falling back to raw JSON. — _Evidence:_ `candy-code/src/Cli/LaunchContext.php:2010-2022` (served `backendFor` → `tools()`); `candy-code/src/Tools/BuiltIn/Edit.php:137-146`; `candy-code/src/Host/TranscriptProjector.php:279`; `candy-code-web/src-web/lib/lineDiff.ts:36-52`; `candy-code-web/src-web/components/ToolCard.vue:21,81`",
+   "why": "Edit's `edits` list IS the multi-edit and it reaches served sessions; \"no MultiEdit\" judged the wrong name."
+  },
+  {
+   "row": "TL-05",
+   "col": "cc",
+   "expect": "✅ ApplyPatch: Codex/opencode `*** Begin ",
+   "new": "✅ ApplyPatch: Codex/opencode `*** Begin Patch` (add/update/move/delete), hunks found by content, all-or-nothing rollback",
+   "detail": "✅ — cell unchanged in substance; Appendix A detail stays as is.",
+   "why": "current cell is 132 chars (>130 limit)."
+  },
+  {
+   "row": "TL-08",
+   "col": "web",
+   "expect": "❌ No dedicated list-directory tool in th",
+   "new": "✅ Ls runs server-side in served sessions (same tool roster); generic card",
+   "detail": "✅ — Ls` is catalog-built with no launch condition, and served sessions take their tools from the same `LaunchContext::tools()` → `ToolCatalog::build()` chain as the TUI, so the model has it in every served turn; the browser shows it as a generic tool card. — _Evidence:_ `candy-code/src/Tools/BuiltIn/Ls.php:61,102-104`; `candy-code/src/Cli/LaunchContext.php:1681,2010-2022",
+   "why": "Ls shipped (position 36) and reaches served sessions."
+  },
+  {
+   "row": "TL-09",
+   "col": "web",
+   "expect": "✅ Bash card with command, output and exi",
+   "new": "✅ Bash card with command, output and exit; a live tail streams into the card while it runs (`tool.progress`)",
+   "detail": "✅ — Bash binds the turn's `tool.progress` emitter and sends a frame-capped tail of its output while it runs; the server relays it as a non-durable session event and ToolCard paints it as a \"live tail\" `<pre>` until `tool.finished` replaces the card. — _Evidence:_ `candy-code/src/Tools/BuiltIn/Bash.php:51,117-119,530-534`; `candy-code/src/Host/TranscriptProjector.php:421`; `candy-code-web/src-web/protocol/generated.ts:1764,1856`; `candy-code-web/src-web/stores/reducer.ts:509-514`; `candy-code-web/src-web/components/ToolCard.vue:44,69-74`",
+   "why": "\"output only once finished\" is stale since `tool.progress` shipped."
+  },
+  {
+   "row": "TL-10",
+   "col": "web",
+   "expect": "🟡 PtyRun exists server-side; no live out",
+   "new": "✅ Inherited: run_in_background, ShellOutput and ShellStop run server-side as cards; no shell list or kill control in the UI",
+   "detail": "✅ — Served sessions get Bash `run_in_background` plus ShellOutput/ShellStop because `tools()` threads the launch's BackgroundShellRegistry into the catalog build; their calls render as ordinary cards, and foreground Bash streams a live tail. The registry is one table per server process and workspace root (`forSession('main')`), so concurrent served sessions in one root share it. — _Evidence:_ `candy-code/src/Cli/LaunchContext.php:690-694,1708`; `candy-code/src/Cli/Bootstrap.php:8396-8406`; `candy-code/src/Tools/BuiltIn/ShellOutput.php:50,66`; `candy-code/src/Tools/BuiltIn/ShellStop.php:56,72`",
+   "why": "the cell describes the pre-SHL era (PtyRun only, no streaming); the background-shell tools exist server-side."
+  },
+  {
+   "row": "TL-16",
+   "col": "cc",
+   "expect": "✅ Lsp tool: definition/references/hover/",
+   "new": "✅ Lsp tool: definition/references/hover/symbols/code-actions/diagnostics; read class; `lsp` config or opt-in `lspAutoDetect`",
+   "detail": "✅ — Zero-indexed positions (the description says so); with no server every call returns an error, never an empty answer. Servers come from the hand-written `lsp` map or, when the user-tier `lspAutoDetect` bool is on, from a fingerprint table probed against PATH (explicit entries win per language). — _Evidence:_ `candy-code/src/Tools/BuiltIn/LspTool.php:59,78-83,170`; `candy-code/src/LSP/LspLauncher.php:27,95,163,237`",
+   "why": "\"needs a manual `lsp` server config\" is stale since lspAutoDetect shipped."
+  },
+  {
+   "row": "TL-17",
+   "col": "web",
+   "expect": "✅ PermissionCard renders a button per ch",
+   "new": "✅ PermissionCard renders a button per AskUser choice; the note field stays for free-form answers",
+   "detail": "✅ — AskUser rides the permission channel; the card reads the real choices from `arguments.options` and answers `once` with the exact option string, keeping the note field as the free-text path. — _Evidence:_ `candy-code-web/src-web/components/PermissionCard.vue:40-49,85,130-137`; `candy-code/src/Tools/BuiltIn/AskUserTool.php:71`",
+   "why": "lane tag in a current-state cell; Appendix A still carries the stale 🟡 \"— —\"."
+  },
+  {
+   "row": "TL-19",
+   "col": "cc",
+   "expect": "✅ — Read answers images to vision-capabl",
+   "new": "🟡 Read carries in-cap images (TUI paints them); the model sees pixels only on Anthropic and Vertex-Claude, else a caption",
+   "detail": "🟡 — Read sniffs PNG/JPEG/GIF/WebP in an 8 KiB head and returns an image-bearing result up to the 5 MiB display cap (the TUI mosaic ladder paints it). Only the Anthropic Messages wire puts those bytes in a `tool_result` image block (≤256 KiB, vision-gated); OpenAI-family, SGLang, Bedrock and Gemini wires send the caption alone by design. Read never carries PDFs (see TL-20). — _Evidence:_ `candy-code/src/Tools/BuiltIn/Read.php:726-746,799-807`; `candy-code/src/Providers/Concerns/AnthropicMessagesWire.php:89,838-858`; `candy-code/src/Providers/VertexProvider.php:400-403`; `candy-code/src/Providers/Concerns/GeminiGenerateContentWire.php:339`",
+   "why": "\"vision-capable models\" overstates (one wire family); \"PDFs ride document blocks\" is false for Read."
+  },
+  {
+   "row": "TL-19",
+   "col": "web",
+   "expect": "🟡 Images a tool reads are not rendered; ",
+   "new": "🟡 A Read image becomes a MediaCard whose fetch fails (media.fetch serves only the session media store); generated media render",
+   "detail": "🟡 — tool.finished` projects Read's `imagePath` as a media ref (artifactId = basename stem), so the card renders a MediaCard; `media.fetch` resolves ids and paths only inside the session MediaStore, so a workspace image answers `media_artifact_not_found` (a stored artifact sharing the stem would show the wrong image). GenerateImage/Video artifacts load normally. — _Evidence:_ `candy-code/src/Tools/BuiltIn/Read.php:745`; `candy-code/src/Host/TranscriptProjector.php:301-303,351-364`; `candy-code/src/Support/MediaStore.php:752-756`; `candy-code/src/Protocol/Methods/MediaMethods.php:499-509,521-524`; `candy-code-web/src-web/components/ToolCard.vue:86-87",
+   "why": "Read now carries image paths, which changes what the web does (it tries and fails rather than showing nothing)."
+  },
+  {
+   "row": "TL-20",
+   "col": "cc",
+   "expect": "✅ `@`-mentions send PDFs as document blo",
+   "new": "🟡 `@`-mentioned PDFs ride document blocks on Anthropic and Vertex-Claude only; Read answers a PDF with a `pdftotext` hint",
+   "detail": "🟡 — A user's `@file.pdf` attaches up to 20 MB as a `document` block where `supportsDocuments()` is true (Anthropic, Vertex with a Claude model; Bedrock, Gemini, OpenAI-family and SGLang decline). The model cannot read a PDF on its own: Read returns a notice (its \"mention the file\" advice is a user action) and the only model road is Bash `pdftotext`. — _Evidence:_ `candy-code/src/Tools/BuiltIn/Read.php:750-763`; `candy-code/src/Attachments/FileMentions.php:64`; `candy-code/src/Providers/AnthropicProvider.php:230-233`; `candy-code/src/Providers/VertexProvider.php:411-413`; `candy-code/src/Providers/BedrockProvider.php:445-451`",
+   "why": "212-char cell; ✅ overstates — every competitor's Read reads PDFs, candy-code's model-side path is pdftotext only."
+  },
+  {
+   "row": "TL-20",
+   "col": "web",
+   "expect": "❓ Engine question; the web would show on",
+   "new": "🟡 Inherited: `@file.pdf` in the web composer takes the same document-block road; Read gives only a `pdftotext` hint",
+   "detail": "🟡 — session.send` resolves mentions by default, and the served submit path runs the same `FileMentions::resolve`, so a typed `@path.pdf` becomes a document attachment on the same providers as the TUI. — _Evidence:_ `candy-code/src/Protocol/Methods/TurnMethods.php:191,198`; `candy-code/src/Host/TurnController.php:1059-1060,1078-1082",
+   "why": "❓ is settleable from code."
+  },
+  {
+   "row": "TL-22",
+   "col": "cc",
+   "expect": "❌ No cron/scheduling tool",
+   "new": "🟡 No model-callable cron tool; users schedule recurring prompts with `/loop` and `/schedules` (serve is the cron host)",
+   "detail": "🟡 — Schedule`/`ScheduleRegistry` (`~/.candy-code/schedules.json`) are evaluated inside the TUI background pump and the served host's background tick, spawning background sessions when due; `/loop <interval> <prompt>` and `/schedules` (alias `/schedule`) manage them. No tool in the catalog lets the model create one. — _Evidence:_ `candy-code/builtin-commands/2910-schedules.php`; `candy-code/builtin-commands/2920-loop.php`; `candy-code/src/Chat.php:18528`; `candy-code/src/Host/BackgroundEvents.php:229`; `candy-code/src/Cli/Bootstrap.php:1910",
+   "why": "scheduling shipped as user commands; the row grades the capability, missing piece is the model tool."
+  },
+  {
+   "row": "TL-22",
+   "col": "web",
+   "expect": "❌ No cron/scheduling tool",
+   "new": "🟡 `/loop` and `/schedules` run server-side via command.exec; no model tool and no schedule panel",
+   "detail": "🟡 — Both specs carry host commands, so `command.list` marks them server-runnable and the web runs them as typed commands; schedules fire in serve's background tick. — _Evidence:_ `candy-code/builtin-commands/2910-schedules.php`; `candy-code/builtin-commands/2920-loop.php` (`withHostCommand`); `candy-code/src/Host/BackgroundEvents.php:229`",
+   "why": "as TL-22 candy-code."
+  },
+  {
+   "row": "TL-27",
+   "col": "web",
+   "expect": "✅ Picking `plan` in the status bar appli",
+   "new": "🟡 Picking `plan` in the status bar sets the session's mode; the gate refuses writes, the tool list is unchanged",
+   "detail": "🟡 — The status-bar picker calls `session.setMode`, a permission-mode change; EngineBackend's per-turn tool list filters only the context-ledger tools, so plan mode refuses writes at the gate rather than offering a read-only roster. — _Evidence:_ `candy-code-web/src-web/components/StatusBar.vue:8,16`; `candy-code/src/Protocol/Methods/SessionMethods.php:56`; `candy-code/src/Backend/EngineBackend.php:3151,3180-3190`",
+   "why": "the cell claims a mode-scoped tool set the engine (TL-27 cc 🟡) does not have."
+  },
+  {
+   "row": "TL-28",
+   "col": "web",
+   "expect": "🟡 GenerateImage/GenerateVideo artifacts ",
+   "new": "✅ Generate panel submits image/video jobs (`generate.submit`/`status`); artifacts render as MediaCards (lazy fetch, lightbox)",
+   "detail": "✅ — GeneratePanel (a SidePanels tab) drives `generate.submit` and polls `generate.status` through `stores/generate.ts`; finished artifacts and model-run GenerateImage/Video results load through `media.fetch` into MediaCards. — _Evidence:_ `candy-code-web/src-web/components/panels/SidePanels.vue:13,103`; `candy-code-web/src-web/stores/generate.ts:6-9,24-26`; `candy-code/src/Protocol/Methods/MediaMethods.php:100-111`",
+   "why": "the Generate form shipped."
+  },
+  {
+   "row": "TL-N1",
+   "col": "web",
+   "expect": "✅ Inherited PtyRun for served sessions; ",
+   "new": "✅ Inherited PtyRun for served sessions; its card shows the final transcript/screen at tool.finished (no live tail)",
+   "detail": "✅ — PtyRun is in the served roster and its steps pass the same approval chain as Bash; the permission card shows the raw arguments, steps included. PtyRun emits no `tool.progress` (only Bash does), so the card fills at finish. — _Evidence:_ `candy-code/src/Tools/BuiltIn/PtyRun.php:50`; `candy-code/src/Permissions/PermissionGate.php:622,900`; `candy-code/src/Backend/EngineBackend.php:3218`; `candy-code-web/src-web/components/ToolCard.vue:44`",
+   "why": "131-char cell; Appendix A still says \"the unseen-keystrokes P0 from a4 applies\", which is fixed."
+  },
+  {
+   "row": "TL-N3",
+   "col": "cc",
+   "expect": "❌ No code-mode tool; nearest is Workflow",
+   "new": "❌ No code-mode tool; nearest is Workflow (model-authored YAML of staged sub-agents with output interpolation) plus Bash",
+   "detail": "❌ — No built-in tool runs a script that can call agent tools or MCP namespaces. Workflow composes whole sub-agent stages (`{{stage.output}}`), each its own agentic run; Bash runs real scripts but cannot reach the agent's tools or MCP servers; parallel calls in one message are the only round-trip saver. — _Evidence:_ `candy-code/src/Tools/BuiltIn/WorkflowTool.php:59`; `candy-code/src/Tools/BuiltIn/Bash.php:50`; `candy-code/src/Tools/Catalog/ToolCatalog.php:197-210`",
+   "why": "132-char cell; Appendix A's \"The 30 built-in tools\" count is stale (36 catalog classes)."
+  },
+  {
+   "row": "SH-02",
+   "col": "web",
+   "expect": "🟡 Inherited",
+   "new": "❌ Inherited: every served Bash call is a fresh `bash -c`",
+   "detail": "❌ — Served turns run the same Bash tool; there is no persistent shell to inherit. — _Evidence:_ `candy-code/src/Tools/BuiltIn/Bash.php:198,234`; `candy-code/src/Cli/LaunchContext.php:2010-2022`",
+   "why": "inheriting an absent feature cannot be partial."
+  },
+  {
+   "row": "SH-03",
+   "col": "cc",
+   "expect": "✅ — Grep is bounded: wall-clock timeout ",
+   "new": "✅ Bash 120 s default / 600 s max (settings rebind per turn), per-call `timeout`, output kept on timeout; PtyRun 30/300 s",
+   "detail": "✅ — bashTimeoutSeconds`/`bashMaxTimeoutSeconds` rebind per turn; the model passes `timeout` per call (clamped to the max). On timeout the group is killed and the output so far returns with a \"[timed out after N s …]\" marker. Grep has its own 60 s wall clock; LLM calls carry no total timeout. — _Evidence:_ `candy-code/src/Tools/BuiltIn/Bash.php:102-103,407,505,598-607,695-696`; `candy-code/src/Tools/ToolLimits.php:109,112`; `candy-code/src/Tools/BuiltIn/PtyRun.php:60,62`; `candy-code/src/Tools/BuiltIn/Grep.php:50",
+   "why": "the cell holds a Grep sentence pasted into the Bash-timeouts row."
+  },
+  {
+   "row": "SH-04",
+   "col": "web",
+   "expect": "🟡 Background panel manages `/bg` session",
+   "new": "🟡 Background shells run server-side (ShellOutput/ShellStop cards); the Background panel lists `/bg` sessions only, no shells",
+   "detail": "🟡 — The model can start, poll and kill background shells in served sessions; the human has no list or kill control for them (BackgroundPanel covers `/bg` agent sessions). — _Evidence:_ `candy-code/src/Cli/LaunchContext.php:1708`; `candy-code-web/src-web/components/panels/BackgroundPanel.vue`",
+   "why": "the cell omits that background shells now exist server-side."
+  },
+  {
+   "row": "SH-06",
+   "col": "cc",
+   "expect": "🟡 Opt-in bubblewrap (`bashSandbox` on/no",
+   "new": "🟡 Opt-in bubblewrap (`bashSandbox` on/no-network) for Bash and PtyRun: ro `/`, writable root+tmp; Linux; hooks/LSP/MCP unjailed",
+   "detail": "🟡 — --unshare-all --die-with-parent`, `.git/hooks`, `.git/config`, `.candy-code` and `.mcp.json` bound read-only; fails closed when bwrap cannot start; user tier only. It wraps foreground and `run_in_background` Bash and PtyRun's pty spawn (argv form, no `--new-session`); hooks, lint/test runners, LSP and MCP children run unsandboxed. A write jail, not a read jail. — _Evidence:_ `candy-code/src/Tools/Sandbox/Bubblewrap.php:10-56`; `candy-code/src/Tools/BuiltIn/Bash.php:186,569,577-588`; `candy-code/src/Tools/BuiltIn/PtyRun.php:176,430`; `candy-code/src/Support/ProcessContainment.php:588-598",
+   "why": "\"Bash only\" is stale — PtyRun is jailed too; Appendix A still says PtyRun runs unsandboxed."
+  },
+  {
+   "row": "SH-07",
+   "col": "cc",
+   "expect": "🟡 The `no-network` sandbox mode removes ",
+   "new": "🟡 The `no-network` sandbox mode removes network for Bash and PtyRun only; no domain allowlist or egress proxy",
+   "detail": "🟡 — Without the sandbox there is no network control beyond the auto-mode classifier and WebFetch's ask class/rules. — _Evidence:_ `candy-code/src/Tools/Sandbox/Bubblewrap.php:53-56`; `candy-code/src/Tools/BuiltIn/PtyRun.php:176,430`",
+   "why": "same PtyRun jail fact as SH-06."
+  },
+  {
+   "row": "SH-08",
+   "col": "cc",
+   "expect": "🟡 The tool row shows running/done with e",
+   "new": "🟡 TUI row shows running/done with elapsed time but paints no live output; Bash's live tail reaches only web and stream-json",
+   "detail": "🟡 — Bash emits frame-capped `ToolProgress` tails while it runs (foreground and `interactive`); Chat records them and deliberately paints nothing, while serve relays them as `tool.progress` and `--output-format stream-json` writes them as NDJSON. PtyRun and other tools emit no progress. — _Evidence:_ `candy-code/src/Tools/BuiltIn/Bash.php:530-534,590-596`; `candy-code/src/Chat.php:3702-3711,4230-4237`; `candy-code/src/Cli/StreamJsonEmitter.php:123-129`",
+   "why": "the engine now streams; the TUI renderer is the missing piece."
+  },
+  {
+   "row": "SH-08",
+   "col": "web",
+   "expect": "❌ Shell output appears only at `tool.fin",
+   "new": "✅ Foreground Bash streams a live tail into its running card (ephemeral `tool.progress`, frame-capped); other tools at finish",
+   "detail": "✅ — tool.progress` is a non-durable session event (never replayed; `tool.finished` stays the whole-payload contract); the reducer keeps the newest tail per card with a seq guard and ToolCard shows it as \"live tail · older output dropped\" while running. — _Evidence:_ `candy-code/src/Host/SessionEvent.php:48`; `candy-code/src/Host/TranscriptProjector.php:421`; `candy-code-web/src-web/protocol/generated.ts:1764,1856`; `candy-code-web/src-web/stores/reducer.ts:70-72,509`; `candy-code-web/src-web/components/ToolCard.vue:44,69-74",
+   "why": "`tool.progress` shipped; the cell and its Appendix A (schema \"no tool.progress\") are stale."
+  },
+  {
+   "row": "TL-01",
+   "col": "cc",
+   "expect": "✅ Read: numbered pages (2000 lines / 50 ",
+   "detail": "✅ — Returns `N: text` lines with a next-offset footer; a long file read without offset/limit gets an LSP or regex outline (≤200 rows / 8 KiB). Binary files answer with a note instead of mojibake: in-cap images ride the result (TL-19), PDFs get a `pdftotext` hint (TL-20). Line counting stops at an 8 MiB scan budget (footer then says `of ≥N`); jailed via `PathJail::resolve`, records stat + hash into the shared ReadLedger. — _Evidence:_ `candy-code/src/Tools/BuiltIn/Read.php:46,54,62,93,101-102,423-427,726-763`",
+   "why": "Appendix \"Gaps: no image/PDF … support (mojibake) … scans and hashes the whole file\" is stale."
+  },
+  {
+   "row": "TL-07",
+   "col": "cc",
+   "expect": "✅ — Dual-engine grep: ripgrep when on PA",
+   "detail": "✅ — rg` runs when present at boot (with `--hidden --no-ignore --binary --with-filename`, the tool's own IgnoreRules post-filter deciding visibility), GNU `grep -rn` otherwise; the schema states the active dialect. Option injection is closed and .env/key files are never opened; 60 s wall clock (`grepTimeout`) and an output bound. No case-insensitive, context-line, count or files-only modes. — _Evidence:_ `candy-code/src/Tools/BuiltIn/Grep.php:50,72,238-260,281-283,391,945-960`; `candy-code/src/Cli/LaunchContext.php:2018",
+   "why": "Appendix is still the 🟡 pre-SHL-4 text (\"rgAvailable only adds a hint\", \"never cut off\")."
+  },
+  {
+   "row": "TL-08",
+   "col": "cc",
+   "expect": "✅ Ls tool (StreamingDirectoryLister-back",
+   "detail": "✅ — Ls` (Read class, ParallelSafe) lists one directory name-sorted with `/`-marked directories over `StreamingDirectoryLister`; dotfiles and .gitignore'd entries are hidden unless `include_hidden`, the list caps at 1000 with a PARTIAL marker, and paths are jailed like Glob. — _Evidence:_ `candy-code/src/Tools/BuiltIn/Ls.php:61-62,73,145,231-259,321",
+   "why": "Appendix still 🟡 \"StreamingDirectoryLister has no callers\"."
+  },
+  {
+   "row": "TL-10",
+   "col": "cc",
+   "expect": "✅ Bash `run_in_background` with ShellOut",
+   "detail": "✅ — run_in_background: true` starts the (cd-guarded, sandbox-wrapped) command through the containment spawn, records pid = pgid, streams stdio to owner-only files and answers a `sh-xxxxxxxx` id at once; ShellOutput reads from a byte cursor, ShellStop sends TERM→grace→KILL to the group. Shells are killed at 1800 s and at teardown; output is capped at 64 MiB. — _Evidence:_ `candy-code/src/Tools/BuiltIn/Bash.php:422,577-588`; `candy-code/src/Background/BackgroundShellRegistry.php:142,164,982`; `candy-code/src/Tools/BuiltIn/ShellOutput.php:83-92`; `candy-code/src/Tools/BuiltIn/ShellStop.php:20-22,82",
+   "why": "Appendix still ❌ \"orphaned and untracked … only Task sub-agents\"."
+  },
+  {
+   "row": "TL-18",
+   "col": "web",
+   "expect": "✅ PlanExit card renders the plan through",
+   "detail": "✅ — The PlanExit ask carries the plan text in `arguments.plan`; the card renders it (plus the summary) through MessageMarkdown above the normal approve/reject actions. — _Evidence:_ `candy-code/src/Tools/BuiltIn/PlanExitTool.php:181-186`; `candy-code-web/src-web/components/PermissionCard.vue:56-68,108-110`",
+   "why": "Appendix still 🟡 \"— —\"."
+  },
+  {
+   "row": "TL-26",
+   "col": "cc",
+   "expect": "✅ Parallel tool calls on by default; Par",
+   "detail": "✅ — parallelToolCalls` (default true) and `parallelToolDeadlineSeconds`. ParallelSafe: Read, Glob, Grep, Ls, WebFetch, WebSearch, Task and BoardRead; Lsp, Workflow and MCP bridges run alone (MCP is a deliberate barrier). Parallel Task members relay permission asks to the modal. — _Evidence:_ `candy-code/src/Config/Settings/Definitions/AgentLoopSettings.php:34`; `candy-code/src/Tools/BuiltIn/Ls.php:62`; `candy-code/src/Tools/BuiltIn/TaskTool.php:204`; `candy-code/src/Tools/McpToolBridge.php:82,545",
+   "why": "Appendix roster lists Lsp/Workflow/MCP as ParallelSafe (false) and omits Ls."
+  },
+  {
+   "row": "TL-N1",
+   "col": "cc",
+   "expect": "✅ PtyRun runs a program on a real pty an",
+   "detail": "✅ — Up to 64 steps, named keys (`<Enter>`, `<C-x>`), `\\xHH` escapes, substring or `/regex/` expects, cols/rows, 64 KiB default capture (raisable to 1 MiB), transcript or final-screen output, TERM-then-KILL reaping. Steps pass the same breaker, rules, classifier and Bash-shared rule subject as `command`, and the bwrap jail applies. — _Evidence:_ `candy-code/src/Tools/BuiltIn/PtyRun.php:50,60-62,83,176,430`; `candy-code/src/Permissions/PermissionGate.php:622,900,1249-1258`; `candy-code/src/Permissions/PermissionRule.php:197`; `candy-code/src/Permissions/SafetyClassifier.php:376`",
+   "why": "Appendix \"steps escape every safety layer (see ISSUES P0/P1)\" is fixed history."
+  },
+  {
+   "row": "SH-04",
+   "col": "cc",
+   "expect": "✅ — Background shell (TL-10); timeout ki",
+   "detail": "✅ — The deadline kill targets the process-group id recorded at spawn (setsid makes child pid = pgid) and reports the kill as confirmed only when `kill(-pgid, 0)` answers ESRCH, so `cmd &` children die with the group. Background shells: see TL-10. — _Evidence:_ `candy-code/src/Tools/Concerns/CapturesProcessOutput.php:222-224,369-412`",
+   "why": "Appendix still ❌ with the old \"sleep 61 survives\" repro."
+  },
+  {
+   "row": "SH-10",
+   "col": "cc",
+   "expect": "✅ Heuristic layers: rm -rf / or ~ breake",
+   "detail": "✅ — The breaker reads quote-removed words, prefixes and abbreviated flags; ConfirmRemoveHook catches rm -r/-f, find -delete, shred and dd of= and stands down in bypass. PtyRun `steps` go through the same breaker, rules, classifier and session grants as a Bash `command`. — _Evidence:_ `candy-code/src/Permissions/PermissionGate.php:622,900,1249-1258`; `candy-code/src/Hooks/BuiltIn/ConfirmRemoveHook.php`",
+   "why": "Appendix mixes the old \"PtyRun steps pass unseen\" with a dated \"_2026-10-18 remediated:_\" tail."
+  },
+  {
+   "row": "SH-N1",
+   "col": "cc",
+   "expect": "✅ All children: setsid detach, non-inter",
+   "detail": "✅ — SECRET_ENV_PATTERNS plus provider key names, overridable with `secretEnvAllowlist`; the repo-wide `tools/check-child-lifetimes.php` gate accounts every `proc_open` site and currently reports 0 problems (61 libs, 33 sites). — _Evidence:_ `candy-code/src/Support/ProcessContainment.php:81-143`; `tools/check-child-lifetimes.php` (run output)",
+   "why": "Appendix figure \"60 libs, 28 proc_open sites\" is stale."
+  },
+  {
+   "row": "SH-N1",
+   "col": "web",
+   "expect": "✅ Inherited: every child a served turn s",
+   "detail": "✅ — Workspace-host processes also receive their secrets on stdin, not argv. — _Evidence:_ `candy-code/src/Support/ProcessContainment.php:56`; `candy-code/src/Server/Workspace/WorkspaceHostProcess.php`",
+   "why": "drop the \"(a6)\" audit-lane tag."
+  }
+ ],
+ "narrative": [
+  {
+   "old": "as well as foreign skills (`.claude`, `.agents`, `.opencode`); MCP server fingerprint pinning",
+   "new": "as well as foreign skills (`.claude`, `.agents`, `.opencode`) and foreign commands (`.claude/commands`, `.opencode/command(s)`); MCP server fingerprint pinning"
+  },
+  {
+   "old": "no plugin registry or marketplace (bundles import Claude-format plugins); MCP resources, prompts, SSE, user scope and deferred loading have since shipped (no elicitation/sampling/server mode); 12 hook events vs Claude Code's 33; `.claude/` and `.opencode/` commands are read |",
+   "new": "no plugin registry or marketplace (bundles import Claude-format plugins); no MCP elicitation, sampling, roots or server mode, and MCP resources and prompts are TUI-only; 12 hook events vs Claude Code's 33, and a Claude settings file with non-`command` hook types or newer entry keys refuses the launch; no forked or tool-restricted skills |"
+  },
+  {
+   "old": "SSRF on a par with OpenClaw; opt-in bubblewrap sandbox for Bash that fails closed",
+   "new": "SSRF on a par with OpenClaw; opt-in bubblewrap sandbox for Bash and PtyRun that fails closed"
+  },
+  {
+   "old": "(with an opt-in LLM reviewer now fed every call), where Claude Code ships a trained classifier; background shell, opt-in auto-format and opt-in LSP auto-detect have since shipped |",
+   "new": "(with an opt-in LLM reviewer fed flagged calls and every unflagged non-read-only shell call), where Claude Code runs a model-based classifier (server-side review, else a client-side model); auto-format and LSP auto-detect are opt-in, with no bundled formatter table and no LSP auto-install; no notebook, browser-control or code-mode tool; WebFetch returns raw HTML; the model reads PDFs only via `pdftotext`; the TUI paints no live shell output |"
+  },
+  {
+   "old": "(`.claude`, `.agents`, `.opencode`, `~/.config/opencode`), badged by origin | — |",
+   "new": "(`.claude`, `.agents`, `.opencode`, `~/.config/opencode`) + plugin-bundle `skills/`, badged by origin | Inherited; the Context panel lists loaded skills by tier |"
+  },
+  {
+   "old": "| `$name` mention (one turn, Tab completes); the Ctrl+S picker reaches the model — enabling ships the skill's prompt on the following turns | ❌ |",
+   "new": "| `/skill-name args` or a `$name` mention (one turn, Tab completes); the Ctrl+S picker enables a skill's prompt for the following turns | 🟡 `$name` resolves server-side; `/skill-name` is sent as prose |"
+  },
+  {
+   "old": "dream-pass drafts sit behind `/skills proposed` | ❌ |",
+   "new": "dream-pass drafts sit behind `/skills proposed` | ✅ Context panel (name, tier, disabled) + server-run `/skills` table |"
+  },
+  {
+   "old": "| **Registry** | ❌ | ❌ |",
+   "new": "| **Registry** | 🟡 none; `bundles install <git-url/path>` installs Claude-format plugin bundles | ❌ |"
+  },
+  {
+   "old": "**Not** read: `.claude/commands`, `.opencode/commands` (even though foreign agents and skills are imported).",
+   "new": "Foreign `.claude/commands` and `.opencode/command(s)` trees (project, home, `~/.config/opencode`) and plugin-bundle `commands/` import at the lowest precedence — they never shadow a built-in or native file — badged `[claude]`/`[opencode]`/`[bundle]` in the `/` popup. MCP prompts list as `/mcp__server__prompt`."
+  },
+  {
+   "old": "Ctrl+P palette is a curated 19-action subset. F10 menu bar.",
+   "new": "Ctrl+P palette: 49 rows — 42 of the 57 slash commands plus 7 palette-only actions — and provider/model/theme pickers; 15 argument-taking or read-out commands (`/effort`, `/loop`, `/fork`, `/review`, `/status`, …) and command files stay slash-only. F10 menu bar."
+  },
+  {
+   "old": "the suggestion half fires mainly on the colon form (`/key:status`).",
+   "new": "the suggestion half fires mainly on the colon form (`/key:status`). A `/name` that a user-invocable skill claims is rewritten into the `$name` channel instead of refused."
+  },
+  {
+   "old": "16 refused as terminal-only (`/theme`, `/keys`, `/help`, `/sessions`, …). ⚠ `!cmd` runs but reports \"refused\".",
+   "new": "16 refused as terminal-only (`/theme`, `/keys`, `/help`, `/sessions`, `/review`, …). Native, foreign and bundle command files list and run server-side; MCP prompts and `/skill-name` are TUI-only. `!cmd` runs on the server and its rows arrive as transcript events; a Ctrl+K palette lists sessions, panels and server-runnable commands."
+  },
+  {
+   "old": "| Payload | `CRUSH_*` env vars (stdin closed) |",
+   "new": "| Payload | `CRUSH_*` env vars plus Claude-shaped JSON on stdin (session_id, cwd, hook_event_name, tool_name, tool_input, tool_response) |"
+  },
+  {
+   "old": "| ⚠ Docs claim it; in practice CC stdin scripts receive nothing, and exit 1 means deny |",
+   "new": "| 🟡 Reads `hooks` from `~/.claude/settings.json` and trusted project `.claude/settings(.local).json` (command type only — other types or newer entry keys refuse the launch); unknown events skipped and recorded; exit 1 denies where Claude Code proceeds |"
+  },
+  {
+   "old": "Covers tools and resources over stdio, Streamable HTTP and legacy SSE (origin-locked), with a strong trust model:",
+   "new": "Covers tools, resources (`@mcp:` mentions) and prompts (`/mcp__server__prompt`) over stdio, Streamable HTTP (buffered replies, no GET stream) and legacy SSE (origin-locked), with a strong trust model:"
+  },
+  {
+   "old": "Deferred loading by default: a McpToolShape token floor plus `mcp_list`/`mcp_call` discovery keep schemas out of every turn; `eager: true` opts back in.",
+   "new": "Deferred loading per server: a server whose schemas exceed `mcp.lazySchemaTokens` (8000) is reached through `mcp_list`/`mcp_call`; smaller servers and `eager: true` entries keep first-class bridges. A preset's `mcpServers` allowlist does not yet scope the dispatchers."
+  },
+  {
+   "old": "User-level `~/.candy-code/mcp.json` scope ships; still missing: elicitation, sampling, roots and MCP-server mode.",
+   "new": "User-level `~/.candy-code/mcp.json` plus project `.mcp.json` (project wins); missing: elicitation, sampling, roots, list_changed, answering server pings, runtime enable/disable and MCP-server mode."
+  },
+  {
+   "old": "OAuth drives a forked browser PKCE flow from `/mcp login` (`/mcp reconnect` after); tokens attach at the next launch.",
+   "new": "OAuth is PKCE over a loopback listener (`candy-code mcp auth login`); the TUI's `/mcp login <server>` forks that flow and prints the URL, and `/mcp reconnect` restarts servers when the config is unchanged; tokens attach at the next launch."
+  },
+  {
+   "old": "**candy-code-web**: MCP calls are generic cards; `/mcp` prints config status only.",
+   "new": "**candy-code-web**: MCP calls are generic cards; the Context panel lists project servers (transport, trust) and offers a trust prompt for an untrusted project; `/mcp` verbs answer as text; `@mcp:` mentions, MCP prompt commands and `/mcp login` are TUI-only."
+  },
+  {
+   "old": "reconnect restarts from launch-time entry bytes and reports roster drift rather than re-deriving mid-session (cache law).",
+   "new": "reconnect refuses when the MCP config changed since launch, otherwise stops and restarts every server and reports a changed tool roster without re-deriving it mid-session (cache law)."
+  },
+  {
+   "old": "**The Ctrl+P palette is a superset of the slash roster** — per-row judgement; slash-only survivors carry reasoned rows in `PaletteSupersetDispatchTest`.",
+   "new": "**The Ctrl+P palette covers 42 of the 57 slash commands plus 7 palette-only rows** — per-row judgement; the 15 slash-only commands carry reasoned rows in `PaletteSupersetDispatchTest`; command files are not in the palette."
+  },
+  {
+   "old": "below the built-in/file/CONTROL_PLANE precedence.",
+   "new": "below the built-in/file/CONTROL_PLANE precedence. TUI only: served sessions still send `/skill-name` as prose (`$name` works there)."
+  },
+  {
+   "old": "**Hooks:** stdin payload delivery, CC event-name handling, relative-command resolution and the shadowing/trust precedence shipped first; reading the `hooks` block of `.claude/settings.json` has shipped — `cc:{event}:{index}` rows through the same `HookConfig::parse` chain, project files gated on `trustedProjectHooks`, the `Notification` event skip-and-recorded.",
+   "new": "**Hooks:** scripts get Claude-shaped JSON on stdin, and the `hooks` block of `~/.claude/settings.json` (always) and the project's `.claude/settings(.local).json` (under `trustedProjectHooks`) loads as `cc:{event}:{index}` rows through the same `HookConfig::parse` chain; unknown events (e.g. `Notification`) are skipped and recorded. Open: non-`command` hook types and newer entry keys (`async`, `statusMessage`, `if`) refuse the launch instead of being skipped, and exit 1 denies where Claude Code proceeds."
+  },
+  {
+   "old": "**Plugin bundles:** shipped — Claude-format bundles",
+   "new": "**Plugin bundles:** Claude-format bundles"
+  },
+  {
+   "old": "`bundles list|install <path|git-url>` is the MVP; the registry remains open.",
+   "new": "`bundles list|install <path|git-url>` read and install them; there is no registry or marketplace."
+  },
+  {
+   "old": "| MCP | **Shipped:** `@mcp:<server>:<uri>` resource mentions, `/mcp__server__prompt` commands, `~/.candy-code/mcp.json` user scope (project wins collisions, per-server entries start without repo-trust), legacy 2024-11-05 SSE transport (origin-locked endpoint handshake), in-TUI `/mcp login` forking the CLI PKCE flow, `/mcp reconnect`, and **deferred tool loading** — past a schema-token floor the roster rides `mcp_list`/`mcp_call` with per-entry `eager:true`, allow/deny parity on both spellings | Configurable timeouts, 401 surfacing, embedded resource/image rendering and correct `claude-mcp` args shipped earlier |",
+   "new": "| MCP | No elicitation (OpenCode 2.1.4 renders forms in TUI, desktop and web), sampling, roots or answered server pings; no GET stream on Streamable HTTP; no MCP-server mode; no runtime enable/disable; `@mcp:`, prompt commands and `/mcp login` are TUI-only; `mcpServers` presets do not scope `mcp_call` | Handle server-initiated frames in sugar-mcp-client; wire `McpClient::setAgentPreset()` for sub-agents; pass the MCP provider and prompt specs into SessionHost; `mcp serve` over the tool catalog |"
+  },
+  {
+   "old": "| Plugins / marketplace | **Partially shipped:** Claude-format bundle reader + `bundles list|install` (git clone bounded, owned-dest) | the registry tier (Claude Code 315-entry marketplace, OpenCode npm plugins, OpenClaw ClawHub parity) remains open |",
+   "new": "| Plugins / marketplace | Bundles carry content only (skills, commands, agents); no registry/marketplace, no code-defined tools, no in-process plugin API (Claude Code 315-entry marketplace, OpenCode npm plugins, OpenClaw ClawHub) | A `marketplace.json` index over `bundles install`; file-defined script tools through the exec gate |"
+  },
+  {
+   "old": "`LS` built on the former `StreamingDirectoryLister` (position 36, `includeHidden`), Read answering images and PDFs across all three tiers (tool-result image blocks gated on `supportsVision`, PDFs riding `AttachmentType::Document`)",
+   "new": "`Ls` built on the former `StreamingDirectoryLister` (`include_hidden`), Read carrying in-cap images (the model sees them on the Anthropic wire; other wires get a caption) and answering PDFs with a `pdftotext` hint (only user `@`-mentions ride `AttachmentType::Document`), Bash's live output tail over `tool.progress` (web and stream-json)"
+  },
+  {
+   "old": "| The binary notice and Grep bounds shipped earlier |",
+   "new": "| Still open: model-side PDF reading, tool-result images on non-Anthropic wires, a live shell tail in the TUI, HTML→Markdown in WebFetch, a notebook tool, a model-callable schedule tool, a network allowlist |"
+  },
+  {
+   "old": "| Editing | **Shipped:** `formatCommands` + `PostEditFormatHook` recording into `ReadLedger` (registered before the linter so it sees formatted bytes; hash-before/restore-on-corruption mutate guard), and the user-tier opt-in `lspAutoDetect` fingerprint table (explicit entries win per language, injectable binary probe keeps tests off PATH) | `--allow-root`-style opt-in posture per plan |",
+   "new": "| Editing | Auto-format and LSP auto-detect are opt-in with no bundled formatter table (OpenCode ships 26) and no LSP auto-install; no BOM preservation; web asks lack a file-context diff | Default formatter table gated on binary presence (LspLauncher's probe seam); BOM inherit beside `IndentShift::inheritEndings`; send `previewDiff()` in `permission.asked` |"
+  }
+ ]
+}

@@ -1,0 +1,405 @@
+{
+ "cells": [
+  {
+   "row": "PLAT-01",
+   "col": "claude",
+   "expect": "✅ TypeScript app shipped as a native sin",
+   "why": "binary grew from ~256 MB (2.1.301) to ~280 MiB (2.1.311)",
+   "new": "✅ TypeScript app shipped as a native single-file executable (Bun-compiled, ~280 MiB); npm package runs on Node",
+   "detail": "✅ — The native installer keeps versioned binaries under `~/.local/share/claude/versions/` with a launcher symlink at `~/.local/bin/claude` (observed: ELF x86-64; 2.1.311 = 293,776,752 bytes, `du` 281M; the binary embeds Bun v1.4.4). The npm package `@anthropic-ai/claude-code` is a supported install path and runs under Node (npm `latest` 2.1.311, `stable` 2.1.308). Bundles ripgrep; on macOS/Linux/WSL the shell's `find`/`grep` are embedded `bfs`/`ugrep`. The Agent SDK (TS/Python) drives the same CLI as a subprocess. — _Evidence:_ local: `ls -la ~/.local/share/claude/versions/`, `du -sh …/2.1.311`, `file ~/.local/bin/claude`, `grep -a 'Bun v1.'`; `npm view @anthropic-ai/claude-code dist-tags`; cc:setup; cc:tools-reference#glob-tool-behavior"
+  },
+  {
+   "row": "PLAT-09",
+   "col": "claude",
+   "expect": "🟡 Heavy install (~256 MB binary); `--bar",
+   "why": "install size figure stale (~256 MB → ~280 MiB); 2.1.311 startup trims",
+   "new": "🟡 Heavy install (~280 MiB binary); `--bare` / `--safe-mode` trim startup; no published startup benchmarks",
+   "detail": "🟡 — The 2.1.311 binary is ~280 MiB. Measured locally: `claude --version` ≈10 ms, 36 MB RSS (fast path only, not a full session start). `--bare` skips hooks, LSP, plugin sync, attribution, auto-memory, background prefetches, keychain reads and CLAUDE.md discovery (sets CLAUDE_CODE_SIMPLE=1); `--safe-mode` disables customizations. Pro/Max relaunches within an hour of the last check skip two network requests, and launches whose only arguments are options start faster. `/heapdump`; `CLAUDE_CODE_TOOL_MEMORY_LIMIT` caps Bash/Monitor memory via cgroup on Linux. — _Evidence:_ local `du -sh ~/.local/share/claude/versions/2.1.311`, `/usr/bin/time claude --version`; help (`--bare`, `--safe-mode`); CL v2.1.311; cc:tools-reference#memory-limit-on-linux-and-wsl"
+  },
+  {
+   "row": "MOD-10",
+   "col": "claude",
+   "expect": "🟡 Claude-only catalog via aliases (defau",
+   "why": "2.1.311 adds a signed remote model catalog for cloud-provider routes",
+   "new": "🟡 Claude-only aliases (default, best, fable, opus, sonnet, haiku, [1m], opusplan); 3P routes use a signed catalog; no models.dev",
+   "detail": "🟡 — Provider routes: Anthropic API, Bedrock (incl. Mantle), Agent Platform, Foundry, Claude Platform on AWS, gateways. Current API defaults: Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1. On Bedrock, Mantle, Vertex and Foundry the model settings are loaded from a signed catalog file on downloads.claude.ai (`CLAUDE_CODE_MODEL_CATALOG=off` turns it off); the `[1m]` suffix and label are hidden where they have no effect but accepted. `ANTHROPIC_DEFAULT_{FABLE,OPUS,SONNET,HAIKU}_MODEL` pins; `availableModels` allowlist; `modelOverrides`. No models.dev and no non-Claude families. — _Evidence:_ cc:model-config#model-aliases; cc:model-config#restrict-model-selection; CL v2.1.311"
+  },
+  {
+   "row": "MOD-15",
+   "col": "claude",
+   "expect": "✅ Effort low/medium/high/xhigh/max (`/ef",
+   "why": "`ultrathink` now really raises the request effort (xhigh) instead of only adding an instruction",
+   "new": "✅ Effort low/medium/high/xhigh/max (`/effort` slider, `--effort`, env, per-model); `ultrathink` runs its turn at xhigh; `ultracode`",
+   "detail": "✅ — Adaptive reasoning on current models; thinking can't be disabled on Opus/Sonnet/Haiku 5.5 or Fable. In the interactive terminal on Anthropic's API, `ultrathink` runs its turn at xhigh effort on Opus/Sonnet/Haiku 5.5 and Fable 5.1, and typed while Claude works it raises the rest of that turn. `maxEffortLevel` caps; `/effort` applies mid-turn after a cache warning; `max` is session-only. — _Evidence:_ CL v2.1.311; cc:model-config#use-ultrathink-for-one-off-deep-reasoning; help (`--effort`)"
+  },
+  {
+   "row": "INS-18",
+   "col": "claude",
+   "expect": "✅ Files >4 MiB skipped; startup and `/st",
+   "why": "2.1.309 adds a per-file cap with truncation + Read pointer for on-demand instruction files",
+   "new": "✅ Files >4 MiB skipped; on-demand nested/rule files over a per-file cap load only their start; ~200-line warnings; MEMORY.md capped",
+   "detail": "✅ — A CLAUDE.md loaded at launch arrives whole up to 4 MiB and is skipped above that; startup and `/status` warn on long files. Subdirectory CLAUDE.md/CLAUDE.local.md, their `@` imports and on-demand rules files have a per-file cap (40,000 chars at 200K context; 200,000 on Opus/Sonnet 4.6 at 1M; 150,000 on later 1M models): over it Claude gets only the start plus a note to Read the rest. MEMORY.md loads its first 200 lines / 25 KB; `/doctor` estimates cost and biggest contributors. — _Evidence:_ cc:memory#claude-ignores-the-end-of-my-subdirectory-claude-md; cc:memory#my-claude-md-is-too-large; CL v2.1.309"
+  },
+  {
+   "row": "CTX-05",
+   "col": "claude",
+   "expect": "✅ LLM summary on the cached prefix; re-i",
+   "why": "2.1.304 re-sends the skill listing after compaction; 2.1.311 re-asks for a missing summary",
+   "new": "✅ LLM summary on the cached prefix; re-injects CLAUDE.md, memory, plan, 5 recent files, skill listing + bodies (5K/25K), git status",
+   "detail": "✅ — Clears older tool outputs, then summarises on the cached prefix (asking once more when the reply holds no summary). Re-injects root CLAUDE.md and unscoped rules, auto memory, the plan, up to 5 recently modified files (>5K tokens come back as `Referenced file`), invoked skill bodies (5K each / 25K total), a rebuilt skill listing (v2.1.304+) and a fresh git snapshot; still-running background work is listed; SessionStart(`compact`) hooks re-run; Ctrl+O shows the tools called before the summary. — _Evidence:_ cc:context-window#what-survives-compaction; CL v2.1.304; CL v2.1.311"
+  },
+  {
+   "row": "CTX-N2",
+   "col": "claude",
+   "expect": "✅ compacts idle 200K+ chats before cache",
+   "why": "settings toggle added; the stale-resume dialog is now a usage-estimate choice, not (only) a summary offer",
+   "new": "✅ compacts idle 200K+ chats before cache expiry (`/config` Idle compaction row); stale long resumes show a usage-cost dialog",
+   "detail": "✅ — Idle compaction compacts 200K+ conversations left idle before the 1-hour cache expires; `/config` has an Idle compaction row (v2.1.302+) and the post-compaction notice says how to turn it off. On Pro/Max, resuming a long conversation after a long break or on another model opens \"Resume this conversation?\", estimating its share of the 5-hour limit and offering Resume or Start a new conversation (which may still look the old one up). — _Evidence:_ cc:settings-reference (Idle compaction row); cc:sessions#the-resume-this-conversation-dialog; CL v2.1.302; CL v2.1.304"
+  },
+  {
+   "row": "AGT-13",
+   "col": "claude",
+   "expect": "✅ Background by default in interactive s",
+   "why": "2.1.302 extends background-by-default/fork mode from the terminal to every surface",
+   "new": "✅ Main-conversation subagents start in the background on every surface (fork mode on by default); results arrive as notifications",
+   "detail": "✅ — With nothing configured, subagents Claude spawns from the main conversation start in the background; in the terminal, desktop app and VS Code Claude can't wait for them while fork mode is on (default on every surface; `CLAUDE_CODE_FORK_SUBAGENT=0` turns it off), while in `-p`/SDK it may wait on its own judgment. A subagent's own Agent calls run in the foreground by default in `-p`, SDK, desktop and VS Code. Ctrl+B backgrounds a running task; background subagents get a reduced tool set and their permission prompts surface in the main session. — _Evidence:_ cc:sub-agents#which-subagents-run-in-the-background; cc:sub-agents#turn-fork-mode-off; CL v2.1.302"
+  },
+  {
+   "row": "CMD-01",
+   "col": "claude",
+   "expect": "✅ ~116 built-in commands/bundled skills ",
+   "why": "docs table now has 120 rows (was 119)",
+   "new": "✅ ~117 built-in commands/bundled skills (120 table rows, 3 marked removed): /context, /compact, /rewind, /btw, /goal, /loop, /diff…",
+   "detail": "✅ — The commands reference has 120 rows, 3 marked removed (`/pr-comments`, `/ultraplan`, `/vim`), including 20 bundled skills and the bundled workflow `/deep-research`. Notable: /agents (reminder only), /auto-mode-setup, /autocompact, /background, /batch, /branch, /cd, /fork, /subtask, /code-review (+ultra), /security-review, /doctor, /effort, /fast, /insights, /mcp, /memory, /model, /plugin, /permissions, /remote-control, /schedule, /skill-doctor, /skills, /tasks, /teleport, /tui, /usage, /voice, /workflows. Some run immediately mid-turn; availability varies by plan/provider. — _Evidence:_ cc:commands#all-commands"
+  },
+  {
+   "row": "CMD-12",
+   "col": "claude",
+   "expect": "🟡 `~/.claude/keybindings.json` rebinds b",
+   "why": "glyph 🟡→✅: documented `command:<name>` contradicts \"no binding for slash commands\" (feature predates 2.1.309, so likely already wrong at 2.1.301)",
+   "new": "✅ `~/.claude/keybindings.json` rebinds built-in actions (chords, hot reload); `command:<name>` binds a key to run `/<name>`",
+   "detail": "✅ — `~/.claude/keybindings.json` rebinds actions per context (chords, `null` unbinds, JSON schema, hot reload). The `command:<name>` action binds a key to run `/<name>` (e.g. `\"meta+g\": \"command:compact\"` in a `Chat` block; unbound by default), and key-bound slash commands never run as shell input in `!` mode. Mods' Buttons can trigger keybinding actions. — _Evidence:_ cc:keybindings (Chat actions, `command:<name>` row); CL v2.1.309; cc:plugins/mods/reference"
+  },
+  {
+   "row": "MCP-12",
+   "col": "claude",
+   "expect": "✅ Tool search on by default: only tool n",
+   "why": "2.1.304 turns tool search on behind gateways (2.1.301 detail said it fell back there)",
+   "new": "✅ Tool search on by default, also behind gateways: only tool names + server instructions load; `ToolSearch` loads schemas on demand",
+   "detail": "✅ — Only tool names and server instructions load; `ToolSearch` loads schemas on demand. On by default on Opus 4/Sonnet 4/Haiku 4.5 and later, and also behind an `ANTHROPIC_BASE_URL` gateway (requests carry `defer_loading`/`tool_reference`; a 400 or 422 is retried without tool search). Tools load upfront on older models, earlier Agent Platform models and Azure-hosted Foundry; `ENABLE_TOOL_SEARCH` true/auto/auto:N/false; `alwaysLoad` exempts a server; `WaitForMcpServers` when off. — _Evidence:_ cc:mcp#configure-tool-search; cc:mcp#scale-with-mcp-tool-search; CL v2.1.304; observed in-session (deferred-tools reminder + ToolSearch)"
+  },
+  {
+   "row": "TL-22",
+   "col": "claude",
+   "expect": "✅ `CronCreate/Delete/List` (session-scop",
+   "why": "docs rename routines to cloud scheduled tasks (rename date UNVERIFIED)",
+   "new": "✅ `CronCreate/Delete/List` (session-scoped, 7-day expiry), `ScheduleWakeup` (self-paced /loop), `RemoteTrigger` (cloud tasks)",
+   "detail": "✅ — Session crons (`CronCreate/Delete/List`, 5-field cron; recurring tasks expire after 7 days) are restored on resume; `ScheduleWakeup` paces a self-paced `/loop` (1 min–1 h); `RemoteTrigger` creates, updates, runs and lists cloud scheduled tasks (routines) and backs `/schedule`; needs a claude.ai plan. — _Evidence:_ cc:tools-reference; cc:scheduled-tasks#seven-day-expiry; cc:routines; observed in-session (`loop`, `schedule` skills)"
+  },
+  {
+   "row": "TL-24",
+   "col": "claude",
+   "expect": "✅ `Artifact` tool publishes live HTML/Ma",
+   "why": "cell undersold the artifact surface (comments, live data, DB, Docs); possibly already true at 2.1.301",
+   "new": "✅ `Artifact` tool publishes live claude.ai pages (comments, live connector data, per-page DB, downloads); Slides/Docs/Design types",
+   "detail": "✅ — `Artifact` publishes an HTML/Markdown file as a private claude.ai page (shareable publicly or in-org) and updates it in place; viewers can comment and Claude can answer, pages can pull live data through each viewer's own connectors and offer file downloads, and a page can keep a small shared database. Claude can start from Slides, Design or Docs templates (Claude Docs reaches Claude Code as a claude.ai connector for editable documents); `/design`, `/slides`; mods can draw panes/bands inside the TUI. Pro/Max/Team/Enterprise. — _Evidence:_ cc:artifacts; observed in-session (Artifact publish/read/list/quickstart/pin actions, `ArtifactComments`, `ArtifactData`, Slides/Docs/Design types)"
+  },
+  {
+   "row": "PER-01",
+   "col": "claude",
+   "expect": "✅ Six modes: Manual(`default`), acceptEd",
+   "why": "2.1.302: headless/SDK runs now start in Manual, not auto",
+   "new": "✅ Six modes: Manual(`default`), acceptEdits, plan, auto, dontAsk, bypassPermissions; auto starts interactive runs, `-p`/SDK Manual",
+   "detail": "✅ — Auto = classifier reviews actions (server-side review on 1P); deny rules apply in every mode; auto needs supported models (Opus/Sonnet 4.6+, Haiku 5.5, Fable). Interactive terminal and VS Code sessions start in auto (v2.1.283+); `claude -p` and Agent SDK runs with no mode set start in Manual and deny calls needing approval unless a rule, hook, `canUseTool` or `--permission-prompt-tool` approves (v2.1.302+). The CLI flag spells Manual as `manual`, settings and SDK as `default`. — _Evidence:_ cc:permission-modes#which-mode-a-session-starts-in; cc:permission-modes#tool-calls-denied-in-claude--p-and-agent-sdk-runs; help (`--permission-mode` choices); CL v2.1.302"
+  },
+  {
+   "row": "PER-07",
+   "col": "claude",
+   "expect": "✅ Auto mode classifier (server-side revi",
+   "why": "classifier model now selectable; setup wizard extended to 3P/gateway sessions",
+   "new": "✅ Auto mode classifier (server-side review, else a client model via `CLAUDE_CODE_AUTO_MODE_MODEL`) blocks escalation, hostile acts",
+   "detail": "✅ — Where server-side checks are on, the server reviews calls inside the session's own requests; otherwise Claude Code sends classifier requests to Claude Sonnet 5 by default or to the model in `CLAUDE_CODE_AUTO_MODE_MODEL` (v2.1.302+). `/auto-mode-setup` drafts `autoMode.environment` from the project and recent sessions (also on Bedrock/Vertex/Foundry/gateway and telemetry-off sessions since v2.1.304); `claude auto-mode config/defaults/critique/reset`; 3-in-a-row / 20-total blocks fall back to prompts; Recently denied names the command; reviews SendMessage and subagent handbacks. — _Evidence:_ cc:permission-modes#server-side-classifier-review; cc:permission-modes#choose-the-classifier-model; cc:auto-mode-config; help (`auto-mode`); CL v2.1.302; CL v2.1.304"
+  },
+  {
+   "row": "PER-14",
+   "col": "claude",
+   "expect": "🟡 OTel `tool_decision` events (classifie",
+   "why": "2.1.307 adds a dedicated per-refusal safety event (still export-only, so 🟡 stays)",
+   "new": "🟡 OTel `tool_decision` + `safety_event` per refusal/prompt (rule, mode, hook, classifier, sandbox); Recently denied; no local log",
+   "detail": "🟡 — OTel `claude_code.tool_decision` carries source, classifier verdict and category; `claude_code.safety_event` (v2.1.307+) is logged whenever a permission rule, mode, auto mode, a built-in safety check, a hook or the sandbox (incl. its network proxy) refuses, prompts or sends back a call, with `decision`, `reason_code`, `rule_source`, `grant_scope`, `circuit_breaker` and no command text. `/permissions` → Recently denied lists denials; there is no local audit-log file. — _Evidence:_ cc:monitoring-usage#safety-event; cc:monitoring-usage#tool-decision-event; CL v2.1.307"
+  },
+  {
+   "row": "GIT-12",
+   "col": "claude",
+   "expect": "✅ `@claude` in PR/issue comments (Action",
+   "why": "Code Review gained review levels, org-wide coverage and `review stop`",
+   "new": "✅ `@claude` in PR/issue comments (Action), Code Review app (inline comments, Quick/Standard/Deep levels, Team/Ent), `/autofix-pr`",
+   "detail": "✅ — `@claude` mentions in PR/issue comments via `anthropics/claude-code-action`; the managed Code Review GitHub App (Team/Enterprise) posts inline findings at an Owner-chosen review level (Quick, Standard default, Deep) per org or per repo, can cover every repo in a GitHub org, and takes `@claude review always|stop` subscriptions; `/autofix-pr` cloud watcher. — _Evidence:_ cc:github-actions; cc:code-review#review-levels; cc:code-review-setup; CL v2.1.304; CL v2.1.307"
+  },
+  {
+   "row": "UI-04",
+   "col": "claude",
+   "expect": "✅ Syntax highlighting of code blocks (to",
+   "why": "2.1.311 adds code-block coloring to the VS Code panel",
+   "new": "✅ Syntax highlighting of code blocks (toggle with Ctrl+T inside `/theme`); the VS Code panel colors code blocks too",
+   "detail": "✅ — Code blocks are syntax-highlighted in the terminal (toggle with Ctrl+T inside `/theme`); the VS Code chat panel colors code blocks in light, dark and high-contrast dark themes. — _Evidence:_ cc:interactive-mode#theme-and-display; CL v2.1.311"
+  },
+  {
+   "row": "UI-27",
+   "col": "claude",
+   "expect": "🟡 No inline image rendering of conversat",
+   "why": "mod images gained iTerm2 and tmux-passthrough paths (2.1.305/2.1.310)",
+   "new": "🟡 No inline image rendering of conversation content; mods' `Image` elements draw via kitty/iTerm2 protocols (tmux passthrough too)",
+   "detail": "🟡 — Conversation content is never drawn as inline images. Mods' `Image` elements use the kitty graphics or iTerm2 protocol when detected — including iTerm2 3.5+ with fullscreen rendering and inside tmux with `allow-passthrough` and `focus-events` on (kitty, Ghostty, iTerm2) — and otherwise show their `alt` text; `CLAUDE_CODE_FORCE_TERMINAL_IMAGES`. — _Evidence:_ cc:plugins/mods/gallery; cc:env-vars; CL v2.1.305; CL v2.1.310"
+  },
+  {
+   "row": "AUT-01",
+   "col": "claude",
+   "expect": "✅ `claude -p` print mode (workspace trus",
+   "why": "2.1.302 headless default-mode change",
+   "new": "✅ `claude -p` print mode (workspace trust skipped; settings errors silent; starts in Manual unless a permission mode is set)",
+   "detail": "✅ — `--bare` for reproducible CI. With no `--permission-mode` (or `permissions.defaultMode`) a print run starts in Manual and denies calls needing approval unless an allow rule, hook or `--permission-prompt-tool` approves them (v2.1.302+); `--permission-prompts none` denies anything that would prompt. — _Evidence:_ help (`-p`, `--permission-prompts`); cc:headless; cc:permission-modes#tool-calls-denied-in-claude--p-and-agent-sdk-runs"
+  },
+  {
+   "row": "AUT-07",
+   "col": "claude",
+   "expect": "✅ Routines (cloud cron/API/GitHub trigge",
+   "why": "naming: docs call routines \"cloud scheduled tasks\" now",
+   "new": "✅ Cloud scheduled tasks (ex-routines: cron/API/GitHub triggers, research preview), Desktop scheduled tasks, session `CronCreate`",
+   "detail": "✅ — `/schedule` (backed by `RemoteTrigger`) or claude.ai/code/routines creates cloud scheduled tasks (routines) with schedule, API and GitHub triggers (research preview; Pro/Max/Team/Enterprise); the changelog and admin UI say \"routines\". Desktop scheduled tasks run locally; session crons expire after 7 days. — _Evidence:_ cc:routines; cc:desktop-scheduled-tasks; cc:scheduled-tasks; CL v2.1.311"
+  },
+  {
+   "row": "AUT-11",
+   "col": "claude",
+   "expect": "✅ Routine API triggers (HTTP POST + bear",
+   "why": "naming only (routines → cloud scheduled tasks)",
+   "new": "✅ Cloud scheduled-task API triggers (HTTP POST + bearer) and GitHub event triggers; channels push webhooks into a live session",
+   "detail": "✅ — A cloud scheduled task's API trigger is an HTTP POST to its own endpoint with a bearer token; GitHub triggers fire on repository events (e.g. `pull_request.opened`); channel plugins push webhook events into a live session. — _Evidence:_ cc:routines; cc:channels"
+  },
+  {
+   "row": "OBS-02",
+   "col": "claude",
+   "expect": "✅ OpenTelemetry metrics, events and trac",
+   "why": "new `safety_event`",
+   "new": "✅ OpenTelemetry metrics, events (incl. per-refusal `safety_event`) and traces (beta); mTLS, dynamic headers, cardinality controls",
+   "detail": "✅ — Metrics, events and traces (beta) over OTLP with mTLS, dynamic headers and cardinality controls; `tool_decision` (with `agent_id`/`request_id` since v2.1.310), opt-in raw API bodies, GenAI semantic conventions, and the per-refusal `claude_code.safety_event` (v2.1.307+). — _Evidence:_ cc:monitoring-usage; CL v2.1.307"
+  },
+  {
+   "row": "OBS-03",
+   "col": "claude",
+   "expect": "✅ `/usage` (`/cost`, `/stats`) with plan",
+   "why": "2.1.305 one-key fixes; attribution/recommendations were missing from the cell",
+   "new": "✅ `/usage` (`/cost`, `/stats`): plan breakdown, usage attribution, cache stats, recommendations `f` applies; Team/Ent analytics",
+   "detail": "✅ — `/usage` (aliases `/cost`, `/stats`) shows session cost, plan limits and activity; on paid plans its breakdown attributes recent usage to skills, subagents, plugins and MCP servers, lists the heaviest loops and recommends changes, and `f` applies the ones it can (v2.1.305+; the same fixes appear in VS Code and `/doctor`); Team/Enterprise analytics dashboard; 🔌 `session-report`, `receipts`. — _Evidence:_ cc:costs#plan-usage-breakdown; cc:costs#apply-recommendations-with-the-fix-shortcut; cc:analytics; CL v2.1.305"
+  },
+  {
+   "row": "TL-10",
+   "col": "claude",
+   "expect": "✅ `run_in_background`, Ctrl+B, auto-back",
+   "why": "detail-only: the 2.1.301 detail says Monitor is unavailable on Bedrock/Vertex/Foundry/telemetry-off — no longer true",
+   "detail": "✅ — Output goes to a file Claude reads; `/tasks` + `TaskStop`; background time limits only in unattended runs (30 min default, 2 h max); a foreground command that reaches its timeout moves to the background and returns its output so far. `Monitor` streams command output lines or WebSocket messages back as events; on Bedrock, Claude Platform on AWS, Agent Platform, Foundry, or with telemetry/nonessential traffic off it needs v2.1.310+; Windows needs Git Bash; plugins can declare monitors. — _Evidence:_ cc:interactive-mode#background-bash-commands; cc:tools-reference#monitor-tool; CL v2.1.310; CL v2.1.311; observed in-session (Monitor among the deferred tools)"
+  },
+  {
+   "row": "SH-03",
+   "col": "claude",
+   "expect": "✅ Default 2 min, max 10 min (BASH_DEFAUL",
+   "why": "detail-only",
+   "detail": "✅ — Background commands: unlimited interactively, 30 min/2 h in unattended runs; a command that reaches its timeout (not `sleep`) moves to the background and its result shows the output so far. — _Evidence:_ cc:tools-reference#timeout-and-output-limits; CL v2.1.311"
+  },
+  {
+   "row": "SH-06",
+   "col": "claude",
+   "expect": "✅ Opt-in OS sandbox (`/sandbox`, `sandbo",
+   "why": "detail-only",
+   "detail": "✅ — Writes limited to cwd/added dirs/temp; protected paths denied inside; `sandbox.credentials` masks secrets; shell startup files run inside the sandbox; built on open-source sandbox-runtime; `dangerouslyDisableSandbox` retry goes through permissions; `failIfUnavailable` fails closed. On Linux/WSL2 `sandbox.allowNestedUserNamespaces` (user settings only) lets Chromium or rootless podman create user namespaces at the cost of file protections; `/sandbox` names Ubuntu's AppArmor userns restriction and the fix. — _Evidence:_ cc:sandboxing; cc:settings-reference#sandbox-allownestedusernamespaces; CL v2.1.305; CL v2.1.309; CL v2.1.310"
+  },
+  {
+   "row": "MOD-18",
+   "col": "claude",
+   "expect": "✅ 10 retries w/ exponential backoff, sta",
+   "why": "detail-only",
+   "detail": "✅ — Retries 5xx/529/timeouts/dropped connections/429 throttles (not spend-limit 429s, nor requests the API marks not to retry); unparseable tool calls are retried up to twice; gateways that reject a beta value or field are retried without it; `system/api_retry` events in stream-json; `CLAUDE_CODE_RETRY_WATCHDOG` waits out 429/529 unattended (`…_MAX_WAIT_MS`, `…_MAX_USAGE_LIMIT_WAIT_MS`, `…_USAGE_LIMIT_RECHECK_MS`); `CLAUDE_CODE_OVERLOADED_RETRY_*` delays. — _Evidence:_ cc:errors#automatic-retries; cc:env-vars; CL v2.1.305; CL v2.1.307; CL v2.1.310; CL v2.1.311"
+  },
+  {
+   "row": "MCP-03",
+   "col": "claude",
+   "expect": "✅ Streamable HTTP (`--transport http`, h",
+   "why": "detail-only",
+   "detail": "✅ — Two client runtimes (MCP TS SDK 1.x / 2.0 with protocol 2026-07-28); 16 MiB response cap; discovery cache opt-in; a call pending when an HTTP connection drops is repeated once only for tools marked `readOnlyHint`/`idempotentHint`. — _Evidence:_ cc:mcp#mcp-client-runtimes; cc:mcp#mark-tools-that-are-safe-to-call-twice; CL v2.1.307"
+  },
+  {
+   "row": "HK-03",
+   "col": "claude",
+   "expect": "✅ Five handler types: command (stdin JSO",
+   "why": "detail-only (33 events and 5 handler kinds re-verified unchanged)",
+   "detail": "✅ — Plus mods (JS/TS functions in-process). Command hooks: exec or shell form, `shell: powershell`, `async: true` background. Defaults: 600 s command/http/mcp_tool, 30 s prompt, 60 s agent (30 s on UserPromptSubmit/model-switch). Matching hooks run in parallel, but at most 12 prompt/agent hooks of one event at once; skills from one source may register at most 1,024 hooks / 16,384 matcher chars per session. — _Evidence:_ cc:hooks#hook-handler-fields; cc:hooks#hooks-in-skills-and-agents; CL v2.1.302; CL v2.1.304"
+  },
+  {
+   "row": "SKL-02",
+   "col": "claude",
+   "expect": "✅ Enterprise, personal, project (walk-up",
+   "why": "detail-only",
+   "detail": "✅ — Precedence enterprise > personal > project; plugin skills namespaced `/plugin:skill`; nested dupes exposed as `/apps/web:deploy`, and an `--add-dir` skill whose name clashes is offered as `<folder>:<name>`; claude.ai skills sync into `~/.claude/skills/synced/`; worktrees fall back to the main checkout's skills. Reserved names `synced`, `anthropic-skills`. — _Evidence:_ cc:skills#where-skills-live; cc:skills#how-synced-skills-behave; CL v2.1.309"
+  },
+  {
+   "row": "AUT-05",
+   "col": "claude",
+   "expect": "✅ `anthropics/claude-code-action` GitHub",
+   "why": "detail-only (2.1.301 detail was empty)",
+   "detail": "✅ — `anthropics/claude-code-action`, the GitLab CI/CD recipe, and `claude ultrareview [PR|base]` for CI, which requires workspace trust: scripts pass `--trust-workspace` or set `CLAUDE_CODE_DISABLE_ULTRAREVIEW_TRUST_CHECK=1`. — _Evidence:_ cc:github-actions; cc:gitlab-ci-cd; cc:ultrareview; help (`ultrareview`); CL v2.1.309"
+  },
+  {
+   "row": "WEB-12",
+   "col": "claude",
+   "expect": "✅ Cloud sessions on Anthropic infra or s",
+   "why": "detail-only",
+   "detail": "✅ — `--cloud`, `/teleport` (warns when a compacted cloud session loads from its last compaction), setup scripts, environments; Projects coordinate many cloud sessions; self-hosted runners (`claude self-hosted-runner`, incl. `--hold-idle-file`/`--max-hold-min`); Enterprise custom roles grant cloud sessions and Remote Control per role. — _Evidence:_ cc:claude-code-on-the-web; cc:self-hosted-environments; cc:claude-projects; cc:remote-control (custom roles); help (`self-hosted-runner`); CL v2.1.310; CL v2.1.311"
+  },
+  {
+   "row": "PLG-N1",
+   "col": "claude",
+   "expect": "✅ in-process JS/TS plugins that draw pan",
+   "why": "detail-only",
+   "detail": "✅ — Built-ins: cc-plugin-agents-md, -diff, -you-should-know, -telemetry, -sec-default, -plugin-authoring; `claude plugin test`. A mod's `tool.check` can answer `decider: \"person\"` (only the permission dialog or a host callback may approve) and sees `e.isReadOnly`; `settings.read` hooks receive each settings layer, so a managed mod can make an org setting a ceiling. — _Evidence:_ cc:plugins/mods/overview; cc:plugins/mods/events; CL v2.1.304; observed in-session (`plugin-authoring` skill)"
+  },
+  {
+   "row": "AUT-02",
+   "col": "claude",
+   "expect": "✅ `--output-format text/json/stream-json",
+   "why": "detail-only",
+   "detail": "✅ — `--forward-subagent-text`; `prompt_suggestion` messages; `--include-hook-events`; json/stream-json write DEL, C1 and Unicode format characters inside strings as `\\uXXXX` escapes. — _Evidence:_ help; cc:headless#stream-responses; CL v2.1.311"
+  }
+ ],
+ "new_rows": [
+  {
+   "id": "MCP-N2",
+   "feature": "🆕 Long-running MCP calls (auto-backgrounded tool calls; server-run MCP tasks that outlive the turn/session)",
+   "cells": {
+    "cc": "❌ MCP `tools/call` is a blocking request/response; no auto-backgrounding and no MCP tasks (`tasks/get`/`tasks/result`)",
+    "web": "❌ No MCP client of its own; slow calls run in the server and the web shows nothing until `tool.finished`",
+    "claude": "✅ Long MCP calls move to the background after 2 min; MCP tasks (2026-07-28 tasks extension) outlive the session (CLI public beta)",
+    "oc1": "· Not assessed",
+    "oc2": "· Not assessed",
+    "claw": "· Not assessed"
+   },
+   "details": {
+    "cc": "❌ — MCP clients issue `tools/call` and wait for the reply on the turn; nothing moves a slow call to a background task and no task-augmented result (`tasks/get`, `tasks/result`, `taskSupport`) is handled. `/bg` backgrounds agent tasks, not MCP calls. — _Evidence:_ `src/MCP/HttpMcpServer.php:360`, `src/MCP/SseMcpServer.php:271`, `src/ClaudeCodeMcpClient.php:631`; grep for `tasks/get|tasks/result|taskSupport|autoBackground` in `src` finds nothing",
+    "web": "❌ — The web UI has no MCP client; MCP calls execute server-side and the browser only sees tool events, with no background or task state. — _Evidence:_ web:protocol/generated.ts (no MCP task events); `src/MCP/HttpMcpServer.php:360`",
+    "claude": "✅ — An MCP tool call in the main conversation that is still running after 2 minutes moves to a `/tasks` background task, and its result arrives as a notification (`CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS`; off in `-p` unless `CLAUDE_AUTO_BACKGROUND_TASKS=1`). A server on protocol revision 2026-07-28 can answer `tools/call` with an MCP task (tasks extension). The footer counts running tasks, and Claude Code polls their status. A remote task keeps running after exit and is followed again on resume; `x` in `/tasks` asks the server to cancel. MCP tasks are a public beta in the CLI, Agent SDK and GitHub Actions from v2.1.304, and are not available in VS Code or the desktop app. — _Evidence:_ cc:mcp#automatic-backgrounding-of-long-tool-calls; cc:mcp#mcp-tasks-that-run-on-the-server; cc:mcp#mcp-tasks-for-server-authors; cc:env-vars (`CLAUDE_CODE_DISABLE_MCP_TASK_BACKGROUND`, v2.1.304)",
+    "oc1": "· — Not assessed — _Evidence:_ n/a",
+    "oc2": "· — Not assessed — _Evidence:_ n/a",
+    "claw": "· — Not assessed — _Evidence:_ n/a"
+   }
+  },
+  {
+   "id": "WEB-N6",
+   "feature": "🆕 Deep links (URL opens a local session in a given directory with a pre-filled, unsent prompt)",
+   "cells": {
+    "cc": "❌ No URL-scheme handler; a session starts only from the CLI or TUI",
+    "web": "🟡 Hash routes (`/#/s/:id`) link to an existing session; no URL carries a directory or a pre-filled prompt",
+    "claude": "✅ `claude-cli://` links open a local terminal session in the linked directory with the prompt pre-filled, never auto-sent",
+    "oc1": "· Not assessed",
+    "oc2": "· Not assessed",
+    "claw": "· Not assessed"
+   },
+   "details": {
+    "cc": "❌ — No OS URL-scheme registration or handler exists; sessions start from `candy-code` arguments or the TUI. — _Evidence:_ grep for `x-scheme-handler`, `registerProtocol`, a custom URL scheme in `src`, `bin`, `docs` finds nothing",
+    "web": "🟡 — The router uses hash history so `/#/s/:id` opens an existing session and `/#code=` carries the sign-in code. No route starts a session in a chosen directory or pre-fills the composer. — _Evidence:_ web:router.ts:10-25",
+    "claude": "✅ — Claude Code registers the `claude-cli://` scheme with the OS. A link carries a working directory and prompt text, and opens a new terminal window running Claude Code there with the prompt typed but not sent. A `Prompt from an external link` warning stays below the input, with a length warning past 1,000 chars. Permission rules, CLAUDE.md and trust prompts apply as usual. The feature is meant for runbooks, alerts, dashboards and READMEs, and handler registration can be managed or disabled per platform. — _Evidence:_ cc:deep-links",
+    "oc1": "· — Not assessed — _Evidence:_ n/a",
+    "oc2": "· — Not assessed — _Evidence:_ n/a",
+    "claw": "· — Not assessed — _Evidence:_ n/a"
+   }
+  },
+  {
+   "id": "PLG-N3",
+   "feature": "🆕 Contextual plugin recommendations (install suggestions triggered by repo/files/commands or by a tool's hint)",
+   "cells": {
+    "cc": "❌ Plugin bundles are discovered from disk only; no install suggestions from session signals or tool hints",
+    "web": "❌ No plugin discovery or recommendation surface",
+    "claude": "✅ Marketplace `relevance` signals (dirs, files read, commands run) and CLI `<claude-code-hint />` tags trigger install suggestions",
+    "oc1": "· Not assessed",
+    "oc2": "· Not assessed",
+    "claw": "· Not assessed"
+   },
+   "details": {
+    "cc": "❌ — `BundleDiscovery` loads installed `.claude-plugin/plugin.json` bundles; there is no marketplace, `relevance` block or `<claude-code-hint />` parsing, so nothing suggests a plugin. — _Evidence:_ `src/Bundles/BundleDiscovery.php`, `src/Bundles/Bundle.php:29`; grep for `claude-code-hint` and plugin `relevance` in `src` finds nothing",
+    "web": "❌ — The web UI has no plugin install or recommendation surface. — _Evidence:_ grep for `claude-code-hint|relevance` in web:src-web finds nothing",
+    "claude": "✅ — A marketplace entry's `relevance` block (working directory, files Claude read, commands it ran) makes Claude Code suggest installing that plugin when a session matches, once an admin allowlists the marketplace in managed settings. A third-party CLI or SDK can print a one-line `<claude-code-hint />` tag to stderr; Claude Code strips it from Bash/PowerShell output before the model sees it and shows a one-time install prompt for that tool's official-marketplace plugin. The LSP recommendation dialog offers code-intelligence plugins when a server binary is on PATH. — _Evidence:_ cc:plugins/relevance; cc:plugins/cli-hints; cc:plugins/code-intelligence",
+    "oc1": "· — Not assessed — _Evidence:_ n/a",
+    "oc2": "· — Not assessed — _Evidence:_ n/a",
+    "claw": "· — Not assessed — _Evidence:_ n/a"
+   }
+  },
+  {
+   "id": "OBS-N1",
+   "feature": "🆕 Usage-optimisation advice (usage attributed to skills/subagents/plugins/MCP servers, with one-step fixes)",
+   "cells": {
+    "cc": "❌ `/usage 7/30/all` gives day x model rollups only; no per-skill/agent/MCP attribution or recommendations",
+    "web": "❌ Status bar shows session spend only; no attribution or recommendations",
+    "claude": "✅ `/usage` attributes plan usage to skills, subagents, plugins, MCP servers and recommends fixes (`f` applies); `/skill-doctor`",
+    "oc1": "· Not assessed",
+    "oc2": "· Not assessed",
+    "claw": "· Not assessed"
+   },
+   "details": {
+    "cc": "❌ — `/usage` folds the `usage_records` ledger by day and model (windows 7, 30, all). It does not attribute spend to skills, subagents, plugins or MCP servers, lists no heavy loops and offers no applicable fixes. — _Evidence:_ `src/Host/Commands/UsageHostCommand.php:30-60`, `builtin-commands/2210-usage.php`",
+    "web": "❌ — The web shows running spend and per-turn cost in the status bar and session tiles, with no breakdown by skill, agent or MCP server and no advice. — _Evidence:_ web:components/StatusBar.vue:68, web:components/grid/SessionTile.vue",
+    "claude": "✅ — On Pro/Max/Team/Enterprise, `/usage` attributes the last 24 h or 7 days of usage to skills, subagents, plugins and individual MCP servers. It lists the heaviest loops and recommends changes, one row each with its usage share (e.g. trimming a 49K-token CLAUDE.md). `f` applies what it can (v2.1.305+): it runs any `/effort` rows, then has Claude make the rest, showing each change first. The same recommendations appear in VS Code and `/doctor`. `/skill-doctor` reports each skill's context cost and use and where to turn unused ones off. — _Evidence:_ cc:costs#plan-usage-breakdown; cc:costs#apply-recommendations-with-the-fix-shortcut; cc:skills#find-unused-skills; cc:commands (`/skill-doctor`); CL v2.1.305",
+    "oc1": "· — Not assessed — _Evidence:_ n/a",
+    "oc2": "· — Not assessed — _Evidence:_ n/a",
+    "claw": "· — Not assessed — _Evidence:_ n/a"
+   }
+  }
+ ],
+ "narrative": [
+  {
+   "old": "| **Claude Code** | 2.1.301 (installed here) | All 228 official doc pages, the changelog, `--help` for every subcommand, and a read-only look at `~/.claude` |",
+   "new": "| **Claude Code** | 2.1.311 (installed here; npm `latest` 2.1.311, `stable` 2.1.308) | All 228 official doc pages, the changelog through 2.1.311, `--help` for every subcommand, and a read-only look at `~/.claude` |"
+  },
+  {
+   "old": "Lazily on first read/write/edit (a Bash `cat` counts); terminal prints `Loaded <path>`",
+   "new": "Lazily on first read/write/edit (a Bash `cat` counts); terminal prints `Loaded <path>`; a file over the per-file cap (40K chars at 200K context, 150K–200K at 1M) arrives as its start plus a Read pointer"
+  },
+  {
+   "old": "Files >4 MiB skipped; warnings over ~200 lines",
+   "new": "Files >4 MiB skipped; on-demand nested/rule files over a per-file cap load only their start; warnings over ~200 lines"
+  },
+  {
+   "old": "~116 commands and bundled skills",
+   "new": "~117 commands and bundled skills"
+  },
+  {
+   "old": "(it falls back to upfront loading for older models, non-first-party base URLs and Azure Foundry)",
+   "new": "(also behind `ANTHROPIC_BASE_URL` gateways, which are retried without it on a 400/422; it falls back to upfront loading for older models and Azure-hosted Foundry)"
+  },
+  {
+   "old": "  - `claude mcp serve` exposes Claude Code itself as a server.",
+   "new": "  - `claude mcp serve` exposes Claude Code itself as a server.\n  - Long tool calls move to the background after 2 minutes, and servers on protocol 2026-07-28 can run MCP tasks that outlive the session (public beta)."
+  },
+  {
+   "old": "  - Idle compaction before the 1-hour cache expires.",
+   "new": "  - Idle compaction before the 1-hour cache expires (a `/config` toggle); on Pro/Max, resuming a long idle chat first estimates its share of the 5-hour limit."
+  },
+  {
+   "old": "≈ model limit (`/autocompact`), idle compaction before cache expiry",
+   "new": "≈ model limit (`/autocompact`); a standard-context session past 200K compacts and continues; idle compaction before cache expiry (`/config` toggle)"
+  },
+  {
+   "old": "Clear old tool outputs first, then summarise; re-inject CLAUDE.md, memory, plan, last 5 files, skills, git",
+   "new": "Clear old tool outputs first, then summarise (asking again if the reply has no summary); re-inject CLAUDE.md, memory, plan, last 5 files, skill listing + invoked skills, git"
+  },
+  {
+   "old": "(classifier, falls back to prompts after 3 consecutive / 20 total blocks)",
+   "new": "(classifier: server-side review, else a client-side model selectable with `CLAUDE_CODE_AUTO_MODE_MODEL`; falls back to prompts after 3 consecutive / 20 total blocks); `claude -p` and SDK runs with no mode set start in Manual"
+  },
+  {
+   "old": "- **Claude Code**: CLI, VS Code, JetBrains, Desktop, web (claude.ai/code), mobile (cloud sessions + Remote Control), Slack, channel plugins.",
+   "new": "- **Claude Code**: CLI, VS Code, JetBrains, Desktop (Linux in beta), web (claude.ai/code), mobile (cloud sessions + Remote Control), Slack and Claude Tag, Chrome, channel plugins, `claude-cli://` deep links."
+  },
+  {
+   "old": "- Changelog: <https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md>.",
+   "new": "- Changelog: <https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md> (through 2.1.311)."
+  }
+ ]
+}
