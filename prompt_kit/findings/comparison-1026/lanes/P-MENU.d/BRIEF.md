@@ -1,0 +1,52 @@
+### P-MENU.d — Swap the bar to the five-menu tree: keyboard, click, dispatch, `»` overflow
+- item: P-MENU-REDO (sources: owner pick; supersedes P-IMG.a; latent bug 4)
+- kind: feature · effort M
+- approach:
+  - **MenuBar.**
+    - `menus()` reads the `ShellMenu::tree()` titles.
+    - The static `$activeMenu`/`$activeItem` pair becomes one static `MenuCursor`.
+    - `handleKey()` is `MenuCursor::key()`, and `selectItem()` takes a path (an int still means a root row).
+    - `panels()` returns the `MenuCascade`, and `activeMenuColumn()` counts painted titles only.
+    - The deprecated `get*` forwarders stay.
+  - **Narrow widths.** Titles drop from the right into a `»` title (`tui.menu.more`). Its dropdown lists the dropped menus as submenus, so every row stays reachable at any width; this is P-IMG.a's overflow idea, done through the nested model. The tab strip stays in this step (P-MENU.e moves it), so the titles keep today's budget rule.
+  - **Dispatch by name.**
+    - Leaves raise `MenuSelectedMsg(menu, label, action: 'cmd:<name>' | 'pane:<value>')`.
+    - `App::dispatchMenuSelection()` sends `cmd:` to `runRegistryCommand($name)`, with the same settings-view rule (:4000). It sends `pane:` to a `togglePaneFromChrome(Pane)` extracted from the `panetab:` click arm (:3468-3482), so a keyboard toggle and a click are one door.
+    - With `action === null`, the label lookup stays. `AppModelTest`, `MenuCommandDraftPreservationTest` and `SettingsCommandTest` build label-only messages and do not move.
+  - **Bug 4 (root cause).** While a menu is open, a key the menu answers returns from the open-menu block (`KeyboardHandler.php:591-603`). It never reaches the skill picker (:612) or `handleNavigation()` (:632).
+  - **KeyBindingRegistry `menu()`** (:1327-1337):
+    - `menu.switch` (`← / →`, from a leaf row) is kept;
+    - new `menu.submenu` (`→ / ←`: open the highlighted submenu, then close it again);
+    - `menu.run` is reworded to "Run the row, or open its submenu (or o)";
+    - `menu.close` is reworded to "Close the submenu, then the menu (or q)".
+
+    Each two-effect row is driven both ways, per the drift test's own rule (`KeyBindingDriftTest.php:78-88`).
+  - **Pane tabs.** They stay on the bar for this one step. View ▸ Panes rows carry `menuitem:` zones here and toggle by keyboard and click; P-MENU.e moves the `panetab:` zones onto them.
+- files.create: none
+- files.modify:
+  - `candy-code/src/Tui/Components/MenuBar.php`: `menus()`, `compose()` (title loop + `»`), `handleKey()`, `cycleMenu()`, `moveItem()`, `itemsOf()`, `selectMenuItem()`, `selectItem()`, `openMenu()`, `activateMenu()`, `closeMenu()`, `activeItem()`, `menuItems()`, `panels*()`, `activeMenuColumn()`;
+  - `candy-code/src/Tui/Components/MenuSelectedMsg.php`: `?string $action = null`;
+  - `candy-code/src/App/App.php`: `dispatchMenuSelection()`; in `dispatchChromeClick()`, the `menuitem:` path parse, and the `panetab:` arm moved onto `togglePaneFromChrome()`;
+  - `candy-code/src/Tui/KeyboardHandler.php`: the open-menu block;
+  - `candy-code/src/Commands/KeyBindingRegistry.php`: `menu()`;
+  - `candy-code/lang/en.php`: `keys.menu.*`, `tui.menu.more`;
+  - `candy-code/README.md`: L308 (the form's doors gain `F10 ▸ Tools ▸ Generate image…`); L356 (Mouse: "clicking the menu bar opens a menu", plus submenus);
+  - `candy-code/docs/MEDIA.md`: L85 (the form's doors).
+- tests:
+  - create `candy-code/tests/Tui/MenuReachabilityTest.php`: at 30/40/60/80/120/200 cols, every `ShellMenu` leaf is reachable from F10 by keys, and by clicks through painted titles or `»`; its selection dispatches the spec it names; at 80 cols, `F10 → → Enter` opens the media form.
+  - create `candy-code/tests/Tui/MenuKeyboardOwnershipTest.php` (bug 4 regression): a menu open over the Agents dashboard and over an open skill picker; ↑/↓ move only the menu; `selectedAgentIndex` and the picker cursor are unchanged.
+  - create `candy-code/tests/App/MenuActionDispatchTest.php`: the `cmd:` and `pane:` actions; the label fallback; `pane:` and `panetab:` leave identical App state.
+  - modify:
+    - `candy-code/tests/Tui/MenuBarTest.php`, `candy-code/tests/Tui/MenuOpenTest.php`, `candy-code/tests/Tui/MenuDropdownTest.php`, `candy-code/tests/Tui/MenuBarMouseTest.php`;
+    - `candy-code/tests/Tui/TuiComponentTest.php` (`testMenuBarRenderProducesNonEmptyOutputWithMenuItems` pins the old category titles);
+    - `candy-code/tests/Tui/ShellContrastTest.php` (cascade rows);
+    - `candy-code/tests/Commands/KeyBindingDriftTest.php` (the `menu.*` observations :2215-2261; the `openMenuAt()`/`openMenuRowCount()`/`menuCount()` reflection helpers :2538-2575; the `activeItem` reflection :3250).
+- docs/guards:
+  - README.md and docs/MEDIA.md prose. There is no generated roster: `docs/COMMANDS.md` does not render categories (`CommandDocGenerator.php:107-118`).
+  - `KeyBindingDriftTest` moves in-step with the `menu.*` rows.
+- serialized: [lang] (prefix `keys.menu.`, `tui.menu.more`) [docs:README.md] [docs:MEDIA.md] [hot:candy-code/src/App/App.php] [hot:candy-code/src/Tui/Components/MenuBar.php] [hot:candy-code/src/Tui/KeyboardHandler.php] [hot:candy-code/src/Commands/KeyBindingRegistry.php]
+- deps: P-MENU.b, P-MENU.c
+- phase: normal
+- ruling: none (it consumes R-MENU-1 through P-MENU.b)
+- risks: the menu state is process-static. Every touched test's `setUp` must reset the cursor (as `closeMenu()` does today), or a half-open submenu leaks between tests.
+

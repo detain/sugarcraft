@@ -87,18 +87,10 @@
   "C-PRV-5.a",
   "C-SEC-5.c",
   "C-CTX-6.a",
-  "C-EXT-7.a"
+  "C-EXT-7.a",
+  "P-MENU.d"
  ],
  "inflight": {
-  "P-MENU.d": {
-   "stage": "clean",
-   "round": 2,
-   "session": "IN-WELDER batch-2",
-   "worktree": "/home/sites/cc-cmp-P-MENU.d",
-   "branch": "cc/P-MENU.d",
-   "note": "r2 CLEAN (fix 5c46ca73e tests-only +35/\u22129, Menu 261T/13,920A, goldens clean, pair-only). WELD chain 6c7cf7d1b+5c46ca73e; DUR MenuReachability/MenuKeyboardOwnership/MenuActionDispatch; fold-budget MINOR carry must ride P-MENU.e brief; \u00a74 unstaged",
-   "ts": "2026-10-27T22:46:55.515653+00:00"
-  },
   "C-EXT-2.b": {
    "stage": "build",
    "round": 1,
@@ -458,6 +450,16 @@
    "durations_owed": "NEW candy-code/tests/Host/Commands/HooksHostCommandLiveChainTest.php (4T) - LIST ONLY, durations.tsv is closeout duty",
    "evidence": "lanes/C-EXT-7.a/{BRIEF,REPORT,REVIEW-1,REVIEW-2}.md all persisted; r2 CLEAN per lead dispatch",
    "prune": "cherry proof both '-'; worktree+branch pruned"
+  },
+  "P-MENU.d": {
+   "master": "65335c6c4+f8f6096b8",
+   "picks": "6c7cf7d1b->65335c6c4 (build, 20 files +1251/-493), 5c46ca73e->f8f6096b8 (r2 tests-only MenuReachability +35/-9), onto b066aabc1, clean zero conflicts despite older 86f43fae2 base (MenuBar rewrite, App.php, KeyBindingRegistry hub, README, en.php all auto-merged; the a33919030 CLIP->MENU_CLIP_PATH cure did NOT collide - MenuOverlayFrameTest merged both sides); %ae/%ce separate greps 1/1 detain, zero Co-Authored trailers",
+   "regen": "no-op (gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0; README/MEDIA.md edits are hand regions; no src/Protocol or candy-code-web files -> schema/npm legs skipped by scope)",
+   "gates": "merged-tree (worktree detached at f8f6096b8): --filter 'Menu' 261T/13920A OK EXACT; goldens --filter 'Renderer|KitchenSink' 1197T/152281A OK EXACT; --filter 'KeyBinding' 278T/3332A OK; five-guard 133T/15809A F2 = staleness pair ONLY (pinned 25,537 vs live 26,270 - closeout re-pin); 2 allowed AccessorDeprecationTest deprecations throughout",
+   "durations_owed": "NEW candy-code tests/Tui/MenuReachabilityTest.php (14T) + tests/Tui/MenuKeyboardOwnershipTest.php (5T) + tests/App/MenuActionDispatchTest.php (9T) - LIST ONLY, durations.tsv is closeout duty",
+   "carries": "fold-budget non-monotonic MINOR = RECORDED P-MENU.e HANDOFF CARRY (see carries); no code change at weld per lead ruling",
+   "evidence": "lanes/P-MENU.d/{BRIEF,REPORT,REVIEW-1,REVIEW-2}.md all persisted; r2 CLEAN per lead dispatch",
+   "prune": "cherry proof both '-'; worktree+branch pruned"
   }
  },
  "carries": [
@@ -510,7 +512,9 @@
   "C-CTX-6.a weld: DUR none (no NEW candy-code *Test.php \u2014 SessionHostIdleAutoTest.php pre-existing, +3T rides the closeout re-pin). Gates EXACT: SessionHost 57T/283A; Idle|AutoCompact|Compaction 461T/22159A; gens --check up-to-date x3 (SessionHost is [hot] but minted no CommandLoader/registry doc drift); five-guard 133T pair-only.",
   "SessionHost.php:1055 release() never cancels the idle alarm \u2014 base shape, lane re-arms lengthen its life; wave-ledger note for a future release-side cure",
   "C-CTX-6.a BRIEF.md:5 stale App.php:4691 cite (real anchor Chat.php ~:14300 handleIdleCompactTick) \u2014 closeout doc sweep",
-  "DUR row owed at closeout gate: candy-code/tests/Host/Commands/HooksHostCommandLiveChainTest.php (4T)"
+  "DUR row owed at closeout gate: candy-code/tests/Host/Commands/HooksHostCommandLiveChainTest.php (4T)",
+  "DUR rows owed at closeout gate (P-MENU.d): candy-code/tests/Tui/MenuReachabilityTest.php (14T), candy-code/tests/Tui/MenuKeyboardOwnershipTest.php (5T), candy-code/tests/App/MenuActionDispatchTest.php (9T)",
+  "P-MENU.d -> P-MENU.e HANDOFF (explicit): fold-budget non-monotonic MINOR is a RECORDED P-MENU.e carry - the P-MENU.e dispatch brief MUST pick it up; weld made NO code change per lead ruling (weld note only)"
  ],
- "updated": "2026-10-27T22:53:25.080172+00:00"
+ "updated": "2026-10-27T23:01:54.421216+00:00"
 }
