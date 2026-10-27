@@ -960,6 +960,22 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * The tool list the NEXT request actually carries (P-CTX.a): the launch
+     * list as {@see turnTools()} shapes it for a turn — merged config limits
+     * applied, ledger-bound tools included or dropped by the session's
+     * pruning mode, engine-delegating copies bound. {@see tools()} is the
+     * UNBOUND launch list; `/context` must price what ships, not what was
+     * built, so the tool-schema and MCP figures ride this accessor — the
+     * same call {@see promptSectionSizes()} folds into the session App.
+     *
+     * @return list<Tool>
+     */
+    public function promptTools(): array
+    {
+        return $this->turnTools(null, null, null);
+    }
+
+    /**
      * @param array<int, \SugarCraft\Code\Skills\Skill> $skills
      */
     public function withSkills(array $skills): self
@@ -2809,7 +2825,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      */
     public function promptSectionSizes(): array
     {
-        $app = $this->sessionApp()->withTools($this->turnTools(null, null, null));
+        $app = $this->sessionApp()->withTools($this->promptTools());
 
         // Fresh guard per call: resolveHookManager keys its clone on the
         // guard's identity, so the shared launch manager keeps serving turns.

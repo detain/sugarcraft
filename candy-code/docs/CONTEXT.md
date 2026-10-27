@@ -41,6 +41,19 @@ cached (a *cache break*: one after a prune or a compression is that rewrite's
 price; two in a row mean a rewrite is not byte-stable). It is local and calls
 no model.
 
+The report opens with a *By category* block: the same measured tokens read as
+who to bill — the harness's own system prompt, the built-in tool schemas, the
+MCP tools (a row per server, plus the honest note that server instructions
+are never sent by this build), the custom-agent roster carried by the Task
+tool's guidance (carved out of the tool-guidance layer, not double-counted
+into it), the instruction and memory files, project memory, the repository
+map, skills, the messages net of pruning, the autocompact buffer the session's
+compaction config reserves between its firing point and the window's end (a
+measured zero when compaction is off), and the free remainder, which is never
+negative. The bar apportions its cells by the same tokens, so its segments
+sum exactly. Categories the backend cannot report print "not measured" with
+the rest of the panel's unknown-honesty rule.
+
 The window is the provider's own `contextWindow()`; a backend that cannot say
 (the offline echo provider) is measured against 100,000 tokens
 (`Context\ContextWindow::FALLBACK_TOKENS`). The `contextWindow` setting

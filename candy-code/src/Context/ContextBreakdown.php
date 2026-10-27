@@ -74,6 +74,18 @@ final readonly class ContextBreakdown
      *        sizes only, bodies never (roadmap VIS-2a) — plus the paths the
      *        loader refused and why; null when this breakdown was measured
      *        without pricing them ({@see measure()})
+     * @param int|null $mcpToolCount  the tools whose schemas ride each request that are MCP
+     *        surfaces (bridges + dispatchers), null when unmeasured (P-CTX.a)
+     * @param int|null $mcpToolTokens their estimated cost — the MCP half of
+     *        $toolTokens, exact because schemas are priced per tool
+     * @param list<array{name: string, count: int, tokens: int}>|null $mcpServers
+     *        the bridges grouped by server, for the block's per-server rows
+     * @param int|null $agentsTokens  the `<available-agents>` roster the Task
+     *        guidance splices — billed to Custom agents rather than System
+     *        prompt ({@see \SugarCraft\Code\Context\ContextCategories::splitTools()})
+     * @param ?CompactorConfig $compactorConfig the session's compaction config,
+     *        kept so the autocompact-buffer row reads the same threshold the
+     *        session will act on; never serialized to the wire
      */
     public function __construct(
         public int $window,
@@ -89,6 +101,11 @@ final readonly class ContextBreakdown
         public ?array $pruning = null,
         public ?array $cacheBreaks = null,
         public ?array $instructionFiles = null,
+        public ?int $mcpToolCount = null,
+        public ?int $mcpToolTokens = null,
+        public ?array $mcpServers = null,
+        public ?int $agentsTokens = null,
+        public ?CompactorConfig $compactorConfig = null,
     ) {
     }
 
@@ -167,6 +184,11 @@ final readonly class ContextBreakdown
             ],
             $this->cacheBreaks,
             $this->instructionFiles,
+            mcpToolCount: $this->mcpToolCount,
+            mcpToolTokens: $this->mcpToolTokens,
+            mcpServers: $this->mcpServers,
+            agentsTokens: $this->agentsTokens,
+            compactorConfig: $this->compactorConfig,
         );
     }
 
@@ -196,6 +218,11 @@ final readonly class ContextBreakdown
             $this->pruning,
             ['breaks' => max(0, $breaks), 'last' => $last],
             $this->instructionFiles,
+            mcpToolCount: $this->mcpToolCount,
+            mcpToolTokens: $this->mcpToolTokens,
+            mcpServers: $this->mcpServers,
+            agentsTokens: $this->agentsTokens,
+            compactorConfig: $this->compactorConfig,
         );
     }
 
@@ -227,6 +254,9 @@ final readonly class ContextBreakdown
      *        the session's instruction documents as the loader named them
      *        (roadmap VIS-2a); null says "this session did not price them",
      *        and the report prints that rather than an empty list
+     * @param ?CompactorConfig $compactorConfig the session's compaction config;
+     *        null says the reporting surface does not know one, and the
+     *        autocompact-buffer row prints "not measured" (P-CTX.a)
      */
     public static function measure(
         array $history,
@@ -236,13 +266,18 @@ final readonly class ContextBreakdown
         int $historyTokens,
         int $largest = self::LARGEST_MESSAGES,
         ?array $instructionFiles = null,
+        ?CompactorConfig $compactorConfig = null,
     ): self {
         $toolCount = null;
         $toolTokens = null;
+        $toolSplit = null;
         if ($tools !== null) {
             $list = is_array($tools) ? array_values($tools) : iterator_to_array($tools, false);
             $toolCount = count($list);
             $toolTokens = TokenEstimate::ofToolSchemas($list);
+            // P-CTX.a: one pass over the SAME priced list yields the MCP and
+            // roster shares, so the block cannot disagree with the totals.
+            $toolSplit = ContextCategories::splitTools($list);
         }
 
         $meter = ContextMeter::new();
@@ -291,6 +326,11 @@ final readonly class ContextBreakdown
             $lastCache,
             $cacheReplies > 0 ? ['read' => $cacheRead, 'prompt' => $cachePrompt, 'replies' => $cacheReplies] : null,
             instructionFiles: $instructionFiles,
+            mcpToolCount: $toolSplit['mcpCount'] ?? null,
+            mcpToolTokens: $toolSplit['mcpTokens'] ?? null,
+            mcpServers: $toolSplit['servers'] ?? null,
+            agentsTokens: $toolSplit['agentsTokens'] ?? null,
+            compactorConfig: $compactorConfig,
         );
     }
 

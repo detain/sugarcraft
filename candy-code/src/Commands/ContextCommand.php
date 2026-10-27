@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Commands;
 
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\ContextBreakdown;
+use SugarCraft\Code\Context\ContextCategories;
 use SugarCraft\Code\Context\Pruning\RefTag;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Util\TokenCount;
@@ -49,6 +50,9 @@ final class ContextCommand
         return self::compose($this->breakdown);
     }
 
+    /** Display cells one full bar in the {@see categoryLines()} block spans. */
+    private const BAR_CELLS = 24;
+
     public static function compose(ContextBreakdown $b): string
     {
         $lines = [
@@ -59,6 +63,13 @@ final class ContextCommand
             ]),
             '',
         ];
+
+        // P-CTX.a: the Claude Code-style attribution first — the same
+        // measured tokens, read as "who to bill" — before the per-layer
+        // detail the panel has always printed.
+        $category = self::categoryLines($b);
+        $category[] = '';
+        array_push($lines, ...$category);
 
         $system = $b->systemTokens();
         if ($system === null || $b->sections === null) {
@@ -140,6 +151,50 @@ final class ContextCommand
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * The `By category` block (roadmap P-CTX.a): every measured token
+     * attributed to who to bill — System prompt, System tools, MCP tools
+     * (per-server sub-rows and the honest note that server instructions are
+     * never sent), Custom agents (the `<available-agents>` roster carved out
+     * of the tool-guidance section), Memory files (per-document sub-rows,
+     * bytes only — the panel never reads a body to price it), Project memory,
+     * Repository map, Skills, Messages, the autocompact reservation, and the
+     * free remainder, never negative. Figures are the breakdown's own; the
+     * bar apportions the same tokens by largest remainder so the segments
+     * sum to exactly the row width. Unknown parts say "not measured".
+     *
+     * @return list<string>
+     */
+    private static function categoryLines(ContextBreakdown $b): array
+    {
+        $cats = ContextCategories::from($b);
+        $bars = $cats->bar(self::BAR_CELLS);
+
+        $lines = [Lang::t('cmd.context.category.header')];
+        foreach ($cats->rows as $i => $row) {
+            $lines[] = '  ' . Width::padRight($row['category']->label(), 20) . ' '
+                . ($row['tokens'] === null
+                    ? Lang::t('cmd.context.category.unmeasured')
+                    : Width::padRight('~' . TokenCount::compact($row['tokens']), 8))
+                . (($bars[$i] ?? '') === '' ? '' : ' ' . $bars[$i]);
+            foreach ($row['sub'] as $sub) {
+                $label = '    ' . Width::padRight(Chat::reportField($sub['label']), 20);
+                if ($sub['note'] !== null) {
+                    $lines[] = $label . ' ' . $sub['note'];
+                } elseif ($sub['bytes'] !== null) {
+                    $lines[] = $label . ' ' . Width::padRight(self::bytes($sub['bytes']), 8)
+                        . ($sub['personal'] ? ' ' . Lang::t('cmd.context.instructions.personal') : '');
+                } elseif ($sub['tokens'] !== null) {
+                    $lines[] = $label . ' ~' . TokenCount::compact($sub['tokens']);
+                } else {
+                    $lines[] = $label . ' ' . Lang::t('cmd.context.category.unmeasured');
+                }
+            }
+        }
+
+        return $lines;
     }
 
     /**

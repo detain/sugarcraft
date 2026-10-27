@@ -112,6 +112,10 @@ final class ContextCommandTest extends TestCase
         self::assertStringContainsString('Instruction files: not measured', $report, 'a breakdown that never priced its documents says so, never lists nothing');
         self::assertStringContainsString('Prompt cache: no reply has reported a cache split yet.', $report);
         self::assertStringContainsString('History: ~12 (1 message sent to the model; 0 UI-only rows never sent)', $report);
+        self::assertStringContainsString('By category:', $report);
+        self::assertMatchesRegularExpression('/^  System prompt\s+not measured$/m', $report, 'unknown parts say so in the block too');
+        self::assertMatchesRegularExpression('/^  Messages\s+~12\s*$/m', $report, 'By-category row 12-of-8192 weighs under one cell — no invented block');
+        self::assertMatchesRegularExpression('/^  Free space\s+~\S+\s+█+$/mu', $report, 'the measured remainder carries the bar');
     }
 
     public function testTheReportListsEveryLayerToolsAndLargestMessages(): void
@@ -372,6 +376,27 @@ final class ContextCommandTest extends TestCase
         self::assertSame($documents, $both->instructionFiles, 'withCacheBreaks() must carry them too');
         self::assertSame(['breaks' => 1, 'last' => ['from' => 90, 'to' => 5]], $both->cacheBreaks, 'the breaks still land in their own slot');
         self::assertIsArray($both->pruning);
+    }
+
+    /**
+     * P-CTX.a widened the ctor with five more trailing slots. Same law,
+     * same reason: both withers re-new by hand, and a dropped MCP/roster/
+     * config figure would silently print "not measured" after any prune.
+     */
+    public function testTheCategoryFieldsRideBothWithers(): void
+    {
+        $servers = [['name' => 'alpha', 'count' => 2, 'tokens' => 40]];
+        $b = ContextBreakdown::measure([Message::user('hi')], null, null, 200, 1)->withCacheBreaks(0, null);
+        $with = new ContextBreakdown(200, null, 5, 90, 1, 1, 0, [], null, null, null, null, null, 2, 40, $servers, 7, \SugarCraft\Code\Context\CompactorConfig::new());
+
+        $carried = $with->withPruning(\SugarCraft\Code\Context\Pruning\ContextLedger::new(), [Message::user('hi')])->withCacheBreaks(1, null);
+
+        self::assertSame(2, $carried->mcpToolCount);
+        self::assertSame(40, $carried->mcpToolTokens);
+        self::assertSame($servers, $carried->mcpServers);
+        self::assertSame(7, $carried->agentsTokens);
+        self::assertInstanceOf(\SugarCraft\Code\Context\CompactorConfig::class, $carried->compactorConfig);
+        self::assertNull($b->mcpToolCount, 'a hand-measured breakdown without a tool list still reports nulls');
     }
 
     /**

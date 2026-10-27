@@ -64,7 +64,11 @@ final class ContextSources
                 $sections = null;
             }
         }
-        $tools = $backend instanceof EngineBackend ? $backend->tools() : null;
+        // P-CTX.a: price what the NEXT request carries — the shaped turn list
+        // (promptTools()), the same list the section rows were built with,
+        // not the unbound launch list tools() answers with.
+        $tools = $backend instanceof EngineBackend ? $backend->promptTools() : null;
+        $compactorConfig = $backend instanceof EngineBackend ? $backend->compactorConfig() : null;
 
         $breakdown = ContextBreakdown::measure(
             $context->history,
@@ -73,6 +77,7 @@ final class ContextSources
             (int) $context->contextTokenLimit,
             $historyTokens ?? (int) $context->contextTokens,
             instructionFiles: $instructionFiles,
+            compactorConfig: $compactorConfig,
         )
             // Roadmap 5.6 remainder: what the session's ledger prunes out.
             ->withPruning($context->contextLedger(), $context->history);
