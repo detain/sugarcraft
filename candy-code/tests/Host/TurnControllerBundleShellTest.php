@@ -64,7 +64,7 @@ final class TurnControllerBundleShellTest extends TestCase
     {
         // Today-behavior, untouched by C-SEC-3: a user-tier native row is the
         // operator's own file, and a user-tier foreign import is judged by
-        // the tier exactly like it was (C-SEC-3.b will rule on foreign).
+        // the tier exactly like it was (settled by the C-SEC-3.b ruling).
         $turns = TurnController::new();
         $native = CommandSpec::new('u', 'd', 'Custom', template: 'run', tier: 'user');
         $foreign = CommandSpec::new('c', 'd', 'Custom', template: 'run', tier: 'user', source: SkillSource::Claude);

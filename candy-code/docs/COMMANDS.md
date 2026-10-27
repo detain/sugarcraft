@@ -27,7 +27,7 @@ Three tiers, merged by name, later overriding earlier
 | project | `<root>/.candy-code/commands/*.md` | **only if this root is trusted** |
 | bundle | a plugin bundle's `commands/*.md` ([PLUGINS.md](PLUGINS.md)) | **never — refused whatever tier the bundle installed under** |
 | mcp | a fetched `prompts/get` body ([MCP.md](MCP.md)) | **never — refused whatever this project trusts** |
-| foreign | the other tools' trees (below) | never — imports run no shell |
+| foreign | the other tools' trees (below) | the tier decides: user **yes**, project **only if this root is trusted** |
 
 The foreign floor is what INT-3 added: `~/.claude/commands`,
 `<root>/.claude/commands`, `~/.opencode/{command,commands}`,

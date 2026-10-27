@@ -507,11 +507,13 @@ final class TurnController
      *    body fetched over a wire, and a `Bundle` row whatever tier it
      *    installed under — are REFUSED outright, before trust is even asked:
      *    the project-trust list vouches for this checkout's own files, and a
-     *    stranger's text is not one of them (C-SEC-3, plan_comparison §6;
-     *    C-SEC-3.b is the planned per-origin opt-in). `Operator` is the
-     *    user's own file or a spec an in-process caller built; foreign rows
-     *    keep today's tier answer, which the table routes to these same two
-     *    cases.
+     *    stranger's text is not one of them (C-SEC-3, plan_comparison §6; the
+     *    per-origin opt-in is ruled in — C-SEC-3.b — and lands with the row
+     *    identity stamps, since until a bundle or a fetched body carries its
+     *    origin name there is nothing for the allow-lists to match).
+     *    `Operator` is the user's own file or a spec an in-process caller
+     *    built; foreign rows keep the settled tier answer, which the table
+     *    routes to these same two cases.
      * 2. THE GATE, and only then, because {@see PermissionGate::evaluate()}
      *    MUTATES Auto mode's circuit-breaker counters, and a command refused
      *    by posture never really ran.

@@ -63,9 +63,9 @@ final class CommandShellPostureTest extends TestCase
     }
 
     /**
-     * Foreign rows keep today's answer: the tier decides, and the imported
-     * tree's provenance badge does not change it (C-SEC-3.b will rule on a
-     * foreign posture; until then this pin is the do-not-move record).
+     * Foreign rows keep the tier's answer — the C-SEC-3.b ruling settles it:
+     * the imported tree's provenance badge does not change the posture, and
+     * `docs/COMMANDS.md`'s foreign row now states what this pin enforces.
      */
     public function testForeignRowsAreJudgedByTheirTierNotTheirBadge(): void
     {

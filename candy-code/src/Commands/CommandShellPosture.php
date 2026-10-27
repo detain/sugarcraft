@@ -22,12 +22,14 @@ use SugarCraft\Code\Skills\SkillSource;
  *    the tier alone would read either as native text this machine chose.
  *    A bundle is a package somebody else packed; its shell forms are refused
  *    whichever directory it landed in.
- * 3. Then the tier decides, and foreign rows keep today's answer there: a
- *    `~/.claude` row is user tier and judged as the operator's own, a
- *    `<root>/.claude` row is project tier and judged as the repository's.
- *    C-SEC-3.b gives the imported trees their own posture; until then, the
- *    tier speaks for them exactly as it does for `~/.candy-code/commands` and
- *    `<root>/.candy-code/commands`.
+ * 3. Then the tier decides, and the C-SEC-3.b ruling settles that as the
+ *    foreign rows' permanent answer: a `~/.claude` row is user tier and
+ *    judged as the operator's own, a `<root>/.claude` row is project tier and
+ *    judged as the repository's, exactly as it does for
+ *    `~/.candy-code/commands` and `<root>/.candy-code/commands`. The per-origin
+ *    opt-in covers only the two third-party arms, and it lands with the
+ *    bundle and MCP row-identity stamps later plan steps mint — without an
+ *    origin name on the row there is nothing for the two allow-lists to match.
  */
 final class CommandShellPosture
 {
