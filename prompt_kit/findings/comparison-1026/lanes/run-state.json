@@ -26,7 +26,8 @@
   "C-WEB-1.c",
   "C-TOOL-1.b",
   "C-SEC-2.b",
-  "C-SES-5.d"
+  "C-SES-5.d",
+  "C-SEC-4.a"
  ],
  "inflight": {
   "C-SEC-3.a": {
@@ -50,14 +51,6 @@
    "branch": "cc/C-SES-2.b",
    "session": null,
    "note": "r2 CLEAN tip c7b7c17e3 base 50ec2e702; weld re-runs Session family 1726T/15114A + five-guard pair-only; goldens rode r1 commit; durations duty SessionPickerDebouncedSearchTest"
-  },
-  "C-SEC-4.a": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-SEC-4.a",
-   "branch": "cc/C-SEC-4.a",
-   "session": null,
-   "note": "r1 CLEAN tip 1c50da86b base fffeceaec; weld gates 95T/441A + five-guard pair-only; optional NIT docblock-order weld-absorbable; NEW ServedProjectCommandTrustTest 4T durations duty"
   },
   "P-CTX.a": {
    "stage": "clean",
