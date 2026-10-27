@@ -61,8 +61,8 @@ final class ContextPane
     /**
      * One glyph per category, keyed by the enum's value — PHP const arrays
      * cannot key on enum cases. All width-1, all pairwise distinct; the
-     * block shades read the same visual family as {@see ContextCategory::
-     * bar()}'s single '█'.
+     * block shades read the same visual family as the single '█' in
+     * {@see ContextCategories::bar()}.
      *
      * @var array<string, string>
      */
