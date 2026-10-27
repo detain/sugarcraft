@@ -4,6 +4,17 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Workspace;
 
+use React\Promise\PromiseInterface;
+use SugarCraft\Core\Msg;
+use SugarCraft\Code\Backend;
+use SugarCraft\Code\Message;
+use SugarCraft\Code\Role;
+use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Session\SessionStore;
+use SugarCraft\Code\Usage;
+
+use function React\Promise\resolve;
+
 /**
  * Opt-in auto-commit (step 3.G, Aider's git loop): the `autoCommit` setting
  * — `off` (the default), `turn` or `edit` — commits what candy-code changed,
@@ -114,6 +125,126 @@ final class AutoCommitter
         }
 
         return self::DEFAULT_TRAILER;
+    }
+
+    /**
+     * The after-settle call for `turn` mode (C-CTX-2.b), decided from what any
+     * settle already knows — no Chat state, no terminal — so every host
+     * commits a settled turn by this one rule. It is the scheduling half of
+     * what {@see \SugarCraft\Code\Chat::scheduleAutoCommit()} does today,
+     * returned as a raw factory instead of a `Cmd`: the host wraps it in its
+     * own machinery (`Cmd::promise` for the TUI, a loop task for a server).
+     *
+     * The factory is null unless `autoCommit` is `turn`, the session has a
+     * store and a project root, and the latest checkpoint for the session
+     * carries a captured workspace to tell the turn's changes from what was
+     * there already. Otherwise it prepares the changed files inside the
+     * factory — never here — asks the cheap title model for a subject when
+     * one is reachable under the spend cap, and resolves to an
+     * {@see AutoCommittedMsg} (or to null when the checkpoint's files turn
+     * out unchanged).
+     *
+     * @param array<string, mixed> $userConfig the merged user settings
+     * @param list<Message> $history the transcript the commit follows
+     *
+     * @return (\Closure(): PromiseInterface)|null
+     */
+    public static function turnCall(
+        array $userConfig,
+        SessionStore|EnhancedSessionStore|null $sessionStore,
+        ?string $sessionId,
+        ?string $projectRoot,
+        array $history,
+        bool $capReached,
+        ?Backend $titleBackend,
+    ): ?\Closure {
+        $mode = self::modeFrom($userConfig[self::SETTINGS_KEY] ?? null);
+        if ($mode !== self::MODE_TURN || !$sessionStore instanceof EnhancedSessionStore
+            || $sessionId === null || $projectRoot === null || $projectRoot === '') {
+            return null;
+        }
+
+        try {
+            $latest = $sessionStore->listCheckpoints($sessionId, 1)[0]['state_data'] ?? null;
+        } catch (\Throwable) {
+            return null;
+        }
+        $workspace = self::checkpointWorkspace($latest);
+        if (!WorkspaceCheckpointer::isCaptured($workspace) || !\is_array($workspace)) {
+            return null;
+        }
+
+        $committer = self::new($projectRoot)
+            ->withSessionId($sessionId)
+            ->withTrailer(self::trailerFor($userConfig['attribution'] ?? null));
+        $checkpointer = $sessionStore->workspaceCheckpointer($projectRoot);
+        $backend = $capReached ? null : $titleBackend;
+        $context = '';
+        foreach (array_reverse(Message::agentVisible($history)) as $message) {
+            if ($message->role === Role::User) {
+                $context = $message->content;
+                break;
+            }
+        }
+
+        return static function () use ($committer, $checkpointer, $workspace, $backend, $context, $sessionId): PromiseInterface {
+            try {
+                $prepared = $committer->prepareTurn($checkpointer, $workspace);
+            } catch (\Throwable $e) {
+                $prepared = $e->getMessage();
+            }
+            if ($prepared === null) {
+                return resolve(null);
+            }
+            if (\is_string($prepared)) {
+                return resolve(new AutoCommittedMsg(error: $prepared, sessionId: $sessionId));
+            }
+
+            $finish = static function (?string $reply, ?Usage $usage) use ($committer, $prepared, $sessionId): Msg {
+                $subject = ($reply === null ? null : CommitMessageWriter::subjectFrom($reply))
+                    ?? CommitMessageWriter::fallback($prepared['paths']);
+                $outcome = $committer->commit($prepared['paths'], $subject);
+
+                return new AutoCommittedMsg(
+                    sha: $outcome['sha'],
+                    subject: $outcome['subject'],
+                    paths: $outcome['paths'],
+                    snapshot: $prepared['snapshot'],
+                    error: $outcome['ok'] ? null : $outcome['reason'],
+                    usage: $usage,
+                    sessionId: $sessionId,
+                );
+            };
+            if ($backend === null) {
+                return resolve($finish(null, null));
+            }
+
+            return $backend->completeAsync(CommitMessageWriter::request($prepared['diff'], $context))->then(
+                static fn (Message $reply): Msg => $finish($reply->content, $reply->usage),
+                // The commit still lands with the plain subject: a title
+                // model that failed is no reason to leave the turn uncommitted.
+                static fn (\Throwable $e): Msg => $finish(null, null),
+            );
+        };
+    }
+
+    /**
+     * The workspace outcome a decoded checkpoint state carries, if any — the
+     * plain reader the store's checkpoint rows use (the same shape
+     * {@see \SugarCraft\Code\Host\Commands\Checkpoints::checkpointWorkspace()}
+     * reads, kept package-local so `Workspace` does not reach into `Host`).
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function checkpointWorkspace(mixed $state): ?array
+    {
+        if (!\is_array($state)) {
+            return null;
+        }
+        $key = EnhancedSessionStore::CHECKPOINT_WORKSPACE_KEY;
+        $workspace = $state[$key] ?? $state['state_data'][$key] ?? null;
+
+        return \is_array($workspace) ? $workspace : null;
     }
 
     public function withTrailer(string $trailer): self

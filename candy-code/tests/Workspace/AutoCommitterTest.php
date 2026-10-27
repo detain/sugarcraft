@@ -6,7 +6,9 @@ namespace SugarCraft\Code\Tests\Workspace;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Tests\Support\CheckpointedRepoTrait;
+use SugarCraft\Code\Workspace\AutoCommittedMsg;
 use SugarCraft\Code\Workspace\AutoCommitter;
+use SugarCraft\Code\Workspace\CommitMessageWriter;
 
 /**
  * Step 3.G: opt-in auto-commit, Aider's way — the user's own earlier changes
@@ -77,6 +79,79 @@ final class AutoCommitterTest extends TestCase
         self::assertSame('Ada User <ada@example.invalid>', $this->gitAt('log', '-1', '--format=%an <%ae>'));
         self::assertSame('Co-authored-by: Bot <bot@example.invalid>', trim($this->gitAt('log', '-1', '--format=%(trailers:only,unfold)')));
         self::assertSame($outcome['sha'], $this->gitAt('rev-parse', 'HEAD'));
+    }
+
+    public function testTurnCallCommitsTheTurnsFilesWithAPlainSubjectWithoutATitleBackend(): void
+    {
+        file_put_contents($this->repo . '/file.txt', "mine\n");
+        $this->checkpoint();
+
+        file_put_contents($this->repo . '/turn.txt', "created by the model\n");
+        $call = AutoCommitter::turnCall(
+            userConfig: [AutoCommitter::SETTINGS_KEY => AutoCommitter::MODE_TURN],
+            sessionStore: $this->store,
+            sessionId: 'undo-session',
+            projectRoot: $this->repo,
+            history: [],
+            capReached: false,
+            titleBackend: null,
+        );
+        self::assertNotNull($call);
+
+        $settled = null;
+        $call()->then(static function (mixed $msg) use (&$settled): void {
+            $settled = $msg;
+        });
+        self::assertInstanceOf(AutoCommittedMsg::class, $settled);
+        self::assertNull($settled->error);
+        self::assertNull($settled->usage, 'no title backend was dialed, so nothing was billed');
+        self::assertSame(['turn.txt'], $settled->paths);
+        self::assertSame(CommitMessageWriter::fallback(['turn.txt']), $settled->subject);
+        // The snapshot commit rides only turns whose paths entangle the
+        // user's earlier edits; this turn added one untouched file.
+        self::assertSame([$settled->subject, 'base'], $this->subjects());
+        self::assertSame($settled->sha, $this->gitAt('rev-parse', 'HEAD'), 'the message names the commit it made');
+    }
+
+    public function testTurnCallRefusesWithoutTheTurnSettingOrASnapshotItCanRead(): void
+    {
+        $turn = [AutoCommitter::SETTINGS_KEY => AutoCommitter::MODE_TURN];
+        self::assertNull(AutoCommitter::turnCall(
+            userConfig: [],
+            sessionStore: $this->store,
+            sessionId: 'undo-session',
+            projectRoot: $this->repo,
+            history: [],
+            capReached: false,
+            titleBackend: null,
+        ), 'off (unset) commits nothing');
+        self::assertNull(AutoCommitter::turnCall(
+            userConfig: [AutoCommitter::SETTINGS_KEY => AutoCommitter::MODE_EDIT],
+            sessionStore: $this->store,
+            sessionId: 'undo-session',
+            projectRoot: $this->repo,
+            history: [],
+            capReached: false,
+            titleBackend: null,
+        ), 'edit mode belongs to the commit-on-edit hook, not the turn settle');
+        self::assertNull(AutoCommitter::turnCall(
+            userConfig: $turn,
+            sessionStore: null,
+            sessionId: 'undo-session',
+            projectRoot: $this->repo,
+            history: [],
+            capReached: false,
+            titleBackend: null,
+        ), 'a base store cannot be checkpoint-read');
+        self::assertNull(AutoCommitter::turnCall(
+            userConfig: $turn,
+            sessionStore: $this->store,
+            sessionId: 'never-written',
+            projectRoot: $this->repo,
+            history: [],
+            capReached: false,
+            titleBackend: null,
+        ), 'no checkpoint for the session means no workspace to read back');
     }
 
     public function testATurnWithNoUserChangesNeedsNoSnapshotAndAnUnchangedTurnCommitsNothing(): void
