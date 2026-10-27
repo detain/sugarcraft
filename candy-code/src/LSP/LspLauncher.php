@@ -27,9 +27,15 @@ use SugarCraft\Code\Tools\Concerns\DetectsCapabilities;
  * AUTO-DETECT IS THE OTHER USER-TIER STATEMENT (EDT-2): with `lspAutoDetect`
  * true, {@see AUTO_TABLE} starts the server a project fingerprint names and a
  * binary is installed for. Detection reads; launching is the execution, so
- * the table runs ONLY on that opt-in, explicit entries win per language, the
- * MAX_SERVERS cap is shared, and every started-by-fingerprint server reports
- * itself through {@see problems()} so no launch has a mystery server.
+ * the table runs ONLY on that opt-in AND on the project-trust input
+ * {@see \SugarCraft\Code\Cli\Bootstrap::lspClient()} feeds it — the same
+ * grant that already means "this repository's code may run here" (C-TOOL-7.c:
+ * the fingerprints live in a CLONE's files, and rust-analyzer runs
+ * `build.rs` before first paint). Explicit entries never consult trust: they
+ * are the user's own words. Explicit entries win per language, the
+ * MAX_SERVERS cap is shared, and every fingerprint outcome — started OR
+ * skipped for trust — reports itself through {@see problems()} so no launch
+ * has a mystery server and no silent loss is mistaken for no fingerprint.
  *
  * THE HANDSHAKE IS SPOKEN HERE, not through {@see LspConnection::initialize()},
  * because that one sends no `rootUri`: a server that is not told the workspace
@@ -88,7 +94,9 @@ final class LspLauncher
      * the detection's whole output is a LAUNCH, and launching is the code
      * execution {@see self::$root}'s docblock above reserves to the user — so
      * the table may only run where the user has said "yes, launch what you
-     * find". With the key off nothing here consults the table at all, which is
+     * find" AND, per root, where the project itself carries the hooks-trust
+     * grant (C-TOOL-7.c; {@see self::fromConfig()}'s `$projectTrusted`). With
+     * the key off nothing here consults the table at all, which is
      * what keeps every parse below byte-identical to the manual-only launcher
      * it grew out of.
      */
@@ -162,14 +170,23 @@ final class LspLauncher
      *
      * With `$autoDetect` (the `lspAutoDetect` key, EDT-2) the
      * {@see AUTO_TABLE} fingerprints of $root are consulted after the
-     * explicit entries: a row fills only a language NO explicit entry spoke
-     * for — including a `disabled` one, because switching a language off is
-     * the user speaking for it — and only when a candidate binary passes
-     * `$binaryPresent`. `$binaryPresent` is a seam so tests never read the
-     * real PATH; production leaves it null and gets the shared
-     * capability-memo lookup.
+     * explicit entries — but only when `$projectTrusted` says this root may
+     * run the user's code (C-TOOL-7.c): the fingerprints live in a CLONE's
+     * own files, and starting rust-analyzer runs its `build.rs`, so the
+     * table rides the hooks-trust grant the launcher is given, never its own
+     * reading of the tree. Explicit entries are unaffected by trust — a
+     * named server is the user's own command line. Key on, trust off: the
+     * table's servers stay down and {@see problems()} carries the skip line,
+     * so the loss is loud on the same surface that names every started
+     * server — the explicit half is exactly what it would have been. A row
+     * fills only a
+     * language NO explicit entry spoke for — including a `disabled` one,
+     * because switching a language off is the user speaking for it — and only
+     * when a candidate binary passes `$binaryPresent`. `$binaryPresent` is a
+     * seam so tests never read the real PATH; production leaves it null and
+     * gets the shared capability-memo lookup.
      */
-    public static function fromConfig(mixed $raw, string $root, bool $autoDetect = false, ?callable $binaryPresent = null): self
+    public static function fromConfig(mixed $raw, string $root, bool $autoDetect = false, ?callable $binaryPresent = null, bool $projectTrusted = false): self
     {
         if ($raw === null || $raw === [] || $raw === false) {
             $raw = [];
@@ -208,7 +225,14 @@ final class LspLauncher
             }
         }
 
-        if ($autoDetect) {
+        if ($autoDetect && !$projectTrusted) {
+            // C-TOOL-7.c: the fingerprints are read out of the clone's own
+            // tree, and acting on them is a launch. Provenance rows are what
+            // this method emits for every fingerprint outcome, so the skipped
+            // one lands on the same surface and is never mistaken for
+            // "matched nothing".
+            $problems[] = 'lsp: auto-detect skipped — this project is not trusted for hooks';
+        } elseif ($autoDetect) {
             $binaryPresent ??= static fn (string $binary): bool => self::capabilityPresent($binary);
             foreach (self::AUTO_TABLE as $row) {
                 if (isset($claimed[$row['language']]) || \count($servers) >= self::MAX_SERVERS) {

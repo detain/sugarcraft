@@ -68,7 +68,7 @@ final class LspLauncherAutoDetectTest extends TestCase
     public function testAFingerprintWithABinaryStartsExactlyItsServer(): void
     {
         $this->touch('composer.json');
-        $launcher = LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['intelephense']));
+        $launcher = LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['intelephense']), projectTrusted: true);
 
         $this->assertSame(['php'], $launcher->languages());
         $this->assertContains('lspAutoDetect started php=intelephense', $launcher->problems(), 'a started-by-fingerprint server must never look like the user wrote it');
@@ -80,7 +80,7 @@ final class LspLauncherAutoDetectTest extends TestCase
     public function testAFingerprintWithoutABinaryStartsNothing(): void
     {
         $this->touch('composer.json');
-        $launcher = LspLauncher::fromConfig(null, $this->root, true, $this->probeWith([]));
+        $launcher = LspLauncher::fromConfig(null, $this->root, true, $this->probeWith([]), projectTrusted: true);
 
         $this->assertSame([], $launcher->languages());
         $this->assertSame([], $launcher->problems());
@@ -89,10 +89,10 @@ final class LspLauncherAutoDetectTest extends TestCase
     public function testATypeScriptTreeNeedsBothFilesAndRoutesAllFourExtensions(): void
     {
         $this->touch('tsconfig.json');
-        $this->assertSame([], LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['typescript-language-server']))->languages(), 'tsconfig alone is not the pair');
+        $this->assertSame([], LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['typescript-language-server']), projectTrusted: true)->languages(), 'tsconfig alone is not the pair');
 
         $this->touch('package.json');
-        $launcher = LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['typescript-language-server']));
+        $launcher = LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['typescript-language-server']), projectTrusted: true);
         $this->assertSame(['typescript'], $launcher->languages());
 
         $client = $launcher->launch(static fn (): LspConnectionInterface => self::stubConnection())[0];
@@ -106,7 +106,7 @@ final class LspLauncherAutoDetectTest extends TestCase
     public function testPythonAcceptsEitherFingerprintAlone(): void
     {
         $this->touch('setup.py');
-        $this->assertSame(['python'], LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['pyright-langserver']))->languages());
+        $this->assertSame(['python'], LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['pyright-langserver']), projectTrusted: true)->languages());
     }
 
     public function testEveryMatchedFingerprintFillsItsOwnLanguageInTableOrder(): void
@@ -114,7 +114,7 @@ final class LspLauncherAutoDetectTest extends TestCase
         $this->touch('Cargo.toml');
         $this->touch('go.mod');
         $this->touch('composer.json');
-        $launcher = LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['gopls', 'rust-analyzer']));
+        $launcher = LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['gopls', 'rust-analyzer']), projectTrusted: true);
 
         $this->assertSame(['go', 'rust'], $launcher->languages(), 'php stays out (no binary) and the order rides the table, not the filesystem');
         $this->assertSame(
@@ -127,7 +127,7 @@ final class LspLauncherAutoDetectTest extends TestCase
     {
         mkdir($this->root . '/composer.json', 0o700, true);
         try {
-            $this->assertSame([], LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['intelephense']))->languages());
+            $this->assertSame([], LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['intelephense']), projectTrusted: true)->languages());
         } finally {
             @rmdir($this->root . '/composer.json');
         }
@@ -143,6 +143,7 @@ final class LspLauncherAutoDetectTest extends TestCase
             $this->root,
             true,
             $this->probeWith(['intelephense']),
+            projectTrusted: true,
         );
 
         $this->assertSame(['php'], $launcher->languages());
@@ -158,6 +159,7 @@ final class LspLauncherAutoDetectTest extends TestCase
             $this->root,
             true,
             $this->probeWith(['intelephense']),
+            projectTrusted: true,
         );
 
         $this->assertSame([], $launcher->languages(), 'switching php off is the user speaking for php');
@@ -172,6 +174,7 @@ final class LspLauncherAutoDetectTest extends TestCase
             $this->root,
             true,
             $this->probeWith(['intelephense']),
+            projectTrusted: true,
         );
 
         $this->assertSame([], $launcher->languages());
@@ -183,7 +186,7 @@ final class LspLauncherAutoDetectTest extends TestCase
     public function testAMalformedMapCostsTheExplicitHalfNotTheTable(): void
     {
         $this->touch('composer.json');
-        $launcher = LspLauncher::fromConfig('not-a-map', $this->root, true, $this->probeWith(['intelephense']));
+        $launcher = LspLauncher::fromConfig('not-a-map', $this->root, true, $this->probeWith(['intelephense']), projectTrusted: true);
 
         $this->assertSame(['php'], $launcher->languages());
         $this->assertSame(
@@ -204,11 +207,57 @@ final class LspLauncherAutoDetectTest extends TestCase
         for ($i = 0; $i < LspLauncher::MAX_SERVERS; $i++) {
             $raw['lang' . $i] = ['command' => 'server' . $i];
         }
-        $launcher = LspLauncher::fromConfig($raw, $this->root, true, $this->probeWith(['intelephense']));
+        $launcher = LspLauncher::fromConfig($raw, $this->root, true, $this->probeWith(['intelephense']), projectTrusted: true);
 
         $this->assertCount(LspLauncher::MAX_SERVERS, $launcher->languages());
         $this->assertNotContains('php', $launcher->languages());
         $this->assertSame([], $launcher->problems(), 'the explicit eight already named the cap problem nowhere; auto adds nothing it could not start');
+    }
+
+    // ── project trust gates the auto arm (C-TOOL-7.c) ──────────────────
+
+    public function testAnUntrustedProjectStartsNoFingerprintServer(): void
+    {
+        $this->touch('Cargo.toml');
+        $probed = [];
+        $probe = static function (string $binary) use (&$probed): bool {
+            $probed[] = $binary;
+
+            return true;
+        };
+
+        // Passed positionally on purpose: against the pre-fix signature the
+        // extra argument is ignored and this case fails on its assertions —
+        // rust-analyzer starts — not on a PHP Error about an unknown name.
+        $launcher = LspLauncher::fromConfig(null, $this->root, true, $probe, false);
+
+        $this->assertSame([], $launcher->languages(), 'rust-analyzer runs build.rs; an opened clone may not start it');
+        $this->assertSame([], $probed, 'an untrusted root never reaches the binary probe — the table is not consulted at all');
+        $this->assertSame(
+            ['lsp: auto-detect skipped — this project is not trusted for hooks'],
+            $launcher->problems(),
+            'the skip is a provenance row, never silence mistaken for no fingerprint',
+        );
+    }
+
+    public function testExplicitEntriesIgnoreTrust(): void
+    {
+        $this->touch('composer.json');
+        $launcher = LspLauncher::fromConfig(
+            ['php' => ['command' => 'my-php-server']],
+            $this->root,
+            true,
+            $this->probeWith(['intelephense']),
+            projectTrusted: false,
+        );
+
+        $this->assertSame(['php'], $launcher->languages());
+        $this->assertSame([['my-php-server', []]], $this->commandsOf($launcher));
+        $this->assertSame(
+            ['lsp: auto-detect skipped — this project is not trusted for hooks'],
+            $launcher->problems(),
+            'trust gates the table, not the entries — the named server launched anyway, and the row is about the auto half the key switched on',
+        );
     }
 
     // ── the table itself ───────────────────────────────────────────────
@@ -232,7 +281,7 @@ final class LspLauncherAutoDetectTest extends TestCase
     public function testAnAutoServerCarriesTheFullManualShape(): void
     {
         $this->touch('composer.json');
-        $launcher = LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['intelephense']));
+        $launcher = LspLauncher::fromConfig(null, $this->root, true, $this->probeWith(['intelephense']), projectTrusted: true);
 
         $servers = (new ReflectionClass($launcher))->getProperty('servers')->getValue($launcher);
 
@@ -249,15 +298,20 @@ final class LspLauncherAutoDetectTest extends TestCase
 
     // ── the production seam (wired by Bootstrap, pinned without the PATH) ──
 
-    public function testTheLaunchReadsTheKeyIntoTheThirdArgument(): void
+    public function testTheLaunchReadsTheKeyAndTheTrustGrantIntoTheAutoArm(): void
     {
         $source = (string) file_get_contents(__DIR__ . '/../../src/Cli/Bootstrap.php');
-        $body = substr($source, (int) strpos($source, 'public static function lspClient'), 1600);
+        $body = substr($source, (int) strpos($source, 'public static function lspClient'), 2000);
 
         $this->assertStringContainsString(
-            '($config[\\SugarCraft\\Code\\LSP\\LspLauncher::AUTO_DETECT_SETTINGS_KEY] ?? false) === true,',
+            '$autoDetect = ($config[\\SugarCraft\\Code\\LSP\\LspLauncher::AUTO_DETECT_SETTINGS_KEY] ?? false) === true;',
             $body,
             'lspClient() must hand the flag through strictly === true — the table runs ONLY on the user key',
+        );
+        $this->assertStringContainsString(
+            'projectTrusted: $autoDetect && self::projectHooksAreTrusted($root),',
+            $body,
+            'C-TOOL-7.c: the auto arm reaches the launcher ONLY behind the hooks-trust grant for this root, and the grant is consulted only when the key is already on',
         );
         $this->assertStringContainsString('LspLauncher::SETTINGS_KEY] ?? null,', $body, 'the manual map keeps its own read');
     }

@@ -8671,7 +8671,11 @@ public static function useMaxCost(?string $maxCost): void
      * USER TIER ONLY, like `.mcp.json`'s trust gate and for the same reason:
      * starting a server is code execution. The key is not project-settable
      * (`LspSettings`), so {@see readUserConfig()} never takes it from a
-     * project file, trusted or not.
+     * project file, trusted or not. And the auto-detect half of the key is
+     * gated per root on {@see projectHooksAreTrusted()} (C-TOOL-7.c): that
+     * table starts servers a CLONE's fingerprints name, which is the clone
+     * choosing to run code here — the same grant that admits its
+     * `hooks.yaml`.
      *
      * Memoised per pid and root, the {@see mcpClient()} shape: a
      * `pcntl_fork()`ed child inherits the parent's servers through the objects
@@ -8692,10 +8696,18 @@ public static function useMaxCost(?string $maxCost): void
         }
 
         $config = self::readUserConfig();
+        $autoDetect = ($config[\SugarCraft\Code\LSP\LspLauncher::AUTO_DETECT_SETTINGS_KEY] ?? false) === true;
         $launcher = \SugarCraft\Code\LSP\LspLauncher::fromConfig(
             $config[\SugarCraft\Code\LSP\LspLauncher::SETTINGS_KEY] ?? null,
             $root,
-            ($config[\SugarCraft\Code\LSP\LspLauncher::AUTO_DETECT_SETTINGS_KEY] ?? false) === true,
+            $autoDetect,
+            // C-TOOL-7.c: the AUTO_TABLE launches what a CLONE's files name,
+            // so it runs only where the hooks-trust grant already says this
+            // root's code may run here. Short-circuited on the key: with auto-
+            // detect off this stays the exact pre-fix read, and a corrupt
+            // config costs nothing new here ({@see projectHooksAreTrusted()}
+            // throws, {@see rawUserConfig()} does not).
+            projectTrusted: $autoDetect && self::projectHooksAreTrusted($root),
         );
         $client = null;
         if ($launcher->hasServers()) {
