@@ -76,7 +76,8 @@
   "P-TABS.h",
   "C-SEC-5.a",
   "C-SES-5.c",
-  "C-WEB-3.c"
+  "C-WEB-3.c",
+  "C-WEB-3.d"
  ],
  "inflight": {
   "C-AGT-3.b": {
@@ -103,14 +104,6 @@
    "session": "closed",
    "note": "r2 CLEAN with gates RUN (27 files/215 vitest; vue-tsc 6 foreign TS2554 only). REVIEW-2.md collected from /tmp/opencode/cc-cmp/ to lanes. WELD queued behind running batch welder: picks 0504a19a6+b98125b2b (base e36d86d84-era), npm build dist commit-if-changed, vitest re-run, §4 unstaged, evidence 4 files (BRIEF/REPORT/REVIEW-1/REVIEW-2). Carries: NIT Ctrl+Enter-stale-arm-clear leg unpinned (later micro: arm, Ctrl+Enter, assert aria-pressed false); r1 queued-count NIT open; reviewer /tmp probe file leftover harmless."
   },
-  "C-WEB-3.d": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-WEB-3.d",
-   "branch": "cc/C-WEB-3.d",
-   "session": "closed",
-   "note": "r1 CLEAN static, 4 [SEV-GATE] runtime checks assigned to weld (scope --stat, porcelain, author greps, vitest+vue-tsc). FROZEN pre-weld: pick 5f0253544; dist rebuild; §4 unstaged; evidence 3 files; prune."
-  },
   "C-AGT-7.c": {
    "stage": "build",
    "round": 1,
@@ -131,6 +124,29 @@
    "worktree": "/home/sites/cc-cmp-C-CTX-6.d",
    "branch": "cc/C-CTX-6.d",
    "session": "pending"
+  },
+  "C-EXT-7.a": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-EXT-7.a",
+   "branch": "cc/C-EXT-7.a",
+   "session": "ses_e80cef218ffekYVBfBndlu810r",
+   "note": "RESUMED entry (lost in batch-welder round-trip @1479@). /hooks live-workspace + manifest declined hooks/mcpServers legs."
+  },
+  "C-MCP-6.a": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-MCP-6.a",
+   "branch": "cc/C-MCP-6.a",
+   "session": "pending"
+  },
+  "C-PRV-5.a": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-PRV-5.a",
+   "branch": "cc/C-PRV-5.a",
+   "session": "pending",
+   "note": "collision-watch: both C-PRV-5.a (hand prose L344/L491) and C-CTX-6.c (gen region) edit docs/SETTINGS.md on separate branches — welder keep-both, distinct hunks expected"
   }
  },
  "blocked": [],
@@ -147,7 +163,8 @@
   "2": "closed r1 CLEAN battery green",
   "4": "closed r1 FINAL CLEAN battery green 2026-10-27",
   "3": "closed r3 (static proof + lead battery 94T/103T, pair-only, gens rc0)",
-  "5": "closed r2 CLEAN (EnvRoster cure 86eab474c; battery pre-pass)"
+  "5": "closed r2 CLEAN (EnvRoster cure 86eab474c; battery pre-pass)",
+  "6": "r1 CLEAN (fresh reviewer ses_e80cd6267, 10-step roster; evidence lanes/W6/WAVE-REVIEW-1.md) — close behind batch welder"
  },
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "weld_notes": {
@@ -378,6 +395,13 @@
    "regen": "none - web lane; npm run build changed bundle hashes (index-BFWWS6rn.js / index-DCx0m3NK.css), dist committed as separate weld commit",
    "gates": "vitest --no-file-parallelism workflowStatus panels stores = 25 files / 210 tests passed (0 failed; superset of the 3-file/26 trio); vue-tsc -b --force = exactly 6 errors, all TS2554 in foreign statusBar.spec.ts(2)+reducer.spec.ts(4)",
    "durations_owed": "none - workflowStatus.spec.ts rides the vitest-side roster, no phpunit DUR row"
+  },
+  "C-WEB-3.d": {
+   "master": "91c311db0",
+   "pick": "f566243c6 (5f0253544); dist rebuild 91c311db0",
+   "regen": "none - web lane; npm run build changed bundle hashes (index-C8CC-Omt.js / index-czZF8ZjI.css), dist committed as separate weld commit",
+   "gates": "r1 [SEV-GATE] runtime checks all PASS: --stat exactly 4 declared files (no dist/durations/suite-figure), lane worktree porcelain clean, %ae+%ce detain / 0 Co-Authored; vitest --no-file-parallelism sidebarCloseRoot sessions = 2 files/9 passed; regression session+sidebar = 9 files/45 passed; vue-tsc -b --force = exactly 6 TS2554 (foreign); five-guard 133T/15735A pair-only (25,537-vs-26,141)",
+   "durations_owed": "none - sidebarCloseRoot.spec.ts rides the vitest-side roster, no phpunit DUR row"
   }
  },
  "carries": [
@@ -417,6 +441,7 @@
   "W3+W5 wave close COMMITTED 2026-10-27; W6 loop NOT run (owner wrap-up; fresh lead decides)",
   "C-WEB-3.a memoryHistory.spec.ts = vitest-side; dormantRoster row drop owed at C-WEB-3.g",
   "2026-10-27T16:3x OWNER STOP-SPAWNING FREEZE active: 4-lane batch welder cancelled after L1(C-CTX-2.a)+L2(C-SES-4.b) landed; server restart killed all children. FROZEN-PRE-WELD queue: C-SEC-5.a, C-SES-5.c, C-WEB-3.c, C-WEB-3.d (dist), +P-AGENT.d after r2 review. W6 wave loop NOT dispatched (eligible: C-SES-9.a/9.c/9.d, C-EXT-7.b, C-SES-6.a, C-TOOL-7.c all welded). C-AGT-3.b/P-MENU.d hold uncommitted partials on their worktrees.",
-  "C-SEC-5.a weld: docs/MCP.md :627-640 closeout seam rides this lane"
+  "C-SEC-5.a weld: docs/MCP.md :627-640 closeout seam rides this lane",
+  "C-WEB-3.d weld: dormancy rows files.read/memory.log/undo/session.shares owed at C-WEB-3.g"
  ]
 }
