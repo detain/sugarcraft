@@ -477,6 +477,7 @@ it and the two tables below are generated from the code
 | `session.send` | write | yes | `sessionId`, `text` | Send a prompt: start a turn, or queue / steer / interrupt the running one. |
 | `session.setMode` | write | yes | `sessionId`, `permissionMode` | The permission mode the session's next turns run in. |
 | `session.share` | write | yes | `sessionId` | Publish an HTML snapshot of a session as a self-hosted share page at /s/{token}. |
+| `session.shares` | read |  | — | The live share pages of one session, or of every session when sessionId is absent. |
 | `session.subscribe` | read |  | `sessionId` | Follow a session's events from a cursor (replay) or from a snapshot; snapshotLimit pages the reset snapshot. |
 | `session.unshare` | write | yes | `token` | Revoke a share page by token; it 404s from its next request. |
 | `session.unsubscribe` | read |  | `sessionId` | Stop following a session. |

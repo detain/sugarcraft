@@ -3914,6 +3914,73 @@
                 ]
             }
         },
+        "session.shares": {
+            "description": "The live share pages of one session, or of every session when sessionId is absent.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    }
+                }
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "sessionId": {
+                                    "$ref": "#/$defs/SessionId"
+                                },
+                                "sessionName": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ]
+                                },
+                                "token": {
+                                    "type": "string",
+                                    "maxLength": 32
+                                },
+                                "tokenPrefix": {
+                                    "type": "string",
+                                    "maxLength": 8
+                                },
+                                "path": {
+                                    "type": "string"
+                                },
+                                "format": {
+                                    "enum": [
+                                        "html"
+                                    ]
+                                },
+                                "expiresAt": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                }
+                            },
+                            "required": [
+                                "sessionId",
+                                "sessionName",
+                                "token",
+                                "tokenPrefix",
+                                "path",
+                                "format",
+                                "expiresAt"
+                            ]
+                        }
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            }
+        },
         "session.subscribe": {
             "description": "Follow a session's events from a cursor (replay) or from a snapshot; snapshotLimit pages the reset snapshot.",
             "scope": "read",

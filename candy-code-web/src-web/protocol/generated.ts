@@ -1083,6 +1083,23 @@ export interface Methods {
       expiresAt: number
     }
   }
+  /** The live share pages of one session, or of every session when sessionId is absent. */
+  "session.shares": {
+    params: {
+      sessionId?: SessionId
+    }
+    result: {
+      items: ({
+        sessionId: SessionId
+        sessionName: string | null
+        token: string
+        tokenPrefix: string
+        path: string
+        format: "html"
+        expiresAt: number
+      })[]
+    }
+  }
   /** Follow a session's events from a cursor (replay) or from a snapshot; snapshotLimit pages the reset snapshot. */
   "session.subscribe": {
     params: {
@@ -1435,6 +1452,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "session.send": "write",
   "session.setMode": "write",
   "session.share": "write",
+  "session.shares": "read",
   "session.subscribe": "read",
   "session.unshare": "write",
   "session.unsubscribe": "read",
