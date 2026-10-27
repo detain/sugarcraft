@@ -11,6 +11,7 @@ import SessionTabs from './components/grid/SessionTabs.vue'
 import SessionSidebar from './components/SessionSidebar.vue'
 import { SIGN_IN_CODE } from './keys'
 import { AuthError } from './protocol/auth'
+import { usePanelsStore } from './stores/agents/panels'
 import { useConnectionStore } from './stores/connection'
 import { useLayoutStore } from './stores/layout'
 import { useSessionsStore } from './stores/sessions'
@@ -23,6 +24,7 @@ const connection = useConnectionStore()
 // Created up front so they hear the first handshake and every event after it.
 useSessionsStore()
 const layout = useLayoutStore()
+const panels = usePanelsStore()
 const settings = useSettingsStore()
 const route = useRoute()
 const router = useRouter()
@@ -98,6 +100,7 @@ async function signOut(): Promise<void> {
       <span class="status" :data-status="connection.status" data-testid="connection-status">{{ connection.statusLabel }}<template v-if="rtt"> · {{ rtt }}</template></span>
       <RouterLink v-if="!onLogin" :to="{ name: 'settings' }" class="nav" data-testid="settings-link">settings</RouterLink>
       <button v-if="!onLogin" type="button" class="link" data-testid="about-button" @click="aboutOpen = true">about</button>
+      <button v-if="connection.canGenerateImage" type="button" class="link" data-testid="generate-button" @click="panels.show('generate')">generate</button>
       <button type="button" class="link opt" :title="`Theme: ${settings.theme}`" @click="settings.cycleTheme()">theme: {{ settings.theme }}</button>
       <button v-if="!settings.notify" type="button" class="link opt" :title="settings.notifyProblem ? NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] : 'Desktop notifications for questions'" @click="settings.enableNotifications()">notify</button>
       <span v-if="settings.notifyProblem" class="notify-problem" role="status" data-testid="notify-problem">{{ NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] }}</span>
