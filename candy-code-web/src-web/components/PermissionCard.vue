@@ -30,9 +30,10 @@ const alwaysLabel = computed(() => {
 
 /**
  * WEB-5a-ii: when the ask echoes an Edit/Write tool input, show the change as a
- * unified diff instead of a raw JSON dump. Fail-soft by construction: anything
- * unrecognisable yields null and the card falls back to the raw arguments —
- * the card is a security gate, it must never break on an unexpected payload.
+ * unified diff. Fail-soft by construction: anything unrecognisable yields null.
+ * C-SEC-2: the raw arguments never hide behind that verdict — the arguments
+ * `<details>` renders beside the preview always, so every byte the tool will
+ * execute stays inspectable; the card is the security gate.
  */
 const preview = computed(() => askDiffPreview(props.ask.tool, props.ask.arguments))
 
@@ -113,7 +114,11 @@ function onKey(event: KeyboardEvent): void {
       <summary>{{ preview.label }} (+{{ preview.added }} −{{ preview.removed }})</summary>
       <DiffView :diff="preview.text" />
     </details>
-    <details v-else>
+    <!-- C-SEC-2 (WEB-5-P1): the raw arguments ride along beside the preview,
+         never behind it — a preview the tool could out-run is exactly the
+         partial consent a security gate must not ask for. Collapsed by
+         default, so the card's height is unchanged. -->
+    <details data-testid="ask-arguments">
       <summary>arguments</summary>
       <pre>{{ argsJson }}</pre>
     </details>

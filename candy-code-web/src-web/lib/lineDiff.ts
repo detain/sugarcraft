@@ -3,10 +3,15 @@
  *
  * The ask echoes the tool's own arguments — the `old_string`/`new_string` of
  * an Edit, the `content` of a Write — never a diff, so the card mints one
- * here: a line-level LCS over the pair, emitted in the unified shape
+ * here: a line-level LCS over each pair, emitted in the unified shape
  * `DiffView` already parses. The card is the security gate, so every entry
- * point fail-softs to null (the raw JSON dump rides on) instead of throwing,
- * and inputs beyond the work caps are refused as too big to diff quietly.
+ * point fail-softs to null (the raw JSON dump rides on, always visible)
+ * instead of throwing, and inputs beyond the work caps are refused as too
+ * big to diff quietly. C-SEC-2: an Edit's preview covers the WHOLE call —
+ * the top-level pair plus every `edits` entry, in the order
+ * `candy-code/src/Tools/BuiltIn/Edit.php` (`editList()`) actually runs them,
+ * with `replace_all` read the same way it is — because the approver who
+ * sees one hunk but signs for N is being asked for a partial consent.
  */
 export interface LineDiffPreview {
   label: string
@@ -27,27 +32,64 @@ const MAX_LINES = 1200
 /** A rendered diff beyond this many characters is refused. */
 const MAX_DIFF_CHARS = 200_000
 
+/** One before/after an ask's arguments carry, plus what the server will do differently with it. */
+export interface EditPair {
+  before: string
+  after: string
+  /** The flag `editList()` casts with `(bool)`: this pair replaces every occurrence. */
+  replaceAll: boolean
+}
+
 /**
- * The before/after an ask's arguments carry: one pair per Edit hunk (the
- * batched `edits` form included), a new-file view for Write. Null when the
- * payload is not an edit shape at all — a Bash ask, a missing string — so
- * the caller keeps the raw dump.
+ * `Edit::editList()` reads replace_all as a PHP `(bool)` cast, and every
+ * value the JSON wire can carry has an exact JS counterpart: null/false/0/
+ * ''/'0' and the empty list are false, anything else — the string 'false'
+ * included — is true.
  */
-export function diffPairsFor(tool: string, args: Record<string, unknown>): { before: string; after: string }[] | null {
+function replaceAllTruthy(value: unknown): boolean {
+  if (value === null || value === undefined || value === false) return false
+  if (typeof value === 'number') return value !== 0
+  if (typeof value === 'string') return value !== '' && value !== '0'
+  if (Array.isArray(value)) return value.length > 0
+  return true
+}
+
+/**
+ * The before/after an ask's arguments carry: one pair per Edit the call runs
+ * — the top-level pair as edit 1, then every `edits` entry as edits 2..N,
+ * exactly the order `editList()` executes them in (C-SEC-2: the old shape
+ * returned only the top-level pair whenever it was present, so a batched
+ * call previewed one hunk and silently consented the approver to the rest) —
+ * and a new-file view for Write. Null when the payload is not an edit shape
+ * at all, or carries anything `editList()` itself refuses (a missing side, a
+ * non-list `edits`, a malformed entry, an empty `old_string` in `edits`), so
+ * the caller keeps the raw dump: the card never previews a change the tool
+ * would not make, and never shows less than the change it would.
+ */
+export function diffPairsFor(tool: string, args: Record<string, unknown>): EditPair[] | null {
   const str = (value: unknown): string | null => (typeof value === 'string' ? value : null)
   if (tool === 'Edit') {
     const oldString = str(args['old_string'])
     const newString = str(args['new_string'])
-    if (oldString !== null && newString !== null) return [{ before: oldString, after: newString }]
+    // editList demands the top-level strings before it ever looks at `edits`:
+    // a call without them is refused outright, so it gets no preview either.
+    if (oldString === null || newString === null) return null
+    const pairs: EditPair[] = [
+      { before: oldString, after: newString, replaceAll: replaceAllTruthy(args['replace_all']) },
+    ]
     const edits = args['edits']
-    if (!Array.isArray(edits) || edits.length === 0) return null
-    const pairs: { before: string; after: string }[] = []
+    // editList: null and the empty list both mean "just the top-level edit".
+    if (edits === null || edits === undefined) return pairs
+    if (!Array.isArray(edits)) return null
     for (const edit of edits) {
       if (edit === null || typeof edit !== 'object') return null
       const before = str((edit as Record<string, unknown>)['old_string'])
       const after = str((edit as Record<string, unknown>)['new_string'])
       if (before === null || after === null) return null
-      pairs.push({ before, after })
+      // editList refuses an empty old_string in `edits`; the whole call fails,
+      // so previewing any part of it would be a fiction.
+      if (before === '') return null
+      pairs.push({ before, after, replaceAll: replaceAllTruthy((edit as Record<string, unknown>)['replace_all']) })
     }
     return pairs
   }
@@ -55,7 +97,7 @@ export function diffPairsFor(tool: string, args: Record<string, unknown>): { bef
     // Write carries only the new content: the preview is the file added whole
     // (and says so in the label); its `before` is not in the payload.
     const content = str(args['content'])
-    return content === null ? null : [{ before: '', after: content }]
+    return content === null ? null : [{ before: '', after: content, replaceAll: false }]
   }
   return null
 }
@@ -64,24 +106,41 @@ export function diffPairsFor(tool: string, args: Record<string, unknown>): { bef
 export function askDiffPreview(tool: string, args: Record<string, unknown>): LineDiffPreview | null {
   try {
     const path = typeof args['file_path'] === 'string' ? (args['file_path'] as string) : tool
+    const pairs = diffPairsFor(tool, args)
+    if (pairs === null) return null
+    if (tool === 'Write') {
+      const label = `${path} (${args['overwrite'] === true ? 'replaces the file' : 'new file'})`
+      return renderPreview(
+        label,
+        pairs.map((pair) => ({ before: pair.before, after: pair.after, label })),
+      )
+    }
+    // WEB-5-P4: an Edit hunk counts lines from the start of its own snippet,
+    // not of the file, and the `@@` grammar DiffView parses must stay — so
+    // the summary carries the honesty instead of the headers.
     const label =
-      tool === 'Write'
-        ? `${path} (${args['overwrite'] === true ? 'replaces the file' : 'new file'})`
-        : path
-    return renderPreview(label, diffPairsFor(tool, args))
+      pairs.length === 1 ? `${path} (snippet-relative)` : `${path} (${pairs.length} edits, snippet-relative)`
+    return renderPreview(
+      label,
+      pairs.map((pair) => ({
+        before: pair.before,
+        after: pair.after,
+        label: pair.replaceAll ? `${path} (replace all occurrences)` : path,
+      })),
+    )
   } catch {
     // A payload so malformed it broke the shape read: the raw dump answers.
     return null
   }
 }
 
-function renderPreview(label: string, pairs: { before: string; after: string }[] | null): LineDiffPreview | null {
+function renderPreview(label: string, pairs: { before: string; after: string; label: string }[] | null): LineDiffPreview | null {
   if (pairs === null) return null
   const chunks: string[] = []
   let added = 0
   let removed = 0
   for (const pair of pairs) {
-    const rendered = unifiedDiff(pair.before, pair.after, label)
+    const rendered = unifiedDiff(pair.before, pair.after, pair.label)
     if (rendered === null) return null
     chunks.push(rendered.text)
     added += rendered.added

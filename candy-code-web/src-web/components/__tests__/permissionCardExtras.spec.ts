@@ -34,8 +34,12 @@ describe('PermissionCard diff preview (WEB-5a-ii)', () => {
     expect(box.find('summary').text()).toContain('+1')
     expect(box.find('.row.add .text').text()).toBe('BETA')
     expect(box.find('.row.del .text').text()).toBe('beta')
-    // The diff replaces the raw JSON dump for recognisable payloads.
-    expect(wrapper.find('details:not([data-testid="ask-diff"])').exists()).toBe(false)
+    // C-SEC-2 (WEB-5-P1): the raw dump used to be replaced by the preview —
+    // exactly the defect (a batched or malformed payload could hide bytes the
+    // tool will run). The arguments details now ride beside the diff always.
+    const raw = wrapper.find('[data-testid="ask-arguments"]')
+    expect(raw.exists()).toBe(true)
+    expect(raw.find('pre').text()).toContain('old_string')
   })
 
   it('renders a Write ask as a new-file preview', () => {
