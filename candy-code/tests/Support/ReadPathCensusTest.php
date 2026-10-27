@@ -847,6 +847,18 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — sweepCorpseFiles() (SHL-1) lists this registry\'s own 0700 directory '
                 . 'for `sh-<hex>.(out|err|exit)` names no row still owns; the names feed only an '
                 . 'mtime check and an unlink, and no content read follows the listing',
+            // cure 2026-10-27 (C-TOOL-7.a finding): the launch sweep joined the key. The
+            // containment leg for both new rows: the sweep only ever descends directories
+            // matching `launch-<digits>` under its own 0700 shells root — a name that fails
+            // the pattern, the pid-liveness gate, or the retention ceiling is never opened.
+            'NAMES_ONLY — sweepDeadLaunchDirs() lists the registry root\'s sibling '
+                . '`launch-<pid>` directory names; the name feeds only the signal-0 liveness '
+                . 'gate and the retention check before the descend below, and nothing is '
+                . 'admitted as content from the listing',
+            'NAMES_ONLY — sweepDeadLaunchDirs()\'s descend into one already-matched '
+                . '`launch-<digits>` directory under its own 0700 root lists the `sh-*` '
+                . 'capture names (out|err|exit|outd|errd) for an mtime check and an '
+                . 'unlink; no content read follows the listing',
         ],
         'Background/BackgroundSupervisor.php|file_get_contents' => [
             'SELF_LOCATED — the IPC buffer this supervisor named for its own child (or one '
