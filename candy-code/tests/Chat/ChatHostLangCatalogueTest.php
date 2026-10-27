@@ -15,7 +15,9 @@ use SugarCraft\Code\Lang;
  * titles `src/Permissions/PermissionPrompt.php` builds for it (W5-A), and —
  * since ISS-070 — `src/Backend/EngineBackend.php`, which records one
  * catalogue row of its own onto the notice seam the host drains, joined for
- * VIS-6 by `src/Runtime.php`, whose recall row rides that same seam.
+ * VIS-6 by `src/Runtime.php`, whose recall row rides that same seam. EffortGate
+ * joins for C-PRV-1.a: the /effort verdict's shape phrases emit their own
+ * `chat.effort.shape.*` rows from `src/Providers/`.
  *
  * LangParityTest already proves every literal key src asks for exists. What it
  * cannot see is the other half of a call: the parameters. A call that passes
@@ -85,7 +87,7 @@ final class ChatHostLangCatalogueTest extends TestCase
         }
 
         $unused = array_values(array_diff(array_keys($this->catalogue()), array_keys($asked)));
-        self::assertSame([], $unused, 'chat./host. entries nothing in src/Chat.php, src/Host, SessionPermissionMemo, PermissionPrompt, PendingAsk, EngineBackend or GoalLoop asks for');
+        self::assertSame([], $unused, 'chat./host. entries nothing in src/Chat.php, src/Host, SessionPermissionMemo, PermissionPrompt, PendingAsk, EngineBackend, GoalLoop or EffortGate asks for');
     }
 
     public function testTheEnglishRenderingIsTheTextTheLiteralsUsedToSpell(): void
@@ -134,7 +136,9 @@ final class ChatHostLangCatalogueTest extends TestCase
         // W7-S4: route()'s family arms live in src/Chat/Handlers/ traits —
         // the census now spans both files, so the whole directory is walked
         // (unlisted files strand their keys as unused here).
-        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Permissions/PermissionPrompt.php', self::SRC . '/Backend/PendingAsk.php', self::SRC . '/Backend/EngineBackend.php', self::SRC . '/Runtime.php', self::SRC . '/Goal/GoalLoop.php'];
+        // C-PRV-1.a: EffortGate.php joins — the /effort verdict emits its own
+        // chat.effort.shape.* rows from the src/Providers/ directory.
+        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Permissions/PermissionPrompt.php', self::SRC . '/Backend/PendingAsk.php', self::SRC . '/Backend/EngineBackend.php', self::SRC . '/Runtime.php', self::SRC . '/Goal/GoalLoop.php', self::SRC . '/Providers/EffortGate.php'];
         foreach (new \RecursiveDirectoryIterator(self::SRC . '/Chat/Handlers', \FilesystemIterator::SKIP_DOTS) as $handlerFile) {
             if ($handlerFile->isFile() && $handlerFile->getExtension() === 'php') {
                 $files[] = $handlerFile->getPathname();
