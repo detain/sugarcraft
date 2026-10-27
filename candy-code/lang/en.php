@@ -3335,4 +3335,15 @@ TXT,
     'settings.webSearchTimeoutSeconds.help' => 'Seconds one search request may take.',
     'settings.webhooks.help' => 'Map of hook name to {secret, prompt, permissionMode?, rate?}; POST /api/hooks/{name} then splices the body (escaped as untrusted) into the prompt and starts a background session. Empty (default) mounts nothing. Bypass-class permission modes are refused for hooks at launch.',
     // --- end settings help ---
+
+    // --- begin tui.window (P-TABS.a) ---
+    // Strings of the window-strip kit in src/Tui/Window/. Census law
+    // (TuiLangTest): every key here must ride as a single-quoted literal
+    // under src/Tui/ or src/Palette/, and every such literal must exist
+    // here. The kit quotes exactly these four.
+    'tui.window.overflow' => '‹{count}›',
+    'tui.window.unnamed' => 'window',
+    'tui.window.summary' => '{sessions} windows · {attention} need attention',
+    'tui.window.summary.none' => 'no windows open',
+    // --- end tui.window (P-TABS.a) ---
 ];
